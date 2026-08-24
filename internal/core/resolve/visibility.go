@@ -1,6 +1,8 @@
 package resolve
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -11,14 +13,47 @@ func importAllowsPrivate(imp *ast.Import) bool {
 	return imp.IsAll
 }
 
-// visibleThroughImport reports whether sym may be surfaced by imp when
-// enumerating a namespace's members. Private members are hidden unless the
-// import is `import all`.
+// visibleThroughImport reports whether imp surfaces sym: an import takes its
+// target's visible memberships, and only `import all` takes the rest.
 func visibleThroughImport(imp *ast.Import, sym *symbols.Symbol) bool {
-	if sym.Visibility == ast.VisibilityPrivate {
-		return importAllowsPrivate(imp)
+	if sym == nil {
+		return false
 	}
-	return true
+	return importAllowsPrivate(imp) || symbols.VisibleOutside(sym.Visibility)
+}
+
+// namedThroughNamespace reports whether sym may be named as a member of the
+// namespace a qualified name or feature chain reached: visible resolution reads
+// only that namespace's public memberships, whatever the referring namespace
+// specializes, except under an `import all` (KerML 8.2.3.5.3).
+func (r *Resolver) namedThroughNamespace(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	return r.allVisible > 0 || symbols.VisibleOutside(sym.Visibility)
+}
+
+func (r *Resolver) namedThroughNamespaces(cands []*symbols.Symbol) []*symbols.Symbol {
+	kept := make([]*symbols.Symbol, 0, len(cands))
+	for _, sym := range cands {
+		if r.namedThroughNamespace(sym) {
+			kept = append(kept, sym)
+		}
+	}
+	return kept
+}
+
+// visibleAsInheritedMember reports whether found, reached as a member of owner,
+// is visible inside owner: what owner declares always is, what it inherits is
+// unless private (KerML 8.2.3.5.2).
+func visibleAsInheritedMember(owner, found *symbols.Symbol) bool {
+	if found == nil {
+		return false
+	}
+	if owner != nil && owner.Scope != nil && found.OwnerScope == owner.Scope {
+		return true
+	}
+	return symbols.VisibleAs(found.Visibility, false, true)
 }
 
 // inheritedThroughSpecialization reports whether imp reaches the bodies that
@@ -101,4 +136,54 @@ func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*s
 		}
 	}
 	return nil, false
+}
+
+// ImportTarget is the namespace or membership an import names, as the import
+// itself reaches it.
+func (r *Resolver) ImportTarget(scope *symbols.Scope, imp *ast.Import) (*symbols.Symbol, bool) {
+	return r.resolveImportTarget(scope, imp)
+}
+
+// resolveImportTarget resolves what an import names; an `import all` (an expose
+// is one) reaches a membership its target would otherwise hide.
+func (r *Resolver) resolveImportTarget(scope *symbols.Scope, imp *ast.Import) (*symbols.Symbol, bool) {
+	if imp == nil || imp.Imported == nil {
+		return nil, false
+	}
+	if !importAllowsPrivate(imp) {
+		// A plain import keeps the boundary even when it is consulted while an
+		// enclosing `import all` resolves its own target.
+		var sym *symbols.Symbol
+		var ok bool
+		r.outsideAllVisible(func() { sym, ok = r.ResolveQualified(scope, imp.Imported) })
+		return sym, ok
+	}
+	var sym *symbols.Symbol
+	var ok bool
+	r.inAllVisible(func() { sym, ok = r.ResolveQualified(scope, imp.Imported) })
+	return sym, ok
+}
+
+// importSurfaces reports whether imp takes sym from the namespace named
+// targetFQN: its visible memberships, plus, under `import all`, the ones it
+// declares privately — but not a hidden one it merely imported itself.
+func (r *Resolver) importSurfaces(imp *ast.Import, targetFQN string, sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if symbols.VisibleOutside(sym.Visibility) {
+		return true
+	}
+	return importAllowsPrivate(imp) && r.declaresMember(targetFQN, sym)
+}
+
+// declaresMember reports whether the namespace named fqn is where sym is
+// declared, as opposed to a namespace an import surfaced it in.
+func (r *Resolver) declaresMember(fqn string, sym *symbols.Symbol) bool {
+	if r.idx == nil || fqn == "" {
+		return false
+	}
+	declared := withoutEmptySegments(r.idx.GetFQN(sym))
+	i := strings.LastIndex(declared, "::")
+	return i > 0 && declared[:i] == fqn
 }

@@ -42,6 +42,8 @@ func unwrapMember(m ast.Node) (ast.Node, ast.Visibility) {
 		return v, v.Visibility
 	case *ast.Alias:
 		return v, v.Visibility
+	case *ast.RelationshipMember:
+		return v, v.Visibility
 	default:
 		return m, ast.VisibilityDefault
 	}
@@ -51,6 +53,9 @@ func unwrapMember(m ast.Node) (ast.Node, ast.Visibility) {
 // declaration node. trivia is the leading trivia captured from the member
 // wrapper before unwrap.
 func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
+	if prefixes := prefixMetadataOf(decl); len(prefixes) > 0 {
+		buildMetadataBodyScopes(scope, prefixes)
+	}
 	switch d := decl.(type) {
 	case *ast.Package:
 		child := NewScope(scope, d)
@@ -70,6 +75,14 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.Dependency:
 		sym := newSymbol(d.Ident, SymbolDependency, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+	case *ast.RelationshipMember:
+		// A keyword-first relationship owns its members, and names one only when
+		// the notation gives it an identification.
+		child := NewScope(scope, d)
+		sym := newSymbol(d.Ident, SymbolRelationship, d, vis, child, scope, trivia)
+		defineIdent(scope, d.Ident, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
 	case *ast.Comment:
 		sym := newSymbol(d.Ident, SymbolComment, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
@@ -120,6 +133,10 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
+	case *ast.PrefixMetadata:
+		if len(d.Body) > 0 {
+			buildMetadataBodyScope(scope, d)
+		}
 	case *ast.InitialNode:
 		// Register initial node by name so transitions can reference it
 		if d.Name != "" {
@@ -129,7 +146,12 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
 			defineIdent(scope, id, sym)
 			scope.AddChild(child)
+			buildMembers(child, d.Members)
 		}
+	case *ast.SendStatement:
+		// A send's body declares the node's own parameters, and the node is the
+		// action the send was written on (`action a send x via p { in x; }`).
+		buildMembers(scope, d.Members)
 	case *ast.FinalNode:
 		// Register final node by name so transitions can reference it
 		if d.Name != "" {
@@ -168,6 +190,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Effect)
+		defineTransitionEffect(child, d)
 	case *ast.StateRegion:
 		// A region is a namespace of its own: sibling regions routinely reuse
 		// state names (each region declaring its own `initial start`), so their
@@ -248,6 +271,45 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	}
 }
 
+func prefixMetadataOf(decl ast.Node) []*ast.PrefixMetadata {
+	switch d := decl.(type) {
+	case *ast.Package:
+		return d.Prefixes
+	case *ast.Namespace:
+		return d.Prefixes
+	case *ast.Dependency:
+		return d.Prefixes
+	case *ast.Definition:
+		return d.Prefixes
+	case *ast.Usage:
+		return d.Prefixes
+	case *ast.AssumeMember:
+		return d.Prefixes
+	case *ast.RequireMember:
+		return d.Prefixes
+	default:
+		return nil
+	}
+}
+
+func buildMetadataBodyScopes(scope *Scope, prefixes []*ast.PrefixMetadata) {
+	for _, prefix := range prefixes {
+		if prefix != nil && len(prefix.Body) > 0 {
+			buildMetadataBodyScope(scope, prefix)
+		}
+	}
+}
+
+func buildMetadataBodyScope(parent *Scope, prefix *ast.PrefixMetadata) {
+	if parent == nil || prefix == nil || len(prefix.Body) == 0 {
+		return
+	}
+	child := NewScope(parent, prefix)
+	child.markBodyLocal()
+	parent.AddChild(child)
+	buildMembers(child, prefix.Body)
+}
+
 // buildControlNode registers a named fork/join/merge/decision node the way a
 // final node is registered, at its name's span; an unnamed one declares none.
 func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.Span, vis ast.Visibility, trivia []ast.Trivia) {
@@ -259,6 +321,9 @@ func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.
 	sym := newSymbol(id, SymbolActionUsage, decl, vis, child, scope, trivia)
 	defineIdent(scope, id, sym)
 	scope.AddChild(child)
+	// A control node ends in ActionBody, so what its body declares are features
+	// of the node a flow may name (`flow F.b1 to B1.b`).
+	buildMembers(child, ast.NodeBodyMembers(decl))
 }
 
 // buildConstraintBodyScope links the scope a require/assume body declares into.
@@ -305,6 +370,43 @@ func buildConnectorEnds(scope *Scope, u *ast.Usage) {
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 	}
+}
+
+// transitionEffectName is the TransitionAction feature a transition's effect
+// action redefines.
+const transitionEffectName = "effect"
+
+// defineTransitionEffect names a transition's effect action `effect`, the
+// TransitionAction feature it redefines (SysML v2 §7.19.2), so `t.effect.x`
+// reads through the effect action rather than the abstract library feature.
+func defineTransitionEffect(scope *Scope, trans *ast.TransitionMember) {
+	if len(trans.Effect) != 1 {
+		return
+	}
+	if _, exists := scope.LookupLocal(transitionEffectName); exists {
+		return
+	}
+	effect, _ := unwrapMember(trans.Effect[0])
+	if effect == nil {
+		return
+	}
+	// A declared effect action is already a member of the transition's scope:
+	// name that symbol rather than building a second one for it.
+	for _, sym := range scope.AllMembers() {
+		if sym.Decl == effect {
+			scope.Define(transitionEffectName, sym)
+			return
+		}
+	}
+	// A statement (`do send x to y`) declares no member of its own, so the
+	// action it performs is named here, its members staying the transition's.
+	body := NewScope(scope, effect)
+	sym := newSymbol(
+		ast.Identification{Name: transitionEffectName, NameSpan: effect.Span()},
+		SymbolActionUsage, effect, ast.VisibilityDefault, body, scope, nil,
+	)
+	scope.Define(transitionEffectName, sym)
+	scope.AddChild(body)
 }
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the
@@ -473,6 +575,10 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		// A KerML `connector` is the connection usage of the kernel layer
 		// (KerML 1.0 §7.4.6), so it is one kind of symbol.
 		return SymbolConnectionUsage
+	case ast.UsageSuccession:
+		// A succession is a SuccessionAsUsage (SysML v2 §8.3.13.7): a connector
+		// usage of its own kind, so it is a redefinition target like any feature.
+		return SymbolSuccessionUsage
 	case ast.UsageFlow:
 		return SymbolFlowUsage
 	case ast.UsagePort:
@@ -491,6 +597,9 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		return SymbolConstraintUsage
 	case ast.UsageRequirement:
 		return SymbolRequirementUsage
+	case ast.UsageSatisfy:
+		// A satisfy requirement usage is a requirement usage (SysML v2 §8.3.19).
+		return SymbolSatisfyRequirementUsage
 	case ast.UsageCase:
 		return SymbolCaseUsage
 	case ast.UsageAnalysisCase:
@@ -517,6 +626,10 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		// A KerML step is a feature typed by a behavior, which is what a SysML
 		// action usage is (SysML v2 §8.3.14).
 		return SymbolActionUsage
+	case ast.UsageExpr, ast.UsageBool:
+		// A KerML `expr`/`bool` declares an Expression: a feature typed by a
+		// function (KerML 1.0 §9.2.10), as a SysML calc usage is.
+		return SymbolCalcUsage
 	default:
 		return SymbolUnknown
 	}
@@ -535,6 +648,11 @@ func classifyUsage(u *ast.Usage) SymbolKind {
 	// it specializes, unlike the `attribute`/`feature` keywords classified below.
 	if u.Keyword == "datatype" {
 		return SymbolAttributeDef
+	}
+	// A KerML `function` declares a Function: a Behavior specialization, so a
+	// definition (KerML 1.0 §9.2.9), which is what `calc def` declares in SysML.
+	if u.Keyword == "function" {
+		return SymbolCalcDef
 	}
 	// Only classify attribute usages (datatype, attribute, feature keywords)
 	if u.Kind != ast.UsageAttribute {

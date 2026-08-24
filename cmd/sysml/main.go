@@ -12,6 +12,7 @@ import (
 
 	"github.com/chzyer/readline"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
@@ -104,10 +105,12 @@ var (
 	quietMode     bool
 	traceMode     bool
 	convertFormat string
+	queryText     string
 	outputPath    string
 	fromFormat    string
 	renderView    string
 	renderForm    string
+	strictMode    bool
 	modelChecks   checks
 )
 
@@ -175,6 +178,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "  sysml -satisfy=Ctx model.sysml                 # ...only the ones Ctx states\n")
 	fmt.Fprintf(w, "  sysml -instantiate p -constraint C model.sysml  # Check C against an object of p\n")
 	fmt.Fprintf(w, "  sysml -validate model.sysml                    # Report diagnostics only\n")
+	fmt.Fprintf(w, "  sysml -validate -strict model.sysml            # ...asking whether it is conforming SysML v2\n")
 	fmt.Fprintf(w, "  sysml -calc \"Fall(3, 4)\" model.sysml           # Invoke a calculation\n")
 	fmt.Fprintf(w, "  sysml -action Drive model.sysml                # Run an action to completion\n")
 	fmt.Fprintf(w, "  sysml -state Mission -advance 10 model.sysml   # Run a state machine for 10 time units\n")
@@ -234,8 +238,10 @@ func runCLI() int {
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	flag.BoolVar(&debugMode, "debug", false, "Report every diagnostic over the whole session buffer, with the pass that produced it")
 	flag.BoolVar(&quietMode, "quiet", false, "Report errors only, suppressing warnings")
+	flag.BoolVar(&strictMode, "strict", false, "Judge the model as conforming SysML v2: notation no pinned production admits is an error, not a warning")
 	flag.BoolVar(&traceMode, "trace", false, "Report each execution step: expression evaluation, calc invocation, action tokens, state transitions")
 	flag.StringVar(&convertFormat, "convert", "", "Convert the model to this format instead of running it: sysml, kerml, ttl, turtle or rdf (RDF is experimental)")
+	flag.StringVar(&queryText, "query", "", "Evaluate OSLC Query text against the model instead of running the REPL")
 	flag.StringVar(&outputPath, "output", "", "Write conversion output to this file (default: stdout)")
 	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
 	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
@@ -297,6 +303,10 @@ func runCLI() int {
 	}
 
 	if convertFormat != "" {
+		if queryText != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -convert and -query are mutually exclusive")
+			return 2
+		}
 		if modelChecks.requested() {
 			return refuse(modelChecks,
 				"-convert writes the model out and decides nothing about it; check it in its own run")
@@ -309,6 +319,14 @@ func runCLI() int {
 			return fail(err)
 		}
 		return exitHolds
+	}
+
+	if queryText != "" {
+		if modelChecks.requested() || renderView != "" || len(evalExprs) > 0 || outputPath != "" || fromFormat != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -query cannot be combined with checks, -eval, -render, -output or -from")
+			return 2
+		}
+		return runQuery(args, queryText)
 	}
 
 	if renderView != "" {
@@ -361,6 +379,7 @@ func newSession() *repl.Session {
 		sess.SetVerbosity(repl.VerbosityQuiet)
 	}
 	sess.SetTracing(traceMode)
+	sess.SetConformanceMode(conformance.ModeOf(strictMode))
 	sess.SetRenderWidth(terminalWidth())
 	return sess
 }

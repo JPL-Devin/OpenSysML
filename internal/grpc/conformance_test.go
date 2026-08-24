@@ -42,6 +42,10 @@ type expectedAttribute struct {
 type conformanceCase struct {
 	RPC string `json:"rpc"`
 
+	// ApplyEdits
+	Operations      []conformanceEditOperation `json:"operations,omitempty"`
+	ExpectedContent string                     `json:"expected_content,omitempty"`
+
 	// Evaluate
 	Expression      string `json:"expression,omitempty"`
 	ContextSymbolID string `json:"context_symbol_id,omitempty"`
@@ -66,10 +70,27 @@ type conformanceCase struct {
 	// GetSymbol
 	ExpectedAttributeNames []string                     `json:"expected_attribute_names,omitempty"`
 	ExpectedAttributes     map[string]expectedAttribute `json:"expected_attributes,omitempty"`
+	// MinWithheldLibraryAttributes requires the response to state at least this
+	// many library-inherited attributes withheld from the list.
+	MinWithheldLibraryAttributes int32 `json:"min_withheld_library_attributes,omitempty"`
 
 	// ExpectedError, when set, requires the RPC to report an in-band error
 	// containing this substring.
 	ExpectedError string `json:"expected_error,omitempty"`
+}
+
+type conformanceEditOperation struct {
+	Kind         string   `json:"kind"`
+	Target       string   `json:"target,omitempty"`
+	Value        string   `json:"value,omitempty"`
+	NewName      string   `json:"new_name,omitempty"`
+	Owner        string   `json:"owner,omitempty"`
+	MemberKind   string   `json:"member_kind,omitempty"`
+	MemberName   string   `json:"member_name,omitempty"`
+	Type         string   `json:"type,omitempty"`
+	Multiplicity string   `json:"multiplicity,omitempty"`
+	Specializes  []string `json:"specializes,omitempty"`
+	Cascade      bool     `json:"cascade,omitempty"`
 }
 
 // TestGRPCConformance is the AGENTS.md §5.2 Layer 2 contract for the gRPC
@@ -145,8 +166,61 @@ func runGRPCConformanceCase(t *testing.T, dir, caseName string) {
 		runExecuteActionCase(t, srv, ctx, parseResp.ModelHash, tc)
 	case "ExecuteState":
 		runExecuteStateCase(t, srv, ctx, parseResp.ModelHash, tc)
+	case "ApplyEdits":
+		runApplyEditsCase(t, srv, ctx, parseResp.ModelHash, tc)
 	default:
 		t.Fatalf("unknown rpc %q", tc.RPC)
+	}
+}
+
+func runApplyEditsCase(t *testing.T, srv *Service, ctx context.Context, modelHash string, tc conformanceCase) {
+	t.Helper()
+
+	operations := make([]*pb.EditOperation, 0, len(tc.Operations))
+	for _, op := range tc.Operations {
+		switch op.Kind {
+		case "add_member":
+			operations = append(operations, &pb.EditOperation{
+				Operation: &pb.EditOperation_AddMember{AddMember: &pb.AddMemberEdit{
+					Owner: op.Owner, Kind: op.MemberKind, Name: op.MemberName,
+					Type: op.Type, Multiplicity: op.Multiplicity,
+					Value: op.Value, Specializes: op.Specializes,
+				}},
+			})
+		case "delete":
+			operations = append(operations, &pb.EditOperation{
+				Operation: &pb.EditOperation_Delete{Delete: &pb.DeleteEdit{
+					Target: op.Target, Cascade: op.Cascade,
+				}},
+			})
+		case "set_value":
+			operations = append(operations, &pb.EditOperation{
+				Operation: &pb.EditOperation_SetValue{SetValue: &pb.SetValueEdit{
+					Target: op.Target, Value: op.Value,
+				}},
+			})
+		case "rename":
+			operations = append(operations, &pb.EditOperation{
+				Operation: &pb.EditOperation_Rename{Rename: &pb.RenameEdit{
+					Target: op.Target, NewName: op.NewName,
+				}},
+			})
+		default:
+			t.Fatalf("unknown edit operation %q", op.Kind)
+		}
+	}
+
+	resp, err := srv.ApplyEdits(ctx, &pb.ApplyEditsRequest{
+		ModelHash: modelHash, Operations: operations,
+	})
+	if err != nil {
+		t.Fatalf("ApplyEdits: %v", err)
+	}
+	if checkExpectedError(t, tc, resp.Error) {
+		return
+	}
+	if resp.Content != tc.ExpectedContent {
+		t.Errorf("content =\n%s\nwant\n%s", resp.Content, tc.ExpectedContent)
 	}
 }
 
@@ -197,6 +271,11 @@ func runGetSymbolCase(t *testing.T, srv *Service, ctx context.Context, modelHash
 		}
 		if strings.Join(got, ",") != strings.Join(tc.ExpectedAttributeNames, ",") {
 			t.Errorf("attributes = %v, want %v", got, tc.ExpectedAttributeNames)
+		}
+	}
+	if want := tc.MinWithheldLibraryAttributes; want > 0 {
+		if got := resp.Symbol.GetWithheldLibraryAttributes(); got < want {
+			t.Errorf("withheld library attributes = %d, want at least %d", got, want)
 		}
 	}
 

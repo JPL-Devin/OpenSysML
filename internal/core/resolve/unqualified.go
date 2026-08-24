@@ -31,7 +31,7 @@ func (r *Resolver) LookupName(scope *symbols.Scope, name string) (*symbols.Symbo
 // hide the action its owner inherits from its type.
 func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide *refFilter) resolution {
 	for s := scope; s != nil; s = s.Parent() {
-		if sym, ok := hide.lookupLocal(s, name); ok {
+		if sym, ok := r.localBinding(s, name, hide); ok {
 			return resolution{sym: sym, ok: true}
 		}
 
@@ -43,28 +43,106 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 			return resolution{sym: sym, ok: true}
 		}
 
-		if sym, ok := r.visibleMember(s.Owner(), name, hide); ok {
-			return resolution{sym: sym, ok: true}
-		}
-
-		if sym, ok := r.lookupImports(s, name); ok && !hide.hides(sym) {
+		if sym, ok := r.visibleMember(r.scopeOwner(s), name, hide); ok {
 			return resolution{sym: sym, ok: true}
 		}
 
 		if sym, ok := r.lookupInheritedImports(s, name); ok && !hide.hides(sym) {
 			return resolution{sym: sym, ok: true}
 		}
-	}
-	if root := rootOf(scope); root != nil {
-		if sym, ok := hide.lookupLocal(root, name); ok {
+
+		if sym, ok := r.enclosingLocal(s.Parent(), name, hide); ok {
+			return resolution{sym: sym, ok: true}
+		}
+
+		if sym, ok := r.lookupImports(s, name); ok && !hide.hides(sym) {
 			return resolution{sym: sym, ok: true}
 		}
 	}
+	if root := rootOf(scope); root != nil {
+		if sym, ok := r.localBinding(root, name, hide); ok {
+			return resolution{sym: sym, ok: true}
+		}
+	}
+	if sym, ok := r.nestedInRedefined(scope, name, hide); ok {
+		return resolution{sym: sym, ok: true}
+	}
 	// Final fallback: check global index (cross-document top-level names)
-	if sym, n := r.lookupGlobalTop(scope, name); n == 1 && !hide.hides(sym) {
+	if sym := r.lookupGlobalTop(scope, name); sym != nil && !hide.hides(sym) {
 		return resolution{sym: sym, ok: true}
 	}
 	return resolution{}
+}
+
+func (r *Resolver) enclosingLocal(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
+	for ; scope != nil; scope = scope.Parent() {
+		if sym, ok := r.localBinding(scope, name, hide); ok {
+			return sym, true
+		}
+	}
+	return nil, false
+}
+
+// localBinding is lookupLocal less the members that bind no name of their own.
+func (r *Resolver) localBinding(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
+	sym, ok := hide.lookupLocal(scope, name)
+	if !ok || !r.bindsEffectiveName(sym) {
+		return nil, false
+	}
+	return sym, true
+}
+
+// bindsEffectiveName reports whether sym binds the name it was found under. A
+// feature with no declared name takes the name of the feature it redefines, so
+// it binds none when that redefinition resolves to nothing (KerML 7.3.4.5).
+func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
+	if sym == nil || !sym.EffectiveName {
+		return true
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return true
+	}
+	rel := ast.NamingFeature(usage)
+	if rel == nil || rel.Kind != ast.RelRedefines {
+		return true
+	}
+	if named, done := r.effNames[sym]; done {
+		return named
+	}
+	if r.naming[sym] {
+		return true
+	}
+	r.naming[sym] = true
+	defer delete(r.naming, sym)
+	named := true
+	r.aside(func() { named = r.namesVisibleFeature(sym.OwnerScope, usage, rel.Target) })
+	r.effNames[sym] = named
+	return named
+}
+
+// namesVisibleFeature reports whether a redefinition target owned by decl names
+// a feature the redefinition can see, chain segments included (KerML 8.2.3.5).
+func (r *Resolver) namesVisibleFeature(scope *symbols.Scope, decl ast.Node, target ast.Node) bool {
+	hide := &refFilter{decl: decl, skipBorrowedName: true}
+	chain, ok := target.(*ast.FeatureChainExpr)
+	if !ok {
+		if qn := ast.AsQualifiedName(target); qn != nil {
+			_, resolved := r.resolveQualified(scope, qn, hide)
+			return resolved
+		}
+		return true
+	}
+	cur, ok := r.resolveTarget(scope, chain.Operand, hide.forPrefix())
+	if !ok || chain.Member == nil {
+		return false
+	}
+	for _, part := range chain.Member.Parts {
+		if cur, ok = r.chainMember(cur, part.Text); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // visibleMember resolves name as a member of sym, skipping what hide covers, so
@@ -73,10 +151,20 @@ func (r *Resolver) visibleMember(sym *symbols.Symbol, name string, hide *refFilt
 	if hide.contributedOnly() {
 		// The owner's own declarations are the local bindings already filtered
 		// by the caller, so only contributed ones remain.
-		return r.lookupContributedMember(sym, name)
+		found, ok := r.lookupContributedMember(sym, name)
+		if !ok || !visibleAsInheritedMember(sym, found) ||
+			r.inheritanceMaskedDeclaring(sym, found, declaredNameIn(sym, hide.decl)) {
+			return nil, false
+		}
+		return found, true
 	}
 	found, ok := r.lookupMember(sym, name)
-	if !ok {
+	if !ok || !visibleAsInheritedMember(sym, found) {
+		return nil, false
+	}
+	// What a feature of sym redefines, sym does not inherit, so no name of it
+	// resolves here (KerML 8.3.3.3); a redefinition being written is exempt.
+	if r.inheritanceMaskedDeclaring(sym, found, declaredNameIn(sym, hide.declNode())) {
 		return nil, false
 	}
 	if !hide.hides(found) {
@@ -174,7 +262,7 @@ func (r *Resolver) lookupImports(scope *symbols.Scope, name string) (*symbols.Sy
 // traversed, including a public membership import.
 func (r *Resolver) lookupImportedMember(target *symbols.Symbol, targetScope, from *symbols.Scope, name string) (*symbols.Symbol, bool) {
 	for _, imp := range r.importsOf(targetScope.Node()) {
-		if imp.Kind != ast.ImportMembership {
+		if r.importStack[imp] {
 			continue
 		}
 		if !r.importPrefixAvailable(targetScope, imp, name) {
@@ -183,9 +271,12 @@ func (r *Resolver) lookupImportedMember(target *symbols.Symbol, targetScope, fro
 		if !r.importVisibleFrom(target, from, imp) {
 			continue
 		}
+		r.importStack[imp] = true
 		if sym, ok := r.matchImport(targetScope, imp, name); ok {
+			delete(r.importStack, imp)
 			return sym, true
 		}
+		delete(r.importStack, imp)
 	}
 	return nil, false
 }
@@ -266,13 +357,22 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		return nil, false
 	}
 	r.resolvingImports[imp] = true
-	target, ok := r.ResolveQualified(scope, imp.Imported)
+	// Resolved aside: a miss here may only mean sibling imports were suspended
+	// for cycle safety, so it must not be memoized or reported as unresolved.
+	var target *symbols.Symbol
+	var ok bool
+	r.aside(func() { target, ok = r.resolveImportTarget(scope, imp) })
 	delete(r.resolvingImports, imp)
 	if !ok {
 		return nil, false
 	}
 	admit := r.importAdmits(scope, imp)
 	if imp.Kind == ast.ImportMembership {
+		// A membership import names a membership: `import P::Car` where Car is an
+		// alias imports that name, so the alias is what it surfaces.
+		if alias, isAlias := r.PartAlias(imp.Imported, len(imp.Imported.Parts)-1); isAlias {
+			target = alias
+		}
 		// The imported member itself (last segment) is visible by its own name.
 		// For FQN-indexed symbols (stdlib), target.Name may be the full FQN, so extract last segment.
 		targetName := target.Name
@@ -282,8 +382,8 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		if (targetName == name || (target.ShortName != "" && target.ShortName == name)) && admit(target) {
 			return target, true
 		}
-		if imp.IsRecursive && target.Scope != nil {
-			if sym, ok := lookupInSubtree(target.Scope, name, imp, admit, map[*symbols.Scope]bool{}); ok {
+		if imp.IsRecursive {
+			if sym, ok := r.lookupInSubtree(scope, target, name, imp, admit); ok {
 				return sym, true
 			}
 		}
@@ -295,7 +395,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) && admit(sym) {
 			return sym, true
 		}
-		if sym, ok := r.lookupImportedMember(target, target.Scope, scope, name); ok && visibleThroughImport(imp, sym) && admit(sym) {
+		if sym, ok := r.lookupImportedMember(target, target.Scope, scope, name); ok && symbols.VisibleOutside(sym.Visibility) && admit(sym) {
 			return sym, true
 		}
 	}
@@ -305,12 +405,16 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		// it but not a visible one, so a wildcard import does not re-export it
 		// (KerML 8.2.3.3) — unless this is an `import all`, which takes the
 		// target's private memberships too.
+		targetFQN := r.registeredFQN(target)
 		var children []*symbols.Symbol
 		if importAllowsPrivate(imp) {
-			children = r.idx.LookupDirectChildren(target.Name)
+			children = r.idx.LookupDirectChildren(targetFQN)
 		} else {
-			children = r.idx.LookupDirectChildrenFrom(target.Name, r.ReferringNamespaceFQN(scope))
+			children = r.idx.LookupDirectChildrenFrom(targetFQN, r.ReferringNamespaceFQN(scope))
 		}
+		// The import names one namespace, so a same-named other namespace's
+		// members registered under the same path are not what it surfaces.
+		children = notConflatedWith(target, children)
 		for _, sym := range children {
 			// Extract short name from FQN for comparison
 			symName := sym.Name
@@ -323,16 +427,16 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 			// The target may itself have surfaced the name through an import of
 			// its own, filtered by its `filter` members: what it re-exports
 			// onward is what those select.
-			if !r.admitsUnderName("", r.ReferringNamespaceFQN(scope), target.Name+"::"+name, sym) {
+			if !r.admitsUnderName("", r.ReferringNamespaceFQN(scope), targetFQN+"::"+name, sym) {
 				continue
 			}
-			if visibleThroughImport(imp, sym) && admit(sym) {
+			if r.importSurfaces(imp, targetFQN, sym) && admit(sym) {
 				return sym, true
 			}
 		}
 	}
 	if imp.IsRecursive {
-		if sym, ok := lookupInSubtree(target.Scope, name, imp, admit, map[*symbols.Scope]bool{}); ok {
+		if sym, ok := r.lookupInSubtree(scope, target, name, imp, admit); ok {
 			return sym, true
 		}
 	}
@@ -359,20 +463,13 @@ func (r *Resolver) importPrefixAvailable(scope *symbols.Scope, imp *ast.Import, 
 	return false
 }
 
-// lookupInSubtree searches a scope and all descendant scopes for a match on
-// name that imp may surface. A match the import cannot surface does not end the
-// walk: another scope in the subtree may hold a visible one.
-func lookupInSubtree(scope *symbols.Scope, name string, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[*symbols.Scope]bool) (*symbols.Symbol, bool) {
-	// A body-local name is not a member of the namespace being imported.
-	if scope == nil || seen[scope] || scope.BodyLocal() {
-		return nil, false
-	}
-	seen[scope] = true
-	if sym, ok := scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) && admit(sym) {
-		return sym, true
-	}
-	for _, child := range scope.Children() {
-		if sym, ok := lookupInSubtree(child, name, imp, admit, seen); ok {
+// lookupInSubtree searches the target namespace and its visible descendants for
+// a name, including memberships re-exported through nested imports.
+func (r *Resolver) lookupInSubtree(scope *symbols.Scope, target *symbols.Symbol, name string, imp *ast.Import, admit func(*symbols.Symbol) bool) (*symbols.Symbol, bool) {
+	out := newElementList()
+	r.appendSubtree(out, scope, target, imp, admit, map[symbols.ElementKey]bool{})
+	for _, sym := range out.elems {
+		if localNameOf(sym) == name || sym.ShortName == name {
 			return sym, true
 		}
 	}

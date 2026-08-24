@@ -73,7 +73,7 @@ func checkName(i int, name string) error {
 // refuses it if it carries errors the original did not: an edit never hands back
 // a model that cannot be read again.
 func (m Model) validate(content []byte) error {
-	sf := source.New(m.Source.Name(), content)
+	sf := source.NewWithKind(m.Source.Name(), content, m.Source.Kind())
 	p := parser.New(sf)
 	root := p.ParseFile()
 	editedParse := parseDiagnostics(p.Diagnostics)
@@ -90,13 +90,17 @@ func (m Model) validate(content []byte) error {
 	if m.NewIndex == nil {
 		return nil
 	}
-	idx := m.NewIndex()
-	idx.AddDocument(sf.Name(), root)
+	if m.reindex == nil { // validated outside an Apply call
+		m.reindex = &reindexer{newIndex: m.NewIndex}
+	}
 	// The parse diagnostics are handed to the analysis, so a model that already
-	// had syntax errors is not judged by tiers its own parse never reached.
+	// had syntax errors is not judged by tiers its own parse never reached. The
+	// baseline is taken first: it and the edited notation share one index, in
+	// which each is in turn the document under the model's name.
 	before := errorsOnly(m.baseline(editedParse))
 	before = append(before, errorsOnly(originalParse)...)
-	after := errorsOnly(passes.Analyze(sf.Name(), root, editedParse, idx))
+	idx := m.reindex.analyzedIn(sf.Name(), root, sf.Kind())
+	after := errorsOnly(passes.AnalyzeWithKind(sf.Name(), sf.Kind(), root, editedParse, idx))
 	if introduced := introduced(before, after); len(introduced) > 0 {
 		return &Error{
 			Failure:        FailureResultInvalid,
@@ -121,9 +125,8 @@ func (m Model) baseline(gate []passes.Diagnostic) []passes.Diagnostic {
 	}
 	p := parser.New(m.Source)
 	root := p.ParseFile()
-	idx := m.NewIndex()
-	idx.AddDocument(m.Source.Name(), root)
-	return passes.Analyze(m.Source.Name(), root, gate, idx)
+	idx := m.reindex.analyzedIn(m.Source.Name(), root, m.Source.Kind())
+	return passes.AnalyzeWithKind(m.Source.Name(), m.Source.Kind(), root, gate, idx)
 }
 
 // parseDiagnostics presents parse diagnostics as pass diagnostics, which is how

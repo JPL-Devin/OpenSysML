@@ -10,7 +10,6 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var updateGolden = flag.Bool("update", false, "update golden files")
@@ -33,7 +32,7 @@ func runPassesGolden(t *testing.T, name string) {
 			Code: "syntax", Source: "syntax",
 		})
 	}
-	idx := symbols.NewIndexFromDoc(name+".sysml", root)
+	idx := newTestIndexFromDoc(name+".sysml", root)
 	diags := Analyze(name+".sysml", root, parseDiags, idx)
 
 	var b strings.Builder
@@ -68,12 +67,13 @@ func TestPassesGoldenClean(t *testing.T)       { runPassesGolden(t, "clean") }
 func TestPassesGoldenErrors(t *testing.T)      { runPassesGolden(t, "errors") }
 func TestPassesGoldenConstraints(t *testing.T) { runPassesGolden(t, "constraints") }
 
-// A bare `import` is non-conforming notation: it warns, at every nesting depth,
-// and still resolves and type-checks (no other diagnostic follows).
+// A bare `import` is non-conforming notation the reference rejects: it errors at
+// every nesting depth (D2).
 func TestPassesGoldenImportNoVisibility(t *testing.T) {
 	runPassesGolden(t, "import_no_visibility")
 }
 
-// The corpus notation stays clean at every tier: a regression in the conjugated
-// end or the portion prefix is a false positive on a flagship model.
+// The corpus notation reports only the two duplicate-name warnings the pinned
+// validator reports on the same fixture, at the same positions (matched run,
+// w6c): a regression in the conjugated end or portion prefix would add more.
 func TestPassesGoldenCorpusNotation(t *testing.T) { runPassesGolden(t, "corpus_notation") }

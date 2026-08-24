@@ -7,21 +7,18 @@ import (
 	"testing"
 )
 
-// libRecords is a library restored from cache rather than parsed: the shape the
-// REPL and the LSP hold their standard library in, where a symbol carries its
-// qualified name and no declaration.
-var libRecords = []RecordEntry{
-	{FQN: "Lib", Kind: SymbolPackage},
-	{FQN: "Lib::Widget", Kind: SymbolNamespace},
-	{FQN: "Lib::Kilogram", ShortName: "kg", Kind: SymbolNamespace},
-}
+// libDoc and libSource are the standard library as every load path holds it: a
+// parsed document marked library content.
+const libDoc = "lib.sysml"
+const libSource = "package Lib { namespace Widget; namespace <kg> Kilogram; }"
 
 // buildIndex indexes docs (in name order, so the result does not depend on map
-// iteration order) plus the cached library, and expands to the fixpoint.
+// iteration order) plus the library, and expands to the fixpoint.
 func buildIndex(t *testing.T, docs map[string]string) *Index {
 	t.Helper()
 	idx := NewIndex()
-	idx.AddRecords("lib", libRecords)
+	addDoc(t, idx, libDoc, libSource)
+	idx.MarkLibrary(libDoc)
 	names := make([]string, 0, len(docs))
 	for name := range docs {
 		names = append(names, name)
@@ -42,36 +39,31 @@ func buildIndex(t *testing.T, docs map[string]string) *Index {
 func indexState(idx *Index) string {
 	var b strings.Builder
 	for _, fqn := range idx.FQNs() {
-		descs := make([]string, 0, len(idx.fqn[fqn]))
-		for _, sym := range idx.fqn[fqn] {
+		descs := make([]string, 0, len(idx.fqn.at(fqn)))
+		for _, sym := range idx.fqn.at(fqn) {
 			descs = append(descs, describeEntry(idx, fqn, sym))
 		}
 		sort.Strings(descs)
 		fmt.Fprintf(&b, "%s -> %s\n", fqn, strings.Join(descs, " "))
 	}
 
-	parents := make([]string, 0, len(idx.children))
-	for parent := range idx.children {
-		parents = append(parents, parent)
-	}
+	parents := idx.children.keys()
 	sort.Strings(parents)
 	for _, parent := range parents {
 		kids := idx.childKeys(parent)
 		fmt.Fprintf(&b, "children %q -> %v\n", parent, kids)
 	}
 
-	importers := make([]string, 0, len(idx.wildcardMeta))
-	for pkgFQN := range idx.wildcardMeta {
-		importers = append(importers, pkgFQN)
-	}
+	importers := idx.wildcardMeta.keys()
 	sort.Strings(importers)
 	for _, pkgFQN := range importers {
 		fmt.Fprintf(&b, "imports %q -> %v\n", pkgFQN, idx.WildcardImportsOf(pkgFQN))
 	}
 
-	declared := make([]string, 0, len(idx.declaredAt))
-	for _, fqn := range idx.declaredAt {
-		declared = append(declared, fqn)
+	syms := idx.declaredAt.keys()
+	declared := make([]string, 0, len(syms))
+	for _, sym := range syms {
+		declared = append(declared, idx.declaredAt.at(sym))
 	}
 	sort.Strings(declared)
 	fmt.Fprintf(&b, "declaredAt -> %v\n", declared)
@@ -83,13 +75,13 @@ func indexState(idx *Index) string {
 func describeEntry(idx *Index, fqn string, sym *Symbol) string {
 	origin := "declared"
 	switch {
-	case idx.hidden[fqn][sym]:
+	case idx.hidden.at(fqn)[sym]:
 		origin = "reexported-hidden"
-	case idx.reexported[fqn][sym]:
+	case idx.reexported.at(fqn)[sym]:
 		origin = "reexported"
 	}
 	return fmt.Sprintf("[%s kind=%v short=%q from=%q %s]",
-		sym.Name, sym.Kind, sym.ShortName, idx.declaredAt[sym], origin)
+		sym.Name, sym.Kind, sym.ShortName, idx.declaredAt.at(sym), origin)
 }
 
 // Removing a document must leave the index a fresh build over the remaining
@@ -383,7 +375,7 @@ func TestRemoveDocumentKeepsAReexportAnotherDocumentSurfaces(t *testing.T) {
 	if len(widget) != 1 {
 		t.Fatalf("Lib::Widget = %d symbols, want 1", len(widget))
 	}
-	if got := idx.declaredAt[widget[0]]; got != "Lib::Widget" {
+	if got := idx.declaredAt.at(widget[0]); got != "Lib::Widget" {
 		t.Fatalf("declaredAt = %q, want Lib::Widget: a re-export is not a declaration", got)
 	}
 
@@ -391,7 +383,7 @@ func TestRemoveDocumentKeepsAReexportAnotherDocumentSurfaces(t *testing.T) {
 	if got := len(idx.LookupQualified("Shared::Widget")); got != 1 {
 		t.Errorf("Shared::Widget = %d symbols, want 1: b.sysml still imports Lib", got)
 	}
-	if got := idx.declaredAt[widget[0]]; got != "Lib::Widget" {
+	if got := idx.declaredAt.at(widget[0]); got != "Lib::Widget" {
 		t.Errorf("declaredAt = %q after removal, want Lib::Widget", got)
 	}
 }

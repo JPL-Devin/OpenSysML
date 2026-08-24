@@ -36,6 +36,20 @@ build one. Point the extension at a specific build with `.vscode/settings.json`:
 }
 ```
 
+### Asking the strict question in the editor
+
+The server reports OpenSysML's own notation as warnings, like the CLI does. An
+editor that can send settings asks the strict question with the boolean
+`sysml.strictConformance` ([LSP extensions](../reference/lsp.md#strict-conformance-setting)),
+and the diagnostics of every open document are republished as errors at once. In
+this extension, start the server strictly instead:
+
+```json
+{
+  "opensysml.server.args": ["-strict"]
+}
+```
+
 ### The diagram panel
 
 `SysML: Open Diagram`, from the command palette with a `.sysml` or `.kerml` file

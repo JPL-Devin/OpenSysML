@@ -168,7 +168,11 @@ func TestGRPCRobustness(t *testing.T) {
 		// must still answer, reporting unresolved names as diagnostics.
 		svc := mustNewService(t, 10)
 		defer svc.Close()
-		svc.libIndexes = newIndexPool(0, symbols.NewIndex)
+		svc.libIndexes = newLibraryBase(func() *symbols.Index {
+			idx := symbols.NewIndex()
+			idx.Freeze()
+			return idx
+		})
 
 		resp, err := svc.ParseFile(context.Background(), &pb.ParseFileRequest{
 			Source: &pb.ParseFileRequest_Content{
@@ -183,6 +187,54 @@ func TestGRPCRobustness(t *testing.T) {
 		}
 		if _, ok := svc.cache.Get(resp.ModelHash); !ok {
 			t.Error("Expected the model to be cached despite the missing library")
+		}
+	})
+}
+
+func TestGRPCAuthoringRobustness(t *testing.T) {
+	service := mustNewService(t, 10)
+	hash := mustParsedModel(t, service, `package Demo {
+    part def Base;
+    part use : Base;
+}`)
+
+	t.Run("unknown_owner", func(t *testing.T) {
+		resp, err := service.ApplyEdits(context.Background(), &pb.ApplyEditsRequest{
+			ModelHash: hash,
+			Operations: []*pb.EditOperation{{
+				Operation: &pb.EditOperation_AddMember{AddMember: &pb.AddMemberEdit{
+					Owner: "Demo::Missing", Kind: "part def", Name: "Vehicle",
+				}},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("ApplyEdits failed the call: %v", err)
+		}
+		if resp.Failure != pb.EditFailure_EDIT_FAILURE_OWNER_UNKNOWN {
+			t.Fatalf("failure = %s, want owner unknown", resp.Failure)
+		}
+		if resp.Content != "" || resp.Error == "" {
+			t.Fatalf("refusal response = content %q, error %q", resp.Content, resp.Error)
+		}
+	})
+
+	t.Run("delete_referenced_without_cascade", func(t *testing.T) {
+		resp, err := service.ApplyEdits(context.Background(), &pb.ApplyEditsRequest{
+			ModelHash: hash,
+			Operations: []*pb.EditOperation{{
+				Operation: &pb.EditOperation_Delete{Delete: &pb.DeleteEdit{
+					Target: "Demo::Base",
+				}},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("ApplyEdits failed the call: %v", err)
+		}
+		if resp.Failure != pb.EditFailure_EDIT_FAILURE_DELETE_REFERENCED {
+			t.Fatalf("failure = %s, want delete referenced", resp.Failure)
+		}
+		if len(resp.ReferringElements) == 0 {
+			t.Fatal("refusal did not identify referring elements")
 		}
 	})
 }

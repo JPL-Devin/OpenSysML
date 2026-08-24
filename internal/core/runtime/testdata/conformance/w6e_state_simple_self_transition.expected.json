@@ -1,0 +1,12 @@
+{
+  "type": "state",
+  "trace": true,
+  "events": [
+    {"signal": "again", "args": null}
+  ],
+  "finalState": "s",
+  "stateVisits": ["s", "s"],
+  "outputs": {
+    "log": {"type": "Integer", "value": 1291}
+  }
+}

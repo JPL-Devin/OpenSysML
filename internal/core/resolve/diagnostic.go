@@ -14,6 +14,9 @@ type Diagnostic struct {
 	// Fixes are the unambiguous edits resolving the diagnostic, offered by an
 	// editor as quick fixes.
 	Fixes []quickfix.Fix
+	// Warning reports a well-formedness rule the reference states as a warning:
+	// the model still resolves, so validation continues past it.
+	Warning bool
 }
 
 // CodeNameConflict marks a name declared twice in one namespace, counting the

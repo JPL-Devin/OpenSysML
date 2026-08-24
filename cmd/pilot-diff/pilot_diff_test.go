@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 func TestCategorizePilot(t *testing.T) {
@@ -139,13 +141,15 @@ func TestCollectFilesSkipsNestedRoots(t *testing.T) {
 	}
 }
 
-func TestCollectFilesByLanguage(t *testing.T) {
+// F34: a root carries both languages, so collection is extension-agnostic and
+// the language is decided per file.
+func TestCollectFilesBothLanguages(t *testing.T) {
 	repo := t.TempDir()
 	for _, rel := range []string{
-		"kerml/Example.kerml",
-		"kerml/Example.sysml",
-		"sysml/Example.kerml",
-		"sysml/Example.sysml",
+		"models/Example.kerml",
+		"models/Example.sysml",
+		"models/notes.md",
+		"models/nested/Other.kerml",
 	} {
 		path := filepath.Join(repo, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -156,138 +160,34 @@ func TestCollectFilesByLanguage(t *testing.T) {
 		}
 	}
 
-	tests := []struct {
-		name string
-		root corpusRoot
-		want []string
-	}{
-		{
-			name: "KerML",
-			root: corpusRoot{Name: "kerml", Dir: "kerml", Lang: languageKerML},
-			want: []string{"Example.kerml"},
-		},
-		{
-			name: "SysML",
-			root: corpusRoot{Name: "sysml", Dir: "sysml"},
-			want: []string{"Example.sysml"},
-		},
+	got, err := collectFiles(repo, corpusRoot{Name: "models", Dir: "models"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			got, err := collectFiles(repo, test.root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(got, test.want) {
-				t.Errorf("collectFiles() = %v, want %v", got, test.want)
-			}
-		})
+	want := []string{"Example.kerml", "Example.sysml", "nested/Other.kerml"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("collectFiles() = %v, want %v", got, want)
 	}
 }
 
-func TestBatchByBaseName(t *testing.T) {
-	got := batchByBaseName([]string{"a/x.sysml", "b/x.sysml", "c/y.sysml", "d/x.sysml"})
-	want := [][]string{
-		{"a/x.sysml", "c/y.sysml"},
-		{"b/x.sysml"},
-		{"d/x.sysml"},
+// F34: each language is one batch, so the reference still resolves cross-file
+// references within it, and SysML is compared first.
+func TestBatchByLanguage(t *testing.T) {
+	files := []string{"a.kerml", "b.sysml", "nested/c.kerml", "nested/d.sysml"}
+	got := batchByLanguage(files)
+	want := []languageBatch{
+		{Kind: source.KindSysML, Files: []string{"b.sysml", "nested/d.sysml"}},
+		{Kind: source.KindKerML, Files: []string{"a.kerml", "nested/c.kerml"}},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("batchByBaseName() = %v, want %v", got, want)
-	}
-}
-
-// The pilot processes its inputs sequentially, so an importing file must follow
-// the file declaring the imported namespace even when it sorts first.
-func TestOrderByImports(t *testing.T) {
-	dir := t.TempDir()
-	write := func(name, content string) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("a-user.sysml", "package User {\n\tprivate import 'Defs'::*;\n}\n")
-	write("b-defs.sysml", "package 'Defs' {\n\tpart def Thing;\n}\n")
-	write("c-standalone.sysml", "package Standalone;\n")
-
-	files := []string{"a-user.sysml", "b-defs.sysml", "c-standalone.sysml"}
-	want := []string{"b-defs.sysml", "c-standalone.sysml", "a-user.sysml"}
-	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
-		t.Errorf("orderByImports() = %v, want %v", got, want)
-	}
-}
-
-// A qualified import must match the longest declared namespace prefix.
-func TestOrderByImportsQualifiedPrefix(t *testing.T) {
-	dir := t.TempDir()
-	write := func(name, content string) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("z-provider.sysml", "package Wrapper {\n\tpackage SimpleVehicleModel {\n\t\tpart def Thing;\n\t}\n}\n")
-	write("a-importer.sysml", "package Views {\n\tprivate import Wrapper::SimpleVehicleModel::*;\n}\n")
-
-	files := []string{"a-importer.sysml", "z-provider.sysml"}
-	want := []string{"z-provider.sysml", "a-importer.sysml"}
-	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
-		t.Errorf("orderByImports() = %v, want %v", got, want)
-	}
-}
-
-// Top-level definitions, usages, and aliases are importable declarations too.
-func TestOrderByImportsDeclarations(t *testing.T) {
-	dir := t.TempDir()
-	write := func(name, content string) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("z-definition.sysml", "part def DefinitionThing;\n")
-	write("y-usage.sysml", "part usageThing;\n")
-	write("x-alias.sysml", "alias AliasThing for DefinitionThing;\n")
-	write("a-importer.sysml", "package Imports {\n\tprivate import DefinitionThing::*;\n\tprivate import usageThing::*;\n\tprivate import AliasThing::*;\n}\n")
-
-	files := []string{"a-importer.sysml", "z-definition.sysml", "y-usage.sysml", "x-alias.sysml"}
-	want := []string{"z-definition.sysml", "y-usage.sysml", "x-alias.sysml", "a-importer.sysml"}
-	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
-		t.Errorf("orderByImports() = %v, want %v", got, want)
-	}
-}
-
-// Repeated declarations must still propagate child prefixes from each occurrence.
-func TestOrderByImportsRepeatedPackage(t *testing.T) {
-	dir := t.TempDir()
-	write := func(name, content string) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("z-provider.sysml", "package Provider {\n\tpart first;\n}\npackage Provider {\n\tpackage Inner {\n\t\tpart second;\n\t}\n}\n")
-	write("a-importer.sysml", "package Views {\n\tprivate import Provider::Inner::*;\n}\n")
-
-	files := []string{"a-importer.sysml", "z-provider.sysml"}
-	want := []string{"z-provider.sysml", "a-importer.sysml"}
-	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
-		t.Errorf("orderByImports() = %v, want %v", got, want)
-	}
-}
-
-// An import cycle must not hang or drop files.
-func TestOrderByImportsCycle(t *testing.T) {
-	dir := t.TempDir()
-	for name, content := range map[string]string{
-		"a.sysml": "package A {\n\tprivate import B::*;\n}\n",
-		"b.sysml": "package B {\n\tprivate import A::*;\n}\n",
-	} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		t.Errorf("batchByLanguage() = %+v, want %+v", got, want)
 	}
 
-	files := []string{"a.sysml", "b.sysml"}
-	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, files) {
-		t.Errorf("orderByImports() = %v, want %v", got, files)
+	if got := batchByLanguage([]string{"only.sysml"}); len(got) != 1 || got[0].Kind != source.KindSysML {
+		t.Errorf("batchByLanguage() = %+v, want the SysML batch alone", got)
+	}
+	if got := batchByLanguage([]string{"only.kerml"}); len(got) != 1 || got[0].Kind != source.KindKerML {
+		t.Errorf("batchByLanguage() = %+v, want the KerML batch alone", got)
 	}
 }
 
@@ -328,7 +228,8 @@ func TestPilotLineParsing(t *testing.T) {
 	}
 }
 
-func TestKerMLDiagnosticsAttribution(t *testing.T) {
+// F6: both validators are single-batch and report paths relative to --root.
+func TestPilotDiagnosticsAttribution(t *testing.T) {
 	repo := t.TempDir()
 	rel := "Nested Space/Example.kerml"
 	file := filepath.Join(repo, filepath.FromSlash(rel))
@@ -344,7 +245,7 @@ func TestKerMLDiagnosticsAttribution(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := kermlDiagnostics(bridge, repo, ".", []string{rel}, 0)
+	got, err := pilotDiagnostics(bridge, repo, ".", []string{rel}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

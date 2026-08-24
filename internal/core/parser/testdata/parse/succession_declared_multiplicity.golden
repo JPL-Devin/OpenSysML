@@ -2,9 +2,13 @@
   (Membership visibility="default"
     (Package name="SuccessionDeclarations" library=false standard=false
       (Membership visibility="default"
-        (Definition kind="connection" abstract=false variation=false name="Before"))
+        (Definition kind="connection" abstract=false variation=false name="Before"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="source" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="target" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true))))
       (Membership visibility="default"
-        (Definition kind="action" abstract=false variation=false name="Process"
+        (Definition kind="action" abstract=false variation=false name="Base"
           (Usage kind="action" name="paint" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
           (Usage kind="action" name="dry" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
           (Membership visibility="default"
@@ -16,7 +20,11 @@
               (ConnectorEnd target="paint"
                 (*ast.QualifiedName))
               (ConnectorEnd target="dry"
-                (*ast.QualifiedName))))
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Process"
+          (Relationship kind="specializes" target=Base
+            (*ast.QualifiedName))
           (Membership visibility="default"
             (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="redefines" target=named

@@ -17,7 +17,7 @@ func nameresCtx(t *testing.T, name, src string) (*Context, *ast.RootNamespace) {
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
 	}
-	idx := symbols.NewIndexFromDoc(name, root)
+	idx := newTestIndexFromDoc(name, root)
 	return NewContext(name, idx, nil), root
 }
 
@@ -58,27 +58,32 @@ func parseDoc(t *testing.T, name, src string) *ast.RootNamespace {
 	return root
 }
 
-func TestNameResolutionPassReportsAmbiguous(t *testing.T) {
-	// Two documents each declare a top-level package P, so a qualified
-	// reference whose first segment is P has two global candidates and the
-	// resolver reports an ambiguous reference.
+// Two documents each declare a top-level package P. Resolution in the global
+// namespace is single-valued — KerML 8.2.3.5 resolves a qualified name to one
+// membership or to none, its operations selecting `memberships->first()` — so a
+// reference to P names the first document's P, and only what that P declares is
+// reachable through it. Distinguishable naming constrains a Namespace's own
+// members, and the global namespace is not one.
+func TestNameResolutionPassResolvesARepeatedTopLevelNameToTheFirst(t *testing.T) {
 	rootA := parseDoc(t, "a.sysml", "package P { namespace X; }")
 	rootB := parseDoc(t, "b.sysml", "package P { namespace Y; }")
 	rootC := parseDoc(t, "c.sysml", "package Q { alias A for P::X; }")
+	rootD := parseDoc(t, "d.sysml", "package R { alias B for P::Y; }")
 
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("a.sysml", rootA)
 	idx.AddDocument("b.sysml", rootB)
 	idx.AddDocument("c.sysml", rootC)
+	idx.AddDocument("d.sysml", rootD)
 
-	ctx := NewContext("c.sysml", idx, nil)
-	got := NameResolutionPass{}.Run(ctx, "c.sysml", rootC)
-	if len(got) == 0 {
-		t.Fatalf("expected an ambiguous diagnostic, got none")
+	got := NameResolutionPass{}.Run(NewContext("c.sysml", idx, nil), "c.sysml", rootC)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want P::X to resolve through the first P", got)
 	}
-	d := got[0]
-	if d.Source != "name-resolution" || d.Code != "ambiguous" || d.Severity != SeverityError {
-		t.Fatalf("got %+v, want source=name-resolution code=ambiguous severity=error", d)
+	// The second P is not consulted, so its member is not reachable under P.
+	got = NameResolutionPass{}.Run(NewContext("d.sysml", idx, nil), "d.sysml", rootD)
+	if len(got) != 1 || got[0].Code != "unresolved" || got[0].Severity != SeverityError {
+		t.Fatalf("got %+v, want one unresolved error for P::Y", got)
 	}
 }
 
@@ -168,9 +173,10 @@ func TestImplicitlyRedefiningParameterDoesNotBindItsKeyword(t *testing.T) {
 	}
 }
 
-// A nested usage sharing a name with an inherited feature is a name conflict:
-// it is a distinct feature, not a redefinition of the inherited one
-// (SysML 7.6.1, KerML 7.3.2.1).
+// A nested usage sharing a name with an inherited feature is indistinguishable
+// from it, which the reference reports as a warning, not an error, and names the
+// namespace it is inherited from (SysML 7.6.1, KerML 7.2.2; matched run against
+// the pinned validator, w6c).
 func TestNameResolutionPassReportsInheritedNameConflict(t *testing.T) {
 	got := nameresDiags(t, `package P {
 		part def Engine;
@@ -181,10 +187,10 @@ func TestNameResolutionPassReportsInheritedNameConflict(t *testing.T) {
 		t.Fatalf("got %+v, want one diagnostic", got)
 	}
 	d := got[0]
-	if d.Code != "name-conflict" || d.Source != "name-resolution" || d.Severity != SeverityError {
-		t.Fatalf("got %+v, want code=name-conflict source=name-resolution severity=error", d)
+	if d.Code != "name-conflict" || d.Source != "name-resolution" || d.Severity != SeverityWarning {
+		t.Fatalf("got %+v, want code=name-conflict source=name-resolution severity=warning", d)
 	}
-	if want := "name conflict: engine is already the name of the inherited feature Vehicle::engine"; d.Message != want {
+	if want := "Duplicate of inherited member name 'engine' from Vehicle"; d.Message != want {
 		t.Fatalf("message = %q, want %q", d.Message, want)
 	}
 	if d.Span.Len != len("engine") {

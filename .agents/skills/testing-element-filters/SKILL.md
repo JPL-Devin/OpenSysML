@@ -36,14 +36,60 @@ Fixture shapes that matter (copy them; the alternatives produce misleading resul
 - A recursive `import X::**` does not surface grandchildren (members of a nested package/part) even
   unfiltered, so a "filtered recursive import hides X" assertion needs an unfiltered control run or
   it proves nothing.
-- Any earlier-level error in the document (e.g. one `unresolved reference:`) suppresses the
-  `filter-not-boolean` / `filter-not-evaluable` diagnostics (`ElementFilterPass` runs at
-  `LevelType`). Keep the bad-filter fixture otherwise clean, or the diagnostics never appear.
+- **Gating is per-filter-condition, not per-document** (`ElementFilterPass` runs at `LevelType` but
+  declares `passes.ElementScoped`; wave 12A). An unrelated earlier-level error elsewhere in the file
+  no longer suppresses `filter-not-boolean` / `filter-not-evaluable`. Only the filter's *own*
+  classification `TypeRef` being unresolved gates it. So a fixture like
+  `alias Bad for P::Missing;` + `filter 1 + 2;` **does** now report `Must have a Boolean result`.
+  If you are testing on an older commit the document-wide behaviour applies instead — when a filter
+  diagnostic mysteriously fails to appear, check which side of that change you are on by running the
+  same fixture through a binary built from both commits. Don't assert "absent" without that control.
 - Corollary: a filter whose condition names an **unresolvable** metadata type (`filter @NoSuchType;`)
-  never produces `filter-not-evaluable` — it produces a name-resolution error
-  (`unresolved reference: NoSuchType`), which then suppresses the filter pass. The filter is simply
-  not applied. To assert the `filter-not-evaluable` warning, use a condition that resolves but is
-  outside the supported subset (`filter @Meta::Safety + 1;`).
+  still produces only the name-resolution error (`unresolved reference: NoSuchType`) and *no*
+  `filter-not-evaluable` — that specific suppression is the point of the per-element gate and holds
+  for `@`, `@@`, `istype`, `hastype`, recursed through boolean composition. To assert the
+  `filter-not-evaluable` warning, use a condition that resolves but is outside the supported subset
+  (`filter @Meta::Safety + 1;`).
+- **An operator that is Boolean whatever its operands are gates on any unresolved operand,** not just
+  classification `TypeRef`s — the logical set (`not`, `and`, `or`, `xor`, `implies`) *and* the
+  comparisons (`==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=`), and for `istype`/`hastype` the tested
+  operand as well as the named type. So `filter @Safe and Undefined;`,
+  `filter Undefined1 and Undefined2;`, `filter Undefined == 1;` and
+  `filter Undefined istype Safe;` yield only the
+  unresolved-reference error, matching the pinned pilot, which reports nothing at that line (its
+  `Must have a Boolean result` is satisfied by the top-level operator). A *bare*
+  `filter Undefined;` still reports — the pilot reports there too. These shapes are absent from the
+  four OMG corpora, so the differential's only-ours count will not catch a regression here; probe
+  them with hand-written fixtures plus
+  `build/pilot-sysml-validator/validate-sysml-batch --root <dir> <file>` as the referee.
+- **Syntactically malformed conditions are a distinct risk class, and the cheapest bug to reintroduce.**
+  A classification test with no type (`filter x istype ;`, `x hastype ;`, `@;`, `@@;`) parses to an
+  `*ast.OperatorExpr` whose `TypeRef` is a **typed nil** `*ast.QualifiedName`. `DownstreamOfFailure`
+  only guards `ref == nil`, which a typed nil passes, so it reaches `ref.Span()` and panics — the
+  `op.TypeRef == nil` arm of `gated()` (which treats the missing type as its own resolution failure,
+  so the syntax error stands alone as the pilot has it) is the only thing preventing it. To prove
+  that arm is load-bearing rather than decorative, delete it, rebuild, and check all four shapes
+  panic; a plain `go test` alone will not tell you it matters. Note `gated()` also hands raw `ast.Node`
+  interface values from `op.Operands` (and `f.Expr`) to `DownstreamOfFailure`/`gated` *without* that
+  guard, so if the parser ever starts emitting typed-nil operands instead of `ErrorNode`s the same
+  panic returns by a different door — sweep `filter x == ;`, `filter and x;`, `filter not ;`,
+  `filter ((@)) ;` and friends after any parser change.
+- Malformed shapes whose *operand* the parser recovered as an `ErrorNode` (`filter x == ;`,
+  `filter and x;`) are still judged, so they can emit `Must be model-level evaluable` on a document
+  whose only other fault is a parse error, where the pilot reports just the syntax error. The pilot
+  does corroborate the well-formed-but-non-Boolean cases (`filter ;`, `filter not ;`,
+  `filter x + ;`). Treat the rest as a known divergence confined to already-invalid documents, and
+  referee any new one with the pilot rather than assuming it is fine.
+- The gate's `default: return false` arm means operators whose result is **not** Boolean regardless
+  (notably arithmetic `+`) do *not* gate on unresolved operands, so `filter Undefined + 1;` still
+  reports — and the pilot reports there too, so that is correct, not noise. Don't "fix" it.
+- Metadata annotations gate the same per-annotation way (`MetadataTypePass`), and unlike the filter
+  pass its `pm.Type` is a concrete `*ast.QualifiedName` guarded by `pm.Type == nil`, so it has no
+  typed-nil exposure; malformed annotations (`#;`, `# part p;`, `#(;`) are safe. Note our
+  `Must have a concrete type` is emitted at the **file start (`1:1`)** rather than at the annotation
+  line, where the pilot puts it. That mis-attribution predates wave 12A — don't score it as a
+  regression, but don't key an assertion on the line number either; assert presence/absence by
+  toggling the annotation in and out of the fixture.
 - Filters at a document's **root** (no enclosing package) are a separate code path: both
   `import Lib::*[@Lib::Safety];` and a bare `filter @Lib::Safety;` written at file top level gate the
   resolver's top-level fallback (`resolve/qualified.go lookupGlobalTop`). Root filters are **per

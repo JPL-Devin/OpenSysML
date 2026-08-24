@@ -1,0 +1,36 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ReturnUsages" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Engine"))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="SelectEngine"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="engine" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Engine
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Usage kind="attribute" name="selectedEngine" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="subsets" target=engine
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Profile"
+          (Usage kind="attribute" name="accelerationProfile" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Real
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInfinity))
+            (SequenceExpr))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Sum"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (*ast.ResultMember))))))

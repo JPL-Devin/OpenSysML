@@ -35,7 +35,7 @@ func BodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
 
 // newBodyExprScope creates and links the scope body's parameters declare into.
 func newBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
-	if len(body.Params) == 0 {
+	if len(body.Params) == 0 && len(body.Members) == 0 {
 		return parent
 	}
 	scope := NewScope(parent, body)
@@ -56,6 +56,7 @@ func newBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
 			OwnerScope: scope,
 		})
 	}
+	buildMembers(scope, body.Members)
 	parent.AddChild(scope)
 	return scope
 }
@@ -65,9 +66,28 @@ func bodyScopeChild(scope *Scope, decl ast.Node) *Scope {
 	return scope.ChildFor(decl)
 }
 
+// nodeBodyScope returns the scope the body of an action node resolves against:
+// its own where the builder gave it one, and the enclosing scope otherwise.
+func nodeBodyScope(scope *Scope, node ast.Node) *Scope {
+	if child := bodyScopeChild(scope, node); child != nil {
+		return child
+	}
+	return scope
+}
+
 // bodyScopesInDecl walks the expressions a declaration carries, descending into
 // the child scopes its body resolves against.
 func bodyScopesInDecl(scope *Scope, decl ast.Node) {
+	if prefixes := prefixMetadataOf(decl); len(prefixes) > 0 {
+		for _, prefix := range prefixes {
+			if prefix == nil || len(prefix.Body) == 0 {
+				continue
+			}
+			if child := bodyScopeChild(scope, prefix); child != nil {
+				buildBodyScopes(child, prefix.Body)
+			}
+		}
+	}
 	switch d := decl.(type) {
 	case *ast.Package:
 		if child := bodyScopeChild(scope, d); child != nil {
@@ -79,6 +99,10 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		}
 	case *ast.FilterMember:
 		bodyScopesInExpr(scope, d.Condition)
+	case *ast.PrefixMetadata:
+		if child := bodyScopeChild(scope, d); child != nil {
+			buildBodyScopes(child, d.Body)
+		}
 	case *ast.Definition:
 		bodyScopesInRelationships(scope, d.Relationships)
 		if child := bodyScopeChild(scope, d); child != nil {
@@ -116,6 +140,9 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		}
 	case *ast.InitialNode:
 		bodyScopesInExpr(scope, d.Guard)
+		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		buildBodyScopes(nodeBodyScope(scope, d), ast.NodeBodyMembers(d))
 	case *ast.ResultMember:
 		bodyScopesInExpr(scope, d.Expression)
 	case *ast.ConstraintMember:
@@ -162,9 +189,12 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		body := newTriggerScope(scope, d)
 		bodyScopesInExpr(body, d.Guard)
 		buildBodyScopes(body, d.Effect)
+		buildBodyScopes(body, d.Members)
 	case *ast.SendStatement:
 		bodyScopesInExpr(scope, d.Message)
 		bodyScopesInExpr(scope, d.Target)
+		bodyScopesInExpr(scope, d.Receiver)
+		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
 	case *ast.TerminateStatement:
 		bodyScopesInExpr(scope, d.Target)
 	case *ast.AssignmentActionNode:
@@ -195,6 +225,9 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 			body = child
 		}
 		buildBodyScopes(body, d.Body)
+	default:
+		// Bare expression members can contain nested body expressions.
+		bodyScopesInExpr(scope, decl)
 	}
 }
 
@@ -385,7 +418,9 @@ func bodyScopesInExpr(scope *Scope, e ast.Node) {
 		for i := range v.Params {
 			bodyScopesInExpr(scope, v.Params[i].Value)
 		}
-		bodyScopesInExpr(newBodyExprScope(scope, v), v.Result)
+		body := newBodyExprScope(scope, v)
+		buildBodyScopes(body, v.Members)
+		bodyScopesInExpr(body, v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			bodyScopesInExpr(scope, el)

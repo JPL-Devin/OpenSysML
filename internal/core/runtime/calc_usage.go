@@ -500,7 +500,7 @@ func (ctx *Context) checkCalcTyping(sym *symbols.Symbol) error {
 func (ctx *Context) runCalcUsage(
 	shape *calcShape, ec, nested *EvalContext, env map[string]Value, reader *EvalContext,
 ) (*calcRun, error) {
-	result, returned, activation, err := ctx.runCalcSteps(shape, env)
+	result, returned, activation, err := ctx.runCalcSteps(shape, env, reader.self)
 	if err != nil {
 		if ec.trace != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
@@ -728,12 +728,7 @@ func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, boo
 		}
 	}
 	sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, ref.Name)
-	if !ok || !isOccurrenceUsage(sym) || !ec.ctx.occursOnce(sym) {
-		return nil, false
-	}
-	// A variation classifies its variants abstractly, so it is no occurrence of
-	// itself: a chain through it is read from the variant it is bound to.
-	if ec.ctx.model.IsVariationFeature(sym) {
+	if !ok || !ec.ctx.namesOneObject(sym) {
 		return nil, false
 	}
 	return sym, true

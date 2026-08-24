@@ -15,6 +15,11 @@ type InitialNode struct {
 	// Keyword is the word the node was written with, `first` or `initial`: only
 	// the first is SysML v2 notation.
 	Keyword string
+	// Members are the members of the body the succession was written with
+	// (`first start then continue { … }`), and HasBody that it was written with
+	// one rather than ended by ';'.
+	Members []Node
+	HasBody bool
 }
 
 // FinalNode is the termination point for action execution.
@@ -30,6 +35,11 @@ type ForkNode struct {
 	NodeBase
 	Name     string
 	NameSpan source.Span // span of Name, empty for an unnamed node
+	// Members and HasBody carry the body every ControlNode may declare
+	// (SysML.xtext ControlNode: `UsageDeclaration? ActionBody`), which is where
+	// the node's parameters are written (`fork F { in a; out b; }`).
+	Members []Node
+	HasBody bool
 }
 
 // JoinNode synchronizes concurrent flows (N incoming → 1 outgoing).
@@ -37,6 +47,8 @@ type JoinNode struct {
 	NodeBase
 	Name     string
 	NameSpan source.Span // span of Name, empty for an unnamed node
+	Members  []Node      // body members, as on ForkNode
+	HasBody  bool
 }
 
 // MergeNode merges alternative flows (N incoming → 1 outgoing, first-wins).
@@ -44,6 +56,8 @@ type MergeNode struct {
 	NodeBase
 	Name     string
 	NameSpan source.Span // span of Name, empty for an unnamed node
+	Members  []Node      // body members, as on ForkNode
+	HasBody  bool
 }
 
 // DecisionNode is a conditional branch point (1 incoming → N guarded outgoing).
@@ -54,6 +68,30 @@ type DecisionNode struct {
 	// Keyword is the word the node was written with, `decide` or `decision`:
 	// only the first is SysML v2 notation.
 	Keyword string
+	Members []Node // body members, as on ForkNode
+	HasBody bool
+}
+
+// NodeBodyMembers returns the members of the body an action node declares, and
+// nil for a node that declares no body or admits none.
+func NodeBodyMembers(n Node) []Node {
+	switch v := n.(type) {
+	case *ForkNode:
+		return v.Members
+	case *JoinNode:
+		return v.Members
+	case *MergeNode:
+		return v.Members
+	case *DecisionNode:
+		return v.Members
+	case *InitialNode:
+		return v.Members
+	case *TransitionMember:
+		return v.Members
+	case *SendStatement:
+		return v.Members
+	}
+	return nil
 }
 
 // ActionExecutionNode performs action work: invokes nested action or evaluates inline expression.
@@ -121,6 +159,10 @@ type WhileLoopActionNode struct {
 	// the loop's own body scope, never of the enclosing behavior. Zero for the
 	// other loop forms.
 	Variable Identification
+	// VariableRelationships are the specializations the iteration variable was
+	// declared with (`for n : ScalarValues::Integer in …`), empty when it stated
+	// none: SysML.xtext ForVariableDeclaration is a full UsageDeclaration.
+	VariableRelationships []*Relationship
 	// Collection is the expression a `for` loop iterates over, nil otherwise.
 	Collection Node
 }
@@ -262,6 +304,9 @@ type SuccessionEdge struct {
 	// beside the keyword as written, set once when the body is parsed.
 	SourceMember Node
 	TargetMember Node
+	// Members are the body an action target succession carries
+	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody).
+	Members []Node
 }
 
 // ControlFlowEdge is guarded control flow from decision nodes.
@@ -387,6 +432,9 @@ type ConstraintMember struct {
 // Syntax: subject <name> : <Type>; OR subject = <expr>;
 type SubjectMember struct {
 	NodeBase
+	// Prefixes are the metadata written after the keyword: the `#B` of
+	// `subject #B s` (SysML.xtext SubjectUsage UsageExtensionKeyword).
+	Prefixes      []*PrefixMetadata
 	Name          string
 	TypeRef       *QualifiedName  // subject type (for declaration form)
 	Multiplicity  *Multiplicity   // optional multiplicity
@@ -402,18 +450,42 @@ type SubjectMember struct {
 // Syntax: assume <expression>; OR assume constraint { <expression>... } OR assume <Q::r> { body }
 type AssumeMember struct {
 	NodeBase
+	// Prefix metadata written before the declaration: `assume #goal constraint c;`.
+	Prefixes   []*PrefixMetadata
 	Expression Node           // assumption condition (for expression form)
 	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
 	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
+	// Declaration of the constraint the member owns, when it is written with
+	// one: `assume constraint c1 : C;`.
+	Name          string
+	NameSpan      source.Span
+	Relationships []*Relationship
+	Multiplicity  *Multiplicity
+	Value         Node
+	// HasBody records that the member was written with braces, which an empty
+	// body does not otherwise show.
+	HasBody bool
 }
 
 // RequireMember represents a requirement constraint.
 // Syntax: require <expression>; OR require constraint { <expression>... } OR require <Q::r> { body }
 type RequireMember struct {
 	NodeBase
+	// Prefix metadata written before the declaration: `require #goal r;`.
+	Prefixes   []*PrefixMetadata
 	Expression Node           // requirement condition (for expression form)
 	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
 	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form
+	// Declaration of the constraint the member owns, when it is written with
+	// one: `require constraint c1 : C;`.
+	Name          string
+	NameSpan      source.Span
+	Relationships []*Relationship
+	Multiplicity  *Multiplicity
+	Value         Node
+	// HasBody records that the member was written with braces, which an empty
+	// body does not otherwise show.
+	HasBody bool
 }
 
 // Phase C4: State Body Members
@@ -466,14 +538,22 @@ type TransitionMember struct {
 	Source  *QualifiedName // source state
 	Target  *QualifiedName // target state
 	Trigger Node           // optional trigger event (TimeEvent/ChangeEvent/etc)
-	Guard   Node           // optional guard expression
-	Effect  []Node         // optional effect actions
+	// TriggerSpan spans the accepter the trigger keyword introduces
+	// (`accept A`), which is the element the accepter rules are about.
+	TriggerSpan source.Span
+	Guard       Node   // optional guard expression
+	Effect      []Node // optional effect actions
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName
 	// ToSpan spans the `to` of the second spelling, and is empty when the
 	// transition was written the standard way.
 	ToSpan source.Span
+	// Members and HasBody carry the body a transition may declare, since both
+	// TransitionUsage and TargetTransitionUsage end in ActionBody
+	// (`then starting { … }`).
+	Members []Node
+	HasBody bool
 }
 
 // SendStatement sends a message to a target.
@@ -485,9 +565,17 @@ type TransitionMember struct {
 // was written so routing can tell them apart.
 type SendStatement struct {
 	NodeBase
-	Message Node // message expression (often NewExpression)
+	Message Node // message expression (often NewExpression); nil when the send declared none
 	Target  Node // target expression: the receiver (`to`) or the sending port (`via`)
 	IsVia   bool // the target is a port to route through, not a receiver
+	// Receiver is the receiver of a send that states both clauses (`send x via p
+	// to r`), which SysML.xtext SenderReceiverPart allows.
+	Receiver Node
+	// Members and HasBody carry the body SysML.xtext SendNode ends in, where the
+	// message a send with no argument carries is declared (`send { in :>> payload
+	// = s; }`).
+	Members []Node
+	HasBody bool
 }
 
 // TerminateStatement terminates an action or lifecycle.

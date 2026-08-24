@@ -11,4 +11,5 @@ why. The handbook that puts them in order is [the guide](../guide/).
 - **[Python API](python-api.md)** — `opensysml`, its generated typed classes and latency
 - **[RDF mapping](rdf-mapping.md)** — which triples a model becomes, what is not mapped, and
   why the mapping is experimental
+- **[OSLC Query text](oslc-query.md)** — element-identification query syntax and semantics
 - **[Grammar](grammar/README.md)** — grammar production → parser implementation

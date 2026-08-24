@@ -15,6 +15,13 @@ func TestNegative(t *testing.T) {
 		input string
 	}{
 		{"unclosed_brace", "part {"},
+		// The reference form of `include` subsets an existing use case, so it names
+		// one (SysML.xtext:2300 IncludeUseCaseUsage).
+		{"include_without_target", "package P { use case def U { include ; } }"},
+		// A direction prefixes the feature it applies to (SysML.xtext:554
+		// FeatureDirection).
+		{"direction_without_feature_action", "package P { action def A { in ; } }"},
+		{"direction_without_feature_part", "package P { part def D { out ; } }"},
 		{"empty_requirement", "requirement r { require ; }"},
 		{"empty_expression", "attribute x = ;"},
 		{"numeric_name", "part def 123;"},
@@ -41,6 +48,46 @@ func TestNegative(t *testing.T) {
 		{"constraint_params_assert_no_condition", "constraint c { in x : Real; assert; }"},
 		{"constraint_params_assume_no_condition", "constraint c { in x : Real; assume }"},
 		{"constraint_params_assert_not_no_condition", "constraint c { in x : Real; assert not; }"},
+		// A require member referencing a requirement takes specializations and a
+		// body, so neither may be left half written.
+		{"require_reference_no_specialization_type", "requirement r { require Q::x : ; }"},
+		{"require_reference_unclosed_body", "requirement r { require Q::x { require x > 0; }"},
+		// Prefix metadata needs a name, and the declaration after it a terminator.
+		{"require_prefix_metadata_no_type", "requirement r { require #; }"},
+		{"require_prefix_metadata_unterminated", "requirement r { require #goal c }"},
+		// A target succession's body closes, and its ends are still required
+		// (SysML.xtext:1698 ActionTargetSuccession).
+		{"succession_body_unclosed", "package P { action def A { action a; first a; then a { doc /* x */ } }"},
+		{"succession_body_no_target", "package P { action def A { action a; first a; then { } } }"},
+		// Only an action body item reaches ActionTargetSuccession (SysML.xtext:1698), so a
+		// bodied `then` is not a state, definition or namespace member (:1796-1801, :516-524).
+		{"entry_succession_body", "package P { state def S { state starting; entry; then starting { doc /* x */ } } }"},
+		{"definition_succession_body", "package P { part def D { part a; part b; then b { doc /* x */ } } }"},
+		{"namespace_succession_body", "package P { action a; action b; then b { doc /* x */ } }"},
+		// A control node in a case body takes a declaration or nothing, and its
+		// body closes (SysML.xtext:1676 JoinNode, :1682 ForkNode).
+		{"case_body_fork_unclosed", "package P { use case def U { fork f { action a; } }"},
+		{"case_body_join_no_terminator", "package P { use case def U { join j } }"},
+		// A `for` in a case body states a variable and a sequence
+		// (SysML.xtext ForLoopNode).
+		{"case_body_for_no_variable", "package P { analysis def A { for in xs { } } }"},
+		{"case_body_for_no_sequence", "package P { analysis def A { for i in { } } }"},
+		// A metadata usage's `about` names at least one annotated element
+		// (SysML.xtext:145-147).
+		{"metadata_about_no_target", "package P { metadata def M; @M about ; }"},
+		{"metadata_about_trailing_comma", "package P { metadata def M; part a; @M about a, ; }"},
+		// A prefixed dependency still states both of its ends
+		// (SysML.xtext:55-58).
+		{"prefixed_dependency_no_supplier", "package P { metadata def M; part a; #M dependency d from a to ; }"},
+		// A verification's requirement reference is a name, chained or not
+		// (SysML.xtext:2119).
+		{"verify_chained_no_member", "package P { verification def V { verify a. ; } }"},
+		// `not` negates a satisfaction, and nothing else at member level.
+		{"not_without_satisfy", "package P { not r1 by p; }"},
+		{"not_satisfy_no_subject", "package P { not satisfy r1 by ; }"},
+		// A guarded succession needs a guard expression and a target after it.
+		{"guarded_succession_no_guard", "action def A { action a; action b; succession S first a if then b; }"},
+		{"guarded_succession_no_target", "action def A { action a; succession S first a if x == 0 then ; }"},
 		{"state_fork_no_name", "state s { fork ; }"},
 		{"state_join_no_semicolon", "state s { join sync state t; }"},
 		{"call_trigger_unclosed_params", "state s { accept op(a then t; }"},
@@ -48,6 +95,11 @@ func TestNegative(t *testing.T) {
 		{"perform_no_reference", "action a { perform ; }"},
 		{"perform_dangling_chain", "action a { perform b.; }"},
 		{"allocate_missing_target", "package q { allocate a to ; }"},
+		// `allocate` is one keyword with one role, and it must be followed by a
+		// ConnectorPart (D1, SysML.xtext:1219-1222).
+		{"allocate_without_connector_part", "package q { allocate al; }"},
+		{"allocate_with_body_and_no_ends", "package q { allocate al { } }"},
+		{"allocate_def", "package q { allocate def D; }"},
 		{"message_payload_declaration_no_type", "message m of pay : from a to b;"},
 		{"message_payload_declaration_no_target", "message m of pay : T from a;"},
 		// `state s { defer ; }` and `state s { history ; }` are no longer malformed:
@@ -238,6 +290,35 @@ func TestNegative(t *testing.T) {
 		{"accept_statement_no_payload_type", "action def A { loop { accept e : ; } }"},
 		{"accept_statement_via_no_port", "action def A { loop { accept e : E via; } }"},
 		{"then_accept_no_payload", "action def A { action b; then accept; }"},
+
+		// A word SysML.xtext does not reserve names a usage, so a declaration so
+		// named that is malformed is still reported rather than read as the
+		// KerML relationship the same word states elsewhere.
+		{"part_named_chains_no_type", "part chains : ;"},
+		{"part_named_differences_no_terminator", "part differences"},
+		{"part_named_disjoint_no_type", "part disjoint : ;"},
+		{"part_named_type_no_type", "part type : ;"},
+		// The relationship spelling still states the relationship where one
+		// belongs, so its missing operand is still an error.
+		{"usage_disjoint_from_no_target", "part def T { part a; part b disjoint from ; }"},
+		{"usage_inverse_of_no_target", "part def T { part a; part b inverse of ; }"},
+		{"usage_chains_no_target", "part def T { part a; part b chains ; }"},
+		{"usage_featured_by_no_target", "part def T { part b featured by ; }"},
+
+		// The generalized usage declaration widening keeps its neighbouring
+		// malformed spellings reported (F66).
+		{"ref_redefines_no_target", "part def T { ref redefines [4]; }"},
+		{"ref_redefines_unclosed_multiplicity", "part def T { ref redefines x[4; }"},
+		{"verify_redefines_no_target", "requirement def R { verify r :>> ; }"},
+		{"variant_use_case_no_type", "use case def U { variant use case uc : ; }"},
+		{"assert_not_no_condition", "part def T { assert not ; }"},
+		{"assert_not_no_body_end", "part def T { assert not c { }"},
+
+		// `frame` and `render` are SysML keywords, so a framing or rendering
+		// with no reference is reported rather than read as a name.
+		{"frame_no_concern", "viewpoint def V { frame; }"},
+		{"frame_concern_no_declaration", "viewpoint def V { frame concern }"},
+		{"render_no_rendering", "view def V { render; }"},
 	}
 
 	for _, tt := range tests {
@@ -281,11 +362,33 @@ func TestNegativeKerML(t *testing.T) {
 		{"succession_declaration_no_target", "package P { behavior B { step a; succession s : L [1] first a then ; } }"},
 		{"succession_declaration_no_ends", "package P { behavior B { succession s : L [1] first then; } }"},
 
+		// A named multiplicity states bounds or a subsetting, and the
+		// subsetting names one multiplicity (KerML.xtext:754).
+		{"multiplicity_subsets_no_target", "package P { multiplicity m subsets ; }"},
+		{"multiplicity_subsets_no_terminator", "package P { multiplicity zeroOrMore [0..*]; multiplicity m subsets zeroOrMore }"},
+		{"multiplicity_bounds_and_subsets", "package P { multiplicity zeroOrMore [0..*]; multiplicity m [0..*] subsets zeroOrMore; }"},
+
+		// An index states a sequence of at least one expression and closes
+		// (KerMLExpressions.xtext PrimaryExpression).
+		{"index_sequence_unclosed", "package P { feature a; feature b = a#(1, 2; }"},
+		{"index_sequence_empty", "package P { feature a; feature b = a#(); }"},
+		{"index_sequence_trailing_comma", "package P { feature a; feature b = a#(1,); }"},
+		{"index_bracket_unclosed", "package P { feature a; feature b = a[1, 2; }"},
+
 		// A word the KerML grammar does not reserve names a feature, so a
 		// declaration so named that is malformed is still reported.
 		{"feature_named_merge_no_type", "package P { feature merge : ; }"},
 		{"feature_named_at_no_terminator", "package P { feature at }"},
 		{"import_named_while_no_terminator", "package P { public import while }"},
+
+		// A KerML literal states its relationship where a name would go, so it
+		// does not name a feature there (the pinned KerML validator answers
+		// "no viable alternative at input 'chains'").
+		{"feature_named_chains", "package P { class T; feature chains : T; }"},
+		// A word KerML.xtext does not reserve names a feature, so a malformed
+		// declaration so named is still reported.
+		{"feature_named_frame_no_type", "package P { feature frame : ; }"},
+		{"feature_named_state_no_terminator", "package P { feature state }"},
 	}
 
 	for _, tt := range tests {

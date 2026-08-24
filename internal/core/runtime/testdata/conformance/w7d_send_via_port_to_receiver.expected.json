@@ -1,0 +1,8 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"receiverGot": {"type": "Integer", "value": 42},
+		"siblingGot": {"type": "Integer", "value": 7}
+	}
+}

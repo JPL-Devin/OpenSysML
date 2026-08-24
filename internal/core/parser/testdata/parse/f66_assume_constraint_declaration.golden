@@ -1,0 +1,33 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="AssumedConstraints" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Membership visibility="default"
+        (Definition kind="constraint" abstract=false variation=false name="C"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="fuelLevel" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="R"
+          (SubjectMember name="vehicle" type="Vehicle")
+          (AssumeMember constraint="c1"
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))
+          (AssumeMember constraint="fuelConstraint"
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator=">="
+                (FeatureChainExpr member="fuelLevel"
+                  (FeatureReference name="vehicle"))
+                (LiteralReal value="0.0"))))
+          (RequireMember constraint="r1"
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))
+          (RequireMember
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator="<"
+                (FeatureChainExpr member="fuelLevel"
+                  (FeatureReference name="vehicle"))
+                (LiteralReal value="100.0")))))))))

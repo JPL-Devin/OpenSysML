@@ -7,6 +7,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
+// KerML notation (`namespace`, `connector from/to`, the `all` prefix), so the
+// fixture is a `.kerml` source: `all` is not a SysML.xtext declaration prefix.
 func TestConnectorReferencesKeyword(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -45,7 +47,7 @@ namespace Test {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			src := source.New("test.sysml", []byte(tt.input))
+			src := source.New("test.kerml", []byte(tt.input))
 			p := parser.New(src)
 			_ = p.ParseFile()
 

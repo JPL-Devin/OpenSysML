@@ -22,8 +22,7 @@ func (s *Session) browseIndex() *symbols.Index {
 		return idx
 	}
 	if s.idx == nil {
-		s.idx = symbols.NewIndex()
-		model.LoadStdlibInto(s.idx)
+		s.idx = model.NewIndexWithStdlib()
 	}
 	return s.idx
 }
@@ -143,11 +142,11 @@ func (s *Session) suggestSymbol(name string) []string {
 	return out
 }
 
-// declaredSymbolNames returns the names the session document declares, at every
+// declaredSymbolNames returns the names the session documents declare, at every
 // nesting level, sorted.
 func (s *Session) declaredSymbolNames() []string {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
+	docScopes := s.docScopes()
+	if len(docScopes) == 0 {
 		return nil
 	}
 	seen := map[string]bool{}
@@ -163,7 +162,9 @@ func (s *Session) declaredSymbolNames() []string {
 			collect(child)
 		}
 	}
-	collect(doc.Scope)
+	for _, scope := range docScopes {
+		collect(scope)
+	}
 	out := make([]string, 0, len(seen))
 	for n := range seen {
 		out = append(out, n)

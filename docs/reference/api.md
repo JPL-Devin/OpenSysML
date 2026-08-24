@@ -2,6 +2,14 @@
 
 Complete API reference for OpenSysML packages.
 
+## Python authoring
+
+`Editor.add_member(owner, kind, name, type=None, multiplicity=None, value=None,
+specializes=None)` and its typed `add_*` helpers create declarations while
+preserving untouched source bytes. `Editor.delete(target, cascade=False)`
+removes declarations transactionally. `opensysml.loads(content, language=None,
+strict=False)` loads inline SysML or KerML for this workflow.
+
 ## Overview
 
 OpenSysML is organized into core packages under `internal/core/`, with frontends in `internal/lsp/` and `internal/repl/`.
@@ -561,6 +569,11 @@ repl.Loop(reader, os.Stdout, session)
 
 ## SysML v2 API & Services `Query`
 
+This section describes the structured API Query surface. OpenSysML also accepts
+OSLC Query text for element identification; see [OSLC Query text](oslc-query.md).
+The two surfaces intentionally differ: structured queries support `or`, while
+OSLC compound terms support only `and`, so neither surface subsumes the other.
+
 The gRPC service implements the query surface the **SysML v2 API & Services**
 standard defines, so a client that speaks that API — the
 [`SysML-v2-API-Java-Client`](https://github.com/Systems-Modeling/SysML-v2-API-Java-Client),
@@ -641,7 +654,8 @@ answer.
 
 Mapping OpenSysML's symbol kinds onto the standard's metamodel type names is the
 substantive design decision here; `metamodelTypeNames`
-(`internal/grpc/query.go`) is the single source of truth, and
+(`internal/grpc/query.go`) is the single source of truth, refined per element by
+`MetamodelTypeNameOf` for the kinds one kind spans several metaclasses for, and
 `TestMetamodelTypeNameCoversEveryKind` keeps it total over every kind a parsed
 declaration can have. A standard-library element restored from cache may carry no
 kind at all, and then reports **no** `@type`: it is answered, but never matches a
@@ -666,14 +680,22 @@ kind at all, and then reports **no** `@type`: it is answered, but never matches 
 | `enumerationDef` / `enumerationUsage`, `metadataDef` / `metadataUsage`, `metaclass` | `EnumerationDefinition` / `EnumerationUsage`, `MetadataDefinition` / `MetadataUsage`, `Metaclass` |
 | `comment`, `documentation`, `textualRepresentation`, `dependency` | `Comment`, `Documentation`, `TextualRepresentation`, `Dependency` |
 
-Three kinds have no distinct metamodel type, and report the closest one that
-exists — documented as approximations rather than hidden:
+Three kinds spell a metamodel type the notation's keyword does not name
+directly. Each is the metaclass the pinned grammar's own production returns, so
+none of the three is an approximation:
 
 | OpenSysML kind | `@type` | Why |
 |---|---|---|
-| `individualDef` / `individualUsage` | `OccurrenceDefinition` / `OccurrenceUsage` | An individual is an occurrence with `isIndividual` set, not a type of its own |
-| `connectorEnd` | `Feature` | A connector end is a `Feature` with `isEnd` set |
-| `alias` | `Membership` | An alias is a named membership, not an element |
+| `individualDef` / `individualUsage` | `OccurrenceDefinition` / `OccurrenceUsage` | `IndividualDefinition returns SysML::OccurrenceDefinition` (`SysML.xtext`): an individual *is* an occurrence, with `isIndividual` set. The metamodel has no individual class to report |
+| `connectorEnd` | `ReferenceUsage`, or `PortUsage` on an interface | `ConnectorEnd returns SysML::ReferenceUsage` and `InterfaceEnd returns SysML::PortUsage` (`SysML.xtext`), so the end is named by the connector that declares it — `MetamodelTypeNameOf` reads the owning declaration to tell the two apart |
+| `alias` | `Membership` | `AliasMember returns SysML::Membership`: an alias is a named membership, not an element of its own |
+
+One kind reports a type only when the model being queried declares it.
+`kerMLType` covers KerML's `class`, `struct`, `assoc`, `behavior`, `predicate`
+and `interaction`, which are distinct metaclasses the symbol kind does not
+record; `MetamodelTypeNameOf` recovers the metaclass from the declaration's
+keyword. A `kerMLType` restored from the library cache carries no declaration and
+so reports no `@type`, like any cached element whose kind was not retained.
 
 ### Comparison semantics
 

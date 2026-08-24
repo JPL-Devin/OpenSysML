@@ -11,192 +11,157 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// IndexPoolEnvVar names the variable holding how many prewarmed library indexes
-// the service keeps. Zero disables prewarming, so every cache miss builds its
-// own index inline, as it did before the pool existed.
-const IndexPoolEnvVar = "SYSML_GRPC_INDEX_POOL"
+// IndexPrewarmEnvVar names the variable saying whether the service builds the
+// standard library index before the requests that need it. Zero disables
+// prewarming, so the first request builds it.
+const IndexPrewarmEnvVar = "SYSML_GRPC_INDEX_POOL"
 
-// DefaultIndexPoolSize is how many prewarmed library indexes a service keeps
-// when IndexPoolEnvVar is unset.
-const DefaultIndexPoolSize = 4
+// DefaultIndexPrewarm is the value IndexPrewarmEnvVar takes when unset: any
+// positive value prewarms, since one library index now serves every model.
+const DefaultIndexPrewarm = 4
 
-// libraryBuilder builds one index holding the standard library and nothing
-// else. It is a field of indexPool so a test can count the indexes a service
-// builds, and stand in a library of its own.
+// libraryBuilder builds one frozen index holding the standard library and
+// nothing else. It is a field of libraryBase so a test can count the builds a
+// service does, and stand in a library of its own.
 type libraryBuilder func() *symbols.Index
 
-// buildLibraryIndex loads every standard library file into a fresh index,
-// expands the library's wildcard imports and caches the records of whatever had
-// to be parsed. An incomplete library is not persisted: a record is keyed by
-// content alone, so it would be reused without the supertypes the missing file
-// declared.
+// buildLibraryIndex loads every standard library file into an index and freezes
+// it, caching the records of whatever had to be parsed.
 func buildLibraryIndex() *symbols.Index {
 	idx := symbols.NewIndex()
 	src := libs.DefaultSource()
-	cache, _ := libs.NewCache() // a cache failure only costs speed
-	loader := libs.NewLoader(src, cache)
-	complete := true
-	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			complete = false
-		}
-	}
-	idx.ExpandWildcardImports()
-	if complete {
-		loader.Persist(idx)
-	}
+	cache, _ := libs.NewCache()                 // a cache failure only costs speed
+	_ = libs.NewLoader(src, cache).LoadAll(idx) // an unreadable library file only costs its names
+	idx.Freeze()
 	return idx
 }
 
-// indexPool keeps library indexes built ahead of the requests that need them.
+// libraryBase holds the one standard library index the service's models share.
 //
-// A symbols.Index is mutable and the model added to it stays in it, so an index
-// is handed out once and then belongs to the cached model that took it: the pool
-// shares nothing between requests and holds no index a model can still reach.
-// Checkout never waits — an empty pool builds one inline, so a result never
-// depends on how far prewarming got.
-type indexPool struct {
-	size  int
+// The library is the same for every model and immutable once loaded, so it is
+// built once, frozen, and handed to each model as an overlay carrying that
+// model's own document: a model writes only into its overlay, and the base it
+// reads through can be read by any number of models at once. Before this, an
+// index was handed out whole and mutated by the model that took it, which cost
+// one copy of the library per cached model.
+type libraryBase struct {
 	build libraryBuilder
 
 	mu       sync.Mutex
-	ready    []*symbols.Index
-	inflight int  // indexes being built in the background right now
-	target   int  // how many warm indexes to keep ready
-	closed   bool // no further background builds
-	stats    poolStats
-
-	wg sync.WaitGroup // background builders, awaited by close
+	base     *symbols.Index
+	stats    baseStats
+	building chan struct{} // closed when the prewarm build in flight finishes
 }
 
-// poolStats counts what the pool did, which is how a test tells a request served
-// from a prewarmed index apart from one that loaded the library itself.
-type poolStats struct {
-	Pooled int // checkouts served from a prewarmed index
-	Inline int // checkouts that had to build an index on the request path
-	Built  int // indexes built, in the background or inline
+// baseStats counts what the base did, which is how a test tells a model served
+// from a prewarmed library apart from one that loaded the library itself.
+type baseStats struct {
+	Shared int // models handed an overlay over an already-built base
+	Inline int // models that had to build the base on the request path
+	Built  int // library indexes built, in the background or inline
 }
 
-// newIndexPool returns a pool of at most size prewarmed indexes built by build.
-// Prewarming is off until prewarm is called, so a pool nobody prewarms builds
-// exactly the indexes its requests need, one per request, as before.
-func newIndexPool(size int, build libraryBuilder) *indexPool {
-	if size < 0 {
-		size = 0
-	}
-	return &indexPool{size: size, build: build}
+// newLibraryBase returns a base built on demand by build.
+func newLibraryBase(build libraryBuilder) *libraryBase {
+	return &libraryBase{build: build}
 }
 
-// indexPoolSizeFromEnv returns the pool size the environment asks for: the
-// non-negative integer IndexPoolEnvVar holds, or DefaultIndexPoolSize when it is
-// unset or empty. An unusable value is an error naming the variable, rather than
-// a silently kept default.
-func indexPoolSizeFromEnv() (int, error) {
-	raw := strings.TrimSpace(os.Getenv(IndexPoolEnvVar))
+// indexPrewarmFromEnv returns whether the environment asks for prewarming: the
+// non-negative integer IndexPrewarmEnvVar holds, or DefaultIndexPrewarm when it
+// is unset or empty. An unusable value is an error naming the variable, rather
+// than a silently kept default.
+func indexPrewarmFromEnv() (int, error) {
+	raw := strings.TrimSpace(os.Getenv(IndexPrewarmEnvVar))
 	if raw == "" {
-		return DefaultIndexPoolSize, nil
+		return DefaultIndexPrewarm, nil
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, fmt.Errorf("library index pool size must be an integer, got %q (%s)", raw, IndexPoolEnvVar)
+		return 0, fmt.Errorf("library index pool size must be an integer, got %q (%s)", raw, IndexPrewarmEnvVar)
 	}
 	if n < 0 {
-		return 0, fmt.Errorf("library index pool size must not be negative, got %d (%s)", n, IndexPoolEnvVar)
+		return 0, fmt.Errorf("library index pool size must not be negative, got %d (%s)", n, IndexPrewarmEnvVar)
 	}
 	return n, nil
 }
 
-// prewarm starts building indexes up to the pool's size, and keeps refilling as
-// requests take them, so the requests after it are served from a warm index. It
-// returns immediately: the building happens in the background.
-func (p *indexPool) prewarm() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.target = p.size
-	p.fillLocked()
+// prewarm builds the library index in the background, so the first model to
+// arrive is not the one that pays for it. It returns immediately.
+func (b *libraryBase) prewarm() {
+	b.mu.Lock()
+	if b.base != nil || b.building != nil {
+		b.mu.Unlock()
+		return
+	}
+	done := make(chan struct{})
+	b.building = done
+	b.mu.Unlock()
+
+	go func() {
+		defer close(done)
+		b.ensure()
+	}()
 }
 
-// get returns an index carrying the standard library: a prewarmed one when the
-// pool has one, otherwise one built here and now. Either way the caller owns it,
-// and the pool starts building a replacement.
-func (p *indexPool) get() *symbols.Index {
-	p.mu.Lock()
-	var idx *symbols.Index
-	if n := len(p.ready); n > 0 {
-		idx = p.ready[n-1]
-		p.ready = p.ready[:n-1]
-		p.stats.Pooled++
+// ready reports whether the library index is built.
+func (b *libraryBase) ready() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.base != nil
+}
+
+// get returns an index carrying the standard library for one model to add its
+// document to: an overlay over the shared base, which is built here if nothing
+// built it yet.
+func (b *libraryBase) get() *symbols.Index {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.base == nil {
+		b.stats.Inline++
+		b.buildLocked()
 	} else {
-		p.stats.Inline++
+		b.stats.Shared++
 	}
-	p.fillLocked()
-	p.mu.Unlock()
+	return symbols.NewOverlay(b.base)
+}
 
-	if idx != nil {
-		return idx
+// ensure builds the library index if it is not built yet.
+func (b *libraryBase) ensure() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.base == nil {
+		b.buildLocked()
 	}
-	built := p.build()
-	p.mu.Lock()
-	p.stats.Built++
-	p.mu.Unlock()
-	return built
 }
 
-// fillLocked starts a background build if the pool is short of a warm index and
-// none is being built. One at a time is deliberate: the builds of one library
-// hit the same records, so running them in parallel would have each parse what
-// the one before it cached, and spend every core doing it. The caller holds the
-// lock.
-func (p *indexPool) fillLocked() {
-	if p.closed || p.inflight > 0 || len(p.ready) >= p.target {
-		return
+// buildLocked builds the shared index, with the caller holding the lock: a
+// second caller waits for the build rather than starting one of its own, since
+// two builds of one library would parse what the other was about to cache.
+func (b *libraryBase) buildLocked() {
+	b.base = b.build()
+	b.stats.Built++
+}
+
+// snapshot reports what the base has done so far.
+func (b *libraryBase) snapshot() baseStats {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.stats
+}
+
+// close waits for a prewarm build in flight and drops the service's reference to
+// the shared index; the models still holding it keep resolving, and a later
+// request builds a base again.
+func (b *libraryBase) close() {
+	b.mu.Lock()
+	done := b.building
+	b.mu.Unlock()
+	if done != nil {
+		<-done
 	}
-	p.inflight++
-	p.wg.Add(1)
-	go p.fillOne()
-}
 
-// fillOne builds one index in the background and adds it to the pool, dropping
-// it if the pool closed or filled up while it was building, then starts the next
-// build the pool is short of.
-func (p *indexPool) fillOne() {
-	defer p.wg.Done()
-	idx := p.build()
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.inflight--
-	p.stats.Built++
-	if p.closed || len(p.ready) >= p.size {
-		return
-	}
-	p.ready = append(p.ready, idx)
-	p.fillLocked()
-}
-
-// warm is how many prewarmed indexes are ready now.
-func (p *indexPool) warm() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return len(p.ready)
-}
-
-// snapshot reports what the pool has done so far.
-func (p *indexPool) snapshot() poolStats {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.stats
-}
-
-// close stops prewarming, waits for the builds already running and releases the
-// indexes nobody took. get still works afterwards, building inline.
-func (p *indexPool) close() {
-	p.mu.Lock()
-	p.closed = true
-	p.mu.Unlock()
-
-	p.wg.Wait()
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.ready = nil
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.base = nil
+	b.building = nil
 }

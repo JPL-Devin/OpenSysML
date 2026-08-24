@@ -163,7 +163,12 @@ func TestWatchedFileCreateAndChangeReindex(t *testing.T) {
 			TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri.File(main)},
 			Version:                2,
 		},
-		ContentChanges: []protocol.TextDocumentContentChangeEvent{{Text: usesGizmo}},
+		// A whole-document range: the typed DidChange path splices at [0,0) for a
+		// zero Range, which would leave the old text in place (see sync.go).
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{{
+			Range: protocol.Range{End: protocol.Position{Line: 4}},
+			Text:  usesGizmo,
+		}},
 	}); err != nil {
 		t.Fatalf("DidChange err = %v", err)
 	}

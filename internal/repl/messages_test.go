@@ -73,7 +73,7 @@ func TestMessageQuality(t *testing.T) {
 		// A mismatch written in a calc keeps the wrapped message that names the
 		// calc, rather than a position in the line the user typed.
 		name:  "operand_type_mismatch_inside_a_calc",
-		decls: "calc def f { in n; return n + \"a\"; }",
+		decls: "calc def f { in n; n + \"a\" }",
 		line:  "%eval f(1)",
 		want:  []string{`error: evaluation failed: calc f: `, `operator '+' is not defined for`},
 	}, {

@@ -6,15 +6,15 @@
       (Membership visibility="default"
         (Definition kind="action" abstract=false variation=false name="Classify"
           (Membership visibility="default"
-            (Usage kind="part" name="type" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="type" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Anything
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="part" name="state" ref=true direction="in" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="state" ref=true direction="in" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Anything
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="part" name="in" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="in" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Anything
                 (*ast.QualifiedName))))
           (Membership visibility="default"
@@ -22,7 +22,7 @@
               (Relationship kind="typing" target=Anything
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="part" name="seq" ref=false direction="in" composite=false derived=false ordered=true nonunique=true
+            (Usage kind="attribute" name="seq" ref=false direction="in" composite=false derived=false ordered=true nonunique=true
               (Relationship kind="typing" target=Anything
                 (*ast.QualifiedName))
               (Multiplicity range=true

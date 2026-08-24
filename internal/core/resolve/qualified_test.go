@@ -19,6 +19,17 @@ func indexOf(t *testing.T, docs map[string]string) *symbols.Index {
 	return idx
 }
 
+// libraryIndexOf indexes docs as library content, the shape a library load
+// produces: parsed declarations marked as library.
+func libraryIndexOf(t *testing.T, docs map[string]string) *symbols.Index {
+	t.Helper()
+	idx := indexOf(t, docs)
+	for name := range docs {
+		idx.MarkLibrary(name)
+	}
+	return idx
+}
+
 // parsedRoot parses src as the document called name, failing the test on any
 // parse diagnostic.
 func parsedRoot(t *testing.T, name, src string) *ast.RootNamespace {
@@ -99,6 +110,30 @@ func TestResolveQualifiedGlobal(t *testing.T) {
 	sym, ok := r.ResolveQualified(root, qn(true, "P", "N"))
 	if !ok || sym.Kind != symbols.SymbolNamespace {
 		t.Fatalf("$::P::N unresolved or wrong kind: %v ok=%v", sym, ok)
+	}
+}
+
+func TestResolveQualifiedLeadingLocalShadowsImportedNamespace(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"app.sysml": "package Parts { part def parts; } package App { package Parts; }",
+	})
+	parts := scopeOf(t, scopeOf(t, idx.DocumentRoot("app.sysml"), "App"), "Parts")
+
+	r := New(idx)
+	if _, ok := r.ResolveQualified(parts, qn(false, "Parts", "parts")); ok {
+		t.Fatal("the innermost local Parts namespace must shadow the library Parts")
+	}
+}
+
+func TestResolveQualifiedExplicitGlobalReachesLibraryNamespace(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"app.sysml": "package Parts { part def parts; } package App { package Parts; }",
+	})
+	parts := scopeOf(t, scopeOf(t, idx.DocumentRoot("app.sysml"), "App"), "Parts")
+
+	r := New(idx)
+	if _, ok := r.ResolveQualified(parts, qn(true, "Parts", "parts")); !ok {
+		t.Fatalf("$::Parts::parts should reach the library namespace; diagnostics: %v", r.Diagnostics)
 	}
 }
 
@@ -198,18 +233,14 @@ func (d directChildLookup) LookupContributedMember(*symbols.Symbol, string) (*sy
 }
 
 // The qualified walk falls back to an inheritance-aware member search when the
-// index has nothing, and for a cached symbol that search enumerates direct
-// children without consulting the visibility marks. A privately imported name
-// must not come back through it either — the stdlib, where private wildcard
-// imports are pervasive, is loaded exactly this way.
+// index has nothing, and that search enumerates direct children without
+// consulting the visibility marks. A privately imported name must not come back
+// through it either — the stdlib, where private wildcard imports are pervasive,
+// is loaded exactly this way.
 func TestResolveQualifiedRejectsAPrivatelyImportedNameThroughMemberLookup(t *testing.T) {
-	idx := symbols.NewIndex()
-	idx.AddRecords("lib", []symbols.RecordEntry{
-		{FQN: "Base", Kind: symbols.SymbolPackage},
-		{FQN: "Base::Hidden", Kind: symbols.SymbolPartDef},
-		{FQN: "Mid", Kind: symbols.SymbolPackage, WildcardImports: []symbols.WildcardImport{
-			{Target: "Base", Private: true},
-		}},
+	idx := libraryIndexOf(t, map[string]string{
+		"base.sysml": "package Base { part def Hidden; }",
+		"mid.sysml":  "package Mid { private import Base::*; }",
 	})
 	idx.ExpandWildcardImports()
 	r := New(idx)

@@ -35,6 +35,12 @@ func (m *Model) ReferencedFeature(sym *symbols.Symbol) *symbols.Symbol {
 		if target, ok := m.resolver.ResolveReferenceTarget(referenceScope(sym), sym.Decl, node); ok && target != sym {
 			out = target
 		}
+	} else if u, isUsage := sym.Decl.(*ast.Usage); isUsage && u.IsVariant && u.Keyword == "variant" && sym.Name != "" {
+		// A bare `variant X` is a VariantReference (SysML.xtext:642): a
+		// reference usage subsetting the like-named feature visible outside.
+		if named, ok := m.resolver.LookupNameExcluding(sym.OwnerScope, sym.Name, sym.Decl); ok && named != sym {
+			out = named
+		}
 	}
 	// A result computed while another symbol's reference is in flight saw a
 	// truncated member view (that symbol's own reference was hidden), so it is
@@ -54,7 +60,9 @@ func referenceSubsettingTarget(sym *symbols.Symbol) ast.Node {
 		return end.ReferencedTarget()
 	}
 	for _, rel := range RelationshipsOf(sym) {
-		if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {
+		// `include 'add fuel'` is an OwnedReferenceSubsetting in the grammar
+		// (SysML.xtext IncludeUseCaseUsage), so an inclusion contributes too.
+		if rel != nil && (rel.Kind == ast.RelReferences || rel.Kind == ast.RelIncludes) && rel.Target != nil {
 			return rel.Target
 		}
 	}
@@ -95,6 +103,7 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 	var order []*symbols.Symbol
 	visited := map[*symbols.Symbol]bool{sym: true}
 	queue := m.contributors(sym)
+	provisional := m.supersUnstable(sym)
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
@@ -104,24 +113,49 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 		visited[cur] = true
 		order = append(order, cur)
 		queue = append(queue, m.contributors(cur)...)
+		provisional = provisional || m.supersUnstable(cur)
 	}
-	// A query made while a reference target is being resolved sees that
-	// reference as absent (the cycle guard above), so its result is only
-	// provisional and is not cached.
-	if len(m.resolvingRef) == 0 {
+	// An answer computed while a reference target is being resolved, or while a
+	// supertype query it depends on is itself unresolved, is provisional: those
+	// guards report fewer sources than the finished model has, so it is not cached.
+	if len(m.resolvingRef) == 0 && !provisional {
 		m.memberSources[sym] = order
 	}
 	return order
 }
 
+// DirectMemberSources returns the symbols that contribute members to sym in one
+// step, deduplicated: the edges MemberSources takes the closure of. A caller
+// enumerating names needs the steps, not the closure, to tell which types a
+// derivation traversed (KerML 8.2.3.5, inheritedMemberships' excluded types).
+func (m *Model) DirectMemberSources(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	seen := map[*symbols.Symbol]bool{sym: true}
+	var out []*symbols.Symbol
+	for _, src := range m.contributors(sym) {
+		if src == nil || seen[src] {
+			continue
+		}
+		seen[src] = true
+		out = append(out, src)
+	}
+	return out
+}
+
 // contributors returns the direct member-contributing neighbours of sym: its
-// supertypes, the base usage every usage element subsets, then the feature it
-// reference-subsets. The base usage contributes members only, not conformance.
+// supertypes, the base usage every usage element subsets, the base feature a
+// KerML feature keyword implies, then the feature it reference-subsets. The two
+// bases contribute members only, not conformance.
 func (m *Model) contributors(sym *symbols.Symbol) []*symbols.Symbol {
 	supers := m.DirectSupertypes(sym)
 	out := make([]*symbols.Symbol, 0, len(supers)+2)
 	out = append(out, supers...)
 	if base := m.implicitBaseUsage(sym); base != nil {
+		out = append(out, base)
+	}
+	if base := m.implicitKerMLFeatureBase(sym); base != nil {
 		out = append(out, base)
 	}
 	if ref := m.ReferencedFeature(sym); ref != nil {

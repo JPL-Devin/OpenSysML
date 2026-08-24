@@ -5,7 +5,7 @@
 
 ## Overview
 
-A complete, production-grade SysML v2 implementation delivering the integrated tooling experience systems engineers expect from modern language ecosystems (Python, Rust, Go).
+A SysML v2 and KerML 1.1 implementation delivering the integrated tooling experience systems engineers expect from modern language ecosystems (Python, Rust, Go).
 
 ### Core Components
 
@@ -146,9 +146,9 @@ source → lexer → parser → AST → symbol index → resolve → passes
 
 - **PassLevel:** `{LevelSyntax, LevelNameResolution, LevelType, LevelConstraint}`
 - **Pass:** `{Level() PassLevel; Run(ctx, name, root) []Diagnostic}`
-- **Context:** Exposes `Resolver()` + `Model()` (both lazy, memoized)
+- **Context:** Exposes `Resolver()` + `Model()` (both lazy, memoized) and `DownstreamOfFailure(ref)` — did a lower tier report a blocking diagnostic inside this reference?
 - **DefaultRegistry:** SyntaxPass, NameResolutionPass, TypeCheckPass, ConstraintPass
-- **Tiered execution:** Higher tiers skipped if lower tier errors
+- **Tiered execution:** a document-scoped pass at a higher tier is skipped once a lower tier errors; a pass marked `ElementScoped` runs and gates itself per subject through `Context.DownstreamOfFailure` ([wave 12A](../project/wave12a-element-gating.md))
 - **Quick fixes:** A `Diagnostic` carries the `quickfix.Fix` values (`internal/core/quickfix`) the layer reporting it attached, so an editor offers edits without parsing messages
 
 ### 6a. Highlighting (`internal/core/highlight`)
@@ -213,7 +213,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 **Package:** `internal/core/runtime`  
 **Status:** Complete. Conformance gate: every case passing (calc/constraint/requirement/satisfy/action/state all functional); count in [the measured counts](../project/spec-compliance.md).  
-**Spec Alignment:** The governing reference is the SysML v2 metamodel or the bundled KerML semantic library (`internal/core/libs/stdlib/`); UML 2.5.1 is a fallback only where the SysML v2 notation has no production for a concept *and* the KerML library no performance for it (state-body `fork`/`join`, history, entry/exit points, regions). Token flow is succession-ordered: a succession is a KerML `HappensBefore` link (`Occurrences.kerml`), which orders occurrences in time and carries no values — a `SuccessionFlow` is the form that carries a payload (`KerML.kerml`: `Succession specializes Connector`, `SuccessionFlow specializes Succession, Flow`). State machine execution is `Occurrences::Occurrence::isRunToCompletion` over its `runToCompletionScope` ("determines whether transition performances might happen during state entry performances within the run to completion scope"), with event dispatch `isDispatch` / `dispatchScope`. See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for detailed compliance mapping (~98% faithful implementation).
+**Spec Alignment:** The governing reference is the SysML v2 metamodel or the bundled KerML semantic library (`internal/core/libs/stdlib/`); UML 2.5.1 is a fallback only where the SysML v2 notation has no production for a concept *and* the KerML library no performance for it (state-body `fork`/`join`, history, entry/exit points, regions). Token flow is succession-ordered: a succession is a KerML `HappensBefore` link (`Occurrences.kerml`), which orders occurrences in time and carries no values — a `SuccessionFlow` is the form that carries a payload (`KerML.kerml`: `Succession specializes Connector`, `SuccessionFlow specializes Succession, Flow`). State machine execution is `Occurrences::Occurrence::isRunToCompletion` over its `runToCompletionScope` ("determines whether transition performances might happen during state entry performances within the run to completion scope"), with event dispatch `isDispatch` / `dispatchScope`. See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for the detailed compliance mapping, and [the pilot differential](../project/pilot-differential.md) for what is checked against the reference implementation.
 
 **Architecture:**
 
@@ -641,6 +641,18 @@ go test -v -run TestRuntimeRobustness -timeout 60s ./internal/core/runtime
 
 ---
 
+### Declared errata (`internal/errata`)
+
+The three pilot oracles read OMG-published material, which is sometimes wrong itself.
+`internal/errata` is the registry of those defects: file, line, published bytes, the specification
+clause violated, the derivation, and the corrected text where the intended reading is unambiguous.
+The published corpus is never written to — corrections are applied to a copy under the oracle's
+output directory — and an entry whose published text no longer matches the bytes on disk fails a
+test rather than rotting. Each oracle reports both censuses; the as-published one stays the
+conformance statement. See [wave 14](../project/wave14-errata.md).
+
+---
+
 ### Behavioral Semantics Map
 
 **See:** [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for semantic rule → implementation → test case → status mapping.
@@ -649,9 +661,24 @@ Every behavioral feature must have:
 - Semantic rule reference: the SysML v2 metamodel or the bundled KerML semantic library, and UML 2.5.1 only where neither has the concept
 - Implementation location (file:function)
 - Test case(s) exercising the feature
-- Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
+- Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / ⛔ Deliberate Divergence / 🚧 Known Failure
 
-**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
+<!-- doc-counts:begin refereed-figures -->
+**Measured against the pinned reference** (`PILOT_TAG=2026-05`, artifact `0.60.1`). Every number below is generated by `make docs-counts` from the committed baselines and gated; none of them is typed in by hand.
+
+- **Corpus agreement:** 324 of 353 files agree diagnostic-by-diagnostic; 83 diagnostics are ours alone and 66 the reference's alone, and the first number must be read by root: our diagnostics against the reference's own corpora fell while our non-standard-notation warnings on our own example models rose ([differential](../project/pilot-differential.md), `go run ./cmd/pilot-diff`).
+- **Declared-diagnostic silence:** of the 510 declared `errors` rows in the reference's own Xpect suites, we report nothing for 0. 243 we report word-for-word; 248 wording-only and 6 location-only differences are agreement in substance and are not counted as gaps; 0 more we report as a warning and 6 elsewhere in the file ([Xpect oracle](../project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
+- **Scope agreement:** 230 of 230 declared scope assertions match exactly (same source).
+- **Permissiveness gaps:** of 120 invalid models we wrote ourselves, the reference rejects 8 that we accept by default, and 112 both reject; 5 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](../project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
+- **Declared errata:** the registry declares 2 defect(s) in the published reference material — 1 with a specification-derived correction, 1 documented without one, since no intended reading can be inferred ([OMG issues](../project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 325 of 353 files agreeing, 82 diagnostics ours alone and 66 the reference's alone, 0 declared rows we are silent on, and 3 of 120 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
+- **Self-assessed surface:** 125 of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four refereed figures above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.
+
+What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
+
+**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 727 tracked rules stays in [spec compliance](../project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
+<!-- doc-counts:end refereed-figures -->
+
+Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
 
 ---
 

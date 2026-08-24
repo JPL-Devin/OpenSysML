@@ -1,0 +1,107 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="F65" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="item" abstract=false variation=false name="Publish"))
+      (Membership visibility="default"
+        (Definition kind="connection" abstract=false variation=false name="AB"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="P"
+          (Membership visibility="default"
+            (Usage kind="part" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="part" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="bind"
+              (Relationship kind="references" target=a
+                (*ast.QualifiedName))
+              (FeatureReference name="b")))
+          (Membership visibility="default"
+            (Usage kind="binding" name="ab" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=a
+                (*ast.QualifiedName))
+              (FeatureReference name="b")))
+          (Membership visibility="default"
+            (Usage kind="binding" name="ab1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=AB
+                (*ast.QualifiedName))
+              (Relationship kind="references" target=a
+                (*ast.QualifiedName))
+              (FeatureReference name="b")))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=AB
+                (*ast.QualifiedName))
+              (Relationship kind="references" target=a
+                (*ast.QualifiedName))
+              (FeatureReference name="b")))
+          (Membership visibility="default"
+            (Usage kind="binding" name="ab2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=AB
+                (*ast.QualifiedName))
+              (Relationship kind="references" target=a
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (FeatureReference name="b")))
+          (Membership visibility="default"
+            (Usage kind="part" name="producer" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (Membership visibility="default"
+                (Usage kind="occurrence" name="publish_source_event" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+          (Membership visibility="default"
+            (Usage kind="part" name="server" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (Membership visibility="default"
+                (Usage kind="occurrence" name="publish_target_event" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+          (Membership visibility="default"
+            (Usage kind="flow" name="m1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="message"
+              (FlowEnds from="nil" to="nil" payload="Publish" declared=false
+                (Multiplicity range=false
+                  (LiteralInteger value="1")))))
+          (Membership visibility="default"
+            (Usage kind="flow" name="m2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="message"
+              (FlowEnds from="nil" to="nil" payload="Publish" declared=false
+                (Multiplicity range=false
+                  (LiteralInteger value="1")))))
+          (Membership visibility="default"
+            (Usage kind="flow" name="m3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="message"
+              (FlowEnds from="nil" to="nil" payload="payload" declared=true)
+              (Usage kind="attribute" name="payload" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=Publish
+                  (*ast.QualifiedName))
+                (Multiplicity range=false
+                  (LiteralInteger value="1")))))
+          (Membership visibility="default"
+            (Usage kind="flow" name="m4" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="message"
+              (FlowEnds from="producer.publish_source_event" to="server.publish_target_event" payload="Publish" declared=false)))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Q"
+          (Relationship kind="specializes" target=P
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="part" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=producer
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="occurrence" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="event"
+                  (Relationship kind="references" target=publish_source_event
+                    (*ast.QualifiedName))
+                  (FeatureChainExpr member="start"
+                    (FeatureReference name="m4"))))))
+          (Membership visibility="default"
+            (Usage kind="part" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=server
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="occurrence" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=publish_target_event
+                    (*ast.QualifiedName))
+                  (FeatureChainExpr member="done"
+                    (FeatureReference name="m4")))))))))))

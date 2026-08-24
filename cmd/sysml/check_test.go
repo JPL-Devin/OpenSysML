@@ -24,11 +24,11 @@ const checkModel = `package Rover {
         constraint notOvercharged { charge <= capacity }
     }
 
-    constraint MassBudget { assert 180.0 <= 200.0; }
-    constraint TooHeavy { assert 210.0 <= 200.0; }
+    constraint MassBudget { 180.0 <= 200.0 }
+    constraint TooHeavy { 210.0 <= 200.0 }
 
     requirement PowerMargin {
-        require 600.0 >= 450.0;
+        require constraint { 600.0 >= 450.0 }
     }
 
     part def Lander {
@@ -255,10 +255,10 @@ func TestCheckFilesOpeningTheSamePackage(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "first.sysml")
 	second := filepath.Join(dir, "second.sysml")
-	if err := os.WriteFile(first, []byte("package M {\n    constraint Held { assert 1.0 <= 2.0; }\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(first, []byte("package M {\n    constraint Held { 1.0 <= 2.0 }\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(second, []byte("package M {\n    constraint Also { assert 2.0 <= 3.0; }\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(second, []byte("package M {\n    constraint Also { 2.0 <= 3.0 }\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,5 +1,7 @@
 package ast
 
+import "github.com/Open-MBEE/OpenSysML/internal/core/source"
+
 // DefinitionKind discriminates the concrete definition taxonomy element.
 type DefinitionKind int
 
@@ -333,7 +335,8 @@ const (
 	// RelFeaturedBy models a KerML TypeFeaturing written in a feature
 	// declaration: `featured by T` states a type the feature is a feature of
 	// (KerML.xtext TypeFeaturingPart, 8.3.3.1.4). KerML notation only.
-	RelFeaturedBy // 'featured by'
+	RelFeaturedBy  // 'featured by'
+	RelDifferences // 'differences'
 )
 
 func (k RelationshipKind) String() string {
@@ -370,6 +373,8 @@ func (k RelationshipKind) String() string {
 		return "by"
 	case RelFeaturedBy:
 		return "featured by"
+	case RelDifferences:
+		return "differences"
 	default:
 		return "unknown"
 	}
@@ -428,14 +433,19 @@ type Definition struct {
 	Kind     DefinitionKind
 	// Keyword is the kind keyword as written, kept for the same reason as
 	// Usage.Keyword.
-	Keyword       string
-	IsAbstract    bool
-	IsVariation   bool
-	IsAll         bool // 'all' multiplicity propagation modifier
-	IsConstant    bool // 'constant' feature modifier
-	IsEvent       bool // 'event' modifier for event-driven occurrences
+	Keyword      string
+	IsAbstract   bool
+	IsVariation  bool
+	IsAll        bool // 'all' multiplicity propagation modifier
+	IsConstant   bool // 'constant' feature modifier
+	IsEvent      bool // 'event' modifier for event-driven occurrences
+	IsIndividual bool // 'individual' modifier: `individual part def` (SysML v2 8.3.9.11)
+	// IsParallel is the `parallel` before a state body: the state's substates
+	// are orthogonal (SysML v2 StateDefinition::isParallel).
+	IsParallel    bool
 	Visibility    Visibility
 	Ident         Identification
+	Multiplicity  *Multiplicity
 	Relationships []*Relationship
 	Members       []Node
 	HasBody       bool
@@ -458,6 +468,7 @@ type Usage struct {
 	IsVariation   bool // 'variation' modifier: the usage is a variation point
 	IsVariant     bool // declared with 'variant': a variant of the enclosing variation
 	IsReference   bool
+	IsVariable    bool // 'var' feature modifier
 	IsAll         bool // 'all' multiplicity propagation modifier
 	IsEnd         bool // 'end' feature modifier
 	IsChain       bool // 'chain' feature modifier
@@ -475,19 +486,28 @@ type Usage struct {
 	// IsNegated is the `not` of `assert not constraint { … }` and
 	// `assert not satisfy … by …`: the conditions are asserted to be false
 	// (Invariant::isNegated, SysML v2 §8.3.21.10).
-	IsNegated     bool
-	Visibility    Visibility
-	Direction     FeatureDirection
-	IsComposite   bool
+	IsNegated   bool
+	Visibility  Visibility
+	Direction   FeatureDirection
+	IsComposite bool
+	// IsPortion is the `portion` of `portion feature p`: the feature's values
+	// are portions of its featuring instances (KerML Feature::isPortion).
+	IsPortion bool
+	// IsParallel is the `parallel` before a state body (StateUsage::isParallel).
+	IsParallel    bool
 	IsDerived     bool
 	IsOrdered     bool
 	IsNonunique   bool
 	Ident         Identification
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
-	Value         Node
-	Members       []Node
-	HasBody       bool
+	// CrossFeature is the cross feature an end declares inline ahead of its own
+	// declaration (KerML.xtext OwnedCrossFeatureMember).
+	CrossFeature      *CrossFeatureMember
+	Value             Node
+	ValueOperatorSpan source.Span
+	Members           []Node
+	HasBody           bool
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.
@@ -523,6 +543,19 @@ type FlowEnds struct {
 	// (`of name : Type`) instead of referring to an existing one. That usage is
 	// also a member of the owning flow, and Payload names it.
 	PayloadDecl *Usage
+	// PayloadMultiplicity is the multiplicity stated with a payload type that
+	// declares no feature of its own (`of Publish[1]`, `of [1] Publish`). Where
+	// the payload is a declaration the multiplicity is that usage's own.
+	PayloadMultiplicity *Multiplicity
+}
+
+// CrossFeatureMember is the cross feature declared inline by an end feature,
+// the `x1 [0..1]` of `end x1 [0..1] feature x : C1` (KerML 8.3.4.5).
+type CrossFeatureMember struct {
+	NodeBase
+	Ident         Identification
+	Multiplicity  *Multiplicity
+	Relationships []*Relationship
 }
 
 // ConnectorEnd represents a single connector end with optional multiplicity.

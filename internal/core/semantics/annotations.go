@@ -25,13 +25,8 @@ import (
 
 // annotation is one metadata annotation of an element: the metadata type
 // annotating it and the values its body binds that type's features to.
-//
-// A restored library's annotation names its type rather than pointing at it, so
-// both are carried: typ where the annotation was read from a declaration, and
-// typFQN where it was read from an index-cache record.
 type annotation struct {
 	typ    *symbols.Symbol
-	typFQN string
 	values map[string]symbols.FilterValue
 }
 
@@ -49,9 +44,6 @@ func (m *Model) annotationsOf(sym *symbols.Symbol) []annotation {
 	m.annotations[sym] = nil
 
 	var out []annotation
-	for _, facts := range sym.Annotations {
-		out = append(out, m.annotationFromFacts(facts))
-	}
 	if sym.Decl != nil {
 		out = append(out, m.declaredAnnotations(sym)...)
 		out = append(out, m.aboutAnnotations(sym)...)
@@ -60,17 +52,16 @@ func (m *Model) annotationsOf(sym *symbols.Symbol) []annotation {
 	return out
 }
 
-// AnnotationFactsOf states the metadata annotating sym in the declaration-free
-// form an index cache record carries, so that an element filter classifies a
-// restored library element the same way as a parsed one. The values an
-// annotation binds are recorded as read; a binding whose value is not constant
-// is recorded with an unknown value, which a condition reading it reports as
-// unevaluable rather than silently treating as absent.
+// AnnotationFactsOf states the metadata annotating sym as names and constants,
+// so that how an element filter classifies it can be compared across loads. The
+// values an annotation binds are reported as read; a binding whose value is not
+// constant is reported with an unknown value, which a condition reading it
+// reports as unevaluable rather than silently treating as absent.
 func (m *Model) AnnotationFactsOf(sym *symbols.Symbol) []symbols.AnnotationFacts {
 	var out []symbols.AnnotationFacts
 	for _, a := range m.annotationsOf(sym) {
-		typFQN := a.typFQN
-		if typFQN == "" && a.typ != nil {
+		var typFQN string
+		if a.typ != nil {
 			typFQN = m.fqnOf(a.typ)
 		}
 		if typFQN == "" {
@@ -89,7 +80,7 @@ func (m *Model) AnnotationFactsOf(sym *symbols.Symbol) []symbols.AnnotationFacts
 }
 
 // sortedFeatureNames orders an annotation's bound features by name, so that what
-// is written to a cache record does not depend on map iteration order.
+// is reported does not depend on map iteration order.
 func sortedFeatureNames(values map[string]symbols.FilterValue) []string {
 	out := make([]string, 0, len(values))
 	for name := range values {
@@ -97,15 +88,6 @@ func sortedFeatureNames(values map[string]symbols.FilterValue) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// annotationFromFacts rebuilds an annotation a cache record carried.
-func (m *Model) annotationFromFacts(facts symbols.AnnotationFacts) annotation {
-	a := annotation{typFQN: facts.TypeFQN, typ: m.symbolByFQN(facts.TypeFQN), values: map[string]symbols.FilterValue{}}
-	for _, v := range facts.Values {
-		a.values[v.Feature] = v.Value
-	}
-	return a
 }
 
 // declaredAnnotations returns the annotations sym's own declaration states: its
@@ -213,7 +195,7 @@ func (m *Model) usageAnnotation(scope *symbols.Scope, u *ast.Usage) (annotation,
 func (m *Model) annotationOfType(typ *symbols.Symbol, scope *symbols.Scope, body []ast.Node) annotation {
 	values := m.annotationValues(scope, body)
 	m.addTypeDefaults(typ, values)
-	return annotation{typ: typ, typFQN: m.fqnOf(typ), values: values}
+	return annotation{typ: typ, values: values}
 }
 
 // addTypeDefaults adds the value the metadata type declares for each feature the
@@ -375,17 +357,22 @@ func (m *Model) annotationValue(scope *symbols.Scope, value ast.Node) symbols.Fi
 	return symbols.FilterValue{}
 }
 
-// metaclassOf returns the reflective metadata type of the candidate's own
-// metaclass: `SysML::PartUsage` for a part usage. It is what `@@T` tests, and
-// what makes `@SysML::PartUsage` — the form the training corpus filters views
-// with — select by what an element *is* rather than by what annotates it.
-//
-// The metaclass follows the symbol's kind rather than its declaration, so an
-// element restored from an index cache is classified the same way as a parsed
-// one.
+// metaclassOf is the candidate's own metaclass — what `@@T` tests: a KerML
+// declaration by its keyword (its kind cannot tell `struct` from `datatype`),
+// anything else by its symbol kind, so a cached element classifies alike.
 func (m *Model) metaclassOf(sym *symbols.Symbol) *symbols.Symbol {
 	if sym == nil {
 		return nil
+	}
+	// A relationship written keyword-first is classified by its own kind in
+	// either language, since no symbol kind distinguishes its forms.
+	if rel, ok := sym.Decl.(*ast.RelationshipMember); ok {
+		if meta := m.kermlMetaclass(relationshipMetaclassName(rel)); meta != nil {
+			return meta
+		}
+	}
+	if meta := m.kermlMetaclass(kermlMetaclassName(sym, m.isKerMLDoc(sym))); meta != nil {
+		return meta
 	}
 	name := metaclassName(sym.Kind)
 	if name == "" {
@@ -397,10 +384,150 @@ func (m *Model) metaclassOf(sym *symbols.Symbol) *symbols.Symbol {
 	return m.symbolByFQN(name)
 }
 
+// kermlMetaclass is the library element declaring the named KerML metaclass,
+// or nil for an unnamed or undeclared one.
+func (m *Model) kermlMetaclass(name string) *symbols.Symbol {
+	if name == "" {
+		return nil
+	}
+	for _, prefix := range kermlMetaclassPrefixes {
+		if meta := m.symbolByFQN(prefix + name); meta != nil {
+			return meta
+		}
+	}
+	return nil
+}
+
+// relationshipMetaclassName is the metaclass of a keyword-first relationship,
+// which conjugation writes as a form of its own (KerML §7.2).
+func relationshipMetaclassName(rel *ast.RelationshipMember) string {
+	if rel.Conjugated {
+		return "Conjugation"
+	}
+	return relationshipMetaclassNames[rel.Kind]
+}
+
+// relationshipMetaclassNames maps the kind of a relationship written
+// keyword-first to the KerML metaclass classifying it (KerML §7.2).
+var relationshipMetaclassNames = map[ast.RelationshipKind]string{
+	ast.RelSpecializes: "Specialization",
+	ast.RelTyping:      "FeatureTyping",
+	ast.RelSubsets:     "Subsetting",
+	ast.RelRedefines:   "Redefinition",
+	ast.RelInverseOf:   "FeatureInverting",
+	ast.RelFeaturedBy:  "TypeFeaturing",
+}
+
 // sysmlMetaclassPrefix qualifies the reflective metadata types of the SysML
 // abstract syntax, which the standard library declares in SysML::Systems and
 // re-exports through SysML.
 const sysmlMetaclassPrefix = "SysML::Systems::"
+
+// kermlMetaclassPrefixes qualify the KerML abstract syntax metaclasses, which
+// the library declares across KerML's three packages.
+var kermlMetaclassPrefixes = []string{"KerML::Kernel::", "KerML::Core::", "KerML::Root::"}
+
+// kermlMetaclassNames maps a KerML declaration keyword to the metaclass it
+// implies (KerML 1.1 §8.2, §9.2). `assoc struct` is recorded as `struct` by the
+// parser, so it is classified as a Structure rather than an AssociationStructure.
+var kermlMetaclassNames = map[string]string{
+	"type":         "Type",
+	"classifier":   "Classifier",
+	"class":        "Class",
+	"struct":       "Structure",
+	"assoc":        "Association",
+	"association":  "Association",
+	"datatype":     "DataType",
+	"behavior":     "Behavior",
+	"function":     "Function",
+	"predicate":    "Predicate",
+	"interaction":  "Interaction",
+	"metaclass":    "Metaclass",
+	"feature":      "Feature",
+	"step":         "Step",
+	"expr":         "Expression",
+	"bool":         "BooleanExpression",
+	"inv":          "Invariant",
+	"connector":    "Connector",
+	"binding":      "BindingConnector",
+	"bind":         "BindingConnector",
+	"flow":         "Flow",
+	"message":      "Flow",
+	"succession":   "Succession",
+	"multiplicity": "Multiplicity",
+}
+
+// kermlMetaclassName is the metaclass the keyword of sym's KerML declaration
+// implies, or "" for a declaration written in SysML or restored from a cache,
+// which is classified by its symbol kind instead.
+func kermlMetaclassName(sym *symbols.Symbol, isKerML bool) string {
+	if !isKerML {
+		return ""
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return kermlMetaclassNames[d.Keyword]
+	case *ast.Usage:
+		return kermlMetaclassNames[d.Keyword]
+	}
+	return ""
+}
+
+// reflectiveFeatureValue is what the candidate's declaration states for a
+// metaclass feature of it, and whether that feature is derived here at all
+// (KerML 1.1 §8.2.4); an underived one is unevaluable, not false.
+func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (symbols.FilterValue, bool) {
+	switch feature {
+	case "name", "declaredName":
+		return stringOrEmpty(simpleSymbolName(sym)), true
+	case "qualifiedName":
+		return stringOrEmpty(m.fqnOf(sym)), true
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		switch feature {
+		case "isAbstract":
+			return boolValue(d.IsAbstract), true
+		case "isSufficient":
+			return boolValue(d.IsAll), true
+		case "isConstant":
+			return boolValue(d.IsConstant), true
+		}
+	case *ast.Usage:
+		switch feature {
+		case "isAbstract":
+			return boolValue(d.IsAbstract), true
+		case "isSufficient":
+			return boolValue(d.IsAll), true
+		case "isComposite":
+			return boolValue(d.IsComposite), true
+		case "isDerived":
+			return boolValue(d.IsDerived), true
+		case "isEnd":
+			return boolValue(d.IsEnd), true
+		case "isOrdered":
+			return boolValue(d.IsOrdered), true
+		case "isUnique":
+			return boolValue(!d.IsNonunique), true
+		case "isVariable":
+			return boolValue(d.IsVariable), true
+		case "isConstant":
+			return boolValue(d.IsConstant), true
+		case "isPortion":
+			return boolValue(d.Portion != ast.PortionNone), true
+		}
+	}
+	return symbols.FilterValue{}, false
+}
+
+// stringOrEmpty is a string value, or the empty sequence for a name the
+// declaration does not have.
+func stringOrEmpty(s string) symbols.FilterValue {
+	if s == "" {
+		return emptyValue()
+	}
+	return symbols.FilterValue{Kind: symbols.FilterValueString, Str: s}
+}
 
 // metaclassName is the reflective SysML metadata type classifying a declaration
 // of the given kind, or "" for a kind the abstract syntax has no metaclass for.
@@ -456,6 +583,8 @@ func metaclassName(kind symbols.SymbolKind) string {
 		return "ConnectionDefinition"
 	case symbols.SymbolConnectionUsage:
 		return "ConnectionUsage"
+	case symbols.SymbolSuccessionUsage:
+		return "SuccessionAsUsage"
 	case symbols.SymbolFlowDef:
 		return "FlowDefinition"
 	case symbols.SymbolFlowUsage:

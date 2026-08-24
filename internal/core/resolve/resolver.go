@@ -25,6 +25,14 @@ type supertypeLookup interface {
 	DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol
 }
 
+// maskLookup is the part of the semantic model that reports redefinition
+// masking: which of a type's inheritable members it does not inherit because
+// one of its features redefines them. *semantics.Model implements it.
+type maskLookup interface {
+	InheritanceMasked(sym, candidate *symbols.Symbol) bool
+	InheritanceMaskedDeclaring(sym, candidate *symbols.Symbol, declName string) bool
+}
+
 // elementFilterJudge is the part of the semantic model that decides an element
 // filter: whether the element an import would surface is selected by the
 // condition restricting it (KerML 8.2.4). A condition classifies a candidate by
@@ -45,16 +53,42 @@ type featureChainKey struct {
 	node  *ast.FeatureChainExpr
 }
 
+// modeMemoKey keys a lookup made in a non-default resolution mode: a filter
+// condition's own names bypass the namespace's filters, and an `import all` or
+// expose target reaches every membership. Such an answer is memoized apart from
+// the ordinary one, which must never inherit it.
+type modeMemoKey struct {
+	at          ast.Node
+	condition   bool
+	allVisible  bool
+	hide        ast.Node
+	prefix      bool
+	borrowedOut bool
+}
+
+type filteredMemoKey struct {
+	qn               *ast.QualifiedName
+	decl             ast.Node
+	prefix           bool
+	skipBorrowedName bool
+}
+
 // Resolver performs lazy name resolution over a symbol index, memoizing results
 // keyed by the reference AST node and collecting diagnostics.
 type Resolver struct {
 	idx       *symbols.Index
 	memo      map[ast.Node]resolution
+	modeMemo  map[modeMemoKey]resolution
+	filtered  map[filteredMemoKey]resolution
 	resolving map[ast.Node]bool // cycle detection
 	// featureChains are resolved per scope because a chain's leading operand
 	// can resolve differently in different document scopes.
 	featureChains map[featureChainKey]resolution
 	parts         map[*ast.QualifiedName][]*symbols.Symbol
+	// aliasNames are the alias memberships a segment's name went through, kept
+	// beside parts: the segment reaches the aliased element, and a consumer that
+	// asks about the name written (a rename) needs the alias too.
+	aliasNames map[*ast.QualifiedName][]*symbols.Symbol
 	// endpoints are the vertices transition endpoints resolve to, memoized per
 	// name node: lowering consumes what this tier resolved (see ResolveEndpoint).
 	endpoints map[*ast.QualifiedName]resolution
@@ -70,11 +104,23 @@ type Resolver struct {
 	// inCondition is nonzero while a filter condition's own names are resolved,
 	// which the condition does not filter.
 	inCondition int
+	// allVisible is nonzero while the target of an `import all` (or of an
+	// expose) is resolved, which reaches every membership, not the visible ones.
+	allVisible int
 	// nsFilters are the `filter` members of a namespace, extracted once per scope.
 	nsFilters map[*symbols.Scope][]symbols.ElementFilter
 	// payloads are the accept-node payloads a scope's body shares, collected
 	// once per scope: see (*Resolver).acceptPayload.
 	payloads map[*symbols.Scope]map[string]*symbols.Symbol
+	// redefined memoizes the features a declaration redefines, explicitly or as
+	// an end: see (*Resolver).redefinedFeatures.
+	redefined map[*symbols.Symbol][]*symbols.Symbol
+	// bodyOwners memoizes the metadata definition owning an annotation body
+	// scope the document pass has not stamped: see (*Resolver).scopeOwner.
+	bodyOwners map[*symbols.Scope]*symbols.Symbol
+	// effNames memoizes whether a feature named by a redefinition binds that
+	// name: see (*Resolver).bindsEffectiveName.
+	effNames map[*symbols.Symbol]bool
 	model    MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
 	naming   map[*symbols.Symbol]bool // effective names being computed, for cycle detection
 	// inheritedImports are the declarations whose supertypes' imports are being
@@ -95,6 +141,13 @@ type Resolver struct {
 	suggestions map[suggestKey][]string
 	names       *suggest.Table
 	suggesting  map[suggestKey]bool
+	// document is the document ResolveDocument is resolving, so a reference
+	// reached in another one is not reported against it (see foreignScope).
+	document          string
+	reportedQualified map[*ast.QualifiedName]bool
+	// valuesInProgress are the usages whose value expression is being read for
+	// the type it names, so a value naming its own feature ends the walk.
+	valuesInProgress map[*ast.Usage]bool
 }
 
 // New creates a resolver over the given index.
@@ -102,23 +155,31 @@ func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
 		idx:              idx,
 		memo:             map[ast.Node]resolution{},
+		modeMemo:         map[modeMemoKey]resolution{},
+		filtered:         map[filteredMemoKey]resolution{},
 		resolving:        map[ast.Node]bool{},
 		featureChains:    map[featureChainKey]resolution{},
 		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
+		aliasNames:       map[*ast.QualifiedName][]*symbols.Symbol{},
 		endpoints:        map[*ast.QualifiedName]resolution{},
 		imports:          map[ast.Node][]*ast.Import{},
 		importStack:      map[*ast.Import]bool{},
 		resolvingImports: map[*ast.Import]bool{},
 		naming:           map[*symbols.Symbol]bool{},
+		valuesInProgress: map[*ast.Usage]bool{},
 		nsFilters:        map[*symbols.Scope][]symbols.ElementFilter{},
 		payloads:         map[*symbols.Scope]map[string]*symbols.Symbol{},
+		redefined:        map[*symbols.Symbol][]*symbols.Symbol{},
+		bodyOwners:       map[*symbols.Scope]*symbols.Symbol{},
+		effNames:         map[*symbols.Symbol]bool{},
 
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},
 
-		inheritedImports: map[*symbols.Symbol]bool{},
-		aliasTargets:     map[*symbols.Symbol]resolution{},
-		resolvingAlias:   map[*symbols.Symbol]bool{},
+		inheritedImports:  map[*symbols.Symbol]bool{},
+		aliasTargets:      map[*symbols.Symbol]resolution{},
+		resolvingAlias:    map[*symbols.Symbol]bool{},
+		reportedQualified: map[*ast.QualifiedName]bool{},
 	}
 }
 
@@ -126,15 +187,32 @@ func New(idx *symbols.Index) *Resolver {
 // Per-segment results are kept here rather than on the AST, which stays
 // immutable after parsing so that concurrent readers may share it.
 func (r *Resolver) recordPart(qn *ast.QualifiedName, i int, sym *symbols.Symbol) {
+	r.resolvedPart(qn, i, sym)
+}
+
+// resolvedPart records what segment i of qn named and returns the element it
+// reaches: a name bound by an alias reaches the aliased element (see
+// AliasedElement), and the alias itself is kept in aliasNames.
+func (r *Resolver) resolvedPart(qn *ast.QualifiedName, i int, sym *symbols.Symbol) *symbols.Symbol {
+	element := r.AliasedElement(sym)
 	if qn == nil || i < 0 || i >= len(qn.Parts) {
-		return
+		return element
 	}
 	syms, ok := r.parts[qn]
 	if !ok {
 		syms = make([]*symbols.Symbol, len(qn.Parts))
 		r.parts[qn] = syms
 	}
-	syms[i] = sym
+	syms[i] = element
+	if element != sym {
+		aliases, ok := r.aliasNames[qn]
+		if !ok {
+			aliases = make([]*symbols.Symbol, len(qn.Parts))
+			r.aliasNames[qn] = aliases
+		}
+		aliases[i] = sym
+	}
+	return element
 }
 
 // PartSymbol returns the symbol the i-th segment of qn resolved to during a
@@ -147,6 +225,16 @@ func (r *Resolver) PartSymbol(qn *ast.QualifiedName, i int) (*symbols.Symbol, bo
 		return nil, false
 	}
 	return syms[i], true
+}
+
+// PartAlias returns the alias membership the i-th segment of qn was written as,
+// where the name it wrote is an alias of the element PartSymbol reports.
+func (r *Resolver) PartAlias(qn *ast.QualifiedName, i int) (*symbols.Symbol, bool) {
+	aliases, ok := r.aliasNames[qn]
+	if !ok || i < 0 || i >= len(aliases) || aliases[i] == nil {
+		return nil, false
+	}
+	return aliases[i], true
 }
 
 // Index returns the symbol index this resolver operates over.
@@ -164,6 +252,9 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 		return found, true
 	}
 	if found, ok := r.model.LookupContributedMember(sym, name); ok {
+		return found, true
+	}
+	if found, ok := r.triggerPayload(sym, name); ok {
 		return found, true
 	}
 	if sym.Scope == nil {
@@ -211,8 +302,28 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	if qn == nil {
 		return nil, false
 	}
-	if res, done := r.memo[qn]; done {
+	if r.foreignScope(scope) {
+		var sym *symbols.Symbol
+		var ok bool
+		r.aside(func() { sym, ok = r.resolveQualified(scope, qn, hide) })
+		return sym, ok
+	}
+	cacheMain := hide == nil || hide.skipNamingTarget || hide.skipBorrowedName
+	if cacheMain {
+		if res, done := r.memo[qn]; done {
+			return res.sym, res.ok
+		}
+	} else if res, done := r.filtered[filteredMemoKey{
+		qn: qn, decl: hide.decl, prefix: hide.skipNamingTarget,
+		skipBorrowedName: hide.skipBorrowedName,
+	}]; done {
 		return res.sym, res.ok
+	}
+	mode, keyed := r.modeKey(qn, hide)
+	if keyed {
+		if res, done := r.modeMemo[mode]; done {
+			return res.sym, res.ok
+		}
 	}
 	// Detect resolution cycles
 	if r.resolving[qn] {
@@ -225,8 +336,22 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	delete(r.resolving, qn)
 	// A failure met during a semantic query is not memoized: the reference it
 	// belongs to must still report when its own document is resolved.
-	if res.ok || r.quiet == 0 {
-		r.memoize(qn, res)
+	if keyed {
+		if res.ok || r.quiet == 0 {
+			r.modeMemo[mode] = res
+		}
+	}
+	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
+		if cacheMain {
+			if res.ok || hide == nil {
+				r.memoize(qn, res)
+			}
+		} else if res.ok || r.quiet == 0 {
+			r.filtered[filteredMemoKey{
+				qn: qn, decl: hide.decl, prefix: hide.skipNamingTarget,
+				skipBorrowedName: hide.skipBorrowedName,
+			}] = res
+		}
 	}
 	return res.sym, res.ok
 }
@@ -234,13 +359,34 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 // ResolveName resolves a single-segment (unqualified) reference from the given
 // scope. The at node keys the memo table.
 func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (*symbols.Symbol, bool) {
+	if r.foreignScope(scope) {
+		var sym *symbols.Symbol
+		var ok bool
+		r.aside(func() { sym, ok = r.ResolveName(scope, name, at) })
+		return sym, ok
+	}
 	if at != nil {
 		if res, done := r.memo[at]; done {
 			return res.sym, res.ok
 		}
 	}
+	mode, keyed := r.modeKey(at, nil)
+	if keyed {
+		if res, done := r.modeMemo[mode]; done {
+			return res.sym, res.ok
+		}
+	}
 	res := r.walkUnqualified(scope, name)
-	if res.ok || r.quiet == 0 {
+	res.sym = r.AliasedElement(res.sym)
+	if r.AliasNamesNothing(res.sym) {
+		res = resolution{nil, false}
+	}
+	// A result found with the boundary lifted for an enclosing `import all` is
+	// not what this reference resolves to in general, so it is not memoized.
+	if keyed && (res.ok || r.quiet == 0) {
+		r.modeMemo[mode] = res
+	}
+	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
 		r.memoize(at, res)
 	}
 	if !res.ok {
@@ -263,11 +409,39 @@ func (r *Resolver) report(d Diagnostic) {
 	r.Diagnostics = append(r.Diagnostics, d)
 }
 
+// foreignScope reports whether scope belongs to a document other than the one
+// being resolved, so a reference read there is that document's to report.
+func (r *Resolver) foreignScope(scope *symbols.Scope) bool {
+	if r.document == "" || r.quiet > 0 || scope == nil {
+		return false
+	}
+	doc := r.documentOf(scope)
+	return doc != "" && doc != r.document
+}
+
 // aside runs a lookup made for a semantic query, whose diagnostics belong to
 // the document declaring what it reached, not to the one being resolved.
 func (r *Resolver) aside(f func()) {
 	r.quiet++
 	defer func() { r.quiet-- }()
+	f()
+}
+
+// inAllVisible runs f with every membership of a namespace reachable through
+// it, as an `import all` and an expose resolve their target (KerML 8.2.3.5.2,
+// SysML v2 8.3.26.2).
+func (r *Resolver) inAllVisible(f func()) {
+	r.allVisible++
+	defer func() { r.allVisible-- }()
+	f()
+}
+
+// outsideAllVisible runs f with the boundary reinstated, for a lookup made
+// while an enclosing `import all` resolves its own target.
+func (r *Resolver) outsideAllVisible(f func()) {
+	saved := r.allVisible
+	r.allVisible = 0
+	defer func() { r.allVisible = saved }()
 	f()
 }
 
@@ -280,6 +454,10 @@ func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
 	if had {
 		saved = append([]*symbols.Symbol(nil), saved...)
 	}
+	savedAliases, hadAliases := r.aliasNames[qn]
+	if hadAliases {
+		savedAliases = append([]*symbols.Symbol(nil), savedAliases...)
+	}
 	resolved := false
 	r.aside(func() { resolved = f() })
 	if resolved {
@@ -290,7 +468,25 @@ func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
 	} else {
 		delete(r.parts, qn)
 	}
+	if hadAliases {
+		r.aliasNames[qn] = savedAliases
+	} else {
+		delete(r.aliasNames, qn)
+	}
 	return false
+}
+
+// modeKey keys a lookup made in a non-default mode, reporting false when the
+// mode is the ordinary one, whose answers the main memo already keeps.
+func (r *Resolver) modeKey(at ast.Node, hide *refFilter) (modeMemoKey, bool) {
+	if at == nil || (r.inCondition == 0 && r.allVisible == 0) {
+		return modeMemoKey{}, false
+	}
+	k := modeMemoKey{at: at, condition: r.inCondition > 0, allVisible: r.allVisible > 0}
+	if hide != nil {
+		k.hide, k.prefix, k.borrowedOut = hide.decl, hide.skipNamingTarget, hide.skipBorrowedName
+	}
+	return k, true
 }
 
 // memoize remembers a reference's resolution, except one reached while a filter

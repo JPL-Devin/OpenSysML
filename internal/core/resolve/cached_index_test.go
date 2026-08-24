@@ -13,8 +13,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// A restored library symbol carries no declaration, so every rule reading a
-// library element has two implementations. Both are asked about this library.
+// A library symbol carries its declaration on either load path, so every rule
+// reading a library element is asked about this library the same way.
 const cachedLibrary = `standard library package Cycles {
 	attribute def Mass;
 	part def Cycle {
@@ -43,32 +43,32 @@ const cachedUser = `package App {
 	part racer : Racer;
 }`
 
-// What resolution answers about a library element must not depend on whether the
-// index was parsed or restored: inherited features, redefinitions, chains, aliases.
-func TestResolutionOfALibraryIsTheSameParsedAndRestored(t *testing.T) {
+// What resolution answers about a library element must not depend on the cache:
+// inherited features, redefinitions, chains, aliases.
+func TestResolutionOfALibraryIsTheSameColdAndWarm(t *testing.T) {
 	dir, cacheDir := t.TempDir(), t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "cycles.sysml"), []byte(cachedLibrary), 0o600); err != nil {
 		t.Fatalf("write library: %v", err)
 	}
 
-	parsedIdx := loadLibrary(t, dir, cacheDir)   // cache miss: parses
-	restoredIdx := loadLibrary(t, dir, cacheDir) // cache hit: restores
-	if sym := libSymbol(t, parsedIdx, "Cycles::Cycle"); sym.Decl == nil {
-		t.Fatal("the first load must parse the library, leaving its symbols a declaration")
-	}
-	if sym := libSymbol(t, restoredIdx, "Cycles::Cycle"); sym.Decl != nil {
-		t.Fatal("the second load must restore the library's record, whose symbols carry no declaration")
+	coldIdx := loadLibrary(t, dir, cacheDir) // cache miss: parses, then reduces
+	warmIdx := loadLibrary(t, dir, cacheDir) // cache hit: restores
+	// A library is parsed either way, so both answer from declarations.
+	for path, idx := range map[string]*symbols.Index{"cold": coldIdx, "warm": warmIdx} {
+		if sym := libSymbol(t, idx, "Cycles::Cycle"); sym.Decl == nil {
+			t.Fatalf("the %s load leaves the library without its declarations", path)
+		}
 	}
 
-	parsedAnswers := resolveAgainstLibrary(t, parsedIdx)
-	restoredAnswers := resolveAgainstLibrary(t, restoredIdx)
-	for question, want := range parsedAnswers {
+	coldAnswers := resolveAgainstLibrary(t, coldIdx)
+	warmAnswers := resolveAgainstLibrary(t, warmIdx)
+	for question, want := range coldAnswers {
 		// Every question has an answer, so agreeing on "unresolved" is no pass.
 		if want == "unresolved" || want == "false" {
-			t.Errorf("%s = %q on the parsed path, which is not an answer", question, want)
+			t.Errorf("%s = %q on the cold path, which is not an answer", question, want)
 		}
-		if got := restoredAnswers[question]; got != want {
-			t.Errorf("%s = %q with a restored library, %q with a parsed one", question, got, want)
+		if got := warmAnswers[question]; got != want {
+			t.Errorf("%s = %q warm, %q cold", question, got, want)
 		}
 	}
 }
@@ -118,8 +118,8 @@ func resolveAgainstLibrary(t *testing.T, idx *symbols.Index) map[string]string {
 	out["Cycles::HiddenFrame"] = fqnOf(r.ResolveAliasTarget(libSymbol(t, idx, "Cycles::HiddenFrame")))
 	out["App::Copy super"] = fqnOf(firstSuper(m, libSymbol(t, idx, "App::Copy")))
 	out["Cycles::AliasedCopy super"] = fqnOf(firstSuper(m, libSymbol(t, idx, "Cycles::AliasedCopy")))
-	// Conformance across a library specialization, which the restored path reads
-	// from the record's supertype names.
+	// Conformance across a library specialization, read from the recorded
+	// supertype facts.
 	out["Tandem conforms to Cycle"] = boolText(m.Conforms(
 		libSymbol(t, idx, "Cycles::Tandem"), libSymbol(t, idx, "Cycles::Cycle")))
 	out["Racer conforms to Cycle"] = boolText(m.Conforms(racer, libSymbol(t, idx, "Cycles::Cycle")))
@@ -136,15 +136,10 @@ func loadLibrary(t *testing.T, dir, cacheDir string) *symbols.Index {
 		t.Fatalf("cache: %v", err)
 	}
 	src := libs.NewDirSource(dir)
-	ld := libs.NewLoader(src, cache)
 	idx := symbols.NewIndex()
-	for _, name := range src.List() {
-		if err := ld.Load(name, idx); err != nil {
-			t.Fatalf("load %s: %v", name, err)
-		}
+	if err := libs.NewLoader(src, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
-	idx.ExpandWildcardImports()
-	ld.Persist(idx)
 	if len(idx.FQNs()) == 0 {
 		t.Fatal("the load registered nothing")
 	}

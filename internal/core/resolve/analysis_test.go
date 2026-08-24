@@ -225,8 +225,15 @@ func TestResolveDragonStructures(t *testing.T) {
 			end;
 		}
 	}`)
-	if len(r.Diagnostics) != 0 {
-		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
+	// `assert constraint c` names the constraint usage above it a second time,
+	// which the reference reports on both, as a warning (matched run, w6c).
+	for _, d := range r.Diagnostics {
+		if !d.Warning || d.Code != CodeNameConflict {
+			t.Fatalf("expected only duplicate-name warnings, got %v", r.Diagnostics)
+		}
+	}
+	if len(r.Diagnostics) != 2 {
+		t.Fatalf("expected the two duplicate-name warnings for c, got %v", r.Diagnostics)
 	}
 }
 

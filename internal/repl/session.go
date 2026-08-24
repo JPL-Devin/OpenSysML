@@ -22,7 +22,23 @@ import (
 )
 
 // docName is the in-memory workspace key for the accumulated REPL buffer.
+// Text loaded from a .kerml file keeps that file's language: it is masked out
+// of docName and analyzed in kermlDocName, whose name carries the KerML kind
+// the parser's file-kind gates read. Both documents span the same joined
+// buffer byte for byte, so every offset locates the same snippet in either.
 const docName = "<repl>"
+
+// kermlDocName is the workspace key for the buffer's KerML text.
+const kermlDocName = "<repl>.kerml"
+
+// parseDocName is the document a snippet from origin is parsed and analyzed
+// in, which carries the kind of the file it was loaded from.
+func parseDocName(origin string) string {
+	if source.KindOf(origin) == source.KindKerML {
+		return kermlDocName
+	}
+	return docName
+}
 
 // snippet is one accepted submission source, the top-level names it declares,
 // and the file it was loaded from, so a finding about it can be reported where
@@ -261,14 +277,14 @@ func (s *Session) accept(origin, src string) {
 // A loaded file supersedes only itself and what the prompt said about the same
 // names, since several files of one model commonly open the same package.
 func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
-	p := parser.New(source.New(docName, []byte(src)))
+	p := parser.New(source.New(parseDocName(origin), []byte(src)))
 	root := p.ParseFile()
 	names := declaredNames(root)
 	text := src
 	// A submission that does not close its own text is masked out of the buffer
 	// rather than left to absorb the submissions after it, and declares nothing:
 	// what the parser recovered from it is not what was meant.
-	if !closesItsOwnText(src) {
+	if !closesItsOwnText(parseDocName(origin), src) {
 		key := fileKeyOf(origin)
 		if key != "" {
 			// Re-reading the file supersedes what it declared before, which it no
@@ -489,6 +505,24 @@ func (s *Session) joined() string {
 	return strings.Join(parts, "\n")
 }
 
+// joinedFor is the buffer one session document analyzes: joined, with the
+// snippets of the other language masked out too, so each document parses its
+// own snippets as the kind its name carries while keeping every offset. The
+// second result reports whether any snippet of that language survives.
+func (s *Session) joinedFor(name string) (string, bool) {
+	parts := make([]string, len(s.snippets))
+	any := false
+	for i, sn := range s.snippets {
+		if sn.open || parseDocName(sn.origin) != name {
+			parts[i] = maskedText(sn.src)
+			continue
+		}
+		any = true
+		parts[i] = sn.src
+	}
+	return strings.Join(parts, "\n"), any
+}
+
 // text is the buffer as it was submitted, masking nothing: what %save writes
 // back, so work the parser could not read is not lost.
 func (s *Session) text() string {
@@ -557,49 +591,17 @@ func (s *Session) openDiagnostics() []passes.Diagnostic {
 	return out
 }
 
-// dropKerMLNotationOfKerMLFiles drops the KerML-notation-in-SysML finding for a
-// snippet loaded from a .kerml file, where that notation is legal: the buffer is
-// one document of no file kind, so the snippet the span falls in decides.
-func (s *Session) dropKerMLNotationOfKerMLFiles(diags []passes.Diagnostic) []passes.Diagnostic {
-	type span struct{ start, end int }
-	var kerml []span
-	acc := 0
-	for _, sn := range s.snippets {
-		end := acc + len(sn.src)
-		if source.KindOf(sn.origin) == source.KindKerML {
-			kerml = append(kerml, span{acc, end})
-		}
-		acc = end + 1 // the newline joined() writes between snippets
-	}
-	if len(kerml) == 0 {
-		return diags
-	}
-	kept := make([]passes.Diagnostic, 0, len(diags))
-	for _, d := range diags {
-		legal := false
-		if d.Code == passes.CodeKerMLNotation {
-			for _, sp := range kerml {
-				if d.Span.Offset >= sp.start && d.Span.Offset < sp.end {
-					legal = true
-					break
-				}
-			}
-		}
-		if !legal {
-			kept = append(kept, d)
-		}
-	}
-	return kept
-}
-
 // diagnostics reports the analysis of the buffer together with the syntax errors
 // of the submissions masked out of it. The masked text is blanked rather than
 // removed, so what the analysis finds is about the submissions that did parse
-// and is reported as it stands.
+// and is reported as it stands. Both session documents share the buffer's
+// coordinates, so their findings interleave by offset.
 func (s *Session) diagnostics() []passes.Diagnostic {
-	analyzed := s.dropKerMLNotationOfKerMLFiles(s.ws.Diagnostics(docName))
+	analyzed := append([]passes.Diagnostic{}, s.ws.Diagnostics(docName)...)
+	analyzed = append(analyzed, s.ws.Diagnostics(kermlDocName)...)
 	open := s.openDiagnostics()
 	if len(open) == 0 {
+		sort.SliceStable(analyzed, func(i, j int) bool { return analyzed[i].Span.Offset < analyzed[j].Span.Offset })
 		return analyzed
 	}
 	out := make([]passes.Diagnostic, 0, len(analyzed)+len(open))
@@ -705,7 +707,7 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	seen := map[string]bool{}
 	s.version++
 	for _, f := range files {
-		for _, name := range declaredNames(parser.New(source.New(docName, []byte(f.Text))).ParseFile()) {
+		for _, name := range declaredNames(parser.New(source.New(parseDocName(f.Name), []byte(f.Text))).ParseFile()) {
 			if !seen[name] {
 				seen[name] = true
 				declared = append(declared, name)
@@ -725,7 +727,13 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	// before the new text replaces that resolution, so what the new document does
 	// not change can be told apart from what it does.
 	over := s.recordCarryover()
-	s.ws.Open(docName, []byte(joined), s.version)
+	sysml, _ := s.joinedFor(docName)
+	s.ws.Open(docName, []byte(sysml), s.version)
+	if kerml, any := s.joinedFor(kermlDocName); any {
+		s.ws.Open(kermlDocName, []byte(kerml), s.version)
+	} else {
+		s.ws.Remove(kermlDocName)
+	}
 	// The document is a new AST and scope tree, so the context derived from the
 	// previous one is replaced; the objects it holds are carried into the new one
 	// where the declarations they were materialized against are unchanged. The
@@ -740,10 +748,7 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	s.keepIdentitiesOf(over.prev)
 	// The diagnostics already carry their own "did you mean" hints.
 	diags := s.diagnostics()
-	var members []ast.Node
-	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
-		members = doc.AST.Members
-	}
+	members := s.sessionMembers()
 	res := Result{
 		Members:     members,
 		Declared:    declared,
@@ -908,12 +913,14 @@ func (s *Session) Clear() []string {
 func (s *Session) clear() []string {
 	notices, lost, endedAction, endedState := s.resetLoss()
 	s.ws.Remove(docName)
+	s.ws.Remove(kermlDocName)
 	s.snippets = nil
 	s.version = 0
 	s.rtCtx, s.replaced = nil, nil
 	if s.idx != nil {
-		// Drop the document, keep the library the index was built with.
+		// Drop the documents, keep the library the index was built with.
 		s.idx.RemoveDocument(docName)
+		s.idx.RemoveDocument(kermlDocName)
 		s.idxVersion = 0
 	}
 	s.instances = make(map[string]*runtime.Instance)
@@ -964,8 +971,8 @@ func (s *Session) getOrCreateRuntime() (*runtime.Context, error) {
 	}
 	// Give the runtime the buffer's text, so an error about a declaration reports
 	// the line it was submitted on rather than a byte offset.
-	if doc := s.ws.Document(docName); doc != nil {
-		ctx.RegisterSource(source.New(docName, doc.Content))
+	for _, doc := range s.sessionDocs() {
+		ctx.RegisterSource(source.New(doc.Name, doc.Content))
 	}
 	ctx.AdoptIdentities(s.replaced)
 	s.rtCtx = ctx
@@ -988,15 +995,44 @@ func (s *Session) symbolIndex() *symbols.Index {
 		return nil
 	}
 	if s.idx == nil {
-		s.idx = symbols.NewIndex()
-		model.LoadStdlibInto(s.idx)
+		s.idx = model.NewIndexWithStdlib()
 	} else if s.idxVersion == doc.Version {
 		return s.idx
 	}
 	s.idx.AddDocument(docName, doc.AST)
+	if kdoc := s.ws.Document(kermlDocName); kdoc != nil {
+		s.idx.AddDocument(kermlDocName, kdoc.AST)
+	} else {
+		s.idx.RemoveDocument(kermlDocName)
+	}
 	s.idx.ExpandWildcardImports()
 	s.idxVersion = doc.Version
 	return s.idx
+}
+
+// sessionDocs returns the session's open documents, the SysML buffer first,
+// so a caller reading the whole session reads both languages.
+func (s *Session) sessionDocs() []*model.Document {
+	var out []*model.Document
+	for _, name := range []string{docName, kermlDocName} {
+		if doc := s.ws.Document(name); doc != nil {
+			out = append(out, doc)
+		}
+	}
+	return out
+}
+
+// sessionMembers returns the top-level members of both session documents in
+// buffer order, which their shared coordinates make the span order.
+func (s *Session) sessionMembers() []ast.Node {
+	var out []ast.Node
+	for _, doc := range s.sessionDocs() {
+		if doc.AST != nil {
+			out = append(out, doc.AST.Members...)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Span().Offset < out[j].Span().Offset })
+	return out
 }
 
 // qualifiedOr returns the looked-up qualified name, falling back to the name as

@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -28,7 +29,7 @@ elmt:LoopsAndConditionals__Control
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:LoopsAndConditionals__Control__count
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::count" ;
     sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -58,8 +59,26 @@ elmt:LoopsAndConditionals__Control___403
     sysml:qualifiedName "LoopsAndConditionals::Control::@3" ;
     sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "3"^^xsd:integer ;
-    sysx:whileCondition "count > 0" ;
+    sysx:whileCondition expr:LoopsAndConditionals__Control___403.whileCondition ;
     sysx:hasBody "true"^^xsd:boolean .
+
+expr:LoopsAndConditionals__Control___403.whileCondition
+    a sysml:OperatorExpression ;
+    sysx:sourceText "count > 0" ;
+    sysml:operator ">" ;
+    sysml:argument expr:LoopsAndConditionals__Control___403.whileCondition.a0, expr:LoopsAndConditionals__Control___403.whileCondition.a1 .
+
+expr:LoopsAndConditionals__Control___403.whileCondition.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "count" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__count ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:LoopsAndConditionals__Control___403.whileCondition.a1
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___403___400
     a sysml:ActionUsage ;
@@ -83,16 +102,57 @@ elmt:LoopsAndConditionals__Control___404___400
     sysml:owningNamespace elmt:LoopsAndConditionals__Control___404 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assign" ;
-    sysx:target "total" ;
-    sysml:value "total + 1" .
+    sysx:target expr:LoopsAndConditionals__Control___404___400.target ;
+    sysml:value expr:LoopsAndConditionals__Control___404___400.value .
+
+expr:LoopsAndConditionals__Control___404___400.target
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "total" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__total .
+
+expr:LoopsAndConditionals__Control___404___400.value
+    a sysml:OperatorExpression ;
+    sysx:sourceText "total + 1" ;
+    sysml:operator "+" ;
+    sysml:argument expr:LoopsAndConditionals__Control___404___400.value.a0, expr:LoopsAndConditionals__Control___404___400.value.a1 .
+
+expr:LoopsAndConditionals__Control___404___400.value.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "total" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__total ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:LoopsAndConditionals__Control___404___400.value.a1
+    a sysml:LiteralInteger ;
+    sysx:sourceText "1" ;
+    sysml:value "1"^^xsd:integer ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___405
     a sysml:WhileLoopActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@5" ;
     sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "5"^^xsd:integer ;
-    sysx:untilCondition "total > 100" ;
+    sysx:untilCondition expr:LoopsAndConditionals__Control___405.untilCondition ;
     sysx:hasBody "true"^^xsd:boolean .
+
+expr:LoopsAndConditionals__Control___405.untilCondition
+    a sysml:OperatorExpression ;
+    sysx:sourceText "total > 100" ;
+    sysml:operator ">" ;
+    sysml:argument expr:LoopsAndConditionals__Control___405.untilCondition.a0, expr:LoopsAndConditionals__Control___405.untilCondition.a1 .
+
+expr:LoopsAndConditionals__Control___405.untilCondition.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "total" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__total ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:LoopsAndConditionals__Control___405.untilCondition.a1
+    a sysml:LiteralInteger ;
+    sysx:sourceText "100" ;
+    sysml:value "100"^^xsd:integer ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___405___400
     a sysml:ActionUsage ;
@@ -109,8 +169,26 @@ elmt:LoopsAndConditionals__Control___406
     sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "6"^^xsd:integer ;
     sysx:loopVariable "idx" ;
-    sysx:collection "1..10" ;
+    sysx:collection expr:LoopsAndConditionals__Control___406.collection ;
     sysx:hasBody "true"^^xsd:boolean .
+
+expr:LoopsAndConditionals__Control___406.collection
+    a sysml:OperatorExpression ;
+    sysx:sourceText "1..10" ;
+    sysml:operator ".." ;
+    sysml:argument expr:LoopsAndConditionals__Control___406.collection.a0, expr:LoopsAndConditionals__Control___406.collection.a1 .
+
+expr:LoopsAndConditionals__Control___406.collection.a0
+    a sysml:LiteralInteger ;
+    sysx:sourceText "1" ;
+    sysml:value "1"^^xsd:integer ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:LoopsAndConditionals__Control___406.collection.a1
+    a sysml:LiteralInteger ;
+    sysx:sourceText "10" ;
+    sysml:value "10"^^xsd:integer ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___406___400
     a sysml:AssignmentActionUsage ;
@@ -118,15 +196,56 @@ elmt:LoopsAndConditionals__Control___406___400
     sysml:owningNamespace elmt:LoopsAndConditionals__Control___406 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assign" ;
-    sysx:target "total" ;
-    sysml:value "total + idx" .
+    sysx:target expr:LoopsAndConditionals__Control___406___400.target ;
+    sysml:value expr:LoopsAndConditionals__Control___406___400.value .
+
+expr:LoopsAndConditionals__Control___406___400.target
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "total" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__total .
+
+expr:LoopsAndConditionals__Control___406___400.value
+    a sysml:OperatorExpression ;
+    sysx:sourceText "total + idx" ;
+    sysml:operator "+" ;
+    sysml:argument expr:LoopsAndConditionals__Control___406___400.value.a0, expr:LoopsAndConditionals__Control___406___400.value.a1 .
+
+expr:LoopsAndConditionals__Control___406___400.value.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "total" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__total ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:LoopsAndConditionals__Control___406___400.value.a1
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "idx" ;
+    sysml:referent "idx" ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___407
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@7" ;
     sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "7"^^xsd:integer ;
-    sysx:condition "count > 0" .
+    sysx:condition expr:LoopsAndConditionals__Control___407.condition .
+
+expr:LoopsAndConditionals__Control___407.condition
+    a sysml:OperatorExpression ;
+    sysx:sourceText "count > 0" ;
+    sysml:operator ">" ;
+    sysml:argument expr:LoopsAndConditionals__Control___407.condition.a0, expr:LoopsAndConditionals__Control___407.condition.a1 .
+
+expr:LoopsAndConditionals__Control___407.condition.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "count" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__count ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:LoopsAndConditionals__Control___407.condition.a1
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___407___400
     a sysx:IfBranch ;
@@ -150,7 +269,25 @@ elmt:LoopsAndConditionals__Control___408
     sysml:qualifiedName "LoopsAndConditionals::Control::@8" ;
     sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "8"^^xsd:integer ;
-    sysx:condition "count > 0" .
+    sysx:condition expr:LoopsAndConditionals__Control___408.condition .
+
+expr:LoopsAndConditionals__Control___408.condition
+    a sysml:OperatorExpression ;
+    sysx:sourceText "count > 0" ;
+    sysml:operator ">" ;
+    sysml:argument expr:LoopsAndConditionals__Control___408.condition.a0, expr:LoopsAndConditionals__Control___408.condition.a1 .
+
+expr:LoopsAndConditionals__Control___408.condition.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "count" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__count ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:LoopsAndConditionals__Control___408.condition.a1
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___408___400
     a sysx:IfBranch ;
@@ -183,15 +320,43 @@ elmt:LoopsAndConditionals__Control___408___401___400
     sysml:owningNamespace elmt:LoopsAndConditionals__Control___408___401 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assign" ;
-    sysx:target "total" ;
-    sysml:value "0" .
+    sysx:target expr:LoopsAndConditionals__Control___408___401___400.target ;
+    sysml:value expr:LoopsAndConditionals__Control___408___401___400.value .
+
+expr:LoopsAndConditionals__Control___408___401___400.target
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "total" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__total .
+
+expr:LoopsAndConditionals__Control___408___401___400.value
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___409
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9" ;
     sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "9"^^xsd:integer ;
-    sysx:condition "count > 0" .
+    sysx:condition expr:LoopsAndConditionals__Control___409.condition .
+
+expr:LoopsAndConditionals__Control___409.condition
+    a sysml:OperatorExpression ;
+    sysx:sourceText "count > 0" ;
+    sysml:operator ">" ;
+    sysml:argument expr:LoopsAndConditionals__Control___409.condition.a0, expr:LoopsAndConditionals__Control___409.condition.a1 .
+
+expr:LoopsAndConditionals__Control___409.condition.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "count" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__count ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:LoopsAndConditionals__Control___409.condition.a1
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___409___400
     a sysx:IfBranch ;
@@ -223,7 +388,25 @@ elmt:LoopsAndConditionals__Control___409___401___400
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@1::@0" ;
     sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401 ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysx:condition "total > 0" .
+    sysx:condition expr:LoopsAndConditionals__Control___409___401___400.condition .
+
+expr:LoopsAndConditionals__Control___409___401___400.condition
+    a sysml:OperatorExpression ;
+    sysx:sourceText "total > 0" ;
+    sysml:operator ">" ;
+    sysml:argument expr:LoopsAndConditionals__Control___409___401___400.condition.a0, expr:LoopsAndConditionals__Control___409___401___400.condition.a1 .
+
+expr:LoopsAndConditionals__Control___409___401___400.condition.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "total" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__total ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:LoopsAndConditionals__Control___409___401___400.condition.a1
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___409___401___400___400
     a sysx:IfBranch ;
@@ -239,5 +422,15 @@ elmt:LoopsAndConditionals__Control___409___401___400___400___400
     sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401___400___400 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assign" ;
-    sysx:target "total" ;
-    sysml:value "0" .
+    sysx:target expr:LoopsAndConditionals__Control___409___401___400___400___400.target ;
+    sysml:value expr:LoopsAndConditionals__Control___409___401___400___400___400.value .
+
+expr:LoopsAndConditionals__Control___409___401___400___400___400.target
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "total" ;
+    sysml:referent elmt:LoopsAndConditionals__Control__total .
+
+expr:LoopsAndConditionals__Control___409___401___400___400___400.value
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer .

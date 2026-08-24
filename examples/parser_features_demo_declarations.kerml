@@ -52,9 +52,11 @@ package Declarations {
         feature name: String;
     }
     
-    subclassifier Derived specializes Base {
+    classifier Derived {
         feature derivedField: Integer;
     }
+    
+    subclassifier Derived specializes Base;
     
     // ===== Multiple Typing with Comma (Task 78) =====
     
@@ -64,10 +66,10 @@ package Declarations {
     
     feature MultiTypedFeature {
         // Multiple typing
-        ref : Type1, Type2;
+        feature : Type1, Type2;
         
         // Named with multiple types
-        ref multiTyped: Type1, Type2, Type3;
+        feature multiTyped: Type1, Type2, Type3;
     }
     
     // ===== Subset/Disjoint Statements (Task 65) =====
@@ -91,9 +93,11 @@ package Declarations {
     
     // ===== Redefines Statements =====
     
-    feature Redefinition {
+    classifier RedefinitionBase {
         feature innerSpaceDimension: Integer default 3;
-        
+    }
+    
+    classifier Redefinition specializes RedefinitionBase {
         // Redefines statement with value
         redefines innerSpaceDimension = 0;
     }

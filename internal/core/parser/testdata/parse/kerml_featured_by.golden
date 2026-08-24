@@ -9,7 +9,7 @@
         (Usage kind="class" name="ShoppingCart" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
       (Membership visibility="default"
         (Usage kind="class" name="Product_Account" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (Membership visibility="default"
+          (Membership visibility="default" typeFeature=true
             (Usage kind="attribute" name="inCart" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
               (Relationship kind="typing" target=ShoppingCart
                 (*ast.QualifiedName))
@@ -18,7 +18,7 @@
               (Multiplicity range=true
                 (LiteralInteger value="0")
                 (LiteralInteger value="1"))))
-          (Membership visibility="default"
+          (Membership visibility="default" typeFeature=true
             (Usage kind="attribute" name="both" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
               (Relationship kind="typing" target=ShoppingCart
                 (*ast.QualifiedName))
@@ -26,7 +26,7 @@
                 (*ast.QualifiedName))
               (Relationship kind="featured by" target=Account
                 (*ast.QualifiedName))))
-          (Membership visibility="default"
+          (Membership visibility="default" typeFeature=true
             (Usage kind="attribute" name="multBeforeType" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
               (Relationship kind="typing" target=ShoppingCart
                 (*ast.QualifiedName))

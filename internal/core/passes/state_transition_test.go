@@ -6,7 +6,6 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // transitionDiags runs the pass alone, so what it reports is not mixed with what
@@ -19,7 +18,7 @@ func transitionDiags(t *testing.T, src string) []Diagnostic {
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
 	}
-	idx := symbols.NewIndexFromDoc("t.sysml", root)
+	idx := newTestIndexFromDoc("t.sysml", root)
 	return StateTransitionPass{}.Run(NewContext("t.sysml", idx, nil), "t.sysml", root)
 }
 
@@ -33,7 +32,7 @@ func analyzeTransitions(t *testing.T, src string) []Diagnostic {
 		t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
 	}
 	var out []Diagnostic
-	for _, d := range Analyze("t.sysml", root, nil, symbols.NewIndexFromDoc("t.sysml", root)) {
+	for _, d := range Analyze("t.sysml", root, nil, newTestIndexFromDoc("t.sysml", root)) {
 		// The models here are written in our own state notation, which
 		// NonstandardNotationPass warns about; the verdict under test is another
 		// tier's.
@@ -334,7 +333,8 @@ func TestTransitionOutOfEntryActionIsLegal(t *testing.T) {
 
 // An entry action stands in for a start pseudostate only in the bare completion
 // shape: a triggered or guarded transition is an edge between two vertices, and
-// an entry action is neither.
+// an entry action is neither. A trigger names the accepter rule, which is the
+// specific reading of the same rejection.
 func TestTriggeredTransitionOutOfEntryActionIsNotAVertex(t *testing.T) {
 	wantOneError(t, `package test {
 	state def M {
@@ -342,7 +342,7 @@ func TestTriggeredTransitionOutOfEntryActionIsNotAVertex(t *testing.T) {
 		transition begin accept Warning then busy;
 		state busy;
 	}
-}`, CodeEndpointNotOfMachine, "begin")
+}`, CodeAccepterSourceNotState, "must have a state as its source")
 	wantOneError(t, `package test {
 	state def M {
 		entry action begin { }

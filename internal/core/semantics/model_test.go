@@ -16,13 +16,18 @@ func buildModel(t *testing.T, src string) (*Model, *symbols.Scope) {
 }
 
 func buildModelNamed(t *testing.T, name, src string) (*Model, *symbols.Scope) {
+	return buildModelNamedWithKind(t, name, source.KindOf(name), src)
+}
+
+func buildModelNamedWithKind(t *testing.T, name string, kind source.Kind, src string) (*Model, *symbols.Scope) {
 	t.Helper()
 	p := parser.New(source.New(name, []byte(src)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
 	}
-	idx := symbols.NewIndexFromDoc(name, root)
+	idx := symbols.NewIndex()
+	idx.AddDocumentWithKind(name, root, kind)
 	r := resolve.New(idx)
 	m := NewModel(r)
 	// The workspace attaches the model before resolving so that feature chains
@@ -219,5 +224,28 @@ func TestConformsToAnything(t *testing.T) {
 	}
 	if m.Conforms(engine, sym(t, root, "X")) {
 		t.Fatalf("unrelated X should still not be conformed to")
+	}
+}
+
+// A closure built while a metadata annotation type is unresolved must not be
+// memoized, or the base type it contributes never appears once it resolves.
+func TestAllSupertypesNotMemoizedWhileMetadataProvisional(t *testing.T) {
+	m, root := buildModel(t, "part def A; #Unknown part def B specializes A;")
+	b := sym(t, root, "B")
+	if got := m.AllSupertypes(b); len(got) != 1 || got[0] != sym(t, root, "A") {
+		t.Fatalf("AllSupertypes(B) = %v, want [A]", got)
+	}
+	if !m.provisionalSupers[b] {
+		t.Fatalf("B's supertypes should be provisional while #Unknown is unresolved")
+	}
+	if _, cached := m.allSupers[b]; cached {
+		t.Fatalf("a provisional closure must not be memoized")
+	}
+
+	m2, root2 := buildModel(t, "metadata def Safety :> Base::Metaobject; part def A; #Safety part def B specializes A;")
+	b2 := sym(t, root2, "B")
+	m2.AllSupertypes(b2)
+	if _, cached := m2.allSupers[b2]; !cached {
+		t.Fatalf("a complete closure should be memoized")
 	}
 }

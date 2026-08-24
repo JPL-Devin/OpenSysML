@@ -35,6 +35,25 @@ func TestIndexQualifiedLookup(t *testing.T) {
 	}
 }
 
+func TestIndexDocumentKindUsesExplicitKindAndNameFallback(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "fallback.kerml", "class C;")
+	if got := idx.DocumentKind("fallback.kerml"); got != source.KindKerML {
+		t.Fatalf("DocumentKind(fallback.kerml) = %s, want KerML", got)
+	}
+
+	sf := source.NewWithKind("<content>", []byte("class C;"), source.KindKerML)
+	root := parser.New(sf).ParseFile()
+	idx.AddDocumentWithKind("<content>", root, source.KindKerML)
+	if got := idx.DocumentKind("<content>"); got != source.KindKerML {
+		t.Fatalf("DocumentKind(<content>) = %s, want KerML", got)
+	}
+	idx.RemoveDocument("<content>")
+	if got := idx.DocumentKind("<content>"); got != source.KindUnknown {
+		t.Fatalf("DocumentKind(<content>) after removal = %s, want unknown", got)
+	}
+}
+
 func TestIndexAmbiguousQualified(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "a.sysml", "package P { namespace D; }")
@@ -160,7 +179,7 @@ func TestExpandWildcardImportsKeepsAnOwnedNameOwnedAcrossACycle(t *testing.T) {
 	idx.ExpandWildcardImports()
 
 	got := idx.LookupQualified("A::Widget")
-	if len(got) != 1 || idx.declaredAt[got[0]] != "A::Widget" {
+	if len(got) != 1 || idx.declaredAt.at(got[0]) != "A::Widget" {
 		t.Errorf("LookupQualified(A::Widget) = %d symbol(s), want A's own: "+
 			"`import B::*` re-exporting it back does not make it borrowed", len(got))
 	}
@@ -195,7 +214,7 @@ func TestExpandWildcardImportsIgnoresAnAmbiguousTarget(t *testing.T) {
 		"package P { public import A::*; public import B::*; public import Shared::*; }")
 	idx.ExpandWildcardImports()
 
-	if got := len(idx.fqn["P::Shared"]); got != 2 {
+	if got := len(idx.fqn.at("P::Shared")); got != 2 {
 		t.Fatalf("P::Shared names %d symbols, want the 2 re-exports this case needs", got)
 	}
 	for _, fqn := range []string{"P::FromA", "P::FromB"} {
@@ -436,14 +455,12 @@ func TestExpandWildcardImportsForgetsARemovedMember(t *testing.T) {
 	}
 }
 
-// A library restored from cache is registered by FQN alone, with no scope tree,
-// and a wildcard import of it still surfaces its members.
-func TestExpandWildcardImportsReachesRecordedMembers(t *testing.T) {
+// A wildcard import of library content surfaces its members, which are parsed
+// declarations marked as library on every load path.
+func TestExpandWildcardImportsReachesLibraryMembers(t *testing.T) {
 	idx := NewIndex()
-	idx.AddRecords("lib", []RecordEntry{
-		{FQN: "Lib", Kind: SymbolPackage},
-		{FQN: "Lib::Thing", Kind: SymbolNamespace},
-	})
+	addDoc(t, idx, "lib.sysml", "package Lib { namespace Thing; }")
+	idx.MarkLibrary("lib.sysml")
 	addDoc(t, idx, "b.sysml", "package App { public import Lib::*; }")
 	idx.ExpandWildcardImports()
 

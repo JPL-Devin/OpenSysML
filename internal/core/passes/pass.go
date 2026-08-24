@@ -2,8 +2,10 @@ package passes
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -47,16 +49,62 @@ type Pass interface {
 // import the parser, so these enter here).
 type Context struct {
 	Name             string
+	Kind             source.Kind
 	Index            *symbols.Index
 	ParseDiagnostics []Diagnostic
+	// Options is what the caller asked for, fixed at construction: a pass reads
+	// it, and nothing mutates it during a run.
+	Options Options
 
 	resolver *resolve.Resolver
 	model    *semantics.Model
+	// failures is where the tiers below the pass now running found blocking
+	// faults, so an element-scoped pass can gate itself per element.
+	failures []source.Span
 }
 
-// NewContext builds a Context for a document.
+// Options is the analysis configuration of one run. The zero value is what
+// every existing caller gets: today's behavior, unchanged.
+type Options struct {
+	// Conformance is the strictness the notation is judged at.
+	Conformance conformance.Mode
+}
+
+// NewContext builds a Context for a document, in the default mode.
 func NewContext(name string, idx *symbols.Index, parseDiags []Diagnostic) *Context {
-	return &Context{Name: name, Index: idx, ParseDiagnostics: parseDiags}
+	return NewContextWithKind(name, source.KindOf(name), idx, parseDiags)
+}
+
+// NewContextWithKind builds a context with an explicit source language.
+func NewContextWithKind(name string, kind source.Kind, idx *symbols.Index,
+	parseDiags []Diagnostic) *Context {
+	return NewContextWithOptions(name, kind, idx, parseDiags, Options{})
+}
+
+// NewContextWithOptions builds a context that carries explicit analysis options.
+func NewContextWithOptions(name string, kind source.Kind, idx *symbols.Index,
+	parseDiags []Diagnostic, opts Options) *Context {
+	return &Context{Name: name, Kind: kind, Index: idx, ParseDiagnostics: parseDiags, Options: opts}
+}
+
+// setFailures records the blocking spans of the tiers below the pass about to
+// run. Only the registry calls it, once per pass.
+func (c *Context) setFailures(spans []source.Span) { c.failures = spans }
+
+// DownstreamOfFailure reports whether a reference an element's meaning rests on
+// — its type, its metaclass — carries a blocking fault from a lower tier, so a
+// pass whose subject is that element has nothing sound to judge.
+func (c *Context) DownstreamOfFailure(ref ast.Node) bool {
+	if c == nil || ref == nil {
+		return false
+	}
+	span := ref.Span()
+	for _, f := range c.failures {
+		if f.Offset >= span.Offset && f.End() <= span.End() {
+			return true
+		}
+	}
+	return false
 }
 
 // Resolver returns the shared resolver for this context, creating it on first

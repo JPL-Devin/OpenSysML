@@ -9,6 +9,7 @@ import (
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
@@ -38,6 +39,9 @@ const CapabilityVerification = "verification"
 // SysML v2 API & Services Query over a parsed model.
 const CapabilityQuery = "query"
 
+// CapabilityOSLCQuery names the capability of evaluating OSLC Query text.
+const CapabilityOSLCQuery = "oslc_query"
+
 // CapabilityEnumValues names the capability of carrying an enumeration literal
 // as Value.enum_literal, rather than reporting it as an unsupported null.
 const CapabilityEnumValues = "enum_values"
@@ -59,6 +63,16 @@ const CapabilityUnsetValue = "unset_value"
 // a parsed model's own source, preserving everything the edit did not touch.
 const CapabilityApplyEdits = "apply_edits"
 
+// CapabilityAuthoring names add-member and delete source authoring operations.
+const CapabilityAuthoring = "authoring"
+
+// CapabilityInlineLanguage names explicit language selection for inline content.
+const CapabilityInlineLanguage = "inline_language"
+
+// CapabilityStrictConformance names ParseFileRequest.strict_conformance, which
+// asks whether the source is conforming SysML v2.
+const CapabilityStrictConformance = "strict_conformance"
+
 // CapabilityFeatureValues names the capability of populating
 // Instance.feature_values, which replaced the pre-0.1.0 Instance.slots.
 const CapabilityFeatureValues = "feature_values"
@@ -67,8 +81,10 @@ const CapabilityFeatureValues = "feature_values"
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
+	CapabilityOSLCQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
 	CapabilityUnsetValue, CapabilityFeatureValues, CapabilityApplyEdits,
+	CapabilityAuthoring, CapabilityInlineLanguage, CapabilityStrictConformance,
 }
 
 // Capabilities returns the capability names this build of the service reports.
@@ -80,10 +96,12 @@ func Capabilities() []string {
 type Service struct {
 	pb.UnimplementedSysMLServiceServer
 	cache *Cache
-	// libIndexes hands out indexes carrying the standard library, built ahead of
-	// the requests that need them: the library does not depend on the model, so a
-	// cache miss should not pay for loading it.
-	libIndexes *indexPool
+	// libIndexes hands each model an overlay over the one standard library index
+	// the service holds: the library does not depend on the model, so no model
+	// pays for loading it, and no model keeps a copy of it.
+	libIndexes *libraryBase
+	// prewarm is whether Prewarm builds the library ahead of the first request.
+	prewarm bool
 	// budgets bounds every runtime context the service creates, read once from
 	// the environment at construction.
 	budgets runtime.Budgets
@@ -94,7 +112,7 @@ type Service struct {
 // NewService creates a gRPC service with specified cache size, reporting
 // version as its build version. It returns an error if cacheSize is not
 // positive, if a budget variable holds anything but a positive integer, or if
-// the index pool size is not a non-negative integer. It does not load the
+// the prewarm setting is not a non-negative integer. It does not load the
 // standard library: call Prewarm to have that happen in the background, ahead of
 // the requests that need it.
 func NewService(cacheSize int, version string) (*Service, error) {
@@ -106,28 +124,32 @@ func NewService(cacheSize int, version string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	poolSize, err := indexPoolSizeFromEnv()
+	prewarm, err := indexPrewarmFromEnv()
 	if err != nil {
 		return nil, err
 	}
 	return &Service{
 		cache:      cache,
-		libIndexes: newIndexPool(poolSize, buildLibraryIndex),
+		libIndexes: newLibraryBase(buildLibraryIndex),
+		prewarm:    prewarm > 0,
 		budgets:    budgets,
 		version:    version,
 	}, nil
 }
 
-// Prewarm starts building the service's pool of standard library indexes in the
+// Prewarm starts building the service's standard library index in the
 // background, so the first model to arrive is not the one that pays for the
 // library. It returns immediately and is safe to call more than once.
 func (s *Service) Prewarm() {
+	if !s.prewarm {
+		return
+	}
 	s.libIndexes.prewarm()
 }
 
-// Close releases the prewarmed indexes nobody took and waits for the background
-// builds in flight. The service still answers afterwards, building each index on
-// the request that needs it.
+// Close waits for a background library build in flight and releases the
+// service's reference to the shared index. The service still answers
+// afterwards, building the library on the request that needs it.
 func (s *Service) Close() {
 	s.libIndexes.close()
 }
@@ -157,13 +179,24 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	// Extract source content and file path
 	var content string
 	var filePath string
+	var kind source.Kind
 
 	switch src := req.Source.(type) {
 	case *pb.ParseFileRequest_Content:
 		content = src.Content
 		filePath = "<content>"
+		kind = source.KindSysML
+		switch req.Language {
+		case "", "sysml":
+		case "kerml":
+			kind = source.KindKerML
+		default:
+			return nil, status.Errorf(codes.InvalidArgument,
+				"language must be sysml or kerml, got %q", req.Language)
+		}
 	case *pb.ParseFileRequest_FilePath:
 		filePath = src.FilePath
+		kind = source.KindOf(filePath)
 		// #nosec G304 -- the client names the model file it wants parsed; reading
 		// arbitrary paths is the service's purpose, and it runs with the caller's
 		// own privileges.
@@ -179,27 +212,30 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	// Keyed by what was read, not by the hash the request carried: a hash
 	// disagreeing with its content would serve another model. The file name is
 	// part of the key, since a record's diagnostics name the file it came from.
-	modelHash := computeHash(filePath + "\x00" + content)
+	// The conformance mode is part of the key: the same source asks a different
+	// question in each mode, so one mode's diagnostics may not serve the other.
+	mode := conformance.ModeOf(req.StrictConformance)
+	modelHash := computeHash(filePath + "\x00" + req.Language + "\x00" + mode.String() + "\x00" + content)
 	if cached, ok := s.cache.Get(modelHash); ok {
 		return s.buildParseResponse(modelHash, cached), nil
 	}
 
 	// Parse the file
-	srcFile := source.New(filePath, []byte(content))
+	srcFile := source.NewWithKind(filePath, []byte(content), kind)
 	p := parser.New(srcFile)
 	root := p.ParseFile()
 
 	// Get parser diagnostics
 	parseDiags := p.Diagnostics
 
-	// Take an index carrying the standard library, which type resolution needs.
-	// It is prewarmed when the pool has one, and built here when it does not; the
-	// two are the same index, so what a model resolves against does not depend on
-	// prewarming. This model owns it from here on.
+	// Take an index carrying the standard library, which type resolution needs:
+	// an overlay over the one library index the service holds. The model's own
+	// document goes into the overlay alone, so what it resolves against does not
+	// depend on prewarming or on any other model.
 	idx := s.libIndexes.get()
 
 	// Add user document
-	idx.AddDocument(filePath, root)
+	idx.AddDocumentWithKind(filePath, root, kind)
 
 	// Run semantic passes (name-resolution, type, constraint)
 	// Only run if no parse errors (tier gating per AGENTS.md §4)
@@ -207,7 +243,8 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	if len(parseDiags) == 0 {
 		// passes.Analyze expects parser diagnostics converted to passes.Diagnostic
 		parseDiagsConverted := make([]passes.Diagnostic, 0) // No parse errors to convert
-		passesDiags = passes.Analyze(filePath, root, parseDiagsConverted, idx)
+		passesDiags = passes.AnalyzeWithOptions(filePath, kind, root, parseDiagsConverted, idx,
+			passes.Options{Conformance: mode})
 	}
 
 	// Create cached model
@@ -568,14 +605,31 @@ func computeHash(content string) string {
 // lookupNamed resolves a symbol ID written in either spelling: the quoted,
 // notation-legal form a model author writes ('My Pkg'::Car), or the unquoted
 // spelling the index records (My Pkg::Car), which keeps working as it did.
+// Model elements come before library homonyms: an ID naming both denotes the
+// model's own element, which is what the client asked about.
 func lookupNamed(idx *symbols.Index, id string) []*symbols.Symbol {
 	if syms := idx.LookupQualified(id); len(syms) > 0 {
-		return syms
+		return modelFirst(idx, syms)
 	}
 	if plain, ok := unquotedName(id); ok && plain != id {
-		return idx.LookupQualified(plain)
+		return modelFirst(idx, idx.LookupQualified(plain))
 	}
 	return nil
+}
+
+// modelFirst reorders matches so the ones the model declares precede the ones
+// standard-library content declares, each group keeping its index order.
+func modelFirst(idx *symbols.Index, syms []*symbols.Symbol) []*symbols.Symbol {
+	out := make([]*symbols.Symbol, 0, len(syms))
+	var lib []*symbols.Symbol
+	for _, sym := range syms {
+		if idx.Library(sym) {
+			lib = append(lib, sym)
+			continue
+		}
+		out = append(out, sym)
+	}
+	return append(out, lib...)
 }
 
 // unquotedName is the name a notation-legal qualified name states, with the

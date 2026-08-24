@@ -1,0 +1,17 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="F81" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="A"))
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="B"))
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="C"))
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="D"
+          (Relationship kind="disjoint" target=C
+            (*ast.QualifiedName))
+          (Relationship kind="differences" target=A
+            (*ast.QualifiedName))
+          (Relationship kind="differences" target=B
+            (*ast.QualifiedName)))))))

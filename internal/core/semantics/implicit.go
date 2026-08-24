@@ -100,42 +100,149 @@ var implicitKerMLBases = map[string]string{
 	"type":        "Base::Anything",
 }
 
-// implicitBase returns the stdlib definition sym is implicitly typed by, or nil
-// when sym is not a declaration of a kind with a known base.
-func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
-	isKerML := source.KindOf(sym.DocName) == source.KindKerML
-	var fqn string
-	var ok bool
+// implicitKerMLFeatureBases maps a KerML feature keyword to the base feature
+// every feature of that kind subsets (KerML 1.1 §8.4.2).
+var implicitKerMLFeatureBases = map[string]string{
+	"type":        baseUsageFQN,
+	"classifier":  baseUsageFQN,
+	"feature":     baseUsageFQN,
+	"class":       "Occurrences::occurrences",
+	"struct":      "Objects::objects",
+	"datatype":    "Base::dataValues",
+	"assoc":       "Links::links",
+	"association": "Links::links",
+	"connector":   "Links::links",
+	"binding":     "Links::selfLinks",
+	"bind":        "Links::selfLinks",
+	"succession":  "Occurrences::happensBeforeLinks",
+	"behavior":    "Performances::performances",
+	"step":        "Performances::performances",
+	"function":    "Performances::evaluations",
+	"expr":        "Performances::evaluations",
+	"predicate":   "Performances::booleanEvaluations",
+	"bool":        "Performances::booleanEvaluations",
+	"inv":         "Performances::trueEvaluations",
+	"interaction": "Transfers::transfers",
+	"flow":        "Transfers::flowTransfers",
+	"metaclass":   "Metaobjects::metaobjects",
+}
+
+// KindBaseFQN returns the standard-library base every declaration of sym's
+// kind conforms to, implicitly or through its declared chain.
+func KindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
+	return kindBaseFQN(sym, isKerML)
+}
+
+// FeatureBaseFQN returns the standard-library element a feature declaration
+// takes its type from when it declares none: the base feature its kind implies,
+// or the base definition a SysML usage of that kind is typed by.
+func (m *Model) FeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
+	if sym == nil {
+		return "", false
+	}
+	if typed, ok := m.declaredTypeFeatureBase(sym); ok {
+		return typed, true
+	}
+	if !m.isKerMLDoc(sym) {
+		usage, ok := sym.Decl.(*ast.Usage)
+		if !ok {
+			return "", false
+		}
+		if fqn, ok := implicitUsageBases[usage.Kind]; ok {
+			return fqn, true
+		}
+		// A usage of no particular kind still subsets the base feature every
+		// usage does, which is what types it (SysML v2 §7.3.2).
+		return baseUsageFQN, true
+	}
+	fqn, ok := implicitKerMLFeatureBases[keywordOf(sym)]
+	return fqn, ok
+}
+
+// RelationshipTarget resolves the element rel names from sym's scope.
+func (m *Model) RelationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
+	return m.relationshipTarget(sym, rel)
+}
+
+func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
+	if sym == nil {
+		return "", false
+	}
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
-		fqn, ok = implicitUsageBases[d.Kind]
+		if isKerML {
+			fqn, ok := implicitKerMLBases[d.Keyword]
+			return fqn, ok
+		}
+		if len(ownedEnds(sym)) == 2 {
+			switch d.Kind {
+			case ast.UsageConnection:
+				return "Connections::BinaryConnection", true
+			case ast.UsageInterface:
+				return "Interfaces::BinaryInterface", true
+			}
+		}
 		if d.IsIndividual && d.Kind == ast.UsageOccurrence {
 			// An individual occurrence is a life, not an arbitrary occurrence
 			// (SysML v2 §7.9.4), however the modifier is spelled.
-			fqn, ok = implicitUsageBases[ast.UsageIndividual]
+			fqn, ok := implicitUsageBases[ast.UsageIndividual]
+			return fqn, ok
 		}
+		fqn, ok := implicitUsageBases[d.Kind]
+		return fqn, ok
 	case *ast.Definition:
-		fqn, ok = implicitDefinitionBases[d.Kind]
+		if isKerML {
+			fqn, ok := implicitKerMLBases[d.Keyword]
+			return fqn, ok
+		}
+		if len(ownedEnds(sym)) == 2 {
+			switch d.Kind {
+			case ast.DefConnection:
+				return "Connections::BinaryConnection", true
+			case ast.DefInterface:
+				return "Interfaces::BinaryInterface", true
+			}
+		}
+		fqn, ok := implicitDefinitionBases[d.Kind]
+		return fqn, ok
 	case *ast.SubstateMember:
 		// `state s;` in a state body: a bodyless, always-untyped state usage.
-		fqn, ok = implicitUsageBases[ast.UsageState]
-	default:
-		return nil
+		fqn, ok := implicitUsageBases[ast.UsageState]
+		return fqn, ok
+	case *ast.TransitionMember:
+		// A textual transition is a TransitionUsage (SysML v2 §7.19.2), so it
+		// gets the same base as `transition` written as a usage.
+		fqn, ok := implicitUsageBases[ast.UsageTransition]
+		return fqn, ok
 	}
-	if isKerML {
-		switch d := sym.Decl.(type) {
-		case *ast.Usage:
-			fqn, ok = implicitKerMLBases[d.Keyword]
-		case *ast.Definition:
-			fqn, ok = implicitKerMLBases[d.Keyword]
-		}
-	} else if declaresGeneralization(RelationshipsOf(sym)) {
-		return nil
+	return "", false
+}
+
+// isKerMLDoc reports whether sym is declared by a KerML document, as recorded
+// by the index rather than inferred from the document name.
+func (m *Model) isKerMLDoc(sym *symbols.Symbol) bool {
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return false
 	}
-	if isKerML && m.declaredGeneralizationReaches(sym, fqn, nil) {
-		return nil
-	}
+	return m.resolver.Index().DocumentKind(sym.DocName) == source.KindKerML
+}
+
+// implicitBase returns the stdlib definition sym is implicitly typed by, or nil
+// when sym is not a declaration of a kind with a known base.
+func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
+	isKerML := m.isKerMLDoc(sym)
+	fqn, ok := kindBaseFQN(sym, isKerML)
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	// A declaration keeps its kind's base unless a declared chain already reaches
+	// it — the same rule for a usage and in either language (KerML §8.4.2).
+	if m.declaredGeneralizationReaches(sym, fqn, nil) {
+		return nil
+	}
+	// A conjugated type takes its supertypes from what it conjugates rather than
+	// from an implicit specialization of its kind's base (KerML §8.3.3.1.1).
+	if declaresConjugation(sym) {
 		return nil
 	}
 	for _, base := range m.resolver.Index().LookupQualified(fqn) {
@@ -144,6 +251,16 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 		}
 	}
 	return nil
+}
+
+// declaresConjugation reports whether sym conjugates a type.
+func declaresConjugation(sym *symbols.Symbol) bool {
+	for _, rel := range RelationshipsOf(sym) {
+		if rel != nil && rel.Conjugated {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, visiting map[*symbols.Symbol]bool) bool {
@@ -163,25 +280,48 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 		if rel == nil || !GeneralizationKind(rel.Kind) {
 			continue
 		}
-		targetNode := rel.Target
-		if fr, ok := targetNode.(*ast.FeatureReference); ok {
-			targetNode = fr.Name
-		}
-		qn, ok := targetNode.(*ast.QualifiedName)
-		if !ok {
-			continue
-		}
-		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if !ok || target == nil {
-			continue
-		}
-		if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
-			target = resolved
-		} else {
+		target := m.relationshipTarget(sym, rel)
+		// A declaration on the path back to itself is a cycle, not a path to
+		// the base, so it does not displace the implicit one.
+		if target == nil || visiting[target] {
 			continue
 		}
 		sameBase := m.resolver.Index() != nil && m.resolver.Index().GetFQN(target) == want
+		if !sameBase && !visiting[target] {
+			// A declaration conforms to its kind's base whether the edge is
+			// declared or implicit, so reaching one of the same kind suffices —
+			// except back through a cycle, which reaches nothing new.
+			if base, ok := kindBaseFQN(target, m.isKerMLDoc(target)); ok && base == want && !m.declaredReaches(target, sym, nil) {
+				sameBase = true
+			}
+		}
 		if sameBase || m.declaredGeneralizationReaches(target, want, visiting) {
+			return true
+		}
+	}
+	return false
+}
+
+// declaredReaches reports whether want is on from's declared generalization
+// chain: a cycle, when asked of a type's own supertype.
+func (m *Model) declaredReaches(from, want *symbols.Symbol, visiting map[*symbols.Symbol]bool) bool {
+	if from == nil || want == nil {
+		return false
+	}
+	if visiting == nil {
+		visiting = make(map[*symbols.Symbol]bool)
+	}
+	if visiting[from] {
+		return false
+	}
+	visiting[from] = true
+
+	for _, rel := range RelationshipsOf(from) {
+		if rel == nil || !GeneralizationKind(rel.Kind) {
+			continue
+		}
+		target := m.relationshipTarget(from, rel)
+		if target == want || m.declaredReaches(target, want, visiting) {
 			return true
 		}
 	}
@@ -194,13 +334,111 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 // makes an unqualified `that` resolve inside a usage body.
 const baseUsageFQN = "Base::things"
 
+// isKerMLTypeDecl reports whether sym declares a KerML type rather than a
+// feature — `class`, `struct`, `assoc`, `behavior`, `predicate`, `interaction` —
+// which the parser records as a usage node (KerML §8.3).
+func isKerMLTypeDecl(sym *symbols.Symbol) bool {
+	return sym != nil && sym.Kind == symbols.SymbolKerMLType
+}
+
+// implicitKerMLFeatureBase returns the base feature a KerML feature declaration
+// subsets (KerML §8.4.2); it contributes members only, like implicitBaseUsage.
+func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || m.resolver == nil || m.resolver.Index() == nil || !m.isKerMLDoc(sym) {
+		return nil
+	}
+	// Only a feature subsets a base feature; a type specializes a base type.
+	if isKerMLTypeDecl(sym) {
+		return nil
+	}
+	fqn, ok := implicitKerMLFeatureBases[usage.Keyword]
+	// A typed feature subsets the base feature of its type's kind, not of its own
+	// keyword: `feature f : C` with C a class subsets Occurrences::occurrences.
+	if typed, tok := m.declaredTypeFeatureBase(sym); tok {
+		fqn, ok = typed, true
+	}
+	if !ok || m.declaredGeneralizationReaches(sym, fqn, nil) {
+		return nil
+	}
+	for _, base := range m.resolver.Index().LookupQualified(fqn) {
+		if base == nil || base == sym || enclosedBy(sym, base) {
+			continue
+		}
+		return base
+	}
+	return nil
+}
+
+// relationshipTarget resolves the element rel names from sym's scope, following
+// an alias to what it names.
+func (m *Model) relationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
+	if m.resolver == nil {
+		return nil
+	}
+	node := rel.Target
+	if fr, ok := node.(*ast.FeatureReference); ok {
+		node = fr.Name
+	}
+	qn, ok := node.(*ast.QualifiedName)
+	if !ok {
+		return nil
+	}
+	target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
+	if !ok || target == nil {
+		return nil
+	}
+	resolved, ok := m.resolver.ResolveAliasTarget(target)
+	if !ok {
+		return nil
+	}
+	return resolved
+}
+
+// declaredTypeFeatureBase returns the base feature implied by the kind of the
+// type sym is declared to have, if it declares one that is a KerML type.
+func (m *Model) declaredTypeFeatureBase(sym *symbols.Symbol) (string, bool) {
+	for _, rel := range RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		target := m.relationshipTarget(sym, rel)
+		if target == nil || !isKerMLTypeDecl(target) {
+			continue
+		}
+		if fqn, ok := implicitKerMLFeatureBases[keywordOf(target)]; ok {
+			return fqn, true
+		}
+	}
+	return "", false
+}
+
+// keywordOf returns the declaration keyword sym was written with.
+func keywordOf(sym *symbols.Symbol) string {
+	switch d := sym.Decl.(type) {
+	case *ast.Usage:
+		return d.Keyword
+	case *ast.Definition:
+		return d.Keyword
+	}
+	return ""
+}
+
 // implicitBaseUsage returns Base::things for a usage element, or nil when sym is
 // not a usage, is that base usage, or is owned by it.
 func (m *Model) implicitBaseUsage(sym *symbols.Symbol) *symbols.Symbol {
 	if _, ok := sym.Decl.(*ast.Usage); !ok {
 		return nil
 	}
+	// A KerML type declaration is a classifier, not a usage of one.
+	if isKerMLTypeDecl(sym) {
+		return nil
+	}
 	if m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	// A KerML feature typed by a kind with its own base subsets that base instead.
+	if typed, ok := m.declaredTypeFeatureBase(sym); ok && typed != baseUsageFQN && m.isKerMLDoc(sym) {
 		return nil
 	}
 	for _, base := range m.resolver.Index().LookupQualified(baseUsageFQN) {
@@ -225,13 +463,18 @@ func enclosedBy(sym, owner *symbols.Symbol) bool {
 	return false
 }
 
-// declaresGeneralization reports whether rels contain a conformance edge, which
-// makes a declaration take its supertypes from the declaration itself.
-func declaresGeneralization(rels []*ast.Relationship) bool {
-	for _, rel := range rels {
-		if rel != nil && GeneralizationKind(rel.Kind) {
-			return true
+// ImplicitGenerals returns the general types sym has by its kind rather than by
+// declaration. A scope reached through a recursive import does not traverse them
+// (KerML 8.2.3.5).
+func (m *Model) ImplicitGenerals(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	var out []*symbols.Symbol
+	for _, base := range []*symbols.Symbol{m.implicitBase(sym), m.implicitBaseUsage(sym), m.implicitKerMLFeatureBase(sym)} {
+		if base != nil && base != sym {
+			out = append(out, base)
 		}
 	}
-	return false
+	return out
 }

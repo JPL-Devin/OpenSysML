@@ -80,6 +80,14 @@ var (
 	// evaluation, so an expression naming it fails rather than yielding nothing.
 	ErrUnsupportedOperator = errors.New("unsupported operator")
 
+	// ErrUnresolvedType is returned when a type classification operand names no
+	// resolvable type.
+	ErrUnresolvedType = errors.New("unresolved type")
+
+	// ErrUndeterminedValueType is returned when a value classification has no
+	// direct runtime type to compare.
+	ErrUndeterminedValueType = errors.New("value type cannot be determined")
+
 	// ErrCalcNoReturn is returned when a calc body runs to its end without
 	// returning: it computed no result, which is not the same as a null one.
 	ErrCalcNoReturn = errors.New("calculation returned no value")
@@ -104,6 +112,15 @@ var (
 	// reported instead of hanging.
 	ErrAcceptDeadlock = errors.New("accept deadlock")
 
+	// ErrActionDeadlock is returned when action tokens cannot make progress.
+	ErrActionDeadlock = errors.New("action deadlock")
+
+	// ErrInvalidActionFlow is returned for a structurally invalid action graph.
+	ErrInvalidActionFlow = errors.New("invalid action flow")
+
+	// ErrNoEnabledSuccession is returned when a decision can select no branch.
+	ErrNoEnabledSuccession = errors.New("no enabled succession")
+
 	// ErrNoClock is returned when a behavior waits for a time event where no
 	// clock advances: an action body has no time base of its own, so
 	// `accept at t` / `accept after d` written among an action's nodes is
@@ -114,6 +131,18 @@ var (
 	// the run's calc depth budget, which an unbounded recursion would otherwise
 	// do until the process ran out of stack.
 	ErrCalcRecursionLimit = errors.New("calc recursion limit exceeded")
+
+	// ErrActionStepLimitExceeded is returned when an action executor exceeds
+	// its token-flow step budget.
+	ErrActionStepLimitExceeded = errors.New("action step limit exceeded")
+
+	// ErrStateEventLimitExceeded is returned when state processing exceeds its
+	// event budget.
+	ErrStateEventLimitExceeded = errors.New("state event limit exceeded")
+
+	// ErrDoStepLimitExceeded is returned when a state do behavior exceeds its
+	// action-step budget.
+	ErrDoStepLimitExceeded = errors.New("state do-step limit exceeded")
 
 	// ErrViolated is returned when an asserted constraint or a required
 	// condition evaluates to false. It is a verdict about the model, not a
@@ -216,6 +245,11 @@ var (
 	// declaring two parameters has no second argument to receive.
 	ErrBodyArity = errors.New("body parameter count mismatch")
 
+	// ErrUnsupportedBodyDeclaration is returned when a body expression declares
+	// features of its own: the evaluator binds its parameters, not its
+	// declarations, so applying it would read them as unresolved.
+	ErrUnsupportedBodyDeclaration = errors.New("unsupported declaration in a body expression")
+
 	// ErrReceiverWithNamedArgs is returned when a receiver is written before a
 	// call whose arguments are named, `x->f(a = 1)`. The receiver binds by
 	// position and the arguments by name, so which parameter the receiver binds
@@ -260,6 +294,22 @@ var (
 	// it can be created.
 	ErrNoSubject = errors.New("no subject to satisfy the requirement")
 )
+
+type budgetExceededError struct {
+	message string
+	errs    []error
+}
+
+func (e *budgetExceededError) Error() string { return e.message }
+
+func (e *budgetExceededError) Unwrap() []error { return e.errs }
+
+func budgetExceeded(sentinel error, message string, causes ...error) error {
+	errs := make([]error, 0, len(causes)+1)
+	errs = append(errs, sentinel)
+	errs = append(errs, causes...)
+	return &budgetExceededError{message: message, errs: errs}
+}
 
 // ViolationError reports a condition that evaluated to false, naming the
 // condition so a verdict says which one failed. It unwraps to ErrViolated,

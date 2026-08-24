@@ -23,10 +23,17 @@ package demo_relationships {
 	
 	// Inverse of relationship - establishes bidirectional links
 	assoc struct BidirectionalLink {
+		doc /* Association ends carry multiplicity 1 */
+		
+		end feature parent: Node[1];
+		end feature child: Node[1];
+	}
+	
+	classifier Tree {
 		doc /* Example of inverse relationships from Occurrences.kerml */
 		
-		feature parent: Node[1];
-		feature child: Node[0..*] inverse of parent;
+		feature parentNode: Tree[0..1] inverse of childNodes;
+		feature childNodes: Tree[0..*] inverse of parentNode;
 	}
 	
 	// Unions relationship - combines multiple features

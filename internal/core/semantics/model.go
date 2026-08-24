@@ -12,7 +12,6 @@ package semantics
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -21,16 +20,22 @@ import (
 type Model struct {
 	resolver *resolve.Resolver
 
-	directSupers  map[*symbols.Symbol][]*symbols.Symbol
-	allSupers     map[*symbols.Symbol][]*symbols.Symbol
-	referenced    map[*symbols.Symbol]*symbols.Symbol
-	resolvingRef  map[*symbols.Symbol]bool
-	memberSources map[*symbols.Symbol][]*symbols.Symbol
-	primTypes     map[*symbols.Symbol]PrimType
-	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
-	params        map[*symbols.Symbol]behaviorParameters
-	unioning      map[*symbols.Symbol][]*symbols.Symbol
-	ends          map[*symbols.Symbol][]*symbols.Symbol
+	directSupers map[*symbols.Symbol][]*symbols.Symbol
+	allSupers    map[*symbols.Symbol][]*symbols.Symbol
+	// provisionalSupers holds the symbols whose last DirectSupertypes answer was
+	// incomplete, so neither it nor a closure over it may be memoized.
+	provisionalSupers map[*symbols.Symbol]bool
+	// computingSupers holds the symbols whose DirectSupertypes call is still on
+	// the stack, so the re-entrancy guard answers nil for them.
+	computingSupers map[*symbols.Symbol]bool
+	referenced      map[*symbols.Symbol]*symbols.Symbol
+	resolvingRef    map[*symbols.Symbol]bool
+	memberSources   map[*symbols.Symbol][]*symbols.Symbol
+	primTypes       map[*symbols.Symbol]PrimType
+	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
+	params          map[*symbols.Symbol]behaviorParameters
+	unioning        map[*symbols.Symbol][]*symbols.Symbol
+	ends            map[*symbols.Symbol][]*symbols.Symbol
 
 	superEdgeCache map[*symbols.Symbol][]superEdge      // generalization edges with conjugation
 	conjSupers     map[*symbols.Symbol][]conjugatedType // supertypes with conjugation parity
@@ -51,6 +56,22 @@ type Model struct {
 	filterTypes    map[string]*symbols.Symbol
 	annotations    map[*symbols.Symbol][]annotation
 	aboutAnnots    map[*symbols.Symbol][]annotation
+
+	// Redefinition masking (see masking.go): the features each declaration
+	// redefines, and the elements each type does not inherit because of them.
+	redefined map[*symbols.Symbol][]*symbols.Symbol
+	redefMask map[*symbols.Symbol]map[*symbols.Symbol]bool
+	// redefMaskInherited is the same mask counting inherited redefinitions only.
+	redefMaskInherited map[*symbols.Symbol]map[*symbols.Symbol]bool
+	// declMask is redefMaskInherited as a declaration of a given name sees it.
+	declMask map[declMaskKey]map[*symbols.Symbol]bool
+}
+
+// declMaskKey keys the mask a declaration written in a type sees, by the type
+// and the declaration's name.
+type declMaskKey struct {
+	owner *symbols.Symbol
+	name  string
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -59,16 +80,19 @@ type Model struct {
 // inherited members, which a redefinition target may only be reachable through.
 func NewModel(resolver *resolve.Resolver) *Model {
 	m := &Model{
-		resolver:      resolver,
-		directSupers:  make(map[*symbols.Symbol][]*symbols.Symbol),
-		allSupers:     make(map[*symbols.Symbol][]*symbols.Symbol),
-		referenced:    make(map[*symbols.Symbol]*symbols.Symbol),
-		resolvingRef:  make(map[*symbols.Symbol]bool),
-		memberSources: make(map[*symbols.Symbol][]*symbols.Symbol),
-		primTypes:     make(map[*symbols.Symbol]PrimType),
-		params:        make(map[*symbols.Symbol]behaviorParameters),
-		unioning:      make(map[*symbols.Symbol][]*symbols.Symbol),
-		ends:          make(map[*symbols.Symbol][]*symbols.Symbol),
+		resolver:     resolver,
+		directSupers: make(map[*symbols.Symbol][]*symbols.Symbol),
+		allSupers:    make(map[*symbols.Symbol][]*symbols.Symbol),
+
+		provisionalSupers: make(map[*symbols.Symbol]bool),
+		computingSupers:   make(map[*symbols.Symbol]bool),
+		referenced:        make(map[*symbols.Symbol]*symbols.Symbol),
+		resolvingRef:      make(map[*symbols.Symbol]bool),
+		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
+		primTypes:         make(map[*symbols.Symbol]PrimType),
+		params:            make(map[*symbols.Symbol]behaviorParameters),
+		unioning:          make(map[*symbols.Symbol][]*symbols.Symbol),
+		ends:              make(map[*symbols.Symbol][]*symbols.Symbol),
 
 		superEdgeCache: make(map[*symbols.Symbol][]superEdge),
 		conjSupers:     make(map[*symbols.Symbol][]conjugatedType),
@@ -83,6 +107,11 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		filterVerdicts: make(map[filterKey]filterVerdict),
 		filterTypes:    make(map[string]*symbols.Symbol),
 		annotations:    make(map[*symbols.Symbol][]annotation),
+
+		redefined:          make(map[*symbols.Symbol][]*symbols.Symbol),
+		redefMask:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
+		redefMaskInherited: make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
+		declMask:           make(map[declMaskKey]map[*symbols.Symbol]bool),
 	}
 	if resolver != nil {
 		resolver.SetModel(m)
@@ -158,6 +187,13 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	}
 	// Guard against re-entrancy on cyclic graphs: seed with an empty slice.
 	m.directSupers[sym] = nil
+	m.computingSupers[sym] = true
+	defer delete(m.computingSupers, sym)
+	if sym.Facts != nil && sym.Facts.Supers != nil {
+		out := m.recordedSupertypes(sym)
+		m.directSupers[sym] = out
+		return out
+	}
 
 	var out []*symbols.Symbol
 	seen := make(map[*symbols.Symbol]bool)
@@ -172,6 +208,13 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 		qn, isQN := targetNode.(*ast.QualifiedName)
 		if !isQN {
+			// A chain target (`subsets b.f`) generalizes to the chain's final feature.
+			if fc, isChain := targetNode.(*ast.FeatureChainExpr); isChain {
+				if target, ok := m.resolver.ResolveTarget(sym.OwnerScope, fc); ok && target != nil && target != sym && !seen[target] {
+					seen[target] = true
+					out = append(out, target)
+				}
+			}
 			continue
 		}
 		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
@@ -197,27 +240,6 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 		seen[target] = true
 		out = append(out, target)
-	}
-
-	// A library symbol restored from the cache has no AST: its specialization
-	// edges were resolved when the record was written and are carried as FQNs.
-	for _, fqn := range sym.SuperFQNs {
-		for _, target := range m.resolver.Index().LookupQualified(fqn) {
-			if target == nil {
-				continue
-			}
-			if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
-				target = resolved
-			} else {
-				continue
-			}
-			if target == sym || seen[target] {
-				continue
-			}
-			seen[target] = true
-			out = append(out, target)
-			break
-		}
 	}
 
 	// SubjectMember has TypeRef instead of Relationships - handle separately
@@ -268,6 +290,33 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 
+	// A send written as an action node is a SendActionUsage of its own, so it is
+	// typed by SendAction whether or not a usage declares it.
+	if _, ok := sym.Decl.(*ast.SendStatement); ok {
+		for _, sendDef := range m.resolver.Index().LookupQualified("Actions::SendAction") {
+			if sendDef == nil || sendDef == sym || seen[sendDef] {
+				continue
+			}
+			seen[sendDef] = true
+			out = append(out, sendDef)
+			break
+		}
+	}
+
+	// An action usage with an accept payload is an AcceptActionUsage, implicitly
+	// typed by AcceptAction, which supplies `receiver` and `acceptedMessage`
+	// (SysML v2 §7.16.5, §8.3.17).
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind == ast.UsageAction && hasAcceptPayload(usage) {
+		for _, acceptDef := range m.resolver.Index().LookupQualified("Actions::AcceptAction") {
+			if acceptDef == nil || acceptDef == sym || seen[acceptDef] {
+				continue
+			}
+			seen[acceptDef] = true
+			out = append(out, acceptDef)
+			break
+		}
+	}
+
 	// A variant specializes the variation it is a variant of, so it carries the
 	// variation's type and features and restates only what it chooses
 	// (SysML v2 §7.20).
@@ -278,10 +327,13 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 
 	// Semantic metadata annotating this element — a `#keyword` prefix — adds the
 	// implicit specialization of its baseType (SysML v2 §7.27.3, §7.27.4).
-	for _, base := range m.semanticMetadataBases(sym) {
+	fromMetadata := false
+	metadataBases, metadataComplete := m.semanticMetadataBases(sym)
+	for _, base := range metadataBases {
 		if base == nil || base == sym || seen[base] {
 			continue
 		}
+		fromMetadata = true
 		seen[base] = true
 		out = append(out, base)
 	}
@@ -289,7 +341,6 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// A parameter of a behavior or step implicitly redefines the corresponding
 	// parameter of each behavior or step its owner specializes, and so takes
 	// that parameter's type when it declares none (see redefinition.go).
-	declared := len(out)
 	for _, redefined := range m.implicitParameterRedefinitions(sym) {
 		if seen[redefined] {
 			continue
@@ -309,17 +360,64 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, redefined)
 	}
 
-	// An untyped usage still specializes its standard-library base feature.
-	// Implicit redefinition does not stand in for it: the two rules are
-	// independent, and the redefined parameter may itself be untyped.
-	if declared == 0 || source.KindOf(sym.DocName) == source.KindKerML {
-		if base := m.implicitBase(sym); base != nil {
-			out = append(out, base)
-		}
+	// A declaration keeps its kind's base whatever else it declares; implicitBase
+	// suppresses it only when a declared chain already reaches that base. A
+	// metadata keyword supplies the kind itself, so its baseType stands in.
+	if base := m.implicitBase(sym); !fromMetadata && base != nil && !seen[base] {
+		seen[base] = true
+		out = append(out, base)
 	}
 
+	// A metadata annotation whose type did not resolve yet — a name still being
+	// resolved when this query ran — leaves the answer provisional, so it is
+	// recomputed on the next query instead of being memoized.
+	if !metadataComplete {
+		delete(m.directSupers, sym)
+		m.provisionalSupers[sym] = true
+		return out
+	}
+
+	delete(m.provisionalSupers, sym)
 	m.directSupers[sym] = out
 	return out
+}
+
+// recordedSupertypes resolves the supertype edges installed for a library
+// symbol, which the same derivation over its declaration produced when they were
+// recorded. An edge naming nothing in this index is dropped, as an unresolved
+// declared target is.
+func (m *Model) recordedSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	seen := make(map[*symbols.Symbol]bool)
+	for _, fqn := range sym.Facts.Supers {
+		for _, target := range m.resolver.Index().LookupQualified(fqn) {
+			if target == nil {
+				continue
+			}
+			resolved, aliasOK := m.resolver.ResolveAliasTarget(target)
+			if !aliasOK || resolved == sym || seen[resolved] {
+				break
+			}
+			seen[resolved] = true
+			out = append(out, resolved)
+			break
+		}
+	}
+	return out
+}
+
+// SupertypesProvisional reports whether sym's supertypes were last derived from
+// a metadata annotation whose type had not resolved yet, so the answer may still
+// change and must not be recorded as a fact.
+func (m *Model) SupertypesProvisional(sym *symbols.Symbol) bool {
+	return m.provisionalSupers[sym]
+}
+
+// supersUnstable reports whether sym's supertype answer may still change: it was
+// provisional, or its own computation is on the stack and the re-entrancy guard
+// is answering nil for it.
+func (m *Model) supersUnstable(sym *symbols.Symbol) bool {
+	return m.provisionalSupers[sym] || m.computingSupers[sym]
 }
 
 // inheritedFeature returns the feature that sym's owner inherits under the name
@@ -385,6 +483,7 @@ func (m *Model) AllSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	var order []*symbols.Symbol
 	visited := make(map[*symbols.Symbol]bool)
 	queue := append([]*symbols.Symbol(nil), m.DirectSupertypes(sym)...)
+	provisional := m.supersUnstable(sym)
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
@@ -394,6 +493,12 @@ func (m *Model) AllSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		visited[cur] = true
 		order = append(order, cur)
 		queue = append(queue, m.DirectSupertypes(cur)...)
+		provisional = provisional || m.supersUnstable(cur)
+	}
+	// A closure over a provisional answer is provisional too.
+	if provisional {
+		delete(m.allSupers, sym)
+		return order
 	}
 	m.allSupers[sym] = order
 	return order
@@ -522,6 +627,17 @@ func (m *Model) HasSpecializationCycle(sym *symbols.Symbol) bool {
 func hasSendStatement(usage *ast.Usage) bool {
 	for _, member := range usage.Members {
 		if _, ok := member.(*ast.SendStatement); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAcceptPayload reports whether an action usage declares an accept payload
+// parameter, which is what makes it an AcceptActionUsage (SysML v2 §8.3.17).
+func hasAcceptPayload(usage *ast.Usage) bool {
+	for _, member := range usage.Members {
+		if payload, ok := unwrapUsage(member); ok && payload.IsAccept {
 			return true
 		}
 	}

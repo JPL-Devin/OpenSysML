@@ -1,0 +1,76 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="F61KeywordlessMembers" library=false standard=false
+      (Membership visibility="default"
+        (Comment about="" locale="\"en_US\""))
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="DerivedUnit"))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="scalarQuantities" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="distance" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="volume" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="km" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="L" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="T1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralReal value="10.0")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="distancePerVolume" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="subsets" target=scalarQuantities
+            (*ast.QualifiedName))
+          (OperatorExpr operator="/"
+            (FeatureReference name="distance")
+            (FeatureReference name="volume"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="kpl" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=DerivedUnit
+            (*ast.QualifiedName))
+          (OperatorExpr operator="/"
+            (FeatureReference name="km")
+            (FeatureReference name="L"))))
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="Collection"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="m" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=DerivedUnit
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="value" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=distance
+                (*ast.QualifiedName))
+              (Relationship kind="typing" target=DerivedUnit
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="Size"
+          (Relationship kind="specializes" target=ScalarValues::Real
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Definition kind="enum" abstract=false variation=false name="SizeChoice"
+          (Relationship kind="specializes" target=Size
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="enum" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralReal value="60.0")))
+          (Membership visibility="default"
+            (Usage kind="enum" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralReal value="70.0")))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Mass"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="v" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Collection
+                (*ast.QualifiedName))))
+          (FeatureChainExpr member="m"
+            (FeatureReference name="v"))))
+      (Membership visibility="default"
+        (Definition kind="analysis case" abstract=false variation=false name="FuelEconomy"
+          (Membership visibility="default"
+            (Usage kind="subject" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Collection
+                (*ast.QualifiedName))))
+          (FeatureChainExpr member="m"
+            (FeatureReference name="v")))))))

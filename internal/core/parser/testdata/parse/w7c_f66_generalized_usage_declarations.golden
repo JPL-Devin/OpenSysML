@@ -1,0 +1,150 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="W7CGeneralizedUsageDeclarations" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Cylinder"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="LightRollBar"))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="MassRequirement"))
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="MassValue"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="cylinderBR" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Cylinder
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="rollBarBR" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=LightRollBar
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="lugBoltBR" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Cylinder
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle Model 1"
+          (Relationship kind="specializes" target=Vehicle
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=cylinderBR
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="4"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=rollBarBR
+                (*ast.QualifiedName))
+              (Relationship kind="typing" target=LightRollBar
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=lugBoltBR
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="24"))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle Model 2"
+          (Relationship kind="specializes" target=Vehicle
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=cylinderBR
+                (*ast.QualifiedName))
+              (Multiplicity range=true
+                (LiteralInteger value="6")
+                (LiteralInteger value="8"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=rollBarBR
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="0"))))))
+      (Membership visibility="default"
+        (Definition kind="verification case" abstract=false variation=false name="MassTest"
+          (Membership visibility="default"
+            (Usage kind="objective" name="massVerificationObjective" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Usage kind="satisfy" name="massRequirement" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="verify"
+                (Relationship kind="typing" target=MassRequirement
+                  (*ast.QualifiedName)))))))
+      (Membership visibility="default"
+        (Usage kind="requirement" name="vehicleMassRequirement" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=MassRequirement
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="verification case" name="vehicleMassTest" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="verification"
+          (Relationship kind="typing" target=MassTest
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="objective" name="vehicleMassVerificationObjective" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="verify"
+                (Relationship kind="subsets" target=vehicleMassRequirement
+                  (*ast.QualifiedName))
+                (Relationship kind="redefines" target=massRequirement
+                  (*ast.QualifiedName)))))))
+      (Membership visibility="default"
+        (Definition kind="use case" abstract=false variation=false name="UC"))
+      (Membership visibility="default"
+        (Usage kind="use case" name="uc1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variation=true
+          (Relationship kind="typing" target=UC
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="use case" name="uc11" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true))
+          (Membership visibility="default"
+            (Usage kind="use case" name="uc12" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variant=true))))
+      (Membership visibility="default"
+        (Usage kind="part" name="vehicle3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="mass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=MassValue
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="vehicle4" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="mass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=MassValue
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="massLimitation" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="mass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=MassValue
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="massLimit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=MassValue
+                (*ast.QualifiedName))))
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator="<"
+              (FeatureReference name="mass")
+              (FeatureReference name="massLimit")))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="assert" negated=true
+          (Relationship kind="references" target=massLimitation
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=mass
+                (*ast.QualifiedName))
+              (FeatureChainExpr member="mass"
+                (FeatureReference name="vehicle3"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=massLimit
+                (*ast.QualifiedName))
+              (FeatureChainExpr member="mass"
+                (FeatureReference name="vehicle4"))))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="assert"
+          (Relationship kind="references" target=massLimitation
+            (*ast.QualifiedName)))))))

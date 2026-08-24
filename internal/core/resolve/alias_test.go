@@ -2,8 +2,6 @@ package resolve
 
 import (
 	"testing"
-
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestAliasResolvesTarget(t *testing.T) {
@@ -59,15 +57,10 @@ func TestAliasCycleGuard(t *testing.T) {
 // it sees only via `private import ISQBase::*`. A qualified reference from
 // anywhere else must not reach that name (KerML 8.2.3.3), so the alias resolves
 // its target *from* its own namespace.
-func TestAliasResolvesAPrivatelyImportedTargetFromCache(t *testing.T) {
-	idx := symbols.NewIndex()
-	idx.AddRecords("lib", []symbols.RecordEntry{
-		{FQN: "Base", Kind: symbols.SymbolPackage},
-		{FQN: "Base::Hidden", Kind: symbols.SymbolPartDef},
-		{FQN: "Mid", Kind: symbols.SymbolPackage, WildcardImports: []symbols.WildcardImport{
-			{Target: "Base", Private: true},
-		}},
-		{FQN: "Mid::HiddenAlias", Kind: symbols.SymbolAlias, AliasTarget: "Hidden"},
+func TestAliasResolvesAPrivatelyImportedTargetInALibrary(t *testing.T) {
+	idx := libraryIndexOf(t, map[string]string{
+		"base.sysml": "package Base { part def Hidden; }",
+		"mid.sysml":  "package Mid { private import Base::*; alias HiddenAlias for Hidden; }",
 	})
 	idx.ExpandWildcardImports()
 
@@ -79,8 +72,8 @@ func TestAliasResolvesAPrivatelyImportedTargetFromCache(t *testing.T) {
 	if !ok {
 		t.Fatalf("alias of a privately imported type unresolved")
 	}
-	if target.Name != "Base::Hidden" {
-		t.Fatalf("alias target = %q, want Base::Hidden", target.Name)
+	if target.Name != "Hidden" {
+		t.Fatalf("alias target = %q, want Hidden", target.Name)
 	}
 }
 

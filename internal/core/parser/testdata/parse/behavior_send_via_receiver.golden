@@ -1,0 +1,13 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Usage kind="action" name="Sender" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+      (Membership visibility="default"
+        (Usage kind="port" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Port
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="action" name="sendIt" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (SendStatement via=true
+            (FeatureReference name="data")
+            (FeatureReference name="p")
+            (FeatureReference name="receiver")))))))

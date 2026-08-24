@@ -232,6 +232,11 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			fc := &ast.FeatureChainExpr{Operand: expr, Member: member}
 			fc.NodeSpan = p.spanFrom(start)
 			expr = fc
+			// `f.s(1)`: the instantiated type of an invocation may be a feature
+			// chain (KerMLExpressions InstantiatedTypeMember → OwnedFeatureChain).
+			if p.at(lexer.LParen) {
+				expr = p.parseInvocationTail(start, fc, nil)
+			}
 
 		case p.at(lexer.DotQuestion):
 			// `.?{ body }` (select). The body is a body expression whatever it
@@ -248,10 +253,11 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			expr = s
 
 		case p.at(lexer.Hash):
-			// `#( index )` sequence index.
+			// `#( index )` sequence index. The index is a SequenceExpression,
+			// so a multi-dimensional index `arr#(1,3)` is one operand.
 			p.advance() // #
 			p.expect(lexer.LParen, "expected '(' after '#'")
-			idx := p.ParseExpression()
+			idx := p.parseSequenceExpr()
 			p.expect(lexer.RParen, "expected ')'")
 			ix := &ast.IndexExpr{Operand: expr, Index: idx}
 			ix.NodeSpan = p.spanFrom(start)
@@ -260,7 +266,7 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 		case p.at(lexer.LBracket):
 			// `[ index ]` operator index.
 			p.advance() // [
-			idx := p.ParseExpression()
+			idx := p.parseSequenceExpr()
 			p.expect(lexer.RBracket, "expected ']'")
 			ix := &ast.IndexExpr{Operand: expr, Index: idx, Bracket: true}
 			ix.NodeSpan = p.spanFrom(start)
@@ -445,6 +451,23 @@ func (p *Parser) parseParenOrSequence(start int) ast.Node {
 	return seq
 }
 
+// parseSequenceExpr parses a KerMLExpressions SequenceExpression: one
+// expression, or a comma-separated sequence of them (`1, 3`), as one node.
+func (p *Parser) parseSequenceExpr() ast.Node {
+	start := p.peek().Span.Offset
+	elems := []ast.Node{p.ParseExpression()}
+	for p.at(lexer.Comma) {
+		p.advance() // ,
+		elems = append(elems, p.ParseExpression())
+	}
+	if len(elems) == 1 {
+		return elems[0]
+	}
+	seq := &ast.SequenceExpr{Elements: elems}
+	seq.NodeSpan = p.spanFrom(start)
+	return seq
+}
+
 // parseConstructor parses `new QualifiedName ( args )`.
 func (p *Parser) parseConstructor(start int) ast.Node {
 	p.advance() // new
@@ -517,7 +540,30 @@ func (p *Parser) parseInvocationTail(start int, recv ast.Node, typ *ast.Qualifie
 	return inv
 }
 
-// parseBodyExpr parses `{ [doc] (in param ;)* resultExpr }`.
+// atBodyExprMember reports whether a declaration follows in a body expression,
+// rather than its result expression: a visibility or a kind keyword introduces
+// one (`private attribute lbcf = …;`), neither of which starts an expression.
+func (p *Parser) atBodyExprMember() bool {
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	switch p.peek().KeywordID {
+	case "public", "private", "protected":
+		return true
+	}
+	if !p.isKindKeyword(p.peek()) {
+		return false
+	}
+	// A kind keyword is the kind only when the name of a declaration follows;
+	// otherwise the result expression reads it as a name (`objective(a)`).
+	switch p.peekN(1).Kind {
+	case lexer.Identifier, lexer.UnrestrictedName, lexer.Lt:
+		return true
+	}
+	return false
+}
+
+// parseBodyExpr parses `{ [doc] (in param ;)* (member)* resultExpr }`.
 func (p *Parser) parseBodyExpr(start int) ast.Node {
 	p.advance() // {
 	b := &ast.BodyExpr{}
@@ -560,7 +606,18 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 		p.expect(lexer.Semicolon, "expected ';' after body parameter")
 	}
 
-	for p.atKeyword("in") {
+	for p.atKeyword("in") || p.atBodyExprMember() {
+		// A body expression is a calculation body, so it may declare features of
+		// its own between its parameters and its result.
+		if !p.atKeyword("in") {
+			before := p.peek().Span.Offset
+			b.Members = append(b.Members, p.parseBodyMember())
+			// Force progress: a member that consumed nothing would spin the loop.
+			if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+				p.advance()
+			}
+			continue
+		}
 		p.advance() // in
 		var paramType *ast.QualifiedName
 		var paramMult *ast.Multiplicity
@@ -594,8 +651,7 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 			// (`in p :> ISQ::mass`), which is how a filter names the feature its
 			// elements redefine.
 			paramRels := p.parseRelationships(true)
-			if p.at(lexer.Eq) {
-				p.advance() // =
+			if _, ok := p.accept(lexer.Eq); ok {
 				paramValue = p.ParseExpression()
 			}
 			// Parse optional body members: in ref a { doc ... }

@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -44,7 +45,7 @@ elmt:ActionNodes__Drive
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:ActionNodes__Drive__speed
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "ActionNodes::Drive::speed" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -144,25 +145,55 @@ elmt:ActionNodes__Drive___4012
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "12"^^xsd:integer ;
     sysx:declaredKeyword "assign" ;
-    sysx:target "log" ;
-    sysml:value "speed" .
+    sysx:target expr:ActionNodes__Drive___4012.target ;
+    sysml:value expr:ActionNodes__Drive___4012.value .
+
+expr:ActionNodes__Drive___4012.target
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "log" ;
+    sysml:referent elmt:ActionNodes__Drive__log .
+
+expr:ActionNodes__Drive___4012.value
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "speed" ;
+    sysml:referent elmt:ActionNodes__Drive__speed .
 
 elmt:ActionNodes__Drive___4013
     a sysml:SendActionUsage ;
     sysml:qualifiedName "ActionNodes::Drive::@13" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "13"^^xsd:integer ;
-    sysx:payload "Command()" ;
-    sysx:receiver "antenna" .
+    sysx:payload expr:ActionNodes__Drive___4013.payload ;
+    sysx:receiver expr:ActionNodes__Drive___4013.receiver .
+
+expr:ActionNodes__Drive___4013.payload
+    a sysml:InvocationExpression ;
+    sysx:sourceText "Command()" ;
+    sysml:function elmt:ActionNodes__Command .
+
+expr:ActionNodes__Drive___4013.receiver
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "antenna" ;
+    sysml:referent elmt:ActionNodes__Drive__antenna .
 
 elmt:ActionNodes__Drive___4014
     a sysml:SendActionUsage ;
     sysml:qualifiedName "ActionNodes::Drive::@14" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "14"^^xsd:integer ;
-    sysx:payload "Command()" ;
-    sysx:receiver "antenna" ;
+    sysx:payload expr:ActionNodes__Drive___4014.payload ;
+    sysx:receiver expr:ActionNodes__Drive___4014.receiver ;
     sysx:isVia "true"^^xsd:boolean .
+
+expr:ActionNodes__Drive___4014.payload
+    a sysml:InvocationExpression ;
+    sysx:sourceText "Command()" ;
+    sysml:function elmt:ActionNodes__Command .
+
+expr:ActionNodes__Drive___4014.receiver
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "antenna" ;
+    sysml:referent elmt:ActionNodes__Drive__antenna .
 
 elmt:ActionNodes__Drive___4015
     a sysml:ActionUsage ;
@@ -173,7 +204,7 @@ elmt:ActionNodes__Drive___4015
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:ActionNodes__Drive___4015___400
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "ActionNodes::Drive::@15::@0" ;
     sysml:owningNamespace elmt:ActionNodes__Drive___4015 ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -181,8 +212,12 @@ elmt:ActionNodes__Drive___4015___400
     sysml:isReference "true"^^xsd:boolean ;
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
-    sysml:value "when speed > 0" ;
+    sysml:value expr:ActionNodes__Drive___4015___400.value ;
     sysx:hasBody "false"^^xsd:boolean .
+
+expr:ActionNodes__Drive___4015___400.value
+    a sysml:Expression ;
+    sysx:sourceText "when speed > 0" .
 
 elmt:ActionNodes__Drive___4016
     a sysml:TerminateActionUsage ;
@@ -195,7 +230,12 @@ elmt:ActionNodes__Drive___4017
     sysml:qualifiedName "ActionNodes::Drive::@17" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "17"^^xsd:integer ;
-    sysx:expression "brake" .
+    sysx:expression expr:ActionNodes__Drive___4017.expression .
+
+expr:ActionNodes__Drive___4017.expression
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "brake" ;
+    sysml:referent elmt:ActionNodes__Drive__brake .
 
 elmt:ActionNodes__Drive__finish
     a sysx:FinalNode ;
@@ -217,4 +257,19 @@ elmt:ActionNodes__Drive___4020
     sysml:qualifiedName "ActionNodes::Drive::@20" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "20"^^xsd:integer ;
-    sysx:sourceText "succession first brake then finish;" .
+    sysx:sourceText "succession first brake then finish;" ;
+    sysx:relatedFeature expr:ActionNodes__Drive___4020.end0, expr:ActionNodes__Drive___4020.end1 ;
+    sysx:endForm "firstThen" ;
+    sysx:endVerb "first" .
+
+expr:ActionNodes__Drive___4020.end0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "brake" ;
+    sysml:referent elmt:ActionNodes__Drive__brake ;
+    sysx:endIndex "0"^^xsd:integer .
+
+expr:ActionNodes__Drive___4020.end1
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "finish" ;
+    sysml:referent elmt:ActionNodes__Drive__finish ;
+    sysx:endIndex "1"^^xsd:integer .

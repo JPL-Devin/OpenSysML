@@ -193,7 +193,7 @@ func TestKindKeywordSynonymsSurviveRDF(t *testing.T) {
 		"feature f;",
 		"function def F;",
 		"message m;",
-		"allocate al;",
+		"allocate a to b;",
 		"timeslice ts;",
 		"snapshot sn;",
 	} {
@@ -497,9 +497,10 @@ func TestSysMLToSysMLChecksSyntax(t *testing.T) {
 	}
 }
 
-// A member-attached `then` is a succession edge naming both members it
-// sequences, so the sequencing it declares survives the round trip. Member
-// order alone would not carry it: the declaration order here is the reverse.
+// A member-attached `then` is a succession edge whose ends the graph states,
+// and whose form says the source end is the member before it, so the notation
+// it was written in comes back as written. Member order alone would not carry
+// the sequencing: the declaration order here is the reverse.
 func TestSuccessionRoundTrips(t *testing.T) {
 	src := `package P {
 	action def A;
@@ -523,8 +524,8 @@ func TestSuccessionRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("back to notation: %v", err)
 	}
-	if !strings.Contains(string(back), "then a c;") {
-		t.Fatalf("the succession should come back naming both its members:\n%s", back)
+	if !strings.Contains(string(back), "then action c : A;") {
+		t.Fatalf("the succession should come back as the form it was written in:\n%s", back)
 	}
 	// The notation that came back declares the same succession: converting it
 	// again yields the same graph, which member order could not have done.
@@ -712,6 +713,163 @@ func TestVerbatimHeadsRoundTrip(t *testing.T) {
 	}
 	if !strings.Contains(string(back), "connect engine to spare") {
 		t.Errorf("connect declaration lost:\n%s", back)
+	}
+}
+
+// withoutTriples writes the graph again without the named extension property,
+// the shape a graph from another tool has: the head is then rebuilt from the
+// mapping rather than read back from the text it was written as.
+func withoutTriples(t *testing.T, turtle []byte, property string) []byte {
+	t.Helper()
+	var blocks []string
+	for _, block := range strings.Split(string(turtle), "\n\n") {
+		var kept []string
+		for _, line := range strings.Split(block, "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "sysx:"+property+" ") {
+				continue
+			}
+			kept = append(kept, line)
+		}
+		// Dropping the last triple of a block leaves the one before it to end it.
+		for i := len(kept) - 1; i >= 0; i-- {
+			if trimmed := strings.TrimRight(kept[i], "\n"); strings.HasSuffix(trimmed, " ;") {
+				kept[i] = strings.TrimSuffix(trimmed, " ;") + " ."
+				break
+			} else if trimmed != "" {
+				break
+			}
+		}
+		blocks = append(blocks, strings.Join(kept, "\n"))
+	}
+	return []byte(strings.Join(blocks, "\n\n"))
+}
+
+// Every end-binding head states the form its ends are written in, so the
+// declaration comes back as written from the mapping alone — without the source
+// text that our own graphs also carry. Converting that notation again gives the
+// original graph back, which is what proves the second hop loses nothing.
+func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
+	heads := []string{
+		"connect left to right;",
+		"connect (left, right);",
+		"connection c connect left to right;",
+		"bind a = b;",
+		"allocate a to b;",
+		"flow left to right;",
+		"flow of Bus from left to right;",
+		"succession first left then right;",
+		"satisfy R by v;",
+		"verify R;",
+	}
+	for _, head := range heads {
+		t.Run(head, func(t *testing.T) {
+			src := "package P {\n\tport def Bus;\n\trequirement def R;\n\tpart v;\n\tpart def Car {\n\t\tport left : Bus;\n\t\tport right : Bus;\n\t\tattribute a : Integer;\n\t\tattribute b : Integer;\n\t\t" + head + "\n\t}\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), head) {
+				t.Fatalf("the head should come back as written:\n%s", back)
+			}
+			again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again: %v", err)
+			}
+			if string(again) != string(turtle) {
+				t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+			}
+		})
+	}
+}
+
+// A transition and an accept state their trigger and payload in the head too,
+// inside the bodies that allow them.
+func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {
+	bodies := map[string]string{
+		"transition": "state def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 accept e then s2;\n\t}",
+		"accept":     "action def A {\n\t\taccept x : Bus;\n\t}",
+		"send":       "action def A {\n\t\tsend x to y;\n\t}",
+	}
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n\tport def Bus;\n\tpart x;\n\tpart y;\n\t" + body + "\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again: %v", err)
+			}
+			if string(again) != string(turtle) {
+				t.Errorf("the head did not come back as written\n--- notation ---\n%s\n--- first ---\n%s\n--- second ---\n%s", back, turtle, again)
+			}
+		})
+	}
+}
+
+// A `then` beside a member the notation leaves unnamed states its source end as
+// that member, so it comes back as written where a name could not have said it.
+func TestUnnamedSuccessionEndComesBackFromTheGraph(t *testing.T) {
+	src := `package P {
+	state def S;
+	state def M {
+		entry;
+		then s1;
+		state s1 : S;
+	}
+}`
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "then s1;") {
+		t.Fatalf("the succession beside the unnamed entry should come back:\n%s", back)
+	}
+	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again: %v", err)
+	}
+	if string(again) != string(turtle) {
+		t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+	}
+	// The form and the member it names carry the succession without the text.
+	fromGraph, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v", err)
+	}
+	if !strings.Contains(string(fromGraph), "then s1;") {
+		t.Errorf("the mapping alone should say which member the `then` follows:\n%s", fromGraph)
+	}
+}
+
+// A graph that relates ends but states no form for them is refused: the ends
+// alone do not say which keyword and notation the head was written in.
+func TestEndsWithoutTheirFormAreReported(t *testing.T) {
+	src := "package P {\n\tpart def Car {\n\t\tpart left;\n\t\tpart right;\n\t\tconnect left to right;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	stripped := withoutTriples(t, withoutTriples(t, turtle, "sourceText"), "endForm")
+	_, err = export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+	if err == nil {
+		t.Fatal("a head whose form the graph does not state should be reported")
+	}
+	if !strings.Contains(err.Error(), "sysx:endForm") {
+		t.Errorf("the report should name the property it needs: %v", err)
 	}
 }
 
@@ -909,6 +1067,15 @@ func TestFixtureElementIDsRoundTrip(t *testing.T) {
 			t.Fatalf("%s: %v", path, err)
 		}
 		for _, subject := range graph.Subjects() {
+			if strings.HasPrefix(subject.Value, rdf.Expression) {
+				// An expression node is named for the element and slot it
+				// belongs to, not by a qualified name of its own.
+				id, _, ok := strings.Cut(strings.TrimPrefix(subject.Value, rdf.Expression), ".")
+				if owner, decoded := rdf.DecodeElementID(id); !ok || !decoded || owner == "" {
+					t.Errorf("%s: expression %s is not named for an element", path, subject.Value)
+				}
+				continue
+			}
 			qname, ok := graph.Lexical(subject, rdf.SysML+"qualifiedName")
 			if !ok {
 				t.Errorf("%s: subject %s has no qualified name", path, subject.Value)

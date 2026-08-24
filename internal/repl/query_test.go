@@ -19,15 +19,15 @@ const checkFixture = `package Rover {
         constraint nearlyEmpty { charge <= 5.0 }
     }
 
-    constraint MassBudget { assert 180.0 <= 200.0; }
-    constraint TooHeavy { assert 210.0 <= 200.0; }
+    constraint MassBudget { 180.0 <= 200.0 }
+    constraint TooHeavy { 210.0 <= 200.0 }
 
     requirement PowerMargin {
-        assume 600.0 > 0.0;
-        require 600.0 >= 450.0;
+        assume constraint { 600.0 > 0.0 }
+        require constraint { 600.0 >= 450.0 }
     }
     requirement PowerShortfall {
-        require 300.0 >= 450.0;
+        require constraint { 300.0 >= 450.0 }
     }
 }
 `
@@ -106,7 +106,7 @@ const unevaluableFixture = `package Landing {
     part def Lander { attribute verticalSpeed; }
     requirement def TouchdownRequirement {
         subject lander : Lander;
-        require lander.verticalSpeed <= 1.5;
+        require constraint { lander.verticalSpeed <= 1.5 }
     }
     requirement touchdown : TouchdownRequirement;
 }
@@ -133,7 +133,7 @@ func TestSatisfactionThatCouldNotBeEvaluated(t *testing.T) {
     part def Lander { attribute verticalSpeed; }
     requirement def TouchdownRequirement {
         subject lander : Lander;
-        require lander.verticalSpeed <= 1.5;
+        require constraint { lander.verticalSpeed <= 1.5 }
     }
     requirement touchdown : TouchdownRequirement;
     part lander1 : Lander;
@@ -173,7 +173,7 @@ const inheritedConditionFixture = `package P {
     part def Sensor {
         attribute reading = 0.0;
         constraint inRange { reading <= 100.0 }
-        requirement ok { require reading <= 100.0; }
+        requirement ok { require constraint { reading <= 100.0 } }
     }
     part hot : Sensor { attribute :>> reading = 140.0; }
     part cold : Sensor { attribute :>> reading = 20.0; }

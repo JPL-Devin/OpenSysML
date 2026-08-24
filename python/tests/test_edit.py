@@ -15,7 +15,12 @@ from concurrent import futures
 import grpc
 import pytest
 
-from opensysml.capabilities import CAPABILITY_APPLY_EDITS, MissingCapabilityError
+from opensysml.capabilities import (
+    CAPABILITY_APPLY_EDITS,
+    CAPABILITY_AUTHORING,
+    CAPABILITY_INLINE_LANGUAGE,
+    MissingCapabilityError,
+)
 from opensysml.connection import Connection
 from opensysml.conversion import Conversion, FORMAT_SYSML
 from opensysml.edit import EditResult
@@ -28,6 +33,11 @@ from opensysml.errors import (
     NoEditsError,
     OverlappingEditsError,
     RenameReferencedError,
+    OwnerNotFoundError,
+    OwnerNotNamespaceError,
+    IllegalMemberKindError,
+    MemberNameTakenError,
+    DeleteReferencedError,
 )
 from opensysml.proto import sysml_pb2, sysml_pb2_grpc
 
@@ -182,6 +192,102 @@ def test_the_request_carries_the_operations_in_order(fake_service):
         "Demo::SC::margin", "reserve",
     )
     assert str(result) == "edited"
+
+
+def test_add_member_and_delete_requests_are_exact(fake_service):
+    port, service = fake_service(
+        capabilities=(CAPABILITY_APPLY_EDITS, CAPABILITY_AUTHORING)
+    )
+    with Connection(port=port, auto_start=False) as conn:
+        model = conn.load_from_content(MODEL)
+        result = (
+            model.edit()
+            .add_member(
+                "Demo::SC", "part", "board", type="Board",
+                multiplicity="[1]", value="1", specializes=[]
+            )
+            .delete("Demo::sc", cascade=False)
+            .apply()
+        )
+    add, delete = service.requests[0].operations
+    assert add.WhichOneof("operation") == "add_member"
+    assert (
+        add.add_member.owner, add.add_member.kind, add.add_member.name,
+        add.add_member.type, add.add_member.multiplicity, add.add_member.value,
+    ) == ("Demo::SC", "part", "board", "Board", "[1]", "1")
+    assert delete.WhichOneof("operation") == "delete"
+    assert (delete.delete.target, delete.delete.cascade) == ("Demo::sc", False)
+    assert result is not None
+
+
+@pytest.mark.parametrize(
+    "method,kind",
+    [
+        ("add_package", "package"), ("add_part_def", "part def"),
+        ("add_part", "part"), ("add_attribute_def", "attribute def"),
+        ("add_attribute", "attribute"), ("add_item_def", "item def"),
+        ("add_item", "item"), ("add_port_def", "port def"),
+        ("add_port", "port"), ("add_class", "class"), ("add_struct", "struct"),
+        ("add_datatype", "datatype"), ("add_classifier", "classifier"),
+        ("add_feature", "feature"), ("add_assoc", "assoc"),
+        ("add_behavior", "behavior"), ("add_function", "function"),
+        ("add_predicate", "predicate"), ("add_interaction", "interaction"),
+        ("add_metaclass", "metaclass"), ("add_calc_def", "calc def"),
+        ("add_calc", "calc"),
+    ],
+)
+def test_every_typed_helper_uses_service_kind(fake_service, method, kind):
+    port, service = fake_service(
+        capabilities=(CAPABILITY_APPLY_EDITS, CAPABILITY_AUTHORING)
+    )
+    with Connection(port=port, auto_start=False) as conn:
+        getattr(conn.load_from_content(MODEL).edit(), method)("Demo::SC", "New").apply()
+    assert service.requests[0].operations[0].add_member.kind == kind
+
+
+def test_authoring_capability_gates_add_and_delete(fake_service):
+    port, service = fake_service(capabilities=(CAPABILITY_APPLY_EDITS,))
+    with Connection(port=port, auto_start=False) as conn:
+        model = conn.load_from_content(MODEL)
+        with pytest.raises(MissingCapabilityError) as add_error:
+            model.edit().add_part("Demo::SC", "new").apply()
+        with pytest.raises(MissingCapabilityError) as delete_error:
+            model.edit().delete("Demo::sc").apply()
+    assert add_error.value.capability == CAPABILITY_AUTHORING
+    assert delete_error.value.capability == CAPABILITY_AUTHORING
+    assert service.requests == []
+
+
+@pytest.mark.parametrize(
+    "failure,expected",
+    [
+        (sysml_pb2.EDIT_FAILURE_OWNER_UNKNOWN, OwnerNotFoundError),
+        (sysml_pb2.EDIT_FAILURE_OWNER_NOT_NAMESPACE, OwnerNotNamespaceError),
+        (sysml_pb2.EDIT_FAILURE_ILLEGAL_KIND, IllegalMemberKindError),
+        (sysml_pb2.EDIT_FAILURE_MEMBER_NAME_TAKEN, MemberNameTakenError),
+        (sysml_pb2.EDIT_FAILURE_DELETE_REFERENCED, DeleteReferencedError),
+    ],
+)
+def test_every_authoring_failure_is_typed(fake_service, failure, expected):
+    port, _ = fake_service(
+        capabilities=(CAPABILITY_APPLY_EDITS, CAPABILITY_AUTHORING),
+        error="refused", failure=failure,
+    )
+    with Connection(port=port, auto_start=False) as conn:
+        with pytest.raises(expected):
+            conn.load_from_content(MODEL).edit().add_part("Demo::SC", "new").apply()
+
+
+def test_inline_language_capability_and_loads(monkeypatch, fake_service):
+    import opensysml
+
+    port, _ = fake_service(
+        capabilities=(CAPABILITY_APPLY_EDITS, CAPABILITY_INLINE_LANGUAGE)
+    )
+    conn = Connection(port=port, auto_start=False)
+    monkeypatch.setattr(opensysml, "_get_default_connection", lambda: conn)
+    model = opensysml.loads("namespace N;", language="kerml")
+    assert model.root.name == "Demo"
 
 
 def test_a_symbol_names_its_own_target(fake_service):
@@ -351,7 +457,7 @@ def test_an_unknown_operation_kind_is_refused(fake_service):
     """The connection's own operation form is checked before anything is sent."""
     port, service = fake_service()
     with Connection(port=port, auto_start=False) as conn:
-        with pytest.raises(ValueError, match="unknown edit operation"):
+        with pytest.raises(ValueError, match="malformed delete operation"):
             conn.apply_edits("fake-hash", [("delete", "Demo::SC", "")])
     assert service.requests == []
 
@@ -417,6 +523,22 @@ class TestEditRoundTripAgainstRealService:
             assert value.magnitude == pytest.approx(1050.0)
             assert str(value.unit) == "SI::kg"
 
+    def test_authoring_adds_definition_and_part_and_reads_it_back(self, real_service):
+        source = "package Demo;\n"
+        with Connection(port=real_service, auto_start=False) as conn:
+            model = conn.load_from_content(source)
+            result = (
+                model.edit()
+                .add_part_def("", "Vehicle")
+                .add_part("Vehicle", "engine", type="Vehicle")
+                .apply()
+            )
+            edited = str(result)
+            again = conn.load_from_content(edited)
+            vehicle = again.find("Vehicle")
+            assert vehicle is not None
+            assert any(part.name == "engine" for part in vehicle.parts())
+
     def test_a_value_is_added_to_a_feature_that_had_none(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:
             model = conn.load_from_content(MODEL)
@@ -472,12 +594,15 @@ class TestEditRoundTripAgainstRealService:
             assert "attribute callSign : ScalarValues::String" in edited
             assert conn.load_from_content(edited).find("callSign") is not None
 
-    def test_a_referenced_declaration_is_not_renamed(self, real_service):
+    def test_a_referenced_declaration_is_renamed_with_its_references(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:
             model = conn.load_from_content(MODEL)
-            with pytest.raises(RenameReferencedError) as excinfo:
-                model.edit().rename("Demo::SC::unitMass", "unitWeight").apply()
-        assert excinfo.value.referring_elements, "the refusal named no referrer"
+            result = model.edit().rename("Demo::SC::unitMass", "unitWeight").apply()
+            edited = str(result)
+            assert "attribute unitWeight : ISQ::MassValue = 1000.0[SI::kg];" in edited
+            assert "attribute total : ISQ::MassValue = unitWeight;" in edited
+            assert "unitMass" not in edited
+            assert conn.load_from_content(edited).find("unitWeight") is not None
 
     @pytest.mark.parametrize(
         "operation,expected",

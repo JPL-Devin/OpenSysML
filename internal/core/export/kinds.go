@@ -94,6 +94,35 @@ var usageMetaclass = map[ast.UsageKind]string{
 	ast.UsageBool:             "BooleanUsage",
 }
 
+// keywordMetaclass names the metaclass a keyword builds where several spellings
+// share one AST kind (KerML.xtext:788, :924; SysML.xtext:632).
+var keywordMetaclass = map[string]string{
+	"datatype": "DataType",
+	"function": "Function",
+	"ref":      "ReferenceUsage",
+}
+
+// usageMetaclassOf gives the metaclass a usage builds, reading the keyword where
+// the kind does not decide it; a kindless one is a DefaultReferenceUsage.
+func usageMetaclassOf(n *ast.Usage) (string, bool) {
+	if m, ok := keywordMetaclass[n.Keyword]; ok {
+		return m, true
+	}
+	if n.Keyword == "" && n.Kind == ast.UsageAttribute {
+		return "ReferenceUsage", true
+	}
+	m, ok := usageMetaclass[n.Kind]
+	return m, ok
+}
+
+// metaclassKeywordUsage reads the keyword-decided metaclasses back to the kind
+// the parser records for them.
+var metaclassKeywordUsage = map[string]ast.UsageKind{
+	"DataType":       ast.UsageAttribute,
+	"Function":       ast.UsageCalc,
+	"ReferenceUsage": ast.UsageAttribute,
+}
+
 // definitionKeyword and usageKeyword give the source keyword for a kind. The
 // AST's own String() is the keyword for every kind, which is what makes the
 // printer able to reconstruct a declaration head from the metaclass alone.
@@ -126,6 +155,7 @@ var relationshipProperty = map[ast.RelationshipKind]string{
 	ast.RelCrosses:     "crosses",
 	ast.RelDisjoint:    "disjointFrom",
 	ast.RelIntersects:  "intersects",
+	ast.RelDifferences: "differences",
 	ast.RelInverseOf:   "inverseOf",
 	ast.RelUnions:      "unions",
 	ast.RelChains:      "chains",
@@ -134,6 +164,45 @@ var relationshipProperty = map[ast.RelationshipKind]string{
 	ast.RelAnnotates:   "annotates",
 	ast.RelSubject:     "subject",
 	ast.RelFeaturedBy:  "featuringType",
+}
+
+// relationshipEndForm describes how a keyword-first relationship element is
+// written as a graph: its metaclass and the properties naming its two ends,
+// which the OMG metamodel keeps ordered.
+type relationshipEndForm struct {
+	metaclass string
+	source    string
+	target    string
+}
+
+// relationshipElementForm maps a keyword-first relationship to its metaclass and
+// its ordered end properties (KerML §7.2, §8.3).
+var relationshipElementForm = map[ast.RelationshipKind]relationshipEndForm{
+	ast.RelSpecializes: {"Specialization", "specific", "general"},
+	ast.RelTyping:      {"FeatureTyping", "typedFeature", "type"},
+	ast.RelSubsets:     {"Subsetting", "subsettingFeature", "subsettedFeature"},
+	ast.RelRedefines:   {"Redefinition", "redefiningFeature", "redefinedFeature"},
+	ast.RelInverseOf:   {"FeatureInverting", "invertingFeature", "featureInverted"},
+	ast.RelFeaturedBy:  {"TypeFeaturing", "featureOfType", "featuringType"},
+}
+
+// conjugationForm is the form a `conjugate x conjugates y` member takes, which
+// is a Conjugation rather than the Specialization its kind records.
+var conjugationForm = relationshipEndForm{"Conjugation", "conjugatedType", "originalType"}
+
+// relationshipMemberSyntax reads a keyword-first relationship back from its
+// graph, keyed by the keyword the notation states.
+var relationshipMemberSyntax = map[string]struct {
+	source, target, separator string
+}{
+	"subtype":       {"specific", "general", "specializes"},
+	"subclassifier": {"specific", "general", "specializes"},
+	"typing":        {"typedFeature", "type", "typed by"},
+	"subset":        {"subsettingFeature", "subsettedFeature", "subsets"},
+	"redefinition":  {"redefiningFeature", "redefinedFeature", "redefines"},
+	"conjugate":     {"conjugatedType", "originalType", "conjugates"},
+	"inverse":       {"invertingFeature", "featureInverted", "of"},
+	"featuring":     {"featureOfType", "featuringType", "by"},
 }
 
 // relationshipSyntax gives the source syntax that introduces a relationship
@@ -147,6 +216,7 @@ var relationshipSyntax = map[ast.RelationshipKind]string{
 	ast.RelCrosses:     "crosses",
 	ast.RelDisjoint:    "disjoint from",
 	ast.RelIntersects:  "intersects",
+	ast.RelDifferences: "differences",
 	ast.RelInverseOf:   "inverse of",
 	ast.RelUnions:      "unions",
 	ast.RelChains:      "chains",
@@ -170,6 +240,9 @@ func init() {
 	for kind, name := range usageMetaclass {
 		metaclassUsage[name] = kind
 	}
+	for name, kind := range metaclassKeywordUsage {
+		metaclassUsage[name] = kind
+	}
 }
 
 // relationshipOrder is the order relationships are written back into a
@@ -183,6 +256,7 @@ var relationshipOrder = []ast.RelationshipKind{
 	ast.RelCrosses,
 	ast.RelDisjoint,
 	ast.RelIntersects,
+	ast.RelDifferences,
 	ast.RelInverseOf,
 	ast.RelUnions,
 	ast.RelChains,

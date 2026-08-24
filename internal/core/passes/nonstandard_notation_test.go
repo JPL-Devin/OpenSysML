@@ -1,6 +1,7 @@
 package passes
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -125,6 +126,134 @@ func TestTransitionToSpellingIsReported(t *testing.T) {
 		CodeNonstandardNotation, "`transition <source> to <target>;`")
 }
 
+func TestComputedReturnExpressionsAreReported(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+	}{
+		{"literal", "calc c { in a : Real; return 42; }"},
+		{"arithmetic", "calc c { in basePrice : Real; return basePrice * 2.0; }"},
+		{"invocation", "calc c { in dx : Real; return sqrt(dx*dx); }"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantNotation(t, "a.sysml", tc.src, CodeNonstandardNotation,
+				"`return <expression>;`")
+		})
+	}
+}
+
+func TestReferenceReturnsStaySilent(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+	}{
+		{"bare_name", "calc c { in a : Real; return a; }"},
+		{"qualified_name", "calc c { in a : Real; return P::a; }"},
+		{"dotted_feature_chain", "calc c { in a : Real; return a.b; }"},
+		{"named_result_parameter", "calc c { return result : Real = 1.0; }"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantSilent(t, "a.sysml", tc.src)
+		})
+	}
+}
+
+func TestKeywordedConstraintConditionsAreReported(t *testing.T) {
+	for _, tc := range []struct {
+		name, keyword string
+	}{
+		{"assert", "assert"},
+		{"assume", "assume"},
+		{"negated_assert", "assert"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			expr := "x >= 0"
+			if tc.name == "negated_assert" {
+				expr = "not x >= 0"
+			}
+			src := fmt.Sprintf("constraint validRange { in x : Real; %s %s; }", tc.keyword, expr)
+			wantNotation(t, "a.sysml", src, CodeNonstandardNotation,
+				fmt.Sprintf("`%s <expression>;`", tc.keyword))
+		})
+	}
+}
+
+func TestKeywordedRequirementConditionsAreReported(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+	}{
+		{"requirement_assume", "requirement r { attribute x : Real; assume x > 0; }"},
+		{"requirement_require", "requirement r { attribute x : Real; require x > 0; }"},
+		{"concern", "concern def c { attribute x : Real; require x > 0; }"},
+		{"viewpoint", "viewpoint v { attribute x : Real; require x > 0; }"},
+		{"objective", "objective o { attribute x : Real; require x > 0; }"},
+		{"case_nested_requirement", "case def c { requirement r { require x > 0; } }"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			keyword := "require"
+			if tc.name == "requirement_assume" {
+				keyword = "assume"
+			}
+			wantNotation(t, "a.sysml", tc.src, CodeNonstandardNotation,
+				fmt.Sprintf("`%s <expression>;`", keyword))
+		})
+	}
+}
+
+func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
+	src := `calc c {
+		in x : Real;
+		return x * 2;
+	}
+	constraint validRange {
+		in x : Real;
+		assert x >= 0;
+	}`
+	root, pd, idx := analyzeInputs(t, "a.sysml", src)
+	if len(pd) != 0 {
+		t.Fatalf("%s: parse errors %+v", src, pd)
+	}
+	got := (NonstandardNotationPass{}).Run(NewContext("a.sysml", idx, pd), "a.sysml", root)
+	if len(got) != 2 {
+		t.Fatalf("%s: got %d diagnostics %+v, want 2", src, len(got), got)
+	}
+	for i, want := range []struct {
+		line, length int
+	}{
+		{3, len("return")},
+		{7, len("assert")},
+	} {
+		if line := strings.Count(src[:got[i].Span.Offset], "\n") + 1; line != want.line {
+			t.Errorf("diagnostic %d is on line %d, want %d", i, line, want.line)
+		}
+		if got[i].Span.Len != want.length {
+			t.Errorf("diagnostic %d spans %d bytes, want %d", i, got[i].Span.Len, want.length)
+		}
+	}
+}
+
+func TestStandardConstraintAndRequirementConditionsStaySilent(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+	}{
+		{"bare_condition", "constraint validRange { in x : Real; x >= 0 }"},
+		{"named_constraint_assertion", "part def P { assert constraint c1 : C; }"},
+		{"satisfy_assertion", "requirement def R { assert satisfy r by q; }"},
+		{"metadata_constraint_assumption", "requirement def R { assume #goal constraint payloadMassLimit; }"},
+		{"named_requirement_constraint", "requirement def R { require constraint c; }"},
+		{"bare_requirement_reference", "requirement def R { require c; }"},
+		{"concern_bare_reference", "concern def C { require c; }"},
+		{"requirement_feature_reference", "requirement r { assume x.y; }"},
+		{"objective_feature_reference", "objective o { require x.y; }"},
+		{"named_assumption_with_body", "requirement def R { assume constraint c { 1 > 0 } }"},
+		{"named_requirement_with_body", "requirement def R { require constraint c { 1 > 0 } }"},
+		{"anonymous_assumption_body", "requirement def R { assume constraint { 1 > 0 } }"},
+		{"anonymous_requirement_body", "requirement def R { require constraint { 1 > 0 } }"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantSilent(t, "a.sysml", tc.src)
+		})
+	}
+}
+
 // Notation the pinned grammars do define stays silent: a false extension warning
 // on standard notation is the worse defect.
 func TestStandardNotationIsSilent(t *testing.T) {
@@ -148,4 +277,52 @@ func TestStandardNotationIsSilent(t *testing.T) {
 	} {
 		wantSilent(t, "a.sysml", src)
 	}
+}
+
+// F104: `bind` relates two features, so a binding whose right side is an
+// expression is ours, while a feature-valued one is standard.
+func TestExpressionValuedBindingIsAnExtension(t *testing.T) {
+	wantNotation(t, "a.sysml", "part def P { attribute a; attribute b; bind a = b * 2; }",
+		CodeNonstandardNotation, "`bind <feature> = <expression>;`")
+	wantSilent(t, "a.sysml", "part def P { attribute a; attribute b; bind a = b; }")
+	wantSilent(t, "a.sysml", "part def P { part a { attribute x; } attribute b; bind b = a.x; }")
+}
+
+// F105: `done` is a library feature a succession names, and a succession states
+// its ends with `first` and `then`.
+func TestNamedFinalNodeAndTwoEndedThenAreExtensions(t *testing.T) {
+	wantNotation(t, "a.sysml", "action def A { done end; }", CodeNonstandardNotation, "`done <name>;`")
+	wantNotation(t, "a.sysml", "action def A { action a; action b; then a b; }",
+		CodeNonstandardNotation, "`then <source> <target>;`")
+	wantSilent(t, "a.sysml", "action def A { action a; action b; first a then b; }")
+	wantSilent(t, "a.sysml", "action def A { action a; first a; then done; }")
+}
+
+// F106: an InitialNodeMember is reachable from ActionBodyItem alone, so a
+// one-ended `first` is standard in an action body and ours in a part body.
+func TestOneEndedFirstOutsideAnActionBodyIsAnExtension(t *testing.T) {
+	wantNotation(t, "a.sysml", "part def P { part a; first a; }",
+		CodeNonstandardNotation, "one-ended `first <node>;` outside an action body")
+	wantSilent(t, "a.sysml", "action def A { action a; first a; }")
+	wantSilent(t, "a.sysml", "action def A { action outer { action a; first a; } }")
+	wantSilent(t, "a.sysml", "part def P { action a { action b; first b; } }")
+}
+
+// F107: RequirementConstraintMember belongs to a RequirementBody, which an
+// analysis case body is not.
+func TestRequirementConstraintOutsideARequirementBodyIsAnExtension(t *testing.T) {
+	wantNotation(t, "a.sysml", "analysis def An { attribute size; require constraint { size >= 1 } }",
+		CodeNonstandardNotation, "`require` outside a requirement body")
+	wantNotation(t, "a.sysml", "part def P { attribute size; assume constraint { size >= 1 } }",
+		CodeNonstandardNotation, "`assume` outside a requirement body")
+	wantSilent(t, "a.sysml", "requirement def R { attribute size; require constraint { size >= 1 } }")
+	wantSilent(t, "a.sysml", "analysis def An { attribute size; assert constraint { size >= 1 } }")
+}
+
+// k02: the KerML grammar has no `part` declaration, so a SysML declaration
+// keyword in a .kerml file is reported, and the KerML spelling is silent.
+func TestSysMLDeclarationInKerMLIsReported(t *testing.T) {
+	wantNotation(t, "a.kerml", "package P { part def Wheel; }", CodeSysMLNotation, "`part` is SysML notation")
+	wantSilent(t, "a.kerml", "package P { struct Wheel; }")
+	wantSilent(t, "a.sysml", "package P { part def Wheel; }")
 }

@@ -14,31 +14,21 @@ import (
 //
 // A condition is a predicate over one candidate element, not a value expression,
 // and evaluating it needs the metadata annotating the candidate — knowledge the
-// symbol layer does not have. So a filter is carried here in the two forms the
-// evaluator in semantics can run:
-//
-//   - Expr, the condition as parsed, together with the Scope its names resolve
-//     against. This is what a live-parsed document holds.
-//   - Pred, the condition compiled to element references already resolved to
-//     fully-qualified names. This is what a library restored from an index cache
-//     holds, whose declarations — and the scopes that gave its names meaning —
-//     are gone. It is what makes a filtered import behave the same way for a
-//     parsed and for a cache-restored library.
+// symbol layer does not have. So it is carried as parsed: the expression,
+// together with the Scope its names resolve against, which the evaluator in
+// semantics compiles to a predicate over resolved elements.
 type ElementFilter struct {
 	Expr  ast.Node
 	Scope *Scope
-	Pred  *FilterPredicate
 	Span  source.Span
 }
 
 // IsZero reports whether there is no condition to apply.
-func (f ElementFilter) IsZero() bool { return f.Expr == nil && f.Pred == nil }
+func (f ElementFilter) IsZero() bool { return f.Expr == nil }
 
-// String describes a filter for a snapshot of the index. It deliberately
-// renders only whether a condition applies: the same condition reaches a parsed
-// document as an expression and a restored library as a compiled predicate, and
-// the contract between the two is that they select the same elements, which is
-// asserted over resolution rather than over this text.
+// String describes a filter for a snapshot of the index, rendering only whether
+// a condition applies: which elements it selects is asserted over resolution
+// rather than over this text.
 func (f ElementFilter) String() string {
 	if f.IsZero() {
 		return "unfiltered"
@@ -122,6 +112,9 @@ const (
 	// bound to nothing has. It is a result, unlike FilterValueUnknown, which
 	// says a value could not be determined.
 	FilterValueEmpty
+	// FilterValueInstance is an instance a condition constructs (`new A(…)`).
+	// It is a value, and never a truth value.
+	FilterValueInstance
 )
 
 // FilterValue is a constant a filter predicate yields or compares: a literal, or
@@ -138,28 +131,15 @@ type FilterValue struct {
 // Same reports whether two filters are the same condition, so that two routes to
 // one re-exported name can be compared. A condition is identified by the
 // declaration it was written in: the expression node and the scope its names
-// resolve against, or the compiled predicate a restored library carries.
+// resolve against.
 func (f ElementFilter) Same(g ElementFilter) bool {
-	return f.Expr == g.Expr && f.Scope == g.Scope && f.Pred == g.Pred
-}
-
-// filtersFromPredicates wraps compiled conditions as the filters a restored
-// namespace applies, which carry no expression and no scope.
-func filtersFromPredicates(preds []*FilterPredicate) []ElementFilter {
-	out := make([]ElementFilter, 0, len(preds))
-	for _, pred := range preds {
-		if pred == nil {
-			continue
-		}
-		out = append(out, ElementFilter{Pred: pred, Span: pred.Span})
-	}
-	return out
+	return f.Expr == g.Expr && f.Scope == g.Scope
 }
 
 // NamespaceFiltersOf returns the filter conditions declared by the namespace
 // registered under fqn, over the documents declaring it in name order.
 func (idx *Index) NamespaceFiltersOf(fqn string) []ElementFilter {
-	byDoc := idx.nsFilters[fqn]
+	byDoc := idx.nsFilters.at(fqn)
 	if len(byDoc) == 0 {
 		return nil
 	}
@@ -177,27 +157,25 @@ func (idx *Index) namespaceFiltersGating(fqn, doc string) []ElementFilter {
 	if fqn != "" {
 		return idx.NamespaceFiltersOf(fqn)
 	}
-	return idx.nsFilters[fqn][doc]
+	return idx.nsFilters.at(fqn)[doc]
 }
 
 // SetNamespaceFilters records the filter conditions doc declares for the
 // namespace registered under fqn. A library restored from an index cache states
 // them this way, having no declaration left to read them from.
 func (idx *Index) SetNamespaceFilters(fqn, doc string, filters []ElementFilter) {
+	idx.mustBeWritable("SetNamespaceFilters")
 	if len(filters) == 0 {
 		idx.forgetNamespaceFilters(fqn, doc)
 		return
 	}
-	if idx.nsFilters[fqn] == nil {
-		idx.nsFilters[fqn] = make(map[string][]ElementFilter)
-	}
-	idx.nsFilters[fqn][doc] = filters
+	writableMap(idx.nsFilters, fqn)[doc] = filters
 	idx.refilter(fqn)
 }
 
 // dropNamespaceFilters forgets the filters doc declared, for every namespace.
 func (idx *Index) dropNamespaceFilters(doc string) {
-	for fqn := range idx.nsFilters {
+	for _, fqn := range idx.nsFilters.keys() {
 		idx.forgetNamespaceFilters(fqn, doc)
 	}
 }
@@ -205,13 +183,13 @@ func (idx *Index) dropNamespaceFilters(doc string) {
 // forgetNamespaceFilters drops the filters doc declared for the namespace
 // registered under fqn, if it declared any.
 func (idx *Index) forgetNamespaceFilters(fqn, doc string) {
-	byDoc := idx.nsFilters[fqn]
-	if _, had := byDoc[doc]; !had {
+	if _, had := idx.nsFilters.at(fqn)[doc]; !had {
 		return
 	}
+	byDoc := writableMap(idx.nsFilters, fqn)
 	delete(byDoc, doc)
 	if len(byDoc) == 0 {
-		delete(idx.nsFilters, fqn)
+		idx.nsFilters.del(fqn)
 	}
 	idx.refilter(fqn)
 }
@@ -221,7 +199,7 @@ func (idx *Index) forgetNamespaceFilters(fqn, doc string) {
 // under the filters the namespace now declares, and the members it takes back
 // meanwhile mark the namespaces importing it onward for expansion too.
 func (idx *Index) refilter(fqn string) {
-	delete(idx.lastTargets, fqn)
+	idx.lastTargets.del(fqn)
 	idx.purgeReexportsUnder(fqn)
 }
 

@@ -59,7 +59,7 @@ contributed, are in the baseline and in the generated report.
 ### Why `no-evidence` is empty, and what to read instead
 
 An empty `no-evidence` bucket is the real result, not an error: of the 217 distinct literals
-the three grammars use, all but two (`%` and `disjoining`) occur somewhere in the corpora, and
+the three grammars use, all but one (`%`) occur somewhere in the corpora, and
 a production is credited as soon as its *cheapest* path is present. Since optional groups are, by definition,
 skippable, the cheapest path of most productions is the one that omits them — which makes the
 production-level bucket a weak instrument.
@@ -113,7 +113,7 @@ own name, rather than as a clause of a declaration.
 
 | Form | Grammar | Status here |
 |---|---|---|
-| `disjoining D disjoint A from B;` | `KerML.xtext:426` `Disjoining`, optional `'disjoining' Identification?` | `disjoining` occurs in no corpus file, and `internal/core/lexer/keywords.go` is the only place it appears in our code |
+| `disjoining D disjoint A from B;` | `KerML.xtext:426` `Disjoining`, optional `'disjoining' Identification?` | not parsed. Since wave 9 the literal does occur in a fixture — as an *attribute name* in `w7c_kerml_only_words_name_sysml_usages.sysml`, which is keyword-as-name coverage, not `Disjoining` coverage: the form stays unseen, and it is a good example of literal search crediting a spelling for the wrong reason |
 | `conjugation Cj conjugate C ~ A.b;` | `KerML.xtext:408` `Conjugation`, the `OwnedFeatureChain` alternative | not parsed |
 | `redefinition R redefinition g :>> f;` | `KerML.xtext:712` `Redefinition`, the `':>>'` alternative | not parsed |
 

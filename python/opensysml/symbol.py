@@ -121,9 +121,21 @@ class Symbol:
         """Return all generalization edges declared on this symbol."""
         return [Specialization.from_pb(spec) for spec in self._pb.specializations]
 
+    @property
+    def withheld_library_attributes(self) -> int:
+        """Return how many standard-library-inherited attributes were withheld.
+
+        The service reports a model's own and non-library-inherited attributes;
+        this says how many of the metamodel frame's it left out, so their absence
+        is stated rather than silent.
+        """
+        return self._pb.withheld_library_attributes
+
     def attribute_facts(self) -> List[AttributeFacts]:
         """Return every attribute this symbol has, own and inherited, with its
-        resolved type, constant default value and unit.
+        resolved type, constant default value and unit. Attributes inherited from
+        standard-library content are withheld and counted by
+        :attr:`withheld_library_attributes`.
 
         This is the attribute set the service resolved, so unlike
         :meth:`attributes` it needs no further RPC and reports each attribute's
@@ -166,6 +178,7 @@ class Symbol:
             multiplicity=self.multiplicity,
             specializations=tuple(self.specializations),
             attributes=tuple(self._attribute_facts()),
+            withheld_library_attributes=self.withheld_library_attributes,
         )
 
     def children(self) -> List["Symbol"]:

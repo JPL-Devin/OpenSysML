@@ -7,6 +7,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -43,6 +44,16 @@ type constraintChecker struct {
 	diags    []Diagnostic
 }
 
+// libraryDeclared reports whether sym is declared by bundled library content,
+// which states the metamodel frame a model specializes rather than the model.
+func (cc *constraintChecker) libraryDeclared(sym *symbols.Symbol) bool {
+	if cc.resolver == nil {
+		return false
+	}
+	idx := cc.resolver.Index()
+	return idx != nil && idx.Library(sym)
+}
+
 // walk visits every symbol in the scope subtree, deduping by pointer (a decl
 // with short+primary names registers the same *Symbol under two keys), and
 // recurses into each symbol's owned child scope.
@@ -66,8 +77,6 @@ func (cc *constraintChecker) walk(scope *symbols.Scope) {
 		if sym == nil || cc.seen[sym] {
 			continue
 		}
-		if sym.Name == "" {
-		}
 		// AllMembers includes named + anonymous, so dedup via seen map
 		cc.seen[sym] = true
 		cc.check(sym)
@@ -79,14 +88,47 @@ func (cc *constraintChecker) walk(scope *symbols.Scope) {
 func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkSpecializationCycle(sym)
 	cc.checkMultiplicityRange(sym)
-	cc.checkSubsettingMultiplicity(sym)
+	cc.checkMultiplicityConformance(sym)
 	cc.checkConnectorEnds(sym)
 	cc.checkConnectorEndRedefinition(sym)
+	cc.checkFlowEndSubsetting(sym)
 	cc.checkInterfaceEndConjugation(sym)
 	cc.checkRedefinition(sym)
+	cc.checkW10BRedefinition(sym)
+	cc.checkW10BCrossFeatures(sym)
+	cc.checkSubsettingFeaturingTypes(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
 	cc.checkVariantOutsideVariation(sym)
 	cc.checkViewSatisfyTarget(sym)
+	cc.checkAtMostOneMember(sym)
+}
+
+// checkFlowEndSubsetting requires each declared flow end to name a payload
+// feature of its participant with dot notation.
+func (cc *constraintChecker) checkFlowEndSubsetting(sym *symbols.Symbol) {
+	for _, attachment := range cc.model.FlowEndAttachments(sym) {
+		if attachment.Attachment == nil {
+			continue
+		}
+		if _, ok := cc.resolver.ResolveTarget(sym.OwnerScope, attachment.Attachment); !ok {
+			continue
+		}
+		target := attachment.Attachment
+		if ref, ok := target.(*ast.FeatureReference); ok {
+			target = ref.Name
+		}
+		qn, ok := target.(*ast.QualifiedName)
+		if !ok || qn == nil || len(qn.Parts) != 1 {
+			continue
+		}
+		cc.diags = append(cc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     attachment.Attachment.Span(),
+			Message:  "a flow end must name the feature the payload flows from or to using dot notation",
+			Code:     "flow-end-subsetting",
+			Source:   "constraint",
+		})
+	}
 }
 
 // checkViewSatisfyTarget flags a `satisfy` claiming a view's conformance to a
@@ -116,27 +158,19 @@ func (cc *constraintChecker) checkViewSatisfyTarget(sym *symbols.Symbol) {
 	})
 }
 
-// checkVariantOutsideVariation warns about a `variant` whose owner is not a
-// variation: it offers no choice to anything (SysML v2 §7.20 VariantMembership),
-// so it is an ordinary member spelled as if it were selectable.
+// checkVariantOutsideVariation reports a `variant` whose owner is not a
+// variation: it offers no choice to anything (SysML v2 §7.20 VariantMembership).
+// Pilot SysMLValidator (2026-05) validateVariantMembershipOwningNamespace.
 func (cc *constraintChecker) checkVariantOutsideVariation(sym *symbols.Symbol) {
 	if !semantics.DeclaresVariant(sym) || cc.model.VariationPointOwning(sym) != nil {
 		return
 	}
-	owner := "a namespace"
-	if sym.OwnerScope != nil {
-		if ownerSym := sym.OwnerScope.Owner(); ownerSym != nil && ownerSym.Name != "" {
-			owner = ownerSym.Name
-		}
-	}
 	cc.diags = append(cc.diags, Diagnostic{
-		Severity: SeverityWarning,
+		Severity: SeverityError,
 		Span:     sym.Decl.Span(),
-		Message: fmt.Sprintf(
-			"variant %s is declared in %s, which is not a variation, so it offers no choice; declare its owner `variation` or drop `variant`",
-			sym.Name, owner),
-		Code:   "variant-outside-variation",
-		Source: "constraint",
+		Message:  msgVariantOutsideVariation,
+		Code:     "variant-outside-variation",
+		Source:   "constraint",
 	})
 }
 
@@ -144,16 +178,21 @@ func (cc *constraintChecker) checkVariantOutsideVariation(sym *symbols.Symbol) {
 // cycle. The diagnostic is anchored at the first generalization edge that leads
 // back to sym so the error points at the offending clause.
 func (cc *constraintChecker) checkSpecializationCycle(sym *symbols.Symbol) {
-	if !cc.model.HasSpecializationCycle(sym) {
+	selfSpan, selfLoop := cc.selfSpecialization(sym)
+	if !cc.model.HasSpecializationCycle(sym) && !selfLoop {
 		return
 	}
 	span := sym.DeclSpan
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Target == nil || !semantics.GeneralizationKind(rel.Kind) {
-			continue
+	if selfLoop {
+		span = selfSpan
+	} else {
+		for _, rel := range semantics.RelationshipsOf(sym) {
+			if rel == nil || rel.Target == nil || !semantics.GeneralizationKind(rel.Kind) {
+				continue
+			}
+			span = rel.Target.Span()
+			break
 		}
-		span = rel.Target.Span()
-		break
 	}
 	cc.diags = append(cc.diags, Diagnostic{
 		Severity: SeverityError,
@@ -162,6 +201,51 @@ func (cc *constraintChecker) checkSpecializationCycle(sym *symbols.Symbol) {
 		Code:     "specialization-cycle",
 		Source:   "constraint",
 	})
+}
+
+// selfSpecialization reports a `part p :> p` edge, which the specialization
+// graph drops: a same-named subsetting or redefinition with no inherited feature
+// to retarget resolves back to sym itself.
+func (cc *constraintChecker) selfSpecialization(sym *symbols.Symbol) (source.Span, bool) {
+	if sym == nil || sym.OwnerScope == nil {
+		return source.Span{}, false
+	}
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Target == nil ||
+			(rel.Kind != ast.RelSubsets && rel.Kind != ast.RelRedefines) {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, ok := targetNode.(*ast.QualifiedName)
+		if !ok || len(qn.Parts) != 1 || qn.Parts[0].Text != sym.Name {
+			continue
+		}
+		if cc.inheritsFeatureNamed(sym, qn.Parts[0].Text) {
+			continue // the name denotes the inherited feature, not sym
+		}
+		if target, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn); ok && target == sym {
+			return rel.Target.Span(), true
+		}
+	}
+	return source.Span{}, false
+}
+
+// inheritsFeatureNamed reports whether sym's owner inherits a feature named
+// name from a supertype, skipping sym itself.
+func (cc *constraintChecker) inheritsFeatureNamed(sym *symbols.Symbol, name string) bool {
+	owner := sym.OwnerScope.Owner()
+	if owner == nil {
+		return false
+	}
+	for _, sup := range cc.model.AllSupertypes(owner) {
+		if found, ok := cc.model.LookupMember(sup, name); ok && found != sym {
+			return true
+		}
+	}
+	return false
 }
 
 // checkMultiplicityRange flags a usage whose evaluable multiplicity has a lower
@@ -187,57 +271,6 @@ func (cc *constraintChecker) checkMultiplicityRange(sym *symbols.Symbol) {
 		Code:     "multiplicity-range",
 		Source:   "constraint",
 	})
-}
-
-// checkSubsettingMultiplicity flags a subsetting usage whose upper bound exceeds
-// the upper bound of a usage it subsets (design §4.1): a subset may not admit
-// more elements than its superset. Bounds that are not evaluable are skipped.
-func (cc *constraintChecker) checkSubsettingMultiplicity(sym *symbols.Symbol) {
-	subRange, ok := cc.model.MultiplicityOf(sym)
-	if !ok || !subRange.Upper.Known {
-		return
-	}
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Target == nil || rel.Kind != ast.RelSubsets {
-			continue
-		}
-		// Unwrap FeatureReference if needed
-		targetNode := rel.Target
-		if fr, ok := targetNode.(*ast.FeatureReference); ok {
-			targetNode = fr.Name
-		}
-		qn, isQN := targetNode.(*ast.QualifiedName)
-		if !isQN {
-			continue
-		}
-		target, resolved := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if !resolved || target == nil {
-			continue
-		}
-		if canonical, aliasOK := cc.resolver.ResolveAliasTarget(target); aliasOK {
-			target = canonical
-		} else {
-			continue
-		}
-		superRange, ok := cc.model.MultiplicityOf(target)
-		if !ok || !superRange.Upper.Known {
-			continue
-		}
-		if superRange.Upper.Infinite {
-			continue // superset is unbounded: any subset upper conforms
-		}
-		if subRange.Upper.Infinite || subRange.Upper.Value > superRange.Upper.Value {
-			cc.diags = append(cc.diags, Diagnostic{
-				Severity: SeverityError,
-				Span:     rel.Target.Span(),
-				Message: fmt.Sprintf(
-					"subsetting %s: upper bound exceeds subsetted %s",
-					sym.Name, target.Name),
-				Code:   "subsetting-multiplicity",
-				Source: "constraint",
-			})
-		}
-	}
 }
 
 // checkConnectorEnds validates the declared ends of connector-like usages
@@ -268,7 +301,7 @@ func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 				cc.addConnectorEndsDiag(sym, u, "a connection must have at least two ends")
 			}
 		case ast.UsageInterface:
-			if n != 2 {
+			if n != 2 && cc.interfaceIsBinary(sym) {
 				cc.addConnectorEndsDiag(sym, u, "an interface connection must be binary (exactly two ends)")
 			}
 		case ast.UsageAllocation:
@@ -277,6 +310,10 @@ func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 			}
 		}
 	}
+}
+
+func (cc *constraintChecker) interfaceIsBinary(sym *symbols.Symbol) bool {
+	return cc.model != nil && cc.model.IsBinaryConnector(sym)
 }
 
 // checkConnectorEndRedefinition flags an end a connector declares that redefines
@@ -445,6 +482,12 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			continue
 		}
 
+		// A target that is not an inherited member may still be reachable
+		// through the featuring context (KerML validateRedefinitionFeaturingTypes).
+		if !inherited {
+			inherited = cc.redefinedAccessible(sym, redefined, map[*symbols.Symbol]bool{})
+		}
+
 		if !inherited {
 			cc.diags = append(cc.diags, Diagnostic{
 				Severity: SeverityError,
@@ -471,46 +514,6 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 						"%s (typed by %s) redefines %s (typed by %s): types do not conform",
 						sym.Name, usageType.Name, redefined.Name, redefinedType.Name),
 					Code:   "redefinition-type-mismatch",
-					Source: "constraint",
-				})
-			}
-		}
-
-		// Check multiplicity bounds (SysML: redefining multiplicity must tighten)
-		symMult, symOk := cc.model.MultiplicityOf(sym)
-		redefinedMult, redefinedOk := cc.model.MultiplicityOf(redefined)
-
-		// Only validate if both multiplicities are known and evaluable.
-		// MultiplicityOf returns ok=false for non-usages or missing multiplicity.
-		// Bound.Known=false means expression is not model-level-evaluable.
-		// This guards against nil/uninitialized bounds and non-evaluable expressions.
-		if symOk && redefinedOk && symMult.Lower.Known && symMult.Upper.Known &&
-			redefinedMult.Lower.Known && redefinedMult.Upper.Known {
-			// Lower bound must be >= redefined lower bound
-			lowerViolated := false
-			if !symMult.Lower.Infinite && !redefinedMult.Lower.Infinite {
-				lowerViolated = symMult.Lower.Value < redefinedMult.Lower.Value
-			}
-
-			// Upper bound must be <= redefined upper bound (or both unbounded)
-			upperViolated := false
-			if !redefinedMult.Upper.Infinite { // redefined has finite upper bound
-				if symMult.Upper.Infinite { // sym is unbounded
-					upperViolated = true
-				} else if symMult.Upper.Value > redefinedMult.Upper.Value {
-					upperViolated = true
-				}
-			}
-
-			if lowerViolated || upperViolated {
-				cc.diags = append(cc.diags, Diagnostic{
-					Severity: SeverityError,
-					Span:     rel.Target.Span(),
-					Message: fmt.Sprintf(
-						"%s [%s..%s] redefines %s [%s..%s]: multiplicity bounds incompatible",
-						sym.Name, formatBound(symMult.Lower), formatBound(symMult.Upper),
-						redefined.Name, formatBound(redefinedMult.Lower), formatBound(redefinedMult.Upper)),
-					Code:   "redefinition-multiplicity",
 					Source: "constraint",
 				})
 			}
@@ -543,6 +546,121 @@ func (cc *constraintChecker) featuringOwners(sym *symbols.Symbol) ([]*symbols.Sy
 		owners = append(owners, target)
 	}
 	return owners, len(owners) > 0
+}
+
+// redefinedAccessible reports whether redefined is reachable from sym's
+// featuring contexts, walking outward through feature-valued contexts
+// (KerML 1.0 §8.3.3.3 validateRedefinitionFeaturingTypes).
+func (cc *constraintChecker) redefinedAccessible(sym, redefined *symbols.Symbol, visited map[*symbols.Symbol]bool) bool {
+	if sym == nil || visited[sym] {
+		return false
+	}
+	visited[sym] = true
+	for _, t := range cc.featuringContexts(sym) {
+		if cc.featuredWithin(redefined, t) {
+			return true
+		}
+		if isUsageKind(t.Kind) && cc.redefinedAccessible(t, redefined, visited) {
+			return true
+		}
+	}
+	return false
+}
+
+// featuringContexts returns sym's explicit featured-by targets, or its owning
+// type when it declares none.
+func (cc *constraintChecker) featuringContexts(sym *symbols.Symbol) []*symbols.Symbol {
+	if owners, ok := cc.featuringOwners(sym); ok {
+		return owners
+	}
+	if sym.OwnerScope == nil {
+		return nil
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil || owner.Kind == symbols.SymbolPackage || owner.Kind == symbols.SymbolNamespace {
+		return nil
+	}
+	return []*symbols.Symbol{owner}
+}
+
+// featuredWithin reports whether feature b is featured within type t: every
+// featuring context of b accepts t (KerML 1.0 §8.3.3.3, Feature::isFeaturedWithin).
+func (cc *constraintChecker) featuredWithin(b, t *symbols.Symbol) bool {
+	ctxs := cc.featuringContexts(b)
+	if len(ctxs) == 0 {
+		return false
+	}
+	for _, f := range ctxs {
+		if !cc.featuringContextConforms(t, f) {
+			return false
+		}
+	}
+	return true
+}
+
+// featuringContextConforms reports whether featuring context t conforms to f:
+// by specialization, or because both redefine a common feature and t's own
+// contexts conform to f's (the variable-feature snapshot encoding).
+func (cc *constraintChecker) featuringContextConforms(t, f *symbols.Symbol) bool {
+	if t == nil || f == nil {
+		return false
+	}
+	if t == f || cc.model.Conforms(t, f) {
+		return true
+	}
+	if !cc.shareRedefinedTarget(t, f) {
+		return false
+	}
+	fCtxs := cc.featuringContexts(f)
+	for _, ct := range cc.featuringContexts(t) {
+		for _, cf := range fCtxs {
+			if ct == cf || cc.model.Conforms(ct, cf) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// shareRedefinedTarget reports whether t and f redefine a common feature,
+// directly or transitively.
+func (cc *constraintChecker) shareRedefinedTarget(t, f *symbols.Symbol) bool {
+	tTargets := make(map[*symbols.Symbol]bool)
+	cc.collectRedefined(t, tTargets)
+	if len(tTargets) == 0 {
+		return false
+	}
+	fTargets := make(map[*symbols.Symbol]bool)
+	cc.collectRedefined(f, fTargets)
+	for g := range fTargets {
+		if tTargets[g] {
+			return true
+		}
+	}
+	return false
+}
+
+// collectRedefined resolves sym's redefinition targets into `into`, transitively.
+func (cc *constraintChecker) collectRedefined(sym *symbols.Symbol, into map[*symbols.Symbol]bool) {
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, ok := targetNode.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		target, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
+		if !ok || target == nil || into[target] {
+			continue
+		}
+		into[target] = true
+		cc.collectRedefined(target, into)
+	}
 }
 
 func (cc *constraintChecker) isInheritedMember(
@@ -631,15 +749,4 @@ func (cc *constraintChecker) resolveInheritedMember(owner *symbols.Symbol, qn *a
 
 	// For multi-part names, resolve normally (qualifiers won't be local members)
 	return cc.resolver.ResolveQualified(owner.Scope, qn)
-}
-
-// formatBound formats a Bound for display (infinite = "*", else numeric value).
-func formatBound(b semantics.Bound) string {
-	if b.Infinite {
-		return "*"
-	}
-	if b.Known {
-		return fmt.Sprintf("%d", b.Value)
-	}
-	return "?"
 }

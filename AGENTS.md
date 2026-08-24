@@ -53,6 +53,17 @@ fetch it once with `./scripts/download-training-examples.sh` and re-run
 too and sets `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, so there an absent corpus fails rather
 than skips.
 
+The three OMG pilot corpora are gated the same way: fetch them with
+`./scripts/download-pilot-corpora.sh` and run
+`go test -count=1 ./internal/core/model -run TestPilotCorpora`. CI sets
+`OPENSYSML_REQUIRE_PILOT_CORPORA=1`. See `docs/project/pilot-corpora.md`.
+
+All four roots share one mechanism (`internal/core/model/corpus_gate_test.go`) but two
+policies, and the difference is deliberate: the training corpus is **asserted** clean, so its
+expectation file holds no per-file counts and `-update-training` refuses to record one, while
+the other three are a **per-file ratchet** whose every movement must be adjudicated. Do not
+turn the assertion into a ratchet.
+
 ---
 
 ## 3. Repository Map
@@ -90,7 +101,7 @@ Read `docs/internals/architecture.md` before non-trivial work — it documents t
 - **Immutable AST.** `internal/core/ast` is syntax-only and is never mutated after parsing. All derived/semantic data lives in **side tables keyed by node/symbol**.
 - **Parser never fails.** `parser.New(src).ParseFile()` always returns a tree; malformed input yields `ErrorNode`s + diagnostics, never a panic.
 - **Lazy + memoized semantics.** Name resolution and type queries compute on demand and cache. Don't force eager work.
-- **Tiered passes.** Higher validation tiers are skipped when a lower tier errors. Keep passes independent and level-scoped.
+- **Tiered passes.** Higher validation tiers are skipped when a lower tier errors, unless a pass declares `passes.ElementScoped` and gates itself per subject via `Context.DownstreamOfFailure`. Keep passes independent and level-scoped.
 - **Runtime consumes lowered IR.** Executors should operate on `internal/core/lower` graphs (`ActionGraph`/`StateGraph`) as the single source of truth — do **not** re-parse `symbol.Decl` inside executors, and do not build parallel/duplicate structures that can drift. Lowering must be lossless (carry guards, triggers, effects, pseudostate edges).
 - **Error timing is part of the contract.** Constructors (`newActionExecutor`, `newStateExecutor`) succeed on structurally-empty inputs; "no initial node/state" errors surface at `initialize()`. Don't move error points without updating the corresponding tests intentionally.
 

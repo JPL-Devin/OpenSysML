@@ -141,6 +141,10 @@ func (r *Resolver) AdmittedChildrenOf(scope *symbols.Scope, fqn string, children
 	doc, from := r.documentOf(scope), r.ReferringNamespaceFQN(scope)
 	kept := make([]*symbols.Symbol, 0, len(children))
 	for _, sym := range children {
+		// A qualified name reaches only the namespace's visible memberships.
+		if !r.namedThroughNamespace(sym) {
+			continue
+		}
 		if r.admitsUnderName(doc, from, fqn+"::"+localNameOf(sym), sym) {
 			kept = append(kept, sym)
 		}
@@ -169,7 +173,7 @@ func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*sy
 	if scope == nil || imp == nil || imp.Imported == nil || len(imp.Imported.Parts) == 0 {
 		return nil
 	}
-	target, ok := r.ResolveQualified(scope, imp.Imported)
+	target, ok := r.resolveImportTarget(scope, imp)
 	if !ok || target == nil {
 		return nil
 	}
@@ -177,8 +181,14 @@ func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*sy
 	out := newElementList()
 	if imp.Kind == ast.ImportMembership {
 		// `import P::x` surfaces x itself; the recursive form adds its subtree.
+		// An import of an alias imports that membership, so the name it surfaces
+		// is the alias's own (KerML §8.2.3.2).
+		named := target
+		if alias, ok := r.PartAlias(imp.Imported, len(imp.Imported.Parts)-1); ok {
+			named = alias
+		}
 		if admit(target) {
-			out.add(target)
+			out.add(named)
 		}
 	} else {
 		r.appendNamespaceMembers(out, scope, target, imp, admit)
@@ -209,9 +219,6 @@ func (r *Resolver) namespaceChildren(scope *symbols.Scope, target *symbols.Symbo
 			children.add(sym)
 		}
 		for _, childImp := range r.importsOf(target.Scope.Node()) {
-			if childImp.Kind != ast.ImportMembership {
-				continue
-			}
 			if !r.importVisibleFrom(target, scope, childImp) || r.importStack[childImp] {
 				continue
 			}
@@ -254,9 +261,8 @@ func (r *Resolver) indexedNameOf(target *symbols.Symbol) string {
 }
 
 // appendSubtree adds the descendants of target a recursive import surfaces. The
-// walk descends into every member, admitted or not: a lookup through the import
-// reaches a nested element whatever its namespace was judged to be, so filtering
-// the descent would hide elements the import surfaces (see lookupInSubtree).
+// walk descends through the members the import can see, as the lookup does: a
+// namespace it cannot surface hides its own contents too (see lookupInSubtree).
 func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[symbols.ElementKey]bool) {
 	if target == nil || (target.Scope != nil && target.Scope.BodyLocal()) {
 		return
@@ -273,6 +279,9 @@ func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target 
 		}
 	}
 	for _, sym := range children {
+		if !visibleThroughImport(imp, sym) {
+			continue
+		}
 		r.appendSubtree(out, scope, sym, imp, admit, seen)
 	}
 }

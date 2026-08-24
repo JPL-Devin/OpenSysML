@@ -87,7 +87,13 @@ Positions checked against `SysML.xtext` `StateBodyItem` (1755-1770),
 
 No production admits these anywhere in the pinned grammars. They stay parsed —
 deleting notation users already write is worse than diagnosing it — and are
-reported as a warning, never an error.
+reported as a warning by default. Under the opt-in
+[strict conformance mode](../../guide/03-command-line.md#strict-conformance) the
+same findings are errors: strictness changes the severity of this table's
+diagnostics and nothing else, so the tree, the spans and the messages are the
+ones below in either mode. The mode is what answers "is this file conforming
+SysML v2?"; the default mode's acceptance of these constructs is intended and
+unchanged.
 
 | Construct | Why it is not standard |
 |-----------|------------------------|

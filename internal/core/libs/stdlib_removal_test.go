@@ -56,13 +56,9 @@ func indexWithStdlib(t *testing.T) *symbols.Index {
 	idx := symbols.NewIndex()
 	src := DefaultSource()
 	cache := &Cache{dir: t.TempDir()}
-	loader := NewLoader(src, cache)
-	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			t.Fatalf("load %s: %v", name, err)
-		}
+	if err := NewLoader(src, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
-	idx.ExpandWildcardImports()
 	return idx
 }
 

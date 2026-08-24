@@ -168,6 +168,43 @@ read would be an answer about a different model than the one you wrote. Name as
 many files as the model spans, in any order: the gate is about the model as a
 whole, so a reference from one file to a declaration in another resolves.
 
+## Strict conformance
+
+OpenSysML accepts a few notations of its own that no SysML v2 production admits —
+the `initial`/`final` state markers, `region`, `defer`, the `choice`, `junction`,
+`history` and `entry`/`exit point` pseudostates, the `initial`/`final`/`decision`
+action nodes, and `transition <source> to <target>`. They are reported as
+warnings, so a model using them still analyses cleanly. `-strict` asks the other
+question — *is this file conforming SysML v2?* — by making those warnings errors:
+
+```bash
+$ sysml -validate monitor.sysml; echo "exit=$?"
+monitor.sysml:3:9: warning: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
+        initial off;
+        ^~~~~~~
+✓ package M
+✓ monitor.sysml: no errors
+exit=0
+
+$ sysml -strict -validate monitor.sysml; echo "exit=$?"
+monitor.sysml:3:9: error: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
+        initial off;
+        ^~~~~~~
+sysml: monitor.sysml did not analyse cleanly; no check was made
+exit=2
+```
+
+`-strict` changes nothing about what parses: the same file, the same tree, the
+same findings in the same places — only their severity, and with it the exit
+status and the tier gate. It is a portability check, so run it when a model has
+to be read by another SysML v2 tool; leave it off otherwise. Each finding names
+the standard notation to write instead, and
+[the conformance audit](../reference/grammar/conformance-audit.md) cites the
+production each extension is measured against. The same switch is `%strict` at
+the prompt ([4. The REPL](04-repl.md)), the `sysml.strictConformance` setting in
+an editor ([8. Editors](08-editors.md)) and `strict_conformance=True` from Python
+([9. Python](09-python.md)).
+
 ## Running behavior
 
 The debuggers have non-interactive forms that run to completion and report the

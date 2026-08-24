@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve
+.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -47,7 +47,8 @@ build-grpc: ## Build sysml-grpc binary
 
 test: ## Run all tests
 	@echo "Running tests..."
-	go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+	@# Per-package timeout: under -race, passes and model run within 1% of go's 10m default.
+	go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
 
 lint: ## Run static analysis (staticcheck + gosec), as CI does
 	@echo "Running staticcheck..."
@@ -120,6 +121,13 @@ vscode-package: ## Package the VS Code extension as a .vsix for side-loading
 	@echo "Packaging the VS Code extension..."
 	cd $(VSCODE_DIR) && npm ci && npm run package
 	@echo "✓ Packaged $(VSCODE_DIR)/opensysml-sysml.vsix"
+
+docs-counts: ## Regenerate and verify all derived documentation counts
+	@echo "Regenerating the documentation count lines and refereed figures..."
+	go run ./cmd/doc-counts
+	go run ./cmd/doc-counts -check
+	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts
+	@echo "✓ Documentation counts and refereed figures are current"
 
 docs-install: ## Install the documentation site toolchain
 	$(PYTHON) -m pip install -r docs-requirements.txt

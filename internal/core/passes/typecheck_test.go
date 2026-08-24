@@ -14,6 +14,8 @@ import (
 func typeDiags(t *testing.T, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	// A bare resource set: these fixtures assert the type rules, not the
+	// library's contribution to them.
 	idx := symbols.NewIndex()
 	idx.AddDocument("<t>", root)
 	all := Analyze("<t>", root, nil, idx)

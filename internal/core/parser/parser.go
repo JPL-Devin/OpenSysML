@@ -175,6 +175,16 @@ func (p *Parser) atKeyword(kw string) bool {
 	return t.Kind == lexer.Keyword && t.KeywordID == kw
 }
 
+// acceptSufficientAll consumes the `all` of a declaration prefix
+// (`isSufficient ?= 'all'`, KerML.xtext:325). SysML.xtext declares `all` only
+// after `import`, so there the word names the declaration instead.
+func (p *Parser) acceptSufficientAll() bool {
+	if p.src.Kind() == source.KindSysML {
+		return false
+	}
+	return p.acceptKeyword("all")
+}
+
 // peekIsKeyword reports whether the token n ahead of the cursor is the given
 // keyword literal.
 func (p *Parser) peekIsKeyword(n int, kw string) bool {
@@ -206,19 +216,36 @@ func (p *Parser) valueOperatorAt(n int) bool {
 		(t.Kind == lexer.Keyword && t.KeywordID == "default")
 }
 
-// acceptValueOperator consumes the operator that introduces a feature value:
-// `=`, `:=`, or `default` followed by either of them (KerML `FeatureValue`).
-func (p *Parser) acceptValueOperator() bool {
-	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) {
-		return true
+// acceptValueOperatorSpan consumes a feature value operator and returns the
+// source span from its first token through the last consumed operator token.
+func (p *Parser) acceptValueOperatorSpan() (source.Span, bool) {
+	if op, ok := p.accept(lexer.Eq); ok {
+		return op.Span, true
 	}
-	if p.acceptKeyword("default") {
-		if !p.accept2(lexer.Eq) {
-			p.accept2(lexer.ColonEq)
+	if op, ok := p.accept(lexer.ColonEq); ok {
+		return op.Span, true
+	}
+	if p.atKeyword("default") {
+		first := p.advance()
+		last := first
+		if op, ok := p.accept(lexer.Eq); ok {
+			last = op
+		} else if op, ok := p.accept(lexer.ColonEq); ok {
+			last = op
 		}
-		return true
+		return source.Span{Offset: first.Span.Offset, Len: last.Span.End() - first.Span.Offset}, true
 	}
-	return false
+	return source.Span{}, false
+}
+
+func (p *Parser) parseUsageValue(u *ast.Usage) bool {
+	span, ok := p.acceptValueOperatorSpan()
+	if !ok {
+		return false
+	}
+	u.ValueOperatorSpan = span
+	u.Value = p.ParseExpression()
+	return true
 }
 
 // expect consumes a token of the given kind or records a diagnostic at the

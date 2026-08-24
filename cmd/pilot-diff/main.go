@@ -5,7 +5,7 @@
 //
 // It is advisory: nothing in the build or the test suite depends on it, and it
 // never touches internal/core/model/testdata/training_examples_expected.txt.
-// Provision the reference validator with scripts/download-pilot-validator.sh,
+// Provision the reference validator with scripts/download-pilot-sysml-validator.sh,
 // then run `go run ./cmd/pilot-diff`. See docs/project/pilot-differential.md.
 package main
 
@@ -17,40 +17,34 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/errata"
 )
 
-// corpusRoot is one directory of models compared as a batch: every file in it is
-// loaded before any diagnostic is read, on both sides, because corpus files
-// import each other.
+// corpusRoot is one directory of models. Each language in it is compared as its
+// own single batch: every file of that language is loaded into one resource set
+// before any diagnostic is read, on both sides, because corpus files import
+// each other.
 type corpusRoot struct {
 	Name string
 	Dir  string
-	Lang language
 	// Skip lists sub-paths of Dir (slash-separated, relative to Dir) that
 	// belong to another root.
 	Skip []string
 }
 
-type language uint8
-
-const (
-	languageSysML language = iota
-	languageKerML
-)
-
-func (root corpusRoot) extension() string {
-	if root.Lang == languageKerML {
-		return ".kerml"
-	}
-	return ".sysml"
+// languageBatch is one root's files in a single language, in comparison order.
+type languageBatch struct {
+	Kind  source.Kind
+	Files []string
 }
 
 var defaultRoots = []corpusRoot{
 	{Name: "training", Dir: "examples/sysml-v2-training"},
 	{Name: "pilot-examples", Dir: "examples/pilot-corpora/sysml-examples"},
 	{Name: "pilot-validation", Dir: "examples/pilot-corpora/sysml-validation"},
-	// KerML is validated in one resource-set batch by the plain-Java bridge.
-	{Name: "kerml-examples", Dir: "examples/pilot-corpora/kerml-examples", Lang: languageKerML},
+	{Name: "kerml-examples", Dir: "examples/pilot-corpora/kerml-examples"},
 	{Name: "testdata", Dir: "testdata"},
 	{Name: "examples", Dir: "examples", Skip: []string{"sysml-v2-training", "pilot-corpora"}},
 	// Hand-written models for behaviour classes the corpora do not cover, such
@@ -60,19 +54,20 @@ var defaultRoots = []corpusRoot{
 
 func main() {
 	repo := flag.String("repo", "", "repository root (default: the module root containing this command)")
-	validator := flag.String("validator", "", "pilot validator executable (default: <repo>/build/pilot-validator/validate-sysml)")
+	validator := flag.String("validator", "", "pilot SysML validator executable (default: <repo>/build/pilot-sysml-validator/validate-sysml-batch)")
 	kermlValidator := flag.String("kerml-validator", "", "KerML pilot validator executable (default: <repo>/build/pilot-kerml-validator/validate-kerml)")
+	syside := flag.String("syside", "", "optional Sensmetry SysIDE launcher for a third column (default: <repo>/build/syside/validate-syside if present)")
 	out := flag.String("out", "", "output directory for the reports (default: <repo>/build/pilot-diff)")
 	timeout := flag.Duration("timeout", 0, "per-batch timeout for the pilot validator (0: no limit)")
 	flag.Parse()
 
-	if err := run(*repo, *validator, *kermlValidator, *out, *timeout); err != nil {
+	if err := run(*repo, *validator, *kermlValidator, *syside, *out, *timeout); err != nil {
 		fmt.Fprintf(os.Stderr, "pilot-diff: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, validator, kermlValidator, out string, timeout time.Duration) error {
+func run(repo, validator, kermlValidator, syside, out string, timeout time.Duration) error {
 	var err error
 	if repo == "" {
 		repo, err = moduleRoot()
@@ -81,7 +76,7 @@ func run(repo, validator, kermlValidator, out string, timeout time.Duration) err
 		}
 	}
 	if validator == "" {
-		validator = filepath.Join(repo, "build", "pilot-validator", "validate-sysml")
+		validator = filepath.Join(repo, "build", "pilot-sysml-validator", "validate-sysml-batch")
 	}
 	if kermlValidator == "" {
 		kermlValidator = filepath.Join(repo, "build", "pilot-kerml-validator", "validate-kerml")
@@ -90,14 +85,48 @@ func run(repo, validator, kermlValidator, out string, timeout time.Duration) err
 		out = filepath.Join(repo, "build", "pilot-diff")
 	}
 	if _, err := os.Stat(validator); err != nil {
-		return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-validator.sh", validator)
+		return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-sysml-validator.sh", validator)
+	}
+
+	// Named explicitly: fail loudly. Defaulted: the third column is optional,
+	// and its absence must leave the two-way report byte-identical.
+	requested := syside != ""
+	if !requested {
+		syside = filepath.Join(repo, "build", "syside", "validate-syside")
+	}
+	if _, err := os.Stat(syside); err != nil {
+		if requested {
+			return fmt.Errorf("SysIDE launcher not found at %s: run ./scripts/download-syside.sh", syside)
+		}
+		fmt.Fprintf(os.Stderr, "comparing against the pilot only; run ./scripts/download-syside.sh for a third column\n")
+		syside = ""
+	}
+
+	// The declared errata overlay: every root is compared a second time with
+	// the corrections inside it applied to a copy, never to the corpus.
+	overlay, err := errata.Load()
+	if err != nil {
+		return err
 	}
 
 	// Recorded relative to the repository where possible: the JSON is committed
 	// as a baseline, so it must not carry a machine-specific path.
-	report := &Report{Validator: relativeTo(repo, validator)}
+	report := &Report{Validator: relativeTo(repo, validator), Errata: newErrataReport(overlay)}
 	if report.Pilot, err = pilotVersion(validator); err != nil {
 		return err
+	}
+	if syside != "" {
+		version, library, err := sysideRelease(syside)
+		if err != nil {
+			return err
+		}
+		report.Syside = &SysideInfo{
+			Validator: relativeTo(repo, syside),
+			Version:   version,
+			Library:   library,
+			Pilot:     report.Pilot,
+			Scope:     sysideScope,
+		}
 	}
 
 	for _, root := range defaultRoots {
@@ -106,32 +135,57 @@ func run(repo, validator, kermlValidator, out string, timeout time.Duration) err
 			return err
 		}
 		if len(files) == 0 {
-			fmt.Fprintf(os.Stderr, "skipping %s: no %s files (corpus not downloaded?)\n", root.Dir, root.extension())
+			fmt.Fprintf(os.Stderr, "skipping %s: no .sysml or .kerml files (corpus not downloaded?)\n", root.Dir)
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "%s: %d file(s)\n", root.Name, len(files))
 
-		pilot := validator
-		if root.Lang == languageKerML {
-			pilot = kermlValidator
-			if _, err := os.Stat(pilot); err != nil {
-				return fmt.Errorf("KerML pilot validator not found at %s: run ./scripts/download-pilot-kerml-validator.sh", pilot)
+		ours := make(map[string][]diagnostic, len(files))
+		theirs := make(map[string][]diagnostic, len(files))
+		for _, batch := range batchByLanguage(files) {
+			fmt.Fprintf(os.Stderr, "%s: %d %s file(s)\n", root.Name, len(batch.Files), batch.Kind)
+
+			pilot := validator
+			if batch.Kind == source.KindKerML {
+				pilot = kermlValidator
+				if _, err := os.Stat(pilot); err != nil {
+					return fmt.Errorf("KerML pilot validator not found at %s: run ./scripts/download-pilot-kerml-validator.sh", pilot)
+				}
+			}
+			batchOurs, err := openSysMLDiagnostics(repo, root.Dir, batch.Files)
+			if err != nil {
+				return err
+			}
+			batchTheirs, err := pilotDiagnostics(pilot, repo, root.Dir, batch.Files, timeout)
+			if err != nil {
+				return err
+			}
+			for rel, diagnostics := range batchOurs {
+				ours[rel] = diagnostics
+			}
+			for rel, diagnostics := range batchTheirs {
+				theirs[rel] = diagnostics
 			}
 		}
-		ours, err := openSysMLDiagnostics(repo, root.Dir, files)
+		rootReport := compareRoot(root.Name, root.Dir, files, ours, theirs)
+		if syside != "" {
+			fmt.Fprintf(os.Stderr, "%s: %d file(s) through syside\n", root.Name, len(files))
+			third, err := sysideDiagnostics(syside, repo, root.Dir, files, timeout)
+			if err != nil {
+				return err
+			}
+			attachSyside(&rootReport, files, ours, theirs, third)
+		}
+
+		erratum, err := runErrata(root, files, overlay, ours, theirs, repo, validator, kermlValidator, out, timeout)
 		if err != nil {
 			return err
 		}
-		var theirs map[string][]diagnostic
-		if root.Lang == languageKerML {
-			theirs, err = kermlDiagnostics(pilot, repo, root.Dir, files, timeout)
-		} else {
-			theirs, err = pilotDiagnostics(pilot, repo, root.Dir, files, timeout)
+		if erratum.applied > 0 {
+			rootReport.ErrataTotals = &erratum.totals
+			report.Errata.Applied += erratum.applied
+			report.Errata.Findings = append(report.Errata.Findings, erratum.findings...)
 		}
-		if err != nil {
-			return err
-		}
-		report.Roots = append(report.Roots, compareRoot(root.Name, root.Dir, files, ours, theirs))
+		report.Roots = append(report.Roots, rootReport)
 	}
 
 	report.summarize()
@@ -168,8 +222,30 @@ func moduleRoot() (string, error) {
 	}
 }
 
-// collectFiles returns the root's model files as sorted slash-separated paths
-// relative to the root directory.
+// batchByLanguage splits a root's files into one batch per language, SysML
+// first. Each language is compared against its own reference validator, and
+// batching per language rather than per file keeps the reference's cross-file
+// reference resolution intact within a batch.
+func batchByLanguage(files []string) []languageBatch {
+	batches := []languageBatch{{Kind: source.KindSysML}, {Kind: source.KindKerML}}
+	for _, rel := range files {
+		for i := range batches {
+			if batches[i].Kind == source.KindOf(rel) {
+				batches[i].Files = append(batches[i].Files, rel)
+			}
+		}
+	}
+	out := make([]languageBatch, 0, len(batches))
+	for _, batch := range batches {
+		if len(batch.Files) > 0 {
+			out = append(out, batch)
+		}
+	}
+	return out
+}
+
+// collectFiles returns the root's model files, in either language, as sorted
+// slash-separated paths relative to the root directory.
 func collectFiles(repo string, root corpusRoot) ([]string, error) {
 	dir := filepath.Join(repo, root.Dir)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -194,7 +270,7 @@ func collectFiles(repo string, root corpusRoot) ([]string, error) {
 			}
 			return nil
 		}
-		if filepath.Ext(path) == root.extension() {
+		if source.KindOf(path) != source.KindUnknown {
 			files = append(files, rel)
 		}
 		return nil

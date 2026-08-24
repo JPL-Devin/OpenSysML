@@ -1,3 +1,4 @@
 2:16 error [name-resolution/unresolved] unresolved reference: P::Missing
+3:2 error [type/filter-not-evaluable] Must be model-level evaluable
 3:9 error [name-resolution/unresolved] unresolved reference: Undefined
 4:17 error [name-resolution/unresolved] unresolved reference: Nowhere

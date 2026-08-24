@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // TestImplicitBaseNeedsTheLibrary covers a model resolved without the standard
@@ -117,6 +118,37 @@ func TestKerMLImplicitDefinitionBases(t *testing.T) {
 	}
 }
 
+func TestKerMLImplicitDefinitionBasesUseRecordedDocumentKind(t *testing.T) {
+	content := `package P {
+		class C;
+		struct S;
+	}
+	package Occurrences { classifier Occurrence; }
+	package Objects { classifier Object; }`
+	want := map[string]string{
+		"C": "Occurrences::Occurrence",
+		"S": "Objects::Object",
+	}
+	for _, tc := range []struct {
+		name string
+		kind source.Kind
+	}{
+		{"inline-content", source.KindKerML},
+		{"model.kerml", source.KindKerML},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, root := buildModelNamedWithKind(t, tc.name, tc.kind, content)
+			p := sym(t, root, "P")
+			for name, wantFQN := range want {
+				got := m.DirectSupertypes(sym(t, p.Scope, name))
+				if len(got) != 1 || m.resolver.Index().GetFQN(got[0]) != wantFQN {
+					t.Fatalf("supertypes of %s = %v, want [%s]", name, got, wantFQN)
+				}
+			}
+		})
+	}
+}
+
 func TestSysMLImplicitDefinitionBasesRemainKindBased(t *testing.T) {
 	m, root := buildModelNamed(t, "t.sysml", `package P {
 		part def C;
@@ -186,5 +218,123 @@ func TestSysMLImplicitBaseOfExplicitSupertypeIsTransitive(t *testing.T) {
 		t.Fatal("MyWheel does not inherit endShot through Wheel's implicit base")
 	} else if got := m.resolver.Index().GetFQN(inherited); got != "Parts::Part::endShot" {
 		t.Fatalf("inherited endShot = %q, want Parts::Part::endShot", got)
+	}
+}
+
+// TestW7ATransitionMemberImplicitBase covers SysML v2 §7.19.2: a transition
+// written in a state body is a TransitionUsage, so it inherits TransitionAction's
+// accepter, effect, acceptedMessage and receiver.
+func TestW7ATransitionMemberImplicitBase(t *testing.T) {
+	m, root := buildModelNamed(t, "t.sysml", `package Actions {
+		action def Action;
+		action def TransitionAction :> Action {
+			ref acceptedMessage;
+			ref receiver;
+			action accepter;
+			action effect;
+		}
+	}
+	package States { action def StateAction; }
+	package P {
+		state machine {
+			state wait;
+			transition subscribing first wait then wait;
+		}
+	}`)
+	p := sym(t, root, "P")
+	machine := sym(t, p.Scope, "machine")
+	trans, ok := machine.Scope.LookupLocal("subscribing")
+	if !ok {
+		t.Fatal("the state body declares no subscribing transition")
+	}
+	for _, name := range []string{"accepter", "effect", "acceptedMessage", "receiver"} {
+		if _, ok := m.LookupMember(trans, name); !ok {
+			t.Errorf("transition does not inherit %s from Actions::TransitionAction", name)
+		}
+	}
+}
+
+// TestW7AKerMLFeatureBaseContributesMembers covers KerML §8.4.2: a feature of a
+// kind subsets that kind's base feature, which contributes members only.
+func TestW7AKerMLFeatureBaseContributesMembers(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Base { abstract feature things; }
+	package Performances {
+		abstract step performances { feature enclosingPerformance; }
+		classifier Performance;
+	}
+	package P { step s; }`)
+	s := sym(t, sym(t, root, "P").Scope, "s")
+	if _, ok := m.LookupMember(s, "enclosingPerformance"); !ok {
+		t.Errorf("a KerML step does not inherit members of Performances::performances")
+	}
+	performances, _ := sym(t, root, "Performances").Scope.LookupLocal("performances")
+	if m.Conforms(s, performances) {
+		t.Errorf("a feature reported conforming to its base feature")
+	}
+}
+
+// TestW7AKerMLFeatureBaseSuppressedWhenDeclared covers the §8.4.2 suppression
+// rule: a declared subsetting that already reaches the base suppresses it.
+func TestW7AKerMLFeatureBaseSuppressedWhenDeclared(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Performances {
+		abstract step performances;
+		step nested subsets performances;
+	}
+	package P {
+		step direct subsets Performances::performances;
+		step indirect subsets Performances::nested;
+		step plain;
+	}`)
+	p := sym(t, root, "P").Scope
+	for _, name := range []string{"direct", "indirect"} {
+		if base := m.implicitKerMLFeatureBase(sym(t, p, name)); base != nil {
+			t.Errorf("%s: declared subsetting did not suppress the implicit feature base", name)
+		}
+	}
+	if base := m.implicitKerMLFeatureBase(sym(t, p, "plain")); base == nil {
+		t.Errorf("plain step lost its implicit feature base")
+	}
+}
+
+// TestW7ASysMLSuppressionMatchesKerML covers the same rule in SysML: a declared
+// generalization that does not reach the kind's base does not suppress it.
+func TestW7ASysMLSuppressionMatchesKerML(t *testing.T) {
+	m, root := buildModelNamed(t, "t.sysml", `package Parts { part def Part { feature endShot; } }
+	package Frames { attribute def Frame; }
+	part p :> Frames::Frame;
+	part q :> Parts::Part;`)
+	part, _ := sym(t, root, "Parts").Scope.LookupLocal("Part")
+	if _, ok := m.LookupContributedMember(sym(t, root, "p"), "endShot"); !ok {
+		t.Errorf("a part usage specializing a non-part lost Parts::Part")
+	}
+	supers := m.DirectSupertypes(sym(t, root, "q"))
+	if len(supers) != 1 || supers[0] != part {
+		t.Errorf("DirectSupertypes(q) = %v, want the declared [Parts::Part] only", supers)
+	}
+}
+
+// A KerML feature's implicit base follows the kind of its declared type, not its
+// own keyword: `feature b : A` with A a class subsets Occurrences::occurrences,
+// so it contributes nothing while Occurrences is absent, while an untyped
+// feature still subsets Base::things (KerML §8.4.2).
+func TestImplicitKerMLFeatureBaseFollowsTheDeclaredTypeKind(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Base { abstract feature things { feature that; } }
+		package P { class A; feature b : A; feature c; }`)
+	p := sym(t, root, "P")
+	things, _ := sym(t, root, "Base").Scope.LookupLocal("things")
+
+	b, _ := p.Scope.LookupLocal("b")
+	for _, src := range m.DirectMemberSources(b) {
+		if src == things {
+			t.Errorf("b : A (a class) subsets %v, want no base while Occurrences is absent", src.Name)
+		}
+	}
+	c, _ := p.Scope.LookupLocal("c")
+	found := false
+	for _, src := range m.DirectMemberSources(c) {
+		found = found || src == things
+	}
+	if !found {
+		t.Errorf("untyped feature c does not subset Base::things; sources %v", m.DirectMemberSources(c))
 	}
 }

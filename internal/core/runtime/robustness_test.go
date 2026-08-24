@@ -21,6 +21,8 @@ import (
 
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
+	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
+	t.Run("merge_without_a_successor", testMergeWithoutASuccessor)
 	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
 	t.Run("first_node_with_a_second_succession", testFirstNodeWithASecondSuccession)
 	t.Run("first_beside_an_initial_node", testFirstBesideAnInitialNode)
@@ -64,6 +66,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
+	t.Run("operation_constraint_body_cannot_be_evaluated", testOperationConstraintBodyCannotBeEvaluated)
 	t.Run("binding_conflict", testBindingConflict)
 	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
 	t.Run("binding_multiple_scalar_contributors", testBindingMultipleScalarContributors)
@@ -88,10 +91,16 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("multiple_outputs_invoked_as_an_expression", testMultipleOutputsInvokedAsAnExpression)
 	t.Run("body_local_usage_of_a_non_calc", testBodyLocalUsageOfANonCalc)
 	t.Run("body_local_declaration_not_executable", testBodyLocalDeclarationNotExecutable)
+	t.Run("f99_body_member_without_value", testF99BodyMemberWithoutValue)
+	t.Run("f99_unsupported_body_member", testF99UnsupportedBodyMember)
+	t.Run("f99_cyclic_body_declaration", testF99CyclicBodyDeclaration)
 	t.Run("range_bound_is_not_an_integer", testRangeBoundIsNotAnInteger)
 	t.Run("range_spends_the_step_budget", testRangeSpendsTheStepBudget)
 	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
+	t.Run("performed_action_binding_names_nothing", testPerformedActionBindingNamesNothing)
+	t.Run("structured_attribute_chain_of_an_unknown_feature", testStructuredAttributeChainOfAnUnknownFeature)
+	t.Run("elements_chain_of_a_non_numeric_collection", testElementsChainOfANonNumericCollection)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("nested_condition_subject_is_ambiguous", testNestedConditionSubjectIsAmbiguous)
 	t.Run("satisfaction_subject_is_ambiguous", testSatisfactionSubjectIsAmbiguous)
@@ -134,6 +143,14 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
+	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
+	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
+	t.Run("routed_send_port_type_match", testRoutedSendPortTypeMatch)
+	t.Run("routed_send_scalar_typed_flow_mismatch", testRoutedSendScalarTypedFlowMismatch)
+	t.Run("routed_send_unreachable_receiver", testRoutedSendUnreachableReceiver)
+	t.Run("routed_send_receiver_name_mismatch_deadlock", testRoutedSendReceiverNameMismatchDeadlock)
+	t.Run("type_classification_unresolved_type", testTypeClassificationUnresolvedType)
+	t.Run("type_classification_undetermined_value_type", testTypeClassificationUndeterminedValueType)
 	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
 	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
 	t.Run("send_addressed_to_a_part_no_sibling_takes", testSendAddressedToAPartNoSiblingTakes)
@@ -1912,7 +1929,8 @@ func testStateTransitionEffectReadsAnUnknownFeature(t *testing.T) {
 }
 
 // testNonTerminatingDoBehavior: a do behavior whose state is re-entered every
-// round never ends, so the run is bounded and reports instead of hanging.
+// round never ends, so the run is bounded and reports instead of hanging. The
+// self-transition restarts the do behavior, so either bound may report first.
 func testNonTerminatingDoBehavior(t *testing.T) {
 	spin := &ast.StateNode{
 		Name: "spin",
@@ -1939,7 +1957,7 @@ func testNonTerminatingDoBehavior(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a budget error for a machine that never settles")
 	}
-	if !strings.Contains(err.Error(), "exceeded max") {
+	if !strings.Contains(err.Error(), "exceeded max") && !errors.Is(err, ErrStepLimitExceeded) {
 		t.Errorf("expected a budget error, got: %v", err)
 	}
 }
@@ -2367,6 +2385,200 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+func testRoutedSendViaUnknownPort(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			first start;
+			action sender { send 42 via missing to reader; }
+			action reader accept msg : Integer;
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	var typed *UnknownSendPortError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected UnknownSendPortError, got: %v", err)
+	}
+	if !errors.Is(err, ErrSendViaUnknownPort) {
+		t.Errorf("expected ErrSendViaUnknownPort, got: %v", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("unknown routed port must not be ErrUnroutableSend: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"missing"`) || !strings.Contains(err.Error(), `"reader"`) {
+		t.Errorf("error = %v, want port and receiver names", err)
+	}
+}
+
+func testRoutedSendPortTypeMismatch(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def IntMessage;
+		item def TextMessage;
+		port def IntegerPort { in item text : TextMessage; }
+		action pipeline {
+			port outPort;
+			port inPort : IntegerPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send IntMessage via outPort to reader; }
+			action reader accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	var typed *SendPortTypeMismatchError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected SendPortTypeMismatchError, got: %v", err)
+	}
+	if !errors.Is(err, ErrSendPortTypeMismatch) {
+		t.Errorf("expected ErrSendPortTypeMismatch, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"outPort"`) ||
+		!strings.Contains(err.Error(), `"reader"`) {
+		t.Errorf("error = %v, want port and receiver names", err)
+	}
+}
+
+func testRoutedSendPortTypeMatch(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def IntMessage;
+		port def IntegerPort { in item value : IntMessage; }
+		action pipeline {
+			port outPort;
+			port inPort : IntegerPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send IntMessage via outPort to reader; }
+			action reader accept : IntMessage via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute routed send through matching typed flow: %v", err)
+	}
+}
+
+func testRoutedSendScalarTypedFlowMismatch(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def Integer;
+		item def TextMessage;
+		port def TextPort { in item text : TextMessage; }
+		action pipeline {
+			port outPort;
+			port inPort : TextPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort to reader; }
+			action reader accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	var typed *SendPortTypeMismatchError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected scalar SendPortTypeMismatchError, got: %v", err)
+	}
+	if !errors.Is(err, ErrSendPortTypeMismatch) {
+		t.Errorf("expected ErrSendPortTypeMismatch for scalar message, got: %v", err)
+	}
+}
+
+func testRoutedSendUnreachableReceiver(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort to missing; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	var typed *UnreachableSendReceiverError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected UnreachableSendReceiverError, got: %v", err)
+	}
+	if !errors.Is(err, ErrUnreachableSendReceiver) {
+		t.Errorf("expected ErrUnreachableSendReceiver, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"outPort"`) ||
+		!strings.Contains(err.Error(), `"missing"`) {
+		t.Errorf("error = %v, want port and receiver names", err)
+	}
+}
+
+func testRoutedSendReceiverNameMismatchDeadlock(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort to receiver; }
+			action receiver;
+			action sibling accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender sibling;
+			then sibling end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected a deadlock: sibling must not consume receiver's message")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Fatalf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+func testTypeClassificationUnresolvedType(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `package P {
+		item def Integer;
+		calc classify { return : Boolean = 1 istype MissingType; }
+	}`)
+	pkg := resolveSymbol(t, root, "P")
+	calc := resolveSymbol(t, pkg.Scope, "classify")
+	_, err := NewContext(model, resolver, 1000).InvokeCalc(calc, nil, pkg.Scope)
+	if err == nil {
+		t.Fatal("expected unresolved type classification to fail")
+	}
+	if !errors.Is(err, ErrUnresolvedType) {
+		t.Fatalf("expected ErrUnresolvedType, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "MissingType") {
+		t.Errorf("error = %v, want unresolved type name", err)
+	}
+}
+
+func testTypeClassificationUndeterminedValueType(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `package P {
+		item def Integer;
+		calc classify { return : Boolean = null istype Integer; }
+	}`)
+	pkg := resolveSymbol(t, root, "P")
+	calc := resolveSymbol(t, pkg.Scope, "classify")
+	_, err := NewContext(model, resolver, 1000).InvokeCalc(calc, nil, pkg.Scope)
+	if err == nil {
+		t.Fatal("expected undetermined value type classification to fail")
+	}
+	if !errors.Is(err, ErrUndeterminedValueType) {
+		t.Fatalf("expected ErrUndeterminedValueType, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "null") {
+		t.Errorf("error = %v, want undecidable value description", err)
 	}
 }
 
@@ -2869,8 +3081,60 @@ func testDeadlockJoinStarvation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a deadlock error, the starved join completed")
 	}
-	if !strings.Contains(err.Error(), "deadlock") {
-		t.Errorf("expected a deadlock error, got: %v", err)
+	if !errors.Is(err, ErrActionDeadlock) {
+		t.Errorf("expected ErrActionDeadlock, got: %v", err)
+	}
+}
+
+func testForkWithoutASuccessor(t *testing.T) {
+	src := `
+		package test {
+			action broken {
+				first start;
+				fork split;
+				then start split;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "broken", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action broken not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrInvalidActionFlow) {
+		t.Fatalf("error = %v, want ErrInvalidActionFlow", err)
+	}
+}
+
+func testMergeWithoutASuccessor(t *testing.T) {
+	src := `
+		package test {
+			action broken {
+				first start;
+				merge converge;
+				then start converge;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "broken", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action broken not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrInvalidActionFlow) {
+		t.Fatalf("error = %v, want ErrInvalidActionFlow", err)
 	}
 }
 
@@ -3073,48 +3337,41 @@ func testForkBranchesAssigningTheSameFeature(t *testing.T) {
 	}
 }
 
-// testDecisionNoSatisfiedGuard: decision node with no guards satisfied
+// testDecisionNoSatisfiedGuard: a decision must select one outgoing succession.
 func testDecisionNoSatisfiedGuard(t *testing.T) {
 	src := `
 		package test {
-			calc noGuard {
-				in x: Integer;
-				if (false) return 1;
-				// No else branch, all guards false
+			private import ScalarValues::*;
+
+			action noGuard {
+				attribute enabled : Boolean = false;
+
+				first start;
+				action selected;
+				done end;
+
+				then start choose;
+				then selected end;
+
+				decide choose;
+				if enabled then selected;
 			}
 		}
 	`
-	file := parseAndBuild(t, src)
-	if file == nil {
-		t.Fatal("parse failed")
-	}
-
-	idx, model, ctx := buildRuntime(t, "<test>", file)
-
-	_ = model // silence unused
-
-	rootScope := idx.DocumentRoot("<test>")
-	sym := findSymbolByName(rootScope, "noGuard", ast.DefCalc)
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "noGuard", ast.DefAction)
 	if sym == nil {
-		t.Fatal("noGuard calc not found")
+		t.Fatal("action noGuard not found")
 	}
 
-	// Invoke with x=5
-	xVal := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 5}}
-	result, err := ctx.InvokeCalc(sym, []Value{xVal}, rootScope)
-
-	// Expect error or null result (implementation-specific)
+	exec, err := ctx.CreateActionExecutor(sym)
 	if err != nil {
-		t.Logf("InvokeCalc returned error (acceptable): %v", err)
-		return
+		t.Fatalf("create action executor: %v", err)
 	}
-
-	if result.Kind == ValNull {
-		t.Log("InvokeCalc returned null (no branch taken)")
-		return
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrNoEnabledSuccession) {
+		t.Fatalf("error = %v, want ErrNoEnabledSuccession", err)
 	}
-
-	t.Logf("InvokeCalc returned: %v (no error - implementation allows missing branch)", result)
 }
 
 // testStateDanglingTransition: state with transition to nonexistent state
@@ -6132,6 +6389,33 @@ func testBodyLocalDeclarationNotExecutable(t *testing.T) {
 	}
 }
 
+func testF99BodyMemberWithoutValue(t *testing.T) {
+	_, err := evalCollectionExprBounded(t,
+		"xs->collect { in i; private missing : Integer; missing }", 10000)
+	if !errors.Is(err, ErrNoValue) {
+		t.Fatalf("error = %v, want ErrNoValue", err)
+	}
+}
+
+func testF99UnsupportedBodyMember(t *testing.T) {
+	_, err := evalCollectionExprBounded(t,
+		"xs->select { in i; private import ScalarValues::*; i > 0 }", 10000)
+	if !errors.Is(err, ErrUnsupportedBodyDeclaration) {
+		t.Fatalf("error = %v, want ErrUnsupportedBodyDeclaration", err)
+	}
+	if !strings.Contains(err.Error(), "Import") {
+		t.Errorf("unsupported-member error = %q, want it to name the form", err)
+	}
+}
+
+func testF99CyclicBodyDeclaration(t *testing.T) {
+	_, err := evalCollectionExprBounded(t,
+		"xs->collect { in i; private attribute cycleValue : Integer = cycleValue; cycleValue }", 10000)
+	if !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Fatalf("error = %v, want ErrCyclicFeatureValue", err)
+	}
+}
+
 // testRangeBoundIsNotAnInteger: `..` declares Integer bounds, so a Real bound is
 // the type mismatch it is rather than a truncated range.
 func testRangeBoundIsNotAnInteger(t *testing.T) {
@@ -6227,6 +6511,79 @@ func testUsageReadThroughAPartWithoutAnOutput(t *testing.T) {
 	}
 }
 
+// testPerformedActionBindingNamesNothing: a performed action's binding names a
+// part that does not exist, reported as the unresolved reference it is rather
+// than materializing the performer without the action's input.
+func testPerformedActionBindingNamesNothing(t *testing.T) {
+	src := `
+		package test {
+			part def Counter { attribute count : Integer = 4; }
+			action def Bump {
+				in c : Counter;
+				out n : Integer = c.count + 1;
+			}
+			part machine {
+				perform action p : Bump { in c = nowhere; }
+			}
+			calc def Probe {
+				in n : Integer;
+				machine.p.n
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Probe", []Value{constInt(1)}, 10000)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Errorf("expected ErrUnresolvedReference, got: %v", err)
+	}
+	if err != nil && !strings.Contains(err.Error(), "nowhere") {
+		t.Errorf("error should name the binding that resolves to nothing, got: %v", err)
+	}
+}
+
+// testStructuredAttributeChainOfAnUnknownFeature: a structured attribute usage
+// holds the features of its type, so a chain into one it does not have is
+// reported rather than answered as an empty value.
+func testStructuredAttributeChainOfAnUnknownFeature(t *testing.T) {
+	src := `
+		package test {
+			attribute def Cost { attribute v : Real default 1.0; }
+			attribute template : Cost;
+			calc def Probe {
+				in n : Integer;
+				template.nope
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Probe", []Value{constInt(1)}, 10000)
+	if err == nil {
+		t.Fatal("expected chaining into an unknown feature to fail")
+	}
+	if !strings.Contains(err.Error(), "nope") {
+		t.Errorf("error should name the feature that does not exist, got: %v", err)
+	}
+}
+
+// testElementsChainOfANonNumericCollection: only a numerical vector is the
+// sequence of its own elements, so `elements` of another collection is a member
+// lookup on each of them, reported rather than answered with the collection.
+func testElementsChainOfANonNumericCollection(t *testing.T) {
+	src := `
+		package test {
+			calc def Probe {
+				in n : Integer;
+				return : String[*] = ("a", "b").elements;
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Probe", []Value{constInt(1)}, 10000)
+	if err == nil {
+		t.Fatal("expected chaining elements of a non-numeric collection to fail")
+	}
+	if !strings.Contains(err.Error(), "cannot chain through non-instance member") {
+		t.Errorf("error should report the member lookup, got: %v", err)
+	}
+}
+
 // testEnumerationNameThatIsNotALiteral: a name qualified by an enumeration
 // designates one of its literals, so one it does not declare is reported with
 // the literals it does, never answered as an empty value.
@@ -6266,7 +6623,7 @@ func testChainThroughALiteralWithoutThatAttribute(t *testing.T) {
 }
 
 // testObjectExhibitedMachineNeverSettles: a machine an object exhibits is bounded
-// by the same event budget as one run on its own, so materializing an object whose
+// by the same budgets as one run on its own, so materializing an object whose
 // machine never settles reports a budget error rather than spinning.
 func testObjectExhibitedMachineNeverSettles(t *testing.T) {
 	src := `
@@ -6286,7 +6643,7 @@ func testObjectExhibitedMachineNeverSettles(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a budget error for an exhibited machine that never settles")
 	}
-	if !strings.Contains(err.Error(), "exceeded max") {
+	if !strings.Contains(err.Error(), "exceeded max") && !errors.Is(err, ErrStepLimitExceeded) {
 		t.Errorf("error = %v, want a budget error", err)
 	}
 }
@@ -6344,6 +6701,28 @@ func testOperationInvokedWithUnboundParameters(t *testing.T) {
 	}
 	if _, err := ctx.InvokeOperation(inst, "total", nil); !errors.Is(err, ErrNotABehavior) {
 		t.Errorf("invoke of an attribute = %v, want ErrNotABehavior", err)
+	}
+}
+
+// testOperationConstraintBodyCannotBeEvaluated: invoking a constraint whose
+// assertion names no feature returns its evaluation error without panicking.
+func testOperationConstraintBodyCannotBeEvaluated(t *testing.T) {
+	src := `
+	package test {
+		part def Tank {
+			constraint broken { assert missing > 0; }
+		}
+	}`
+	ctx, inst, err := instantiateInSource(t, src, "test::Tank")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = ctx.InvokeOperation(inst, "broken", nil)
+	if err == nil {
+		t.Fatal("expected an error for an unevaluable constraint body")
+	}
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("error = %v, want ErrUnresolvedReference", err)
 	}
 }
 

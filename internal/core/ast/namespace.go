@@ -18,6 +18,9 @@ const (
 type NameSegment struct {
 	Text string
 	Span source.Span
+	// Chained records that the segment was written after '.' rather than after
+	// '::': a feature chain step (`S2.S3`) rather than a namespace member.
+	Chained bool
 }
 
 // QualifiedName is an unresolved dotted/`::`-separated name reference.
@@ -133,8 +136,9 @@ type Identification struct {
 // it to a SuccessionEdge of its own (see internal/core/parser/succession.go).
 type Membership struct {
 	NodeBase
-	Visibility Visibility
-	Member     Node
+	Visibility    Visibility
+	IsTypeFeature bool
+	Member        Node
 }
 
 // RootNamespace is the top of every parsed file: a flat list of members.
@@ -148,6 +152,8 @@ type PrefixMetadata struct {
 	NodeBase
 	Type *QualifiedName
 	Body []Node // optional body with property initializers: @Meta{prop = value;}
+	// Elements the usage annotates: `@Meta about a, b;` (SysML.xtext:145-147).
+	About []*QualifiedName
 }
 
 // Namespace is `namespace <id> { ... }`.
@@ -212,14 +218,18 @@ type Alias struct {
 	HasBody    bool
 }
 
-// MultiplicityDecl is `multiplicity <id> [range] ;|{}`.
-// Declares a named multiplicity range like exactlyOne [1..1].
+// MultiplicityDecl is `multiplicity <id> [range] ;|{}` (a MultiplicityRange) or
+// `multiplicity <id> subsets f ;|{}` (a MultiplicitySubset, KerML.xtext:754).
+// Declares a named multiplicity like exactlyOne [1..1].
 type MultiplicityDecl struct {
 	NodeBase
-	Ident   Identification
-	Range   *Multiplicity // optional - range bounds
-	Members []Node        // optional - body members (typically doc comments)
-	HasBody bool          // true if has {}, false if just ;
+	Ident Identification
+	Range *Multiplicity // range bounds, in the MultiplicityRange form
+	// Subsets is the subsetted multiplicity of a MultiplicitySubset; the two
+	// forms are exclusive.
+	Subsets *QualifiedName
+	Members []Node // optional - body members (typically doc comments)
+	HasBody bool   // true if has {}, false if just ;
 }
 
 // Dependency is `dependency [<id> from] clients to suppliers ;|{}`.
@@ -231,6 +241,26 @@ type Dependency struct {
 	Suppliers []*QualifiedName
 	Body      []Node
 	HasBody   bool
+}
+
+// RelationshipMember is a KerML relationship written keyword-first as a member
+// of its own: `specialization Gen subtype A specializes B;` (KerML.xtext:390).
+// Its two ends are ordered — Source relates to Target, never the reverse.
+type RelationshipMember struct {
+	NodeBase
+	Ident Identification
+	Kind  RelationshipKind
+	// Keyword is the relationship keyword as written (`subtype`, `subclassifier`),
+	// and PrefixKeyword the one that may precede it (`specialization`).
+	Keyword       string
+	PrefixKeyword string
+	Source        Node // the specific/subsetting/featured end
+	Target        Node // the general/subsetted/featuring end
+	// Conjugated marks a Conjugation, whose target is the conjugate of Source.
+	Conjugated bool
+	Visibility Visibility
+	Members    []Node
+	HasBody    bool
 }
 
 // Comment is `[comment <id> [about refs]] [locale s] /* ... */`.

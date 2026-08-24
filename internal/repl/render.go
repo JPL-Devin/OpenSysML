@@ -138,6 +138,8 @@ func renderMember(m ast.Node) string {
 		return "import " + importTarget(d)
 	case *ast.Dependency:
 		return "dependency " + nameOrAnon(d.Ident)
+	case *ast.RelationshipMember:
+		return d.Keyword + " " + nameOrAnon(d.Ident)
 	case *ast.Comment:
 		return "comment"
 	case *ast.Definition:
@@ -352,11 +354,11 @@ func renderSplit(r Result, v Verbosity) (found, declared []string) {
 // text just read rather than about the analysis of the model as a whole: a load
 // that defers the analysis still says why a file could not be read.
 func renderSyntax(r Result, v Verbosity) []string {
-	// A syntax warning is no reason a file could not be read, and the analysis
-	// this load defers reports it, so reporting it here would report it twice.
+	// A finding about the notation is no reason a file could not be read, and the
+	// analysis this load defers reports it, so reporting it here would report it twice.
 	var diags []passes.Diagnostic
 	for _, d := range scopedDiagnostics(r, v) {
-		if d.Source == "syntax" && d.Severity == passes.SeverityError {
+		if d.Source == "syntax" && d.Blocking() {
 			diags = append(diags, d)
 		}
 	}
@@ -464,7 +466,7 @@ func (n *blockerNote) record(key string) {
 func (r Result) analysisBlocked() *blocker {
 	var first *blocker
 	for _, d := range r.Diagnostics {
-		if d.Severity != passes.SeverityError || r.mine(d.Span) || r.isMasked(d.Span) {
+		if !d.Blocking() || r.mine(d.Span) || r.isMasked(d.Span) {
 			continue
 		}
 		if first != nil {
@@ -489,9 +491,11 @@ func (r Result) isMasked(span source.Span) bool {
 	return false
 }
 
+// hasError reports whether the submission failed in a way that leaves it
+// nothing to summarize; a notation error still reads, so it is not one.
 func hasError(diags []passes.Diagnostic) bool {
 	for _, d := range diags {
-		if d.Severity == passes.SeverityError {
+		if d.Blocking() {
 			return true
 		}
 	}

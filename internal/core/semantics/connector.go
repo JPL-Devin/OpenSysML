@@ -35,6 +35,10 @@ func connectorLike(sym *symbols.Symbol) bool {
 	return false
 }
 
+func (m *Model) isConnectorLike(sym *symbols.Symbol) bool {
+	return connectorLike(sym) || sym != nil && sym.Decl == nil && m.IsBinaryConnector(sym)
+}
+
 // ownedEnds returns the end features sym owns, one entry per end in
 // declaration order: first the ends of its `connect` clause, then the `end`
 // features of its body. An end that declares no name of its own — `connect a
@@ -78,6 +82,20 @@ func (m *Model) endsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	}
 	// Guard against re-entrancy on cyclic specialization graphs.
 	m.ends[sym] = nil
+
+	if sym != nil && sym.Decl == nil && m.IsBinaryConnector(sym) {
+		var out []*symbols.Symbol
+		for _, name := range binaryConnectorEndNames {
+			end, ok := m.LookupMember(sym, name)
+			if !ok {
+				m.ends[sym] = nil
+				return nil
+			}
+			out = append(out, end)
+		}
+		m.ends[sym] = out
+		return out
+	}
 
 	out := ownedEnds(sym)
 
@@ -131,7 +149,7 @@ func namedEnds(end *symbols.Symbol, general []*symbols.Symbol) []*symbols.Symbol
 		}
 		name := qn.Parts[len(qn.Parts)-1].Text
 		for _, candidate := range general {
-			if candidate != nil && candidate.Name == name {
+			if candidate != nil && leafName(candidate.Name) == name {
 				out = append(out, candidate)
 			}
 		}
@@ -164,7 +182,7 @@ func (m *Model) implicitEndRedefinitions(sym *symbols.Symbol) []*symbols.Symbol 
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
-	if !connectorLike(owner) {
+	if !m.isConnectorLike(owner) {
 		return nil
 	}
 	position := -1
@@ -180,7 +198,7 @@ func (m *Model) implicitEndRedefinitions(sym *symbols.Symbol) []*symbols.Symbol 
 
 	var out []*symbols.Symbol
 	for _, sup := range m.DirectSupertypes(owner) {
-		if !connectorLike(sup) {
+		if !m.isConnectorLike(sup) {
 			continue
 		}
 		supEnds := m.endsOf(sup)
@@ -215,7 +233,7 @@ func declaresEnd(sym *symbols.Symbol) bool {
 // that has too few ends. A connector with no connector-like general — an
 // untyped `connect a to b` — has none: there is nothing to match against.
 func (m *Model) UnmatchedConnectorEnds(sym *symbols.Symbol) (*symbols.Symbol, []*symbols.Symbol) {
-	if !connectorLike(sym) {
+	if !m.isConnectorLike(sym) {
 		return nil, nil
 	}
 	owned := ownedEnds(sym)
@@ -223,7 +241,7 @@ func (m *Model) UnmatchedConnectorEnds(sym *symbols.Symbol) (*symbols.Symbol, []
 		return nil, nil
 	}
 	for _, sup := range m.DirectSupertypes(sym) {
-		if !connectorLike(sup) {
+		if !m.isConnectorLike(sup) {
 			continue
 		}
 		supEnds := m.endsOf(sup)
@@ -248,7 +266,12 @@ func (m *Model) UnmatchedConnectorEnds(sym *symbols.Symbol) (*symbols.Symbol, []
 
 // ConnectorEndCount returns the number of effective ends of the connector sym.
 func (m *Model) ConnectorEndCount(sym *symbols.Symbol) int {
-	return len(m.endsOf(sym))
+	count := len(m.endsOf(sym))
+	if count == 0 && sym != nil && sym.Decl == nil &&
+		m.fqnOf(sym) == binaryConnectorBaseFQN {
+		return len(binaryConnectorEndNames)
+	}
+	return count
 }
 
 // IsConnectorUsage reports whether sym declares a connector usage that joins
@@ -257,7 +280,7 @@ func (m *Model) ConnectorEndCount(sym *symbols.Symbol) int {
 // features its ends attach to, unlike a usage that only holds objects of its
 // own.
 func (m *Model) IsConnectorUsage(sym *symbols.Symbol) bool {
-	if sym == nil || !connectorLike(sym) {
+	if sym == nil || !m.isConnectorLike(sym) {
 		return false
 	}
 	usage, ok := sym.Decl.(*ast.Usage)
@@ -302,7 +325,16 @@ type ConnectorEndAttachment struct {
 // and each of the usage's ends implicitly redefines the one at its position. A
 // binary `interface`, `allocation` or `flow` reaches the same pair through
 // `BinaryInterface`, `Allocation` and `Flow`, which redefine them again.
+// An indexed base retains these two effective ends even without its body.
 var binaryConnectorEndNames = [2]string{"source", "target"}
+
+const binaryConnectorBaseFQN = "Links::BinaryLink"
+
+// IsBinaryConnector reports whether sym conforms to the library's binary-link
+// base, including through cached/index-only specialization edges.
+func (m *Model) IsBinaryConnector(sym *symbols.Symbol) bool {
+	return m != nil && m.conformsByName(sym, binaryConnectorBaseFQN)
+}
 
 // ConnectorEndAttachments returns the ends of the connector usage sym in
 // declaration order, one entry per end of its `connect` clause. It returns
@@ -323,13 +355,34 @@ func (m *Model) ConnectorEndAttachments(sym *symbols.Symbol) []ConnectorEndAttac
 		att := ConnectorEndAttachment{Attachment: end.AttachedTarget(), End: end}
 		switch {
 		case i < len(owned) && owned[i] != nil:
-			att.Name, att.EndFeature = owned[i].Name, owned[i]
+			att.Name, att.EndFeature = leafName(owned[i].Name), owned[i]
 		case i < len(general) && general[i] != nil:
-			att.Name, att.EndFeature = general[i].Name, general[i]
+			att.Name, att.EndFeature = leafName(general[i].Name), general[i]
 		case len(usage.ConnectorEnds) == 2:
 			att.Name = binaryConnectorEndNames[i]
 		}
 		out = append(out, att)
+	}
+	return out
+}
+
+// FlowEndAttachment is one declared from/to target of a flow usage.
+type FlowEndAttachment struct {
+	Attachment ast.Node
+}
+
+// FlowEndAttachments returns the declared from/to targets of a flow usage.
+func (m *Model) FlowEndAttachments(sym *symbols.Symbol) []FlowEndAttachment {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Kind != ast.UsageFlow || usage.Keyword == "message" || usage.FlowEnds == nil {
+		return nil
+	}
+	out := make([]FlowEndAttachment, 0, 2)
+	for _, target := range []ast.Node{usage.FlowEnds.From, usage.FlowEnds.To} {
+		if target == nil {
+			continue
+		}
+		out = append(out, FlowEndAttachment{Attachment: target})
 	}
 	return out
 }
@@ -340,14 +393,17 @@ func (m *Model) ConnectorEndAttachments(sym *symbols.Symbol) []ConnectorEndAttac
 // not enumerable — a library declaration indexed without its body — supplies
 // none.
 func (m *Model) generalConnectorEnds(sym *symbols.Symbol) []*symbols.Symbol {
-	var generals []*symbols.Symbol
+	var generals [][]*symbols.Symbol
 	for _, sup := range m.DirectSupertypes(sym) {
-		if connectorLike(sup) {
-			generals = append(generals, sup)
+		if !m.isConnectorLike(sup) {
+			continue
+		}
+		if ends := m.endsOf(sup); len(ends) > 0 {
+			generals = append(generals, ends)
 		}
 	}
 	if len(generals) != 1 {
 		return nil
 	}
-	return m.endsOf(generals[0])
+	return generals[0]
 }

@@ -103,6 +103,32 @@ func TestParseNaryConnectorEndsKeepsEveryEnd(t *testing.T) {
 	}
 }
 
+func TestParseNaryNamedConnectorEndsKeepReferenceSubsettings(t *testing.T) {
+	u := parseOneMember(t, "allocation a allocate (logical ::> l, physical references p);").(*ast.Usage)
+	if len(u.ConnectorEnds) != 2 {
+		t.Fatalf("expected 2 ends, got %d", len(u.ConnectorEnds))
+	}
+	for i, want := range []struct {
+		name string
+		ref  string
+	}{
+		{name: "logical", ref: "l"},
+		{name: "physical", ref: "p"},
+	} {
+		end := u.ConnectorEnds[i]
+		decl, ok := end.DeclaredName()
+		if !ok || decl.Name != want.name {
+			t.Fatalf("end %d declared name = %#v, %v; want %q", i, decl, ok, want.name)
+		}
+		if len(end.Relationships) != 1 || end.Relationships[0].Kind != ast.RelReferences {
+			t.Fatalf("end %d relationships = %#v, want one references relationship", i, end.Relationships)
+		}
+		if got := ast.SimpleName(end.ReferencedTarget()); got != want.ref {
+			t.Fatalf("end %d reference target = %q, want %q", i, got, want.ref)
+		}
+	}
+}
+
 // A malformed n-ary clause keeps the ends parsed so far and reports, rather
 // than dropping ends silently or panicking.
 func TestParseNaryConnectorEndsMalformedKeepsPartialEnds(t *testing.T) {

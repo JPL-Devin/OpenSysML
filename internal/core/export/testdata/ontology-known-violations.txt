@@ -13,6 +13,7 @@
 # that this tool collapses into the element itself (D3.3). The property name is
 # right; the subject should have been the intervening element.
 domain-mismatch AttributeUsage value             # FeatureValue_value: the feature value is written on the usage instead of a FeatureValue membership
+domain-mismatch ReferenceUsage value             # FeatureValue_value: same collapse on a kindless usage's value
 domain-mismatch AssignmentActionUsage value      # FeatureValue_value: same collapse on an assignment's target value
 domain-mismatch PartUsage lowerBound             # MultiplicityRange_lowerBound: the multiplicity is written on the usage instead of a MultiplicityRange
 domain-mismatch PartUsage upperBound             # MultiplicityRange_upperBound: the multiplicity is written on the usage instead of a MultiplicityRange
@@ -27,11 +28,12 @@ domain-mismatch Import importedNamespace         # NamespaceImport_importedNames
 # an element (D7). D3.1 gives references stable IRIs to point at; emitting them is
 # D7's own work.
 literal-for-object-property AttributeUsage type                                  # Feature_type: the type is written as its name, not as an element IRI
+literal-for-object-property ReferenceUsage type                                  # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property PartUsage type                                       # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property SuccessionAsUsage sourceFeature                      # Connector_sourceFeature: a succession end is written as a name (D2)
 literal-for-object-property urn:opensysml:sysml:InitialNode sourceFeature        # Connector_sourceFeature: a succession end is written as a name (D2)
-literal-for-object-property urn:opensysml:sysml:MultiplicityDeclaration lowerBound # MultiplicityRange_lowerBound: the bound is written as a literal, not as an Expression element (D1)
-literal-for-object-property urn:opensysml:sysml:MultiplicityDeclaration upperBound # MultiplicityRange_upperBound: the bound is written as a literal, not as an Expression element (D1)
+literal-for-object-property FeatureReferenceExpression referent                   # FeatureReferenceExpression_referent: a name resolving outside the graph is written as a name, as every reference this tool cannot link is (D7)
+literal-for-object-property FeatureChainExpression targetFeature                  # FeatureChainExpression_targetFeature: a chained feature is written as a name, since the member reached through the chain is not an element of this graph (D7)
 
 # 3. Metaclass names this tool writes into the SysML namespace that the 202407
 # rendering does not declare at all.
@@ -62,16 +64,18 @@ unknown-class urn:opensysml:sysml:StateRegion -              # a state's region,
 # the elements are materialized (D3.3).
 unknown-property PartDefinition specializes                  # specialization is a Specialization element, not a property
 unknown-property PartUsage subsets                           # subsetting is a Subsetting element, not a property
+unknown-property urn:opensysml:sysml:MultiplicityDeclaration subsets # a MultiplicitySubset's bounds, written the same way as any other subsetting
 unknown-property PartUsage redefines                         # redefinition is a Redefinition element, not a property
 unknown-property SubjectMembership redefines                 # redefinition is a Redefinition element, not a property
 unknown-property ActionUsage references                      # a referenced element is a ReferenceUsage or Membership, not a property
+unknown-property StateUsage references                       # the state an `exhibit` names, referenced the same way
 unknown-property ViewRenderingMembership references          # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:AssumeMember references # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:Alias aliasedElement    # an alias target is a Membership's memberElement, not a property
 unknown-property ActionUsage via                             # the port an accept trigger listens on, which the metamodel reaches through the accept action's parameters
 unknown-property TransitionUsage via                         # the port a transition's trigger listens on, reached the same way
-unknown-property AttributeUsage isAccept                     # notation flag for an accept parameter, no metamodel property
-unknown-property AttributeUsage isResult                     # notation flag for a result parameter, no metamodel property
+unknown-property ReferenceUsage isAccept                     # notation flag for an accept parameter, no metamodel property
+unknown-property ReferenceUsage isResult                     # notation flag for a result parameter, no metamodel property
 unknown-property OccurrenceUsage isSnapshot                  # notation flag for the `snapshot` keyword, no metamodel property
 unknown-property OccurrenceUsage isTimeslice                 # notation flag for the `timeslice` keyword, no metamodel property
 unknown-property PartUsage isChain                           # notation flag for a feature chain, no metamodel property

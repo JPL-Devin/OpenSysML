@@ -21,7 +21,7 @@ func TestWarningSourceIsAWarning(t *testing.T) {
 // submission left an error in the buffer, and that error is not re-echoed.
 func TestEarlierErrorDoesNotSuppressThisSubmission(t *testing.T) {
 	s := NewSession()
-	s.Submit("namespace N { import Missing::X; }")
+	s.Submit("namespace N { private import Missing::X; }")
 	got := strings.Join(renderResult(s.Submit("package P { }"), VerbosityNormal), "\n")
 
 	wants(t, got, "package P")
@@ -32,7 +32,7 @@ func TestEarlierErrorDoesNotSuppressThisSubmission(t *testing.T) {
 // validation tiers, so the confirmation says so rather than reading as a pass.
 func TestBlockedAnalysisIsNotReportedAsClean(t *testing.T) {
 	s := NewSession()
-	s.Submit("namespace N { import Missing::X; }")
+	s.Submit("namespace N { private import Missing::X; }")
 	got := strings.Join(renderResult(s.Submit("package P { }"), VerbosityNormal), "\n")
 	// The blocking error is named by the buffer line it is on, which is what
 	// makes it something to go and fix.
@@ -47,7 +47,7 @@ func TestBlockedAnalysisIsNotReportedAsClean(t *testing.T) {
 // starts blocking the checks.
 func TestBlockingErrorIsNamedOnceNotOnEverySubmission(t *testing.T) {
 	s := NewSession()
-	s.Submit("namespace N { import Missing::X; }")
+	s.Submit("namespace N { private import Missing::X; }")
 	first := strings.Join(renderResult(s.Submit("package P { }"), VerbosityNormal), "\n")
 	wants(t, first, "deeper checks may not have run here")
 
@@ -55,7 +55,7 @@ func TestBlockingErrorIsNamedOnceNotOnEverySubmission(t *testing.T) {
 	rejects(t, again, "deeper checks")
 
 	// A second, different blocker is worth saying, and is counted with the first.
-	s.Submit("namespace M { import Absent::Y; }")
+	s.Submit("namespace M { private import Absent::Y; }")
 	third := strings.Join(renderResult(s.Submit("package R { }"), VerbosityNormal), "\n")
 	wants(t, third, "deeper checks may not have run here", "1 error elsewhere in the buffer")
 }
@@ -65,7 +65,7 @@ func TestBlockingErrorIsNamedOnceNotOnEverySubmission(t *testing.T) {
 // not use up the one warning the standing error gets.
 func TestBlockingErrorIsStillNamedWhenTheNoteWasNotPrinted(t *testing.T) {
 	s := NewSession()
-	s.Submit("namespace N { import Missing::X; }")
+	s.Submit("namespace N { private import Missing::X; }")
 
 	debug := strings.Join(renderResult(s.Submit("package P { }"), VerbosityDebug), "\n")
 	rejects(t, debug, "deeper checks may not have run here")
@@ -76,7 +76,7 @@ func TestBlockingErrorIsStillNamedWhenTheNoteWasNotPrinted(t *testing.T) {
 	// Nor does a submission reporting errors of its own, which is what there is
 	// to read there instead of the note.
 	other := NewSession()
-	other.Submit("namespace N { import Missing::X; }")
+	other.Submit("namespace N { private import Missing::X; }")
 	res := other.Submit("package R { import Gone::Z; }")
 	rejects(t, strings.Join(renderResult(res, VerbosityNormal), "\n"), "deeper checks may not have run here")
 	if key := other.notedBlocker.reportedKey(); key != "" {
@@ -99,7 +99,7 @@ func TestSummaryCoversOnlyThisSubmission(t *testing.T) {
 func TestDiagnosticLinesAreRelativeToTheSubmission(t *testing.T) {
 	s := NewSession()
 	s.Submit("package Earlier {\n}\n")
-	r := s.Submit("namespace N {\n\timport Missing::X;\n}")
+	r := s.Submit("namespace N {\n\tprivate import Missing::X;\n}")
 	got := strings.Join(renderResult(r, VerbosityNormal), "\n")
 
 	wants(t, got, "2:", "Missing::X")
@@ -115,7 +115,7 @@ func TestVerbosityFiltersBySeverity(t *testing.T) {
 	normal := strings.Join(renderResult(NewSession().Submit(warningSrc), VerbosityNormal), "\n")
 	wants(t, normal, "warning:", "package W")
 
-	errored := strings.Join(renderResult(NewSession().Submit("namespace N { import Missing::X; }"), VerbosityQuiet), "\n")
+	errored := strings.Join(renderResult(NewSession().Submit("namespace N { private import Missing::X; }"), VerbosityQuiet), "\n")
 	wants(t, errored, "error:")
 }
 
@@ -123,7 +123,7 @@ func TestVerbosityFiltersBySeverity(t *testing.T) {
 // behind each diagnostic.
 func TestDebugReportsTheWholeBuffer(t *testing.T) {
 	s := NewSession()
-	s.Submit("namespace N {\n\timport Missing::X;\n}")
+	s.Submit("namespace N {\n\tprivate import Missing::X;\n}")
 	got := strings.Join(renderResult(s.Submit("package P { }"), VerbosityDebug), "\n")
 
 	wants(t, got, "[debug]", "Missing::X", "2:")

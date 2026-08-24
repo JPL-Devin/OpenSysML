@@ -41,6 +41,7 @@ The wording is one constant, `export.ExperimentalNotice`.
 | `sysml:` | `https://www.omg.org/spec/SysML#`             | Metaclasses and metamodel properties |
 | `elmt:`  | `urn:sysmlv2:element:`                        | The elements of the converted model |
 | `sysx:`  | `urn:opensysml:sysml:`                        | The few properties the metamodel does not define |
+| `expr:`  | `urn:opensysml:expr:`                         | The expressions an element's positions hold, see [Expressions](#expressions) |
 | `rdf:`, `xsd:` | the standard RDF and XML Schema namespaces | `rdf:type`, literal datatypes |
 
 The `sysml:` vocabulary and the `elmt:` element base match the ones the
@@ -112,8 +113,9 @@ takes it from.
   without the quotes an unrestricted name is written with; a target that is an
   expression rather than a name (a feature chain, say) is carried as the text it
   was written as, typed `sysx:Expression` to tell the two apart.
-- `sysml:lowerBound`, `sysml:upperBound` — multiplicity
-- `sysml:value` — a feature's value
+- `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
+  ([Expressions](#expressions))
+- `sysml:value` — a feature's value, as an expression node
 - `sysml:importedNamespace`, `sysml:aliasedElement`, `sysml:client`,
   `sysml:supplier`, `sysml:body`, `sysml:language`, `sysml:locale`,
   `sysml:annotatedElement`
@@ -127,6 +129,9 @@ The `sysx:` properties:
 | `sysx:sourceText` | The verbatim source of the constructs described under *Limitations*. |
 | `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
+| `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
+| `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
+| `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then part b;`, or a `then` beside an unnamed member). The end is the element itself rather than a name, since there is none to write. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
 | `sysx:isKindImplicit` | The declaration wrote no kind keyword (`in x : Real;`), which takes its kind from its owner. Without it the canonical keyword would come back written out, declaring what the author did not. A kind named in a comment in the head (`in /* attribute */ x : Real;`) is trivia, not a keyword the declaration wrote. |
@@ -142,6 +147,73 @@ standard metaclasses: `sysx:Alias`, `sysx:FilterMember`,
 Comments, documentation and textual representations convert as their own
 elements (`sysml:Comment`, `sysml:Documentation`, `sysml:TextualRepresentation`)
 carrying `sysml:body`.
+
+## Expressions
+
+An expression-valued position — a feature value, a multiplicity bound, a guard,
+a filter, a condition, a send payload, a loop's collection — states the
+expression as a **tree of typed nodes** in the `expr:` namespace, so a consumer
+can query the model's semantics and not only its structure:
+
+```sysml
+package P { attribute a : Integer; attribute total : Integer = a * 2; }
+```
+
+```turtle
+elmt:P__total
+    a sysml:AttributeUsage ;
+    sysml:value expr:P__total.value .
+
+expr:P__total.value
+    a sysml:OperatorExpression ;
+    sysx:sourceText "a * 2" ;
+    sysx:operator "*" ;
+    sysml:argument expr:P__total.value.a0, expr:P__total.value.a1 .
+
+expr:P__total.value.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "a" ;
+    sysml:referent elmt:P__a ;
+    sysx:argumentIndex "0"^^xsd:integer .
+```
+
+The rules the tree follows:
+
+- **A node's IRI is its owner and its position**: `expr:<owner id>.<slot>`, and a
+  nested operand appends its own index (`.a0`, `.a1`). Two expressions of one
+  element therefore never collide, and the IRIs are deterministic, like element
+  IRIs.
+- **Every node carries `sysx:sourceText`**, the notation it was written as. The
+  tree is *additive*: the text is what a conversion back to notation is written
+  from, so exactness does not depend on the tree being complete, and
+  `TestRoundTripIsLossless` covers the same round trip it did before.
+- **Operands are ordered** by `sysx:argumentIndex`, because an RDF graph is a set
+  and `a - b` is not `b - a`.
+- **Metaclasses are the standard ones** where the metamodel names them:
+  `LiteralBoolean`, `LiteralInteger`, `LiteralRational`, `LiteralString`,
+  `LiteralInfinity`, `NullExpression`, `FeatureReferenceExpression`,
+  `FeatureChainExpression`, `OperatorExpression`, `InvocationExpression`,
+  `CollectExpression`, `SelectExpression`, `ConstructorExpression`,
+  `MetadataAccessExpression`, `Expression` for a body. `sysx:operator`,
+  `sysx:argumentIndex` and `sysx:sourceText` are the properties the metamodel
+  does not define.
+- **A feature reference links to the element** it names (`sysml:referent`) when
+  that element is in the graph, and carries its name as a literal when it
+  resolves outside it — the same rule the declaration-head relationships follow.
+- **An expression node is not a model element.** It has no
+  `sysml:qualifiedName` and no `sysml:owningNamespace`, and reading a graph back
+  never turns one into a declaration.
+- **A graph from another tool is read from its structure** when it carries no
+  `sysx:sourceText`: the supported shapes above are written back as notation, and
+  a shape this mapping cannot write — a missing operator, an operand count an
+  operator does not take, a literal with no value — is reported as unsupported
+  naming the node, never guessed.
+- **Older graphs still read.** A position holding a plain literal
+  (`sysml:value "1200.0"`), which is what releases before this wrote, is read as
+  that notation.
+
+Tests: `w6g4_rdf_expr_test.go` (structure, ordering, per-position identity,
+legacy literals, foreign trees, unsupported shapes, round-trip exactness).
 
 ## Behavior
 
@@ -176,9 +248,9 @@ A state's members are held in the AST in one bucket per kind (entry, do, exit,
 defer, substates, regions); they are written back in the order they were
 declared, taken from their source spans, so `do` before `entry` stays that way.
 
-The conditions and expressions these nodes carry are notation, as everywhere
-else in this mapping, so they convert back exactly but SPARQL cannot see inside
-them.
+The conditions and expressions these nodes carry are expression trees, like
+every other expression-valued position ([Expressions](#expressions)): they
+convert back exactly *and* SPARQL can see inside them.
 
 What is still refused, with the node named:
 
@@ -203,11 +275,13 @@ documented limitation, not a silent one: converting an affected element from a
 graph that lacks the text reports an error naming the element rather than
 guessing.
 
-**Expressions are carried as source text.** Feature values, multiplicity
-bounds, filter conditions, constraint conditions and succession guards are
-stored as their notation (`sysml:value "1200.0"`) rather than decomposed into
-expression trees. They convert back exactly and a consumer reading model
-structure is unaffected, but SPARQL cannot see inside them.
+**An expression tree is not the metamodel's own expression model.** Feature
+values, multiplicity bounds, filter and constraint conditions and guards are
+expression trees ([Expressions](#expressions)), which is queryable, but the
+nodes are not `Feature`s owned through `FeatureMembership`s the way the abstract
+syntax models an expression; the notation each node was written as is what a
+conversion back is written from. A consumer wanting the metamodel's own shape
+does not get it from this mapping.
 
 **Lexical comments do not survive the RDF hop.** `//` and `/* */` trivia is
 attached to no element, so a `notation → RDF → notation` round trip drops it:
@@ -225,15 +299,68 @@ The `comment` and `doc` keywords declare elements, so they convert both ways.
 Save straight to `.sysml` when the trivia matters — that path writes the source
 and keeps everything.
 
-**Declaration heads that bind ends are carried as `sysx:sourceText`.** A
-`connect`, `bind`, `flow`, `succession`, `transition`, `accept` or `satisfy`
-declaration has a head whose participants are not reconstructible from the
-properties above, so the head is kept verbatim alongside its structural
-properties. These round-trip exactly through OpenSysML. A graph produced by
-*another* tool will not carry the text, and converting such an element to
-notation then reports it as unsupported.
+### End-binding heads
 
-**A `then` succession carries its two ends.** Every `then` is one node naming
+**A head that binds ends states the form it writes them in.** A `connect`,
+`bind`, `flow`, `succession`, `transition`, `accept` or `satisfy` declaration is
+carried as `sysx:sourceText` — the exact text is what a save writes back — and
+beside it as the structure the head states: its ends, and `sysx:endForm`, the
+notation those ends are written in. The form is what makes the head
+reconstructible without the text, so a graph from another tool converts to
+notation as well:
+
+```turtle
+elmt:P__Car___402
+    a sysml:ConnectionUsage ;
+    sysx:sourceText "connect left to right;" ;
+    sysx:endForm "to" ;
+    sysx:relatedFeature expr:P__Car___402.end0, expr:P__Car___402.end1 .
+
+expr:P__Car___402.end0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "left" ;
+    sysml:referent elmt:P__Car__left ;
+    sysx:endIndex "0"^^xsd:integer .
+```
+
+`sysx:relatedFeature` points at one expression node per end, each carrying
+`sysx:endIndex` and — for a flow — `sysx:endRole` (`source`, `target`,
+`payload`). The forms and what each writes:
+
+| `sysx:endForm` | Notation | Head |
+|----------------|----------|------|
+| `to` | `<end0> to <end1, …>` | `connect a to b`, `allocate a to b` |
+| `nary` | `(<end0>, <end1>, …)` | `connect (a, b, c)` |
+| `equals` | `<end0> = <end1>` | `bind a = b` |
+| `firstThen` | `<end0> then <end1>` | `succession first a then b` |
+| `fromTo` | `[of <payload>] from <end0> to <end1>` | `flow of P from a to b` |
+| `flowTo` | `[of <payload>] <end0> to <end1>` | `flow a to b` |
+| `satisfy` | `<requirement>` (the `sysml:subsets` end, written bare) | `satisfy R by v`, `verify R` |
+| `then` | the source end is the member written before it | `then b;`, `then part b;` |
+
+A head whose own keyword is the noun form writes a verb ahead of its ends, and
+that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
+is a synonym of the kind's — `verify` for a satisfy, `allocate` for an
+allocation — it is carried as `sysx:declaredKeyword`, as elsewhere.
+
+**The form is only stated when rebuilding it reproduces the head as written.**
+The encoder writes the ends back from `sysx:endForm` and compares them with the
+source before recording it, so a head this mapping cannot rebuild exactly
+carries no form and stays readable as text alone. Those are the heads that state
+more than their ends: an end with a multiplicity or a `references` clause, an
+inline payload declaration (`flow of x : P from a to b`), a satisfy that
+declares a name of its own (`satisfy s : R by v`), or any head with a body.
+Converting such an element from a graph that carries no `sysx:sourceText` is
+reported, not guessed. A graph that relates ends and states no form at all is
+reported the same way (`export_test.go:TestEndsWithoutTheirFormAreReported`).
+
+Tests: `export_test.go:TestEndBindingHeadsComeBackFromTheGraphAlone` and
+`TestBehavioralHeadsComeBackFromTheGraphAlone` strip `sysx:sourceText` from the
+graph, write the notation back from the mapping alone, and convert it again —
+the second graph must equal the first, which is what proves the second hop loses
+nothing. `TestBindingEndsAreStatedAsStructure` covers the ends themselves.
+
+**A `then` succession carries its two ends.** Every `then` is one node stating
 the members it sequences, whether it was written as its own member (`then a b;`)
 or attached to one (`then action b : B;`, which the parser desugars to the same
 edge), so the order a model declares survives the hop:
@@ -241,22 +368,31 @@ edge), so the order a model declares survives the hop:
 ```turtle
 elmt:P__Move___402
     a sysml:SuccessionAsUsage ;
-    sysml:sourceFeature elmt:P__Move__a ;
-    sysml:targetFeature elmt:P__Move__c .
+    sysx:endForm "then" ;
+    sysml:targetFeature elmt:P__Move__c ;
+    sysx:sourceMember elmt:P__Move__a .
 ```
 
-Converting that back writes `then a c;`, which sequences the same pair wherever
-the two members are declared — member order alone would not have carried it
-(`export_test.go:TestSuccessionRoundTrips`). Every body that can carry a
-succession — definition, usage, action, state (a region included), calculation
-and requirement — reads that form back as the same node, so a second conversion
-yields the same graph (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
+A `then` that names neither end writes `sysx:sourceMember` and
+`sysx:targetMember` instead: the member it sequences is the element, since the
+notation states no name for it. That is what carries a `then` beside a member
+the notation leaves unnamed (`then send Show(x) to screen;`, a state's
+`entry; then s1;`) — the shape the parser used to warn about
+(`unnamed-succession-end`) and the encoder used to refuse. Both ends are
+positions in one body, so writing them back is exact: the source end is the
+member before the succession, and a target that *is* that preceding member is
+the declaration the `then` was written ahead of. A graph stating a position the
+notation cannot express — sequencing from a member elsewhere in the body — is
+reported rather than written back somewhere else
+(`export_test.go:TestUnnamedSuccessionEndComesBackFromTheGraph`,
+`TestHalfNamedSuccessionInAGraphIsReported`).
 
-A `then` beside a member with no name (`then send Show(x) to screen;`) declares
-an order these ends cannot name. The parser warns (`unnamed-succession-end`) and
-records no edge, so the conversion carries the members without it; an edge that
-reaches the encoder naming only one end is reported rather than written back —
-see [Behavior](#behavior) for that boundary.
+Every body that can carry a succession — definition, usage, action, state (a
+region included), calculation and requirement — reads these forms back as the
+same node, so a second conversion yields the same graph
+(`export_test.go:TestSuccessionRoundTripsInEveryBody`). The two-name form
+(`then a b;`) reads only basic names, so a succession naming an end that needs
+quotes is reported rather than written as notation the parser rejects.
 
 **Two keyword prefixes are normalized away.** `variant` and `include` prefix a
 kind keyword the AST records on its own, and the prefix is not recorded, so

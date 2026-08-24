@@ -37,54 +37,54 @@ package Trade {
 
 	analysis def Bounded {
 		attribute size : Integer;
-		require constraint { size >= 3 }
-		require constraint { size <= 9 }
+		assert constraint { size >= 3 }
+		assert constraint { size <= 9 }
 		objective smallest : MinimizeObjective { attribute :>> best = size; }
 	}
 
 	analysis def Widest {
 		attribute size : Integer;
-		require constraint { size <= 9 }
+		assert constraint { size <= 9 }
 		objective largest : MaximizeObjective {
 			attribute :>> best = size;
-			require constraint { size >= 0 }
+			assert constraint { size >= 0 }
 		}
 	}
 
 	analysis def Unbounded {
 		attribute size : Integer;
-		require constraint { size >= 3 }
+		assert constraint { size >= 3 }
 		objective largest : MaximizeObjective { attribute :>> best = size; }
 	}
 
 	analysis def Impossible {
 		attribute size : Integer;
-		require constraint { size >= 9 }
-		require constraint { size <= 3 }
+		assert constraint { size >= 9 }
+		assert constraint { size <= 3 }
 		objective smallest : MinimizeObjective { attribute :>> best = size; }
 	}
 
 	analysis def Ordered {
 		attribute cost : Integer;
 		attribute margin : Integer;
-		require constraint { cost >= 3 and cost <= 9 }
-		require constraint { margin >= 0 and margin <= cost }
+		assert constraint { cost >= 3 and cost <= 9 }
+		assert constraint { margin >= 0 and margin <= cost }
 		objective cheapest : MinimizeObjective { attribute :>> best = cost; }
 		objective widest : MaximizeObjective { attribute :>> best = margin; }
 	}
 
 	analysis def OpenBound {
 		attribute margin : Real;
-		require constraint { margin >= 0.0 }
-		require constraint { margin < 10.5 }
+		assert constraint { margin >= 0.0 }
+		assert constraint { margin < 10.5 }
 		objective widest : MaximizeObjective { attribute :>> best = margin; }
 	}
 
 	analysis def Nonlinear {
 		attribute a : Real;
 		attribute b : Real;
-		require constraint { a >= 1.0 and a <= 4.0 }
-		require constraint { b >= 1.0 and b <= 4.0 }
+		assert constraint { a >= 1.0 and a <= 4.0 }
+		assert constraint { b >= 1.0 and b <= 4.0 }
 		objective gain : MaximizeObjective { attribute :>> best = a * b; }
 	}
 
@@ -92,13 +92,13 @@ package Trade {
 
 	analysis def Undirected {
 		attribute size : Integer;
-		require constraint { size >= 1 }
+		assert constraint { size >= 1 }
 		objective goal : FitsWell { attribute :>> best = size; }
 	}
 
 	analysis def NoObjective {
 		attribute size : Integer;
-		require constraint { size >= 1 }
+		assert constraint { size >= 1 }
 	}
 }
 `

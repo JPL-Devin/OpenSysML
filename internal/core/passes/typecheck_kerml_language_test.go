@@ -15,7 +15,7 @@ import (
 func diagsIn(t *testing.T, name, src, diagSource string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New(name, []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument(name, root)
 	var out []Diagnostic
 	for _, d := range Analyze(name, root, nil, idx) {
@@ -134,6 +134,7 @@ func TestIsTypeKindIsAnAllowlist(t *testing.T) {
 	for _, k := range []symbols.SymbolKind{
 		symbols.SymbolKerMLType, symbols.SymbolPartDef, symbols.SymbolMetaclass,
 		symbols.SymbolAttributeUsage, symbols.SymbolConnectorEnd,
+		symbols.SymbolSatisfyRequirementUsage,
 	} {
 		if !isTypeKind(k) {
 			t.Errorf("%s: expected a type", k)
@@ -148,7 +149,7 @@ func TestIsTypeKindIsAnAllowlist(t *testing.T) {
 			t.Errorf("%s: expected not a type", k)
 		}
 	}
-	if n := symbols.SymbolKerMLType + 1; isTypeKind(n) {
+	if n := symbols.SymbolSatisfyRequirementUsage + 1; isTypeKind(n) {
 		t.Errorf("an unenumerated kind (%d) must not be a type", n)
 	}
 }

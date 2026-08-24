@@ -150,10 +150,14 @@ func (s *Session) viewRenderer() (*view.Renderer, error) {
 	model := semantics.NewModel(resolver)
 	resolver.SetModel(model)
 	var text view.SourceText
-	if doc := s.ws.Document(docName); doc != nil {
-		sf := source.New(docName, doc.Content)
+	if docs := s.sessionDocs(); len(docs) > 0 {
+		files := make(map[string]*source.SourceFile, len(docs))
+		for _, doc := range docs {
+			files[doc.Name] = source.New(doc.Name, doc.Content)
+		}
 		text = func(name string, span source.Span) string {
-			if name != docName {
+			sf, ok := files[name]
+			if !ok {
 				return ""
 			}
 			return sf.Text(span)
@@ -312,8 +316,8 @@ func (r *reportRuntime) runtime() (*runtime.Context, error) {
 	if err := ctx.SetBudgets(r.session.budgets); err != nil {
 		return nil, err
 	}
-	if doc := r.session.ws.Document(docName); doc != nil {
-		ctx.RegisterSource(source.New(docName, doc.Content))
+	for _, doc := range r.session.sessionDocs() {
+		ctx.RegisterSource(source.New(doc.Name, doc.Content))
 	}
 	// Recorded like the session's own evaluation, so a trace does not depend on
 	// which objects the report had to materialize.

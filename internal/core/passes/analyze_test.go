@@ -14,14 +14,22 @@ func analyzeInputs(t *testing.T, name, src string) (*ast.RootNamespace, []Diagno
 	sf := source.New(name, []byte(src))
 	p := parser.New(sf)
 	root := p.ParseFile()
-	parseDiags := make([]Diagnostic, 0, len(p.Diagnostics))
+	// The warnings carry their own code, as the workspace maps them, since a pass
+	// may read what the parser recovered (see keywordNameSpans).
+	parseDiags := make([]Diagnostic, 0, len(p.Diagnostics)+len(p.Warnings))
 	for _, d := range p.Diagnostics {
 		parseDiags = append(parseDiags, Diagnostic{
 			Severity: SeverityError, Span: d.Span, Message: d.Message,
 			Code: "syntax", Source: "syntax",
 		})
 	}
-	idx := symbols.NewIndexFromDoc(name, root)
+	for _, w := range p.Warnings {
+		parseDiags = append(parseDiags, Diagnostic{
+			Severity: SeverityWarning, Span: w.Span, Message: w.Message,
+			Code: w.Code, Source: "syntax",
+		})
+	}
+	idx := newTestIndexFromDoc(name, root)
 	return root, parseDiags, idx
 }
 

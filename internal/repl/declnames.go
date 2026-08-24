@@ -54,6 +54,8 @@ func memberName(m ast.Node) string {
 		return d.Ident.Name
 	case *ast.Alias:
 		return d.Ident.Name
+	case *ast.RelationshipMember:
+		return d.Ident.Name
 	case *ast.Definition:
 		return d.Ident.Name
 	case *ast.Usage:

@@ -117,7 +117,7 @@ func (s *Session) reopenedNamespaces(key string, root *ast.RootNamespace) []drop
 		if len(shared) == 0 {
 			continue
 		}
-		snRoot := parser.New(source.New(docName, []byte(sn.src))).ParseFile()
+		snRoot := parser.New(source.New(parseDocName(sn.origin), []byte(sn.src))).ParseFile()
 		for _, name := range shared {
 			if _, ok := namedNamespaceIn(sn.src, snRoot, name); ok {
 				reopened[name] = true

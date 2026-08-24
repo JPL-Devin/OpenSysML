@@ -1,0 +1,31 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="VerifyAndSuccessionBody" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="MassRequirement"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Specification"
+          (Membership visibility="default"
+            (Usage kind="requirement" name="vehicleMassRequirement" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=MassRequirement
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="verification case" abstract=false variation=false name="MassTest"
+          (Membership visibility="default"
+            (Usage kind="part" name="vehicleSpecification" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Specification
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="objective" name="massObjective" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="verify"
+                (Relationship kind="subsets" target=vehicleSpecification.vehicleMassRequirement
+                  (*ast.QualifiedName))
+                (Documentation locale=""))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Sequence"
+          (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Usage kind="action" name="starting" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (InitialNode name="a" successor="")
+          (SuccessionEdge source="a" target="starting"
+            (Membership visibility="default"
+              (Documentation locale=""))))))))

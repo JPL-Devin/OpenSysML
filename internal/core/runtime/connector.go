@@ -284,6 +284,11 @@ func (ctx *Context) anonymousConnectors(typeSym *symbols.Symbol) []*symbols.Symb
 	}
 	var out []*symbols.Symbol
 	for _, decl := range append([]*symbols.Symbol{typeSym}, ctx.model.AllSupertypes(typeSym)...) {
+		// A library supertype states the metamodel frame every element
+		// specializes, not the model's own connections.
+		if decl != typeSym && ctx.libraryDeclared(decl) {
+			continue
+		}
 		for _, member := range declMembers(decl.Decl) {
 			usage, ok := member.(*ast.Usage)
 			if !ok || usage.Ident.Name != "" || usage.Ident.ShortName != "" {

@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // TestUnimplementedOperatorReportsWhy requires an operator the runtime does not
 // evaluate to say what it would need, rather than failing as "unsupported".
 func TestUnimplementedOperatorReportsWhy(t *testing.T) {
-	const src = `calc def classify { in n : Integer; return : Boolean = n hastype Integer; }`
+	const src = `calc def classify { in n : Integer; return : Boolean = n as Integer; }`
 
 	model, resolver, root := parseAndBuildModel(t, src)
 	ctx := NewContext(model, resolver, 1000)
@@ -24,6 +25,117 @@ func TestUnimplementedOperatorReportsWhy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "runtime type") {
 		t.Fatalf("InvokeCalc: %v does not say what classification would need", err)
+	}
+}
+
+func TestTypeClassificationOperators(t *testing.T) {
+	tests := []struct {
+		expr string
+		want bool
+	}{
+		{"n7 istype Integer", true},
+		{"n7 hastype Integer", true},
+		{"n7 istype Real", true},
+		{"n7 hastype Real", false},
+		{"n7 istype Natural", false},
+		{"nat3 istype Integer", true},
+		{"nat3 hastype Integer", true},
+		{"test::car hastype Car", true},
+		{"r25 istype Integer", false},
+		{"test::car hastype Vehicle", false},
+		{`str istype String`, true},
+		{"n7 istype String", false},
+		{"3 istype Integer", true},
+		{"3 istype Real", true},
+		{"seqInt istype Integer", true},
+		{`(1, "a") istype Integer`, false},
+		{"test::none istype Integer", true},
+		{"test::car istype Car", true},
+		{"test::car istype Vehicle", true},
+		{"test::sys istype Car", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.expr, func(t *testing.T) {
+			got, err := evalTypeClassificationExpr(t, tt.expr)
+			if err != nil {
+				t.Fatalf("%s: %v", tt.expr, err)
+			}
+			if got != tt.want {
+				t.Errorf("%s = %v, want %v", tt.expr, got, tt.want)
+			}
+		})
+	}
+}
+
+func evalTypeClassificationExpr(t *testing.T, expr string) (bool, error) {
+	t.Helper()
+	const prefix = `package test {
+		item def Real;
+		item def Integer :> Real;
+		item def Natural :> Integer;
+		item def Boolean;
+		item def String;
+		part def Vehicle;
+		part def Car :> Vehicle;
+		part def Sys;
+		attribute n7 : Integer = 7;
+		attribute nat3 : Natural = 3;
+		attribute r25 : Real = 2.5;
+		attribute str : String = "s";
+		attribute seqInt : Integer[*] = (1, 2, 3);
+		attribute none : Integer[0..1];
+		part car : Car;
+		part sys : Sys;
+		attribute result = `
+	model, resolver, root := parseAndBuildModel(t, prefix+expr+`; }`)
+	pkg := resolveSymbol(t, root, "test")
+	result := resolveSymbol(t, pkg.Scope, "result")
+	decl := result.Decl.(*ast.Usage)
+	value, err := NewEvalContext(NewContext(model, resolver, 10000), pkg.Scope).Eval(decl.Value)
+	if err != nil {
+		return false, err
+	}
+	if value.Kind != ValConst || value.Const.Kind != semantics.ValBool {
+		t.Fatalf("%s = %v, want Boolean", expr, value)
+	}
+	return value.Const.Bool, nil
+}
+
+func TestTypeClassificationFollowsSelectedVariant(t *testing.T) {
+	const src = `
+		part def Vehicle;
+		variation part choice : Vehicle {
+			variant part car : Vehicle;
+		}
+		part def Garage {
+			part chosen : Vehicle = choice::car;
+		}
+		part garage : Garage;
+		attribute exact = garage.chosen hastype choice::car;
+		attribute declared = garage.chosen hastype Vehicle;
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+	for _, tt := range []struct {
+		name string
+		want bool
+	}{
+		{name: "exact", want: true},
+		{name: "declared", want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sym := resolveSymbol(t, root, tt.name)
+			value, err := ctx.Eval(sym.Decl.(*ast.Usage).Value)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if value.Kind != ValConst || value.Const.Kind != semantics.ValBool {
+				t.Fatalf("value = %v, want Boolean", value)
+			}
+			if value.Const.Bool != tt.want {
+				t.Errorf("value = %v, want %v", value.Const.Bool, tt.want)
+			}
+		})
 	}
 }
 

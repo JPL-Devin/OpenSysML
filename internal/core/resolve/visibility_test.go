@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // ident is a throwaway AST node used only as a memo key for ResolveName.
@@ -179,16 +178,12 @@ func TestCyclicMembershipImportsTerminate(t *testing.T) {
 	}
 }
 
-// The same, for symbols restored from the library cache: they carry no scope, so
-// a wildcard import enumerates them through the index alone.
-func TestNamespaceImportSkipsAPrivatelyImportedCachedName(t *testing.T) {
-	idx := symbols.NewIndex()
-	idx.AddRecords("lib", []symbols.RecordEntry{
-		{FQN: "Base", Kind: symbols.SymbolPackage},
-		{FQN: "Base::Hidden", Kind: symbols.SymbolPartDef},
-		{FQN: "Mid", Kind: symbols.SymbolPackage, WildcardImports: []symbols.WildcardImport{
-			{Target: "Base", Private: true},
-		}},
+// The same, for library content a model imports: a wildcard import of a library
+// namespace does not re-export what that namespace imported privately.
+func TestNamespaceImportSkipsAPrivatelyImportedLibraryName(t *testing.T) {
+	idx := libraryIndexOf(t, map[string]string{
+		"base.sysml": "package Base { part def Hidden; }",
+		"mid.sysml":  "package Mid { private import Base::*; }",
 	})
 	idx.AddDocument("app.sysml", parsedRoot(t, "app.sysml", "package App { import Mid::*; }"))
 	idx.ExpandWildcardImports()
@@ -200,14 +195,20 @@ func TestNamespaceImportSkipsAPrivatelyImportedCachedName(t *testing.T) {
 	}
 }
 
-func TestQualifiedAccessIgnoresPrivate(t *testing.T) {
+// A qualified name reaches a namespace's visible memberships only, so a private
+// member is unreachable through one: the pilot rejects `A::X` for a private X
+// with "Couldn't resolve reference to Classifier 'A::X'" (KerML 8.2.3.5).
+func TestQualifiedAccessSkipsPrivate(t *testing.T) {
 	idx := indexOf(t, map[string]string{
-		"lib.sysml": "package Lib { private namespace Sec; }",
+		"lib.sysml": "package Lib { private namespace Sec; public namespace Open; }",
 	})
 	root := idx.DocumentRoot("lib.sysml")
 
 	r := New(idx)
-	if _, ok := r.ResolveQualified(root, qn(false, "Lib", "Sec")); !ok {
-		t.Fatalf("expected qualified path Lib::Sec to resolve even though Sec is private")
+	if sym, ok := r.ResolveQualified(root, qn(false, "Lib", "Sec")); ok {
+		t.Errorf("Lib::Sec resolved to %q, want unresolved: Sec is private", sym.Name)
+	}
+	if _, ok := r.ResolveQualified(root, qn(false, "Lib", "Open")); !ok {
+		t.Error("Lib::Open did not resolve, want the public member reachable")
 	}
 }

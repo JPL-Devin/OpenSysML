@@ -27,6 +27,11 @@ class EditFailure(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     EDIT_FAILURE_RENAME_REFERENCED: _ClassVar[EditFailure]
     EDIT_FAILURE_OVERLAPPING_EDITS: _ClassVar[EditFailure]
     EDIT_FAILURE_RESULT_INVALID: _ClassVar[EditFailure]
+    EDIT_FAILURE_OWNER_UNKNOWN: _ClassVar[EditFailure]
+    EDIT_FAILURE_OWNER_NOT_NAMESPACE: _ClassVar[EditFailure]
+    EDIT_FAILURE_ILLEGAL_KIND: _ClassVar[EditFailure]
+    EDIT_FAILURE_MEMBER_NAME_TAKEN: _ClassVar[EditFailure]
+    EDIT_FAILURE_DELETE_REFERENCED: _ClassVar[EditFailure]
 
 class PrimitiveOperator(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -55,6 +60,11 @@ EDIT_FAILURE_NOT_NAMED: EditFailure
 EDIT_FAILURE_RENAME_REFERENCED: EditFailure
 EDIT_FAILURE_OVERLAPPING_EDITS: EditFailure
 EDIT_FAILURE_RESULT_INVALID: EditFailure
+EDIT_FAILURE_OWNER_UNKNOWN: EditFailure
+EDIT_FAILURE_OWNER_NOT_NAMESPACE: EditFailure
+EDIT_FAILURE_ILLEGAL_KIND: EditFailure
+EDIT_FAILURE_MEMBER_NAME_TAKEN: EditFailure
+EDIT_FAILURE_DELETE_REFERENCED: EditFailure
 PRIMITIVE_OPERATOR_UNSPECIFIED: PrimitiveOperator
 PRIMITIVE_OPERATOR_EQUAL: PrimitiveOperator
 PRIMITIVE_OPERATOR_GREATER: PrimitiveOperator
@@ -184,14 +194,18 @@ class CalcOutput(_message.Message):
     def __init__(self, name: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ...) -> None: ...
 
 class ParseFileRequest(_message.Message):
-    __slots__ = ("file_path", "content", "content_hash")
+    __slots__ = ("file_path", "content", "content_hash", "language", "strict_conformance")
     FILE_PATH_FIELD_NUMBER: _ClassVar[int]
     CONTENT_FIELD_NUMBER: _ClassVar[int]
     CONTENT_HASH_FIELD_NUMBER: _ClassVar[int]
+    LANGUAGE_FIELD_NUMBER: _ClassVar[int]
+    STRICT_CONFORMANCE_FIELD_NUMBER: _ClassVar[int]
     file_path: str
     content: str
     content_hash: str
-    def __init__(self, file_path: _Optional[str] = ..., content: _Optional[str] = ..., content_hash: _Optional[str] = ...) -> None: ...
+    language: str
+    strict_conformance: bool
+    def __init__(self, file_path: _Optional[str] = ..., content: _Optional[str] = ..., content_hash: _Optional[str] = ..., language: _Optional[str] = ..., strict_conformance: _Optional[bool] = ...) -> None: ...
 
 class ParseFileResponse(_message.Message):
     __slots__ = ("model_hash", "root", "diagnostics", "error")
@@ -414,12 +428,42 @@ class ApplyEditsRequest(_message.Message):
     def __init__(self, model_hash: _Optional[str] = ..., operations: _Optional[_Iterable[_Union[EditOperation, _Mapping]]] = ...) -> None: ...
 
 class EditOperation(_message.Message):
-    __slots__ = ("set_value", "rename")
+    __slots__ = ("set_value", "rename", "add_member", "delete")
     SET_VALUE_FIELD_NUMBER: _ClassVar[int]
     RENAME_FIELD_NUMBER: _ClassVar[int]
+    ADD_MEMBER_FIELD_NUMBER: _ClassVar[int]
+    DELETE_FIELD_NUMBER: _ClassVar[int]
     set_value: SetValueEdit
     rename: RenameEdit
-    def __init__(self, set_value: _Optional[_Union[SetValueEdit, _Mapping]] = ..., rename: _Optional[_Union[RenameEdit, _Mapping]] = ...) -> None: ...
+    add_member: AddMemberEdit
+    delete: DeleteEdit
+    def __init__(self, set_value: _Optional[_Union[SetValueEdit, _Mapping]] = ..., rename: _Optional[_Union[RenameEdit, _Mapping]] = ..., add_member: _Optional[_Union[AddMemberEdit, _Mapping]] = ..., delete: _Optional[_Union[DeleteEdit, _Mapping]] = ...) -> None: ...
+
+class AddMemberEdit(_message.Message):
+    __slots__ = ("owner", "kind", "name", "type", "multiplicity", "value", "specializes")
+    OWNER_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    MULTIPLICITY_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    SPECIALIZES_FIELD_NUMBER: _ClassVar[int]
+    owner: str
+    kind: str
+    name: str
+    type: str
+    multiplicity: str
+    value: str
+    specializes: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, owner: _Optional[str] = ..., kind: _Optional[str] = ..., name: _Optional[str] = ..., type: _Optional[str] = ..., multiplicity: _Optional[str] = ..., value: _Optional[str] = ..., specializes: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class DeleteEdit(_message.Message):
+    __slots__ = ("target", "cascade")
+    TARGET_FIELD_NUMBER: _ClassVar[int]
+    CASCADE_FIELD_NUMBER: _ClassVar[int]
+    target: str
+    cascade: bool
+    def __init__(self, target: _Optional[str] = ..., cascade: _Optional[bool] = ...) -> None: ...
 
 class SetValueEdit(_message.Message):
     __slots__ = ("target", "value")
@@ -470,7 +514,7 @@ class AppliedEdit(_message.Message):
     def __init__(self, operation_index: _Optional[int] = ..., target: _Optional[str] = ..., offset: _Optional[int] = ..., length: _Optional[int] = ..., old_text: _Optional[str] = ..., new_text: _Optional[str] = ...) -> None: ...
 
 class SymbolInfo(_message.Message):
-    __slots__ = ("id", "name", "kind", "metadata", "child_ids", "attributes", "type_info", "multiplicity", "specializations")
+    __slots__ = ("id", "name", "kind", "metadata", "child_ids", "attributes", "type_info", "multiplicity", "specializations", "withheld_library_attributes")
     class MetadataEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -487,6 +531,7 @@ class SymbolInfo(_message.Message):
     TYPE_INFO_FIELD_NUMBER: _ClassVar[int]
     MULTIPLICITY_FIELD_NUMBER: _ClassVar[int]
     SPECIALIZATIONS_FIELD_NUMBER: _ClassVar[int]
+    WITHHELD_LIBRARY_ATTRIBUTES_FIELD_NUMBER: _ClassVar[int]
     id: str
     name: str
     kind: str
@@ -496,7 +541,8 @@ class SymbolInfo(_message.Message):
     type_info: TypeInfo
     multiplicity: MultiplicityInfo
     specializations: _containers.RepeatedCompositeFieldContainer[Specialization]
-    def __init__(self, id: _Optional[str] = ..., name: _Optional[str] = ..., kind: _Optional[str] = ..., metadata: _Optional[_Mapping[str, str]] = ..., child_ids: _Optional[_Iterable[str]] = ..., attributes: _Optional[_Iterable[_Union[AttributeInfo, _Mapping]]] = ..., type_info: _Optional[_Union[TypeInfo, _Mapping]] = ..., multiplicity: _Optional[_Union[MultiplicityInfo, _Mapping]] = ..., specializations: _Optional[_Iterable[_Union[Specialization, _Mapping]]] = ...) -> None: ...
+    withheld_library_attributes: int
+    def __init__(self, id: _Optional[str] = ..., name: _Optional[str] = ..., kind: _Optional[str] = ..., metadata: _Optional[_Mapping[str, str]] = ..., child_ids: _Optional[_Iterable[str]] = ..., attributes: _Optional[_Iterable[_Union[AttributeInfo, _Mapping]]] = ..., type_info: _Optional[_Union[TypeInfo, _Mapping]] = ..., multiplicity: _Optional[_Union[MultiplicityInfo, _Mapping]] = ..., specializations: _Optional[_Iterable[_Union[Specialization, _Mapping]]] = ..., withheld_library_attributes: _Optional[int] = ...) -> None: ...
 
 class Specialization(_message.Message):
     __slots__ = ("kind", "declared", "target_id", "target_kind")
@@ -655,12 +701,14 @@ class ServerInfoResponse(_message.Message):
     def __init__(self, version: _Optional[str] = ..., capabilities: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class QueryRequest(_message.Message):
-    __slots__ = ("model_hash", "query")
+    __slots__ = ("model_hash", "query", "oslc_query")
     MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
     QUERY_FIELD_NUMBER: _ClassVar[int]
+    OSLC_QUERY_FIELD_NUMBER: _ClassVar[int]
     model_hash: str
     query: Query
-    def __init__(self, model_hash: _Optional[str] = ..., query: _Optional[_Union[Query, _Mapping]] = ...) -> None: ...
+    oslc_query: str
+    def __init__(self, model_hash: _Optional[str] = ..., query: _Optional[_Union[Query, _Mapping]] = ..., oslc_query: _Optional[str] = ...) -> None: ...
 
 class QueryResponse(_message.Message):
     __slots__ = ("elements",)

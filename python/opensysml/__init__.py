@@ -31,6 +31,8 @@ from opensysml.errors import (
     EditError, EditResultError, EditTargetError, ExecutionError,
     FeatureValueError, InvalidEditError, NoEditsError, OverlappingEditsError,
     RenameReferencedError,
+    OwnerNotFoundError, OwnerNotNamespaceError, IllegalMemberKindError,
+    MemberNameTakenError, DeleteReferencedError,
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
     ServiceTimeoutError, StaleServiceError, SymbolNotFoundError,
@@ -53,6 +55,8 @@ __all__ = [
     "ConversionError", "ExecutionError", "FeatureValueError",
     "EditError", "NoEditsError", "EditTargetError", "InvalidEditError",
     "RenameReferencedError", "OverlappingEditsError", "EditResultError",
+    "OwnerNotFoundError", "OwnerNotNamespaceError", "IllegalMemberKindError",
+    "MemberNameTakenError", "DeleteReferencedError",
     "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
     "ServiceError", "ServiceTimeoutError", "StaleServiceError",
@@ -60,7 +64,7 @@ __all__ = [
     "TypeMismatchError", "UnpinnedReleaseError",
     "UnsupportedOperationError", "UnsupportedValueError",
     "WrongKindError",
-    "load", "connect", "convert",
+    "load", "loads", "connect", "convert",
     # "eval" is deprecated in favour of "evaluate", so it is not exported.
     "evaluate", "instantiate",
     "DEFAULT_PORT", "split_target",
@@ -109,7 +113,22 @@ def _get_default_connection(host='localhost', port=None):
     return _default_connection
 
 
-def load(file_path, host='localhost', port=None, strict=False):
+def loads(content, host='localhost', port=None, language=None, strict=False,
+          strict_conformance=False):
+    """Parse inline SysML or KerML content using the default connection."""
+    connection = (
+        _get_default_connection()
+        if host == 'localhost' and port is None
+        else _get_default_connection(host, port)
+    )
+    return connection.load_from_content(
+        content, strict=strict, language=language,
+        strict_conformance=strict_conformance
+    )
+
+
+def load(file_path, host='localhost', port=None, strict=False,
+         strict_conformance=False):
     """Load a SysML model from file using the default connection.
     
     Convenience function that uses a module-level singleton connection.
@@ -120,6 +139,8 @@ def load(file_path, host='localhost', port=None, strict=False):
         port (int, optional): Service port (default: 50051)
         strict (bool): Refuse a model the service reported errors for, rather
             than returning one whose lookups fail later
+        strict_conformance (bool): Ask whether the file is conforming SysML v2:
+            notation only OpenSysML accepts is an error, not a warning
     
     Returns:
         Model: Parsed model object
@@ -131,7 +152,8 @@ def load(file_path, host='localhost', port=None, strict=False):
         ValueError: If host names a port that is unreadable or disagrees with port
     """
     conn = _get_default_connection(host, port)
-    return conn.load(file_path, strict=strict)
+    return conn.load(file_path, strict=strict,
+                     strict_conformance=strict_conformance)
 
 
 def connect(host='localhost', port=None, auto_start=True, version=None,

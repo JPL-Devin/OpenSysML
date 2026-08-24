@@ -22,6 +22,11 @@ type exprChecker struct {
 	// chaining guards the type of a feature read through a chain against a
 	// feature whose value names itself, directly or through another feature.
 	chaining map[*symbols.Symbol]bool
+	// walkMembers checks the declarations an expression body owns, which are
+	// members of the body's own scope (F64); bodiesChecked keeps one body from
+	// being checked twice when its type is inferred more than once.
+	walkMembers   func(*symbols.Scope, []ast.Node)
+	bodiesChecked map[*ast.BodyExpr]bool
 }
 
 func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
@@ -109,10 +114,28 @@ func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context st
 		return
 	}
 	got := ec.infer(scope, n)
-	if got == semantics.PrimUnknown || got == semantics.PrimBoolean {
+	if got == semantics.PrimBoolean {
+		return
+	}
+	if got == semantics.PrimUnknown {
+		ec.checkNonScalarCondition(scope, n, context)
 		return
 	}
 	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, got)
+}
+
+// checkNonScalarCondition reports a condition naming a feature typed by
+// something no Boolean can come from: a part, an item, an enumeration.
+func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, context string) {
+	typeSym := ec.valueTypeSymbol(scope, n)
+	if typeSym == nil {
+		typeSym = ec.invocationResultTypeSymbol(scope, n)
+	}
+	if typeSym == nil || !ec.isDefinitelyNonBehavior(typeSym) ||
+		ec.model.CouldHold(typeSym, semantics.PrimBoolean) {
+		return
+	}
+	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, typeSym.Name)
 }
 
 // infer returns the scalar type of an expression, checking its operands on the
@@ -283,6 +306,7 @@ func (ec *exprChecker) inferCollect(scope *symbols.Scope, e *ast.CollectExpr) se
 func (ec *exprChecker) inferSelect(scope *symbols.Scope, e *ast.SelectExpr) semantics.PrimType {
 	ec.infer(scope, e.Operand)
 	if body, ok := e.Body.(*ast.BodyExpr); ok && body.Result != nil {
+		ec.checkBodyMembers(scope, body)
 		ec.checkBoolean(ec.bodyScope(scope, body), body.Result, "select predicate")
 		return semantics.PrimUnknown
 	}
@@ -294,6 +318,7 @@ func (ec *exprChecker) inferSelect(scope *symbols.Scope, e *ast.SelectExpr) sema
 // checking that result in the scope the body's parameters are declared in.
 func (ec *exprChecker) inferBody(scope *symbols.Scope, e *ast.BodyExpr) semantics.PrimType {
 	inner := ec.bodyScope(scope, e)
+	ec.checkBodyMembers(scope, e)
 	for i := range e.Params {
 		ec.infer(scope, e.Params[i].Value)
 	}
@@ -311,6 +336,21 @@ func (ec *exprChecker) bodyScope(scope *symbols.Scope, body *ast.BodyExpr) *symb
 		return nil
 	}
 	return symbols.BodyExprScope(scope, body)
+}
+
+// checkBodyMembers types the declarations an expression body owns, once per
+// body, in the scope they are members of.
+func (ec *exprChecker) checkBodyMembers(scope *symbols.Scope, body *ast.BodyExpr) {
+	if ec.walkMembers == nil || body == nil || len(body.Members) == 0 {
+		return
+	}
+	if ec.bodiesChecked == nil {
+		ec.bodiesChecked = make(map[*ast.BodyExpr]bool)
+	} else if ec.bodiesChecked[body] {
+		return
+	}
+	ec.bodiesChecked[body] = true
+	ec.walkMembers(ec.bodyScope(scope, body), body.Members)
 }
 
 func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedName) semantics.PrimType {
@@ -576,7 +616,19 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 		return semantics.PrimUnknown
 	}
 	sym = resolved
-	if !isBehaviorKind(sym.Kind) {
+	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
+		if ec.isDefinitelyNonBehavior(sym) {
+			ec.diags = append(ec.diags, Diagnostic{
+				Severity: SeverityError,
+				Span:     e.Type.Span(),
+				Message:  "Must invoke a behavior or a behavioral feature",
+				Code:     "invocation-not-behavior",
+				Source:   "type",
+			})
+		}
+		return semantics.PrimUnknown
+	}
+	if isInvocationBehaviorKind(sym.Kind) && !isBehaviorKind(sym.Kind) {
 		return semantics.PrimUnknown
 	}
 	params, ok := ec.effectiveInParameters(sym)
@@ -641,14 +693,106 @@ func (ec *exprChecker) checkArguments(
 	}
 }
 
-// isBehaviorKind reports whether a symbol is a calc or action, the invocable
-// kinds whose parameter lists the checker understands.
+// isBehaviorKind reports the behavior kinds whose parameter lists are checked.
 func isBehaviorKind(k symbols.SymbolKind) bool {
 	switch k {
-	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage, symbols.SymbolActionDef, symbols.SymbolActionUsage:
+	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage,
+		symbols.SymbolActionDef, symbols.SymbolActionUsage:
 		return true
 	}
 	return false
+}
+
+func isInvocationBehaviorKind(k symbols.SymbolKind) bool {
+	switch k {
+	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage,
+		symbols.SymbolActionDef, symbols.SymbolActionUsage,
+		symbols.SymbolConstraintDef, symbols.SymbolConstraintUsage,
+		symbols.SymbolStateDef, symbols.SymbolStateUsage:
+		return true
+	}
+	return false
+}
+
+func (ec *exprChecker) isInvocationBehavior(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) bool {
+	if sym == nil || visiting[sym] {
+		return false
+	}
+	if isInvocationBehaviorKind(sym.Kind) || isBehaviorDeclaration(sym.Decl) {
+		return true
+	}
+	if sym.Decl == nil {
+		return false
+	}
+	visiting[sym] = true
+	defer delete(visiting, sym)
+
+	typed := make([]*symbols.Symbol, 0, 1)
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
+			continue
+		}
+		target, ok := ec.resolver.ResolveTarget(sym.OwnerScope, rel.Target)
+		if !ok || target == nil {
+			return false
+		}
+		typed = append(typed, target)
+	}
+	if len(typed) != 1 {
+		return false
+	}
+	return ec.isInvocationBehavior(typed[0], visiting)
+}
+
+func isBehaviorDeclaration(decl ast.Node) bool {
+	switch d := decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefBehavior || d.Kind == ast.DefState ||
+			d.Kind == ast.DefPredicate || d.Kind == ast.DefConstraint
+	case *ast.Usage:
+		switch d.Kind {
+		case ast.UsageBehavior, ast.UsageState, ast.UsagePredicate,
+			ast.UsageExpr, ast.UsageConstraint:
+			return true
+		}
+	}
+	return false
+}
+
+func (ec *exprChecker) isDefinitelyNonBehavior(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if isInvocationBehaviorKind(sym.Kind) || isBehaviorDeclaration(sym.Decl) {
+		return false
+	}
+	if isRequirementDeclaration(sym.Decl) {
+		return false
+	}
+	if sym.Decl != nil {
+		switch sym.Decl.(type) {
+		case *ast.Definition, *ast.Usage:
+			return true
+		}
+	}
+	switch sym.Kind {
+	case symbols.SymbolUnknown, symbols.SymbolKerMLType,
+		symbols.SymbolRequirementDef, symbols.SymbolRequirementUsage:
+		return false
+	default:
+		return true
+	}
+}
+
+func isRequirementDeclaration(decl ast.Node) bool {
+	switch d := decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefRequirement
+	case *ast.Usage:
+		return d.Kind == ast.UsageRequirement
+	default:
+		return false
+	}
 }
 
 // parameter is one `in` parameter of an invoked behavior together with the

@@ -1,6 +1,7 @@
 {
 	"rpc": "GetSymbol",
 	"symbol_id": "demo::Car",
+	"min_withheld_library_attributes": 1,
 	"expected_attribute_names": [
 		"mass",
 		"wheels",

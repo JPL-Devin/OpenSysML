@@ -8,10 +8,42 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-// atName reports whether the current token can begin a name segment.
+// atName reports whether the current token can begin a name segment. A keyword
+// of the *other* language is an ordinary name: Xtext reserves a literal only
+// inside the grammar declaring it, and the two grammars share only
+// KerMLExpressions.xtext (`part chains : T;` is a SysML part named `chains`).
 func (p *Parser) atName() bool {
-	k := p.peek().Kind
-	return k == lexer.Identifier || k == lexer.UnrestrictedName
+	t := p.peek()
+	switch t.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		return !p.reservedWord(t.KeywordID)
+	}
+	return false
+}
+
+// reservedWord reports whether the word is a literal of this file's grammar,
+// and so cannot spell a name in it.
+func (p *Parser) reservedWord(w string) bool {
+	kind := p.src.Kind()
+	if kind == source.KindUnknown {
+		// A buffer with no model extension is read as SysML, as the
+		// nonstandard-notation pass already reads it.
+		kind = source.KindSysML
+	}
+	return lexer.IsKeywordIn(w, kind)
+}
+
+// nameToken reports whether a consumed token spells a declaration's name.
+func (p *Parser) nameToken(t lexer.Token) bool {
+	switch t.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		return !p.reservedWord(t.KeywordID)
+	}
+	return false
 }
 
 // atNameOrKeyword reports whether the current token can begin a name segment,
@@ -184,9 +216,39 @@ func (p *Parser) parseIdentificationStopping(stop ...string) ast.Identification 
 			return id
 		}
 		// Any other keyword here is the name the author meant, so it is read as
-		// one rather than dropped. SysML reserves it though (KerML §7.2.4): only
-		// an unrestricted name may spell a keyword.
-		p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw), codeReservedKeywordName)
+		// one rather than dropped. Only a word this language reserves needs the
+		// quotes of an unrestricted name to spell it (KerML §7.2.4).
+		if p.reservedWord(kw) {
+			p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw), codeReservedKeywordName)
+		}
+	}
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
+		id.Name = seg.Text
+		id.NameSpan = seg.Span
+	}
+	return id
+}
+
+// parseAnnotationIdentification parses the identification of a comment,
+// documentation or representation. Its /* */ body ends the identification, so a
+// name after that body belongs to the next member: `doc <a> /* ... */ feature q;`.
+func (p *Parser) parseAnnotationIdentification() ast.Identification {
+	if !p.at(lexer.Lt) {
+		return p.parseIdentification()
+	}
+	var id ast.Identification
+	ltOff := p.peek().Span.Offset
+	p.advance() // <
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
+		id.ShortName = seg.Text
+		id.ShortNameSpan = seg.Span
+	} else {
+		p.error(p.peek().Span, "expected short name after '<'")
+	}
+	p.expect(lexer.Gt, "expected '>'")
+	p.peek() // force any trailing comment into the pending body
+	if p.pendingCommentAfter(ltOff) {
+		return id
 	}
 	if seg, ok := p.parseNameSegmentRelaxed(); ok {
 		id.Name = seg.Text
@@ -228,6 +290,12 @@ func (p *Parser) parseMember() ast.Node {
 		al.SetLeadingTrivia(trivia)
 		return al
 	}
+	if p.atKeyword("disjoint") {
+		return p.parseDisjointMember(start, vis, trivia)
+	}
+	if p.atRelationshipMember() {
+		return p.parseRelationshipMember(start, vis, trivia)
+	}
 
 	// A namespace member may be a succession stated without its keyword
 	// (SysML v2 8.2.2.13.3): `first a::b then c;`, whose ends are qualified
@@ -254,6 +322,15 @@ func (p *Parser) parseMember() ast.Node {
 // Returns the parsed node if successful, nil if current position doesn't start a declaration.
 // Uses backtracking to avoid consuming tokens on failure.
 func (p *Parser) tryParseDeclaration() ast.Node {
+	// In a statement position `name = expr;` is an assignment shorthand,
+	// not a keyword-less usage; leave it to the caller.
+	if p.atName() {
+		switch p.peekN(1).Kind {
+		case lexer.Eq, lexer.ColonEq:
+			return nil
+		}
+	}
+
 	start := p.peek().Span.Offset
 	cp := p.checkpoint()
 
@@ -288,13 +365,21 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseComment(start)
 	case p.atKeyword("doc"):
 		return p.parseDocumentation(start)
-	case p.atKeyword("rep"), p.atKeyword("language"):
+	case p.atTextualRepresentationStart():
 		return p.parseTextualRepresentation(start)
 	case p.atKeyword("multiplicity"):
 		return p.parseMultiplicityDecl(start)
 	case p.atKeyword("filter"):
 		return p.parseFilter(start)
+	case p.atKeyword("locale"):
+		// An anonymous comment carrying a locale (SysML.xtext Comment: the
+		// `comment` keyword is optional).
+		return p.parseAnonymousLocaleComment(start)
 	case p.atDefUsageStart():
+		return p.parseDefUsage(start)
+	case p.atKeywordlessFeature():
+		// A feature declared with no keyword: `T1 = 10.0;`, `a : Integer;`,
+		// `p5[1] : Real;`, `x;` (KerML.xtext Feature, SysML DefaultReferenceUsage).
 		return p.parseDefUsage(start)
 	case p.at(lexer.At):
 		// A metadata usage is a namespace member as much as it is a body member.
@@ -309,6 +394,9 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		}
 		if p.leadingPrefixIsNamespace() {
 			return p.parseNamespace(start)
+		}
+		if p.leadingPrefixIsDependency() {
+			return p.parseDependency(start)
 		}
 		if p.leadingPrefixIsDefUsage() {
 			return p.parseDefUsage(start)
@@ -459,11 +547,19 @@ func (p *Parser) expectCommentBody(start int) source.Span {
 	return p.spanFrom(start)
 }
 
+// pendingCommentAfter reports whether the pending /* */ comment starts at or
+// after off, i.e. belongs to the element being parsed rather than an earlier one.
+func (p *Parser) pendingCommentAfter(off int) bool {
+	return p.hasPendingComment && p.pendingComment.Offset >= off
+}
+
 func (p *Parser) parseComment(start int) ast.Node {
 	p.advance() // 'comment'
 	c := &ast.Comment{}
-	if p.atName() && !p.atKeyword("about") && !p.atKeyword("locale") {
-		c.Ident = p.parseIdentification()
+	// An identification may be a short name alone: `comment <c> /* ... */`. A name
+	// after the body belongs to the next member, not to this comment.
+	if (p.atName() || p.at(lexer.Lt)) && !p.atKeyword("about") && !p.atKeyword("locale") && !p.pendingCommentAfter(start) {
+		c.Ident = p.parseAnnotationIdentification()
 	}
 	if p.acceptKeyword("about") {
 		c.About = p.parseQualifiedNameList()
@@ -478,14 +574,27 @@ func (p *Parser) parseComment(start int) ast.Node {
 	return c
 }
 
+// parseAnonymousLocaleComment parses `locale "en_US" /* ... */`, a Comment
+// whose optional `comment` keyword is omitted (SysML.xtext:86).
+func (p *Parser) parseAnonymousLocaleComment(start int) ast.Node {
+	p.advance() // 'locale'
+	c := &ast.Comment{}
+	if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
+		c.Locale = p.src.Text(tok.Span)
+	}
+	c.BodySpan = p.expectCommentBody(start)
+	c.NodeSpan = p.spanFrom(start)
+	return c
+}
+
 func (p *Parser) parseDocumentation(start int) ast.Node {
 	p.advance() // 'doc'
 	d := &ast.Documentation{}
 
 	// Parse optional identification only if there's no pending comment
 	// Pattern: `doc name /* comment */` vs `doc /* comment */` (comment belongs to doc, not name)
-	if p.atName() && !p.atKeyword("locale") && !p.hasPendingComment {
-		d.Ident = p.parseIdentification()
+	if (p.atName() || p.at(lexer.Lt)) && !p.atKeyword("locale") && !p.pendingCommentAfter(start) {
+		d.Ident = p.parseAnnotationIdentification()
 	}
 	if p.acceptKeyword("locale") {
 		if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
@@ -565,10 +674,26 @@ func (p *Parser) parseImportTail(imp *ast.Import) {
 		}
 	}
 
-	if p.at(lexer.LBracket) {
+	// A filter package takes one or more filter members (KerML.xtext
+	// FilterPackage:200); they select conjunctively, so they combine with `and`.
+	for p.at(lexer.LBracket) {
+		start := p.peek().Span.Offset
+		if imp.FilterExpr != nil {
+			start = imp.FilterExpr.Span().Offset
+		}
 		p.advance() // consume '['
-		imp.FilterExpr = p.ParseExpression()
+		expr := p.ParseExpression()
 		p.expect(lexer.RBracket, "expected ']' after import filter expression")
+		if imp.FilterExpr == nil {
+			imp.FilterExpr = expr
+			continue
+		}
+		and := &ast.OperatorExpr{
+			Operator: ast.OpConditionalAnd,
+			Operands: []ast.Node{imp.FilterExpr, expr},
+		}
+		and.NodeSpan = p.spanFrom(start)
+		imp.FilterExpr = and
 	}
 }
 
@@ -733,6 +858,12 @@ func (p *Parser) leadingPrefixIsNamespace() bool {
 	return t.Kind == lexer.Keyword && t.KeywordID == "namespace"
 }
 
+// A dependency takes prefix metadata like any element (SysML.xtext:55-57).
+func (p *Parser) leadingPrefixIsDependency() bool {
+	t := p.peekN(p.prefixLookahead())
+	return t.Kind == lexer.Keyword && t.KeywordID == "dependency"
+}
+
 func (p *Parser) leadingPrefixIsDefUsage() bool {
 	i := p.prefixLookahead() // skip past all #QualifiedName prefixes
 	t := p.peekN(i)
@@ -748,8 +879,13 @@ func (p *Parser) leadingPrefixIsDefUsage() bool {
 	if t.KeywordID == "def" {
 		return true // explicit 'def' after prefixes
 	}
-	_, isDef := definitionKindKeywords[t.KeywordID]
-	_, isUsage := usageKindKeywords[t.KeywordID]
+	// `#M connect a to b;` — `connect` begins an anonymous connection usage
+	// without being a kind keyword (SysML.xtext ConnectionUsage).
+	if t.KeywordID == "connect" {
+		return true
+	}
+	_, isDef := p.definitionKind(t.KeywordID)
+	_, isUsage := p.usageKind(t.KeywordID)
 	return isDef || isUsage
 }
 
@@ -763,18 +899,25 @@ func (p *Parser) parseFilter(start int) ast.Node {
 	return f
 }
 
-// parseMultiplicityDecl parses `multiplicity <id> [range] ;|{ members }`.
-// Declares a named multiplicity range (e.g., exactlyOne [1..1]).
+// parseMultiplicityDecl parses the two Multiplicity forms of KerML.xtext:754 —
+// `multiplicity <id> [range] ;|{ members }` (a MultiplicityRange, e.g.
+// exactlyOne [1..1]) and `multiplicity <id> subsets f ;|{ members }` (a
+// MultiplicitySubset, which states its bounds by subsetting another
+// multiplicity instead of writing them).
 func (p *Parser) parseMultiplicityDecl(start int) ast.Node {
 	p.advance() // multiplicity
 
 	// Parse identification (name)
 	ident := p.parseIdentification()
 
-	// Parse optional multiplicity range [lower..upper]
 	var mult *ast.Multiplicity
-	if p.at(lexer.LBracket) {
+	var subsets *ast.QualifiedName
+	switch {
+	case p.at(lexer.LBracket):
 		mult = p.parseMultiplicity()
+	case p.at(lexer.ColonGt) || p.atKeyword("subsets"):
+		p.advance() // ':>' or 'subsets'
+		subsets = p.parseQualifiedName()
 	}
 
 	// Parse body or semicolon
@@ -783,6 +926,7 @@ func (p *Parser) parseMultiplicityDecl(start int) ast.Node {
 	md := &ast.MultiplicityDecl{
 		Ident:   ident,
 		Range:   mult,
+		Subsets: subsets,
 		Members: members,
 		HasBody: hasBody,
 	}

@@ -60,8 +60,10 @@ func TestRedefinitionThroughAliasSupertype(t *testing.T) {
 	}
 }
 
-// Redeclaring an inherited name is a conflict, unless the declaration redefines or
-// subsets what it shares the name with (SysML v2 §7.6.1).
+// Redeclaring an inherited name is indistinguishable from it unless the
+// declaration redefines what it shares the name with: a redefined feature is no
+// longer inherited (SysML v2 §7.6.1, KerML §7.2.2). Reference subsetting keeps
+// it, so the reference reports the duplicate there — matched runs, w6c.
 func TestRedeclaringAnInheritedNameConflictsUnlessItRedefines(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -70,7 +72,8 @@ func TestRedeclaringAnInheritedNameConflictsUnlessItRedefines(t *testing.T) {
 	}{
 		{"plain redeclaration", "part wheel;", true},
 		{"redefinition", "part wheel :>> wheel;", false},
-		{"reference", "ref part wheel references wheel;", false},
+		{"reference", "ref part wheel references wheel;", true},
+		{"subsetting", "part wheel :> wheel;", true},
 		{"another name", "part spare;", false},
 	} {
 		r, _, _ := resolvedDoc(t, `package P {
@@ -81,9 +84,27 @@ func TestRedeclaringAnInheritedNameConflictsUnlessItRedefines(t *testing.T) {
 		if got := len(conflicts) != 0; got != tc.conflict {
 			t.Errorf("%s: name conflict reported = %v, want %v (%v)", tc.name, got, tc.conflict, r.Diagnostics)
 		}
-		if len(conflicts) != 0 && !strings.Contains(conflicts[0].Message, "Vehicle::wheel") {
+		if len(conflicts) != 0 && !strings.Contains(conflicts[0].Message, "'wheel' from Vehicle") {
 			t.Errorf("%s: conflict message %q does not name the inherited feature", tc.name, conflicts[0].Message)
 		}
+	}
+}
+
+// A same-named explicit redefinition resolves against the inherited feature,
+// not the member that borrows its name (KerML 8.3.3.1, 8.4.3.2).
+func TestSameNamedRedefinitionReachesInheritedFeature(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def Vehicle {
+			attribute mass;
+			attribute dryMass;
+		}
+		part vehicle_b : Vehicle {
+			attribute mass redefines mass;
+			attribute dryMass redefines dryMass;
+		}
+	}`)
+	if conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict); len(conflicts) != 0 {
+		t.Fatalf("conflicts = %v, want same-named redefinitions to remove their inherited features", conflicts)
 	}
 }
 
@@ -144,6 +165,107 @@ func TestInheritedMembersThroughGeneralFeature(t *testing.T) {
 				t.Fatalf("resolution diagnostics: %v", r.Diagnostics)
 			}
 		})
+	}
+}
+
+// A name inherited from two supertypes at once is ambiguous with no member of
+// the subtype at fault, so the reference reports it on the subtype itself
+// (SysML v2 §7.6.1) — matched run, w6c.
+func TestNameInheritedFromTwoSupertypesIsReportedOnTheSubtype(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def L1 { attribute p; }
+		part def R1 { attribute p; }
+		part def D2 :> L1, R1;
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 {
+		t.Fatalf("conflicts = %v, want one for the diamond-inherited name", r.Diagnostics)
+	}
+	if want := "Duplicate of inherited member name 'p' from L1, R1"; conflicts[0].Message != want {
+		t.Errorf("message = %q, want %q", conflicts[0].Message, want)
+	}
+	if !conflicts[0].Warning {
+		t.Error("the diamond conflict is an error, want a warning")
+	}
+}
+
+// A supertype's non-private imports are memberships it has, so a subtype
+// inherits the imported names too (KerML §8.4.3.2) — Xpect
+// ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.
+func TestNameImportedByASupertypeIsInherited(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		visibility string
+		conflict   bool
+	}{
+		{"public import", "public ", true},
+		{"private import", "private ", false},
+	} {
+		r, _, _ := resolvedDoc(t, `package P {
+			package Outer { part def B; }
+			part def Inner { `+tc.visibility+`import Outer::*; }
+			part def Sub :> Inner { part B; }
+		}`)
+		conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+		if !tc.conflict {
+			if len(conflicts) != 0 {
+				t.Errorf("%s: conflicts = %v, want none", tc.name, conflicts)
+			}
+			continue
+		}
+		if len(conflicts) != 1 {
+			t.Fatalf("%s: conflicts = %v, want one for the inherited import", tc.name, r.Diagnostics)
+		}
+		if want := "Duplicate of inherited member name 'B' from Outer"; conflicts[0].Message != want {
+			t.Errorf("%s: message = %q, want %q", tc.name, conflicts[0].Message, want)
+		}
+	}
+}
+
+// A feature an intermediate supertype redefines is still inherited by that
+// supertype's own subtypes under its name, so redeclaring it there conflicts.
+func TestNameRedefinedByAnIntermediateSupertypeStillConflicts(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def B { attribute p; }
+		part def M :> B { attribute :>> p; }
+		part def D :> M { attribute p; }
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 {
+		t.Fatalf("conflicts = %v, want one for the name M redefines", r.Diagnostics)
+	}
+	if want := "Duplicate of inherited member name 'p' from M"; conflicts[0].Message != want {
+		t.Errorf("message = %q, want %q", conflicts[0].Message, want)
+	}
+}
+
+// A parameter inherited twice under one name is one feature when the owner of
+// one specializes the owner of the other, which implicitly redefines it —
+// matched run, w6c.
+func TestParameterInheritedThroughItsOwnSupertypeIsNotAmbiguous(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		action def A { in p; }
+		action def Outer { action a : A { in p; } }
+		action def Sub :> Outer { action :>> a : A; }
+	}`)
+	if conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict); len(conflicts) != 0 {
+		t.Errorf("conflicts = %v, want none for the implicitly redefined parameter", conflicts)
+	}
+}
+
+// Two parameters of unrelated supertypes are still ambiguous — matched run.
+func TestParameterInheritedFromTwoUnrelatedSupertypesIsAmbiguous(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		action def L { in p; }
+		action def R { in p; }
+		action def D :> L, R;
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 {
+		t.Fatalf("conflicts = %v, want one for the diamond-inherited parameter", r.Diagnostics)
+	}
+	if want := "Duplicate of inherited member name 'p' from L, R"; conflicts[0].Message != want {
+		t.Errorf("message = %q, want %q", conflicts[0].Message, want)
 	}
 }
 

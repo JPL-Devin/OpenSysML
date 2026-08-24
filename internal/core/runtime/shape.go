@@ -72,8 +72,9 @@ func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
 
 // buildFeatures constructs the effective-feature list by walking the type hierarchy.
 func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
-	// Collect all members (local + inherited) using semantics.MembersOf
-	allMembers := ctx.model.MembersOf(typeSym)
+	// Redefined features stay in the shape: a redefinition shares its target's
+	// feature value, which both names read (see subsetting_test.go).
+	allMembers := ctx.model.MembersOfIncludingRedefined(typeSym)
 
 	// Track which features to keep (deduplication by name: last declarator wins per masking/redefinition)
 	featureMap := make(map[string]EffectiveFeature)
@@ -89,6 +90,11 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 
 		// Only include features (attributes, parts, etc.)
 		if !isFeature(memberSym) {
+			continue
+		}
+		// A library-declared feature belongs to the metamodel frame every element
+		// specializes, not to the object the model asked for.
+		if ctx.libraryDeclared(memberSym) {
 			continue
 		}
 		// A variant is a choice offered for its variation, not a feature of the

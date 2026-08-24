@@ -28,17 +28,17 @@ const libraryModel = `package Sweep {
 	calc def Doubled { in x : ScalarValues::Real; return : ScalarValues::Real = x * 2; }
 }`
 
-// prewarmedService returns a service whose index pool is full, so a request
-// takes a prewarmed index rather than building one.
-func prewarmedService(t *testing.T, cacheSize, poolSize int) *Service {
+// prewarmedService returns a service whose shared library index is built, so a
+// request is handed an overlay over it rather than building the library.
+func prewarmedService(t *testing.T, cacheSize int) *Service {
 	t.Helper()
-	t.Setenv(IndexPoolEnvVar, fmt.Sprint(poolSize))
+	t.Setenv(IndexPrewarmEnvVar, "4")
 	svc := mustNewService(t, cacheSize)
 	svc.Prewarm()
 	deadline := time.Now().Add(2 * time.Minute)
-	for svc.libIndexes.warm() < poolSize {
+	for !svc.libIndexes.ready() {
 		if time.Now().After(deadline) {
-			t.Fatalf("pool warmed only %d of %d indexes", svc.libIndexes.warm(), poolSize)
+			t.Fatal("the shared library index never built")
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
@@ -92,11 +92,13 @@ func lookupLines(idx *symbols.Index) []string {
 	return out
 }
 
-// TestPooledIndexMatchesFreshlyBuiltIndex proves prewarming does not change what
-// a model resolves against: the same model analysed through a prewarmed index and
-// through one built on the request path produces the same diagnostics, the same
-// root, and the same qualified lookups over the whole index.
-func TestPooledIndexMatchesFreshlyBuiltIndex(t *testing.T) {
+// TestSharedIndexMatchesFreshlyBuiltIndex proves the shared library index does
+// not change what a model resolves against: the same model analysed over a
+// prewarmed shared base and over a library built on the request path produces
+// the same diagnostics, the same root, and the same qualified lookups over the
+// whole index — including what each name resolves to and whether it is library
+// content.
+func TestSharedIndexMatchesFreshlyBuiltIndex(t *testing.T) {
 	demo, err := os.ReadFile("../../examples/combined-behavioral-demo.sysml")
 	if err != nil {
 		t.Fatalf("read demo model: %v", err)
@@ -107,38 +109,38 @@ func TestPooledIndexMatchesFreshlyBuiltIndex(t *testing.T) {
 		"parse_errors":       "package Broken { part def (((;",
 	}
 
-	pooled := prewarmedService(t, 10, 4)
-	defer pooled.Close()
+	shared := prewarmedService(t, 10)
+	defer shared.Close()
 
-	// A pool of no indexes is the pre-pool path: every request builds its own.
-	t.Setenv(IndexPoolEnvVar, "0")
+	// Prewarming off is the path where the request itself builds the library.
+	t.Setenv(IndexPrewarmEnvVar, "0")
 	inline := mustNewService(t, 10)
 	defer inline.Close()
 
 	for name, content := range models {
 		t.Run(name, func(t *testing.T) {
-			pooledResp, pooledModel := parseContent(t, pooled, content)
+			sharedResp, sharedModel := parseContent(t, shared, content)
 			inlineResp, inlineModel := parseContent(t, inline, content)
 
-			if pooledResp.ModelHash != inlineResp.ModelHash {
-				t.Fatalf("model hash differs: %s vs %s", pooledResp.ModelHash, inlineResp.ModelHash)
+			if sharedResp.ModelHash != inlineResp.ModelHash {
+				t.Fatalf("model hash differs: %s vs %s", sharedResp.ModelHash, inlineResp.ModelHash)
 			}
-			if got, want := diagLines(pooledResp.Diagnostics), diagLines(inlineResp.Diagnostics); !equalLines(got, want) {
-				t.Errorf("diagnostics differ:\npooled: %v\ninline: %v", got, want)
+			if got, want := diagLines(sharedResp.Diagnostics), diagLines(inlineResp.Diagnostics); !equalLines(got, want) {
+				t.Errorf("diagnostics differ:\nshared: %v\ninline: %v", got, want)
 			}
-			if (pooledResp.Root == nil) != (inlineResp.Root == nil) {
-				t.Fatalf("root differs: pooled %v, inline %v", pooledResp.Root, inlineResp.Root)
+			if (sharedResp.Root == nil) != (inlineResp.Root == nil) {
+				t.Fatalf("root differs: shared %v, inline %v", sharedResp.Root, inlineResp.Root)
 			}
-			if pooledResp.Root != nil {
-				pooledKids := append([]string(nil), pooledResp.Root.ChildIds...)
+			if sharedResp.Root != nil {
+				sharedKids := append([]string(nil), sharedResp.Root.ChildIds...)
 				inlineKids := append([]string(nil), inlineResp.Root.ChildIds...)
-				sort.Strings(pooledKids)
+				sort.Strings(sharedKids)
 				sort.Strings(inlineKids)
-				if !equalLines(pooledKids, inlineKids) {
-					t.Errorf("root children differ:\npooled: %v\ninline: %v", pooledKids, inlineKids)
+				if !equalLines(sharedKids, inlineKids) {
+					t.Errorf("root children differ:\nshared: %v\ninline: %v", sharedKids, inlineKids)
 				}
 			}
-			if got, want := lookupLines(pooledModel.Index), lookupLines(inlineModel.Index); !equalLines(got, want) {
+			if got, want := lookupLines(sharedModel.Index), lookupLines(inlineModel.Index); !equalLines(got, want) {
 				t.Errorf("qualified lookups differ: %s", firstDifference(got, want))
 			}
 		})
@@ -174,12 +176,12 @@ func firstDifference(a, b []string) string {
 	return "no difference"
 }
 
-// TestParseFileServesModelsFromThePrewarmedPool is the regression guard against
-// going back to loading the standard library on the request path: with the pool
-// warm, no cache miss builds an index itself.
-func TestParseFileServesModelsFromThePrewarmedPool(t *testing.T) {
-	const models = 4
-	svc := prewarmedService(t, 10, models)
+// TestParseFileServesEveryModelFromOneLibraryIndex is the regression guard
+// against going back to a library index per model: many cache misses build the
+// library once between them and share it.
+func TestParseFileServesEveryModelFromOneLibraryIndex(t *testing.T) {
+	const models = 8
+	svc := prewarmedService(t, 10)
 	defer svc.Close()
 
 	for i := 0; i < models; i++ {
@@ -187,18 +189,21 @@ func TestParseFileServesModelsFromThePrewarmedPool(t *testing.T) {
 	}
 
 	stats := svc.libIndexes.snapshot()
+	if stats.Built != 1 {
+		t.Errorf("%d models built %d library indexes, want 1 (stats %+v)", models, stats.Built, stats)
+	}
 	if stats.Inline != 0 {
 		t.Errorf("%d of %d models loaded the library on the request path, want 0 (stats %+v)", stats.Inline, models, stats)
 	}
-	if stats.Pooled != models {
-		t.Errorf("served %d models from the pool, want %d (stats %+v)", stats.Pooled, models, stats)
+	if stats.Shared != models {
+		t.Errorf("served %d models from the shared index, want %d (stats %+v)", stats.Shared, models, stats)
 	}
 }
 
 // TestParseFileTakesNoIndexOnACacheHit keeps the LRU doing its job: the same
 // content twice costs one index, not two.
 func TestParseFileTakesNoIndexOnACacheHit(t *testing.T) {
-	svc := prewarmedService(t, 10, 2)
+	svc := prewarmedService(t, 10)
 	defer svc.Close()
 
 	first, _ := parseContent(t, svc, libraryModel)
@@ -208,17 +213,18 @@ func TestParseFileTakesNoIndexOnACacheHit(t *testing.T) {
 	}
 
 	stats := svc.libIndexes.snapshot()
-	if got := stats.Pooled + stats.Inline; got != 1 {
+	if got := stats.Shared + stats.Inline; got != 1 {
 		t.Errorf("two requests for one model took %d indexes, want 1 (stats %+v)", got, stats)
 	}
 }
 
-// TestCachedModelsOwnTheirIndex holds the rule that makes the pool safe: an index
-// is handed out once, so no two cached models share one — including when the LRU
-// evicts and when requests arrive concurrently.
+// TestCachedModelsOwnTheirIndex holds the rule that makes sharing safe: each
+// cached model has an index of its own to write its document into, even though
+// they read one library — including when the LRU evicts and when requests arrive
+// concurrently.
 func TestCachedModelsOwnTheirIndex(t *testing.T) {
 	const models = 8
-	svc := prewarmedService(t, 3, 4) // cache smaller than the model count, so it evicts
+	svc := prewarmedService(t, 3) // cache smaller than the model count, so it evicts
 	defer svc.Close()
 
 	var wg sync.WaitGroup
@@ -253,19 +259,41 @@ func TestCachedModelsOwnTheirIndex(t *testing.T) {
 	if len(seen) == 0 {
 		t.Fatal("no model survived in the cache")
 	}
+
+	// One model's document must not be visible through another's index, which is
+	// what the shared base would break if a document landed in it.
+	for i, hash := range hashes {
+		cached, ok := svc.cache.Get(hash)
+		if !ok {
+			continue
+		}
+		mine := fmt.Sprintf("P%d", i)
+		if syms := cached.Index.LookupQualified(mine); len(syms) == 0 {
+			t.Errorf("model %d does not know its own package %s", i, mine)
+		}
+		for j := 0; j < models; j++ {
+			if j == i {
+				continue
+			}
+			other := fmt.Sprintf("P%d", j)
+			if syms := cached.Index.LookupQualified(other); len(syms) != 0 {
+				t.Errorf("model %d sees %s, another model's package", i, other)
+			}
+		}
+	}
 }
 
-// TestIndexPoolFallsBackToBuildingInline pins that a result never depends on how
-// far prewarming got: with prewarming off, every request builds its own index and
-// the answers are the same ones.
-func TestIndexPoolFallsBackToBuildingInline(t *testing.T) {
-	t.Setenv(IndexPoolEnvVar, "0")
+// TestLibraryBaseFallsBackToBuildingInline pins that a result never depends on
+// how far prewarming got: with prewarming off, the first request builds the
+// library itself and the answers are the same ones.
+func TestLibraryBaseFallsBackToBuildingInline(t *testing.T) {
+	t.Setenv(IndexPrewarmEnvVar, "0")
 	svc := mustNewService(t, 10)
 	defer svc.Close()
-	svc.Prewarm() // a pool of no indexes has nothing to warm
+	svc.Prewarm() // prewarming off builds nothing
 
-	if warm := svc.libIndexes.warm(); warm != 0 {
-		t.Errorf("pool of size 0 warmed %d indexes", warm)
+	if svc.libIndexes.ready() {
+		t.Error("prewarming is off, yet the library index is built")
 	}
 	resp, cached := parseContent(t, svc, libraryModel)
 	if len(resp.Diagnostics) != 0 {
@@ -274,21 +302,21 @@ func TestIndexPoolFallsBackToBuildingInline(t *testing.T) {
 	if syms := cached.Index.LookupQualified("ScalarValues::Real"); len(syms) == 0 {
 		t.Error("inline index does not carry the standard library")
 	}
-	if stats := svc.libIndexes.snapshot(); stats.Inline != 1 || stats.Pooled != 0 {
-		t.Errorf("stats %+v, want one inline checkout and no pooled one", stats)
+	if stats := svc.libIndexes.snapshot(); stats.Inline != 1 || stats.Shared != 0 {
+		t.Errorf("stats %+v, want one inline build and no shared checkout", stats)
 	}
 }
 
-// TestIndexPoolCloseStopsPrewarmingAndStillServes covers shutdown: closing waits
-// for the builds in flight, drops what nobody took, and leaves the service able
-// to answer by building inline.
-func TestIndexPoolCloseStopsPrewarmingAndStillServes(t *testing.T) {
-	svc := prewarmedService(t, 10, 2)
+// TestLibraryBaseCloseReleasesTheIndexAndStillServes covers shutdown: closing
+// waits for a build in flight, releases the shared index, and leaves the service
+// able to answer by building it again.
+func TestLibraryBaseCloseReleasesTheIndexAndStillServes(t *testing.T) {
+	svc := prewarmedService(t, 10)
 	svc.Close()
 	svc.Close() // closing twice is not an error
 
-	if warm := svc.libIndexes.warm(); warm != 0 {
-		t.Errorf("%d indexes still held after close", warm)
+	if svc.libIndexes.ready() {
+		t.Error("the shared library index is still held after close")
 	}
 	_, cached := parseContent(t, svc, libraryModel)
 	if syms := cached.Index.LookupQualified("ScalarValues::Real"); len(syms) == 0 {
@@ -297,21 +325,18 @@ func TestIndexPoolCloseStopsPrewarmingAndStillServes(t *testing.T) {
 	if stats := svc.libIndexes.snapshot(); stats.Inline != 1 {
 		t.Errorf("stats %+v, want the request after close to have built inline", stats)
 	}
-	if warm := svc.libIndexes.warm(); warm != 0 {
-		t.Errorf("close did not stop prewarming: %d indexes ready", warm)
-	}
 }
 
-// TestIndexPoolSizeFromEnv covers the pool size a deployment asks for, including
-// the values that are a typo rather than a size.
-func TestIndexPoolSizeFromEnv(t *testing.T) {
+// TestIndexPrewarmFromEnv covers the prewarm setting a deployment asks for,
+// including the values that are a typo rather than a number.
+func TestIndexPrewarmFromEnv(t *testing.T) {
 	cases := []struct {
 		raw     string
 		want    int
 		wantErr bool
 	}{
-		{raw: "", want: DefaultIndexPoolSize},
-		{raw: "   ", want: DefaultIndexPoolSize},
+		{raw: "", want: DefaultIndexPrewarm},
+		{raw: "   ", want: DefaultIndexPrewarm},
 		{raw: "0", want: 0},
 		{raw: "2", want: 2},
 		{raw: " 6 ", want: 6},
@@ -321,22 +346,22 @@ func TestIndexPoolSizeFromEnv(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%q", tc.raw), func(t *testing.T) {
-			t.Setenv(IndexPoolEnvVar, tc.raw)
-			got, err := indexPoolSizeFromEnv()
+			t.Setenv(IndexPrewarmEnvVar, tc.raw)
+			got, err := indexPrewarmFromEnv()
 			if tc.wantErr {
 				if err == nil {
-					t.Fatalf("%q was accepted as size %d", tc.raw, got)
+					t.Fatalf("%q was accepted as %d", tc.raw, got)
 				}
-				if !strings.Contains(err.Error(), IndexPoolEnvVar) {
-					t.Errorf("error does not name %s: %v", IndexPoolEnvVar, err)
+				if !strings.Contains(err.Error(), IndexPrewarmEnvVar) {
+					t.Errorf("error does not name %s: %v", IndexPrewarmEnvVar, err)
 				}
 				if _, serr := NewService(4, "test"); serr == nil {
-					t.Error("NewService accepted an unusable pool size")
+					t.Error("NewService accepted an unusable prewarm setting")
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("indexPoolSizeFromEnv(%q): %v", tc.raw, err)
+				t.Fatalf("indexPrewarmFromEnv(%q): %v", tc.raw, err)
 			}
 			if got != tc.want {
 				t.Errorf("size %d, want %d", got, tc.want)
@@ -345,114 +370,114 @@ func TestIndexPoolSizeFromEnv(t *testing.T) {
 	}
 }
 
-// TestIndexPoolStopsAtItsSize keeps the pool's memory bounded: it never holds
-// more indexes than it was sized for, however many requests it has served.
-func TestIndexPoolStopsAtItsSize(t *testing.T) {
-	var built int
+// TestLibraryBaseBuildsOnceUnderConcurrentDemand pins that many requests
+// arriving at a cold service build one library between them: two builds of one
+// library would each parse what the other was about to cache, and would cost two
+// copies of it.
+func TestLibraryBaseBuildsOnceUnderConcurrentDemand(t *testing.T) {
 	var mu sync.Mutex
-	pool := newIndexPool(2, func() *symbols.Index {
+	built := 0
+	base := newLibraryBase(func() *symbols.Index {
 		mu.Lock()
 		built++
 		mu.Unlock()
-		return symbols.NewIndex()
-	})
-	defer pool.close()
-
-	pool.prewarm()
-	deadline := time.Now().Add(30 * time.Second)
-	for pool.warm() < 2 {
-		if time.Now().After(deadline) {
-			t.Fatal("pool never warmed")
-		}
-		time.Sleep(time.Millisecond)
-	}
-	pool.prewarm() // asking again does not grow it
-	time.Sleep(20 * time.Millisecond)
-	if warm := pool.warm(); warm > 2 {
-		t.Errorf("pool holds %d indexes, above its size of 2", warm)
-	}
-	for i := 0; i < 4; i++ {
-		if pool.get() == nil {
-			t.Fatal("pool handed out no index")
-		}
-	}
-	if warm := pool.warm(); warm > 2 {
-		t.Errorf("pool holds %d indexes after refilling, above its size of 2", warm)
-	}
-}
-
-// TestIndexPoolBuildsOneIndexAtATime pins that filling the pool does not run the
-// builds in parallel: the builds of one library hit the same cache records, so
-// overlapping them has each build parse what its peers were about to cache.
-func TestIndexPoolBuildsOneIndexAtATime(t *testing.T) {
-	var mu sync.Mutex
-	building, peak := 0, 0
-	pool := newIndexPool(4, func() *symbols.Index {
-		mu.Lock()
-		building++
-		if building > peak {
-			peak = building
-		}
-		mu.Unlock()
 		time.Sleep(5 * time.Millisecond)
-		mu.Lock()
-		building--
-		mu.Unlock()
-		return symbols.NewIndex()
+		idx := symbols.NewIndex()
+		idx.Freeze()
+		return idx
 	})
-	defer pool.close()
+	defer base.close()
 
-	pool.prewarm()
-	deadline := time.Now().Add(30 * time.Second)
-	for pool.warm() < 4 {
-		if time.Now().After(deadline) {
-			t.Fatal("pool never warmed")
-		}
-		time.Sleep(time.Millisecond)
+	const models = 16
+	var wg sync.WaitGroup
+	indexes := make([]*symbols.Index, models)
+	for i := 0; i < models; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			indexes[i] = base.get()
+		}(i)
 	}
+	wg.Wait()
+
 	mu.Lock()
 	defer mu.Unlock()
-	if peak > 1 {
-		t.Errorf("%d library builds ran at once, want them one at a time", peak)
+	if built != 1 {
+		t.Errorf("%d models built %d libraries, want 1", models, built)
+	}
+	seen := map[*symbols.Index]bool{}
+	for i, idx := range indexes {
+		if idx == nil {
+			t.Fatalf("model %d was handed no index", i)
+		}
+		if seen[idx] {
+			t.Fatalf("model %d was handed an index another model already has", i)
+		}
+		seen[idx] = true
 	}
 }
 
-// BenchmarkParseFileColdPooled measures a first-time model against a prewarmed
-// pool; BenchmarkParseFileColdInline measures the same work with prewarming off.
-// The gap between them is the library build the pool takes off the request path.
-func BenchmarkParseFileColdPooled(b *testing.B) {
-	benchmarkParseFileCold(b, DefaultIndexPoolSize)
+// TestLibraryBasePrewarmsOnce pins that repeated or concurrent prewarming builds
+// one library rather than one per call, and that close waits for the build it
+// started rather than leaving it running.
+func TestLibraryBasePrewarmsOnce(t *testing.T) {
+	var mu sync.Mutex
+	built := 0
+	base := newLibraryBase(func() *symbols.Index {
+		mu.Lock()
+		built++
+		mu.Unlock()
+		time.Sleep(5 * time.Millisecond)
+		idx := symbols.NewIndex()
+		idx.Freeze()
+		return idx
+	})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			base.prewarm()
+		}()
+	}
+	wg.Wait()
+	base.close()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if built != 1 {
+		t.Errorf("8 prewarms built %d libraries, want 1", built)
+	}
+}
+
+// BenchmarkParseFileColdShared measures a first-time model over a prewarmed
+// shared library; BenchmarkParseFileColdInline measures the same work with
+// prewarming off, where the first request builds the library.
+func BenchmarkParseFileColdShared(b *testing.B) {
+	benchmarkParseFileCold(b, DefaultIndexPrewarm)
 }
 
 func BenchmarkParseFileColdInline(b *testing.B) {
 	benchmarkParseFileCold(b, 0)
 }
 
-func benchmarkParseFileCold(b *testing.B, poolSize int) {
-	b.Setenv(IndexPoolEnvVar, fmt.Sprint(poolSize))
+func benchmarkParseFileCold(b *testing.B, prewarm int) {
+	b.Setenv(IndexPrewarmEnvVar, fmt.Sprint(prewarm))
 	svc, err := NewService(b.N+1, "bench")
 	if err != nil {
 		b.Fatalf("NewService: %v", err)
 	}
 	defer svc.Close()
 	svc.Prewarm()
-	if poolSize > 0 {
-		for svc.libIndexes.warm() < poolSize {
+	if prewarm > 0 {
+		for !svc.libIndexes.ready() {
 			time.Sleep(time.Millisecond)
 		}
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// Waiting for the refill is not part of a request's latency: a service
-		// prewarms while it is idle, not while it is answering.
-		if poolSize > 0 {
-			b.StopTimer()
-			for svc.libIndexes.warm() == 0 {
-				time.Sleep(time.Millisecond)
-			}
-			b.StartTimer()
-		}
 		content := fmt.Sprintf("%s\n// model %d\n", libraryModel, i)
 		if _, err := svc.ParseFile(context.Background(), &pb.ParseFileRequest{
 			Source: &pb.ParseFileRequest_Content{Content: content},

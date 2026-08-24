@@ -106,6 +106,7 @@ nav:
       - reference/README.md
       - CLI: reference/cli.md
       - REPL commands: reference/repl-commands.md
+      - OSLC Query text: reference/oslc-query.md
       - Environment variables: reference/environment.md
       - Language server: reference/lsp.md
       - Go API: reference/api.md
@@ -139,8 +140,22 @@ nav:
       - project/README.md
       - Spec compliance: project/spec-compliance.md
       - Training examples: project/training-examples.md
+      - Pilot corpora gate: project/pilot-corpora.md
       - Pilot differential: project/pilot-differential.md
+      - Pilot execution referee: project/pilot-execution-referee.md
+      - Pilot Xpect expectations: project/pilot-xpect.md
+      - Pilot rejection oracle: project/pilot-rejection.md
       - Grammar coverage: project/grammar-coverage.md
+      - Wave 10 decisions: project/wave10-decisions.md
+      - Wave 11B parser findings: project/wave11b-parser-findings.md
+      - Wave 11D metadata and evaluability: project/wave11d-metadata-evaluability.md
+      - Wave 11E decisions: project/wave11e-decisions.md
+      - Wave 12A element-scoped tier gating: project/wave12a-element-gating.md
+      - Wave 12C lossless library records: project/wave12c-lossless-library-records.md
+      - Wave 12D decisions: project/wave12d-decisions.md
+      - Wave 12E decisions: project/wave12e-decisions.md
+      - Wave 12F false positives: project/wave12f-false-positives.md
+      - Wave 14 declared errata overlay: project/wave14-errata.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
       - macOS distribution: project/macos-distribution.md

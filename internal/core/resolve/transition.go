@@ -34,7 +34,7 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 			// leaving the qualifiers saying which state or region it lives in.
 			Fixes: endpointFixes(last.Text, last.Span, r.vertexSuggestions(scope, qn)),
 		})
-	case !isVertex(sym.Decl) && !startAction(sym):
+	case stateMachineEndpoint(scope) && !r.endpointIsVertex(scope, qn, sym):
 		r.report(Diagnostic{
 			Span:    qn.Span(),
 			Message: "transition endpoint " + qnText(qn) + " is not a state or pseudostate",
@@ -46,6 +46,14 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 		r.endpoints[qn] = res
 	}
 	return res.sym, res.ok
+}
+
+// EndpointSymbol returns the resolved symbol for a transition endpoint.
+func (r *Resolver) EndpointSymbol(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	var sym *symbols.Symbol
+	var ok bool
+	r.aside(func() { sym, ok = r.ResolveEndpoint(scope, qn) })
+	return sym, ok
 }
 
 // Endpoint returns the declaration an endpoint names, which lowering builds its
@@ -90,13 +98,107 @@ func (r *Resolver) lookupEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) (
 	var sym *symbols.Symbol
 	var ok bool
 	r.aside(func() { sym, ok = r.resolveQualified(scope, qn, nil) })
-	if ok && isVertex(sym.Decl) {
+	machine := machineScope(scope)
+	if ok && r.endpointIsVertex(scope, qn, sym) && declaredWithin(machine, sym) {
 		return sym, true
 	}
-	if vertex, found := firstVertex(machineScope(scope), qualifiedParts(qn)); found {
+	// A vertex of the machine itself outranks one the name reaches elsewhere, so an
+	// inherited member does not shadow the state declared beside the transition.
+	if vertex, found := firstVertex(machine, qualifiedParts(qn)); found {
 		return vertex, true
 	}
+	if ok && r.endpointIsVertex(scope, qn, sym) {
+		return sym, true
+	}
 	return sym, ok
+}
+
+// declaredWithin reports whether sym is declared in scope or one of the scopes
+// under it, which for a machine's body is what makes a vertex the machine's own.
+func declaredWithin(scope *symbols.Scope, sym *symbols.Symbol) bool {
+	if scope == nil || sym == nil {
+		return false
+	}
+	for _, candidate := range scope.LookupLocalAll(sym.Name) {
+		if candidate == sym {
+			return true
+		}
+	}
+	for _, child := range scope.Children() {
+		if declaredWithin(child, sym) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Resolver) endpointIsVertex(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if isVertex(sym.Decl) {
+		return true
+	}
+	if startAction(sym) {
+		return true
+	}
+	if !stateMachineEndpoint(scope) {
+		return false
+	}
+	return r.machineStateVertex(scope, qn, sym)
+}
+
+func isVertexSymbol(sym *symbols.Symbol) bool {
+	return sym != nil && isVertex(sym.Decl)
+}
+
+func (r *Resolver) machineStateVertex(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
+	if !isVertexSymbol(sym) || r.model == nil || r.idx == nil || qn == nil || len(qn.Parts) == 0 {
+		return false
+	}
+	machineScope := machineScope(scope)
+	if machineScope == nil {
+		return false
+	}
+	machine := machineScope.Owner()
+	if machine == nil {
+		return false
+	}
+	name := qn.Parts[len(qn.Parts)-1].Text
+	member, ok := r.model.LookupMember(machine, name)
+	if !ok || member == nil {
+		return false
+	}
+	return member == sym || r.idx.GetFQN(member) == r.idx.GetFQN(sym)
+}
+
+// MachineStateVertex reports whether sym is a vertex of the state machine
+// enclosing scope, using the same inherited-member predicate as endpoint
+// resolution.
+func (r *Resolver) MachineStateVertex(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
+	return r.machineStateVertex(scope, qn, sym)
+}
+
+func stateMachineEndpoint(scope *symbols.Scope) bool {
+	for s := scope; s != nil; s = s.Parent() {
+		switch n := s.Node().(type) {
+		case *ast.Definition:
+			switch n.Kind {
+			case ast.DefState:
+				return true
+			case ast.DefAction:
+				return false
+			}
+		case *ast.Usage:
+			switch n.Kind {
+			case ast.UsageState:
+				return true
+			case ast.UsageAction:
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // endpointMessage is what an endpoint resolving to nothing reports: the ordinary

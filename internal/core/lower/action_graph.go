@@ -96,7 +96,10 @@ type Send struct {
 	// the sender's features, rather than a name in a namespace (`R`, `P::R`).
 	TargetPath bool
 	IsVia      bool
-	Scope      *symbols.Scope // the scope the statement was declared in
+	// Receiver is the name addressed by a routed send, empty when omitted.
+	Receiver     string
+	ReceiverPath bool
+	Scope        *symbols.Scope // the scope the statement was declared in
 }
 
 func (Send) statement() {}
@@ -340,11 +343,13 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			}
 			graph.Initial = n
 			graph.Nodes = append(graph.Nodes, n)
+			lowerNodeBody(graph, n, n.Members, scope)
 		case *ast.FinalNode:
 			graph.Finals = append(graph.Finals, n)
 			graph.Nodes = append(graph.Nodes, n)
 		case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode, *ast.ActionExecutionNode:
 			graph.Nodes = append(graph.Nodes, n)
+			lowerNodeBody(graph, n, ast.NodeBodyMembers(n), scope)
 		case *ast.Usage:
 			// Nested action usage (treat as execution node)
 			if n.Kind == ast.UsageAction {
@@ -521,6 +526,37 @@ func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 	}
 }
 
+// lowerNodeBody records the statements the body of an action node declares, so
+// a body the notation admits on a control node or a succession executes when a
+// token reaches it rather than being dropped.
+func lowerNodeBody(graph *ActionGraph, node ast.Node, members []ast.Node, scope *symbols.Scope) {
+	body := childScope(scope, node)
+	for _, member := range BodyStatementMembers(members) {
+		graph.Bodies[node] = append(graph.Bodies[node], lowerStatement(unwrapMembership(member), body))
+	}
+}
+
+// BodyStatementMembers returns the members of a node body that state work to
+// perform, in declaration order: what a body declares (a parameter, a doc
+// comment) is a feature of the node, not a step of the flow through it.
+func BodyStatementMembers(members []ast.Node) []ast.Node {
+	var stmts []ast.Node
+	for _, member := range members {
+		switch m := unwrapMembership(member).(type) {
+		case *ast.SendStatement, *ast.AssignmentActionNode, *ast.WhileLoopActionNode,
+			*ast.IfActionNode, *ast.TerminateStatement:
+			stmts = append(stmts, member)
+		case *ast.Usage:
+			// A declared action is a feature of the node; only one naming the action
+			// it performs is a step (`perform a;`).
+			if m.Kind == ast.UsageAction && !m.IsBodyParameter && performsAction(m) {
+				stmts = append(stmts, member)
+			}
+		}
+	}
+	return stmts
+}
+
 // lowerStatement lowers one executable body statement, in the scope it was
 // written in. Every form it recognizes is lowered losslessly; a form it does not
 // becomes Unsupported, so the executor reports it rather than skipping it.
@@ -534,12 +570,26 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 		if m.IsVia {
 			target, isPath = FeaturePath(m.Target), true
 		}
+		message := m.Message
+		if message == nil {
+			message = sendPayload(m)
+		}
+		if message == nil {
+			return Unsupported{
+				Description: "a send declaring no message",
+				Node:        m,
+				Scope:       scope,
+			}
+		}
+		receiver, receiverPath := SendTarget(m.Receiver)
 		return Send{
-			Message:    m.Message,
-			Target:     target,
-			TargetPath: isPath,
-			IsVia:      m.IsVia,
-			Scope:      scope,
+			Message:      message,
+			Target:       target,
+			TargetPath:   isPath,
+			IsVia:        m.IsVia,
+			Receiver:     receiver,
+			ReceiverPath: receiverPath,
+			Scope:        scope,
 		}
 	case *ast.AssignmentActionNode:
 		// A target naming more than one segment reaches outside the body, which no
@@ -603,6 +653,17 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	default:
 		return Unsupported{Description: fmt.Sprintf("%T", member), Node: member, Scope: scope}
 	}
+}
+
+// sendPayload returns the message a send with no argument carries: the value
+// its body binds the payload parameter to (`send { in :>> payload = s; }`).
+func sendPayload(m *ast.SendStatement) ast.Node {
+	for _, member := range m.Members {
+		if u, ok := unwrapMembership(member).(*ast.Usage); ok && u.Direction == ast.DirIn && u.Value != nil {
+			return u.Value
+		}
+	}
+	return nil
 }
 
 // lowerBlock lowers the body of a loop or of one branch of a conditional. owner

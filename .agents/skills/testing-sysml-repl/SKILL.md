@@ -34,6 +34,30 @@ Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evide
 it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
 line/column numbers, where a screenshot of the new behavior alone proves nothing.
 
+## Library-cache cold/warm testing (`XDG_CACHE_HOME`)
+
+`bin/sysml` persists stdlib symbol indexes under `$XDG_CACHE_HOME/sysml-ls/libs/*-v<N>.idx`
+(`internal/core/libs`, `formatVersion` in `record.go`). Cache-dependent bugs only show up on the
+*second* run, so any change touching `symbols`/`libs`/`resolve` should be tested like this:
+
+```bash
+export C=/tmp/cachetest && rm -rf $C && mkdir $C
+XDG_CACHE_HOME=$C ./bin/sysml -validate file.kerml > cold.out 2>&1; echo $?
+XDG_CACHE_HOME=$C ./bin/sysml -validate file.kerml > warm.out 2>&1; echo $?
+cmp cold.out warm.out    # cold and warm must be byte-identical
+```
+
+- A known reproducer class: implicit parameter redefinition against cached (Decl-less) library
+  symbols, e.g. `package R { behavior b { step u : FeatureReferencingPerformances::FeatureWritePerformance { in onOccurrence { feature redefines startingAt; } } } }`
+  in a `.kerml` file — cold-clean/warm-broken before cache format 21.
+- Stale-format handling: warm the cache with a binary built from an older commit (worktree trick
+  above), then run the new binary against the same `XDG_CACHE_HOME`. It must ignore the old
+  `-v<N-1>.idx` files and write `-v<N>.idx` alongside them (`find $C -name '*.idx'` shows both);
+  output must equal a fresh-cache run. Versions coexist — the old binary keeps using its own files.
+- For corpus-level sweeps, run every file twice against one shared cache dir and `cmp` per-file
+  outputs and exit codes; only the first file of pass 1 is truly cold, which is fine for
+  warm-identity checks.
+
 ## Profiling flags: `-memstats`, `-cpuprofile`, `-memprofile` (PR #156)
 
 `main()` is a one-liner over `runCLI()` returning an exit status, so every profile is flushed by a
@@ -95,6 +119,30 @@ Fixtures that actually exercise the redefinition-owner path:
 - Imports: a wildcard `import Lib::*` plus a nested `import Lib::Inner::Wheel` for the positive
   case, and a usage of an undeclared type for the negative (`unresolved reference: Gearbox`).
 
+## Per-snippet parse kind: .kerml vs .sysml gates (PR #360)
+
+Since F51 the REPL analyzes each snippet under the parse kind of the file it came from, so the
+parser's file-kind gates are testable through the binary:
+
+- **Fixture pair that hits both gates:** `package F51Expr { feature at = 1; feature while = 2;
+  feature merge = 3; feature decide = 4; feature total = at + while + merge + decide; }` (contextual
+  keywords as names) and `package F51Type { class at; feature f : at; feature g = at::self; }`
+  (keyword in type/qualified-name position). As `.kerml` both must `-validate` clean (exit 0) and
+  `-convert sysml` successfully; byte-identical `.sysml` copies must produce four
+  `"<kw>" is a reserved keyword` warnings (expr) and an `at::self` → `expected '{' or ';'` **error,
+  exit 2** (type). The reference `./build/pilot-kerml-validator/validate-kerml` accepts both .kerml
+  files (exit 0) — the agreement check.
+- **The prompt is always SysML-kind:** `namespace N;` typed at `sysml>` must still get the
+  `` `namespace` is KerML notation `` warning, and `package P { feature at = 1; }` the
+  reserved-keyword warning, even right after clean `.kerml` %loads. If either warning disappears
+  after a `%load *.kerml`, the snippet kind leaked into the prompt.
+- **Mixed sessions:** `./bin/sysml k.kerml sn.sysml -validate` (or `%load` both) must attribute the
+  kerml-notation warning **only** to the `.sysml` file, and a prompt snippet must resolve
+  kerml-declared names across kinds (`package Q { attribute r = K::f; }` → `%eval Q::r`).
+- Known pre-existing (same on main, not regressions): `%eval` of a reference whose value chain
+  names a kerml feature spelled with a contextual keyword fails `unresolved reference: at`;
+  compound `%eval` expressions reparse the buffer under an unknown-kind temp doc.
+
 ## Two ways to drive it
 
 1. **Non-interactive (fast, for exploration and expected-value discovery).** The REPL reads a
@@ -106,6 +154,32 @@ Fixtures that actually exercise the redefinition-owner path:
    non-zero exit rather than stalling the session.
 2. **Interactive in a GUI terminal (for the recording).** Because the app under test *is* a CLI,
    the recording should show a real terminal session. See the recording setup below.
+
+**At the `sysml>` prompt an expression must go through `%eval`.** Bare text — even a fully
+qualified `test::r.cost.v` — is submitted as *model source*, so it answers
+`1:1: error: expected a namespace member` and leaves an unresolved buffer error that taints the
+next submission with `note: deeper checks may not have run here…` (the same trap as typing
+`clear`). On camera this looks like the feature is broken. Type `%eval test::r.cost.v`; if you have
+already tainted the session, `%quit`/Ctrl-D and restart rather than continuing.
+
+### Driving a `type: "calc"` conformance fixture from the CLI
+
+Fixtures under `internal/core/runtime/testdata/conformance/` whose `.expected.json` says
+`{"type": "calc", "evaluate": "test::probe"}` are run non-interactively with `-calc` and an
+explicit argument list — the parentheses are required even when the calc takes none:
+
+```bash
+./bin/sysml -calc "test::probe()" internal/core/runtime/testdata/conformance/<name>.sysml
+./bin/sysml -validate internal/core/runtime/testdata/conformance/<name>.sysml   # cheap clean-model check
+```
+
+Reals print rounded to two places (`= [5.00, 2.00]` for an expected `[5.0, 2.0]`), so compare
+values, not literal text. A failing evaluation exits 2 with
+`sysml: calc invocation failed: calc test::probe: evaluating the returned expression: <error>`,
+while a *static* rejection exits 2 with `did not analyse cleanly; no check was made` — worth
+distinguishing in a report, since a negative case can be caught at either tier. Beware that a
+`… | grep …` pipeline in a recorded one-liner makes `$?` the grep's status; capture sysml's own
+exit code without a pipe when the exit code is part of the evidence.
 
 ## Saving and converting models (`%save`, `sysml -convert`)
 
@@ -1470,6 +1544,19 @@ worth asserting, with the wording each produces:
   `UserWarning: Keeping the cached sysml-grpc … could not be downloaded` and returns the old path.
   That is the only observable half of the replacement without network; say so rather than claiming
   the replacement was proven. Always back up the cache + sidecar and restore them afterwards.
+- **On a box that *does* reach GitHub the replacement completes**: `OPENSYSML_GRPC_VERSION=v0.0.8` will
+  download that release over `~/.opensysml/bin/sysml-grpc` and write a matching sidecar, so your local
+  `make build-grpc` binary is gone and `server_info().version` reports `v0.0.8` afterwards. Re-run
+  `cp bin/sysml-grpc ~/.opensysml/bin/ && rm -f ~/.opensysml/bin/sysml-grpc.json` before the next test.
+  The leftover sidecar is also the classic false negative when contrasting
+  `OPENSYSML_GRPC_VERSION` (honoured, warns) against a pre-rename `PYSYSML_GRPC_VERSION` (must be
+  ignored, no warning): if the sidecar already records the version you are asking for, *neither*
+  warns and the contrast proves nothing. Delete the sidecar and pick a version the cache is not,
+  then assert on the presence/absence of the `Replacing the cached sysml-grpc` `UserWarning`
+  (capture it with `warnings.catch_warnings(record=True)`).
+- `OPENSYSML_GRPC_BINARY` is read by no code (`get_binary_path()` is hard-coded to
+  `~/.opensysml/bin`, as this skill notes) — treat any request to "verify OPENSYSML_GRPC_BINARY" as a
+  claim to disprove, not a feature to exercise.
 
 #### Proving a *pinned release digest* really unblocks a download (PR #316)
 
@@ -1596,21 +1683,24 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
   service is reproducible with `opensysml.connect(port=50123, auto_start=False)`.
 
-### The prewarmed library-index pool, `SYSML_GRPC_INDEX_POOL` (PR #252)
+### The shared library index, `SYSML_GRPC_INDEX_POOL` (PR #252; shared base since slice A of L3)
 
-`internal/grpc/libindex.go` keeps N standard library indexes built ahead of the requests that need
-them (default 4; `0` restores the old per-cache-miss build). How to observe it end to end, and what
-generalizes to any service-side perf change:
+`internal/grpc/libindex.go` builds **one** frozen standard library index and gives each model an
+overlay over it (any positive `SYSML_GRPC_INDEX_POOL` prewarms that build; `0` restores the
+per-cache-miss build). It was a pool of N per-model indexes until slice A, so the drain-and-refill
+behaviour below no longer applies: there is nothing to drain, and a tight sweep of distinct models
+stays fast after the first build. How to observe it end to end, and what generalizes to any
+service-side perf change:
 
 - **Measure with DISTINCT model texts.** The service caches models by content, so a repeated model
   is a cache hit and shows nothing. Append a unique trailing comment (`// distinct model %d`) per
   iteration and time `conn.load_from_content(src)` client-side; a library-backed model (imports
   `ScalarValues`/`ISQ`, a derived attribute) is required, otherwise no library index is needed.
 - Numbers observed at 607b0eb8 on a ~85-line model, 12 distinct models: **pool default (4) median
-  4.4 ms**, `SYSML_GRPC_INDEX_POOL=0` **median 112.5 ms**. Expect 1–2 spikes of ~140–155 ms in the
-  pooled run: a tight client loop drains the 4 warm indexes faster than the background refill
-  (~100 ms per index), and the drained request builds inline by design. Report the median plus the
-  spikes rather than the mean, which the spikes dominate.
+  4.4 ms**, `SYSML_GRPC_INDEX_POOL=0` **median 112.5 ms**. The 1–2 spikes of ~140–155 ms that a
+  pooled run showed were the drained pool rebuilding; with a shared base only the very first
+  request can pay a build, so a spike after the first is now a regression rather than by design.
+  Report the median plus any spike rather than the mean.
 - **The env var reaches the service through the opensysml auto-start path** (the client spawns the
   child, so it inherits the env), so `SYSML_GRPC_INDEX_POOL=0 python sweep.py` is enough — but
   `pkill -x sysml-grpc; rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock`
@@ -1618,7 +1708,8 @@ generalizes to any service-side perf change:
 - **Equivalence is the assertion that catches a wrong index.** Have one script print a sorted JSON
   blob (diagnostics, `find()` id/kind, `eval`, instantiate slot kind+value, `execute_action`,
   `execute_state`) and `diff` the pool=4 and pool=0 runs: only the line naming the configuration may
-  differ. A pool that shared an index between models would show up here, not in the timings.
+  differ. A model writing into the shared base, or seeing another model's document, would show up
+  here, not in the timings.
 - Bad values are rejected in `NewService`, so `sysml-grpc` **exits 1 before listening**:
   `-1` → `library index pool size must not be negative, got -1 (SYSML_GRPC_INDEX_POOL)`,
   `many`/`1.5`/`"4 4"` → `library index pool size must be an integer, got "many" (…)`. Assert the exit
@@ -1637,13 +1728,42 @@ generalizes to any service-side perf change:
 - Prewarming must not block startup: the port accepts in ~30 ms with pool=4, and SIGTERM after
   prewarming exits **0** in ~13 ms (`Close()` waits for in-flight builds, so a hang here is the
   regression to watch). Time both with `date +%s.%N` around the launch/`kill -TERM`.
-- Two cheap adversarial shapes worth keeping: `SYSML_GRPC_INDEX_POOL=1` with 8 threads loading
-  distinct models at once (pool permanently drained → mostly inline builds; all 8 must still answer
+- Two cheap adversarial shapes worth keeping: `SYSML_GRPC_INDEX_POOL=0` with 8 threads loading
+  distinct models at once (all 8 must still answer
   `Perf::Engine`, `1+1 == 2` and the full `execute_action` dict), and `-cache-size 5` with 8 distinct
   models loaded (the 3 oldest hashes raise `ModelNotFoundError`, the 5 newest still evaluate) — an
   index handed to a model that is later evicted must not disturb the models still cached.
 - Interpreter trap: see [the venv trap](#venv-trap) above before blaming `import grpc`/`import
   opensysml` on the change under test.
+- **`Model.find()` does not answer library names.** `find("ScalarValues::Real")` and
+  `find("ISQBase::MassValue")` are `None` even when the model resolves those types fine (the RPC
+  searches the model's own document symbols). So a `find`-based "the library still resolves"
+  assertion is **vacuous** — it is `None` on a working build and on a broken one alike. Prove library
+  resolution with a value instead: a derived attribute over a library type
+  (`attribute doubled : Real = power * 2.0` → `eval("Pkg::Vehicle::engine.doubled") == 300.0`) plus
+  an empty `diagnostics` list. Keep the `find` entries in the sweep blob anyway — they are still a
+  good *isolation* probe, since `find("OtherPkg::Engine")` must be `None`.
+- `Model.execute_state(...)` returns a **plain dict**: subscript `r["states_visited"]` /
+  `r["final_context"]`; `r.states_visited` raises `AttributeError: 'dict' object has no attribute`.
+  `execute_action` is a dict too.
+- `%search` matches the **qualified name as written in the library**, so `%search ISQ::MassValue`
+  answers `no symbol matches` (the symbol is `ISQBase::MassValue`) while `%search MassValue` lists
+  it. Use the bare name for a lookup assertion, or you record a false negative on camera.
+- The strongest "nothing a user sees changed" evidence for this refactor is a **byte diff against
+  the parent commit on both surfaces**: `/tmp/old-sysml` vs `./bin/sysml` over scripted REPL
+  transcripts (`%search`/`%load`/`%eval`/`%instantiate`/`%features`/`%action`+`%continue`/`%state`+
+  `%step`) and `-validate` over `examples/*.sysml`, plus the same sweep JSON against a hand-started
+  parent-commit `sysml-grpc` (`/tmp/old-sysml-grpc -port 50123 -health-port 50124`, client
+  `auto_start=False`). At 5a50e806 all of those are identical. Note a multi-model REPL session
+  legitimately prints `note: deeper checks may not have run here: the error on buffer line NN is
+  unresolved …` once the conformance fixtures are in the buffer — it reproduces on the parent binary,
+  so do not report it as a regression.
+- Post-first-load timings observed at 5a50e806 over 12 distinct library-backed models:
+  `SYSML_GRPC_INDEX_POOL=4` first 55 ms then median 4.2 ms (max 5.1 ms); `=0` first 77 ms then
+  median 5.0 ms (max 5.6 ms) — i.e. with a shared base even `=0` is fast after the first request,
+  and any post-first load above ~60 ms is a regression. Port accepts in ~10–12 ms and SIGTERM
+  (including one sent immediately after the port opens, while the prewarm build is still in flight)
+  exits 0 in a few ms.
 
 #### The shared on-disk library index cache (`internal/core/libs/cache.go`)
 
@@ -3559,6 +3679,44 @@ Traps and recipes:
   `error: execution failed: execution exceeded max steps (1000000 steps; ...)` — so "hangs to the
   step budget", not just a wrong value, is the pre-fix signature here.
 
+### Typed failure classes for fork/join/merge/decision control nodes (PR #449 class)
+
+Any PR that claims "typed user-facing errors" for the control nodes is really claiming a *prefix*
+per failure class, so the discriminating evidence is A/B against the parent commit: the values and
+the fact that an error appears are usually unchanged, only the wording gains its class. Observed at
+6b1c1f76 (new) vs its parent (old):
+
+| failure | new wording | parent wording |
+|---|---|---|
+| fork with no outgoing succession | `invalid action flow: fork node split has no successors` | same text, **no** `invalid action flow:` prefix |
+| merge with no outgoing succession | `invalid action flow: merge node converge has no successors` | same, unprefixed |
+| join that can never be satisfied | `action deadlock: 1 token(s) stuck, no progress made` | `deadlock detected: 1 token(s) stuck, …` |
+| decision whose every guard is false | `no enabled succession: decision node choose has no true guard` | `decision node choose: no true guard` |
+
+All four arrive as `error: execution failed: <typed message>` on `%continue`. Minimal probe shapes
+(each its own file, since they all declare `package test` — see the restart trap above):
+
+- **fork/merge with no successors:** declare the node and route a token into it but give it no
+  outgoing `then`: `first start; fork split; then start split;` (same with `merge converge;`).
+  Parse succeeds, so the failure is genuinely a runtime one.
+- **join starvation:** `first start; action stranded; join sync; done end; then start sync; then
+  stranded sync; then sync end;` — `sync` has two incoming edges but `stranded` is unreachable, so
+  one token waits forever. This is the case worth wrapping in `time timeout 20` on camera: a correct
+  build fails in ~0.1s, whereas the pre-fix signature for join/merge bugs is spinning to the step
+  budget (see the merge note above), which a bare interactive run makes look like a hang.
+- **decision with no true guard:** `attribute enabled : Boolean = false;` plus `decide choose; if
+  enabled then selected;` — one guarded branch that is false, and no `else`.
+
+Also worth asserting: **the REPL survives each of these**. Follow the error with `%eval 1 + 1` and
+check `= 2`; an executor that leaves the session wedged is a separate defect from the wording.
+
+Fixture noise to expect, not report: `internal/core/runtime/testdata/conformance/
+action_fork_branches_share_features.sysml` omits `import ScalarValues::*;`, so `%load` prints two
+`unresolved reference: Integer — did you mean ScalarValues::Integer?` errors before running to
+`x = 1, y = 2` correctly. It is pre-existing (identical on the parent binary); the sibling
+`action_decision_merge_guarded_branch.sysml` loads clean, so a reviewer seeing one noisy and one
+quiet load is looking at fixture hygiene, not a regression.
+
 ## Verifying the RDF "experimental" marking, `%print`, `%view`, guards and addressed sends
 
 The wave-1/0.1.0 surfaces below were verified end to end at `870da1fd`. Each entry is the
@@ -4154,3 +4312,544 @@ regression net, but two traps ruin it:
   unimplemented gap, patch a temp copy replacing just that construct (e.g. a body on
   `first a then b { … }` / `merge m { … }` → `;`) and validate the copy — clean output proves the
   downstream diagnostics were recovery noise.
+
+## Authoring edits (`model.edit()` add_member / delete) via the Python client
+
+The edit API is service-side byte splicing plus re-analysis, so testing it needs the **freshly
+built** `bin/sysml-grpc` copied to `~/.opensysml/bin/sysml-grpc` (`pkill -x sysml-grpc` first) and
+a protobuf-new-enough interpreter — `/home/ubuntu/opensysml-proto-venv/bin/python` works
+(grpcio 1.83 / protobuf 7.36); the system Python's protobuf is too old for the regenerated stubs.
+Confirm the surface is actually present before blaming the client:
+`connect().server_info().capabilities` must contain `authoring` and `inline_language`.
+
+- **Good fixture:** `examples/rdf-interop-demo.sysml` — 4-space indent, a leading `//` comment, a
+  `doc`, blank lines between declarations, a body-less `port def TelemetryPort;`, a referenced
+  `part def Battery`, and a trailing `comment about Wheel`. That one file covers golden path,
+  body-less owner growth, delete-referenced refusal and comment-preservation in one go.
+- **Preservation must be proven by diff, not by eyeball:** run
+  `difflib.unified_diff(original, edited, n=0)` and assert **zero** `-` lines. Body-less owners are
+  the one legitimate exception (the `;` line is rewritten into `{ … }`).
+- **Known cosmetic artifact:** inserting into an owner whose closing `}` sits on an indented line
+  leaves a whitespace-only line (`"    \n"` / `"\t\n"`) where the indentation used to be. Byte
+  content elsewhere is intact, so treat it as a formatting nit, not a preservation failure — but do
+  flag trailing-whitespace-sensitive linting.
+- **KerML vs SysML discriminator:** `class B specializes A;` is clean in KerML and reports
+  `only a definition may specialize; found a usage` in SysML. Use it to prove
+  `loads(src, language='kerml')` really switched languages; plain `class`/`struct`/`feature`/`assoc`
+  declarations parse clean in *both* and prove nothing.
+- **Refusal expectations:** unknown owner → `OwnerNotFoundError`; a usage/attribute owner (or a
+  body-less usage) → `OwnerNotNamespaceError`; wrong-language kind → `IllegalMemberKindError`;
+  duplicate name → `MemberNameTakenError`; unresolvable type target → `EditResultError` (the whole
+  batch is refused after re-analysis, so include a *valid* sibling add in the same batch and assert
+  it did not land). Delete of a referenced declaration → `DeleteReferencedError` naming the
+  referrer.
+- Editors are single-shot: a second `.apply()` raises `RuntimeError`, an empty one `NoEditsError`.
+  Build a new editor from the reloaded model instead of reusing one.
+- `Symbol.parts()` exposes `multiplicity` but leaves `type_name` `None` even for pre-existing
+  members — verify added typing via the written notation or by resolving the type's FQN, not by
+  `type_name`.
+- **Proving `loads(..., language='kerml')` really analysed as KerML** needs a probe sensitive to the
+  KerML *implicit library base* (`class` → `Occurrences::Occurrence`, `struct` → `Objects::Object`,
+  `datatype` → `Base::DataValue`). The one that works: `class C { feature redefines endShot; }` —
+  clean inline-as-KerML and in a `.kerml` file, but reports
+  `unresolved reference: endShot` when the same text is loaded with no `language` argument.
+  Diagnostics parity between the inline load and the identical text saved as `.kerml` (compare the
+  messages with the file-name prefix stripped, since inline diagnostics are prefixed `<content>`)
+  is the assertion to make. Note `Symbol.specializations`/`type_facts`/`attributes()` do **not**
+  expose implicit library supertypes, so don't try to observe the base there.
+
+## Proving an *executable* body ran — and ran exactly once
+
+A parser PR that makes an optional body legal on a node (control node, initial node, succession,
+transition) has a second, sharper failure mode than "the body was not read": the body parses and
+lowers but never *executes*, or executes more than once. `-validate` cannot see either. Drive the
+built REPL and judge on exact attribute values, never on `Action completed`:
+
+- Make every body write a **counter** (`assign forkRuns := forkRuns + 1;`) rather than a constant,
+  then read `Results:` after `%continue`. A constant assignment cannot distinguish "ran once" from
+  "ran three times"; a counter can.
+- Chain the reads so a dropped body is visible downstream: `fork split { assign x := 1; }` →
+  `action left { assign y := x + 1; }` → `join sync { assign z := y + 1; }` must give exactly
+  `x = 1, y = 2, z = 3`. A dropped fork body shows up as `y = 1`, not as an error.
+- The duplicate-execution hazards are structural, so build for them explicitly:
+  - a **fork** with two outgoing branches (a body run per emitted token gives `forkRuns = 2`);
+  - a **join** whose branches are of unequal length, so the short branch's token parks at the join
+    and the executor retries it for several steps (a body run per *arrival* gives `joinRuns > 1`).
+    `%step N` + `%tokens` shows `Token 2 @ sync` waiting with the counter still `0`, which is the
+    screenshot that proves the retry actually happened before `%continue` finishes.
+- For transitions, `%state <qname>`, then `%current` before and after `%advance 1`: the body effect
+  and the entry action of the substate reached by a dotted end (`then beta.work`) must be separate
+  attributes so `State data:` distinguishes them. `%current` also prints the `State stack (active
+  configuration)`, which is how you confirm a dotted end entered the *nested* state.
+- A body statement the runtime cannot execute should surface as
+  `error: execution failed: action node <n>: … is not executable`. If a construct is documented as
+  "parses but unsupported at runtime" (e.g. `send x via p to r`), assert that error text explicitly —
+  otherwise you cannot tell "reported as unsupported" from "silently skipped".
+- Adversarial: put a non-terminating `while true { … }` **inside a node body**. Expect
+  `evaluation step limit exceeded (… steps; raise SYSML_MAX_STEPS to allow more)` within a second,
+  and assert the session survives by running `%eval 1 + 1` right after in the same REPL.
+
+### A/B against a binary built from the parent commit
+
+The cheapest proof that a syntax fix is real (and the best screenshot) is a side-by-side with the
+pre-change compiler:
+
+```
+git worktree add /tmp/wt-old <parent-sha> && (cd /tmp/wt-old && go build -o /tmp/old-sysml ./cmd/sysml)
+/tmp/old-sysml -validate <fixture>   # expect the old parse error, exit 2
+./bin/sysml    -validate <fixture>   # expect "no errors", exit 0
+```
+
+Compare `grep -c 'error:'` counts per file for the corpus files the PR claims to unblock. Beware
+`| grep …` when you also want the exit status — `$?` is the exit of `grep`, so capture
+`${PIPESTATUS[0]}`.
+
+### REPL pitfalls that cost time here
+
+- Shell built-ins typed at the `sysml>` prompt are parsed as SysML: `clear; %tokens` yields
+  `error: expected a namespace member` and, worse, leaves an unresolved error in the buffer, so
+  later `%load`s print `note: deeper checks may not have run here…`. Quit the REPL before running
+  shell commands, or use `printf '%%load …\n%%continue\n%%quit\n' | ./bin/sysml` per case.
+- Naming fixture attributes after keywords or inherited features wastes a cycle: `after` is a
+  reserved keyword, and `done` collides with the inherited `Actions::Action::done`, which downgrades
+  the run to `did not analyse cleanly; no check was made`. Pick neutral names (`next`, `flag`).
+
+## Testing behavior/expression parser fixes (F64/F66/F71-style PRs)
+
+Parser PRs that "unblock a form" are best proven with three surfaces, in this order:
+
+1. **`-validate` on minimal fixtures**, A/B against the parent binary (above). Positive fixtures must
+   go from an old parse error to `no errors`/exit 0; the PR's known-blocked fixtures must still exit 2
+   with a located `file:line:col: error:` and zero `panic`/`goroutine` lines.
+2. **The REPL for execution**, because parsing a form is not executing it. A returned usage
+   (`calc scaled { in x : Real; return attribute doubled : Real = x * 2.0; }`) is only proven by
+   `%calc Sc::scaled 21.0` printing `= 42.00`. Typed runtime errors are visible the same way, e.g.
+   `error: evaluation failed: unsupported declaration in a body expression: …` for a collection body
+   that declares a feature, and
+   `error: calc invocation failed: no result expression: …` for a returned usage with no value.
+   Always follow an error with `%eval 1 + 1` → `= 2` to show the session survived.
+3. **A whole-corpus A/B sweep** for regressions:
+
+```bash
+while IFS= read -r -d '' f; do cp "$f" /tmp/sw.sysml
+  diff <(./bin/sysml -validate /tmp/sw.sysml 2>&1; echo $?) \
+       <(/tmp/old-sysml -validate /tmp/sw.sysml 2>&1; echo $?) >/dev/null || echo "DIFF: $f"
+done < <(find examples internal/core/runtime/testdata/conformance -name '*.sysml' -print0)
+```
+
+Copy each file to a fixed path first — corpus paths contain spaces, and comparing the *output plus
+exit status* catches wording changes a count would miss.
+
+**Expect "tier unmasking" and classify it, do not report it as a regression.** Because higher
+validation tiers are skipped when a lower tier errors (see AGENTS.md §4), a parser fix makes files
+that previously died at a parse error reach name resolution, where *pre-existing* problems appear —
+so the raw `grep -c 'error:'` count can *rise* on a file the PR improved. Distinguish the two by
+reading both outputs: old = `expected ';' after return expression`, new = `unresolved reference: …`
+or `name conflict: …` at a different line is unmasking; a new *syntax* error at a line the old
+binary accepted is a real regression.
+
+**Known limitation to check for on F64-style body-declaration work:** the parser may keep the
+features a body expression declares (`ast.BodyExpr.Members`) without the resolver contributing them
+to the body's scope, so a model that *uses* the declared name still fails with
+`unresolved reference: <name>` even though it now parses. Test the using case explicitly
+(`(1..n)->forAll { in i; private attribute k = r * i; k > 0.0 }`), and don't assume a clean parse
+means the form works end to end.
+
+**Adversarial forms worth having as files** (each must exit 2, never 124, and never panic): truncated
+`return x :>` at EOF, `assume constraint c1 :`, an unclosed `[` in a returned usage multiplicity,
+EOF mid-declaration, and — for notation changes that reclassify keywords per file type — a `.kerml`
+file using the word as both a name and a modifier (`snapshot timeslice x : T;`). Verify the same
+change did *not* break the word's modifier role in `.sysml` (`snapshot start; timeslice cruise;`
+inside an `occurrence` must still validate clean).
+
+**An unclosed bracket in the REPL is not a diagnostic yet.** The prompt switches to `...>` and keeps
+buffering, so a following `%eval` is swallowed as model text. Press `ctrl+c` to flush the buffer —
+the diagnostics then print and the session stays usable. Budget for this when driving malformed
+input on camera, rather than reading it as a hang.
+
+## RDF expression trees, reference-rewriting rename, declaration-aware Query (PR #390)
+
+Three surfaces changed together here; each has a cheap, high-signal probe.
+
+**Expression trees in Turtle.** Every expression-valued position (feature value, multiplicity
+bound, condition, guard, payload, loop collection) emits a node in `urn:opensysml:expr:`
+(`@prefix expr:`). A one-file fixture that reaches value/bound/literal/boolean/condition at once:
+
+```
+package P {
+    part def Panel {
+        attribute width : ScalarValues::Real;
+        attribute height : ScalarValues::Real;
+        attribute total = width * height + 2;          // nested operator tree
+        attribute count : ScalarValues::Integer[1..width * 2];  // bound
+        attribute label = "panel";                     // literal
+        attribute ok = total > 10 and count < 5;
+    }
+    constraint def Fits { attribute w : ScalarValues::Real; assert constraint { w < 100 } }
+}
+```
+
+Assert structurally, not by grepping the source text: count `expr:` subjects and require the same
+number of `sysx:sourceText` triples on them (source text must be on *every* node), require
+`sysml:operator` + two `sysml:argument` nodes with distinct `sysx:argumentIndex` on the operator
+node, and require `sysml:lowerBound`/`sysml:upperBound`/`sysx:condition` to point at `expr:` IRIs
+rather than plain literals. A stale binary emits `sysml:value "width * height + 2"`, which that
+assertion rejects — this is the check that proves you rebuilt.
+
+Connector/binding heads (`connect`/`bind`/`flow`/`allocate`/`succession`) additionally emit
+`sysx:relatedFeature` end nodes carrying `sysx:endIndex` and, for directed heads, `sysx:endRole`
+`"source"`/`"target"`. Round-trip these too (`c.ttl -> c.sysml -> d.ttl`, `diff` empty).
+
+**Source text stays authoritative for ttl→sysml.** A malformed expression node that still has
+`sysx:sourceText` converts *successfully* — that is by design, not a bug. To reach the structural
+decoder in an adversarial fixture you must delete the parent node's `sysx:sourceText` as well as
+the triple you are breaking. Broken graphs then exit 2, write no output file, and the message
+names the exact node IRI, e.g.
+`cannot convert the expression <urn:opensysml:expr:P__Panel__total.value.a1>: a literal expression
+states the value it evaluates to`.
+
+**opensysml API details that cost time:**
+
+- `Model.edit()`, not `Model.editor()`.
+- `Model.hash`, not `Model.model_hash`.
+- `ApplyEditsResponse` has **no** `success`/`message` fields — read `resp.error` (empty string means
+  success), `resp.failure` (e.g. `EDIT_FAILURE_INVALID_NAME`), `resp.content`, `resp.referring_elements`.
+  Checking "empty content on refusal" on the wire means asserting `resp.content == ""` from a raw
+  stub call, not just catching `InvalidEditError`.
+- Never name a probe script `grpc.py` — it shadows the `grpc` package.
+
+**Rename fixture that covers all the rewrite/leave-alone rules in one file:** a declaration, an
+unqualified reference (`attribute doubled = mass * 2;`), a qualified reference
+(`R::Widget::mass`), an `alias m for R::Widget::mass;`, an explicit `import R::Widget::mass;`, a
+wildcard `import R::Widget::*;` (must not change), a same-named member in an unrelated package
+(must not change), a sibling `weight`, and comments. Assert the output re-validates
+(`bin/sysml -validate`) and that it is *not* byte-identical to the input (catches a silent no-op).
+
+**Query property names are JSON-LD-ish:** `@id` and `@type`, not `id`/`type`. Requesting an unknown
+property returns an error listing the valid set. `isIndividual` is **not** in `QueryPropertyNames()`
+— individual status is only observable through `@type` = `OccurrenceDefinition`/`OccurrenceUsage`.
+If a PR description claims `isIndividual`, verify whether it is a queryable property or only a
+type refinement, and report the difference.
+
+Values worth asserting after the declaration-aware change (contrast against a parent-commit service
+on another port to make the delta visible; the parent returned `Feature` or an absent `@type`):
+connector ends `ReferenceUsage`, `interface def` ends `PortUsage`, `class`→`Class`,
+`struct`→`Structure`, `assoc`→`Association`, `behavior`→`Behavior`, `predicate`→`Predicate`,
+`interaction`→`Interaction`, individual def/usage → `OccurrenceDefinition`/`OccurrenceUsage`,
+alias → `Membership`.
+
+**Konsole font size on camera:** use `ctrl+plus` / `ctrl+minus`. `ctrl+shift+plus` is not a Konsole
+binding and types literal `+` characters into the shell (`+++cd: command not found`).
+
+## Driving state self-transitions and budget failures from the REPL (PR #411)
+
+Self-transition semantics (`StateExecutor.encloses`: `source == target` is *external*, so exit →
+effect → entry run and the state is visited twice) are fully REPL-observable, but only if the
+fixture's trigger is one the REPL can produce:
+
+- **The shipped conformance fixtures mostly use `accept again` (a signal), which the REPL cannot
+  inject** — they park in their start state forever. Re-author the same model with
+  `transition first s accept after 5 do assign log := log * 10 + 9 then s;` and drive it with
+  `%state <Pkg>::<Machine>`, `%trace on`, `%advance 5`, `%current`. The `log` digits then read as a
+  transcript of the ordering, so one integer is a complete assertion — e.g. simple state
+  `log = 1291`, composite `1342913`, orthogonal `17342913`, matching the `.expected.json` values.
+- **Change triggers (`accept when <cond>`) *are* dispatched by `%advance`** despite the folklore
+  that only `RunToCompletion` polls them: the rising-edge model reaches `waiting` with `log = 1`
+  from the REPL and gRPC `execute_state` agrees (`states_visited ['start','waiting','waiting']`).
+  Always run both surfaces and diff them — that pair is what would expose a debugger-only gap.
+- **`./bin/sysml <model> -state <machine>` does NOT run to completion.** It only prints
+  `Started state machine executor …` / `Current state: <initial>` and exits 0, so it is useless as
+  an execution oracle; a model that "stays in `start`" there proves nothing. Use the REPL's
+  `%advance` or gRPC `execute_state`.
+- **A `region` needs its own `initial`**; `entry; then x;` inside a region fails lowering with
+  `region <r> in state <S> has no initial state`, which looks like a runtime bug but is fixture
+  shape.
+- **Untriggered (completion) self-transitions are the budget test.** They are *not* dispatched when
+  `%state` starts the machine — you must `%advance 1`, which then reports
+  `Stopped at the event budget (1000000 events; raise SYSML_MAX_EVENTS to allow more)` in ~2 s and
+  leaves the REPL usable (`%eval 1 + 1` → `= 2`). The object-exhibited path fails earlier and
+  louder: `%instantiate <Pkg>::<PartDef>` on a `part def` with `exhibit state …` returns
+  `instantiation failed: exhibited state machine <M> of object #1: state machine exceeded max
+  events (…), possible infinite loop` plus `(no instances created)` — there is no need for a
+  `%state <M> <obj>` step, and that object name never exists to be referenced.
+- A/B against the parent commit is cheap and decisive here: the pre-fix binary prints `log = 19`
+  for the simple fixture (internal transition, no exit/entry) while composite and orthogonal
+  fixtures are byte-identical across both binaries.
+- The blueprint's `maintenance` step already builds a opensysml venv at **`~/pv`** and copies
+  `bin/sysml-grpc` into `~/.opensysml/bin`; use `~/pv/bin/python` instead of building a new
+  `/tmp/pv` venv. Copies of hand-written fixtures must qualify stdlib types
+  (`ScalarValues::Integer`) or add `private import ScalarValues::*;` when moved out of the
+  conformance directory.
+
+## Per-source-language keyword reservation (wave 7C, PR #428)
+
+Reservation is decided per *source language* (`lexer.IsKeywordIn` + parser `reservedWord`), so the
+file extension of the fixture is part of the test, not an incidental detail.
+
+- A word only `KerML.xtext` spells (`chains`, `type`, `namespace`, `all`) is an ordinary name in a
+  `.sysml` file: `part chains : T;`, `part type : T;` validate clean (exit 0). The same word as a
+  *feature name* in a `.kerml` file must still error — always test both directions, one fixture
+  per extension, or you will pass a test that only proves the lexer is permissive everywhere.
+- Words that are SysML-only syntax (`frame`, `render`, `state`, `part`, `action`) are ordinary
+  names in `.kerml` (`feature frame : T;` clean) but are **syntax** in SysML positions:
+  `viewpoint def V { frame; }` and `view def V { render; }` must be diagnosed.
+- Watch the *severity*: `part frame : T;` in `.sysml` currently yields a **warning**
+  (`"frame" is a reserved keyword; write 'frame' to use it as a name`) and exit 0, not an error.
+  Assert on exit code *and* on whether the line says `warning:` or `error:`.
+- `%search <Pkg>::` is the cheapest confirmation that a name-shaped keyword really became a symbol:
+  it prints quoted names such as ``PosK::'frame'  attributeUsage``.
+- Recovery noise is expected on some of these: `viewpoint def V { frame; }` emits two diagnostics
+  (the real one at the `;`, plus `expected a body member`). Report it as message quality, not as a
+  missing diagnostic.
+
+### The REPL buffer has no extension
+
+The REPL document is `<repl>` with no extension, and unknown-extension buffers read as **SysML**
+for reservation. Two consequences worth knowing before writing assertions:
+
+- You cannot prove `.kerml`-specific parser behaviour by typing into the prompt. Use
+  `%load /path/x.kerml` (kind comes from the loaded file) or the CLI, and use the prompt only for
+  the SysML-side names.
+- REPL diagnostics print **`1:12: error: …`** — line:col with **no `<repl>` filename prefix**
+  (CLI output does print `path:line:col:`). If a test plan says "confirm diagnostics report
+  `<repl>:line:col`", that expectation does not match the current binary; check with the lead
+  before calling it a pass or a bug.
+
+### Escaping the continuation prompt
+
+Incomplete input (`part def U { ref redefines x[4;`) puts the REPL into a `...>` continuation
+prompt, and *anything* typed there — including `%eval 1+1` — is swallowed as more model text.
+Press **Ctrl-C** to abandon the continuation: the buffered text is then parsed, its diagnostics
+print, and the `sysml>` prompt returns usable. Always follow a malformed submission with
+`%eval 1 + 1` (expect `= 2`) to prove the session survived. Never type shell words like `clear`
+at the prompt; it parses as a model line and produces `expected a namespace member`.
+
+### Kindless parameters and the RDF shape
+
+A kindless parameter (`in x : Real`, `out mass : Real`) is a kindless/attribute usage, so
+`sysml -convert=turtle` emits `a sysml:AttributeUsage`. Hand-written fixtures are often *not*
+discriminating (both old and new binaries agree); the repo fixture
+`internal/core/export/testdata/convert/views_flows_parameters.sysml` is, because its
+`action def Measure { out mass : Real; }` prints `AttributeUsage` on the new binary and
+`PartUsage` on a parent-commit binary. Prefer an A/B against `/tmp/old-sysml` over asserting a
+single output.
+
+### Cross-checking against the pinned pilot validator
+
+`./build/pilot-validator/validate-sysml <file>` takes ~20 s per file (it reads the whole standard
+library) and prints hundreds of `Reading …` lines plus `log4j:WARN` noise — filter with
+`grep -v '^Reading \|log4j'` and capture `${PIPESTATUS[0]}` for the real exit code. The pilot is
+*narrower* on keyword-as-name forms: `part frame : T;` and `part all : T;` are
+`no viable alternative at input …` (exit 1) there while OpenSysML accepts them. Classify that as
+wider/narrower, not automatically as an OpenSysML defect.
+
+## The conformance harness loads no libraries; the REPL does (wave 7D)
+
+`internal/core/runtime/testdata/conformance/*.sysml` runs with **no standard library loaded**, so a
+fixture that passes there can still fail at the CLI, where the stdlib is always present. Two defects
+of that exact shape were only visible through `bin/sysml`:
+
+- A receiving node named `receiver` made a routed `send x via p to receiver` report
+  `send receiver is unreachable`, because in the sending action's scope that name also resolves to
+  the inherited `Transfers::SendPerformance::receiver`. Renaming the node to `reader` "fixed" it —
+  that asymmetry is the tell for a name-shadowing bug, not a routing bug.
+- Any hand-written model, and any conformance fixture opened in the REPL, needs
+  `private import ScalarValues::*;` (or qualified `ScalarValues::Integer`) or the session fills with
+  unresolved-`Integer` noise that hides the result you are checking.
+
+So: for any change under `internal/core/runtime`, re-run the shipped fixture through the REPL with
+libraries loaded, and add a library-loaded unit test (`buildRuntimeWithLibraries`) beside the
+library-free one. Prefer a name a library also declares (`receiver`, `source`, `target`) when
+choosing fixture names — those are the ones that break.
+
+## Checking a mutated object is seen through *every* path that reaches it
+
+The high-value bug class for `%invoke`/calc work is a plausible wrong number, with no error. Drive
+it as a matrix, not a single call: mutate a feature through an action, then invoke calcs that reach
+it by different routes, and assert the mutated value in each.
+
+```
+%invoke bot drain                  # action assigns charge := 3
+%eval in Pkg::bot : charge         # = 3
+%invoke bot direct                 # charge + 100      -> 103
+%invoke bot anon                   # charge * 2        -> 6
+%invoke bot nested                 # anon() + 1        -> 7    (was 21: declared default)
+%invoke bot usesDirect             # direct() + 1000   -> 1103 (was 1110)
+```
+
+The two-hop rows are the ones that regress: a calc reached through a *calc invocation expression*
+took a different code path from a calc *usage* read, and only the usage shape had a unit test. Any
+"the body now sees the object" claim should be checked with at least one two-hop case per shape
+(anonymous result and named result), at the CLI, since the unit test passing proved nothing here.
+
+Bounds are worth a sweep in the same session — each of `SYSML_MAX_STEPS`, `SYSML_MAX_ACTION_STEPS`,
+`SYSML_MAX_EVENTS`, `SYSML_MAX_DO_STEPS`, `SYSML_MAX_ELEMENTS`, `SYSML_MAX_CALC_DEPTH` set to a tiny
+value must error naming that bound and return *no* result; a truncated-but-returned answer is the
+failure to look for.
+
+## Testing name-resolution / visibility changes at the CLI
+
+Resolution changes (visibility, imports, qualified names) are best proved with an **A/B contrast**
+against a build of the parent commit, because the interesting evidence is "this used to analyse
+cleanly and now reports an error":
+
+```bash
+git worktree add /tmp/wt-old <parent-sha>
+(cd /tmp/wt-old && go build -o /tmp/old-sysml ./cmd/sysml)
+./bin/sysml f.kerml </dev/null; /tmp/old-sysml f.kerml </dev/null   # compare output AND exit code
+```
+
+Pitfalls that cost time:
+
+- `bin/sysml <file>` **drops into the interactive REPL after analysing** when stdin is a TTY. In a
+  recorded Konsole always append `</dev/null` (or plan to type `%quit`), otherwise every subsequent
+  shell command is parsed as SysML.
+- Use `.kerml` fixtures for KerML shapes (`classifier X specializes Y`, `feature f references g`).
+  The same text in a `.sysml` file can fail earlier with `only a definition may specialize; found a
+  usage`, masking the behaviour under test.
+- A batch regression sweep is cheap and is the strongest "no false positives" evidence: run every
+  file in `examples/` and `testdata/{passes,resolve}` under both binaries and require byte-identical
+  output plus matching exit status.
+- Cold vs warm run under a scratch `XDG_CACHE_HOME` catches resolution that depends on the on-disk
+  symbol index; diagnostics must be byte-identical.
+
+### Proving parser *recovery* (not just the diagnostic) with `%search`
+
+For a change that claims "malformed X no longer abandons the enclosing body", the diagnostic text is
+only half the evidence — you must show the members *after* the malformed one still exist in the tree.
+`-convert kerml` refuses a file with syntax errors, so use the symbol index instead:
+
+```bash
+printf '%%load /tmp/f.kerml\n%%search P::\n%%search P::B::\n' | ./bin/sysml
+```
+
+Build the fixture with a sentinel member inside the broken body (`feature c;`) and a `tail`
+declaration after it. A working recovery lists `P::B::c` *and* `P::tail`; a broken one hoists the
+member to the wrong scope (`P::c`) and drops `tail` — exactly what a parent-commit control binary
+shows. Note that not every dot shape is covered by such a fix: chains like `a...b` and `..a` may
+still cascade and drop later members identically on both binaries, so A/B every shape before
+calling a residual cascade a regression.
+
+Also worth checking on such changes: whether the changed member form still *declares* a name.
+A reference member (`perform doIt;`, plain `exhibit s;`) is expected to resolve an existing name, so
+an undeclared target must produce `unresolved reference: …`; the "did you mean <the same FQN>?"
+suggestion is normal because `%search` sees the reference-derived index entry.
+
+### Which REPL surfaces are visibility-aware
+
+`%search` and readline name completion browse the **raw symbol index** (`internal/repl/discover.go`,
+`complete.go`) and are *not* filtered by member visibility, so a `private` member is still listed
+even when resolution rejects every reference to it. The visibility-filtered surface is
+`model.Workspace.VisibleNames/VisibleNamesAt`, which today is reached only from `cmd/pilot-xpect`
+scope checks and not from any REPL meta-command — do not report a `%search` listing of a private
+name as a regression without A/B-ing it against the parent build first. `%view <name>` *is* useful
+for `expose`: it lists what a view exposes, and an `expose`/`import all` is expected to reach its
+target's own private members.
+
+## End-to-end testing `ApplyEdits` / `model.edit()` over gRPC (PR #509 and later edit work)
+
+Any change in `internal/core/edit` (index reuse, reparse/validate ordering, refusal kinds) is
+testable entirely through the real service plus the Python client; the strongest evidence is
+**a batch of N dependent operations against the same operations sent one per request**.
+
+```bash
+export PATH=/usr/local/go/bin:$PATH
+make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/
+XDG_CACHE_HOME=$(mktemp -d) ./bin/sysml-grpc -port 50123 &     # -port, not -addr
+/home/ubuntu/pv/bin/pip install -e python/                     # see the venv trap above
+```
+
+- Drive it with `opensysml.connect(port=50123, auto_start=False)` and
+  `conn.load_from_content(text)` (there is no module-level `load_from_content`).
+  `m.edit()` collects `add_member(owner, kind, name, type=…)`, `set_value`, `rename`, `delete`
+  and `apply()` sends them as one `ApplyEdits`. An `Editor` is single-use: build a new one from
+  the reloaded model for the next request.
+- A fixture that actually reaches the library-index overlay needs a library-resolving type:
+  `package Rig { private import ISQ::*; part def Sensor { attribute reading : ScalarValues::Real; }
+  part def Frame; part sensor : Sensor; attribute margin = 1.0; }`. Ops whose later members are
+  owned by earlier ones (`add Rig::Mount`, then `add Rig::Mount::height`) are the reparse path;
+  ops that don't nest are applied as one batch without any reparse, so a flat op list proves nothing.
+- Equivalence assertions worth making: `str(result)` byte-identical, the
+  `[a.target + " -> " + a.new_text for a in result.applied]` sequence identical (operation indexes
+  differ between one request of N and N requests of one, so leave them out), reparse diagnostics
+  identical, and `m.get(fqn)` over both the added and the pre-existing names identical.
+- **`Model.get()` and `Model.find()` return `None` for a name they don't hold — they do not raise.**
+  A "no cross-model leakage" check written as `try: m.get(x); leaked=True` passes vacuously and
+  then fails for the wrong reason; assert `m.get(x) is None`. `m[name]` is the raising form.
+- Refusals arrive as typed `opensysml.errors.EditError` subclasses with `.failure` and
+  `.diagnostics`. Useful trio, all of which must refuse with empty content and leave the cached
+  model untouched: a later add taking a name an earlier add wrote
+  (`EDIT_FAILURE_MEMBER_NAME_TAKEN`, message names the colliding operation pair), an add naming a
+  type nothing declares (`EDIT_FAILURE_RESULT_INVALID`, with an `unresolved reference` diagnostic),
+  and an add owning something no operation created (`EDIT_FAILURE_OWNER_UNKNOWN`).
+- For perf/refactor claims, run a **contrast service from the parent commit on a second port**
+  (`git worktree add /tmp/old <sha>; go build -o /tmp/old-sysml-grpc ./cmd/sysml-grpc;
+  /tmp/old-sysml-grpc -port 50124`) and drive both from one script: assert byte-identical
+  notation and identical refusal kind/message/diagnostics, and time `apply()` only. At 8cef2b61 an
+  8-operation request measured ~17 ms median vs ~60 ms on HEAD~1.
+- Cheap leak checks that would catch a request-local index escaping: send the same request 3x
+  against the same model hash (content and applied lists must be identical each time), and edit two
+  different models alternately (neither result's text nor lookups may contain the other's names).
+- Recording: this surface has no GUI, so record a maximized Konsole
+  (`setsid konsole … &; wmctrl -a Konsole; wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz`)
+  and `tee` the script output, then page it with `sed -n 'a,bp'` so each section fits one screen.
+
+### Devin Secrets Needed
+None — the service, client and stdlib are all local.
+
+## Proving "the stdlib is parsed on every load path" (record-format waves, e.g. formatVersion 25)
+
+When `internal/core/libs` changes what the on-disk cache persists (derived facts only:
+`Supers`/`Unit`/`Dimension`/`Abstract`, installed onto already-parsed symbols), the load-bearing
+property is **cold == warm == no-cache**, observed from outside the Go tests. Three cache states,
+one scratch dir:
+
+```bash
+C=$(mktemp -d)
+XDG_CACHE_HOME=$C   ./bin/sysml ...   # cold (dir empty)
+XDG_CACHE_HOME=$C   ./bin/sysml ...   # warm (ls $C/sysml-ls/libs | wc -l  -> ~95 *-v25.idx)
+XDG_CACHE_HOME=/proc/self/nope ./bin/sysml ...   # no-cache fallback
+```
+
+- There is **no `-no-cache` flag**; point `XDG_CACHE_HOME` at an uncreatable path and the loader
+  logs `WARN stdlib symbol cache unavailable, loading without cache error="mkdir ..."` on stderr
+  and continues. Compare after `grep -v 'stdlib symbol cache unavailable'` or with stderr dropped,
+  otherwise the diff is only that warning and you will misreport a failure.
+- Cheap sanity that the warm run really hit the cache: wall time drops (~1.0s -> ~0.28s for a
+  single `-validate`; ~3.5s -> ~2.7s for a multi-command battery) and the `*-v25.idx` files exist.
+- A battery worth diffing per cache state (all against one library-leaning fixture):
+  `-validate`, `-e '2.0 [SI::kg] + 3.0 [SI::kg]'`, `-e <lib-typed attr>`, `-constraint <c>`,
+  `-calc 'Sum(2, 40)'`, `-instantiate <def> -json`, `-query`, `-convert sysml`, plus the
+  pilot-reject negative fixture. Then repeat over
+  `internal/core/runtime/testdata/conformance/*.sysml` (360 files) for a corpus-level A/B.
+
+### Library feature multiplicity: declared `0..1` vs assumed `1..1`
+Neither `-query` nor gRPC `GetSymbol` reaches standard-library symbols, so you cannot read a
+library feature's multiplicity directly. The observable surface is
+`internal/core/passes/multiplicity_conformance.go`: redefine a library feature with a wider or
+weaker bound and check the warning text.
+
+```sysml
+package MultD { occurrence def Probe :> Occurrences::Occurrence {
+  occurrence mid : Probe[0..*] redefines Occurrences::Occurrence::middleTimeSlice; } }
+```
+-> `Subsetting/redefining feature should not have larger multiplicity upper bound`; redefining
+`timeSlices` with `[0..1]` -> `Redefining feature should not have smaller multiplicity lower
+bound`. A build that only has declaration-free library records stays **silent** on both (it falls
+back to assumed `1..1`), so silence-vs-warning is the discriminator; `[0..1]` against a declared
+`0..1` library feature must stay clean.
+
+### gRPC/Python control when library attributes are NOT withheld
+With no L3-3 projection, `GetSymbol` on a part returns own attributes **first, in declaration
+order**, then ~55 inherited from `Occurrences`/`Objects`/`Base` (e.g. `demo::Car` in
+`internal/grpc/testdata/conformance/symbol_attributes.sysml`: 6 own + 55 = 61). Assert the head
+order and that the client can read every row; don't assert a total.
+Two traps that reproduce on **base too** (do not attribute them to a record-format PR):
+- A `@Metadata` annotation written *inside* a part def collapses that symbol's gRPC attribute list
+  to its own declarations only. Put the annotation on a `part` usage instead if you want the
+  inherited tail. Always A/B this against the parent commit before reporting it.
+- A user package named exactly like a bundled library package (`package Occurrences { ... }`)
+  reports no reachable children over gRPC (`Model.get("Occurrences::Thing") is None`); the REPL is
+  fine.
+- `instantiate` reports a constraint feature as `feature value 'massOK': feature value is not
+  materialized` — also present on base.

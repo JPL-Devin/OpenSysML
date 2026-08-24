@@ -34,20 +34,20 @@
     {
       "name": "testdata",
       "dir": "testdata",
-      "files": 11,
-      "lines": 144
+      "files": 15,
+      "lines": 260
     },
     {
       "name": "parser-fixtures",
       "dir": "internal/core/parser/testdata/parse",
-      "files": 96,
-      "lines": 1927
+      "files": 134,
+      "lines": 2825
     },
     {
       "name": "examples",
       "dir": "examples",
       "files": 22,
-      "lines": 2097
+      "lines": 2118
     }
   ],
   "totals": {
@@ -221,9 +221,6 @@
                 "disjoining",
                 "disjoint",
                 "from"
-              ],
-              "missingLiterals": [
-                "disjoining"
               ]
             },
             {

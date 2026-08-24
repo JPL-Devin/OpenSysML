@@ -140,8 +140,8 @@ func TestReexportRoutesSurviveEditingDocuments(t *testing.T) {
 // and, on a cycle, never settles.
 func assertRoutesAreAnAntichain(t *testing.T, idx *Index, stage, src string) {
 	t.Helper()
-	for key, byDoc := range idx.reexportDocs {
-		for doc, claim := range byDoc {
+	for _, key := range idx.reexportDocs.keys() {
+		for doc, claim := range idx.reexportDocs.at(key) {
 			for i, route := range claim.routes {
 				for j, other := range claim.routes {
 					if i == j || route.private != other.private {

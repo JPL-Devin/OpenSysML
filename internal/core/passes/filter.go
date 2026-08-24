@@ -14,12 +14,16 @@ import (
 // name resolution keeps every candidate rather than hiding model content on a
 // verdict it could not reach.
 //
-// It runs at LevelType: deciding what a condition yields needs the elements it
-// names to have resolved, and adds nothing over the unresolved-reference
-// diagnostics when they have not.
+// It runs at LevelType, and its subject is one condition. A classification test
+// is Boolean whatever type it names, so it rests on that type and says nothing
+// more once the type fails to resolve; every other form is judged on itself,
+// where an unresolved name is the verdict — not model-level evaluable — rather
+// than a reason to withhold it.
 type ElementFilterPass struct{}
 
 func (ElementFilterPass) Level() PassLevel { return LevelType }
+
+func (ElementFilterPass) ElementScoped() {}
 
 func (ElementFilterPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {
@@ -29,12 +33,13 @@ func (ElementFilterPass) Run(ctx *Context, name string, root *ast.RootNamespace)
 	if rootScope == nil {
 		return nil
 	}
-	fc := &filterChecker{model: ctx.Model(), seen: make(map[*symbols.Scope]bool)}
+	fc := &filterChecker{ctx: ctx, model: ctx.Model(), seen: make(map[*symbols.Scope]bool)}
 	fc.walk(rootScope)
 	return fc.diags
 }
 
 type filterChecker struct {
+	ctx   *Context
 	model *semantics.Model
 	seen  map[*symbols.Scope]bool
 	diags []Diagnostic
@@ -49,10 +54,10 @@ func (fc *filterChecker) walk(scope *symbols.Scope) {
 	}
 	fc.seen[scope] = true
 	for _, f := range symbols.NamespaceFiltersIn(scope) {
-		fc.check(f, "filter")
+		fc.check(f)
 	}
 	for _, f := range symbols.ImportFiltersIn(scope) {
-		fc.check(f, "import filter")
+		fc.check(f)
 	}
 	for _, sym := range scope.AllMembers() {
 		if sym != nil {
@@ -61,35 +66,69 @@ func (fc *filterChecker) walk(scope *symbols.Scope) {
 	}
 }
 
-// check reports the faults of one condition, described as what wrote it.
-func (fc *filterChecker) check(f symbols.ElementFilter, what string) {
-	if fc.model == nil {
+// check reports the faults of one condition.
+func (fc *filterChecker) check(f symbols.ElementFilter) {
+	if fc.model == nil || fc.gated(f.Expr) {
 		return
 	}
 	for _, p := range fc.model.CheckElementFilter(f) {
-		fc.diags = append(fc.diags, filterDiagnostic(p, what))
+		fc.diags = append(fc.diags, filterDiagnostic(p))
 	}
 }
 
-// filterDiagnostic renders one fault. A condition yielding a non-boolean is an
-// error: it can never select an element. One the evaluator cannot decide is a
-// warning, because the filter is then not applied and the model keeps every
-// element it would have selected from — nothing is lost, but the filter the
-// model asked for is not the one it got.
-func filterDiagnostic(p semantics.FilterProblem, what string) Diagnostic {
+// gated reports whether the condition rests on something a lower tier could not
+// resolve: the type a classification test names, or any operand of an operator
+// whose own result is Boolean whatever its operands turn out to be.
+func (fc *filterChecker) gated(expr ast.Node) bool {
+	op, ok := expr.(*ast.OperatorExpr)
+	if !ok {
+		return false
+	}
+	switch op.Operator {
+	case ast.OpAt, ast.OpMetaAt, ast.OpIsType, ast.OpHasType:
+		// A type the parser never produced is a resolution failure of its own.
+		if op.TypeRef == nil || fc.ctx.DownstreamOfFailure(op.TypeRef) {
+			return true
+		}
+	case ast.OpNot, ast.OpAnd, ast.OpConditionalAnd, ast.OpOr, ast.OpConditionalOr,
+		ast.OpXor, ast.OpImplies,
+		ast.OpEq, ast.OpNeq, ast.OpEqEqEq, ast.OpNeqEqEq,
+		ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe:
+	default:
+		return false
+	}
+	for _, o := range op.Operands {
+		if fc.gated(o) || fc.ctx.DownstreamOfFailure(o) {
+			return true
+		}
+	}
+	return false
+}
+
+// Pilot KerMLValidator (2026-05) validateElementFilterMembershipIsBoolean and
+// the model-level evaluability check behind it: a condition must yield a truth
+// value, and must do so without running the model.
+const (
+	msgFilterNotBoolean   = "Must have a Boolean result"
+	msgFilterNotEvaluable = "Must be model-level evaluable"
+)
+
+// filterDiagnostic renders one fault. Both are errors: a condition that cannot
+// yield a truth value at model level never selects an element.
+func filterDiagnostic(p semantics.FilterProblem) Diagnostic {
 	if p.NotBoolean {
 		return Diagnostic{
 			Severity: SeverityError,
 			Span:     p.Span,
-			Message:  "a " + what + " condition must be boolean-valued, but this one yields " + p.Reason + " (KerML 8.2.4)",
+			Message:  msgFilterNotBoolean,
 			Code:     "filter-not-boolean",
 			Source:   "type",
 		}
 	}
 	return Diagnostic{
-		Severity: SeverityWarning,
+		Severity: SeverityError,
 		Span:     p.Span,
-		Message:  "this " + what + " condition cannot be evaluated, so it selects nothing and is not applied: " + p.Reason,
+		Message:  msgFilterNotEvaluable,
 		Code:     "filter-not-evaluable",
 		Source:   "type",
 	}

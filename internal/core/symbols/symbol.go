@@ -62,6 +62,9 @@ const (
 	SymbolConcernUsage
 	// Tier B usages.
 	SymbolConnectionUsage
+	// SymbolSuccessionUsage classifies a succession usage: a SuccessionAsUsage
+	// (SysML v2 §8.3.13.7), a ConnectorAsUsage that is not a ConnectionUsage.
+	SymbolSuccessionUsage
 	SymbolFlowUsage
 	SymbolPortUsage
 	SymbolInterfaceUsage
@@ -83,70 +86,81 @@ const (
 	// `classifier`, `struct`, `assoc`, `behavior`, `predicate` — which the SysML
 	// definition taxonomy has no counterpart for.
 	SymbolKerMLType
+	// SymbolSatisfyRequirementUsage classifies a `satisfy requirement` usage: a
+	// RequirementUsage specialization (SysML v2 §8.3.19) with its own kind, since
+	// only a satisfy usage may be an assertion of a requirement's satisfaction.
+	SymbolSatisfyRequirementUsage
+	// SymbolRelationship classifies a relationship written keyword-first as a
+	// member of its own (`specialization Gen subtype A specializes B`), whose two
+	// ends are ordered (KerML §7.2).
+	SymbolRelationship
 )
 
 var symbolKindNames = map[SymbolKind]string{
-	SymbolUnknown:               "unknown",
-	SymbolPackage:               "package",
-	SymbolNamespace:             "namespace",
-	SymbolAlias:                 "alias",
-	SymbolDependency:            "dependency",
-	SymbolComment:               "comment",
-	SymbolDocumentation:         "documentation",
-	SymbolTextualRepresentation: "textualRepresentation",
-	SymbolPartDef:               "partDef",
-	SymbolAttributeDef:          "attributeDef",
-	SymbolPartUsage:             "partUsage",
-	SymbolAttributeUsage:        "attributeUsage",
-	SymbolItemDef:               "itemDef",
-	SymbolOccurrenceDef:         "occurrenceDef",
-	SymbolIndividualDef:         "individualDef",
-	SymbolMetadataDef:           "metadataDef",
-	SymbolMetaclass:             "metaclass",
-	SymbolEnumerationDef:        "enumDef",
-	SymbolViewDef:               "viewDef",
-	SymbolViewpointDef:          "viewpointDef",
-	SymbolRenderingDef:          "renderingDef",
-	SymbolConcernDef:            "concernDef",
-	SymbolConnectionDef:         "connectionDef",
-	SymbolFlowDef:               "flowDef",
-	SymbolPortDef:               "portDef",
-	SymbolInterfaceDef:          "interfaceDef",
-	SymbolAllocationDef:         "allocationDef",
-	SymbolActionDef:             "actionDef",
-	SymbolStateDef:              "stateDef",
-	SymbolCalcDef:               "calcDef",
-	SymbolConstraintDef:         "constraintDef",
-	SymbolRequirementDef:        "requirementDef",
-	SymbolCaseDef:               "caseDef",
-	SymbolAnalysisCaseDef:       "analysisCaseDef",
-	SymbolVerificationCaseDef:   "verificationCaseDef",
-	SymbolUseCaseDef:            "useCaseDef",
-	SymbolItemUsage:             "itemUsage",
-	SymbolOccurrenceUsage:       "occurrenceUsage",
-	SymbolIndividualUsage:       "individualUsage",
-	SymbolMetadataUsage:         "metadataUsage",
-	SymbolEnumerationUsage:      "enumUsage",
-	SymbolViewUsage:             "viewUsage",
-	SymbolViewpointUsage:        "viewpointUsage",
-	SymbolRenderingUsage:        "renderingUsage",
-	SymbolConcernUsage:          "concernUsage",
-	SymbolConnectionUsage:       "connectionUsage",
-	SymbolFlowUsage:             "flowUsage",
-	SymbolPortUsage:             "portUsage",
-	SymbolInterfaceUsage:        "interfaceUsage",
-	SymbolAllocationUsage:       "allocationUsage",
-	SymbolActionUsage:           "actionUsage",
-	SymbolStateUsage:            "stateUsage",
-	SymbolCalcUsage:             "calcUsage",
-	SymbolConstraintUsage:       "constraintUsage",
-	SymbolRequirementUsage:      "requirementUsage",
-	SymbolCaseUsage:             "caseUsage",
-	SymbolAnalysisCaseUsage:     "analysisCaseUsage",
-	SymbolVerificationCaseUsage: "verificationCaseUsage",
-	SymbolUseCaseUsage:          "useCaseUsage",
-	SymbolConnectorEnd:          "connectorEnd",
-	SymbolKerMLType:             "kermlType",
+	SymbolUnknown:                 "unknown",
+	SymbolPackage:                 "package",
+	SymbolNamespace:               "namespace",
+	SymbolAlias:                   "alias",
+	SymbolDependency:              "dependency",
+	SymbolRelationship:            "relationship",
+	SymbolComment:                 "comment",
+	SymbolDocumentation:           "documentation",
+	SymbolTextualRepresentation:   "textualRepresentation",
+	SymbolPartDef:                 "partDef",
+	SymbolAttributeDef:            "attributeDef",
+	SymbolPartUsage:               "partUsage",
+	SymbolAttributeUsage:          "attributeUsage",
+	SymbolItemDef:                 "itemDef",
+	SymbolOccurrenceDef:           "occurrenceDef",
+	SymbolIndividualDef:           "individualDef",
+	SymbolMetadataDef:             "metadataDef",
+	SymbolMetaclass:               "metaclass",
+	SymbolEnumerationDef:          "enumDef",
+	SymbolViewDef:                 "viewDef",
+	SymbolViewpointDef:            "viewpointDef",
+	SymbolRenderingDef:            "renderingDef",
+	SymbolConcernDef:              "concernDef",
+	SymbolConnectionDef:           "connectionDef",
+	SymbolFlowDef:                 "flowDef",
+	SymbolPortDef:                 "portDef",
+	SymbolInterfaceDef:            "interfaceDef",
+	SymbolAllocationDef:           "allocationDef",
+	SymbolActionDef:               "actionDef",
+	SymbolStateDef:                "stateDef",
+	SymbolCalcDef:                 "calcDef",
+	SymbolConstraintDef:           "constraintDef",
+	SymbolRequirementDef:          "requirementDef",
+	SymbolCaseDef:                 "caseDef",
+	SymbolAnalysisCaseDef:         "analysisCaseDef",
+	SymbolVerificationCaseDef:     "verificationCaseDef",
+	SymbolUseCaseDef:              "useCaseDef",
+	SymbolItemUsage:               "itemUsage",
+	SymbolOccurrenceUsage:         "occurrenceUsage",
+	SymbolIndividualUsage:         "individualUsage",
+	SymbolMetadataUsage:           "metadataUsage",
+	SymbolEnumerationUsage:        "enumUsage",
+	SymbolViewUsage:               "viewUsage",
+	SymbolViewpointUsage:          "viewpointUsage",
+	SymbolRenderingUsage:          "renderingUsage",
+	SymbolConcernUsage:            "concernUsage",
+	SymbolConnectionUsage:         "connectionUsage",
+	SymbolSuccessionUsage:         "successionUsage",
+	SymbolFlowUsage:               "flowUsage",
+	SymbolPortUsage:               "portUsage",
+	SymbolInterfaceUsage:          "interfaceUsage",
+	SymbolAllocationUsage:         "allocationUsage",
+	SymbolActionUsage:             "actionUsage",
+	SymbolStateUsage:              "stateUsage",
+	SymbolCalcUsage:               "calcUsage",
+	SymbolConstraintUsage:         "constraintUsage",
+	SymbolRequirementUsage:        "requirementUsage",
+	SymbolSatisfyRequirementUsage: "satisfyRequirementUsage",
+	SymbolCaseUsage:               "caseUsage",
+	SymbolAnalysisCaseUsage:       "analysisCaseUsage",
+	SymbolVerificationCaseUsage:   "verificationCaseUsage",
+	SymbolUseCaseUsage:            "useCaseUsage",
+	SymbolConnectorEnd:            "connectorEnd",
+	SymbolKerMLType:               "kermlType",
 }
 
 // String returns the display name of the kind.
@@ -158,8 +172,7 @@ func (k SymbolKind) String() string {
 }
 
 // UnitFacts is a measurement unit reduced to a scale factor over base units,
-// each named by its qualified name. It is what a cached library symbol carries
-// in place of the declaration the reduction was computed from.
+// each named by its qualified name, in the form a library index cache carries.
 type UnitFacts struct {
 	ScaleNum float64
 	ScaleDen float64
@@ -177,9 +190,9 @@ type UnitFactorFacts struct {
 	Exponent float64
 }
 
-// DimensionFacts is a quantity dimension as a cached library symbol carries it:
-// the base quantities it is a product of powers of, each named by its qualified
-// name. Empty factors are the dimension of a count or a ratio of like quantities.
+// DimensionFacts is a quantity dimension in the form a library index cache
+// carries: the base quantities it is a product of powers of, each named by its
+// qualified name. No factors is the dimension of a count or of a like ratio.
 type DimensionFacts struct {
 	Factors []DimensionFactorFacts
 }
@@ -211,52 +224,26 @@ type Symbol struct {
 
 	DocName string // name of the document that declares this symbol (stamped after Build)
 
-	// SuperFQNs are the fully-qualified names of the specialization targets
-	// (specializes/subsets/redefines), populated for cached library symbols
-	// where Decl=nil. Empty for live-parsed symbols, which use Decl instead.
-	SuperFQNs []string
-
-	// AliasTargetFQN is the raw qualified name text of the alias target
-	// ("alias X for Y" → "Y"), populated for cached stdlib aliases where Decl=nil.
-	// Empty for non-aliases or live-parsed aliases (which use Decl instead).
-	AliasTargetFQN string
+	// Facts is the derived analysis installed for a library symbol, a memo of
+	// work its declaration would otherwise repeat. Nil for everything else.
+	Facts *LibraryFacts
 
 	// ShortName is the short name from Identification (e.g., "kg" for "kilogram").
-	// Populated for cached symbols where Decl=nil. Empty if no short name.
+	// Empty if the declaration states none.
 	ShortName string
 
 	// EffectiveName reports that Name was taken from the feature this
 	// declaration references rather than declared (KerML Feature::effectiveName).
 	EffectiveName bool
 
-	// Unit is the reduced measurement-unit form persisted for a cached library
-	// symbol, whose declaration is absent: without it the conversion a unit
-	// declares could not be read back. Nil for a symbol that is not a
-	// measurement unit, and for live-parsed symbols, which use Decl instead.
-	Unit *UnitFacts
-
-	// Dimension is the quantity dimension persisted for a cached library symbol,
-	// whose declaration is absent: the power factors a unit definition states are
-	// declared members with bound values, which the declaration takes with it.
-	// Nil for a symbol whose dimension is not determined, and for live-parsed
-	// symbols, which are read from Decl instead.
-	Dimension *DimensionFacts
-
 	// NamingTarget is the reference that named this symbol when EffectiveName
 	// is set: the target of its reference subsetting or redefinition. Resolving
 	// that reference must not see the name it gave away, or it would resolve to
 	// the feature that borrowed it (KerML 7.3.4.5).
 	NamingTarget ast.Node
-
-	// Annotations are the metadata annotations of a cached library symbol,
-	// whose declaration is absent: an element filter classifies a candidate by
-	// the metadata annotating it, so a restored symbol has to carry what its
-	// declaration would have said. Empty for live-parsed symbols, which are read
-	// from Decl instead.
-	Annotations []AnnotationFacts
 }
 
-// AnnotationFacts is one metadata annotation of a cached library symbol: the
+// AnnotationFacts is one metadata annotation reduced to names and constants: the
 // fully-qualified name of the metadata type annotating it, and the values the
 // annotation body binds its features to, as written.
 type AnnotationFacts struct {

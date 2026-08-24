@@ -57,14 +57,14 @@ package PhaseC {
         in quantity : Integer;
         in taxRate : Real;
         
-        return basePrice * quantity * (1.0 + taxRate);
+        basePrice * quantity * (1.0 + taxRate)
     }
     
     calc def DistanceFormula {
         in dx : Real;
         in dy : Real;
         
-        return sqrt(dx * dx + dy * dy);
+        sqrt(dx * dx + dy * dy)
     }
     
     calc boundedValue {
@@ -72,35 +72,35 @@ package PhaseC {
         in lowerBound : Real;
         in upperBound : Real;
         
-        return min(max(input, lowerBound), upperBound);
+        min(max(input, lowerBound), upperBound)
     }
     
     // ==========================================
     // PHASE C1: Constraint Bodies
     // ==========================================
     
-    constraint validRange {
-        in x : Real;
-        in initialized : Boolean;
-        
-        assert x >= 0;
-        assert x <= 100;
-        assume initialized;
+    // An assumption belongs to a requirement: a constraint body is one condition.
+    requirement validRange {
+        attribute x : Real;
+        attribute initialized : Boolean;
+
+        assume constraint { initialized }
+        require constraint { x >= 0 and x <= 100 }
     }
     
     constraint def NonNegative {
         in value : Real;
-        
-        assert not value < 0;
+
+        not value < 0
     }
     
-    constraint safeBraking {
-        in vehicle : Vehicle;
-        in minimumRequired : Real;
-        
-        assume vehicle.speed > 0;
-        assert vehicle.brakeForce >= minimumRequired;
-        assert not vehicle.brakes.worn;
+    requirement safeBraking {
+        subject vehicle : Vehicle;
+        attribute minimumRequired : Real;
+
+        assume constraint { vehicle.speed > 0 }
+        require constraint { vehicle.brakeForce >= minimumRequired }
+        require constraint { not vehicle.brakes.worn }
     }
     
     // ==========================================
@@ -109,9 +109,9 @@ package PhaseC {
     
     requirement SafetyReq {
         subject vehicle : Vehicle;
-        assume vehicle.speed > 0;
-        require vehicle.brakes.functional;
-        require vehicle.airbags.deployed;
+        assume constraint { vehicle.speed > 0 }
+        require constraint { vehicle.brakes.functional }
+        require constraint { vehicle.airbags.deployed }
         actor driver : Driver;
     }
     
@@ -122,16 +122,16 @@ package PhaseC {
         
         subject system : BrakingSystem;
         actor operator : HumanOperator;
-        assume operator.alertLevel > threshold;
-        require system.response < maxDelay;
-        require system.force >= emergencyForce;
+        assume constraint { operator.alertLevel > threshold }
+        require constraint { system.response < maxDelay }
+        require constraint { system.force >= emergencyForce }
     }
     
     requirement PasswordPolicy {
         subject password : Password;
-        require password.length >= 8;
-        require password.hasUpperCase;
-        require password.hasDigit;
+        require constraint { password.length >= 8 }
+        require constraint { password.hasUpperCase }
+        require constraint { password.hasDigit }
         actor user : AuthenticatedUser;
     }
     
@@ -250,16 +250,16 @@ package PhaseC {
         subject autopilot : AutopilotSystem;
         actor vehicle : AutonomousVehicle;
         
-        assume autopilot.calibrated;
-        require autopilot.sensorHealth >= 0.95;
-        require autopilot.responseTime < 100;
+        assume constraint { autopilot.calibrated }
+        require constraint { autopilot.sensorHealth >= 0.95 }
+        require constraint { autopilot.responseTime < 100 }
     }
     
     calc def RiskScore {
         in sensorHealth : Real;
         in trafficDensity : Real;
         
-        return (1.0 - sensorHealth) * trafficDensity;
+        (1.0 - sensorHealth) * trafficDensity
     }
     
     state def AutopilotMode {

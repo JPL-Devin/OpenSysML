@@ -596,17 +596,19 @@ This generates error frequency analysis and per-file diagnostics.
 The gate indexes the standard library from an empty semantic cache — it points
 `XDG_CACHE_HOME` at a temporary directory — so it reports the same numbers on a
 fresh machine as on one whose `~/.cache/sysml-ls` is already populated.
-`TestTrainingExamplesCacheStateIndependent` runs the corpus twice over one cache
-directory and fails if any file's diagnostics differ between the two.
+`TestCorpusGatesCacheStateIndependent` runs each of the four OMG roots twice over
+one cache directory and fails if any file's diagnostics differ between the two.
 
 ---
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (338/338 execution conformance cases passing).
+**Implementation Status**: Core behavioral semantics complete (344/344 execution conformance cases passing).
 
 **Training Example Status**: 100/100 clean. The last two files were false positives of ours, not
 OMG bugs: `start` and `done` are declared by `Items::Item` and redefined by `Parts::Part`, and every
 definition body now inherits the features its kind implies (see the re-pin below).
 
-The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.
+A clean training corpus means these 100 files produce no diagnostic — it is not evidence about
+execution semantics, which this corpus does not run, nor about the notation these files happen not
+to use. See [spec compliance](spec-compliance.md) for what is and is not claimed.

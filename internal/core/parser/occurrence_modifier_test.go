@@ -141,16 +141,14 @@ func TestParseUsageOccurrenceModifiersInBody(t *testing.T) {
 	}
 }
 
-// `all` follows the portion keyword of a bare portion usage, as it follows any
-// other kind keyword.
-func TestParseBarePortionAll(t *testing.T) {
+// `all` is KerML.xtext's `isSufficient` prefix; SysML.xtext admits the word
+// after `import` alone, so the pinned validator rejects `snapshot all s : T;`.
+func TestParseBarePortionAllIsKerMLOnly(t *testing.T) {
 	for _, input := range []string{"snapshot all s : Flight;", "timeslice all t : Flight;"} {
-		u := parseSingleUsage(t, input)
-		if !u.IsAll {
-			t.Errorf("%s: IsAll = false", input)
-		}
-		if u.Ident.Name != "s" && u.Ident.Name != "t" {
-			t.Errorf("%s: name = %q, want the declared name", input, u.Ident.Name)
+		p := New(source.New("occurrence_modifier.sysml", []byte(input)))
+		p.ParseFile()
+		if len(p.Diagnostics) == 0 {
+			t.Errorf("%s: parsed clean, want a diagnostic", input)
 		}
 	}
 }

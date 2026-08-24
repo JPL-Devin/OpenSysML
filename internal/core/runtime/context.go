@@ -454,7 +454,7 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 	}
 
 	// Evaluate every condition the constraint states, inherited ones included.
-	conds := conditionsOf(ctx.chainMembers(sym, scope))
+	conds := ctx.conditionsOf(ctx.chainMembers(sym, scope))
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:     sym,
 		kind:    "constraint",
@@ -567,13 +567,15 @@ type scopedMember struct {
 
 // chainMembers returns the members declared by sym's supertypes, most general
 // first, followed by sym's own. A usage that takes its conditions from a
-// definition (constraint limit : MassLimit) carries no members itself.
+// definition (constraint limit : MassLimit) carries no members itself. A library
+// supertype states the metamodel frame every element specializes rather than the
+// model's own objectives, conditions or parameters, so it contributes none.
 func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []scopedMember {
 	var out []scopedMember
 	supers := ctx.model.AllSupertypes(sym)
 	for i := len(supers) - 1; i >= 0; i-- {
 		link := supers[i]
-		if link == nil {
+		if link == nil || ctx.libraryDeclared(link) {
 			continue
 		}
 		for _, node := range declMembers(link.Decl) {
@@ -638,7 +640,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 	}
 
 	// Second pass: evaluate the assumed and required conditions.
-	conds := conditionsOf(members)
+	conds := ctx.conditionsOf(members)
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:      sym,
 		kind:     "requirement",

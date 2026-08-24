@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -12,7 +13,7 @@ elmt:Synonyms
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:Synonyms__Temperature
-    a sysml:AttributeUsage ;
+    a sysml:DataType ;
     sysml:qualifiedName "Synonyms::Temperature" ;
     sysml:owningNamespace elmt:Synonyms ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -75,14 +76,27 @@ elmt:Synonyms__note
     sysml:declaredName "note" ;
     sysx:sourceText "message note;" .
 
-elmt:Synonyms__budget
+elmt:Synonyms___407
     a sysml:AllocationUsage ;
-    sysml:qualifiedName "Synonyms::budget" ;
+    sysml:qualifiedName "Synonyms::@7" ;
     sysml:owningNamespace elmt:Synonyms ;
     sysx:memberIndex "7"^^xsd:integer ;
-    sysml:declaredName "budget" ;
-    sysx:declaredKeyword "allocate" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:sourceText "allocate reading to base;" ;
+    sysx:relatedFeature expr:Synonyms___407.end0, expr:Synonyms___407.end1 ;
+    sysx:endForm "to" ;
+    sysx:declaredKeyword "allocate" .
+
+expr:Synonyms___407.end0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "reading" ;
+    sysml:referent elmt:Synonyms__reading ;
+    sysx:endIndex "0"^^xsd:integer .
+
+expr:Synonyms___407.end1
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "base" ;
+    sysml:referent elmt:Synonyms__base ;
+    sysx:endIndex "1"^^xsd:integer .
 
 elmt:Synonyms__Drive
     a sysml:UseCaseDefinition ;
@@ -116,13 +130,13 @@ elmt:Synonyms__Vehicle
     sysml:declaredName "Vehicle" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Synonyms__Vehicle__idling
+elmt:Synonyms__Vehicle___400
     a sysml:StateUsage ;
-    sysml:qualifiedName "Synonyms::Vehicle::idling" ;
+    sysml:qualifiedName "Synonyms::Vehicle::@0" ;
     sysml:owningNamespace elmt:Synonyms__Vehicle ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:declaredName "idling" ;
     sysx:declaredKeyword "exhibit" ;
+    sysml:references "idling" ;
     sysml:type elmt:Synonyms__Idle ;
     sysx:hasBody "false"^^xsd:boolean .
 

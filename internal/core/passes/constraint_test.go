@@ -7,7 +7,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // constraintDiags parses src, indexes it, runs the full default registry, and
@@ -15,7 +14,7 @@ import (
 func constraintDiags(t *testing.T, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>", root)
 	all := Analyze("<t>", root, nil, idx)
 	var out []Diagnostic
@@ -78,6 +77,27 @@ func TestConstraintMultiplicityRangeValidOK(t *testing.T) {
 	}
 }
 
+func TestEnumNamedValuesStillReportDuplicateNames(t *testing.T) {
+	const src = `enum def Colors {
+		enum red;
+		enum red;
+		enum x = 60.0;
+		enum x = 80.0;
+	}`
+	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	idx := newTestIndex()
+	idx.AddDocument("<t>", root)
+	var duplicates []Diagnostic
+	for _, d := range Analyze("<t>", root, nil, idx) {
+		if d.Message == "Duplicate of other owned member name" {
+			duplicates = append(duplicates, d)
+		}
+	}
+	if len(duplicates) != 4 {
+		t.Fatalf("got %d duplicate-name diagnostics, want 4: %v", len(duplicates), duplicates)
+	}
+}
+
 func TestConstraintSubsettingMultiplicityExceeds(t *testing.T) {
 	diags := constraintDiags(t,
 		"part def C { part cap [0..3]; part many subsets cap [0..10]; }")
@@ -133,7 +153,7 @@ func TestConstraintConnectionNaryOK(t *testing.T) {
 func TestConstraintConnectionNaryEndCountReachesTheChecker(t *testing.T) {
 	src := "part def C { part a; part b; part c; part d; connection conn connect (a, b, c, d); }"
 	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>", root)
 	syms := idx.LookupQualified("C::conn")
 	if len(syms) != 1 {
@@ -178,11 +198,27 @@ func TestConstraintInterfaceBinaryOK(t *testing.T) {
 	}
 }
 
-func TestConstraintInterfaceNaryFails(t *testing.T) {
+func TestConstraintUntypedInterfaceNaryIsClean(t *testing.T) {
 	diags := constraintDiags(t,
 		"part def C { port p; port q; port r; interface i connect (p, q, r); }")
+	if hasCode(diags, "connector-ends") {
+		t.Fatalf("untyped interfaces are n-ary, got %v", diags)
+	}
+}
+
+func TestConstraintBinaryInterfaceNaryFails(t *testing.T) {
+	diags := constraintDiags(t,
+		"part def C { port p; port q; port r; interface i : Interfaces::BinaryInterface connect (a ::> p, b ::> q, c ::> r); }")
 	if !hasCode(diags, "connector-ends") {
-		t.Fatalf("expected connector-ends diagnostic for n-ary interface, got %v", diags)
+		t.Fatalf("expected connector-ends diagnostic for n-ary binary interface, got %v", diags)
+	}
+}
+
+func TestConstraintNamedNaryInterfaceIsAccepted(t *testing.T) {
+	diags := constraintDiags(t,
+		"part def C { port p; port q; port r; interface i connect (a ::> p, b ::> q, c ::> r); }")
+	if hasCode(diags, "connector-ends") {
+		t.Fatalf("unexpected connector-ends diagnostic for named n-ary interface, got %v", diags)
 	}
 }
 
@@ -204,7 +240,7 @@ func TestConstraintAllocationNaryFails(t *testing.T) {
 
 func TestConstraintFlowCompleteOK(t *testing.T) {
 	diags := constraintDiags(t,
-		"part def C { item Fuel; part a; part b; flow f of Fuel from a to b; }")
+		"part def C { item Fuel; part a { out item outFuel : Fuel; } part b { in item inFuel : Fuel; } flow f of Fuel from a.outFuel to b.inFuel; }")
 	if hasCode(diags, "flow-ends") {
 		t.Fatalf("unexpected flow-ends diagnostic, got %v", diags)
 	}
@@ -667,8 +703,8 @@ func TestConstraintInterfaceEndConjugation(t *testing.T) {
 	}
 }
 
-// A `variant` whose owner is not a variation offers no choice, so it is reported
-// as a warning: the member is well-formed, only its `variant` keyword is idle.
+// A `variant` whose owner is not a variation offers no choice, so it is an error
+// as it is in the reference.
 func TestConstraintVariantOutsideVariation(t *testing.T) {
 	src := `
 		part def Widget {
@@ -685,11 +721,11 @@ func TestConstraintVariantOutsideVariation(t *testing.T) {
 	if got == nil {
 		t.Fatalf("expected variant-outside-variation diagnostic, got %v", diags)
 	}
-	if got.Severity != SeverityWarning {
-		t.Errorf("severity = %v, want warning", got.Severity)
+	if got.Severity != SeverityError {
+		t.Errorf("severity = %v, want error", got.Severity)
 	}
-	if !strings.Contains(got.Message, "variant misplaced is declared in Widget") {
-		t.Errorf("message %q does not name the variant and its owner", got.Message)
+	if got.Message != msgVariantOutsideVariation {
+		t.Errorf("message = %q, want %q", got.Message, msgVariantOutsideVariation)
 	}
 }
 

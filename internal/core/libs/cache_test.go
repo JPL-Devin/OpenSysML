@@ -3,21 +3,19 @@ package libs
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func sampleRecord(name string) *IndexRecord {
 	return &IndexRecord{
 		Name: name,
-		Symbols: []symRecord{
-			{FQN: "P", Kind: symbols.SymbolPackage, Span: source.Span{Offset: 0, Len: 1}},
-			{FQN: "P::N", Kind: symbols.SymbolNamespace, Span: source.Span{Offset: 2, Len: 3}},
+		Facts: []factRecord{
+			{FQN: "P::N", Supers: []string{"P::M"}},
+			{FQN: "P::M", Unit: &unitFacts{ScaleNum: 1, ScaleDen: 1}},
 		},
 	}
 }
@@ -33,14 +31,17 @@ func TestCacheStoreLoadRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatal("Load miss after Store")
 	}
-	// symRecord contains a []string field, so it is not ==-comparable;
-	// compare the round-tripped fields individually.
-	if got.Name != rec.Name || len(got.Symbols) != len(rec.Symbols) {
+	// factRecord holds slices and pointers, so compare the round-tripped fields.
+	if got.Name != rec.Name || len(got.Facts) != len(rec.Facts) {
 		t.Fatalf("round-trip mismatch: got %+v want %+v", got, rec)
 	}
-	a, b := got.Symbols[1], rec.Symbols[1]
-	if a.FQN != b.FQN || a.Kind != b.Kind || a.Span != b.Span {
-		t.Fatalf("symbol round-trip mismatch: got %+v want %+v", a, b)
+	a, b := got.Facts[0], rec.Facts[0]
+	if a.FQN != b.FQN || !slices.Equal(a.Supers, b.Supers) {
+		t.Fatalf("fact round-trip mismatch: got %+v want %+v", a, b)
+	}
+	if unit := got.Facts[1].Unit; unit == nil || unit.ScaleNum != rec.Facts[1].Unit.ScaleNum ||
+		unit.ScaleDen != rec.Facts[1].Unit.ScaleDen {
+		t.Fatalf("unit facts round-tripped as %+v, want %+v", unit, rec.Facts[1].Unit)
 	}
 }
 
@@ -58,7 +59,7 @@ func TestCacheKeyDependsOnContentSetAndVersion(t *testing.T) {
 	if k1 == k2 {
 		t.Fatal("distinct content produced identical cache keys")
 	}
-	// A record persists values reduced from sibling files, so the same content in
+	// A record persists facts derived from sibling files, so the same content in
 	// a different library set is a different record.
 	if k1 == c.keyFor([]byte("alpha"), "other-set") {
 		t.Fatal("distinct library sets produced identical cache keys")
@@ -70,6 +71,27 @@ func TestCacheKeyDependsOnContentSetAndVersion(t *testing.T) {
 	}
 	if _, ok := c.Load(k2); ok {
 		t.Fatal("stale content produced a cache hit")
+	}
+}
+
+// A record holds facts the code computes rather than reads — a supertype set, a
+// unit reduction — so a record written by another build must miss, not be served
+// with the answer that build gave.
+func TestCacheKeyDependsOnBuildID(t *testing.T) {
+	c := &Cache{dir: t.TempDir()}
+	key := c.keyFor([]byte("alpha"), "set")
+	if err := c.Store(key, sampleRecord("x")); err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	restore := buildID
+	buildID = func() string { return "other-build" }
+	defer func() { buildID = restore }()
+	other := c.keyFor([]byte("alpha"), "set")
+	if other == key {
+		t.Fatal("distinct builds produced identical cache keys")
+	}
+	if _, ok := c.Load(other); ok {
+		t.Fatal("a record written by another build produced a cache hit")
 	}
 }
 
@@ -188,7 +210,7 @@ func TestCacheStoreConcurrentWritersOfOneKey(t *testing.T) {
 	if !ok {
 		t.Fatal("Load miss after concurrent stores: a record was published truncated")
 	}
-	if got.Name != rec.Name || len(got.Symbols) != len(rec.Symbols) {
+	if got.Name != rec.Name || len(got.Facts) != len(rec.Facts) {
 		t.Fatalf("record after concurrent stores: got %+v want %+v", got, rec)
 	}
 	entries, err := os.ReadDir(c.dir)

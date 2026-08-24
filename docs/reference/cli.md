@@ -1,5 +1,16 @@
 # SysML CLI Usage Examples
 
+## OSLC element queries
+
+`-query <oslc-query>` loads the positional model and evaluates OSLC Query text,
+printing one matched element per line as qualified name and metamodel type,
+followed by any selected properties. It is a model-query mode alongside
+`-convert`.
+
+```bash
+sysml -query 'oslc.where=sysml:name="wheel"' model.sysml
+```
+
 ## Interactive Mode (Default)
 
 Start the REPL with no arguments:
@@ -134,6 +145,7 @@ echo "%load model.sysml
 | `--eval <expr>` | `-e` | Evaluate expression and exit (repeatable) |
 | `--debug` | | Report every diagnostic over the whole session buffer, with the pass that produced it |
 | `--quiet` | | Report errors only, suppressing warnings |
+| `--strict` | | Judge the model as conforming SysML v2: notation no pinned production admits is an error, not a warning (see [Strict conformance](../guide/03-command-line.md#strict-conformance)) |
 | `--trace` | | Report each execution step: expression evaluation, calc invocation, action tokens, state transitions |
 | `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf`. RDF is [experimental](rdf-mapping.md#status-experimental) and every run that converts it says so on stderr (see [the RDF mapping](rdf-mapping.md)) |
 | `--from <format>` | | Input format for `--convert` (default: from the input's extension) |

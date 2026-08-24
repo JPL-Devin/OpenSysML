@@ -108,6 +108,23 @@ except opensysml.ModelError as exc:
     partial = exc.model            # what the service did parse
 ```
 
+`strict_conformance=True`, on the same three calls, asks a different question:
+whether the source is conforming SysML v2. OpenSysML's own notation — the
+`initial`/`final` markers, `region`, `defer`, the pseudostates, `transition <src>
+to <tgt>` — is then reported as an error rather than a warning
+([3. Strict conformance](03-command-line.md#strict-conformance)). The two are
+independent: `strict` decides whether errors raise, `strict_conformance` decides
+what counts as one.
+
+```python
+model = opensysml.load("model.sysml", strict_conformance=True)
+model.ok                       # False if the model uses OpenSysML notation
+```
+
+A service too old to know the field raises `MissingCapabilityError` instead of
+silently answering the default question; it advertises
+`strict_conformance` in `Connection.server_info().capabilities`.
+
 ## Inspecting symbols
 
 `Model.find` takes a **short** name and searches the symbol tree, returning
@@ -473,10 +490,22 @@ result.save("spacecraft.sysml")   # every byte outside an edited span unchanged
 existing `= <expr>` on a feature, or adds one before the terminating `;` when the
 feature has none; `value` is SysML notation for one expression — `"1050.0[SI::kg]"`,
 `'"flight-2"'`, `"true"`, `"unitMass * count"`. `rename(target, new_name)` rewrites
-a declaration's name token. A target is a symbol id (its FQN, as `Symbol.id`
+a declaration's name token and the references to it. A target is a symbol id (its FQN, as `Symbol.id`
 reports it) or a `Symbol` itself, so an element found by a read is edited by
 handing it back. Both calls return the editor, so operations chain, and `len(edit)`
 counts them.
+
+The same editor authors declarations:
+
+```python
+model = opensysml.loads("package Demo {}", strict=True)
+result = model.edit().add_part_def("", "Vehicle").apply()
+```
+
+`add_member(owner, kind, name, type=None, multiplicity=None, value=None,
+specializes=None)` accepts notation strings for the declaration. Typed
+`add_*` helpers cover the common SysML and KerML kinds, and
+`delete(target, cascade=False)` removes declarations transactionally.
 
 `apply()` sends the operations in one call and returns an `EditResult`, which *is*
 a `Conversion`: `str(result)` is the edited notation, `result.save(path)` and
@@ -506,35 +535,41 @@ Every refusal is a typed error, never a silent no-op:
 | No operation was added to the editor | `NoEditsError` |
 | No such element, an ambiguous name, or an element that cannot carry a value or a name | `EditTargetError` |
 | A new value that does not parse as one expression, or a new name that is not an identifier or already means something where the element is declared | `InvalidEditError` |
-| A rename of an element that is referenced | `RenameReferencedError` |
+| A rename that would capture or shadow another name, at the declaration or at any reference | `InvalidEditError` |
 | Two operations that would edit overlapping bytes | `OverlappingEditsError` |
 | The edited model does not read back cleanly — a value naming something that does not resolve, say | `EditResultError` |
 
 All of them are `EditError`, which carries `failure` (the refusal kind),
-`diagnostics`, and `referring_elements` for a refused rename. An
-`EditResultError`'s diagnostics are spanned against the edited text.
-`referring_elements` names each namespace a reference is made from, so it says
-where to look rather than which expression is at fault.
+`diagnostics`, and `referring_elements` for a refused rename or a refused
+non-cascade delete. An `EditResultError`'s diagnostics are spanned against the
+edited text. `referring_elements` names each namespace a reference is made from,
+so it says where to look rather than which expression is at fault.
 
 ```python
 try:
-    model.edit().rename("Demo::SC", "Spacecraft").apply()
-except opensysml.RenameReferencedError as refused:
-    print(refused.referring_elements)   # ['Demo::SC', 'Demo::sc']
+    model.edit().rename("Demo::SC::margin", "label").apply()
+except opensysml.InvalidEditError as refused:
+    print(refused.failure)   # 'EDIT_FAILURE_INVALID_NAME'
 ```
+
+A rename rewrites the declaration's name token and every reference to it the
+model's source makes — a qualified name's matching segment, an alias target and
+an import — so the model still says what it said.
 
 Known limitations, by design:
 
-- **A rename does not update references.** It rewrites the declaration's name
-  token; a rename whose element is referenced anywhere is refused rather than
-  leaving the model unresolvable. Rename an element nothing refers to, or make
-  the reference edits yourself. A new name that already means something where the
-  element is declared — a sibling of that name, or one reached through an
-  enclosing namespace, an import or a supertype — is refused too: it would either
-  be ambiguous or shadow what is already there, and either way expressions you
-  did not name would start reading the renamed element.
-- **Elements are not created or deleted**, and a model is not built from Python:
-  editing changes the source of a model that already says what it says.
+- **A rename is refused where it would change what a name means.** A new name
+  that already means something where the element is declared — a sibling of that
+  name, or one reached through an enclosing namespace, an import or a supertype —
+  or that already means something at one of the references being rewritten, is
+  refused: it would either be ambiguous or shadow what is already there, and
+  either way expressions you did not name would start reading the renamed
+  element. References made from another file are not rewritten, since an edit
+  sees only the source of the model it was given.
+- **A model is not built from Python.** Declarations are added to and deleted
+  from a model that is already loaded; there is no way to author one from
+  nothing, and no object facade — a declaration is described by the notation
+  arguments of an `add_*` call, not by a Python object you mutate.
 - An editor is applied **once** — it describes an edit of the model it was made
   from, so applying it twice raises `RuntimeError`. Load the saved file and edit
   that.

@@ -6,14 +6,13 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // filterDiags returns the element-filter findings of src.
 func filterDiags(t *testing.T, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>", root)
 	idx.ExpandWildcardImports()
 
@@ -31,6 +30,18 @@ func only(diags []Diagnostic, code string) []Diagnostic {
 	var out []Diagnostic
 	for _, d := range diags {
 		if d.Code == code {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// except returns the findings without one code, for tests whose subject is a
+// different rule.
+func except(diags []Diagnostic, code string) []Diagnostic {
+	var out []Diagnostic
+	for _, d := range diags {
+		if d.Code != code {
 			out = append(out, d)
 		}
 	}
@@ -64,17 +75,16 @@ func TestFilterNotBooleanIsReported(t *testing.T) {
 			if diags[0].Span.Len == 0 {
 				t.Errorf("the diagnostic has no span: %v", diags[0])
 			}
-			if !strings.Contains(diags[0].Message, "boolean-valued") {
-				t.Errorf("message = %q, want it to say the condition must be boolean-valued", diags[0].Message)
+			if diags[0].Message != msgFilterNotBoolean {
+				t.Errorf("message = %q, want %q", diags[0].Message, msgFilterNotBoolean)
 			}
 		})
 	}
 }
 
-// A condition outside the subset the evaluator decides is reported and not
-// applied, which keeps every candidate: hiding model content on a verdict that
-// was never reached would be worse than surfacing an element a filter meant to
-// leave out. So it is a warning, not an error.
+// A condition outside the subset the evaluator decides is an error, as it is in
+// the reference: it selects nothing, so the filter the model asked for is not
+// the one it got.
 func TestFilterNotEvaluableIsReported(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -88,14 +98,14 @@ func TestFilterNotEvaluableIsReported(t *testing.T) {
 			if len(diags) == 0 {
 				t.Fatalf("the condition is not evaluable but nothing was reported")
 			}
-			if diags[0].Severity != SeverityWarning {
-				t.Errorf("severity = %v, want a warning", diags[0].Severity)
+			if diags[0].Severity != SeverityError {
+				t.Errorf("severity = %v, want an error", diags[0].Severity)
 			}
 			if diags[0].Span.Len == 0 {
 				t.Errorf("the diagnostic has no span: %v", diags[0])
 			}
-			if diags[0].Message == "" || !strings.Contains(diags[0].Message, "cannot be evaluated") {
-				t.Errorf("message = %q, want it to say the condition cannot be evaluated", diags[0].Message)
+			if diags[0].Message != msgFilterNotEvaluable {
+				t.Errorf("message = %q, want %q", diags[0].Message, msgFilterNotEvaluable)
 			}
 		})
 	}
@@ -115,5 +125,31 @@ func TestFilterConditionsInTheSupportedSubsetAreClean(t *testing.T) {
 
 	if diags := filterDiags(t, src); len(diags) != 0 {
 		t.Fatalf("supported filter conditions were reported: %v", diags)
+	}
+}
+
+// A constructor is model-level evaluable, so a filter built from one is reported
+// for yielding an instance rather than a truth value (KerML 7.4.9, 8.2.4).
+func TestFilterConstructorIsNotBooleanRatherThanInevaluable(t *testing.T) {
+	src := filterMetadata + `package P { part def A { attribute n; }
+		filter new A(null, 1, "", false); }`
+	diags := filterDiags(t, src)
+	if len(only(diags, "filter-not-boolean")) != 1 || len(only(diags, "filter-not-evaluable")) != 0 {
+		t.Fatalf("want one filter-not-boolean and no filter-not-evaluable, got %v", diags)
+	}
+}
+
+// The two faults are stated on the membership carrying the condition, once each,
+// however many operands share the fault.
+func TestFilterReportsEachFaultOnceOnTheMembership(t *testing.T) {
+	src := filterMetadata + "package P { filter (3 + @Safety) and (4 + @Safety); }"
+	diags := filterDiags(t, src)
+	if len(only(diags, "filter-not-evaluable")) != 1 {
+		t.Fatalf("want one filter-not-evaluable, got %v", diags)
+	}
+	for _, d := range diags {
+		if d.Span.Len == 0 {
+			t.Errorf("the diagnostic has no span: %v", d)
+		}
 	}
 }

@@ -1,0 +1,156 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="KerMLDeclarations" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Membership visibility="default"
+        (Definition kind="metaclass" abstract=false variation=false name="Classified"))
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="A"
+          (Relationship kind="specializes" target=Base::Anything
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="B"
+          (Relationship kind="specializes" target=Base::Anything
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Integer
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="p5" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))
+          (Multiplicity range=false
+            (LiteralInteger value="1"))))
+      (Membership visibility="default"
+        (Usage kind="class" name="T" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="type"
+          (Relationship kind="specializes" target=A
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="class" name="u" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="type"
+          (Relationship kind="specializes" target=A
+            (*ast.QualifiedName))
+          (Relationship kind="specializes" target=Base::things
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="f" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="g" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+      (RelationshipMember kind="specializes" name="Gen" keyword="subtype" source="A" target="B" conjugated=false)
+      (RelationshipMember kind="typing" name="t1" keyword="typing" source="f" target="B" conjugated=false)
+      (RelationshipMember kind="subsets" name="Sub" keyword="subset" source="f" target="g" conjugated=false)
+      (RelationshipMember kind="featured by" name="F" keyword="featuring" source="f" target="A" conjugated=false)
+      (RelationshipMember kind="inverse" name="i" keyword="inverse" source="f" target="g" conjugated=false)
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+          (Relationship kind="typing" target=A
+            (*ast.QualifiedName))
+          (Relationship kind="typing" target=B
+            (*ast.QualifiedName))
+          (Relationship kind="subsets" target=g
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="C"
+          (Relationship kind="specializes" target=A conjugated=true
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Definition kind="class" abstract=false variation=false name="Tanks"
+          (Relationship kind="specializes" target=Base::Anything
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="fuelInPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Membership visibility="default"
+                (Usage kind="attribute" name="fuelFlow" ref=false direction="in" composite=false derived=false ordered=false nonunique=false keyword="feature"
+                  (Relationship kind="typing" target=Real
+                    (*ast.QualifiedName))))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="fuelOutPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="specializes" target=fuelInPort conjugated=true
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="class" name="D" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=D
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=D
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=D
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="vin" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="a"
+                  (FeatureReference name="c")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="b"
+                  (FeatureReference name="a")))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+                  (Relationship kind="references" target=a
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+                  (Relationship kind="references" target=b
+                    (*ast.QualifiedName))))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+                  (Relationship kind="references" target=a
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+                  (Relationship kind="references" target=b
+                    (*ast.QualifiedName))))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="identifier" ref=false direction="none" composite=true derived=false ordered=false nonunique=false variable=true
+              (Multiplicity range=true
+                (LiteralInteger value="0")
+                (LiteralInteger value="1"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="legalIdentification" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+      (RelationshipMember kind="redefines" name="" keyword="redefinition" source="D::vin" target="legalIdentification" conjugated=false)
+      (Membership visibility="default"
+        (Usage kind="assoc" name="AS" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="e1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="e2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true))))
+      (Membership visibility="default"
+        (Comment about="" locale="\"en\""))
+      (Membership visibility="default"
+        (Documentation locale=""))
+      (Import visibility="private" all=false kind=membership recursive=true imported="KerMLDeclarations" filtered=true
+        (OperatorExpr operator="and"
+          (OperatorExpr operator="@"
+            (FeatureReference name="Classified"))
+          (LiteralBool value=true)))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="z2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (PrefixMetadata type="Classified")))
+      (Membership visibility="default"
+        (Usage kind="behavior" name="W" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="v" ref=false direction="inout" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="expr" name="whileTest" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (OperatorExpr operator=">"
+                (FeatureReference name="v")
+                (LiteralInteger value="3")))))))))

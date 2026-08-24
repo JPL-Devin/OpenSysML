@@ -9,6 +9,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -29,6 +30,15 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 			}
 			return c.list(), nil
 		}
+		// A declaration in a metadata annotation body redefines a feature of
+		// the metadata definition, so only its features are offered there. A
+		// value position resolves in the enclosing scope chain as usual.
+		if body := enclosingMetadataBody(scope); body != nil && !valuePositionAt(doc.Content, offset) {
+			for _, sym := range s.ws.MetadataBodyMembers(body) {
+				c.addSymbol(s, sym)
+			}
+			return c.list(), nil
+		}
 		for ; scope != nil; scope = scope.Parent() {
 			for _, sym := range scope.Members() {
 				c.addSymbol(s, sym)
@@ -44,6 +54,15 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 			Label:  kw,
 			Kind:   protocol.CompletionItemKindKeyword,
 			Detail: "keyword",
+		})
+	}
+	// Words the parser reads as syntax positionally but the lexer does not
+	// reserve, so they are offered without being usable only as a keyword.
+	for _, kw := range lexer.ContextualWords(source.KindOf(name)) {
+		c.add(protocol.CompletionItem{
+			Label:  kw,
+			Kind:   protocol.CompletionItemKindKeyword,
+			Detail: "contextual keyword",
 		})
 	}
 
@@ -148,7 +167,8 @@ func leafName(name string) string {
 // distinguish definitions, usages, behaviors and packages.
 func completionKind(k symbols.SymbolKind) protocol.CompletionItemKind {
 	switch k {
-	case symbols.SymbolPackage, symbols.SymbolNamespace, symbols.SymbolDependency:
+	case symbols.SymbolPackage, symbols.SymbolNamespace, symbols.SymbolDependency,
+		symbols.SymbolRelationship:
 		return protocol.CompletionItemKindModule
 	case symbols.SymbolAlias:
 		return protocol.CompletionItemKindReference
@@ -245,9 +265,20 @@ func isDigit(b byte) bool {
 }
 
 // enclosingScope returns the deepest scope whose owning declaration span
-// contains offset, starting from root. Falls back to root.
+// contains offset, starting from root. Falls back to root. A metadata
+// annotation body scope has no owning symbol, so it is found by its own
+// node span before the annotated declaration's members are consulted.
 func enclosingScope(root *symbols.Scope, offset int) *symbols.Scope {
 	best := root
+	for _, child := range root.Children() {
+		if !isMetadataBodyScope(child) {
+			continue
+		}
+		sp := child.Node().Span()
+		if offset >= sp.Offset && offset < sp.End() {
+			return enclosingScope(child, offset)
+		}
+	}
 	for _, sym := range root.Members() {
 		if sym.Scope == nil {
 			continue
@@ -258,4 +289,22 @@ func enclosingScope(root *symbols.Scope, offset int) *symbols.Scope {
 		}
 	}
 	return best
+}
+
+// valuePositionAt reports whether offset sits after the `=` of the statement
+// it is in — a value, which resolves in the enclosing scope chain rather than
+// against the metadata definition's features.
+func valuePositionAt(content []byte, offset int) bool {
+	if offset > len(content) {
+		offset = len(content)
+	}
+	for i := offset - 1; i >= 0; i-- {
+		switch content[i] {
+		case '=':
+			return true
+		case ';', '{', '}':
+			return false
+		}
+	}
+	return false
 }

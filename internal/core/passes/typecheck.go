@@ -31,8 +31,9 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	tc := &typeChecker{
 		resolver: ctx.Resolver(),
 		expr:     &exprChecker{resolver: ctx.Resolver(), model: model},
-		lang:     source.KindOf(name),
+		lang:     ctx.Kind,
 	}
+	tc.expr.walkMembers = tc.walk
 	tc.walk(rootScope, root.Members)
 	return append(tc.diags, tc.expr.diags...)
 }
@@ -51,7 +52,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 		switch d := unwrapType(m).(type) {
 		case *ast.Definition:
 			tc.checkRelationships(scope, d.Relationships, declKind{
-				lang: tc.lang, isDef: true, defKind: d.Kind, keyword: d.Keyword,
+				lang: tc.lang, isDef: true, defKind: d.Kind, keyword: d.Keyword, span: d.Span(),
 			})
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
@@ -61,10 +62,15 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				lang:         tc.lang,
 				useKind:      d.Kind,
 				direction:    d.Direction,
+				isReference:  d.IsReference,
 				isEnd:        d.IsEnd,
 				isIndividual: d.IsIndividual,
 				portion:      d.Portion,
+				keyword:      d.Keyword,
+				hasType:      hasTypingRelationship(d.Relationships),
+				span:         d.Span(),
 			})
+			tc.checkOneType(scope, d)
 			tc.expr.checkUsageValue(scope, d)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
@@ -144,9 +150,9 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 // escape the usage-kind rules.
 func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMember) {
 	if m.TypeRef != nil {
-		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{lang: tc.lang, useKind: ast.UsageSubject})
+		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{lang: tc.lang, useKind: ast.UsageSubject, span: m.Span()})
 	}
-	tc.checkRelationships(scope, m.Relationships, declKind{lang: tc.lang, useKind: ast.UsageSubject})
+	tc.checkRelationships(scope, m.Relationships, declKind{lang: tc.lang, useKind: ast.UsageSubject, span: m.Span()})
 	if m.BindingExpr != nil {
 		tc.expr.infer(scope, m.BindingExpr)
 	}
@@ -182,11 +188,13 @@ func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
 type declKind struct {
 	// lang is the language of the document the declaration is written in: the
 	// KerML type layer has no definition/usage split to check against.
-	lang      source.Kind
-	isDef     bool
-	defKind   ast.DefinitionKind
-	useKind   ast.UsageKind
-	direction ast.FeatureDirection
+	lang        source.Kind
+	isDef       bool
+	defKind     ast.DefinitionKind
+	useKind     ast.UsageKind
+	direction   ast.FeatureDirection
+	isReference bool
+	hasType     bool
 	// isEnd marks a feature declared with the `end` modifier, whose type is that
 	// of the feature it connects and so escapes the usage-kind taxonomy.
 	isEnd bool
@@ -200,6 +208,11 @@ type declKind struct {
 	// keyword is the kind keyword as written, which tells apart the spellings a
 	// single DefinitionKind carries (`classifier` and `class` are both DefClass).
 	keyword string
+	// span is the declaration itself, where the reference reports a wrong typing
+	// (see pilotTypingMessage).
+	span source.Span
+	// conjugated marks a `~T` typing, which the conjugation rule owns.
+	conjugated bool
 }
 
 // isPlainClassifier reports whether the declaration is written with `classifier`
@@ -207,6 +220,14 @@ type declKind struct {
 func (d declKind) isPlainClassifier() bool {
 	return d.isDef && d.defKind == ast.DefClass &&
 		(d.keyword == "classifier" || d.keyword == "subclassifier")
+}
+
+// isReferenceUsage reports whether the usage was written with no kind keyword at
+// all: a ReferenceUsage (SysML.xtext DefaultReferenceUsage, `x : T;`, `ref x :
+// T;`) or a plain Usage (ExtendedUsage, `#meta x : T;`). Neither is a usage of
+// the default kind, so the usage-kind taxonomy does not constrain its type.
+func (d declKind) isReferenceUsage() bool {
+	return !d.isDef && d.keyword == "" && d.useKind == ast.UsageAttribute
 }
 
 // isKerML reports whether the declaration is written in KerML, which has no
@@ -233,8 +254,13 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 		if rel == nil || rel.Target == nil {
 			continue
 		}
-		tc.checkTypeTarget(scope, rel.Target, rel.Kind, decl)
-		if rel.Conjugated {
+		// Only a conjugated *typing* is a ConjugatedPortTyping (SysML.xtext:974); a
+		// KerML Conjugation relates any two Types (KerML §7.4) and demands no port.
+		conjugatedTyping := rel.Conjugated && rel.Kind == ast.RelTyping
+		target := decl
+		target.conjugated = conjugatedTyping
+		tc.checkTypeTarget(scope, rel.Target, rel.Kind, target)
+		if conjugatedTyping {
 			tc.checkConjugatedTyping(scope, rel, decl)
 		}
 	}
@@ -250,6 +276,7 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 	}
 	qn, isQN := targetNode.(*ast.QualifiedName)
 	if !isQN {
+		tc.checkChainSegments(scope, targetNode)
 		return
 	}
 	sym, ok := tc.resolver.ResolveQualified(scope, qn)
@@ -268,19 +295,184 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 			targetSym = resolved
 		}
 	}
-	if msg := compatMessage(decl, relKind, targetSym.Kind); msg != "" {
-		tc.diags = append(tc.diags, Diagnostic{
-			Severity: SeverityError,
-			Span:     target.Span(),
-			Message:  msg,
-			Code:     "type",
-			Source:   "type",
-		})
+	if relKind == ast.RelRedefines || relKind == ast.RelSubsets {
+		if tc.checkNearestDeclaredUsageTyping(targetSym, decl) {
+			return
+		}
 	}
+	msg := compatMessage(decl, relKind, targetSym.Kind)
+	if msg == "" {
+		return
+	}
+	span, code := target.Span(), "type"
+	// A wrong typing is the reference's per-kind message on the declaration.
+	if relKind == ast.RelTyping {
+		if pilot, pilotCode, ok := pilotTypingMessage(decl); ok {
+			msg, span, code = pilot, decl.span, pilotCode
+		}
+	}
+	tc.appendUnique(Diagnostic{
+		Severity: SeverityError,
+		Span:     span,
+		Message:  msg,
+		Code:     code,
+		Source:   "type",
+	})
 }
 
-// checkConjugatedTyping checks a `~T` typing: conjugation names the conjugated
-// port definition of a port definition, so T must be one (SysML v2 §7.12.3).
+// checkChainSegments reports a feature chain whose leading segments do not name
+// features: a FeatureChaining chains Features (KerML 1.0 §8.3.4.7), so a chain
+// cannot continue from a type declaration.
+func (tc *typeChecker) checkChainSegments(scope *symbols.Scope, target ast.Node) {
+	chain, ok := target.(*ast.FeatureChainExpr)
+	if !ok {
+		return
+	}
+	tc.checkChainSegments(scope, chain.Operand)
+	sym, ok := tc.resolver.ResolveTarget(scope, chain.Operand)
+	if !ok || sym == nil {
+		return // unresolved: name-resolution tier owns this
+	}
+	if sym.Kind == symbols.SymbolAlias {
+		if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
+			sym = resolved
+		}
+	}
+	if sym.Kind == symbols.SymbolUnknown || isUsageKind(sym.Kind) {
+		return
+	}
+	tc.appendUnique(Diagnostic{
+		Severity: SeverityError,
+		Span:     chain.Operand.Span(),
+		Message:  fmt.Sprintf("feature chain segment must be a feature, found %s", sym.Kind),
+		Code:     "type",
+		Source:   "type",
+	})
+}
+
+func (tc *typeChecker) checkNearestDeclaredUsageTyping(target *symbols.Symbol, decl declKind) bool {
+	if _, ok := target.Decl.(*ast.Usage); !ok ||
+		decl.isDef || decl.isReference || decl.keyword == "" ||
+		decl.keyword == "feature" || decl.hasType ||
+		w11aInheritedTypingKinds[decl.useKind] {
+		return false
+	}
+	msg, code, ok := pilotTypingMessage(decl)
+	if !ok {
+		return false
+	}
+	for _, typ := range nearestDeclaredUsageTypesOf(tc.resolver, target, make(map[*symbols.Symbol]bool)) {
+		if !isDefKind(typ.sym.Kind) {
+			continue
+		}
+		if compatibleTyping(decl.useKind, decl.direction, typ.sym.Kind) {
+			continue
+		}
+		tc.appendUnique(Diagnostic{
+			Severity: SeverityError,
+			Span:     decl.span,
+			Message:  msg,
+			Code:     code,
+			Source:   "type",
+		})
+		return true
+	}
+	return false
+}
+
+func nearestDeclaredUsageTypesOf(resolver *resolve.Resolver, sym *symbols.Symbol, visited map[*symbols.Symbol]bool) []w8dUsageType {
+	if sym == nil || visited[sym] {
+		return nil
+	}
+	visited[sym] = true
+	decl, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return nil
+	}
+	scope := w8dScopeOf(sym)
+	var inherited []*symbols.Symbol
+	for _, rel := range decl.Relationships {
+		if rel == nil || rel.Target == nil {
+			continue
+		}
+		target, ok := resolver.ResolveTarget(scope, rel.Target)
+		if !ok || target == nil {
+			continue
+		}
+		if rel.Kind == ast.RelTyping {
+			inherited = append(inherited, target)
+		}
+	}
+	if len(inherited) > 0 {
+		if !usageDeclCanBeTypedByDefinition(decl) {
+			return nil
+		}
+		types := make([]w8dUsageType, 0, len(inherited))
+		for _, target := range inherited {
+			types = append(types, w8dUsageType{sym: target, declared: true})
+		}
+		return types
+	}
+	var types []w8dUsageType
+	for _, rel := range decl.Relationships {
+		if rel == nil || rel.Target == nil ||
+			(rel.Kind != ast.RelSubsets && rel.Kind != ast.RelRedefines && rel.Kind != ast.RelReferences) {
+			continue
+		}
+		target, ok := resolver.ResolveTarget(scope, rel.Target)
+		if !ok || target == nil {
+			continue
+		}
+		types = append(types, nearestDeclaredUsageTypesOf(resolver, target, visited)...)
+	}
+	return types
+}
+
+func usageDeclCanBeTypedByDefinition(decl *ast.Usage) bool {
+	if decl == nil || decl.IsReference || decl.Direction != ast.DirNone ||
+		decl.Keyword == "" || decl.Keyword == "feature" {
+		return false
+	}
+	return usageKindCanBeTypedByDefinition(decl.Kind)
+}
+
+func usageKindCanBeTypedByDefinition(kind ast.UsageKind) bool {
+	switch kind {
+	case ast.UsageAttribute, ast.UsagePart, ast.UsageItem, ast.UsageOccurrence,
+		ast.UsagePort, ast.UsageAction, ast.UsageState, ast.UsageConnection,
+		ast.UsageInterface, ast.UsageAllocation, ast.UsageFlow, ast.UsageCalc,
+		ast.UsageConstraint, ast.UsageRequirement, ast.UsageCase,
+		ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase,
+		ast.UsageEnumeration, ast.UsageRendering, ast.UsageViewpoint, ast.UsageView,
+		ast.UsageMetadata:
+		return true
+	}
+	return false
+}
+
+func hasTypingRelationship(rels []*ast.Relationship) bool {
+	for _, rel := range rels {
+		if rel != nil && rel.Kind == ast.RelTyping {
+			return true
+		}
+	}
+	return false
+}
+
+// appendUnique records d unless the same message was already reported there: a
+// declaration with two wrong types states its one rule once.
+func (tc *typeChecker) appendUnique(d Diagnostic) {
+	for _, have := range tc.diags {
+		if have.Span.Offset == d.Span.Offset && have.Message == d.Message {
+			return
+		}
+	}
+	tc.diags = append(tc.diags, d)
+}
+
+// checkConjugatedTyping checks a `~T` typing: a ConjugatedPortTyping names the
+// conjugated port definition of a port definition, so T must be one (SysML v2
+// §7.12.3). A KerML declaration conjugation is a Conjugation, not a typing.
 func (tc *typeChecker) checkConjugatedTyping(scope *symbols.Scope, rel *ast.Relationship, decl declKind) {
 	target := rel.Target
 	if fr, ok := target.(*ast.FeatureReference); ok {
@@ -312,7 +504,7 @@ func (tc *typeChecker) checkConjugatedTyping(scope *symbols.Scope, rel *ast.Rela
 		})
 		return
 	}
-	if decl.isDef || (decl.useKind != ast.UsagePort && !decl.isEnd) {
+	if decl.isDef || (decl.useKind != ast.UsagePort && !decl.isEnd && !decl.isReferenceUsage()) {
 		tc.diags = append(tc.diags, Diagnostic{
 			Severity: SeverityError,
 			Span:     target.Span(),
@@ -382,6 +574,12 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		if !isUsageKind(target) && !isDefKind(target) {
 			return fmt.Sprintf("%s target must be a usage or definition, found %s", rel, target)
 		}
+		// A KerML Subsetting relates two Features (KerML 1.0 §8.3.4.9), so a feature
+		// cannot subset a bare type declaration (`classifier`, `class`, `struct`, …).
+		if decl.isKerML() && decl.keyword == "feature" && rel == ast.RelSubsets &&
+			target == symbols.SymbolKerMLType {
+			return fmt.Sprintf("%s target must be a feature, found %s", rel, target)
+		}
 		// `satisfy`/`verify <name>` is a reference subsetting of an existing
 		// requirement usage; viewpoint and concern usages are requirement usages.
 		if useKind == ast.UsageSatisfy && rel == ast.RelSubsets && !isRequirementUsageKind(target) {
@@ -406,6 +604,11 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		// connects is typed by (`end supplierPort : FuelOutPort`), so the usage-kind
 		// taxonomy does not constrain it.
 		if decl.isEnd {
+			return ""
+		}
+		// Nor does it constrain a usage written with no kind keyword: that is a
+		// ReferenceUsage, whose type may be any definition.
+		if decl.isReferenceUsage() {
 			return ""
 		}
 		// Every SysML definition specializes a KerML type (a part def is a
@@ -585,33 +788,35 @@ var defSymbolKinds = map[symbols.SymbolKind]bool{
 
 // usageSymbolKinds is the set of SymbolKinds that classify a usage.
 var usageSymbolKinds = map[symbols.SymbolKind]bool{
-	symbols.SymbolPartUsage:             true,
-	symbols.SymbolAttributeUsage:        true,
-	symbols.SymbolItemUsage:             true,
-	symbols.SymbolOccurrenceUsage:       true,
-	symbols.SymbolIndividualUsage:       true,
-	symbols.SymbolMetadataUsage:         true,
-	symbols.SymbolEnumerationUsage:      true,
-	symbols.SymbolViewUsage:             true,
-	symbols.SymbolViewpointUsage:        true,
-	symbols.SymbolRenderingUsage:        true,
-	symbols.SymbolConcernUsage:          true,
-	symbols.SymbolConnectionUsage:       true,
-	symbols.SymbolFlowUsage:             true,
-	symbols.SymbolPortUsage:             true,
-	symbols.SymbolInterfaceUsage:        true,
-	symbols.SymbolAllocationUsage:       true,
-	symbols.SymbolActionUsage:           true,
-	symbols.SymbolStateUsage:            true,
-	symbols.SymbolCalcUsage:             true,
-	symbols.SymbolConstraintUsage:       true,
-	symbols.SymbolRequirementUsage:      true,
-	symbols.SymbolCaseUsage:             true,
-	symbols.SymbolAnalysisCaseUsage:     true,
-	symbols.SymbolVerificationCaseUsage: true,
-	symbols.SymbolUseCaseUsage:          true,
-	symbols.SymbolConnectorEnd:          true, // An end of a connect clause is a feature
-	symbols.SymbolAlias:                 true, // Aliases can be subsetting targets
+	symbols.SymbolPartUsage:               true,
+	symbols.SymbolAttributeUsage:          true,
+	symbols.SymbolItemUsage:               true,
+	symbols.SymbolOccurrenceUsage:         true,
+	symbols.SymbolIndividualUsage:         true,
+	symbols.SymbolMetadataUsage:           true,
+	symbols.SymbolEnumerationUsage:        true,
+	symbols.SymbolViewUsage:               true,
+	symbols.SymbolViewpointUsage:          true,
+	symbols.SymbolRenderingUsage:          true,
+	symbols.SymbolConcernUsage:            true,
+	symbols.SymbolConnectionUsage:         true,
+	symbols.SymbolSuccessionUsage:         true,
+	symbols.SymbolFlowUsage:               true,
+	symbols.SymbolPortUsage:               true,
+	symbols.SymbolInterfaceUsage:          true,
+	symbols.SymbolAllocationUsage:         true,
+	symbols.SymbolActionUsage:             true,
+	symbols.SymbolStateUsage:              true,
+	symbols.SymbolCalcUsage:               true,
+	symbols.SymbolConstraintUsage:         true,
+	symbols.SymbolRequirementUsage:        true,
+	symbols.SymbolSatisfyRequirementUsage: true,
+	symbols.SymbolCaseUsage:               true,
+	symbols.SymbolAnalysisCaseUsage:       true,
+	symbols.SymbolVerificationCaseUsage:   true,
+	symbols.SymbolUseCaseUsage:            true,
+	symbols.SymbolConnectorEnd:            true, // An end of a connect clause is a feature
+	symbols.SymbolAlias:                   true, // Aliases can be subsetting targets
 }
 
 func isDefKind(k symbols.SymbolKind) bool {
@@ -748,7 +953,8 @@ func isDataTypeDefKind(k symbols.SymbolKind) bool {
 // specializations (ViewpointUsage, ConcernUsage).
 func isRequirementUsageKind(k symbols.SymbolKind) bool {
 	switch k {
-	case symbols.SymbolRequirementUsage, symbols.SymbolViewpointUsage, symbols.SymbolConcernUsage:
+	case symbols.SymbolRequirementUsage, symbols.SymbolSatisfyRequirementUsage,
+		symbols.SymbolViewpointUsage, symbols.SymbolConcernUsage:
 		return true
 	}
 	return false
@@ -799,14 +1005,11 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 		defKind = symbols.SymbolItemDef
 	}
 
-	// Attributes can be typed by any structural def (for parameters, properties)
-	// Also allow enumDef for typed enumerations
-	// This allows: in scene : Scene (attribute : itemDef), verdict : VerdictKind (attribute : enumDef)
-	if useKind == ast.UsageAttribute {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef ||
+	// An attribute is typed by data types: an attribute or enumeration
+	// definition (SysML v2 §8.3.9.4 validateAttributeUsageType). A directed one
+	// is a parameter and crosses to structural definitions below.
+	if useKind == ast.UsageAttribute && direction == ast.DirNone {
+		return defKind == symbols.SymbolAttributeDef ||
 			defKind == symbols.SymbolEnumerationDef
 	}
 
@@ -822,29 +1025,34 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 			defKind == symbols.SymbolEnumerationDef
 	}
 
-	// Items can be typed by any structural def (structural hierarchy)
-	if useKind == ast.UsageItem {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef
+	// An occurrence, item or part is typed by occurrence definitions only: its
+	// types are Classes, and a data type is not one (SysML v2 §8.3.9.7
+	// validateOccurrenceUsageType).
+	if useKind == ast.UsagePart || useKind == ast.UsageItem {
+		return isOccurrenceDefKind(defKind)
+	}
+	// An `occurrence`/`individual` usage's data typing is W8D's, which reports
+	// it whether declared or inherited.
+	if useKind == ast.UsageOccurrence || useKind == ast.UsageIndividual {
+		return isOccurrenceDefKind(defKind) || defKind == symbols.SymbolAttributeDef
 	}
 
-	// Occurrences can be typed by any structural def
-	if useKind == ast.UsageOccurrence {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef
+	// An action must be typed by action definitions, i.e. Behaviors (SysML v2
+	// §8.3.16.6 validateActionUsageType), so any behavior-family def works.
+	if useKind == ast.UsageAction {
+		return defKindSpecializes(defKind, symbols.SymbolActionDef)
 	}
 
-	// Individuals can be typed by any structural def
-	if useKind == ast.UsageIndividual {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef ||
-			defKind == symbols.SymbolIndividualDef
+	// A case may be typed by a case definition of any kind (SysML v2 §8.3.24.4
+	// validateCaseUsageType); analysis and verification keep their exact kinds.
+	if useKind == ast.UsageCase {
+		return defKindSpecializes(defKind, symbols.SymbolCaseDef)
+	}
+
+	// Successions and bindings type through a plain UsageDeclaration
+	// (SysML.xtext:1033, :1020), so any definition types them.
+	if useKind == ast.UsageSuccession || useKind == ast.UsageBinding {
+		return true
 	}
 
 	// SysML v2 §8.3.22.4: an ObjectiveMembership's ownedObjectiveRequirement is a

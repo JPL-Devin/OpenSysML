@@ -113,12 +113,14 @@ func resultBindingExpr(bindings []lower.Binding) ast.Node {
 
 // calcChain returns sym's calc specialization chain, most general first. Only
 // calc links contribute: a calc that specializes a non-calc type inherits no
-// parameters or result from it.
+// parameters or result from it. A library link is the normative frame every calc
+// specializes — this runtime implements its parameters rather than inheriting
+// them, so it contributes none.
 func (ctx *Context) calcChain(sym *symbols.Symbol) []*symbols.Symbol {
 	supers := ctx.model.AllSupertypes(sym)
 	chain := make([]*symbols.Symbol, 0, len(supers)+1)
 	for i := len(supers) - 1; i >= 0; i-- {
-		if supers[i] != nil && isCalcDecl(supers[i].Decl) {
+		if supers[i] != nil && isCalcDecl(supers[i].Decl) && !ctx.libraryDeclared(supers[i]) {
 			chain = append(chain, supers[i])
 		}
 	}
@@ -212,10 +214,18 @@ func (ctx *Context) InvokeCalcNamed(sym *symbols.Symbol, args map[string]Value, 
 	return ctx.invokeCalc(sym, calcArgs{named: args}, scope)
 }
 
+func (ctx *Context) invokeCalcNamedShapeOn(shape *calcShape, args map[string]Value, scope *symbols.Scope, self *Instance) (Value, error) {
+	return ctx.invokeCalcShape(shape, calcArgs{named: args}, scope, self)
+}
+
 // invokeCalc resolves the calc's shape and invokes it, the single path every
 // calc invocation takes. A function library declaration the library gives no
 // body is applied by its built-in implementation instead.
 func (ctx *Context) invokeCalc(sym *symbols.Symbol, args calcArgs, scope *symbols.Scope) (Value, error) {
+	return ctx.invokeCalcWithSelf(sym, args, scope, nil)
+}
+
+func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope *symbols.Scope, self *Instance) (Value, error) {
 	if fn, ok := ctx.libraryFunctionFor(sym); ok {
 		return fn.invoke(ctx, args)
 	}
@@ -224,13 +234,13 @@ func (ctx *Context) invokeCalc(sym *symbols.Symbol, args calcArgs, scope *symbol
 	if err != nil {
 		return Value{}, err
 	}
-	return ctx.invokeCalcShape(shape, args, scope)
+	return ctx.invokeCalcShape(shape, args, scope, self)
 }
 
 // invokeCalcShape binds arguments and evaluates the calc body. Binding happens
 // in the calc's own environment: defaults and the result expression see the
 // parameters and the calc's lexical scope, never the caller's frames.
-func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope *symbols.Scope) (Value, error) {
+func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
 	if err := shape.checkArgs(args); err != nil {
 		return Value{}, err
 	}
@@ -241,7 +251,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	}
 	defer leave()
 
-	ec := NewEvalContext(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, callerScope))
+	ec := NewEvalContextIn(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, callerScope), self)
 
 	if ec.trace != nil {
 		ec.trace.RecordCalcEnter(shape.Name)
@@ -257,7 +267,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		return Value{}, err
 	}
 
-	result, err := ctx.runCalcBody(shape, bindings, callerScope)
+	result, err := ctx.runCalcBody(shape, bindings, callerScope, self)
 	if ec.trace != nil {
 		if err != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
@@ -320,8 +330,8 @@ func (ctx *Context) bindCalcParameters(
 // bindings holds its parameters and its locals — and answers with the one value
 // the invocation yields: what the body returned, or, for a body that returns
 // nothing, the calc's designated output feature.
-func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, callerScope *symbols.Scope) (Value, error) {
-	result, returned, activation, err := ctx.runCalcSteps(shape, bindings)
+func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, callerScope *symbols.Scope, self *Instance) (Value, error) {
+	result, returned, activation, err := ctx.runCalcSteps(shape, bindings, self)
 	// The invocation's activation ends with the value it yields, which is the last
 	// thing evaluated in it.
 	defer ctx.endActivation(activation)
@@ -338,7 +348,7 @@ func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, cal
 	// The designated output's binding may name the calc's other outputs, and one
 	// naming itself is a cycle rather than an evaluation, so it is evaluated
 	// through the same run bookkeeping a calc usage's outputs use.
-	run := newCalcRun(shape, callerScope, nil, bindings)
+	run := newCalcRun(shape, callerScope, self, bindings)
 	run.activation = activation
 	// The invocation already holds this evaluation's nesting feature value.
 	run.onStack = true
@@ -348,8 +358,8 @@ func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, cal
 // runCalcSteps runs the calc's lowered computation, reporting whether it
 // returned a value and the activation it ran in. bindings holds the calc's
 // parameters on the way in and its locals on the way out.
-func (ctx *Context) runCalcSteps(shape *calcShape, bindings map[string]Value) (Value, bool, int64, error) {
-	host := &calcStmtHost{shape: shape}
+func (ctx *Context) runCalcSteps(shape *calcShape, bindings map[string]Value, self *Instance) (Value, bool, int64, error) {
+	host := &calcStmtHost{shape: shape, self: self}
 	engine := newStmtEngine(ctx, host, bindings)
 
 	flow, err := engine.run(shape.Steps)
@@ -468,7 +478,7 @@ func isCalcDecl(decl ast.Node) bool {
 }
 
 // isCalcSymbol reports whether sym declares a calc, reading its declaration when
-// it has one and its symbol kind otherwise, as a cached library symbol does.
+// it has one and its symbol kind otherwise.
 func isCalcSymbol(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false

@@ -18,6 +18,25 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
+// atChainedFirstSuccession reports whether the `first` at the cursor opens a
+// succession whose source end is a '.'-chained or '::'-qualified name. Only
+// SuccessionAsUsage's ConnectorEnd reaches a feature chain (KerML.xtext:699);
+// InitialNodeMember's memberElement is a plain QualifiedName (SysML.xtext:1385).
+func (p *Parser) atChainedFirstSuccession() bool {
+	if !p.atKeyword("first") || !p.peekIsName(1) {
+		return false
+	}
+	chained, i := false, 2
+	for k := p.peekN(i).Kind; k == lexer.Dot || k == lexer.ColonColon; k = p.peekN(i).Kind {
+		if !p.peekIsName(i + 1) {
+			return false
+		}
+		chained, i = true, i+2
+	}
+	t := p.peekN(i)
+	return chained && t.Kind == lexer.Keyword && t.KeywordID == "then"
+}
+
 // nonOccurrenceUsageKeywords are the usage keywords a `then` may not precede:
 // SysML.xtext lists them under NonOccurrenceUsageElement rather than under
 // StructureUsageElement or BehaviorUsageElement.
@@ -123,8 +142,8 @@ func (b *bodyBuilder) atSuccession() bool {
 			return false
 		}
 	} else {
-		_, isUsage := usageKindKeywords[kw]
-		_, isDef := definitionKindKeywords[kw]
+		_, isUsage := p.usageKind(kw)
+		_, isDef := p.definitionKind(kw)
 		if !isUsage && !isDef {
 			// `then first x;` and the guarded forms: edges with their own parsers.
 			return false
@@ -243,10 +262,10 @@ func (b *bodyBuilder) illegalTarget() (string, bool) {
 		if what, ok := namespaceMemberKeywords[kw]; ok {
 			return what, true
 		}
-		if _, isDef := definitionKindKeywords[kw]; isDef && p.peekN(i+1).Kind == lexer.Keyword && p.peekN(i+1).KeywordID == "def" {
+		if _, isDef := p.definitionKind(kw); isDef && p.peekN(i+1).Kind == lexer.Keyword && p.peekN(i+1).KeywordID == "def" {
 			return "a definition", true
 		}
-		if _, isUsage := usageKindKeywords[kw]; isUsage {
+		if _, isUsage := p.usageKind(kw); isUsage {
 			// `ref` is both a modifier and a usage keyword: `then ref part x;`
 			// is a part usage, `then ref x;` a reference usage.
 			if what, isNon := nonOccurrenceUsageKeywords[kw]; isNon && !(kw == "ref" && b.kindFollows(i+1)) {
@@ -267,7 +286,7 @@ func (b *bodyBuilder) kindFollows(i int) bool {
 	if tok.Kind != lexer.Keyword {
 		return false
 	}
-	_, ok := usageKindKeywords[tok.KeywordID]
+	_, ok := b.p.usageKind(tok.KeywordID)
 	return ok
 }
 

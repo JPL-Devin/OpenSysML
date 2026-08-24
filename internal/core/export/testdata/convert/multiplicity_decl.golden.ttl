@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,9 +18,19 @@ elmt:Mult__exactlyOne
     sysml:owningNamespace elmt:Mult ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "exactlyOne" ;
-    sysml:lowerBound "1" ;
-    sysml:upperBound "1" ;
+    sysml:lowerBound expr:Mult__exactlyOne.lowerBound ;
+    sysml:upperBound expr:Mult__exactlyOne.upperBound ;
     sysx:hasBody "false"^^xsd:boolean .
+
+expr:Mult__exactlyOne.lowerBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "1" ;
+    sysml:value "1"^^xsd:integer .
+
+expr:Mult__exactlyOne.upperBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "1" ;
+    sysml:value "1"^^xsd:integer .
 
 elmt:Mult__optional
     a sysx:MultiplicityDeclaration ;
@@ -27,6 +38,25 @@ elmt:Mult__optional
     sysml:owningNamespace elmt:Mult ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "optional" ;
-    sysml:lowerBound "0" ;
-    sysml:upperBound "1" ;
+    sysml:lowerBound expr:Mult__optional.lowerBound ;
+    sysml:upperBound expr:Mult__optional.upperBound ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+expr:Mult__optional.lowerBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer .
+
+expr:Mult__optional.upperBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "1" ;
+    sysml:value "1"^^xsd:integer .
+
+elmt:Mult__single
+    a sysx:MultiplicityDeclaration ;
+    sysml:qualifiedName "Mult::single" ;
+    sysml:owningNamespace elmt:Mult ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "single" ;
+    sysml:subsets elmt:Mult__exactlyOne ;
     sysx:hasBody "false"^^xsd:boolean .

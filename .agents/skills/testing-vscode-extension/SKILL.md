@@ -273,6 +273,102 @@ main.sysml  package Main { import Lib::*; part w : Widget; }
 - Parse-error proof: delete a closing `}`. The previous SVG must stay on screen at reduced opacity
   (`.stale`) with a red status line; zoom on the status line, and compare box brightness before/after.
 
+## TextMate grammar changes (`editors/vscode/syntaxes/*.tmLanguage.json`, `tools/gengrammar`)
+
+- A *real* before/after for a grammar rule needs no branch switching and no repackaging: install the
+  vsix once, then swap the single JSON in the **installed** extension and reload the window.
+  ```bash
+  git show origin/main:editors/vscode/syntaxes/sysml.tmLanguage.json > /tmp/sysml-main.tmLanguage.json
+  EXT=~/.vscode/extensions/open-mbee.opensysml-sysml-0.1.0/syntaxes/sysml.tmLanguage.json
+  cp /tmp/sysml-main.tmLanguage.json "$EXT"                                    # BEFORE
+  cp editors/vscode/syntaxes/sysml.tmLanguage.json "$EXT"                      # AFTER (restore!)
+  ```
+  Command Palette → **Developer: Reload Window** picks the new grammar up; nothing else is needed.
+  Always restore the branch copy when done — the installed file is not under git, so `git status`
+  will not remind you.
+- **Semantic tokens beat TextMate for declared names**, so a word that a new TextMate rule colours
+  may still render plain where the LSP marks it as a usage/variable. Example: with the F9
+  `keyword.other.contextual` rule, `initial off;` / `region r { }` / `entry point p;` colour as
+  keywords, but `attribute point : ScalarValues::Real;` keeps the plain identifier colour. Pick the
+  screenshot line accordingly, and prove the scope with **Developer: Inspect Editor Tokens and
+  Colors** (`region` → `keyword.other.contextual.source.sysml`, foreground `#FF7B72`).
+
+### Completion oracle for keyword-ish items
+
+Type a real prefix (`poi`, `def`, `var`) then `ctrl+space` and read the **detail column** in a `zoom`:
+`keyword` = reserved, `contextual keyword` = the F9 list, no detail + `abc` icon = VS Code word-based
+noise. Language gating is visible this way too (`var` only in `.kerml`).
+Beware the server **dedupes by label**: in a document that already declares `attribute point`, the
+contextual item `point` disappears (a document symbol wins). Use a fixture *without* those names when
+asserting the contextual list, and a separate fixture with them for the "still ordinary names" test.
+Confirm the whole expected list cheaply first with a stdio JSON-RPC completion probe against
+`bin/sysml-lsp`, then prove it in the GUI.
+
+## Name resolution / alias / rename testing (`internal/core/resolve`, `internal/lsp/rename.go`)
+
+- **Never name a fixture package after a standard-library package.** `internal/core/libs/stdlib`
+  ships `Domain Libraries/Geometry/ShapeItems.sysml`, which itself declares
+  `alias Box for RectangularCuboid`. A fixture `package ShapeItems { ... alias Box for Cube; }`
+  therefore collides: `%explain ShapeItems::Box` reports `is ambiguous`, and a broken
+  `ShapeItems::Box` reference can still resolve (to the stdlib alias), silently masking failures.
+  Use a unique package name (`Shapes`, `Demo`) and re-run any assertion first taken with a colliding
+  name. Grep before choosing a name:
+  `grep -rn "\balias Box\b" internal/core/libs/`.
+- **LSP rename/references do NOT go through `internal/core/edit/rename.go`.** `Server.Rename` uses
+  `Workspace.ResolveReferenceNameSegmentsInDoc` (the name a segment *wrote*, so an alias use belongs
+  to the alias) and `References` unions that with `ResolveReferenceSegmentsInDoc`, comparing with
+  `symbols.SameElement`. A resolver change to segment identity therefore changes rename/references
+  even when `go test ./internal/core/edit` is green: test both in the editor *and* with a probe.
+- Cheap oracle before driving the GUI: a stdio JSON-RPC probe that sends `textDocument/rename`
+  (with `newName`) and `textDocument/references` for both the alias declaration and the target
+  declaration, printing `(line, char, newText)` per edit. Run the same probe against a
+  `origin/main`-built server; a swapped set of edit positions is the whole finding.
+- A **regression control inside one window**: `Ctrl+,` → `opensysml.server.path` → point at
+  `/tmp/old-sysml-lsp` (main build), redo the rename, then point it back. Editing
+  `~/.config/Code/User/settings.json` from the shell plus `Developer: Reload Window` is the most
+  reliable way to force the swap; confirm it with `pgrep -af sysml-lsp` (put it in a script so the
+  grep does not match itself).
+- **Expected alias difference vs main once references union both identities:** references on a target
+  (`Cube`) include alias-written uses (`part p : Box`, `Shapes::Box`) — e.g. 6 hits where a
+  main-built server reports 4 — while references on the alias list only occurrences of its own
+  written name. Main also still lands F12 on the `alias ... for ...` line instead of the target
+  declaration. Both are intended changes, not regressions; verify the direction before reporting.
+- Right after a window/server start, `F2` can answer **"The element can't be renamed / no renameable
+  name at this position"** even on a valid name. It is usually a not-yet-indexed document, not a
+  failure: `Escape`, wait a few seconds, click inside the identifier again and retry before
+  concluding anything.
+- `bin/sysml-lsp` accepts `--stdio`, so the `/tmp/lsp-wrap.sh` workaround above is not needed — check with `timeout 5 ./bin/sysml-lsp --stdio </dev/null; echo $?` (0 = fine).
+- Judging a rename: the oracle is the **Problems panel after the rename**. A rename that leaves the
+  model with new `unresolved reference: X` errors is a failure even if the declaration was renamed.
+- Completion after a trailing `Qualifier::` *does* work for member lookup (`Shapes::Box::` →
+  `length/width/height` with `attributeUsage` details) even though the file is momentarily a syntax
+  error; keep the fixture otherwise valid and `Escape` + revert the line afterwards.
+
+## Metadata annotation body testing (`internal/lsp/metadata.go`, `internal/core/model/metadata.go`)
+
+For `@Anno { x = ...; }` bodies (KerML 7.4.7 implicit redefinition), a compact fixture is
+`metadata def Base { attribute inherited; }` / `metadata def Anno :> Base { attribute own : ScalarValues::Integer; }`
+annotated on an `item p { attribute outer; }`, plus `item q { @Missing { ghost = 1; } }` as the
+degradation case.
+
+- Hover on a body declaration name reads `enumUsage own redefines Anno::own : ScalarValues::Integer` —
+  the kind text is `enumUsage` (not `attributeUsage`); don't report that as a bug, it is what the
+  server has always shown for these declarations. The `redefines <FQN> : <type>` clause is the new part.
+- `unresolved reference: Missing` on the `@Missing` metaclass name is a **pre-existing diagnostic**
+  (identical on a main-built server) and does not contradict "quiet degradation" — degradation means
+  no diagnostics on the *body declarations* (`ghost`), plain hover without a `redefines` clause, and
+  F12 answering "No definition found" without crashing the server. Prove pre-existence with the
+  `origin/main` worktree build (see the negative-control recipe above) before flagging any diagnostic.
+- Completion inside the body is position-sensitive: at a declaration position the list is *exactly*
+  the metadata definition's features (2 items, `attributeUsage` details); after `=` on the same line
+  it is the enclosing scope chain (sibling attributes, items, all library packages — hundreds).
+  Trigger the declaration-position case on a *fresh empty line* inside the body (End, Enter,
+  Ctrl+Space); typing `own = ` first flips it to the value case.
+- Confirm every expected string first with a stdio JSON-RPC probe (hover/definition/completion/
+  documentSymbol/semanticTokens) against `bin/sysml-lsp` so GUI deviations are real findings.
+- Body names carry semantic token type `enumMember` with modifiers `declaration readonly`
+  (Inspect Editor Tokens and Colors).
+
 ## Recording tips
 
 Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoom`ing the status bar

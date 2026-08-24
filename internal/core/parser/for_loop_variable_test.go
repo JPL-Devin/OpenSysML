@@ -64,22 +64,28 @@ func TestForLoopVariableMayBeShortNameOnly(t *testing.T) {
 }
 
 // A keyword used as a name is still reported, so the author learns the quoted
-// spelling is the well-formed one.
+// spelling is the well-formed one. `step` is a KerML.xtext literal only, so in
+// a SysML source it is an ordinary name and must not be warned about.
 func TestForLoopKeywordVariableWarns(t *testing.T) {
-	sf := source.New("for_loop.sysml", []byte("action def A { for step in c { action inner; } }"))
-	p := New(sf)
-	p.ParseFile()
-	if len(p.Diagnostics) > 0 {
-		t.Fatalf("unexpected parse errors: %v", p.Diagnostics)
-	}
-	var found bool
-	for _, w := range p.Warnings {
-		if w.Code == codeReservedKeywordName {
-			found = true
+	for _, tc := range []struct {
+		variable string
+		want     bool
+	}{{"state", true}, {"step", false}} {
+		sf := source.New("for_loop.sysml", []byte("action def A { for "+tc.variable+" in c { action inner; } }"))
+		p := New(sf)
+		p.ParseFile()
+		if len(p.Diagnostics) > 0 {
+			t.Fatalf("%s: unexpected parse errors: %v", tc.variable, p.Diagnostics)
 		}
-	}
-	if !found {
-		t.Errorf("no %s warning for a keyword loop variable, warnings = %v", codeReservedKeywordName, p.Warnings)
+		var found bool
+		for _, w := range p.Warnings {
+			if w.Code == codeReservedKeywordName {
+				found = true
+			}
+		}
+		if found != tc.want {
+			t.Errorf("for %s: %s warning = %t, want %t (warnings %v)", tc.variable, codeReservedKeywordName, found, tc.want, p.Warnings)
+		}
 	}
 }
 

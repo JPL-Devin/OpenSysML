@@ -29,7 +29,8 @@ class TestModuleLevelAPI:
             MockConnection.assert_called_once_with('localhost', 50051, auto_start=True)
             
             # Should delegate to Connection.load(), not asking for strict loading
-            mock_conn.load.assert_called_once_with("test.sysml", strict=False)
+            mock_conn.load.assert_called_once_with(
+                "test.sysml", strict=False, strict_conformance=False)
             
             assert result == mock_model
     
@@ -51,7 +52,33 @@ class TestModuleLevelAPI:
             # Should create connection with custom params
             MockConnection.assert_called_once_with('example.com', 9999, auto_start=True)
             
-            mock_conn.load.assert_called_once_with("test.sysml", strict=False)
+            mock_conn.load.assert_called_once_with(
+                "test.sysml", strict=False, strict_conformance=False)
+            assert result == mock_model
+
+    def test_opensysml_loads_with_custom_host_port(self):
+        """Test opensysml.loads() with custom host and port."""
+        with patch('opensysml.Connection') as MockConnection:
+            mock_conn = MagicMock()
+            mock_model = MagicMock()
+            mock_conn.load_from_content.return_value = mock_model
+            MockConnection.return_value = mock_conn
+
+            opensysml._default_connection = None
+            opensysml._default_connection_params = None
+
+            result = opensysml.loads(
+                "package Demo;", host="example.com", port=9999,
+                language="sysml", strict=True,
+            )
+
+            MockConnection.assert_called_once_with(
+                'example.com', 9999, auto_start=True
+            )
+            mock_conn.load_from_content.assert_called_once_with(
+                "package Demo;", strict=True, language="sysml",
+                strict_conformance=False
+            )
             assert result == mock_model
     
     def test_opensysml_load_reuses_default_connection(self):
@@ -104,8 +131,10 @@ class TestModuleLevelAPI:
             MockConnection.assert_any_call('h2', 2222, auto_start=True)
             
             # Each load uses its own connection
-            mock_conn1.load.assert_called_once_with("test1.sysml", strict=False)
-            mock_conn2.load.assert_called_once_with("test2.sysml", strict=False)
+            mock_conn1.load.assert_called_once_with(
+                "test1.sysml", strict=False, strict_conformance=False)
+            mock_conn2.load.assert_called_once_with(
+                "test2.sysml", strict=False, strict_conformance=False)
             assert result1 == mock_model1
             assert result2 == mock_model2
     

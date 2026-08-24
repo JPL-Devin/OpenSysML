@@ -174,6 +174,18 @@ func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, erro
 	if body.Result == nil {
 		return Value{}, fmt.Errorf("%w: body expression states no result", ErrNoResultExpression)
 	}
+	for _, member := range body.Members {
+		decl := member
+		if membership, ok := member.(*ast.Membership); ok {
+			decl = membership.Member
+		}
+		if _, ok := decl.(*ast.Usage); !ok {
+			if decl == nil {
+				return Value{}, fmt.Errorf("%w: nil body member", ErrUnsupportedBodyDeclaration)
+			}
+			return Value{}, fmt.Errorf("%w: %T", ErrUnsupportedBodyDeclaration, decl)
+		}
+	}
 	bindings := make(map[string]Value, len(body.Params))
 	for i := range body.Params {
 		bindings[body.Params[i].Name] = args[i]

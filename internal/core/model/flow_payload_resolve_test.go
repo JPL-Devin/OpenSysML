@@ -56,14 +56,22 @@ func TestDeclaredFlowPayloadIsAMember(t *testing.T) {
 func TestFlowPayloadReferenceStillResolvesOutward(t *testing.T) {
 	clean := `package P {
 		item def Fuel;
-		part def Sys { part a; part b; flow f of Fuel from a to b; }
+		part def Sys {
+			part a { out item outFuel : Fuel; }
+			part b { in item inFuel : Fuel; }
+			flow f of Fuel from a.outFuel to b.inFuel;
+		}
 	}`
 	if got := diagnose(t, "flow_payload_ref", clean); len(got) != 0 {
 		t.Fatalf("unexpected findings: %s", strings.Join(got, "; "))
 	}
 
 	missing := `package P {
-		part def Sys { part a; part b; flow f of Fuel from a to b; }
+		part def Sys {
+			part a { out item outFuel; }
+			part b { in item inFuel; }
+			flow f of Fuel from a.outFuel to b.inFuel;
+		}
 	}`
 	got := diagnose(t, "flow_payload_missing", missing)
 	if len(got) != 1 || !strings.Contains(got[0], "Fuel") {

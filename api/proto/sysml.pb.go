@@ -80,17 +80,22 @@ func (FailureReason) EnumDescriptor() ([]byte, []int) {
 type EditFailure int32
 
 const (
-	EditFailure_EDIT_FAILURE_UNSPECIFIED       EditFailure = 0  // no failure
-	EditFailure_EDIT_FAILURE_NO_OPERATIONS     EditFailure = 1  // the request named no edit
-	EditFailure_EDIT_FAILURE_UNKNOWN_TARGET    EditFailure = 2  // no element of that name in the model
-	EditFailure_EDIT_FAILURE_AMBIGUOUS_TARGET  EditFailure = 3  // the name denotes several declarations
-	EditFailure_EDIT_FAILURE_NOT_VALUED        EditFailure = 4  // the element can carry no value
-	EditFailure_EDIT_FAILURE_INVALID_VALUE     EditFailure = 5  // the new value does not parse as an expression
-	EditFailure_EDIT_FAILURE_INVALID_NAME      EditFailure = 6  // the new name does not lex as an identifier
-	EditFailure_EDIT_FAILURE_NOT_NAMED         EditFailure = 7  // the element declares no name to rewrite
-	EditFailure_EDIT_FAILURE_RENAME_REFERENCED EditFailure = 8  // references to the element would break
-	EditFailure_EDIT_FAILURE_OVERLAPPING_EDITS EditFailure = 9  // two edits cover the same bytes
-	EditFailure_EDIT_FAILURE_RESULT_INVALID    EditFailure = 10 // the edited source has errors the original had not
+	EditFailure_EDIT_FAILURE_UNSPECIFIED         EditFailure = 0  // no failure
+	EditFailure_EDIT_FAILURE_NO_OPERATIONS       EditFailure = 1  // the request named no edit
+	EditFailure_EDIT_FAILURE_UNKNOWN_TARGET      EditFailure = 2  // no element of that name in the model
+	EditFailure_EDIT_FAILURE_AMBIGUOUS_TARGET    EditFailure = 3  // the name denotes several declarations
+	EditFailure_EDIT_FAILURE_NOT_VALUED          EditFailure = 4  // the element can carry no value
+	EditFailure_EDIT_FAILURE_INVALID_VALUE       EditFailure = 5  // the new value does not parse as an expression
+	EditFailure_EDIT_FAILURE_INVALID_NAME        EditFailure = 6  // the new name does not lex as an identifier
+	EditFailure_EDIT_FAILURE_NOT_NAMED           EditFailure = 7  // the element declares no name to rewrite
+	EditFailure_EDIT_FAILURE_RENAME_REFERENCED   EditFailure = 8  // references to the element would break
+	EditFailure_EDIT_FAILURE_OVERLAPPING_EDITS   EditFailure = 9  // two edits cover the same bytes
+	EditFailure_EDIT_FAILURE_RESULT_INVALID      EditFailure = 10 // the edited source has errors the original had not
+	EditFailure_EDIT_FAILURE_OWNER_UNKNOWN       EditFailure = 11 // add-member owner does not exist
+	EditFailure_EDIT_FAILURE_OWNER_NOT_NAMESPACE EditFailure = 12 // owner cannot contain members
+	EditFailure_EDIT_FAILURE_ILLEGAL_KIND        EditFailure = 13 // kind is invalid for document language
+	EditFailure_EDIT_FAILURE_MEMBER_NAME_TAKEN   EditFailure = 14 // owner already declares the name
+	EditFailure_EDIT_FAILURE_DELETE_REFERENCED   EditFailure = 15 // delete would leave references
 )
 
 // Enum value maps for EditFailure.
@@ -107,19 +112,29 @@ var (
 		8:  "EDIT_FAILURE_RENAME_REFERENCED",
 		9:  "EDIT_FAILURE_OVERLAPPING_EDITS",
 		10: "EDIT_FAILURE_RESULT_INVALID",
+		11: "EDIT_FAILURE_OWNER_UNKNOWN",
+		12: "EDIT_FAILURE_OWNER_NOT_NAMESPACE",
+		13: "EDIT_FAILURE_ILLEGAL_KIND",
+		14: "EDIT_FAILURE_MEMBER_NAME_TAKEN",
+		15: "EDIT_FAILURE_DELETE_REFERENCED",
 	}
 	EditFailure_value = map[string]int32{
-		"EDIT_FAILURE_UNSPECIFIED":       0,
-		"EDIT_FAILURE_NO_OPERATIONS":     1,
-		"EDIT_FAILURE_UNKNOWN_TARGET":    2,
-		"EDIT_FAILURE_AMBIGUOUS_TARGET":  3,
-		"EDIT_FAILURE_NOT_VALUED":        4,
-		"EDIT_FAILURE_INVALID_VALUE":     5,
-		"EDIT_FAILURE_INVALID_NAME":      6,
-		"EDIT_FAILURE_NOT_NAMED":         7,
-		"EDIT_FAILURE_RENAME_REFERENCED": 8,
-		"EDIT_FAILURE_OVERLAPPING_EDITS": 9,
-		"EDIT_FAILURE_RESULT_INVALID":    10,
+		"EDIT_FAILURE_UNSPECIFIED":         0,
+		"EDIT_FAILURE_NO_OPERATIONS":       1,
+		"EDIT_FAILURE_UNKNOWN_TARGET":      2,
+		"EDIT_FAILURE_AMBIGUOUS_TARGET":    3,
+		"EDIT_FAILURE_NOT_VALUED":          4,
+		"EDIT_FAILURE_INVALID_VALUE":       5,
+		"EDIT_FAILURE_INVALID_NAME":        6,
+		"EDIT_FAILURE_NOT_NAMED":           7,
+		"EDIT_FAILURE_RENAME_REFERENCED":   8,
+		"EDIT_FAILURE_OVERLAPPING_EDITS":   9,
+		"EDIT_FAILURE_RESULT_INVALID":      10,
+		"EDIT_FAILURE_OWNER_UNKNOWN":       11,
+		"EDIT_FAILURE_OWNER_NOT_NAMESPACE": 12,
+		"EDIT_FAILURE_ILLEGAL_KIND":        13,
+		"EDIT_FAILURE_MEMBER_NAME_TAKEN":   14,
+		"EDIT_FAILURE_DELETE_REFERENCED":   15,
 	}
 )
 
@@ -1001,9 +1016,15 @@ type ParseFileRequest struct {
 	// parse hits the cache whether or not a client sends this.
 	//
 	// Deprecated: Marked as deprecated in sysml.proto.
-	ContentHash   string `protobuf:"bytes,3,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ContentHash string `protobuf:"bytes,3,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"`
+	// Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
+	Language string `protobuf:"bytes,4,opt,name=language,proto3" json:"language,omitempty"`
+	// Judge the source as conforming SysML v2: notation no pinned production
+	// admits is an error rather than a warning. Part of the cache key, so the two
+	// modes never serve each other's diagnostics.
+	StrictConformance bool `protobuf:"varint,5,opt,name=strict_conformance,json=strictConformance,proto3" json:"strict_conformance,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ParseFileRequest) Reset() {
@@ -1067,6 +1088,20 @@ func (x *ParseFileRequest) GetContentHash() string {
 		return x.ContentHash
 	}
 	return ""
+}
+
+func (x *ParseFileRequest) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *ParseFileRequest) GetStrictConformance() bool {
+	if x != nil {
+		return x.StrictConformance
+	}
+	return false
 }
 
 type isParseFileRequest_Source interface {
@@ -2298,14 +2333,15 @@ func (x *ApplyEditsRequest) GetOperations() []*EditOperation {
 	return nil
 }
 
-// EditOperation is one change to make. Only the two source-preserving forms
-// exist: setting a feature's value and renaming a declaration.
+// EditOperation is one source-preserving change to make.
 type EditOperation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Operation:
 	//
 	//	*EditOperation_SetValue
 	//	*EditOperation_Rename
+	//	*EditOperation_AddMember
+	//	*EditOperation_Delete
 	Operation     isEditOperation_Operation `protobuf_oneof:"operation"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2366,6 +2402,24 @@ func (x *EditOperation) GetRename() *RenameEdit {
 	return nil
 }
 
+func (x *EditOperation) GetAddMember() *AddMemberEdit {
+	if x != nil {
+		if x, ok := x.Operation.(*EditOperation_AddMember); ok {
+			return x.AddMember
+		}
+	}
+	return nil
+}
+
+func (x *EditOperation) GetDelete() *DeleteEdit {
+	if x != nil {
+		if x, ok := x.Operation.(*EditOperation_Delete); ok {
+			return x.Delete
+		}
+	}
+	return nil
+}
+
 type isEditOperation_Operation interface {
 	isEditOperation_Operation()
 }
@@ -2378,9 +2432,176 @@ type EditOperation_Rename struct {
 	Rename *RenameEdit `protobuf:"bytes,2,opt,name=rename,proto3,oneof"`
 }
 
+type EditOperation_AddMember struct {
+	AddMember *AddMemberEdit `protobuf:"bytes,3,opt,name=add_member,json=addMember,proto3,oneof"`
+}
+
+type EditOperation_Delete struct {
+	Delete *DeleteEdit `protobuf:"bytes,4,opt,name=delete,proto3,oneof"`
+}
+
 func (*EditOperation_SetValue) isEditOperation_Operation() {}
 
 func (*EditOperation_Rename) isEditOperation_Operation() {}
+
+func (*EditOperation_AddMember) isEditOperation_Operation() {}
+
+func (*EditOperation_Delete) isEditOperation_Operation() {}
+
+// AddMemberEdit inserts a declaration into a namespace or the document root.
+type AddMemberEdit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Namespace FQN to receive the declaration; empty means the document root.
+	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	// Written declaration kind, such as "part def" or "class".
+	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	// Declared identifier.
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// Optional type target for a usage, written as notation.
+	Type string `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`
+	// Optional multiplicity, including brackets, such as "[0..*]".
+	Multiplicity string `protobuf:"bytes,5,opt,name=multiplicity,proto3" json:"multiplicity,omitempty"`
+	// Optional value expression, written as notation.
+	Value string `protobuf:"bytes,6,opt,name=value,proto3" json:"value,omitempty"`
+	// Optional specialization targets for a definition.
+	Specializes   []string `protobuf:"bytes,7,rep,name=specializes,proto3" json:"specializes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddMemberEdit) Reset() {
+	*x = AddMemberEdit{}
+	mi := &file_sysml_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddMemberEdit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddMemberEdit) ProtoMessage() {}
+
+func (x *AddMemberEdit) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddMemberEdit.ProtoReflect.Descriptor instead.
+func (*AddMemberEdit) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *AddMemberEdit) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *AddMemberEdit) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *AddMemberEdit) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AddMemberEdit) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *AddMemberEdit) GetMultiplicity() string {
+	if x != nil {
+		return x.Multiplicity
+	}
+	return ""
+}
+
+func (x *AddMemberEdit) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *AddMemberEdit) GetSpecializes() []string {
+	if x != nil {
+		return x.Specializes
+	}
+	return nil
+}
+
+// DeleteEdit removes a declaration and its owned trivia.
+type DeleteEdit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Fully qualified name of the declaration to remove.
+	Target string `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// Also remove declarations that refer to target.
+	Cascade       bool `protobuf:"varint,2,opt,name=cascade,proto3" json:"cascade,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteEdit) Reset() {
+	*x = DeleteEdit{}
+	mi := &file_sysml_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteEdit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteEdit) ProtoMessage() {}
+
+func (x *DeleteEdit) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteEdit.ProtoReflect.Descriptor instead.
+func (*DeleteEdit) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *DeleteEdit) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *DeleteEdit) GetCascade() bool {
+	if x != nil {
+		return x.Cascade
+	}
+	return false
+}
 
 // SetValueEdit sets the value of a feature that already exists, replacing the
 // expression of its `= <expr>` or adding one before the declaration's `;`.
@@ -2397,7 +2618,7 @@ type SetValueEdit struct {
 
 func (x *SetValueEdit) Reset() {
 	*x = SetValueEdit{}
-	mi := &file_sysml_proto_msgTypes[30]
+	mi := &file_sysml_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2409,7 +2630,7 @@ func (x *SetValueEdit) String() string {
 func (*SetValueEdit) ProtoMessage() {}
 
 func (x *SetValueEdit) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[30]
+	mi := &file_sysml_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2422,7 +2643,7 @@ func (x *SetValueEdit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetValueEdit.ProtoReflect.Descriptor instead.
 func (*SetValueEdit) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{30}
+	return file_sysml_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *SetValueEdit) GetTarget() string {
@@ -2452,7 +2673,7 @@ type RenameEdit struct {
 
 func (x *RenameEdit) Reset() {
 	*x = RenameEdit{}
-	mi := &file_sysml_proto_msgTypes[31]
+	mi := &file_sysml_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2464,7 +2685,7 @@ func (x *RenameEdit) String() string {
 func (*RenameEdit) ProtoMessage() {}
 
 func (x *RenameEdit) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[31]
+	mi := &file_sysml_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2477,7 +2698,7 @@ func (x *RenameEdit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameEdit.ProtoReflect.Descriptor instead.
 func (*RenameEdit) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{31}
+	return file_sysml_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *RenameEdit) GetTarget() string {
@@ -2518,7 +2739,7 @@ type ApplyEditsResponse struct {
 
 func (x *ApplyEditsResponse) Reset() {
 	*x = ApplyEditsResponse{}
-	mi := &file_sysml_proto_msgTypes[32]
+	mi := &file_sysml_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2530,7 +2751,7 @@ func (x *ApplyEditsResponse) String() string {
 func (*ApplyEditsResponse) ProtoMessage() {}
 
 func (x *ApplyEditsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[32]
+	mi := &file_sysml_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2543,7 +2764,7 @@ func (x *ApplyEditsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyEditsResponse.ProtoReflect.Descriptor instead.
 func (*ApplyEditsResponse) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{32}
+	return file_sysml_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ApplyEditsResponse) GetContent() string {
@@ -2594,18 +2815,20 @@ type AppliedEdit struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Index of the operation in the request, so an answer maps back to its ask.
 	OperationIndex int32  `protobuf:"varint,1,opt,name=operation_index,json=operationIndex,proto3" json:"operation_index,omitempty"`
-	Target         string `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`                  // element edited, as the request named it
-	Offset         int32  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`                 // byte offset in the original source
-	Length         int32  `protobuf:"varint,4,opt,name=length,proto3" json:"length,omitempty"`                 // bytes replaced; zero for text inserted
-	OldText        string `protobuf:"bytes,5,opt,name=old_text,json=oldText,proto3" json:"old_text,omitempty"` // what was there, empty for an insertion
-	NewText        string `protobuf:"bytes,6,opt,name=new_text,json=newText,proto3" json:"new_text,omitempty"` // what was written
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	Target         string `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"` // element edited, as the request named it
+	// Batch offsets use the original source; sequential offsets use the
+	// intermediate source seen by that operation.
+	Offset        int32  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
+	Length        int32  `protobuf:"varint,4,opt,name=length,proto3" json:"length,omitempty"`                 // bytes replaced; zero for text inserted
+	OldText       string `protobuf:"bytes,5,opt,name=old_text,json=oldText,proto3" json:"old_text,omitempty"` // what was there, empty for an insertion
+	NewText       string `protobuf:"bytes,6,opt,name=new_text,json=newText,proto3" json:"new_text,omitempty"` // what was written
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AppliedEdit) Reset() {
 	*x = AppliedEdit{}
-	mi := &file_sysml_proto_msgTypes[33]
+	mi := &file_sysml_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2617,7 +2840,7 @@ func (x *AppliedEdit) String() string {
 func (*AppliedEdit) ProtoMessage() {}
 
 func (x *AppliedEdit) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[33]
+	mi := &file_sysml_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2630,7 +2853,7 @@ func (x *AppliedEdit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppliedEdit.ProtoReflect.Descriptor instead.
 func (*AppliedEdit) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{33}
+	return file_sysml_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AppliedEdit) GetOperationIndex() int32 {
@@ -2691,13 +2914,16 @@ type SymbolInfo struct {
 	// Every generalization edge declared, in declaration order. metadata["type"]
 	// and metadata["specializes"] report only the first, kept for compatibility.
 	Specializations []*Specialization `protobuf:"bytes,9,rep,name=specializations,proto3" json:"specializations,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Attributes inherited from standard-library content, which `attributes`
+	// leaves out. Their absence is stated here rather than silent.
+	WithheldLibraryAttributes int32 `protobuf:"varint,10,opt,name=withheld_library_attributes,json=withheldLibraryAttributes,proto3" json:"withheld_library_attributes,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *SymbolInfo) Reset() {
 	*x = SymbolInfo{}
-	mi := &file_sysml_proto_msgTypes[34]
+	mi := &file_sysml_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2709,7 +2935,7 @@ func (x *SymbolInfo) String() string {
 func (*SymbolInfo) ProtoMessage() {}
 
 func (x *SymbolInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[34]
+	mi := &file_sysml_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2722,7 +2948,7 @@ func (x *SymbolInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SymbolInfo.ProtoReflect.Descriptor instead.
 func (*SymbolInfo) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{34}
+	return file_sysml_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *SymbolInfo) GetId() string {
@@ -2788,6 +3014,13 @@ func (x *SymbolInfo) GetSpecializations() []*Specialization {
 	return nil
 }
 
+func (x *SymbolInfo) GetWithheldLibraryAttributes() int32 {
+	if x != nil {
+		return x.WithheldLibraryAttributes
+	}
+	return 0
+}
+
 // Specialization is one generalization edge an element declares.
 type Specialization struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -2805,7 +3038,7 @@ type Specialization struct {
 
 func (x *Specialization) Reset() {
 	*x = Specialization{}
-	mi := &file_sysml_proto_msgTypes[35]
+	mi := &file_sysml_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2817,7 +3050,7 @@ func (x *Specialization) String() string {
 func (*Specialization) ProtoMessage() {}
 
 func (x *Specialization) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[35]
+	mi := &file_sysml_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2830,7 +3063,7 @@ func (x *Specialization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Specialization.ProtoReflect.Descriptor instead.
 func (*Specialization) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{35}
+	return file_sysml_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *Specialization) GetKind() string {
@@ -2887,7 +3120,7 @@ type TypeInfo struct {
 
 func (x *TypeInfo) Reset() {
 	*x = TypeInfo{}
-	mi := &file_sysml_proto_msgTypes[36]
+	mi := &file_sysml_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2899,7 +3132,7 @@ func (x *TypeInfo) String() string {
 func (*TypeInfo) ProtoMessage() {}
 
 func (x *TypeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[36]
+	mi := &file_sysml_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2912,7 +3145,7 @@ func (x *TypeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TypeInfo.ProtoReflect.Descriptor instead.
 func (*TypeInfo) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{36}
+	return file_sysml_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *TypeInfo) GetDeclared() string {
@@ -2976,7 +3209,7 @@ type MultiplicityInfo struct {
 
 func (x *MultiplicityInfo) Reset() {
 	*x = MultiplicityInfo{}
-	mi := &file_sysml_proto_msgTypes[37]
+	mi := &file_sysml_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2988,7 +3221,7 @@ func (x *MultiplicityInfo) String() string {
 func (*MultiplicityInfo) ProtoMessage() {}
 
 func (x *MultiplicityInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[37]
+	mi := &file_sysml_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3001,7 +3234,7 @@ func (x *MultiplicityInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MultiplicityInfo.ProtoReflect.Descriptor instead.
 func (*MultiplicityInfo) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{37}
+	return file_sysml_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *MultiplicityInfo) GetLower() string {
@@ -3031,7 +3264,7 @@ type AttributeInfo struct {
 
 func (x *AttributeInfo) Reset() {
 	*x = AttributeInfo{}
-	mi := &file_sysml_proto_msgTypes[38]
+	mi := &file_sysml_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3043,7 +3276,7 @@ func (x *AttributeInfo) String() string {
 func (*AttributeInfo) ProtoMessage() {}
 
 func (x *AttributeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[38]
+	mi := &file_sysml_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3056,7 +3289,7 @@ func (x *AttributeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttributeInfo.ProtoReflect.Descriptor instead.
 func (*AttributeInfo) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{38}
+	return file_sysml_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *AttributeInfo) GetName() string {
@@ -3109,7 +3342,7 @@ type Value struct {
 
 func (x *Value) Reset() {
 	*x = Value{}
-	mi := &file_sysml_proto_msgTypes[39]
+	mi := &file_sysml_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3121,7 +3354,7 @@ func (x *Value) String() string {
 func (*Value) ProtoMessage() {}
 
 func (x *Value) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[39]
+	mi := &file_sysml_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3134,7 +3367,7 @@ func (x *Value) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Value.ProtoReflect.Descriptor instead.
 func (*Value) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{39}
+	return file_sysml_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *Value) GetKind() isValue_Kind {
@@ -3317,7 +3550,7 @@ type EnumLiteral struct {
 
 func (x *EnumLiteral) Reset() {
 	*x = EnumLiteral{}
-	mi := &file_sysml_proto_msgTypes[40]
+	mi := &file_sysml_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3329,7 +3562,7 @@ func (x *EnumLiteral) String() string {
 func (*EnumLiteral) ProtoMessage() {}
 
 func (x *EnumLiteral) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[40]
+	mi := &file_sysml_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3342,7 +3575,7 @@ func (x *EnumLiteral) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnumLiteral.ProtoReflect.Descriptor instead.
 func (*EnumLiteral) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{40}
+	return file_sysml_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *EnumLiteral) GetLiteralId() string {
@@ -3375,7 +3608,7 @@ type ValueSequence struct {
 
 func (x *ValueSequence) Reset() {
 	*x = ValueSequence{}
-	mi := &file_sysml_proto_msgTypes[41]
+	mi := &file_sysml_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3387,7 +3620,7 @@ func (x *ValueSequence) String() string {
 func (*ValueSequence) ProtoMessage() {}
 
 func (x *ValueSequence) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[41]
+	mi := &file_sysml_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3400,7 +3633,7 @@ func (x *ValueSequence) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValueSequence.ProtoReflect.Descriptor instead.
 func (*ValueSequence) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{41}
+	return file_sysml_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ValueSequence) GetElements() []*Value {
@@ -3434,7 +3667,7 @@ type Quantity struct {
 
 func (x *Quantity) Reset() {
 	*x = Quantity{}
-	mi := &file_sysml_proto_msgTypes[42]
+	mi := &file_sysml_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3446,7 +3679,7 @@ func (x *Quantity) String() string {
 func (*Quantity) ProtoMessage() {}
 
 func (x *Quantity) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[42]
+	mi := &file_sysml_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3459,7 +3692,7 @@ func (x *Quantity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Quantity.ProtoReflect.Descriptor instead.
 func (*Quantity) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{42}
+	return file_sysml_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *Quantity) GetMagnitude() isQuantity_Magnitude {
@@ -3532,7 +3765,7 @@ type UnitTerm struct {
 
 func (x *UnitTerm) Reset() {
 	*x = UnitTerm{}
-	mi := &file_sysml_proto_msgTypes[43]
+	mi := &file_sysml_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3544,7 +3777,7 @@ func (x *UnitTerm) String() string {
 func (*UnitTerm) ProtoMessage() {}
 
 func (x *UnitTerm) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[43]
+	mi := &file_sysml_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3557,7 +3790,7 @@ func (x *UnitTerm) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnitTerm.ProtoReflect.Descriptor instead.
 func (*UnitTerm) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{43}
+	return file_sysml_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *UnitTerm) GetScaleNum() float64 {
@@ -3593,7 +3826,7 @@ type UnitFactor struct {
 
 func (x *UnitFactor) Reset() {
 	*x = UnitFactor{}
-	mi := &file_sysml_proto_msgTypes[44]
+	mi := &file_sysml_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3605,7 +3838,7 @@ func (x *UnitFactor) String() string {
 func (*UnitFactor) ProtoMessage() {}
 
 func (x *UnitFactor) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[44]
+	mi := &file_sysml_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3618,7 +3851,7 @@ func (x *UnitFactor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnitFactor.ProtoReflect.Descriptor instead.
 func (*UnitFactor) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{44}
+	return file_sysml_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *UnitFactor) GetUnitId() string {
@@ -3647,7 +3880,7 @@ type Diagnostic struct {
 
 func (x *Diagnostic) Reset() {
 	*x = Diagnostic{}
-	mi := &file_sysml_proto_msgTypes[45]
+	mi := &file_sysml_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3659,7 +3892,7 @@ func (x *Diagnostic) String() string {
 func (*Diagnostic) ProtoMessage() {}
 
 func (x *Diagnostic) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[45]
+	mi := &file_sysml_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3672,7 +3905,7 @@ func (x *Diagnostic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Diagnostic.ProtoReflect.Descriptor instead.
 func (*Diagnostic) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{45}
+	return file_sysml_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *Diagnostic) GetSeverity() string {
@@ -3710,7 +3943,7 @@ type Span struct {
 
 func (x *Span) Reset() {
 	*x = Span{}
-	mi := &file_sysml_proto_msgTypes[46]
+	mi := &file_sysml_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3722,7 +3955,7 @@ func (x *Span) String() string {
 func (*Span) ProtoMessage() {}
 
 func (x *Span) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[46]
+	mi := &file_sysml_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3735,7 +3968,7 @@ func (x *Span) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Span.ProtoReflect.Descriptor instead.
 func (*Span) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{46}
+	return file_sysml_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *Span) GetFile() string {
@@ -3783,7 +4016,7 @@ type ServerInfoRequest struct {
 
 func (x *ServerInfoRequest) Reset() {
 	*x = ServerInfoRequest{}
-	mi := &file_sysml_proto_msgTypes[47]
+	mi := &file_sysml_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3795,7 +4028,7 @@ func (x *ServerInfoRequest) String() string {
 func (*ServerInfoRequest) ProtoMessage() {}
 
 func (x *ServerInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[47]
+	mi := &file_sysml_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3808,7 +4041,7 @@ func (x *ServerInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerInfoRequest.ProtoReflect.Descriptor instead.
 func (*ServerInfoRequest) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{47}
+	return file_sysml_proto_rawDescGZIP(), []int{49}
 }
 
 // ServerInfoResponse describes the running service.
@@ -3832,6 +4065,7 @@ type ServerInfoResponse struct {
 	//	               questions the REPL's %constraint, %requirement, %satisfy
 	//	               and %calc answer.
 	//	"query"      - the Query RPC evaluates a SysML v2 API & Services Query.
+	//	"oslc_query" - the Query RPC evaluates OSLC Query text.
 	//	"enum_values" - a Value carries an enumeration literal as enum_literal,
 	//	               rather than reporting it as an unsupported null.
 	//	"unset_value" - a valueless feature of a value type is reported as
@@ -3846,7 +4080,7 @@ type ServerInfoResponse struct {
 
 func (x *ServerInfoResponse) Reset() {
 	*x = ServerInfoResponse{}
-	mi := &file_sysml_proto_msgTypes[48]
+	mi := &file_sysml_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3858,7 +4092,7 @@ func (x *ServerInfoResponse) String() string {
 func (*ServerInfoResponse) ProtoMessage() {}
 
 func (x *ServerInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[48]
+	mi := &file_sysml_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3871,7 +4105,7 @@ func (x *ServerInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerInfoResponse.ProtoReflect.Descriptor instead.
 func (*ServerInfoResponse) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{48}
+	return file_sysml_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ServerInfoResponse) GetVersion() string {
@@ -3890,16 +4124,18 @@ func (x *ServerInfoResponse) GetCapabilities() []string {
 
 // QueryRequest runs a Query against a model the service already parsed.
 type QueryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ModelHash     string                 `protobuf:"bytes,1,opt,name=model_hash,json=modelHash,proto3" json:"model_hash,omitempty"` // from ParseFile response
-	Query         *Query                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ModelHash string                 `protobuf:"bytes,1,opt,name=model_hash,json=modelHash,proto3" json:"model_hash,omitempty"` // from ParseFile response
+	Query     *Query                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	// OSLC Query 3.0 parameter text, mutually exclusive with query.
+	OslcQuery     string `protobuf:"bytes,3,opt,name=oslc_query,json=oslcQuery,proto3" json:"oslc_query,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *QueryRequest) Reset() {
 	*x = QueryRequest{}
-	mi := &file_sysml_proto_msgTypes[49]
+	mi := &file_sysml_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3911,7 +4147,7 @@ func (x *QueryRequest) String() string {
 func (*QueryRequest) ProtoMessage() {}
 
 func (x *QueryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[49]
+	mi := &file_sysml_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3924,7 +4160,7 @@ func (x *QueryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryRequest.ProtoReflect.Descriptor instead.
 func (*QueryRequest) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{49}
+	return file_sysml_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *QueryRequest) GetModelHash() string {
@@ -3941,6 +4177,13 @@ func (x *QueryRequest) GetQuery() *Query {
 	return nil
 }
 
+func (x *QueryRequest) GetOslcQuery() string {
+	if x != nil {
+		return x.OslcQuery
+	}
+	return ""
+}
+
 // QueryResponse contains the elements the query selected, in the order they are
 // declared in the model. A query that matches nothing answers with no elements;
 // a query the service cannot evaluate fails the call with INVALID_ARGUMENT
@@ -3954,7 +4197,7 @@ type QueryResponse struct {
 
 func (x *QueryResponse) Reset() {
 	*x = QueryResponse{}
-	mi := &file_sysml_proto_msgTypes[50]
+	mi := &file_sysml_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3966,7 +4209,7 @@ func (x *QueryResponse) String() string {
 func (*QueryResponse) ProtoMessage() {}
 
 func (x *QueryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[50]
+	mi := &file_sysml_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3979,7 +4222,7 @@ func (x *QueryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryResponse.ProtoReflect.Descriptor instead.
 func (*QueryResponse) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{50}
+	return file_sysml_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *QueryResponse) GetElements() []*QueryResultElement {
@@ -4009,7 +4252,7 @@ type Query struct {
 
 func (x *Query) Reset() {
 	*x = Query{}
-	mi := &file_sysml_proto_msgTypes[51]
+	mi := &file_sysml_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4021,7 +4264,7 @@ func (x *Query) String() string {
 func (*Query) ProtoMessage() {}
 
 func (x *Query) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[51]
+	mi := &file_sysml_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4034,7 +4277,7 @@ func (x *Query) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Query.ProtoReflect.Descriptor instead.
 func (*Query) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{51}
+	return file_sysml_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *Query) GetScope() []string {
@@ -4073,7 +4316,7 @@ type Constraint struct {
 
 func (x *Constraint) Reset() {
 	*x = Constraint{}
-	mi := &file_sysml_proto_msgTypes[52]
+	mi := &file_sysml_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4085,7 +4328,7 @@ func (x *Constraint) String() string {
 func (*Constraint) ProtoMessage() {}
 
 func (x *Constraint) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[52]
+	mi := &file_sysml_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4098,7 +4341,7 @@ func (x *Constraint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Constraint.ProtoReflect.Descriptor instead.
 func (*Constraint) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{52}
+	return file_sysml_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *Constraint) GetConstraint() isConstraint_Constraint {
@@ -4161,7 +4404,7 @@ type PrimitiveConstraint struct {
 
 func (x *PrimitiveConstraint) Reset() {
 	*x = PrimitiveConstraint{}
-	mi := &file_sysml_proto_msgTypes[53]
+	mi := &file_sysml_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4173,7 +4416,7 @@ func (x *PrimitiveConstraint) String() string {
 func (*PrimitiveConstraint) ProtoMessage() {}
 
 func (x *PrimitiveConstraint) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[53]
+	mi := &file_sysml_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4186,7 +4429,7 @@ func (x *PrimitiveConstraint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrimitiveConstraint.ProtoReflect.Descriptor instead.
 func (*PrimitiveConstraint) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{53}
+	return file_sysml_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *PrimitiveConstraint) GetInverse() bool {
@@ -4229,7 +4472,7 @@ type CompositeConstraint struct {
 
 func (x *CompositeConstraint) Reset() {
 	*x = CompositeConstraint{}
-	mi := &file_sysml_proto_msgTypes[54]
+	mi := &file_sysml_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4241,7 +4484,7 @@ func (x *CompositeConstraint) String() string {
 func (*CompositeConstraint) ProtoMessage() {}
 
 func (x *CompositeConstraint) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[54]
+	mi := &file_sysml_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4254,7 +4497,7 @@ func (x *CompositeConstraint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompositeConstraint.ProtoReflect.Descriptor instead.
 func (*CompositeConstraint) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{54}
+	return file_sysml_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *CompositeConstraint) GetOperator() CompositeOperator {
@@ -4286,7 +4529,7 @@ type QueryResultElement struct {
 
 func (x *QueryResultElement) Reset() {
 	*x = QueryResultElement{}
-	mi := &file_sysml_proto_msgTypes[55]
+	mi := &file_sysml_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4298,7 +4541,7 @@ func (x *QueryResultElement) String() string {
 func (*QueryResultElement) ProtoMessage() {}
 
 func (x *QueryResultElement) ProtoReflect() protoreflect.Message {
-	mi := &file_sysml_proto_msgTypes[55]
+	mi := &file_sysml_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4311,7 +4554,7 @@ func (x *QueryResultElement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryResultElement.ProtoReflect.Descriptor instead.
 func (*QueryResultElement) Descriptor() ([]byte, []int) {
-	return file_sysml_proto_rawDescGZIP(), []int{55}
+	return file_sysml_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *QueryResultElement) GetId() string {
@@ -4396,11 +4639,13 @@ const file_sysml_proto_rawDesc = "" +
 	"\n" +
 	"CalcOutput\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\"\n" +
-	"\x05value\x18\x02 \x01(\v2\f.sysml.ValueR\x05value\"~\n" +
+	"\x05value\x18\x02 \x01(\v2\f.sysml.ValueR\x05value\"\xc9\x01\n" +
 	"\x10ParseFileRequest\x12\x1d\n" +
 	"\tfile_path\x18\x01 \x01(\tH\x00R\bfilePath\x12\x1a\n" +
 	"\acontent\x18\x02 \x01(\tH\x00R\acontent\x12%\n" +
-	"\fcontent_hash\x18\x03 \x01(\tB\x02\x18\x01R\vcontentHashB\b\n" +
+	"\fcontent_hash\x18\x03 \x01(\tB\x02\x18\x01R\vcontentHash\x12\x1a\n" +
+	"\blanguage\x18\x04 \x01(\tR\blanguage\x12-\n" +
+	"\x12strict_conformance\x18\x05 \x01(\bR\x11strictConformanceB\b\n" +
 	"\x06source\"\xa4\x01\n" +
 	"\x11ParseFileResponse\x12\x1d\n" +
 	"\n" +
@@ -4507,11 +4752,26 @@ const file_sysml_proto_rawDesc = "" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\x124\n" +
 	"\n" +
 	"operations\x18\x02 \x03(\v2\x14.sysml.EditOperationR\n" +
-	"operations\"}\n" +
+	"operations\"\xe1\x01\n" +
 	"\rEditOperation\x122\n" +
 	"\tset_value\x18\x01 \x01(\v2\x13.sysml.SetValueEditH\x00R\bsetValue\x12+\n" +
-	"\x06rename\x18\x02 \x01(\v2\x11.sysml.RenameEditH\x00R\x06renameB\v\n" +
-	"\toperation\"<\n" +
+	"\x06rename\x18\x02 \x01(\v2\x11.sysml.RenameEditH\x00R\x06rename\x125\n" +
+	"\n" +
+	"add_member\x18\x03 \x01(\v2\x14.sysml.AddMemberEditH\x00R\taddMember\x12+\n" +
+	"\x06delete\x18\x04 \x01(\v2\x11.sysml.DeleteEditH\x00R\x06deleteB\v\n" +
+	"\toperation\"\xbd\x01\n" +
+	"\rAddMemberEdit\x12\x14\n" +
+	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
+	"\x04type\x18\x04 \x01(\tR\x04type\x12\"\n" +
+	"\fmultiplicity\x18\x05 \x01(\tR\fmultiplicity\x12\x14\n" +
+	"\x05value\x18\x06 \x01(\tR\x05value\x12 \n" +
+	"\vspecializes\x18\a \x03(\tR\vspecializes\">\n" +
+	"\n" +
+	"DeleteEdit\x12\x16\n" +
+	"\x06target\x18\x01 \x01(\tR\x06target\x12\x18\n" +
+	"\acascade\x18\x02 \x01(\bR\acascade\"<\n" +
 	"\fSetValueEdit\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\"?\n" +
@@ -4532,7 +4792,7 @@ const file_sysml_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\x12\x16\n" +
 	"\x06length\x18\x04 \x01(\x05R\x06length\x12\x19\n" +
 	"\bold_text\x18\x05 \x01(\tR\aoldText\x12\x19\n" +
-	"\bnew_text\x18\x06 \x01(\tR\anewText\"\xbd\x03\n" +
+	"\bnew_text\x18\x06 \x01(\tR\anewText\"\xfd\x03\n" +
 	"\n" +
 	"SymbolInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -4545,7 +4805,9 @@ const file_sysml_proto_rawDesc = "" +
 	"attributes\x12,\n" +
 	"\ttype_info\x18\a \x01(\v2\x0f.sysml.TypeInfoR\btypeInfo\x12;\n" +
 	"\fmultiplicity\x18\b \x01(\v2\x17.sysml.MultiplicityInfoR\fmultiplicity\x12?\n" +
-	"\x0fspecializations\x18\t \x03(\v2\x15.sysml.SpecializationR\x0fspecializations\x1a;\n" +
+	"\x0fspecializations\x18\t \x03(\v2\x15.sysml.SpecializationR\x0fspecializations\x12>\n" +
+	"\x1bwithheld_library_attributes\x18\n" +
+	" \x01(\x05R\x19withheldLibraryAttributes\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"~\n" +
@@ -4624,11 +4886,13 @@ const file_sysml_proto_rawDesc = "" +
 	"\x11ServerInfoRequest\"R\n" +
 	"\x12ServerInfoResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\"\n" +
-	"\fcapabilities\x18\x02 \x03(\tR\fcapabilities\"Q\n" +
+	"\fcapabilities\x18\x02 \x03(\tR\fcapabilities\"p\n" +
 	"\fQueryRequest\x12\x1d\n" +
 	"\n" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12\"\n" +
-	"\x05query\x18\x02 \x01(\v2\f.sysml.QueryR\x05query\"F\n" +
+	"\x05query\x18\x02 \x01(\v2\f.sysml.QueryR\x05query\x12\x1d\n" +
+	"\n" +
+	"oslc_query\x18\x03 \x01(\tR\toslcQuery\"F\n" +
 	"\rQueryResponse\x125\n" +
 	"\belements\x18\x01 \x03(\v2\x19.sysml.QueryResultElementR\belements\"^\n" +
 	"\x05Query\x12\x14\n" +
@@ -4664,7 +4928,7 @@ const file_sysml_proto_rawDesc = "" +
 	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19FAILURE_REASON_EVALUATION\x10\x01\x12\x1d\n" +
 	"\x19FAILURE_REASON_WRONG_KIND\x10\x02\x12$\n" +
-	" FAILURE_REASON_AMBIGUOUS_SUBJECT\x10\x03*\xf0\x02\n" +
+	" FAILURE_REASON_AMBIGUOUS_SUBJECT\x10\x03*\x9d\x04\n" +
 	"\vEditFailure\x12\x1c\n" +
 	"\x18EDIT_FAILURE_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aEDIT_FAILURE_NO_OPERATIONS\x10\x01\x12\x1f\n" +
@@ -4677,7 +4941,12 @@ const file_sysml_proto_rawDesc = "" +
 	"\x1eEDIT_FAILURE_RENAME_REFERENCED\x10\b\x12\"\n" +
 	"\x1eEDIT_FAILURE_OVERLAPPING_EDITS\x10\t\x12\x1f\n" +
 	"\x1bEDIT_FAILURE_RESULT_INVALID\x10\n" +
-	"*\x92\x01\n" +
+	"\x12\x1e\n" +
+	"\x1aEDIT_FAILURE_OWNER_UNKNOWN\x10\v\x12$\n" +
+	" EDIT_FAILURE_OWNER_NOT_NAMESPACE\x10\f\x12\x1d\n" +
+	"\x19EDIT_FAILURE_ILLEGAL_KIND\x10\r\x12\"\n" +
+	"\x1eEDIT_FAILURE_MEMBER_NAME_TAKEN\x10\x0e\x12\"\n" +
+	"\x1eEDIT_FAILURE_DELETE_REFERENCED\x10\x0f*\x92\x01\n" +
 	"\x11PrimitiveOperator\x12\"\n" +
 	"\x1ePRIMITIVE_OPERATOR_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18PRIMITIVE_OPERATOR_EQUAL\x10\x01\x12\x1e\n" +
@@ -4718,7 +4987,7 @@ func file_sysml_proto_rawDescGZIP() []byte {
 }
 
 var file_sysml_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_sysml_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
+var file_sysml_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
 var file_sysml_proto_goTypes = []any{
 	(FailureReason)(0),                 // 0: sysml.FailureReason
 	(EditFailure)(0),                   // 1: sysml.EditFailure
@@ -4754,142 +5023,146 @@ var file_sysml_proto_goTypes = []any{
 	(*ConvertResponse)(nil),            // 31: sysml.ConvertResponse
 	(*ApplyEditsRequest)(nil),          // 32: sysml.ApplyEditsRequest
 	(*EditOperation)(nil),              // 33: sysml.EditOperation
-	(*SetValueEdit)(nil),               // 34: sysml.SetValueEdit
-	(*RenameEdit)(nil),                 // 35: sysml.RenameEdit
-	(*ApplyEditsResponse)(nil),         // 36: sysml.ApplyEditsResponse
-	(*AppliedEdit)(nil),                // 37: sysml.AppliedEdit
-	(*SymbolInfo)(nil),                 // 38: sysml.SymbolInfo
-	(*Specialization)(nil),             // 39: sysml.Specialization
-	(*TypeInfo)(nil),                   // 40: sysml.TypeInfo
-	(*MultiplicityInfo)(nil),           // 41: sysml.MultiplicityInfo
-	(*AttributeInfo)(nil),              // 42: sysml.AttributeInfo
-	(*Value)(nil),                      // 43: sysml.Value
-	(*EnumLiteral)(nil),                // 44: sysml.EnumLiteral
-	(*ValueSequence)(nil),              // 45: sysml.ValueSequence
-	(*Quantity)(nil),                   // 46: sysml.Quantity
-	(*UnitTerm)(nil),                   // 47: sysml.UnitTerm
-	(*UnitFactor)(nil),                 // 48: sysml.UnitFactor
-	(*Diagnostic)(nil),                 // 49: sysml.Diagnostic
-	(*Span)(nil),                       // 50: sysml.Span
-	(*ServerInfoRequest)(nil),          // 51: sysml.ServerInfoRequest
-	(*ServerInfoResponse)(nil),         // 52: sysml.ServerInfoResponse
-	(*QueryRequest)(nil),               // 53: sysml.QueryRequest
-	(*QueryResponse)(nil),              // 54: sysml.QueryResponse
-	(*Query)(nil),                      // 55: sysml.Query
-	(*Constraint)(nil),                 // 56: sysml.Constraint
-	(*PrimitiveConstraint)(nil),        // 57: sysml.PrimitiveConstraint
-	(*CompositeConstraint)(nil),        // 58: sysml.CompositeConstraint
-	(*QueryResultElement)(nil),         // 59: sysml.QueryResultElement
-	nil,                                // 60: sysml.Instance.FeatureValuesEntry
-	nil,                                // 61: sysml.ExecuteActionRequest.InputsEntry
-	nil,                                // 62: sysml.ExecuteActionResponse.OutputsEntry
-	nil,                                // 63: sysml.ExecuteStateResponse.FinalContextEntry
-	nil,                                // 64: sysml.SymbolInfo.MetadataEntry
-	nil,                                // 65: sysml.QueryResultElement.PropertiesEntry
+	(*AddMemberEdit)(nil),              // 34: sysml.AddMemberEdit
+	(*DeleteEdit)(nil),                 // 35: sysml.DeleteEdit
+	(*SetValueEdit)(nil),               // 36: sysml.SetValueEdit
+	(*RenameEdit)(nil),                 // 37: sysml.RenameEdit
+	(*ApplyEditsResponse)(nil),         // 38: sysml.ApplyEditsResponse
+	(*AppliedEdit)(nil),                // 39: sysml.AppliedEdit
+	(*SymbolInfo)(nil),                 // 40: sysml.SymbolInfo
+	(*Specialization)(nil),             // 41: sysml.Specialization
+	(*TypeInfo)(nil),                   // 42: sysml.TypeInfo
+	(*MultiplicityInfo)(nil),           // 43: sysml.MultiplicityInfo
+	(*AttributeInfo)(nil),              // 44: sysml.AttributeInfo
+	(*Value)(nil),                      // 45: sysml.Value
+	(*EnumLiteral)(nil),                // 46: sysml.EnumLiteral
+	(*ValueSequence)(nil),              // 47: sysml.ValueSequence
+	(*Quantity)(nil),                   // 48: sysml.Quantity
+	(*UnitTerm)(nil),                   // 49: sysml.UnitTerm
+	(*UnitFactor)(nil),                 // 50: sysml.UnitFactor
+	(*Diagnostic)(nil),                 // 51: sysml.Diagnostic
+	(*Span)(nil),                       // 52: sysml.Span
+	(*ServerInfoRequest)(nil),          // 53: sysml.ServerInfoRequest
+	(*ServerInfoResponse)(nil),         // 54: sysml.ServerInfoResponse
+	(*QueryRequest)(nil),               // 55: sysml.QueryRequest
+	(*QueryResponse)(nil),              // 56: sysml.QueryResponse
+	(*Query)(nil),                      // 57: sysml.Query
+	(*Constraint)(nil),                 // 58: sysml.Constraint
+	(*PrimitiveConstraint)(nil),        // 59: sysml.PrimitiveConstraint
+	(*CompositeConstraint)(nil),        // 60: sysml.CompositeConstraint
+	(*QueryResultElement)(nil),         // 61: sysml.QueryResultElement
+	nil,                                // 62: sysml.Instance.FeatureValuesEntry
+	nil,                                // 63: sysml.ExecuteActionRequest.InputsEntry
+	nil,                                // 64: sysml.ExecuteActionResponse.OutputsEntry
+	nil,                                // 65: sysml.ExecuteStateResponse.FinalContextEntry
+	nil,                                // 66: sysml.SymbolInfo.MetadataEntry
+	nil,                                // 67: sysml.QueryResultElement.PropertiesEntry
 }
 var file_sysml_proto_depIdxs = []int32{
 	0,  // 0: sysml.Verdict.failure_reason:type_name -> sysml.FailureReason
 	4,  // 1: sysml.VerifyConstraintResponse.verdict:type_name -> sysml.Verdict
 	22, // 2: sysml.VerifyConstraintResponse.instances:type_name -> sysml.Instance
-	49, // 3: sysml.VerifyConstraintResponse.diagnostics:type_name -> sysml.Diagnostic
+	51, // 3: sysml.VerifyConstraintResponse.diagnostics:type_name -> sysml.Diagnostic
 	4,  // 4: sysml.VerifyRequirementResponse.verdict:type_name -> sysml.Verdict
 	22, // 5: sysml.VerifyRequirementResponse.instances:type_name -> sysml.Instance
-	49, // 6: sysml.VerifyRequirementResponse.diagnostics:type_name -> sysml.Diagnostic
+	51, // 6: sysml.VerifyRequirementResponse.diagnostics:type_name -> sysml.Diagnostic
 	4,  // 7: sysml.VerifySatisfactionResponse.verdicts:type_name -> sysml.Verdict
 	22, // 8: sysml.VerifySatisfactionResponse.instances:type_name -> sysml.Instance
-	49, // 9: sysml.VerifySatisfactionResponse.diagnostics:type_name -> sysml.Diagnostic
+	51, // 9: sysml.VerifySatisfactionResponse.diagnostics:type_name -> sysml.Diagnostic
 	0,  // 10: sysml.VerifySatisfactionResponse.failure_reason:type_name -> sysml.FailureReason
-	43, // 11: sysml.EvaluateCalcRequest.arguments:type_name -> sysml.Value
-	43, // 12: sysml.EvaluateCalcResponse.result:type_name -> sysml.Value
+	45, // 11: sysml.EvaluateCalcRequest.arguments:type_name -> sysml.Value
+	45, // 12: sysml.EvaluateCalcResponse.result:type_name -> sysml.Value
 	13, // 13: sysml.EvaluateCalcResponse.outputs:type_name -> sysml.CalcOutput
-	49, // 14: sysml.EvaluateCalcResponse.diagnostics:type_name -> sysml.Diagnostic
+	51, // 14: sysml.EvaluateCalcResponse.diagnostics:type_name -> sysml.Diagnostic
 	0,  // 15: sysml.EvaluateCalcResponse.failure_reason:type_name -> sysml.FailureReason
-	43, // 16: sysml.CalcOutput.value:type_name -> sysml.Value
-	38, // 17: sysml.ParseFileResponse.root:type_name -> sysml.SymbolInfo
-	49, // 18: sysml.ParseFileResponse.diagnostics:type_name -> sysml.Diagnostic
-	38, // 19: sysml.SymbolResponse.symbol:type_name -> sysml.SymbolInfo
-	49, // 20: sysml.DiagnosticsResponse.diagnostics:type_name -> sysml.Diagnostic
-	43, // 21: sysml.EvaluateResponse.result:type_name -> sysml.Value
-	49, // 22: sysml.EvaluateResponse.diagnostics:type_name -> sysml.Diagnostic
-	60, // 23: sysml.Instance.feature_values:type_name -> sysml.Instance.FeatureValuesEntry
-	43, // 24: sysml.FeatureValue.value:type_name -> sysml.Value
-	43, // 25: sysml.FeatureValue.values:type_name -> sysml.Value
+	45, // 16: sysml.CalcOutput.value:type_name -> sysml.Value
+	40, // 17: sysml.ParseFileResponse.root:type_name -> sysml.SymbolInfo
+	51, // 18: sysml.ParseFileResponse.diagnostics:type_name -> sysml.Diagnostic
+	40, // 19: sysml.SymbolResponse.symbol:type_name -> sysml.SymbolInfo
+	51, // 20: sysml.DiagnosticsResponse.diagnostics:type_name -> sysml.Diagnostic
+	45, // 21: sysml.EvaluateResponse.result:type_name -> sysml.Value
+	51, // 22: sysml.EvaluateResponse.diagnostics:type_name -> sysml.Diagnostic
+	62, // 23: sysml.Instance.feature_values:type_name -> sysml.Instance.FeatureValuesEntry
+	45, // 24: sysml.FeatureValue.value:type_name -> sysml.Value
+	45, // 25: sysml.FeatureValue.values:type_name -> sysml.Value
 	22, // 26: sysml.InstantiateResponse.instance:type_name -> sysml.Instance
-	49, // 27: sysml.InstantiateResponse.diagnostics:type_name -> sysml.Diagnostic
+	51, // 27: sysml.InstantiateResponse.diagnostics:type_name -> sysml.Diagnostic
 	22, // 28: sysml.InstantiateResponse.instances:type_name -> sysml.Instance
-	61, // 29: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
-	62, // 30: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
-	49, // 31: sysml.ExecuteActionResponse.diagnostics:type_name -> sysml.Diagnostic
-	63, // 32: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
-	49, // 33: sysml.ExecuteStateResponse.diagnostics:type_name -> sysml.Diagnostic
-	49, // 34: sysml.ConvertResponse.diagnostics:type_name -> sysml.Diagnostic
+	63, // 29: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
+	64, // 30: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
+	51, // 31: sysml.ExecuteActionResponse.diagnostics:type_name -> sysml.Diagnostic
+	65, // 32: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
+	51, // 33: sysml.ExecuteStateResponse.diagnostics:type_name -> sysml.Diagnostic
+	51, // 34: sysml.ConvertResponse.diagnostics:type_name -> sysml.Diagnostic
 	33, // 35: sysml.ApplyEditsRequest.operations:type_name -> sysml.EditOperation
-	34, // 36: sysml.EditOperation.set_value:type_name -> sysml.SetValueEdit
-	35, // 37: sysml.EditOperation.rename:type_name -> sysml.RenameEdit
-	37, // 38: sysml.ApplyEditsResponse.applied:type_name -> sysml.AppliedEdit
-	1,  // 39: sysml.ApplyEditsResponse.failure:type_name -> sysml.EditFailure
-	49, // 40: sysml.ApplyEditsResponse.diagnostics:type_name -> sysml.Diagnostic
-	64, // 41: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
-	42, // 42: sysml.SymbolInfo.attributes:type_name -> sysml.AttributeInfo
-	40, // 43: sysml.SymbolInfo.type_info:type_name -> sysml.TypeInfo
-	41, // 44: sysml.SymbolInfo.multiplicity:type_name -> sysml.MultiplicityInfo
-	39, // 45: sysml.SymbolInfo.specializations:type_name -> sysml.Specialization
-	43, // 46: sysml.AttributeInfo.value:type_name -> sysml.Value
-	45, // 47: sysml.Value.sequence:type_name -> sysml.ValueSequence
-	46, // 48: sysml.Value.quantity:type_name -> sysml.Quantity
-	44, // 49: sysml.Value.enum_literal:type_name -> sysml.EnumLiteral
-	43, // 50: sysml.ValueSequence.elements:type_name -> sysml.Value
-	47, // 51: sysml.Quantity.unit_term:type_name -> sysml.UnitTerm
-	48, // 52: sysml.UnitTerm.factors:type_name -> sysml.UnitFactor
-	50, // 53: sysml.Diagnostic.span:type_name -> sysml.Span
-	55, // 54: sysml.QueryRequest.query:type_name -> sysml.Query
-	59, // 55: sysml.QueryResponse.elements:type_name -> sysml.QueryResultElement
-	56, // 56: sysml.Query.where:type_name -> sysml.Constraint
-	57, // 57: sysml.Constraint.primitive:type_name -> sysml.PrimitiveConstraint
-	58, // 58: sysml.Constraint.composite:type_name -> sysml.CompositeConstraint
-	2,  // 59: sysml.PrimitiveConstraint.operator:type_name -> sysml.PrimitiveOperator
-	3,  // 60: sysml.CompositeConstraint.operator:type_name -> sysml.CompositeOperator
-	56, // 61: sysml.CompositeConstraint.constraint:type_name -> sysml.Constraint
-	65, // 62: sysml.QueryResultElement.properties:type_name -> sysml.QueryResultElement.PropertiesEntry
-	23, // 63: sysml.Instance.FeatureValuesEntry.value:type_name -> sysml.FeatureValue
-	43, // 64: sysml.ExecuteActionRequest.InputsEntry.value:type_name -> sysml.Value
-	43, // 65: sysml.ExecuteActionResponse.OutputsEntry.value:type_name -> sysml.Value
-	43, // 66: sysml.ExecuteStateResponse.FinalContextEntry.value:type_name -> sysml.Value
-	51, // 67: sysml.SysMLService.GetServerInfo:input_type -> sysml.ServerInfoRequest
-	14, // 68: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
-	16, // 69: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
-	18, // 70: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
-	20, // 71: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
-	24, // 72: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
-	26, // 73: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
-	28, // 74: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
-	30, // 75: sysml.SysMLService.Convert:input_type -> sysml.ConvertRequest
-	32, // 76: sysml.SysMLService.ApplyEdits:input_type -> sysml.ApplyEditsRequest
-	5,  // 77: sysml.SysMLService.VerifyConstraint:input_type -> sysml.VerifyConstraintRequest
-	7,  // 78: sysml.SysMLService.VerifyRequirement:input_type -> sysml.VerifyRequirementRequest
-	9,  // 79: sysml.SysMLService.VerifySatisfaction:input_type -> sysml.VerifySatisfactionRequest
-	11, // 80: sysml.SysMLService.EvaluateCalc:input_type -> sysml.EvaluateCalcRequest
-	53, // 81: sysml.SysMLService.Query:input_type -> sysml.QueryRequest
-	52, // 82: sysml.SysMLService.GetServerInfo:output_type -> sysml.ServerInfoResponse
-	15, // 83: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
-	17, // 84: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
-	19, // 85: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
-	21, // 86: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
-	25, // 87: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
-	27, // 88: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
-	29, // 89: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
-	31, // 90: sysml.SysMLService.Convert:output_type -> sysml.ConvertResponse
-	36, // 91: sysml.SysMLService.ApplyEdits:output_type -> sysml.ApplyEditsResponse
-	6,  // 92: sysml.SysMLService.VerifyConstraint:output_type -> sysml.VerifyConstraintResponse
-	8,  // 93: sysml.SysMLService.VerifyRequirement:output_type -> sysml.VerifyRequirementResponse
-	10, // 94: sysml.SysMLService.VerifySatisfaction:output_type -> sysml.VerifySatisfactionResponse
-	12, // 95: sysml.SysMLService.EvaluateCalc:output_type -> sysml.EvaluateCalcResponse
-	54, // 96: sysml.SysMLService.Query:output_type -> sysml.QueryResponse
-	82, // [82:97] is the sub-list for method output_type
-	67, // [67:82] is the sub-list for method input_type
-	67, // [67:67] is the sub-list for extension type_name
-	67, // [67:67] is the sub-list for extension extendee
-	0,  // [0:67] is the sub-list for field type_name
+	36, // 36: sysml.EditOperation.set_value:type_name -> sysml.SetValueEdit
+	37, // 37: sysml.EditOperation.rename:type_name -> sysml.RenameEdit
+	34, // 38: sysml.EditOperation.add_member:type_name -> sysml.AddMemberEdit
+	35, // 39: sysml.EditOperation.delete:type_name -> sysml.DeleteEdit
+	39, // 40: sysml.ApplyEditsResponse.applied:type_name -> sysml.AppliedEdit
+	1,  // 41: sysml.ApplyEditsResponse.failure:type_name -> sysml.EditFailure
+	51, // 42: sysml.ApplyEditsResponse.diagnostics:type_name -> sysml.Diagnostic
+	66, // 43: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
+	44, // 44: sysml.SymbolInfo.attributes:type_name -> sysml.AttributeInfo
+	42, // 45: sysml.SymbolInfo.type_info:type_name -> sysml.TypeInfo
+	43, // 46: sysml.SymbolInfo.multiplicity:type_name -> sysml.MultiplicityInfo
+	41, // 47: sysml.SymbolInfo.specializations:type_name -> sysml.Specialization
+	45, // 48: sysml.AttributeInfo.value:type_name -> sysml.Value
+	47, // 49: sysml.Value.sequence:type_name -> sysml.ValueSequence
+	48, // 50: sysml.Value.quantity:type_name -> sysml.Quantity
+	46, // 51: sysml.Value.enum_literal:type_name -> sysml.EnumLiteral
+	45, // 52: sysml.ValueSequence.elements:type_name -> sysml.Value
+	49, // 53: sysml.Quantity.unit_term:type_name -> sysml.UnitTerm
+	50, // 54: sysml.UnitTerm.factors:type_name -> sysml.UnitFactor
+	52, // 55: sysml.Diagnostic.span:type_name -> sysml.Span
+	57, // 56: sysml.QueryRequest.query:type_name -> sysml.Query
+	61, // 57: sysml.QueryResponse.elements:type_name -> sysml.QueryResultElement
+	58, // 58: sysml.Query.where:type_name -> sysml.Constraint
+	59, // 59: sysml.Constraint.primitive:type_name -> sysml.PrimitiveConstraint
+	60, // 60: sysml.Constraint.composite:type_name -> sysml.CompositeConstraint
+	2,  // 61: sysml.PrimitiveConstraint.operator:type_name -> sysml.PrimitiveOperator
+	3,  // 62: sysml.CompositeConstraint.operator:type_name -> sysml.CompositeOperator
+	58, // 63: sysml.CompositeConstraint.constraint:type_name -> sysml.Constraint
+	67, // 64: sysml.QueryResultElement.properties:type_name -> sysml.QueryResultElement.PropertiesEntry
+	23, // 65: sysml.Instance.FeatureValuesEntry.value:type_name -> sysml.FeatureValue
+	45, // 66: sysml.ExecuteActionRequest.InputsEntry.value:type_name -> sysml.Value
+	45, // 67: sysml.ExecuteActionResponse.OutputsEntry.value:type_name -> sysml.Value
+	45, // 68: sysml.ExecuteStateResponse.FinalContextEntry.value:type_name -> sysml.Value
+	53, // 69: sysml.SysMLService.GetServerInfo:input_type -> sysml.ServerInfoRequest
+	14, // 70: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
+	16, // 71: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
+	18, // 72: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
+	20, // 73: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
+	24, // 74: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
+	26, // 75: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
+	28, // 76: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
+	30, // 77: sysml.SysMLService.Convert:input_type -> sysml.ConvertRequest
+	32, // 78: sysml.SysMLService.ApplyEdits:input_type -> sysml.ApplyEditsRequest
+	5,  // 79: sysml.SysMLService.VerifyConstraint:input_type -> sysml.VerifyConstraintRequest
+	7,  // 80: sysml.SysMLService.VerifyRequirement:input_type -> sysml.VerifyRequirementRequest
+	9,  // 81: sysml.SysMLService.VerifySatisfaction:input_type -> sysml.VerifySatisfactionRequest
+	11, // 82: sysml.SysMLService.EvaluateCalc:input_type -> sysml.EvaluateCalcRequest
+	55, // 83: sysml.SysMLService.Query:input_type -> sysml.QueryRequest
+	54, // 84: sysml.SysMLService.GetServerInfo:output_type -> sysml.ServerInfoResponse
+	15, // 85: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
+	17, // 86: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
+	19, // 87: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
+	21, // 88: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
+	25, // 89: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
+	27, // 90: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
+	29, // 91: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
+	31, // 92: sysml.SysMLService.Convert:output_type -> sysml.ConvertResponse
+	38, // 93: sysml.SysMLService.ApplyEdits:output_type -> sysml.ApplyEditsResponse
+	6,  // 94: sysml.SysMLService.VerifyConstraint:output_type -> sysml.VerifyConstraintResponse
+	8,  // 95: sysml.SysMLService.VerifyRequirement:output_type -> sysml.VerifyRequirementResponse
+	10, // 96: sysml.SysMLService.VerifySatisfaction:output_type -> sysml.VerifySatisfactionResponse
+	12, // 97: sysml.SysMLService.EvaluateCalc:output_type -> sysml.EvaluateCalcResponse
+	56, // 98: sysml.SysMLService.Query:output_type -> sysml.QueryResponse
+	84, // [84:99] is the sub-list for method output_type
+	69, // [69:84] is the sub-list for method input_type
+	69, // [69:69] is the sub-list for extension type_name
+	69, // [69:69] is the sub-list for extension extendee
+	0,  // [0:69] is the sub-list for field type_name
 }
 
 func init() { file_sysml_proto_init() }
@@ -4909,8 +5182,10 @@ func file_sysml_proto_init() {
 	file_sysml_proto_msgTypes[29].OneofWrappers = []any{
 		(*EditOperation_SetValue)(nil),
 		(*EditOperation_Rename)(nil),
+		(*EditOperation_AddMember)(nil),
+		(*EditOperation_Delete)(nil),
 	}
-	file_sysml_proto_msgTypes[39].OneofWrappers = []any{
+	file_sysml_proto_msgTypes[41].OneofWrappers = []any{
 		(*Value_IntValue)(nil),
 		(*Value_RealValue)(nil),
 		(*Value_BoolValue)(nil),
@@ -4922,11 +5197,11 @@ func file_sysml_proto_init() {
 		(*Value_EnumLiteral)(nil),
 		(*Value_Unset)(nil),
 	}
-	file_sysml_proto_msgTypes[42].OneofWrappers = []any{
+	file_sysml_proto_msgTypes[44].OneofWrappers = []any{
 		(*Quantity_IntMagnitude)(nil),
 		(*Quantity_RealMagnitude)(nil),
 	}
-	file_sysml_proto_msgTypes[52].OneofWrappers = []any{
+	file_sysml_proto_msgTypes[54].OneofWrappers = []any{
 		(*Constraint_Primitive)(nil),
 		(*Constraint_Composite)(nil),
 	}
@@ -4936,7 +5211,7 @@ func file_sysml_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sysml_proto_rawDesc), len(file_sysml_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   62,
+			NumMessages:   64,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

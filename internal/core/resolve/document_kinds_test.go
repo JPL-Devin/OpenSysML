@@ -12,7 +12,7 @@ func TestResolveConnectorEndsClean(t *testing.T) {
 
 func TestResolveFlowEndsAndPayloadClean(t *testing.T) {
 	r := resolveDoc(t, "d.sysml",
-		"part def Sys { item Fuel; part a; part b; flow f of Fuel from a to b; }")
+		"part def Sys { item Fuel; part a { out item outFuel : Fuel; } part b { in item inFuel : Fuel; } flow f of Fuel from a.outFuel to b.inFuel; }")
 	if len(r.Diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
 	}
@@ -23,5 +23,31 @@ func TestResolveUnresolvedConnectorEnd(t *testing.T) {
 		"part def Sys { part a; connection c connect a to missing; }")
 	if len(r.Diagnostics) == 0 {
 		t.Fatalf("expected an unresolved-name diagnostic for the 'missing' end")
+	}
+}
+
+func TestResolveNamedNaryConnectorEnds(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `package T {
+		part def L;
+		part def P;
+		allocation def LtoP { end logical : L; end physical : P; }
+		part l : L;
+		part p : P;
+		allocation a2 : LtoP allocate (logical ::> l, physical ::> p);
+	}`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected named n-ary allocation ends to resolve, got %v", r.Diagnostics)
+	}
+}
+
+func TestResolveNamedConnectorEndReferenceStillReportsMissingTarget(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `package T {
+		part def L;
+		allocation def LtoP { end logical : L; }
+		part l : L;
+		allocation a : LtoP allocate (logical ::> missing, l);
+	}`)
+	if len(r.Diagnostics) == 0 {
+		t.Fatal("expected an unresolved-name diagnostic for the named end reference")
 	}
 }

@@ -4,10 +4,12 @@ import (
 	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -22,30 +24,69 @@ type Workspace struct {
 	open      map[string]bool   // names with an authoritative open buffer
 	index     *symbols.Index
 	diagCache map[string][]passes.Diagnostic
+	// analysis is the options every document of this workspace is analyzed under,
+	// so one session asks one question of all its files.
+	analysis passes.Options
+}
+
+// Option configures a workspace at construction.
+type Option func(*Workspace)
+
+// WithConformanceMode analyzes this workspace's documents at mode.
+func WithConformanceMode(mode conformance.Mode) Option {
+	return func(w *Workspace) { w.analysis.Conformance = mode }
 }
 
 // NewWorkspace returns a workspace with stdlib pre-loaded into the global index.
 // Stdlib files are loaded from embedded sources (or SYSML_LIBRARY_PATH if set).
-func NewWorkspace() *Workspace {
-	idx := symbols.NewIndex()
+// Without options it analyzes in the default conformance mode.
+func NewWorkspace(opts ...Option) *Workspace {
+	return NewWorkspaceWithIndex(libs.NewModelIndex(), opts...)
+}
 
-	// Load stdlib into global index
-	libs.LoadInto(idx)
-
-	return &Workspace{
+// NewWorkspaceWithIndex returns a workspace over a caller-built index, for a
+// consumer whose resource set is not the bundled standard library. The options
+// travel with the resource set, so any index is analyzed under the asked mode.
+func NewWorkspaceWithIndex(idx *symbols.Index, opts ...Option) *Workspace {
+	w := &Workspace{
 		docs:      map[string]*Document{},
 		onDisk:    map[string][]byte{},
 		open:      map[string]bool{},
 		index:     idx,
 		diagCache: map[string][]passes.Diagnostic{},
 	}
+	for _, opt := range opts {
+		opt(w)
+	}
+	return w
 }
 
-// LoadStdlibInto loads the standard library into idx, for a consumer that
-// resolves library names through an index of its own — the REPL's runtime,
-// which has to resolve the measurement unit a quantity expression names.
-func LoadStdlibInto(idx *symbols.Index) {
-	libs.LoadInto(idx)
+// ConformanceMode reports the strictness this workspace judges notation at.
+func (w *Workspace) ConformanceMode() conformance.Mode {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.analysis.Conformance
+}
+
+// SetConformanceMode switches the mode for a live session — an LSP client
+// changing its setting, a REPL user asking the strict question — and drops the
+// cached diagnostics, which answered the other question.
+func (w *Workspace) SetConformanceMode(mode conformance.Mode) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.analysis.Conformance == mode {
+		return
+	}
+	w.analysis.Conformance = mode
+	w.invalidateLocked()
+}
+
+// NewIndexWithStdlib returns an index carrying the standard library for a
+// consumer that resolves library names outside a workspace — the REPL's
+// runtime, which has to resolve the measurement unit a quantity expression
+// names. It shares the one library index every model reads.
+func NewIndexWithStdlib() *symbols.Index {
+	return libs.NewModelIndex()
 }
 
 // Open registers an authoritative open buffer for name and reindexes.
@@ -201,7 +242,7 @@ func (w *Workspace) diagnosticsLocked(name string, doc *Document) []passes.Diagn
 			Fixes:    pw.Fixes,
 		})
 	}
-	diags := passes.Analyze(name, doc.AST, parseDiags, w.index)
+	diags := passes.AnalyzeWithOptions(name, source.KindOf(name), doc.AST, parseDiags, w.index, w.analysis)
 	w.diagCache[name] = diags
 	return diags
 }
@@ -259,7 +300,13 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 	if target, ok := resolver.ResolveAliasTarget(sym); ok {
 		sym = target
 	}
+	return w.memberSymbolsLocked(resolver, sem, scope, sym)
+}
 
+// memberSymbolsLocked returns the members visible on sym as seen from scope.
+// Callers hold the read lock.
+func (w *Workspace) memberSymbolsLocked(resolver *resolve.Resolver, sem *semantics.Model,
+	scope *symbols.Scope, sym *symbols.Symbol) []*symbols.Symbol {
 	members := sem.MembersOf(sym)
 	// A cached library symbol has no scope, and a package's own scope does not
 	// hold what its imports brought in; both are reachable through the index,
@@ -338,6 +385,30 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 	r.ResolveReference(ref)
 	out := make([]*symbols.Symbol, len(ref.QN.Parts))
 	for i := range ref.QN.Parts {
+		if sym, ok := r.PartSymbol(ref.QN, i); ok {
+			out[i] = sym
+		}
+	}
+	return out
+}
+
+// ResolveReferenceNameSegmentsInDoc is ResolveReferenceSegmentsInDoc reporting
+// what each segment's name *is* rather than the element it reaches, so a segment
+// written as an alias name is the alias. Rename edits names, not elements.
+func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
+	if ref.QN == nil {
+		return nil
+	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	r, _ := w.newResolver()
+	r.ResolveReference(ref)
+	out := make([]*symbols.Symbol, len(ref.QN.Parts))
+	for i := range ref.QN.Parts {
+		if sym, ok := r.PartAlias(ref.QN, i); ok {
+			out[i] = sym
+			continue
+		}
 		if sym, ok := r.PartSymbol(ref.QN, i); ok {
 			out[i] = sym
 		}

@@ -66,11 +66,13 @@ func declMembers(sym *symbols.Symbol) []ast.Node {
 }
 
 // parameter is one owned parameter of a behavior or step: the symbol declared
-// for a directed feature in its body, plus whether it is the result parameter.
+// for a directed feature in its body, plus its direction and whether it is the
+// result parameter.
 type parameter struct {
-	sym      *symbols.Symbol
-	usage    *ast.Usage
-	isResult bool
+	sym       *symbols.Symbol
+	usage     *ast.Usage
+	direction ast.FeatureDirection
+	isResult  bool
 }
 
 // behaviorParameters is the parameter list of a behavior or step: the
@@ -122,6 +124,15 @@ func (m *Model) parametersOf(sym *symbols.Symbol) behaviorParameters {
 	return out
 }
 
+// ResultParameterOf returns the result parameter of a behavior or step,
+// inherited ones included, or nil when it has none.
+func (m *Model) ResultParameterOf(sym *symbols.Symbol) *symbols.Symbol {
+	if m == nil || sym == nil {
+		return nil
+	}
+	return m.parametersOf(sym).result.sym
+}
+
 // claimedParameters returns the parameters of general that owned redefines,
 // each by the target its declaration names explicitly or, failing that, the one
 // at its own position with the same direction. Only what no owned parameter
@@ -137,7 +148,7 @@ func claimedParameters(owned, general behaviorParameters) map[*symbols.Symbol]bo
 		}
 		// A position whose directions disagree is not a redefinition, so the
 		// general parameter there is neither redefined nor dropped.
-		if i < len(general.positional) && general.positional[i].usage.Direction == p.usage.Direction {
+		if i < len(general.positional) && general.positional[i].direction == p.direction {
 			claimed[general.positional[i].sym] = true
 		}
 	}
@@ -154,6 +165,9 @@ func claimedParameters(owned, general behaviorParameters) map[*symbols.Symbol]bo
 // namedParameters returns the parameters of general that a declaration's `:>>`
 // clauses name, matching on the last segment of each qualified name.
 func namedParameters(u *ast.Usage, general behaviorParameters) []parameter {
+	if u == nil {
+		return nil // a cache-restored parameter's redefinitions resolved at record time
+	}
 	var out []parameter
 	for _, rel := range u.Relationships {
 		if rel == nil || rel.Kind != ast.RelRedefines {
@@ -193,7 +207,7 @@ func ownedParameters(sym *symbols.Symbol) []parameter {
 		if found == nil {
 			continue
 		}
-		out = append(out, parameter{sym: found, usage: usage, isResult: usage.IsResult})
+		out = append(out, parameter{sym: found, usage: usage, direction: usage.Direction, isResult: usage.IsResult})
 	}
 	return out
 }
@@ -225,6 +239,23 @@ func memberSymbol(scope *symbols.Scope, node ast.Node) *symbols.Symbol {
 // result parameters. It returns nothing for a feature that is not a parameter,
 // or whose declaration redefines something explicitly.
 func (m *Model) implicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.implicitParameterTargets(sym, true)
+}
+
+// implicitParameterCounterparts returns the parameters at sym's position in the
+// general behaviors whatever their direction, which is what a direction
+// conformance check needs: a disagreeing direction is a violation there rather
+// than an absent redefinition.
+func (m *Model) implicitParameterCounterparts(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.implicitParameterTargets(sym, false)
+}
+
+// implicitParameterTargets is the shared walk: matchDirection keeps only the
+// positions whose direction agrees with sym's.
+func (m *Model) implicitParameterTargets(sym *symbols.Symbol, matchDirection bool) []*symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
 	usage, ok := sym.Decl.(*ast.Usage)
 	if !ok || usage.Direction == ast.DirNone {
 		return nil
@@ -272,7 +303,7 @@ func (m *Model) implicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.S
 		}
 		// A redefining parameter has the same direction as the parameter it
 		// redefines; a position whose directions disagree is not a redefinition.
-		if target.usage.Direction != usage.Direction {
+		if matchDirection && target.direction != usage.Direction {
 			continue
 		}
 		out = append(out, target.sym)

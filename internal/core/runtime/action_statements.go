@@ -32,6 +32,15 @@ func (e *ActionExecutor) executeBody(node ast.Node) error {
 	return err
 }
 
+// runNodeBody runs the statements a control or initial node's body declares,
+// which the token passing through the node performs.
+func (e *ActionExecutor) runNodeBody(node ast.Node) error {
+	if len(e.graph.Bodies[node]) == 0 {
+		return nil
+	}
+	return e.executeBody(node)
+}
+
 func (h *actionStmtHost) describe() string {
 	return "action node " + ActionNodeName(h.node)
 }

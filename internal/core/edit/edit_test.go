@@ -22,11 +22,8 @@ func libraryIndex(t *testing.T) *symbols.Index {
 	idx := symbols.NewIndex()
 	src := libs.DefaultSource()
 	cache, _ := libs.NewCache()
-	loader := libs.NewLoader(src, cache)
-	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			t.Fatalf("load standard library %s: %v", name, err)
-		}
+	if err := libs.NewLoader(src, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the standard library: %v", err)
 	}
 	idx.ExpandWildcardImports()
 	return idx
@@ -75,6 +72,59 @@ func requireClean(t *testing.T, m Model) {
 		if d.Severity == passes.SeverityError {
 			t.Fatalf("fixture is not valid: %s at %v", d.Message, d.Span)
 		}
+	}
+}
+
+func TestAddMemberIntoBodyAndRoot(t *testing.T) {
+	m := loadContent(t, "add.sysml", "package P {\n}\n")
+	res, err := Apply(m, []Operation{
+		AddMember("P", "part def", "Wheel"),
+		AddMember("", "part def", "Vehicle"),
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	want := "package P {\n    part def Wheel;\n}\npart def Vehicle;\n"
+	if string(res.Content) != want {
+		t.Fatalf("content = %q, want %q", res.Content, want)
+	}
+}
+
+func TestAddMemberBodylessOwner(t *testing.T) {
+	m := loadContent(t, "add.sysml", "part def Vehicle;\n")
+	res, err := Apply(m, []Operation{AddMember("Vehicle", "part", "wheel")})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if got, want := string(res.Content), "part def Vehicle {\n    part wheel;\n}\n"; got != want {
+		t.Fatalf("content = %q, want %q", got, want)
+	}
+}
+
+func TestAddMemberSameOwnerPreservesRequestOrder(t *testing.T) {
+	m := loadContent(t, "add.sysml", "package P {\n}\n")
+	res, err := Apply(m, []Operation{
+		AddMember("P", "part def", "First"),
+		AddMember("P", "part def", "Second"),
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if got, want := string(res.Content),
+		"package P {\n    part def First;\n    part def Second;\n}\n"; got != want {
+		t.Fatalf("content = %q, want %q", got, want)
+	}
+}
+
+func TestDeleteOwnCommentAndLine(t *testing.T) {
+	m := loadContent(t, "delete.sysml", "package P {\n    // keep this\n    part def Keep;\n\n    // remove this\n    part def Gone;\n}\n")
+	res, err := Apply(m, []Operation{Delete("P::Gone", false)})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	want := "package P {\n    // keep this\n    part def Keep;\n}\n"
+	if got := string(res.Content); got != want {
+		t.Fatalf("content = %q, want %q", got, want)
 	}
 }
 
@@ -288,31 +338,32 @@ func TestRenameRewritesTheNameTokenOnly(t *testing.T) {
 	requireClean(t, loadContent(t, "spacecraft.sysml", string(res.Content)))
 }
 
-func TestRenameRefusedWhenReferenced(t *testing.T) {
+// A referenced rename used to be refused; it now rewrites the references, so
+// this pins the rewriting instead of the old refusal.
+func TestRenameRewritesReferences(t *testing.T) {
 	m := load(t, "spacecraft.sysml")
 	requireClean(t, m)
 
-	_, err := Apply(m, []Operation{Rename("Demo::SC::unitMass", "dryMass")})
-	e := editError(t, err)
-	if e.Failure != FailureRenameReferenced {
-		t.Fatalf("failure is %s, want rename-referenced: %s", e.Failure, e.Message)
-	}
-	if len(e.Referring) == 0 {
-		t.Fatalf("refusal names no referring element: %s", e.Message)
-	}
-	// The refusal names the namespaces the references are made from: the value
-	// expression of SC::total, and sc's redefinition of the feature.
-	for _, want := range []string{"Demo::SC", "Demo::sc"} {
-		found := false
-		for _, got := range e.Referring {
-			if got == want {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("referring elements %v do not include %s", e.Referring, want)
+	res := applyOne(t, m, Rename("Demo::SC::unitMass", "dryMass"))
+
+	got := string(res.Content)
+	for _, want := range []string{
+		"attribute dryMass : ISQ::MassValue = 1000.0[SI::kg];",
+		"attribute total : ISQ::MassValue = dryMass;",
+		"attribute redefines dryMass = 1200.0[SI::kg];",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rename did not produce %q:\n%s", want, got)
 		}
 	}
+	if strings.Contains(got, "unitMass") {
+		t.Fatalf("old name survives the rename:\n%s", got)
+	}
+	if len(res.Applied) != 3 {
+		t.Fatalf("applied %d edits, want 3 (declaration and two references)", len(res.Applied))
+	}
+	assertOnlySpanChanged(t, m, res)
+	requireClean(t, loadContent(t, "spacecraft.sysml", got))
 }
 
 func TestRefusals(t *testing.T) {
@@ -549,17 +600,16 @@ func TestRenameSeesInheritedMembers(t *testing.T) {
 		t.Fatalf("refusal does not name the inherited feature: %s", e.Message)
 	}
 
-	// The inherited feature is referenced by name from P, so renaming it there is
-	// the referenced-rename refusal, naming where the reference is made.
+	// The inherited feature is referenced by name from P, and the rename rewrites
+	// that reference too.
 	m = loadContent(t, "inherit.sysml", src)
-	_, err = Apply(m, []Operation{Rename("Demo::Base::mass", "weight")})
-	e = editError(t, err)
-	if e.Failure != FailureRenameReferenced {
-		t.Fatalf("failure is %s (%s), want rename-referenced", e.Failure, e.Message)
+	res := applyOne(t, m, Rename("Demo::Base::mass", "weight"))
+	got := string(res.Content)
+	if !strings.Contains(got, "attribute weight = 1.0;") ||
+		!strings.Contains(got, "attribute q = weight;") {
+		t.Fatalf("inherited reference not rewritten:\n%s", got)
 	}
-	if len(e.Referring) != 1 || e.Referring[0] != "Demo::P" {
-		t.Fatalf("referrers are %v, want [Demo::P]", e.Referring)
-	}
+	requireClean(t, loadContent(t, "inherit.sysml", got))
 }
 
 func TestSemanticValidationSkippedWithoutIndexSource(t *testing.T) {

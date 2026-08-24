@@ -3,10 +3,10 @@
 Baseline: `main` @ `c28b5f1`, verified locally on 2026-08-19 with Go 1.25.13.
 Read `AGENTS.md` first; it governs everything below.
 
-0.1.0 is released from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
-archives. `main` now carries everything cut under 0.1.1 in `CHANGELOG.md`, which is awaiting its
-tag. Everything in "Release follow-through" is maintainer- or account-gated; everything after it
-is ordinary engineering work.
+0.1.2 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
+`sysml-grpc` archives. `main` now carries everything cut under 0.2.0 in `CHANGELOG.md`, which is
+awaiting its tag. Everything in "Release follow-through" is maintainer- or account-gated; everything
+after it is ordinary engineering work.
 
 Track status as of this baseline: **Tracks A, B, C and P are closed**, and their entries are
 removed from this file rather than kept as a list of done work — `CHANGELOG.md` is the record of
@@ -24,13 +24,13 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 |---|---|
 | OMG training corpus | **100/100 clean** — no file reports a semantic error |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative OpenSysML extension |
-| Execution conformance cases | 338 |
-| gRPC conformance fixtures | 14 |
-| Golden execution traces | 106 |
-| Runtime robustness cases | 194 |
+| Execution conformance cases | 344 |
+| gRPC conformance fixtures | 15 |
+| Golden execution traces | 109 |
+| Runtime robustness cases | 195 |
 | gRPC robustness cases | 8 |
-| Golden AST fixtures | 90 |
-| Negative parser subtests | 135 |
+| Golden AST fixtures | 107 |
+| Negative parser subtests | 167 |
 
 Statement coverage, measured with `go test -cover ./...` at the baseline commit. It counts only
 each package's own tests, which understates a package consumed by others: `internal/core/ast`
@@ -68,17 +68,17 @@ runs the suite with that variable set, and it runs on `v*` tags as well as on br
 
 # Release follow-through
 
-## R1 — tag 0.1.1 (maintainer, blocking everything else in this section)
+## R1 — tag 0.2.0 (maintainer, blocking everything else in this section)
 
-`v0.1.0` is tagged and released on `Open-MBEE/OpenSysML`, so what remains is the same procedure
+`v0.1.2` is tagged and released on `Open-MBEE/OpenSysML`, so what remains is the same procedure
 for the next release. Releases live on `Open-MBEE/OpenSysML`; development happens on
 `JPL-Devin/OpenSysML`, which has no tags at all. So the tag is preceded by promoting `main`
 upstream, as 0.0.4 was through Open-MBEE PR #47:
 
 ```bash
 # on Open-MBEE/OpenSysML, after main carries the release commit
-git tag -a v0.1.1 -m "v0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
 ```
 
 The publish job needs `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project.
@@ -97,10 +97,11 @@ from whichever release the caller names, so its version and the core's are not l
 See `docs/project/releasing.md`.
 
 One decision precedes the upload, found in the 0.0.8 pre-release audit: `python/opensysml/_version.py`
-declares `0.2.0` while the newest published artifact is `0.1.1`, so the first upload has to be
-`opensysml-v0.2.0` (the tag-versus-source check refuses anything else) and 0.2.0's Python-side
-changes — `evaluate`/`ExecutionError`, pinned checksums, subject-aware `eval`, generated typed
-classes — all land in that one release rather than incrementally.
+declares `0.3.0` and nothing is published to PyPI yet, so the first upload has to be
+`opensysml-v0.3.0` (the tag-versus-source check refuses anything else) and every Python-side change
+since the client's version line was cut — `evaluate`/`ExecutionError`, pinned checksums,
+subject-aware `eval`, generated typed classes, `loads`, authoring edits and the strict-conformance
+keyword — all land in that one release rather than incrementally.
 
 What remains is account-gated and cannot be done from a session: create the PyPI project's
 first release with an account-scoped token, then replace it with a project-scoped one; create
@@ -151,6 +152,87 @@ fixed — the client appends `--stdio`, which `sysml-lsp` rejected with exit 2, 
 process. What remains is packaging and publishing: `vsce package` in the release workflow, a
 `.vsix` on the release, and (for the marketplace) a publisher account and a PAT in CI — the same
 class of account gate as R2/R4.
+
+## L2 — tier gating is per document, and the reference's is per element (done, wave 12A)
+
+**Landed.** `passes.ElementScoped` generalizes 11D's `SelfGated` marker: a pass that names its
+subject in code runs despite a lower-tier failure and gates itself per element through
+`Context.DownstreamOfFailure`; a pass whose subject is the file stays document-scoped. Differential
+agreement 25 → 32 and only-pilot 73 → 66 with only-ours unmoved at 119; the Xpect and rejection
+oracles do not move. The four rows this item was expected to close are **not** behind the gate —
+removing the gate entirely leaves the Xpect oracle byte-identical — each is an unimplemented rule
+owned elsewhere. See [wave 12A](wave12a-element-gating.md) for the measurements and the row table.
+
+### The motivation, as it stood before wave 12A
+
+`Registry.Run` (`internal/core/passes/registry.go`) skipped every pass at a strictly higher level
+once any pass emitted a blocking error, for the **whole document**. The reference is EMF/Xtext,
+where a linking failure on one element does not stop validating the others — which is why it
+reports an unresolved reference *and* `Must have a concrete type` in one file where we reported
+only the first. The divergence was a policy of ours, not a position the specification takes.
+
+Wave 11D raised this as an adjudication question and offered two ways out; both were refused.
+Moving a rule down a tier buys one row by suppressing filter diagnostics elsewhere (11D measured
+that), and making name-resolution errors non-blocking wholesale uncaps cascade noise across every
+corpus. The answer taken instead was to narrow the gate: a higher-tier pass skips the elements
+whose own resolution failed, not the file.
+
+`Diagnostic.Blocking()` was the precedent for how a non-gating error is already expressed — a
+`Notation` error concerns the writing rather than the meaning, so it gates nothing. Wave 12A
+generalized that from a per-diagnostic flag to a per-element question, giving `Context` a way for
+a pass to ask whether the element it is about to check is downstream of a resolution failure.
+
+Cascade noise is the reason the coarse gate existed, so the measure of success was the oracles
+moving *without* a rise in only-ours rows — met, and the control with the gate removed entirely
+(only-ours 119 → 166) is why the marker stayed opt-in.
+
+## L3 — a library contributes names but no bodies (partly done, wave 12C)
+
+A standard library is **index-only**: `libs.Loader.LoadAll` reduces every file it parses to the
+same record a cache hit restores, so a library type contributes its name, kind, specializations,
+alias target, unit and annotation facts — and no members, declared values or condition bodies —
+whether the cache was cold or warm. That contract was adopted deliberately, as the fix for a
+cache that was not a cache: a hit produced a *poorer* state than a miss, so `solve` evaluated
+library-inherited invariants and gRPC reported dozens of inherited library attributes only until
+the cache warmed, and the conformance oracles gave two answers for one tree.
+
+The contract is honest but lossy, and this item is the other way out (option B when it was
+adjudicated): make records **lossless** — serialize enough member, value and condition structure
+that a restored library equals a parsed one — and then let libraries keep their bodies on both
+paths. What it buys is not conformance: it is reach. Hover and go-to-definition into a library
+body (the stdlib analogue of the annotation-body editor surface wave 12 closed as L1),
+library-declared conditions in the solver's translatable subset, and library feature
+multiplicity, which a record does not persist today
+(`TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` asserts the assumed `1..1` on both paths
+rather than the declared `0..1`).
+
+What it costs, as measured while adopting the index-only contract instead: the on-disk format
+grows substantially and gains a version-compatibility surface; library value expressions have to
+actually evaluate, which they do not today (`isSolid = isEmpty(voids)`,
+`Systems Library/Items.sysml:105`, whose callee resolves while `Model.Eval` declines to fold it); and
+every consumer that currently sees no library body starts seeing one, which is a diagnostics
+change to adjudicate per oracle rather than a plumbing change. Several sessions, and it must not
+be taken as a cosmetic metric move — the index-only contract is what makes the cache provably
+free of semantic effect, so anything replacing it needs the same proof
+(`internal/core/libs/index_only_test.go`). The record format, the version-compatibility surface and
+the measurements behind them are designed in
+[wave 12C](wave12c-lossless-library-records.md), which recommends caching only the derived facts and
+parsing the library on every path — parsing all 95 bundled files costs 41 ms of the 1.90 s cold load.
+
+**Slice A landed** ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)) ahead of the record
+format, because measuring L3's cost exposed a larger defect it would have multiplied: every model
+was handed a library index of its own, so a full gRPC model cache held ~100 copies of the same
+library — heap 1595 MiB, 15.95 MiB each. The library is now built once, frozen, and read through a
+per-model overlay (`libs.SharedBase`, `symbols.NewOverlay`), which measures 17.2 MiB for the base
+plus 1.5 MiB for 100 models. That reprices the record format rather than delivering it: keeping the
+parsed trees is now a once-per-process ~17 MiB, not per model.
+
+**Row L3-9 is closed too:** `ApplyEdits` took a library index per edit *operation* and now takes one
+per request — a 5-operation request went from 6 indexes and 12.03 MiB in 37.6 ms to 1 and 3.04 MiB in
+8.7 ms, applying the same edits with the same diagnostics and the same qualified lookups.
+
+**Still open:** the record format itself, and the rest of the consumers listed as slice B in the
+design page.
 
 ---
 
@@ -474,3 +556,9 @@ Tracks A, B, C, P and T1 are closed and their entries are removed; what is left 
    **D8** (the OWL-ontology output profile) is optional and additive: its domain/range gate is
    worth having as soon as the profile's term table exists, but the profile only becomes fully
    conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
+3. **L2** after wave 11 as a whole, since slices' rows sit behind the gate it narrows — closed in
+   wave 12A. **L3**'s record format last of the two and only if its reach is wanted: it buys no
+   conformance row, and it replaces a contract the cache's correctness currently rests on. L1, the
+   annotation-body editor surface, closed in wave 12; L3's slice A (the shared library index)
+   closed with it, being a memory defect on its own rather than part of that trade. Both are
+   independent of the release section and of Track D.

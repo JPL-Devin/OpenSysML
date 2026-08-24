@@ -20,9 +20,11 @@ form-level unseen diagnostics.
 - All eight corpus roots must be present, which takes two more downloads: the OMG training corpus
   (`./scripts/download-training-examples.sh`) and the OMG example/validation corpora
   (`./scripts/download-pilot-corpora.sh`, which writes `examples/pilot-corpora/`, 212 of the files).
-  A missing corpus silently lowers the file count (expect `searched 536 corpus file(s) for 217
-  distinct literal(s)` when everything is present) and shifts every bucket — check that line before
-  believing a diff, since `cmp` against the committed baseline fails on the root stats alone.
+  A missing corpus silently lowers the file count and shifts every bucket. Compare the
+  `searched N corpus file(s)` line with the count implied by the committed baseline's `roots`
+  entries (the sum of their `files` values). A mismatch means either the corpus or the committed
+  baseline is stale; do not diagnose it as a missing corpus from the count alone. No test enforces
+  reproduction of the compact baseline, so it can go stale silently when fixtures are added.
 
 ## The core check
 
@@ -89,6 +91,15 @@ are each rejected with `expected a namespace member`.
 **Always redirect stdin** when driving `./cmd/sysml <file>` from a recorded Konsole: after analysing
 the file it drops into the REPL and blocks, so the next typed command is swallowed as SysML. Use
 `go run ./cmd/sysml file </dev/null`.
+
+## Measuring an extra corpus root
+
+There is no flag for extra scanned roots (`cmd/grammar-coverage` takes only `-repo`, `-grammars`,
+`-out`, `-baseline`), so claims of the form "corpus X closes the unseen-form gap" need a temporary
+`corpusRoot` appended to `evidenceRoots` in `cmd/grammar-coverage/corpus.go`, then reverted. Example
+at `PILOT_TAG=2026-05`: adding `cmd/pilot-reject/testdata/negative` contributes 119 files / 842
+lines and takes unseen forms 5 → 0 with `indistinguishable` unchanged at 244. Such a configuration
+is not reproduced by CI, so report it as a local measurement, not a baseline movement.
 
 ## Recording
 

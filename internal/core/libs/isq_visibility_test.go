@@ -13,10 +13,10 @@ func TestISQMassValueVisibility(t *testing.T) {
 	loader := NewLoader(src, cache)
 
 	// Load ISQBase
-	loader.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx)
-	loader.Load("Domain Libraries/Quantities and Units/Quantities.sysml", idx)
-	loader.Load("Domain Libraries/Quantities and Units/MeasurementReferences.sysml", idx)
-	loader.Load("Domain Libraries/Quantities and Units/ISQBase.sysml", idx)
+	loader.load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx)
+	loader.load("Domain Libraries/Quantities and Units/Quantities.sysml", idx)
+	loader.load("Domain Libraries/Quantities and Units/MeasurementReferences.sysml", idx)
+	loader.load("Domain Libraries/Quantities and Units/ISQBase.sysml", idx)
 
 	// Check ISQBase::MassValue visibility
 	syms := idx.LookupQualified("ISQBase::MassValue")

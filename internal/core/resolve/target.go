@@ -32,8 +32,14 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 			return nil, false
 		}
 		return r.resolveQualified(scope, t.Name, hide)
+	case *ast.IndexExpr:
+		// `a#(1)` names one element of the sequence a, of a's own type.
+		if t.Bracket {
+			return nil, false
+		}
+		return r.resolveTarget(scope, t.Operand, hide)
 	case *ast.FeatureChainExpr:
-		owner, ok := r.resolveTarget(scope, t.Operand, hide)
+		owner, ok := r.resolveTarget(scope, t.Operand, hide.forPrefix())
 		if !ok || t.Member == nil {
 			return nil, false
 		}
@@ -57,6 +63,13 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 type refFilter struct {
 	decl         ast.Node
 	namingTarget ast.Node
+	targetName   string
+	// featuredBy hides the members a scope features: a connector end's
+	// participant is not a feature of the connector (KerML 8.3.4.5).
+	featuredBy       *symbols.Scope
+	hideBorrowedName bool
+	skipNamingTarget bool
+	skipBorrowedName bool
 }
 
 // hides reports whether sym is a binding a reference target must not see.
@@ -64,10 +77,46 @@ func (f *refFilter) hides(sym *symbols.Symbol) bool {
 	if f == nil || sym == nil {
 		return false
 	}
-	if f.decl != nil && (sym.Decl == f.decl || sym.EffectiveName) {
+	if f.decl != nil && sym.Decl == f.decl {
 		return true
 	}
-	return f.namingTarget != nil && sym.NamingTarget == f.namingTarget
+	if f.featuredBy != nil && sym.OwnerScope == f.featuredBy {
+		return true
+	}
+	if f.namingTarget == nil {
+		return false
+	}
+	if sym.NamingTarget == f.namingTarget {
+		return true
+	}
+	if f.hideBorrowedName && namedByReference(sym) && sym.Name == f.targetName {
+		return true
+	}
+	return false
+}
+
+// namedByReference reports whether sym borrowed its name from a reference
+// subsetting rather than taking it from the feature it redefines: a redefining
+// feature is itself the feature of that name here (KerML 7.3.4.5), so it is a
+// valid target, while a borrowed binding never is.
+func namedByReference(sym *symbols.Symbol) bool {
+	if !sym.EffectiveName {
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return true
+	}
+	rel := ast.NamingFeature(usage)
+	return rel == nil || rel.Kind != ast.RelRedefines
+}
+
+// declNode returns the declaration f hides the bindings of, if any.
+func (f *refFilter) declNode() ast.Node {
+	if f == nil {
+		return nil
+	}
+	return f.decl
 }
 
 // contributedOnly reports whether a scope owner's own declarations are hidden,
@@ -85,7 +134,32 @@ func (f *refFilter) hiding(target ast.Node) *refFilter {
 	out := refFilter{namingTarget: target}
 	if f != nil {
 		out.decl = f.decl
+		out.featuredBy = f.featuredBy
+		out.skipNamingTarget = f.skipNamingTarget
+		out.skipBorrowedName = f.skipBorrowedName
 	}
+	if out.skipNamingTarget {
+		out.namingTarget = nil
+		out.targetName = ""
+		out.hideBorrowedName = false
+	} else if !out.skipBorrowedName {
+		if qn := ast.AsQualifiedName(target); qn != nil && len(qn.Parts) > 0 {
+			out.targetName = qn.Parts[len(qn.Parts)-1].Text
+			out.hideBorrowedName = true
+		}
+	}
+	return &out
+}
+
+func (f *refFilter) forPrefix() *refFilter {
+	if f == nil {
+		return nil
+	}
+	out := *f
+	out.skipNamingTarget = true
+	out.namingTarget = nil
+	out.targetName = ""
+	out.hideBorrowedName = false
 	return &out
 }
 
@@ -201,8 +275,7 @@ func (r *Resolver) memberChain(owner *symbols.Symbol, qn *ast.QualifiedName) (*s
 		if !ok {
 			return nil, false
 		}
-		cur = next
-		r.recordPart(qn, i, cur)
+		cur = r.resolvedPart(qn, i, next)
 	}
 	return cur, true
 }
