@@ -2091,8 +2091,9 @@ disagreements.
 * **Parallel state syntax:** `TransitionUsage_invalid.sysml:45, 54, 68` closed in
   wave 12D, which parses `state … parallel { … }` and retains it in the AST so
   “A parallel state cannot have successions or transitions” and the
-  accepter-source rule can be evaluated. Line 60 (`Must be a Boolean
-  expression.`) remains open behind tier gating. See
+  accepter-source rule can be evaluated. Line 60 now reports
+  `transition guard must be Boolean, found String` on the declared model line;
+  its expression-only span keeps the Xpect row in `same-line`. See
   [wave12d-decisions.md](wave12d-decisions.md).
 * **Fixture environment:** `Feature_invalid_noType.sysml:18,20` has no library
   resource in `XPECT_SETUP`. The pilot consequently lacks `Parts::Part`, so the

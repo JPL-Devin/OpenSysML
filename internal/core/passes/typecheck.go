@@ -130,7 +130,6 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.checkBoolean(body, m.Until, "condition of 'until'")
 		tc.walk(body, m.Body)
 	case *ast.TransitionMember:
-		tc.expr.checkBoolean(scope, m.Guard, "transition guard")
 		tc.checkTrigger(scope, m.Trigger)
 	case *ast.AssignmentActionNode:
 		tc.expr.infer(scope, m.Value)
@@ -573,12 +572,6 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		// The check for isUsageKind OR isDefKind allows both patterns
 		if !isUsageKind(target) && !isDefKind(target) {
 			return fmt.Sprintf("%s target must be a usage or definition, found %s", rel, target)
-		}
-		// A KerML Subsetting relates two Features (KerML 1.0 §8.3.4.9), so a feature
-		// cannot subset a bare type declaration (`classifier`, `class`, `struct`, …).
-		if decl.isKerML() && decl.keyword == "feature" && rel == ast.RelSubsets &&
-			target == symbols.SymbolKerMLType {
-			return fmt.Sprintf("%s target must be a feature, found %s", rel, target)
 		}
 		// `satisfy`/`verify <name>` is a reference subsetting of an existing
 		// requirement usage; viewpoint and concern usages are requirement usages.

@@ -26,10 +26,10 @@
       "disagree": 19,
       "unlocated": 0,
       "notAdjudicated": 0,
-      "sameLocation": 7,
-      "sameLine": 6,
+      "sameLocation": 10,
+      "sameLine": 7,
       "severityDiffers": 0,
-      "elsewhereInFile": 6
+      "elsewhereInFile": 2
     },
     {
       "kind": "noErrors",
@@ -135,10 +135,10 @@
           "disagree": 15,
           "unlocated": 0,
           "notAdjudicated": 0,
-          "sameLocation": 5,
+          "sameLocation": 8,
           "sameLine": 6,
           "severityDiffers": 0,
-          "elsewhereInFile": 4
+          "elsewhereInFile": 1
         },
         {
           "kind": "noErrors",
@@ -1216,9 +1216,9 @@
               "line": 21,
               "at": "non",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Feature 'non'.\"",
-              "ours": "no error at line 22; nearest is line 30: unresolved reference: Test3::A (no namespace \"Test3\" is loaded; \"A\" is declared as test::A)"
+              "ours": "line 22 offset 410: subsets target must be a feature, found kermlType"
             },
             {
               "kind": "errors",
@@ -1253,9 +1253,9 @@
               "line": 21,
               "at": "non",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Feature 'non'.\"",
-              "ours": "no error at line 22; nearest is line 31: expected a name after '.'"
+              "ours": "line 22 offset 410: subsets target must be a feature, found kermlType"
             },
             {
               "kind": "errors",
@@ -1300,9 +1300,9 @@
               "line": 21,
               "at": "non",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Feature 'non'.\"",
-              "ours": "no error at line 22; nearest is line 32: expected a name after '.'"
+              "ours": "line 22 offset 410: subsets target must be a feature, found kermlType"
             },
             {
               "kind": "errors",
@@ -4589,9 +4589,9 @@
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 2,
-          "sameLine": 0,
+          "sameLine": 1,
           "severityDiffers": 0,
-          "elsewhereInFile": 2
+          "elsewhereInFile": 1
         },
         {
           "kind": "noErrors",
@@ -5306,9 +5306,9 @@
               "line": 60,
               "at": "if \"test\"",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-line",
               "declared": "error: \"Must be a Boolean expression.\"",
-              "ours": "no error at line 61; nearest is line 46: A parallel state cannot have successions or transitions."
+              "ours": "line 61 offset 2043: transition guard must be Boolean, found String"
             }
           ]
         },
@@ -5611,10 +5611,10 @@
         "disagree": 19,
         "unlocated": 0,
         "notAdjudicated": 0,
-        "sameLocation": 7,
-        "sameLine": 6,
+        "sameLocation": 10,
+        "sameLine": 7,
         "severityDiffers": 0,
-        "elsewhereInFile": 6
+        "elsewhereInFile": 2
       },
       {
         "kind": "noErrors",
