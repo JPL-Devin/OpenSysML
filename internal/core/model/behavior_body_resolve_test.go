@@ -267,10 +267,7 @@ func TestKeywordNamedDeclarationIsReferenceable(t *testing.T) {
 	}
 }
 
-// TestReservedKeywordNameWarning covers how a keyword-spelled declaration name
-// reaches consumers: as a warning that does not gate the later tiers, so the
-// same file still reports its unresolved reference.
-func TestReservedKeywordNameWarning(t *testing.T) {
+func TestReservedKeywordNameErrorDoesNotGateLaterTiers(t *testing.T) {
 	ws := NewWorkspace()
 	uri := "file:///kwwarn.sysml"
 	ws.Open(uri, []byte(`package P {
@@ -281,24 +278,20 @@ func TestReservedKeywordNameWarning(t *testing.T) {
 	}`), 1)
 	defer ws.Close(uri)
 
-	var warnings, errors []passes.Diagnostic
+	var errors []passes.Diagnostic
 	for _, d := range ws.Diagnostics(uri) {
-		switch d.Severity {
-		case passes.SeverityWarning:
-			warnings = append(warnings, d)
-		case passes.SeverityError:
+		if d.Severity == passes.SeverityError {
 			errors = append(errors, d)
 		}
 	}
 
-	if len(warnings) != 1 || warnings[0].Code != "reserved-keyword-name" {
-		t.Fatalf("warnings = %v, want one reserved-keyword-name", warnings)
+	if len(errors) != 2 {
+		t.Fatalf("errors = %v, want the keyword name and unresolved reference", errors)
 	}
-	if !strings.Contains(warnings[0].Message, `"flow" is a reserved keyword`) {
-		t.Errorf("warning = %q", warnings[0].Message)
+	if errors[0].Code != "reserved-keyword-name" || !strings.Contains(errors[0].Message, `"flow" is a reserved keyword`) {
+		t.Errorf("keyword error = %+v", errors[0])
 	}
-	// The warning must not gate name resolution: `zzz` is still reported.
-	if len(errors) != 1 || !strings.Contains(errors[0].Message, "unresolved reference: zzz") {
-		t.Errorf("errors = %v, want the unresolved reference to zzz", errors)
+	if !strings.Contains(errors[1].Message, "unresolved reference: zzz") {
+		t.Errorf("name-resolution error = %+v", errors[1])
 	}
 }

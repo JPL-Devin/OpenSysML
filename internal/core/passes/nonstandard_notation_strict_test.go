@@ -113,9 +113,7 @@ func TestNotationSeverity(t *testing.T) {
 	}
 }
 
-// The findings this slice adds follow the mode like every other one: warned by
-// default, error when conformance is asked for strictly.
-func TestSliceFindingsFollowTheMode(t *testing.T) {
+func TestExtensionFindingsFollowTheMode(t *testing.T) {
 	for _, tc := range []struct {
 		name, file, src, code string
 	}{
@@ -125,7 +123,6 @@ func TestSliceFindingsFollowTheMode(t *testing.T) {
 		{"source_then_target", "a.sysml", "state def S { state a; state b; a then b; }", CodeNonstandardNotation},
 		{"one_ended_first", "a.sysml", "part def P { part a; first a; }", CodeNonstandardNotation},
 		{"requirement_constraint", "a.sysml", "analysis def An { attribute size; require constraint { size >= 1 } }", CodeNonstandardNotation},
-		{"sysml_in_kerml", "a.kerml", "package P { part def Wheel; }", CodeSysMLNotation},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			def := notationDiags(t, tc.file, tc.src, conformance.ModeDefault)
@@ -146,22 +143,35 @@ func TestSliceFindingsFollowTheMode(t *testing.T) {
 	}
 }
 
-// g15: the parser already warns on a keyword-as-name and keeps the recovery an
-// editor needs, so the pass only escalates it under strict mode.
-func TestKeywordAsNameIsEscalatedOnlyUnderStrictMode(t *testing.T) {
-	const src = "package P { part def part; }"
-	if got := notationDiags(t, "a.sysml", src, conformance.ModeDefault); len(got) != 0 {
-		t.Errorf("default: got %+v, want the parser warning alone", got)
-	}
-	got := notationDiags(t, "a.sysml", src, conformance.ModeStrict)
-	if len(got) != 1 || got[0].Code != CodeReservedKeywordName || got[0].Severity != SeverityError {
-		t.Fatalf("strict: got %+v, want one reserved-keyword-name error", got)
+func TestRecoveredGrammarViolationsAreErrorsInEitherMode(t *testing.T) {
+	for _, tc := range []struct {
+		name, file, src, code string
+	}{
+		{"definition_keyword_name", "a.sysml", "package P { part def part; }", CodeReservedKeywordName},
+		{"alias_keyword_name", "a.sysml", "package P { part def B; alias part for P::B; }", CodeReservedKeywordName},
+		{"sysml_declaration_in_kerml", "a.kerml", "package P { part def Wheel; }", CodeSysMLNotation},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			def := notationDiags(t, tc.file, tc.src, conformance.ModeDefault)
+			strict := notationDiags(t, tc.file, tc.src, conformance.ModeStrict)
+			if len(def) != 1 || len(strict) != 1 {
+				t.Fatalf("got %d default and %d strict findings, want 1 each: %+v / %+v", len(def), len(strict), def, strict)
+			}
+			if def[0].Code != tc.code || strict[0].Code != tc.code {
+				t.Errorf("codes = %q / %q, want %q", def[0].Code, strict[0].Code, tc.code)
+			}
+			if def[0].Severity != SeverityError || strict[0].Severity != SeverityError {
+				t.Errorf("severities = %v / %v, want errors", def[0].Severity, strict[0].Severity)
+			}
+			if def[0].Message != strict[0].Message || def[0].Span != strict[0].Span {
+				t.Errorf("modes changed the finding: %+v vs %+v", def[0], strict[0])
+			}
+		})
 	}
 }
 
-// A keyword-as-name is reported once per span in either mode and never lost:
-// strict drops the parser's warning where a pass escalated that same span, and
-// every declaration that parses with a keyword for a name is escalated there.
+// A keyword-as-name is reported once per span after the parser warning is
+// replaced by the notation error for the same recovered declaration.
 func TestKeywordAsNameIsReportedOnceInEitherMode(t *testing.T) {
 	for _, tc := range []struct{ name, file, src string }{
 		{"definition", "a.sysml", "package P { part def part; }"},
@@ -183,12 +193,8 @@ func TestKeywordAsNameIsReportedOnceInEitherMode(t *testing.T) {
 				if len(got) != 1 {
 					t.Fatalf("%v: got %+v, want the keyword reported exactly once", mode, got)
 				}
-				want := SeverityWarning
-				if mode.IsStrict() {
-					want = SeverityError
-				}
-				if got[0].Severity != want {
-					t.Errorf("%v: severity = %v, want %v", mode, got[0].Severity, want)
+				if got[0].Severity != SeverityError {
+					t.Errorf("%v: severity = %v, want error", mode, got[0].Severity)
 				}
 			}
 		})
