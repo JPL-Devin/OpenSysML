@@ -85,6 +85,30 @@ type Model struct {
 	// against and no document of its own, for analyzing the edited notation.
 	// Nil checks syntax alone.
 	NewIndex func() *symbols.Index
+	// reindex is the one index an Apply call analyzes in, set by Apply.
+	reindex *reindexer
+}
+
+// reindexer holds the one index an Apply call reads its intermediate and final
+// notation in: adding a document the index already holds drops the previous
+// contributions first, so reuse leaves what a fresh build would.
+type reindexer struct {
+	newIndex func() *symbols.Index
+	idx      *symbols.Index
+}
+
+// analyzedIn returns the index holding root as the document named name,
+// building the call's index on first use.
+func (r *reindexer) analyzedIn(name string, root *ast.RootNamespace, kind source.Kind) *symbols.Index {
+	if r.idx == nil {
+		if r.newIndex != nil {
+			r.idx = r.newIndex()
+		} else {
+			r.idx = symbols.NewIndex()
+		}
+	}
+	r.idx.AddDocumentWithKind(name, root, kind)
+	return r.idx
 }
 
 // Applied describes one replacement. Batch spans use the original source;
@@ -116,6 +140,7 @@ func Apply(m Model, ops []Operation) (*Result, error) {
 	if err := duplicateAddNames(ops); err != nil {
 		return nil, err
 	}
+	m.reindex = &reindexer{newIndex: m.NewIndex}
 	if !needsSequential(ops) {
 		return applyBatch(m, ops)
 	}
@@ -216,26 +241,18 @@ func applyBatch(m Model, ops []Operation) (*Result, error) {
 	return &Result{Content: content, Applied: applied}, nil
 }
 
+// reparseModel is the state the later operations locate their targets in: it is
+// parsed and indexed, and not analyzed — an edit is judged by the original's
+// diagnostics and the returned notation's, which validate takes.
 func reparseModel(base Model, content []byte) (Model, error) {
 	sf := source.NewWithKind(base.Source.Name(), content, base.Source.Kind())
 	p := parser.New(sf)
 	root := p.ParseFile()
-	var idx *symbols.Index
-	if base.NewIndex != nil {
-		idx = base.NewIndex()
-		idx.AddDocumentWithKind(sf.Name(), root, sf.Kind())
-	} else {
-		idx = symbols.NewIndex()
-		idx.AddDocumentWithKind(sf.Name(), root, sf.Kind())
-	}
-	var semDiags []passes.Diagnostic
-	if len(p.Diagnostics) == 0 {
-		semDiags = passes.AnalyzeWithKind(sf.Name(), sf.Kind(), root, nil, idx)
-	}
+	idx := base.reindex.analyzedIn(sf.Name(), root, sf.Kind())
 	return Model{
 		Source: sf, Root: root, Index: idx,
-		ParseDiags: p.Diagnostics, SemDiags: semDiags,
-		NewIndex: base.NewIndex,
+		ParseDiags: p.Diagnostics,
+		NewIndex:   base.NewIndex, reindex: base.reindex,
 	}, nil
 }
 

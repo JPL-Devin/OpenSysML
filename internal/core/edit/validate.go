@@ -90,12 +90,16 @@ func (m Model) validate(content []byte) error {
 	if m.NewIndex == nil {
 		return nil
 	}
-	idx := m.NewIndex()
-	idx.AddDocumentWithKind(sf.Name(), root, sf.Kind())
+	if m.reindex == nil { // validated outside an Apply call
+		m.reindex = &reindexer{newIndex: m.NewIndex}
+	}
 	// The parse diagnostics are handed to the analysis, so a model that already
-	// had syntax errors is not judged by tiers its own parse never reached.
+	// had syntax errors is not judged by tiers its own parse never reached. The
+	// baseline is taken first: it and the edited notation share one index, in
+	// which each is in turn the document under the model's name.
 	before := errorsOnly(m.baseline(editedParse))
 	before = append(before, errorsOnly(originalParse)...)
+	idx := m.reindex.analyzedIn(sf.Name(), root, sf.Kind())
 	after := errorsOnly(passes.AnalyzeWithKind(sf.Name(), sf.Kind(), root, editedParse, idx))
 	if introduced := introduced(before, after); len(introduced) > 0 {
 		return &Error{
@@ -121,8 +125,7 @@ func (m Model) baseline(gate []passes.Diagnostic) []passes.Diagnostic {
 	}
 	p := parser.New(m.Source)
 	root := p.ParseFile()
-	idx := m.NewIndex()
-	idx.AddDocumentWithKind(m.Source.Name(), root, m.Source.Kind())
+	idx := m.reindex.analyzedIn(m.Source.Name(), root, m.Source.Kind())
 	return passes.AnalyzeWithKind(m.Source.Name(), m.Source.Kind(), root, gate, idx)
 }
 

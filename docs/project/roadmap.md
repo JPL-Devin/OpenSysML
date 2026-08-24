@@ -226,8 +226,12 @@ per-model overlay (`libs.SharedBase`, `symbols.NewOverlay`), which measures 17.2
 plus 1.5 MiB for 100 models. That reprices the record format rather than delivering it: keeping the
 parsed trees is now a once-per-process ~17 MiB, not per model.
 
-**Still open:** the record format itself, and the consumers listed as slice B in the design page —
-including `ApplyEdits`, which still reindexes per edit *operation* (row L3-9).
+**Row L3-9 is closed too:** `ApplyEdits` took a library index per edit *operation* and now takes one
+per request — a 5-operation request went from 6 indexes and 12.03 MiB in 37.6 ms to 1 and 3.04 MiB in
+8.7 ms, applying the same edits with the same diagnostics and the same qualified lookups.
+
+**Still open:** the record format itself, and the rest of the consumers listed as slice B in the
+design page.
 
 ---
 

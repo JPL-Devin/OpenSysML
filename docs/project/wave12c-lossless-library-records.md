@@ -205,8 +205,8 @@ on `1af78d94`:** the same 100 cached models cost **1.1 MiB of heap and 76.5 MiB 
 model) against 1598.3 MiB / 2180.3 MiB before, and **1** library index is built rather than 104. The
 REPL's two indexes (row **L3-10**) become two overlays of one base: 4 sessions with a submission and
 a browse index cost 17.1 MiB, against 122.7 MiB. The LSP's single index is unchanged in size and now
-shares the process-wide base. Rows **L3-4** and **L3-10** are closed by that slice; **L3-9** keeps
-its per-operation churn but no longer loads a library per operation.
+shares the process-wide base. Rows **L3-4** and **L3-10** are closed by that slice; **L3-9** kept
+its per-operation churn until the slice recorded in its row below.
 
 **The pool's `Built` counter does not track one build per cached model.** Over the 100-model run it
 reached 104 with `Pooled: 53, Inline: 47`: 53 requests took a prewarmed index, 47 built one inline
@@ -214,11 +214,11 @@ because the pool was empty, and the 4 extra builds are the prewarm slots refille
 `Built` counts *pool and inline construction*, not retention — the pool caps nothing, since every
 index it hands out leaves it for good.
 
-One further build site, not retained but not free either: `ApplyEdits` gives `edit.reparseModel` a
+One further build site, not retained but not free either: `ApplyEdits` gave `edit.reparseModel` a
 fresh library index per *operation* (`internal/grpc/edit.go:43`, and `reparseModel` is called inside
 the operation loop, `internal/core/edit/edit.go:145`). Measured, a 5-operation request took **6**
 indexes from the pool — ~96 MiB of allocation and ~0.5 s of index building for one request (row
-**L3-9**).
+**L3-9**, now closed: an `Apply` call takes one).
 
 ### 3.2 Why the copy exists
 
@@ -545,7 +545,7 @@ Every row below is open, with a category from
 | **L3-5** | The 26 `unresolved` errors the passes report over the parsed library (`that`, feature chains such as `CartesianVectorOf::result::dimension`, and implicit-redefinition targets). Each needs a category of its own once a consumer actually surfaces it. | not yet adjudicated | L3, after step 2 |
 | **L3-7** | First derivation of a specialization edge costs ~36 µs per symbol (~365 ms over the library) and is dominated by resolving each generalization target; the memo itself is live (a second pass is 0.13 ms). Whether 36 µs per edge is acceptable is a `semantics`/`resolve` question, and if it were cheap the cache would have little reason to exist. | performance defect, unadjudicated | `semantics` |
 | **L3-8** | **Delivered** in [#504](https://github.com/JPL-Devin/OpenSysML/pull/504): `Freeze`/`NewOverlay`, the layered read paths, the suppression of an ambiguated import target, the five proofs of §3.4, and the gRPC/REPL/LSP/workspace migration — done as one slice rather than the A/B split of §3.5. | unimplemented obligation, now met | `symbols`, `internal/grpc`, `internal/repl` |
-| **L3-9** | `ApplyEdits` still builds an index per edit *operation* (`internal/grpc/edit.go:43` through `edit.reparseModel`): a 5-operation request took 6. Slice A made each one an overlay rather than a library load, so the ~96 MiB and ~0.5 s are gone, but the per-operation reindexing remains. | performance defect | `internal/grpc` |
+| **L3-9** | **Closed**: `edit.Apply` takes one index per call and reuses it, since adding a document a name already holds drops the previous contributions first (`internal/core/edit/edit.go`, `reindexer`). Measured on a fresh cache, 10 runs each: a 5-operation request took **6** indexes and 12.03 MiB of allocation in 37.6 ms, and now takes **1** and 3.04 MiB in 8.7 ms; a 10-operation request went from **11** indexes, 34.97 MiB and 100.3 ms to **1**, 5.68 MiB and 15.7 ms. An overlay of the shared base is 1.4 KiB retained (200 of them, 0.3 MiB), so the heap the per-operation indexes held was the analysis each carried, not the index: the same slice stopped analyzing the intermediate notation, whose diagnostics no caller reads — an edit is judged by the original's and the returned notation's. Equivalence with applying the operations one at a time — notation, applied edits, diagnostics, whole-index qualified lookups, refusal kinds, and no write into another model's index or the frozen base — is proved in `internal/grpc/edit_reindex_test.go`. | performance defect, closed | `internal/grpc` |
 | **L3-10** | **Closed by slice A**: the REPL's two library indexes (30.7 MiB) are two overlays of one shared base; 4 sessions with a submission and a browse index cost 17.1 MiB against 122.7 MiB. | performance defect | `internal/repl` |
 | **L3-6** | `roadmap.md`'s L3 text says library value expressions do not resolve; measured, they resolve and fail to evaluate. Also it says `TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` skips, while it asserts. | our defect (documentation) | this page; corrected in the roadmap by this PR |
 
