@@ -3,10 +3,10 @@
 Baseline: `main` @ `c28b5f1`, verified locally on 2026-08-19 with Go 1.25.13.
 Read `AGENTS.md` first; it governs everything below.
 
-0.1.0 is released from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
-archives. `main` now carries everything cut under 0.1.1 in `CHANGELOG.md`, which is awaiting its
-tag. Everything in "Release follow-through" is maintainer- or account-gated; everything after it
-is ordinary engineering work.
+0.1.2 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
+`sysml-grpc` archives. `main` now carries everything cut under 0.2.0 in `CHANGELOG.md`, which is
+awaiting its tag. Everything in "Release follow-through" is maintainer- or account-gated; everything
+after it is ordinary engineering work.
 
 Track status as of this baseline: **Tracks A, B, C and P are closed**, and their entries are
 removed from this file rather than kept as a list of done work — `CHANGELOG.md` is the record of
@@ -68,17 +68,17 @@ runs the suite with that variable set, and it runs on `v*` tags as well as on br
 
 # Release follow-through
 
-## R1 — tag 0.1.1 (maintainer, blocking everything else in this section)
+## R1 — tag 0.2.0 (maintainer, blocking everything else in this section)
 
-`v0.1.0` is tagged and released on `Open-MBEE/OpenSysML`, so what remains is the same procedure
+`v0.1.2` is tagged and released on `Open-MBEE/OpenSysML`, so what remains is the same procedure
 for the next release. Releases live on `Open-MBEE/OpenSysML`; development happens on
 `JPL-Devin/OpenSysML`, which has no tags at all. So the tag is preceded by promoting `main`
 upstream, as 0.0.4 was through Open-MBEE PR #47:
 
 ```bash
 # on Open-MBEE/OpenSysML, after main carries the release commit
-git tag -a v0.1.1 -m "v0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
 ```
 
 The publish job needs `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project.
@@ -97,10 +97,11 @@ from whichever release the caller names, so its version and the core's are not l
 See `docs/project/releasing.md`.
 
 One decision precedes the upload, found in the 0.0.8 pre-release audit: `python/opensysml/_version.py`
-declares `0.2.0` while the newest published artifact is `0.1.1`, so the first upload has to be
-`opensysml-v0.2.0` (the tag-versus-source check refuses anything else) and 0.2.0's Python-side
-changes — `evaluate`/`ExecutionError`, pinned checksums, subject-aware `eval`, generated typed
-classes — all land in that one release rather than incrementally.
+declares `0.3.0` and nothing is published to PyPI yet, so the first upload has to be
+`opensysml-v0.3.0` (the tag-versus-source check refuses anything else) and every Python-side change
+since the client's version line was cut — `evaluate`/`ExecutionError`, pinned checksums,
+subject-aware `eval`, generated typed classes, `loads`, authoring edits and the strict-conformance
+keyword — all land in that one release rather than incrementally.
 
 What remains is account-gated and cannot be done from a session: create the PyPI project's
 first release with an account-scoped token, then replace it with a project-scoped one; create
