@@ -105,3 +105,85 @@ func TestW8CFeatureReferenceLegal(t *testing.T) {
 		t.Errorf("unexpected %q: %v", msgReferentIsFeature, msgs)
 	}
 }
+
+// F20 validateSubsettingFeaturingTypes: a body writes references the pilot
+// checks for accessibility just as it checks a value expression, so a feature
+// named through its owning type's namespace is not reachable there.
+func TestW8CFeatureReferenceBodyInaccessible(t *testing.T) {
+	cases := map[string]string{
+		"constraint def body": `package P {
+	part def Q { attribute n = 1; }
+	constraint def C { P::Q::n > 0 }
+}`,
+		"asserted constraint": `package P {
+	part def Q { attribute n = 1; }
+	part def R { assert constraint { P::Q::n > 0 } }
+}`,
+		"calc return": `package P {
+	part def Q { attribute n = 1; }
+	calc def C { return x = P::Q::n; }
+}`,
+		"transition guard": `package P {
+	part def Q { attribute n = 1; }
+	state def S { state a; state b; transition first a if P::Q::n > 0 then b; }
+}`,
+		"require constraint": `package P {
+	part def Q { attribute n = 1; }
+	requirement def R { require constraint { P::Q::n > 0 } }
+}`,
+		"assume constraint": `package P {
+	part def Q { attribute n = 1; }
+	requirement def R { assume constraint { P::Q::n > 0 } }
+}`,
+		"assignment value": `package P {
+	part def Q { attribute n = 1; }
+	action def A { attribute v = 0; assign v := P::Q::n; }
+}`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			msgs := w8cLibraryMessagesIn(t, "<t>.sysml", src)
+			if got := w8cCount(msgs, msgSubsettingFeaturingTypes); got != 1 {
+				t.Errorf("want one %q, got %v", msgSubsettingFeaturingTypes, msgs)
+			}
+		})
+	}
+}
+
+// The traps the reverted attempt fell into: a body reaches its own type's
+// features, inherited ones included, and a dot path reaches a nested one.
+func TestW8CFeatureReferenceBodyAccessible(t *testing.T) {
+	cases := map[string]string{
+		"own feature": `package P {
+	part def Q { attribute n = 1; constraint c { n > 0 } }
+}`,
+		"inherited feature": `package P {
+	part def Base { attribute n = 1; }
+	part def D :> Base { constraint c { n > 0 } }
+}`,
+		"redefined feature": `package P {
+	part def Base { attribute n = 1; }
+	part def D :> Base { attribute n redefines n; constraint c { n > 0 } }
+}`,
+		"dotted subject": `package P {
+	part def Widget { attribute mass = 1; }
+	requirement def R { subject s : Widget; require constraint { s.mass > 0 } }
+}`,
+		"dotted part path": `package P {
+	part def Q { attribute n = 1; }
+	part def R { part q : Q; constraint c { q.n > 0 } }
+}`,
+		"connector ends": `package P {
+	part def Port;
+	part def A { part x : Port; part y : Port; connect x to y; }
+}`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			msgs := w8cLibraryMessagesIn(t, "<t>.sysml", src)
+			if got := w8cCount(msgs, msgSubsettingFeaturingTypes); got != 0 {
+				t.Errorf("unexpected %q: %v", msgSubsettingFeaturingTypes, msgs)
+			}
+		})
+	}
+}
