@@ -146,16 +146,16 @@ nav:
       - Pilot Xpect expectations: project/pilot-xpect.md
       - Pilot rejection oracle: project/pilot-rejection.md
       - Grammar coverage: project/grammar-coverage.md
-      - Wave 10 decisions: project/wave10-decisions.md
-      - Wave 11B parser findings: project/wave11b-parser-findings.md
-      - Wave 11D metadata and evaluability: project/wave11d-metadata-evaluability.md
-      - Wave 11E decisions: project/wave11e-decisions.md
-      - Wave 12A element-scoped tier gating: project/wave12a-element-gating.md
-      - Wave 12C lossless library records: project/wave12c-lossless-library-records.md
-      - Wave 12D decisions: project/wave12d-decisions.md
-      - Wave 12E decisions: project/wave12e-decisions.md
-      - Wave 12F false positives: project/wave12f-false-positives.md
-      - Wave 14 declared errata overlay: project/wave14-errata.md
+      - Validation adjudications: project/wave10-decisions.md
+      - Parser findings: project/wave11b-parser-findings.md
+      - Metadata and evaluability: project/wave11d-metadata-evaluability.md
+      - KerML validation and visibility decisions: project/wave11e-decisions.md
+      - Element-scoped tier gating: project/wave12a-element-gating.md
+      - Lossless library records: project/wave12c-lossless-library-records.md
+      - Parser recovery decisions: project/wave12d-decisions.md
+      - Scope enumeration and visibility decisions: project/wave12e-decisions.md
+      - Our false positives: project/wave12f-false-positives.md
+      - Declared errata overlay: project/wave14-errata.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
       - macOS distribution: project/macos-distribution.md

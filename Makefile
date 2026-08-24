@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts
+.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -128,6 +128,10 @@ docs-counts: ## Regenerate and verify all derived documentation counts
 	go run ./cmd/doc-counts -check
 	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts
 	@echo "✓ Documentation counts and refereed figures are current"
+
+docs-check: ## Verify documentation links, and that reader-facing pages cite no internal label
+	$(PYTHON) scripts/check-doc-links.py
+	$(PYTHON) scripts/check-doc-ids.py
 
 docs-install: ## Install the documentation site toolchain
 	$(PYTHON) -m pip install -r docs-requirements.txt

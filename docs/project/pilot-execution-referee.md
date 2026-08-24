@@ -208,7 +208,7 @@ No compliance row's status flag is changed on the strength of this work.
 Run it with `go run ./cmd/pilot-exec-diff` after `./scripts/download-pilot-evaluator.sh`; with the
 execution artifact absent it prints a provisioning instruction, exits 0 and writes nothing, so
 `cmd/pilot-diff` and its committed baseline are untouched. Current state of the 94 committed cases,
-the original 32 plus the 62 the wave-6D expression round added:
+the original 32 plus the 62 the expression round added:
 
 ```
 agree: 56 · kind-only: 1 · order-only: 0 · disagree: 1
@@ -216,7 +216,7 @@ pilot-unevaluated: 21 · pilot-silent: 4 · pilot-error: 2 · ours-error: 1 · b
 nondeterministic: 0
 ```
 
-The wave-10F runtime fixes moved five of the six `ours-error` cases to `agree`
+A later round of runtime fixes moved five of the six `ours-error` cases to `agree`
 (`dot-perform-out`, `dot-machine-attr`, `w6d:inherited-value-no-body`,
 `w6d:inherited-value-template`, `w6d:vector-elements`) and `bump-out-target` from
 `both-error` to `pilot-error`: we now answer `n = 1` on `--target=Behave::Bump`, which the pilot
@@ -239,7 +239,7 @@ The one remaining `ours-error` case is an adjudicated divergence:
 |---|---|---|
 | `w6d:held-undeclared-multi` | `multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1` | **Deliberately ours.** `attribute xs = (1.0, 2.0)` declares no multiplicity, so the assumed `1..1` makes the default a violation (KerML 1.0 §7.4.5, and the multiplicity row of [spec-compliance.md](spec-compliance.md)); the pilot returns both values. An adjudicated divergence, not a defect |
 
-The cases that were `ours-error` before wave-10F, and what closed them:
+The cases that were `ours-error` before that round, and what closed them:
 
 | Case | Was | Closed by |
 |---|---|---|
@@ -249,8 +249,8 @@ The cases that were `ours-error` before wave-10F, and what closed them:
 
 ## Findings to carry forward
 
-1. **`Behave::machine.p.n` — a `perform action` binding's scope, closed in wave-10F.** Both tools
-   validate the model clean and both now answer the same value:
+1. **`Behave::machine.p.n` — a `perform action` binding's scope, closed by those runtime fixes.**
+   Both tools validate the model clean and both now answer the same value:
 
    ```
    $ ./bin/sysml -e "Behave::machine.p.n" behavior.sysml

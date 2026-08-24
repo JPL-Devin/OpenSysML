@@ -13,6 +13,12 @@ are externally refereed — the pilot's verdict on every case comes from actuall
 pinned validators, not from our reading of the grammar. Our adjudication of *why* each gap exists
 (the "likely root cause" column) is self-assessed.
 
+**Labels:** the short labels in this record are internal cross-references, not specification or
+product terms. A "wave" (and a "slice" within one) is a numbered development round of this
+project; the numbering is chronological and carries no external meaning. `F<n>` names a row of the
+follow-up table in [pilot-differential.md](pilot-differential.md), and `K<n>`/`S<n>` its KerML and
+SysML diagnostic classes. A reader who only wants the verdicts can ignore all of them.
+
 ## Pinned reference
 
 The same pin as the differential: OMG SysML v2 Pilot Implementation `2026-05`
@@ -49,7 +55,7 @@ systematically from three sources, one subdirectory each:
    `first <src> then <tgt>`, and has no pseudostates or deferral at all. Adjudication: these are
    **intended OpenSysML extensions**, not accidents — each has dedicated parser tests
    (`internal/core/parser/state_notation_test.go`) and runtime support. They are documented as
-   extensions and, since W8E, gated behind an opt-in
+   extensions and, since strict mode was added, gated behind an opt-in
    [strict conformance mode](../guide/03-command-line.md#strict-conformance) a conformance-minded
    user can turn on; the default mode keeps accepting them on purpose.
 3. **`xpect/` — the pilot's own negative expectations** (34 cases; 7 in wave 8, 27 added by wave
@@ -174,7 +180,7 @@ same cold and warm. Persisting a fact emits no diagnostic on its own — the rul
 (`internal/core/passes/w8c_metadata_type.go`) reads that accessor instead of casting `Decl`, which
 is what closes the row. Hence **117 both reject, 3 only the pilot rejects** above.
 
-## Adjudications (W9F)
+## Adjudications
 
 Every gap below is a **real permissiveness finding**: the pinned grammar admits none of these
 models, so a conforming SysML v2 tool rejects them and we do not. Adjudicating one says where the
@@ -187,7 +193,7 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   `mismatched input 'import'`. We do report it — as a *warning*
   (`internal/core/passes/import_visibility.go`, code `import-visibility`), and warnings do not
   count as rejection here. Per the pinned grammar the severity should be an error in the default
-  mode; the diagnostic is a semantic pass, so W9F does not change it (`internal/core/passes` is
+  mode; the diagnostic is a semantic pass, so this round does not change it (`internal/core/passes` is
   another wave-9 slice). Wave-10 item: raise `SeverityWarning` to an error, or make it
   conformance-dependent as `nonstandard_notation.go` already does.
   **Closed in wave 10C (D2):** the finding is an error in every mode, and the case now rejects.
@@ -208,9 +214,9 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   slice.** `part def` exists in no KerML production; the KerML validator reports `no viable
   alternative at input 'def'`. We parse `.kerml` with the same grammar as `.sysml` and filter
   afterwards: `internal/core/passes/nonstandard_notation.go` reports SysML-only notation in a
-  KerML file, at a severity that depends on the conformance mode. As W9F measured it, the walker
+  KerML file, at a severity that depends on the conformance mode. As measured here, the walker
   did not cover the SysML *definition and usage keywords* themselves, so `-conformance strict` left
-  this case open too. Extending that walker is a `internal/core/passes` change, so W9F wrote it up
+  this case open too. Extending that walker is a `internal/core/passes` change, so this round wrote it up
   rather than doing it.
   **Wave 10C:** the walker now reports SysML declaration keywords in a `.kerml` file, so strict
   mode rejects the case; the default mode warns, so it remains a default-mode gap.
@@ -230,10 +236,10 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   `allocate f to g;` form. `g02`'s severity is D2 in the same record.
   **Closed in wave 10C (D1):** `allocate` demands its `ConnectorPart`, and the case now rejects.
 
-### Grammar mutation pass (W9F)
+### Grammar mutation pass
 
 The `grammar/` derivation was extended along the *unreached* axis rather than the interesting-case
-axis: [grammar-coverage.md](grammar-coverage.md) lists the forms no input of ours touches, and W9F
+axis: [grammar-coverage.md](grammar-coverage.md) lists the forms no input of ours touches, and this round
 mutated exactly those. Measured by running `cmd/grammar-coverage` over a tree with the negative
 corpus added as a scanned root, the five forms the committed coverage report calls unseen —
 `KerML.xtext:119` (`#`-prefixed `namespace`), `:408` `Conjugation`, `:426` `Disjoining`, `:712`
@@ -246,18 +252,18 @@ this same PR rather than left as gaps: `g20-include-without-target.sysml` (a bar
 inside a body was read as a member *named* `include`) and
 `g36-direction-without-feature.sysml` (`in ;` declared nothing and was accepted).
 
-### Second pass (W10G)
+### Second pass
 
 The second pass extended the corpus along two axes at once, so the two instruments cross-check.
 
 **Grammar axis (13 cases).** The five forms `grammar-coverage.md` calls unseen were already reached
-by W9F, so this pass mutated productions the coverage report cannot see as blind spots at all —
+in that round, so this pass mutated productions the coverage report cannot see as blind spots at all —
 `ConjugatedPortTyping`, `RealValue`, `StringValue`, `RangeExpression`, positional argument lists,
 `FeatureChainMember`, `QualifiedName`, unrestricted names, `SatisfyRequirementUsage`,
 `OwnedCrossSubsetting`, `Unioning`, `ConnectorEndMember` and `MetadataTyping` (`g50`–`g59`,
 `k17`–`k19`). The coverage instrument's own movement is unchanged by this pass and by design: with
 the negative corpus added as a scanned root the report still shows **0 unseen forms of 807** (it
-showed 5 before W9F's cases existed), and the committed baseline still shows **5 unseen forms**
+showed 5 before these cases existed), and the committed baseline still shows **5 unseen forms**
 because the committed roots do not include the negative corpus. The 244 indistinguishable
 productions are an instrument limitation — every path through them matches without a literal — so
 no corpus case can move that number. All 13 grammar cases are agreements.
@@ -294,9 +300,9 @@ an error, each has dedicated parser and runtime tests, and each is documented as
 strict mode ever stopped covering one of them, the default-mode acceptance would be an
 undocumented non-conformance and the case should be fixed instead of adjudicated.
 
-### Forms kept rejected (W10D)
+### Forms kept rejected
 
-Slice 10D probed the parser-debt follow-ups F60–F63, F102 and F103 against the pinned grammars and
+A later round probed the parser-debt follow-ups against the pinned grammars and
 accepted every form they derive. Three neighbouring forms are **not** derivable, so the rejection
 stays. Each is guarded by a `TestNegative` case (`entry_succession_body`,
 `definition_succession_body`, `namespace_succession_body`) — the first two guard the succession
@@ -318,7 +324,7 @@ enumerates exactly the baseline's `pilot-only-rejects` cases. It reads only comm
 validators, no downloads — so it runs in CI and fails the moment this prose goes stale.
 
 
-## Wave 14 — the declared errata overlay
+## The declared errata overlay
 
 The rejection census is reported twice, as published and with the [declared
 errata](wave14-errata.md) applied. Every case here is one we wrote ourselves, so no declared

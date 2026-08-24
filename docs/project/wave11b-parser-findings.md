@@ -1,4 +1,9 @@
-# Wave 11B — the parsing rows, and the ones that are not parser rows
+# The parsing rows, and the ones that are not parser rows
+
+> **Labels.** This is an engineering record. A "wave" (or a "slice" within one) is a numbered
+> development round of this project — chronological, with no meaning outside this repository — and
+> `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
+> [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
 
 Wave 11B owns the 20 Xpect disagreements in the pilot's parsing suites that were attributed to the
 lexer and the parser, plus one row 11A escalated as parser-owned (`StateUsage_invalid.sysml.xt`:83).

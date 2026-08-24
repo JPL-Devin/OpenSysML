@@ -1,9 +1,10 @@
 # Grammar Conformance Audit — reserved words and state/action notation
 
-This is the reviewable claim behind follow-ups F3 and F8 of
-[pilot-differential.md](../../project/pilot-differential.md): every word we
-reserve and every state-machine construct we accept, checked against the pinned
-OMG grammars, with the resulting policy.
+This is the reviewable claim behind two findings of the
+[pilot differential](../../project/pilot-differential.md) — that we reserved
+words the grammars do not, and that we rejected state-machine notation they
+admit: every word we reserve and every state-machine construct we accept,
+checked against the pinned OMG grammars, with the resulting policy.
 
 ## Ground truth
 
@@ -122,7 +123,7 @@ and is warned in `.sysml`, silent in `.kerml`.
 ### Reserved by SysML only — a name in a `.kerml` file
 
 A word is reserved by the grammar of the file it is written in, so a literal of
-`SysML.xtext` alone is an ordinary name in KerML. F30 unreserves these four by
+`SysML.xtext` alone is an ordinary name in KerML. These four are unreserved by
 file kind; they keep their SysML meanings in `.sysml`, where the literal exists.
 
 | Word | `KerML.xtext` | `KerMLExpressions.xtext` | `SysML.xtext` | Corpus witness |
@@ -135,7 +136,7 @@ file kind; they keep their SysML meanings in `.sysml`, where the literal exists.
 `featured by` is the converse case: `TypeFeaturingPart` (`KerML.xtext:569-571`)
 and `OwnedTypeFeaturing` (`:659`) are KerML productions with no SysML
 counterpart, so the clause is parsed everywhere and warned as `kerml-notation`
-in a `.sysml` file — the F3 treatment of `namespace`.
+in a `.sysml` file — the same treatment `namespace` gets in the other direction.
 
 ## Judgment calls
 

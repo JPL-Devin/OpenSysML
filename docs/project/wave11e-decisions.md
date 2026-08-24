@@ -1,4 +1,9 @@
-# Wave 11E — the KerML validation and visibility rows that stay open
+# The KerML validation and visibility rows that stay open
+
+> **Labels.** This is an engineering record. A "wave" (or a "slice" within one) is a numbered
+> development round of this project — chronological, with no meaning outside this repository — and
+> `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
+> [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
 
 Wave 11E owns 25 Xpect disagreements in the KerML validation and visibility suites. Nineteen closed
 by implementing or re-attaching a rule; the six expectations below, in five fixtures, do not close

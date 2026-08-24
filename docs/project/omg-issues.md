@@ -30,7 +30,7 @@ function includingAt{ in seq: Anything[0..*] ordered nonunique; in values: Anyth
 `subsequence(index + 1)` is the tail starting after `index`; the element at
 `index` appears in neither, so evaluating the body as written *replaces* it with
 `values` rather than inserting before it. OpenSysML implements insertion
-(maintainer ruling, PR for task S4), so `includingAt` is a divergence from the
+(maintainer ruling), so `includingAt` is a divergence from the
 vendored body and is recorded here for review against a future OMG release.
 
 ---
@@ -47,9 +47,9 @@ static dimensional check.
 | `Analysis Examples/Turbojet Stage Analysis.sysml:25` | `1/(2 * Cp) * V^2 + T_static`, with `Cp : DimensionOneValue`, `V : VolumeValue`, and `T_static : TemperatureValue` | the declared types make the operands L^6 and Θ | SysML v2.0 §9.8.9.1 requires addition operands to have the same quantity dimension and top-level quantity type. The formula needs dimensionally appropriate parameter declarations or conversion before addition. | **not filed** |
 
 They form one adjudicated quantity-commensurability family in
-[wave12f-false-positives.md](wave12f-false-positives.md): OpenSysML retains both warnings, and
-nothing has been posted upstream. Both are also entries of the declared errata overlay — F82 with a
-correction, F83 without one — quoted verbatim with their derivations in
+[the false-positive audit](wave12f-false-positives.md): OpenSysML retains both warnings, and
+nothing has been posted upstream. Both are also entries of the declared errata overlay — the geometry row with a
+correction, the turbojet row without one — quoted verbatim with their derivations in
 [the fourth section](#the-errata-overlay-entries-for-these-models).
 
 ---
@@ -66,15 +66,15 @@ and not from a disagreement alone.
 
 | Component | Pinned version | Symptom | Adjudication | Status |
 |---|---|---|---|---|
-| `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [K6 / F33](pilot-differential.md#k6-diagnostic-by-diagnostic-f33) — one cause for all six corpus diagnostics, reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) (W10G), **pending adjudication**, body below |
+| `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [one cause for all six corpus diagnostics](pilot-differential.md#k6-diagnostic-by-diagnostic-f33), reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) **pending adjudication**, body below |
 | `org.omg.sysml` — the `queryx/failing` Xpect fixtures | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | `QPE-Qualifier`, `QPE-Traversal` and `QPE-Wildcard` declare `XPECT noErrors`, yet the pinned validator rejects all three with `no viable alternative at input '/'`, `For input string: "."` and `no viable alternative at input '@'` | [wave12d-decisions.md](wave12d-decisions.md) — established by running the pinned pilot's own SysML validator on the three fixtures, not from a disagreement | **not filed** — question drafted below, awaiting maintainer authorisation |
 
-### F80 — `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
+### `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
 
 Filed as
 [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790);
 the body below is what was submitted, and the supporting analysis is
-[K6, diagnostic by diagnostic](pilot-differential.md#k6-diagnostic-by-diagnostic-f33).
+[the disjoining diagnostics, one by one](pilot-differential.md#k6-diagnostic-by-diagnostic-f33).
 
 ````markdown
 ### Every `disjoint from` clause in a type declaration reports an unpaired bidirectional reference
@@ -165,8 +165,7 @@ the six files contributes **exactly one** pilot-only row, each row is the EMF
 pair diagnostic above, and each line is a `disjoint from` clause written in a
 type declaration — the form the mechanism section pins to `OwnedDisjoining`. The
 per-clause table is in
-[the wave-9B sweep](pilot-differential.md#only-the-pilot--the-wave-9b-row-by-row-sweep-137)
-(W16). The clause appears on classifiers, plain types and features alike and the
+[the row-by-row sweep of pilot-only diagnostics](pilot-differential.md#only-the-pilot--the-wave-9b-row-by-row-sweep-137). The clause appears on classifiers, plain types and features alike and the
 reported EMF class tracks the declaration, so the defect is in the pair rather
 than in one metaclass; the standalone form `disjoint b.f.a from b.a;`
 (`Simple Tests/FeatureChains.kerml:28`) sits in the same file as one of the six
@@ -176,11 +175,11 @@ column entirely and silences nothing else it depends on.
 
 ---
 
-### F81 — are the `queryx/failing` query path expressions intended notation? (pilot `2026-05`)
+### Are the `queryx/failing` query path expressions intended notation? (pilot `2026-05`)
 
 **Not filed.** Drafted here for a maintainer to authorise; nothing has been
-posted upstream. The finding is wave 12D's, and the adjudication is in
-[wave12d-decisions.md](wave12d-decisions.md).
+posted upstream. The adjudication is in
+[the parser-recovery decisions](wave12d-decisions.md).
 
 ````markdown
 **Question, not a bug report:** three Xpect fixtures under
@@ -221,11 +220,11 @@ reason for asking rather than implementing.
 ## The errata overlay entries for these models
 
 The second section's rows are also entries of the declared errata overlay
-(`internal/errata`, [wave14-errata.md](wave14-errata.md)): the published bytes on
+(`internal/errata`, [the declared errata overlay](wave14-errata.md)): the published bytes on
 disk are never edited, and a row that carries a correction has that correction
 applied to the *second* figure every oracle reports, never to the headline one.
 The overlay adds no category and reclassifies nothing — both rows stay the
-adjudicated quantity-commensurability family wave 12F recorded.
+adjudicated quantity-commensurability family recorded in the false-positive audit.
 
 An entry is accepted only with a specification citation and a written
 derivation, and only while its as-published text still matches the corpus on
@@ -233,15 +232,15 @@ disk; both are tests (`internal/errata`), not conventions. A defect with no
 unambiguous intended reading is documented **without** a correction rather than
 closed by a guess.
 
-| ID | File | Line | Citation | Overlay | Status |
+| Finding | File | Line | Citation | Overlay | Status |
 |---|---|---:|---|---|---|
-| F82 | `sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml` | 38 | SysML v2 §9.8.9.1 | corrected | **not filed** — drafted below, awaiting maintainer authorisation |
-| F83 | `sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml` | 25 | SysML v2 §9.8.9.1 | documented without a correction | **not filed** — drafted below, awaiting maintainer authorisation |
+| dimensionless addend | `sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml` | 38 | SysML v2 §9.8.9.1 | corrected | **not filed** — drafted below, awaiting maintainer authorisation |
+| mismatched dimensions | `sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml` | 25 | SysML v2 §9.8.9.1 | documented without a correction | **not filed** — drafted below, awaiting maintainer authorisation |
 
 Filing is the user's decision: nothing here has been posted to
 `Systems-Modeling/SysML-v2-Pilot-Implementation` or any other upstream repository.
 
-### F82 — `radius = 22/2*25.4 + 110 [mm]` adds a dimensionless value to a length (pilot `2026-05`)
+### `radius = 22/2*25.4 + 110 [mm]` adds a dimensionless value to a length (pilot `2026-05`)
 
 **Not filed.** Drafted here for a maintainer to authorise; nothing has been
 posted upstream.
@@ -270,7 +269,7 @@ positive. The pinned pilot performs no dimensional analysis and is silent both
 on the published line and on the corrected one, so the correction changes our
 verdict and not the pilot's.
 
-### F83 — `1/(2 * Cp) * V^2 + T_static` adds L^6 to Θ (pilot `2026-05`)
+### `1/(2 * Cp) * V^2 + T_static` adds L^6 to Θ (pilot `2026-05`)
 
 **Not filed.** Drafted here for a maintainer to authorise; nothing has been
 posted upstream.

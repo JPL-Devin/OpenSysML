@@ -1,10 +1,16 @@
-# Wave 12F — our false positives on the reference's own valid models
+# Our false positives on the reference's own valid models
 
-Wave 12F owns the rows where **we** report something on a model the pinned OMG pilot
+This record owns the rows where **we** report something on a model the pinned OMG pilot
 (tag `2026-05`, artifacts `0.60.1`) accepts. A false positive on the reference's own corpus is the
 most expensive divergence we can carry, because it makes our validator unusable on models the pilot
-considers valid — so the slice is measured on the reference's corpora and its Xpect fixtures, not on
+considers valid — so the work is measured on the reference's corpora and its Xpect fixtures, not on
 ours.
+
+**Labels:** the short labels in this record are internal cross-references, not specification or
+product terms. A "wave" (and a "slice" within one) is a numbered development round of this
+project; the numbering is chronological and carries no external meaning. `F<n>` names a row of the
+follow-up table in [pilot-differential.md](pilot-differential.md), and `K<n>`/`S<n>` its KerML and
+SysML diagnostic classes. A reader who only wants the verdicts can ignore all of them.
 
 Every number below is from a fresh-cache run on this branch, never quoted from a report:
 
