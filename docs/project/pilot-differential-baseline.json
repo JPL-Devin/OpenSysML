@@ -129,7 +129,17 @@
           ],
           "pilotOnly": []
         }
-      ]
+      ],
+      "errataTotals": {
+        "files": 98,
+        "filesFullyAgreeing": 92,
+        "agreement": 0,
+        "severityMismatch": 0,
+        "openSysMLOnly": 15,
+        "pilotOnly": 0,
+        "openSysMLDiagnostics": 15,
+        "pilotDiagnostics": 0
+      }
     },
     {
       "name": "pilot-validation",
@@ -1685,5 +1695,53 @@
       "message": "The opposite features 'owningType' of 'org.omg.sysml.lang.sysml.impl.DisjoiningImpl{Simple Tests/Types.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0/@ownedRelationship.1}' and 'ownedDisjoining' of 'org.omg.sysml.lang.sysml.impl.TypeImpl{Simple Tests/Types.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0}' do not refer to each other",
       "count": 1
     }
-  ]
+  ],
+  "errata": {
+    "registryEntries": 2,
+    "corrections": 1,
+    "documentedWithoutCorrection": 1,
+    "correctionsApplied": 1,
+    "entries": [
+      {
+        "id": "F82",
+        "path": "examples/pilot-corpora/sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml",
+        "line": 38,
+        "citation": "SysML v2 §9.8.9.1",
+        "corrected": true,
+        "derivation": "the unit postfix binds to PrimaryExpression (KerMLExpressions.xtext:308), below AdditiveExpression, so `[mm]` qualifies 110 alone and `+` adds a dimensionless value to a length, which §9.8.9.1 forbids."
+      },
+      {
+        "id": "F83",
+        "path": "examples/pilot-corpora/sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml",
+        "line": 25,
+        "citation": "SysML v2 §9.8.9.1",
+        "corrected": false,
+        "derivation": "V is a VolumeValue and Cp dimensionless, so the first operand has dimension L^6 while T_static has Θ; no reading of the published text shares a dimension, so the defect is documented without a correction."
+      }
+    ],
+    "totals": {
+      "files": 353,
+      "filesFullyAgreeing": 322,
+      "agreement": 32,
+      "severityMismatch": 24,
+      "openSysMLOnly": 91,
+      "pilotOnly": 66,
+      "openSysMLDiagnostics": 147,
+      "pilotDiagnostics": 122
+    },
+    "findings": [
+      {
+        "id": "F82",
+        "root": "pilot-examples",
+        "path": "examples/pilot-corpora/sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml",
+        "line": 38,
+        "openSysMLAsPublished": 1,
+        "openSysMLWithErrata": 0,
+        "pilotAsPublished": 0,
+        "pilotWithErrata": 0,
+        "pilotVerdictChanged": false,
+        "note": "our diagnostic is cleared and the pilot is silent on both texts"
+      }
+    ]
+  }
 }

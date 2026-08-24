@@ -1,6 +1,7 @@
 package doccounts
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,6 +95,43 @@ func TestReadRefereedCountsDerivesAllBaselineFigures(t *testing.T) {
 	if counts.SelfAssessed != 1 || counts.PilotTag != "2026-05" || counts.PilotArtifact != "0.60.1" {
 		t.Fatalf("derived metadata: %+v", counts)
 	}
+	want := ErrataCounts{Registry: 2, Corrections: 1, Documented: 1,
+		Files: 2, FilesAgreeing: 2, OursOnly: 2, PilotOnly: 4, Silent: 0, RejectCases: 12, RejectPilotOnly: 1}
+	if counts.Errata != want {
+		t.Fatalf("errata counts: %+v, want %+v", counts.Errata, want)
+	}
+}
+
+// TestReadRefereedCountsRejectsABaselineWithoutErrata keeps the second figure a
+// measurement: a baseline predating the overlay is stale, not zero.
+func TestReadRefereedCountsRejectsABaselineWithoutErrata(t *testing.T) {
+	for _, path := range []string{
+		"docs/project/pilot-differential-baseline.json",
+		"docs/project/pilot-xpect-baseline.json",
+		"docs/project/pilot-rejection-baseline.json",
+	} {
+		t.Run(path, func(t *testing.T) {
+			root := t.TempDir()
+			writeDoccountsFixture(t, root)
+			content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+			if err != nil {
+				t.Fatalf("read fixture: %v", err)
+			}
+			var decoded map[string]any
+			if err := json.Unmarshal(content, &decoded); err != nil {
+				t.Fatalf("parse fixture: %v", err)
+			}
+			delete(decoded, "errata")
+			stripped, err := json.Marshal(decoded)
+			if err != nil {
+				t.Fatalf("encode fixture: %v", err)
+			}
+			writeAt(t, root, path, string(stripped))
+			if _, err := ReadRefereedCounts(root); err == nil {
+				t.Fatalf("%s without an errata section: want an error", path)
+			}
+		})
+	}
 }
 
 func TestRewriteBlockUsesConsumerRelativeLinksAndIsIdempotent(t *testing.T) {
@@ -178,9 +216,12 @@ func writeDoccountsFixture(t *testing.T, root string) {
 |---|---|
 | a | ✅ Faithful |
 `)
-	writeAt(t, root, "docs/project/pilot-differential-baseline.json", `{"pilotRelease":"2026-05 (jupyter-sysml-kernel 0.60.1)","totals":{"files":2,"filesFullyAgreeing":1,"openSysMLOnly":3,"pilotOnly":4}}`)
-	writeAt(t, root, "docs/project/pilot-xpect-baseline.json", `{"kinds":[{"kind":"errors","rows":11,"agree":8,"wordingOnly":2,"sameLocation":1,"sameLine":1,"severityDiffers":0,"elsewhereInFile":0},{"kind":"scope","assertions":8,"agree":7}]}`)
-	writeAt(t, root, "docs/project/pilot-rejection-baseline.json", `{"totals":{"cases":12,"bothReject":11,"pilotOnlyRejects":1},"strictOnlyAgreements":["a","b"]}`)
+	writeAt(t, root, "docs/project/pilot-differential-baseline.json", `{"pilotRelease":"2026-05 (jupyter-sysml-kernel 0.60.1)","totals":{"files":2,"filesFullyAgreeing":1,"openSysMLOnly":3,"pilotOnly":4},`+
+		`"errata":{"registryEntries":2,"corrections":1,"documentedWithoutCorrection":1,"totals":{"files":2,"filesFullyAgreeing":2,"openSysMLOnly":2,"pilotOnly":4}}}`)
+	writeAt(t, root, "docs/project/pilot-xpect-baseline.json", `{"kinds":[{"kind":"errors","rows":11,"agree":8,"wordingOnly":2,"sameLocation":1,"sameLine":1,"severityDiffers":0,"elsewhereInFile":0},{"kind":"scope","assertions":8,"agree":7}],`+
+		`"errata":{"kinds":[{"kind":"errors","rows":11,"agree":9,"wordingOnly":2,"sameLocation":1,"sameLine":1}]}}`)
+	writeAt(t, root, "docs/project/pilot-rejection-baseline.json", `{"totals":{"cases":12,"bothReject":11,"pilotOnlyRejects":1},"strictOnlyAgreements":["a","b"],`+
+		`"errata":{"totals":{"cases":12,"bothReject":11,"pilotOnlyRejects":1}}}`)
 }
 
 func writeAt(t *testing.T, root, path, content string) {

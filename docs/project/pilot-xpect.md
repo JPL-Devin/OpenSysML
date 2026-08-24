@@ -840,3 +840,19 @@ closed in wave 12D ([wave12d-decisions.md](wave12d-decisions.md)), **E3** `Conne
 `VisibilityTests_Protected_FeatureChaining` were our defects owned by the resolver and closed in wave
 12E ([wave12e-decisions.md](wave12e-decisions.md)), and **E4** is the adjudicated divergence above. Read that page beside this one: an open row with no category reads as a
 defect, and two of these six are not.
+
+
+## Wave 14 — the declared errata overlay
+
+This oracle reports its census twice, as published and with the [declared errata](wave14-errata.md)
+applied. No declared correction lies under `build/pilot-xpect-corpus`, so the two figures coincide
+and the report says why in those words rather than printing an unexplained equality:
+
+```
+no declared correction lies under build/pilot-xpect-corpus, so the errata-applied corpus is
+byte-identical to the published one and both figures coincide
+```
+
+The registry is still restated here with each entry's citation, and a correction landing in a `.xt`
+suite later would materialise a corrected copy of it and re-adjudicate every assertion against that
+copy, leaving the published corpus untouched.

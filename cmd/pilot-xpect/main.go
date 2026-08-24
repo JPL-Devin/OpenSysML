@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/errata"
 )
 
 // suite is one Xpect plugin of the pilot repository, as the downloader lays it
@@ -64,11 +65,20 @@ func run(repo, out string, jobs int) error {
 		jobs = 1
 	}
 
+	overlay, err := errata.Load()
+	if err != nil {
+		return err
+	}
+
 	report := &Report{
 		Pilot:   pilotPin(repo),
 		Corpus:  "build/pilot-xpect-corpus",
 		Library: "the suite's own /library* copies, loaded per fixture as its XPECT_SETUP declares them",
+		Errata:  newErrataReport(overlay),
 	}
+	// The errata-applied figure is adjudicated in its own shadow run, so the
+	// as-published report above is untouched by it.
+	erratum := &Report{}
 	for _, s := range defaultSuites {
 		dir := filepath.Join(repo, filepath.FromSlash(s.Dir))
 		if _, err := os.Stat(dir); err != nil {
@@ -79,16 +89,31 @@ func run(repo, out string, jobs int) error {
 		if err != nil {
 			return err
 		}
-		report.Suites = append(report.Suites, SuiteReport{
-			Name:  s.Name,
-			Dir:   s.Dir,
-			Files: compareAll(dir, files, jobs),
-		})
+		published := compareAll(dir, files, jobs)
+		report.Suites = append(report.Suites, SuiteReport{Name: s.Name, Dir: s.Dir, Files: published})
+
+		corrected, applied, err := erratumSuite(s, overlay, repo, out, jobs)
+		if err != nil {
+			return err
+		}
+		if applied == 0 {
+			corrected = append([]fileResult(nil), published...)
+		}
+		report.Errata.Applied += applied
+		erratum.Suites = append(erratum.Suites, SuiteReport{Name: s.Name, Dir: s.Dir, Files: corrected})
 	}
 	if len(report.Suites) == 0 {
 		return fmt.Errorf("no suite found under build/pilot-xpect-corpus; run scripts/download-pilot-xpect.sh")
 	}
 	report.summarize()
+	erratum.summarize()
+	report.Errata.Totals = erratum.Totals
+	report.Errata.Kinds = erratum.Kinds
+	if report.Errata.Applied == 0 {
+		report.Errata.Note = "no declared correction lies under build/pilot-xpect-corpus, so the errata-applied corpus is byte-identical to the published one and both figures coincide"
+	} else {
+		report.Errata.Note = "adjudicated again over a corrected copy of the suites; the published corpus is unchanged on disk"
+	}
 	return writeReports(out, report)
 }
 

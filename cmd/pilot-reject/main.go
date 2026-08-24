@@ -22,6 +22,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/errata"
 )
 
 // bucket names one quadrant of the two validators' verdicts.
@@ -97,11 +98,45 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 		}
 	}
 
+	cases, err := adjudicate(repo, corpusDir, policy, validator, kermlValidator, files, batches, timeout)
+	if err != nil {
+		return err
+	}
+
+	overlay, err := errata.Load()
+	if err != nil {
+		return err
+	}
+
+	report := &Report{
+		Validator:   relativeTo(repo, validator),
+		Corpus:      corpusDir,
+		Conformance: policy,
+		Errata:      newErrataReport(overlay),
+	}
+	if report.Pilot, err = pilotVersion(validator); err != nil {
+		return err
+	}
+	for _, rel := range files {
+		report.Cases = append(report.Cases, *cases[rel])
+	}
+	report.summarize()
+
+	if err := runErrata(report, overlay, repo, corpusDir, policy, validator, kermlValidator, out, files, batches, timeout); err != nil {
+		return err
+	}
+	return writeReports(out, report)
+}
+
+// adjudicate buckets every case of a corpus directory: ours in the policy's
+// mode, ours in the default mode, and the pilot's, per language batch.
+func adjudicate(repo, corpusDir, policy, validator, kermlValidator string,
+	files []string, batches []languageBatch, timeout time.Duration) (map[string]*Case, error) {
 	cases := make(map[string]*Case, len(files))
 	for _, rel := range files {
 		c, err := readCase(repo, corpusDir, rel)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		c.Mode = modeFor(policy, c.Source).String()
 		cases[rel] = c
@@ -120,30 +155,21 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 		pilot := pilotFor(batch.Kind, validator, kermlValidator)
 		ours, err := openSysMLErrors(repo, corpusDir, batch.Files, modes)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		oursDefault, err := openSysMLErrors(repo, corpusDir, batch.Files, defaults)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		theirs, err := pilotErrors(pilot, repo, corpusDir, batch.Files, timeout)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, rel := range batch.Files {
 			classify(cases[rel], ours[rel], oursDefault[rel], theirs[rel])
 		}
 	}
-
-	report := &Report{Validator: relativeTo(repo, validator), Corpus: corpusDir, Conformance: policy}
-	if report.Pilot, err = pilotVersion(validator); err != nil {
-		return err
-	}
-	for _, rel := range files {
-		report.Cases = append(report.Cases, *cases[rel])
-	}
-	report.summarize()
-	return writeReports(out, report)
+	return cases, nil
 }
 
 // pilotFor picks the reference validator for a language batch.

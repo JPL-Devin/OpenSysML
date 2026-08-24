@@ -66,6 +66,7 @@ var (
 	docScopeAgreementPattern  = regexp.MustCompile(`^- \*\*Scope agreement:\*\* ([0-9]+) of ([0-9]+) declared scope assertions match exactly`)
 	docPermissivenessPattern  = regexp.MustCompile(`^- \*\*Permissiveness gaps:\*\* of ([0-9]+) invalid models we wrote ourselves, the reference rejects ([0-9]+) that we accept by default, and ([0-9]+) both reject; ([0-9]+) further cases agree only when we are asked strictly`)
 	docSelfAssessedPattern    = regexp.MustCompile(`^- \*\*Self-assessed surface:\*\* ([0-9]+) of the tracked rules have no external referee at all`)
+	docErrataPattern          = regexp.MustCompile(`^- \*\*Declared errata:\*\* the registry declares ([0-9]+) defect\(s\) in the published reference material — ([0-9]+) with a specification-derived correction, ([0-9]+) documented without one, since no intended reading can be inferred \(\[OMG issues\]\([^)]+\), ` + "`internal/errata`" + `\)\. Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports ([0-9]+) of ([0-9]+) files agreeing, ([0-9]+) diagnostics ours alone and ([0-9]+) the reference's alone, ([0-9]+) declared rows we are silent on, and ([0-9]+) of ([0-9]+) authored cases the reference alone rejects\.`)
 	docRejectionLinePattern   = regexp.MustCompile(`^\*\*Rejection oracle:\*\* the reverse direction — do we reject what the reference rejects\? ([0-9]+) hand-written invalid models validated by both implementations, ([0-9]+) rejected by both, ([0-9]+) the pinned pilot rejects and we accept;`)
 )
 
@@ -203,6 +204,16 @@ func docAssertRefereedHeadline(t *testing.T, path string, lines []docLine, count
 		docPermissivenessPattern, "**Permissiveness gaps:**",
 		[]int{counts.RejectCases, counts.RejectDefaultPilotOnly, counts.RejectDefaultBoth, counts.RejectStrictOnly},
 		[]string{"authored cases", "cases only the pilot rejects by default", "cases both reject by default", "strict-only agreements"},
+	}, {
+		docErrataPattern, "**Declared errata:**",
+		[]int{counts.Errata.Registry, counts.Errata.Corrections, counts.Errata.Documented,
+			counts.Errata.FilesAgreeing, counts.Errata.Files, counts.Errata.OursOnly, counts.Errata.PilotOnly,
+			counts.Errata.Silent, counts.Errata.RejectPilotOnly, counts.Errata.RejectCases},
+		[]string{"registry entries", "corrections", "documented without a correction",
+			"files agreeing with the errata", "files compared with the errata",
+			"diagnostics only ours with the errata", "diagnostics only the pilot's with the errata",
+			"declared rows we are silent on with the errata",
+			"cases only the pilot rejects with the errata", "authored cases with the errata"},
 	}, {
 		docSelfAssessedPattern, "**Self-assessed surface:**",
 		[]int{counts.SelfAssessed},

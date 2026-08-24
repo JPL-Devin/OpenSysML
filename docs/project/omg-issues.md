@@ -48,7 +48,9 @@ static dimensional check.
 
 They form one adjudicated quantity-commensurability family in
 [wave12f-false-positives.md](wave12f-false-positives.md): OpenSysML retains both warnings, and
-nothing has been posted upstream.
+nothing has been posted upstream. Both are also entries of the declared errata overlay — F82 with a
+correction, F83 without one — quoted verbatim with their derivations in
+[the fourth section](#the-errata-overlay-entries-for-these-models).
 
 ---
 
@@ -213,3 +215,81 @@ A second implementation reading the corpus cannot tell from the fixtures alone
 whether the declared silence is an obligation or an aspiration, which is the
 reason for asking rather than implementing.
 ````
+
+---
+
+## The errata overlay entries for these models
+
+The second section's rows are also entries of the declared errata overlay
+(`internal/errata`, [wave14-errata.md](wave14-errata.md)): the published bytes on
+disk are never edited, and a row that carries a correction has that correction
+applied to the *second* figure every oracle reports, never to the headline one.
+The overlay adds no category and reclassifies nothing — both rows stay the
+adjudicated quantity-commensurability family wave 12F recorded.
+
+An entry is accepted only with a specification citation and a written
+derivation, and only while its as-published text still matches the corpus on
+disk; both are tests (`internal/errata`), not conventions. A defect with no
+unambiguous intended reading is documented **without** a correction rather than
+closed by a guess.
+
+| ID | File | Line | Citation | Overlay | Status |
+|---|---|---:|---|---|---|
+| F82 | `sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml` | 38 | SysML v2 §9.8.9.1 | corrected | **not filed** — drafted below, awaiting maintainer authorisation |
+| F83 | `sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml` | 25 | SysML v2 §9.8.9.1 | documented without a correction | **not filed** — drafted below, awaiting maintainer authorisation |
+
+Filing is the user's decision: nothing here has been posted to
+`Systems-Modeling/SysML-v2-Pilot-Implementation` or any other upstream repository.
+
+### F82 — `radius = 22/2*25.4 + 110 [mm]` adds a dimensionless value to a length (pilot `2026-05`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Published, `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38:
+
+```sysml
+:>> radius = 22/2*25.4 + 110 [mm];
+```
+
+Corrected by the overlay:
+
+```sysml
+:>> radius = (22/2*25.4 + 110) [mm];
+```
+
+`'[' SequenceExpression ']'` is a postfix on `PrimaryExpression`
+(`build/pilot-grammars/KerMLExpressions.xtext:308`), below `AdditiveExpression`,
+so `[mm]` qualifies `110` alone and the `+` combines a dimensionless value with
+a length. **SysML v2 §9.8.9.1** requires the operands and the result of an
+addition to share a quantity dimension, so the published expression is not
+satisfiable under any reading, and the evident intent — a radius in millimetres —
+is the parenthesised form. OpenSysML's warning at that line
+(`operator '+' combines incommensurable quantities`) is therefore a true
+positive. The pinned pilot performs no dimensional analysis and is silent both
+on the published line and on the corrected one, so the correction changes our
+verdict and not the pilot's.
+
+### F83 — `1/(2 * Cp) * V^2 + T_static` adds L^6 to Θ (pilot `2026-05`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Published, `Analysis Examples/Turbojet Stage Analysis.sysml`:25:
+
+```sysml
+return : TemperatureValue = 1/(2 * Cp) * V^2 + T_static;
+```
+
+`V` is declared `VolumeValue` (L^3) and `Cp` `DimensionOneValue`, so the first
+operand has dimension L^6 while `T_static` is a `TemperatureValue` (Θ);
+**SysML v2 §9.8.9.1** requires both operands and the result of `+` to share a
+quantity dimension, and the declared return type Θ agrees with the second
+operand only. The physics the calculation names (a total-temperature rise,
+`V^2 / (2·Cp)`) wants `V` to be a speed rather than a volume, but the published
+model does not say so anywhere: correcting it would mean choosing a type, a
+unit and a dimension on the example's behalf.
+
+So this row is **documented without a correction**. The overlay carries it for
+provenance only; both figures every oracle reports keep the published text, and
+OpenSysML's warning at that line stays in the differential census.

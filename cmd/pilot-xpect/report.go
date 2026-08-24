@@ -76,6 +76,9 @@ type Report struct {
 	Unparsed []string      `json:"unparsed,omitempty"`
 	Ignored  []string      `json:"ignoredNotes,omitempty"`
 	Missing  []string      `json:"missingResources,omitempty"`
+	// Errata is the same adjudication with the declared corrections applied;
+	// Totals above stays the as-published headline.
+	Errata *ErrataReport `json:"errata,omitempty"`
 }
 
 // kindOrder fixes the order of the per-kind table: the adjudicated kinds first,
@@ -289,6 +292,7 @@ func renderText(report *Report) string {
 	fmt.Fprintf(&b, "pilot pin: %s\ncorpus:    %s\nlibrary:   %s\n\n", report.Pilot, report.Corpus, report.Library)
 	writeTotals(&b, "TOTAL", report.Totals)
 	writeKinds(&b, report.Kinds)
+	writeErrata(&b, report.Errata)
 
 	for _, suite := range report.Suites {
 		fmt.Fprintf(&b, "\n%s\n%s (%s)\n", strings.Repeat("=", 72), suite.Name, suite.Dir)
@@ -373,6 +377,24 @@ func at(r row) string {
 		return ""
 	}
 	return fmt.Sprintf("at %q", r.At)
+}
+
+// writeErrata states the second figure after the headline, never instead of it.
+func writeErrata(b *strings.Builder, report *ErrataReport) {
+	if report == nil {
+		return
+	}
+	fmt.Fprintf(b, "\ndeclared errata: %d entr(ies), %d correction(s), %d documented without one; %d applied here\n",
+		report.Registry, report.Corrections, report.Documented, report.Applied)
+	for _, entry := range report.Entries {
+		shape := "documented, no substitution"
+		if entry.Corrected {
+			shape = "corrected"
+		}
+		fmt.Fprintf(b, "  %s %s:%d (%s) — %s\n", entry.ID, entry.Path, entry.Line, entry.Citation, shape)
+	}
+	fmt.Fprintf(b, "  %s\n", report.Note)
+	writeTotals(b, "TOTAL with errata applied", report.Totals)
 }
 
 func writeTotals(b *strings.Builder, label string, t Totals) {

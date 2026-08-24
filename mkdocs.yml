@@ -155,6 +155,7 @@ nav:
       - Wave 12D decisions: project/wave12d-decisions.md
       - Wave 12E decisions: project/wave12e-decisions.md
       - Wave 12F false positives: project/wave12f-false-positives.md
+      - Wave 14 declared errata overlay: project/wave14-errata.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
       - macOS distribution: project/macos-distribution.md

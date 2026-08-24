@@ -58,6 +58,9 @@ type Report struct {
 	StrictOnlyAgreements []string       `json:"strictOnlyAgreements,omitempty"`
 	Sources              []SourceTotals `json:"sources"`
 	Cases                []Case         `json:"cases"`
+	// Errata is the same run with the declared corrections applied; Totals
+	// above stays the as-published headline.
+	Errata *ErrataReport `json:"errata,omitempty"`
 }
 
 func (t *Totals) count(bucket string) {
@@ -124,6 +127,27 @@ func headline(t Totals) string {
 		t.Cases, t.BothReject, t.PilotOnlyRejects, t.OursOnlyRejects, t.BothAccept)
 }
 
+// writeErrata states the second figure after the headline, never instead of it.
+func writeErrata(b *strings.Builder, report *ErrataReport) {
+	if report == nil {
+		return
+	}
+	fmt.Fprintf(b, "\ndeclared errata: %d entr(ies), %d correction(s), %d documented without one; %d applied here\n",
+		report.Registry, report.Corrections, report.Documented, report.Applied)
+	for _, entry := range report.Entries {
+		shape := "documented, no substitution"
+		if entry.Corrected {
+			shape = "corrected"
+		}
+		fmt.Fprintf(b, "  %s %s:%d (%s) — %s\n", entry.ID, entry.Path, entry.Line, entry.Citation, shape)
+	}
+	fmt.Fprintf(b, "  %s\n", report.Note)
+	fmt.Fprintf(b, "TOTAL with errata applied: %s\n", headline(report.Totals))
+	for _, change := range report.VerdictChanges {
+		fmt.Fprintf(b, "  %s: %s -> %s\n", change.Path, change.Published, change.Corrected)
+	}
+}
+
 func renderText(report *Report) string {
 	var b strings.Builder
 	b.WriteString("OpenSysML vs the OMG pilot implementation over a hand-written negative corpus\n")
@@ -137,6 +161,7 @@ func renderText(report *Report) string {
 		fmt.Fprintf(&b, "  %-12s %6d %11d %10d %9d %11d\n",
 			st.Source, st.Cases, st.BothReject, st.PilotOnlyRejects, st.OursOnlyRejects, st.BothAccept)
 	}
+	writeErrata(&b, report.Errata)
 
 	for _, c := range report.Cases {
 		fmt.Fprintf(&b, "\n%s\n", c.Path)

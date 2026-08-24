@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/errata"
 )
 
 // corpusRoot is one directory of models. Each language in it is compared as its
@@ -101,9 +102,16 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 		syside = ""
 	}
 
+	// The declared errata overlay: every root is compared a second time with
+	// the corrections inside it applied to a copy, never to the corpus.
+	overlay, err := errata.Load()
+	if err != nil {
+		return err
+	}
+
 	// Recorded relative to the repository where possible: the JSON is committed
 	// as a baseline, so it must not carry a machine-specific path.
-	report := &Report{Validator: relativeTo(repo, validator)}
+	report := &Report{Validator: relativeTo(repo, validator), Errata: newErrataReport(overlay)}
 	if report.Pilot, err = pilotVersion(validator); err != nil {
 		return err
 	}
@@ -166,6 +174,16 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 				return err
 			}
 			attachSyside(&rootReport, files, ours, theirs, third)
+		}
+
+		erratum, err := runErrata(root, files, overlay, ours, theirs, repo, validator, kermlValidator, out, timeout)
+		if err != nil {
+			return err
+		}
+		if erratum.applied > 0 {
+			rootReport.ErrataTotals = &erratum.totals
+			report.Errata.Applied += erratum.applied
+			report.Errata.Findings = append(report.Errata.Findings, erratum.findings...)
 		}
 		report.Roots = append(report.Roots, rootReport)
 	}
