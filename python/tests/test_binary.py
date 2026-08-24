@@ -556,11 +556,16 @@ class TestPinnedDigests:
             expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', 'ef' * 32)
 
     def test_a_download_of_an_unpinned_release_is_refused(self, cache):
-        """No pin stops the download before anything is fetched."""
+        """No pin and no verifiable manifest stops the download before the binary."""
         with patch('urllib.request.urlopen') as urlopen:
             with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
                 download_binary(version='v9.9.9')
-        assert urlopen.call_count == 1  # the sidecar only; no binary was fetched
+        # The sidecar, the manifest and its bundle, and no binary.
+        fetched = [str(call[0][0]) for call in urlopen.call_args_list]
+        assert len(fetched) == 3
+        assert fetched[1].endswith('/v9.9.9/SHA256SUMS.txt')
+        assert fetched[2].endswith('/v9.9.9/SHA256SUMS.txt.bundle')
+        assert not any(url.endswith(release_asset_name()) for url in fetched)
 
     def test_a_missing_pin_is_told_apart_from_a_contradicted_one(self, pins):
         """Only a contradiction is evidence of tampering, so only it is unrecoverable."""
