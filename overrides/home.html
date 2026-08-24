@@ -1,0 +1,322 @@
+{% extends "main.html" %}
+
+<!-- The landing page: a hero above docs/README.md, which renders below it as usual.
+     scripts/mkdocs_landing.py selects this template; the Markdown is untouched. -->
+
+{% block extrahead %}
+  {{ super() }}
+  <style>
+    :root {
+      --osml-hero-from: #1a237e;
+      --osml-hero-to:   #303f9f;
+    }
+    [data-md-color-scheme="slate"] {
+      --osml-hero-from: #0d1030;
+      --osml-hero-to:   #1a237e;
+    }
+
+    .osml-hero {
+      background: linear-gradient(120deg, var(--osml-hero-from), var(--osml-hero-to));
+      color: #fff;
+      padding: 3.6rem 1.2rem 3.2rem;
+    }
+    .osml-hero__inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2.4rem;
+      align-items: center;
+      max-width: 61rem;
+      margin: 0 auto;
+    }
+    .osml-hero__eyebrow {
+      font-size: .68rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      opacity: .8;
+      margin: 0 0 .5rem;
+    }
+    .osml-hero h1 {
+      color: #fff;
+      font-size: 1.9rem;
+      line-height: 1.2;
+      font-weight: 700;
+      margin: 0 0 .7rem;
+    }
+    .osml-hero__lede {
+      font-size: .84rem;
+      line-height: 1.7;
+      opacity: .92;
+      margin: 0 0 1.4rem;
+    }
+    .osml-hero__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .6rem;
+      margin-bottom: 1.2rem;
+    }
+    /* Material's own .md-button is scoped to .md-typeset, which the hero is not. */
+    .osml-btn {
+      display: inline-block;
+      padding: .55rem 1.1rem;
+      border: 1px solid #fff;
+      border-radius: .2rem;
+      color: #fff;
+      font-size: .72rem;
+      font-weight: 700;
+      transition: background-color .2s, color .2s, border-color .2s;
+    }
+    .osml-btn--primary {
+      background: #fff;
+      color: var(--osml-hero-from);
+    }
+    .osml-btn:focus,
+    .osml-btn:hover {
+      background: var(--md-accent-fg-color);
+      border-color: var(--md-accent-fg-color);
+      color: #fff;
+    }
+    .osml-hero__meta {
+      font-size: .66rem;
+      opacity: .8;
+      margin: 0;
+    }
+    .osml-hero__meta a {
+      color: #fff;
+      text-decoration: underline;
+    }
+
+    .osml-terminal {
+      background: rgba(0, 0, 0, .38);
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-radius: .35rem;
+      overflow: hidden;
+      box-shadow: 0 .6rem 1.6rem rgba(0, 0, 0, .3);
+    }
+    .osml-terminal__bar {
+      display: flex;
+      gap: .32rem;
+      padding: .5rem .7rem;
+      background: rgba(255, 255, 255, .08);
+    }
+    .osml-terminal__bar span {
+      width: .5rem;
+      height: .5rem;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .35);
+    }
+    .osml-terminal pre {
+      margin: 0;
+      padding: .9rem 1rem;
+      font-size: .62rem;
+      line-height: 1.65;
+      color: #e8eaf6;
+      overflow-x: auto;
+    }
+    .osml-terminal .osml-prompt { color: #90caf9; }
+    .osml-terminal .osml-ok     { color: #a5d6a7; }
+    .osml-terminal .osml-dim    { opacity: .68; }
+
+    .osml-features {
+      max-width: 61rem;
+      margin: 0 auto;
+      padding: 2.6rem 1.2rem .4rem;
+    }
+    .osml-features h2 {
+      font-size: 1.1rem;
+      margin: 0 0 1.2rem;
+    }
+    .osml-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+      gap: 1rem;
+    }
+    .osml-card {
+      display: block;
+      padding: 1rem 1.1rem;
+      border: 1px solid var(--md-default-fg-color--lightest);
+      border-radius: .35rem;
+      color: inherit;
+      transition: border-color .2s, transform .2s, box-shadow .2s;
+    }
+    a.osml-card:hover {
+      border-color: var(--md-accent-fg-color);
+      transform: translateY(-2px);
+      box-shadow: 0 .3rem .9rem var(--md-default-fg-color--lightest);
+    }
+    .osml-card h3 {
+      font-size: .78rem;
+      margin: 0 0 .35rem;
+      font-weight: 700;
+    }
+    .osml-card p {
+      font-size: .7rem;
+      line-height: 1.6;
+      margin: 0;
+      color: var(--md-default-fg-color--light);
+    }
+
+    .osml-strip {
+      border-top: 1px solid var(--md-default-fg-color--lightest);
+      border-bottom: 1px solid var(--md-default-fg-color--lightest);
+      margin-top: 2.4rem;
+    }
+    .osml-strip__inner {
+      max-width: 61rem;
+      margin: 0 auto;
+      padding: 1.6rem 1.2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+      gap: 1.2rem;
+    }
+    .osml-strip h3 {
+      font-size: .74rem;
+      margin: 0 0 .3rem;
+    }
+    .osml-strip p {
+      font-size: .68rem;
+      line-height: 1.6;
+      margin: 0;
+      color: var(--md-default-fg-color--light);
+    }
+
+    .osml-install {
+      max-width: 61rem;
+      margin: 0 auto;
+      padding: 2.4rem 1.2rem 0;
+    }
+    .osml-install h2 {
+      font-size: 1.1rem;
+      margin: 0 0 .9rem;
+    }
+    .osml-install pre {
+      background: var(--md-code-bg-color);
+      color: var(--md-code-fg-color);
+      border-radius: .3rem;
+      padding: .9rem 1rem;
+      font-size: .68rem;
+      line-height: 1.7;
+      overflow-x: auto;
+      margin: 0 0 .6rem;
+    }
+    .osml-install p {
+      font-size: .7rem;
+      color: var(--md-default-fg-color--light);
+    }
+
+    @media screen and (max-width: 59.9375em) {
+      .osml-hero__inner { grid-template-columns: 1fr; }
+      .osml-hero h1 { font-size: 1.55rem; }
+    }
+  </style>
+{% endblock %}
+
+{% block hero %}
+<section class="osml-hero">
+  <div class="osml-hero__inner">
+    <div class="osml-hero__copy">
+      <p class="osml-hero__eyebrow">SysML v2 &middot; KerML 1.1 &middot; written in Go</p>
+      <h1>Author, check and run systems models from one toolchain.</h1>
+      <p class="osml-hero__lede">
+        OpenSysML parses and validates SysML v2 and KerML 1.1, serves an editor over
+        the Language Server Protocol, executes actions, state machines and constraints,
+        and exports models as RDF — with a Python client for the same runtime.
+      </p>
+      <div class="osml-hero__actions">
+        <a class="osml-btn osml-btn--primary" href="{{ 'guide/01-install/'|url }}">Install</a>
+        <a class="osml-btn" href="{{ 'guide/'|url }}">Read the guide</a>
+        <a class="osml-btn" href="{{ config.repo_url }}">Source</a>
+      </div>
+      <p class="osml-hero__meta">
+        Apache-2.0 &middot; Linux, macOS and Windows binaries &middot;
+        measured against the <a href="{{ 'project/pilot-differential/'|url }}">OMG pilot implementation</a>
+      </p>
+    </div>
+    <div class="osml-terminal">
+      <div class="osml-terminal__bar"><span></span><span></span><span></span></div>
+<pre><code><span class="osml-prompt">sysml&gt;</span> part def Wheel { attribute diameter = 16.0; }
+<span class="osml-ok">✓ part def Wheel</span>
+
+<span class="osml-prompt">sysml&gt;</span> %instantiate Wheel
+<span class="osml-ok">✓ Created instance of Wheel</span>
+  <span class="osml-dim">ID: 1</span>
+
+<span class="osml-prompt">sysml&gt;</span> calc add { in x; in y; return x + y; }
+<span class="osml-ok">✓ calc add</span>
+
+<span class="osml-prompt">sysml&gt;</span> %calc add 10 20
+<span class="osml-ok">✓ add(10, 20)</span>
+  <span class="osml-dim">= 30</span>
+</code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="osml-features">
+  <h2>What it does</h2>
+  <div class="osml-grid">
+    <a class="osml-card" href="{{ 'guide/05-checking/'|url }}">
+      <h3>Parse and validate</h3>
+      <p>A hand-written parser for the full surface syntax, name resolution, and
+      validation split into tiers so a model is checked as strictly as you ask.</p>
+    </a>
+    <a class="osml-card" href="{{ 'guide/08-editors/'|url }}">
+      <h3>Edit anywhere</h3>
+      <p><code>sysml-lsp</code> speaks the Language Server Protocol — completion,
+      diagnostics, hovers and navigation in VS Code or any LSP client.</p>
+    </a>
+    <a class="osml-card" href="{{ 'guide/04-repl/'|url }}">
+      <h3>Explore in a REPL</h3>
+      <p>An interactive session that keeps your model: instantiate parts, inspect
+      feature values, and step through behavior at a breakpoint.</p>
+    </a>
+    <a class="osml-card" href="{{ 'guide/06-behavior/'|url }}">
+      <h3>Execute behavior</h3>
+      <p>Actions, state machines, calculations and constraints really run, with a
+      step budget so a model can never spin forever.</p>
+    </a>
+    <a class="osml-card" href="{{ 'guide/07-saving-and-rdf/'|url }}">
+      <h3>Interoperate</h3>
+      <p>Round-trip models through RDF/Turtle and query them with OSLC query text,
+      so a model is data other tools can read.</p>
+    </a>
+    <a class="osml-card" href="{{ 'guide/09-python/'|url }}">
+      <h3>Automate from Python</h3>
+      <p>The <code>opensysml</code> package drives the same execution runtime over
+      gRPC, with generated typed classes.</p>
+    </a>
+  </div>
+</section>
+
+<section class="osml-install">
+  <h2>Install</h2>
+<pre><code># macOS
+brew install Open-MBEE/tap/opensysml
+
+# with a Go toolchain
+go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
+</code></pre>
+  <p>Linux and Windows archives are on the
+  <a href="{{ config.repo_url }}/releases/latest">releases page</a>; the
+  <a href="{{ 'guide/01-install/'|url }}">install page</a> covers every route,
+  checksums, and macOS Gatekeeper.</p>
+</section>
+
+<section class="osml-strip">
+  <div class="osml-strip__inner">
+    <div>
+      <h3><a href="{{ 'project/spec-compliance/'|url }}">Compliance, stated plainly</a></h3>
+      <p>Every construct is recorded as faithful, approximate or not implemented. No
+      conformance certification is claimed.</p>
+    </div>
+    <div>
+      <h3><a href="{{ 'project/pilot-differential/'|url }}">Refereed against the pilot</a></h3>
+      <p>Our diagnostics are compared with the pinned OMG pilot implementation over
+      its own corpora, and the difference is published.</p>
+    </div>
+    <div>
+      <h3><a href="{{ 'project/roadmap/'|url }}">Known gaps</a></h3>
+      <p>The roadmap lists what is missing, in the order it should be picked up.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
