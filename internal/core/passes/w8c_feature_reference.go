@@ -23,7 +23,6 @@ func (FeatureReferencePass) Run(ctx *Context, name string, root *ast.RootNamespa
 		return nil
 	}
 	c := &featureReferenceChecker{cc: &constraintChecker{
-		index:    ctx.Index,
 		model:    ctx.Model(),
 		resolver: ctx.Resolver(),
 	}}
