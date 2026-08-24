@@ -4,6 +4,76 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.2.1 — 2026-08-24
+
+A conformance patch and a supply-chain improvement. The rejection oracle against the pinned
+OMG pilot (`2026-05`, jupyter-sysml-kernel 0.60.1) now stands at 120 of 120 both-reject under
+default mode — the three reserved-keyword cases that previously only the pilot rejected are
+errors by default — and every implementation-side divergence the conformance records
+adjudicated as fixable is closed. Releases now publish a cosign-signed checksum manifest, and
+the Python client verifies it. No API was removed or renamed.
+
+### Reserved keyword names are errors by default
+
+- **A reserved keyword used as a name is rejected in default mode**, not only under
+  `-strict`: a keyword as a declaration name (`part if;`), a keyword behind an alias, and a
+  SysML keyword used as a name in KerML. Parser recovery still produces a usable AST and the
+  diagnostic still lands on the offending name; strict mode is unchanged, and no other
+  notation extension was tightened. This closes the last three pilot-only rejection cases:
+  120 of 120 negative cases both-reject, none by the pilot alone.
+
+### Diagnostics the reference declares and 0.2.0 missed
+
+- **A member-leading succession shorthand** (`then x;` opening a member) is diagnosed as
+  nonstandard notation instead of accepted in silence.
+- **Duplicate state and transition member names are reported.** State members and named
+  transitions carried no declaration-name span, so the name-distinguishability rule never saw
+  them; two states of one name in one body now warn as any other duplicate does.
+- **Feature accessibility over behavioral bodies is corrected**: a shared `accept` payload is
+  accessible from sibling nodes, references in state and transition bodies resolve in their
+  own scopes rather than the enclosing one, and a body's implicit result expression is
+  checked like an explicit one.
+- **A textual representation accepts a short name**: `rep <ocl> inOCL language "ocl" /* … */`
+  parses like the named and anonymous forms; contents remain unevaluated.
+
+### Conformance records match the implementation
+
+- The divergence follow-up rows that lagged earlier fixes are closed against live runs of the
+  pinned validators, with pinning tests and fixtures added where coverage was missing — among
+  them a cold/warm library-cache test proving a cached library symbol keeps its declaration,
+  metamodel type and abstractness. Refreshed baselines: differential 353 files, 324 fully
+  agreeing (84 diagnostics only ours, 65 only the pilot's); Xpect 1,295 of 1,323 rows agreeing
+  (248 wording-only), 28 disagreeing. All oracles remain advisory.
+
+### The release manifest is signed
+
+- **`build-release` signs `dist/SHA256SUMS.txt`** with cosign keyless using the release
+  pipeline's OIDC identity and publishes the sigstore bundle beside it as
+  `SHA256SUMS.txt.bundle`. Nothing changes for a caller downloading binaries directly.
+
+### Python client (`opensysml` 0.3.1)
+
+- **A core release published after this client can now be installed.** Previously every
+  installable core release needed a digest pinned in this client, so a new core release
+  required a new PyPI release. Now, for a release with no pin, the client downloads the
+  release's `SHA256SUMS.txt.bundle`, verifies it against the release pipeline's identity with
+  sigstore, and takes the asset digest from the verified manifest. Pins stay authoritative:
+  where one exists it wins, and a verified manifest that disagrees with a pin is reported as
+  a mismatch, never used as a downgrade.
+- **`sigstore` is an optional dependency, imported on demand.** An install without it refuses
+  to verify an unpinned release — exactly the previous behavior — rather than failing to
+  import `opensysml`.
+- The `v0.2.1` digests are pinned after the core release's assets publish, before
+  `opensysml-v0.3.1` is tagged.
+
+### Project
+
+- The documentation site is published at [opensysml.org](https://opensysml.org/); the old
+  GitHub Pages address redirects there.
+- GitHub issue forms and a pull request template.
+- Reader-facing documentation no longer uses internal work-item labels, and
+  `scripts/check-doc-ids.py` keeps it that way.
+
 ## 0.2.0 — 2026-08-24
 
 Three more advisory oracles now judge this implementation against the pinned OMG pilot
