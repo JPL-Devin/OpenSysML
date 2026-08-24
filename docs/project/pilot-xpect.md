@@ -477,7 +477,7 @@ severity alone. What is left:
 | `elsewhere-in-file` | 6 | we report errors, but not where the declaration points |
 | nothing | 0 | **empty since wave 12D:** no declared-error file is accepted in silence |
 
-The disagreements split 18 KerML / 1 SysML across this kind. The SysML suite's assertions anchor at a whole
+The disagreements split 15 KerML / 4 SysML across this kind. The SysML suite's assertions anchor at a whole
 declaration (`at "part def P { ... }"`) while ours land on the offending token inside it, so
 `same-line` there often means what `same-location` means in KerML. Together, **503 of 510 declared
 errors are ours at the declared location or line.**
