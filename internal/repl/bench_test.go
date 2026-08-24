@@ -183,12 +183,11 @@ func BenchmarkInstantiate(b *testing.B) {
 }
 
 // BenchmarkDiagnostics measures rendering and locating diagnostics across a
-// warning-emitting model whose size grows with the existing benchmark sizes.
+// warning-emitting model, one warning per declared attribute.
 func BenchmarkDiagnostics(b *testing.B) {
-	for _, parts := range modelSizes {
-		src := warningModel(parts)
-		elements := parts * benchElementsPerPart
-		b.Run(fmt.Sprintf("elements=%d", elements), func(b *testing.B) {
+	for _, attributes := range modelSizes {
+		src := warningModel(attributes)
+		b.Run(fmt.Sprintf("attributes=%d", attributes), func(b *testing.B) {
 			sess := NewSession()
 			sess.Submit(src)
 			diagnostics := len(sess.Diagnostics())
