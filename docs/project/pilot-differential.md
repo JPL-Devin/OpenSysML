@@ -1983,10 +1983,10 @@ page dismissed as wrapper noise into a reference rule we do not implement.
 After wave 5 the adjudicated syntax debt is **empty on the KerML side**: F84–F95 (K7–K18) all
 landed in #403 and `kerml-examples` carries no syntax diagnostic at all, moving to 47 of 58 files
 fully agreeing with 15 diagnostics of ours — against `pilot-examples` at 76 of 98 and
-`pilot-validation` at 52 of 56. Two of the twelve are closed in the parser and open downstream,
-in packages #403 did not own: **F90** (7 diagnostics, the conjugation check in `passes/`) and
-**F93** (3, the element-filter false positives in `resolve/`). Those, F101–F103 and the SysML
-rows F60–F63, F67 and F69 are the open follow-ups.
+`pilot-validation` at 52 of 56. One of the twelve is closed in the parser and open downstream,
+in a package #403 did not own: **F93** (3, the element-filter false positives in `resolve/`);
+F90's downstream half was closed by #409. F93, F101–F103 and the SysML rows F60–F63 and F67 are
+the open follow-ups.
 
 What the numbers support today changed with this round: the KerML notation the reference's own
 corpus uses now parses in full, so the parsing claim is no longer SysML-only. It remains a claim
