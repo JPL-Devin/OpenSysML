@@ -1,0 +1,49 @@
+name: Objection to a ruling
+description: OpenSysML behaves as documented, and you think the documented interpretation is wrong.
+labels: ["interpretation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is for the case where the behaviour is deliberate — a maintainer ruling, a recorded
+        divergence, or a design decision — and the argument is about whether it should be that way.
+        The rulings live in
+        [spec-compliance](https://open-mbee.github.io/OpenSysML/project/spec-compliance/),
+        [OMG materials defects](https://open-mbee.github.io/OpenSysML/project/omg-issues/) and the
+        decision records under [project/](https://open-mbee.github.io/OpenSysML/project/).
+
+  - type: input
+    id: ruling
+    attributes:
+      label: The ruling
+      description: Link or quote the behaviour as currently documented.
+    validations:
+      required: true
+
+  - type: textarea
+    id: argument
+    attributes:
+      label: Why it is wrong
+      description: >
+        The argument, with the specification clauses it rests on. Say what a conforming reading
+        should be and why the current one does not survive it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: >
+        What OpenSysML should do instead, and what it would break — models, diagnostics, corpus
+        gates, or the differential against the pilot.
+    validations:
+      required: true
+
+  - type: textarea
+    id: counterargument
+    attributes:
+      label: The case against your position
+      description: >
+        Optional but valued: the strongest reason to keep the current behaviour, and why you think
+        it loses.
