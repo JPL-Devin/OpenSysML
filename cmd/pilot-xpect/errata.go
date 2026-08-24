@@ -66,6 +66,8 @@ func erratumSuite(s suite, overlay *errata.Overlay, repo, out string, jobs int) 
 		if removeErr := os.RemoveAll(corrected); removeErr != nil && err == nil {
 			err = removeErr
 		}
+		// leaves nothing behind once the last suite's copy is gone
+		os.Remove(filepath.Dir(corrected))
 	}()
 	files, err := collectXT(corrected)
 	if err != nil {
