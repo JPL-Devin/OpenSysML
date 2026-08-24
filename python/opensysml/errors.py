@@ -68,6 +68,26 @@ class UnpinnedReleaseError(ChecksumMismatchError):
     unpinned = True
 
 
+class UnsignedReleaseError(UnpinnedReleaseError):
+    """Raised when a release publishes no signature this opensysml can check.
+
+    An old release published before the pipeline signed its checksum manifest,
+    one whose bundle asset is missing or unreadable, or an install without the
+    ``sigstore`` dependency: no signature was checked, so the release is one
+    this opensysml cannot vouch for, exactly as an unpinned one is.
+    """
+
+
+class ManifestSignatureError(ChecksumMismatchError):
+    """Raised when the signature on a release's checksum manifest does not verify.
+
+    A bundle was published and read, and it does not attest that this release
+    pipeline produced this manifest — another signer, an expired certificate, or
+    a manifest changed after signing. That is evidence, not absence, so it is a
+    mismatch: no cached binary answers for it.
+    """
+
+
 class StaleServiceError(ConnectionError):
     """Raised when the service already listening is not the one asked for.
 
@@ -500,6 +520,7 @@ __all__ = [
     "ModelError",
     "ModelFileNotFoundError",
     "ModelNotFoundError",
+    "ManifestSignatureError",
     "ServiceError",
     "FeatureValueError",
     "ServiceTimeoutError",
@@ -507,6 +528,7 @@ __all__ = [
     "SymbolNotFoundError",
     "TypeMismatchError",
     "UnpinnedReleaseError",
+    "UnsignedReleaseError",
     "UnsupportedOperationError",
     "UnsupportedValueError",
     "WrongKindError",

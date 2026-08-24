@@ -1,0 +1,55 @@
+{
+  "mediaType": "application/vnd.dev.sigstore.trustedroot+json;version=0.1",
+  "tlogs": [
+    {
+      "baseUrl": "https://rekor.fixture.invalid",
+      "hashAlgorithm": "SHA2_256",
+      "publicKey": {
+        "rawBytes": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEOHqx6De0E2+yepLlrvL9YBKFZoc+nfAhdEynII+BVePWNm6ttJB1rINPf6FfLpXizKFeDi2uDI6yjMBC24hlIA==",
+        "keyDetails": "PKIX_ECDSA_P256_SHA_256",
+        "validFor": {
+          "start": "2016-01-04T00:00:00Z"
+        }
+      },
+      "logId": {
+        "keyId": "OmrMg7SV4g/nkLU8C6TrNteSvBKH8cihit/C+NH+nxQ="
+      }
+    }
+  ],
+  "certificateAuthorities": [
+    {
+      "subject": {
+        "organization": "opensysml fixture",
+        "commonName": "fulcio"
+      },
+      "uri": "https://fulcio.fixture.invalid",
+      "certChain": {
+        "certificates": [
+          {
+            "rawBytes": "MIIBijCCATCgAwIBAgIUCtMBMIV+eQGtRwxenxfcvxnrlEwwCgYIKoZIzj0EAwIwIzEhMB8GA1UEAwwYb3BlbnN5c21sIGZpeHR1cmUgZnVsY2lvMB4XDTE2MDEwNDAwMDAwMFoXDTM1MTIzMDAwMDAwMFowIzEhMB8GA1UEAwwYb3BlbnN5c21sIGZpeHR1cmUgZnVsY2lvMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEPyTi3Qf+RYtCqxb+a+SyYPl8CUlhkJGVL+anBtmAo/R96nTGcyWa5TrchZkUbnt5nrt7q7Y1cAzQWn8o1TJb8aNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFMnG4XDCLLhg0NxZOowFOqzepmg+MAoGCCqGSM49BAMCA0gAMEUCIFUWwhZkFovRUQccU7+wWAA6ByCQF1K/LSQgmQYyEQzhAiEA4UJ5PfaPtqd2Glmzs6NgZHqy1humnWCucX1MnkDI7Ks="
+          }
+        ]
+      },
+      "validFor": {
+        "start": "2016-01-04T00:00:00Z"
+      }
+    }
+  ],
+  "ctlogs": [
+    {
+      "baseUrl": "https://ctfe.fixture.invalid",
+      "hashAlgorithm": "SHA2_256",
+      "publicKey": {
+        "rawBytes": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElzrhGcVVSfmFb9TEc0VdEAwdMg6CEpz1L6gBdVwGjhLtXwB3f8U6pBXpZcmn6qNSZIgCtSXVuq3Bu7wx+A8sqQ==",
+        "keyDetails": "PKIX_ECDSA_P256_SHA_256",
+        "validFor": {
+          "start": "2016-01-04T00:00:00Z"
+        }
+      },
+      "logId": {
+        "keyId": "m1ZC6MlxdherFF/afn0F41QxNqQmgFNAZ81ztEmAuXc="
+      }
+    }
+  ],
+  "timestampAuthorities": []
+}

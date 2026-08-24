@@ -674,6 +674,43 @@ jobs:
             (cd grpc && sha256sum sysml-grpc-* >> ../SHA256SUMS.txt)
             (cd grpc && for f in sysml-grpc-*; do sha256sum "$f" > "$f.sha256"; done)
             cat SHA256SUMS.txt
+
+      # Signs the manifest keylessly: the certificate identity comes from this
+      # job's CircleCI OIDC token, so there is no signing key to store.
+      - run:
+          name: Sign the checksum manifest with cosign keyless
+          command: |
+            go install github.com/sigstore/cosign/v3/cmd/cosign@v3.0.3
+            export PATH="$(go env GOPATH)/bin:$PATH"
+
+            # Fulcio requires the 'sigstore' audience, which the ambient
+            # $CIRCLE_OIDC_TOKEN_V2 does not carry.
+            SIGSTORE_ID_TOKEN="$(circleci run oidc get --claims '{"aud": "sigstore"}')"
+            export SIGSTORE_ID_TOKEN
+
+            cd dist
+            cosign sign-blob SHA256SUMS.txt \
+              --oidc-issuer "https://oidc.circleci.com/org/${CIRCLE_ORGANIZATION_ID}" \
+              --bundle SHA256SUMS.txt.bundle \
+              --use-signing-config=false \
+              --yes
+
+      # Fails the release rather than publish a signature the client's pinned
+      # identity would reject, and prints the identity that signed.
+      - run:
+          name: Verify the signature against the identity clients pin
+          command: |
+            export PATH="$(go env GOPATH)/bin:$PATH"
+            cd dist
+            cosign verify-blob SHA256SUMS.txt \
+              --bundle SHA256SUMS.txt.bundle \
+              --certificate-oidc-issuer "https://oidc.circleci.com/org/${CIRCLE_ORGANIZATION_ID}" \
+              --certificate-identity-regexp "^https://circleci\\.com/api/v2/projects/${CIRCLE_PROJECT_ID}/pipeline-definitions/[0-9a-f-]+$"
+            echo "Signed by:"
+            jq -r '.verificationMaterial.certificate.rawBytes' SHA256SUMS.txt.bundle \
+              | base64 -d | openssl x509 -inform DER -noout -text \
+              | grep -A1 -E '1\.3\.6\.1\.4\.1\.57264\.1\.8:|URI:' || true
+
       
       # An artifact whose version disagrees with its tag looks identical on the
       # release page. The host-platform builds are asked what they report; the
@@ -747,6 +784,9 @@ jobs:
             mv dist/*.tar.gz dist/*.zip dist/release/ 2>/dev/null || true
             mv dist/grpc/* dist/release/
             mv dist/SHA256SUMS.txt dist/release/
+            # The signature over that manifest, which the Python client verifies
+            # before it trusts a digest from it.
+            mv dist/SHA256SUMS.txt.bundle dist/release/
             echo "Release artifacts:"
             ls -la dist/release/
             
