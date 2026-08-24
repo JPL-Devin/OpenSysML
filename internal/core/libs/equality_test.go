@@ -16,9 +16,10 @@ import (
 )
 
 // bodyLibrary declares what only a declaration exposes: members, a declared
-// value, a condition body, and a stated [0..1] multiplicity.
+// value, a condition body, a stated [0..1] multiplicity, and abstractness.
 const bodyLibrary = `package Lib {
-	part def Space {
+	abstract part def Volume;
+	part def Space :> Volume {
 		part voids [0..*];
 		attribute isSolid = isEmpty(voids);
 		assert constraint { outerDimension >= innerDimension }
@@ -185,7 +186,52 @@ func TestLibraryBodiesArePresentOnEveryPath(t *testing.T) {
 			if got.Lower.Value != 0 || !got.Lower.Known || got.Upper.Value != 1 || !got.Upper.Known {
 				t.Errorf("multiplicity of innerDimension = %v, want the declared 0..1", got)
 			}
+			// Abstractness, which a rule on a library metaclass reads (p24).
+			if !isAbstract(lookupOne(t, idx, "Lib::Volume")) {
+				t.Error("Lib::Volume does not read as abstract")
+			}
+			if isAbstract(space) {
+				t.Error("Lib::Space reads as abstract, which it is not")
+			}
 		})
+	}
+}
+
+// Abstractness of a bundled metaclass is what p24's rule judges, and it is no
+// persisted fact: it follows from the declaration every load path parses. A
+// record format that stopped parsing would fail here rather than only in the
+// oracle.
+func TestAbstractnessOfBundledMetaclassesOnEveryPath(t *testing.T) {
+	cacheDir := t.TempDir()
+	cold := NewLoader(DefaultSource(), &Cache{dir: cacheDir})
+	warm := NewLoader(DefaultSource(), &Cache{dir: cacheDir})
+	paths := []struct {
+		name   string
+		loader *Loader
+	}{
+		{"cold", cold},
+		{"warm", warm},
+		{"no cache", NewLoader(DefaultSource(), nil)},
+	}
+	for _, path := range paths {
+		t.Run(path.name, func(t *testing.T) {
+			idx := symbols.NewIndex()
+			if err := path.loader.LoadAll(idx); err != nil {
+				t.Fatalf("load the library: %v", err)
+			}
+			if !isAbstract(lookupOne(t, idx, "Metaobjects::Metaobject")) {
+				t.Error("Metaobjects::Metaobject does not read as abstract, so p24's rule cannot fire")
+			}
+			if isAbstract(lookupOne(t, idx, "KerML::Comment")) {
+				t.Error("KerML::Comment reads as abstract, which it is not")
+			}
+		})
+	}
+	if cold.Hits() != 0 {
+		t.Errorf("the cold load hit the cache %d time(s), so it proves nothing", cold.Hits())
+	}
+	if warm.Hits() == 0 {
+		t.Error("the warm load hit no record, so it did not exercise the restored path")
 	}
 }
 
@@ -262,9 +308,24 @@ func describeSemantics(m *semantics.Model, sym *symbols.Symbol) string {
 			value = "unfolded"
 		}
 	}
-	return fmt.Sprintf("kind=%v mult=%v members=%v annotations=%v conforms=%v value=%s bodies=%d",
-		sym.Kind, m.EffectiveMultiplicityOf(sym), memberNames(m, sym), annotations, conforms, value,
-		conditionBodies(sym))
+	return fmt.Sprintf("kind=%v abstract=%v mult=%v members=%v annotations=%v conforms=%v value=%s bodies=%d",
+		sym.Kind, isAbstract(sym), m.EffectiveMultiplicityOf(sym), memberNames(m, sym), annotations,
+		conforms, value, conditionBodies(sym))
+}
+
+// isAbstract reads the abstractness of a library declaration, the fact p24's rule
+// judges a metadata usage's metaclass by.
+func isAbstract(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.IsAbstract
+	case *ast.Usage:
+		return d.IsAbstract
+	}
+	return false
 }
 
 // memberNames names the members sym exposes, its supertypes' included.

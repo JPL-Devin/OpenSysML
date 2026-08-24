@@ -34,13 +34,14 @@ func byName(attrs []*pb.AttributeInfo) map[string]*pb.AttributeInfo {
 
 // TestAttributesAreReportedOwnThenInherited verifies the attribute set is what
 // the element has, own first, with a redefinition masking what it redefines and
-// non-attribute members left out.
+// non-attribute members left out. What it inherits from the library is withheld,
+// and counted rather than silently dropped.
 func TestAttributesAreReportedOwnThenInherited(t *testing.T) {
 	get := parseForFacts(t, attributeModel)
-	attrs := get("Demo::Car").Attributes
+	car := get("Demo::Car")
 
 	var names []string
-	for _, attr := range attrs {
+	for _, attr := range car.Attributes {
 		names = append(names, attr.Name)
 	}
 	want := []string{"mass", "wheels", "derived", "label", "inheritedOnly"}
@@ -51,6 +52,22 @@ func TestAttributesAreReportedOwnThenInherited(t *testing.T) {
 		if names[i] != name {
 			t.Fatalf("attribute names = %v, want %v", names, want)
 		}
+	}
+	if car.WithheldLibraryAttributes == 0 {
+		t.Error("the library attributes a part inherits are absent but not counted, which is silence")
+	}
+}
+
+// A library element asked about directly reports what it declares: the policy
+// withholds library-inherited attributes, not the library's own contents.
+func TestOwnAttributesOfALibraryElementAreReported(t *testing.T) {
+	get := parseForFacts(t, attributeModel)
+	occurrence := get("Occurrences::Occurrence")
+	if occurrence == nil {
+		t.Fatal("the library element is not reported at all")
+	}
+	if len(occurrence.Attributes) == 0 {
+		t.Error("Occurrences::Occurrence reports none of the attributes it declares")
 	}
 }
 
@@ -132,11 +149,15 @@ package Demo {
 	}
 }
 
-// TestAttributesOfAnElementWithNoneIsEmpty verifies an element with no
-// attributes reports none rather than something inherited from elsewhere.
+// TestAttributesOfAnElementWithNoneIsEmpty verifies an element declaring none
+// reports none, and still states how many library-inherited ones it left out.
 func TestAttributesOfAnElementWithNoneIsEmpty(t *testing.T) {
 	get := parseForFacts(t, attributeModel)
-	if attrs := get("Demo::Car::engine").Attributes; len(attrs) != 0 {
+	engine := get("Demo::Car::engine")
+	if attrs := engine.Attributes; len(attrs) != 0 {
 		t.Errorf("engine attributes = %v, want none", attrs)
+	}
+	if engine.WithheldLibraryAttributes == 0 {
+		t.Error("engine inherits library attributes but reports none withheld")
 	}
 }

@@ -41,6 +41,34 @@ func TestW8CMetadataAbstractTypeIsElementScoped(t *testing.T) {
 	}
 }
 
+// p24: the metaclass is a library one, so the rule can only judge it while the
+// library is parsed on every load path rather than reduced to facts.
+func TestW8CMetadataAbstractLibraryMetaclass(t *testing.T) {
+	src := `package P {
+	item p {
+		@Metaobjects::Metaobject;
+	}
+}`
+	msgs := w8cLibraryMessagesIn(t, "meta-abstract-library.sysml", src)
+	if got := w8cCount(msgs, msgMetadataConcreteType); got != 1 {
+		t.Errorf("want one %q for the abstract library metaclass, got %v", msgMetadataConcreteType, msgs)
+	}
+}
+
+// A concrete library metaclass stays legal, so the rule reads abstractness rather
+// than rejecting library metaclasses.
+func TestW8CMetadataConcreteLibraryMetaclass(t *testing.T) {
+	src := `package P {
+	item p {
+		@KerML::Comment;
+	}
+}`
+	msgs := w8cLibraryMessagesIn(t, "meta-concrete-library.sysml", src)
+	if got := w8cCount(msgs, msgMetadataConcreteType); got != 0 {
+		t.Errorf("unexpected %q for a concrete library metaclass: %v", msgMetadataConcreteType, msgs)
+	}
+}
+
 func TestW8CMetadataConcreteTypeLegal(t *testing.T) {
 	src := `package P {
 	metaclass A { feature :>> annotatedElement : KerML::Classifier; }
