@@ -70,6 +70,9 @@ type conformanceCase struct {
 	// GetSymbol
 	ExpectedAttributeNames []string                     `json:"expected_attribute_names,omitempty"`
 	ExpectedAttributes     map[string]expectedAttribute `json:"expected_attributes,omitempty"`
+	// ExpectedLeadingAttributeNames asserts the head of the reported list, for
+	// elements whose tail is whatever they inherit from the library.
+	ExpectedLeadingAttributeNames []string `json:"expected_leading_attribute_names,omitempty"`
 
 	// ExpectedError, when set, requires the RPC to report an in-band error
 	// containing this substring.
@@ -268,6 +271,15 @@ func runGetSymbolCase(t *testing.T, srv *Service, ctx context.Context, modelHash
 		}
 		if strings.Join(got, ",") != strings.Join(tc.ExpectedAttributeNames, ",") {
 			t.Errorf("attributes = %v, want %v", got, tc.ExpectedAttributeNames)
+		}
+	}
+	if want := tc.ExpectedLeadingAttributeNames; want != nil {
+		var got []string
+		for _, attr := range attrs {
+			got = append(got, attr.GetName())
+		}
+		if len(got) < len(want) || strings.Join(got[:len(want)], ",") != strings.Join(want, ",") {
+			t.Errorf("attributes = %v, want them to start with %v", got, want)
 		}
 	}
 

@@ -34,7 +34,8 @@ func byName(attrs []*pb.AttributeInfo) map[string]*pb.AttributeInfo {
 
 // TestAttributesAreReportedOwnThenInherited verifies the attribute set is what
 // the element has, own first, with a redefinition masking what it redefines and
-// non-attribute members left out.
+// non-attribute members left out. Library types now have bodies, so what a part
+// inherits from Occurrences/Objects/Base follows; L3-3 withholds that tail.
 func TestAttributesAreReportedOwnThenInherited(t *testing.T) {
 	get := parseForFacts(t, attributeModel)
 	attrs := get("Demo::Car").Attributes
@@ -44,12 +45,20 @@ func TestAttributesAreReportedOwnThenInherited(t *testing.T) {
 		names = append(names, attr.Name)
 	}
 	want := []string{"mass", "wheels", "derived", "label", "inheritedOnly"}
-	if len(names) != len(want) {
-		t.Fatalf("attribute names = %v, want %v", names, want)
+	if len(names) < len(want) {
+		t.Fatalf("attribute names = %v, want them to start with %v", names, want)
 	}
 	for i, name := range want {
 		if names[i] != name {
-			t.Fatalf("attribute names = %v, want %v", names, want)
+			t.Fatalf("attribute names = %v, want them to start with %v", names, want)
+		}
+	}
+	if len(names) == len(want) {
+		t.Errorf("attribute names = %v; a part also inherits library attributes now", names)
+	}
+	for _, name := range names[len(want):] {
+		if name == "engine" {
+			t.Errorf("non-attribute member %q is reported as an attribute", name)
 		}
 	}
 }
@@ -132,11 +141,15 @@ package Demo {
 	}
 }
 
-// TestAttributesOfAnElementWithNoneIsEmpty verifies an element with no
-// attributes reports none rather than something inherited from elsewhere.
-func TestAttributesOfAnElementWithNoneIsEmpty(t *testing.T) {
+// TestAttributesOfAnElementWithNoneAreOnlyLibraryInherited verifies an element
+// declaring no attributes reports nothing of the model's, only what the library
+// types above it declare. L3-3 will withhold that tail.
+func TestAttributesOfAnElementWithNoneAreOnlyLibraryInherited(t *testing.T) {
 	get := parseForFacts(t, attributeModel)
-	if attrs := get("Demo::Car::engine").Attributes; len(attrs) != 0 {
-		t.Errorf("engine attributes = %v, want none", attrs)
+	attrs := byName(get("Demo::Car::engine").Attributes)
+	for _, name := range []string{"mass", "wheels", "ratio", "derived", "label", "inheritedOnly"} {
+		if _, ok := attrs[name]; ok {
+			t.Errorf("engine reports %q, which no type of engine declares", name)
+		}
 	}
 }
