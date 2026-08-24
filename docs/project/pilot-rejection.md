@@ -104,8 +104,6 @@ It writes `build/pilot-reject/pilot-reject.txt` and `build/pilot-reject/pilot-re
 JSON is committed as [pilot-rejection-baseline.json](pilot-rejection-baseline.json); the reports
 carry no timestamps or absolute paths, so repeated runs are byte-identical
 (`cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.json`).
-The committed JSON still records the preceding 117/120 result because baseline refreshes are
-integrated separately; the current implementation result below was measured directly.
 
 ## Totals
 
@@ -160,8 +158,7 @@ rejection, not agreement on the rule.
 
 All 0 gaps under `-conformance auto` are closed. The final three were severity-policy gaps: the pinned
 grammar excluded the spellings, while OpenSysML retained recoverable trees and reported only
-warnings by default. The approved policy now reports errors without removing that recovery. The
-pilot messages remain available in the committed baseline JSON until its separate refresh.
+warnings by default. The approved policy now reports errors without removing that recovery.
 
 ### p24, deferred by Step 3 and closed by the record format
 
@@ -173,7 +170,7 @@ The record format supplies it: the library is parsed on every load path and `Abs
 persisted fact family under the reflective equality coverage, so `symbols.IsAbstract` answers the
 same cold and warm. Persisting a fact emits no diagnostic on its own — the rule
 (`internal/core/passes/w8c_metadata_type.go`) reads that accessor instead of casting `Decl`, which
-is what closed the row and produced the preceding 117/120 result.
+is what closed the row.
 
 ## Adjudications
 
