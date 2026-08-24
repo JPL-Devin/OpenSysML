@@ -257,6 +257,29 @@ func (p *Parser) parseAnnotationIdentification() ast.Identification {
 	return id
 }
 
+// parseRepresentationIdentification parses the identification of a textual
+// representation (`<short>` and/or a name), which its `language` keyword ends.
+func (p *Parser) parseRepresentationIdentification() ast.Identification {
+	var id ast.Identification
+	if p.at(lexer.Lt) {
+		p.advance() // <
+		if seg, ok := p.parseNameSegmentRelaxed(); ok {
+			id.ShortName = seg.Text
+			id.ShortNameSpan = seg.Span
+		} else {
+			p.error(p.peek().Span, "expected short name after '<'")
+		}
+		p.expect(lexer.Gt, "expected '>'")
+	}
+	if p.atName() && !p.atKeyword("language") {
+		if seg, ok := p.parseNameSegmentRelaxed(); ok {
+			id.Name = seg.Text
+			id.NameSpan = seg.Span
+		}
+	}
+	return id
+}
+
 // parseVisibility reads an optional public/private/protected prefix.
 func (p *Parser) parseVisibility() ast.Visibility {
 	switch {
@@ -609,8 +632,8 @@ func (p *Parser) parseDocumentation(start int) ast.Node {
 func (p *Parser) parseTextualRepresentation(start int) ast.Node {
 	r := &ast.TextualRepresentation{}
 	if p.acceptKeyword("rep") {
-		if p.atName() && !p.atKeyword("language") {
-			r.Ident = p.parseIdentification()
+		if p.at(lexer.Lt) || (p.atName() && !p.atKeyword("language")) {
+			r.Ident = p.parseRepresentationIdentification()
 		}
 	}
 	if !p.acceptKeyword("language") {
