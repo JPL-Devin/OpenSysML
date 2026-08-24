@@ -90,13 +90,18 @@ func TestFilterNotEvaluableIsReported(t *testing.T) {
 		name string
 		src  string
 	}{
-		{"an unsupported operator", filterMetadata + "package P { filter @Safety + 1; }"},
 		{"an indexed condition", filterMetadata + "package P { filter @Safety[1]; }"},
+		{"an invocation", filterMetadata + "package P { filter coll->select(x); }"},
+		{"a Boolean-result operator", filterMetadata + "package P { filter ~(1 as Integer); }"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			diags := only(filterDiags(t, tc.src), "filter-not-evaluable")
+			all := filterDiags(t, tc.src)
+			diags := only(all, "filter-not-evaluable")
 			if len(diags) == 0 {
 				t.Fatalf("the condition is not evaluable but nothing was reported")
+			}
+			if got := len(only(all, "filter-not-boolean")); got != 0 {
+				t.Fatalf("got %d filter-not-boolean diagnostics, want none: %v", got, all)
 			}
 			if diags[0].Severity != SeverityError {
 				t.Errorf("severity = %v, want an error", diags[0].Severity)
@@ -106,6 +111,29 @@ func TestFilterNotEvaluableIsReported(t *testing.T) {
 			}
 			if diags[0].Message != msgFilterNotEvaluable {
 				t.Errorf("message = %q, want %q", diags[0].Message, msgFilterNotEvaluable)
+			}
+		})
+	}
+}
+
+func TestUnsupportedFilterResultReportsBooleanRule(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cond string
+	}{
+		{"an unsupported operator", "@Safety + 1"},
+		{"a feature chain", "a.b.c"},
+		{"a conditional", "if c ? a else b"},
+		{"a cast", "x as Integer"},
+		{"an unresolved reference", "Undefined"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := filterDiags(t, filterMetadata+"package P { filter "+tc.cond+"; }")
+			if got := len(only(diags, "filter-not-boolean")); got != 1 {
+				t.Fatalf("got %d filter-not-boolean diagnostics, want one: %v", got, diags)
+			}
+			if got := len(only(diags, "filter-not-evaluable")); got != 0 {
+				t.Fatalf("got %d filter-not-evaluable diagnostics, want none: %v", got, diags)
 			}
 		})
 	}
