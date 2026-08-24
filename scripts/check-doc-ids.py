@@ -35,7 +35,9 @@ READER_FACING = [
 # Each pattern is (regex, what to write instead).
 PATTERNS = [
     (re.compile(r"\bwaves?[\s-]+\d", re.IGNORECASE), "name the change, not the development round"),
-    (re.compile(r"\bW\d{1,2}[A-Z]\b"), "name the change, not the development round"),
+    # A slice label is W<round><letter>, the shape a standards body's name also has:
+    # the reference pages say W3C for RDF and OSLC, and mean the consortium.
+    (re.compile(r"\bW(?!3C\b)\d{1,2}[A-Z]\b"), "name the change, not the development round"),
     (re.compile(r"\bF\d{2,3}\b"), "describe the follow-up, do not cite its row number"),
     (re.compile(r"\bP\d\b(?!\d)"), "describe the adjudication, do not cite its probe number"),
     (re.compile(r"\b[KS]\d{1,2}\b(?!\d)"), "describe the diagnostic, do not cite its class"),
