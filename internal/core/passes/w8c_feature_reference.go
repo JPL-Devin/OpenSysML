@@ -23,11 +23,13 @@ func (FeatureReferencePass) Run(ctx *Context, name string, root *ast.RootNamespa
 		return nil
 	}
 	c := &featureReferenceChecker{cc: &constraintChecker{
+		index:    ctx.Index,
 		model:    ctx.Model(),
 		resolver: ctx.Resolver(),
 	}}
 	w := &w8cWalker{seen: map[*symbols.Symbol]bool{}}
 	w.walk(rootScope, c.checkSymbol)
+	c.walkFilters(rootScope, make(map[*symbols.Scope]bool))
 	return c.diags
 }
 
@@ -62,8 +64,9 @@ type featureReferenceChecker struct {
 // refSite is where a reference is written: the declaration owning it, and
 // whether it stands in that declaration's body, which the declaration features.
 type refSite struct {
-	sym    *symbols.Symbol
-	inBody bool
+	sym             *symbols.Symbol
+	inBody          bool
+	inElementFilter bool
 }
 
 // accessibleFrom reports whether target is reachable from the site.
@@ -85,6 +88,25 @@ func (c *featureReferenceChecker) checkSymbol(sym *symbols.Symbol) {
 		c.walkMembers(refSite{sym: sym, inBody: true}, scope, d.Members)
 	case *ast.Definition:
 		c.walkMembers(refSite{sym: sym, inBody: true}, scope, d.Members)
+	}
+}
+
+// walkFilters visits every namespace filter in the document's scope tree.
+func (c *featureReferenceChecker) walkFilters(scope *symbols.Scope, seen map[*symbols.Scope]bool) {
+	if scope == nil || seen[scope] {
+		return
+	}
+	seen[scope] = true
+	for _, f := range symbols.NamespaceFiltersIn(scope) {
+		c.walkExpr(refSite{inElementFilter: true}, f.Scope, f.Expr)
+	}
+	for _, f := range symbols.ImportFiltersIn(scope) {
+		c.walkExpr(refSite{inElementFilter: true}, f.Scope, f.Expr)
+	}
+	for _, sym := range scope.AllMembers() {
+		if sym != nil {
+			c.walkFilters(sym.Scope, seen)
+		}
 	}
 }
 
@@ -263,7 +285,11 @@ func (c *featureReferenceChecker) checkReferent(site refSite, scope *symbols.Sco
 			return
 		}
 	}
-	if c.accessibleFrom(site, target) {
+	if site.inElementFilter {
+		if c.cc.libraryDeclared(target) {
+			return
+		}
+	} else if c.accessibleFrom(site, target) {
 		return
 	}
 	// A feature of an implicit node (an accept parameter's action) has no
@@ -273,7 +299,7 @@ func (c *featureReferenceChecker) checkReferent(site refSite, scope *symbols.Sco
 		return
 	}
 	msg, code := msgSubsettingFeaturingTypes, "feature-reference-featuring-types"
-	if isChain {
+	if isChain && !site.inElementFilter {
 		msg, code = msgReferentIsFeature, "feature-reference-referent"
 	}
 	c.diags = append(c.diags, Diagnostic{

@@ -29,6 +29,7 @@ func (ConstraintPass) Run(ctx *Context, name string, root *ast.RootNamespace) []
 		return nil
 	}
 	cc := &constraintChecker{
+		index:    ctx.Index,
 		model:    ctx.Model(),
 		resolver: ctx.Resolver(),
 		seen:     make(map[*symbols.Symbol]bool),
@@ -38,6 +39,7 @@ func (ConstraintPass) Run(ctx *Context, name string, root *ast.RootNamespace) []
 }
 
 type constraintChecker struct {
+	index    *symbols.Index
 	model    *semantics.Model
 	resolver *resolve.Resolver
 	seen     map[*symbols.Symbol]bool
@@ -47,11 +49,7 @@ type constraintChecker struct {
 // libraryDeclared reports whether sym is declared by bundled library content,
 // which states the metamodel frame a model specializes rather than the model.
 func (cc *constraintChecker) libraryDeclared(sym *symbols.Symbol) bool {
-	if cc.resolver == nil {
-		return false
-	}
-	idx := cc.resolver.Index()
-	return idx != nil && idx.Library(sym)
+	return cc.index != nil && cc.index.Library(sym)
 }
 
 // walk visits every symbol in the scope subtree, deduping by pointer (a decl

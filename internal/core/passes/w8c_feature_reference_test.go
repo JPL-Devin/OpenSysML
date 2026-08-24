@@ -216,3 +216,49 @@ func TestW8CFeatureReferenceBodyAccessible(t *testing.T) {
 		})
 	}
 }
+
+func TestW8CFeatureReferenceFilterConditions(t *testing.T) {
+	t.Run("user feature path is inaccessible", func(t *testing.T) {
+		src := `package R1 {
+	private import ScalarValues::*;
+	metaclass M { var feature a : Boolean[1]; }
+}
+package Q { filter R1::M::a; }`
+		msgs := w8cLibraryMessagesIn(t, "<t>.kerml", src)
+		if got := w8cCount(msgs, msgSubsettingFeaturingTypes); got != 1 {
+			t.Fatalf("want one %q, got %v", msgSubsettingFeaturingTypes, msgs)
+		}
+	})
+
+	for _, tc := range []struct {
+		name string
+		src  string
+	}{
+		{
+			"library metaclass path",
+			`package Q {
+	private import KerML::*;
+	filter Element::name == "System" and not Type::isAbstract;
+}`,
+		},
+		{
+			"dot notation on a cast",
+			`package Q {
+	private import ScalarValues::*;
+	metaclass X { var feature f : ScalarValues::Boolean[1]; }
+	filter (as X).f;
+}`,
+		},
+		{
+			"metadata classification",
+			`metadata def Safety;
+package Q { filter @Safety; }`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if msgs := w8cLibraryMessagesIn(t, "<t>.kerml", tc.src); len(msgs) != 0 {
+				t.Fatalf("expected no diagnostics, got %v", msgs)
+			}
+		})
+	}
+}
