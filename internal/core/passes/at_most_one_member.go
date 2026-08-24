@@ -57,6 +57,11 @@ func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, member
 		if member == nil || member.OwnerScope == sym.Scope {
 			continue
 		}
+		// Cases::Case::obj is the frame every case objective redefines, not a
+		// competing objective of the model.
+		if cc.libraryDeclared(member) {
+			continue
+		}
 		if isObjectiveDecl(member.Decl) {
 			inherited++
 		}

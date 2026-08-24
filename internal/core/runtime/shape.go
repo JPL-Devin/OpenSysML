@@ -92,6 +92,11 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 		if !isFeature(memberSym) {
 			continue
 		}
+		// A library-declared feature belongs to the metamodel frame every element
+		// specializes, not to the object the model asked for.
+		if ctx.libraryDeclared(memberSym) {
+			continue
+		}
 		// A variant is a choice offered for its variation, not a feature of the
 		// object declaring it: it materializes no feature value of its own. A `variant`
 		// outside a variation offers no choice, so it stays an ordinary feature.
