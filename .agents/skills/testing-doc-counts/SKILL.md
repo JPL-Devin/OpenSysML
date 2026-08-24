@@ -88,9 +88,11 @@ Copy **all** `build/pilot-*` dirs together: the validator launchers resolve the 
   `grep -c` the mutated text and confirm it is 1 before believing an `already current` result.
 - Both errors and the stale-file diff go to different streams: the diff report is on **stdout**,
   hard errors on **stderr**. Capture both and the exit code without a pipe.
-- `python3` on PATH may be another repo's venv. `mkdocs build --strict` needs one that has mkdocs:
-  `/home/ubuntu/repos/fprime/fprime-venv/bin/python3 -m mkdocs build --strict` works; it prints a
-  red mkdocs-2.0 deprecation banner and still exits 0. `rm -rf site` afterwards.
+- Find a python with mkdocs before building: run `python3 -m mkdocs --version` first. `python3` on
+  PATH may be another repo's venv (sometimes one that *does* have mkdocs), and the blueprint's
+  `~/pv` venv may lack mkdocs even though the maintenance step installs `docs-requirements.txt`
+  there — fall back to `pip install -r docs-requirements.txt` into whichever interpreter you use.
+  The build prints a red mkdocs-2.0 deprecation banner and still exits 0. `rm -rf site` afterwards.
 
 ## Recording
 
