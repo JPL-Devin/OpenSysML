@@ -150,6 +150,22 @@ Then update `docs/project/spec-compliance.md` mapping: semantic rule → impleme
 - **Commit messages — Conventional Commits:** `<type>(<scope>): <description>`
   - types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`
   - e.g. `fix(runtime): preserve transition effects when lowering state graph`
+- **Never write internal work-item labels into anything a user reads.** Waves and slices
+  (`wave 12A`, `W8G`), follow-up rows (`F4`, `F84–F95`), adjudication probes (`P1`) and diagnostic
+  classes (`K5`, `S10`) are this project's private bookkeeping — a reader has nothing to resolve them
+  against. Write what the change *did* instead: not "F3 unreserved these four", but "these four are
+  unreserved by file kind".
+  - This applies to `CHANGELOG.md`, `README.md`, `docs/guide/`, `docs/reference/`, `docs/internals/`,
+    doc comments, diagnostic messages, **and equally to PR titles/bodies, release notes and GitHub
+    comments** — CI only guards the files (`python3 scripts/check-doc-ids.py`, or `make docs-check`
+    with the link checker), so the prose you write around them is on you.
+  - The conformance records under `docs/project/` are the one exception: they cross-reference each
+    other by these labels, so each opens with a **Labels** note defining them. If you add a record
+    that uses them, add that note too.
+  - Real keyboard shortcuts (`F2` to rename, `F5` in VS Code) are not internal labels — spell them
+    `<kbd>F2</kbd>` so their meaning is unambiguous.
+  - Identifiers in code (an `errata.Entry.ID`, a test name) may keep their labels; when code points
+    at documentation, point at the section's title, not at the label (`errata.Entry.Heading`).
 
 ---
 

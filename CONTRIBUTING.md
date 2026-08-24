@@ -282,6 +282,13 @@ When a change needs documenting:
   guard (`go test ./cmd/pilot-diff`) still fails on a stale line rather than fixing it, so run
   the target before committing. It does not touch the externally refereed oracle numbers, which
   come from the baseline JSONs.
+- **Internal work-item labels stay out of what a reader reads.** Waves and slices (`wave 12A`,
+  `W8G`), follow-up rows (`F4`), adjudication probes (`P1`) and diagnostic classes (`K5`, `S10`)
+  have no public referent, so `CHANGELOG.md`, `README.md`, the guide, the reference, the internals
+  pages — and PR bodies and release notes — say what the change did instead. `python3
+  scripts/check-doc-ids.py` fails on one and runs in CI. The `docs/project/` conformance records
+  are the exception: they cross-reference each other by these labels and each defines them in a
+  note at the top. A real keyboard shortcut is not an internal label; spell it `<kbd>F2</kbd>`.
 - **A new page goes in the `nav:` of [mkdocs.yml](mkdocs.yml)**, in the reading order of its
   area, or it is published but unreachable from the site's navigation. `make docs-install`
   once, then `make docs` builds the site the way CI does and `make docs-serve` previews it.

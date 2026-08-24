@@ -30,6 +30,7 @@ func TestRegistryIsAccepted(t *testing.T) {
 func TestEntryWithoutProvenanceIsRejected(t *testing.T) {
 	valid := Entry{
 		ID:          "F82",
+		Heading:     "`x = 1` is dimensionless",
 		Path:        "examples/pilot-corpora/sysml-examples/Sample.sysml",
 		Line:        3,
 		AsPublished: "    x = 1;",
@@ -45,6 +46,7 @@ func TestEntryWithoutProvenanceIsRejected(t *testing.T) {
 		"no citation":         func(e Entry) Entry { e.Citation = ""; return e },
 		"no derivation":       func(e Entry) Entry { e.Derivation = ""; return e },
 		"no issues row":       func(e Entry) Entry { e.ID = ""; return e },
+		"no issues section":   func(e Entry) Entry { e.Heading = ""; return e },
 		"no file":             func(e Entry) Entry { e.Path = ""; return e },
 		"no line":             func(e Entry) Entry { e.Line = 0; return e },
 		"no published text":   func(e Entry) Entry { e.AsPublished = "   "; return e },
@@ -106,8 +108,8 @@ func TestEveryEntryIsDocumented(t *testing.T) {
 	}
 	text := string(page)
 	for _, entry := range Registry() {
-		if !strings.Contains(text, "### "+entry.ID+" —") {
-			t.Errorf("%s: %s has no `### %s —` section", IssuesPath, entry.ID, entry.ID)
+		if !strings.Contains(text, "### "+entry.Heading) {
+			t.Errorf("%s: %s has no `### %s` section", IssuesPath, entry.ID, entry.Heading)
 		}
 		if !strings.Contains(text, entry.Citation) {
 			t.Errorf("%s: %s does not quote the citation %s", IssuesPath, entry.ID, entry.Citation)
@@ -123,7 +125,7 @@ func TestEveryEntryIsDocumented(t *testing.T) {
 
 func TestApplyRewritesOnlyTheDeclaredLine(t *testing.T) {
 	entry := Entry{
-		ID: "F00", Path: "examples/pilot-corpora/x/Sample.sysml", Line: 2,
+		ID: "F00", Heading: "a test entry", Path: "examples/pilot-corpora/x/Sample.sysml", Line: 2,
 		AsPublished: "b", Corrected: "B",
 		Citation: "SysML v2 §9.8.9.1", Derivation: "test entry.",
 	}
@@ -138,7 +140,7 @@ func TestApplyRewritesOnlyTheDeclaredLine(t *testing.T) {
 
 func TestApplyRefusesAnEntryThatNoLongerMatches(t *testing.T) {
 	entry := Entry{
-		ID: "F00", Path: "examples/pilot-corpora/x/Sample.sysml", Line: 2,
+		ID: "F00", Heading: "a test entry", Path: "examples/pilot-corpora/x/Sample.sysml", Line: 2,
 		AsPublished: "b", Corrected: "B",
 		Citation: "SysML v2 §9.8.9.1", Derivation: "test entry.",
 	}
@@ -154,7 +156,7 @@ func TestApplyRefusesAnEntryThatNoLongerMatches(t *testing.T) {
 // defect is recorded, and the text the oracles read is the published one.
 func TestDocumentedEntrySubstitutesNothing(t *testing.T) {
 	entry := Entry{
-		ID: "F00", Path: "examples/pilot-corpora/x/Sample.sysml", Line: 1,
+		ID: "F00", Heading: "a test entry", Path: "examples/pilot-corpora/x/Sample.sysml", Line: 1,
 		AsPublished: "a", Citation: "SysML v2 §9.8.9.1", Derivation: "no intended reading.",
 	}
 	overlay, err := New([]Entry{entry})

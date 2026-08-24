@@ -8,6 +8,12 @@
 **Baseline:** the last committed run is [pilot-xpect-baseline.json](pilot-xpect-baseline.json), which carries every non-agreeing row, so a later run can be diffed against it
 **Status:** advisory only — nothing here gates CI, for the same reason [pilot-differential.md](pilot-differential.md) does not: the corpus is an unvendored network fetch at the pinned tag, and this is a report, not a ratchet
 
+**Labels:** the short labels in this record are internal cross-references, not specification or
+product terms. A "wave" (and a "slice" within one) is a numbered development round of this
+project; the numbering is chronological and carries no external meaning. `F<n>` names a row of the
+follow-up table in [pilot-differential.md](pilot-differential.md), and `K<n>`/`S<n>` its KerML and
+SysML diagnostic classes. A reader who only wants the verdicts can ignore all of them.
+
 [pilot-differential.md](pilot-differential.md) compares us against *observed* pilot behaviour: it runs
 the pinned validator and records what it says. That answers "do we agree with the reference?" but not
 "was the reference's behaviour intended?" — the question that has kept several rows there advisory.
@@ -412,7 +418,7 @@ larger multiplicity upper bound` rule, 8 rows of nothing on the first run, and
 One reading trap in the per-kind table above: the `nothing` column subtracts the agreements as well
 as the tolerances, so it reads **1** — the row where nothing of ours is there at all.
 
-### Wave 9C: the library diamond, as a warning
+### The library diamond, as a warning
 
 The severity finding above is what wave 9C addressed, and the four rules it adds live in
 `internal/core/passes` (`w9c_inherited_name_conflict.go`, `w9c_owned_name_and_library.go`,
@@ -442,7 +448,7 @@ What is still open in the family, by reproducer:
 | 0 | `AttributeUsage_invalid.sysml.xt:47,52` | Closed in wave 11 with the declared-type reading, without reintroducing the `'self' from DataValue, …` false positives across the pilot-corpora roots. |
 | 0 | `ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt:28` | Closed in wave 11C — see below. Not a library diamond, so the resolver's own rule owns it. |
 
-### Wave 11C: a supertype's imports are memberships it has
+### A supertype's imports are memberships it has
 
 `ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt:28` declares
 `Duplicate of inherited member name 'B' from OuterPackage` where `inner1 subsets inner` and `inner`
@@ -671,7 +677,7 @@ disagreement — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
 
 ---
 
-## Wave 11C — the global namespace, and what the self/that residue really is
+## The global namespace, and what the self/that residue really is
 
 Four adjudications and one open question came out of the 34 rows wave 11C owned (all 18 `scope` rows
 and the 16 `noErrors` rows). They are recorded here because each one decides what an answer *means*,
@@ -732,7 +738,7 @@ classifier reference in `Test1`, while our identifier-boundary rule walks past i
 `VP::VP1`. Relaxing the rule globally costs ten other rows, so the anchor needs Xpect's own matching,
 not a looser one.
 
-### The rows wave 11C leaves open, each labelled
+### The rows that stay open, each labelled
 
 An open row with no label reads as a defect, so every one of the twelve is classified here. The
 categories are: **our defect** (the specification says one thing and we do another), **spec-derived
@@ -842,7 +848,7 @@ closed in wave 12D ([wave12d-decisions.md](wave12d-decisions.md)), **E3** `Conne
 defect, and two of these six are not.
 
 
-## Wave 14 — the declared errata overlay
+## The declared errata overlay
 
 This oracle reports its census twice, as published and with the [declared errata](wave14-errata.md)
 applied. No declared correction lies under `build/pilot-xpect-corpus`, so the two figures coincide

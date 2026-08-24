@@ -1,4 +1,9 @@
-# Wave 12D — parser recovery and grammar gaps
+# Parser recovery and grammar gaps
+
+> **Labels.** This is an engineering record. A "wave" (or a "slice" within one) is a numbered
+> development round of this project — chronological, with no meaning outside this repository — and
+> `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
+> [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
 
 Wave 12D owns the wave-12 Xpect rows where **our parser is the reason we disagree**: it recovers at a
 different token than the pilot does, or it has no production for a form the pilot's grammar admits, so

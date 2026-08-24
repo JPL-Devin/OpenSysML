@@ -9,6 +9,12 @@
 **Baseline:** the last committed run is [pilot-differential-baseline.json](pilot-differential-baseline.json), so a later run can be diffed against it
 **Status:** advisory only — nothing here gates CI, and the harness reads the corpora without writing to them
 
+**Labels:** this is an engineering record, and the short labels in it are internal cross-references, not
+specification or product terms. A "wave" (and a "slice" within one) is a numbered development round of
+this project, chronological and with no external meaning; `F<n>` is a row of the [follow-up table](#follow-ups-not-fixed-here--this-pr-is-advisory)
+below, `K<n>` and `S<n>` are the KerML and SysML diagnostic classes the adjudications group findings
+into, and `P<n>` is a probe of the reference. A reader who only wants the verdicts can ignore them.
+
 [training-examples.md](training-examples.md) gates on
 `internal/core/model/testdata/training_examples_expected.txt`, which is a snapshot of *our*
 behavior: regenerating it records whatever the code now reports, so a regression re-baselines
@@ -33,7 +39,7 @@ interpretation of the reference rather than the reference.
 | [DeciSym/sysmlv2-validator](https://github.com/DeciSym/sysmlv2-validator) | **Chosen for provisioning.** Builds from a pinned commit with Maven 3.6.3 and Java 21 here (`mvn -Psetup-dependency initialize && mvn package`), and its `setup-dependency` profile downloads the pilot release itself, so the pilot version is pinned in the same place as the wrapper. Emits GNU-format `file:line:col: severity: message`. |
 | [Fabi303/sysmlv2tool](https://github.com/Fabi303/sysmlv2tool) | **Not used — could not be built here.** Its directory mode is the better fit (one batch, one resource set), but it builds the pilot from a submodule through Tycho, and the build fails under the Maven available in this environment: `No implementation for org.eclipse.tycho.core.resolver.MavenTargetLocationFactory was bound`. Re-tried with Maven 3.9.9 without success. Left as a follow-up rather than faked. |
 
-### The limitation this used to force, and how F6 removed it
+### The limitation this used to force, and how the bridge removed it
 
 The DeciSym CLI recurses into directories, but it validates each file with a separate
 `interactive.process(content, true)` call against one accumulating `SysMLInteractive` session
@@ -1939,7 +1945,7 @@ one.
 | ~~F72~~ | **Done** (#391). The rule is the first of the two candidates: the body of a redefining feature sees the features nested under what it redefines, including an association end's implicit redefinition. `Association Examples/ProductSelection_N_ary.kerml` 3 → 0. `member feature Product_Account1 subsets Product_Account …` inside `assoc SingleProductSelection3` (`Association Examples/ProductSelection_N_ary.kerml:93,101,109`, 3 diagnostics): the target is a member of a *nested* member of the end feature this end redefines, and the pilot resolves it. Which rule makes it visible — inherited nested members through a redefined end, or a featuring path — is not established, so no fix was guessed at. |
 | ~~F32~~ | **Done.** Adjudicated per row. The first two rows are SysML-only rules: KerML has no definition/usage distinction — a Specialization relates two Types and a FeatureTyping's type is any Type, a Feature among them (KerML 1.0 §8.3.3, §8.3.4.4) — so on a `.kerml` document `passes/typecheck.go` `compatMessage` checks only that the target *is* a type, reading the language from `source.KindOf` (the F3+F8 file-kind mechanism, no second notion). The metaclass row was our own bug in either language: `defSymbolKind` had no `ast.DefMetaclass` case, so a metaclass was incomparable with its own kind; `metaclass … specializes Metaobject` is a Class specializing a Class (§8.4.4). The `rollsOn` row is not a language gate but missing semantics: unioning was resolved nowhere, so `semantics/model.go` now resolves `unions` in its own cache (`UnioningTypes`) and `Conforms` accepts a union whose every unioning type conforms — a union is constrained by its members, not a generalization of them, so it stays out of `DirectSupertypes`. Nothing here was skipped wholesale: the KerML rows keep a non-type target an error, and `.sysml` counterpart tests lock in that each check still fires. |
 | ~~F33~~ | **Done.** The six are one cause and it is the reference's: the derived `Type::ownedDisjoining` is empty for a `Disjoining` whose `owningType` is that `Type`, so the `eOpposite` pair EMF checks is inconsistent in the pilot's own graph. Reproduced in three lines, surviving validation of a single file in a fresh resource set, so neither batching nor the bridge is implicated; the notation is `KerML.xtext:344` `DisjoiningPart` as the reference's own examples write it. Category stays `unmapped`. See [K6, diagnostic by diagnostic (F33)](#k6-diagnostic-by-diagnostic-f33). Spawned F80–F83. |
-| F80 | **Written, not filed.** The upstream report for K6 against the pilot at `2026-05` — `Type::ownedDisjoining`'s setting delegate does not see a `Disjoining` that `owningType` reports it owns, so every `disjoint from` in a type declaration draws EMF's unpaired-bidirectional-reference error — is in [omg-issues.md](omg-issues.md#f80--typeowneddisjoining-does-not-contain-a-disjoining-whose-owningtype-is-that-type-pilot-2026-05), ready to paste into `Systems-Modeling/SysML-v2-Pilot-Implementation`. The reproducer and the probe output are in the K6 section; nothing on our side changes when it is fixed except the root's only-pilot count falling 6 → 0. |
+| F80 | **Written, not filed.** The upstream report for K6 against the pilot at `2026-05` — `Type::ownedDisjoining`'s setting delegate does not see a `Disjoining` that `owningType` reports it owns, so every `disjoint from` in a type declaration draws EMF's unpaired-bidirectional-reference error — is in [omg-issues.md](omg-issues.md#typeowneddisjoining-does-not-contain-a-disjoining-whose-owningtype-is-that-type-pilot-2026-05), ready to paste into `Systems-Modeling/SysML-v2-Pilot-Implementation`. The reproducer and the probe output are in the K6 section; nothing on our side changes when it is fixed except the root's only-pilot count falling 6 → 0. |
 | ~~F81~~ | **Done** (#374), as `ast.RelDifferences` with an RDF/export mapping. `differences A, B` in a type declaration is not parsed: `classifier D differences A, B;` gives `expected '{' or ';' after declaration` and `expected a namespace member`, where the pilot is silent (`KerML.xtext:359` `DifferencingPart`). `intersects` and `unions` at the same position parse, so it is that one keyword. 4 of the root's 140 syntax diagnostics (`Simple Tests/Classifiers.kerml:13`, `FeatureChains.kerml:31`). |
 | ~~F82~~ | **Done** (#374), through the parser path namespace and body members share. A standalone disjoining as a namespace or body member is not parsed: `disjoint B from A;` gives `expected a namespace member` where the pilot is silent. `Disjoining` is a `NonFeatureElement` alternative (`KerML.xtext:257`, production at `:426`), so the keyword may open a member. 1 diagnostic (`Simple Tests/FeatureChains.kerml:28`). |
 | ~~F83~~ | **Done** (#374), preserved on `ast.Definition.Multiplicity` and gated on the KerML declaration syntax — a SysML definition declaration has no such multiplicity slot. A multiplicity in a classifier declaration is not parsed: `classifier B [1] specializes A;` gives `expected '{' or ';' after declaration` and `expected a namespace member` where the pilot is silent. `ClassifierDeclaration` takes `( ownedRelationship += OwnedMultiplicity )?` before the superclassing part (`KerML.xtext:468-470`). 2 diagnostics (`KerML Spec Annex A Examples/A-2-ModelingInstances.kerml:9`). |
@@ -2007,7 +2013,7 @@ moved count is a claim about one of the two implementations, and it needs a reas
 
 ---
 
-## Wave 11F — current branch movement and adjudications
+## Current branch movement and adjudications
 
 The settled control is a clean run of `466de743cbd46eaa6983fd8cf0cffc4097a2137f`,
 after the merged wave-11 changes and before the remaining wave-11F changes. The
@@ -2098,7 +2104,7 @@ disagreements.
   (§8.3.6.4), in an element-scoped constraint pass so an unrelated lower-tier
   error does not mask the assignment diagnostic.
 
-## Wave 12A — element-scoped tier gating (roadmap L2)
+## Element-scoped tier gating (roadmap L2)
 
 Narrowing the tier gate from the document to the element moves this oracle only: agreement 25 →
 **32**, only-pilot 73 → **66**, our diagnostics 168 → **175**, only-ours unmoved at **119**, and the
@@ -2130,7 +2136,7 @@ own `Must have a Boolean result` can agree with the pilot's identical string ins
 `unmapped`. No diagnostic of ours in the corpus carried that wording before wave 12A.
 
 
-## Wave 14 — the declared errata overlay
+## The declared errata overlay
 
 Every root is compared a second time with the [declared errata](wave14-errata.md) applied to a
 **copy** of it, so the published corpus stays byte-identical on disk. The as-published census above
