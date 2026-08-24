@@ -588,12 +588,13 @@ func (p *Parser) atVarPrefixedFeature() bool {
 }
 
 // atTextualRepresentationStart matches the KerML TextualRepresentation head
-// (`rep` Name? `language` String), including its language-only spelling.
+// (`rep` Identification? `language` String), including its language-only spelling.
 func (p *Parser) atTextualRepresentationStart() bool {
 	if p.atKeyword("rep") {
 		next := p.peekN(1)
 		return next.Kind == lexer.Identifier ||
 			next.Kind == lexer.UnrestrictedName ||
+			next.Kind == lexer.Lt || // a short name, `rep <ocl> language "ocl"`
 			(next.Kind == lexer.Keyword && next.KeywordID == "language")
 	}
 	return p.atKeyword("language") && p.peekN(1).Kind == lexer.String

@@ -278,8 +278,8 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		fmt.Fprintf(b, `(Documentation locale=%q)`, v.Locale)
 	case *TextualRepresentation:
 		fmt.Fprintf(b, `(TextualRepresentation language=%q`, v.Language)
-		if v.Ident.Name != "" {
-			fmt.Fprintf(b, ` name=%q`, v.Ident.Name)
+		if name := identName(v.Ident); name != "" {
+			fmt.Fprintf(b, ` name=%q`, name)
 		}
 		b.WriteString(`)`)
 	case *PrefixMetadata:
