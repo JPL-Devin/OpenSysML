@@ -2,7 +2,7 @@
 
 How to profile `sysml`, what a large model costs today, and what the measurements
 say about where the remaining cost is. Figures below were taken on an
-`Intel Xeon Platinum 8175M @ 2.50GHz`, Go 1.23, `GOMAXPROCS=8`; treat them as
+`Intel Xeon Platinum 8559C`, Go 1.25, `GOMAXPROCS=8`; treat them as
 ratios rather than absolutes.
 
 ## Profiling a run
@@ -69,34 +69,31 @@ action, a state machine or a part usage.
 
 | elements | load wall | allocated | live heap held |
 | -------- | --------- | --------- | -------------- |
-| 0        | 80 ms     | 32 MiB    | 14 MiB         |
-| 250      | 106 ms    | 44 MiB    | 16 MiB         |
-| 1 000    | 186 ms    | 83 MiB    | 24 MiB         |
-| 4 000    | 538 ms    | 242 MiB   | 55 MiB         |
+| 0        | 0.17 ms   | 115 KiB   | 32 KiB         |
+| 250      | 25 ms     | 19 MiB    | 2.7 MiB        |
+| 1 000    | 96 ms     | 80 MiB    | 11 MiB         |
+| 4 000    | 402 ms    | 329 MiB   | 43 MiB         |
 
-Two things follow from the `elements=0` row. A session costs about **14 MiB held
-and 32 MiB allocated before it holds any model of its own**: that is the standard
-library, which every session indexes so that names such as a quantity's unit
-resolve. And each session holds its own copy — a process serving many sessions
-(the LSP, a server) pays that per session, not once.
+The `elements=0` row is what a session costs before it holds a model of its own:
+**32 KiB held and 115 KiB allocated**. The standard library is no longer indexed
+eagerly per session, so a process serving many sessions (the LSP, a server) no
+longer pays a multi-megabyte floor for each one.
 
-Above that baseline a model costs roughly **10 KiB held per element**, and
-allocates roughly **50 KiB per element** while loading, most of it short-lived
+Above that baseline a model costs roughly **11 KiB held per element**, and
+allocates roughly **80 KiB per element** while loading, most of it short-lived
 parser and resolution garbage.
 
-Whole-binary scaling on `-validate` over generated models, before and after the
-fixes described below:
+Whole-binary scaling on `-validate` over generated models in standard notation,
+which report nothing:
 
-| elements | wall (before) | peak RSS (before) | wall (now) | peak RSS (now) |
-| -------- | ------------- | ----------------- | ---------- | -------------- |
-| 4 000    | 1.64 s        | 140 MiB           | 0.59 s     | 105 MiB        |
-| 8 000    | 6.35 s        | 249 MiB           | 1.13 s     | 196 MiB        |
-| 16 000   | 25.64 s       | 492 MiB           | 2.19 s     | 353 MiB        |
+| elements | wall   | peak RSS |
+| -------- | ------ | -------- |
+| 3 000    | 0.41 s | 138 MiB  |
+| 6 000    | 0.71 s | 207 MiB  |
+| 12 000   | 1.40 s | 335 MiB  |
 
-Before, doubling the model roughly quadrupled the time: loading was quadratic in
-the size of the model. A 4 000-element model allocated 840 MiB to end up holding
-55 MiB; it now allocates 242 MiB. Now both time and memory grow linearly with the
-model — 4 000, 8 000 and 16 000 elements allocate 242, 451 and 873 MiB.
+Both time and memory grow linearly with the model. Loading was quadratic once —
+doubling the model roughly quadrupled the time — for the reasons below.
 
 ### What made it quadratic
 
@@ -117,6 +114,26 @@ namespace:
   lookup made in it. The tree is immutable after parsing, so the resolver
   memoizes it.
 
+### What made reporting findings quadratic
+
+Reporting a finding needs the line and column its offset falls on, which
+`SourceFile.Lines()` answers from a line index over the whole file. The index was
+rebuilt on every call, and the calls are made once per finding, so validating a
+model that reports something cost the file's size times the number of findings: a
+16 000-element model that warns on every usage took 123 s and allocated 258 GiB,
+against 1.0 s over the same model that warns on nothing. A source file's content
+is immutable, so the index is now built once per file and reused, and the REPL's
+diagnostic paths hold one index per submission rather than one per finding. That
+model now takes 2.1 s and allocates 1.4 GiB — around 570 B allocated per finding
+reported, flat in the size of the file.
+
+Materialization rollback had the same shape. A failed creation drops every object
+it reached, which it used to identify by copying the whole live-instance key set
+before each (also nested) materialization — 81% of all memory allocated while
+instantiating. The context now records instance registrations in an append-only
+log and marks its length, so a rollback walks only what the failed creation
+added.
+
 ## What running a model costs
 
 Runs are measured against an already-loaded model, with the session's runtime
@@ -126,17 +143,17 @@ run being measured.
 
 | elements | start state machine | evaluate calculation | instantiate part def |
 | -------- | ------------------- | -------------------- | -------------------- |
-| 250      | 26 µs, 4.0 KiB      | 23 µs, 3.7 KiB       | 20 µs, 1.6 KiB       |
-| 1 000    | 82 µs, 4.0 KiB      | 77 µs, 3.7 KiB       | 73 µs, 1.6 KiB       |
-| 4 000    | 334 µs, 4.0 KiB     | 435 µs, 3.7 KiB      | 329 µs, 1.6 KiB      |
+| 250      | 12 µs, 5.3 KiB      | 12 µs, 4.5 KiB       | 11 µs, 2.8 KiB       |
+| 1 000    | 36 µs, 5.3 KiB      | 36 µs, 4.5 KiB       | 34 µs, 2.8 KiB       |
+| 4 000    | 202 µs, 5.3 KiB     | 199 µs, 4.5 KiB      | 198 µs, 2.8 KiB      |
 
 Execution memory is **flat in the size of the model** — a run allocates a few
 kilobytes whatever the surrounding model — so memory pressure from executing
 models is not where a large model hurts; loading it is.
 
 Execution *time*, however, grows with the size of the surrounding model: starting
-the same three-state machine takes 13 times longer in a 4 000-element model than
-in a 250-element one, while allocating exactly the same memory. A CPU profile of
+the same three-state machine takes about 17 times longer in a 4 000-element model
+than in a 250-element one, while allocating exactly the same memory. A CPU profile of
 that benchmark is spent in the garbage collector — `runtime.scanobject` and its
 neighbors account for over half of it — so the cost is collection scanning the
 live model, paid by whatever allocates next, rather than work the run itself does.
@@ -146,12 +163,15 @@ a faster executor.
 
 ## Notes for further work
 
-- The parser's token buffer (`parser.fill`) is now the largest single source of
-  allocation while loading, at about 54% of a large model's total. It grows the
+- The parser's token buffer (`parser.fill`) is the largest single source of
+  allocation while loading, at about 35% of a large model's total. It grows the
   buffer as it reads; sizing it from the source length would cut most of that,
   and with it much of the collector pressure a load creates.
 - Runs over a large model spend their time in collection, not in the executor
   (above). Reducing what a load leaves behind is the lever, since the live model
   is what each cycle scans.
-- A session holds its own standard-library index (14 MiB). Sharing one index
-  across sessions in one process would remove that per-session floor.
+- Resolving inherited library features in every definition body roughly doubled
+  what loading costs in both time and allocation, against the figures the
+  quadratic fixes above left. It is linear in the model, and the scope and
+  member scans it walks (`symbols.Scope.AllMembers`,
+  `symbols.Index.LookupDirectChildrenFrom`) are where that time goes.
