@@ -13,6 +13,8 @@ import (
 const (
 	fixtureCompliance = `# Compliance
 
+**No external referee:** self-assessed.
+
 The map below tracks 99 semantic rules: **99 ✅ faithful, 0 ⚠️ approximate, 0 ❌ not implemented, 0 ⛔ deliberate divergence.**
 
 | Rule | Status |
@@ -22,9 +24,16 @@ The map below tracks 99 semantic rules: **99 ✅ faithful, 0 ⚠️ approximate,
 `
 	fixtureBookkeeping = `# Guide
 
-**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 99 tracked rules stays in the map.
+**Reference differential:** 99 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (` + "`" + `old` + "`" + `), 99 in full agreement;
+**Rejection oracle:** the reverse direction — do we reject what the reference rejects? 99 hand-written invalid models validated by both implementations, 99 rejected by both, 99 the pinned pilot rejects and we accept;
+<!-- doc-counts:begin refereed-figures -->
+old generated block
+<!-- doc-counts:end refereed-figures -->
 Nothing else on this line's neighbours moves.
 `
+	fixtureDifferentialBaseline = `{"pilotRelease":"2026-05 (jupyter-sysml-kernel 0.60.1)","totals":{"files":2,"filesFullyAgreeing":1,"openSysMLOnly":3,"pilotOnly":4}}`
+	fixtureXpectBaseline        = `{"kinds":[{"kind":"errors","assertions":2,"rows":2,"agree":2,"wordingOnly":1,"sameLocation":0,"sameLine":0,"severityDiffers":0,"elsewhereInFile":0},{"kind":"scope","assertions":3,"agree":2}]}`
+	fixtureRejectionBaseline    = `{"totals":{"cases":2,"bothReject":2,"pilotOnlyRejects":0},"strictOnlyAgreements":[]}`
 )
 
 // TestRunRewritesEveryDerivedLineAndIsIdempotent is the guarantee the wave-9
@@ -47,7 +56,7 @@ func TestRunRewritesEveryDerivedLineAndIsIdempotent(t *testing.T) {
 		t.Fatalf("header not restated:\n%s", first[doccounts.SpecCompliancePath])
 	}
 	for _, path := range []string{doccounts.ReadmePath, doccounts.ArchitecturePath} {
-		if !strings.Contains(first[path], "each of the 2 tracked rules stays in the map.") {
+		if !strings.Contains(first[path], "status of each of the 2 tracked rules stays in [spec compliance]") {
 			t.Fatalf("%s bookkeeping line not restated:\n%s", path, first[path])
 		}
 		if !strings.Contains(first[path], "Nothing else on this line's neighbours moves.") {
@@ -108,12 +117,45 @@ func TestRunReportsAMapWithNoRuleRows(t *testing.T) {
 	}
 }
 
+func TestCheckReportsStaleFilesWithoutWriting(t *testing.T) {
+	root := writeFixture(t)
+	before := read(t, root, doccounts.ReadmePath)
+	var output strings.Builder
+	stale, err := check(root, &output)
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	if stale != 3 {
+		t.Fatalf("check reported %d stale files, want 3", stale)
+	}
+	if !strings.Contains(output.String(), "README.md is stale") {
+		t.Fatalf("check report does not name README.md:\n%s", output.String())
+	}
+	if read(t, root, doccounts.ReadmePath) != before {
+		t.Fatal("check mode changed README.md")
+	}
+}
+
+func TestCheckCommittedTreeIsCurrent(t *testing.T) {
+	var output strings.Builder
+	stale, err := check("../..", &output)
+	if err != nil {
+		t.Fatalf("check committed tree: %v", err)
+	}
+	if stale != 0 {
+		t.Fatalf("committed tree has %d stale files:\n%s", stale, output.String())
+	}
+}
+
 func writeFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	writeAt(t, root, doccounts.SpecCompliancePath, fixtureCompliance)
 	writeAt(t, root, doccounts.ReadmePath, fixtureBookkeeping)
 	writeAt(t, root, doccounts.ArchitecturePath, fixtureBookkeeping)
+	writeAt(t, root, "docs/project/pilot-differential-baseline.json", fixtureDifferentialBaseline)
+	writeAt(t, root, "docs/project/pilot-xpect-baseline.json", fixtureXpectBaseline)
+	writeAt(t, root, "docs/project/pilot-rejection-baseline.json", fixtureRejectionBaseline)
 	return root
 }
 
