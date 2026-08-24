@@ -135,6 +135,10 @@ func TestW8CFeatureReferenceBodyInaccessible(t *testing.T) {
 	part def Q { attribute n = 1; }
 	requirement def R { assume constraint { P::Q::n > 0 } }
 }`,
+		"implicit calc result": `package P {
+	part def Q { attribute n = 1; }
+	calc def C { P::Q::n }
+}`,
 		"assignment value": `package P {
 	part def Q { attribute n = 1; }
 	action def A { attribute v = 0; assign v := P::Q::n; }
@@ -172,6 +176,9 @@ func TestW8CFeatureReferenceBodyAccessible(t *testing.T) {
 		"dotted part path": `package P {
 	part def Q { attribute n = 1; }
 	part def R { part q : Q; constraint c { q.n > 0 } }
+}`,
+		"implicit calc result": `package P {
+	calc def C { attribute m = 1; m }
 }`,
 		"connector ends": `package P {
 	part def Port;

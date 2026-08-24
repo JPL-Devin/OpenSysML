@@ -153,6 +153,10 @@ func (c *featureReferenceChecker) walkMember(site refSite, scope *symbols.Scope,
 		c.walkMembers(site, scope, n.Actions)
 	case *ast.ExitMember:
 		c.walkMembers(site, scope, n.Actions)
+	default:
+		// A bare expression member is a body's implicit result, as in a calc
+		// body whose result is its last expression.
+		c.walkExpr(site, scope, m)
 	}
 }
 
