@@ -89,8 +89,9 @@ open the possibility that the bundle is not bound to the manifest bytes.
 - The identity regexp is written `\\.` inside a YAML block scalar and a double-quoted shell
   string; bash reduces it to `\.`, so cosign gets the intended pattern. Verify by
   `bash -c 'printf "%s\n" "...\\..."'` rather than eyeballing it.
-- The CI regexp `[0-9a-f-]+` is looser than the client's UUID regexp in `signing.py`
-  (`_DEFINITION_ID`). The client being stricter is safe, but note the asymmetry.
+- The CI regexp and the client's `_DEFINITION_ID` in `signing.py` both require the UUID shape
+  `[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}`. Check they still agree: a looser CI pattern would
+  pass a subject the client rejects, so the self-check would not catch it.
 - Confirm `mv dist/SHA256SUMS.txt.bundle dist/release/` precedes `ghr -replace ... dist/release/`
   in `publish-github-release`, and that the sign/verify steps sit after the manifest-hashing
   step in `build-release`.
