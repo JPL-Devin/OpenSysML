@@ -99,6 +99,101 @@ func TestW9CConformingTypingStaysSilent(t *testing.T) {
 	}
 }
 
+func TestW9CBinaryInterfaceEndDiamondWarns(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{
+			name: "reference subsetting",
+			src: `package Test {
+	part def C {
+		part p;
+		interface i {
+			end part ::> p;
+			end port q1;
+		}
+	}
+}`,
+		},
+		{
+			name: "declared end",
+			src: `package Test {
+	part def C {
+		interface i {
+			end part p1;
+			end port q1;
+		}
+	}
+}`,
+		},
+		{
+			name: "interface definition",
+			src: `package Test {
+	interface def I {
+		end part p1;
+		end port q1;
+	}
+}`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, warm := range []bool{false, true} {
+				got := w9cMessages(w9cLibraryDiags(t, tc.src, warm), msgW9CDuplicateInherited)
+				want := []string{msgW9CDuplicateInherited + " 'self' from Part, Port"}
+				if strings.Join(got, "\n") != strings.Join(want, "\n") {
+					t.Errorf("warm=%v: got %v, want %v", warm, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestW9CNonBinaryConnectorEndsStaySilent(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "three-ended interface",
+			body: `interface i {
+				end part p1;
+				end port q1;
+				end port q2;
+			}`,
+		},
+		{
+			name: "binary connection",
+			body: `connection c {
+				end part p1;
+				end part p2;
+			}`,
+		},
+		{
+			name: "binary connection definition",
+			body: `connection def C {
+				end part p1;
+				end part p2;
+			}`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `package Test {
+	part def C {
+		` + tc.body + `
+	}
+}`
+			for _, warm := range []bool{false, true} {
+				if got := w9cMessages(w9cLibraryDiags(t, src, warm), msgW9CDuplicateInherited); len(got) != 0 {
+					t.Errorf("warm=%v: got %v, want none", warm, got)
+				}
+			}
+		})
+	}
+}
+
 // Short names are names for distinguishability: a repeated short name, and a
 // short name repeating another member's name, are both reported
 // (ShortNameTests_Distinguishibility1/2.kerml.xt:20,22).

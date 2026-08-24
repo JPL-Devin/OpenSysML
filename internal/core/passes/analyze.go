@@ -29,6 +29,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(TopLevelImportPass{})
 	reg.Register(AssociationEndTypesPass{})
 	reg.Register(VariableFeaturePass{})
+	reg.Register(AssignmentReferentPass{})
 	reg.Register(ResultExpressionPass{})
 	reg.Register(FeatureReferencePass{})
 	reg.Register(MetadataTypePass{})

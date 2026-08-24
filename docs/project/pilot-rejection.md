@@ -162,6 +162,18 @@ and accepted by default.
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays.
 
+### p24, deferred by Step 3 and closed by the record format
+
+Step 3 measured **116 both reject, 4 only the pilot rejects** and deferred `p24` — KerML
+`validateMetadataFeatureMetaclassNotAbstract`, a metadata usage typed by an abstract metaclass —
+because abstractness of a metaclass was not a fact the reduced library record carried.
+
+The record format supplies it: the library is parsed on every load path and `Abstract` is a
+persisted fact family under the reflective equality coverage, so `symbols.IsAbstract` answers the
+same cold and warm. Persisting a fact emits no diagnostic on its own — the rule
+(`internal/core/passes/w8c_metadata_type.go`) reads that accessor instead of casting `Decl`, which
+is what closes the row. Hence **117 both reject, 3 only the pilot rejects** above.
+
 ## Adjudications (W9F)
 
 Every gap below is a **real permissiveness finding**: the pinned grammar admits none of these

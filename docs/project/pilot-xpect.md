@@ -169,15 +169,15 @@ Every difference from the published numbers is accounted for, and none of it is 
 ```
 428 .xt file(s), 0 unparsed, 0 missing declared resource(s)
 1261 assertion(s) declaring 1323 expectation(s)
-agree 1293 (of which wording-only 248) | disagree 30 | unlocated 0 | not adjudicated 0
+agree 1295 (of which wording-only 248) | disagree 28 | unlocated 0 | not adjudicated 0
 ```
 
 | Kind | Expectations | Agree | of which wording-only | Disagree | Not adjudicated | `same-location` | `same-line` | `severity-differs` | `elsewhere` | nothing |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `errors` | 510 | 490 | 248 | 20 | 0 | 7 | 6 | 0 | 7 | 0 |
+| `errors` | 510 | 491 | 248 | 19 | 0 | 7 | 6 | 0 | 6 | 0 |
 | `noErrors` | 275 | 267 | — | 8 | 0 | — | — | — | — | — |
 | `linkedName` | 194 | 194 | — | 0 | 0 | — | — | — | — | — |
-| `warnings` | 113 | 111 | — | 2 | 0 | 0 | 0 | 1 | 0 | 1 |
+| `warnings` | 113 | 112 | — | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
 | `scope` | 230 | 230 | — | 0 | 0 | — | — | — | — | — |
 | `exportedObjects` | 1 | 1 | — | 0 | 0 | — | — | — | — | — |
 
@@ -186,12 +186,12 @@ Per suite:
 | Suite | Files | Expectations | Agree | Disagree | Not adjudicated |
 |---|---:|---:|---:|---:|---:|
 | `kerml` | 303 | 966 | 948 | 18 | 0 |
-| `sysml` | 125 | 357 | 345 | 12 | 0 |
+| `sysml` | 125 | 357 | 347 | 10 | 0 |
 
-**Read the `errors` row carefully: 248 of its 490 agreements are wording-only, so more than half of
+**Read the `errors` row carefully: 248 of its 491 agreements are wording-only, so more than half of
 that column is us stating the pilot's rule in our own words rather than a rule written against its
-text.** The 238 word-for-word rows are the ones where a rule was implemented against the declared
-message. `warnings` shows the same effect from the other side: its 111 agreements are the
+text.** The 243 word-for-word rows are the ones where a rule was implemented against the declared
+message. `warnings` shows the same effect from the other side: its 112 agreements are the
 duplicate-member-name, visibility and wave-9C library rules written against the pilot's declared
 wording, so they match by construction rather than by luck. `noErrors` and `linkedName` are
 wording-independent, and they are where this oracle adjudicates most directly.
@@ -203,16 +203,36 @@ change in our behaviour):
 |---|---|---|---|
 | `linkedName` | 151 / 194 | **194 / 194** | alias-introduced names resolve to the aliased element, and the `~ B::f` conjugation form parses |
 | `noErrors` | 231 / 275 | **267 / 275** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 2 others no longer draw an error, wave 9D's protected/shadowed path reconciliation cleared 11 more, wave 11C closed the 6 protected-import rows wave 10E had made unsatisfiable by modelling `noErrors` as Xpect's residue rather than as file-wide silence, wave 12D's parser work cleared `ParsingTests_Indexing` and `SemanticMetadata_valid`, and wave 12F closed two more rows |
-| `warnings` | 0 / 113 | **111 / 113** | the duplicate-member-name warnings, the wave-8 rules written against the declared wording, wave 9C's library rules, wave 10's warnings residue, and wave 11A/11F's usage-typing rules, which stopped another rule's error from standing where a warning is declared |
-| `errors` | 0 / 510 | **490 / 510** | 242 rows are ours word-for-word; the other 248 are wording-only, admitted centrally in wave 10 after the rule and element were checked, not by adopting the pilot's phrasing |
+| `warnings` | 0 / 113 | **112 / 113** | the duplicate-member-name warnings, the wave-8 rules written against the declared wording, wave 9C's library rules, wave 10's warnings residue, wave 11A/11F's usage-typing rules, and Step 3's binary-interface end typing |
+| `errors` | 0 / 510 | **491 / 510** | 243 rows are ours word-for-word; the other 248 are wording-only, admitted centrally in wave 10 after the rule and element were checked, not by adopting the pilot's phrasing |
 | `scope` | 73 / 230 | **230 / 230** | wave 9A resolves implicit and inherited members through the library (`library-names` 125 → 27), wave 9D reconciles the protected and shadowed paths, wave 10A bounds re-entry to one per name, wave 11C fixes the quoted anchor and stops a recursive import's descent carrying implicit generals, and wave 12E bounds derived `self`/`that` paths and anchors a scope assertion on the reference its text names |
 
-**These tables and the baseline are a single fresh run on wave 12D rebased onto `main` with waves 11,
-12A, 12B and 12E merged.** The largest movement in wave 11 was detection, not classification: the 11
+**These tables and the baseline are a single fresh-cache Step 3 run against merged base
+`4b9baf2d`.** The largest movement in wave 11 was detection, not classification: the 11
 `severity-differs` `errors` rows are **0**, because wave 11A implemented the usage-typing and
 specialization rules the pilot declares there instead of adjusting a severity, and 11F canonicalized
 the resolver's inherited-name warning that had been standing in their place. `errors` silence falls
 8 → **0**, `elsewhere-in-file` 42 → **7**, `same-line` 25 → **6**, and `noErrors` rises 248 → **267**.
+
+### Step 3 obligation round
+
+Independent fresh-cache runs of exact base `4b9baf2d` and this tree move Xpect from
+**1293 agree / 248 wording-only / 30 disagree** to
+**1295 / 248 / 28**. Two rows recover and none regress:
+
+| Row | Base | Step 3 | Movement |
+|---|---|---|---|
+| `AssignmentActionUsage_invalid.sysml.xt:44` | declared `Referent must be time varying.`; ours elsewhere in the file | word-for-word agreement | closed by SysML v2 §8.3.17.5 assignment-referent validation |
+| `InterfaceUsage_Invalid.sysml.xt:78` | declared `Duplicate of inherited member name 'self' from Part, Port`; ours had an interface-end error | word-for-word agreement | exactly two-ended binary typing exposes the inherited port end and its diamond |
+
+No lower-tier fix unmasks a new Xpect diagnostic. `InterfaceUsage_Invalid.sysml.xt:49` stays a
+same-location disagreement and is a **pilot limitation**: SysML v2 §7.14.1 permits three or more
+interface ends, while §7.14.2 and §8.3.14.2 constrain the binary subtype only.
+`BindingConnector_Invalid2.sysml.xt:42` stays the sole warnings gap: KerML's binding rule constrains
+the related features of a binding connector, but no numbered normative constraint was found for the
+pilot's argument-level warning on the operator expression `rearWheel+1`; the pilot validator source
+marks that conformance check TODO. It is therefore recorded as a **pilot limitation**, not
+implemented by special-casing the expression.
 
 **The `nothing` column is empty for the first time**: wave 12D's parser productions let
 `Type_Multiplicity_invalid` reach its validation rule and gave `ScopeWithFourDotAndDot` a real
@@ -356,9 +376,9 @@ rows. No row here is unsatisfiable any more.
 
 ---
 
-## warnings — 111 of 113, and the severity finding is closed
+## warnings — 112 of 113, and the severity finding is closed
 
-111 rows agree, all of them word-for-word: no `warnings` row is wording-only. The first 11 were duplicate-member-name warnings implemented in the wave-6
+112 rows agree, all of them word-for-word: no `warnings` row is wording-only. The first 11 were duplicate-member-name warnings implemented in the wave-6
 round from the pilot's declared text — 6 in `MembershipTests_Distinguishability.kerml.xt`, and 5
 across the `Redefinition_Diamond*_invalid` / `RedefinitionDiamond*_invalid` pairs; wave 8 added 12
 more, the multiplicity-upper-bound rule among them; **wave 9C added 66**, the library inherited-name
@@ -367,12 +387,11 @@ diamond chief among them, wave 10 closed 10 more, and wave 11 closed 12 — the 
 error. All of them match by construction rather than by luck, because each was written against the
 declared text.
 
-The remaining 2:
-
-| Outcome | Rows | Read |
-|---|---:|---|
-| `severity-differs` — a diagnostic of ours **is** there, as an **error** | 1 | `InterfaceUsage_Invalid.sysml.xt`:78, where `Duplicate of inherited member name 'self' from Part, Port` is declared and our `An interface end must be a port.` error stands at the line. The declared warning needs the `end part ::> tankAssy.fuel;` subsetting chain the diamond rule does not follow. |
-| nothing of ours there at all | 1 | `BindingConnector_Invalid2.sysml.xt`:42 — a shape the rule does not reach. |
+The remaining row is `BindingConnector_Invalid2.sysml.xt:42`: the pilot declares `Bound features
+should have conforming types` on `rearWheel+1`, while OpenSysML has no feature endpoint to compare
+at that expression. Step 3 classifies it as a **pilot limitation**: KerML constrains the related
+features of a binding connector, but no numbered normative constraint was found for this
+argument-level operator-expression warning, and the pilot validator source marks the check TODO.
 
 **The severity defect the first run found is closed: it was 60 rows before wave 9C and is 0 now.**
 The pilot declares:
@@ -384,8 +403,9 @@ The pilot declares:
 ```
 
 and on 60 rows we produced an error at that line until wave 9C made the rule a warning over library
-bases. What remains of the family is 1 of the 2 disagreements, and it is not a severity disagreement
-of this rule's own making: another rule's error stands at the line. The `Subsetting/redefining feature should not have
+bases. Step 3 closed the remaining interface-end row by deriving binary interface typing for exactly
+two-ended interfaces; the inherited end at that position supplies the port type and exposes the
+`Part, Port` diamond. The `Subsetting/redefining feature should not have
 larger multiplicity upper bound` rule, 8 rows of nothing on the first run, and
 `User library packages should not be marked as standard`, 1 row, are both implemented and agreeing.
 
@@ -415,8 +435,8 @@ What is still open in the family, by reproducer:
 
 | Rows | Reproducer | Why it still disagrees |
 |---:|---|---|
-| 1 | `InterfaceUsage_Invalid.sysml.xt:78` | `Part, Port` through an `end part ::> tankAssy.fuel;` subsetting chain, which the rule does not follow; an interface-end error of another rule is at the line. |
-| 1 | `BindingConnector_Invalid2.sysml.xt:42` | `Bound features should have conforming types` on `rearWheel+1`: one endpoint is an expression, so the rule has no feature type to compare. |
+| 0 | `InterfaceUsage_Invalid.sysml.xt:78` | Closed in Step 3: exactly two-ended interfaces implicitly specialize `Interfaces::BinaryInterface`, and positional end redefinition supplies the inherited port-typed end. |
+| 1 | `BindingConnector_Invalid2.sysml.xt:42` | Pilot limitation: no numbered normative constraint was found for argument-level conformance on the operator expression `rearWheel+1`; the pilot validator marks that check TODO. |
 | 0 | `ActionUsage_invalid.sysml.xt:61`, `StateUsage_invalid.sysml.xt:87`, `OccurrenceUsage_invalid.sysml.xt:59` | Closed in wave 11: the warning now lands on the nested `perform b.a;` / `exhibit s.sa;` reference usage and the `b.a` expression inside it, where the pilot reports it, rather than on the referenced declaration. |
 | 0 | `Specialization_invalid.kerml.xt:56,60` | Closed in wave 11E, which runs `validateSpecializationSpecificNotConjugated` at the type tier so a metaclass error in the same file no longer hides it. |
 | 0 | `AttributeUsage_invalid.sysml.xt:47,52` | Closed in wave 11 with the declared-type reading, without reintroducing the `'self' from DataValue, …` false positives across the pilot-corpora roots. |
@@ -441,9 +461,9 @@ redefinition removed was silent too.
 
 ---
 
-## errors — 490 of 510, of which 248 wording-only
+## errors — 491 of 510, of which 248 wording-only
 
-Agreement here is 242 rows word-for-word plus 248 wording-only: the same rule about the same element
+Agreement here is 243 rows word-for-word plus 248 wording-only: the same rule about the same element
 at the same offset and severity, in our phrasing. Almost all of the wording-only rows are one family,
 `Couldn't resolve reference to <kind> 'X'.` against `unresolved reference: X — did you mean …?`, and
 the harness admits them only after matching the rule and the element named, never on span and
@@ -454,10 +474,10 @@ severity alone. What is left:
 | `same-location` | 7 | we flag the exact declared offset for a **different rule** |
 | `same-line` | 6 | we flag the declared line at a different offset — almost certainly the same defect |
 | `severity-differs` | 0 | **empty:** wave 11A implemented the declared rules instead |
-| `elsewhere-in-file` | 7 | we report errors, but not where the declaration points |
+| `elsewhere-in-file` | 6 | we report errors, but not where the declaration points |
 | nothing | 0 | **empty since wave 12D:** no declared-error file is accepted in silence |
 
-The disagreements split 15 KerML / 9 SysML. The SysML suite's assertions anchor at a whole
+The disagreements split 15 KerML / 4 SysML across this kind. The SysML suite's assertions anchor at a whole
 declaration (`at "part def P { ... }"`) while ours land on the offending token inside it, so
 `same-line` there often means what `same-location` means in KerML. Together, **503 of 510 declared
 errors are ours at the declared location or line.**
@@ -481,8 +501,9 @@ them would have hidden five distinct divergences:
   these left `severity-differs`. The pilot rejects the same line as a syntax error instead — an
   **adjudicated divergence** since wave 12E, whose reading is in
   [wave12e-decisions.md](wave12e-decisions.md).
-- **`InterfaceUsage_Invalid.sysml.xt`:49**, where the pilot counts connector ends and we require an
-  interface end to be a port.
+- **`InterfaceUsage_Invalid.sysml.xt`:49**, a **pilot limitation**: SysML v2 §7.14.1 permits three
+  or more interface ends, while §7.14.2 and §8.3.14.2 constrain only `BinaryInterface`; our
+  independent port-kind error is at :53.
 - **`TransitionUsage_invalid.sysml.xt`:45**, where the pilot reports the ANTLR failure
   (`A parallel state cannot have successions or transitions`) and we report what our recovery expected
   — same defect, differently attributed, and the declared text is a parser-internal message we would
@@ -514,13 +535,13 @@ warning. They were missing detection wearing a cosmetic label: wave 11A implemen
 11F added the use-case analogues and canonicalized the resolver's inherited-name warning so it stops
 standing in for them, and the column closed by implementation rather than by relabelling.
 
-Every row that is not word-for-word — all 248 wording-only and all 24 disagreements — is recorded
+Every row that is not word-for-word — all 248 wording-only and all 28 disagreements — is recorded
 individually with the declared message and ours in
 [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
 
 ### Attribution of the `same-line` and `elsewhere-in-file` rows
 
-The 13 rows in these two tolerance classes are attributed below. The Xpect row is the line containing
+The 12 rows in these two tolerance classes are attributed below. The Xpect row is the line containing
 the assertion; its declared diagnostic generally anchors in the following model line. The citations
 are to the published KerML 1.0 and SysML v2.0 specifications that govern the pinned 2026-05
 implementation. There is no published KerML 1.1 specification to cite; where parser behavior matters,
@@ -539,14 +560,16 @@ wording alone.
 | `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:26 (`A`) | `no viable alternative at input 'A'` | The same single `expected a name after '.'` at model line 32. | Same malformed `test::A..a` and parser-recovery reading. | **adjudicated divergence** | parser recovery (wave 12D) |
 | `ParsingTests_Import_Visibility.kerml.xt`:25 | `extraneous input '}' expecting EOF` | No diagnostic at the brace; the nearest is the direct bare-import error at model line 24. | Import visibility is mandatory (KerML 7.2.5.4 and 8.2.3.4.2). OpenSysML reports that violated rule once; the brace message is the pilot parser's cascade, and the specification does not require it. | **adjudicated divergence** | parser recovery (wave 12E) |
 | `ParsingTests_ScopeWithFourDotAndDot.kerml.xt`:22 | `Couldn't resolve reference to Feature 'b'.` | `feature chain segment must be a feature, found kermlType` on model line 27. | Every chaining element is a Feature (KerML 7.3.4.6, 8.2.4.3.5 and 8.3.3.3.5). OpenSysML resolves `OuterPackage::B` and reports its wrong metaclass; the pilot filters/fails the lookup. Both reject the same chain, and KerML does not require failed resolution rather than a direct metaclass diagnostic. | **adjudicated divergence** | feature-chain type validation (wave 12D) |
-| `AssignmentActionUsage_invalid.sysml.xt`:44 | `Referent must be time varying.` | No diagnostic there; the nearest is `unresolved member: b` at model line 41. | SysML v2 8.3.17.5 `validateAssignmentActionUsage` requires `referent.featureTarget.mayTimeVary`. OpenSysML has no assignment-referent time-variance validation; disabling tier gating does not produce this diagnostic. | **unimplemented obligation** | constraint tier: assignment-action validation (Step 3) |
 | `Import_Visibility_Invalid.sysml.xt`:25 | `extraneous input '}' expecting EOF` | No diagnostic at the brace; the nearest is the direct bare-import error at model line 24. | Import visibility is mandatory in the SysML package-import production (SysML v2 7.5.3 and 8.2.2.5.1). The pilot's brace error is an unspecified recovery cascade after the same bare import OpenSysML rejects directly. | **adjudicated divergence** | parser recovery (wave 12E) |
 | `TransitionUsage_invalid.sysml.xt`:60 | `Must be a Boolean expression.` | No diagnostic there; the nearest is `A parallel state cannot have successions or transitions.` at model line 46. | A transition guard must be a Boolean-valued expression of multiplicity 1 (SysML v2 7.18.1, 7.18.3 and 8.3.18.8 `validateTransitionFeatureMembershipGuardExpression`). OpenSysML implements the rule and emits it in isolation, but the earlier name-resolution-tier error prevents the document-scoped type pass from running. | **adjudicated divergence** | validation-registry tier gating (waves 12A/12D) |
 
+Step 3 closes the former `AssignmentActionUsage_invalid.sysml.xt:44` row with an element-scoped
+constraint pass implementing SysML v2 §8.3.17.5
+`referent.featureTarget.mayTimeVary`; it moves from `elsewhere-in-file` to word-for-word agreement.
 This corrects one detail in the wave 12D narrative without changing its adjudication: the three
 `non` rows are suppressed by document-level tier gating, not by the parser's local recovery. Their
 underlying subsetting rule is present. The five malformed-chain rows remain parser-recovery
-divergences, and the assignment-referent row is the only newly identified implementation obligation.
+divergences.
 
 ---
 

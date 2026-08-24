@@ -149,7 +149,7 @@ func namedEnds(end *symbols.Symbol, general []*symbols.Symbol) []*symbols.Symbol
 		}
 		name := qn.Parts[len(qn.Parts)-1].Text
 		for _, candidate := range general {
-			if candidate != nil && candidate.Name == name {
+			if candidate != nil && leafName(candidate.Name) == name {
 				out = append(out, candidate)
 			}
 		}
@@ -355,9 +355,9 @@ func (m *Model) ConnectorEndAttachments(sym *symbols.Symbol) []ConnectorEndAttac
 		att := ConnectorEndAttachment{Attachment: end.AttachedTarget(), End: end}
 		switch {
 		case i < len(owned) && owned[i] != nil:
-			att.Name, att.EndFeature = owned[i].Name, owned[i]
+			att.Name, att.EndFeature = leafName(owned[i].Name), owned[i]
 		case i < len(general) && general[i] != nil:
-			att.Name, att.EndFeature = general[i].Name, general[i]
+			att.Name, att.EndFeature = leafName(general[i].Name), general[i]
 		case len(usage.ConnectorEnds) == 2:
 			att.Name = binaryConnectorEndNames[i]
 		}

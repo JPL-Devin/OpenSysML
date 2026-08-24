@@ -274,8 +274,10 @@ func TestReservedKeywordNameWarning(t *testing.T) {
 	ws := NewWorkspace()
 	uri := "file:///kwwarn.sysml"
 	ws.Open(uri, []byte(`package P {
-		attribute x = 1;
-		action flow { assign x := zzz; }
+		part p {
+			attribute x = 1;
+			action flow { assign x := zzz; }
+		}
 	}`), 1)
 	defer ws.Close(uri)
 
