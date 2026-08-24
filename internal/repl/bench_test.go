@@ -70,6 +70,16 @@ func syntheticModel(parts int) string {
 	return b.String()
 }
 
+func warningModel(parts int) string {
+	var b strings.Builder
+	b.WriteString("package BenchWarnings {\n")
+	for i := 0; i < parts; i++ {
+		fmt.Fprintf(&b, "    attribute flag%d = 1 == \"one\";\n", i)
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
 // loadModel loads src into a fresh session, failing if it does not analyse
 // cleanly, since an erroring model skips the later passes.
 func loadModel(tb testing.TB, src string) *Session {
@@ -170,4 +180,35 @@ func BenchmarkInstantiate(b *testing.B) {
 			b.Fatal(err)
 		}
 	})
+}
+
+// BenchmarkDiagnostics measures rendering and locating diagnostics across a
+// warning-emitting model whose size grows with the existing benchmark sizes.
+func BenchmarkDiagnostics(b *testing.B) {
+	for _, parts := range modelSizes {
+		src := warningModel(parts)
+		elements := parts * benchElementsPerPart
+		b.Run(fmt.Sprintf("elements=%d", elements), func(b *testing.B) {
+			sess := NewSession()
+			sess.Submit(src)
+			diagnostics := len(sess.Diagnostics())
+			if diagnostics == 0 {
+				b.Fatal("warning model produced no diagnostics")
+			}
+
+			var start, end runtime.MemStats
+			runtime.ReadMemStats(&start)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				sess.DiagnosticLines()
+				sess.LocatedDiagnostics()
+			}
+			b.StopTimer()
+			runtime.ReadMemStats(&end)
+
+			allocated := (end.TotalAlloc - start.TotalAlloc) / uint64(b.N)
+			b.ReportMetric(float64(allocated)/float64(2*diagnostics), "B/diagnostic")
+			runtime.KeepAlive(sess)
+		})
+	}
 }
