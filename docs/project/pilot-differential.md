@@ -2009,8 +2009,8 @@ landed in #403 and `kerml-examples` carries no syntax diagnostic at all, moving 
 fully agreeing with 15 diagnostics of ours — against `pilot-examples` at 76 of 98 and
 `pilot-validation` at 52 of 56. One of the twelve is closed in the parser and open downstream,
 in a package #403 did not own: **F93** (3, the element-filter false positives in `resolve/`);
-F90's downstream half was closed by #409. F93, F101–F103 and the SysML row F67 are the open
-follow-ups.
+F90's downstream half was closed by #409. F93, F101–F103 and the SysML row F67 were the open
+follow-ups then; each is closed above.
 
 What the numbers support today changed with this round: the KerML notation the reference's own
 corpus uses now parses in full, so the parsing claim is no longer SysML-only. It remains a claim
