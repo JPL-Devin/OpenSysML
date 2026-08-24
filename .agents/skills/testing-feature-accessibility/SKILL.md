@@ -92,9 +92,12 @@ the *enclosing definition's* feature — `part def P { attribute n = 1; calc def
 the same shape with `constraint def` or a `state def` transition guard. The pilot reports; OpenSysML
 has been silent on all three. Minimal probes reproduce it in three lines, so include them.
 
-**Intentional, do not report as a bug:** element-filter expressions (`filter …;`,
-`import P::*[@T]`) are not accessibility-checked, because filter references are candidate-relative
-and checking them false-positived on `kerml-examples/Simple Tests/Filtering.kerml`.
+Element-filter expressions (`filter …;`, `import P::*[@T]`) are accessibility-checked with the
+candidate element as the featuring context; the referent is accessible when its declaration comes
+from library content. A filter fixture must use a metaclass or `metadata def` feature
+(`metaclass M { var feature a : Boolean[1]; }`, `metadata def Safety { attribute isMandatory : Boolean; }`):
+a plain `part def` attribute or any dot chain in a filter is masked by the type tier's
+`Must be model-level evaluable` and can silently look like a pass.
 
 ## Fixture shapes worth keeping
 
