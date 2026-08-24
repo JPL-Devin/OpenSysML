@@ -71,7 +71,7 @@ Measured on this branch with fresh caches:
 
 | Oracle | As published | With the errata applied |
 |---|---|---|
-| `pilot-diff` | 353 files, 321 fully agreeing; 32 agreed, 92 only ours, 66 only the pilot's | 353 files, **322** fully agreeing; 32 agreed, **91** only ours, 66 only the pilot's |
+| `pilot-diff` | 353 files, 324 fully agreeing; 32 agreed, 83 only ours, 66 only the pilot's | 353 files, **325** fully agreeing; 32 agreed, **82** only ours, 66 only the pilot's |
 | `pilot-xpect` | 428 `.xt` files, 1261 assertions, 1323 rows, 1293 agree, 30 disagree | identical — no declared correction lies under `build/pilot-xpect-corpus` |
 | `pilot-reject` | 120 cases: 116 both reject, 4 only the pilot rejects | identical — no declared correction lies under `cmd/pilot-reject/testdata/negative` |
 
