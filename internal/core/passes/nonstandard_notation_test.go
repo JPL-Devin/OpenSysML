@@ -294,6 +294,8 @@ func TestNamedFinalNodeAndTwoEndedThenAreExtensions(t *testing.T) {
 	wantNotation(t, "a.sysml", "action def A { done end; }", CodeNonstandardNotation, "`done <name>;`")
 	wantNotation(t, "a.sysml", "action def A { action a; action b; then a b; }",
 		CodeNonstandardNotation, "`then <source> <target>;`")
+	wantNotation(t, "a.sysml", "state def S { state a; state b; a then b; }",
+		CodeNonstandardNotation, "`<source> then <target>;`")
 	wantSilent(t, "a.sysml", "action def A { action a; action b; first a then b; }")
 	wantSilent(t, "a.sysml", "action def A { action a; first a; then done; }")
 }

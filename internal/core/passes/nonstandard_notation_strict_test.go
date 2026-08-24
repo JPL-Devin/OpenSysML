@@ -122,6 +122,7 @@ func TestSliceFindingsFollowTheMode(t *testing.T) {
 		{"binding", "a.sysml", "part def P { attribute a; attribute b; bind a = b * 2; }", CodeNonstandardNotation},
 		{"final_node", "a.sysml", "action def A { done end; }", CodeNonstandardNotation},
 		{"succession_edge", "a.sysml", "action def A { action a; action b; then a b; }", CodeNonstandardNotation},
+		{"source_then_target", "a.sysml", "state def S { state a; state b; a then b; }", CodeNonstandardNotation},
 		{"one_ended_first", "a.sysml", "part def P { part a; first a; }", CodeNonstandardNotation},
 		{"requirement_constraint", "a.sysml", "analysis def An { attribute size; require constraint { size >= 1 } }", CodeNonstandardNotation},
 		{"sysml_in_kerml", "a.kerml", "package P { part def Wheel; }", CodeSysMLNotation},

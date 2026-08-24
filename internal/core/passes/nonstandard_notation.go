@@ -131,6 +131,7 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.sysmlDeclaration(n, n.Keyword)
 			w.keywordAsName(n.Ident)
 			w.binding(n)
+			w.successionUsage(n)
 			w.requirementConstraint(n)
 			w.walkDeclaration(n.Members, n)
 		case *ast.Import:
@@ -334,6 +335,20 @@ func (w *notationWalker) successionEdge(n *ast.SuccessionEdge) {
 		return
 	}
 	w.extension(keywordSpan(n, "then"), "`then <source> <target>;`",
+		"a succession names both ends as `first <source> then <target>`")
+}
+
+// successionUsage reports the state-body shorthand whose source begins the
+// usage; a standard anonymous succession begins with `first`.
+func (w *notationWalker) successionUsage(n *ast.Usage) {
+	if n.Kind != ast.UsageSuccession || n.Keyword != "" || len(n.ConnectorEnds) != 2 {
+		return
+	}
+	first := n.ConnectorEnds[0]
+	if first == nil || first.Reference == nil || first.Reference.Span().Offset != n.Span().Offset {
+		return
+	}
+	w.extension(first.Reference.Span(), "`<source> then <target>;`",
 		"a succession names both ends as `first <source> then <target>`")
 }
 
