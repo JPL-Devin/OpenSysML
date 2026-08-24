@@ -108,6 +108,28 @@ grep -rn "targetMember" internal/core/export/testdata/ internal/core/export/*_te
 
 If it is still absent, say so — the predicate is decoder-only and its encoder branch is untested.
 
+## The `variant` / `include` prefixes (formerly normalized away)
+
+Since the parser started recording them, `variant part a : A;` and `include U;` round-trip. The
+carriers to strip for their negative controls are **`sysml:` predicates, not `sysx:` ones**:
+
+- `variant` rides on `sysml:isVariant "true"` — stripping it silently degrades the head to
+  `part a : A;` (exit 0, judge by text).
+- `include U;` rides on `sysml:includes <target>` — stripping it degrades the member to a bare
+  `;` in the owner's body (exit 0). Stripping `sysx:isKindImplicit` alone does *not* degrade it.
+
+A minimal fixture that validates clean:
+
+```sysml
+package RT2 {
+  part def A;
+  variation part def VP { variant part a : A; }
+  use case def UD;
+  use case U : UD;
+  part def Sys { include U; }
+}
+```
+
 ## Recording
 
 Shell-only; no GUI. No recording needed.
