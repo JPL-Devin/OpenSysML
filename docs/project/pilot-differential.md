@@ -2141,10 +2141,10 @@ The seven rows that became agreement are all on `testdata`, and only one of them
 | File | Line | Ours | The pilot's | Reading |
 |---|---|---|---|---|
 | `parse/expressions.sysml` | 2 | `Must have a Boolean result` | `Must have a Boolean result` | agreed, same rule |
-| `parse/expressions.sysml` | 3, 5, 6 | `Must be model-level evaluable` | `Must have a Boolean result` | agreed by category; **open wording divergence** — both reject the expression, on different grounds |
+| `parse/expressions.sysml` | 3, 5, 6 | `Must have a Boolean result` | `Must have a Boolean result` | agreed, same rule |
 | `parse/expressions.sysml` | 4 | `Must be model-level evaluable` | `Must invoke a behavior or a behavioral feature` | agreed by category; **open wording divergence** |
-| `passes/errors.sysml` | 3 | `Must be model-level evaluable` | `Must have a Boolean result` | agreed by category; **open wording divergence** |
-| `resolve/errors.sysml` | 3 | `Must be model-level evaluable` | `Must have a Boolean result` | agreed by category; **open wording divergence** |
+| `passes/errors.sysml` | 3 | `Must have a Boolean result` | `Must have a Boolean result` | agreed, same rule |
+| `resolve/errors.sysml` | 3 | `Must have a Boolean result` | `Must have a Boolean result` | agreed, same rule |
 
 Those six are counted as agreement by the harness's `(line, severity, category)` matching, not as
 wording-only agreement in the strict sense (same rule, same element, same offset). They are listed

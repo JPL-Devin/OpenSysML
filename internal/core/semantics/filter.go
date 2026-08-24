@@ -814,6 +814,9 @@ func (m *Model) CheckElementFilter(f symbols.ElementFilter) []FilterProblem {
 	if pred == nil {
 		return []FilterProblem{{Reason: "the condition is empty", Span: f.Span}}
 	}
+	if pred.Op == symbols.FilterUnsupported && failsFilterBooleanRule(f.Expr) {
+		return []FilterProblem{{NotBoolean: true, Reason: "an unsupported expression", Span: f.Span}}
+	}
 	// The constraints are on the membership stating the condition (KerML 8.2.4),
 	// so each fault is reported there, once.
 	var out []FilterProblem
@@ -827,6 +830,25 @@ func (m *Model) CheckElementFilter(f symbols.ElementFilter) []FilterProblem {
 		out = append(out, p)
 	}
 	return out
+}
+
+// The pilot reports an unsupported top-level value against the Boolean rule.
+// Forms with a Boolean result or a distinct constraint keep evaluability.
+func failsFilterBooleanRule(expr ast.Node) bool {
+	switch e := expr.(type) {
+	case *ast.InvocationExpr, *ast.IndexExpr:
+		return false
+	case *ast.OperatorExpr:
+		switch e.Operator {
+		case ast.OpAt, ast.OpMetaAt, ast.OpIsType, ast.OpHasType,
+			ast.OpNot, ast.OpBitNot, ast.OpAnd, ast.OpConditionalAnd,
+			ast.OpOr, ast.OpConditionalOr, ast.OpXor, ast.OpImplies,
+			ast.OpEq, ast.OpNeq, ast.OpEqEqEq, ast.OpNeqEqEq,
+			ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe:
+			return false
+		}
+	}
+	return true
 }
 
 // appendFilterProblems collects the faults of a compiled condition. wantBool
