@@ -737,8 +737,7 @@ func declaredNameIn(sym *symbols.Symbol, decl ast.Node) string {
 }
 
 // generalsOf returns the symbols sym inherits features from: the resolved
-// specialization, typing and featuring targets of a live declaration, or the
-// edges a symbol restored from the library cache carries as persisted FQNs.
+// specialization, typing and featuring targets of its declaration.
 func (r *Resolver) generalsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	var rels []*ast.Relationship
 	switch decl := sym.Decl.(type) {
@@ -746,28 +745,6 @@ func (r *Resolver) generalsOf(sym *symbols.Symbol) []*symbols.Symbol {
 		rels = decl.Relationships
 	case *ast.Usage:
 		rels = decl.Relationships
-	case nil:
-		if r.idx == nil {
-			return nil
-		}
-		var out []*symbols.Symbol
-		for _, fqn := range sym.SuperFQNs {
-			for _, target := range r.idx.LookupQualified(fqn) {
-				if resolved, ok := r.ResolveAliasTarget(target); ok {
-					out = append(out, resolved)
-					break
-				}
-			}
-		}
-		for _, fqn := range sym.FeaturedByFQNs {
-			for _, target := range r.idx.LookupQualified(fqn) {
-				if resolved, ok := r.ResolveAliasTarget(target); ok {
-					out = append(out, resolved)
-					break
-				}
-			}
-		}
-		return out
 	default:
 		return nil
 	}
@@ -1226,7 +1203,7 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		}
 		// If usage has inline members (scope), return it to access those members
 		// Otherwise follow type for inherited members
-		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage {
+		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage && !r.IsBaseThat(sym) {
 			if sym.Scope != nil &&
 				(len(sym.Scope.Members()) > 0 || len(r.importsOf(sym.Scope.Node())) > 0) {
 				// Usage has inline members, return usage symbol
@@ -1274,10 +1251,7 @@ const baseThatFQN = "Base::things::that"
 // written. It is nil for any other operand, and where no usage encloses the
 // expression — `that` is typed Anything, which has no members of its own.
 func (r *Resolver) featuringOf(scope *symbols.Scope, operand *symbols.Symbol) *symbols.Symbol {
-	if operand == nil {
-		return nil
-	}
-	if operand.Name != baseThatFQN && r.registeredFQN(operand) != baseThatFQN {
+	if !r.IsBaseThat(operand) {
 		return nil
 	}
 	for s := scope; s != nil; s = s.Parent() {
@@ -1291,6 +1265,16 @@ func (r *Resolver) featuringOf(scope *symbols.Scope, operand *symbols.Symbol) *s
 		return nil
 	}
 	return nil
+}
+
+// IsBaseThat reports whether sym is the implicit `that` feature of the base
+// usage: it names the object featuring a usage's values, so it is reachable in
+// any usage body and its declared type Anything is not what a chain reads.
+func (r *Resolver) IsBaseThat(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	return sym.Name == baseThatFQN || r.registeredFQN(sym) == baseThatFQN
 }
 
 // getUsageType returns the type symbol of a usage by resolving its typing relationship.

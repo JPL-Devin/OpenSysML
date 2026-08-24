@@ -300,8 +300,8 @@ func (m *Model) dimensionOf(sym *symbols.Symbol) (UnitTerm, bool) {
 
 // deriveDimension computes the dimension dimensionOf memoizes.
 func (m *Model) deriveDimension(sym *symbols.Symbol) (UnitTerm, bool) {
-	if sym.Dimension != nil {
-		return m.persistedDimension(sym)
+	if sym.Facts != nil && sym.Facts.Dimension != nil {
+		return m.recordedDimension(sym.Facts.Dimension)
 	}
 	if dimOne := m.libSymbol(fqnDimensionOneUnit); dimOne != nil && m.Conforms(sym, dimOne) {
 		return UnitTerm{Scale: UnitScale(1)}, true
@@ -312,11 +312,11 @@ func (m *Model) deriveDimension(sym *symbols.Symbol) (UnitTerm, bool) {
 	return m.inheritedDimension(sym)
 }
 
-// persistedDimension rebuilds the dimension persisted with a cached library
-// symbol, resolving each base quantity by qualified name.
-func (m *Model) persistedDimension(sym *symbols.Symbol) (UnitTerm, bool) {
+// recordedDimension rebuilds a dimension recorded for a library symbol,
+// resolving each base quantity by qualified name.
+func (m *Model) recordedDimension(facts *symbols.DimensionFacts) (UnitTerm, bool) {
 	term := UnitTerm{Scale: UnitScale(1)}
-	for _, factor := range sym.Dimension.Factors {
+	for _, factor := range facts.Factors {
 		quantity := m.libSymbol(factor.FQN)
 		if quantity == nil {
 			return UnitTerm{}, false
@@ -422,9 +422,9 @@ func sequenceElements(node ast.Node) []ast.Node {
 	return []ast.Node{node}
 }
 
-// DimensionFactsOf returns the dimension to persist with a symbol whose
-// declaration a cache record drops, or nil when it is undetermined or its base
-// quantities have no qualified name to restore them by.
+// DimensionFactsOf returns the dimension to record for a library symbol, or nil
+// when it is undetermined or its base quantities have no qualified name to
+// restore them by.
 func (m *Model) DimensionFactsOf(sym *symbols.Symbol, idx *symbols.Index) *symbols.DimensionFacts {
 	term, ok := m.dimensionOf(sym)
 	if !ok {

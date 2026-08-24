@@ -361,7 +361,7 @@ func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryF
 // function library declaration this runtime implements.
 func (ctx *Context) libraryFunctionFor(sym *symbols.Symbol) (*libraryFunction, bool) {
 	// A declaration that is not a function is not one of these, whatever it is
-	// named. A cached library symbol carries a kind and no Decl.
+	// named.
 	if sym == nil || !isCalcSymbol(sym) {
 		return nil, false
 	}
@@ -370,8 +370,8 @@ func (ctx *Context) libraryFunctionFor(sym *symbols.Symbol) (*libraryFunction, b
 		return nil, false
 	}
 	// A library declaration is answered by its built-in even where it carries a
-	// body: a warm library cache restores symbols without their AST, so
-	// evaluating the body would make the result depend on the cache.
+	// body: the built-in is the implementation of that normative function, and the
+	// body it is declared with is a specification of it rather than one.
 	if ctx.libraryDeclared(sym) {
 		return fn, true
 	}

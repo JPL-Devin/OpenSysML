@@ -121,12 +121,11 @@ func (m *Model) EvalElementFilter(f symbols.ElementFilter, cand *symbols.Symbol)
 }
 
 // CompileElementFilter returns the condition compiled to a predicate over a
-// candidate element: for a parsed condition by resolving the elements it names
-// against the scope it was written in, and for a restored library by taking the
-// compiled predicate its record carried. Returns nil for an empty condition.
+// candidate element, by resolving the elements it names against the scope it was
+// written in. Returns nil for an empty condition.
 func (m *Model) CompileElementFilter(f symbols.ElementFilter) *symbols.FilterPredicate {
 	if f.Expr == nil {
-		return f.Pred
+		return nil
 	}
 	if pred, ok := m.filterPreds[f.Expr]; ok {
 		return pred
@@ -720,13 +719,9 @@ func (m *Model) metaclassConforms(cand *symbols.Symbol, typeFQN string) bool {
 
 // annotationConforms reports whether an annotation's metadata type conforms to
 // the type a condition names. The types are compared as symbols where both are
-// indexed, and by qualified name otherwise, which is what a restored library's
-// annotation — recorded as the name of its type — allows.
+// indexed, and by qualified name otherwise.
 func (m *Model) annotationConforms(a annotation, typ *symbols.Symbol, typeFQN string) bool {
 	if a.typ != nil && typ != nil && m.Conforms(a.typ, typ) {
-		return true
-	}
-	if a.typFQN != "" && a.typFQN == typeFQN {
 		return true
 	}
 	return a.typ != nil && m.conformsByName(a.typ, typeFQN)

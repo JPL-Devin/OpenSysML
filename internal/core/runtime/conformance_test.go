@@ -360,9 +360,9 @@ func loadLibraries(t *testing.T, idx *symbols.Index) {
 	}
 }
 
-// A loaded library is restored from cache, the shape that knows a symbol's
-// qualified name — a parsed one reports a shadowed unit as `metre`, not `SI::metre`.
-func TestLoadLibrariesRestoresCachedRecords(t *testing.T) {
+// A loaded library carries its parsed declaration on every path, with the cache
+// restoring only the facts derived from it.
+func TestLoadLibrariesKeepsDeclarationsAndRestoresFacts(t *testing.T) {
 	idx := symbols.NewIndex()
 	loadLibraries(t, idx)
 
@@ -370,11 +370,15 @@ func TestLoadLibrariesRestoresCachedRecords(t *testing.T) {
 	if len(matches) != 1 {
 		t.Fatalf("SI::metre matched %d symbols, want 1", len(matches))
 	}
-	if decl := matches[0].Decl; decl != nil {
-		t.Errorf("SI::metre carries the declaration %T, want a record restored from cache", decl)
+	sym := matches[0]
+	if sym.Decl == nil {
+		t.Error("SI::metre carries no declaration, want the one it was parsed from")
 	}
-	if name := matches[0].Name; name != "SI::metre" {
-		t.Errorf("SI::metre is named %q, want its qualified name", name)
+	if sym.Name != "metre" {
+		t.Errorf("SI::metre is named %q, want its declared name", sym.Name)
+	}
+	if sym.Facts == nil || sym.Facts.Unit == nil {
+		t.Errorf("SI::metre has facts %+v, want its unit facts restored", sym.Facts)
 	}
 }
 

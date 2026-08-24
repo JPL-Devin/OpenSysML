@@ -13,7 +13,7 @@ import (
 )
 
 // w5gLibrary exercises the shapes the inherited-feature walk must follow
-// through restored symbols: a multi-hop specialization chain, a specialization
+// through library symbols: a multi-hop specialization chain, a specialization
 // cycle, and a `featured by` edge.
 const w5gLibrary = `standard library package Rigs {
 	classifier Base {
@@ -54,7 +54,7 @@ func resolveW5GUser(t *testing.T, idx *symbols.Index, src string) []string {
 }
 
 // w5gLibraryIndexes loads w5gLibrary twice against one cache: the first load
-// parses and reduces it, the second restores the persisted record.
+// derives its facts, the second restores the persisted ones.
 func w5gLibraryIndexes(t *testing.T) (cold, warm *symbols.Index) {
 	t.Helper()
 	dir, cacheDir := t.TempDir(), t.TempDir()
@@ -64,8 +64,8 @@ func w5gLibraryIndexes(t *testing.T) (cold, warm *symbols.Index) {
 	cold = loadLibrary(t, dir, cacheDir)
 	warm = loadLibrary(t, dir, cacheDir)
 	for path, idx := range map[string]*symbols.Index{"cold": cold, "warm": warm} {
-		if sym := libSymbol(t, idx, "Rigs::Rig"); sym.Decl != nil {
-			t.Fatalf("the %s load leaves the library its declarations", path)
+		if sym := libSymbol(t, idx, "Rigs::Rig"); sym.Decl == nil {
+			t.Fatalf("the %s load leaves the library without its declarations", path)
 		}
 	}
 	return cold, warm

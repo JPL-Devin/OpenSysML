@@ -229,29 +229,8 @@ func TestFilterMemoization(t *testing.T) {
 	}
 }
 
-// The compiled form of a condition is what a library restored from an index
-// cache carries, and it decides candidates the same way as the parsed condition.
-func TestFilterCompiledPredicateDecidesAlone(t *testing.T) {
-	m, f, root := filterOf(t, metadataModel, "@Safety and Safety::isMandatory == true")
-	compiled := symbols.ElementFilter{Pred: m.CompileElementFilter(f), Span: f.Span}
-	for _, tc := range []struct {
-		name  string
-		match bool
-	}{{"seatBelt", true}, {"airBag", false}, {"keylessEntry", false}} {
-		cand := sym(t, root, tc.name)
-		fromExpr, errExpr := m.EvalElementFilter(f, cand)
-		fromPred, errPred := m.EvalElementFilter(compiled, cand)
-		if (errExpr == nil) != (errPred == nil) || fromExpr != fromPred {
-			t.Fatalf("%s: parsed condition = %v/%v, compiled = %v/%v", tc.name, fromExpr, errExpr, fromPred, errPred)
-		}
-		if errExpr == nil && fromExpr != tc.match {
-			t.Fatalf("%s: verdict %v, want %v", tc.name, fromExpr, tc.match)
-		}
-	}
-}
-
 // A declared `filter` member compiles to a predicate over its candidate, which
-// is the route the validation pass and the record writer take.
+// is the route the validation pass takes.
 func TestCompilingADeclaredFilterMember(t *testing.T) {
 	m, root := buildModel(t, metadataModel+"\npackage P { filter @Safety; }")
 	pkg := sym(t, root, "P")

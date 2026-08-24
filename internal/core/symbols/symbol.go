@@ -172,8 +172,7 @@ func (k SymbolKind) String() string {
 }
 
 // UnitFacts is a measurement unit reduced to a scale factor over base units,
-// each named by its qualified name. It is what a cached library symbol carries
-// in place of the declaration the reduction was computed from.
+// each named by its qualified name, in the form a library index cache carries.
 type UnitFacts struct {
 	ScaleNum float64
 	ScaleDen float64
@@ -191,9 +190,9 @@ type UnitFactorFacts struct {
 	Exponent float64
 }
 
-// DimensionFacts is a quantity dimension as a cached library symbol carries it:
-// the base quantities it is a product of powers of, each named by its qualified
-// name. Empty factors are the dimension of a count or a ratio of like quantities.
+// DimensionFacts is a quantity dimension in the form a library index cache
+// carries: the base quantities it is a product of powers of, each named by its
+// qualified name. No factors is the dimension of a count or of a like ratio.
 type DimensionFacts struct {
 	Factors []DimensionFactorFacts
 }
@@ -203,21 +202,6 @@ type DimensionFacts struct {
 type DimensionFactorFacts struct {
 	FQN      string
 	Exponent float64
-}
-
-// BehaviorFacts is a behavior or step as a cached library symbol carries it:
-// its parameters in declaration order, which implicit parameter redefinition
-// matches by position where the declaration is gone.
-type BehaviorFacts struct {
-	Params []ParamFacts
-}
-
-// ParamFacts is one parameter of a cached behavior or step: the qualified name
-// of its symbol, its direction, and whether it is the result parameter.
-type ParamFacts struct {
-	FQN       string
-	Direction ast.FeatureDirection
-	IsResult  bool
 }
 
 // Symbol describes one declared name. The same declaration may be reachable
@@ -240,60 +224,26 @@ type Symbol struct {
 
 	DocName string // name of the document that declares this symbol (stamped after Build)
 
-	// SuperFQNs are the fully-qualified names of the specialization targets
-	// (specializes/subsets/redefines), populated for cached library symbols
-	// where Decl=nil. Empty for live-parsed symbols, which use Decl instead.
-	SuperFQNs []string
-
-	// FeaturedByFQNs are the fully-qualified names of the `featured by`
-	// targets, populated for cached library symbols where Decl=nil.
-	FeaturedByFQNs []string
-
-	// Behavior carries the parameter list of a behavior or step, populated for
-	// cached library symbols where Decl=nil. Nil for live-parsed symbols.
-	Behavior *BehaviorFacts
-
-	// AliasTargetFQN is the raw qualified name text of the alias target
-	// ("alias X for Y" → "Y"), populated for cached stdlib aliases where Decl=nil.
-	// Empty for non-aliases or live-parsed aliases (which use Decl instead).
-	AliasTargetFQN string
+	// Facts is the derived analysis installed for a library symbol, a memo of
+	// work its declaration would otherwise repeat. Nil for everything else.
+	Facts *LibraryFacts
 
 	// ShortName is the short name from Identification (e.g., "kg" for "kilogram").
-	// Populated for cached symbols where Decl=nil. Empty if no short name.
+	// Empty if the declaration states none.
 	ShortName string
 
 	// EffectiveName reports that Name was taken from the feature this
 	// declaration references rather than declared (KerML Feature::effectiveName).
 	EffectiveName bool
 
-	// Unit is the reduced measurement-unit form persisted for a cached library
-	// symbol, whose declaration is absent: without it the conversion a unit
-	// declares could not be read back. Nil for a symbol that is not a
-	// measurement unit, and for live-parsed symbols, which use Decl instead.
-	Unit *UnitFacts
-
-	// Dimension is the quantity dimension persisted for a cached library symbol,
-	// whose declaration is absent: the power factors a unit definition states are
-	// declared members with bound values, which the declaration takes with it.
-	// Nil for a symbol whose dimension is not determined, and for live-parsed
-	// symbols, which are read from Decl instead.
-	Dimension *DimensionFacts
-
 	// NamingTarget is the reference that named this symbol when EffectiveName
 	// is set: the target of its reference subsetting or redefinition. Resolving
 	// that reference must not see the name it gave away, or it would resolve to
 	// the feature that borrowed it (KerML 7.3.4.5).
 	NamingTarget ast.Node
-
-	// Annotations are the metadata annotations of a cached library symbol,
-	// whose declaration is absent: an element filter classifies a candidate by
-	// the metadata annotating it, so a restored symbol has to carry what its
-	// declaration would have said. Empty for live-parsed symbols, which are read
-	// from Decl instead.
-	Annotations []AnnotationFacts
 }
 
-// AnnotationFacts is one metadata annotation of a cached library symbol: the
+// AnnotationFacts is one metadata annotation reduced to names and constants: the
 // fully-qualified name of the metadata type annotating it, and the values the
 // annotation body binds its features to, as written.
 type AnnotationFacts struct {

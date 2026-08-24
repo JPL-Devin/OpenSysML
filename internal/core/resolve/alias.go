@@ -74,13 +74,9 @@ func (r *Resolver) resolveAliasTarget(sym *symbols.Symbol) (*symbols.Symbol, boo
 	return nil, false
 }
 
-// aliasStep resolves one alias's target: a cached symbol carries its target as
-// text, a live-parsed one as a qualified name resolved from its own scope.
+// aliasStep resolves one alias's target, named by a qualified name resolved from
+// the alias's own scope.
 func (r *Resolver) aliasStep(sym *symbols.Symbol) (*symbols.Symbol, bool) {
-	if sym.AliasTargetFQN != "" {
-		next := r.resolveCachedAliasTarget(sym.AliasTargetFQN, sym)
-		return next, next != nil
-	}
 	al, ok := sym.Decl.(*ast.Alias)
 	if !ok || al.For == nil {
 		return nil, false
@@ -94,53 +90,4 @@ func (r *Resolver) aliasStep(sym *symbols.Symbol) (*symbols.Symbol, bool) {
 // child scope a declaration owns and is nil for leaves.
 func aliasScope(sym *symbols.Symbol) *symbols.Scope {
 	return sym.OwnerScope
-}
-
-// resolveCachedAliasTarget resolves an alias target from its raw qualified name
-// text. A cached symbol carries no scope, so the lookup goes through the index:
-// first as an absolute FQN, then relative to the namespace that declares the
-// alias.
-//
-// Both lookups are made *from* that namespace (LookupQualifiedFrom), which is
-// what lets an alias reach a target its namespace only sees through a private
-// wildcard import — `ISQThermodynamics::TemperatureValue` aliases
-// `ThermodynamicTemperatureValue`, which ISQThermodynamics holds only by way of
-// its `private import ISQBase::*`. That name is a member of the namespace but
-// not a visible one (KerML 8.2.3.3), so it is unreachable by a qualified
-// reference from elsewhere while remaining reachable from within, which is where
-// an alias of it is declared.
-func (r *Resolver) resolveCachedAliasTarget(targetText string, aliasSym *symbols.Symbol) *symbols.Symbol {
-	namespaceFQN := parentPackageFQN(aliasSym.Name)
-
-	// Absolute reference.
-	if candidates := r.idx.LookupQualifiedFrom(targetText, namespaceFQN); len(candidates) > 0 {
-		return candidates[0]
-	}
-
-	// Relative to the declaring namespace: an alias at "ISQ::TimeValue" naming
-	// "DurationValue" means "ISQ::DurationValue".
-	if namespaceFQN != "" {
-		candidateFQN := namespaceFQN + "::" + targetText
-		if candidates := r.idx.LookupQualifiedFrom(candidateFQN, namespaceFQN); len(candidates) > 0 {
-			return candidates[0]
-		}
-	}
-
-	return nil
-}
-
-// parentPackageFQN extracts parent package FQN from symbol FQN.
-// "A::B::C" → "A::B", "A" → "", "" → ""
-func parentPackageFQN(fqn string) string {
-	lastIdx := -1
-	for i := len(fqn) - 1; i >= 0; i-- {
-		if i > 0 && fqn[i-1:i+1] == "::" {
-			lastIdx = i - 1
-			break
-		}
-	}
-	if lastIdx < 0 {
-		return ""
-	}
-	return fqn[:lastIdx]
 }

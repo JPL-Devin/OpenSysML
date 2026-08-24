@@ -31,16 +31,19 @@ func w9cLibraryDiags(t *testing.T, src string, warm bool) []Diagnostic {
 			t.Fatalf("warm library: %v", err)
 		}
 	}
-	if err := libs.NewLoader(libSrc, cache).LoadAll(idx); err != nil {
+	ld := libs.NewLoader(libSrc, cache)
+	if err := ld.LoadAll(idx); err != nil {
 		t.Fatalf("load the library: %v", err)
 	}
-	if warm {
-		// A restored symbol is AST-less, so a declaration here would mean the
-		// library was parsed again and the warm run proved nothing.
-		for _, sym := range idx.LookupQualified("Actions::Action") {
-			if sym.Decl != nil {
-				t.Fatal("warm run parsed the library instead of restoring records")
-			}
+	if warm && ld.Hits() == 0 {
+		// Facts derived again would make the warm run a second cold one, which
+		// proves nothing about what a cache hit restores.
+		t.Fatal("warm run derived the library facts instead of restoring them")
+	}
+	// Either path parses the library, so the diamond is read from declarations.
+	for _, sym := range idx.LookupQualified("Actions::Action") {
+		if sym.Decl == nil {
+			t.Fatalf("warm=%v: Actions::Action carries no declaration", warm)
 		}
 	}
 	root := parser.New(source.New("<t>.sysml", []byte(src))).ParseFile()

@@ -31,9 +31,6 @@ func behaviorLike(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
-	if sym.Decl == nil {
-		return sym.Behavior != nil // a cached behavior carries its parameter facts
-	}
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		switch d.Kind {
@@ -70,7 +67,7 @@ func declMembers(sym *symbols.Symbol) []ast.Node {
 
 // parameter is one owned parameter of a behavior or step: the symbol declared
 // for a directed feature in its body, plus its direction and whether it is the
-// result parameter. usage is nil for a parameter restored from the cache.
+// result parameter.
 type parameter struct {
 	sym       *symbols.Symbol
 	usage     *ast.Usage
@@ -99,7 +96,7 @@ func (m *Model) parametersOf(sym *symbols.Symbol) behaviorParameters {
 	// Guard against re-entrancy on cyclic specialization graphs.
 	m.params[sym] = behaviorParameters{}
 
-	owned := m.ownedParametersOf(sym)
+	owned := ownedParameters(sym)
 	out := behaviorParameters{positional: positionalParameters(owned), result: resultParameter(owned)}
 
 	// Only a single general behavior or step may leave parameters inherited;
@@ -215,44 +212,6 @@ func ownedParameters(sym *symbols.Symbol) []parameter {
 	return out
 }
 
-// ownedParametersOf returns the parameters owned by sym: read from its parsed
-// declaration, or from the parameter facts a cache-restored symbol carries.
-func (m *Model) ownedParametersOf(sym *symbols.Symbol) []parameter {
-	if sym == nil {
-		return nil
-	}
-	if sym.Decl == nil && sym.Behavior != nil {
-		idx := m.resolver.Index()
-		var out []parameter
-		for _, p := range sym.Behavior.Params {
-			for _, target := range idx.LookupQualified(p.FQN) {
-				out = append(out, parameter{sym: target, direction: p.Direction, isResult: p.IsResult})
-				break
-			}
-		}
-		return out
-	}
-	return ownedParameters(sym)
-}
-
-// BehaviorFactsOf reduces a behavior or step to its parameter list, so the
-// order and directions implicit parameter redefinition matches on survive
-// caching. Returns nil for symbols that are not behavior-like.
-func (m *Model) BehaviorFactsOf(sym *symbols.Symbol, idx *symbols.Index) *symbols.BehaviorFacts {
-	if !behaviorLike(sym) || sym.Decl == nil {
-		return nil
-	}
-	facts := &symbols.BehaviorFacts{}
-	for _, p := range ownedParameters(sym) {
-		fqn := idx.GetFQN(p.sym)
-		if fqn == "" {
-			continue
-		}
-		facts.Params = append(facts.Params, symbols.ParamFacts{FQN: fqn, Direction: p.direction, IsResult: p.isResult})
-	}
-	return facts
-}
-
 // unwrapUsage returns the usage a body member node declares, unwrapping the
 // membership wrapper the parser puts around visibility-carrying members.
 func unwrapUsage(member ast.Node) (*ast.Usage, bool) {
@@ -314,7 +273,7 @@ func (m *Model) implicitParameterTargets(sym *symbols.Symbol, matchDirection boo
 		return nil
 	}
 	position := -1
-	for i, p := range positionalParameters(m.ownedParametersOf(owner)) {
+	for i, p := range positionalParameters(ownedParameters(owner)) {
 		if p.sym == sym {
 			position = i
 			break

@@ -49,8 +49,8 @@ func TestExplicitSpecializationReplacesMetadataBase(t *testing.T) {
 		metadata def Derived :> Base;
 	}`
 	got := implicitBaseOf(t, src, "P", "Derived")
-	if len(got) != 1 || got[0] != "Base" {
-		t.Fatalf("supertypes of the derived metadata definition = %v, want [Base]", got)
+	if len(got) != 1 || got[0] != "P::Base" {
+		t.Fatalf("supertypes of the derived metadata definition = %v, want [P::Base]", got)
 	}
 }
 
@@ -86,8 +86,8 @@ func TestSemanticMetadataKeywordSubsetsBaseType(t *testing.T) {
 	}
 
 	got := implicitBaseOf(t, semanticMetadataSource, "P", "Car", "frontLeft")
-	if len(got) != 1 || got[0] != "wheels" {
-		t.Fatalf("supertypes of the annotated usage = %v, want [wheels]", got)
+	if len(got) != 1 || got[0] != "P::wheels" {
+		t.Fatalf("supertypes of the annotated usage = %v, want [P::wheels]", got)
 	}
 }
 
@@ -96,8 +96,8 @@ func TestSemanticMetadataKeywordSubsetsBaseType(t *testing.T) {
 // baseType subclassifies the definitions that usage is typed by.
 func TestSemanticMetadataKeywordSubclassifiesBaseTypeOfDefinition(t *testing.T) {
 	got := implicitBaseOf(t, semanticMetadataSource, "P", "SportsWheel")
-	if len(got) != 1 || got[0] != "Wheel" {
-		t.Fatalf("supertypes of the annotated definition = %v, want [Wheel]", got)
+	if len(got) != 1 || got[0] != "P::Wheel" {
+		t.Fatalf("supertypes of the annotated definition = %v, want [P::Wheel]", got)
 	}
 }
 

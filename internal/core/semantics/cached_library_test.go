@@ -13,8 +13,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// A library symbol has no declaration on either load path, so every rule it takes
-// part in must answer from its record alone.
+// A library symbol keeps its declaration on either load path, so every rule it
+// takes part in must answer the same whichever path loaded it.
 const semanticsLibrary = `standard library package Kit {
 	attribute def Mass;
 	metadata def Safety;
@@ -45,8 +45,8 @@ struct MyWheel specializes Wheel {
 }
 struct EndShot;`
 
-// Conformance follows the specialization graph, which a library holds as recorded
-// supertype names: it must answer the same cold and warm, and transitively.
+// Conformance follows the specialization graph, which a library load records as
+// supertype facts: it must answer the same cold and warm, and transitively.
 func TestConformanceOverALibraryIsTheSameColdAndWarm(t *testing.T) {
 	cold, warm := bothPaths(t)
 	for _, tc := range []struct {
@@ -77,8 +77,8 @@ func TestInheritedImplicitBaseIsTheSameColdAndWarm(t *testing.T) {
 
 	for path, lib := range map[string]library{"cold": cold, "warm": warm} {
 		myWheel := lib.symbol(t, "MyWheel")
-		if myWheel.Decl != nil {
-			t.Fatalf("the %s load leaves MyWheel a declaration", path)
+		if myWheel.Decl == nil {
+			t.Fatalf("the %s load leaves MyWheel without its declaration", path)
 		}
 		inherited, ok := lib.model.LookupContributedMember(myWheel, "endShot")
 		if !ok {
@@ -91,8 +91,8 @@ func TestInheritedImplicitBaseIsTheSameColdAndWarm(t *testing.T) {
 	}
 }
 
-// The members of a library type come from the index rather than from a scope,
-// including the inherited ones and the masking a closer declaration applies.
+// The members of a library type are the same on both paths, including the
+// inherited ones and the masking a closer declaration applies.
 func TestMembersOfALibraryTypeAreTheSameColdAndWarm(t *testing.T) {
 	cold, warm := bothPaths(t)
 	for _, tc := range []struct{ owner, member, want string }{
@@ -132,13 +132,13 @@ func TestContributedMembersOfALibraryTypeAreTheSameColdAndWarm(t *testing.T) {
 	}
 }
 
-// A library `filter` reaches the evaluator as a compiled predicate on both paths,
-// never as a parsed condition, and must classify the same either way.
+// A library `filter` reaches the evaluator as its parsed condition on both
+// paths, and must classify the same either way.
 func TestNamespaceFilterOverALibraryIsTheSameColdAndWarm(t *testing.T) {
 	cold, warm := bothPaths(t)
 	for path, lib := range map[string]library{"cold": cold, "warm": warm} {
-		if f := filterOn(t, lib, "Kit::Critical"); f.Pred == nil {
-			t.Errorf("the %s load does not carry the condition compiled", path)
+		if f := filterOn(t, lib, "Kit::Critical"); f.IsZero() {
+			t.Errorf("the %s load does not carry the condition", path)
 		}
 	}
 	for _, tc := range []struct {
@@ -158,8 +158,8 @@ func TestNamespaceFilterOverALibraryIsTheSameColdAndWarm(t *testing.T) {
 	}
 }
 
-// The metadata annotating a library element is read from its record on both
-// paths, so a filter classifies it the same way.
+// The metadata annotating a library element reads the same on both paths, so a
+// filter classifies it the same way.
 func TestAnnotationFactsOfALibraryElementSurviveTheCache(t *testing.T) {
 	cold, warm := bothPaths(t)
 	for path, lib := range map[string]library{"cold": cold, "warm": warm} {
@@ -199,7 +199,7 @@ func (l library) symbol(t *testing.T, fqn string) *symbols.Symbol {
 }
 
 // bothPaths loads semanticsLibrary twice through one cache directory: the first
-// load parses it, the second restores its record.
+// load derives its facts, the second restores them.
 func bothPaths(t *testing.T) (cold, warm library) {
 	t.Helper()
 	dir, cacheDir := t.TempDir(), t.TempDir()
@@ -208,13 +208,13 @@ func bothPaths(t *testing.T) (cold, warm library) {
 	}
 	cold = modelOver(t, loadLibrary(t, dir, cacheDir))
 	warm = modelOver(t, loadLibrary(t, dir, cacheDir))
-	// Both loads are index-only, which is what makes the comparisons below a test
-	// of the record path rather than of two different states.
-	if cold.symbol(t, "Kit::Fastener").Decl != nil {
-		t.Fatal("the cold load leaves the library its declarations")
+	// Both loads parse the library, which is what makes the comparisons below a
+	// test of the fact path rather than of two different states.
+	if cold.symbol(t, "Kit::Fastener").Decl == nil {
+		t.Fatal("the cold load leaves the library without its declarations")
 	}
-	if warm.symbol(t, "Kit::Fastener").Decl != nil {
-		t.Fatal("the warm load leaves the library its declarations")
+	if warm.symbol(t, "Kit::Fastener").Decl == nil {
+		t.Fatal("the warm load leaves the library without its declarations")
 	}
 	return cold, warm
 }
@@ -229,7 +229,7 @@ func modelOver(t *testing.T, idx *symbols.Index) library {
 }
 
 // loadLibrary indexes every file of the library in dir through a loader backed
-// by cacheDir, persisting its records exactly as the stdlib load does.
+// by cacheDir, persisting its facts exactly as the stdlib load does.
 func loadLibrary(t *testing.T, dir, cacheDir string) *symbols.Index {
 	t.Helper()
 	t.Setenv("XDG_CACHE_HOME", cacheDir)
@@ -248,16 +248,19 @@ func loadLibrary(t *testing.T, dir, cacheDir string) *symbols.Index {
 	return idx
 }
 
-// A record persists no multiplicity, so a library feature takes the assumed 1..1
-// on both paths rather than its declared 0..1 (roadmap L3).
+// A library feature is parsed on both paths, so it takes the multiplicity it
+// declares rather than the assumed 1..1 (roadmap L3).
 func TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm(t *testing.T) {
 	cold, warm := bothPaths(t)
 	got := cold.model.EffectiveMultiplicityOf(cold.symbol(t, "Kit::Nut::mass"))
 	if want := warm.model.EffectiveMultiplicityOf(warm.symbol(t, "Kit::Nut::mass")); got != want {
 		t.Errorf("Kit::Nut::mass multiplicity = %+v cold, %+v warm", got, want)
 	}
-	if got != semantics.AssumedRange() {
-		t.Errorf("Kit::Nut::mass multiplicity = %+v, want the assumed %+v: a record now "+
-			"carries multiplicity, so assert the declared 0..1 instead", got, semantics.AssumedRange())
+	declared := semantics.Range{
+		Lower: semantics.Bound{Value: 0, Known: true},
+		Upper: semantics.Bound{Value: 1, Known: true},
+	}
+	if got != declared {
+		t.Errorf("Kit::Nut::mass multiplicity = %+v, want the declared %+v", got, declared)
 	}
 }

@@ -183,6 +183,11 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	}
 	// Guard against re-entrancy on cyclic graphs: seed with an empty slice.
 	m.directSupers[sym] = nil
+	if sym.Facts != nil && sym.Facts.Supers != nil {
+		out := m.recordedSupertypes(sym)
+		m.directSupers[sym] = out
+		return out
+	}
 
 	var out []*symbols.Symbol
 	seen := make(map[*symbols.Symbol]bool)
@@ -229,27 +234,6 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 		seen[target] = true
 		out = append(out, target)
-	}
-
-	// A library symbol restored from the cache has no AST: its specialization
-	// edges were resolved when the record was written and are carried as FQNs.
-	for _, fqn := range sym.SuperFQNs {
-		for _, target := range m.resolver.Index().LookupQualified(fqn) {
-			if target == nil {
-				continue
-			}
-			if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
-				target = resolved
-			} else {
-				continue
-			}
-			if target == sym || seen[target] {
-				continue
-			}
-			seen[target] = true
-			out = append(out, target)
-			break
-		}
 	}
 
 	// SubjectMember has TypeRef instead of Relationships - handle separately
@@ -390,6 +374,37 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	delete(m.provisionalSupers, sym)
 	m.directSupers[sym] = out
 	return out
+}
+
+// recordedSupertypes resolves the supertype edges installed for a library
+// symbol, which the same derivation over its declaration produced when they were
+// recorded. An edge naming nothing in this index is dropped, as an unresolved
+// declared target is.
+func (m *Model) recordedSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	seen := make(map[*symbols.Symbol]bool)
+	for _, fqn := range sym.Facts.Supers {
+		for _, target := range m.resolver.Index().LookupQualified(fqn) {
+			if target == nil {
+				continue
+			}
+			resolved, aliasOK := m.resolver.ResolveAliasTarget(target)
+			if !aliasOK || resolved == sym || seen[resolved] {
+				break
+			}
+			seen[resolved] = true
+			out = append(out, resolved)
+			break
+		}
+	}
+	return out
+}
+
+// SupertypesProvisional reports whether sym's supertypes were last derived from
+// a metadata annotation whose type had not resolved yet, so the answer may still
+// change and must not be recorded as a fact.
+func (m *Model) SupertypesProvisional(sym *symbols.Symbol) bool {
+	return m.provisionalSupers[sym]
 }
 
 // inheritedFeature returns the feature that sym's owner inherits under the name
