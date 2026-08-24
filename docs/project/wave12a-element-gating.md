@@ -1,4 +1,9 @@
-# Wave 12A — tier gating per element (roadmap L2)
+# Tier gating per element (roadmap L2)
+
+> **Labels.** This is an engineering record. A "wave" (or a "slice" within one) is a numbered
+> development round of this project — chronological, with no meaning outside this repository — and
+> `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
+> [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
 
 Roadmap item **L2** recorded that `Registry.Run` skipped *every* pass at a strictly higher level
 once any pass emitted a blocking error, for the whole document, while the reference (EMF/Xtext)

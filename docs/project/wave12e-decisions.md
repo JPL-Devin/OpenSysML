@@ -1,4 +1,9 @@
-# Wave 12E — scope enumeration, visibility, and two resolver defects
+# Scope enumeration, visibility, and two resolver defects
+
+> **Labels.** This is an engineering record. A "wave" (or a "slice" within one) is a numbered
+> development round of this project — chronological, with no meaning outside this repository — and
+> `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
+> [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
 
 Wave 12E owns the Xpect rows where **the set of names we consider visible differs from the pilot's**,
 plus the two resolver defects [wave11e-decisions.md](wave11e-decisions.md) adjudicated and left open

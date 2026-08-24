@@ -153,17 +153,17 @@ process. What remains is packaging and publishing: `vsce package` in the release
 `.vsix` on the release, and (for the marketplace) a publisher account and a PAT in CI — the same
 class of account gate as R2/R4.
 
-## L2 — tier gating is per document, and the reference's is per element (done, wave 12A)
+## L2 — tier gating is per document, and the reference's is per element (done)
 
-**Landed.** `passes.ElementScoped` generalizes 11D's `SelfGated` marker: a pass that names its
+**Landed.** `passes.ElementScoped` generalizes the earlier `SelfGated` marker: a pass that names its
 subject in code runs despite a lower-tier failure and gates itself per element through
 `Context.DownstreamOfFailure`; a pass whose subject is the file stays document-scoped. Differential
 agreement 25 → 32 and only-pilot 73 → 66 with only-ours unmoved at 119; the Xpect and rejection
 oracles do not move. The four rows this item was expected to close are **not** behind the gate —
 removing the gate entirely leaves the Xpect oracle byte-identical — each is an unimplemented rule
-owned elsewhere. See [wave 12A](wave12a-element-gating.md) for the measurements and the row table.
+owned elsewhere. See [element-scoped tier gating](wave12a-element-gating.md) for the measurements and the row table.
 
-### The motivation, as it stood before wave 12A
+### The motivation, as it stood before that change
 
 `Registry.Run` (`internal/core/passes/registry.go`) skipped every pass at a strictly higher level
 once any pass emitted a blocking error, for the **whole document**. The reference is EMF/Xtext,
@@ -171,14 +171,14 @@ where a linking failure on one element does not stop validating the others — w
 reports an unresolved reference *and* `Must have a concrete type` in one file where we reported
 only the first. The divergence was a policy of ours, not a position the specification takes.
 
-Wave 11D raised this as an adjudication question and offered two ways out; both were refused.
-Moving a rule down a tier buys one row by suppressing filter diagnostics elsewhere (11D measured
-that), and making name-resolution errors non-blocking wholesale uncaps cascade noise across every
+This was raised earlier as an adjudication question, with two ways out; both were refused.
+Moving a rule down a tier buys one row by suppressing filter diagnostics elsewhere (measured at the
+time), and making name-resolution errors non-blocking wholesale uncaps cascade noise across every
 corpus. The answer taken instead was to narrow the gate: a higher-tier pass skips the elements
 whose own resolution failed, not the file.
 
 `Diagnostic.Blocking()` was the precedent for how a non-gating error is already expressed — a
-`Notation` error concerns the writing rather than the meaning, so it gates nothing. Wave 12A
+`Notation` error concerns the writing rather than the meaning, so it gates nothing. The change
 generalized that from a per-diagnostic flag to a per-element question, giving `Context` a way for
 a pass to ask whether the element it is about to check is downstream of a resolution failure.
 
@@ -186,7 +186,7 @@ Cascade noise is the reason the coarse gate existed, so the measure of success w
 moving *without* a rise in only-ours rows — met, and the control with the gate removed entirely
 (only-ours 119 → 166) is why the marker stayed opt-in.
 
-## L3 — a library contributes names but no bodies (partly done, wave 12C)
+## L3 — a library contributes names but no bodies (partly done)
 
 A standard library is **index-only**: `libs.Loader.LoadAll` reduces every file it parses to the
 same record a cache hit restores, so a library type contributes its name, kind, specializations,
@@ -200,7 +200,7 @@ The contract is honest but lossy, and this item is the other way out (option B w
 adjudicated): make records **lossless** — serialize enough member, value and condition structure
 that a restored library equals a parsed one — and then let libraries keep their bodies on both
 paths. What it buys is not conformance: it is reach. Hover and go-to-definition into a library
-body (the stdlib analogue of the annotation-body editor surface wave 12 closed as L1),
+body (the stdlib analogue of the annotation-body editor surface closed as L1),
 library-declared conditions in the solver's translatable subset, and library feature
 multiplicity, which a record does not persist today
 (`TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` asserts the assumed `1..1` on both paths
@@ -216,7 +216,7 @@ be taken as a cosmetic metric move — the index-only contract is what makes the
 free of semantic effect, so anything replacing it needs the same proof
 (`internal/core/libs/index_only_test.go`). The record format, the version-compatibility surface and
 the measurements behind them are designed in
-[wave 12C](wave12c-lossless-library-records.md), which recommends caching only the derived facts and
+[lossless library records](wave12c-lossless-library-records.md), which recommends caching only the derived facts and
 parsing the library on every path — parsing all 95 bundled files costs 41 ms of the 1.90 s cold load.
 
 **Slice A landed** ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)) ahead of the record
@@ -556,9 +556,9 @@ Tracks A, B, C, P and T1 are closed and their entries are removed; what is left 
    **D8** (the OWL-ontology output profile) is optional and additive: its domain/range gate is
    worth having as soon as the profile's term table exists, but the profile only becomes fully
    conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
-3. **L2** after wave 11 as a whole, since slices' rows sit behind the gate it narrows — closed in
-   wave 12A. **L3**'s record format last of the two and only if its reach is wanted: it buys no
+3. **L2** was taken after the conformance rounds whose rows sat behind the gate it narrows, and is
+   closed. **L3**'s record format last of the two and only if its reach is wanted: it buys no
    conformance row, and it replaces a contract the cache's correctness currently rests on. L1, the
-   annotation-body editor surface, closed in wave 12; L3's slice A (the shared library index)
+   annotation-body editor surface, is closed; L3's slice A (the shared library index)
    closed with it, being a memory defect on its own rather than part of that trade. Both are
    independent of the release section and of Track D.

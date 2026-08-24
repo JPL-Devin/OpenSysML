@@ -80,7 +80,7 @@ does not offer the command.
 Run `SysML: Restart Language Server` from the command palette after rebuilding
 the binary. `editors/vscode/README.md` documents every setting, the grammar
 generator (keywords come from `internal/core/lexer.Keywords()`, so they cannot
-drift) and the F5 development loop.
+drift) and the <kbd>F5</kbd> extension-debugging loop.
 
 Other editors can still launch `bin/sysml-lsp` over stdio through their own
 generic LSP client; only the highlighting is VS Code-specific.

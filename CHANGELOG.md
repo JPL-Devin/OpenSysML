@@ -116,7 +116,7 @@ Python surfaces gain fields and calls; nothing was removed or renamed.
 
 ### Notation the reference accepts now parses
 
-- **The KerML declaration grammar cluster is closed** (F84–F95): a member with no kind keyword is a
+- **The KerML declaration grammar cluster is closed**: a member with no kind keyword is a
   feature wherever a member is expected, decided by lookahead over the declaration head rather than
   by a keyword table, so `a : Integer;`, `x;`, `p5[1] : Real;` and `composite e1 redefines V::m;`
   parse. The pilot's KerML example corpus now reports no syntax diagnostic of ours at all.
@@ -221,8 +221,9 @@ Python surfaces gain fields and calls; nothing was removed or renamed.
   feature and its type, go-to-definition jumps to it including an inherited one, completion offers
   the metadata definition's features at a declaration position and the enclosing scope's at a value
   position, and document/workspace symbols and semantic tokens cover the body.
-- **Rename and find-references follow the name an alias segment wrote**, so F2 on an alias rewrites
-  its uses and F2 on the target no longer rewrites a name that was never the target's.
+- **Rename and find-references follow the name an alias segment wrote**, so an editor rename (F2) on an
+  alias rewrites its uses, and the same rename on the target no longer rewrites a name that was
+  never the target's.
 
 ### Declared errata: the published reference material can itself be wrong
 

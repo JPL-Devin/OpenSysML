@@ -1,4 +1,9 @@
-# Wave 12C — making library records lossless (roadmap L3): the design
+# Making library records lossless (roadmap L3): the design
+
+> **Labels.** This is an engineering record. A "wave" (or a "slice" within one) is a numbered
+> development round of this project — chronological, with no meaning outside this repository — and
+> `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
+> [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
 
 Roadmap item **L3** asks for library records to become *lossless*: a restored library must equal a
 parsed one, so a library keeps its members, declared values and condition bodies on both load paths.
