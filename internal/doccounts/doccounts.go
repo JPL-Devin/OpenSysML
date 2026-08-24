@@ -100,7 +100,7 @@ type rejectionBaseline struct {
 
 // ReadRefereedCounts reads and derives all five headline figures.
 func ReadRefereedCounts(root string) (RefereedCounts, error) {
-	compliance, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(SpecCompliancePath)))
+	compliance, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(SpecCompliancePath))) // #nosec G304 -- the path is a fixed documentation file under the requested repository root
 	if err != nil {
 		return RefereedCounts{}, err
 	}
@@ -175,7 +175,7 @@ func ReadRefereedCounts(root string) (RefereedCounts, error) {
 }
 
 func readJSON(root, path string, into any) error {
-	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path))) // #nosec G304 -- the path is a fixed baseline file under the requested repository root
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func parsePilotRelease(release string) (string, string, error) {
 
 // ReadSelfAssessedRows counts rows in sections without an external referee.
 func ReadSelfAssessedRows(root string) (int, error) {
-	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(SpecCompliancePath)))
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(SpecCompliancePath))) // #nosec G304 -- the path is a fixed documentation file under the requested repository root
 	if err != nil {
 		return 0, err
 	}
