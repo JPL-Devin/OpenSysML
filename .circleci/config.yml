@@ -705,7 +705,7 @@ jobs:
             cosign verify-blob SHA256SUMS.txt \
               --bundle SHA256SUMS.txt.bundle \
               --certificate-oidc-issuer "https://oidc.circleci.com/org/${CIRCLE_ORGANIZATION_ID}" \
-              --certificate-identity-regexp "^https://circleci\\.com/api/v2/projects/${CIRCLE_PROJECT_ID}/pipeline-definitions/[0-9a-f-]+$"
+              --certificate-identity-regexp "^https://circleci\\.com/api/v2/projects/${CIRCLE_PROJECT_ID}/pipeline-definitions/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
             echo "Signed by:"
             jq -r '.verificationMaterial.certificate.rawBytes' SHA256SUMS.txt.bundle \
               | base64 -d | openssl x509 -inform DER -noout -text \
