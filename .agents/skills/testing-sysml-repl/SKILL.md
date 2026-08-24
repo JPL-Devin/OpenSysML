@@ -4796,3 +4796,60 @@ XDG_CACHE_HOME=$(mktemp -d) ./bin/sysml-grpc -port 50123 &     # -port, not -add
 
 ### Devin Secrets Needed
 None — the service, client and stdlib are all local.
+
+## Proving "the stdlib is parsed on every load path" (record-format waves, e.g. formatVersion 25)
+
+When `internal/core/libs` changes what the on-disk cache persists (derived facts only:
+`Supers`/`Unit`/`Dimension`/`Abstract`, installed onto already-parsed symbols), the load-bearing
+property is **cold == warm == no-cache**, observed from outside the Go tests. Three cache states,
+one scratch dir:
+
+```bash
+C=$(mktemp -d)
+XDG_CACHE_HOME=$C   ./bin/sysml ...   # cold (dir empty)
+XDG_CACHE_HOME=$C   ./bin/sysml ...   # warm (ls $C/sysml-ls/libs | wc -l  -> ~95 *-v25.idx)
+XDG_CACHE_HOME=/proc/self/nope ./bin/sysml ...   # no-cache fallback
+```
+
+- There is **no `-no-cache` flag**; point `XDG_CACHE_HOME` at an uncreatable path and the loader
+  logs `WARN stdlib symbol cache unavailable, loading without cache error="mkdir ..."` on stderr
+  and continues. Compare after `grep -v 'stdlib symbol cache unavailable'` or with stderr dropped,
+  otherwise the diff is only that warning and you will misreport a failure.
+- Cheap sanity that the warm run really hit the cache: wall time drops (~1.0s -> ~0.28s for a
+  single `-validate`; ~3.5s -> ~2.7s for a multi-command battery) and the `*-v25.idx` files exist.
+- A battery worth diffing per cache state (all against one library-leaning fixture):
+  `-validate`, `-e '2.0 [SI::kg] + 3.0 [SI::kg]'`, `-e <lib-typed attr>`, `-constraint <c>`,
+  `-calc 'Sum(2, 40)'`, `-instantiate <def> -json`, `-query`, `-convert sysml`, plus the
+  pilot-reject negative fixture. Then repeat over
+  `internal/core/runtime/testdata/conformance/*.sysml` (360 files) for a corpus-level A/B.
+
+### Library feature multiplicity: declared `0..1` vs assumed `1..1`
+Neither `-query` nor gRPC `GetSymbol` reaches standard-library symbols, so you cannot read a
+library feature's multiplicity directly. The observable surface is
+`internal/core/passes/multiplicity_conformance.go`: redefine a library feature with a wider or
+weaker bound and check the warning text.
+
+```sysml
+package MultD { occurrence def Probe :> Occurrences::Occurrence {
+  occurrence mid : Probe[0..*] redefines Occurrences::Occurrence::middleTimeSlice; } }
+```
+-> `Subsetting/redefining feature should not have larger multiplicity upper bound`; redefining
+`timeSlices` with `[0..1]` -> `Redefining feature should not have smaller multiplicity lower
+bound`. A build that only has declaration-free library records stays **silent** on both (it falls
+back to assumed `1..1`), so silence-vs-warning is the discriminator; `[0..1]` against a declared
+`0..1` library feature must stay clean.
+
+### gRPC/Python control when library attributes are NOT withheld
+With no L3-3 projection, `GetSymbol` on a part returns own attributes **first, in declaration
+order**, then ~55 inherited from `Occurrences`/`Objects`/`Base` (e.g. `demo::Car` in
+`internal/grpc/testdata/conformance/symbol_attributes.sysml`: 6 own + 55 = 61). Assert the head
+order and that the client can read every row; don't assert a total.
+Two traps that reproduce on **base too** (do not attribute them to a record-format PR):
+- A `@Metadata` annotation written *inside* a part def collapses that symbol's gRPC attribute list
+  to its own declarations only. Put the annotation on a `part` usage instead if you want the
+  inherited tail. Always A/B this against the parent commit before reporting it.
+- A user package named exactly like a bundled library package (`package Occurrences { ... }`)
+  reports no reachable children over gRPC (`Model.get("Occurrences::Thing") is None`); the REPL is
+  fine.
+- `instantiate` reports a constraint feature as `feature value 'massOK': feature value is not
+  materialized` — also present on base.
