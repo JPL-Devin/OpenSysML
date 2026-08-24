@@ -1169,8 +1169,8 @@
     ],
     "totals": {
       "cases": 120,
-      "bothReject": 116,
-      "pilotOnlyRejects": 4,
+      "bothReject": 117,
+      "pilotOnlyRejects": 3,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
