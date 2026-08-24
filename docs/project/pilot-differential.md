@@ -2136,7 +2136,7 @@ Xpect and rejection oracles are byte-identical. The design, the control run with
 entirely (only-ours 119 → **166**), and the rows the gate turned out *not* to be hiding are in
 [wave 12A](wave12a-element-gating.md).
 
-The seven rows that became agreement are all on `testdata`, and only one of them is word-for-word:
+The seven rows that became agreement are all on `testdata`, and six of them are now word-for-word:
 
 | File | Line | Ours | The pilot's | Reading |
 |---|---|---|---|---|
@@ -2146,13 +2146,11 @@ The seven rows that became agreement are all on `testdata`, and only one of them
 | `passes/errors.sysml` | 3 | `Must have a Boolean result` | `Must have a Boolean result` | agreed, same rule |
 | `resolve/errors.sysml` | 3 | `Must have a Boolean result` | `Must have a Boolean result` | agreed, same rule |
 
-Those six are counted as agreement by the harness's `(line, severity, category)` matching, not as
-wording-only agreement in the strict sense (same rule, same element, same offset). They are listed
-here so the count is not read as six closed rules: what closed is the *silence*, and the wording
-divergence is open. `Must be model-level evaluable` is the stricter of the two rules — an expression
-that cannot be evaluated at model level cannot be shown to have a Boolean result either — so
-reporting it where the pilot reports the Boolean-result rule is not a defect, and asserting the
-pilot's exact rule as well is a separate obligation.
+The five Boolean-result rows now agree on the exact rule, element, and wording. The remaining
+`parse/expressions.sysml` line 4 row is counted as agreement by the harness's
+`(line, severity, category)` matching, but its wording divergence remains open: our diagnostic
+requires a model-level-evaluable condition, while the pilot requires an invocation of a behavior or
+behavioral feature.
 
 One category mapping moved with this and no count did on the base tree: `must have` now maps to
 `kind-mismatch` on our side as it already did on the pilot's (`cmd/pilot-diff/category.go`), so our
