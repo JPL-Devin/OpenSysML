@@ -27,8 +27,11 @@ var publishedRoots = []string{
 // AsPublished is that line's exact bytes without its terminator, which is what
 // lets a re-vendored corpus invalidate the entry instead of silently rotting it.
 type Entry struct {
-	// ID is the row in docs/project/omg-issues.md documenting the defect.
+	// ID is the entry's stable internal label, as the oracles report it.
 	ID string
+	// Heading titles the docs/project/omg-issues.md section documenting the
+	// defect, without its `### ` marker.
+	Heading string
 	// Path is the defective file, relative to the repository root.
 	Path string
 	// Line is the 1-based line the entry covers.
@@ -52,6 +55,8 @@ func (e Entry) Validate() error {
 	switch {
 	case e.ID == "":
 		return fmt.Errorf("entry for %s:%d names no %s row", e.Path, e.Line, IssuesPath)
+	case e.Heading == "":
+		return fmt.Errorf("entry %s names no %s section documenting it", e.ID, IssuesPath)
 	case e.Path == "":
 		return fmt.Errorf("entry %s names no file", e.ID)
 	case e.Line < 1:
@@ -85,9 +90,10 @@ func underPublishedRoot(path string) bool {
 // Registry is the declared errata, in report order.
 func Registry() []Entry {
 	return []Entry{{
-		ID:   "F82",
-		Path: "examples/pilot-corpora/sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml",
-		Line: 38,
+		ID:      "F82",
+		Heading: "`radius = 22/2*25.4 + 110 [mm]` adds a dimensionless value to a length",
+		Path:    "examples/pilot-corpora/sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml",
+		Line:    38,
 		// The published line keeps its trailing space; the correction keeps it too.
 		AsPublished: "            :>> radius = 22/2*25.4 + 110 [mm]; ",
 		Corrected:   "            :>> radius = (22/2*25.4 + 110) [mm]; ",
@@ -95,6 +101,7 @@ func Registry() []Entry {
 		Derivation:  "the unit postfix binds to PrimaryExpression (KerMLExpressions.xtext:308), below AdditiveExpression, so `[mm]` qualifies 110 alone and `+` adds a dimensionless value to a length, which §9.8.9.1 forbids.",
 	}, {
 		ID:          "F83",
+		Heading:     "`1/(2 * Cp) * V^2 + T_static` adds L^6 to Θ",
 		Path:        "examples/pilot-corpora/sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml",
 		Line:        25,
 		AsPublished: "\t    \treturn : TemperatureValue = 1/(2 * Cp) * V^2 + T_static;",

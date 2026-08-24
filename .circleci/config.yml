@@ -65,6 +65,12 @@ jobs:
           name: Check documentation links
           command: python3 scripts/check-doc-links.py
 
+      # Internal work-item labels (waves, F<n>, P<n>, K<n>/S<n>) have no public
+      # referent, so they may not appear in the pages a user reads.
+      - run:
+          name: Check for internal labels in reader-facing documentation
+          command: python3 scripts/check-doc-ids.py
+
       - run:
           name: Run static analysis (staticcheck + gosec)
           command: make lint
