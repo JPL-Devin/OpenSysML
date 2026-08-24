@@ -35,6 +35,10 @@ func connectorLike(sym *symbols.Symbol) bool {
 	return false
 }
 
+func (m *Model) isConnectorLike(sym *symbols.Symbol) bool {
+	return connectorLike(sym) || sym != nil && sym.Decl == nil && m.IsBinaryConnector(sym)
+}
+
 // ownedEnds returns the end features sym owns, one entry per end in
 // declaration order: first the ends of its `connect` clause, then the `end`
 // features of its body. An end that declares no name of its own — `connect a
@@ -78,6 +82,20 @@ func (m *Model) endsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	}
 	// Guard against re-entrancy on cyclic specialization graphs.
 	m.ends[sym] = nil
+
+	if sym != nil && sym.Decl == nil && m.IsBinaryConnector(sym) {
+		var out []*symbols.Symbol
+		for _, name := range binaryConnectorEndNames {
+			end, ok := m.LookupMember(sym, name)
+			if !ok {
+				m.ends[sym] = nil
+				return nil
+			}
+			out = append(out, end)
+		}
+		m.ends[sym] = out
+		return out
+	}
 
 	out := ownedEnds(sym)
 
@@ -164,7 +182,7 @@ func (m *Model) implicitEndRedefinitions(sym *symbols.Symbol) []*symbols.Symbol 
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
-	if !connectorLike(owner) {
+	if !m.isConnectorLike(owner) {
 		return nil
 	}
 	position := -1
@@ -180,7 +198,7 @@ func (m *Model) implicitEndRedefinitions(sym *symbols.Symbol) []*symbols.Symbol 
 
 	var out []*symbols.Symbol
 	for _, sup := range m.DirectSupertypes(owner) {
-		if !connectorLike(sup) {
+		if !m.isConnectorLike(sup) {
 			continue
 		}
 		supEnds := m.endsOf(sup)
@@ -215,7 +233,7 @@ func declaresEnd(sym *symbols.Symbol) bool {
 // that has too few ends. A connector with no connector-like general — an
 // untyped `connect a to b` — has none: there is nothing to match against.
 func (m *Model) UnmatchedConnectorEnds(sym *symbols.Symbol) (*symbols.Symbol, []*symbols.Symbol) {
-	if !connectorLike(sym) {
+	if !m.isConnectorLike(sym) {
 		return nil, nil
 	}
 	owned := ownedEnds(sym)
@@ -223,7 +241,7 @@ func (m *Model) UnmatchedConnectorEnds(sym *symbols.Symbol) (*symbols.Symbol, []
 		return nil, nil
 	}
 	for _, sup := range m.DirectSupertypes(sym) {
-		if !connectorLike(sup) {
+		if !m.isConnectorLike(sup) {
 			continue
 		}
 		supEnds := m.endsOf(sup)
@@ -262,7 +280,7 @@ func (m *Model) ConnectorEndCount(sym *symbols.Symbol) int {
 // features its ends attach to, unlike a usage that only holds objects of its
 // own.
 func (m *Model) IsConnectorUsage(sym *symbols.Symbol) bool {
-	if sym == nil || !connectorLike(sym) {
+	if sym == nil || !m.isConnectorLike(sym) {
 		return false
 	}
 	usage, ok := sym.Decl.(*ast.Usage)
@@ -375,14 +393,17 @@ func (m *Model) FlowEndAttachments(sym *symbols.Symbol) []FlowEndAttachment {
 // not enumerable — a library declaration indexed without its body — supplies
 // none.
 func (m *Model) generalConnectorEnds(sym *symbols.Symbol) []*symbols.Symbol {
-	var generals []*symbols.Symbol
+	var generals [][]*symbols.Symbol
 	for _, sup := range m.DirectSupertypes(sym) {
-		if connectorLike(sup) {
-			generals = append(generals, sup)
+		if !m.isConnectorLike(sup) {
+			continue
+		}
+		if ends := m.endsOf(sup); len(ends) > 0 {
+			generals = append(generals, ends)
 		}
 	}
 	if len(generals) != 1 {
 		return nil
 	}
-	return m.endsOf(generals[0])
+	return generals[0]
 }

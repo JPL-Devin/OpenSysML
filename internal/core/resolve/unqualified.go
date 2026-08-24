@@ -262,7 +262,7 @@ func (r *Resolver) lookupImports(scope *symbols.Scope, name string) (*symbols.Sy
 // traversed, including a public membership import.
 func (r *Resolver) lookupImportedMember(target *symbols.Symbol, targetScope, from *symbols.Scope, name string) (*symbols.Symbol, bool) {
 	for _, imp := range r.importsOf(targetScope.Node()) {
-		if imp.Kind != ast.ImportMembership {
+		if r.importStack[imp] {
 			continue
 		}
 		if !r.importPrefixAvailable(targetScope, imp, name) {
@@ -271,9 +271,12 @@ func (r *Resolver) lookupImportedMember(target *symbols.Symbol, targetScope, fro
 		if !r.importVisibleFrom(target, from, imp) {
 			continue
 		}
+		r.importStack[imp] = true
 		if sym, ok := r.matchImport(targetScope, imp, name); ok {
+			delete(r.importStack, imp)
 			return sym, true
 		}
+		delete(r.importStack, imp)
 	}
 	return nil, false
 }

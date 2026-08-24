@@ -95,10 +95,6 @@ func TestW8GInterfaceConjugationStaysAWarning(t *testing.T) {
 	}
 }
 
-// TestW8GVerifyRedefinesInheritedObjective is F66's residue, pinned as a gap:
-// the redefinition target is inherited through the objective the verification's
-// type declares, which `internal/core/symbols` does not compute, so the
-// reference resolves `massRequirement` where we report it unresolved.
 func TestW8GVerifyRedefinesInheritedObjective(t *testing.T) {
 	diags := analyzeAll(t, "f66.sysml", `package F66 {
 	requirement def MassReq;
@@ -116,7 +112,27 @@ func TestW8GVerifyRedefinesInheritedObjective(t *testing.T) {
 			unresolved = append(unresolved, d.Message)
 		}
 	}
-	if len(unresolved) != 1 || !strings.Contains(unresolved[0], "massRequirement") {
-		t.Fatalf("expected the inherited objective member to be the one unresolved reference, got %v", unresolved)
+	if len(unresolved) != 0 {
+		t.Fatalf("inherited objective member is unresolved: %v", unresolved)
 	}
+}
+
+func TestW8GObjectiveDoesNotInheritSubjectMembers(t *testing.T) {
+	diags := analyzeAll(t, "role-negative.sysml", `package Roles {
+	verification def Base {
+		subject s { attribute subjectOnly; }
+		objective o;
+	}
+	verification derived : Base {
+		objective {
+			attribute :>> subjectOnly;
+		}
+	}
+}`)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "unresolved reference: subjectOnly") {
+			return
+		}
+	}
+	t.Fatalf("expected subjectOnly to remain unresolved, got %v", diags)
 }

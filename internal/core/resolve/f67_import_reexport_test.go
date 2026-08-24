@@ -1,6 +1,7 @@
 package resolve_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
@@ -62,6 +63,18 @@ func TestF67WildcardReexportChain(t *testing.T) {
 	}`)
 }
 
+func TestF67WildcardReexportReachesRecursiveMembershipImport(t *testing.T) {
+	f67Clean(t, "mixed-chain", `package M {
+		package Metadata { metadata def Safety; }
+		package Definitions { public import Metadata::**; }
+		package Model { public import Definitions::*; }
+		package Use {
+			private import Model::*;
+			part x { @Safety; }
+		}
+	}`)
+}
+
 // A private wildcard import does not re-export (KerML 8.2.3.3): the chained
 // lookup must still miss when the middle import is private.
 func TestF67PrivateImportDoesNotReexport(t *testing.T) {
@@ -75,6 +88,49 @@ func TestF67PrivateImportDoesNotReexport(t *testing.T) {
 	}`)
 	if len(r.Diagnostics) == 0 {
 		t.Fatal("expected an unresolved-reference diagnostic through the private import chain")
+	}
+}
+
+func TestF67PrivateMixedImportDoesNotReexport(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package M {
+		package Metadata { metadata def Safety; }
+		package Definitions { private import Metadata::**; }
+		package Model { public import Definitions::*; }
+		package Use {
+			private import Model::*;
+			part x { @Safety; }
+		}
+	}`)
+	for _, d := range r.Diagnostics {
+		if strings.Contains(d.Message, "unresolved reference: Safety") {
+			return
+		}
+	}
+	t.Fatalf("expected Safety to remain unresolved through the private import, got %v", r.Diagnostics)
+}
+
+func TestF67MixedImportCycleTerminates(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package M {
+        package A { public import B::*; }
+        package B {
+            public import A::*;
+            metadata def Safety;
+        }
+        package Use {
+            private import A::*;
+            part x { @Safety; @Missing; }
+        }
+    }`)
+	var safety, missing bool
+	for _, d := range r.Diagnostics {
+		safety = safety || strings.Contains(d.Message, "unresolved reference: Safety")
+		missing = missing || strings.Contains(d.Message, "unresolved reference: Missing")
+	}
+	if safety {
+		t.Fatal("Safety did not resolve through the cyclic import chain")
+	}
+	if !missing {
+		t.Fatal("expected Missing to remain unresolved")
 	}
 }
 

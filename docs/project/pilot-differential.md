@@ -191,25 +191,53 @@ nor double-counted as two independent disagreements.
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `examples/pilot-corpora/sysml-examples` | 98 | 91 | 16 | 0 | 0 | 0 | 16 | 0 |
-| `examples/pilot-corpora/sysml-validation` | 56 | 55 | 1 | 0 | 0 | 0 | 1 | 0 |
+| `examples/pilot-corpora/sysml-examples` | 98 | 93 | 8 | 0 | 0 | 0 | 8 | 0 |
+| `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 15 | 8 | 36 | 53 | 32 | 1 | 3 | 20 |
 | `examples` | 22 | 15 | 86 | 63 | 0 | 23 | 63 | 40 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **353** | **321** | **148** | **122** | **32** | **24** | **92** | **66** |
+| **Total** | **353** | **324** | **139** | **122** | **32** | **24** | **83** | **66** |
 
-**Read the `only ours` total by root, never as one number.** It falls 119 → **92** in wave 12F, and
-every row of that fall is on the reference's **own** corpora: `pilot-examples` 43 → 16, with
-`pilot-validation` (1) and `kerml-examples` (3) unmoved, so our diagnostics there fall 47 → **20**. The
+**Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
+positives from the reference's **own** corpora: `pilot-examples` 16 → **8** and
+`pilot-validation` 1 → **0**, with `kerml-examples` unmoved at 3. Our diagnostics on those roots
+therefore fall 20 → **11**. The
 `examples` root is unmoved at 63, and all 63 of its rows are one check firing on them: the
 non-standard-notation warning (26 `then <source> <target>;`, 24 `transition <source> to <target>;`, 6
 `require` outside a requirement body, and 7 across `done`/`initial`/`region`/`junction`). **Those are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **20**. `severity-only` (24) is unmoved for the same reason:
+reference corpora is **11**. `severity-only` (24) is unmoved for the same reason:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
+
+### Step 2 resolver round
+
+The control is a fresh-cache run of merge base `bbd3b2ec`; the head is an independent
+fresh-cache run of this tree:
+
+| Oracle | Control | Head |
+|---|---:|---:|
+| Xpect | 1293 agree / 248 wording-only / 30 disagree | 1293 / 248 / 30 |
+| Differential | 321 fully agreeing / 92 only ours / 148 diagnostics of ours | 324 / 83 / 139 |
+| Rejection | 116 both reject / 4 only pilot / 0 only ours / 0 both accept | 116 / 4 / 0 / 0 |
+
+The differential movement is exactly the nine attributed resolver rows; agreed diagnostics,
+severity-only, only-pilot, Xpect, and rejection do not move:
+
+| Corpus row | Mechanism | Result |
+|---|---|---|
+| `Vehicle Example/Annex_A_VehicleViews.sysml:753` | recursive public import re-export for `@Safety` | closed |
+| `Vehicle Example/Annex_A_VehicleViews.sysml:754` | recursive public import re-export for `@Security` | closed |
+| `Vehicle Example/Annex_A_VehicleViews.sysml:757` | recursive public import re-export for `@Security` | closed |
+| `Vehicle Example/Annex_A_VehicleViews.sysml:758` | recursive public import re-export for `@Safety` | closed |
+| `Vehicle Example/Annex_A_VehicleViews.sysml:760` | recursive public import re-export for `@Safety` | closed |
+| `Vehicle Example/Annex_A_VehicleViews.sysml:789` | recursive public import re-export for `@Safety` | closed |
+| `State Space Representation Examples/EVSample1.sysml:351` | source-end implicit redefinition through cached `Transfers::Transfer` | closed |
+| `State Space Representation Examples/EVSample1.sysml:354` | target-end implicit redefinition through cached `Transfers::Transfer` | closed |
+| `09-Verification/9-Verification-simplified.sysml:55` | objective-role implicit redefinition | closed |
+| `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml:38` | adjudicated divergence: `[mm]` applies to `110`, not the additive expression | retained |
 
 **Wave 12A moves the agreement column and nothing else.** Narrowing tier gating from the document to
 the element (roadmap L2) turns 7 pilot-only rows into agreed ones: agreement 25 → **32**, only-pilot
@@ -309,9 +337,8 @@ Two things did move here, and one is a first:
   them until F93 is fixed in `semantics/`. A ratchet reading of "only-ours went up on `testdata`"
   is correct and expected here.
 
-Per category, the only-ours totals are: `pilot-examples` 8 `unresolved-reference`, 5 `unmapped`,
-1 `kind-mismatch`, 2 `units`; `pilot-validation` 1 `unresolved-reference`;
-`kerml-examples` 3 `unmapped`; `examples` 63 syntax; `testdata` 2
+Per category, the only-ours totals are: `pilot-examples` 5 `unmapped`, 1 `kind-mismatch`, 2
+`units`; `kerml-examples` 3 `unmapped`; `examples` 63 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 11 `kind-mismatch`, 4 `unmapped`, 3 syntax, 2 `unresolved-reference`;
 `examples` 15 `unmapped`, 13 syntax, 6 `kind-mismatch`, 5 `unresolved-reference`, 1
@@ -346,15 +373,15 @@ columns below are the only combined measurements. "At #356" is the state the adj
 written against, "F60–F69" the round of #358–#364, "wave 3" the round of #372–#376, "wave 4" the
 round of #383/#391/#387/#388/#382, "wave 5" the round of #403/#405/#397/#396/#398, "wave 6" the
 round of #408–#415, "wave 7A" #424, "wave 8" everything landed on `main` between 7A and 8G (#438),
-"wave 9" the round of #449–#455, "wave 12A" #500, and "now" wave 12F (#502). The wave-3 and wave-5 reason columns are dropped for width; those reasons survive in the K- and S-class tables below and in this page's history:
+"wave 9" the round of #449–#455, "wave 12A" #500, and "now" Step 2's resolver round. The wave-3 and wave-5 reason columns are dropped for width; those reasons survive in the K- and S-class tables below and in this page's history:
 
 For round 3, the fresh control column is the `1af78d94` base, before the wave-12F changes:
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **321 / 92 / 148** |
-| `pilot-examples`: only ours | **43** | **16** |
-| `pilot-validation`: only ours | **1** | **1** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **324 / 83 / 139** |
+| `pilot-examples`: only ours | **43** | **8** |
+| `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
 | `examples`: only pilot | **40** | **40** |
 | `examples`: fully agreeing | **15** | **15** |
@@ -678,10 +705,11 @@ Eight files, one diagnostic each, and the only class where the verdict splits.
 | `Vehicle Example/VehicleDefinitions.sysml:47` | `interface … ports … are not conjugate` (warning) | clean | **One-sided**: our own advice, reproduced by `i7`; the reference has no conjugation check |
 | `Analysis Examples/Turbojet Stage Analysis.sysml:25` | `operator '+' combines incommensurable quantities` (`units`) | clean | **One-sided**: probed directly — `attribute s = a + t;` over `LengthValue` and `TemperatureValue` draws our dimension warning and *nothing* from the reference, which has no dimensional analysis at all. Like F4/K5, our extension |
 
-The five "ours" rows are the honest count of semantic false positives on this corpus: five, out
-of 373. The three one-sided rows stay, on the F4 precedent — a check the reference lacks is not
-a disagreement — and the units row keeps its own category rather than being folded into
-`kind-mismatch`.
+The five "ours" rows are the honest count of semantic false positives in this historical slice:
+five, out of 373. Its three one-sided rows stay, on the F4 precedent — a check the reference lacks
+is not a disagreement. `VehicleGeometryAndCoordinateFrames.sysml:38` later joins Turbojet's units
+row in the same adjudicated quantity-commensurability family; the current census above supersedes
+this eight-row snapshot.
 
 #### What this class list predicts
 
