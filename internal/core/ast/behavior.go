@@ -522,7 +522,8 @@ type DeferMember struct {
 // Syntax: state <name>;
 type SubstateMember struct {
 	NodeBase
-	Name string // substate name
+	Name     string      // substate name
+	NameSpan source.Span // span of Name, empty for an unnamed node
 }
 
 // TransitionMember represents a state transition in textual form, in either the
@@ -534,10 +535,11 @@ type SubstateMember struct {
 // or the `transition <source> to <target> …` spelling OpenSysML also accepts.
 type TransitionMember struct {
 	NodeBase
-	Name    string         // the transition's own name, empty when anonymous
-	Source  *QualifiedName // source state
-	Target  *QualifiedName // target state
-	Trigger Node           // optional trigger event (TimeEvent/ChangeEvent/etc)
+	Name     string         // the transition's own name, empty when anonymous
+	NameSpan source.Span    // span of Name, empty for an anonymous transition
+	Source   *QualifiedName // source state
+	Target   *QualifiedName // target state
+	Trigger  Node           // optional trigger event (TimeEvent/ChangeEvent/etc)
 	// TriggerSpan spans the accepter the trigger keyword introduces
 	// (`accept A`), which is the element the accepter rules are about.
 	TriggerSpan source.Span

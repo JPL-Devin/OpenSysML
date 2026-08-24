@@ -2787,7 +2787,7 @@ func (p *Parser) parseCallEvent(start int, operation *ast.QualifiedName) ast.Nod
 //
 //	accept <trigger> [via <port>] [if <guard>] [do <effect>] then <target>;
 func (p *Parser) parseAcceptTransition(start int) ast.Node {
-	return p.parseTransitionTail(start, "", nil, nil, lexer.Token{})
+	return p.parseTransitionTail(start, ast.NameSegment{}, nil, nil, lexer.Token{})
 }
 
 // stateSubactionKind names which of a state's subactions is being parsed: the
@@ -2916,7 +2916,8 @@ func (p *Parser) parseSubstateMember(start int) ast.Node {
 	p.expect(lexer.Semicolon, "expected ';' after state name")
 
 	node := &ast.SubstateMember{
-		Name: name,
+		Name:     name,
+		NameSpan: nameToken.Span,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -3117,7 +3118,7 @@ func (p *Parser) parsePseudostate(start int, keyword string, kind ast.Pseudostat
 // `first` and the target with `then`; the second is the `to` spelling OpenSysML
 // also accepts. Both describe the same transition and give the same node.
 func (p *Parser) parseTransitionMember(start int) ast.Node {
-	var name string
+	var name ast.NameSegment
 	var source, target *ast.QualifiedName
 	// The `to` of the second spelling, kept so the pass that diagnoses it can
 	// point at the word.
@@ -3127,7 +3128,7 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 	// in the `to` spelling the first name is the source state.
 	if p.atName() && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "first" {
 		if seg, ok := p.parseNameSegment(); ok {
-			name = seg.Text
+			name = seg
 		}
 	}
 
@@ -3169,11 +3170,12 @@ func (p *Parser) atTransitionClause() bool {
 // the `then` naming it — and the terminating ';'. The clauses are read in the
 // order they were written so a misordered transition is reported once, at the
 // clause that is out of place, rather than silently dropped.
-func (p *Parser) parseTransitionTail(start int, name string, source, target *ast.QualifiedName, toTok lexer.Token) ast.Node {
+func (p *Parser) parseTransitionTail(start int, name ast.NameSegment, source, target *ast.QualifiedName, toTok lexer.Token) ast.Node {
 	node := &ast.TransitionMember{
-		Name:   name,
-		Source: source,
-		Target: target,
+		Name:     name.Text,
+		NameSpan: name.Span,
+		Source:   source,
+		Target:   target,
 	}
 	if toTok.Kind == lexer.Keyword {
 		node.ToSpan = toTok.Span

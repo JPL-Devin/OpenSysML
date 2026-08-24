@@ -1525,7 +1525,7 @@ question.
 | P1 | `mismatched input 'import' expecting '}'` / `missing EOF at 'import'` on a bare `import X::*;` | 10 of our 21 `testdata`/`examples` files | **Pilot is stricter, and its grammar is explicit**: `fragment ImportPrefix returns SysML::Import : visibility = VisibilityIndicator 'import' ...` — visibility is *mandatory* for an import, unlike `MemberPrefix`, where it is optional. `private import X::*;` parses cleanly. Whether the specification's concrete syntax makes visibility mandatory too is not settled here, so this is not booked as our bug: follow-up F2. **This is also the single largest cascade source** — once the import fails, the pilot abandons the enclosing body, which produces most of the `no viable alternative`, `extraneous input '}' expecting EOF`, `missing EOF`, `Couldn't resolve reference to Type 'Real'` and `A usage must be typed by definitions.` entries downstream. |
 | P2 | `no viable alternative at input '<name>'` on `namespace N;` inside a package body | 4 files | **Ours is wrong (over-acceptance).** `namespace` is a KerML keyword; the pilot's `DefinitionElement` list has no namespace declaration, so `.sysml` notation has none. We parse it. Follow-up F3. |
 | P3 | `no viable alternative at input 'region'` (`orthogonal-regions-demo.sysml`) | 1 file | **Ours is wrong (over-acceptance).** SysML v2 spells orthogonal regions as a `parallel` state body (`';' \| ( isParallel ?= 'parallel' )? '{' StateBodyPart '}'`); there is no `region` keyword. We accept one. Follow-up F3. |
-| P4 | `Duplicate of other owned member name` (warning) | 25 | **A real reference rule we do not implement**, `unmapped` — not the harness artifact this row claimed until F6 (#397) tested the claim. All 25 survive true single-batch loading, and each reproduces from its file alone under both the old interactive wrapper and the batch bridge, because they are *intra-file* duplicates: `testdata/passes/corpus_notation.sysml:33-34` is `timeslice item item1;` / `snapshot item item1;` inside `item item1 { … }`, a genuinely repeated member name. Follow-up: whether a repeated owned member name warrants a diagnostic of ours is unadjudicated — it is not booked as our bug yet, only as our silence. |
+| P4 | `Duplicate of other owned member name` (warning) | 25 (re-measured: 15) | **Re-derived from clean inputs (F110), and the earlier verdict was too broad.** The rule itself we implement and agree on: on inputs both implementations parse identically the warning matches line, column and multiplicity for repeated part, attribute, action, `enum` and calculation-parameter names (`calc c { in a : Real; return a; }` draws it twice from each side; `testdata/passes/corpus_notation.sysml:33-34` is the corpus instance, an agreement row). What the class actually held was two things: **measurement artifacts** — all 15 remaining pilot-side diagnostics sit in files whose pilot parse failed on the same or an earlier line, so they say nothing about the rule (see W12) — and **one real under-report of ours**, found only by clean reproducers: a simple state member of a state body (`state red;`) and a named transition (`transition t first a then b;`) contribute their names to their container's namespace, and our distinguishability check skipped both because those declarations carried no name span. Fixed at the root (both now record one), so their duplicate warnings match the reference's exactly. The rule is booked as implemented and agreeing; nothing here is our silence any more. |
 | P5 | `Bound features should have conforming types`, `Must have a Boolean result`, `Must have at least two related elements`, `An attribute must be typed by attribute definitions.` | 23 | **Mostly downstream of P1/P2/P3**: with the imports or the enclosing body broken, the pilot type-checks a partially-recovered model. Not adjudicated individually; the honest reading is that these become meaningful only once P1–P3 are resolved and the files re-run. |
 | P6 | `Must be an accessible feature (use dot notation for nesting)`, `Cannot identify flow end (use dot notation)`, `Must be model-level evaluable`, `Must invoke a behavior or a behavioral feature` | 9 | **Adjudicated per diagnostic below** (F5, done). 5 are downstream of P2, 2 are a real gap in our constraint tier, 2 are downstream of unresolved references both implementations report. The four *rules* behind them are all real, and three of them we do not implement: follow-ups F20–F23. |
 | P7 | K6, the KerML `eOpposite` complaint | 6 | **A defect in the reference implementation**, `unmapped`, and the only pilot-only class on the KerML root. Adjudicated diagnostic by diagnostic under [K6 (F33)](#k6-diagnostic-by-diagnostic-f33): one cause, the reference's own `Disjoining`/`Type` `eOpposite` pair, with a three-line reproducer. Upstream report is F80. |
@@ -1607,7 +1607,7 @@ which retired those rows rather than reclassifying them. The paragraph under W2 
 | W9 | notation already adjudicated: the bare `import` of F2, `region`/`initial`/`transition … to …` of F3 | 7 | `testdata/passes/import_no_visibility.sysml:8,12`, `examples/orthogonal-regions-demo.sysml:10,17,18`, `examples/pseudostates-demo.sysml:9,17` | **adjudicated divergence** — F2, F3 |
 | W10 | recovery surplus after a failed parse, including the one semantic row the pilot derives from a recovered succession | 30 | `examples/phase-c-behavioral-bodies.sysml:60` ×4, `:67` ×6, `:75` ×6; `examples/orthogonal-regions-demo.sysml:16` (`Must have at least two related elements`) | **adjudicated divergence** |
 | W11 | the file-level give-up row | 4 | `examples/phase-c-behavioral-bodies.sysml:89`, `examples/repl-behavioral-demo.sysml:35`, `examples/views-demo.sysml:90`, `testdata/passes/import_no_visibility.sysml:13` | **adjudicated divergence** |
-| W12 | `Duplicate of other owned member name` | 23 | `examples/phase-c-behavioral-bodies.sysml:67` ×4, `examples/repl-behavioral-demo.sysml:26` ×4 | **adjudicated divergence** — but see P4 and F110 |
+| W12 | `Duplicate of other owned member name` | 15 | `testdata/passes/import_no_visibility.sysml:3,8,12`, `examples/orthogonal-regions-demo.sysml:11,12,16` ×2, `examples/pseudostates-demo.sysml:9,10,16` ×2, `examples/semantic-layer/demo.sysml:35,105` | **measurement artifact** — every row is recovery-only; the rule agrees on clean inputs, and the one real gap the class hid is fixed (F110, done) |
 | W13 | a kind rule over an unresolved or absent type | 19 | `testdata/lex/basic.sysml:4`, `examples/phase-c-behavioral-bodies.sysml:64,65,71,72,73,83,84` | **adjudicated divergence** |
 | W14 | implicit binding connectors and filter rules over unresolved operands | 24 | `testdata/parse/expressions.sysml:3,4,5,6`, `examples/solver-demo.sysml:120,124` | **adjudicated divergence** |
 | W15 | `Must be an accessible feature` downstream of `namespace` | 5 | `examples/semantic-layer/demo.sysml:44,45,46,50,51` | **adjudicated divergence** — F5, F20 |
@@ -1755,23 +1755,38 @@ notation warnings past that point have no pilot row to pair with. Counting a rec
 separate gaps would make our notation debt look an order of magnitude larger than the number of
 constructs behind it — 34 rows for what is, in this column, 19 constructs.
 
-#### W12 — `Duplicate of other owned member name` (23, adjudicated divergence)
+#### W12 — `Duplicate of other owned member name` (15, measurement artifact; F110 done)
 
-The rule is real and unimplemented, which P4 established for the 25 of the previous baseline; what
-this sweep adds is that 18 of the current 23 sit on lines the pilot only reached through recovery —
-`examples/phase-c-behavioral-bodies.sysml:67` ×4, `:86`, `:87` and
-`examples/repl-behavioral-demo.sysml:26` ×4 are the recovered `return` and `assert` bodies of W1 and
-W2, and `examples/orthogonal-regions-demo.sysml:11,12,16` ×4 and
-`examples/pseudostates-demo.sysml:9,10,16` ×4 are the recovered state bodies of F3 — so they are not
-evidence about duplicate member names at all. The remaining 5
-(`testdata/passes/import_no_visibility.sysml:3,8,12` and
-`examples/semantic-layer/demo.sysml:35,105`) are in files whose parse the pilot lost earlier still, to
-the bare `import` of F2 and the `namespace` of F3. The rule itself we can reproduce cleanly, and both implementations agree on it
-where the model parses for both: `calc c { in a : Real; return a; }` draws
-`Duplicate of other owned member name` twice from the pilot — the return parameter named `a`
-duplicates the input `a` — and the same two warnings, same lines, from us. So our silence in this
-column is a recovery artifact, not a missing rule, and re-measuring P4 after the notation work is the
-honest next step: follow-up **F110**.
+Re-measured on current `main` with the succession-shorthand notation work landed, this class holds
+**15 pilot-side diagnostics over 11 rows, 0 only-ours rows and 2 agreement rows**, and every
+pilot-only row is class (b), a line the pilot reached only through recovery:
+`testdata/passes/import_no_visibility.sysml:3,8,12` behind the bare `import` of F2 (the pilot errors
+at `:8` and `:12` and reads `Lib` as a member of the enclosing body),
+`examples/orthogonal-regions-demo.sysml:11,12,16` ×2 behind the `region` of F3 (its error at `:10`
+flattens both regions into one namespace, which is what makes `start`/`red` repeat),
+`examples/pseudostates-demo.sysml:9,10,16` ×2 behind the same class (error at `:9`), and
+`examples/semantic-layer/demo.sysml:35,105` behind the `namespace` of F3, where the pilot's error is
+on the duplicate's own line. None of these is evidence about the rule.
+
+The rule itself is adjudicated on inputs both implementations parse identically
+(KerML 7.2.2 / SysML v2 7.6.1, `validateNamespaceDistinguishability`: the names a namespace's
+memberships declare must be distinguishable). It **agrees** for every ordinary member —
+`part def P { part a; part a; }`, the same with `attribute`, `action`, `enum` and `part def`
+members, and `calc c { in a : Real; return a; }` — matching line, column and multiplicity, and it
+correctly stays silent where the names are in sibling namespaces
+(`state def S { state r1 { state x; } state r2 { state x; } }`). Two clean reproducers did diverge,
+and there we **under-reported**: `state def S { state red; state red; }` (also in a `state` usage, a
+nested state and a `parallel` body; the same members in a `part def` body parse as ordinary usages
+and were already reported) and
+`state def S { state a; state b; transition t first a then b; transition t first b then a; }` draw
+two warnings from the reference and none from us. Both declarations name a member of their
+container, so the reference is right; our distinguishability check filters members by whether they
+declare a name of their own, and these two nodes were the only named declarations not recording the
+span of the name they declare, so they were dropped before the check. Recording it fixes both, and
+our warnings then match the reference's line and column. The corpus counts do not move — no corpus
+file has clean duplicate state or transition names, all 15 rows above being recovery — so this is a
+reproducer-only movement, pinned by `passes/f110_state_duplicate_names_test.go`. Follow-up **F110**
+is done.
 
 #### W13, W14 — the tier boundary (43, adjudicated divergence)
 
@@ -1983,7 +1998,7 @@ one.
 | ~~F107~~ | **Done** (#464). Requirement constraints outside requirement-style bodies are diagnosed without changing the legal requirement-body form. |
 | ~~F108~~ | **Done** (#467). Concrete connection definitions require two related elements, and `FuelLine` now declares both ends. |
 | ~~F109~~ | **Done** (#467). A non-Boolean element filter reports `Must have a Boolean result` independently of model-level evaluability. |
-| F110 | Wave-9B, W12 (23): re-measure P4 after F105–F107. 18 of the 23 `Duplicate of other owned member name` rows sit on lines the pilot reached only through recovery from notation of ours, so they are not evidence about duplicate member names; where a file parses for both implementations the rule *agrees* (`calc c { in a : Real; return a; }` draws the warning twice from each). P4's "a reference rule we do not implement" needs re-deriving from files both implementations read the same way. |
+| ~~F110~~ | **Done.** P4 re-derived from inputs both implementations parse identically: all 15 remaining `Duplicate of other owned member name` diagnostics are recovery artifacts (0 only-ours rows, 2 agreement rows), the rule agrees on every ordinary member, and the one real divergence the class hid — a simple state member and a named transition were skipped by our distinguishability check, because those declarations recorded no span for the name they declare — is fixed at the root and pinned by `passes/f110_state_duplicate_names_test.go`. Aggregate pilot-diff counts are unmoved: no corpus file has clean duplicate state or transition names. |
 
 F6 is done, and it is the case for testing harness assumptions rather than reasoning about them:
 it changed nothing about what either implementation says, but it turned 25 diagnostics that this
