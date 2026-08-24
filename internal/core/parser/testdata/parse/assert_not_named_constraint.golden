@@ -1,0 +1,47 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="AssertNotNamedConstraint" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="constraint" abstract=false variation=false name="MassLimit"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="mass" ref=false direction="in" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="massLimit" ref=false direction="in" composite=false derived=false ordered=false nonunique=false))
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator="<="
+              (FeatureReference name="mass")
+              (FeatureReference name="massLimit")))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="mass" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Context"
+          (Membership visibility="default"
+            (Usage kind="part" name="vehicle3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="vehicle4" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="constraint" name="massLimitation" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=MassLimit
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="constraint" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="assert" negated=true
+              (Relationship kind="references" target=massLimitation
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=mass
+                    (*ast.QualifiedName))
+                  (FeatureChainExpr member="mass"
+                    (FeatureReference name="vehicle3"))))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=massLimit
+                    (*ast.QualifiedName))
+                  (FeatureChainExpr member="mass"
+                    (FeatureReference name="vehicle4")))))))))))
