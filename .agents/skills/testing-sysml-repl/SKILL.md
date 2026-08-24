@@ -4745,3 +4745,54 @@ scope checks and not from any REPL meta-command — do not report a `%search` li
 name as a regression without A/B-ing it against the parent build first. `%view <name>` *is* useful
 for `expose`: it lists what a view exposes, and an `expose`/`import all` is expected to reach its
 target's own private members.
+
+## End-to-end testing `ApplyEdits` / `model.edit()` over gRPC (PR #509 and later edit work)
+
+Any change in `internal/core/edit` (index reuse, reparse/validate ordering, refusal kinds) is
+testable entirely through the real service plus the Python client; the strongest evidence is
+**a batch of N dependent operations against the same operations sent one per request**.
+
+```bash
+export PATH=/usr/local/go/bin:$PATH
+make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/
+XDG_CACHE_HOME=$(mktemp -d) ./bin/sysml-grpc -port 50123 &     # -port, not -addr
+/home/ubuntu/pv/bin/pip install -e python/                     # see the venv trap above
+```
+
+- Drive it with `opensysml.connect(port=50123, auto_start=False)` and
+  `conn.load_from_content(text)` (there is no module-level `load_from_content`).
+  `m.edit()` collects `add_member(owner, kind, name, type=…)`, `set_value`, `rename`, `delete`
+  and `apply()` sends them as one `ApplyEdits`. An `Editor` is single-use: build a new one from
+  the reloaded model for the next request.
+- A fixture that actually reaches the library-index overlay needs a library-resolving type:
+  `package Rig { private import ISQ::*; part def Sensor { attribute reading : ScalarValues::Real; }
+  part def Frame; part sensor : Sensor; attribute margin = 1.0; }`. Ops whose later members are
+  owned by earlier ones (`add Rig::Mount`, then `add Rig::Mount::height`) are the reparse path;
+  ops that don't nest are applied as one batch without any reparse, so a flat op list proves nothing.
+- Equivalence assertions worth making: `str(result)` byte-identical, the
+  `[a.target + " -> " + a.new_text for a in result.applied]` sequence identical (operation indexes
+  differ between one request of N and N requests of one, so leave them out), reparse diagnostics
+  identical, and `m.get(fqn)` over both the added and the pre-existing names identical.
+- **`Model.get()` and `Model.find()` return `None` for a name they don't hold — they do not raise.**
+  A "no cross-model leakage" check written as `try: m.get(x); leaked=True` passes vacuously and
+  then fails for the wrong reason; assert `m.get(x) is None`. `m[name]` is the raising form.
+- Refusals arrive as typed `opensysml.errors.EditError` subclasses with `.failure` and
+  `.diagnostics`. Useful trio, all of which must refuse with empty content and leave the cached
+  model untouched: a later add taking a name an earlier add wrote
+  (`EDIT_FAILURE_MEMBER_NAME_TAKEN`, message names the colliding operation pair), an add naming a
+  type nothing declares (`EDIT_FAILURE_RESULT_INVALID`, with an `unresolved reference` diagnostic),
+  and an add owning something no operation created (`EDIT_FAILURE_OWNER_UNKNOWN`).
+- For perf/refactor claims, run a **contrast service from the parent commit on a second port**
+  (`git worktree add /tmp/old <sha>; go build -o /tmp/old-sysml-grpc ./cmd/sysml-grpc;
+  /tmp/old-sysml-grpc -port 50124`) and drive both from one script: assert byte-identical
+  notation and identical refusal kind/message/diagnostics, and time `apply()` only. At 8cef2b61 an
+  8-operation request measured ~17 ms median vs ~60 ms on HEAD~1.
+- Cheap leak checks that would catch a request-local index escaping: send the same request 3x
+  against the same model hash (content and applied lists must be identical each time), and edit two
+  different models alternately (neither result's text nor lookups may contain the other's names).
+- Recording: this surface has no GUI, so record a maximized Konsole
+  (`setsid konsole … &; wmctrl -a Konsole; wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz`)
+  and `tee` the script output, then page it with `sed -n 'a,bp'` so each section fits one screen.
+
+### Devin Secrets Needed
+None — the service, client and stdlib are all local.
