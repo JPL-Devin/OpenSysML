@@ -35,7 +35,7 @@ def strip(src, preds, dst):
     out = []
     for line in open(src):
         s = line.strip()
-        if any(("sysx:%s " % p) in s for p in preds):
+        if any((p + " ") in s for p in preds):
             if s.endswith('.') and out:
                 prev = out[-1].rstrip()
                 if prev.endswith(';'):
@@ -44,6 +44,10 @@ def strip(src, preds, dst):
         out.append(line)
     open(dst, 'w').write(''.join(out))
 ```
+
+Pass fully-prefixed predicate names — `strip("hop1.ttl", ["sysx:sourceText"], "stripped.ttl")` —
+since not every load-bearing predicate lives in the `sysx:` namespace (the `sysml:isVariant` /
+`sysml:includes` controls below use the `sysml:` prefix).
 
 Pass criterion: the source-text-free back-conversion is **byte-identical** to the source-text-backed
 one, and re-encoding it gives a `.ttl` byte-identical to `hop1.ttl`.
@@ -111,7 +115,8 @@ If it is still absent, say so — the predicate is decoder-only and its encoder 
 ## The `variant` / `include` prefixes (formerly normalized away)
 
 Since the parser started recording them, `variant part a : A;` and `include U;` round-trip. The
-carriers to strip for their negative controls are **`sysml:` predicates, not `sysx:` ones**:
+carriers to strip for their negative controls are **`sysml:` predicates, not `sysx:` ones** (with
+the helper above: `strip("hop1.ttl", ["sysml:isVariant"], ...)`):
 
 - `variant` rides on `sysml:isVariant "true"` — stripping it silently degrades the head to
   `part a : A;` (exit 0, judge by text).
