@@ -206,7 +206,7 @@ other roots are the reference's.
 | 15 | `pilot-examples`: `Simple Tests/PartTest.sysml` (4); `kerml-examples`: `Simple Tests/Circular.kerml` (3); `testdata`: `passes/constraints.sysml` (2); `probes` (6) | `<x> participates in a specialization cycle` | adjudicated divergence — the same F4/K5 reading as the three Xpect rows below; every fixture declares a real cycle and the pilot has no such check | 12F (this doc) |
 | 6 | `pilot-examples`: `Vehicle Example/Annex_A_VehicleViews.sysml`:753–789 | `unresolved reference: Safety` / `Security — did you mean SimpleVehicleModel::Definitions::MetadataDefinitions::Safety?` | our defect | resolver — an `@Safety` / `@Security` prefix annotation inside a nested part body, whose metadata definition the file reaches through imports; the mechanism is not derived in this slice |
 | 2 | `pilot-examples`: `State Space Representation Examples/EVSample1.sysml`:351,354 | `unresolved reference: sourceOutput` / `targetInput — did you mean Transfers::Transfer::source::sourceOutput?` | our defect | resolver — `attribute :>> sourceOutput :>> output.voltage;` inside a `flow`'s `end ::> battery`, so the redefined name is inherited through the end's implicit `Transfer` typing |
-| 1 | `pilot-examples`: `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38 | `unit 'mm' is not applicable to value` | our defect | units — the fresh base retains this warning at the `60 [mm]` value; it is not a row closed by wave 12F |
+| 1 | `pilot-examples`: `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38 | `operator '+' combines incommensurable quantities: a dimensionless value and mm (dimension L)` | our defect | units — the fresh base retains this warning at `22/2*25.4 + 110 [mm]`; Step 2 must derive the bracket's applicability rather than preserve the stale pre-wave-12D message |
 | 1 | `pilot-validation`: `09-Verification/9-Verification-simplified.sysml`:55 | `unresolved reference: massRequirement — did you mean MassRequirement?` | our defect | resolver — `verify vehicleMassRequirement :>> massRequirement;`, the same shape as the `EVSample1` rows: a `:>>` target inherited from the enclosing verification's type |
 | 1 | `pilot-examples`: `Vehicle Example/VehicleDefinitions.sysml`:47 | `interface Mounting connects ports … whose directed features are not conjugate` | adjudicated divergence — a warning of ours where the pilot has no check | 11A (usage typing), kept |
 | 1 | `pilot-examples`: `Analysis Examples/Turbojet Stage Analysis.sysml`:25 | `operator '+' combines incommensurable quantities` | adjudicated divergence — a specification-grounded warning deliberately retained where the pilot is silent; attribution below | quantity/dimension analysis |
@@ -257,7 +257,8 @@ specialization relation actually contains. It contains exactly what these fixtur
   to be a strict partial order (a type may not be a proper supertype of itself), so the pair is not
   satisfiable by any model.
 - `PartTest.sysml.xt`:67–71 — `part p1 :> p2; part p2 :> p3; part p3 :> p1;` and `part p4 :> p4;`.
-  `:>` is subsetting, whose transitive closure is likewise irreflexive (KerML 8.3.4.2); the self-loop
+  `:>` is subsetting, a kind of specialization (KerML 7.3.4.4 and 8.3.3.3.10), whose transitive
+  closure is irreflexive under the specialization strict partial order (KerML 7.3.3.2); the self-loop
   is the same rule at length one.
 - `Redefinition_OwningType_Cyclic_Gen.sysml.xt`:28–34 — `part def A :> C` with `part def C :> A, B`.
   Redefinition of an owning type is indeed legal, and this fixture does not only redefine: it
