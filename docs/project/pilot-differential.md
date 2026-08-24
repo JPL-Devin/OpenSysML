@@ -2146,7 +2146,7 @@ The seven rows that became agreement are all on `testdata`, and six of them are 
 | `passes/errors.sysml` | 3 | `Must have a Boolean result` | `Must have a Boolean result` | agreed, same rule |
 | `resolve/errors.sysml` | 3 | `Must have a Boolean result` | `Must have a Boolean result` | agreed, same rule |
 
-The five Boolean-result rows now agree on the exact rule, element, and wording. The remaining
+The five rows aligned here now agree on the exact rule, element, and wording. The remaining
 `parse/expressions.sysml` line 4 row is counted as agreement by the harness's
 `(line, severity, category)` matching, but its wording divergence remains open: our diagnostic
 requires a model-level-evaluable condition, while the pilot requires an invocation of a behavior or
