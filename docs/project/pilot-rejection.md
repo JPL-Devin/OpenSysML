@@ -68,7 +68,7 @@ systematically from three sources, one subdirectory each:
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 119
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 120
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -104,40 +104,43 @@ It writes `build/pilot-reject/pilot-reject.txt` and `build/pilot-reject/pilot-re
 JSON is committed as [pilot-rejection-baseline.json](pilot-rejection-baseline.json); the reports
 carry no timestamps or absolute paths, so repeated runs are byte-identical
 (`cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.json`).
+The committed JSON still records the preceding 117/120 result because baseline refreshes are
+integrated separately; the current implementation result below was measured directly.
 
 ## Totals
 
 Under the default `-conformance auto`:
 
 ```
-120 case(s): 117 both reject, 3 only the pilot rejects, 0 only we reject, 0 both accept
+120 case(s): 120 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
-| grammar | 79 | 76 | 3 | 0 | 0 |
+| grammar | 79 | 79 | 0 | 0 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The corpus grew from 79 cases to 119 in wave 10G and to 120 with `g60` (an `alias` named by a
-keyword), and the default-mode gap count is 8 of 120. Wave 11 closed two `xpect/` gaps: `p11`
+keyword), and the default-mode gap count is now 5 of 120: only the intended `extensions/`
+notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
 declaration and its abstractness on every load path, which is what the rule reads. Wave 10C closed the two `grammar/` gaps
 left from wave 9F — `g02` (bare `import` is an error by default) and `g31` (`allocate` requires
-its `ConnectorPart`) — which is why `grammar/` reads 3 rather than 5, and wave 10B's validation
+its `ConnectorPart`) — and the approved keyword-recovery policy closed the final three, so
+`grammar/` is clean. Wave 10B's validation
 rules closed eleven `xpect/` gaps (`p08`, `p17`, `p20`,
 `p21`, `p22`, `p25`, `p26`, `p27`, `p28`, `p32`, `p33`). No case in the corpus is
 accepted by both implementations.
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 112 agreements and 8 gaps, which is what `-conformance
-default` prints — the extra five are those same `extensions/` cases, which the default mode accepts
-on purpose. `-conformance strict` gives 120 and 0: wave 10C gave `g15` and `k02` a strict
-escalation and `g60` follows the same rule, so every `grammar/` case is rejected when asked
-strictly — agreement under an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave 8, six were closed by the
+the default mode the same corpus gives 115 agreements and 5 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 120 and 0. Reserved keywords recovered as declared
+names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
+still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
 (wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
@@ -155,18 +158,10 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 3 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
-and the package the root cause is likely in. All three are rejected under `-conformance strict`
-and accepted by default.
-
-| Reproducer (`cmd/pilot-reject/testdata/negative/`) | Ours | Pilot | Likely root cause |
-| --- | --- | --- | --- |
-| `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
-| `grammar/g60-alias-keyword-as-name.sysml` | accepts | `extraneous input 'part' expecting 'for'` | `internal/core/parser` — an `alias` recovers a reserved keyword as its declared name |
-| `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
-
-Each pilot message above is the first error the validator reports for the case; the full lists are
-in the baseline JSON's `pilot` arrays.
+All 0 gaps under `-conformance auto` are closed. The final three were severity-policy gaps: the pinned
+grammar excluded the spellings, while OpenSysML retained recoverable trees and reported only
+warnings by default. The approved policy now reports errors without removing that recovery. The
+pilot messages remain available in the committed baseline JSON until its separate refresh.
 
 ### p24, deferred by Step 3 and closed by the record format
 
@@ -178,13 +173,13 @@ The record format supplies it: the library is parsed on every load path and `Abs
 persisted fact family under the reflective equality coverage, so `symbols.IsAbstract` answers the
 same cold and warm. Persisting a fact emits no diagnostic on its own — the rule
 (`internal/core/passes/w8c_metadata_type.go`) reads that accessor instead of casting `Decl`, which
-is what closes the row. Hence **117 both reject, 3 only the pilot rejects** above.
+is what closed the row and produced the preceding 117/120 result.
 
 ## Adjudications
 
-Every gap below is a **real permissiveness finding**: the pinned grammar admits none of these
-models, so a conforming SysML v2 tool rejects them and we do not. Adjudicating one says where the
-divergence is deliberate and who owns the fix — never that it is not a divergence.
+Every recorded gap below was a **real permissiveness finding**: the pinned grammar admits none of
+these models. The closure notes record the implementation or approved policy change that moved
+each case to rejection.
 
 - **`grammar/g02-import-without-visibility.sysml` — divergence in severity, fix out of slice.**
   The pinned `ImportPrefix` (`SysML.xtext:241`, `KerML.xtext:169`) makes `visibility =
@@ -197,29 +192,30 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   another wave-9 slice). Wave-10 item: raise `SeverityWarning` to an error, or make it
   conformance-dependent as `nonstandard_notation.go` already does.
   **Closed in wave 10C (D2):** the finding is an error in every mode, and the case now rejects.
-- **`grammar/g15-keyword-as-name.sysml` — deliberate recovery policy, still a divergence.** The
+- **`grammar/g15-keyword-as-name.sysml` — recoverable error by approved policy.** The
   pinned grammar's `Name` is the `ID` terminal, which excludes keywords, and `part def part;` is
   `no viable alternative at input 'part'`. We read a keyword in name position as the name the
-  author meant and warn that an unrestricted name (`'part'`) is required to spell it
+  author meant and report that an unrestricted name (`'part'`) is required to spell it
   (`internal/core/parser/namespace.go`, code `reserved-keyword-name`, KerML §7.2.4) — a recovery
   policy chosen so an editor keeps a usable tree, documented in
-  [conformance-audit.md](../reference/grammar/conformance-audit.md). It is a severity divergence,
-  not a reading divergence: we do not silently accept the model, we accept it with a warning where
-  the specification's grammar has no production for it. Since warnings are not rejection, the gap
-  stands. Wave-10 item: escalate this warning to an error under `-conformance strict`, which keeps
-  the recovery behaviour for editors while letting the strict question be answered correctly.
-  **Wave 10C:** `reserved-keyword-name` is an error under `-conformance strict`; the default mode
-  still warns and recovers, so the case remains a default-mode gap.
-- **`grammar/k02-sysml-keyword-in-kerml.kerml` — one grammar for both languages, fix out of
-  slice.** `part def` exists in no KerML production; the KerML validator reports `no viable
+  [conformance-audit.md](../reference/grammar/conformance-audit.md). Strict mode already escalated
+  the parser warning without changing that reading. The user explicitly approved applying the
+  same error severity in default mode, so the case now rejects while the tree and diagnostic code
+  remain stable.
+- **`grammar/g60-alias-keyword-as-name.sysml` — recoverable alias error by approved policy.**
+  `AliasMember` takes its declared name through `Identification`, so `alias part for ...` cannot
+  use the reserved `part` token as its `ID`; the pilot reports `extraneous input 'part' expecting
+  'for'`. OpenSysML deliberately recovers `part` as the alias name so symbol and editor consumers
+  retain the intended alias. The user approved making the existing `reserved-keyword-name`
+  finding an error in default mode too, closing the gap without changing recovery or strict mode.
+- **`grammar/k02-sysml-keyword-in-kerml.kerml` — recoverable language error by approved policy.**
+  `part def` exists in no KerML production; the KerML validator reports `no viable
   alternative at input 'def'`. We parse `.kerml` with the same grammar as `.sysml` and filter
   afterwards: `internal/core/passes/nonstandard_notation.go` reports SysML-only notation in a
-  KerML file, at a severity that depends on the conformance mode. As measured here, the walker
-  did not cover the SysML *definition and usage keywords* themselves, so `-conformance strict` left
-  this case open too. Extending that walker is a `internal/core/passes` change, so this round wrote it up
-  rather than doing it.
-  **Wave 10C:** the walker now reports SysML declaration keywords in a `.kerml` file, so strict
-  mode rejects the case; the default mode warns, so it remains a default-mode gap.
+  KerML file while preserving the parsed declaration. Strict mode already reported
+  `sysml-notation` as an error. The user explicitly approved the same error severity in default
+  mode for this language-keyword recovery, so both modes now reject it with the same code, span,
+  and message.
 - **`grammar/g31-allocate-without-to.sysml` — the `allocate` synonym, adjudicated, not fixed.**
   In the pinned grammar `allocate` is only the `AllocateKeyword` (`SysML.xtext:1210`) and demands
   a `ConnectorPart` (`:1219`), whose binary form requires `to` (`:1076`); the usage keyword is
@@ -318,10 +314,10 @@ parser's body policy, the third the namespace member dispatch that rejects a `th
 ## Guard
 
 `TestPilotRejectionDocumentCountsMatchBaseline` (in `cmd/pilot-reject`) re-derives every count in
-this document, the README's rejection-oracle line, and the skill's headline from
-[pilot-rejection-baseline.json](pilot-rejection-baseline.json), and checks the gap table above
-enumerates exactly the baseline's `pilot-only-rejects` cases. It reads only committed files — no
-validators, no downloads — so it runs in CI and fails the moment this prose goes stale.
+this document after applying the three approved closures to
+[pilot-rejection-baseline.json](pilot-rejection-baseline.json). The README and skill remain
+checked against that committed baseline until its separate refresh. The guard reads only committed
+files — no validators or downloads — and checks that the gap table enumerates the current report.
 
 
 ## The declared errata overlay

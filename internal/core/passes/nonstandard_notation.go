@@ -21,23 +21,18 @@ const CodeKerMLNotation = "kerml-notation"
 // KerML grammar admits nowhere.
 const CodeSysMLNotation = "sysml-notation"
 
-// CodeReservedKeywordName marks a declared name spelled as a reserved keyword,
-// which the parser reads and warns about and strict mode rejects.
+// CodeReservedKeywordName marks a recovered declared name spelled as a
+// reserved keyword, which analysis rejects in every mode.
 const CodeReservedKeywordName = "reserved-keyword-name"
 
-// NonstandardNotationPass reports the constructs OpenSysML accepts beyond the
-// pinned grammars, classified in docs/reference/grammar/conformance-audit.md.
-// They stay parsed in either mode — models already use them — and the mode
-// decides what the finding weighs: a warning by default, an error under
-// conformance.ModeStrict, which rejects the file but, being notation, gates
-// no higher tier.
+// NonstandardNotationPass reports extension notation and recoverable grammar
+// violations without gating later semantic analysis.
 type NonstandardNotationPass struct{}
 
 // Level reports the syntax level: the written notation is all it reads.
 func (NonstandardNotationPass) Level() PassLevel { return LevelSyntax }
 
-// Run walks the document for extension notation and for KerML notation in a
-// SysML file.
+// Run walks the document for extension and language-specific notation.
 func (NonstandardNotationPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if root == nil {
 		return nil
@@ -52,16 +47,14 @@ func (NonstandardNotationPass) Run(ctx *Context, name string, root *ast.RootName
 		keywordName: keywordNameSpans(ctx.ParseDiagnostics),
 	}
 	w.walk(root.Members)
-	// Under strict conformance the findings are errors, but they say how the
-	// model is written, not what it means, so they gate no higher tier.
+	// Notation errors describe the writing, not the recovered model's meaning.
 	for i := range w.diags {
 		w.diags[i].Notation = true
 	}
 	return w.diags
 }
 
-// notationSeverity maps the conformance mode onto what a non-conforming
-// construct weighs.
+// notationSeverity maps the mode onto extension-notation severity.
 func notationSeverity(mode conformance.Mode) Severity {
 	if mode.IsStrict() {
 		return SeverityError
@@ -72,7 +65,7 @@ func notationSeverity(mode conformance.Mode) Severity {
 // notationWalker accumulates the diagnostics of one document.
 type notationWalker struct {
 	sysml bool
-	// severity is what every finding of this walk carries; see notationSeverity.
+	// severity applies to mode-sensitive extension findings.
 	severity          Severity
 	diags             []Diagnostic
 	inRequirementBody bool
@@ -468,14 +461,14 @@ var kermlDeclarationKeywords = map[string]bool{
 	"struct": true, "succession": true, "type": true,
 }
 
-// sysmlDeclaration reports a kind keyword in a KerML file that no KerML
-// production spells, like the `part def` of k02 (KerML.xtext RootNamespace).
+// sysmlDeclaration rejects a declaration keyword no KerML production spells
+// while retaining the parsed declaration for editor and analysis consumers.
 func (w *notationWalker) sysmlDeclaration(n ast.Node, keyword string) {
 	if w.sysml || keyword == "" || kermlDeclarationKeywords[keyword] {
 		return
 	}
 	w.diags = append(w.diags, Diagnostic{
-		Severity: w.severity,
+		Severity: SeverityError,
 		Span:     keywordSpan(n, keyword),
 		Message: fmt.Sprintf("`%s` is SysML notation: the KerML grammar has no such declaration keyword, "+
 			"so move the declaration to a .sysml file", keyword),
@@ -484,20 +477,17 @@ func (w *notationWalker) sysmlDeclaration(n ast.Node, keyword string) {
 	})
 }
 
-// keywordAsName rejects a declared name spelled as a reserved keyword, which the
-// ID terminal excludes. Only strict mode reports it: the parser already warns and
-// keeps the recovery an editor needs (g15, docs/project/pilot-rejection.md).
-// Only a span the parser recovered qualifies, so a legal name the lexer knows as a
-// keyword of the other language, or a member a mis-parse named, is left alone.
+// keywordAsName rejects a recovered declared name the ID terminal excludes.
+// The parser keeps the declaration available to editors and later analysis.
 func (w *notationWalker) keywordAsName(id ast.Identification) {
-	if w.severity != SeverityError || id.Name == "" || id.NameSpan.Len != len(id.Name) {
+	if id.Name == "" || id.NameSpan.Len != len(id.Name) {
 		return
 	}
 	if !w.keywordName[id.NameSpan.Offset] {
 		return
 	}
 	w.diags = append(w.diags, Diagnostic{
-		Severity: w.severity,
+		Severity: SeverityError,
 		Span:     id.NameSpan,
 		Message: fmt.Sprintf("%q is a reserved keyword, not a name the ID terminal admits; "+
 			"write '%s' to use it as a name", id.Name, id.Name),
