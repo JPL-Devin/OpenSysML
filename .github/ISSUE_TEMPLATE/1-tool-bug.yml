@@ -1,0 +1,66 @@
+name: Tool bug
+description: OpenSysML crashes, hangs, or does something other than what it documents.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a diagnostic you believe disagrees with the *specification* rather than with our
+        documentation, use **Spec conformance gap** instead. To argue against a ruling we have
+        already recorded, use **Objection to a ruling**.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: >
+        The exact command and the smallest model that shows it. Paste the model inline rather
+        than attaching a workspace where you can.
+      placeholder: |
+        $ sysml -check model.sysml
+        ...output...
+
+        model.sysml:
+        package P {
+            part def Wheel;
+        }
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `sysml --version` (or the release/commit you built from).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - CLI (sysml)
+        - REPL (sysml)
+        - Language server (sysml-lsp) / VS Code extension
+        - gRPC service (sysml-grpc)
+        - Python client (opensysml)
+        - Build, packaging, or CI
+        - Documentation
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: Ubuntu 24.04 / macOS 15 arm64 / Windows 11

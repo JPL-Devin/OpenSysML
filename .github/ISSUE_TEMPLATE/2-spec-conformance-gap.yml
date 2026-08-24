@@ -1,0 +1,58 @@
+name: Spec conformance gap
+description: OpenSysML accepts, rejects, or evaluates something differently from what SysML v2 or KerML requires.
+labels: ["conformance"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check [the compliance record](https://open-mbee.github.io/OpenSysML/project/spec-compliance/)
+        and [the OMG-materials defect list](https://open-mbee.github.io/OpenSysML/project/omg-issues/)
+        first — a known divergence is usually already a row there, with the reasoning behind it.
+
+  - type: textarea
+    id: model
+    attributes:
+      label: Model and observed behaviour
+      description: The smallest model, the command you ran, and what OpenSysML did with it.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: required
+    attributes:
+      label: What the specification requires
+      description: >
+        What should happen instead, with the clause that says so — document, version and section
+        (for example "KerML 1.0 §8.2.5.8.1"). Quote the sentence you are relying on.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of gap
+      options:
+        - Valid model is rejected (false positive)
+        - Invalid model is accepted (false negative)
+        - Parsed or resolved into the wrong structure
+        - Evaluates or executes to the wrong result
+        - Unsupported syntax or construct
+    validations:
+      required: true
+
+  - type: input
+    id: pilot
+    attributes:
+      label: Reference implementation
+      description: >
+        Optional. What the OMG pilot implementation (or another tool) does with the same model, if
+        you tried it.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `sysml --version`.
+    validations:
+      required: true
