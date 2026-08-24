@@ -180,7 +180,7 @@ agree 1295 (of which wording-only 248) | disagree 28 | unlocated 0 | not adjudic
 
 | Kind | Expectations | Agree | of which wording-only | Disagree | Not adjudicated | `same-location` | `same-line` | `severity-differs` | `elsewhere` | nothing |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `errors` | 510 | 491 | 248 | 19 | 0 | 7 | 6 | 0 | 6 | 0 |
+| `errors` | 510 | 491 | 248 | 19 | 0 | 10 | 7 | 0 | 2 | 0 |
 | `noErrors` | 275 | 267 | — | 8 | 0 | — | — | — | — | — |
 | `linkedName` | 194 | 194 | — | 0 | 0 | — | — | — | — | — |
 | `warnings` | 113 | 112 | — | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
@@ -213,8 +213,11 @@ change in our behaviour):
 | `errors` | 0 / 510 | **491 / 510** | 243 rows are ours word-for-word; the other 248 are wording-only, admitted centrally in wave 10 after the rule and element were checked, not by adopting the pilot's phrasing |
 | `scope` | 73 / 230 | **230 / 230** | wave 9A resolves implicit and inherited members through the library (`library-names` 125 → 27), wave 9D reconciles the protected and shadowed paths, wave 10A bounds re-entry to one per name, wave 11C fixes the quoted anchor and stops a recursive import's descent carrying implicit generals, and wave 12E bounds derived `self`/`that` paths and anchors a scope assertion on the reference its text names |
 
-**These tables and the baseline are a single fresh-cache Step 3 run against merged base
-`4b9baf2d`.** The largest movement in wave 11 was detection, not classification: the 11
+**These tables and the baseline are a fresh-cache run after the transition-guard and KerML
+subsetting-metaclass rules became element-scoped.** Agreement is unchanged, while four rows now
+carry their own diagnostics: `same-location` 7 → **10**, `same-line` 6 → **7**, and
+`elsewhere-in-file` 6 → **2**. The differential census is byte-identical, including 84 only-ours
+diagnostics. The largest movement in wave 11 was detection, not classification: the 11
 `severity-differs` `errors` rows are **0**, because wave 11A implemented the usage-typing and
 specialization rules the pilot declares there instead of adjusting a severity, and 11F canonicalized
 the resolver's inherited-name warning that had been standing in their place. `errors` silence falls
@@ -248,7 +251,7 @@ diagnostic, so no file whose implementers declared an error is now accepted in s
 agreement without changing what we detect — the same severity, the same offset, the same rule, the
 same element, our phrasing (`unresolved reference: A::a1 — did you mean …` against `Couldn't resolve
 reference to Classifier 'A::a1'.`). **Nothing was newly detected by it, and the sub-count exists so
-that a future reader cannot book the jump as detection.** The 7 rows left in `same-location` are the
+that a future reader cannot book the jump as detection.** The 10 rows left in `same-location` are the
 interesting residue: there we flag the declared offset for a *different* reason than the pilot does,
 such as `ParsingTests_BadScopeWithOnlyTwoDot.kerml.xt`:26, where it cannot resolve `test` and we say
 the reference resolves to a package where a type is required.
@@ -477,27 +480,29 @@ severity alone. What is left:
 
 | Tolerance | Rows | Meaning |
 |---|---:|---|
-| `same-location` | 7 | we flag the exact declared offset for a **different rule** |
-| `same-line` | 6 | we flag the declared line at a different offset — almost certainly the same defect |
+| `same-location` | 10 | we flag the exact declared offset for a **different rule** |
+| `same-line` | 7 | we flag the declared line at a different offset — almost certainly the same defect |
 | `severity-differs` | 0 | **empty:** wave 11A implemented the declared rules instead |
-| `elsewhere-in-file` | 6 | we report errors, but not where the declaration points |
+| `elsewhere-in-file` | 2 | we report errors, but not where the declaration points |
 | nothing | 0 | **empty since wave 12D:** no declared-error file is accepted in silence |
 
 The disagreements split 15 KerML / 4 SysML across this kind. The SysML suite's assertions anchor at a whole
 declaration (`at "part def P { ... }"`) while ours land on the offending token inside it, so
-`same-line` there often means what `same-location` means in KerML. Together, **503 of 510 declared
+`same-line` there often means what `same-location` means in KerML. Together, **508 of 510 declared
 errors are ours at the declared location or line.**
 
-**The 7 remaining `same-location` rows are the ones the wording-only class deliberately refuses.**
+**The 10 remaining `same-location` rows are the ones the wording-only class deliberately refuses.**
 They sit at the declared offset with the declared severity and state a *different rule*, so admitting
-them would have hidden five distinct divergences:
+them would hide the following divergences:
 
-- **3 parse-shape rows** (`ParsingTests_BadScopeWithOnlyTwoDot.kerml.xt`:21 and :26,
-  `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:26) where the pilot cannot resolve the
-  reference at all and we resolve it and reject the *kind* (`type must be a type, found package`,
-  `subsets target must be a feature, found kermlType`) — the rows here where our answer is arguably
-  the more precise one. Wave 12D's recovery brought `:21` into this class out of
-  `elsewhere-in-file`.
+- **6 parse-shape rows** (`ParsingTests_BadScopeWithOnlyTwoDot.kerml.xt`:21 and :26,
+  `ParsingTests_BadScopeWithOnlyTwoDotAtTheEnd.kerml.xt`:21,
+  `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt`:21, and
+  `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:21 and :26) where the pilot cannot
+  resolve the reference at all and we resolve it and reject the *kind*
+  (`type must be a type, found package`, `subsets target must be a feature, found kermlType`) — the
+  rows here where our answer is arguably the more precise one. Element-scoped subsetting validation
+  brought the three `non` rows into this class out of `elsewhere-in-file`.
 - **`ParsingTests_ScopeWithFourDotAndDot.kerml.xt`:22**, where wave 12D replaced a false negative with
   `feature chain segment must be a feature, found kermlType` on the same declared reference —
   a KerML 8.3.4.7 chain rule rather than the pilot's unresolved-reference verdict.
@@ -510,11 +515,6 @@ them would have hidden five distinct divergences:
 - **`InterfaceUsage_Invalid.sysml.xt`:49**, a **pilot limitation**: SysML v2 §7.14.1 permits three
   or more interface ends, while §7.14.2 and §8.3.14.2 constrain only `BinaryInterface`; our
   independent port-kind error is at :53.
-- **`TransitionUsage_invalid.sysml.xt`:45**, where the pilot reports the ANTLR failure
-  (`A parallel state cannot have successions or transitions`) and we report what our recovery expected
-  — same defect, differently attributed, and the declared text is a parser-internal message we would
-  not adopt.
-
 The two `Specialization_invalid.kerml.xt` specialization rows and
 `CaseSubjectObjective_Invalid.sysml.xt`:80 left this class in wave 11: 11A implemented the
 specialization metaclass rules and 11E re-attached the conjugation rule at the type tier, and the
@@ -547,7 +547,7 @@ individually with the declared message and ours in
 
 ### Attribution of the `same-line` and `elsewhere-in-file` rows
 
-The 12 rows in these two tolerance classes are attributed below. The Xpect row is the line containing
+The 9 rows in these two tolerance classes are attributed below. The Xpect row is the line containing
 the assertion; its declared diagnostic generally anchors in the following model line. The citations
 are to the published KerML 1.0 and SysML v2.0 specifications that govern the pinned 2026-05
 implementation. There is no published KerML 1.1 specification to cite; where parser behavior matters,
@@ -556,26 +556,22 @@ wording alone.
 
 | Xpect row | Declared | OpenSysML | Specification reading | Category | Owner |
 |---|---|---|---|---|---|
-| `ParsingTests_BadScopeWithOnlyTwoDotAtTheEnd.kerml.xt`:21 | `Couldn't resolve reference to Feature 'non'.` | No diagnostic at the declared row; the nearest is `unresolved reference: Test3::A` at model line 30. | Subsetting relates two Features (KerML 7.3.4.4 and 8.3.3.3.10), so `feature aa subsets non;` is invalid when `non` is a classifier. OpenSysML has that metaclass check, but the unrelated malformed chain later in the file prevents the type tier from running. KerML specifies neither document-level diagnostic scheduling nor recovery completeness. | **adjudicated divergence** | validation-registry tier gating (waves 12A/12D) |
-| `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt`:21 | `Couldn't resolve reference to Feature 'non'.` | No diagnostic at the declared row; the nearest is `expected a name after '.'` at model line 31. | The same KerML 7.3.4.4/8.3.3.3.10 rule is implemented but gated by the later syntax error. The specification does not require a type-tier diagnostic to survive malformed input elsewhere in the document. | **adjudicated divergence** | validation-registry tier gating (waves 12A/12D) |
 | `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt`:26 (`..`) | `no viable alternative at input '..'` | One `expected a name after '.'` at model line 31. | A qualified name uses `::` (KerML 8.2.3.4.1), while a feature chain is qualified names separated by one or more single `.` tokens (KerML 7.3.4.6 and 8.2.4.3.5). `test..A::a` is malformed; the specification does not prescribe ANTLR alternatives, recovery offsets, diagnostic wording, or one diagnostic per recovered token. | **adjudicated divergence** | parser recovery (wave 12D) |
 | `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt`:26 (`::`) | `no viable alternative at input '::'` | The same single `expected a name after '.'` at model line 31. | Same malformed `test..A::a` and the same KerML 8.2.3.4.1/8.2.4.3.5 reading; this is a second pilot recovery trace for one malformed chain, not a second semantic obligation. | **adjudicated divergence** | parser recovery (wave 12D) |
 | `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt`:26 (`A`) | `no viable alternative at input 'A'` | The same single `expected a name after '.'` at model line 31. | Same malformed `test..A::a` and parser-recovery reading. | **adjudicated divergence** | parser recovery (wave 12D) |
-| `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:21 | `Couldn't resolve reference to Feature 'non'.` | No diagnostic at the declared row; the nearest is `expected a name after '.'` at model line 32. | The KerML 7.3.4.4/8.3.3.3.10 subsetting rule is implemented but gated by the later syntax error, as above. | **adjudicated divergence** | validation-registry tier gating (waves 12A/12D) |
 | `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:26 (`..`) | `no viable alternative at input '..'` | One `expected a name after '.'` at model line 32. | `test::A..a` violates the same qualified-name and feature-chain productions (KerML 8.2.3.4.1, 7.3.4.6 and 8.2.4.3.5). Exact recovery traces are not specified. | **adjudicated divergence** | parser recovery (wave 12D) |
 | `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:26 (`A`) | `no viable alternative at input 'A'` | The same single `expected a name after '.'` at model line 32. | Same malformed `test::A..a` and parser-recovery reading. | **adjudicated divergence** | parser recovery (wave 12D) |
 | `ParsingTests_Import_Visibility.kerml.xt`:25 | `extraneous input '}' expecting EOF` | No diagnostic at the brace; the nearest is the direct bare-import error at model line 24. | Import visibility is mandatory (KerML 7.2.5.4 and 8.2.3.4.2). OpenSysML reports that violated rule once; the brace message is the pilot parser's cascade, and the specification does not require it. | **adjudicated divergence** | parser recovery (wave 12E) |
 | `ParsingTests_ScopeWithFourDotAndDot.kerml.xt`:22 | `Couldn't resolve reference to Feature 'b'.` | `feature chain segment must be a feature, found kermlType` on model line 27. | Every chaining element is a Feature (KerML 7.3.4.6, 8.2.4.3.5 and 8.3.3.3.5). OpenSysML resolves `OuterPackage::B` and reports its wrong metaclass; the pilot filters/fails the lookup. Both reject the same chain, and KerML does not require failed resolution rather than a direct metaclass diagnostic. | **adjudicated divergence** | feature-chain type validation (wave 12D) |
 | `Import_Visibility_Invalid.sysml.xt`:25 | `extraneous input '}' expecting EOF` | No diagnostic at the brace; the nearest is the direct bare-import error at model line 24. | Import visibility is mandatory in the SysML package-import production (SysML v2 7.5.3 and 8.2.2.5.1). The pilot's brace error is an unspecified recovery cascade after the same bare import OpenSysML rejects directly. | **adjudicated divergence** | parser recovery (wave 12E) |
-| `TransitionUsage_invalid.sysml.xt`:60 | `Must be a Boolean expression.` | No diagnostic there; the nearest is `A parallel state cannot have successions or transitions.` at model line 46. | A transition guard must be a Boolean-valued expression of multiplicity 1 (SysML v2 7.18.1, 7.18.3 and 8.3.18.8 `validateTransitionFeatureMembershipGuardExpression`). OpenSysML implements the rule and emits it in isolation, but the earlier name-resolution-tier error prevents the document-scoped type pass from running. | **adjudicated divergence** | validation-registry tier gating (waves 12A/12D) |
+| `TransitionUsage_invalid.sysml.xt`:60 | `Must be a Boolean expression.` | `transition guard must be Boolean, found String` on the declared model line. | A transition guard must be a Boolean-valued expression of multiplicity 1 (SysML v2 7.18.1, 7.18.3 and 8.3.18.8 `validateTransitionFeatureMembershipGuardExpression`). OpenSysML now evaluates the guard independently of the unrelated earlier name-resolution error; the remaining difference is diagnostic wording and the expression-only span. | **adjudicated divergence** | transition-guard validation |
 
 Step 3 closes the former `AssignmentActionUsage_invalid.sysml.xt:44` row with an element-scoped
 constraint pass implementing SysML v2 §8.3.17.5
 `referent.featureTarget.mayTimeVary`; it moves from `elsewhere-in-file` to word-for-word agreement.
-This corrects one detail in the wave 12D narrative without changing its adjudication: the three
-`non` rows are suppressed by document-level tier gating, not by the parser's local recovery. Their
-underlying subsetting rule is present. The five malformed-chain rows remain parser-recovery
-divergences.
+The same element-scoped pattern now lets the three previously gated `non` rows report the existing
+subsetting-metaclass rule at their declared offsets, and lets the transition guard report on its
+declared line. The five malformed-chain rows remain parser-recovery divergences.
 
 ---
 
