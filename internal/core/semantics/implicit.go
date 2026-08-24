@@ -174,6 +174,14 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 			fqn, ok := implicitKerMLBases[d.Keyword]
 			return fqn, ok
 		}
+		if len(ownedEnds(sym)) == 2 {
+			switch d.Kind {
+			case ast.UsageConnection:
+				return "Connections::BinaryConnection", true
+			case ast.UsageInterface:
+				return "Interfaces::BinaryInterface", true
+			}
+		}
 		if d.IsIndividual && d.Kind == ast.UsageOccurrence {
 			// An individual occurrence is a life, not an arbitrary occurrence
 			// (SysML v2 §7.9.4), however the modifier is spelled.
@@ -186,6 +194,14 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		if isKerML {
 			fqn, ok := implicitKerMLBases[d.Keyword]
 			return fqn, ok
+		}
+		if len(ownedEnds(sym)) == 2 {
+			switch d.Kind {
+			case ast.DefConnection:
+				return "Connections::BinaryConnection", true
+			case ast.DefInterface:
+				return "Interfaces::BinaryInterface", true
+			}
 		}
 		fqn, ok := implicitDefinitionBases[d.Kind]
 		return fqn, ok

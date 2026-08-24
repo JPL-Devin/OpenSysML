@@ -104,19 +104,19 @@ the gate stays and passes opt in one at a time with a stated subject.
 
 ## Rows the gate was expected to close, and did not
 
-The Xpect run being byte-identical with the gate fully removed is the proof: none of these four is
-behind the gate. Each is a rule we do not implement.
+The Xpect run being byte-identical with the gate fully removed is the proof: none of these four was
+behind the gate. The table records their current disposition after Step 3.
 
 | Row | Declared | Ours | Category | Owner |
 |---|---|---|---|---|
-| `AssignmentActionUsage_invalid.sysml.xt:44` | `Referent must be time varying.` | nothing at the line | unimplemented obligation | constraint tier — the rule is absent (`grep` finds no time-varying check), so ungating cannot produce it |
+| `AssignmentActionUsage_invalid.sysml.xt:44` | `Referent must be time varying.` | word-for-word agreement | closed in Step 3 | element-scoped constraint validation derives the referent's `mayTimeVary` property |
 | `AssociationTest_CrossFeatures_invalid.kerml.xt:52` | `Must be the cross feature` | nothing at the line; our cross-feature rules fire at line 42 in the same file | unimplemented obligation | wave 11E row E2, parser — the nested `end x1 [0..1] feature x : C1 crosses y.b` form. The file's own constraint-tier diagnostics are reported, so nothing in it was ever gated |
-| `InterfaceUsage_Invalid.sysml.xt:49` | `Cannot have more than two ends` (declared *beside* `An interface definition end must be a port.`, which we do report) | only the port rule | adjudicated divergence (already recorded) | the normative library types `Interfaces::Interface`'s participants `[2..*]`; two ends is a property of `BinaryInterface`, which this `interface def` does not specialize. Reproduced in isolation: a three-ended `interface def` in a clean file draws exactly our port-rule diagnostic, with no lower tier failing, so the gate is not involved |
-| `InterfaceUsage_Invalid.sysml.xt:78` | `Duplicate of inherited member name 'self' from Part, Port` (warning) | `An interface end must be a port.` (error) | unimplemented obligation, deferred by measurement (already recorded) | resolver — needs an interface end's implicit `Ports::Port` base; `docs/project/spec-compliance.md` and this page's adjudication record that scoping the extra base raised only-ours 128 → 153 |
+| `InterfaceUsage_Invalid.sysml.xt:49` | `Cannot have more than two ends` (declared *beside* `An interface definition end must be a port.`, which we do report) | only the port rule | pilot limitation | the normative library types `Interfaces::Interface`'s participants `[2..*]`; two ends is a property of `BinaryInterface`. SysML v2 §7.14.1 permits a general interface to have three or more ends |
+| `InterfaceUsage_Invalid.sysml.xt:78` | `Duplicate of inherited member name 'self' from Part, Port` (warning) | word-for-word agreement | closed in Step 3 | exactly two-ended interfaces receive `Interfaces::BinaryInterface`; positional end redefinition then supplies the inherited port end |
 | `Must have a concrete type` family (11D) | — | — | not present | the string appears in neither oracle report at this pin, so there is no row to close |
 
-None of these needs both this gate and another slice: **each needs only the other slice.** The gate
-is not on their path, measured rather than argued.
+The gate is not on any row's path, measured rather than argued. Later closure or adjudication does
+not change that wave 12A finding.
 
 One pre-existing defect surfaced while checking the concrete-type family and is **not** caused by
 this change — it reproduces identically on the base commit. Our `Must have a concrete type` is

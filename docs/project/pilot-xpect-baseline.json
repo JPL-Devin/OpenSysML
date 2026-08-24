@@ -7,9 +7,9 @@
     "filesUnparsed": 0,
     "assertions": 1261,
     "rows": 1323,
-    "agree": 1293,
+    "agree": 1295,
     "wordingOnly": 248,
-    "disagree": 30,
+    "disagree": 28,
     "unlocated": 0,
     "notAdjudicated": 0,
     "missingResources": 0,
@@ -21,15 +21,15 @@
       "assertions": 486,
       "blockAssertions": 27,
       "rows": 510,
-      "agree": 490,
+      "agree": 491,
       "wordingOnly": 248,
-      "disagree": 20,
+      "disagree": 19,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 7,
       "sameLine": 6,
       "severityDiffers": 0,
-      "elsewhereInFile": 7
+      "elsewhereInFile": 6
     },
     {
       "kind": "noErrors",
@@ -66,14 +66,14 @@
       "assertions": 75,
       "blockAssertions": 17,
       "rows": 113,
-      "agree": 111,
+      "agree": 112,
       "wordingOnly": 0,
-      "disagree": 2,
+      "disagree": 1,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
       "sameLine": 0,
-      "severityDiffers": 1,
+      "severityDiffers": 0,
       "elsewhereInFile": 0
     },
     {
@@ -4569,9 +4569,9 @@
         "filesUnparsed": 0,
         "assertions": 309,
         "rows": 357,
-        "agree": 345,
+        "agree": 347,
         "wordingOnly": 5,
-        "disagree": 12,
+        "disagree": 10,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -4583,15 +4583,15 @@
           "assertions": 174,
           "blockAssertions": 10,
           "rows": 184,
-          "agree": 179,
+          "agree": 180,
           "wordingOnly": 5,
-          "disagree": 5,
+          "disagree": 4,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 2,
           "sameLine": 0,
           "severityDiffers": 0,
-          "elsewhereInFile": 3
+          "elsewhereInFile": 2
         },
         {
           "kind": "noErrors",
@@ -4628,14 +4628,14 @@
           "assertions": 57,
           "blockAssertions": 17,
           "rows": 95,
-          "agree": 93,
+          "agree": 94,
           "wordingOnly": 0,
-          "disagree": 2,
+          "disagree": 1,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
           "sameLine": 0,
-          "severityDiffers": 1,
+          "severityDiffers": 0,
           "elsewhereInFile": 0
         }
       ],
@@ -4967,7 +4967,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/AssignmentActionUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 3,
-          "agree": 2,
+          "agree": 3,
           "rows": [
             {
               "kind": "errors",
@@ -4986,15 +4986,6 @@
               "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Element 'c'.\"",
               "ours": "line 43 offset 1443: unresolved member: c"
-            },
-            {
-              "kind": "errors",
-              "line": 44,
-              "at": "d",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Referent must be time varying.\"",
-              "ours": "no error at line 45; nearest is line 41: unresolved member: b"
             }
           ]
         },
@@ -5159,7 +5150,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/InterfaceUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 6,
-          "agree": 4,
+          "agree": 5,
           "rows": [
             {
               "kind": "errors",
@@ -5170,15 +5161,6 @@
               "tolerance": "same-location",
               "declared": "error: \"Cannot have more than two ends\"",
               "ours": "line 53 offset 1550: An interface definition end must be a port."
-            },
-            {
-              "kind": "warnings",
-              "line": 78,
-              "at": "end part ::\u003e tankAssy.fuel;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Part, Port\"",
-              "ours": "no warning at line 79, but a error: line 79 offset 2701: An interface end must be a port."
             }
           ]
         },

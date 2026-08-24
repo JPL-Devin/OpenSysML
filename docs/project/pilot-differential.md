@@ -239,6 +239,22 @@ severity-only, only-pilot, Xpect, and rejection do not move:
 | `09-Verification/9-Verification-simplified.sysml:55` | objective-role implicit redefinition | closed |
 | `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml:38` | adjudicated divergence: `[mm]` applies to `110`, not the additive expression | retained |
 
+### Step 3 obligation round
+
+Independent fresh-cache reports from exact base `4b9baf2d` and this tree are byte-equivalent:
+
+| Oracle | Base `4b9baf2d` | Step 3 |
+|---|---:|---:|
+| Xpect | 1293 agree / 248 wording-only / 30 disagree | 1295 / 248 / 28 |
+| Differential | 324 fully agreeing / 83 only ours / 66 only pilot | 324 / 83 / 66 |
+| Rejection | 116 both reject / 4 only pilot / 0 only ours / 0 both accept | 116 / 4 / 0 / 0 |
+
+The differential has **no row movement, recovery, regression, or newly unmasked diagnostic**.
+Its only-ours counts remain `training` 0, `pilot-examples` 8, `pilot-validation` 0,
+`kerml-examples` 3, `testdata` 3, `examples` 63, and `probes` 6. Pilot-side columns remain
+populated and unchanged: 122 diagnostics total, 66 pilot-only. Step 3's two semantic recoveries are
+Xpect assertions not present in these seven differential roots.
+
 **Wave 12A moves the agreement column and nothing else.** Narrowing tier gating from the document to
 the element (roadmap L2) turns 7 pilot-only rows into agreed ones: agreement 25 → **32**, only-pilot
 73 → **66**, our diagnostics 168 → **175**, only-ours unmoved at **119** and no root other than
@@ -2065,26 +2081,22 @@ disagreements.
 * **General interface end count:** `InterfaceUsage_Invalid.sysml:49` expects
   `Cannot have more than two ends` from the pilot. The normative library's
   `Interfaces::Interface::participant` has multiplicity `[2..*]`; exactly two
-  ends is a property of `BinaryInterface`, not `Interface`. OpenSysML therefore
-  reports the port-typed-end violation at the same location. This is a
-  justified divergence under the library being validated and remains an
-  adjudication question for the parent rather than a categorical claim that
-  the pilot is wrong.
+  ends is a property of `BinaryInterface`, not `Interface`. SysML v2 §7.14.1
+  permits three or more ends on a general interface, while §7.14.2 and
+  §8.3.14.2 constrain the binary subtype. Step 3 therefore classifies the
+  universal expectation as a **pilot limitation**; OpenSysML's independent
+  port-typed-end error remains at the same location.
 * **Interface implicit Port base:** `InterfaceUsage_Invalid.sysml:78` expects
-  `Duplicate of inherited member name 'self' from Part, Port`. This remains
-  intentionally unimplemented. The diamond would require an interface end to
-  carry an implicit `Ports::Port` base in addition to the declaration keyword's
-  own base, while `internal/core/semantics/implicit.go` keys implicit bases on
-  the declaration keyword. Scoping the extra base to ends owned by interface
-  usages or definitions increased only-ours diagnostics from 128 to 153 across
-  training, pilot examples, pilot validation and testdata, introducing false
-  positives. The row stays open because closing it costs correctness elsewhere.
+  `Duplicate of inherited member name 'self' from Part, Port`. Step 3 closes
+  the row by giving exactly two-ended interfaces the normative
+  `Interfaces::BinaryInterface` base; the existing positional implicit
+  redefinition then supplies the matching inherited port end. Three-ended
+  general interfaces and ordinary binary connections remain silent.
 * **Assignment action time variance:** `AssignmentActionUsage_invalid.sysml:44`
-  expects `Referent must be time varying`. This is not implemented: the
-  semantic model does not yet determine time variance on the referent's type.
-  Implementing it requires a type-level time-varying determination propagated
-  through the assignment referent and checked by the assignment-action
-  validation rule.
+  expects `Referent must be time varying`. Step 3 closes it with SysML v2
+  §8.3.17.5 over the referent feature's derived `mayTimeVary` property
+  (§8.3.6.4), in an element-scoped constraint pass so an unrelated lower-tier
+  error does not mask the assignment diagnostic.
 
 ## Wave 12A — element-scoped tier gating (roadmap L2)
 

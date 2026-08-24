@@ -157,10 +157,23 @@ and the package the root cause is likely in. The three `grammar/` rows are rejec
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
 | `grammar/g60-alias-keyword-as-name.sysml` | accepts | `extraneous input 'part' expecting 'for'` | `internal/core/parser` — an `alias` recovers a reserved keyword as its declared name |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
-| `xpect/p24-metadata-abstract-type.sysml` | accepts | `Must have a concrete type` | `internal/core/passes` — metadata usages may be typed by an abstract metaclass |
+| `xpect/p24-metadata-abstract-type.sysml` | accepts | `Must have a concrete type` | **unimplemented obligation, blocked on L3 slice B** — validation needs the semantic fact that the metaclass is abstract, but the reduced library record does not carry abstractness |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays.
+
+### Step 3 measurement and p24 deferral
+
+Independent fresh-cache runs of exact base `4b9baf2d` and this tree are unchanged:
+**120 cases; 116 both reject, 4 only the pilot rejects, 0 only we reject, 0 both accept**.
+There are no rejection-row recoveries, regressions, or unmasked diagnostics.
+
+`p24` remains an **unimplemented obligation** under KerML
+`validateMetadataFeatureMetaclassNotAbstract`: a metadata usage typed by an abstract metaclass must
+be rejected. The missing semantic fact is abstractness of the metaclass after a standard-library
+symbol is restored from the reduced record. This branch does not add a one-off `IsAbstract` field,
+hardcode standard-library qualified names, or parse library declarations on demand; the record
+format and its reflective fact-family equality checks are owned by L3 slice B.
 
 ## Adjudications (W9F)
 
