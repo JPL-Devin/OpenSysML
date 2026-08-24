@@ -11,8 +11,8 @@ and converting notation (`.sysml`, `.kerml`) is stable; this mapping is not, and
 each of these is a deliberate property of it rather than a defect to report:
 
 - **What is not mapped is refused, not partly converted**, with the construct
-  named: 102 of the 120 models under `examples/` convert to Turtle and the other
-  18 are refused. See [Behavior](#behavior) and [Limitations](#limitations).
+  named: 260 of the 334 models under `examples/` convert to Turtle and the other
+  74 are refused. See [Behavior](#behavior) and [Limitations](#limitations).
 - **The vocabulary may change without a compatibility path.** A graph written by
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
@@ -102,7 +102,7 @@ takes it from.
 - `sysml:owningNamespace` — the containing element (absent on a root)
 - `sysml:visibility`, `sysml:direction`
 - Feature flags, written only when true, so an absent flag reads as false:
-  `isAbstract`, `isVariation`, `isReference`, `isComposite`, `isDerived`,
+  `isAbstract`, `isVariation`, `isVariant`, `isReference`, `isComposite`, `isDerived`,
   `isOrdered`, `isNonunique`, `isEnd`, `isConstant`, `isEvent`, `isIndividual`,
   `isSnapshot`, `isConjugated`, `isAll`, `isAccept`, `isResult`
 - Declaration-head relationships, as element IRIs where the target resolves
@@ -393,14 +393,6 @@ same node, so a second conversion yields the same graph
 (`export_test.go:TestSuccessionRoundTripsInEveryBody`). The two-name form
 (`then a b;`) reads only basic names, so a succession naming an end that needs
 quotes is reported rather than written as notation the parser rejects.
-
-**Two keyword prefixes are normalized away.** `variant` and `include` prefix a
-kind keyword the AST records on its own, and the prefix is not recorded, so
-`variant part a : A;` comes back as `part a : A;` and `include U;` as a plain
-use-case reference. Unlike the synonyms above these cannot be detected at
-conversion time, so they are normalized rather than reported — the one place
-this mapping changes a model without saying so. Recording them in the parser is
-roadmap item D5. Save straight to `.sysml` when they matter.
 
 **A reference end is written back in a spelling the parser reads back
 differently.** `end [*] ref cause : Situation;` is carried faithfully — the

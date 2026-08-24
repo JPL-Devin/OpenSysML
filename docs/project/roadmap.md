@@ -1,10 +1,10 @@
 # OpenSysML — Roadmap
 
-Baseline: `main` @ `c28b5f1`, verified locally on 2026-08-19 with Go 1.25.13.
+Baseline: `main` @ `d82fae84`, verified locally on 2026-08-24 with Go 1.25.0.
 Read `AGENTS.md` first; it governs everything below.
 
-0.1.2 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
-`sysml-grpc` archives. `main` now carries everything cut under 0.2.0 in `CHANGELOG.md`, which is
+0.2.0 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
+`sysml-grpc` archives. `main` now carries everything cut under 0.2.1 in `CHANGELOG.md`, which is
 awaiting its tag. Everything in "Release follow-through" is maintainer- or account-gated; everything
 after it is ordinary engineering work.
 
@@ -24,35 +24,36 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 |---|---|
 | OMG training corpus | **100/100 clean** — no file reports a semantic error |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative OpenSysML extension |
-| Execution conformance cases | 344 |
+| Execution conformance cases | 360 |
 | gRPC conformance fixtures | 15 |
-| Golden execution traces | 109 |
-| Runtime robustness cases | 195 |
+| Golden execution traces | 112 |
+| Runtime robustness cases | 212 |
 | gRPC robustness cases | 8 |
-| Golden AST fixtures | 107 |
-| Negative parser subtests | 167 |
+| Golden AST fixtures | 145 |
+| Negative parser subtests | 255 |
 
 Statement coverage, measured with `go test -cover ./...` at the baseline commit. It counts only
 each package's own tests, which understates a package consumed by others: `internal/core/ast`
-is at 85.7% and `internal/core/semantics` at 83.9% measured with `-coverpkg` over the whole
+is at 90.6% and `internal/core/semantics` at 85.4% measured with `-coverpkg` over the whole
 suite, and `cmd/sysml-grpc` is gated by a process lifecycle test whose child process
 contributes no profile at all.
 
 | Package | Coverage | Package | Coverage |
 |---|---|---|---|
-| `internal/core/quickfix` | 100.0% | `internal/core/parser` | 75.8% |
-| `internal/core/format` | 97.2% | `internal/core/model` | 74.4% |
-| `internal/core/suggest` | 92.6% | `internal/core/symbols` | 71.3% |
-| `internal/core/source` | 90.9% | `cmd/sysml-lsp` | 71.1% |
-| `internal/grpc` | 89.9% | `internal/core/lower` | 63.9% |
-| `internal/repl` | 89.3% | `internal/core/resolve` | 77.9% |
-| `internal/core/export` | 89.0% | `internal/core/semantics` | 57.3% |
-| `internal/core/rdf` | 86.7% | `cmd/sysml` | 24.7% |
-| `internal/core/lexer` | 85.5% | `internal/core/ast` | 20.9% |
-| `internal/core/runtime` | 85.0% | `cmd/sysml-grpc` | 18.3% |
-| `internal/core/passes` | 84.9% | | |
-| `internal/core/libs` | 84.4% | | |
-| `internal/lsp` | 81.5% | | |
+| `internal/core/quickfix` | 100.0% | `internal/core/export` | 82.8% |
+| `internal/core/format` | 97.2% | `internal/core/symbols` | 74.8% |
+| `internal/core/suggest` | 93.2% | `cmd/sysml-lsp` | 71.7% |
+| `internal/grpc` | 90.3% | `internal/core/source` | 68.8% |
+| `internal/repl` | 88.5% | `internal/core/lower` | 68.1% |
+| `internal/core/passes` | 88.1% | `internal/core/semantics` | 58.8% |
+| `internal/core/lexer` | 87.7% | `cmd/sysml` | 32.7% |
+| `internal/core/rdf` | 87.1% | `internal/core/ast` | 19.0% |
+| `internal/lsp` | 85.3% | `cmd/sysml-grpc` | 18.3% |
+| `internal/core/runtime` | 85.3% | | |
+| `internal/core/resolve` | 84.0% | | |
+| `internal/core/parser` | 83.8% | | |
+| `internal/core/model` | 83.4% | | |
+| `internal/core/libs` | 82.9% | | |
 
 The corpus gate needs the corpus (`./scripts/download-training-examples.sh`) and never
 re-baseline `internal/core/model/testdata/training_examples_expected.txt`: adjudicate each
@@ -68,23 +69,24 @@ runs the suite with that variable set, and it runs on `v*` tags as well as on br
 
 # Release follow-through
 
-## R1 — tag 0.2.0 (maintainer, blocking everything else in this section)
+## R1 — tag 0.2.1 (maintainer, blocking everything else in this section)
 
-`v0.1.2` is tagged and released on `Open-MBEE/OpenSysML`, so what remains is the same procedure
-for the next release. Releases live on `Open-MBEE/OpenSysML`; development happens on
+`v0.2.0` is tagged and released on `Open-MBEE/OpenSysML` with its full archive set, so what
+remains is the same procedure for the release `CHANGELOG.md` now carries as 0.2.1, dated but
+untagged. Releases live on `Open-MBEE/OpenSysML`; development happens on
 `JPL-Devin/OpenSysML`, which has no tags at all. So the tag is preceded by promoting `main`
 upstream, as 0.0.4 was through Open-MBEE PR #47:
 
 ```bash
 # on Open-MBEE/OpenSysML, after main carries the release commit
-git tag -a v0.2.0 -m "v0.2.0"
-git push origin v0.2.0
+git tag -a v0.2.1 -m "v0.2.1"
+git push origin v0.2.1
 ```
 
 The publish job needs `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project.
-Without one the tag builds artifacts and then fails at publish, having created no release.
-Nobody has verified which is set. Full procedure and post-tag verification:
-`docs/project/releasing.md`.
+Without one the tag builds artifacts and then fails at publish, having created no release —
+the `v0.2.0` release was published with every archive, so the path is proven. Full procedure
+and post-tag verification: `docs/project/releasing.md`.
 
 ## R2 — publish `opensysml` to PyPI (account-gated remainder)
 
@@ -97,36 +99,36 @@ from whichever release the caller names, so its version and the core's are not l
 See `docs/project/releasing.md`.
 
 One decision precedes the upload, found in the 0.0.8 pre-release audit: `python/opensysml/_version.py`
-declares `0.3.0` and nothing is published to PyPI yet, so the first upload has to be
-`opensysml-v0.3.0` (the tag-versus-source check refuses anything else) and every Python-side change
+declares `0.3.1` and nothing is published to PyPI yet, so the first upload has to be
+`opensysml-v0.3.1` (the tag-versus-source check refuses anything else) and every Python-side change
 since the client's version line was cut — `evaluate`/`ExecutionError`, pinned checksums,
-subject-aware `eval`, generated typed classes, `loads`, authoring edits and the strict-conformance
-keyword — all land in that one release rather than incrementally.
+subject-aware `eval`, generated typed classes, `loads`, authoring edits, the strict-conformance
+keyword and the signed-manifest verification that lets it install a core release published after
+it — all land in that one release rather than incrementally.
 
 What remains is account-gated and cannot be done from a session: create the PyPI project's
 first release with an account-scoped token, then replace it with a project-scoped one; create
 the restricted CircleCI context `PyPI` holding `PYPI_API_TOKEN` (and optionally
 `TEST_PYPI_API_TOKEN` for pre-release tags).
 
-Also decide the default download repository. `python/opensysml/binary.py` defaults to
-`Open-MBEE/OpenSysML`, releases are currently cut from `JPL-Devin/OpenSysML`, and
-`OPENSYSML_GITHUB_REPO` is the override. `sysml-grpc` assets ship from 0.0.5 onward,
-so `opensysml` can fetch a binary from a released tag; `pip install opensysml` still waits on the
-PyPI project above.
+The default download repository is settled: `python/opensysml/binary.py` defaults to
+`Open-MBEE/OpenSysML`, which is where releases live, and `OPENSYSML_GITHUB_REPO` is the
+override. `sysml-grpc` assets ship from 0.0.5 onward, so `opensysml` can fetch a binary from a
+released tag; `pip install opensysml` still waits on the PyPI project above.
 
 ## R3 — Homebrew tap
 
 `packaging/homebrew/` holds a template with `__TAG__`/`__SHA256_*__` placeholders and
 `scripts/render-homebrew-formula.sh` renders it from a tag's `SHA256SUMS.txt`. The tap
-`Open-MBEE/homebrew-tap` exists and carries the 0.0.4 formula: `brew install
+`Open-MBEE/homebrew-tap` exists and carries the 0.2.0 formula: `brew install
 Open-MBEE/tap/opensysml` has been verified end to end on Linux (install, `brew test`,
-`brew audit --strict --online`). Two things remain:
+`brew audit --strict --online`). The bump is automated (the old C3): the tap updates itself
+from its own scheduled workflow, rendering the formula from this repository's script and
+template at the latest release tag — the 0.1.2 and 0.2.0 bumps are both that workflow's
+commits, and nothing here pushes to the tap. One thing remains:
 
 - **Install it on a real Mac.** The darwin archives have never been executed on macOS; their
   checksums match the release manifest and nothing more.
-- **Automate the bump** so the pinned hashes can't go stale (the old C3): a tag-triggered step
-  that renders the formula and opens a PR against the tap. Needs a CI secret with write access
-  to the tap repository.
 
 `homebrew/core` — which would drop the tap and the trust step entirely — is gated on
 [notability](https://docs.brew.sh/Package-Acceptance-Policy#notability) (75 stars / 30 forks /
@@ -186,38 +188,27 @@ Cascade noise is the reason the coarse gate existed, so the measure of success w
 moving *without* a rise in only-ours rows — met, and the control with the gate removed entirely
 (only-ours 119 → 166) is why the marker stayed opt-in.
 
-## L3 — a library contributes names but no bodies (partly done)
+## L3 — a library contributes names but no bodies (largely done)
 
-A standard library is **index-only**: `libs.Loader.LoadAll` reduces every file it parses to the
-same record a cache hit restores, so a library type contributes its name, kind, specializations,
+A standard library was **index-only**: `libs.Loader.LoadAll` reduced every file it parsed to the
+same record a cache hit restores, so a library type contributed its name, kind, specializations,
 alias target, unit and annotation facts — and no members, declared values or condition bodies —
 whether the cache was cold or warm. That contract was adopted deliberately, as the fix for a
 cache that was not a cache: a hit produced a *poorer* state than a miss, so `solve` evaluated
 library-inherited invariants and gRPC reported dozens of inherited library attributes only until
 the cache warmed, and the conformance oracles gave two answers for one tree.
 
-The contract is honest but lossy, and this item is the other way out (option B when it was
-adjudicated): make records **lossless** — serialize enough member, value and condition structure
-that a restored library equals a parsed one — and then let libraries keep their bodies on both
-paths. What it buys is not conformance: it is reach. Hover and go-to-definition into a library
-body (the stdlib analogue of the annotation-body editor surface closed as L1),
-library-declared conditions in the solver's translatable subset, and library feature
-multiplicity, which a record does not persist today
-(`TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` asserts the assumed `1..1` on both paths
-rather than the declared `0..1`).
-
-What it costs, as measured while adopting the index-only contract instead: the on-disk format
-grows substantially and gains a version-compatibility surface; library value expressions have to
-actually evaluate, which they do not today (`isSolid = isEmpty(voids)`,
-`Systems Library/Items.sysml:105`, whose callee resolves while `Model.Eval` declines to fold it); and
-every consumer that currently sees no library body starts seeing one, which is a diagnostics
-change to adjudicate per oracle rather than a plumbing change. Several sessions, and it must not
-be taken as a cosmetic metric move — the index-only contract is what makes the cache provably
-free of semantic effect, so anything replacing it needs the same proof
-(`internal/core/libs/index_only_test.go`). The record format, the version-compatibility surface and
-the measurements behind them are designed in
-[lossless library records](wave12c-lossless-library-records.md), which recommends caching only the derived facts and
-parsing the library on every path — parsing all 95 bundled files costs 41 ms of the 1.90 s cold load.
+**The record format landed** ([#515](https://github.com/JPL-Devin/OpenSysML/pull/515)), as
+designed in [lossless library records](wave12c-lossless-library-records.md): every library file
+is parsed and indexed on every load path, so a library contributes its declarations whether or
+not the cache held anything for it, and a record carries only the derived facts whose derivation
+dominates a cold load (`libs.Loader`). A library keeps its bodies on both paths, and library
+feature multiplicity persists — `TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` now
+asserts the declared `0..1` on both paths rather than the assumed `1..1`. The element-API policy
+the design decided landed too ([#518](https://github.com/JPL-Devin/OpenSysML/pull/518)): gRPC
+reports an element's own and non-library-inherited attributes and counts the
+standard-library-inherited ones it withholds in a `SymbolInfo` field rather than omitting them
+silently.
 
 **Slice A landed** ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)) ahead of the record
 format, because measuring L3's cost exposed a larger defect it would have multiplied: every model
@@ -231,8 +222,11 @@ parsed trees is now a once-per-process ~17 MiB, not per model.
 per request — a 5-operation request went from 6 indexes and 12.03 MiB in 37.6 ms to 1 and 3.04 MiB in
 8.7 ms, applying the same edits with the same diagnostics and the same qualified lookups.
 
-**Still open:** the record format itself, and the rest of the consumers listed as slice B in the
-design page.
+**Still open:** `Model.Eval` declines to fold a library value expression that invokes a Kernel
+Function Library function over a feature (`isSolid = isEmpty(voids)`,
+`Systems Library/Items.sysml:105`, whose callee resolves), and the solver's translatable subset
+does not yet take library-declared conditions — `solve`'s differential harness still indexes the
+standard library as ordinary documents (`parseLibraries`) to reach them.
 
 ---
 
@@ -393,11 +387,12 @@ this is mechanical once D3.1 gives references something stable to point at.
 The reference-vs-literal half of that audit is now mechanized, against the OWL ontology rather
 than the API schema (D8): `TestGoldenGraphsMatchOntology` (`internal/core/export`) checks every
 SysML-namespace triple in the 24 golden graphs against the metamodel's declared domain and range,
-and the 131 triples it flags are inventoried key-by-key with a reason in
+and the 135 triples it flags are inventoried key-by-key with a reason in
 `internal/core/export/testdata/ontology-known-violations.txt`, so any *new* disagreement fails the
-build. 19 of them are this item's own bug — an object property carrying a name as a literal, over
-six distinct metaclass/property pairs: `type` on `AttributeUsage` and `PartUsage`, `sourceFeature`
-on `SuccessionAsUsage` and `sysx:InitialNode`, and both bounds of `sysx:MultiplicityDeclaration`.
+build. 20 of them are this item's own bug — an object property carrying a name as a literal, over
+seven distinct metaclass/property pairs: `type` on `AttributeUsage`, `ReferenceUsage` and
+`PartUsage`, `sourceFeature` on `SuccessionAsUsage` and `sysx:InitialNode`, `referent` on
+`FeatureReferenceExpression`, and `targetFeature` on `FeatureChainExpression`.
 `sysml:importedNamespace "ISQ"` is *not* among them, because the ontology declares that property on
 `NamespaceImport` while we type the element `sysml:Import`, which makes the triple a domain
 mismatch first; that is the same defect seen from the other side. The abstract-metaclass half is
@@ -458,10 +453,10 @@ must be concrete" check that would have caught D7's abstract `sysml:Import` is n
 this table and is not implemented — D7's abstract-metaclass audit stays manual.
 
 The gate is `TestGoldenGraphsMatchOntology` (`internal/core/export/ontology_gate_test.go`), reading
-the golden graphs from `testdata/convert` dynamically. Against the 24 of them it finds **131 triples
-in 45 distinct metaclass/property violations**: 41 triples (10 keys) whose property is declared on a
-metaclass that is not the subject's or an ancestor of it, 39 (14) typed by a class the ontology does
-not declare, 32 (15) naming a property no metaclass declares, and 19 (6) giving an object property a
+the golden graphs from `testdata/convert` dynamically. Against the 24 of them it finds **135 triples
+in 49 distinct metaclass/property violations**: 41 triples (11 keys) whose property is declared on a
+metaclass that is not the subject's or an ancestor of it, 40 (14) typed by a class the ontology does
+not declare, 34 (17) naming a property no metaclass declares, and 20 (7) giving an object property a
 literal (D7). No datatype property gets an IRI, and no subject carrying SysML properties lacks an
 `rdf:type`. Every one is inventoried with a one-line reason in
 `testdata/ontology-known-violations.txt` and the gate fails on anything new, so the encoder was left
@@ -471,7 +466,7 @@ element (`value` → `FeatureValue`, the multiplicity bounds → `MultiplicityRa
 `Membership`, `isNegated` → `Invariant`, a transition's ends → `Connector`) — D3.3; names as
 literals — D7 and D2; 12 metaclasses of our own `sysx:` namespace plus two names the 202407
 rendering does not have at all (`FlowUsage`, which it calls `FlowConnectionUsage`, and
-`TerminateActionUsage`); and 15 properties we write into the SysML namespace that no metaclass
+`TerminateActionUsage`); and 17 properties we write into the SysML namespace that no metaclass
 declares, each either a relationship the metamodel reifies as an element (`specializes`, `subsets`,
 `redefines`, `references`, `aliasedElement`, `via`) or a notation flag with no metamodel property
 (`isAccept`, `isResult`, `isSnapshot`, `isTimeslice`, `isChain`) — arguably those belong in `sysx:`
@@ -482,20 +477,14 @@ the gate exist; conformance beyond that is gated on D3.3, D2 and D1 rather than 
 
 ## D5 — the parser drops the `variant` and `include` keyword prefixes
 
-`variant part a : A;` and `include U;` prefix a kind keyword the AST already records on its
-own, and the prefix itself is recorded nowhere: both parse to the same node as the unprefixed
-form. A `notation → RDF → notation` round trip therefore returns `part a : A;` and a plain
-use-case reference, which is the one place the RDF mapping changes a model without reporting
-it (`docs/reference/rdf-mapping.md`, *Limitations*).
-
-The synonym keywords that *are* distinguishable — `datatype`, `feature`, `function`,
-`snapshot`, `timeslice`, `message`, `allocate` and the rest — are carried as
-`sysx:declaredKeyword` and round-trip byte-identically
-(`export_test.go:TestKindKeywordSynonymsSurviveRDF`). Doing the same for these two means the
-parser recording the prefix, most likely as a field alongside `ast.Usage.Keyword`, after which
-the encoder can carry it and the documented exception goes away. Worth checking at the same
-time whether anything downstream *should* distinguish a variant from a plain member, since
-variation semantics currently rest on the enclosing `variation` definition alone.
+**Done.** The parser records both prefixes — `variant` as `ast.Usage.IsVariant`, and
+`include U;` as the use case's `includes` relationship — the encoder carries them
+(`sysml:isVariant`, `sysml:includes`) and the decoder writes the prefixes back
+(`internal/core/export/rdf_out.go`, `rdf_in.go`), so `variant part a : A;` and `include U;`
+round-trip through RDF byte-identically and the exception the RDF mapping used to document is
+gone. The synonym keywords — `datatype`, `feature`, `function`, `snapshot`, `timeslice`,
+`message`, `allocate` and the rest — are carried as `sysx:declaredKeyword` and round-trip the
+same way (`export_test.go:TestKindKeywordSynonymsSurviveRDF`).
 
 ## D6 — a behavioral node has no metaclass, so a model stating steps cannot convert
 
@@ -507,8 +496,9 @@ pseudostates and transitions. Each is covered by a `notation → RDF → notatio
 asserts the body comes back byte-identically (`export/behavior_test.go`), and the mapping is
 tabulated in `docs/reference/rdf-mapping.md` § Behavior.
 
-Measured on the built binary the same way, 102 of the 120 models under `examples/` convert,
-up from 71. The 18 refusals are: nine successions that do not name both of their ends (a
+Measured on the built binary the same way at this baseline, 260 of the 334 models under
+`examples/` convert (the directory has grown since the 102-of-120 measured when this landed).
+The 18 refusals at that measurement were: nine successions that do not name both of their ends (a
 `then` attached to a member states an order whose source end the notation leaves implicit, and
 reconstructing it means inferring which node an edge belongs to from member position — silent
 reattachment, so it is reported instead), three prefix-metadata models, three duplicate
@@ -544,21 +534,21 @@ Lessons that survived the last two batches, unchanged because they keep applying
 
 Tracks A, B, C, P and T1 are closed and their entries are removed; what is left is:
 
-1. **R1** (tag), then **R2**/**R3**/**R5** as the account access appears. R1 gates the rest of
-   the release section, and R2 is what makes the Python surface reachable by a user.
+1. **R1** (tag), then **R2**/**R5** as the account access appears. R1 gates the rest of
+   the release section, and R2 is what makes the Python surface reachable by a user; R3's tap
+   follows a tag on its own, leaving only the real-Mac install to verify.
 2. **Track D** is independent of the rest and can run whenever. Take **D3** first, in its own
    order: **D3.1** (identity) reshapes every fixture and everything else builds on it, then
    **D3.2**/**D3.3**/**D3.4**, then the **D3.5** harness, which is the first thing that can
    actually confirm or refute the interop claim. **D7** next, since it is mechanical once
    identity is stable, then **D2** — a succession end that refers to an unnamed member belongs
    with it, both wanting real end triples rather than names or text — and **D1** last, as the
-   largest piece of design. **D5** can go whenever; it is independent of the interop work.
+   largest piece of design. **D5** is done — both prefixes are recorded and round-trip.
    **D8** (the OWL-ontology output profile) is optional and additive: its domain/range gate is
    worth having as soon as the profile's term table exists, but the profile only becomes fully
    conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
 3. **L2** was taken after the conformance rounds whose rows sat behind the gate it narrows, and is
-   closed. **L3**'s record format last of the two and only if its reach is wanted: it buys no
-   conformance row, and it replaces a contract the cache's correctness currently rests on. L1, the
-   annotation-body editor surface, is closed; L3's slice A (the shared library index)
-   closed with it, being a memory defect on its own rather than part of that trade. Both are
-   independent of the release section and of Track D.
+   closed. **L3**'s record format has landed too, with the shared library index and the
+   element-API policy; what is left of it is `Model.Eval` folding library value expressions and
+   the solver taking library-declared conditions. L1, the annotation-body editor surface, is
+   closed. All of it is independent of the release section and of Track D.
