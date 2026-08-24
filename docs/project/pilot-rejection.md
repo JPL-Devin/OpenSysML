@@ -314,10 +314,10 @@ parser's body policy, the third the namespace member dispatch that rejects a `th
 ## Guard
 
 `TestPilotRejectionDocumentCountsMatchBaseline` (in `cmd/pilot-reject`) re-derives every count in
-this document, the README's rejection-oracle line, and the skill's headline from
-[pilot-rejection-baseline.json](pilot-rejection-baseline.json), and checks the gap table above
-enumerates exactly the baseline's `pilot-only-rejects` cases. It reads only committed files — no
-validators, no downloads — so it runs in CI and fails the moment this prose goes stale.
+this document after applying the three approved closures to
+[pilot-rejection-baseline.json](pilot-rejection-baseline.json). The README and skill remain
+checked against that committed baseline until its separate refresh. The guard reads only committed
+files — no validators or downloads — and checks that the gap table enumerates the current report.
 
 
 ## The declared errata overlay

@@ -27,9 +27,9 @@ var (
 	rejectionGapCount        = regexp.MustCompile(`All (\d+) gaps`)
 )
 
-// TestPilotRejectionDocumentCountsMatchRecordedState checks documented policy
+// TestPilotRejectionDocumentCountsMatchBaseline checks documented policy
 // closures alongside the separately refreshed committed baseline.
-func TestPilotRejectionDocumentCountsMatchRecordedState(t *testing.T) {
+func TestPilotRejectionDocumentCountsMatchBaseline(t *testing.T) {
 	baseline := rejectionReadBaseline(t)
 	current := rejectionCurrentReport(baseline)
 	rejectionCheckHeadlines(t, current, rejectionDocPath)
