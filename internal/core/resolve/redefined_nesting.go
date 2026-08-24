@@ -10,6 +10,7 @@ import (
 // association's ends never spell out (KerML 8.4.4.6).
 type endRedefinitionLookup interface {
 	ImplicitEndRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
+	ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 }
 
 // nestedInRedefined resolves name among the features nested, at any depth, under
@@ -55,6 +56,11 @@ func (r *Resolver) redefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 				out = append(out, end)
 			}
 		}
+		for _, role := range model.ImplicitRoleRedefinitions(sym) {
+			if role != nil && role != sym {
+				out = append(out, role)
+			}
+		}
 	}
 	if usage, ok := sym.Decl.(*ast.Usage); ok && sym.OwnerScope != nil &&
 		sym.OwnerScope.BodyLocal() {
@@ -77,11 +83,21 @@ func (r *Resolver) nestedMember(sym *symbols.Symbol, name string, hide *refFilte
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
-		if cur == nil || seen[cur] || cur.Scope == nil {
+		if cur == nil || seen[cur] {
 			continue
 		}
 		seen[cur] = true
-		for _, member := range cur.Scope.Members() {
+		if member, ok := r.lookupMember(cur, name); ok && !hide.hides(member) {
+			return member, true
+		}
+		var members []*symbols.Symbol
+		if cur.Scope != nil {
+			members = append(members, cur.Scope.Members()...)
+		}
+		if r.idx != nil {
+			members = append(members, r.idx.LookupDirectChildren(r.indexedNameOf(cur))...)
+		}
+		for _, member := range members {
 			if member.Name == name && !hide.hides(member) {
 				return member, true
 			}

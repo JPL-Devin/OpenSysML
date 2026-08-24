@@ -3,12 +3,12 @@
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "totals": {
     "files": 353,
-    "filesFullyAgreeing": 321,
+    "filesFullyAgreeing": 324,
     "agreement": 32,
     "severityMismatch": 24,
-    "openSysMLOnly": 92,
+    "openSysMLOnly": 83,
     "pilotOnly": 66,
-    "openSysMLDiagnostics": 148,
+    "openSysMLDiagnostics": 139,
     "pilotDiagnostics": 122
   },
   "roots": [
@@ -32,12 +32,12 @@
       "dir": "examples/pilot-corpora/sysml-examples",
       "totals": {
         "files": 98,
-        "filesFullyAgreeing": 91,
+        "filesFullyAgreeing": 93,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 16,
+        "openSysMLOnly": 8,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 16,
+        "openSysMLDiagnostics": 8,
         "pilotDiagnostics": 0
       },
       "files": [
@@ -116,70 +116,6 @@
           "pilotOnly": []
         },
         {
-          "path": "State Space Representation Examples/EVSample1.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 351,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 354,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Vehicle Example/Annex_A_VehicleViews.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 753,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 754,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 757,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 758,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 760,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 789,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
           "path": "Vehicle Example/VehicleDefinitions.sysml",
           "agreement": [],
           "severityMismatch": [],
@@ -200,30 +136,15 @@
       "dir": "examples/pilot-corpora/sysml-validation",
       "totals": {
         "files": 56,
-        "filesFullyAgreeing": 55,
+        "filesFullyAgreeing": 56,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 1,
+        "openSysMLOnly": 0,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 1,
+        "openSysMLDiagnostics": 0,
         "pilotDiagnostics": 0
       },
-      "files": [
-        {
-          "path": "09-Verification/9-Verification-simplified.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 55,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        }
-      ]
+      "files": []
     },
     {
       "name": "kerml-examples",

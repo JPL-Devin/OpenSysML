@@ -1,12 +1,9 @@
 # Bugs in the OMG materials
 
 One place to look for defects found in the OMG-published sources this
-implementation consumes, outside the training corpus. Corpus files are
-adjudicated per file in [training-examples.md](training-examples.md); this page
-records defects in the **vendored specification libraries**
-(`internal/core/libs/stdlib/`), where the declaration is wrong rather than a
-model using it, and — in [the second section](#defects-in-the-pilot-implementation) —
-defects in the **OMG pilot implementation** the differential is measured against.
+implementation consumes. This page records defects in the **vendored specification
+libraries** (`internal/core/libs/stdlib/`), in the **published example corpora**, and
+in the **OMG pilot implementation** the differential is measured against.
 
 Each row quotes the vendored declaration verbatim so a reviewer can judge it
 without opening the library, and names what OpenSysML implements instead. Every
@@ -38,10 +35,27 @@ vendored body and is recorded here for review against a future OMG release.
 
 ---
 
+## Defects in published OMG example models
+
+These rows are true positives found by OpenSysML's quantity analysis in models published with the
+OMG example corpora. The pinned pilot is silent because it does not perform the corresponding
+static dimensional check.
+
+| Example | Expression as published | Defect | Specification reading | Status |
+|---|---|---|---|---|
+| `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml:38` | `22/2*25.4 + 110 [mm]` | `[mm]` binds only to `110`, so `+` combines a dimensionless value with a length | KerML 1.0 §8.2.5.8.1–8.2.5.8.2 makes the bracket construction a primary expression; SysML v2.0 §9.8.9.1 requires addition operands to have the same quantity dimension. The evident intended spelling is `(22/2*25.4 + 110) [mm]`. | **not filed** |
+| `Analysis Examples/Turbojet Stage Analysis.sysml:25` | `1/(2 * Cp) * V^2 + T_static`, with `Cp : DimensionOneValue`, `V : VolumeValue`, and `T_static : TemperatureValue` | the declared types make the operands L^6 and Θ | SysML v2.0 §9.8.9.1 requires addition operands to have the same quantity dimension and top-level quantity type. The formula needs dimensionally appropriate parameter declarations or conversion before addition. | **not filed** |
+
+They form one adjudicated quantity-commensurability family in
+[wave12f-false-positives.md](wave12f-false-positives.md): OpenSysML retains both warnings, and
+nothing has been posted upstream.
+
+---
+
 ## Defects in the pilot implementation
 
-The rows above are defects in vendored *library sources*. This section records
-defects in the **OMG SysML v2 pilot implementation**
+The first section records a defect in a vendored library body, and the second records defects in
+published example models. This section records defects in the **OMG SysML v2 pilot implementation**
 (`Systems-Modeling/SysML-v2-Pilot-Implementation`), which
 [pilot-differential.md](pilot-differential.md) uses as the reference oracle. A
 row lands here only when it is established from the pilot's own artifacts — its
