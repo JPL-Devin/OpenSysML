@@ -5,10 +5,10 @@
     "files": 353,
     "filesFullyAgreeing": 324,
     "agreement": 32,
-    "severityMismatch": 24,
-    "openSysMLOnly": 83,
-    "pilotOnly": 66,
-    "openSysMLDiagnostics": 139,
+    "severityMismatch": 25,
+    "openSysMLOnly": 84,
+    "pilotOnly": 65,
+    "openSysMLDiagnostics": 141,
     "pilotDiagnostics": 122
   },
   "roots": [
@@ -659,10 +659,10 @@
         "files": 22,
         "filesFullyAgreeing": 15,
         "agreement": 0,
-        "severityMismatch": 23,
-        "openSysMLOnly": 63,
-        "pilotOnly": 40,
-        "openSysMLDiagnostics": 86,
+        "severityMismatch": 24,
+        "openSysMLOnly": 64,
+        "pilotOnly": 39,
+        "openSysMLDiagnostics": 88,
         "pilotDiagnostics": 63
       },
       "files": [
@@ -1141,6 +1141,13 @@
               "count": 1
             },
             {
+              "line": 16,
+              "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            },
+            {
               "line": 17,
               "category": "syntax",
               "openSysMLSeverity": "warning",
@@ -1176,6 +1183,12 @@
             },
             {
               "line": 28,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 33,
               "severity": "warning",
               "category": "syntax",
               "count": 1
@@ -1222,12 +1235,6 @@
               "line": 10,
               "severity": "warning",
               "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 16,
-              "severity": "error",
-              "category": "syntax",
               "count": 1
             },
             {
@@ -1723,10 +1730,10 @@
       "files": 353,
       "filesFullyAgreeing": 325,
       "agreement": 32,
-      "severityMismatch": 24,
-      "openSysMLOnly": 82,
-      "pilotOnly": 66,
-      "openSysMLDiagnostics": 138,
+      "severityMismatch": 25,
+      "openSysMLOnly": 83,
+      "pilotOnly": 65,
+      "openSysMLDiagnostics": 140,
       "pilotDiagnostics": 122
     },
     "findings": [
