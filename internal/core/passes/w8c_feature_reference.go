@@ -129,24 +129,42 @@ func (c *featureReferenceChecker) walkMember(site refSite, scope *symbols.Scope,
 			c.walkMember(site, scope, branch)
 		}
 	case *ast.IfBranchNode:
-		c.walkMembers(site, symbols.ConstraintBodyScope(scope, n), n.Body)
+		c.walkMembers(site, childScopeOr(scope, n), n.Body)
 	case *ast.WhileLoopActionNode:
-		body := symbols.ConstraintBodyScope(scope, n)
+		body := childScopeOr(scope, n)
 		c.walkExpr(site, scope, n.Collection)
 		c.walkExpr(site, body, n.Condition)
 		c.walkExpr(site, body, n.Until)
 		c.walkMembers(site, body, n.Body)
 	case *ast.TransitionMember:
-		c.walkExpr(site, scope, n.Guard)
+		// A trigger's parameters are visible to the guard and the effect only.
+		body := symbols.TriggerScope(scope, n)
+		c.walkExpr(site, body, n.Guard)
 		if change, ok := n.Trigger.(*ast.ChangeEvent); ok {
 			c.walkExpr(site, scope, change.Condition)
 		}
-		c.walkMembers(site, scope, n.Effect)
-		c.walkMembers(site, scope, ast.NodeBodyMembers(n))
+		c.walkMembers(site, body, n.Effect)
+		c.walkMembers(site, body, n.Members)
 	case *ast.StateNode:
-		c.walkMembers(site, scope, n.Entry)
-		c.walkMembers(site, scope, n.Do)
-		c.walkMembers(site, scope, n.Exit)
+		body := childScopeOr(scope, n)
+		c.walkMembers(site, body, n.Entry)
+		c.walkMembers(site, body, n.Do)
+		c.walkMembers(site, body, n.Exit)
+		c.walkMembers(site, body, n.Substates)
+		for _, region := range n.Regions {
+			c.walkMember(site, body, region)
+		}
+	case *ast.StateRegion:
+		c.walkMembers(site, childScopeOr(scope, n), n.States)
+	case *ast.InitialNode:
+		c.walkMembers(site, childScopeOr(scope, n), n.Members)
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		c.walkMembers(site, childScopeOr(scope, m), ast.NodeBodyMembers(m))
+	case *ast.SendStatement:
+		c.walkExpr(site, scope, n.Message)
+		c.walkExpr(site, scope, n.Target)
+		c.walkExpr(site, scope, n.Receiver)
+		c.walkMembers(site, childScopeOr(scope, n), n.Members)
 	case *ast.EntryMember:
 		c.walkMembers(site, scope, n.Actions)
 	case *ast.DoMember:

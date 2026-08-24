@@ -180,6 +180,21 @@ func TestW8CFeatureReferenceBodyAccessible(t *testing.T) {
 		"implicit calc result": `package P {
 	calc def C { attribute m = 1; m }
 }`,
+		"trigger parameter in a guard": `package P {
+	attribute def Temp;
+	state def S {
+		state a;
+		state b;
+		transition first a accept sig : Temp if sig > 0 then b;
+	}
+}`,
+		"state entry local": `package P {
+	state def S {
+		state a {
+			entry action e { attribute v = 1; assign v := v + 1; }
+		}
+	}
+}`,
 		"connector ends": `package P {
 	part def Port;
 	part def A { part x : Port; part y : Port; connect x to y; }
