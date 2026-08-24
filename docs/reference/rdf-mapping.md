@@ -11,8 +11,8 @@ and converting notation (`.sysml`, `.kerml`) is stable; this mapping is not, and
 each of these is a deliberate property of it rather than a defect to report:
 
 - **What is not mapped is refused, not partly converted**, with the construct
-  named: 102 of the 120 models under `examples/` convert to Turtle and the other
-  18 are refused. See [Behavior](#behavior) and [Limitations](#limitations).
+  named: 260 of the 334 models under `examples/` convert to Turtle and the other
+  74 are refused. See [Behavior](#behavior) and [Limitations](#limitations).
 - **The vocabulary may change without a compatibility path.** A graph written by
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
