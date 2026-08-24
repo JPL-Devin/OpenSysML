@@ -70,9 +70,9 @@ type conformanceCase struct {
 	// GetSymbol
 	ExpectedAttributeNames []string                     `json:"expected_attribute_names,omitempty"`
 	ExpectedAttributes     map[string]expectedAttribute `json:"expected_attributes,omitempty"`
-	// ExpectedLeadingAttributeNames asserts the head of the reported list, for
-	// elements whose tail is whatever they inherit from the library.
-	ExpectedLeadingAttributeNames []string `json:"expected_leading_attribute_names,omitempty"`
+	// MinWithheldLibraryAttributes requires the response to state at least this
+	// many library-inherited attributes withheld from the list.
+	MinWithheldLibraryAttributes int32 `json:"min_withheld_library_attributes,omitempty"`
 
 	// ExpectedError, when set, requires the RPC to report an in-band error
 	// containing this substring.
@@ -273,13 +273,9 @@ func runGetSymbolCase(t *testing.T, srv *Service, ctx context.Context, modelHash
 			t.Errorf("attributes = %v, want %v", got, tc.ExpectedAttributeNames)
 		}
 	}
-	if want := tc.ExpectedLeadingAttributeNames; want != nil {
-		var got []string
-		for _, attr := range attrs {
-			got = append(got, attr.GetName())
-		}
-		if len(got) < len(want) || strings.Join(got[:len(want)], ",") != strings.Join(want, ",") {
-			t.Errorf("attributes = %v, want them to start with %v", got, want)
+	if want := tc.MinWithheldLibraryAttributes; want > 0 {
+		if got := resp.Symbol.GetWithheldLibraryAttributes(); got < want {
+			t.Errorf("withheld library attributes = %d, want at least %d", got, want)
 		}
 	}
 

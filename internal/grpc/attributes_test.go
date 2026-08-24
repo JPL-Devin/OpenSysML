@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"strings"
 	"testing"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
@@ -34,32 +35,35 @@ func byName(attrs []*pb.AttributeInfo) map[string]*pb.AttributeInfo {
 
 // TestAttributesAreReportedOwnThenInherited verifies the attribute set is what
 // the element has, own first, with a redefinition masking what it redefines and
-// non-attribute members left out. Library types now have bodies, so what a part
-// inherits from Occurrences/Objects/Base follows; L3-3 withholds that tail.
+// non-attribute members left out. Library types have bodies, so what a part
+// inherits from Occurrences/Objects/Base is withheld and counted, not dropped.
 func TestAttributesAreReportedOwnThenInherited(t *testing.T) {
 	get := parseForFacts(t, attributeModel)
-	attrs := get("Demo::Car").Attributes
+	car := get("Demo::Car")
 
 	var names []string
-	for _, attr := range attrs {
+	for _, attr := range car.Attributes {
 		names = append(names, attr.Name)
 	}
 	want := []string{"mass", "wheels", "derived", "label", "inheritedOnly"}
-	if len(names) < len(want) {
-		t.Fatalf("attribute names = %v, want them to start with %v", names, want)
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Errorf("attribute names = %v, want %v", names, want)
 	}
-	for i, name := range want {
-		if names[i] != name {
-			t.Fatalf("attribute names = %v, want them to start with %v", names, want)
-		}
+	if car.WithheldLibraryAttributes == 0 {
+		t.Error("the library attributes a part inherits are absent but not counted, which is silence")
 	}
-	if len(names) == len(want) {
-		t.Errorf("attribute names = %v; a part also inherits library attributes now", names)
+}
+
+// A library element asked about directly reports what it declares: the policy
+// withholds library-inherited attributes, not the library's own contents.
+func TestOwnAttributesOfALibraryElementAreReported(t *testing.T) {
+	get := parseForFacts(t, attributeModel)
+	occurrence := get("Occurrences::Occurrence")
+	if occurrence == nil {
+		t.Fatal("the library element is not reported at all")
 	}
-	for _, name := range names[len(want):] {
-		if name == "engine" {
-			t.Errorf("non-attribute member %q is reported as an attribute", name)
-		}
+	if len(occurrence.Attributes) == 0 {
+		t.Error("Occurrences::Occurrence reports none of the attributes it declares")
 	}
 }
 
@@ -141,15 +145,15 @@ package Demo {
 	}
 }
 
-// TestAttributesOfAnElementWithNoneAreOnlyLibraryInherited verifies an element
-// declaring no attributes reports nothing of the model's, only what the library
-// types above it declare. L3-3 will withhold that tail.
-func TestAttributesOfAnElementWithNoneAreOnlyLibraryInherited(t *testing.T) {
+// TestAttributesOfAnElementWithNoneIsEmpty verifies an element declaring none
+// reports none, and still states how many library-inherited ones it left out.
+func TestAttributesOfAnElementWithNoneIsEmpty(t *testing.T) {
 	get := parseForFacts(t, attributeModel)
-	attrs := byName(get("Demo::Car::engine").Attributes)
-	for _, name := range []string{"mass", "wheels", "ratio", "derived", "label", "inheritedOnly"} {
-		if _, ok := attrs[name]; ok {
-			t.Errorf("engine reports %q, which no type of engine declares", name)
-		}
+	engine := get("Demo::Car::engine")
+	if attrs := engine.Attributes; len(attrs) != 0 {
+		t.Errorf("engine attributes = %v, want none", attrs)
+	}
+	if engine.WithheldLibraryAttributes == 0 {
+		t.Error("engine inherits library attributes but reports none withheld")
 	}
 }

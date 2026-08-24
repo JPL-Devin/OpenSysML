@@ -62,7 +62,7 @@ func (s *Service) newVerifyContext(modelHash string) (*verifyContext, error) {
 
 // lookup resolves an FQN to the symbol it names.
 func (v *verifyContext) lookup(symbolID string) (*symbols.Symbol, error) {
-	syms := v.cached.Index.LookupQualified(symbolID)
+	syms := lookupNamed(v.cached.Index, symbolID)
 	if len(syms) == 0 {
 		return nil, fmt.Errorf("symbol not found: %s", symbolID)
 	}

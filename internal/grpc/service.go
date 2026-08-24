@@ -605,14 +605,31 @@ func computeHash(content string) string {
 // lookupNamed resolves a symbol ID written in either spelling: the quoted,
 // notation-legal form a model author writes ('My Pkg'::Car), or the unquoted
 // spelling the index records (My Pkg::Car), which keeps working as it did.
+// Model elements come before library homonyms: an ID naming both denotes the
+// model's own element, which is what the client asked about.
 func lookupNamed(idx *symbols.Index, id string) []*symbols.Symbol {
 	if syms := idx.LookupQualified(id); len(syms) > 0 {
-		return syms
+		return modelFirst(idx, syms)
 	}
 	if plain, ok := unquotedName(id); ok && plain != id {
-		return idx.LookupQualified(plain)
+		return modelFirst(idx, idx.LookupQualified(plain))
 	}
 	return nil
+}
+
+// modelFirst reorders matches so the ones the model declares precede the ones
+// standard-library content declares, each group keeping its index order.
+func modelFirst(idx *symbols.Index, syms []*symbols.Symbol) []*symbols.Symbol {
+	out := make([]*symbols.Symbol, 0, len(syms))
+	var lib []*symbols.Symbol
+	for _, sym := range syms {
+		if idx.Library(sym) {
+			lib = append(lib, sym)
+			continue
+		}
+		out = append(out, sym)
+	}
+	return append(out, lib...)
 }
 
 // unquotedName is the name a notation-legal qualified name states, with the
