@@ -250,7 +250,7 @@ github.com/Open-MBEE/OpenSysML
 
 Documentation is organized by what a reader wants, not by the feature that landed. Four areas,
 mapped in [docs/README.md](docs/README.md) and published as
-<https://open-mbee.github.io/OpenSysML/>:
+<https://opensysml.org/>:
 
 - **[docs/guide/](docs/guide/)** — *how do I use it?* A numbered handbook read in order.
 - **[docs/reference/](docs/reference/)** — *what does this flag, command, API or triple mean?*

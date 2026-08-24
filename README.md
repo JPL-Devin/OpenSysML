@@ -8,7 +8,7 @@ What that is measured against, and what it is not, is in [spec compliance](docs/
 
 **Get started in 5 minutes:** [the guide](docs/guide/)
 
-**All documentation, searchable:** <https://open-mbee.github.io/OpenSysML/> — the same
+**All documentation, searchable:** <https://opensysml.org/> — the same
 pages as [docs/](docs/), rendered from `main`.
 
 ### Install
