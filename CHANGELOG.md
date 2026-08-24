@@ -4,6 +4,261 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.2.0 — 2026-08-24
+
+Three more advisory oracles now judge this implementation against the pinned OMG pilot
+(`2026-05`, jupyter-sysml-kernel 0.60.1), and most of the behavior below is what they found: the
+expectations the pilot's own Xpect suites *declare*, the invalid models it rejects, and the part of
+its surface that can referee execution at all — which is expression evaluation and nothing else.
+Notation and validation rules moved with them: 324 of 353 differential files now agree
+diagnostic-by-diagnostic (was 221 of 338), and of the 510 declared `errors` rows in the pilot's own
+suites there is none we are silent on. Name resolution now enforces membership visibility, so a
+model that named a `private` or `protected` member across a namespace boundary and analyzed clean in
+0.1.2 is now reported. A new opt-in strict mode raises this implementation's own notation extensions
+to errors; default behavior is unchanged. The standard library is loaded once per process and
+shared, which takes a 100-model gRPC cache from 1598.3 MiB of retained heap to 1.1 MiB. The gRPC and
+Python surfaces gain fields and calls; nothing was removed or renamed.
+
+### Three new oracles, and one that says what it cannot judge
+
+- **`cmd/pilot-xpect` adjudicates the expectations the pilot declares**, not its observed behavior:
+  the 428 `.xt` files it ships in `org.omg.kerml.xpect.tests` (303) and `org.omg.sysml.xpect.tests`
+  (125), read through the same `scripts/pilot-pin.sh` pin as every other corpus, over six assertion
+  kinds (`errors`, `noErrors`, `linkedName`, `warnings`, `scope`, `exportedObjects`). The committed
+  baseline (`docs/project/pilot-xpect-baseline.json`) stands at 1,323 rows from 1,261 assertions:
+  1,295 agree — 248 of them wording-only — and 28 disagree, with 0 files unparsed, 0 rows unlocated
+  and 0 not adjudicated. Declared scope assertions agree 230 of 230 and declared linked names 194 of
+  194.
+- **`cmd/pilot-reject` asks the reverse question every other oracle cannot**: does this
+  implementation reject what the reference rejects? Both validators run over a negative corpus we
+  wrote ourselves, grown from 34 cases to 120. 117 agree, 3 are rejected by the pilot alone, and
+  none by us alone; 5 of the 117 agree only when we are asked strictly, and by default 8 of the 120
+  are ours-accepted. The denominator is our own authorship, so it measures the reach of the corpus
+  rather than conformance, and agreement reached only under strict mode is recorded as the weaker
+  evidence it is.
+- **`cmd/pilot-exec-diff` maps the pilot's execution surface before comparing anything**: there is
+  no interpreter, simulator, scheduler, token or trace in the pinned artifact, so of the four
+  behavior areas asked about, model-level expression evaluation is adjudicable and actions, state
+  machines and classifier behaviors are out of reach. 125 of the tracked rules therefore have no
+  external referee at all, and the figure is now stated wherever behavior compliance is claimed.
+- **The differential covers 353 files in seven roots** (the OMG training corpus, the pilot's SysML
+  example, SysML validation and KerML example corpora, our testdata, examples and probes): 324 agree
+  exactly, 83 diagnostics are ours alone and 66 the reference's alone, from 139 and 122 diagnostics
+  respectively. Read by root rather than in total — our diagnostics on the reference's own corpora
+  fell while our non-standard-notation warnings on our own example models rose.
+- **All four harnesses stay advisory.** Nothing in CI depends on a comparison with the pilot, whose
+  Java validators CI does not provision; what CI gates is our own verdicts on the pinned files
+  (below).
+
+### An opt-in strict conformance mode
+
+- **`sysml -strict`, `%strict on|off` in the REPL, `strict_conformance` on `ParseFileRequest` and
+  `strict_conformance=True` from Python** judge the source as conforming SysML v2: notation this
+  implementation accepts that no pinned OMG production admits becomes an error instead of a warning.
+  It needed no second grammar and no edit to any model, example or golden — the mode raises the
+  severity of the existing `nonstandard-notation` finding and nothing else. Strictness is part of
+  the analysis cache key, so the two modes never serve each other's diagnostics, and
+  `internal/core/conformance` holds the mode so no pass decides it locally.
+
+### Name resolution follows the specification's two resolution rules
+
+- **Membership visibility is enforced.** A qualified name, a feature chain link and an import all
+  consulted a membership without consulting its visibility, so `A::X` resolved even where `X` is
+  private in `A`. One predicate now applies the rule on all three routes and to the LSP surface:
+  the 70 declared `Couldn't resolve reference to …` rows we were silent on fall to 4.
+- **A qualified name's first segment resolves locally and every later segment visibly**, per KerML
+  8.2.3.5.3–8.2.3.5.4, which is the distinction the pilot's `VisibilityTests_ProtectedImport_*`
+  fixtures separate: a specializing namespace reaches a protected member by simple name, but what
+  the *referring* namespace specializes cannot widen what a later segment sees. Generalization
+  headers resolve outside the declaration body, qualified redefinition tails walk direct supertypes
+  through a speculative probe that emits no diagnostic when it fails, and unqualified lookup
+  distinguishes an inherited import from a direct nested one.
+- **A supertype's non-private *imported* memberships are inherited** as its owned ones are (KerML
+  8.3.3.1 with 8.4.3.2), so redeclaring a name a supertype imported is the distinguishability
+  violation the reference declares.
+- **Two root namespaces of one name are one global name, not an ambiguity** — resolution in the
+  global namespace is single-valued (KerML 8.2.3.5) and distinguishable naming constrains a
+  namespace's own members, which the global namespace is not.
+- **The reference's name-distinguishability rule is implemented with its own scope and severity** —
+  a warning, not an error — over owned, alias, inherited and diamond-inherited conflicts, with an
+  explicit `:>>` redefinition suppressing the inherited-name conflict and a plain redeclaration,
+  reference or subsetting not.
+- **Derived scope paths are bounded** by one re-entry per name, count an inherited import as a
+  derivation step, and inherit through a feature's declared type before its implicit base.
+- **A redefined name is masked** from member enumeration, and the mask is built once per enumeration
+  rather than per member.
+
+### The validation rules the reference declares
+
+- **Thirty-nine new level-scoped passes in `internal/core/passes`** implement rules the pilot's own
+  Xpect suites declare and this implementation reported nowhere, each scoped from the constraint in
+  `KerMLValidator.xtend` / `SysMLValidator.xtend` rather than from its message string — type
+  unioning/intersecting/differencing and feature chaining, multiplicity bound types, reference
+  subsetting, top-level import visibility, association end types, occurrence typing, connector
+  featuring, flow ends, variability, implicit base and "features must have at least one type",
+  conjugated specifics, and a portion that cannot be variable. Of the 510 declared `errors` rows,
+  the number we report nothing for is 0; 243 match word for word and the rest differ only in wording
+  or location.
+- **Rules that fire where the reference warns now warn**: library inherited-name diamonds, short
+  names, a user-declared standard library, non-conforming bindings, and a computed return.
+- **Validation tier gating asks about the element, not the document.** A blocking error used to skip
+  every higher-tier pass for the whole file; `passes.ElementScoped` plus one query on `Context` now
+  gates per subject, so a valid declaration is still checked when an unrelated one failed to
+  resolve.
+- **Twenty-seven differential diagnostics we reported on models the pilot accepts are retired**, two
+  of them parse/resolve defects rather than rule defects, with a key-by-key check that no row was
+  added and no category re-bucketed. All 137 diagnostics the pilot reports and we did not are
+  classified — our defect, adjudicated divergence, or a defect of the pilot — with a named reproducer
+  per family.
+- **The Step 3 conformance obligations land**: `UsageMayTimeVary` derived from occurrence ownership,
+  assignment referents validated in an element-scoped pass, and `BinaryInterface` / `BinaryConnection`
+  inferred only for exactly two-ended untyped declarations rather than by a universal arity limit.
+
+### Notation the reference accepts now parses
+
+- **The KerML declaration grammar cluster is closed** (F84–F95): a member with no kind keyword is a
+  feature wherever a member is expected, decided by lookahead over the declaration head rather than
+  by a keyword table, so `a : Integer;`, `x;`, `p5[1] : Real;` and `composite e1 redefines V::m;`
+  parse. The pilot's KerML example corpus now reports no syntax diagnostic of ours at all.
+- **Reserved words are read per grammar.** The lexer keeps one token set, but reservation is now the
+  parser's decision from the kind of the file being read, so `part chains : T;` is legal in a
+  `.sysml` file where `chains` is a word only `KerML.xtext` spells.
+- **Index sequences, multiplicity subsetting, `..` recovery and exhibit references parse**, and every
+  remaining parser-only divergence in the pilot corpora was probed against the pinned grammars and
+  accepted only where a production derives it — three neighboring forms are not derivable and stay
+  rejected, with the finding recorded per row. The 28 syntax diagnostics that remain in the
+  differential are all this implementation's own registered extension warnings in `examples/`.
+
+### Metadata annotations
+
+- **A metadata annotation body has a scope and its names resolve.** Per KerML 7.4.7 and 8.3.3.3 a
+  declaration in the body implicitly redefines a feature of the metadata definition, so in
+  `@A { x = ~3; }` the name `x` is `A::x` while the value `~3` resolves in the enclosing scope chain.
+  Nested `@Safety` / `@Security` annotations resolve through public namespace and membership
+  re-exports.
+- **Model-level evaluability is an explicit walk over the expression** (`Model.ModelLevelEvaluable`)
+  rather than a by-product of filter compilation: literals, `null`, metadata access, sequences,
+  `new T(…)` with evaluable arguments, invocations of the Kernel Function Library functions the model
+  itself evaluates, and reads of features reaching an evaluable value are evaluable — being declared
+  by the normative library is not the criterion, so `RealFunctions::sqrt(4.0)` is correctly rejected.
+- **Metaclass reflection is answered from the element**, and a keyword-first relationship is
+  classified by its own metaclass and is a first-class element with ordered ends.
+
+### Execution
+
+- **`send x via p to r` routes instead of reporting unsupported.** Lowering was dropping the
+  receiver, so the runtime had nothing to route with; it now carries port, receiver name and sending
+  object losslessly, with qualified and shadowed receiver names resolved.
+- **A simple state transitioning to itself exits and re-enters.** `transition s to s` ran the effect
+  and stayed put — no exit action, no entry action — because the enclosure test answered that the
+  transition never left its source.
+- **A name denoting one object evaluates to that object**, a vector's elements are its sequence, and
+  a merge node's body runs with the traversal that wins rather than on every arrival.
+- **Declarations in expression bodies are evaluated and scoped**, calc/constraint operations are
+  invoked with the performer context preserved, value type classification is implemented, and
+  executor budget errors are typed (`ErrInvalidActionFlow`, `ErrNoEnabledSuccession`,
+  `ErrActionDeadlock`) so a malformed flow, an unenabled decision and a deadlock are distinguishable
+  rather than one opaque failure.
+
+### The standard library
+
+- **One frozen library index is shared by every model**, with each model's documents in an overlay
+  over it. Measured with gRPC at its default `--cache-size 100` over 100 distinct library-backed
+  models: retained heap 1598.3 MiB → 1.1 MiB, RSS 2180.3 MiB → 76.5 MiB, library indexes built
+  104 → 1. Four REPL sessions go from 122.7 MiB to 17.1 MiB. `Index.Freeze()` makes every write-like
+  method fail loudly and `symbols.NewOverlay(base)` refuses a non-frozen or already-stacked base;
+  evicting a model tombstones a base-owned document locally instead of deleting what another model
+  still reads.
+- **A cache hit can no longer produce a poorer semantic state than a miss.** Records held FQN-level
+  symbols only, so with a warm cache a library type had no members, declared values or condition
+  ASTs — the same commit diverged cold vs warm in user-visible ways (`internal/core/solve` failing
+  cold, ~60 inherited library attributes reported instead of 5, unresolved-reference errors on a
+  filtered library facade). The library is parsed on every path and the on-disk cache persists only
+  derived facts, with a reflective test that fails both ways: a persisted field with no comparator,
+  and a comparator for a field no longer persisted. The cache is keyed by build, so a semantics
+  change is a miss rather than a stale hit.
+- **Library provenance is asked of the index, not inferred.** Four consumers decided a member was
+  not the model's own from the accident that a library symbol carries no declaration; they now ask
+  `Index.Library`, so a user's own imported library is library content when the index says so and a
+  model package named `Occurrences` is not.
+- **`ApplyEdits` takes one library index per request**, not one per edit operation plus validation's
+  — a 10-operation request built 11.
+
+### Authoring, query and export surfaces
+
+- **Elements can be created and deleted from Python** as source-preserving edits
+  (`AddMemberEdit`, `DeleteEdit` over gRPC): every edit is a byte splice into the loaded source, the
+  result is reparsed and reanalyzed, and the whole batch is refused if it introduces errors the
+  original did not have. Five typed failures are added — `EDIT_FAILURE_OWNER_UNKNOWN`,
+  `EDIT_FAILURE_OWNER_NOT_NAMESPACE`, `EDIT_FAILURE_ILLEGAL_KIND`, `EDIT_FAILURE_MEMBER_NAME_TAKEN`,
+  `EDIT_FAILURE_DELETE_REFERENCED` — each with a Python exception. `loads()` parses inline content,
+  and `ParseFileRequest.language` selects `sysml` or `kerml` for it.
+- **Renaming a declaration rewrites the references to it**, and an alias segment is renamed as the
+  name it wrote rather than as the element it reaches.
+- **OSLC Query 3.0 text is a second query front end** beside the structured SysML v2 API `Query`,
+  reachable as `sysml -query 'oslc.where=…'`, `%query` in the REPL and `QueryRequest.oslc_query`.
+  Neither surface subsumes the other: structured queries keep `and`/`or` constraint trees, OSLC
+  brings `!=`, `<=`, `>=`, `in [...]` and `oslc.orderBy`. The CLI and REPL front ends carry OSLC
+  text only; a structured query stays on `QueryRequest.query`. This is not an OSLC server — no query
+  capability documents, result containers, service providers or resource shapes.
+- **RDF carries expression trees beside the source text** of an expression, states the features a
+  binding head relates as structure, keeps a keyword-first relationship's declared visibility, and
+  carries a multiplicity's subsetting through conversion.
+- **`SymbolInfo.withheld_library_attributes` states what a projection withheld** instead of
+  withholding it silently, and two symbol-projection defects are fixed.
+- **The REPL parses each snippet as the kind of the file it came from**, defers a load-time notation
+  error to the analysis report instead of vetoing the run, and no longer hides what a submission
+  declared behind that error. Its prompt scope falls back to the root holding the last declaration.
+
+### Editor surface
+
+- **Contextual keywords are highlighted and completed.** Words the parser reads positionally —
+  `chain`, `choice`, `decision`, `deep`, `defer`, `done`, `point`, `region`, `var` and the rest —
+  were in neither the TextMate grammars nor LSP completion, because both derived their word list
+  from the reserved-word table those words are deliberately absent from. One exported source of
+  truth per language now feeds both surfaces, with lexing untouched.
+- **The editor is no longer blind inside a metadata annotation body**: hover names the redefined
+  feature and its type, go-to-definition jumps to it including an inherited one, completion offers
+  the metadata definition's features at a declaration position and the enclosing scope's at a value
+  position, and document/workspace symbols and semantic tokens cover the body.
+- **Rename and find-references follow the name an alias segment wrote**, so F2 on an alias rewrites
+  its uses and F2 on the target no longer rewrites a name that was never the target's.
+
+### Declared errata: the published reference material can itself be wrong
+
+- **`internal/errata` is a registry of declared defects in published reference material**, and all
+  three corpus oracles now report every census twice — as published, which stays the conformance
+  statement, and with the errata applied as a secondary diagnostic. The registry declares 2 defects,
+  1 with a specification-derived correction and 1 documented without one because no intended reading
+  can be inferred. The published corpus is never edited: a correction is applied to a materialized
+  copy under the oracle's own gitignored output directory, and an erratum never reclassifies a
+  divergence category.
+
+### Measurement infrastructure
+
+- **The four pinned OMG corpus gates share one mechanism** and keep their two deliberate policies:
+  the training corpus is asserted clean, the three pilot corpora are a per-file ratchet whose every
+  movement must be adjudicated. The three pilot corpora (212 files) were report-only before this and
+  failed nothing in CI; what is gated is our own verdicts on those files, which need no Java
+  validator and run in pure Go.
+- **The refereed figures in `README.md` and `docs/internals/architecture.md` are generated from the
+  committed baselines** by `make docs-counts`, which previously only checked a hand-maintained block.
+  No number is typed in by hand, and `cmd/doc-counts -check` makes divergence a build failure.
+- **The `~98% of targeted features` claim is gone.** `docs/project/spec-compliance.md` is a census of
+  our own row list — 727 tracked semantic rules, 641 faithful, 75 approximate, 5 not implemented, 6
+  deliberate divergence — stated as bookkeeping that moves when rows are rewritten and not when an
+  oracle does. No percentage of the specification is claimed anywhere.
+
+### What these numbers do not show
+
+The OMG corpora are demonstrations rather than an official conformance suite; the differential is
+one-directional; the Xpect suites are the pilot authors' test intent rather than a certification
+oracle; the rejection corpus is our own authorship; and the pinned artifact evaluates expressions but
+executes neither actions nor state machines, so the 125 behavior rows that carry the action,
+state-machine and classifier-behavior semantics are self-assessed. 28 declared Xpect rows and 83
+differential diagnostics remain, each adjudicated in `docs/project/pilot-xpect.md` and
+`docs/project/pilot-differential.md` rather than left to be discovered.
+
 ## 0.1.2 — 2026-08-20
 
 A measurement release. Two advisory harnesses now ask the OMG pilot implementation and the
