@@ -25,14 +25,17 @@ type Model struct {
 	// provisionalSupers holds the symbols whose last DirectSupertypes answer was
 	// incomplete, so neither it nor a closure over it may be memoized.
 	provisionalSupers map[*symbols.Symbol]bool
-	referenced        map[*symbols.Symbol]*symbols.Symbol
-	resolvingRef      map[*symbols.Symbol]bool
-	memberSources     map[*symbols.Symbol][]*symbols.Symbol
-	primTypes         map[*symbols.Symbol]PrimType
-	scalars           map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
-	params            map[*symbols.Symbol]behaviorParameters
-	unioning          map[*symbols.Symbol][]*symbols.Symbol
-	ends              map[*symbols.Symbol][]*symbols.Symbol
+	// computingSupers holds the symbols whose DirectSupertypes call is still on
+	// the stack, so the re-entrancy guard answers nil for them.
+	computingSupers map[*symbols.Symbol]bool
+	referenced      map[*symbols.Symbol]*symbols.Symbol
+	resolvingRef    map[*symbols.Symbol]bool
+	memberSources   map[*symbols.Symbol][]*symbols.Symbol
+	primTypes       map[*symbols.Symbol]PrimType
+	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
+	params          map[*symbols.Symbol]behaviorParameters
+	unioning        map[*symbols.Symbol][]*symbols.Symbol
+	ends            map[*symbols.Symbol][]*symbols.Symbol
 
 	superEdgeCache map[*symbols.Symbol][]superEdge      // generalization edges with conjugation
 	conjSupers     map[*symbols.Symbol][]conjugatedType // supertypes with conjugation parity
@@ -82,6 +85,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		allSupers:    make(map[*symbols.Symbol][]*symbols.Symbol),
 
 		provisionalSupers: make(map[*symbols.Symbol]bool),
+		computingSupers:   make(map[*symbols.Symbol]bool),
 		referenced:        make(map[*symbols.Symbol]*symbols.Symbol),
 		resolvingRef:      make(map[*symbols.Symbol]bool),
 		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
@@ -183,6 +187,8 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	}
 	// Guard against re-entrancy on cyclic graphs: seed with an empty slice.
 	m.directSupers[sym] = nil
+	m.computingSupers[sym] = true
+	defer delete(m.computingSupers, sym)
 	if sym.Facts != nil && sym.Facts.Supers != nil {
 		out := m.recordedSupertypes(sym)
 		m.directSupers[sym] = out
@@ -407,6 +413,13 @@ func (m *Model) SupertypesProvisional(sym *symbols.Symbol) bool {
 	return m.provisionalSupers[sym]
 }
 
+// supersUnstable reports whether sym's supertype answer may still change: it was
+// provisional, or its own computation is on the stack and the re-entrancy guard
+// is answering nil for it.
+func (m *Model) supersUnstable(sym *symbols.Symbol) bool {
+	return m.provisionalSupers[sym] || m.computingSupers[sym]
+}
+
 // inheritedFeature returns the feature that sym's owner inherits under the name
 // qn denotes, skipping the owner's own members so a redefinition does not find
 // itself. Only a single-segment name can denote an inherited feature this way;
@@ -470,7 +483,7 @@ func (m *Model) AllSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	var order []*symbols.Symbol
 	visited := make(map[*symbols.Symbol]bool)
 	queue := append([]*symbols.Symbol(nil), m.DirectSupertypes(sym)...)
-	provisional := m.provisionalSupers[sym]
+	provisional := m.supersUnstable(sym)
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
@@ -480,7 +493,7 @@ func (m *Model) AllSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		visited[cur] = true
 		order = append(order, cur)
 		queue = append(queue, m.DirectSupertypes(cur)...)
-		provisional = provisional || m.provisionalSupers[cur]
+		provisional = provisional || m.supersUnstable(cur)
 	}
 	// A closure over a provisional answer is provisional too.
 	if provisional {

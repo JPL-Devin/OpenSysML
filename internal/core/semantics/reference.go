@@ -103,6 +103,7 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 	var order []*symbols.Symbol
 	visited := map[*symbols.Symbol]bool{sym: true}
 	queue := m.contributors(sym)
+	provisional := m.supersUnstable(sym)
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
@@ -112,11 +113,12 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 		visited[cur] = true
 		order = append(order, cur)
 		queue = append(queue, m.contributors(cur)...)
+		provisional = provisional || m.supersUnstable(cur)
 	}
-	// A query made while a reference target is being resolved sees that
-	// reference as absent (the cycle guard above), so its result is only
-	// provisional and is not cached.
-	if len(m.resolvingRef) == 0 {
+	// An answer computed while a reference target is being resolved, or while a
+	// supertype query it depends on is itself unresolved, is provisional: those
+	// guards report fewer sources than the finished model has, so it is not cached.
+	if len(m.resolvingRef) == 0 && !provisional {
 		m.memberSources[sym] = order
 	}
 	return order

@@ -144,3 +144,6 @@ class SymbolFacts:
     multiplicity: Optional[Multiplicity] = None
     specializations: Tuple[Specialization, ...] = field(default_factory=tuple)
     attributes: Tuple[AttributeFacts, ...] = field(default_factory=tuple)
+    #: Library-inherited attributes ``attributes`` leaves out, counted rather
+    #: than silently dropped.
+    withheld_library_attributes: int = 0
