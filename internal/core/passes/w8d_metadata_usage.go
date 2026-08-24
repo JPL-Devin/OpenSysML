@@ -78,8 +78,7 @@ func (mc *w8dMetadataChecker) checkAnnotation(scope *symbols.Scope, typeRef *ast
 	} else {
 		return
 	}
-	// A library symbol carries no declaration, so its abstractness is unknown here.
-	if def, isDef := typ.Decl.(*ast.Definition); isDef && def.IsAbstract {
+	if symbols.IsAbstract(typ) {
 		mc.diags = append(mc.diags, Diagnostic{
 			Severity: SeverityError,
 			Span:     span,

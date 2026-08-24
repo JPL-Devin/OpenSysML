@@ -635,9 +635,9 @@ func (nw *nameWalk) implicitMembers(prefix string, sym *symbols.Symbol, depth in
 }
 
 // chainAvoiding is chainTo restricted to sources the path has not gone through,
-// reporting whether such a detour to declarer exists at all. It also leaves out
-// what a traversed general itself inherits from: the path has already inherited
-// through that general, so no step of a detour re-enters above it.
+// reporting whether such a detour to declarer exists at all. Its first step
+// also leaves out what a traversed general itself inherits from: the path has
+// already inherited through that general, so it does not re-enter above it.
 func (nw *nameWalk) chainAvoiding(owner, declarer *symbols.Symbol) ([]*symbols.Symbol, bool) {
 	if owner == nil || declarer == nil || declarer == owner {
 		return nil, declarer != nil
@@ -652,7 +652,7 @@ func (nw *nameWalk) chainAvoiding(owner, declarer *symbols.Symbol) ([]*symbols.S
 		}
 	}
 	from, found := nw.searchChain(owner, declarer, func(cur, src *symbols.Symbol) bool {
-		return nw.traversed[src] > 0 || above[src]
+		return nw.traversed[src] > 0 || (cur == owner && above[src])
 	})
 	if !found {
 		return nil, false

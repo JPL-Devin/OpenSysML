@@ -58,8 +58,7 @@ func (c *metadataTypeChecker) check(scope *symbols.Scope, pm *ast.PrefixMetadata
 	if !ok || target == nil {
 		return
 	}
-	d, ok := target.Decl.(*ast.Definition)
-	if !ok || !d.IsAbstract {
+	if !symbols.IsAbstract(target) {
 		return
 	}
 	c.diags = append(c.diags, Diagnostic{
