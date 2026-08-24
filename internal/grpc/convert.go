@@ -61,7 +61,7 @@ func SymbolToProtoIn(sym *symbols.Symbol, sc *SymbolContext) *pb.SymbolInfo {
 
 	// The attributes the element has, own and inherited, with their resolved
 	// types and constant default values.
-	info.Attributes, info.WithheldLibraryAttributes = sc.attributesOf(sym)
+	info.Attributes = sc.attributesOf(sym)
 
 	return info
 }

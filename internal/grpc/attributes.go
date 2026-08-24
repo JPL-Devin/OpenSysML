@@ -10,31 +10,18 @@ import (
 
 // attributesOf reports the attributes an element declares and inherits, a
 // closer declaration masking an inherited one of the same name, each with its
-// resolved type, constant default value and unit. An attribute declared in
-// standard-library content is withheld and counted: a client asks about its
-// model, not about the metamodel frame every element sits in.
-func (sc *SymbolContext) attributesOf(sym *symbols.Symbol) ([]*pb.AttributeInfo, int32) {
+// resolved type, constant default value and unit.
+func (sc *SymbolContext) attributesOf(sym *symbols.Symbol) []*pb.AttributeInfo {
 	out := []*pb.AttributeInfo{}
-	var withheld int32
 	seen := make(map[string]bool)
 	for _, member := range sc.Semantics.MembersOf(sym) {
 		if !isAttributeSymbol(member) || member.Name == "" || seen[member.Name] {
 			continue
 		}
 		seen[member.Name] = true
-		if sc.libraryDeclared(member) && member.OwnerScope != sym.Scope {
-			withheld++
-			continue
-		}
 		out = append(out, sc.attributeInfoOf(member))
 	}
-	return out, withheld
-}
-
-// libraryDeclared reports whether the index marks sym as standard-library
-// content, which is provenance rather than a name or FQN prefix test.
-func (sc *SymbolContext) libraryDeclared(sym *symbols.Symbol) bool {
-	return sc.Index != nil && sc.Index.Library(sym)
+	return out
 }
 
 // isAttributeSymbol reports whether a member is an attribute rather than some

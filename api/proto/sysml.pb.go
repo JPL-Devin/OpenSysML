@@ -2914,11 +2914,8 @@ type SymbolInfo struct {
 	// Every generalization edge declared, in declaration order. metadata["type"]
 	// and metadata["specializes"] report only the first, kept for compatibility.
 	Specializations []*Specialization `protobuf:"bytes,9,rep,name=specializations,proto3" json:"specializations,omitempty"`
-	// Attributes inherited from standard-library content, which `attributes`
-	// leaves out. Their absence is stated here rather than silent.
-	WithheldLibraryAttributes int32 `protobuf:"varint,10,opt,name=withheld_library_attributes,json=withheldLibraryAttributes,proto3" json:"withheld_library_attributes,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *SymbolInfo) Reset() {
@@ -3012,13 +3009,6 @@ func (x *SymbolInfo) GetSpecializations() []*Specialization {
 		return x.Specializations
 	}
 	return nil
-}
-
-func (x *SymbolInfo) GetWithheldLibraryAttributes() int32 {
-	if x != nil {
-		return x.WithheldLibraryAttributes
-	}
-	return 0
 }
 
 // Specialization is one generalization edge an element declares.
@@ -4792,7 +4782,7 @@ const file_sysml_proto_rawDesc = "" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\x12\x16\n" +
 	"\x06length\x18\x04 \x01(\x05R\x06length\x12\x19\n" +
 	"\bold_text\x18\x05 \x01(\tR\aoldText\x12\x19\n" +
-	"\bnew_text\x18\x06 \x01(\tR\anewText\"\xfd\x03\n" +
+	"\bnew_text\x18\x06 \x01(\tR\anewText\"\xbd\x03\n" +
 	"\n" +
 	"SymbolInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -4805,9 +4795,7 @@ const file_sysml_proto_rawDesc = "" +
 	"attributes\x12,\n" +
 	"\ttype_info\x18\a \x01(\v2\x0f.sysml.TypeInfoR\btypeInfo\x12;\n" +
 	"\fmultiplicity\x18\b \x01(\v2\x17.sysml.MultiplicityInfoR\fmultiplicity\x12?\n" +
-	"\x0fspecializations\x18\t \x03(\v2\x15.sysml.SpecializationR\x0fspecializations\x12>\n" +
-	"\x1bwithheld_library_attributes\x18\n" +
-	" \x01(\x05R\x19withheldLibraryAttributes\x1a;\n" +
+	"\x0fspecializations\x18\t \x03(\v2\x15.sysml.SpecializationR\x0fspecializations\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"~\n" +

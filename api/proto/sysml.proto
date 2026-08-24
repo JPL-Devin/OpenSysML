@@ -494,9 +494,6 @@ message SymbolInfo {
   // Every generalization edge declared, in declaration order. metadata["type"]
   // and metadata["specializes"] report only the first, kept for compatibility.
   repeated Specialization specializations = 9;
-  // Attributes inherited from standard-library content, which `attributes`
-  // leaves out. Their absence is stated here rather than silent.
-  int32 withheld_library_attributes = 10;
 }
 
 // Specialization is one generalization edge an element declares.
