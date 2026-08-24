@@ -177,6 +177,8 @@ func finding(entry errata.Entry, rootName, rel string, ours, theirs, erratumOurs
 		f.Note = "our diagnostic survives the correction"
 	case f.PilotCorrected > 0:
 		f.Note = "our diagnostic is cleared while the pilot still reports here: a finding, not a fix"
+	case f.PilotPublished > 0:
+		f.Note = "both diagnostics are cleared: the correction changes the pilot's verdict too"
 	case f.OursPublished == 0:
 		f.Note = "neither implementation reported here as published"
 	default:
