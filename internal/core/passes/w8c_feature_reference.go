@@ -269,7 +269,7 @@ func (c *featureReferenceChecker) checkReferent(site refSite, scope *symbols.Sco
 	// A feature of an implicit node (an accept parameter's action) has no
 	// nameable dot path, and our scoping shares it with sibling nodes (W6C row
 	// ~952, a deliberate divergence from the reference).
-	if w8cOwnedByImplicitNode(target) {
+	if w8cOwnedByImplicitNode(target) || w8cAcceptPayload(target) {
 		return
 	}
 	msg, code := msgSubsettingFeaturingTypes, "feature-reference-featuring-types"
@@ -283,6 +283,33 @@ func (c *featureReferenceChecker) checkReferent(site refSite, scope *symbols.Sco
 		Code:     code,
 		Source:   "constraint",
 	})
+}
+
+// w8cAcceptPayload reports whether target is the payload an accept node binds,
+// which the nodes of one action body share (resolve.acceptPayloadsIn), so a
+// sibling node's body reaches it under its bare name.
+func w8cAcceptPayload(target *symbols.Symbol) bool {
+	if target == nil || target.OwnerScope == nil {
+		return false
+	}
+	owner := target.OwnerScope.Owner()
+	if owner == nil {
+		return false
+	}
+	node, ok := owner.Decl.(*ast.Usage)
+	if !ok || node.Kind != ast.UsageAction {
+		return false
+	}
+	for _, member := range node.Members {
+		if mem, ok := member.(*ast.Membership); ok {
+			member = mem.Member
+		}
+		payload, ok := member.(*ast.Usage)
+		if ok && payload.IsAccept && payload.Value == nil && payload.Ident.Name == target.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // w8cOwnedByImplicitNode reports whether target is owned by an unnamed usage,

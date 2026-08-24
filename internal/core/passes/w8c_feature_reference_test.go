@@ -195,6 +195,13 @@ func TestW8CFeatureReferenceBodyAccessible(t *testing.T) {
 		}
 	}
 }`,
+		"accept payload from a sibling node": `package P {
+	attribute def Temp;
+	action def A {
+		action receiver accept msg : Temp;
+		action processor { if msg > 0 { } }
+	}
+}`,
 		"connector ends": `package P {
 	part def Port;
 	part def A { part x : Port; part y : Port; connect x to y; }
