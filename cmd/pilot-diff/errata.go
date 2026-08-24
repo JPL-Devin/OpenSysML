@@ -99,7 +99,7 @@ func runErrata(root corpusRoot, files []string, overlay *errata.Overlay, ours, t
 			fmt.Fprintf(os.Stderr, "remove the corrected copy: %v\n", err)
 		}
 		// leaves nothing behind once the last root's copy is gone
-		os.Remove(filepath.Dir(corrected))
+		_ = os.Remove(filepath.Dir(corrected))
 	}()
 
 	erratumOurs := make(map[string][]diagnostic, len(files))
