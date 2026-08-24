@@ -20,6 +20,9 @@ type Report struct {
 	// Syside is the optional third implementation's column, additive in every
 	// respect: absent, the report is byte-identical to a two-way run.
 	Syside *SysideInfo `json:"syside,omitempty"`
+	// Errata is the same run over the corpus with the declared corrections
+	// applied; Totals above stays the as-published headline.
+	Errata *ErrataReport `json:"errata,omitempty"`
 }
 
 type Totals struct {
@@ -39,6 +42,9 @@ type RootReport struct {
 	Totals Totals        `json:"totals"`
 	Files  []FileReport  `json:"files"`
 	Syside *SysideTotals `json:"syside,omitempty"`
+	// ErrataTotals is this root compared again with its corrections applied,
+	// present only for a root some correction lies in.
+	ErrataTotals *Totals `json:"errataTotals,omitempty"`
 }
 
 // FileReport holds one file's buckets. Files where both implementations are
@@ -216,6 +222,14 @@ func sortedKeys(groups ...map[key][]diagnostic) []key {
 func (r *Report) summarize() {
 	unmapped := make(map[UnmappedRow]int)
 	for _, root := range r.Roots {
+		if r.Errata != nil {
+			// A root no correction lies in contributes its published totals.
+			errataTotals := root.Totals
+			if root.ErrataTotals != nil {
+				errataTotals = *root.ErrataTotals
+			}
+			r.Errata.Totals.add(errataTotals)
+		}
 		r.Totals.Files += root.Totals.Files
 		r.Totals.FilesAgreeing += root.Totals.FilesAgreeing
 		r.Totals.Agreement += root.Totals.Agreement
@@ -261,6 +275,17 @@ func (r *Report) summarize() {
 		}
 		return r.Unmapped[i].Message < r.Unmapped[j].Message
 	})
+}
+
+func (t *Totals) add(other Totals) {
+	t.Files += other.Files
+	t.FilesAgreeing += other.FilesAgreeing
+	t.Agreement += other.Agreement
+	t.SeverityMismatch += other.SeverityMismatch
+	t.OpenSysMLOnly += other.OpenSysMLOnly
+	t.PilotOnly += other.PilotOnly
+	t.OpenSysMLTotal += other.OpenSysMLTotal
+	t.PilotTotal += other.PilotTotal
 }
 
 func countUnmapped(unmapped map[UnmappedRow]int, examples []string) {
@@ -344,6 +369,7 @@ func renderText(report *Report) string {
 	if report.Syside != nil {
 		writeSysideTotals(&b, report.Syside.Totals)
 	}
+	writeErrata(&b, report.Errata)
 
 	for _, root := range report.Roots {
 		fmt.Fprintf(&b, "\n%s\n", strings.Repeat("=", 72))
@@ -369,6 +395,27 @@ func renderText(report *Report) string {
 		}
 	}
 	return b.String()
+}
+
+// writeErrata states the second figure after the headline, never instead of it.
+func writeErrata(b *strings.Builder, report *ErrataReport) {
+	if report == nil {
+		return
+	}
+	fmt.Fprintf(b, "\ndeclared errata: %d entr(ies), %d correction(s), %d documented without one; %d applied here\n",
+		report.Registry, report.Corrections, report.Documented, report.Applied)
+	for _, entry := range report.Entries {
+		shape := "documented, no substitution"
+		if entry.Corrected {
+			shape = "corrected"
+		}
+		fmt.Fprintf(b, "  %s %s:%d (%s) — %s\n", entry.ID, entry.Path, entry.Line, entry.Citation, shape)
+	}
+	writeTotals(b, "TOTAL with errata applied", report.Totals)
+	for _, f := range report.Findings {
+		fmt.Fprintf(b, "  %s %s:%d ours %d->%d, pilot %d->%d: %s\n",
+			f.ID, f.Path, f.Line, f.OursPublished, f.OursCorrected, f.PilotPublished, f.PilotCorrected, f.Note)
+	}
 }
 
 func writeTotals(b *strings.Builder, label string, totals Totals) {

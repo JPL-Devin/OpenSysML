@@ -316,3 +316,20 @@ this document, the README's rejection-oracle line, and the skill's headline from
 [pilot-rejection-baseline.json](pilot-rejection-baseline.json), and checks the gap table above
 enumerates exactly the baseline's `pilot-only-rejects` cases. It reads only committed files — no
 validators, no downloads — so it runs in CI and fails the moment this prose goes stale.
+
+
+## Wave 14 — the declared errata overlay
+
+The rejection census is reported twice, as published and with the [declared
+errata](wave14-errata.md) applied. Every case here is one we wrote ourselves, so no declared
+correction lies under `cmd/pilot-reject/testdata/negative` and the two figures coincide — stated as
+such rather than left to look like a measurement:
+
+```
+no declared correction lies under cmd/pilot-reject/testdata/negative, so the errata-applied
+corpus is byte-identical to the published one and both figures coincide
+```
+
+The mechanism is in place for the case that would matter: an entry correcting a case's model would
+re-adjudicate it over the corrected copy and report any bucket change, including one that moves a
+verdict of the pinned pilot.

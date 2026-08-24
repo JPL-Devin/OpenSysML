@@ -2128,3 +2128,25 @@ One category mapping moved with this and no count did on the base tree: `must ha
 `kind-mismatch` on our side as it already did on the pilot's (`cmd/pilot-diff/category.go`), so our
 own `Must have a Boolean result` can agree with the pilot's identical string instead of sitting in
 `unmapped`. No diagnostic of ours in the corpus carried that wording before wave 12A.
+
+
+## Wave 14 — the declared errata overlay
+
+Every root is compared a second time with the [declared errata](wave14-errata.md) applied to a
+**copy** of it, so the published corpus stays byte-identical on disk. The as-published census above
+is the conformance statement; the corrected one is a secondary diagnostic and is reported beside it:
+
+```
+353 file(s), 324 fully agreeing; 32 agreed, 83 only ours, 66 only the pilot's   (as published)
+353 file(s), 325 fully agreeing; 32 agreed, 82 only ours, 66 only the pilot's   (errata applied)
+```
+
+One correction lies inside these roots — F82, `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38
+(SysML v2 §9.8.9.1). Both implementations are re-run over the corrected copy, because a correction
+that clears our diagnostic while the reference still reports there would be a finding rather than a
+fix. Here it is neither: `ours 1->0, pilot 0->0` — the pinned pilot does no dimensional analysis and
+is silent on both texts, so no pilot verdict changed.
+
+F83 (`Analysis Examples/Turbojet Stage Analysis.sysml`:25) is documented **without** a correction:
+its dimensions are wrong (L^6 against Θ) with no intended reading to infer, so both figures keep the
+published text and our warning at that line stays in the census above.

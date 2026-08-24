@@ -63,39 +63,83 @@ type RefereedCounts struct {
 	SelfAssessed           int
 	PilotTag               string
 	PilotArtifact          string
+	// Errata is the same census with the declared corrections applied. It is a
+	// secondary diagnostic figure; the fields above stay the conformance ones.
+	Errata ErrataCounts
+}
+
+// ErrataCounts is the errata-applied census, read from the same baselines'
+// errata sections so the two figures cannot come from different runs.
+type ErrataCounts struct {
+	Registry        int
+	Corrections     int
+	Documented      int
+	Files           int
+	FilesAgreeing   int
+	OursOnly        int
+	PilotOnly       int
+	Silent          int
+	RejectCases     int
+	RejectPilotOnly int
+}
+
+// differentialTotals is the differential's counts, shared by the as-published
+// totals and the errata-applied ones.
+type differentialTotals struct {
+	Files         int `json:"files"`
+	FilesAgreeing int `json:"filesFullyAgreeing"`
+	OursOnly      int `json:"openSysMLOnly"`
+	PilotOnly     int `json:"pilotOnly"`
+}
+
+// errataProvenance is the registry census every oracle baseline restates.
+type errataProvenance struct {
+	Registry    int `json:"registryEntries"`
+	Corrections int `json:"corrections"`
+	Documented  int `json:"documentedWithoutCorrection"`
 }
 
 type differentialBaseline struct {
-	PilotRelease string `json:"pilotRelease"`
-	Totals       struct {
-		Files         int `json:"files"`
-		FilesAgreeing int `json:"filesFullyAgreeing"`
-		OursOnly      int `json:"openSysMLOnly"`
-		PilotOnly     int `json:"pilotOnly"`
-	} `json:"totals"`
+	PilotRelease string             `json:"pilotRelease"`
+	Totals       differentialTotals `json:"totals"`
+	Errata       *struct {
+		errataProvenance
+		Totals differentialTotals `json:"totals"`
+	} `json:"errata"`
+}
+
+// xpectKind is one assertion kind's counts, as published or with the errata.
+type xpectKind struct {
+	Kind            string `json:"kind"`
+	Assertions      int    `json:"assertions"`
+	Rows            int    `json:"rows"`
+	Agree           int    `json:"agree"`
+	WordingOnly     int    `json:"wordingOnly"`
+	SameLocation    int    `json:"sameLocation"`
+	SameLine        int    `json:"sameLine"`
+	SeverityDiffers int    `json:"severityDiffers"`
+	Elsewhere       int    `json:"elsewhereInFile"`
 }
 
 type xpectBaseline struct {
-	Kinds []struct {
-		Kind            string `json:"kind"`
-		Assertions      int    `json:"assertions"`
-		Rows            int    `json:"rows"`
-		Agree           int    `json:"agree"`
-		WordingOnly     int    `json:"wordingOnly"`
-		SameLocation    int    `json:"sameLocation"`
-		SameLine        int    `json:"sameLine"`
-		SeverityDiffers int    `json:"severityDiffers"`
-		Elsewhere       int    `json:"elsewhereInFile"`
-	} `json:"kinds"`
+	Kinds  []xpectKind `json:"kinds"`
+	Errata *struct {
+		Kinds []xpectKind `json:"kinds"`
+	} `json:"errata"`
+}
+
+type rejectionTotals struct {
+	Cases            int `json:"cases"`
+	BothReject       int `json:"bothReject"`
+	PilotOnlyRejects int `json:"pilotOnlyRejects"`
 }
 
 type rejectionBaseline struct {
-	Totals struct {
-		Cases            int `json:"cases"`
-		BothReject       int `json:"bothReject"`
-		PilotOnlyRejects int `json:"pilotOnlyRejects"`
-	} `json:"totals"`
-	StrictOnlyAgreements []string `json:"strictOnlyAgreements"`
+	Totals               rejectionTotals `json:"totals"`
+	StrictOnlyAgreements []string        `json:"strictOnlyAgreements"`
+	Errata               *struct {
+		Totals rejectionTotals `json:"totals"`
+	} `json:"errata"`
 }
 
 // ReadRefereedCounts reads and derives all five headline figures.
@@ -166,12 +210,54 @@ func ReadRefereedCounts(root string) (RefereedCounts, error) {
 	if !foundErrors || !foundScope {
 		return RefereedCounts{}, fmt.Errorf("docs/project/pilot-xpect-baseline.json: baseline states no errors or scope kind to derive the headline from")
 	}
+	if counts.Errata, err = readErrataCounts(differential, xpect, rejection); err != nil {
+		return RefereedCounts{}, err
+	}
 	selfAssessed, err := ReadSelfAssessedRows(root)
 	if err != nil {
 		return RefereedCounts{}, err
 	}
 	counts.SelfAssessed = selfAssessed
 	return counts, nil
+}
+
+// readErrataCounts derives the errata-applied census from the same baselines.
+// A baseline without an errata section is stale: rerun the oracle.
+func readErrataCounts(differential differentialBaseline, xpect xpectBaseline, rejection rejectionBaseline) (ErrataCounts, error) {
+	if differential.Errata == nil {
+		return ErrataCounts{}, fmt.Errorf("docs/project/pilot-differential-baseline.json: no errata section; rerun `go run ./cmd/pilot-diff`")
+	}
+	if xpect.Errata == nil {
+		return ErrataCounts{}, fmt.Errorf("docs/project/pilot-xpect-baseline.json: no errata section; rerun `go run ./cmd/pilot-xpect`")
+	}
+	if rejection.Errata == nil {
+		return ErrataCounts{}, fmt.Errorf("docs/project/pilot-rejection-baseline.json: no errata section; rerun `go run ./cmd/pilot-reject`")
+	}
+	counts := ErrataCounts{
+		Registry:        differential.Errata.Registry,
+		Corrections:     differential.Errata.Corrections,
+		Documented:      differential.Errata.Documented,
+		Files:           differential.Errata.Totals.Files,
+		FilesAgreeing:   differential.Errata.Totals.FilesAgreeing,
+		OursOnly:        differential.Errata.Totals.OursOnly,
+		PilotOnly:       differential.Errata.Totals.PilotOnly,
+		RejectCases:     rejection.Errata.Totals.Cases,
+		RejectPilotOnly: rejection.Errata.Totals.PilotOnlyRejects,
+	}
+	if counts.Registry != counts.Corrections+counts.Documented {
+		return ErrataCounts{}, fmt.Errorf("docs/project/pilot-differential-baseline.json: %d errata entries are neither corrected nor documented-only", counts.Registry-counts.Corrections-counts.Documented)
+	}
+	for _, kind := range xpect.Errata.Kinds {
+		if kind.Kind != "errors" {
+			continue
+		}
+		counts.Silent = kind.Rows - kind.Agree - kind.SameLocation - kind.SameLine - kind.SeverityDiffers - kind.Elsewhere
+		if counts.Silent < 0 {
+			return ErrataCounts{}, fmt.Errorf("docs/project/pilot-xpect-baseline.json: errata agreements and tolerances exceed %d rows", kind.Rows)
+		}
+		return counts, nil
+	}
+	return ErrataCounts{}, fmt.Errorf("docs/project/pilot-xpect-baseline.json: the errata section states no errors kind")
 }
 
 func readJSON(root, path string, into any) error {
@@ -460,7 +546,8 @@ const refereedBlockTemplateText = "<!-- doc-counts:begin {{.Name}} -->\n" +
 	"- **Declared-diagnostic silence:** of the {{.DeclaredErrors}} declared `errors` rows in the reference's own Xpect suites, we report nothing for {{.Silent}}. {{.DeclaredAgree}} we report word-for-word; {{.WordingOnly}} wording-only and {{.LocationOnly}} location-only differences are agreement in substance and are not counted as gaps; {{.SeverityDiffers}} more we report as a warning and {{.Elsewhere}} elsewhere in the file ([Xpect oracle]({{.LinkPrefix}}pilot-xpect.md), `go run ./cmd/pilot-xpect`).\n" +
 	"- **Scope agreement:** {{.ScopeExact}} of {{.ScopeTotal}} declared scope assertions match exactly (same source).\n" +
 	"- **Permissiveness gaps:** of {{.RejectCases}} invalid models we wrote ourselves, the reference rejects {{.RejectDefaultPilotOnly}} that we accept by default, and {{.RejectDefaultBoth}} both reject; {{.RejectStrictOnly}} further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle]({{.LinkPrefix}}pilot-rejection.md), `go run ./cmd/pilot-reject`).\n" +
-	"- **Self-assessed surface:** {{.SelfAssessed}} of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four numbers above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.\n\n" +
+	"- **Declared errata:** the registry declares {{.Errata.Registry}} defect(s) in the published reference material — {{.Errata.Corrections}} with a specification-derived correction, {{.Errata.Documented}} documented without one, since no intended reading can be inferred ([OMG issues]({{.LinkPrefix}}omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports {{.Errata.FilesAgreeing}} of {{.Errata.Files}} files agreeing, {{.Errata.OursOnly}} diagnostics ours alone and {{.Errata.PilotOnly}} the reference's alone, {{.Errata.Silent}} declared rows we are silent on, and {{.Errata.RejectPilotOnly}} of {{.Errata.RejectCases}} authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.\n" +
+	"- **Self-assessed surface:** {{.SelfAssessed}} of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four refereed figures above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.\n\n" +
 	"What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.\n\n" +
 	"**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the {{.RuleCounts.Total}} tracked rules stays in [spec compliance]({{.LinkPrefix}}spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.\n" +
 	"<!-- doc-counts:end {{.Name}} -->"

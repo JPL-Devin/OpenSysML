@@ -16,6 +16,11 @@ Four categories, and every open row carries one — an unlabelled open row reads
 | **pilot limitation** | the pilot's declared expectation does not follow from the specification |
 | **adjudicated divergence** | we deliberately differ, with the reading recorded |
 
+A fifth case is *not* a category here: the **published material is itself wrong**. Those rows are
+declared in the [errata overlay](wave14-errata.md) with a citation and a derivation, and the overlay
+never relabels one of the four categories above — a row moves out of *our defect* only when the
+derivation says why.
+
 | Row | Category | Owner |
 |---|---|---|
 | E1 `Type_Multiplicity_invalid` | unimplemented obligation | 11B (parser) — **closed in [wave 12D](wave12d-decisions.md)** |
