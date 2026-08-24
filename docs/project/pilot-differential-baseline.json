@@ -132,12 +132,12 @@
       ],
       "errataTotals": {
         "files": 98,
-        "filesFullyAgreeing": 92,
+        "filesFullyAgreeing": 94,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 15,
+        "openSysMLOnly": 7,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 15,
+        "openSysMLDiagnostics": 7,
         "pilotDiagnostics": 0
       }
     },
@@ -1721,12 +1721,12 @@
     ],
     "totals": {
       "files": 353,
-      "filesFullyAgreeing": 322,
+      "filesFullyAgreeing": 325,
       "agreement": 32,
       "severityMismatch": 24,
-      "openSysMLOnly": 91,
+      "openSysMLOnly": 82,
       "pilotOnly": 66,
-      "openSysMLDiagnostics": 147,
+      "openSysMLDiagnostics": 138,
       "pilotDiagnostics": 122
     },
     "findings": [

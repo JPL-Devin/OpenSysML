@@ -2137,8 +2137,8 @@ Every root is compared a second time with the [declared errata](wave14-errata.md
 is the conformance statement; the corrected one is a secondary diagnostic and is reported beside it:
 
 ```
-353 file(s), 321 fully agreeing; 32 agreed, 92 only ours, 66 only the pilot's   (as published)
-353 file(s), 322 fully agreeing; 32 agreed, 91 only ours, 66 only the pilot's   (errata applied)
+353 file(s), 324 fully agreeing; 32 agreed, 83 only ours, 66 only the pilot's   (as published)
+353 file(s), 325 fully agreeing; 32 agreed, 82 only ours, 66 only the pilot's   (errata applied)
 ```
 
 One correction lies inside these roots — F82, `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38
