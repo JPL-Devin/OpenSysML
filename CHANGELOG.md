@@ -198,7 +198,8 @@ Python surfaces gain fields and calls; nothing was removed or renamed.
 - **OSLC Query 3.0 text is a second query front end** beside the structured SysML v2 API `Query`,
   reachable as `sysml -query 'oslc.where=…'`, `%query` in the REPL and `QueryRequest.oslc_query`.
   Neither surface subsumes the other: structured queries keep `and`/`or` constraint trees, OSLC
-  brings `!=`, `<=`, `>=`, `in [...]` and `oslc.orderBy`. This is not an OSLC server — no query
+  brings `!=`, `<=`, `>=`, `in [...]` and `oslc.orderBy`. The CLI and REPL front ends carry OSLC
+  text only; a structured query stays on `QueryRequest.query`. This is not an OSLC server — no query
   capability documents, result containers, service providers or resource shapes.
 - **RDF carries expression trees beside the source text** of an expression, states the features a
   binding head relates as structure, keeps a keyword-first relationship's declared visibility, and
