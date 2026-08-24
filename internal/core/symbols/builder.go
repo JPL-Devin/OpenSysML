@@ -114,7 +114,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.SubstateMember:
 		// SubstateMember represents simple state declaration: state <name>;
 		// Create a state usage symbol for it
-		id := ast.Identification{Name: d.Name}
+		id := ast.Identification{Name: d.Name, NameSpan: d.NameSpan}
 		child := NewScope(scope, d)
 		sym := newSymbol(id, SymbolStateUsage, d, vis, child, scope, trivia)
 		defineIdent(scope, id, sym)
@@ -184,7 +184,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		if d.Name == "" {
 			return
 		}
-		id := ast.Identification{Name: d.Name}
+		id := ast.Identification{Name: d.Name, NameSpan: d.NameSpan}
 		child := NewScope(scope, d)
 		sym := newSymbol(id, SymbolActionUsage, d, vis, child, scope, trivia)
 		defineIdent(scope, id, sym)
