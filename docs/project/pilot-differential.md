@@ -201,20 +201,21 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 15 | 8 | 36 | 53 | 32 | 1 | 3 | 20 |
-| `examples` | 22 | 15 | 86 | 63 | 0 | 23 | 63 | 40 |
+| `examples` | 22 | 15 | 88 | 63 | 0 | 24 | 64 | 39 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **353** | **324** | **139** | **122** | **32** | **24** | **83** | **66** |
+| **Total** | **353** | **324** | **141** | **122** | **32** | **25** | **84** | **65** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **8** and
 `pilot-validation` 1 → **0**, with `kerml-examples` unmoved at 3. Our diagnostics on those roots
 therefore fall 20 → **11**. The
-`examples` root is unmoved at 63, and all 63 of its rows are one check firing on them: the
+`examples` root carries 64, and all 64 of its rows are one check firing on them: the
 non-standard-notation warning (26 `then <source> <target>;`, 24 `transition <source> to <target>;`, 6
-`require` outside a requirement body, and 7 across `done`/`initial`/`region`/`junction`). **Those are
+`require` outside a requirement body, 7 across `done`/`initial`/`region`/`junction`, and 1
+member-leading `<source> then <target>;`). **Those are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **11**. `severity-only` (24) is unmoved for the same reason:
+reference corpora is **11**. `severity-only` (25) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
 
@@ -360,10 +361,10 @@ Two things did move here, and one is a first:
   is correct and expected here.
 
 Per category, the only-ours totals are: `pilot-examples` 5 `unmapped`, 1 `kind-mismatch`, 2
-`units`; `kerml-examples` 3 `unmapped`; `examples` 63 syntax; `testdata` 2
+`units`; `kerml-examples` 3 `unmapped`; `examples` 64 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 11 `kind-mismatch`, 4 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 15 `unmapped`, 13 syntax, 6 `kind-mismatch`, 5 `unresolved-reference`, 1
+`examples` 15 `unmapped`, 12 syntax, 6 `kind-mismatch`, 5 `unresolved-reference`, 1
 `multiplicity` — all of them `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -395,19 +396,27 @@ columns below are the only combined measurements. "At #356" is the state the adj
 written against, "F60–F69" the round of #358–#364, "wave 3" the round of #372–#376, "wave 4" the
 round of #383/#391/#387/#388/#382, "wave 5" the round of #403/#405/#397/#396/#398, "wave 6" the
 round of #408–#415, "wave 7A" #424, "wave 8" everything landed on `main` between 7A and 8G (#438),
-"wave 9" the round of #449–#455, "wave 12A" #500, and "now" Step 2's resolver round. The wave-3 and wave-5 reason columns are dropped for width; those reasons survive in the K- and S-class tables below and in this page's history:
+"wave 9" the round of #449–#455, "wave 12A" #500, and "now" the member-leading-succession diagnostic round (#526). The wave-3 and wave-5 reason columns are dropped for width; those reasons survive in the K- and S-class tables below and in this page's history:
 
 For round 3, the fresh control column is the `1af78d94` base, before the wave-12F changes:
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **324 / 83 / 139** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **324 / 84 / 141** |
 | `pilot-examples`: only ours | **43** | **8** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **40** |
+| `examples`: only pilot | **40** | **39** |
 | `examples`: fully agreeing | **15** | **15** |
 | `unmapped`, our side | **20** | **18** |
+
+The `Now` column's one movement since Step 2's resolver round is #526's member-leading
+succession-shorthand warning, and it lands entirely on `examples/pseudostates-demo.sysml`'s two
+`start then …;` members: line 33 adds one only-ours row (only ours 83 → **84**, our diagnostics
+139 → **141**) and line 16, where the pilot errors, moves from only-pilot to severity-only
+(only pilot 66 → **65**, severity-only 24 → **25**). Agreement (**32**), fully agreeing files
+(**324**) and every OMG root are unmoved: both warnings are true positives about our own demo's
+notation, not movement against the reference's corpora.
 
 This control is measured independently from the wave-12F head: its Xpect result is **1287 agree,
 248 wording-only, 36 disagree**, and its rejection result is **116 both reject / 4 only pilot
@@ -1965,7 +1974,7 @@ one.
 | ~~F96~~ | **Done** (#373, whose title mislabels it "F84" — F84 is K7). Our own 10 `.kerml` demo fixtures carried SysML notation under a `.kerml` suffix, which is why F34 drew 314 pilot diagnostics on them. Two were SysML demos and were renamed (`parser_features_demo_connectors`, `parser_features_demo_messages_events`); the other eight were corrected to notation the KerML grammar accepts. The `examples` root now has **no** `.kerml` pilot diagnostic. F97/F98 were the two further fixture gaps #358 proposed under the same renumbering. |
 | ~~F99~~ | **Done** (#387), in `internal/core/symbols/` and the evaluator: a declaration in an expression body is in scope for the body's result expression, with shadowing preserved, and the runtime evaluates it instead of returning `ErrUnsupportedBodyDeclaration`. `Analysis Examples/Vehicle Analysis Demo.sysml` 6 → 0 and `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml` 2 → 1. A declaration inside an expression body parses (#375, F64b) but its name is not visible to the body's result expression: `Analysis Examples/Vehicle Analysis Demo.sysml:214-218` now reports 6 `unresolved reference: nextSample`/`thisSample` diagnostics over 5 report lines (line 214 carries `x2`) where it previously reported 2 syntax errors, and the evaluator returns the typed `ErrUnsupportedBodyDeclaration` rather than a wrong result. The scope member is `internal/core/symbols/` work, which #375 did not own. Strictly an unmasking: the reference is silent on the file, and the diagnostic count rose because parsing advanced. |
 | ~~F100~~ | **Done** (#388). It was a false positive of ours, as suspected: a redefinition target that is separately `featured by` need not be an inherited member of the immediately enclosing feature, and the check now falls back to the KerML accessibility rule cited in `internal/core/passes/`. Our `unmapped` total drops 16 → 15; the other two wave-3 unmaskings (F69's `Rationale` name conflicts) are a deliberate one-sided check and stay. `member feature isLicensed1 :>> Person1_::isLicensed featured by …` (`Variable Feature Examples/TimeVaryingCarDriver.kerml:93`, 1 `unmapped`) draws `isLicensed1 redefines isLicensed, but isLicensed is not an inherited member of driver`; the reference is silent. The line only parses now that F50 (#374) accepts `member abstract feature`, so this is unmasked, not new — but unlike F99 it looks like a **false positive of ours**: the redefinition target is *qualified* (`Person1_::isLicensed`) and separately `featured by`, so requiring it to be an inherited member of the immediately enclosing feature is too strict. Confirm against the reference on a reduced fixture before widening the check. |
-| ~~F101~~ | **Done** (wave 10F). Re-measured on `main` before the fix, **2** of the 12 remained — both `no scope for member lookup in Actions::TransitionAction::effect`, on `ServerSequenceOutsideRealization-2.sysml:91` and `ServerSequenceRealization-2.sysml:96`; the `accepter`, `acceptedMessage` and `PartTest.sysml:25` `receiver` rows had already been retired by waves 7–9, so the count below is stale rather than wrong when written. The cause was not implicit typing: `kindBaseFQN` already gives `*ast.TransitionMember` the `Actions::TransitionAction` base, and the chain resolved to the library's abstract `effect` feature, which comes back from the library cache without a scope. A transition's own effect action *is* the `effect` it redefines (SysML v2 §7.19.2), so `symbols/builder.go` names it in the transition's scope and the chain reads that action; a `send` written as an action node is a SendActionUsage in its own right, so `semantics/model.go` types it by `Actions::SendAction` whether or not a usage declares it, which is what supplies `sentMessage`. Both files' rows go to 0 and `ServerSequenceRealization-2.sysml` becomes fully agreeing. **Unmasking:** with the name-resolution error gone the constraint tier now runs on `ServerSequenceOutsideRealization-2.sysml` and surfaces 3 `Must be a valid feature` rows on `:>> incomingTransferSort = Occurrences::earlierFirstIncomingTransferSort` (lines 18, 32, 57) — a KerML `bool` expression *is* a feature, so these are false positives of `passes/w8c_feature_reference.go`, they reproduce on `main` when nothing masks the tier, and they are handed to slice 10B with F69. Net on this oracle: fully agreeing 309 → 310, only ours 119 → 120. As handed back in wave 4: **12** of F68's 39 diagnostics remained, all implicit `Actions::TransitionAction` members. 11 are in the two files #391 measured — `ServerSequenceOutsideRealization-2.sysml` 10 → 4 and `ServerSequenceRealization-2.sysml` 13 → 7 — and name `accepter` (6), `effect` (3) and `acceptedMessage` (2); the twelfth is `Simple Tests/PartTest.sysml:25`'s `unresolved member: receiver`, unchanged at 1. `semantics/implicit.go` `kindBaseFQN` must give `*ast.TransitionMember` the base its usage kind already has — a layer #391 did not own. |
+| ~~F101~~ | **Done** (wave 10F). Re-measured on `main` before the fix, **2** of the 12 remained — both `no scope for member lookup in Actions::TransitionAction::effect`, on `ServerSequenceOutsideRealization-2.sysml:91` and `ServerSequenceRealization-2.sysml:96`; the `accepter`, `acceptedMessage` and `PartTest.sysml:25` `receiver` rows had already been retired by waves 7–9, so the count below is stale rather than wrong when written. The cause was not implicit typing: `kindBaseFQN` already gives `*ast.TransitionMember` the `Actions::TransitionAction` base, and the chain resolved to the library's abstract `effect` feature, which comes back from the library cache without a scope. A transition's own effect action *is* the `effect` it redefines (SysML v2 §7.19.2), so `symbols/builder.go` names it in the transition's scope and the chain reads that action; a `send` written as an action node is a SendActionUsage in its own right, so `semantics/model.go` types it by `Actions::SendAction` whether or not a usage declares it, which is what supplies `sentMessage`. Both files' rows go to 0 and `ServerSequenceRealization-2.sysml` becomes fully agreeing. **Unmasking:** with the name-resolution error gone the constraint tier now runs on `ServerSequenceOutsideRealization-2.sysml` and surfaces 3 `Must be a valid feature` rows on `:>> incomingTransferSort = Occurrences::earlierFirstIncomingTransferSort` (lines 18, 32, 57) — a KerML `bool` expression *is* a feature, so these are false positives of `passes/w8c_feature_reference.go`, they reproduce on `main` when nothing masks the tier, and they are handed to slice 10B with F69. Net on this oracle: fully agreeing 309 → 310, only ours 119 → 120. As handed back in wave 4: **12** of F68's 39 diagnostics remained, all implicit `Actions::TransitionAction` members. 11 are in the two files #391 measured — `ServerSequenceOutsideRealization-2.sysml` 10 → 4 and `ServerSequenceRealization-2.sysml` 13 → 7 — and name `accepter` (6), `effect` (3) and `acceptedMessage` (2); the twelfth is `Simple Tests/PartTest.sysml:25`'s `unresolved member: receiver`, unchanged at 1. `semantics/implicit.go` `kindBaseFQN` must give `*ast.TransitionMember` the base its usage kind already has — a layer #391 did not own. **Residue closed:** the two `effect` cases needed a cached library symbol to carry a scope, and fact-only library records (a library document is parsed on every load path) leave every restored symbol its declaration and scope, so both files are clean and the chain resolves identically cold and warm (`model/w8g_f68_effect_member_test.go`). |
 | ~~F102~~ | **Done** (#428), re-verified on `main`: all three forms parse clean, pinned by the `w7c_f66_generalized_usage_declarations` golden fixture and the two neighbouring negative cases. Wave-4 handback from F66 (#375): `verify r :>> massRequirement;`, `variant use case uc11;` and `ref redefines cylinderBR[4];` stay rejected. All three are the generalized usage-declaration path in `parser/defusage.go` `parseUsage`, which #375 did not own; #383 owned that file but scoped itself to F65's three forms. |
 | ~~F103~~ | **Done** (#428), re-verified on `main` and pinned by the `assert_not_named_constraint` golden fixture: `not` before a named constraint negates the asserted expression instead of modifying a declaration, and `Simple Tests/ConstraintTest.sysml` is clean. Wave-4 handback from F64 (#375): `assert not c { … }` stays rejected. `parser/defusage.go` `parseDefUsage` treats `not` as a negation only when a *kind keyword* follows it, so a named constraint after `not` is still read as a declaration where the grammar makes the argument an `OperatorExpression`. |
 | ~~F104~~ | **Done** (#464). Expression-valued bindings are nonstandard-notation warnings by default and errors in strict mode; feature-reference bindings remain silent. |
@@ -2143,8 +2152,8 @@ Every root is compared a second time with the [declared errata](wave14-errata.md
 is the conformance statement; the corrected one is a secondary diagnostic and is reported beside it:
 
 ```
-353 file(s), 324 fully agreeing; 32 agreed, 83 only ours, 66 only the pilot's   (as published)
-353 file(s), 325 fully agreeing; 32 agreed, 82 only ours, 66 only the pilot's   (errata applied)
+353 file(s), 324 fully agreeing; 32 agreed, 84 only ours, 65 only the pilot's   (as published)
+353 file(s), 325 fully agreeing; 32 agreed, 83 only ours, 65 only the pilot's   (errata applied)
 ```
 
 One correction lies inside these roots — F82, `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38
