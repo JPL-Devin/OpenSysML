@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -38,8 +39,8 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	if err := ld.load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx1); err != nil {
 		t.Fatalf("first Load: %v", err)
 	}
-	if len(ld.parsed) != 1 {
-		t.Fatalf("documents parsed on a cold cache = %d, want 1", len(ld.parsed))
+	if len(ld.loaded) != 1 || ld.loaded[0].rec != nil {
+		t.Fatalf("documents loaded on a cold cache = %+v, want one with no record", ld.loaded)
 	}
 	// The key covers the whole library set, so every file of it was digested.
 	if len(cs.reads) != len(cs.List()) {
@@ -48,7 +49,7 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	if len(idx1.LookupQualified("ScalarValues::Boolean")) != 1 {
 		t.Fatal("first load did not index ScalarValues::Boolean")
 	}
-	ld.reduce(idx1, true)
+	ld.installFacts(idx1, true)
 	entries, _ := os.ReadDir(cacheDir)
 	found := false
 	for _, e := range entries {
@@ -64,24 +65,29 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	if err := ld.load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx2); err != nil {
 		t.Fatalf("second Load: %v", err)
 	}
-	if len(ld.parsed) != 0 {
-		t.Fatal("the cached load parsed the file instead of restoring its record")
+	if len(ld.loaded) != 1 || ld.loaded[0].rec == nil {
+		t.Fatalf("documents loaded on a warm cache = %+v, want one with its record", ld.loaded)
 	}
 	if len(idx2.LookupQualified("ScalarValues")) != 1 ||
 		len(idx2.LookupQualified("ScalarValues::Boolean")) != 1 {
 		t.Fatal("cached load did not repopulate index")
 	}
+	ld.installFacts(idx2, false)
 
-	// A symbol restored from the cache keeps its specialization targets: it has
-	// no Decl, so those edges are the only way its inherited members are found.
+	// A hit restores the derived supertype edges onto the parsed symbol, which
+	// keeps its declaration either way.
 	boolean := idx2.LookupQualified("ScalarValues::Boolean")[0]
-	if len(boolean.SuperFQNs) != 1 || boolean.SuperFQNs[0] != "ScalarValues::ScalarValue" {
-		t.Fatalf("supertypes of the cached Boolean = %v, want [ScalarValues::ScalarValue]", boolean.SuperFQNs)
+	if boolean.Decl == nil {
+		t.Fatal("the cached load left ScalarValues::Boolean without its declaration")
+	}
+	if boolean.Facts == nil || len(boolean.Facts.Supers) != 1 ||
+		boolean.Facts.Supers[0] != "ScalarValues::ScalarValue" {
+		t.Fatalf("restored supertype facts of Boolean = %+v, want [ScalarValues::ScalarValue]", boolean.Facts)
 	}
 }
 
-// A restored symbol's supertypes must match what the live-parsed AST yields, so
-// the typing edge of a feature survives the round trip too.
+// Restored supertype facts must match what the live-parsed AST yields, so the
+// typing edge of a feature survives the round trip too.
 func TestLoaderCacheKeepsTypingEdge(t *testing.T) {
 	dir := t.TempDir()
 	src := "package Lib { part def Engine; part e : Engine; }"
@@ -94,18 +100,19 @@ func TestLoaderCacheKeepsTypingEdge(t *testing.T) {
 	if err := ld.load("lib.sysml", idx1); err != nil {
 		t.Fatalf("first Load: %v", err)
 	}
-	ld.reduce(idx1, true)
+	ld.installFacts(idx1, true)
 
 	idx2 := symbols.NewIndex()
 	if err := ld.load("lib.sysml", idx2); err != nil {
 		t.Fatalf("second Load: %v", err)
 	}
+	ld.installFacts(idx2, false)
 	e := idx2.LookupQualified("Lib::e")
 	if len(e) != 1 {
 		t.Fatalf("cached load did not register Lib::e")
 	}
-	if len(e[0].SuperFQNs) != 1 || e[0].SuperFQNs[0] != "Lib::Engine" {
-		t.Fatalf("supertypes of the cached e = %v, want [Lib::Engine]", e[0].SuperFQNs)
+	if e[0].Facts == nil || len(e[0].Facts.Supers) != 1 || e[0].Facts.Supers[0] != "Lib::Engine" {
+		t.Fatalf("restored supertype facts of e = %+v, want [Lib::Engine]", e[0].Facts)
 	}
 }
 
@@ -154,7 +161,7 @@ func TestLoaderRequireResolvedSkipsUnresolvedRecord(t *testing.T) {
 	if err := ld.load("lib.sysml", idx); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	ld.reduce(idx, true)
+	ld.installFacts(idx, true)
 
 	entries, err := os.ReadDir(cacheDir)
 	if err != nil {
@@ -167,12 +174,11 @@ func TestLoaderRequireResolvedSkipsUnresolvedRecord(t *testing.T) {
 	}
 }
 
-// equivalenceLibrary is a library exercising every piece of index state a
-// record round-trip has to preserve: a chain of wildcard imports across sibling
+// equivalenceLibrary is a library exercising every piece of index state a load
+// path has to produce identically: a chain of wildcard imports across sibling
 // packages, a short name, an alias, and a specialization across files.
 // It also carries both element-filter forms over an annotated element, whose
-// verdict a restored record has to be able to reach without the declaration the
-// condition was written in.
+// verdict must not depend on which path loaded the library.
 const equivalenceLibrary = `package Lib {
 	public import Core::*;
 	package Root {
@@ -203,10 +209,10 @@ const equivalenceLibrary = `package Lib {
 	}
 }`
 
-// A persistent cache is a performance optimisation, so indexing a library by
-// parsing it and indexing it by restoring its record must leave the resolver
-// looking at the same thing: the same fully-qualified names, and the same
-// supertypes, wildcard imports and alias targets under each of them.
+// A persistent cache is a performance optimisation, so a load that derives a
+// library's facts and a load that restores them must leave the resolver looking
+// at the same thing: the same fully-qualified names, and the same supertypes,
+// wildcard imports and alias targets under each of them.
 func TestParsedAndRestoredIndexesAreEquivalent(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "lib.sysml"), []byte(equivalenceLibrary), 0o600); err != nil {
@@ -239,10 +245,8 @@ func TestParsedAndRestoredIndexesAreEquivalent(t *testing.T) {
 	}
 }
 
-// A filter's verdict has to follow from the index alone: a restored library has
-// no declaration left to read the condition, or the metadata it classifies by,
-// from. So the elements a filtered import and a filtered re-export admit must be
-// the same whether the library was parsed or restored from its record.
+// The elements a filtered import and a filtered re-export admit must be the same
+// whether the library's facts were derived or restored from its record.
 func TestFilteredImportsSurviveCacheRestore(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "lib.sysml"), []byte(equivalenceLibrary), 0o600); err != nil {
@@ -276,7 +280,7 @@ func TestFilteredImportsSurviveCacheRestore(t *testing.T) {
 // admittedNames reports, for each name the library registers the annotated
 // elements under, whether the filters gating that name admit the element there.
 // It is the question resolution asks of a filter, asked directly of the index and
-// the semantic model, since a library index holds no document to resolve from.
+// the semantic model.
 func admittedNames(t *testing.T, idx *symbols.Index) map[string]bool {
 	t.Helper()
 	r := resolve.New(idx)
@@ -326,9 +330,7 @@ func loadWholeLibrary(t *testing.T, dir, cacheDir string) *symbols.Index {
 
 // indexView is a description of an index that does not depend on how it was
 // populated: every registered fully-qualified name, and the resolver-visible
-// state of the symbols under it. It deliberately ignores symbols.Symbol.Name,
-// which holds a local name on the parse path and a qualified one on the
-// restore path.
+// state of the symbols under it.
 type indexView struct {
 	fqns    []string
 	entries map[string]string
@@ -349,20 +351,26 @@ func snapshotIndex(idx *symbols.Index) indexView {
 	return view
 }
 
-// describeSymbol renders the state a symbol contributes to name resolution.
-// A parsed symbol carries it in its declaration, a restored one in the fields
-// its record populated; both must describe the same thing.
+// describeSymbol renders the state a symbol contributes to name resolution,
+// which its declaration states on every load path.
 func describeSymbol(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver, model *semantics.Model) string {
-	supers, alias, short := sym.SuperFQNs, sym.AliasTargetFQN, sym.ShortName
-	if sym.Decl != nil {
-		supers, _ = supersOf(sym, idx, r, model)
-		alias = aliasTargetOf(sym.Decl)
-	}
+	supers, _ := supersOf(sym, idx, r, model)
 	sort.Strings(supers)
-	return fmt.Sprintf("kind=%v short=%q supers=%v alias=%q", sym.Kind, short, supers, alias)
+	return fmt.Sprintf("kind=%v short=%q supers=%v alias=%q name=%q",
+		sym.Kind, sym.ShortName, supers, aliasTargetOf(sym.Decl), sym.Name)
 }
 
-// A record persists values reduced from sibling files — a unit's scale follows a
+// aliasTargetOf names the target an alias declaration points at, "" for anything
+// that is not an alias.
+func aliasTargetOf(decl ast.Node) string {
+	a, ok := decl.(*ast.Alias)
+	if !ok || a.For == nil {
+		return ""
+	}
+	return semantics.QualifiedNameText(a.For)
+}
+
+// A record persists facts derived from sibling files — a unit's scale follows a
 // prefix or reference unit declared elsewhere — so editing any file of a library
 // must invalidate every record of that library, not just the edited file's.
 func TestLoaderCacheInvalidatesSiblingRecords(t *testing.T) {
@@ -375,17 +383,17 @@ func TestLoaderCacheInvalidatesSiblingRecords(t *testing.T) {
 		t.Fatalf("write b.sysml: %v", err)
 	}
 	cacheDir := t.TempDir()
-	loadWholeLibrary(t, dir, cacheDir) // cold: parses both, then persists them
+	loadWholeLibrary(t, dir, cacheDir) // cold: derives both, then persists them
 
-	if parsed := loadLibraryParseCount(t, dir, cacheDir); parsed != 0 {
-		t.Fatalf("documents parsed on an unchanged library = %d, want 0", parsed)
+	if missed := loadLibraryMissCount(t, dir, cacheDir); missed != 0 {
+		t.Fatalf("records missing for an unchanged library = %d, want 0", missed)
 	}
 
 	if err := os.WriteFile(sibling, []byte("package B { part def Wheel; }"), 0o600); err != nil {
 		t.Fatalf("rewrite b.sysml: %v", err)
 	}
-	if parsed := loadLibraryParseCount(t, dir, cacheDir); parsed != 2 {
-		t.Fatalf("documents parsed after editing one file = %d, want 2 (the whole library)", parsed)
+	if missed := loadLibraryMissCount(t, dir, cacheDir); missed != 2 {
+		t.Fatalf("records missing after editing one file = %d, want 2 (the whole library)", missed)
 	}
 
 	// The records of the library as it was are now unreachable, so the next
@@ -418,9 +426,9 @@ func idxFiles(t *testing.T, cacheDir string) []string {
 	return names
 }
 
-// loadLibraryParseCount indexes the library in dir and reports how many of its
-// files missed the cache and had to be parsed.
-func loadLibraryParseCount(t *testing.T, dir, cacheDir string) int {
+// loadLibraryMissCount indexes the library in dir and reports how many of its
+// files found no record in the cache, so their facts have to be derived.
+func loadLibraryMissCount(t *testing.T, dir, cacheDir string) int {
 	t.Helper()
 	src := NewDirSource(dir)
 	ld := NewLoader(src, &Cache{dir: cacheDir})
@@ -430,20 +438,31 @@ func loadLibraryParseCount(t *testing.T, dir, cacheDir string) int {
 			t.Fatalf("load %s: %v", name, err)
 		}
 	}
-	return len(ld.parsed)
+	missed := 0
+	for _, doc := range ld.loaded {
+		if doc.rec == nil {
+			missed++
+		}
+	}
+	return missed
 }
 
-func TestIndexAddRecordsRemovable(t *testing.T) {
-	idx := symbols.NewIndex()
-	idx.AddRecords("lib.kerml", []symbols.RecordEntry{
-		{FQN: "P", Kind: symbols.SymbolPackage},
-		{FQN: "P::N", Kind: symbols.SymbolNamespace},
-	})
-	if len(idx.LookupQualified("P::N")) != 1 {
-		t.Fatal("AddRecords did not register P::N")
+// A library document is removable whichever path loaded it, which is what lets a
+// workspace drop a library it no longer uses.
+func TestLibraryDocumentIsRemovable(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lib.kerml"), []byte("package P { namespace N; }"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
 	}
-	idx.RemoveDocument("lib.kerml")
-	if len(idx.LookupQualified("P::N")) != 0 {
-		t.Fatal("RemoveDocument did not drop record-added symbols")
+	cacheDir := t.TempDir()
+	for _, path := range []string{"cold", "warm"} {
+		idx := loadWholeLibrary(t, dir, cacheDir)
+		if len(idx.LookupQualified("P::N")) != 1 {
+			t.Fatalf("the %s load did not register P::N", path)
+		}
+		idx.RemoveDocument("lib.kerml")
+		if len(idx.LookupQualified("P::N")) != 0 {
+			t.Fatalf("RemoveDocument left P::N after the %s load", path)
+		}
 	}
 }

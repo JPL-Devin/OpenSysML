@@ -455,14 +455,12 @@ func TestExpandWildcardImportsForgetsARemovedMember(t *testing.T) {
 	}
 }
 
-// A library restored from cache is registered by FQN alone, with no scope tree,
-// and a wildcard import of it still surfaces its members.
-func TestExpandWildcardImportsReachesRecordedMembers(t *testing.T) {
+// A wildcard import of library content surfaces its members, which are parsed
+// declarations marked as library on every load path.
+func TestExpandWildcardImportsReachesLibraryMembers(t *testing.T) {
 	idx := NewIndex()
-	idx.AddRecords("lib", []RecordEntry{
-		{FQN: "Lib", Kind: SymbolPackage},
-		{FQN: "Lib::Thing", Kind: SymbolNamespace},
-	})
+	addDoc(t, idx, "lib.sysml", "package Lib { namespace Thing; }")
+	idx.MarkLibrary("lib.sysml")
 	addDoc(t, idx, "b.sysml", "package App { public import Lib::*; }")
 	idx.ExpandWildcardImports()
 

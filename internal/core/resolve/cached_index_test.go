@@ -13,8 +13,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// A library symbol carries no declaration on either load path, so every rule
-// reading a library element is asked about this library from records alone.
+// A library symbol carries its declaration on either load path, so every rule
+// reading a library element is asked about this library the same way.
 const cachedLibrary = `standard library package Cycles {
 	attribute def Mass;
 	part def Cycle {
@@ -53,10 +53,10 @@ func TestResolutionOfALibraryIsTheSameColdAndWarm(t *testing.T) {
 
 	coldIdx := loadLibrary(t, dir, cacheDir) // cache miss: parses, then reduces
 	warmIdx := loadLibrary(t, dir, cacheDir) // cache hit: restores
-	// A library is index-only either way, so both answer from records.
+	// A library is parsed either way, so both answer from declarations.
 	for path, idx := range map[string]*symbols.Index{"cold": coldIdx, "warm": warmIdx} {
-		if sym := libSymbol(t, idx, "Cycles::Cycle"); sym.Decl != nil {
-			t.Fatalf("the %s load leaves the library its declarations", path)
+		if sym := libSymbol(t, idx, "Cycles::Cycle"); sym.Decl == nil {
+			t.Fatalf("the %s load leaves the library without its declarations", path)
 		}
 	}
 
@@ -118,8 +118,8 @@ func resolveAgainstLibrary(t *testing.T, idx *symbols.Index) map[string]string {
 	out["Cycles::HiddenFrame"] = fqnOf(r.ResolveAliasTarget(libSymbol(t, idx, "Cycles::HiddenFrame")))
 	out["App::Copy super"] = fqnOf(firstSuper(m, libSymbol(t, idx, "App::Copy")))
 	out["Cycles::AliasedCopy super"] = fqnOf(firstSuper(m, libSymbol(t, idx, "Cycles::AliasedCopy")))
-	// Conformance across a library specialization, read from the record's
-	// supertype names.
+	// Conformance across a library specialization, read from the recorded
+	// supertype facts.
 	out["Tandem conforms to Cycle"] = boolText(m.Conforms(
 		libSymbol(t, idx, "Cycles::Tandem"), libSymbol(t, idx, "Cycles::Cycle")))
 	out["Racer conforms to Cycle"] = boolText(m.Conforms(racer, libSymbol(t, idx, "Cycles::Cycle")))

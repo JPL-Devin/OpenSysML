@@ -258,8 +258,8 @@ func (m *Model) IsMeasurementUnit(sym *symbols.Symbol) bool {
 	unitDef := m.libSymbol(fqnMeasurementUnit)
 	if unitDef == nil {
 		// Without the Quantities and Units library there is no unit model to
-		// check against, so a persisted reduction is the only evidence.
-		return sym.Unit != nil
+		// check against, so a recorded reduction is the only evidence.
+		return sym.Facts != nil && sym.Facts.Unit != nil
 	}
 	return m.Conforms(sym, unitDef)
 }
@@ -270,9 +270,8 @@ func (m *Model) IsMeasurementUnit(sym *symbols.Symbol) bool {
 // unit of dimension one reduces to no base unit at all; and a unit that is
 // declared in terms of nothing else is itself a base unit.
 //
-// The reduction is memoized per symbol. A library symbol restored from cache
-// carries no declaration, so its reduction is read from the facts persisted
-// with it.
+// The reduction is memoized per symbol, and read from the facts installed for a
+// library symbol rather than derived again.
 func (m *Model) UnitTermOf(sym *symbols.Symbol) (UnitTerm, error) {
 	if m == nil || sym == nil {
 		return UnitTerm{}, ErrNotAUnit
@@ -299,8 +298,8 @@ func (m *Model) UnitTermOf(sym *symbols.Symbol) (UnitTerm, error) {
 
 // reduceUnit computes the reduction UnitTermOf memoizes.
 func (m *Model) reduceUnit(sym *symbols.Symbol) (UnitTerm, error) {
-	if sym.Decl == nil {
-		return m.persistedUnitTerm(sym)
+	if sym.Facts != nil && sym.Facts.Unit != nil {
+		return m.recordedUnitTerm(sym.Facts.Unit, sym.Name)
 	}
 	if term, declared, err := m.convertedUnitTerm(sym); declared || err != nil {
 		return term, err
@@ -314,24 +313,21 @@ func (m *Model) reduceUnit(sym *symbols.Symbol) (UnitTerm, error) {
 	return UnitTerm{Scale: UnitScale(1), Factors: []UnitFactor{{Unit: sym, Exponent: 1}}}, nil
 }
 
-// persistedUnitTerm rebuilds the reduction persisted with a cached library
-// symbol, resolving each base unit by qualified name.
-func (m *Model) persistedUnitTerm(sym *symbols.Symbol) (UnitTerm, error) {
-	if sym.Unit == nil {
-		return UnitTerm{}, fmt.Errorf("%w: %s", ErrNotAUnit, sym.Name)
+// recordedUnitTerm rebuilds a reduction recorded for a library symbol, resolving
+// each base unit by qualified name. name identifies the unit in errors.
+func (m *Model) recordedUnitTerm(facts *symbols.UnitFacts, name string) (UnitTerm, error) {
+	if facts.Irreducible {
+		return UnitTerm{}, fmt.Errorf("%w: %s reduces to no base unit", ErrUnitConversion, name)
 	}
-	if sym.Unit.Irreducible {
-		return UnitTerm{}, fmt.Errorf("%w: %s reduces to no base unit", ErrUnitConversion, sym.Name)
-	}
-	scale := Scale{Num: sym.Unit.ScaleNum, Den: sym.Unit.ScaleDen}
+	scale := Scale{Num: facts.ScaleNum, Den: facts.ScaleDen}
 	if scale.IsZero() {
-		return UnitTerm{}, fmt.Errorf("%w: %s reduces to a zero scale factor", ErrUnitConversion, sym.Name)
+		return UnitTerm{}, fmt.Errorf("%w: %s reduces to a zero scale factor", ErrUnitConversion, name)
 	}
 	term := UnitTerm{Scale: scale}
-	for _, f := range sym.Unit.Factors {
+	for _, f := range facts.Factors {
 		base := m.libSymbol(f.FQN)
 		if base == nil {
-			return UnitTerm{}, fmt.Errorf("%w: %s reduces to unknown base unit %s", ErrNotAUnit, sym.Name, f.FQN)
+			return UnitTerm{}, fmt.Errorf("%w: %s reduces to unknown base unit %s", ErrNotAUnit, name, f.FQN)
 		}
 		term.Factors = append(term.Factors, UnitFactor{Unit: base, Exponent: f.Exponent})
 	}
@@ -477,11 +473,14 @@ func (m *Model) unitTermOfName(scope *symbols.Scope, qn *ast.QualifiedName) (Uni
 // ShadowedUnitError reports a name in unit position that resolved to a
 // declaration which is not a measurement unit, naming the unit it hid.
 type ShadowedUnitError struct {
-	Name       string          // the name as written in unit position
-	Resolved   *symbols.Symbol // the declaration the name resolved to
-	Shadowed   *symbols.Symbol // the measurement unit that declaration hid, or nil
-	Namespace  string          // qualified name of the namespace Resolved was declared in
-	Suggestion string          // qualified spelling that names the shadowed unit
+	Name     string          // the name as written in unit position
+	Resolved *symbols.Symbol // the declaration the name resolved to
+	Shadowed *symbols.Symbol // the measurement unit that declaration hid, or nil
+	// ShadowedName is the qualified name of Shadowed, which is how a message names
+	// a unit the model did not write.
+	ShadowedName string
+	Namespace    string // qualified name of the namespace Resolved was declared in
+	Suggestion   string // qualified spelling that names the shadowed unit
 }
 
 func (e *ShadowedUnitError) Error() string {
@@ -495,10 +494,10 @@ func (e *ShadowedUnitError) Error() string {
 		return msg
 	}
 	if e.Suggestion == "" {
-		return fmt.Sprintf("%s, shadowing the measurement unit %s", msg, e.Shadowed.Name)
+		return fmt.Sprintf("%s, shadowing the measurement unit %s", msg, e.ShadowedName)
 	}
 	return fmt.Sprintf("%s, shadowing the measurement unit %s — write %s to name the unit",
-		msg, e.Shadowed.Name, e.Suggestion)
+		msg, e.ShadowedName, e.Suggestion)
 }
 
 // Unwrap reports the error as a not-a-unit error, which is the condition a
@@ -514,7 +513,7 @@ func (m *Model) shadowedUnit(qn *ast.QualifiedName, sym *symbols.Symbol) error {
 		return err
 	}
 	if outer := m.unitOutside(sym); outer != nil {
-		err.Shadowed = outer
+		err.Shadowed, err.ShadowedName = outer, m.fqnOf(outer)
 		// The written name qualified by the unit's namespace, which is the
 		// spelling that reaches the unit from inside the shadowing namespace. A
 		// unit owned by no namespace has no such spelling to offer.
@@ -531,11 +530,7 @@ func (m *Model) unitOutside(sym *symbols.Symbol) *symbols.Symbol {
 	if m.resolver == nil || sym.OwnerScope == nil {
 		return nil
 	}
-	name := sym.Name
-	if i := strings.LastIndex(name, "::"); i >= 0 {
-		name = name[i+2:]
-	}
-	found, ok := m.resolver.LookupNameExcluding(sym.OwnerScope, name, sym.Decl)
+	found, ok := m.resolver.LookupNameExcluding(sym.OwnerScope, sym.Name, sym.Decl)
 	if !ok || found == nil || found == sym {
 		return nil
 	}

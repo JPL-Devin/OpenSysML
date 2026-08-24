@@ -25,13 +25,8 @@ import (
 
 // annotation is one metadata annotation of an element: the metadata type
 // annotating it and the values its body binds that type's features to.
-//
-// A restored library's annotation names its type rather than pointing at it, so
-// both are carried: typ where the annotation was read from a declaration, and
-// typFQN where it was read from an index-cache record.
 type annotation struct {
 	typ    *symbols.Symbol
-	typFQN string
 	values map[string]symbols.FilterValue
 }
 
@@ -49,9 +44,6 @@ func (m *Model) annotationsOf(sym *symbols.Symbol) []annotation {
 	m.annotations[sym] = nil
 
 	var out []annotation
-	for _, facts := range sym.Annotations {
-		out = append(out, m.annotationFromFacts(facts))
-	}
 	if sym.Decl != nil {
 		out = append(out, m.declaredAnnotations(sym)...)
 		out = append(out, m.aboutAnnotations(sym)...)
@@ -60,17 +52,16 @@ func (m *Model) annotationsOf(sym *symbols.Symbol) []annotation {
 	return out
 }
 
-// AnnotationFactsOf states the metadata annotating sym in the declaration-free
-// form an index cache record carries, so that an element filter classifies a
-// restored library element the same way as a parsed one. The values an
-// annotation binds are recorded as read; a binding whose value is not constant
-// is recorded with an unknown value, which a condition reading it reports as
-// unevaluable rather than silently treating as absent.
+// AnnotationFactsOf states the metadata annotating sym as names and constants,
+// so that how an element filter classifies it can be compared across loads. The
+// values an annotation binds are reported as read; a binding whose value is not
+// constant is reported with an unknown value, which a condition reading it
+// reports as unevaluable rather than silently treating as absent.
 func (m *Model) AnnotationFactsOf(sym *symbols.Symbol) []symbols.AnnotationFacts {
 	var out []symbols.AnnotationFacts
 	for _, a := range m.annotationsOf(sym) {
-		typFQN := a.typFQN
-		if typFQN == "" && a.typ != nil {
+		var typFQN string
+		if a.typ != nil {
 			typFQN = m.fqnOf(a.typ)
 		}
 		if typFQN == "" {
@@ -89,7 +80,7 @@ func (m *Model) AnnotationFactsOf(sym *symbols.Symbol) []symbols.AnnotationFacts
 }
 
 // sortedFeatureNames orders an annotation's bound features by name, so that what
-// is written to a cache record does not depend on map iteration order.
+// is reported does not depend on map iteration order.
 func sortedFeatureNames(values map[string]symbols.FilterValue) []string {
 	out := make([]string, 0, len(values))
 	for name := range values {
@@ -97,15 +88,6 @@ func sortedFeatureNames(values map[string]symbols.FilterValue) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// annotationFromFacts rebuilds an annotation a cache record carried.
-func (m *Model) annotationFromFacts(facts symbols.AnnotationFacts) annotation {
-	a := annotation{typFQN: facts.TypeFQN, typ: m.symbolByFQN(facts.TypeFQN), values: map[string]symbols.FilterValue{}}
-	for _, v := range facts.Values {
-		a.values[v.Feature] = v.Value
-	}
-	return a
 }
 
 // declaredAnnotations returns the annotations sym's own declaration states: its
@@ -213,7 +195,7 @@ func (m *Model) usageAnnotation(scope *symbols.Scope, u *ast.Usage) (annotation,
 func (m *Model) annotationOfType(typ *symbols.Symbol, scope *symbols.Scope, body []ast.Node) annotation {
 	values := m.annotationValues(scope, body)
 	m.addTypeDefaults(typ, values)
-	return annotation{typ: typ, typFQN: m.fqnOf(typ), values: values}
+	return annotation{typ: typ, values: values}
 }
 
 // addTypeDefaults adds the value the metadata type declares for each feature the

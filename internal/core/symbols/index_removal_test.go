@@ -7,21 +7,18 @@ import (
 	"testing"
 )
 
-// libRecords is a library restored from cache rather than parsed: the shape the
-// REPL and the LSP hold their standard library in, where a symbol carries its
-// qualified name and no declaration.
-var libRecords = []RecordEntry{
-	{FQN: "Lib", Kind: SymbolPackage},
-	{FQN: "Lib::Widget", Kind: SymbolNamespace},
-	{FQN: "Lib::Kilogram", ShortName: "kg", Kind: SymbolNamespace},
-}
+// libDoc and libSource are the standard library as every load path holds it: a
+// parsed document marked library content.
+const libDoc = "lib.sysml"
+const libSource = "package Lib { namespace Widget; namespace <kg> Kilogram; }"
 
 // buildIndex indexes docs (in name order, so the result does not depend on map
-// iteration order) plus the cached library, and expands to the fixpoint.
+// iteration order) plus the library, and expands to the fixpoint.
 func buildIndex(t *testing.T, docs map[string]string) *Index {
 	t.Helper()
 	idx := NewIndex()
-	idx.AddRecords("lib", libRecords)
+	addDoc(t, idx, libDoc, libSource)
+	idx.MarkLibrary(libDoc)
 	names := make([]string, 0, len(docs))
 	for name := range docs {
 		names = append(names, name)

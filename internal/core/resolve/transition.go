@@ -12,9 +12,6 @@ import (
 // end at (SysML 7.19.2).
 const CodeNotAVertex = "not-a-vertex"
 
-// StateActionFQN is the normative library type for state usages.
-const StateActionFQN = "States::StateAction"
-
 // ResolveEndpoint resolves the vertex a transition endpoint names, reporting one
 // that names nothing or no vertex. A nil name is the sourceless form: legal.
 func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
@@ -101,13 +98,38 @@ func (r *Resolver) lookupEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) (
 	var sym *symbols.Symbol
 	var ok bool
 	r.aside(func() { sym, ok = r.resolveQualified(scope, qn, nil) })
+	machine := machineScope(scope)
+	if ok && r.endpointIsVertex(scope, qn, sym) && declaredWithin(machine, sym) {
+		return sym, true
+	}
+	// A vertex of the machine itself outranks one the name reaches elsewhere, so an
+	// inherited member does not shadow the state declared beside the transition.
+	if vertex, found := firstVertex(machine, qualifiedParts(qn)); found {
+		return vertex, true
+	}
 	if ok && r.endpointIsVertex(scope, qn, sym) {
 		return sym, true
 	}
-	if vertex, found := firstVertex(machineScope(scope), qualifiedParts(qn)); found {
-		return vertex, true
-	}
 	return sym, ok
+}
+
+// declaredWithin reports whether sym is declared in scope or one of the scopes
+// under it, which for a machine's body is what makes a vertex the machine's own.
+func declaredWithin(scope *symbols.Scope, sym *symbols.Symbol) bool {
+	if scope == nil || sym == nil {
+		return false
+	}
+	for _, candidate := range scope.LookupLocalAll(sym.Name) {
+		if candidate == sym {
+			return true
+		}
+	}
+	for _, child := range scope.Children() {
+		if declaredWithin(child, sym) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Resolver) endpointIsVertex(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
@@ -127,30 +149,7 @@ func (r *Resolver) endpointIsVertex(scope *symbols.Scope, qn *ast.QualifiedName,
 }
 
 func isVertexSymbol(sym *symbols.Symbol) bool {
-	if sym == nil {
-		return false
-	}
-	if isVertex(sym.Decl) {
-		return true
-	}
-	return IsInheritedStateVertex(sym)
-}
-
-// IsInheritedStateVertex reports whether sym is the synthetic state usage
-// inherited from the normative States::StateAction library type.
-func IsInheritedStateVertex(sym *symbols.Symbol) bool {
-	if sym == nil {
-		return false
-	}
-	if sym.Decl != nil || sym.Kind != symbols.SymbolStateUsage {
-		return false
-	}
-	for _, fqn := range sym.SuperFQNs {
-		if fqn == StateActionFQN {
-			return true
-		}
-	}
-	return false
+	return sym != nil && isVertex(sym.Decl)
 }
 
 func (r *Resolver) machineStateVertex(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {

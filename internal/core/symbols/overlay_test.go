@@ -302,7 +302,6 @@ func TestFrozenIndexRejectsWrites(t *testing.T) {
 		write func()
 	}{
 		{"AddDocument", func() { addDoc(t, base, "user.sysml", "package User;") }},
-		{"AddRecords", func() { base.AddRecords("more", libRecords) }},
 		{"RemoveDocument", func() { base.RemoveDocument(baseDoc) }},
 		{"MarkLibrary", func() { base.MarkLibrary(baseDoc) }},
 		{"ExpandWildcardImports", func() { base.ExpandWildcardImports() }},
@@ -323,7 +322,8 @@ func TestFrozenIndexRejectsWrites(t *testing.T) {
 // read, and freezing twice is a no-op.
 func TestFreezeSettlesTheIndex(t *testing.T) {
 	idx := NewIndex()
-	idx.AddRecords("lib", libRecords)
+	addDoc(t, idx, libDoc, libSource)
+	idx.MarkLibrary(libDoc)
 	addDoc(t, idx, baseDoc, "package P { public import Lib::*; }")
 	idx.Freeze()
 	if !idx.Frozen() {

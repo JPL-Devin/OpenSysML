@@ -135,6 +135,11 @@ func (c *featureReferenceChecker) checkReferent(sym *symbols.Symbol, scope *symb
 	if isChain && (chain.Member == nil || len(chain.Member.Parts) < 2) {
 		return
 	}
+	// The base usage's `that` is implicit in every usage body, so it is
+	// reachable wherever a usage names it.
+	if c.cc.resolver.IsBaseThat(target) {
+		return
+	}
 	// A variant is an owned member of its variation, not a feature of it, so
 	// it carries no featuring type to be accessible from.
 	if tu, ok := target.Decl.(*ast.Usage); ok && tu.IsVariant {

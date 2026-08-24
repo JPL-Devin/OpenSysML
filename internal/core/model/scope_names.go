@@ -316,27 +316,6 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 		nw.add(prefix, sym.ShortName, sym, depth)
 		nw.leave(chain)
 	}
-	// MembersOf reads a source's scope, which a cached standard-library symbol
-	// does not carry, so its inherited members come from the index instead.
-	for _, src := range nw.sem.MemberSources(owner) {
-		if src == nil || src.Scope != nil {
-			continue
-		}
-		if declared != nil && !declared[src] {
-			continue
-		}
-		chain, ok := nw.enter(nw.chainTo(owner, src))
-		if !ok {
-			continue
-		}
-		for _, child := range nw.idx.LookupDirectChildrenFrom(nw.fqnOf(src), "") {
-			if !symbols.VisibleAs(child.Visibility, false, inheriting) {
-				continue
-			}
-			nw.add(prefix, leafName(child.Name), child, depth)
-		}
-		nw.leave(chain)
-	}
 	nw.inheritedImports(owner, prefix, depth, map[*symbols.Symbol]bool{})
 }
 
@@ -621,20 +600,15 @@ func (nw *nameWalk) expand(prefix string, sym *symbols.Symbol, depth int) {
 	nw.expanding[sym]++
 	defer func() { nw.expanding[sym]-- }()
 
+	// A declaration without a body carries no scope, and then only what it
+	// inherits is reachable through it.
 	if sym.Scope != nil {
 		nw.locals(sym.Scope, prefix, depth, false, false)
-		nw.inherited(sym, prefix, depth, false)
-		nw.imports(sym.Scope, prefix, depth, false, false)
-		return
-	}
-	// A cached library symbol carries no scope; its members are the children
-	// the index registers under it.
-	if fqn := nw.fqnOf(sym); fqn != "" {
-		for _, child := range nw.idx.LookupDirectChildrenFrom(fqn, "") {
-			nw.add(prefix, leafName(child.Name), child, depth)
-		}
 	}
 	nw.inherited(sym, prefix, depth, false)
+	if sym.Scope != nil {
+		nw.imports(sym.Scope, prefix, depth, false, false)
+	}
 }
 
 // implicitMembers adds the members a blocked path still reaches: those whose

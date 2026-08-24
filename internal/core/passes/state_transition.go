@@ -290,7 +290,7 @@ func (c *transitionChecker) startsOf(
 		return nil
 	}
 	decl := sym.Decl
-	if !m.vertices[decl] && !resolve.IsInheritedStateVertex(sym) {
+	if !m.vertices[decl] {
 		return nil
 	}
 	if _, pseudostate := decl.(*ast.PseudostateNode); pseudostate {
@@ -318,7 +318,7 @@ func (c *transitionChecker) checkEndpoint(
 		return nil
 	}
 	decl := sym.Decl
-	if m.vertices[decl] || resolve.IsInheritedStateVertex(sym) ||
+	if m.vertices[decl] ||
 		c.resolver.MachineStateVertex(scope, qn, sym) {
 		return decl
 	}

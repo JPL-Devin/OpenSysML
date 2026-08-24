@@ -478,7 +478,7 @@ func isCalcDecl(decl ast.Node) bool {
 }
 
 // isCalcSymbol reports whether sym declares a calc, reading its declaration when
-// it has one and its symbol kind otherwise, as a cached library symbol does.
+// it has one and its symbol kind otherwise.
 func isCalcSymbol(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // ident is a throwaway AST node used only as a memo key for ResolveName.
@@ -179,16 +178,12 @@ func TestCyclicMembershipImportsTerminate(t *testing.T) {
 	}
 }
 
-// The same, for symbols restored from the library cache: they carry no scope, so
-// a wildcard import enumerates them through the index alone.
-func TestNamespaceImportSkipsAPrivatelyImportedCachedName(t *testing.T) {
-	idx := symbols.NewIndex()
-	idx.AddRecords("lib", []symbols.RecordEntry{
-		{FQN: "Base", Kind: symbols.SymbolPackage},
-		{FQN: "Base::Hidden", Kind: symbols.SymbolPartDef},
-		{FQN: "Mid", Kind: symbols.SymbolPackage, WildcardImports: []symbols.WildcardImport{
-			{Target: "Base", Private: true},
-		}},
+// The same, for library content a model imports: a wildcard import of a library
+// namespace does not re-export what that namespace imported privately.
+func TestNamespaceImportSkipsAPrivatelyImportedLibraryName(t *testing.T) {
+	idx := libraryIndexOf(t, map[string]string{
+		"base.sysml": "package Base { part def Hidden; }",
+		"mid.sysml":  "package Mid { private import Base::*; }",
 	})
 	idx.AddDocument("app.sysml", parsedRoot(t, "app.sysml", "package App { import Mid::*; }"))
 	idx.ExpandWildcardImports()

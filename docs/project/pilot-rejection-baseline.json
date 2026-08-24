@@ -5,8 +5,8 @@
   "conformance": "auto",
   "totals": {
     "cases": 120,
-    "bothReject": 116,
-    "pilotOnlyRejects": 4,
+    "bothReject": 117,
+    "pilotOnlyRejects": 3,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -37,8 +37,8 @@
     {
       "source": "xpect",
       "cases": 34,
-      "bothReject": 33,
-      "pilotOnlyRejects": 1,
+      "bothReject": 34,
+      "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     }
@@ -1049,12 +1049,9 @@
       "source": "xpect",
       "rule": "A metadata usage must have a concrete type (SysML 7.24 checkMetadataUsageConcreteType; pilot MetadataUsage_Invalid.sysml.xt:104).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 4: Must have a concrete type"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p25-two-individual-definitions.sysml",

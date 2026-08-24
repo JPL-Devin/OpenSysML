@@ -359,25 +359,25 @@ func TestLibraryFunctionDoesNotHijackAnOutputAssignedInABody(t *testing.T) {
 	}
 }
 
-// A library symbol loaded from the library index carries a kind and no
-// declaration, and dispatches on that kind.
-func TestLibraryFunctionDispatchByCachedSymbol(t *testing.T) {
-	idx := symbols.NewIndex()
-	idx.AddRecords("lib", []symbols.RecordEntry{
-		{FQN: "RealFunctions", Kind: symbols.SymbolPackage},
-		{FQN: "RealFunctions::sqrt", Kind: symbols.SymbolCalcDef},
-		{FQN: "RealFunctions::tolerance", Kind: symbols.SymbolAttributeUsage},
-	})
-	resolver := resolve.New(idx)
-	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+// A library function is implemented by its built-in even where the library
+// declares a body for it, which library content does on every load path.
+func TestLibraryFunctionDispatchByLibraryDeclaration(t *testing.T) {
+	ctx, idx := libraryContextForSource(t, `package RealFunctions {
+	calc sqrt { in x : Real; return : Real = 42.0; }
+	attribute tolerance = 0.5;
+}`)
 
 	fnSym := lookupOne(t, idx, "RealFunctions::sqrt")
 	if _, ok := ctx.libraryFunctionFor(fnSym); !ok {
-		t.Fatalf("the cached RealFunctions::sqrt did not dispatch to its built-in implementation")
+		t.Fatalf("the library RealFunctions::sqrt did not dispatch to its built-in implementation")
+	}
+	got, err := ctx.InvokeCalc(fnSym, []Value{constReal(25)}, nil)
+	if err != nil || got.Const.Real != 5 {
+		t.Fatalf("InvokeCalc(RealFunctions::sqrt, 25.0) = %+v, %v; want the built-in", got, err)
 	}
 	attrSym := lookupOne(t, idx, "RealFunctions::tolerance")
 	if _, ok := ctx.libraryFunctionFor(attrSym); ok {
-		t.Fatalf("a cached attribute dispatched to a built-in implementation")
+		t.Fatalf("a library attribute dispatched to a built-in implementation")
 	}
 }
 
@@ -1029,19 +1029,19 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 	}
 }
 
-// A model reads a library feature by name even where the library index cache
-// restored the symbol without a declaration to evaluate.
-func TestLibraryFeatureNameReadFromACachedSymbol(t *testing.T) {
+// A model reads a library feature by name through the value seam, which answers
+// for a library declaration the library gives no foldable value.
+func TestLibraryFeatureNameReadFromItsLibraryDeclaration(t *testing.T) {
 	root := parser.New(source.New("test.sysml", []byte(`package test {
 	attribute twoPi = 2 * TrigFunctions::pi;
 }`))).ParseFile()
 	idx := symbols.NewIndex()
 	idx.AddDocument("test.sysml", root)
-	idx.AddRecords("lib", []symbols.RecordEntry{
-		{FQN: "TrigFunctions", Kind: symbols.SymbolPackage},
-		{FQN: "TrigFunctions::pi", Kind: symbols.SymbolAttributeUsage},
-	})
-	idx.MarkLibrary("lib")
+	lib := parser.New(source.New("lib.kerml", []byte(`package TrigFunctions {
+	feature pi : Real;
+}`))).ParseFile()
+	idx.AddDocument("lib.kerml", lib)
+	idx.MarkLibrary("lib.kerml")
 	resolver := resolve.New(idx)
 
 	pkg, ok := idx.DocumentRoot("test.sysml").LookupLocal("test")
@@ -1096,22 +1096,16 @@ func TestLibraryFeatureValue(t *testing.T) {
 	}
 }
 
-// A library symbol restored from the library index cache carries no declaration,
-// and the seam answers for it with the same value: a feature's value does not
-// depend on whether the cache was warm.
-func TestLibraryFeatureValueFromACachedSymbol(t *testing.T) {
-	idx := symbols.NewIndex()
-	idx.AddRecords("lib", []symbols.RecordEntry{
-		{FQN: "TrigFunctions", Kind: symbols.SymbolPackage},
-		{FQN: "TrigFunctions::pi", Kind: symbols.SymbolAttributeUsage},
-	})
-	idx.MarkLibrary("lib")
-	resolver := resolve.New(idx)
-	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+// The seam answers for a library declaration that carries a value of its own,
+// which library content does on every load path: the value is this runtime's.
+func TestLibraryFeatureValueOverridesADeclaredLibraryValue(t *testing.T) {
+	ctx, idx := libraryContextForSource(t, `package TrigFunctions {
+	feature pi : Real = 3.0;
+}`)
 
 	got, ok, err := ctx.libraryFeatureValue(lookupOne(t, idx, "TrigFunctions::pi"))
 	if err != nil || !ok || got.Const.Real != math.Pi {
-		t.Fatalf("cached TrigFunctions::pi = %+v, %v, %v; want pi", got, ok, err)
+		t.Fatalf("TrigFunctions::pi = %+v, %v, %v; want pi", got, ok, err)
 	}
 }
 

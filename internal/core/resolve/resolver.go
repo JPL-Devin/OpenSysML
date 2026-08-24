@@ -53,6 +53,19 @@ type featureChainKey struct {
 	node  *ast.FeatureChainExpr
 }
 
+// modeMemoKey keys a lookup made in a non-default resolution mode: a filter
+// condition's own names bypass the namespace's filters, and an `import all` or
+// expose target reaches every membership. Such an answer is memoized apart from
+// the ordinary one, which must never inherit it.
+type modeMemoKey struct {
+	at          ast.Node
+	condition   bool
+	allVisible  bool
+	hide        ast.Node
+	prefix      bool
+	borrowedOut bool
+}
+
 type filteredMemoKey struct {
 	qn               *ast.QualifiedName
 	decl             ast.Node
@@ -65,6 +78,7 @@ type filteredMemoKey struct {
 type Resolver struct {
 	idx       *symbols.Index
 	memo      map[ast.Node]resolution
+	modeMemo  map[modeMemoKey]resolution
 	filtered  map[filteredMemoKey]resolution
 	resolving map[ast.Node]bool // cycle detection
 	// featureChains are resolved per scope because a chain's leading operand
@@ -141,6 +155,7 @@ func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
 		idx:              idx,
 		memo:             map[ast.Node]resolution{},
+		modeMemo:         map[modeMemoKey]resolution{},
 		filtered:         map[filteredMemoKey]resolution{},
 		resolving:        map[ast.Node]bool{},
 		featureChains:    map[featureChainKey]resolution{},
@@ -304,6 +319,12 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	}]; done {
 		return res.sym, res.ok
 	}
+	mode, keyed := r.modeKey(qn, hide)
+	if keyed {
+		if res, done := r.modeMemo[mode]; done {
+			return res.sym, res.ok
+		}
+	}
 	// Detect resolution cycles
 	if r.resolving[qn] {
 		// Cycle detected, fail resolution
@@ -315,6 +336,11 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	delete(r.resolving, qn)
 	// A failure met during a semantic query is not memoized: the reference it
 	// belongs to must still report when its own document is resolved.
+	if keyed {
+		if res.ok || r.quiet == 0 {
+			r.modeMemo[mode] = res
+		}
+	}
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
 		if cacheMain {
 			if res.ok || hide == nil {
@@ -344,6 +370,12 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 			return res.sym, res.ok
 		}
 	}
+	mode, keyed := r.modeKey(at, nil)
+	if keyed {
+		if res, done := r.modeMemo[mode]; done {
+			return res.sym, res.ok
+		}
+	}
 	res := r.walkUnqualified(scope, name)
 	res.sym = r.AliasedElement(res.sym)
 	if r.AliasNamesNothing(res.sym) {
@@ -351,6 +383,9 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 	}
 	// A result found with the boundary lifted for an enclosing `import all` is
 	// not what this reference resolves to in general, so it is not memoized.
+	if keyed && (res.ok || r.quiet == 0) {
+		r.modeMemo[mode] = res
+	}
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
 		r.memoize(at, res)
 	}
@@ -439,6 +474,19 @@ func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
 		delete(r.aliasNames, qn)
 	}
 	return false
+}
+
+// modeKey keys a lookup made in a non-default mode, reporting false when the
+// mode is the ordinary one, whose answers the main memo already keeps.
+func (r *Resolver) modeKey(at ast.Node, hide *refFilter) (modeMemoKey, bool) {
+	if at == nil || (r.inCondition == 0 && r.allVisible == 0) {
+		return modeMemoKey{}, false
+	}
+	k := modeMemoKey{at: at, condition: r.inCondition > 0, allVisible: r.allVisible > 0}
+	if hide != nil {
+		k.hide, k.prefix, k.borrowedOut = hide.decl, hide.skipNamingTarget, hide.skipBorrowedName
+	}
+	return k, true
 }
 
 // memoize remembers a reference's resolution, except one reached while a filter

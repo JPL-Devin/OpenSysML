@@ -8,9 +8,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// implicitBaseOf opens src in a stdlib-loaded workspace and returns the names of
-// the direct supertypes the semantic model reports for the symbol reached by
-// walking path from the document root.
+// implicitBaseOf opens src in a stdlib-loaded workspace and returns the
+// qualified names of the direct supertypes the semantic model reports for the
+// symbol reached by walking path from the document root.
 func implicitBaseOf(t *testing.T, src string, path ...string) []string {
 	t.Helper()
 	const uri = "file:///implicit.sysml"
@@ -36,7 +36,7 @@ func implicitBaseOf(t *testing.T, src string, path ...string) []string {
 	r.SetModel(m)
 	var names []string
 	for _, sup := range m.DirectSupertypes(sym) {
-		names = append(names, sup.Name)
+		names = append(names, symbols.FQNOf(sup))
 	}
 	return names
 }
@@ -93,9 +93,9 @@ func TestImplicitBaseNotAppliedToTypedUsage(t *testing.T) {
 		path []string
 		want string
 	}{
-		{"typed usage", "package P { part def Engine; part x : Engine; }", []string{"P", "x"}, "Engine"},
-		{"subsetting usage", "package P { part y; part x subsets y; }", []string{"P", "x"}, "y"},
-		{"specializing usage", "package P { part y; part x :> y; }", []string{"P", "x"}, "y"},
+		{"typed usage", "package P { part def Engine; part x : Engine; }", []string{"P", "x"}, "P::Engine"},
+		{"subsetting usage", "package P { part y; part x subsets y; }", []string{"P", "x"}, "P::y"},
+		{"specializing usage", "package P { part y; part x :> y; }", []string{"P", "x"}, "P::y"},
 		{"definition", "package P { part def Engine :> Parts::Part; }", []string{"P", "Engine"}, "Parts::Part"},
 	}
 
@@ -121,8 +121,8 @@ func TestParameterRedefinitionAccompaniesTheImplicitBase(t *testing.T) {
 		action focus : Focus { in item scene; out item image; }
 	}`
 	got := implicitBaseOf(t, src, "P", "focus", "image")
-	if len(got) != 2 || got[0] != "image" || got[1] != "Items::Item" {
-		t.Fatalf("supertypes = %v, want [image Items::Item] (the redefined parameter of Focus, then the kind's base)", got)
+	if len(got) != 2 || got[0] != "P::Focus::image" || got[1] != "Items::Item" {
+		t.Fatalf("supertypes = %v, want [P::Focus::image Items::Item] (the redefined parameter of Focus, then the kind's base)", got)
 	}
 }
 
@@ -136,8 +136,8 @@ func TestParameterOfAnUntypedParameterKeepsItsImplicitBase(t *testing.T) {
 		action focus : Focus { in item lighting; }
 	}`
 	got := implicitBaseOf(t, src, "P", "focus", "lighting")
-	if len(got) != 2 || got[0] != "scene" || got[1] != "Items::Item" {
-		t.Fatalf("supertypes = %v, want [scene Items::Item]", got)
+	if len(got) != 2 || got[0] != "P::Focus::scene" || got[1] != "Items::Item" {
+		t.Fatalf("supertypes = %v, want [P::Focus::scene Items::Item]", got)
 	}
 }
 

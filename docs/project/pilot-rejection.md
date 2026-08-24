@@ -104,7 +104,7 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-120 case(s): 116 both reject, 4 only the pilot rejects, 0 only we reject, 0 both accept
+120 case(s): 117 both reject, 3 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -112,12 +112,13 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 79 | 76 | 3 | 0 | 0 |
-| xpect | 34 | 33 | 1 | 0 | 0 |
+| xpect | 34 | 34 | 0 | 0 | 0 |
 
 The corpus grew from 79 cases to 119 in wave 10G and to 120 with `g60` (an `alias` named by a
-keyword), and the default-mode gap count is 9 of 120. Wave 11 closed two `xpect/` gaps: `p11`
+keyword), and the default-mode gap count is 8 of 120. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
-attribute-usage typing rule), leaving 1. Wave 10C closed the two `grammar/` gaps
+attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
+declaration and its abstractness on every load path, which is what the rule reads. Wave 10C closed the two `grammar/` gaps
 left from wave 9F — `g02` (bare `import` is an error by default) and `g31` (`allocate` requires
 its `ConnectorPart`) — which is why `grammar/` reads 3 rather than 5, and wave 10B's validation
 rules closed eleven `xpect/` gaps (`p08`, `p17`, `p20`,
@@ -126,11 +127,11 @@ accepted by both implementations.
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 111 agreements and 9 gaps, which is what `-conformance
+the default mode the same corpus gives 112 agreements and 8 gaps, which is what `-conformance
 default` prints — the extra five are those same `extensions/` cases, which the default mode accepts
-on purpose. `-conformance strict` gives 119 and 1: wave 10C gave `g15` and `k02` a strict
+on purpose. `-conformance strict` gives 120 and 0: wave 10C gave `g15` and `k02` a strict
 escalation and `g60` follows the same rule, so every `grammar/` case is rejected when asked
-strictly and only `p24` remains — agreement under an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave 8, six were closed by the
+strictly — agreement under an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
 (wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
@@ -148,32 +149,30 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 4 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
-and the package the root cause is likely in. The three `grammar/` rows are rejected under
-`-conformance strict` and accepted by default; the `xpect/` row no mode of ours checks.
+All 3 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+and the package the root cause is likely in. All three are rejected under `-conformance strict`
+and accepted by default.
 
 | Reproducer (`cmd/pilot-reject/testdata/negative/`) | Ours | Pilot | Likely root cause |
 | --- | --- | --- | --- |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
 | `grammar/g60-alias-keyword-as-name.sysml` | accepts | `extraneous input 'part' expecting 'for'` | `internal/core/parser` — an `alias` recovers a reserved keyword as its declared name |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
-| `xpect/p24-metadata-abstract-type.sysml` | accepts | `Must have a concrete type` | **unimplemented obligation, blocked on L3 slice B** — validation needs the semantic fact that the metaclass is abstract, but the reduced library record does not carry abstractness |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays.
 
-### Step 3 measurement and p24 deferral
+### p24, deferred by Step 3 and closed by the record format
 
-Independent fresh-cache runs of exact base `4b9baf2d` and this tree are unchanged:
-**120 cases; 116 both reject, 4 only the pilot rejects, 0 only we reject, 0 both accept**.
-There are no rejection-row recoveries, regressions, or unmasked diagnostics.
+Step 3 measured **116 both reject, 4 only the pilot rejects** and deferred `p24` — KerML
+`validateMetadataFeatureMetaclassNotAbstract`, a metadata usage typed by an abstract metaclass —
+because abstractness of a metaclass was not a fact the reduced library record carried.
 
-`p24` remains an **unimplemented obligation** under KerML
-`validateMetadataFeatureMetaclassNotAbstract`: a metadata usage typed by an abstract metaclass must
-be rejected. The missing semantic fact is abstractness of the metaclass after a standard-library
-symbol is restored from the reduced record. This branch does not add a one-off `IsAbstract` field,
-hardcode standard-library qualified names, or parse library declarations on demand; the record
-format and its reflective fact-family equality checks are owned by L3 slice B.
+The record format supplies it: the library is parsed on every load path and `Abstract` is a
+persisted fact family under the reflective equality coverage, so `symbols.IsAbstract` answers the
+same cold and warm. Persisting a fact emits no diagnostic on its own — the rule
+(`internal/core/passes/w8c_metadata_type.go`) reads that accessor instead of casting `Decl`, which
+is what closes the row. Hence **117 both reject, 3 only the pilot rejects** above.
 
 ## Adjudications (W9F)
 

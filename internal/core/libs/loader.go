@@ -14,10 +14,11 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// Loader loads library files from a Source and registers their symbols into a
-// target index, using a Cache to skip parsing on repeat loads (Task 6).
-// A library is index-only: it contributes the names, kinds and specializations a
-// record holds, never declarations, whether it was parsed or restored.
+// Loader loads library files from a Source and registers them into a target
+// index, using a Cache to skip the derivation a load would otherwise repeat.
+// Every file is parsed and indexed on every load path, so a library contributes
+// its declarations whether or not the cache held anything for it; a record
+// carries only the derived facts whose derivation dominates a cold load.
 type Loader struct {
 	src   Source
 	cache *Cache
@@ -25,14 +26,17 @@ type Loader struct {
 	// specialization target, since a key does not describe the index a record was
 	// built in.
 	RequireResolved bool
-	parsed          []pending // documents parsed this session, awaiting reduce
+	loaded          []pending // documents loaded this session, awaiting their facts
 	digest          string    // memoized digest of the library set (see setDigest)
+	hits            int       // documents of the last LoadAll whose facts a record supplied
 }
 
-// pending is a parsed document whose cache record has not been written yet.
+// pending is a parsed document whose facts are not installed yet, with the cache
+// record they were restored from or nil when the cache held none.
 type pending struct {
 	name string
 	key  string
+	rec  *IndexRecord
 }
 
 // NewLoader returns a Loader over src, using cache for persistence.
@@ -41,11 +45,12 @@ func NewLoader(src Source, cache *Cache) *Loader {
 }
 
 // LoadAll registers every file of the source into idx as library content and
-// leaves it in record form. It loads the whole set at once because a record
-// holds supertype names a sibling file may declare; an incomplete library is
-// reported and not cached.
+// installs the derived facts of each. It loads the whole set at once because a
+// record holds supertype names a sibling file may declare; an incomplete library
+// is reported and not cached.
 func (l *Loader) LoadAll(idx *symbols.Index) error {
 	var errs []error
+	l.hits = 0
 	for _, name := range l.src.List() {
 		if err := l.load(name, idx); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", name, err))
@@ -55,47 +60,52 @@ func (l *Loader) LoadAll(idx *symbols.Index) error {
 	// A facade package re-exports what another library package declares.
 	idx.ExpandWildcardImports()
 
-	l.reduce(idx, len(errs) == 0)
+	l.installFacts(idx, len(errs) == 0)
 	return errors.Join(errs...)
 }
 
-// load registers the named library file into idx: a cache hit restores its
-// record, a miss parses it for reduce to replace with one. Loading without a
-// cache still reduces.
+// load parses the named library file into idx and marks it library content,
+// noting the cache record its facts are restored from when there is one.
 func (l *Loader) load(name string, idx *symbols.Index) error {
 	content, err := l.src.Read(name)
 	if err != nil {
 		return err
 	}
 
-	var key string
+	doc := pending{name: name}
 	if l.cache != nil {
-		key = l.cache.keyFor(content, l.setDigest())
-		// Cache hit: restore reduced records, skip lexing/parsing entirely.
-		if rec, ok := l.cache.Load(key); ok {
-			idx.AddRecords(name, recordEntries(rec))
-			idx.MarkLibrary(name)
-			return nil
+		doc.key = l.cache.keyFor(content, l.setDigest())
+		if rec, ok := l.cache.Load(doc.key); ok {
+			doc.rec = rec
 		}
 	}
 
-	// Miss: parse and register now; reduce records it once the whole library is
-	// indexed and cross-file supertypes resolve.
 	p := parser.New(source.New(name, content))
-	root := p.ParseFile()
-	idx.AddDocument(name, root)
+	idx.AddDocument(name, p.ParseFile())
 	idx.MarkLibrary(name)
-	l.parsed = append(l.parsed, pending{name: name, key: key})
+	l.loaded = append(l.loaded, doc)
 	return nil
 }
 
-// reduce replaces every document this loader parsed with the record a cache hit
-// would have restored, caching those records when store is set. This is what
-// makes a parsed and a restored library leave the same index.
-func (l *Loader) reduce(idx *symbols.Index, store bool) {
-	parsed := l.parsed
-	l.parsed = nil
-	if len(parsed) == 0 {
+// installFacts installs the derived facts of every loaded document: restored
+// from its cache record where there was one, derived where there was not, and
+// stored for the next load when store is set.
+func (l *Loader) installFacts(idx *symbols.Index, store bool) {
+	loaded := l.loaded
+	l.loaded = nil
+
+	// Restored facts go in first, so deriving the rest reads the same facts a
+	// fully warm load would.
+	var missing []pending
+	for _, doc := range loaded {
+		if doc.rec == nil {
+			missing = append(missing, doc)
+			continue
+		}
+		idx.InstallLibraryFacts(doc.name, libraryFacts(doc.rec))
+		l.hits++
+	}
+	if len(missing) == 0 {
 		return
 	}
 
@@ -106,22 +116,20 @@ func (l *Loader) reduce(idx *symbols.Index, store bool) {
 		rec      *IndexRecord
 		resolved bool
 	}
-	records := make([]built, 0, len(parsed))
-	for _, p := range parsed {
-		rec, resolved := recordFromIndex(p.name, idx, r, model)
+	records := make([]built, 0, len(missing))
+	for _, doc := range missing {
+		rec, resolved := recordFromIndex(doc.name, idx, r, model)
 		if rec == nil {
 			continue
 		}
-		records = append(records, built{doc: p, rec: rec, resolved: resolved})
+		records = append(records, built{doc: doc, rec: rec, resolved: resolved})
 	}
 
-	// Every record is built before any document is replaced, since a record reads
-	// the index the not-yet-replaced documents are in.
+	// Every record is derived before any is installed, so what one document
+	// derives cannot be read back as a fact while another is still deriving.
 	for _, b := range records {
-		idx.AddRecords(b.doc.name, recordEntries(b.rec))
-		idx.MarkLibrary(b.doc.name)
+		idx.InstallLibraryFacts(b.doc.name, libraryFacts(b.rec))
 	}
-	idx.ExpandWildcardImports() // the records replacing the documents state imports of their own
 
 	if !store || l.cache == nil {
 		return
@@ -134,6 +142,13 @@ func (l *Loader) reduce(idx *symbols.Index, store bool) {
 		}
 		_ = l.cache.Store(b.doc.key, b.rec) // cache write failure is non-fatal
 	}
+}
+
+// Hits reports how many documents of the last LoadAll had their facts installed
+// from a cache record instead of derived, which is how a caller tells a warm load
+// from a cold one.
+func (l *Loader) Hits() int {
+	return l.hits
 }
 
 // setDigest hashes the name and content of every file in the source, memoized.
@@ -157,55 +172,4 @@ func (l *Loader) setDigest() string {
 	}
 	l.digest = hex.EncodeToString(h.Sum(nil))
 	return l.digest
-}
-
-// recordEntries projects a persisted IndexRecord onto symbols.RecordEntry.
-func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
-	out := make([]symbols.RecordEntry, len(rec.Symbols))
-	for i, s := range rec.Symbols {
-		out[i] = symbols.RecordEntry{
-			FQN:             s.FQN,
-			ShortName:       s.ShortName,
-			Kind:            s.Kind,
-			Span:            s.Span,
-			Supers:          s.Supers,
-			FeaturedBy:      s.FeaturedBy,
-			WildcardImports: wildcardImportEntries(s.WildcardImports),
-			AliasTarget:     s.AliasTarget,
-			Unit:            unitFactsEntry(s.Unit),
-			Dimension:       s.Dimension,
-			Behavior:        s.Behavior,
-
-			Annotations:      s.Annotations,
-			NamespaceFilters: s.NamespaceFilters,
-		}
-	}
-	return out
-}
-
-// unitFactsEntry projects a persisted unit reduction onto its index form.
-func unitFactsEntry(facts *unitFacts) *symbols.UnitFacts {
-	if facts == nil {
-		return nil
-	}
-	out := &symbols.UnitFacts{ScaleNum: facts.ScaleNum, ScaleDen: facts.ScaleDen, Irreducible: facts.Irreducible}
-	for _, f := range facts.Factors {
-		out.Factors = append(out.Factors, symbols.UnitFactorFacts{FQN: f.FQN, Exponent: f.Exponent})
-	}
-	return out
-}
-
-// wildcardImportEntries projects persisted wildcard imports onto their index form.
-func wildcardImportEntries(imports []wildcardImport) []symbols.WildcardImport {
-	if len(imports) == 0 {
-		return nil
-	}
-	out := make([]symbols.WildcardImport, len(imports))
-	for i, imp := range imports {
-		out[i] = symbols.WildcardImport{Target: imp.Target, Private: imp.Private}
-		if imp.Filter != nil {
-			out[i].Filter = symbols.ElementFilter{Pred: imp.Filter, Span: imp.Filter.Span}
-		}
-	}
-	return out
 }

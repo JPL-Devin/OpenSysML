@@ -7,11 +7,10 @@ import (
 )
 
 // newTestIndex returns an index holding the bundled standard library, which is
-// the resource set a workspace analyzes a document in.
+// the resource set a workspace analyzes a document in: an overlay over the
+// process-wide frozen base, as a model gets in production.
 func newTestIndex() *symbols.Index {
-	idx := symbols.NewIndex()
-	libs.LoadInto(idx)
-	return idx
+	return libs.NewModelIndex()
 }
 
 // newTestIndexFromDoc is newTestIndex with root indexed under name.

@@ -143,14 +143,16 @@ func TestVisibleNamesInheritedFeatureEndsThePath(t *testing.T) {
 		[]string{"a.A.a.self", "a.A.a.that", "a.A.a.a"})
 }
 
-// Two types importing each other bound the paths through their features, but a
-// feature typed by either still reaches the members its type implies.
+// Two types importing each other bound the paths through their features, and a
+// bounded path still reaches the members its type implies — `self` on a feature
+// whose type the path already went through, as `ShadowingTests_CircleProblem4`
+// declares for `b.b.self` and `b.B.self`.
 func TestVisibleNamesMutualImportBoundsPathsNotImplicitMembers(t *testing.T) {
 	src := "package T {\n\tclassifier A {\n\t\tpublic import B::*;\n\t\tfeature a: A;\n\t\tfeature b: B;\n" +
 		"\t\tclassifier B {\n\t\t\tpublic import A::*;\n\t\t\tfeature aa: A;\n\t\t\tfeature bb: B;\n\t\t}\n\t}\n}\n"
 	names := namesAt(t, src, "public import B", VisibleNamesOptions{LibraryRoots: []string{"Base"}})
-	has(t, names, []string{"a.self", "aa.self", "b.self", "bb.that"},
-		[]string{"a.aa.self", "b.b.self", "bb.B.self"})
+	has(t, names, []string{"a.self", "aa.self", "b.self", "bb.that", "a.aa.self", "b.b.self"},
+		[]string{"a.aa.aa.self", "b.b.b.self"})
 }
 
 func TestVisibleNamesCyclicImportTerminatesAndIsSorted(t *testing.T) {
