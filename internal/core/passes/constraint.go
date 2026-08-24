@@ -44,6 +44,16 @@ type constraintChecker struct {
 	diags    []Diagnostic
 }
 
+// libraryDeclared reports whether sym is declared by bundled library content,
+// which states the metamodel frame a model specializes rather than the model.
+func (cc *constraintChecker) libraryDeclared(sym *symbols.Symbol) bool {
+	if cc.resolver == nil {
+		return false
+	}
+	idx := cc.resolver.Index()
+	return idx != nil && idx.Library(sym)
+}
+
 // walk visits every symbol in the scope subtree, deduping by pointer (a decl
 // with short+primary names registers the same *Symbol under two keys), and
 // recurses into each symbol's owned child scope.
