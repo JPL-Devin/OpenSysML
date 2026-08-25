@@ -302,6 +302,13 @@ func UnevaluableClassification(reason string, span source.Span) error {
 func (m *Model) compileFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExpr) *symbols.FilterPredicate {
 	span := spanOf(e)
 	if e.Member == nil || len(e.Member.Parts) != 1 {
+		if e.Member != nil {
+			resultType, ok := m.resolver.ResolveTarget(scope, e)
+			if !ok || resultType == nil {
+				return unresolvedReference(span, "a feature chain does not resolve")
+			}
+			return evaluatorUnsupported(span, chainLimitation, resultType)
+		}
 		return unsupported(span, "a filter condition reads a single feature of an annotation")
 	}
 	feature := e.Member.Parts[0].Text
@@ -347,7 +354,10 @@ func (m *Model) compileFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExp
 			}
 		}
 	}
-	resultType, _ := m.resolver.ResolveTarget(scope, e)
+	resultType, ok := m.resolver.ResolveTarget(scope, e)
+	if !ok || resultType == nil {
+		return unresolvedReference(span, "a feature chain does not resolve")
+	}
 	return evaluatorUnsupported(span, chainLimitation, resultType)
 }
 
@@ -359,18 +369,18 @@ const chainLimitation = "a filter condition reads a feature through a chain of f
 // constant value ([KerML, 7.4.9] isModelLevelEvaluable).
 func (m *Model) compileFeatureChainRead(scope *symbols.Scope, operand *ast.FeatureReference, feature string, span source.Span) *symbols.FilterPredicate {
 	if operand.Name == nil {
-		return unsupported(span, "the chain operand names nothing")
+		return unresolvedReference(span, "the chain operand names nothing")
 	}
 	root, ok := m.resolver.ResolveQualified(scope, operand.Name)
 	if !ok || root == nil {
-		return unsupported(span, fmt.Sprintf("%s does not resolve", qnText(operand.Name)))
+		return unresolvedReference(span, fmt.Sprintf("%s does not resolve", qnText(operand.Name)))
 	}
 	if reason, notEvaluable := m.referenceNotEvaluable(root); notEvaluable {
 		return unsupported(span, reason)
 	}
 	read, ok := m.LookupMember(root, feature)
 	if !ok || read == nil {
-		return unsupported(span, fmt.Sprintf("%s has no feature %s to read", qnText(operand.Name), feature))
+		return unresolvedReference(span, fmt.Sprintf("%s has no feature %s to read", qnText(operand.Name), feature))
 	}
 	usage, isUsage := read.Decl.(*ast.Usage)
 	if !isUsage || usage.Value == nil {
@@ -398,7 +408,7 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 	}
 	sym, ok := m.resolver.ResolveQualified(scope, qn)
 	if !ok || sym == nil {
-		return unsupported(span, fmt.Sprintf("%s does not resolve", qnText(qn)))
+		return unresolvedReference(span, fmt.Sprintf("%s does not resolve", qnText(qn)))
 	}
 	if owner := m.ownerOf(sym); owner != nil && isMetadataType(owner) {
 		ownerFQN := m.fqnOf(owner)
@@ -471,6 +481,15 @@ func (m *Model) referenceNotEvaluable(sym *symbols.Symbol) (string, bool) {
 		return fmt.Sprintf("%s is not model-level evaluable", m.fqnOf(sym)), true
 	}
 	return "", false
+}
+
+func unresolvedReference(span source.Span, reason string) *symbols.FilterPredicate {
+	return &symbols.FilterPredicate{
+		Op:              symbols.FilterUnsupported,
+		UnsupportedKind: symbols.FilterUnsupportedNotBoolean,
+		Reason:          reason,
+		Span:            span,
+	}
 }
 
 func describeResultType(sym *symbols.Symbol) string {
@@ -913,13 +932,7 @@ func (m *Model) CheckElementFilter(f symbols.ElementFilter) []FilterProblem {
 		if p.Kind != FilterProblemNotBoolean {
 			continue
 		}
-		filtered := out[:0]
-		for _, candidate := range out {
-			if candidate.Kind != FilterProblemUnsupported {
-				filtered = append(filtered, candidate)
-			}
-		}
-		return filtered
+		return dropUnsupportedProblems(out)
 	}
 	return out
 }
@@ -932,6 +945,16 @@ func (m *Model) appendFilterProblems(out []FilterProblem, p *symbols.FilterPredi
 		return out
 	}
 	if p.Op == symbols.FilterUnsupported {
+		if p.UnsupportedKind == symbols.FilterUnsupportedNotBoolean {
+			if wantBool {
+				out = append(out, FilterProblem{
+					Kind:   FilterProblemNotBoolean,
+					Reason: p.Reason,
+					Span:   p.Span,
+				})
+			}
+			return out
+		}
 		kind := FilterProblemNotEvaluable
 		if p.UnsupportedKind == symbols.FilterUnsupportedEvaluator {
 			kind = FilterProblemUnsupported
@@ -958,6 +981,18 @@ func (m *Model) appendFilterProblems(out []FilterProblem, p *symbols.FilterPredi
 		out = m.appendFilterProblems(out, operand, operandsWantBool)
 	}
 	return out
+}
+
+// dropUnsupportedProblems keeps specification faults when a Boolean fault
+// already explains why the condition cannot be accepted.
+func dropUnsupportedProblems(problems []FilterProblem) []FilterProblem {
+	filtered := make([]FilterProblem, 0, len(problems))
+	for _, problem := range problems {
+		if problem.Kind != FilterProblemUnsupported {
+			filtered = append(filtered, problem)
+		}
+	}
+	return filtered
 }
 
 // filterBoolness is what is known about the kind of value a compiled condition

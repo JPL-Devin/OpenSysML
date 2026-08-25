@@ -68,6 +68,8 @@ func TestFilterNotBooleanIsReported(t *testing.T) {
 		{"an import filter", filterMetadata + "package P { public import Belt[42]; }"},
 		{"an operand of a boolean operator", filterMetadata + "package P { filter @Safety and 7; }"},
 		{"a typed element reference where a truth value is needed", filterMetadata + "package P { feature n : ScalarValues::Integer; filter n; }"},
+		{"an unresolved bare reference", filterMetadata + "package P { filter Undefined; }"},
+		{"an unresolved feature chain", filterMetadata + "package P { filter a.b.c; }"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			diags := only(filterDiags(t, tc.src), "filter-not-boolean")
@@ -128,10 +130,10 @@ func TestUnsupportedFilterResultReportsModelLevelRule(t *testing.T) {
 		code string
 	}{
 		{"an unsupported operator", "@Safety + 1", "filter-not-evaluable"},
-		{"a feature chain", "a.b.c", "filter-not-evaluated"},
+		{"a feature chain", "a.b.c", "filter-not-boolean"},
 		{"a conditional", "if c ? a else b", "filter-not-evaluable"},
 		{"a cast", "x as Integer", "filter-not-evaluable"},
-		{"an unresolved reference", "Undefined", "filter-not-evaluable"},
+		{"an unresolved reference", "Undefined", "filter-not-boolean"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			diags := filterDiags(t, filterMetadata+"package P { filter "+tc.cond+"; }")

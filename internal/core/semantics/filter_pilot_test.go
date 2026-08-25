@@ -68,6 +68,18 @@ func TestFilterProblemKindFollowsPilotReferentRule(t *testing.T) {
 			cond: "R::p.a",
 			want: semantics.FilterProblemUnsupported,
 		},
+		{
+			name: "unresolved bare reference is not Boolean",
+			src:  `package R {}`,
+			cond: "Undefined",
+			want: semantics.FilterProblemNotBoolean,
+		},
+		{
+			name: "unresolved feature chain is not Boolean",
+			src:  `package R {}`,
+			cond: "a.b.c",
+			want: semantics.FilterProblemNotBoolean,
+		},
 	}
 
 	for _, tc := range tests {

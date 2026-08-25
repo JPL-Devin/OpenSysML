@@ -78,6 +78,9 @@ const (
 	FilterUnsupportedNotEvaluable FilterUnsupportedKind = iota
 	// FilterUnsupportedEvaluator is a specification-clean evaluator limitation.
 	FilterUnsupportedEvaluator
+	// FilterUnsupportedNotBoolean is an unresolved value whose result cannot be
+	// shown to be Boolean.
+	FilterUnsupportedNotBoolean
 )
 
 // FilterPredicate is an element-filter condition compiled to the form the
