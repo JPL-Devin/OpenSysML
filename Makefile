@@ -99,7 +99,7 @@ version: ## Show version information
 	@echo "Build time: $(BUILD_TIME)"
 	@echo "Go version: $(GO_VERSION)"
 
-proto: proto-go python-proto ## Regenerate all protobuf stubs
+proto: proto-go python-proto proto-rust ## Regenerate all protobuf stubs
 
 proto-go: ## Regenerate Go protobuf stubs
 	@echo "Regenerating Go protobuf stubs..."
@@ -119,8 +119,9 @@ proto-ts: ## Generate TypeScript stubs into gen/ts (for the planned npm client)
 proto-java: ## Generate Java stubs into gen/java (for the planned Java client)
 	$(BUF) generate --template buf.gen.java.yaml
 
-proto-rust: ## Generate Rust stubs into gen/rust (for the planned Rust client)
+proto-rust: ## Generate Rust stubs and the descriptor for the Rust clients
 	$(BUF) generate --template buf.gen.rust.yaml
+	$(BUF) build -o rust/conformance/sysml.descriptor.binpb
 
 proto-lint: ## Lint the protobuf schema
 	$(BUF) lint

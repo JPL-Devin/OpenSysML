@@ -1,0 +1,26 @@
+[package]
+name = "opensysml"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.83"
+description = "Blocking Rust client for the OpenSysML sysml-grpc service"
+license = "Apache-2.0"
+
+[[bin]]
+name = "child_probe"
+path = "src/bin/child_probe.rs"
+test = false
+
+[dependencies]
+prost = "=0.14.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+ureq = { version = "=3.2.1", default-features = false }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
+
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
