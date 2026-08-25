@@ -1,9 +1,0 @@
-version: v2
-# Java stubs for the planned Java client. Not committed and not run in CI:
-# `make proto-java` writes to gen/java/ so the client can adopt it when it lands.
-# Remote plugins need network access to the Buf Schema Registry.
-plugins:
-  - remote: buf.build/protocolbuffers/java:v33.1
-    out: gen/java
-  - remote: buf.build/grpc/java:v1.76.0
-    out: gen/java
