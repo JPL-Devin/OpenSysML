@@ -383,7 +383,6 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 
 	// Note: Initial node is optional at graph construction time.
 	// The executor's initialize() will validate and return the error if missing.
-	implicitInitialAllowed := graph.Initial == nil
 
 	// Second pass: build edges
 	for _, member := range members {
@@ -477,16 +476,13 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				}
 				sourceRef := connectorEndReference(n.ConnectorEnds[0])
 				targetRef := connectorEndReference(n.ConnectorEnds[1])
-				sourceNode := resolveSuccessionUsageEnd(graph, sourceRef, true, implicitInitialAllowed)
-				targetNode := resolveSuccessionUsageEnd(graph, targetRef, false, false)
+				sourceNode := resolveSuccessionUsageEnd(graph, sourceRef, true)
+				targetNode := resolveSuccessionUsageEnd(graph, targetRef, false)
 				if sourceNode == nil {
 					return nil, fmt.Errorf("action succession references undefined source node %s", successionEndText(sourceRef))
 				}
 				if targetNode == nil {
 					return nil, fmt.Errorf("action succession references undefined target node %s", successionEndText(targetRef))
-				}
-				if graph.Initial == nil {
-					graph.Initial = sourceNode
 				}
 				graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
 				graph.recordSuccession(sourceNode, targetNode, n)
@@ -843,21 +839,22 @@ func resolveEnd(nodes []ast.Node, qname *ast.QualifiedName, member ast.Node) ast
 	return findNodeByName(nodes, qname)
 }
 
-func resolveSuccessionUsageEnd(graph *ActionGraph, ref ast.Node, source, allowImplicitStart bool) ast.Node {
+// resolveSuccessionUsageEnd resolves an action succession end or its implied start/done node.
+func resolveSuccessionUsageEnd(graph *ActionGraph, ref ast.Node, source bool) ast.Node {
 	node := findNodeByReference(graph.Nodes, ref)
 	if node != nil {
 		return node
 	}
 
 	name := ast.SimpleName(ref)
-	if source && allowImplicitStart && name == "start" {
-		initial := &ast.InitialNode{Name: "start", Keyword: "first"}
+	if source && name == "start" && graph.Initial == nil {
+		initial := &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "start", Keyword: "first"}
 		graph.Initial = initial
 		graph.Nodes = append(graph.Nodes, initial)
 		return initial
 	}
 	if !source && name == "done" {
-		final := &ast.FinalNode{Name: "done", Keyword: "done"}
+		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "done", Keyword: "done"}
 		graph.Finals = append(graph.Finals, final)
 		graph.Nodes = append(graph.Nodes, final)
 		return final
@@ -865,6 +862,8 @@ func resolveSuccessionUsageEnd(graph *ActionGraph, ref ast.Node, source, allowIm
 	return nil
 }
 
+// findNodeByReference resolves a plain name or a chain to its graph-node root.
+// A chain attaches to the node whose body contains that feature.
 func findNodeByReference(nodes []ast.Node, ref ast.Node) ast.Node {
 	if qname := ast.AsQualifiedName(ref); qname != nil {
 		return findNodeByName(nodes, qname)
@@ -883,6 +882,7 @@ func findNodeByReference(nodes []ast.Node, ref ast.Node) ast.Node {
 	}
 }
 
+// successionEndText formats an endpoint for an action-succession diagnostic.
 func successionEndText(ref ast.Node) string {
 	if text := FeaturePath(ref); text != "" {
 		return strconv.Quote(text)

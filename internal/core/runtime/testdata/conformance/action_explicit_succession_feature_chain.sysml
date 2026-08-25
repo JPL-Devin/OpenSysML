@@ -7,6 +7,7 @@ package test {
 			assign result := 7;
 		}
 		action target { assign result := result + 5; }
+		succession first start then source;
 		succession first source.pin then target;
 		succession first target then done;
 	}

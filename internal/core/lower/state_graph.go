@@ -827,8 +827,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 			if n.Kind == ast.UsageSuccession {
 
 				if len(n.ConnectorEnds) == 2 {
-					// ConnectorEnds[0] is source, ConnectorEnds[1] is target
-					// States could be in Target field OR Reference field
+					// Connector-end targets name the source and target states.
 
 					sourceQName, _ := connectorEndReference(n.ConnectorEnds[0]).(*ast.QualifiedName)
 					targetQName, _ := connectorEndReference(n.ConnectorEnds[1]).(*ast.QualifiedName)

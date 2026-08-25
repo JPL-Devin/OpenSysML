@@ -57,6 +57,20 @@ func TestToActionGraph_ExplicitSuccessionFeatureChain(t *testing.T) {
 	}
 }
 
+func TestToActionGraph_ExplicitSuccessionWithoutInitial(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action seq {
+			action alpha;
+			action beta;
+			succession first alpha then beta;
+		}
+	`)
+
+	if graph.Initial != nil {
+		t.Fatalf("initial node = %v, want no initial node", graph.Initial)
+	}
+}
+
 func TestToActionGraph_ExplicitSuccessionUndefinedEndpoint(t *testing.T) {
 	p := parser.New(source.New("test.sysml", []byte(`
 		action seq {
