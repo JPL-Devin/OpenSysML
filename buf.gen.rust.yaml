@@ -1,0 +1,9 @@
+version: v2
+# Rust stubs (prost + tonic) for the planned Rust client. Not committed and not
+# run in CI: `make proto-rust` writes to gen/rust/ so the client can adopt it
+# when it lands. Remote plugins need network access to the Buf Schema Registry.
+plugins:
+  - remote: buf.build/community/neoeinstein-prost:v0.5.0
+    out: gen/rust
+  - remote: buf.build/community/neoeinstein-tonic:v0.5.0
+    out: gen/rust

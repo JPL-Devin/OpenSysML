@@ -43,8 +43,14 @@ make build-grpc
 # Install to $GOPATH/bin
 make install
 
+# Protobuf schema (api/proto/sysml.proto), all codegen driven by buf
+make proto           # regenerate the Go and Python stubs
+make proto-go        # Go stubs only
+make python-proto    # Python stubs only (needs grpcio-tools)
+make proto-lint      # lint the schema, as CI does
+make proto-breaking  # reject wire-breaking changes against main, as CI does
+
 # Python gRPC bindings
-make python-proto    # regenerate protobuf stubs
 make python-install  # install opensysml package
 make python-test     # run Python binding tests
 

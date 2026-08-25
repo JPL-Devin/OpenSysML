@@ -1,0 +1,7 @@
+version: v2
+# TypeScript stubs for the planned npm client. Not committed and not run in CI:
+# `make proto-ts` writes to gen/ts/ so the client can adopt it when it lands.
+# Remote plugins need network access to the Buf Schema Registry.
+plugins:
+  - remote: buf.build/bufbuild/es:v2.10.0
+    out: gen/ts
