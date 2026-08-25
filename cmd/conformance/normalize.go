@@ -26,6 +26,14 @@ var normalizedIDs = map[string]bool{
 	"sysml.Verdict.instance_id": true,
 }
 
+// integer and unsigned are normalized integral values. They are distinct from
+// float64 so an integral field is compared exactly rather than within the
+// tolerance a Real carries.
+type (
+	integer  int64
+	unsigned uint64
+)
+
 // normalizer turns a response into a JSON-shaped tree with the values that
 // cannot be compared literally replaced. See conformance/README.md.
 type normalizer struct {
@@ -99,11 +107,11 @@ func (n *normalizer) value(field protoreflect.FieldDescriptor, value protoreflec
 		if normalizedIDs[full] {
 			return n.label(value.Int())
 		}
-		return float64(value.Int())
+		return integer(value.Int())
 	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
-		return float64(value.Int())
+		return integer(value.Int())
 	case protoreflect.Uint32Kind, protoreflect.Uint64Kind, protoreflect.Fixed32Kind, protoreflect.Fixed64Kind:
-		return float64(value.Uint())
+		return unsigned(value.Uint())
 	default:
 		return value.String()
 	}

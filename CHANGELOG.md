@@ -31,6 +31,19 @@ affordance, a large JSON response now logs a warning, and
 author will read it. The conformance suite runs every scenario once per protocol so the second
 surface cannot rot.
 
+`-transport stdio` stays as a prototype behind its flag: not the default, and not a transport
+any published client speaks. The transports reference says so, and the binary's wiring of it is
+now covered by a test.
+
+### Fixed
+
+The conformance comparer no longer compares integral fields within the tolerance it allows a
+`Real`. Every numeric field was normalized to a `float64`, so a relative tolerance of 1e-9
+reached counts, ids and spans as well — 1,000,000,000,500 matched 1,000,000,000,000 — and a
+whole number above 2^53 could not be represented exactly in the first place. Integral values
+now carry an integral type and are compared by their digits, expected numbers are read as
+literals rather than floats, and the tolerance applies to `Real` alone.
+
 ## 0.2.1 — 2026-08-24
 
 A conformance patch, a round of performance work, and a supply-chain improvement. The

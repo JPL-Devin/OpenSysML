@@ -28,8 +28,7 @@ unchanged.
 
 `-transport grpc` serves the `grpc-go` server alone, as releases before this one did: no
 Connect, no gRPC-Web, no `curl`, health on `-health-port` only. It is an escape hatch, not the
-recommended path. `-transport stdio` is an evaluation prototype and no client should be built
-on it; see the evaluation's recommendation.
+recommended path. `-transport stdio` is a prototype, described below.
 
 ## Choose protobuf, not JSON
 
@@ -136,6 +135,19 @@ It no longer has to, so `-health-port` is **deprecated**:
 Poll the main port. Nothing in this repository polls 8081: the Python client's readiness probe
 is a `GetDiagnostics` call over gRPC, not an HTTP GET, so it is unaffected by every row of that
 table.
+
+## `-transport stdio`, and why not to build on it
+
+`-transport stdio` serves one client over stdin/stdout with `Content-Length` framing. It is
+**not the default, and not a supported client transport**: no client this project publishes —
+not the Python client, not a generated stub — speaks it, and none will. It exists because a
+supervisor that already spawns the binary as a child process can reach the service without a
+port, which is the question [the evaluation](../internals/design/transport-evaluation.md) asked;
+its answer was to serve clients over a port. Choosing it also gives up everything on this page:
+no reflection, no `/health`, no CORS, no TLS, one client per process. Write a client against the
+default port instead. The prototype is kept, behind the flag, and tested — `internal/stdiorpc`
+covers the protocol and `cmd/sysml-grpc` covers the binary answering a framed call — so that it
+cannot rot unnoticed while it is still in the tree.
 
 ## Every protocol is tested, not just served
 
