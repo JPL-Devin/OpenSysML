@@ -120,9 +120,12 @@ jobs:
 
       # Per-package timeout: under -race, passes and model exceed go's 10m default
       # on this executor. Matches `make test` and the GitHub Actions PR workflow.
+      # no_output_timeout: go test buffers a package's output until it finishes,
+      # so a >10m package looks silent and trips CircleCI's 10m default.
       - run:
           name: Run tests
           command: go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
+          no_output_timeout: 30m
           environment:
             # Turns "corpus absent" into a failure rather than a skip, as the
             # GitHub Actions PR workflow already does.
