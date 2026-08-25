@@ -246,7 +246,7 @@ action sequential {
 One token spawns at `start`, moves to `compute`, which runs its body, and is consumed at
 `done`:
 
-When the named backing file is loaded, each of the three commands below first prints:
+When the named backing file is loaded, the first command below prints:
 
 ```
 ✓ package ActionExecutorDemo
@@ -350,7 +350,9 @@ token on *every* incoming succession before one continues. A fork duplicates con
 values: all three branches are steps of the one performance, so every assignment is visible
 when it completes.
 
-```
+The same package-load and extension-warning preamble shown above precedes this result.
+
+```bash
 $ sysml -action ActionExecutorDemo::forkJoin examples/action-executor-demo.sysml
 ✓ Action completed
   Final state: Completed
@@ -393,7 +395,9 @@ action conditional {
 `decide` evaluates its guards in the order written, with the action's features in scope, and
 takes the first that holds; `else` is taken when none does. With `x = 15`:
 
-```
+The same package-load and extension-warning preamble shown above precedes this result.
+
+```bash
 $ sysml -action ActionExecutorDemo::conditional examples/action-executor-demo.sysml
 ✓ Action completed
   Final state: Completed

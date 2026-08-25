@@ -181,18 +181,26 @@ and [`examples/repl-behavioral-demo.sysml`](../../examples/repl-behavioral-demo.
 convert too, as do most `parser_features_demo_*.kerml` files (except
 `..._advanced_bodies.kerml`, which computes a value, and two that each declare
 one name twice). The behavior a body states converts as well — states, regions,
-substates, action nodes, assignments and transitions all have a mapping. What is
-refused is what the notation could not be rebuilt from: an expression the graph
-would have to compute, a name two members of one body share, or an order whose
-ends the notation leaves implicit (how much of `examples/` converts is measured
-in
-[project/roadmap.md](../project/roadmap.md#d6--a-behavioral-node-has-no-metaclass-so-a-model-stating-steps-cannot-convert)):
+substates, action nodes, assignments and transitions all have a mapping. The
+action-semantics example below now converts successfully. Some other files still
+refuse constructs that the RDF graph cannot rebuild faithfully, such as computed
+operator expressions, duplicate names, and unnamed declarations; the refusal
+names the source construct and recommends saving the original SysML instead:
 
 ```bash
 $ sysml examples/parser_features_demo_action_semantics.sysml -convert ttl -o /tmp/action-semantics.ttl; echo $?
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 wrote /tmp/action-semantics.ttl (ttl, 21671 bytes)
 0
+```
+
+For example, an advanced body with an operator expression is still refused:
+
+```bash
+$ sysml examples/parser_features_demo_advanced_bodies.kerml -convert ttl; echo $?
+note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
+sysml: cannot convert the operator expr at examples/parser_features_demo_advanced_bodies.kerml:87:9: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
+exit=2
 ```
 
 ---

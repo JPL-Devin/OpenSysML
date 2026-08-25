@@ -55,7 +55,9 @@ package MyModel {
         entry;
         then off;
         state off;
-        state warming;
+        state warming {
+            accept after 10 then running;
+        }
         state running;
         transition first off then warming;
     }
@@ -177,16 +179,18 @@ action nodes, and `transition <source> to <target>`. They are reported as
 warnings, so a model using them still analyses cleanly. `-strict` asks the other
 question — *is this file conforming SysML v2?* — by making those warnings errors:
 
-The standard form of the monitor used below is:
+The monitor below deliberately uses the `initial` extension and named succession
+so the difference is visible:
 
 ```sysml
 package M {
     state monitor {
-        entry;
-        then off;
-        state off;
-        state warming;
-        transition first off then warming;
+        initial off;
+        state warming {
+            accept after 10 then running;
+        }
+        state running;
+        off then warming;
     }
 }
 ```
@@ -194,19 +198,32 @@ package M {
 ```bash
 $ sysml -validate monitor.sysml; echo "exit=$?"
 ✓ package M
+monitor.sysml:3:9: warning: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
+        initial off;
+        ^~~~~~~
+monitor.sysml:8:9: warning: `<source> then <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        off then warming;
+        ^~~~
 ✓ monitor.sysml: no errors
 exit=0
 
 $ sysml -strict -validate monitor.sysml; echo "exit=$?"
-✓ package M
-✓ monitor.sysml: no errors
-exit=0
+monitor.sysml:3:9: error: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
+        initial off;
+        ^~~~~~~
+monitor.sysml:8:9: error: `<source> then <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        off then warming;
+        ^~~~
+sysml: monitor.sysml did not analyse cleanly; no check was made
+exit=2
 ```
 
-`-strict` changes nothing about what parses: the same file and the same tree are
-checked, but extensions become errors. It is a portability check, so run it when
-a model has to be read by another SysML v2 tool; leave it off otherwise. Each
-finding names the standard notation to write instead, and
+The standard spelling is `entry; then off;` with
+`transition first off then warming;`. `-strict` changes nothing about what parses:
+the same file, the same tree, the same findings in the same places — only their
+severity, and with it the exit status and the tier gate. It is a portability check,
+so run it when a model has to be read by another SysML v2 tool; leave it off
+otherwise. Each finding names the standard notation to write instead, and
 [the conformance audit](../reference/grammar/conformance-audit.md) cites the
 production each extension is measured against. The same switch is `%strict` at
 the prompt ([4. The REPL](04-repl.md)), the `sysml.strictConformance` setting in
@@ -242,8 +259,8 @@ $ sysml -state MyModel::Monitor -advance 15 checks.sysml
   Time: 0.00
   Events: 1
 ✓ Advanced to 15.00 (2 event(s) processed)
-  Current state: warming
-  Last event at: 0.00
+  Current state: running
+  Last event at: 10.00
   Remaining events: 0
 ```
 
