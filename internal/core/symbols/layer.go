@@ -1,5 +1,19 @@
 package symbols
 
+import "sync/atomic"
+
+type indexGeneration struct {
+	value atomic.Uint64
+}
+
+func (g *indexGeneration) bump() {
+	g.value.Add(1)
+}
+
+func (g *indexGeneration) get() uint64 {
+	return g.value.Load()
+}
+
 // layer is one of the index's tables, which may read through to the same table
 // of a frozen index below it. A write lands in own, so the layer below is shared
 // unmodified between every index built over it, and a key the index above
@@ -11,16 +25,17 @@ type layer[K comparable, V any] struct {
 	base map[K]V    // the frozen index's table, never written
 	own  map[K]V    // this index's own entries
 	dead map[K]bool // base keys this index hides
+	gen  *indexGeneration
 }
 
 // newLayer returns an empty table with nothing below it.
-func newLayer[K comparable, V any]() *layer[K, V] {
-	return &layer[K, V]{own: make(map[K]V)}
+func newLayer[K comparable, V any](gen *indexGeneration) *layer[K, V] {
+	return &layer[K, V]{own: make(map[K]V), gen: gen}
 }
 
 // overLayer returns an empty table reading through to below's entries.
-func overLayer[K comparable, V any](below *layer[K, V]) *layer[K, V] {
-	return &layer[K, V]{base: below.own, own: make(map[K]V)}
+func overLayer[K comparable, V any](below *layer[K, V], gen *indexGeneration) *layer[K, V] {
+	return &layer[K, V]{base: below.own, own: make(map[K]V), gen: gen}
 }
 
 // get returns the entry under k, preferring this layer's own over the one below
@@ -45,12 +60,14 @@ func (l *layer[K, V]) at(k K) V {
 
 // set records v under k in this layer, which also un-deletes the key.
 func (l *layer[K, V]) set(k K, v V) {
+	l.gen.bump()
 	l.own[k] = v
 	delete(l.dead, k)
 }
 
 // del forgets k, hiding an entry the layer below holds under it.
 func (l *layer[K, V]) del(k K) {
+	l.gen.bump()
 	delete(l.own, k)
 	if _, ok := l.base[k]; ok {
 		if l.dead == nil {
@@ -84,6 +101,7 @@ func (l *layer[K, V]) keys() []K {
 
 // clear forgets every entry, hiding the ones the layer below holds.
 func (l *layer[K, V]) clear() {
+	l.gen.bump()
 	l.own = make(map[K]V)
 	for k := range l.base {
 		if l.dead == nil {
@@ -98,6 +116,7 @@ func (l *layer[K, V]) clear() {
 // another's through a table they share.
 func writableMap[K comparable, NK comparable, NV any](l *layer[K, map[NK]NV], k K) map[NK]NV {
 	if m, owned := l.own[k]; owned {
+		l.gen.bump()
 		return m
 	}
 	shared, _ := l.get(k)
@@ -113,6 +132,7 @@ func writableMap[K comparable, NK comparable, NV any](l *layer[K, map[NK]NV], k 
 // one the layer below owns — appending to it could write into the shared array.
 func writableSlice[K comparable, E any](l *layer[K, []E], k K) []E {
 	if s, owned := l.own[k]; owned {
+		l.gen.bump()
 		return s
 	}
 	shared, _ := l.get(k)

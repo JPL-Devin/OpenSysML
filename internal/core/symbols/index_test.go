@@ -497,6 +497,50 @@ func TestLookupDirectChildrenFromDropsPrivatelyImportedNames(t *testing.T) {
 	}
 }
 
+func TestLookupDirectChildrenFromSharesVisibilityCache(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { namespace Hidden; }")
+	addDoc(t, idx, "mid.sysml", "package Mid { private import Base::*; namespace Own; }")
+	idx.ExpandWildcardImports()
+
+	idx.LookupDirectChildrenFrom("Mid", "Other")
+	idx.LookupDirectChildrenFrom("Mid", "Another")
+	if got := len(idx.directChildrenCache); got != 1 {
+		t.Fatalf("direct-children cache has %d entries for equivalent visibility lookups, want 1", got)
+	}
+}
+
+func TestLookupDirectChildrenInvalidatesAfterWrite(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package P { namespace A; }")
+	if got := len(idx.LookupDirectChildren("P")); got != 1 {
+		t.Fatalf("initial direct children = %d, want 1", got)
+	}
+
+	addDoc(t, idx, "b.sysml", "package P { namespace B; }")
+	got := idx.LookupDirectChildren("P")
+	if len(got) != 2 {
+		t.Fatalf("direct children after write = %d, want 2", len(got))
+	}
+	if got[0].Name != "A" || got[1].Name != "B" {
+		t.Fatalf("direct children after write = %q, want [A B]", []string{got[0].Name, got[1].Name})
+	}
+}
+
+func TestLookupDirectChildrenCachesIdenticalLookup(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package P { namespace A; }")
+
+	first := idx.LookupDirectChildren("P")
+	second := idx.LookupDirectChildren("P")
+	if len(idx.directChildrenCache) != 1 {
+		t.Fatalf("direct-children cache has %d entries, want 1", len(idx.directChildrenCache))
+	}
+	if len(first) == 0 || &first[0] != &second[0] {
+		t.Fatal("identical direct-children lookup did not return the cached slice")
+	}
+}
+
 // The index records the conditions a re-export is subject to instead of judging
 // them: an import's filter clause and the `filter` members of the namespace it
 // imports into gate the name it surfaced, while a name the namespace declares
