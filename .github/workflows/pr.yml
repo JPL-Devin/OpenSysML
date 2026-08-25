@@ -35,6 +35,14 @@ jobs:
       - name: Download modules
         run: go mod download
 
+      # One buf template generates both the Go stubs and the Java client's message
+      # classes, so without this check the committed stubs can drift from the schema.
+      - name: Verify the committed Go and Java stubs are current
+        run: |
+          make proto-buf
+          git diff --exit-code api/proto \
+            clients/java/opensysml-client/src/main/java/io/opensysml/proto
+
       # The solver is an external process, never linked in: the solver-dependent
       # tests need one on PATH to run rather than skip.
       - name: Install z3
@@ -344,3 +352,47 @@ jobs:
 
       - name: Verify import
         run: python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"
+
+  # Mirrors the CircleCI java-test job: unit tests plus the conformance suite over
+  # both Connect encodings, on the client's Java 17 baseline.
+  java-test:
+    name: Java client tests
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: bin
+
+      # 17 is the client's compile target, so a 21-only construct fails here.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Make the service binary executable
+        run: chmod +x bin/sysml-grpc
+
+      # opensysml.requireService turns "no binary, so skip" into a failure, and
+      # `install` builds the sources and javadoc jars a release needs on every commit.
+      - name: Test and install the client
+        run: mvn -B -f clients/java/pom.xml install -Dopensysml.requireService=true
+
+      - name: Run the conformance suite through the client
+        run: |
+          mvn -B -q -f clients/java/pom.xml -pl opensysml-conformance \
+            dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt
+          java -cp "clients/java/opensysml-conformance/target/classes:$(cat /tmp/cp.txt)" \
+            io.opensysml.conformance.Main \
+            -binary bin/sysml-grpc -protocols connect,connect-json -allow-skips \
+            -report conformance-report-java.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: java-conformance-report
+          path: conformance-report-java.json
