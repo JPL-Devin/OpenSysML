@@ -359,7 +359,12 @@ jobs:
           name: binaries
           path: bin
 
-      - run: |
+      # The artifact is a zip, which does not carry the executable bit.
+      - name: Install the sysml-grpc binary
+        run: chmod +x bin/sysml-grpc
+
+      - name: Install Rust 1.83
+        run: |
           rustup toolchain install 1.83.0 --profile minimal
           rustup default 1.83.0
           rustc --version
