@@ -61,27 +61,15 @@ func (cc *constraintChecker) walk(scope *symbols.Scope) {
 	if scope == nil {
 		return
 	}
-	// Walk named members
-	for _, childName := range scope.MemberNames() {
-		for _, sym := range scope.LookupLocalAll(childName) {
-			if sym == nil || cc.seen[sym] {
-				continue
-			}
-			cc.seen[sym] = true
-			cc.check(sym)
-			cc.walk(sym.Scope)
-		}
-	}
-	// Walk anonymous members
-	for _, sym := range scope.AllMembers() {
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
 		if sym == nil || cc.seen[sym] {
-			continue
+			return true
 		}
-		// AllMembers includes named + anonymous, so dedup via seen map
 		cc.seen[sym] = true
 		cc.check(sym)
 		cc.walk(sym.Scope)
-	}
+		return true
+	})
 }
 
 // check runs the per-symbol constraint rules.

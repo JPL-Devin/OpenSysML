@@ -126,12 +126,15 @@ func w9cIsLibraryDocument(ctx *Context, name string) bool {
 	if scope == nil {
 		return false
 	}
-	for _, sym := range scope.AllMembers() {
+	found := false
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
 		if sym != nil && ctx.Index.Library(sym) {
-			return true
+			found = true
+			return false
 		}
-	}
-	return false
+		return true
+	})
+	return found
 }
 
 // W9CUserStandardLibraryPass reports a `standard library package` written

@@ -186,12 +186,15 @@ func (r *Resolver) hasUnresolvedRedefinitions(scope *symbols.Scope) bool {
 	if scope == nil {
 		return false
 	}
-	for _, sym := range scope.AllMembers() {
+	found := false
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
 		if r.hasUnresolvedRedefinition(sym) {
-			return true
+			found = true
+			return false
 		}
-	}
-	return false
+		return true
+	})
+	return found
 }
 
 // inheritedMembers collects the members owner inherits, keyed by name: what each
@@ -289,11 +292,12 @@ func (r *Resolver) redefinedByMembers(scope *symbols.Scope) map[*symbols.Symbol]
 	}
 	// An unnamed member redefines just as a named one does, and one whose
 	// effective name only the semantic model knows is anonymous here.
-	for _, sym := range scope.AllMembers() {
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
 		for _, target := range r.redefinedFeatures(sym) {
 			out[target] = append(out[target], sym)
 		}
-	}
+		return true
+	})
 	return out
 }
 

@@ -151,9 +151,29 @@ func (s *Scope) MemberNames() []string {
 // AllMembers returns all symbols in this scope (including anonymous members).
 func (s *Scope) AllMembers() []*Symbol {
 	var all []*Symbol
-	for _, syms := range s.members {
-		all = append(all, syms...)
-	}
-	all = append(all, s.anonymousMembers...)
+	s.ForEachMember(func(sym *Symbol) bool {
+		all = append(all, sym)
+		return true
+	})
 	return all
+}
+
+// ForEachMember visits all symbols in this scope, stopping when yield returns
+// false. Named members precede anonymous members.
+func (s *Scope) ForEachMember(yield func(*Symbol) bool) {
+	if s == nil || yield == nil {
+		return
+	}
+	for _, name := range s.memberOrder {
+		for _, sym := range s.members[name] {
+			if !yield(sym) {
+				return
+			}
+		}
+	}
+	for _, sym := range s.anonymousMembers {
+		if !yield(sym) {
+			return
+		}
+	}
 }

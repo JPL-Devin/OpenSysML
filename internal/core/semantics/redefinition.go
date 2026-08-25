@@ -225,12 +225,15 @@ func unwrapUsage(member ast.Node) (*ast.Usage, bool) {
 // memberSymbol returns the symbol scope declares for node, including anonymous
 // ones (`in item;` declares a parameter with no name), or nil if there is none.
 func memberSymbol(scope *symbols.Scope, node ast.Node) *symbols.Symbol {
-	for _, member := range scope.AllMembers() {
+	var found *symbols.Symbol
+	scope.ForEachMember(func(member *symbols.Symbol) bool {
 		if member.Decl == node {
-			return member
+			found = member
+			return false
 		}
-	}
-	return nil
+		return true
+	})
+	return found
 }
 
 // implicitParameterRedefinitions returns the features sym implicitly redefines

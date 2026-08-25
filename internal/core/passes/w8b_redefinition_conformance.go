@@ -71,14 +71,15 @@ func (rc *redefinitionConformanceChecker) walk(scope *symbols.Scope) {
 	if scope == nil {
 		return
 	}
-	for _, sym := range scope.AllMembers() {
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
 		if sym == nil || rc.seen[sym] {
-			continue
+			return true
 		}
 		rc.seen[sym] = true
 		rc.check(sym)
 		rc.walk(sym.Scope)
-	}
+		return true
+	})
 }
 
 func (rc *redefinitionConformanceChecker) check(sym *symbols.Symbol) {

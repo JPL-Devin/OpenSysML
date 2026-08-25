@@ -26,7 +26,7 @@ func (FeatureReferencePass) Run(ctx *Context, name string, root *ast.RootNamespa
 		model:    ctx.Model(),
 		resolver: ctx.Resolver(),
 	}}
-	w := &w8cWalker{seen: map[*symbols.Symbol]bool{}}
+	w := &w8cWalker{ctx: ctx, seen: map[*symbols.Symbol]bool{}}
 	w.walk(rootScope, c.checkSymbol)
 	c.walkFilters(rootScope, make(map[*symbols.Scope]bool))
 	return c.diags
@@ -102,11 +102,12 @@ func (c *featureReferenceChecker) walkFilters(scope *symbols.Scope, seen map[*sy
 	for _, f := range symbols.ImportFiltersIn(scope) {
 		c.walkExpr(refSite{inElementFilter: true}, f.Scope, f.Expr)
 	}
-	for _, sym := range scope.AllMembers() {
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
 		if sym != nil {
 			c.walkFilters(sym.Scope, seen)
 		}
-	}
+		return true
+	})
 }
 
 // walkMembers visits the expressions a body writes outside a declaration of its

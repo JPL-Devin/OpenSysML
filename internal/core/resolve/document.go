@@ -725,13 +725,19 @@ func declaredNameIn(sym *symbols.Symbol, decl ast.Node) string {
 	if sym == nil || sym.Scope == nil || decl == nil {
 		return ""
 	}
-	for _, member := range sym.Scope.AllMembers() {
+	var found *symbols.Symbol
+	sym.Scope.ForEachMember(func(member *symbols.Symbol) bool {
 		if member.Decl == decl {
-			if i := strings.LastIndex(member.Name, "::"); i >= 0 {
-				return member.Name[i+2:]
-			}
-			return member.Name
+			found = member
+			return false
 		}
+		return true
+	})
+	if found != nil {
+		if i := strings.LastIndex(found.Name, "::"); i >= 0 {
+			return found.Name[i+2:]
+		}
+		return found.Name
 	}
 	return ""
 }
