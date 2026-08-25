@@ -1,0 +1,169 @@
+# What a real Flexo MMS stack does with this project's RDF, measured by
+# TestFlexoInterop. This is a ratchet: every line is adjudicated, and a change to
+# one is a change in interoperability, not a change in the harness.
+#
+# Regenerate against a running stack (see .agents/skills/flexo-interop):
+#   FLEXO_INTEROP=1 FLEXO_INTEROP_TOKEN=<jwt> \
+#     go test -count=1 ./internal/interop/flexo -run TestFlexoInterop -update-flexo
+#
+# graph-load is the Turtle this project writes, loaded through Layer 1's graph
+# endpoint. json-commit is the same model posted through the SysML v2 service's
+# own commit path: the ground truth for what its read path can carry at all.
+# Server-generated commit ids, timestamps and durations are not recorded.
+
+[graph]
+fixture	model.sysml
+subjects	29
+triples	173
+bytes	8030
+triples.rdf	29
+triples.sysml	88
+triples.sysx	56
+
+[graph-load]
+accepted	yes
+commits	1
+elements.written	29
+elements.listed	29
+elements.unexpected	0
+listing.responses	1
+elements.readable-directly	21
+roots.reported	29
+roots.in-model	9
+
+[graph-load.properties]
+sysml:annotatedElement	written=1	delivered=1	multi-valued=0
+sysml:argument	written=2	delivered=2	multi-valued=0
+sysml:body	written=2	delivered=2	multi-valued=0
+sysml:declaredName	written=18	delivered=18	multi-valued=0
+sysml:declaredShortName	written=1	delivered=1	multi-valued=0
+sysml:isAbstract	written=1	delivered=1	multi-valued=0
+sysml:owningNamespace	written=20	delivered=20	multi-valued=0
+sysml:qualifiedName	written=21	delivered=21	multi-valued=0
+sysml:referent	written=2	delivered=2	multi-valued=0
+sysml:specializes	written=3	delivered=2	multi-valued=1
+sysml:targetFeature	written=2	delivered=2	multi-valued=0
+sysml:type	written=6	delivered=6	multi-valued=0
+sysml:upperBound	written=1	delivered=1	multi-valued=0
+sysml:value	written=7	delivered=7	multi-valued=0
+sysx:argumentIndex	written=2	delivered=0	multi-valued=0
+sysx:declaredKeyword	written=1	delivered=0	multi-valued=0
+sysx:endForm	written=1	delivered=0	multi-valued=0
+sysx:endIndex	written=2	delivered=0	multi-valued=0
+sysx:hasBody	written=18	delivered=0	multi-valued=0
+sysx:memberIndex	written=21	delivered=0	multi-valued=0
+sysx:relatedFeature	written=1	delivered=0	multi-valued=1
+sysx:sourceText	written=9	delivered=0	multi-valued=0
+
+[graph-load.elements]
+Interop	type=Package	listed=yes	direct=ok	properties=2/4	lost=sysx:hasBody,sysx:memberIndex
+Interop__Battery	type=PartDefinition	listed=yes	direct=ok	properties=4/7	lost=sysml:specializes,sysx:hasBody,sysx:memberIndex
+Interop__Battery__capacity	type=AttributeUsage	listed=yes	direct=ok	properties=4/6	lost=sysx:hasBody,sysx:memberIndex
+Interop__Battery__capacity.value	type=LiteralRational	listed=yes	direct=refused(400)	properties=1/2	lost=sysx:sourceText
+Interop__Component	type=PartDefinition	listed=yes	direct=ok	properties=3/5	lost=sysx:hasBody,sysx:memberIndex
+Interop__Component__mass	type=AttributeUsage	listed=yes	direct=ok	properties=4/6	lost=sysx:hasBody,sysx:memberIndex
+Interop__Component__mass.value	type=LiteralRational	listed=yes	direct=refused(400)	properties=1/2	lost=sysx:sourceText
+Interop__GroundStation	type=PartDefinition	listed=yes	direct=ok	properties=3/5	lost=sysx:hasBody,sysx:memberIndex
+Interop__GroundStation__uplink	type=PortUsage	listed=yes	direct=ok	properties=4/6	lost=sysx:hasBody,sysx:memberIndex
+Interop__Mission	type=PartDefinition	listed=yes	direct=ok	properties=3/5	lost=sysx:hasBody,sysx:memberIndex
+Interop__Mission___402	type=ConnectionUsage	listed=yes	direct=ok	properties=2/7	lost=sysx:declaredKeyword,sysx:endForm,sysx:memberIndex,sysx:relatedFeature,sysx:sourceText
+Interop__Mission___402.end0	type=FeatureChainExpression	listed=yes	direct=refused(400)	properties=2/4	lost=sysx:endIndex,sysx:sourceText
+Interop__Mission___402.end0.a0	type=FeatureReferenceExpression	listed=yes	direct=refused(400)	properties=1/3	lost=sysx:argumentIndex,sysx:sourceText
+Interop__Mission___402.end1	type=FeatureChainExpression	listed=yes	direct=refused(400)	properties=2/4	lost=sysx:endIndex,sysx:sourceText
+Interop__Mission___402.end1.a0	type=FeatureReferenceExpression	listed=yes	direct=refused(400)	properties=1/3	lost=sysx:argumentIndex,sysx:sourceText
+Interop__Mission__rover	type=PartUsage	listed=yes	direct=ok	properties=4/6	lost=sysx:hasBody,sysx:memberIndex
+Interop__Mission__station	type=PartUsage	listed=yes	direct=ok	properties=4/6	lost=sysx:hasBody,sysx:memberIndex
+Interop__Powered	type=PartDefinition	listed=yes	direct=ok	properties=3/5	lost=sysx:hasBody,sysx:memberIndex
+Interop__Rover	type=PartDefinition	listed=yes	direct=ok	properties=4/6	lost=sysx:hasBody,sysx:memberIndex
+Interop__Rover__battery	type=PartUsage	listed=yes	direct=ok	properties=4/6	lost=sysx:hasBody,sysx:memberIndex
+Interop__Rover__telemetry	type=PortUsage	listed=yes	direct=ok	properties=4/6	lost=sysx:hasBody,sysx:memberIndex
+Interop__Rover__wheels	type=PartUsage	listed=yes	direct=ok	properties=5/7	lost=sysx:hasBody,sysx:memberIndex
+Interop__Rover__wheels.upperBound	type=LiteralInteger	listed=yes	direct=refused(400)	properties=1/2	lost=sysx:sourceText
+Interop__TelemetryPort	type=PortDefinition	listed=yes	direct=ok	properties=3/5	lost=sysx:hasBody,sysx:memberIndex
+Interop__Wheel	type=PartDefinition	listed=yes	direct=ok	properties=5/7	lost=sysx:hasBody,sysx:memberIndex
+Interop__Wheel__diameter	type=AttributeUsage	listed=yes	direct=ok	properties=4/6	lost=sysx:hasBody,sysx:memberIndex
+Interop__Wheel__diameter.value	type=LiteralRational	listed=yes	direct=refused(400)	properties=1/2	lost=sysx:sourceText
+Interop___400	type=Documentation	listed=yes	direct=ok	properties=3/4	lost=sysx:memberIndex
+Interop___409	type=Comment	listed=yes	direct=ok	properties=4/5	lost=sysx:memberIndex
+
+[json-commit]
+accepted	yes
+commits	1
+elements.written	33
+elements.listed	33
+elements.unexpected	0
+listing.responses	1
+elements.readable-directly	33
+roots.reported	1
+roots.in-model	1
+
+[json-commit.properties]
+aliasIds	written=1	delivered=1	multi-valued=0
+annotatedElement	written=1	delivered=1	multi-valued=0
+argument	written=2	delivered=2	multi-valued=0
+body	written=2	delivered=2	multi-valued=0
+connectorEnd	written=1	delivered=1	multi-valued=0
+declaredName	written=18	delivered=18	multi-valued=0
+declaredShortName	written=1	delivered=1	multi-valued=0
+documentation	written=1	delivered=1	multi-valued=0
+elementId	written=33	delivered=33	multi-valued=0
+general	written=4	delivered=4	multi-valued=0
+isAbstract	written=8	delivered=8	multi-valued=0
+ownedElement	written=7	delivered=7	multi-valued=0
+ownedSpecialization	written=3	delivered=3	multi-valued=0
+owner	written=33	delivered=33	multi-valued=0
+qualifiedName	written=21	delivered=21	multi-valued=0
+referent	written=2	delivered=2	multi-valued=0
+specific	written=4	delivered=4	multi-valued=0
+targetFeature	written=2	delivered=2	multi-valued=0
+type	written=6	delivered=6	multi-valued=0
+upperBound	written=1	delivered=1	multi-valued=0
+value	written=7	delivered=7	multi-valued=0
+
+[json-commit.elements]
+Interop	type=Package	listed=yes	direct=ok	properties=5/5
+Interop__Battery	type=PartDefinition	listed=yes	direct=ok	properties=8/8
+Interop__Battery__capacity	type=AttributeUsage	listed=yes	direct=ok	properties=5/5
+Interop__Battery__capacity_value	type=LiteralRational	listed=yes	direct=ok	properties=3/3
+Interop__Battery__spec0	type=Subclassification	listed=yes	direct=ok	properties=4/4
+Interop__Battery__spec1	type=Subclassification	listed=yes	direct=ok	properties=4/4
+Interop__Component	type=PartDefinition	listed=yes	direct=ok	properties=6/6
+Interop__Component__mass	type=AttributeUsage	listed=yes	direct=ok	properties=5/5
+Interop__Component__mass_value	type=LiteralRational	listed=yes	direct=ok	properties=3/3
+Interop__GroundStation	type=PartDefinition	listed=yes	direct=ok	properties=6/6
+Interop__GroundStation__uplink	type=PortUsage	listed=yes	direct=ok	properties=5/5
+Interop__Mission	type=PartDefinition	listed=yes	direct=ok	properties=6/6
+Interop__Mission___402	type=ConnectionUsage	listed=yes	direct=ok	properties=4/4
+Interop__Mission___402_end0	type=FeatureChainExpression	listed=yes	direct=ok	properties=4/4
+Interop__Mission___402_end0_a0	type=FeatureReferenceExpression	listed=yes	direct=ok	properties=3/3
+Interop__Mission___402_end1	type=FeatureChainExpression	listed=yes	direct=ok	properties=4/4
+Interop__Mission___402_end1_a0	type=FeatureReferenceExpression	listed=yes	direct=ok	properties=3/3
+Interop__Mission__rover	type=PartUsage	listed=yes	direct=ok	properties=5/5
+Interop__Mission__station	type=PartUsage	listed=yes	direct=ok	properties=5/5
+Interop__Powered	type=PartDefinition	listed=yes	direct=ok	properties=5/5
+Interop__Rover	type=PartDefinition	listed=yes	direct=ok	properties=8/8
+Interop__Rover__battery	type=PartUsage	listed=yes	direct=ok	properties=5/5
+Interop__Rover__spec0	type=Subclassification	listed=yes	direct=ok	properties=4/4
+Interop__Rover__telemetry	type=PortUsage	listed=yes	direct=ok	properties=5/5
+Interop__Rover__wheels	type=PartUsage	listed=yes	direct=ok	properties=6/6
+Interop__Rover__wheels_upperBound	type=LiteralInteger	listed=yes	direct=ok	properties=3/3
+Interop__TelemetryPort	type=PortDefinition	listed=yes	direct=ok	properties=5/5
+Interop__Wheel	type=PartDefinition	listed=yes	direct=ok	properties=8/8
+Interop__Wheel__diameter	type=AttributeUsage	listed=yes	direct=ok	properties=5/5
+Interop__Wheel__diameter_value	type=LiteralRational	listed=yes	direct=ok	properties=3/3
+Interop__Wheel__spec0	type=Subclassification	listed=yes	direct=ok	properties=4/4
+Interop___400	type=Documentation	listed=yes	direct=ok	properties=4/4
+Interop___409	type=Comment	listed=yes	direct=ok	properties=5/5
+
+[findings]
+graph-load: 29 of 29 elements listed, 86 of 142 properties delivered
+json-commit: 33 of 33 elements listed, 158 of 158 properties delivered
+graph-load: 8 properties are in the sysx: extension namespace and are dropped unread — extractModelElementToJson ignores every predicate outside the sysml: vocabulary and the JSON annotation namespace (sysx:argumentIndex, sysx:declaredKeyword, sysx:endForm, sysx:endIndex, sysx:hasBody, sysx:memberIndex, sysx:relatedFeature, sysx:sourceText)
+graph-load: no element carries sysml:elementId, which the service's own paged listing query selects on; the deployed listing route ignores that query and returns every subject of the branch graph instead, so the loaded elements are visible today only because paging is unimplemented
+graph-load: 2 properties carry more than one value on some element (sysml:specializes on 1, sysx:relatedFeature on 1); a standard predicate with several values is skipped entirely unless a JSON annotation supplies the array
+graph-load: 8 elements cannot be read directly because their ids are not [a-zA-Z0-9_-]+ — the encoder writes expression-node ids with a '.' (Interop__Battery__capacity.value, Interop__Component__mass.value, Interop__Mission___402.end0, Interop__Mission___402.end0.a0, Interop__Mission___402.end1, Interop__Mission___402.end1.a0, Interop__Rover__wheels.upperBound, Interop__Wheel__diameter.value)
+graph-load: the roots endpoint reports 29 of 29 elements as roots (9 have no owner in the model); it filters on sysml:owner and sysml:owningRelatedElement, neither of which the graph carries
+json-commit: the roots endpoint reports 1 of 33 elements as roots, 1 in the payload
+both: the element listing answered 29 elements in one response at pageSize=10 — the service accepts pageAfter/pageBefore/pageSize and ignores them
+json-commit: every multi-valued property survives, because the commit path stores each array whole as a JSON annotation literal alongside the typed triples
+graph-load: 8 of 29 subjects of the graph are expression nodes or other subjects outside the element namespace
