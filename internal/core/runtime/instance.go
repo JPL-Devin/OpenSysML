@@ -143,13 +143,13 @@ func (ctx *Context) instantiateAs(sym *symbols.Symbol, id int64) (*Instance, err
 func (ctx *Context) instantiateOwnedBy(sym *symbols.Symbol, id int64, owner *Instance, feature string) (*Instance, error) {
 	// A creation that fails leaves none of the objects it reached behind, however
 	// deeply nested or however a behavior of it addressed them.
-	existing := ctx.liveInstanceIDs()
+	mark := len(ctx.created)
 	inst, err := ctx.materializeOwnedBy(sym, id, owner, feature)
 	if err != nil {
-		ctx.abandonInstancesSince(existing)
+		ctx.abandonInstancesSince(mark)
 		return nil, err
 	}
-	if err := ctx.startClassifierBehaviors(inst, existing); err != nil {
+	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
 		return nil, err
 	}
 	return inst, nil
@@ -243,14 +243,14 @@ func (ctx *Context) occurrenceOf(sym *symbols.Symbol) (*Instance, error) {
 	}
 	// The occurrence is recorded before its behaviors start, so a behavior that
 	// reaches the usage it belongs to reads this object rather than a second one.
-	existing := ctx.liveInstanceIDs()
+	mark := len(ctx.created)
 	inst, err := ctx.materialize(sym, 0)
 	if err != nil {
-		ctx.abandonInstancesSince(existing)
+		ctx.abandonInstancesSince(mark)
 		return nil, err
 	}
 	ctx.occurrences[sym] = inst.ID
-	if err := ctx.startClassifierBehaviors(inst, existing); err != nil {
+	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
 		return nil, err
 	}
 	return inst, nil
@@ -490,15 +490,15 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		if !mult.Upper.Infinite && mult.Upper.Value == 1 {
 			// Scalar: instantiate one, held by this feature before its behaviors
 			// start, so one addressing it back reads the object held here.
-			existing := ctx.liveInstanceIDs()
+			mark := len(ctx.created)
 			childInst, err := ctx.materializeOwnedBy(composite, 0, inst, name)
 			if err != nil {
-				ctx.abandonInstancesSince(existing)
+				ctx.abandonInstancesSince(mark)
 				return nil, err
 			}
 			fv.Value = Value{Kind: ValInstance, Instance: childInst.ID}
 			fv.Materialized = true
-			if err := ctx.startClassifierBehaviors(childInst, existing); err != nil {
+			if err := ctx.startClassifierBehaviors(childInst, mark); err != nil {
 				return nil, err
 			}
 		} else {
@@ -530,12 +530,12 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 			}
 			// The whole collection is held before any of its objects starts, so a
 			// behavior reading the feature back reads the objects held in it.
-			existing := ctx.liveInstanceIDs()
+			mark := len(ctx.created)
 			children := make([]*Instance, 0, count)
 			for i := 0; i < count; i++ {
 				childInst, err := ctx.materializeOwnedBy(composite, 0, inst, name)
 				if err != nil {
-					ctx.abandonInstancesSince(existing)
+					ctx.abandonInstancesSince(mark)
 					return nil, err
 				}
 				seq.Append(Value{Kind: ValInstance, Instance: childInst.ID})
@@ -543,7 +543,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 			}
 			fv.Values = Value{Kind: ValSequence, Sequence: seq}
 			fv.Materialized = true
-			if err := ctx.startClassifierBehaviorsOf(children, existing); err != nil {
+			if err := ctx.startClassifierBehaviorsOf(children, mark); err != nil {
 				return nil, err
 			}
 		}

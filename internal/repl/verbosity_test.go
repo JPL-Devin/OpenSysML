@@ -106,6 +106,24 @@ func TestDiagnosticLinesAreRelativeToTheSubmission(t *testing.T) {
 	rejects(t, got, "5:")
 }
 
+func TestLocatedDiagnosticsAreRelativeToEachSnippet(t *testing.T) {
+	s := NewSession()
+	s.SubmitFiles([]SourceFile{
+		{Name: "first.sysml", Text: "package First {\n\tprivate import Missing::X;\n}"},
+		{Name: "second.sysml", Text: "package Second {\n\tprivate import Missing::Y;\n}"},
+	})
+
+	got := s.LocatedDiagnostics()
+	if len(got) != 2 {
+		t.Fatalf("LocatedDiagnostics() returned %d diagnostics, want 2: %v", len(got), got)
+	}
+	for _, d := range got {
+		if d.Line != 2 || d.Column == 0 {
+			t.Errorf("diagnostic location = %+v, want line 2 with a column", d)
+		}
+	}
+}
+
 // Quiet drops warnings; normal keeps them. Neither drops an error.
 func TestVerbosityFiltersBySeverity(t *testing.T) {
 	quiet := strings.Join(renderResult(NewSession().Submit(warningSrc), VerbosityQuiet), "\n")

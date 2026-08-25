@@ -123,46 +123,36 @@ func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierB
 // event, no runnable do action, no deliverable message. A start reached from
 // inside a running behavior only attaches, leaving the run to the outermost
 // start, so materializing objects that exhibit each other terminates.
-func (ctx *Context) startClassifierBehaviors(inst *Instance, existing map[int64]bool) error {
-	return ctx.startClassifierBehaviorsOf([]*Instance{inst}, existing)
+func (ctx *Context) startClassifierBehaviors(inst *Instance, mark int) error {
+	return ctx.startClassifierBehaviorsOf([]*Instance{inst}, mark)
 }
 
 // startClassifierBehaviorsOf starts the behaviors of every one of the objects as
 // one collective run, so objects materialized together exchange messages.
-func (ctx *Context) startClassifierBehaviorsOf(objects []*Instance, existing map[int64]bool) error {
+func (ctx *Context) startClassifierBehaviorsOf(objects []*Instance, mark int) error {
 	attached := len(ctx.objectBehaviors)
 	if err := ctx.startBehaviorsOfAll(objects); err != nil {
 		// A creation that failed leaves nothing behind: neither the objects its
 		// behaviors materialized nor any behavior of theirs survives into the next,
 		// unrelated command.
 		ctx.forgetBehaviorsFrom(attached)
-		ctx.abandonInstancesSince(existing)
+		ctx.abandonInstancesSince(mark)
 		return err
 	}
 	return nil
 }
 
-// liveInstanceIDs are the objects the session holds, so a failed start can tell
-// what it materialized from what was already there.
-func (ctx *Context) liveInstanceIDs() map[int64]bool {
-	live := make(map[int64]bool, len(ctx.instances))
-	for id := range ctx.instances {
-		live[id] = true
-	}
-	return live
-}
-
-// abandonInstancesSince removes every object materialized since the snapshot,
-// which a failed creation would otherwise leave running nothing, along with the
-// occurrences naming them: a later read materializes the usage afresh.
-func (ctx *Context) abandonInstancesSince(existing map[int64]bool) {
+// abandonInstancesSince removes objects registered after mark, which a failed
+// creation would otherwise leave behind, along with occurrences naming them.
+func (ctx *Context) abandonInstancesSince(mark int) {
 	abandoned := make(map[int64]bool)
-	for id := range ctx.instances {
-		if !existing[id] {
+	for _, id := range ctx.created[mark:] {
+		if _, live := ctx.instances[id]; live {
 			abandoned[id] = true
 			delete(ctx.instances, id)
 		}
 	}
+	ctx.created = ctx.created[:mark]
 	if len(abandoned) == 0 {
 		return
 	}

@@ -191,9 +191,15 @@ func (s *Session) LocatedDiagnostics() []Diagnostic {
 		return nil
 	}
 	out := make([]Diagnostic, 0, len(diags))
+	indexes := make(map[int]*source.LineIndex, len(s.snippets))
 	for _, d := range diags {
 		sn, start := s.snippetAt(d.Span.Offset)
-		p := source.New(docName, []byte(sn.src)).Lines().PosAt(d.Span.Offset - start)
+		lines, ok := indexes[start]
+		if !ok {
+			lines = source.New(docName, []byte(sn.src)).Lines()
+			indexes[start] = lines
+		}
+		p := lines.PosAt(d.Span.Offset - start)
 		out = append(out, Diagnostic{
 			Severity: d.Severity.String(),
 			Message:  d.Message,

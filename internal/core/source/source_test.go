@@ -53,3 +53,10 @@ func TestLineIndexOffsetAt(t *testing.T) {
 		t.Fatalf("OffsetAt(2,1) = %d, want 5", got)
 	}
 }
+
+func TestSourceFileLinesCachesIndex(t *testing.T) {
+	sf := New("t.sysml", []byte("part\ndef\nE"))
+	if first, second := sf.Lines(), sf.Lines(); first != second {
+		t.Fatal("Lines returned different indexes")
+	}
+}

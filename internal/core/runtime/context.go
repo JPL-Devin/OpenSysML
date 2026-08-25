@@ -21,6 +21,7 @@ type Context struct {
 	steps     int64
 	maxSteps  int64
 	instances map[int64]*Instance
+	created   []int64
 
 	// maxActionSteps, maxStateEvents and maxDoSteps bound the executors this
 	// context runs: token-flow steps, dispatched events, and do actions.
@@ -386,6 +387,7 @@ func (ctx *Context) registerInstance(inst *Instance) {
 		panic(fmt.Sprintf("runtime: duplicate instance ID %d", inst.ID))
 	}
 	ctx.instances[inst.ID] = inst
+	ctx.created = append(ctx.created, inst.ID)
 }
 
 // EvaluateConstraint evaluates a constraint definition/usage naming no object:
