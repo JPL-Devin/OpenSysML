@@ -45,11 +45,12 @@ func main() {
 		exitWithParent = flag.Bool("exit-with-parent", false,
 			"Exit at end of file on stdin, so a child cannot outlive the process that "+
 				"holds the write end of a pipe on it, SIGKILL included")
-		transport = flag.String("transport", transportGRPC,
-			"Transport to serve: grpc (grpc-go, the default), connect (gRPC, gRPC-Web and "+
-				"the Connect protocol on one port), or stdio (one client over stdin/stdout). "+
-				"connect and stdio are evaluation prototypes; see "+
-				"docs/internals/design/transport-evaluation.md")
+		transport = flag.String("transport", transportConnect,
+			"Transport to serve: connect (default; gRPC, gRPC-Web and Connect on one port), "+
+				"grpc (grpc-go only), or stdio (an evaluation prototype over stdin/stdout)")
+		corsOrigins = flag.String("cors-allowed-origins", "", "Comma-separated exact origins allowed for browser CORS")
+		tlsCert     = flag.String("tls-cert", "", "TLS certificate file for the main server")
+		tlsKey      = flag.String("tls-key", "", "TLS private key file for the main server")
 	)
 	flag.Parse()
 
@@ -57,6 +58,15 @@ func main() {
 	case transportGRPC, transportConnect, transportStdio:
 	default:
 		fmt.Fprintf(os.Stderr, "sysml-grpc: unknown -transport %q; want grpc, connect or stdio\n", *transport)
+		os.Exit(2)
+	}
+	if (*tlsCert == "") != (*tlsKey == "") {
+		fmt.Fprintln(os.Stderr, "sysml-grpc: -tls-cert and -tls-key must be supplied together")
+		os.Exit(2)
+	}
+	origins, err := parseCORSOrigins(*corsOrigins)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "sysml-grpc: %v\n", err)
 		os.Exit(2)
 	}
 
@@ -124,17 +134,24 @@ func main() {
 	}
 
 	// Start health check server
-	healthSrv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", *healthPort),
-		Handler:           healthHandler(Version),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	go func() {
-		slog.Info("Health check server listening", "addr", healthSrv.Addr)
-		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("Health check server failed", "error", err)
+	var healthSrv *http.Server
+	if *healthPort != 0 {
+		healthSrv = &http.Server{
+			Addr:              fmt.Sprintf(":%d", *healthPort),
+			Handler:           healthHandler(Version),
+			ReadHeaderTimeout: 10 * time.Second,
 		}
-	}()
+		go func() {
+			slog.Info("Health check server listening", "addr", healthSrv.Addr)
+			if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("Health check server failed", "error", err)
+			}
+		}()
+		if *transport == transportConnect {
+			slog.Warn("the separate health listener is deprecated; /health is served on the main port and -health-port 0 disables it",
+				"health_port", *healthPort)
+		}
+	}
 
 	// Start gRPC server
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
@@ -162,7 +179,7 @@ func main() {
 	if *transport == transportConnect {
 		serveCtx, cancelServe := context.WithCancel(context.Background())
 		served := make(chan error, 1)
-		go func() { served <- serveConnect(serveCtx, lis, svc, Version) }()
+		go func() { served <- serveConnect(serveCtx, lis, svc, Version, origins, *tlsCert, *tlsKey) }()
 
 		select {
 		case err := <-served:
@@ -251,6 +268,9 @@ func exitWhenStdinCloses(shutdown chan<- os.Signal) {
 // stopHealthServer shuts the health check server down, allowing it a moment to
 // finish the requests it has in hand.
 func stopHealthServer(healthSrv *http.Server) {
+	if healthSrv == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := healthSrv.Shutdown(ctx); err != nil {

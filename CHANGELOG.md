@@ -35,6 +35,44 @@ same service release, sharing its parse cache, and is stopped when the last of t
   so it no longer has any effect; the binary is cached in `~/.opensysml/bin` as before.
 - `filelock` and `psutil` are no longer runtime dependencies of the client.
 
+### Connect is the default server transport
+
+`sysml-grpc` now serves gRPC, gRPC-Web and the Connect protocol on one port, so a browser or
+a plain `curl` reaches the service without a proxy and without generated code. Existing gRPC
+clients — the `opensysml` Python client, `grpcurl`, any generated `grpc-go` stub — reach the
+new default unchanged; `-transport grpc` still serves the gRPC-only server for anything that
+needs exactly the old surface.
+
+`GET /health` answers on the main port. `-health-port` still binds its second listener and
+still works, now with a deprecation warning, and `-health-port 0` turns it off; the default
+becomes `0` in a later release. Nothing in this repository polls it — the Python readiness
+probe is a gRPC call.
+
+Two browser prerequisites are now configurable rather than absent: `-cors-allowed-origins`
+takes exact origins and refuses `*` at startup, and `-tls-cert`/`-tls-key` serve every
+protocol over HTTPS on the same port. `application/grpc-web-text` remains unimplemented and
+answers 415, which affects no `fetch`-based client.
+
+Protobuf is the body encoding to use: a 468 KB `Query` answer costs ~6.5 ms as protobuf and
+~40 ms as JSON, from `protojson` CPU rather than the 9.7% extra bytes. JSON is the debugging
+affordance, a large JSON response now logs a warning, and
+[reference/service-transports.md](docs/reference/service-transports.md) says so where a client
+author will read it. The conformance suite runs every scenario once per protocol so the second
+surface cannot rot.
+
+`-transport stdio` stays as a prototype behind its flag: not the default, and not a transport
+any published client speaks. The transports reference says so, and the binary's wiring of it is
+now covered by a test.
+
+### Fixed
+
+The conformance comparer no longer compares integral fields within the tolerance it allows a
+`Real`. Every numeric field was normalized to a `float64`, so a relative tolerance of 1e-9
+reached counts, ids and spans as well — 1,000,000,000,500 matched 1,000,000,000,000 — and a
+whole number above 2^53 could not be represented exactly in the first place. Integral values
+now carry an integral type and are compared by their digits, expected numbers are read as
+literals rather than floats, and the tolerance applies to `Real` alone.
+
 ## 0.2.1 — 2026-08-24
 
 A conformance patch, a round of performance work, and a supply-chain improvement. The

@@ -84,7 +84,9 @@ validation:
     unrecognized_links: warn
     anchors: warn
 
-not_in_nav: |
+# Publish what a user or contributor reads; engineering records under docs/project/
+# and staged plans stay in the repository and are read on GitHub.
+exclude_docs: |
   API.md
   ARCHITECTURE.md
   MACOS_DISTRIBUTION.md
@@ -93,6 +95,20 @@ not_in_nav: |
   RELEASING.md
   SPEC_COMPLIANCE.md
   TRAINING_EXAMPLES.md
+  internals/design/**
+  internals/notes/**
+  project/*.json
+  project/omg-issues.md
+  project/releasing.md
+  project/macos-distribution.md
+  project/demo.md
+  project/training-examples.md
+  project/pilot-corpora.md
+  project/pilot-xpect.md
+  project/pilot-rejection.md
+  project/pilot-execution-referee.md
+  project/grammar-coverage.md
+  project/wave*.md
 
 nav:
   - Documentation: README.md
@@ -117,6 +133,7 @@ nav:
       - Language server: reference/lsp.md
       - Go API: reference/api.md
       - Python API: reference/python-api.md
+      - Service transports: reference/service-transports.md
       - RDF mapping: reference/rdf-mapping.md
       - Grammar: reference/grammar/README.md
       - Grammar conformance audit: reference/grammar/conformance-audit.md
@@ -125,46 +142,8 @@ nav:
       - Architecture: internals/architecture.md
       - Testing: internals/testing.md
       - Performance: internals/performance.md
-      - Design notes:
-          - internals/design/README.md
-          - internals/design/action-executor.md
-          - internals/design/orthogonal-regions.md
-          - internals/design/pseudostates.md
-          - internals/design/python-grpc-bindings.md
-          - internals/design/python-grpc-phase1-plan.md
-          - internals/design/python-grpc-phase2-plan.md
-          - internals/design/python-grpc-phase3-plan.md
-          - internals/design/python-grpc-phase3-fixes.md
-          - internals/design/python-grpc-phase4-plan.md
-          - internals/design/transport-evaluation.md
-          - internals/design/vscode-visual-modeling.md
-      - Plans:
-          - internals/notes/README.md
-          - internals/notes/behavior-robustness-plan.md
-          - internals/notes/lowering-integration-plan.md
-          - internals/notes/parser-robustness-plan.md
   - Project:
       - project/README.md
       - Spec compliance: project/spec-compliance.md
-      - Training examples: project/training-examples.md
-      - Pilot corpora gate: project/pilot-corpora.md
       - Pilot differential: project/pilot-differential.md
-      - Pilot execution referee: project/pilot-execution-referee.md
-      - Pilot Xpect expectations: project/pilot-xpect.md
-      - Pilot rejection oracle: project/pilot-rejection.md
-      - Grammar coverage: project/grammar-coverage.md
-      - Validation adjudications: project/wave10-decisions.md
-      - Parser findings: project/wave11b-parser-findings.md
-      - Metadata and evaluability: project/wave11d-metadata-evaluability.md
-      - KerML validation and visibility decisions: project/wave11e-decisions.md
-      - Element-scoped tier gating: project/wave12a-element-gating.md
-      - Lossless library records: project/wave12c-lossless-library-records.md
-      - Parser recovery decisions: project/wave12d-decisions.md
-      - Scope enumeration and visibility decisions: project/wave12e-decisions.md
-      - Our false positives: project/wave12f-false-positives.md
-      - Declared errata overlay: project/wave14-errata.md
       - Roadmap: project/roadmap.md
-      - Releasing: project/releasing.md
-      - macOS distribution: project/macos-distribution.md
-      - OMG issues: project/omg-issues.md
-      - Demo: project/demo.md

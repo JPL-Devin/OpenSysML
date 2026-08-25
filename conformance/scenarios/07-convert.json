@@ -1,0 +1,116 @@
+{
+  "scenarios": [
+    {
+      "id": "convert/notation_to_notation_keeps_the_model_and_is_not_experimental",
+      "description": "A round trip through the writer keeps declarations and comments, and says it is stable.",
+      "rpc": "Convert",
+      "requires_capabilities": [
+        "convert"
+      ],
+      "request": {
+        "content": "${fixture:vehicle.sysml}",
+        "from_format": "sysml",
+        "to_format": "sysml"
+      },
+      "expect": {
+        "contains_all": {
+          "content": [
+            "part def Vehicle",
+            "attribute mass"
+          ]
+        },
+        "response": {
+          "from_format": "sysml",
+          "to_format": "sysml"
+        },
+        "absent": [
+          "error",
+          "experimental"
+        ]
+      }
+    },
+    {
+      "id": "convert/a_named_alias_is_answered_with_the_canonical_format",
+      "description": "Asking for turtle answers ttl, so a client learns the name the service uses.",
+      "rpc": "Convert",
+      "requires_capabilities": [
+        "convert"
+      ],
+      "request": {
+        "content": "${fixture:vehicle.sysml}",
+        "from_format": "sysml",
+        "to_format": "turtle"
+      },
+      "expect": {
+        "response": {
+          "to_format": "ttl",
+          "experimental": true
+        },
+        "non_empty": [
+          "content",
+          "experimental_notice"
+        ]
+      }
+    },
+    {
+      "id": "convert/a_parsed_model_converts_by_hash",
+      "description": "A model already parsed is convertible without resending its source.",
+      "rpc": "Convert",
+      "requires_capabilities": [
+        "convert"
+      ],
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "to_format": "sysml"
+      },
+      "expect": {
+        "contains_all": {
+          "content": [
+            "part def Vehicle"
+          ]
+        },
+        "absent": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "convert/an_empty_target_format_is_invalid",
+      "rpc": "Convert",
+      "requires_capabilities": [
+        "convert"
+      ],
+      "request": {
+        "content": "${fixture:vehicle.sysml}",
+        "from_format": "sysml"
+      },
+      "expect": {
+        "status": "INVALID_ARGUMENT"
+      }
+    },
+    {
+      "id": "convert/a_syntax_error_refuses_the_conversion_unless_tolerated",
+      "description": "By default unreadable notation is refused rather than written back lossily.",
+      "rpc": "Convert",
+      "requires_capabilities": [
+        "convert"
+      ],
+      "request": {
+        "content": "${fixture:syntax_error.sysml}",
+        "from_format": "sysml",
+        "to_format": "sysml"
+      },
+      "expect": {
+        "non_empty": [
+          "error"
+        ],
+        "min_counts": {
+          "diagnostics": 1
+        }
+      }
+    }
+  ]
+}
