@@ -24,7 +24,7 @@ func (KerMLSubsettingMetaclassPass) Run(ctx *Context, name string, root *ast.Roo
 		return nil
 	}
 	c := &kermlSubsettingMetaclassChecker{ctx: ctx}
-	w := &w8cWalker{seen: make(map[*symbols.Symbol]bool)}
+	w := &w8cWalker{ctx: ctx, seen: make(map[*symbols.Symbol]bool)}
 	w.walk(rootScope, c.check)
 	return c.diags
 }

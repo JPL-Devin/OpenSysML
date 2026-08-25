@@ -37,14 +37,15 @@ func w8dCollectSymbols(root *symbols.Scope) []*symbols.Symbol {
 			return
 		}
 		seenScopes[scope] = true
-		for _, sym := range scope.AllMembers() {
+		scope.ForEachMember(func(sym *symbols.Symbol) bool {
 			if sym == nil || seenSyms[sym] {
-				continue
+				return true
 			}
 			seenSyms[sym] = true
 			out = append(out, sym)
 			walk(sym.Scope)
-		}
+			return true
+		})
 		for _, child := range scope.Children() {
 			walk(child)
 		}

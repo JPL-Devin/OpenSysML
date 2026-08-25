@@ -59,11 +59,12 @@ func (fc *filterChecker) walk(scope *symbols.Scope) {
 	for _, f := range symbols.ImportFiltersIn(scope) {
 		fc.check(f)
 	}
-	for _, sym := range scope.AllMembers() {
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
 		if sym != nil {
 			fc.walk(sym.Scope)
 		}
-	}
+		return true
+	})
 }
 
 // check reports the faults of one condition.

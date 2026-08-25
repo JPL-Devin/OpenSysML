@@ -25,6 +25,10 @@ func (m *Model) RedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 		return cached
 	}
 	m.redefined[sym] = nil // re-entrancy guard for cyclic declarations
+	m.computingRedefinedFeatures++
+	defer func() {
+		m.computingRedefinedFeatures--
+	}()
 
 	var out []*symbols.Symbol
 	seen := make(map[*symbols.Symbol]bool)
@@ -120,7 +124,9 @@ func (m *Model) redefinitionMask(sym *symbols.Symbol, declared bool) map[*symbol
 		return cached
 	}
 	cache[sym] = nil // re-entrancy guard: a nested query sees no mask
-	mask := m.buildMask(sym, m.maskCandidates(sym, declared))
+	mask := m.buildMaskFromCandidates(sym, func(yield func(*symbols.Symbol) bool) {
+		m.forEachMaskCandidate(sym, declared, yield)
+	})
 	cache[sym] = mask
 	return mask
 }
@@ -132,13 +138,14 @@ func (m *Model) redefinitionMaskExcluding(sym, exclude *symbols.Symbol) map[*sym
 	if m == nil || sym == nil {
 		return nil
 	}
-	candidates := make([]*symbols.Symbol, 0, 8)
-	for _, candidate := range m.maskCandidates(sym, true) {
-		if candidate != exclude {
-			candidates = append(candidates, candidate)
-		}
-	}
-	return m.buildMask(sym, candidates)
+	return m.buildMaskFromCandidates(sym, func(yield func(*symbols.Symbol) bool) {
+		m.forEachMaskCandidate(sym, true, func(candidate *symbols.Symbol) bool {
+			if candidate == exclude {
+				return true
+			}
+			return yield(candidate)
+		})
+	})
 }
 
 // buildMask closes candidates' redefinitions transitively into the set of
@@ -158,9 +165,10 @@ func (m *Model) buildMask(sym *symbols.Symbol, candidates []*symbols.Symbol) map
 	}
 	// A local declaration is present whatever it redefines.
 	if sym.Scope != nil {
-		for _, local := range sym.Scope.AllMembers() {
+		sym.Scope.ForEachMember(func(local *symbols.Symbol) bool {
 			delete(mask, local)
-		}
+			return true
+		})
 	}
 	if len(mask) == 0 {
 		return nil
@@ -168,20 +176,121 @@ func (m *Model) buildMask(sym *symbols.Symbol, candidates []*symbols.Symbol) map
 	return mask
 }
 
-// maskCandidates returns the features whose redefinitions can mask something on
-// sym: those it inherits or reference-subsets, plus, when declared, its own.
-func (m *Model) maskCandidates(sym *symbols.Symbol, declared bool) []*symbols.Symbol {
-	var out []*symbols.Symbol
+// buildMaskFromCandidates unions cached candidate closures, falling back to the
+// exact expansion when a closure is cyclic or reaches the owner.
+func (m *Model) buildMaskFromCandidates(
+	sym *symbols.Symbol,
+	iterate func(func(*symbols.Symbol) bool),
+) map[*symbols.Symbol]bool {
+	mask := make(map[*symbols.Symbol]bool)
+	fallback := false
+	iterate(func(candidate *symbols.Symbol) bool {
+		if candidate == nil {
+			return true
+		}
+		closure, cyclic := m.redefinitionClosure(candidate)
+		if cyclic || closure[sym] {
+			fallback = true
+			return false
+		}
+		for target := range closure {
+			mask[target] = true
+		}
+		return true
+	})
+	if fallback {
+		candidates := make([]*symbols.Symbol, 0, 8)
+		iterate(func(candidate *symbols.Symbol) bool {
+			candidates = append(candidates, candidate)
+			return true
+		})
+		return m.buildMask(sym, candidates)
+	}
+	if sym.Scope != nil {
+		sym.Scope.ForEachMember(func(local *symbols.Symbol) bool {
+			delete(mask, local)
+			return true
+		})
+	}
+	if len(mask) == 0 {
+		return nil
+	}
+	return mask
+}
+
+// redefinitionClosure returns the targets reached from candidate, excluding
+// edges whose target keeps the redefining feature's visible name.
+func (m *Model) redefinitionClosure(candidate *symbols.Symbol) (map[*symbols.Symbol]bool, bool) {
+	if candidate == nil {
+		return nil, false
+	}
+	if cached, ok := m.redefClosure[candidate]; ok {
+		return cached, false
+	}
+	if m.computingRedefClosure[candidate] {
+		return nil, true
+	}
+	m.computingRedefClosure[candidate] = true
+	out := make(map[*symbols.Symbol]bool)
+	cyclic := false
+	for _, target := range m.RedefinedFeatures(candidate) {
+		if sharesName(candidate, target) {
+			continue
+		}
+		out[target] = true
+		child, childCyclic := m.redefinitionClosure(target)
+		if childCyclic {
+			cyclic = true
+		}
+		for nested := range child {
+			out[nested] = true
+		}
+	}
+	delete(m.computingRedefClosure, candidate)
+	if cyclic {
+		return out, true
+	}
+	if m.computingRedefinedFeatures == 0 {
+		m.redefClosure[candidate] = out
+	}
+	return out, false
+}
+
+// forEachMaskCandidate visits features whose redefinitions can mask something
+// on sym, preserving declaration and inherited source order.
+func (m *Model) forEachMaskCandidate(sym *symbols.Symbol, declared bool, yield func(*symbols.Symbol) bool) {
+	if sym == nil || yield == nil {
+		return
+	}
 	if declared && sym.Scope != nil {
-		out = append(out, sym.Scope.AllMembers()...)
+		stopped := false
+		sym.Scope.ForEachMember(func(candidate *symbols.Symbol) bool {
+			if !yield(candidate) {
+				stopped = true
+				return false
+			}
+			return true
+		})
+		if stopped {
+			return
+		}
 	}
 	for _, src := range m.MemberSources(sym) {
 		if src == nil || src.Scope == nil {
 			continue
 		}
-		out = append(out, src.Scope.AllMembers()...)
+		stopped := false
+		src.Scope.ForEachMember(func(candidate *symbols.Symbol) bool {
+			if !yield(candidate) {
+				stopped = true
+				return false
+			}
+			return true
+		})
+		if stopped {
+			return
+		}
 	}
-	return out
 }
 
 // sharesName reports whether a redefining feature is visible under a name of
@@ -241,14 +350,14 @@ func (m *Model) declaringMask(sym *symbols.Symbol, declName string) map[*symbols
 		return cached
 	}
 	m.declMask[key] = nil // re-entrancy guard: a nested query sees no mask
-	candidates := make([]*symbols.Symbol, 0, 8)
-	for _, candidate := range m.maskCandidates(sym, false) {
-		if candidate == nil || maskLeafName(candidate.Name) == declName || candidate.ShortName == declName {
-			continue
-		}
-		candidates = append(candidates, candidate)
-	}
-	mask := m.buildMask(sym, candidates)
+	mask := m.buildMaskFromCandidates(sym, func(yield func(*symbols.Symbol) bool) {
+		m.forEachMaskCandidate(sym, false, func(candidate *symbols.Symbol) bool {
+			if candidate == nil || maskLeafName(candidate.Name) == declName || candidate.ShortName == declName {
+				return true
+			}
+			return yield(candidate)
+		})
+	})
 	m.declMask[key] = mask
 	return mask
 }

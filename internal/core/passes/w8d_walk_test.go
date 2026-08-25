@@ -35,3 +35,51 @@ func TestW8DSymbolWalkCachePreservesOrder(t *testing.T) {
 		t.Fatalf("cached symbol slice has %d symbols, want %d", len(cached), len(want))
 	}
 }
+
+func TestW8CSymbolWalkCachePreservesOrder(t *testing.T) {
+	root := symbols.NewScope(nil, nil)
+	nested := &symbols.Symbol{Name: "nested"}
+	nested.Scope = symbols.NewScope(root, nil)
+	nested.Scope.Define("leaf", &symbols.Symbol{Name: "leaf"})
+	root.Define("nested", nested)
+
+	direct := &w8cWalker{seen: make(map[*symbols.Symbol]bool)}
+	var want []*symbols.Symbol
+	direct.walk(root, func(sym *symbols.Symbol) {
+		want = append(want, sym)
+	})
+	ctx := NewContext("test.sysml", symbols.NewIndex(), nil)
+	w := &w8cWalker{ctx: ctx, seen: make(map[*symbols.Symbol]bool)}
+	var got []*symbols.Symbol
+	w.walk(root, func(sym *symbols.Symbol) {
+		got = append(got, sym)
+	})
+	if len(got) != len(want) {
+		t.Fatalf("cached W8C walk visited %d symbols, direct walk visited %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("cached W8C walk symbol %d = %p, direct walk = %p", i, got[i], want[i])
+		}
+	}
+}
+
+func TestW8CWalkerDeduplicatesOverlappingScopes(t *testing.T) {
+	root := symbols.NewScope(nil, nil)
+	shared := &symbols.Symbol{Name: "shared"}
+	overlap := symbols.NewScope(root, nil)
+	overlap.Define("shared", shared)
+	root.Define("shared", shared)
+
+	w := &w8cWalker{seen: make(map[*symbols.Symbol]bool)}
+	var got []*symbols.Symbol
+	w.walk(root, func(sym *symbols.Symbol) {
+		got = append(got, sym)
+	})
+	w.walk(overlap, func(sym *symbols.Symbol) {
+		got = append(got, sym)
+	})
+	if len(got) != 1 || got[0] != shared {
+		t.Fatalf("overlapping W8C walk visited %v, want one shared symbol", got)
+	}
+}
