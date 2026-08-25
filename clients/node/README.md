@@ -197,10 +197,10 @@ from its `os`/`cpu` metadata:
 | `@opensysml/sysml-grpc-win32-x64` | Windows x86-64 |
 
 That is a normal registry install: npm verifies the tarball against the
-registry's integrity hash, the packages carry npm provenance, and **there is no
-postinstall script and nothing is ever downloaded by this client**. An
-unsupported platform installs none of them and fails on first use with a message
-naming every way to supply one, rather than fetching something.
+registry's integrity hash, and **there is no postinstall script and nothing is
+ever downloaded by this client**. An unsupported platform installs none of them
+and fails on first use with a message naming every way to supply one, rather
+than fetching something.
 
 Resolution order:
 
@@ -306,7 +306,7 @@ commands in the `node-test` job.
 Nothing here is published yet; the procedure is in
 [docs/project/releasing.md](../../docs/project/releasing.md) under "The Node
 client". In short: the `release-node` workflow runs on a `client-node-v*` tag,
-builds the per-platform packages from the release assets, and publishes the
-client and those packages with `--provenance` from the `npm` context. It needs
+cross-compiles the binaries, builds the per-platform packages from them, and
+publishes those packages and then the client from the `npm` context. It needs
 the `@opensysml` npm organization and an automation token, which a maintainer
 supplies.
