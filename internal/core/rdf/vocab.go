@@ -63,12 +63,12 @@ func OwningMembershipIRI(qualifiedName string) Term {
 // written only on a graph that carries an expression graph.
 const ExpressionPrefix = "expr"
 
-// ExpressionIRI returns the IRI of one node of an expression graph: the local
-// id of the term it hangs off — an element or an outer subexpression — followed
-// by the path to this node, so every node's identity is derived from where it
-// sits in the model rather than minted.
+// ExpressionIRI returns the IRI of one node of an expression graph: the id of
+// the term it hangs off — an element or an outer subexpression — with the
+// position it holds, so its identity comes from where it sits in the model
+// rather than being minted, and its id is valid where an element id is.
 func ExpressionIRI(owner Term, path string) Term {
-	return IRI(Expression + LocalName(owner.Value) + "." + path)
+	return IRI(Expression + ExpressionNodeID(LocalName(owner.Value), path))
 }
 
 // SysMLTerm returns the IRI of a name in the SysML vocabulary, used for both

@@ -163,7 +163,7 @@ elmt:Values__Sized__size
     sysml:owningMembership elmt:Values__Sized__size_om ;
     sysml:declaredName "size" ;
     sysml:type "Real" ;
-    sysml:value expr:Values__Sized__size.value ;
+    sysml:value expr:Values__Sized__size_pvalue ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Values__Sized__size_om
@@ -178,9 +178,10 @@ elmt:Values__Sized__size_om
     sysml:ownedMemberFeature elmt:Values__Sized__size ;
     sysml:owningType elmt:Values__Sized .
 
-expr:Values__Sized__size.value
+expr:Values__Sized__size_pvalue
     a sysml:LiteralRational ;
     sysx:sourceText "4.5" ;
+    sysml:elementId "Values__Sized__size_pvalue" ;
     sysml:value "4.5"^^xsd:decimal .
 
 elmt:Values__Sized__label
@@ -194,7 +195,7 @@ elmt:Values__Sized__label
     sysml:owningMembership elmt:Values__Sized__label_om ;
     sysml:declaredName "label" ;
     sysml:type "String" ;
-    sysml:value expr:Values__Sized__label.value ;
+    sysml:value expr:Values__Sized__label_pvalue ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Values__Sized__label_om
@@ -209,9 +210,10 @@ elmt:Values__Sized__label_om
     sysml:ownedMemberFeature elmt:Values__Sized__label ;
     sysml:owningType elmt:Values__Sized .
 
-expr:Values__Sized__label.value
+expr:Values__Sized__label_pvalue
     a sysml:LiteralString ;
     sysx:sourceText "\"front\"" ;
+    sysml:elementId "Values__Sized__label_pvalue" ;
     sysml:value "front" .
 
 elmt:Values__Sized__total
@@ -225,7 +227,7 @@ elmt:Values__Sized__total
     sysml:owningMembership elmt:Values__Sized__total_om ;
     sysml:declaredName "total" ;
     sysml:type "Real" ;
-    sysml:value expr:Values__Sized__total.value ;
+    sysml:value expr:Values__Sized__total_pvalue ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Values__Sized__total_om
@@ -240,20 +242,23 @@ elmt:Values__Sized__total_om
     sysml:ownedMemberFeature elmt:Values__Sized__total ;
     sysml:owningType elmt:Values__Sized .
 
-expr:Values__Sized__total.value
+expr:Values__Sized__total_pvalue
     a sysml:OperatorExpression ;
     sysx:sourceText "1.0 + 2.0" ;
+    sysml:elementId "Values__Sized__total_pvalue" ;
     sysml:operator "+" ;
-    sysml:argument expr:Values__Sized__total.value.a0, expr:Values__Sized__total.value.a1 .
+    sysml:argument expr:Values__Sized__total_pvalue_pa0, expr:Values__Sized__total_pvalue_pa1 .
 
-expr:Values__Sized__total.value.a0
+expr:Values__Sized__total_pvalue_pa0
     a sysml:LiteralRational ;
     sysx:sourceText "1.0" ;
+    sysml:elementId "Values__Sized__total_pvalue_pa0" ;
     sysml:value "1.0"^^xsd:decimal ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Values__Sized__total.value.a1
+expr:Values__Sized__total_pvalue_pa1
     a sysml:LiteralRational ;
     sysx:sourceText "2.0" ;
+    sysml:elementId "Values__Sized__total_pvalue_pa1" ;
     sysml:value "2.0"^^xsd:decimal ;
     sysx:argumentIndex "1"^^xsd:integer .

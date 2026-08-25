@@ -201,7 +201,7 @@ elmt:FlowsAndViews__FuelInterface___402
     sysml:owningRelationship elmt:FlowsAndViews__FuelInterface___402_om ;
     sysml:owningMembership elmt:FlowsAndViews__FuelInterface___402_om ;
     sysx:sourceText "flow supplierPort.fuelSupply to consumerPort.fuelSupply;" ;
-    sysx:relatedFeature expr:FlowsAndViews__FuelInterface___402.flowSource, expr:FlowsAndViews__FuelInterface___402.flowTarget ;
+    sysx:relatedFeature expr:FlowsAndViews__FuelInterface___402_pflowSource, expr:FlowsAndViews__FuelInterface___402_pflowTarget ;
     sysx:endForm "flowTo" .
 
 elmt:FlowsAndViews__FuelInterface___402_om
@@ -214,31 +214,35 @@ elmt:FlowsAndViews__FuelInterface___402_om
     sysml:owningRelatedElement elmt:FlowsAndViews__FuelInterface ;
     sysml:membershipOwningNamespace elmt:FlowsAndViews__FuelInterface .
 
-expr:FlowsAndViews__FuelInterface___402.flowSource
+expr:FlowsAndViews__FuelInterface___402_pflowSource
     a sysml:FeatureChainExpression ;
     sysx:sourceText "supplierPort.fuelSupply" ;
-    sysml:argument expr:FlowsAndViews__FuelInterface___402.flowSource.a0 ;
+    sysml:elementId "FlowsAndViews__FuelInterface___402_pflowSource" ;
+    sysml:argument expr:FlowsAndViews__FuelInterface___402_pflowSource_pa0 ;
     sysml:targetFeature "fuelSupply" ;
     sysx:endIndex "0"^^xsd:integer ;
     sysx:endRole "source" .
 
-expr:FlowsAndViews__FuelInterface___402.flowSource.a0
+expr:FlowsAndViews__FuelInterface___402_pflowSource_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "supplierPort" ;
+    sysml:elementId "FlowsAndViews__FuelInterface___402_pflowSource_pa0" ;
     sysml:referent elmt:FlowsAndViews__FuelInterface__supplierPort ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:FlowsAndViews__FuelInterface___402.flowTarget
+expr:FlowsAndViews__FuelInterface___402_pflowTarget
     a sysml:FeatureChainExpression ;
     sysx:sourceText "consumerPort.fuelSupply" ;
-    sysml:argument expr:FlowsAndViews__FuelInterface___402.flowTarget.a0 ;
+    sysml:elementId "FlowsAndViews__FuelInterface___402_pflowTarget" ;
+    sysml:argument expr:FlowsAndViews__FuelInterface___402_pflowTarget_pa0 ;
     sysml:targetFeature "fuelSupply" ;
     sysx:endIndex "1"^^xsd:integer ;
     sysx:endRole "target" .
 
-expr:FlowsAndViews__FuelInterface___402.flowTarget.a0
+expr:FlowsAndViews__FuelInterface___402_pflowTarget_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "consumerPort" ;
+    sysml:elementId "FlowsAndViews__FuelInterface___402_pflowTarget_pa0" ;
     sysml:referent elmt:FlowsAndViews__FuelInterface__consumerPort ;
     sysx:argumentIndex "0"^^xsd:integer .
 
@@ -254,7 +258,7 @@ elmt:FlowsAndViews__tanks
     sysml:declaredName "tanks" ;
     sysml:isNonunique "true"^^xsd:boolean ;
     sysml:type elmt:FlowsAndViews__Tank ;
-    sysml:upperBound expr:FlowsAndViews__tanks.upperBound ;
+    sysml:upperBound expr:FlowsAndViews__tanks_pupperBound ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:FlowsAndViews__tanks_om
@@ -267,9 +271,10 @@ elmt:FlowsAndViews__tanks_om
     sysml:owningRelatedElement elmt:FlowsAndViews ;
     sysml:membershipOwningNamespace elmt:FlowsAndViews .
 
-expr:FlowsAndViews__tanks.upperBound
+expr:FlowsAndViews__tanks_pupperBound
     a sysml:LiteralInfinity ;
-    sysx:sourceText "*" .
+    sysx:sourceText "*" ;
+    sysml:elementId "FlowsAndViews__tanks_pupperBound" .
 
 elmt:FlowsAndViews__vehicle
     a sysml:PartUsage ;
@@ -336,8 +341,8 @@ elmt:FlowsAndViews__vehicle__spares
     sysml:isNonunique "true"^^xsd:boolean ;
     sysml:type elmt:FlowsAndViews__Tank ;
     sysml:subsets elmt:FlowsAndViews__tanks ;
-    sysml:lowerBound expr:FlowsAndViews__vehicle__spares.lowerBound ;
-    sysml:upperBound expr:FlowsAndViews__vehicle__spares.upperBound ;
+    sysml:lowerBound expr:FlowsAndViews__vehicle__spares_plowerBound ;
+    sysml:upperBound expr:FlowsAndViews__vehicle__spares_pupperBound ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:FlowsAndViews__vehicle__spares_om
@@ -352,14 +357,16 @@ elmt:FlowsAndViews__vehicle__spares_om
     sysml:ownedMemberFeature elmt:FlowsAndViews__vehicle__spares ;
     sysml:owningType elmt:FlowsAndViews__vehicle .
 
-expr:FlowsAndViews__vehicle__spares.lowerBound
+expr:FlowsAndViews__vehicle__spares_plowerBound
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "FlowsAndViews__vehicle__spares_plowerBound" ;
     sysml:value "0"^^xsd:integer .
 
-expr:FlowsAndViews__vehicle__spares.upperBound
+expr:FlowsAndViews__vehicle__spares_pupperBound
     a sysml:LiteralInteger ;
     sysx:sourceText "2" ;
+    sysml:elementId "FlowsAndViews__vehicle__spares_pupperBound" ;
     sysml:value "2"^^xsd:integer .
 
 elmt:FlowsAndViews__vehicle__firstSpare
@@ -422,7 +429,7 @@ elmt:FlowsAndViews__vehicle___404
     sysml:owningRelationship elmt:FlowsAndViews__vehicle___404_om ;
     sysml:owningMembership elmt:FlowsAndViews__vehicle___404_om ;
     sysx:sourceText "allocate tank to engine;" ;
-    sysx:relatedFeature expr:FlowsAndViews__vehicle___404.end0, expr:FlowsAndViews__vehicle___404.end1 ;
+    sysx:relatedFeature expr:FlowsAndViews__vehicle___404_pend0, expr:FlowsAndViews__vehicle___404_pend1 ;
     sysx:endForm "to" ;
     sysx:declaredKeyword "allocate" .
 
@@ -438,15 +445,17 @@ elmt:FlowsAndViews__vehicle___404_om
     sysml:ownedMemberFeature elmt:FlowsAndViews__vehicle___404 ;
     sysml:owningType elmt:FlowsAndViews__vehicle .
 
-expr:FlowsAndViews__vehicle___404.end0
+expr:FlowsAndViews__vehicle___404_pend0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "tank" ;
+    sysml:elementId "FlowsAndViews__vehicle___404_pend0" ;
     sysml:referent elmt:FlowsAndViews__vehicle__tank ;
     sysx:endIndex "0"^^xsd:integer .
 
-expr:FlowsAndViews__vehicle___404.end1
+expr:FlowsAndViews__vehicle___404_pend1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "engine" ;
+    sysml:elementId "FlowsAndViews__vehicle___404_pend1" ;
     sysml:referent elmt:FlowsAndViews__vehicle__engine ;
     sysx:endIndex "1"^^xsd:integer .
 
@@ -564,7 +573,7 @@ elmt:FlowsAndViews__StructureView___400
     sysml:owner elmt:FlowsAndViews__StructureView ;
     sysml:owningRelationship elmt:FlowsAndViews__StructureView___400_om ;
     sysml:owningMembership elmt:FlowsAndViews__StructureView___400_om ;
-    sysx:filter expr:FlowsAndViews__StructureView___400.filter .
+    sysx:filter expr:FlowsAndViews__StructureView___400_pfilter .
 
 elmt:FlowsAndViews__StructureView___400_om
     a sysml:OwningMembership ;
@@ -576,9 +585,10 @@ elmt:FlowsAndViews__StructureView___400_om
     sysml:owningRelatedElement elmt:FlowsAndViews__StructureView ;
     sysml:membershipOwningNamespace elmt:FlowsAndViews__StructureView .
 
-expr:FlowsAndViews__StructureView___400.filter
+expr:FlowsAndViews__StructureView___400_pfilter
     a sysml:OperatorExpression ;
     sysx:sourceText "@SysML::PartUsage" ;
+    sysml:elementId "FlowsAndViews__StructureView___400_pfilter" ;
     sysml:operator "@" ;
     sysx:typeArgument "SysML::PartUsage" .
 

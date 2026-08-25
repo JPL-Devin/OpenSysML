@@ -55,6 +55,41 @@ func DecodeOwningMembershipID(id string) (string, bool) {
 	return DecodeElementID(member)
 }
 
+// expressionPositionSeparator joins an expression node's id to the position it
+// holds. EncodeElementID cannot produce `_p` either, so an expression id
+// collides with neither an element id nor a membership id.
+const expressionPositionSeparator = "_p"
+
+// ExpressionNodeID returns the id of the expression node at position under the
+// element or outer node with id owner. Positions nest, so the ids compose, and
+// the result stays in [A-Za-z0-9_-]+ so a consumer restricting ids to that can
+// address the node.
+func ExpressionNodeID(owner, position string) string {
+	return owner + expressionPositionSeparator + EncodeElementID(position)
+}
+
+// DecodeExpressionNodeID reverses ExpressionNodeID, returning the qualified name
+// of the element the node belongs to and the positions leading down to it.
+func DecodeExpressionNodeID(id string) (string, []string, bool) {
+	parts := strings.Split(id, expressionPositionSeparator)
+	if len(parts) < 2 {
+		return "", nil, false
+	}
+	owner, ok := DecodeElementID(parts[0])
+	if !ok {
+		return "", nil, false
+	}
+	positions := make([]string, 0, len(parts)-1)
+	for _, part := range parts[1:] {
+		position, ok := DecodeElementID(part)
+		if !ok {
+			return "", nil, false
+		}
+		positions = append(positions, position)
+	}
+	return owner, positions, true
+}
+
 // DecodeElementID reverses EncodeElementID, reporting whether id is a
 // well-formed encoding. A malformed escape, a byte outside [A-Za-z0-9_-] or
 // an invalid UTF-8 result is rejected rather than guessed at.

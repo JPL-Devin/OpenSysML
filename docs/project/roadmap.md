@@ -320,10 +320,14 @@ selects on `?e sysml:elementId ?id` (`listElementsConstructQuery`) and `QueryApi
 rewrites an `@id` constraint to it, so without the triple an element was invisible to
 both even though a direct construct on the IRI found it.
 
-An **expression node carries none**: it is not an element (no `sysml:qualifiedName`, no
-ownership), and its `expr:` IRI holds a `.` and the position's name, which
-`requireValidId` rejects. Making expressions addressable is D1, which has to decide their
-identity anyway.
+An **expression node carries one too**. Its id was `<owner id>.<position>`, which
+`requireValidId` rejects, so a direct read of a node was refused with 400 before the store
+was touched — measured against a live service. The position is now joined with `_p` and
+encoded, keeping the id inside `[a-zA-Z0-9_-]+` and disjoint from element and membership
+ids (`internal/core/rdf/ids.go` `ExpressionNodeID`, `ids_test.go`), and the node states that
+id in `sysml:elementId`. A node is still not a model element — no `qualifiedName`, no
+ownership, reachable only from the position that holds it — so writing expressions as
+elements owned through memberships remains D1.
 
 ### D3.3 — ownership: every element reads as a root
 

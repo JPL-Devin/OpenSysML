@@ -53,7 +53,7 @@ func TestExpressionValueIsATree(t *testing.T) {
     attribute b : Integer;
     attribute total : Integer = a + b * 2;
 }`)
-	const root = "urn:opensysml:expr:P__total.value"
+	root := rdf.ExpressionIRI(rdf.ElementIRI("P::total"), "value").Value
 	wantType(t, g, root, "OperatorExpression")
 	wantLexical(t, g, root, rdf.SysML+"operator", "+")
 	wantLexical(t, g, root, rdf.OpenSysML+"sourceText", "a + b * 2")
@@ -109,12 +109,12 @@ func TestExpressionPositionsAllEmitTrees(t *testing.T) {
 		}
 	}
 	for _, want := range []struct{ suffix, metaclass string }{
-		{".value", "LiteralInteger"}, // limit = 4
-		{"wheels.lowerBound", "LiteralInteger"},
-		{"wheels.upperBound", "OperatorExpression"},
-		{".condition", "OperatorExpression"},
-		{".guard", "OperatorExpression"},
-		{".filter", "OperatorExpression"},
+		{"_pvalue", "LiteralInteger"}, // limit = 4
+		{"wheels_plowerBound", "LiteralInteger"},
+		{"wheels_pupperBound", "OperatorExpression"},
+		{"_pcondition", "OperatorExpression"},
+		{"_pguard", "OperatorExpression"},
+		{"_pfilter", "OperatorExpression"},
 	} {
 		found := false
 		for name, metaclass := range trees {
@@ -395,12 +395,15 @@ func TestBindingEndsAreStatedAsStructure(t *testing.T) {
 		wantLexical(t, g, related[1], rdf.OpenSysML+"endIndex", "1")
 	}
 	// A connect end names the port it connects; a flow end reaches through one.
-	wantType(t, g, "urn:opensysml:expr:P__Car___402.end0", "FeatureReferenceExpression")
-	if got := g.Objects(iri("urn:opensysml:expr:P__Car___402.end0"), rdf.SysML+"referent"); len(got) != 1 ||
+	connectEnd := rdf.Expression + rdf.ExpressionNodeID("P__Car___402", "end0")
+	wantType(t, g, connectEnd, "FeatureReferenceExpression")
+	if got := g.Objects(iri(connectEnd), rdf.SysML+"referent"); len(got) != 1 ||
 		got[0].Value != "urn:sysmlv2:element:P__Car__left" {
 		t.Errorf("the first connect end reads %v, want the port P::Car::left", got)
 	}
-	wantType(t, g, "urn:opensysml:expr:P__I___402.flowSource", "FeatureChainExpression")
-	wantLexical(t, g, "urn:opensysml:expr:P__I___402.flowSource", rdf.OpenSysML+"endRole", "source")
-	wantLexical(t, g, "urn:opensysml:expr:P__I___402.flowTarget", rdf.OpenSysML+"endRole", "target")
+	source := rdf.Expression + rdf.ExpressionNodeID("P__I___402", "flowSource")
+	wantType(t, g, source, "FeatureChainExpression")
+	wantLexical(t, g, source, rdf.OpenSysML+"endRole", "source")
+	wantLexical(t, g, rdf.Expression+rdf.ExpressionNodeID("P__I___402", "flowTarget"),
+		rdf.OpenSysML+"endRole", "target")
 }

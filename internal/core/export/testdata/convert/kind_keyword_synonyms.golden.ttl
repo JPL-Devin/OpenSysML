@@ -188,7 +188,7 @@ elmt:Synonyms___407
     sysml:owningRelationship elmt:Synonyms___407_om ;
     sysml:owningMembership elmt:Synonyms___407_om ;
     sysx:sourceText "allocate reading to base;" ;
-    sysx:relatedFeature expr:Synonyms___407.end0, expr:Synonyms___407.end1 ;
+    sysx:relatedFeature expr:Synonyms___407_pend0, expr:Synonyms___407_pend1 ;
     sysx:endForm "to" ;
     sysx:declaredKeyword "allocate" .
 
@@ -202,15 +202,17 @@ elmt:Synonyms___407_om
     sysml:owningRelatedElement elmt:Synonyms ;
     sysml:membershipOwningNamespace elmt:Synonyms .
 
-expr:Synonyms___407.end0
+expr:Synonyms___407_pend0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "reading" ;
+    sysml:elementId "Synonyms___407_pend0" ;
     sysml:referent elmt:Synonyms__reading ;
     sysx:endIndex "0"^^xsd:integer .
 
-expr:Synonyms___407.end1
+expr:Synonyms___407_pend1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "base" ;
+    sysml:elementId "Synonyms___407_pend1" ;
     sysml:referent elmt:Synonyms__base ;
     sysx:endIndex "1"^^xsd:integer .
 

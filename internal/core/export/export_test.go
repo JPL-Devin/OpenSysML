@@ -1070,8 +1070,9 @@ func TestFixtureElementIDsRoundTrip(t *testing.T) {
 			if strings.HasPrefix(subject.Value, rdf.Expression) {
 				// An expression node is named for the element and slot it
 				// belongs to, not by a qualified name of its own.
-				id, _, ok := strings.Cut(strings.TrimPrefix(subject.Value, rdf.Expression), ".")
-				if owner, decoded := rdf.DecodeElementID(id); !ok || !decoded || owner == "" {
+				id := strings.TrimPrefix(subject.Value, rdf.Expression)
+				owner, positions, ok := rdf.DecodeExpressionNodeID(id)
+				if !ok || owner == "" || len(positions) == 0 {
 					t.Errorf("%s: expression %s is not named for an element", path, subject.Value)
 				}
 				continue

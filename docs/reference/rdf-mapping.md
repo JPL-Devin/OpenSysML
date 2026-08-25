@@ -103,8 +103,8 @@ takes it from.
 - `sysml:declaredName`, `sysml:declaredShortName`, `sysml:qualifiedName`
 - `sysml:elementId` — the id the element's own IRI ends in, which is what the
   SysML v2 API addresses it by. Every element carries one, including the
-  memberships below; an expression node does not, because it is not an element
-  ([Expressions](#expressions))
+  memberships below and the expression nodes of
+  [Expressions](#expressions)
 - Ownership, described under [Ownership](#ownership): `sysml:owner`, plus
   `sysml:owningMembership` and `sysml:owningRelationship`, or
   `sysml:owningRelatedElement` for an element a relationship owns
@@ -244,15 +244,16 @@ package P { attribute a : Integer; attribute total : Integer = a * 2; }
 ```turtle
 elmt:P__total
     a sysml:AttributeUsage ;
-    sysml:value expr:P__total.value .
+    sysml:value expr:P__total_pvalue .
 
-expr:P__total.value
+expr:P__total_pvalue
     a sysml:OperatorExpression ;
     sysx:sourceText "a * 2" ;
+    sysml:elementId "P__total_pvalue" ;
     sysx:operator "*" ;
-    sysml:argument expr:P__total.value.a0, expr:P__total.value.a1 .
+    sysml:argument expr:P__total_pvalue_pa0, expr:P__total_pvalue_pa1 .
 
-expr:P__total.value.a0
+expr:P__total_pvalue_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "a" ;
     sysml:referent elmt:P__a ;
@@ -261,10 +262,13 @@ expr:P__total.value.a0
 
 The rules the tree follows:
 
-- **A node's IRI is its owner and its position**: `expr:<owner id>.<slot>`, and a
-  nested operand appends its own index (`.a0`, `.a1`). Two expressions of one
+- **A node's IRI is its owner and its position**: `expr:<owner id>_p<slot>`, and
+  a nested operand appends its own index (`_pa0`, `_pa1`). Two expressions of one
   element therefore never collide, and the IRIs are deterministic, like element
-  IRIs.
+  IRIs. The `_p` marker and the encoding of the position keep a node's id inside
+  `[A-Za-z0-9_-]+`, the alphabet the SysML v2 API's `requireValidId` accepts, and
+  it can never be read as an element id or a membership id, because element ids
+  never contain `_p`.
 - **Every node carries `sysx:sourceText`**, the notation it was written as. The
   tree is *additive*: the text is what a conversion back to notation is written
   from, so exactness does not depend on the tree being complete, and
@@ -282,13 +286,12 @@ The rules the tree follows:
 - **A feature reference links to the element** it names (`sysml:referent`) when
   that element is in the graph, and carries its name as a literal when it
   resolves outside it — the same rule the declaration-head relationships follow.
-- **An expression node is not a model element.** It has no
-  `sysml:qualifiedName`, no `sysml:elementId` and no ownership properties, and
-  reading a graph back never turns one into a declaration. It is therefore not
-  addressable through the API's element endpoints: an `expr:` IRI also holds a
-  `.` and the position's name, which `requireValidId` would reject. Making
-  expressions API-addressable means writing them as elements owned through
-  memberships, which is separate work.
+- **A node carries `sysml:elementId`**, the id its own IRI ends in, so it can be
+  read and queried by that id like an element. It is still not a model element:
+  it has no `sysml:qualifiedName` and no ownership properties, it is reached only
+  from the position that holds it, and reading a graph back never turns one into
+  a declaration. Writing expressions as elements owned through memberships is
+  separate work.
 - **A graph from another tool is read from its structure** when it carries no
   `sysx:sourceText`: the supported shapes above are written back as notation, and
   a shape this mapping cannot write — a missing operator, an operand count an

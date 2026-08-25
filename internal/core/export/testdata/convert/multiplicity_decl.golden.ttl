@@ -26,8 +26,8 @@ elmt:Mult__exactlyOne
     sysml:owningRelationship elmt:Mult__exactlyOne_om ;
     sysml:owningMembership elmt:Mult__exactlyOne_om ;
     sysml:declaredName "exactlyOne" ;
-    sysml:lowerBound expr:Mult__exactlyOne.lowerBound ;
-    sysml:upperBound expr:Mult__exactlyOne.upperBound ;
+    sysml:lowerBound expr:Mult__exactlyOne_plowerBound ;
+    sysml:upperBound expr:Mult__exactlyOne_pupperBound ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Mult__exactlyOne_om
@@ -40,14 +40,16 @@ elmt:Mult__exactlyOne_om
     sysml:owningRelatedElement elmt:Mult ;
     sysml:membershipOwningNamespace elmt:Mult .
 
-expr:Mult__exactlyOne.lowerBound
+expr:Mult__exactlyOne_plowerBound
     a sysml:LiteralInteger ;
     sysx:sourceText "1" ;
+    sysml:elementId "Mult__exactlyOne_plowerBound" ;
     sysml:value "1"^^xsd:integer .
 
-expr:Mult__exactlyOne.upperBound
+expr:Mult__exactlyOne_pupperBound
     a sysml:LiteralInteger ;
     sysx:sourceText "1" ;
+    sysml:elementId "Mult__exactlyOne_pupperBound" ;
     sysml:value "1"^^xsd:integer .
 
 elmt:Mult__optional
@@ -60,8 +62,8 @@ elmt:Mult__optional
     sysml:owningRelationship elmt:Mult__optional_om ;
     sysml:owningMembership elmt:Mult__optional_om ;
     sysml:declaredName "optional" ;
-    sysml:lowerBound expr:Mult__optional.lowerBound ;
-    sysml:upperBound expr:Mult__optional.upperBound ;
+    sysml:lowerBound expr:Mult__optional_plowerBound ;
+    sysml:upperBound expr:Mult__optional_pupperBound ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Mult__optional_om
@@ -74,14 +76,16 @@ elmt:Mult__optional_om
     sysml:owningRelatedElement elmt:Mult ;
     sysml:membershipOwningNamespace elmt:Mult .
 
-expr:Mult__optional.lowerBound
+expr:Mult__optional_plowerBound
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "Mult__optional_plowerBound" ;
     sysml:value "0"^^xsd:integer .
 
-expr:Mult__optional.upperBound
+expr:Mult__optional_pupperBound
     a sysml:LiteralInteger ;
     sysx:sourceText "1" ;
+    sysml:elementId "Mult__optional_pupperBound" ;
     sysml:value "1"^^xsd:integer .
 
 elmt:Mult__single

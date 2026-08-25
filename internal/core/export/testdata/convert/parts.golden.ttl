@@ -79,7 +79,7 @@ elmt:Vehicles__Vehicle__engine
     sysml:owningMembership elmt:Vehicles__Vehicle__engine_om ;
     sysml:declaredName "engine" ;
     sysml:type elmt:Vehicles__Engine ;
-    sysml:upperBound expr:Vehicles__Vehicle__engine.upperBound ;
+    sysml:upperBound expr:Vehicles__Vehicle__engine_pupperBound ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Vehicles__Vehicle__engine_om
@@ -94,9 +94,10 @@ elmt:Vehicles__Vehicle__engine_om
     sysml:ownedMemberFeature elmt:Vehicles__Vehicle__engine ;
     sysml:owningType elmt:Vehicles__Vehicle .
 
-expr:Vehicles__Vehicle__engine.upperBound
+expr:Vehicles__Vehicle__engine_pupperBound
     a sysml:LiteralInteger ;
     sysx:sourceText "1" ;
+    sysml:elementId "Vehicles__Vehicle__engine_pupperBound" ;
     sysml:value "1"^^xsd:integer .
 
 elmt:Vehicles__Engine

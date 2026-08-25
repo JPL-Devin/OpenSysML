@@ -128,7 +128,7 @@ elmt:Quoted_20Names__Rover_20Model__mass_20limit___400
     sysml:owningRelationship elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om ;
     sysml:owningMembership elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om ;
     sysx:declaredKeyword "assert" ;
-    sysx:condition expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition .
+    sysx:condition expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition .
 
 elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om
     a sysml:OwningMembership ;
@@ -140,21 +140,24 @@ elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om
     sysml:owningRelatedElement elmt:Quoted_20Names__Rover_20Model__mass_20limit ;
     sysml:membershipOwningNamespace elmt:Quoted_20Names__Rover_20Model__mass_20limit .
 
-expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition
+expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition
     a sysml:OperatorExpression ;
     sysx:sourceText "'dry mass' > 0" ;
+    sysml:elementId "Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition.a0, expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition.a1 .
+    sysml:argument expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition_pa0, expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition_pa1 .
 
-expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition.a0
+expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "'dry mass'" ;
+    sysml:elementId "Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition_pa0" ;
     sysml:referent elmt:Quoted_20Names__Rover_20Model__dry_20mass ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition.a1
+expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition_pa1" ;
     sysml:value "0"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 

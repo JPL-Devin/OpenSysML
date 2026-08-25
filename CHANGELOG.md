@@ -19,6 +19,11 @@ follows; a relationship a namespace declares, such as an import, owns its member
 Visibility moves to the membership that declares it. A document now has one root instead of
 every element reading as one.
 
+The nodes of an expression graph are addressable too: a node's IRI held a `.` and the name
+of the position it sits in, which an API service restricting ids to `[a-zA-Z0-9_-]+` refuses
+outright, so the position is now joined with `_p` and encoded the way an element id is, and
+the node states that id in `sysml:elementId`. A node is still not a model element.
+
 `.ttl` output changes shape accordingly, and every graph regenerates. Reading is
 backward compatible: a graph carrying only the previous compact `sysml:owningNamespace`
 shape still converts unchanged, and that property is still written.
