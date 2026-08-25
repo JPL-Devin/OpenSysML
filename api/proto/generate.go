@@ -1,3 +1,5 @@
 package proto
 
-//go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative sysml.proto
+// buf reads its configuration from the repository root, so the directive runs
+// there; `make proto-go` pins the buf and plugin versions.
+//go:generate sh -c "cd ../.. && make proto-go"
