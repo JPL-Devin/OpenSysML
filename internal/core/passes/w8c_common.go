@@ -11,21 +11,59 @@ import (
 // w8cWalker visits every symbol of a document's scope tree once, deduping by
 // pointer: one declaration may be registered under several keys.
 type w8cWalker struct {
+	ctx  *Context
 	seen map[*symbols.Symbol]bool
 }
 
 func (w *w8cWalker) walk(scope *symbols.Scope, visit func(*symbols.Symbol)) {
-	if scope == nil {
+	if w == nil || scope == nil {
 		return
 	}
-	for _, sym := range scope.AllMembers() {
+	for _, sym := range w8cSymbols(w.ctx, scope) {
 		if sym == nil || w.seen[sym] {
 			continue
 		}
 		w.seen[sym] = true
 		visit(sym)
-		w.walk(sym.Scope, visit)
 	}
+}
+
+func w8cSymbols(ctx *Context, root *symbols.Scope) []*symbols.Symbol {
+	if ctx != nil {
+		if cached, ok := ctx.w8cCache[root]; ok {
+			return cached
+		}
+	}
+	out := w8cCollectSymbols(root)
+	if ctx != nil {
+		if ctx.w8cCache == nil {
+			ctx.w8cCache = make(map[*symbols.Scope][]*symbols.Symbol)
+		}
+		ctx.w8cCache[root] = out
+	}
+	return out
+}
+
+func w8cCollectSymbols(root *symbols.Scope) []*symbols.Symbol {
+	seen := make(map[*symbols.Symbol]bool)
+	var out []*symbols.Symbol
+	var walk func(*symbols.Scope)
+	walk = func(scope *symbols.Scope) {
+		if scope == nil {
+			return
+		}
+		scope.ForEachMember(func(sym *symbols.Symbol) bool {
+			if sym == nil || seen[sym] {
+				return true
+			}
+			seen[sym] = true
+			out = append(out, sym)
+			walk(sym.Scope)
+			return true
+		})
+	}
+	walk(root)
+	return out
 }
 
 // w8cScopeOf returns the scope a declaration's own references resolve in.
