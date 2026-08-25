@@ -80,6 +80,10 @@ STDERR_DRAIN_TIMEOUT = 0.5
 #: pay for, and no other process can reach it, so none can stop it either.
 _private_services: Dict[Optional[str], '_PrivateService'] = {}
 
+#: Held to start, join or release a private service, since connections of one
+#: interpreter share them and may be opened and closed by different threads.
+_private_services_lock = threading.RLock()
+
 
 def split_target(host, port=None):
     """Split a ``host:port`` string written as the host into host and port.
@@ -351,8 +355,8 @@ class _PrivateService:
         return "; it logged: " + " | ".join(logged)
 
 
-def _private_service(version, required_release):
-    """This interpreter's private service for a release requirement.
+def _join_private_service(version, required_release):
+    """Hold this interpreter's private service for a release requirement.
 
     One is started when there is none, or when the last one died: a service that
     crashed is replaced rather than reported, since nothing outside this process
@@ -364,14 +368,16 @@ def _private_service(version, required_release):
             are keyed by, so a connection never joins one of another release
 
     Returns:
-        _PrivateService: A running child, held under required_release
+        _PrivateService: A running child with a reference taken on it, which the
+            caller releases exactly once
     """
-    service = _private_services.get(required_release)
-    if service is not None and service.alive():
+    with _private_services_lock:
+        service = _private_services.get(required_release)
+        if service is None or not service.alive():
+            service = _PrivateService.start(version, required_release)
+            _private_services[required_release] = service
+        service.refs += 1
         return service
-    service = _PrivateService.start(version, required_release)
-    _private_services[required_release] = service
-    return service
 
 
 def _disown_private_services():
@@ -384,10 +390,17 @@ def _disown_private_services():
     for service in _private_services.values():
         service.disown()
     _private_services.clear()
+    _private_services_lock.release()
 
 
 if hasattr(os, 'register_at_fork'):
-    os.register_at_fork(after_in_child=_disown_private_services)
+    # The lock is taken across the fork, so a child never inherits it held by a
+    # thread that does not exist there, mid-change.
+    os.register_at_fork(
+        before=_private_services_lock.acquire,
+        after_in_parent=_private_services_lock.release,
+        after_in_child=_disown_private_services,
+    )
 
 
 class Connection:
@@ -1362,8 +1375,7 @@ class Connection:
         Raises:
             ConnectionError: If a child cannot be started, or does not serve
         """
-        service = _private_service(self._version, self._required_release())
-        service.refs += 1
+        service = _join_private_service(self._version, self._required_release())
         self._private = service
         self.host, self.port = split_target(service.address)
         self._address = service.address
@@ -1380,9 +1392,10 @@ class Connection:
             return
         self._cleaned_up = True
         service, self._private = self._private, None
-        service.refs -= 1
-        if service.refs > 0:
-            return
-        if _private_services.get(service.key) is service:
-            del _private_services[service.key]
+        with _private_services_lock:
+            service.refs -= 1
+            if service.refs > 0:
+                return
+            if _private_services.get(service.key) is service:
+                del _private_services[service.key]
         service.stop()

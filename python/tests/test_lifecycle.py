@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 import textwrap
+import threading
 import time
 
 import psutil
@@ -147,6 +148,34 @@ class TestPrivateService:
         second.close()
         _wait_gone(service)
         assert _is_gone(service)
+
+    def test_threads_opening_and_closing_connections_share_one_service(
+        self, private_binary
+    ):
+        """Concurrent holds are counted, so none of them loses its service."""
+        held = opensysml.connect()
+        service = held._private
+        errors = []
+
+        def churn():
+            try:
+                for _ in range(20):
+                    with opensysml.connect() as conn:
+                        assert conn._private is service
+                        assert conn.server_info() is not None
+            except Exception as failure:  # reported rather than lost in the thread
+                errors.append(failure)
+
+        workers = [threading.Thread(target=churn) for _ in range(8)]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join(timeout=60)
+
+        assert errors == []
+        assert service.refs == 1
+        assert held.server_info() is not None
+        held.close()
 
     def test_a_connection_made_after_it_stopped_starts_another(self, private_binary):
         """Nothing outside this process could have been using the stopped one."""
