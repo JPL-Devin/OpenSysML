@@ -6,14 +6,12 @@ package symbols
 func (s *Scope) Members() []*Symbol {
 	seen := map[*Symbol]bool{}
 	var out []*Symbol
-	for _, name := range s.memberOrder {
-		for _, sym := range s.members[name] {
-			if seen[sym] {
-				continue
-			}
-			seen[sym] = true
-			out = append(out, sym)
+	for _, sym := range s.syms {
+		if seen[sym] {
+			continue
 		}
+		seen[sym] = true
+		out = append(out, sym)
 	}
 	return out
 }
