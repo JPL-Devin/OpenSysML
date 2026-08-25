@@ -34,6 +34,27 @@ func EncodeElementID(qualifiedName string) string {
 	return b.String()
 }
 
+// owningMembershipSuffix ends a membership's id. EncodeElementID cannot produce
+// `_o` — a '_' there starts `__` or a hex escape — so the two id spaces are disjoint.
+const owningMembershipSuffix = "_om"
+
+// OwningMembershipID returns the id of the OwningMembership that owns the
+// member with the given qualified name. The membership sits between exactly one
+// namespace and one member, so the member's own identity determines it.
+func OwningMembershipID(memberQualifiedName string) string {
+	return EncodeElementID(memberQualifiedName) + owningMembershipSuffix
+}
+
+// DecodeOwningMembershipID reverses OwningMembershipID, returning the qualified
+// name of the member the membership owns.
+func DecodeOwningMembershipID(id string) (string, bool) {
+	member, found := strings.CutSuffix(id, owningMembershipSuffix)
+	if !found {
+		return "", false
+	}
+	return DecodeElementID(member)
+}
+
 // DecodeElementID reverses EncodeElementID, reporting whether id is a
 // well-formed encoding. A malformed escape, a byte outside [A-Za-z0-9_-] or
 // an invalid UTF-8 result is rejected rather than guessed at.

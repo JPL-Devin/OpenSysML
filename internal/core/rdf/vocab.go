@@ -51,6 +51,14 @@ func ElementIRI(qualifiedName string) Term {
 	return IRI(Element + EncodeElementID(qualifiedName))
 }
 
+// OwningMembershipIRI returns the IRI of the OwningMembership through which a
+// namespace owns the member named by qualifiedName. It is in the element
+// namespace, since a membership is an element of the abstract syntax in its own
+// right, and its id can never collide with an element's.
+func OwningMembershipIRI(qualifiedName string) Term {
+	return IRI(Element + OwningMembershipID(qualifiedName))
+}
+
 // ExpressionPrefix is the prefix label bound to the expression namespace. It is
 // written only on a graph that carries an expression graph.
 const ExpressionPrefix = "expr"

@@ -8,45 +8,104 @@
 elmt:Values
     a sysml:Package ;
     sysml:qualifiedName "Values" ;
+    sysml:elementId "Values" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Values" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Values__Total, elmt:Values__Sized ;
+    sysml:ownedMembership elmt:Values__Total_om, elmt:Values__Sized_om ;
+    sysml:ownedRelationship elmt:Values__Total_om, elmt:Values__Sized_om .
 
 elmt:Values__Total
     a sysml:CalculationDefinition ;
     sysml:qualifiedName "Values::Total" ;
-    sysml:owningNamespace elmt:Values ;
+    sysml:elementId "Values__Total" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Values ;
+    sysml:owner elmt:Values ;
+    sysml:owningRelationship elmt:Values__Total_om ;
+    sysml:owningMembership elmt:Values__Total_om ;
     sysml:declaredName "Total" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Values__Total__x, elmt:Values__Total__y, elmt:Values__Total__result ;
+    sysml:ownedMembership elmt:Values__Total__x_om, elmt:Values__Total__y_om, elmt:Values__Total__result_om ;
+    sysml:ownedRelationship elmt:Values__Total__x_om, elmt:Values__Total__y_om, elmt:Values__Total__result_om ;
+    sysml:ownedFeature elmt:Values__Total__x, elmt:Values__Total__y, elmt:Values__Total__result ;
+    sysml:ownedFeatureMembership elmt:Values__Total__x_om, elmt:Values__Total__y_om, elmt:Values__Total__result_om .
+
+elmt:Values__Total_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Values__Total_om" ;
+    sysml:owner elmt:Values ;
+    sysml:memberElement elmt:Values__Total ;
+    sysml:ownedMemberElement elmt:Values__Total ;
+    sysml:ownedRelatedElement elmt:Values__Total ;
+    sysml:owningRelatedElement elmt:Values ;
+    sysml:membershipOwningNamespace elmt:Values .
 
 elmt:Values__Total__x
     a sysml:ReferenceUsage ;
     sysml:qualifiedName "Values::Total::x" ;
-    sysml:owningNamespace elmt:Values__Total ;
+    sysml:elementId "Values__Total__x" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Values__Total ;
+    sysml:owner elmt:Values__Total ;
+    sysml:owningRelationship elmt:Values__Total__x_om ;
+    sysml:owningMembership elmt:Values__Total__x_om ;
     sysml:declaredName "x" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type "Real" ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:Values__Total__x_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Values__Total__x_om" ;
+    sysml:owner elmt:Values__Total ;
+    sysml:memberElement elmt:Values__Total__x ;
+    sysml:ownedMemberElement elmt:Values__Total__x ;
+    sysml:ownedRelatedElement elmt:Values__Total__x ;
+    sysml:owningRelatedElement elmt:Values__Total ;
+    sysml:membershipOwningNamespace elmt:Values__Total ;
+    sysml:ownedMemberFeature elmt:Values__Total__x ;
+    sysml:owningType elmt:Values__Total .
+
 elmt:Values__Total__y
     a sysml:ReferenceUsage ;
     sysml:qualifiedName "Values::Total::y" ;
-    sysml:owningNamespace elmt:Values__Total ;
+    sysml:elementId "Values__Total__y" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Values__Total ;
+    sysml:owner elmt:Values__Total ;
+    sysml:owningRelationship elmt:Values__Total__y_om ;
+    sysml:owningMembership elmt:Values__Total__y_om ;
     sysml:declaredName "y" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type "Real" ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:Values__Total__y_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Values__Total__y_om" ;
+    sysml:owner elmt:Values__Total ;
+    sysml:memberElement elmt:Values__Total__y ;
+    sysml:ownedMemberElement elmt:Values__Total__y ;
+    sysml:ownedRelatedElement elmt:Values__Total__y ;
+    sysml:owningRelatedElement elmt:Values__Total ;
+    sysml:membershipOwningNamespace elmt:Values__Total ;
+    sysml:ownedMemberFeature elmt:Values__Total__y ;
+    sysml:owningType elmt:Values__Total .
+
 elmt:Values__Total__result
     a sysml:ReferenceUsage ;
     sysml:qualifiedName "Values::Total::result" ;
-    sysml:owningNamespace elmt:Values__Total ;
+    sysml:elementId "Values__Total__result" ;
     sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Values__Total ;
+    sysml:owner elmt:Values__Total ;
+    sysml:owningRelationship elmt:Values__Total__result_om ;
+    sysml:owningMembership elmt:Values__Total__result_om ;
     sysml:declaredName "result" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isResult "true"^^xsd:boolean ;
@@ -54,23 +113,70 @@ elmt:Values__Total__result
     sysml:type "Real" ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:Values__Total__result_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Values__Total__result_om" ;
+    sysml:owner elmt:Values__Total ;
+    sysml:memberElement elmt:Values__Total__result ;
+    sysml:ownedMemberElement elmt:Values__Total__result ;
+    sysml:ownedRelatedElement elmt:Values__Total__result ;
+    sysml:owningRelatedElement elmt:Values__Total ;
+    sysml:membershipOwningNamespace elmt:Values__Total ;
+    sysml:ownedMemberFeature elmt:Values__Total__result ;
+    sysml:owningType elmt:Values__Total .
+
 elmt:Values__Sized
     a sysml:PartDefinition ;
     sysml:qualifiedName "Values::Sized" ;
-    sysml:owningNamespace elmt:Values ;
+    sysml:elementId "Values__Sized" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Values ;
+    sysml:owner elmt:Values ;
+    sysml:owningRelationship elmt:Values__Sized_om ;
+    sysml:owningMembership elmt:Values__Sized_om ;
     sysml:declaredName "Sized" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Values__Sized__size, elmt:Values__Sized__label, elmt:Values__Sized__total ;
+    sysml:ownedMembership elmt:Values__Sized__size_om, elmt:Values__Sized__label_om, elmt:Values__Sized__total_om ;
+    sysml:ownedRelationship elmt:Values__Sized__size_om, elmt:Values__Sized__label_om, elmt:Values__Sized__total_om ;
+    sysml:ownedFeature elmt:Values__Sized__size, elmt:Values__Sized__label, elmt:Values__Sized__total ;
+    sysml:ownedFeatureMembership elmt:Values__Sized__size_om, elmt:Values__Sized__label_om, elmt:Values__Sized__total_om .
+
+elmt:Values__Sized_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Values__Sized_om" ;
+    sysml:owner elmt:Values ;
+    sysml:memberElement elmt:Values__Sized ;
+    sysml:ownedMemberElement elmt:Values__Sized ;
+    sysml:ownedRelatedElement elmt:Values__Sized ;
+    sysml:owningRelatedElement elmt:Values ;
+    sysml:membershipOwningNamespace elmt:Values .
 
 elmt:Values__Sized__size
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Values::Sized::size" ;
-    sysml:owningNamespace elmt:Values__Sized ;
+    sysml:elementId "Values__Sized__size" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Values__Sized ;
+    sysml:owner elmt:Values__Sized ;
+    sysml:owningRelationship elmt:Values__Sized__size_om ;
+    sysml:owningMembership elmt:Values__Sized__size_om ;
     sysml:declaredName "size" ;
     sysml:type "Real" ;
     sysml:value expr:Values__Sized__size.value ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Values__Sized__size_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Values__Sized__size_om" ;
+    sysml:owner elmt:Values__Sized ;
+    sysml:memberElement elmt:Values__Sized__size ;
+    sysml:ownedMemberElement elmt:Values__Sized__size ;
+    sysml:ownedRelatedElement elmt:Values__Sized__size ;
+    sysml:owningRelatedElement elmt:Values__Sized ;
+    sysml:membershipOwningNamespace elmt:Values__Sized ;
+    sysml:ownedMemberFeature elmt:Values__Sized__size ;
+    sysml:owningType elmt:Values__Sized .
 
 expr:Values__Sized__size.value
     a sysml:LiteralRational ;
@@ -80,12 +186,28 @@ expr:Values__Sized__size.value
 elmt:Values__Sized__label
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Values::Sized::label" ;
-    sysml:owningNamespace elmt:Values__Sized ;
+    sysml:elementId "Values__Sized__label" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Values__Sized ;
+    sysml:owner elmt:Values__Sized ;
+    sysml:owningRelationship elmt:Values__Sized__label_om ;
+    sysml:owningMembership elmt:Values__Sized__label_om ;
     sysml:declaredName "label" ;
     sysml:type "String" ;
     sysml:value expr:Values__Sized__label.value ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Values__Sized__label_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Values__Sized__label_om" ;
+    sysml:owner elmt:Values__Sized ;
+    sysml:memberElement elmt:Values__Sized__label ;
+    sysml:ownedMemberElement elmt:Values__Sized__label ;
+    sysml:ownedRelatedElement elmt:Values__Sized__label ;
+    sysml:owningRelatedElement elmt:Values__Sized ;
+    sysml:membershipOwningNamespace elmt:Values__Sized ;
+    sysml:ownedMemberFeature elmt:Values__Sized__label ;
+    sysml:owningType elmt:Values__Sized .
 
 expr:Values__Sized__label.value
     a sysml:LiteralString ;
@@ -95,12 +217,28 @@ expr:Values__Sized__label.value
 elmt:Values__Sized__total
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Values::Sized::total" ;
-    sysml:owningNamespace elmt:Values__Sized ;
+    sysml:elementId "Values__Sized__total" ;
     sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Values__Sized ;
+    sysml:owner elmt:Values__Sized ;
+    sysml:owningRelationship elmt:Values__Sized__total_om ;
+    sysml:owningMembership elmt:Values__Sized__total_om ;
     sysml:declaredName "total" ;
     sysml:type "Real" ;
     sysml:value expr:Values__Sized__total.value ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Values__Sized__total_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Values__Sized__total_om" ;
+    sysml:owner elmt:Values__Sized ;
+    sysml:memberElement elmt:Values__Sized__total ;
+    sysml:ownedMemberElement elmt:Values__Sized__total ;
+    sysml:ownedRelatedElement elmt:Values__Sized__total ;
+    sysml:owningRelatedElement elmt:Values__Sized ;
+    sysml:membershipOwningNamespace elmt:Values__Sized ;
+    sysml:ownedMemberFeature elmt:Values__Sized__total ;
+    sysml:owningType elmt:Values__Sized .
 
 expr:Values__Sized__total.value
     a sysml:OperatorExpression ;

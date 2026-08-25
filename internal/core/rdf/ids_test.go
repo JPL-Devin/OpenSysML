@@ -73,3 +73,25 @@ func TestDecodeElementIDRejectsMalformedIDs(t *testing.T) {
 		}
 	}
 }
+
+// A membership id is the member's id plus a marker no element id can carry, so
+// it is reversible and can never name an element.
+func TestOwningMembershipIDRoundTripsAndCannotCollide(t *testing.T) {
+	for _, qname := range []string{
+		"Vehicle", "Demo::Vehicle", "A_B::C", "Importer::@0", "日本::語", "A::B_om",
+	} {
+		id := OwningMembershipID(qname)
+		if !idAlphabet.MatchString(id) {
+			t.Errorf("OwningMembershipID(%q) = %q is outside [A-Za-z0-9_-]+", qname, id)
+		}
+		if got, ok := DecodeOwningMembershipID(id); !ok || got != qname {
+			t.Errorf("DecodeOwningMembershipID(%q) = %q, %v, want %q", id, got, ok, qname)
+		}
+		if _, ok := DecodeElementID(id); ok {
+			t.Errorf("%q decodes as an element id, so a membership can be mistaken for an element", id)
+		}
+		if other, ok := DecodeOwningMembershipID(EncodeElementID(qname)); ok {
+			t.Errorf("the element id of %q reads as the membership of %q", qname, other)
+		}
+	}
+}

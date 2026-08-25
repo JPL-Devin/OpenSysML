@@ -6,6 +6,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### RDF output states element ids and ownership
+
+A converted graph now carries the two things a SysML v2 API service needs to address it.
+Every element states `sysml:elementId` — exactly the id its own IRI ends in, so the triple
+and an id derived from the IRI cannot disagree — and containment is stated as the abstract
+syntax does: `sysml:owner` and `sysml:owningRelatedElement` as element references, with a
+materialized `OwningMembership`, or a `FeatureMembership` where a type owns a feature,
+between owner and member. Each membership is an element of its own with a deterministic IRI,
+its own `sysml:elementId`, and the member and owner wiring a client walking from a root
+follows; a relationship a namespace declares, such as an import, owns its member directly.
+Visibility moves to the membership that declares it. A document now has one root instead of
+every element reading as one.
+
+`.ttl` output changes shape accordingly, and every graph regenerates. Reading is
+backward compatible: a graph carrying only the previous compact `sysml:owningNamespace`
+shape still converts unchanged, and that property is still written.
+[reference/rdf-mapping.md](docs/reference/rdf-mapping.md) documents the ownership shape.
+Loading a graph into a live triplestore and reading it back through the API is still not
+demonstrated, and collection-valued properties still carry no JSON annotation.
+
 ### Connect is the default server transport
 
 `sysml-grpc` now serves gRPC, gRPC-Web and the Connect protocol on one port, so a browser or
