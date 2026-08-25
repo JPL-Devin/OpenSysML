@@ -62,7 +62,8 @@ port, through `connect-go` instead of `grpc.NewServer`:
   existing gRPC client needs against a port with no TLS) and HTTP/1.1 are both served.
 
 Three protocols and reflection come off that one handler; `/health` is served on the same port,
-which removes the reason the separate 8081 health port exists.
+which removes the *reason* for the separate 8081 health port. The prototype still binds it, so
+`/health` currently answers on both; retiring the second port is available, not yet taken.
 
 `cmd/sysml-grpc/connect_test.go` asserts this rather than describing it: the generated
 grpc-go stub — the code path the Python client and `grpcurl` use — works unchanged against the
@@ -412,8 +413,8 @@ serialization CPU rather than bytes.
 1. **Serve Connect from `cmd/sysml-grpc`, keeping gRPC on the same port.** Cost: one dependency,
    ~240 lines of adapter and server code, generated Connect bindings, and a second protocol
    surface to test. Gain: a browser client becomes possible, which is the deliverable that has no
-   alternative; the service becomes `curl`-able; the separate 8081 health port stops being
-   necessary. Migration risk to existing consumers: **low but not zero, and it is verified** —
+   alternative; the service becomes `curl`-able; the separate 8081 health port becomes
+   retirable (the prototype still binds it — see §3). Migration risk to existing consumers: **low but not zero, and it is verified** —
    `connect_test.go` runs the generated grpc-go stub and the Python client's code path against
    the Connect handler unchanged. What differs is not the RPCs but the edges: `h2c` rather than
    grpc-go's HTTP/2, so keepalive and max-message-size knobs are configured elsewhere and behave
