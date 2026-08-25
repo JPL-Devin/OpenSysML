@@ -1,6 +1,7 @@
 package symbols
 
 import (
+	"math"
 	"sync/atomic"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -192,12 +193,19 @@ func (s *Scope) loadMemberIndex() *map[string][]int32 {
 	}
 	built := make(map[string][]int32)
 	for i, name := range s.names {
-		built[name] = append(built[name], int32(i))
+		built[name] = append(built[name], memberIndexOf(i))
 	}
 	if s.memberIndex.CompareAndSwap(nil, &built) {
 		return &built
 	}
 	return s.memberIndex.Load()
+}
+
+func memberIndexOf(i int) int32 {
+	if i > math.MaxInt32 {
+		panic("scope member index exceeds int32 capacity")
+	}
+	return int32(i) // #nosec G115 -- bounds checked against math.MaxInt32 above.
 }
 
 // MemberNames returns the distinct member keys of this scope in declaration order.
@@ -210,7 +218,7 @@ func (s *Scope) MemberNames() []string {
 		index := s.loadMemberIndex()
 		for i, name := range s.names {
 			indices := (*index)[name]
-			if len(indices) > 0 && indices[0] == int32(i) {
+			if len(indices) > 0 && int(indices[0]) == i {
 				out = append(out, name)
 			}
 		}
