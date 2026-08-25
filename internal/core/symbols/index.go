@@ -1127,42 +1127,40 @@ func clearMark(marks *layer[string, map[*Symbol]bool], fqn string, sym *Symbol) 
 // contribution of the named document.
 func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 	seen := make(map[*Symbol]bool)
-	for _, syms := range scope.members {
-		for _, sym := range syms {
-			if seen[sym] {
-				continue // symbol registered under both short and primary key
-			}
-			seen[sym] = true
+	for _, sym := range scope.syms {
+		if seen[sym] {
+			continue // symbol registered under both short and primary key
+		}
+		seen[sym] = true
 
-			// Index under primary FQN
-			fqn := joinFQN(prefix, sym.Name)
-			idx.register(fqn, sym)
-			idx.declaredAt.set(sym, fqn)
-			idx.addContribution(doc, fqnEntry{fqn: fqn, sym: sym})
+		// Index under primary FQN
+		fqn := joinFQN(prefix, sym.Name)
+		idx.register(fqn, sym)
+		idx.declaredAt.set(sym, fqn)
+		idx.addContribution(doc, fqnEntry{fqn: fqn, sym: sym})
 
-			// Also index under short name FQN if different
-			// Try cached shortName first (for stdlib), fallback to extracting from Decl
-			shortName := sym.ShortName
-			if shortName == "" {
-				shortName = shortNameOf(sym.Decl)
-			}
-			if shortName != "" && shortName != sym.Name {
-				shortFQN := joinFQN(prefix, shortName)
-				idx.register(shortFQN, sym)
-				idx.addContribution(doc, fqnEntry{fqn: shortFQN, sym: sym})
-			}
+		// Also index under short name FQN if different
+		// Try cached shortName first (for stdlib), fallback to extracting from Decl
+		shortName := sym.ShortName
+		if shortName == "" {
+			shortName = shortNameOf(sym.Decl)
+		}
+		if shortName != "" && shortName != sym.Name {
+			shortFQN := joinFQN(prefix, shortName)
+			idx.register(shortFQN, sym)
+			idx.addContribution(doc, fqnEntry{fqn: shortFQN, sym: sym})
+		}
 
-			// Extract wildcard imports and filters from packages/namespaces
-			if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
-				if wildcards := extractWildcardImports(sym.Decl, sym.Scope); len(wildcards) > 0 {
-					idx.setWildcardImports(fqn, doc, wildcards)
-				}
-				idx.SetNamespaceFilters(fqn, doc, extractNamespaceFilters(sym.Decl, sym.Scope))
+		// Extract wildcard imports and filters from packages/namespaces
+		if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
+			if wildcards := extractWildcardImports(sym.Decl, sym.Scope); len(wildcards) > 0 {
+				idx.setWildcardImports(fqn, doc, wildcards)
 			}
+			idx.SetNamespaceFilters(fqn, doc, extractNamespaceFilters(sym.Decl, sym.Scope))
+		}
 
-			if sym.Scope != nil {
-				idx.indexScope(doc, sym.Scope, fqn)
-			}
+		if sym.Scope != nil {
+			idx.indexScope(doc, sym.Scope, fqn)
 		}
 	}
 }

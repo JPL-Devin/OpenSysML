@@ -69,18 +69,18 @@ action, a state machine or a part usage.
 
 | elements | load wall | allocated | live heap held |
 | -------- | --------- | --------- | -------------- |
-| 0        | 0.21 ms   | 115 KiB   | 33 KiB         |
-| 250      | 20 ms     | 13 MiB    | 2.7 MiB        |
-| 1 000    | 77 ms     | 51 MiB    | 11 MiB         |
-| 4 000    | 346 ms    | 207 MiB   | 43 MiB         |
+| 0        | 0.23 ms   | 112 KiB   | 32 KiB         |
+| 250      | 19 ms     | 11.7 MiB  | 2.5 MiB        |
+| 1 000    | 69 ms     | 46 MiB    | 9.8 MiB        |
+| 4 000    | 307 ms    | 187 MiB   | 39 MiB         |
 
 The `elements=0` row is what a session costs before it holds a model of its own:
-**33 KiB held and 115 KiB allocated**. The standard library is no longer indexed
+**32 KiB held and 112 KiB allocated**. The standard library is no longer indexed
 eagerly per session, so a process serving many sessions (the LSP, a server) no
 longer pays a multi-megabyte floor for each one.
 
-Above that baseline a model costs roughly **11 KiB held per element**, and
-allocates roughly **54 KiB per element** while loading, most of it short-lived
+Above that baseline a model costs roughly **10 KiB held per element**, and
+allocates roughly **48 KiB per element** while loading, most of it short-lived
 parser and resolution garbage.
 
 Whole-binary scaling on `-validate` over generated models in standard notation,
@@ -88,17 +88,19 @@ which report nothing:
 
 | elements | wall   | peak RSS |
 | -------- | ------ | -------- |
-| 3 000    | 0.37 s | 121 MiB  |
-| 6 000    | 0.69 s | 194 MiB  |
-| 12 000   | 1.27 s | 300 MiB  |
+| 3 000    | 0.33 s | 107 MiB  |
+| 6 000    | 0.55 s | 161 MiB  |
+| 12 000   | 1.03 s | 277 MiB  |
 
-Both time and memory grow linearly with the model. Loading was quadratic once —
-doubling the model roughly quadrupled the time — for the reasons below.
+Both time and memory grow linearly with the model. This change cut live heap held
+by 6.9% (8.5% at 4,000 elements) and allocations by about 2%, with output
+byte-identical. Loading was quadratic once — doubling the model roughly
+quadrupled the time — for the reasons below.
 
 ### What made it quadratic
 
-Three scans over a namespace's members, each performed once per member of that
-namespace:
+The load path had several costs, including three scans over a namespace's
+members, each performed once per member of that namespace:
 
 - `passes.checkRedefinition` searched the enclosing scope for the symbol owning
   it, copying the scope's member-name list for every declaration checked. It cost
@@ -113,6 +115,11 @@ namespace:
 - `resolve.importsOf` rebuilt a namespace's import list on every unqualified name
   lookup made in it. The tree is immutable after parsing, so the resolver
   memoizes it.
+- Every scope allocated a member map even when it had no named members, and a
+  populated key also paid map-bucket overhead plus a separate one-element slice.
+  The eager per-scope member map is gone: scopes now store named members in
+  declaration order, scan small scopes, and build a lookup index lazily only
+  above the 12-entry threshold.
 
 ### What made reporting findings quadratic
 
@@ -136,27 +143,37 @@ added.
 
 ### Where a load's allocation goes
 
-A load allocates about 15 times what the model it leaves behind holds, and a CPU
-profile of it is spent in the collector, so allocation volume is what a load's
-wall time follows. Three sources accounted for half of it:
+A load allocates substantially more than the model it leaves behind holds, and a
+CPU profile of it is spent in the collector, so allocation volume is what a
+load's wall time follows. The load's major allocation sources include:
 
 - The validation passes each walked the document's symbol tree themselves, copying
   every scope's member list on the way — 17 traversals of the same tree per
   document. The passes of one run share a `Context`, which now holds the
   traversal, and the walk is made once.
-- `parser.fill` grew the token buffer as it read, which was the largest single
-  source of allocation while loading. Models measure about five source bytes per
-  non-trivia token, so the buffer is sized from the source length instead.
+- A scope used to allocate a member map and a separate member-order slice even
+  when it held no named member. Flat declaration-ordered storage removes both
+  costs from empty scopes and avoids per-key buckets and one-element slices from
+  populated scopes.
+- `parser.fill` grows the token buffer as it reads. The parser sizes that buffer
+  from source length; the estimate suits dense models and over-allocates on
+  sparse ones.
 - A wildcard import surfaces a name by enumerating the target namespace's direct
   children (`symbols.Index.LookupDirectChildren`), which rebuilt and re-sorted
   that list on every unqualified lookup made through the import. The index now
   keeps the list per namespace and visibility, and drops what it kept whenever a
   write lands in any of its tables, so a lookup after an edit is recomputed.
 
-Together these cut a 4 000-element load by 23% in time and 37% in allocation,
-and `-validate` over a 12 000-element model from 1.40 s and 908 MiB allocated to
-1.27 s and 610 MiB, with peak RSS down from 335 to 300 MiB. Diagnostics,
-resolution results and exit status are byte-identical.
+The scope representation is shaped by the actual models. In the standard
+library, 10,666 scopes contain no named members 70.5% of the time, 99.3% contain
+at most eight named members, and the largest contains 516. A generated model
+reaches 16,000 named members in one scope. The former representation therefore
+paid for maps on roughly 72% of scopes that never used one, while a populated
+member cost roughly 80 bytes of map and slice overhead for 24 bytes of data. A
+linear scan is appropriate for the common small scopes; the lazy index prevents
+the large scopes from becoming quadratic.
+
+Diagnostics, resolution results and exit status are byte-identical.
 
 ## What running a model costs
 
@@ -195,6 +212,14 @@ a faster executor.
   recover part of that rather than all of it: loading is still about twice what
   it was before every definition body inherited its library base. The work is
   linear in the model and semantically required, so what is left to win is in
-  the scans it walks — `symbols.Scope.AllMembers` copies a scope's member list
-  per call, and the scope, inheritance and redefinition walkers each traverse
-  the document separately from the shared symbol traversal.
+  the scans it walks. Hot callers now use non-copying member iteration, while
+  callers that need an owned slice continue to use `symbols.Scope.AllMembers`.
+- The “small scopes could use a slice instead of a map” lever is closed:
+  flat declaration-ordered storage replaces the eager map, and scopes above the
+  threshold build a lookup index lazily. The measured scope shape is why the
+  threshold matters.
+- Recycling parser token buffers across parses was measured and rejected. It
+  reduced allocated bytes by only 1.6% while increasing wall time by 3.8% and
+  peak RSS by 0.8%. The source-bytes-per-token ratio is 13.8 on the standard
+  library but 5.6 on generated models, so no fixed presize divisor serves both;
+  do not revisit this lever without new evidence.
