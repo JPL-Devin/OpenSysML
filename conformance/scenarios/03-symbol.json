@@ -1,0 +1,76 @@
+{
+  "scenarios": [
+    {
+      "id": "symbol/a_definition_reports_its_kind_and_members",
+      "rpc": "GetSymbol",
+      "description": "A definition's symbol names its kind and its members, which is what navigation walks.",
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Vehicle"
+      },
+      "expect": {
+        "response": {
+          "symbol": {
+            "id": "Demo::Vehicle",
+            "name": "Vehicle",
+            "kind": "partDef"
+          }
+        }
+      }
+    },
+    {
+      "id": "symbol/an_attribute_reports_the_kind_that_filters_it",
+      "description": "Attribute and part usages are told apart by kind, which is how a client offers attributes() and parts().",
+      "rpc": "GetSymbol",
+      "requires_capabilities": [
+        "symbol_attributes"
+      ],
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Vehicle::mass"
+      },
+      "expect": {
+        "response": {
+          "symbol": {
+            "id": "Demo::Vehicle::mass",
+            "name": "mass",
+            "kind": "attributeUsage"
+          }
+        }
+      }
+    },
+    {
+      "id": "symbol/an_unknown_symbol_is_not_found",
+      "rpc": "GetSymbol",
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Nope"
+      },
+      "expect": {
+        "contains": {
+          "error": "symbol not found"
+        }
+      }
+    },
+    {
+      "id": "symbol/an_unknown_model_is_not_found",
+      "rpc": "GetSymbol",
+      "request": {
+        "model_hash": "no-such-model",
+        "symbol_id": "Demo::Vehicle"
+      },
+      "expect": {
+        "status": "NOT_FOUND"
+      }
+    }
+  ]
+}

@@ -1,0 +1,169 @@
+{
+  "scenarios": [
+    {
+      "id": "instantiate/a_part_def_answers_an_instance_of_it",
+      "rpc": "Instantiate",
+      "model": {
+        "fixture": "simple_part.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Test::SimplePart"
+      },
+      "expect": {
+        "response": {
+          "instance": {
+            "id": "@1",
+            "type_symbol_id": "Test::SimplePart",
+            "feature_values": {
+              "mass": {
+                "feature_name": "mass",
+                "materialized": true,
+                "value": {
+                  "int_value": 100
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "instantiate/a_part_feature_resolves_to_a_nested_instance",
+      "description": "A part slot carries the id of another instance in the graph, which is how a client resolves it.",
+      "rpc": "Instantiate",
+      "requires_capabilities": [
+        "feature_values"
+      ],
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Vehicle"
+      },
+      "expect": {
+        "response": {
+          "instance": {
+            "id": "@1",
+            "type_symbol_id": "Demo::Vehicle",
+            "feature_values": {
+              "mass": {
+                "value": {
+                  "real_value": 1500.0
+                }
+              },
+              "engine": {
+                "value": {
+                  "instance_id": "@2"
+                }
+              }
+            }
+          }
+        },
+        "min_counts": {
+          "instances": 2
+        }
+      }
+    },
+    {
+      "id": "instantiate/a_cyclic_feature_value_is_an_error_on_the_feature",
+      "description": "A feature that cannot be computed says so on itself, so the rest of the instance is still readable.",
+      "rpc": "Instantiate",
+      "requires_capabilities": [
+        "feature_values"
+      ],
+      "model": {
+        "fixture": "cyclic.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Cyclic"
+      },
+      "expect": {
+        "contains": {
+          "instance.feature_values.a.error": "cyclic"
+        }
+      }
+    },
+    {
+      "id": "instantiate/a_valueless_feature_of_a_value_type_is_unset",
+      "description": "A materialized feature holding no value uses the unset arm, which is not the model's null.",
+      "rpc": "Instantiate",
+      "requires_capabilities": [
+        "unset_value"
+      ],
+      "model": {
+        "fixture": "unset.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "P::Q"
+      },
+      "expect": {
+        "response": {
+          "instance": {
+            "feature_values": {
+              "d": {
+                "materialized": true,
+                "value": {
+                  "unset": true
+                }
+              },
+              "k": {
+                "value": {
+                  "real_value": 2.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "instantiate/an_enumeration_typed_feature_holds_the_literal",
+      "rpc": "Instantiate",
+      "requires_capabilities": [
+        "enum_values"
+      ],
+      "model": {
+        "fixture": "enumeration.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "D::Car"
+      },
+      "expect": {
+        "response": {
+          "instance": {
+            "feature_values": {
+              "c": {
+                "value": {
+                  "enum_literal": {
+                    "literal_id": "D::Color::red"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "instantiate/an_unknown_symbol_is_reported_in_band",
+      "rpc": "Instantiate",
+      "model": {
+        "fixture": "simple_part.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Test::DoesNotExist"
+      },
+      "expect": {
+        "contains": {
+          "error": "not found"
+        }
+      }
+    }
+  ]
+}
