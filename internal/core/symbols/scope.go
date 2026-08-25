@@ -206,7 +206,8 @@ func (s *Scope) MemberNames() []string {
 		return nil
 	}
 	out := make([]string, 0, len(s.names))
-	if index := s.memberIndex.Load(); index != nil {
+	if len(s.names) > memberIndexThreshold {
+		index := s.loadMemberIndex()
 		for i, name := range s.names {
 			indices := (*index)[name]
 			if len(indices) > 0 && indices[0] == int32(i) {

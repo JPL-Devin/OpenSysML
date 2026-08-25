@@ -101,6 +101,42 @@ func TestScopeLookupRepeatedKeyOrderAndMemberNameDeduplication(t *testing.T) {
 	}
 }
 
+func TestScopeMemberNamesLargeScopeBuildsIndex(t *testing.T) {
+	names := []string{"first", "repeat", "second", "repeat"}
+	for i := len(names); i < memberIndexThreshold*3; i++ {
+		names = append(names, fmt.Sprintf("member%d", i))
+	}
+
+	small := NewScope(nil, nil)
+	for _, name := range names[:4] {
+		small.Define(name, &Symbol{Name: name})
+	}
+	smallNames := small.MemberNames()
+
+	large := NewScope(nil, nil)
+	for _, name := range names {
+		large.Define(name, &Symbol{Name: name})
+	}
+	if large.memberIndex.Load() != nil {
+		t.Fatal("large scope unexpectedly had an index before MemberNames")
+	}
+	largeNames := large.MemberNames()
+	if large.memberIndex.Load() == nil {
+		t.Fatal("large MemberNames did not build the lookup index")
+	}
+	if len(largeNames) < len(smallNames) {
+		t.Fatalf("large MemberNames returned %d names, want at least %d", len(largeNames), len(smallNames))
+	}
+	for i, name := range smallNames {
+		if largeNames[i] != name {
+			t.Fatalf("large MemberNames[%d] = %q, want %q", i, largeNames[i], name)
+		}
+	}
+	if largeNames[1] != "repeat" {
+		t.Fatalf("large MemberNames = %v, want repeat deduplicated in first-seen order", largeNames[:4])
+	}
+}
+
 func TestScopeMembersPreserveInterleavedDeclarationOrder(t *testing.T) {
 	s := NewScope(nil, nil)
 	first := &Symbol{Name: "first"}
