@@ -111,17 +111,26 @@ func (fc *filterChecker) gated(expr ast.Node) bool {
 const (
 	msgFilterNotBoolean   = "Must have a Boolean result"
 	msgFilterNotEvaluable = "Must be model-level evaluable"
+	msgFilterNotEvaluated = "Filter condition is not evaluated by OpenSysML; all candidates are kept"
 )
 
-// filterDiagnostic renders one fault. Both are errors: a condition that cannot
-// yield a truth value at model level never selects an element.
+// filterDiagnostic renders one filter condition fault.
 func filterDiagnostic(p semantics.FilterProblem) Diagnostic {
-	if p.NotBoolean {
+	switch p.Kind {
+	case semantics.FilterProblemNotBoolean:
 		return Diagnostic{
 			Severity: SeverityError,
 			Span:     p.Span,
 			Message:  msgFilterNotBoolean,
 			Code:     "filter-not-boolean",
+			Source:   "type",
+		}
+	case semantics.FilterProblemUnsupported:
+		return Diagnostic{
+			Severity: SeverityWarning,
+			Span:     p.Span,
+			Message:  msgFilterNotEvaluated,
+			Code:     "filter-not-evaluated",
 			Source:   "type",
 		}
 	}

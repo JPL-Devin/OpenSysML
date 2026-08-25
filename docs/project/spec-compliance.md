@@ -1215,8 +1215,9 @@ Four constraint-tier rules from the pinned reference implementation (pilot `2026
 are covered here. They were adjudicated diagnostic by diagnostic in
 [pilot-differential.md](pilot-differential.md) against minimal reproducers run
 through that reference. The subsetting-featuring and flow-end rules are
-implemented faithfully; the element-filter evaluability and invocation-type rules
-are approximate, with the divergences named in their rows.
+implemented faithfully; element-filter accessibility is now covered for
+candidate-relative filter references, while evaluability and invocation-type
+rules remain approximate, with the divergences named in their rows.
 The rule text is its validator
 (`org.omg.kerml.xtext/.../KerMLValidator.xtend`) plus the constraint text on the
 generated metamodel.
@@ -1229,6 +1230,13 @@ generated metamodel.
 | `validateInvocationExpressionInstantiatedType` — `instantiatedType` must be a `Behavior`, or a `Feature` typed by exactly one `Behavior` | `passes/typecheck_expr.go` `inferInvocation` and invocation-target classification, wording the diagnostic as the reference words it | `passes/pilot_p6_gaps_test.go` `TestTypeCheckInvocationInstantiatedTypeNotImplemented`; `passes/f21_f23_validation_test.go` `TestF23BehavioralTargetsRemainInvocable`; `passes/w7g_invocation_target_test.go` (a non-behavior definition and a feature typed by one are reported at the same location and with the same text as the reference; an unresolved target is not; a name two imports both supply, and a `calc def`/`action def` target) | ⚠️ Approximate (matched runs: on an ambiguous `N` supplied by a part definition and an action definition both implementations resolve the same one and report the rule at `6:16`, and both are silent for `F(1)` on a `calc def`. On `attribute b = P(1); attribute e = d(1);` — both implementations report `Must invoke a behavior or a behavioral feature` at `3:16` and `6:16`. The reference is **not** silent for an unresolved target: on `attribute a = Missing(1)` it reports the unresolved reference *and* this rule at `2:16`, where our tiering reports only the unresolved reference, since the type tier is skipped for a name that did not resolve — a deliberate divergence, not a missing rule) |
 
 ---
+
+The element-filter entries above now include chain-shaped coverage in
+`semantics/filter_pilot_test.go` and `passes/filter_test.go`: metaclass-owned
+Boolean and non-Boolean chains, comparisons, user-struct-featured chains,
+library chains, and package-level feature chains. Evaluator-only limitations
+are warnings; specification faults remain errors, and a type-tier error can
+still gate the constraint-tier accessibility diagnostic.
 
 ### SysML Notation the Reference Accepts and We Reject — the ten classes
 
