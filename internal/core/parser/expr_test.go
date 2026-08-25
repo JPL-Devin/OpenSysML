@@ -109,3 +109,41 @@ func TestTrailingExpressionPrefixOperators(t *testing.T) {
 		})
 	}
 }
+
+// A trailing expression may begin with a name followed by a keyword binary
+// operator; the keyword does not make the name a declaration.
+func TestTrailingExpressionWordOperators(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		op         ast.OperatorKind
+	}{
+		{"and", "a and b", ast.OpConditionalAnd},
+		{"or", "a or b", ast.OpConditionalOr},
+		{"xor", "a xor b", ast.OpXor},
+		{"implies", "a implies b", ast.OpImplies},
+		{"as", "a as Real", ast.OpAs},
+		{"istype", "a istype Real", ast.OpIsType},
+		{"hastype", "a hastype Real", ast.OpHasType},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "calc def C { in a; in b; " + tc.body + " }"
+			p := New(source.New("word_op.sysml", []byte(src)))
+			root := p.ParseFile()
+			if len(p.Diagnostics) > 0 {
+				t.Fatalf("unexpected diagnostics for %q: %v", src, p.Diagnostics)
+			}
+			def := root.Members[0].(*ast.Membership).Member.(*ast.Definition)
+			last := def.Members[len(def.Members)-1]
+			if m, ok := last.(*ast.Membership); ok {
+				last = m.Member
+			}
+			got, ok := last.(*ast.OperatorExpr)
+			if !ok {
+				t.Fatalf("%q parsed to %T, want *ast.OperatorExpr", tc.body, last)
+			}
+			if got.Operator != tc.op {
+				t.Errorf("%q operator = %v, want %v", tc.body, got.Operator, tc.op)
+			}
+		})
+	}
+}

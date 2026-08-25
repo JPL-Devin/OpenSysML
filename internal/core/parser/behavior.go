@@ -55,9 +55,12 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			// but not a declaration pattern (name followed by colon/semicolon/keyword/bracket)
 			peek1 := p.peek()
 			peek2 := p.peekN(1)
+			// A keyword binary operator after the name continues an expression
+			// (`a and b`, `x as Real`), so it is not a declaration.
 			isNameDecl := (peek1.Kind == lexer.Identifier || peek1.Kind == lexer.UnrestrictedName) &&
 				(peek2.Kind == lexer.Colon || peek2.Kind == lexer.Semicolon ||
-					peek2.Kind == lexer.Keyword || peek2.Kind == lexer.LBracket)
+					(peek2.Kind == lexer.Keyword && !wordBinaryOpKeywords[peek2.KeywordID]) ||
+					peek2.Kind == lexer.LBracket)
 
 			// If expression-start but NOT name-declaration pattern, parse as implicit return
 			// A `var`-prefixed declaration is a member, not the value of an
