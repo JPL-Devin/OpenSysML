@@ -4853,3 +4853,47 @@ Two traps that reproduce on **base too** (do not attribute them to a record-form
   fine.
 - `instantiate` reports a constraint feature as `feature value 'massOK': feature value is not
   materialized` — also present on base.
+
+## Proving a pure-performance change is behavior-preserving (line-index / rollback work)
+
+Perf PRs whose claim is "identical output, less cost" are only testable as a **differential**
+against a binary built from the PR's merge-base (`git merge-base HEAD origin/main` — note
+`origin/main` may have moved past the branch point, so use the merge-base, not `main`, or you
+attribute unrelated commits to the PR). Build both `cmd/sysml` and `cmd/sysml-lsp` from each side.
+
+What to diff, in order of how much it catches:
+
+- **`-validate` over off-by-one bait.** A finding on line 1 and on the final line, a file with no
+  trailing newline, a zero-byte file (must still print `✓ <name>: no errors`, exit 0), one very long
+  single line with many findings, and multi-byte UTF-8 (comments with `é`/`—`/emoji) *before* a
+  finding on the same line — columns are **byte** columns, so an index that recounts differently
+  shows up here. Diff `stdout+stderr+exit` as one blob.
+- **A large warning-heavy model**, for output volume: `/home/ubuntu/perf/models/m{4000,8000,16000}.sysml`
+  emit warnings on every element (m4000 is ~16.8k output lines); `clean{3000,6000,12000}.sysml` emit
+  none and are the control that the change did not just move cost around.
+- **Multi-submission REPL transcripts.** `%load` several files, then type two or three multi-line
+  package snippets at the prompt, interleaving `%list`/`%print`. Findings in loaded files must be
+  reported as `file:line:col` relative to that file, prompt findings as bare `line:col` relative to
+  their own submission. Re-issuing `%list` after later submissions is the staleness probe.
+- **Failed-materialization rollback.** The cheapest reliable failure is a part def whose exhibited
+  state machine has no body: `part def Broken { exhibit state empty { } }`. `%instantiate` of it
+  fails outright; nest it as `part bad : Broken;` inside a `part def` (also 4 levels deep, and as a
+  `part bads[3] : Broken;` collection) and reach it with `%features` or
+  `%eval in <Def> : a.b.c.bad` — children are materialized lazily, so instantiating the parent alone
+  proves nothing. Diff the whole transcript **including instance IDs**: the ID gaps left by
+  discarded objects are the sharpest signal that the rollback bookkeeping matches the old one.
+  Repeat each failing read 2–3 times and re-read a sibling afterwards to prove re-materialization.
+- **LSP edit cycles**, for cache staleness: drive `bin/sysml-lsp` over stdio with `initialize`,
+  `didOpen`, then several full-text `didChange`s that cycle content v1→v2→v3→v1, printing every
+  `publishDiagnostics` range. Diff the sequences from both binaries. (Documents are rebuilt per
+  version in `internal/core/model/document.go`, so a per-SourceFile memoized index is safe — but
+  this is the test that would catch it if that ever changes.)
+- `go test -race` on `./internal/core/source/... ./internal/repl/... ./internal/core/runtime/... ./internal/lsp/...`,
+  plus, for a memoized accessor, a throwaway package inside the module (`mkdir tmp_racecmd`, one
+  `_test.go` firing 64 goroutines at `sf.Lines().PosAt(...)`, then `rm -rf` it) — an in-repo dir is
+  required because `internal/...` is unimportable from outside the module.
+
+Measure with `python3 /home/ubuntu/perf/timeit.py <cmd>` (wall + peak RSS; GNU `time` is absent).
+Baseline observed for the line-index memoization: m4000 8.06s→0.55s, m8000 31.7s→1.07s,
+m16000 124.3s→2.18s, clean models unchanged (~0.43s / ~1.4s). Clean-model load being slower than
+some older baseline is a **separate known regression**, not a perf-PR failure.
