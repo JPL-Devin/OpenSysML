@@ -303,14 +303,14 @@ fn connect_error(status: u16, bytes: &[u8]) -> Error {
     let code = parsed
         .as_ref()
         .and_then(|item| item.code.as_deref())
-        .unwrap_or("unknown")
-        .to_owned();
+        .map(ToOwned::to_owned);
     let message = parsed
         .and_then(|item| item.message)
         .filter(|item| !item.is_empty())
         .unwrap_or_else(|| String::from_utf8_lossy(bytes).into_owned());
-    let status = if code == "unknown" {
-        match status {
+    let status = match code.as_deref() {
+        Some(code) => Status::from_connect_code(code),
+        None => match status {
             400 => Status::InvalidArgument,
             401 => Status::Unauthenticated,
             403 => Status::PermissionDenied,
@@ -322,9 +322,7 @@ fn connect_error(status: u16, bytes: &[u8]) -> Error {
             501 => Status::Unimplemented,
             503 => Status::Unavailable,
             _ => Status::Unknown,
-        }
-    } else {
-        Status::from_connect_code(&code)
+        },
     };
     Error::Service { status, message }
 }
@@ -574,6 +572,27 @@ mod tests {
             error,
             Error::Service {
                 status: Status::Unavailable,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn unknown_connect_code_is_not_replaced_by_http_status() {
+        let error = connect_error(500, br#"{"code":"unknown","message":"opaque failure"}"#);
+        assert!(matches!(
+            error,
+            Error::Service {
+                status: Status::Unknown,
+                message
+            } if message == "opaque failure"
+        ));
+
+        let error = connect_error(500, b"");
+        assert!(matches!(
+            error,
+            Error::Service {
+                status: Status::Internal,
                 ..
             }
         ));

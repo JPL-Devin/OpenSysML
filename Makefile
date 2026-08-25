@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance test lint clean install help python-test python-install proto proto-go python-proto proto-ts proto-java proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-rust test lint clean install help python-test python-install proto proto-go python-proto proto-ts proto-java proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -59,6 +59,11 @@ conformance: ## Run the language-independent conformance suite against sysml-grp
 	@mkdir -p $(BIN_DIR)
 	go run ./cmd/conformance -report $(BIN_DIR)/conformance-report.json
 	@echo "✓ Conformance suite passed ($(BIN_DIR)/conformance-report.json)"
+
+conformance-rust: ## Run the conformance suite with the blocking Rust client
+	$(MAKE) build
+	@mkdir -p $(BIN_DIR)
+	OPENSYSML_GRPC_BINARY="$(CURDIR)/$(BIN_DIR)/sysml-grpc" cargo run --manifest-path rust/Cargo.toml -p opensysml-conformance -- -binary "$(CURDIR)/$(BIN_DIR)/sysml-grpc" -report "$(CURDIR)/$(BIN_DIR)/conformance-report-rust.json"
 
 test: ## Run all tests
 	@echo "Running tests..."
