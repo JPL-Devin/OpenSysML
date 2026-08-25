@@ -74,6 +74,27 @@ jobs:
       - run:
           name: Run static analysis (staticcheck + gosec)
           command: make lint
+
+      - run:
+          name: Lint the protobuf schema
+          command: make proto-lint
+
+      # The mechanical half of the wire contract that
+      # python/tests/test_wire_compat.py pins by hand. The baseline is main, so a
+      # shallow fetch of it is enough.
+      - run:
+          name: Check the protobuf schema for breaking changes
+          command: |
+            git fetch --no-tags --depth=1 origin main
+            make proto-breaking
+
+      # Committed stubs must be what buf generates, or the checked-in code and
+      # the schema can drift apart silently.
+      - run:
+          name: Verify the committed Go stubs are current
+          command: |
+            make proto-go
+            git diff --exit-code api/proto
       
       # The corpus is not vendored and the gate skips while it is absent, so a
       # release tag could be cut over a corpus regression without it.
@@ -351,6 +372,28 @@ jobs:
           command: |
             cd python
             OPENSYSML_REQUIRE_SERVICE=1 pytest tests/ -v
+
+      # This executor has no Go toolchain, so buf comes from the official release
+      # rather than `go run`, pinned by digest so a substituted asset is not run.
+      - run:
+          name: Install buf
+          command: |
+            curl -fsSL -o /tmp/buf \
+              https://github.com/bufbuild/buf/releases/download/v1.57.2/buf-Linux-x86_64
+            echo "644e6fa4a62afc2b0d425d3ac9538d2f512947c0f2e82fc95c41a5eab6729414  /tmp/buf" | sha256sum --check --strict
+            sudo install -m 0755 /tmp/buf /usr/local/bin/buf
+            buf --version
+
+      # Committed stubs must be what buf generates, or the checked-in client and
+      # the schema can drift apart silently.
+      - run:
+          name: Verify the committed Python stubs are current
+          command: |
+            # Pinned to the version recorded in the committed stubs
+            # (GRPC_GENERATED_VERSION), so a newer release cannot fail this check.
+            pip install "grpcio-tools==1.83.0"
+            make python-proto BUF=buf
+            git diff --exit-code python/opensysml/proto
       
       - run:
           name: Verify import

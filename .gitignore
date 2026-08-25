@@ -33,3 +33,6 @@ build/
 .pytest_cache/
 coverage.txt
 .coverage
+
+# Generated stubs for the upcoming clients (make proto-ts / proto-java / proto-rust)
+/gen/
