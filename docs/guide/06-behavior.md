@@ -10,10 +10,8 @@ connections.
 sysml> action SimpleWorkflow {
   ...>     attribute result = 0;
   ...>     first start;
-  ...>     action compute { assign result := 42; }
-  ...>     done end;
-  ...>     then start compute;
-  ...>     then compute end;
+  ...>     then action compute { assign result := 42; }
+  ...>     then done;
   ...> }
 ✓ action SimpleWorkflow
 
@@ -32,6 +30,7 @@ sysml> %step
 sysml> %tokens
 Active tokens (1):
   Token 1 @ compute
+  Values:
     result = 0
 
 sysml> %continue
@@ -42,6 +41,11 @@ sysml> %continue
 ```
 
 **State machine execution:**
+
+The following state machine uses OpenSysML extensions with no SysML v2 production
+(`initial`, `final`, and named succession notation). See the
+[conformance audit](../reference/grammar/conformance-audit.md).
+
 ```sysml
 sysml> state TrafficLight {
   ...>     initial start;
@@ -51,6 +55,15 @@ sysml> state TrafficLight {
   ...>     final off;
   ...>     start then green;
   ...> }
+2:5: warning: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
+    initial start;
+    ^~~~~~~
+6:5: warning: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
+    final off;
+    ^~~~~
+7:5: warning: `<source> then <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+    start then green;
+    ^~~~~~
 ✓ state TrafficLight
 
 sysml> %state TrafficLight
@@ -103,7 +116,9 @@ sysml> %advance 30
 - `%advance <time>` — Advance simulation time by `<time>` units, processing every event due
 - `%stop` — Stop debugging
 
-**See [examples/action-executor-demo.sysml](../../examples/action-executor-demo.sysml) and [examples/state-machine-demo.sysml](../../examples/state-machine-demo.sysml) for complete workflows.**
+**See [examples/action-executor-demo.sysml](../../examples/action-executor-demo.sysml),
+[examples/orthogonal-regions-demo.sysml](../../examples/orthogonal-regions-demo.sysml), and
+[examples/pseudostates-demo.sysml](../../examples/pseudostates-demo.sysml) for complete workflows.**
 
 ## An object runs the behaviors its type exhibits
 
@@ -123,7 +138,7 @@ sysml> part def Monitor {
   ...>         }
   ...>         state awake { entry action mark { assign count := count + 10; } }
   ...>     }
-  ...>     action bumpBy { in n; first apply; action apply { assign count := count + n; } }
+  ...>     action bumpBy { in n; action apply { assign count := count + n; } first apply; then done; }
   ...> }
 ✓ part def Monitor
 
@@ -148,6 +163,12 @@ sysml> %features Monitor
 Instance: Monitor (ID: 1)
 Features:
   count = 11
+  modes = Instance(ID: 2)
+    idle = <unknown>
+    awake = <unknown>
+  bumpBy = Instance(ID: 3)
+    n = <unknown>
+    apply = <unknown>
 ```
 
 `%instantiate` started the machine and `%state Monitor` bound the debugger to *that object's*
@@ -189,6 +210,12 @@ sysml> %features Monitor
 Instance: Monitor (ID: 1)
 Features:
   count = 15
+  modes = Instance(ID: 2)
+    idle = <unknown>
+    awake = <unknown>
+  bumpBy = Instance(ID: 3)
+    n = <unknown>
+    apply = <unknown>
 ```
 
 Each argument is written `<parameter>=<expression>`; an unbound parameter, an argument naming no
@@ -204,23 +231,82 @@ prints.
 
 ### Sequential: start → action → done
 
+The sequential flow below uses standard implicit succession notation:
+
 ```sysml
 action sequential {
     attribute result : Integer = 0;
 
     first start;
-    action compute { assign result := 42 * 2; }
-    done finish;
-
-    then start compute;
-    then compute finish;
+    then action compute { assign result := 42 * 2; }
+    then done;
 }
 ```
 
 One token spawns at `start`, moves to `compute`, which runs its body, and is consumed at
-`finish`:
+`done`:
+
+When the named backing file is loaded, each of the three commands below first prints:
 
 ```
+✓ package ActionExecutorDemo
+examples/action-executor-demo.sysml:9:23: warning: `bind <feature> = <expression>;` is an OpenSysML extension with no SysML v2 production: a binding relates two features, so bind the expression's result feature instead
+        bind result = x * 2.0;
+                      ^~~~~~~
+examples/action-executor-demo.sysml:18:9: warning: `done <name>;` is an OpenSysML extension with no SysML v2 production: `done` is a library feature a succession names, not a keyword that declares a node
+        done finish;
+        ^~~~
+examples/action-executor-demo.sysml:20:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then start compute;
+        ^~~~
+examples/action-executor-demo.sysml:21:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then compute finish;
+        ^~~~
+examples/action-executor-demo.sysml:37:9: warning: `done <name>;` is an OpenSysML extension with no SysML v2 production: `done` is a library feature a succession names, not a keyword that declares a node
+        done finish;
+        ^~~~
+examples/action-executor-demo.sysml:39:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then start split;
+        ^~~~
+examples/action-executor-demo.sysml:40:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then split left;
+        ^~~~
+examples/action-executor-demo.sysml:41:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then split middle;
+        ^~~~
+examples/action-executor-demo.sysml:42:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then split right;
+        ^~~~
+examples/action-executor-demo.sysml:43:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then left sync;
+        ^~~~
+examples/action-executor-demo.sysml:44:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then middle sync;
+        ^~~~
+examples/action-executor-demo.sysml:45:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then right sync;
+        ^~~~
+examples/action-executor-demo.sysml:46:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then sync finish;
+        ^~~~
+examples/action-executor-demo.sysml:57:9: warning: `done <name>;` is an OpenSysML extension with no SysML v2 production: `done` is a library feature a succession names, not a keyword that declares a node
+        done finish;
+        ^~~~
+examples/action-executor-demo.sysml:59:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then start check;
+        ^~~~
+examples/action-executor-demo.sysml:60:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then pathA finish;
+        ^~~~
+examples/action-executor-demo.sysml:61:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
+        then pathB finish;
+        ^~~~
+```
+
+The command-specific result then follows:
+
+```
+$ sysml -action ActionExecutorDemo::sequential examples/action-executor-demo.sysml
 ✓ Action completed
   Final state: Completed
   Results:
@@ -230,6 +316,9 @@ One token spawns at `start`, moves to `compute`, which runs its body, and is con
 ---
 
 ### Fork and join: parallel paths
+
+This action uses OpenSysML fork and join extensions with no SysML v2 production.
+See the [conformance audit](../reference/grammar/conformance-audit.md).
 
 ```sysml
 action forkJoin {
@@ -262,6 +351,7 @@ values: all three branches are steps of the one performance, so every assignment
 when it completes.
 
 ```
+$ sysml -action ActionExecutorDemo::forkJoin examples/action-executor-demo.sysml
 ✓ Action completed
   Final state: Completed
   Results:
@@ -275,6 +365,10 @@ A branch that never arrives is a deadlock, not a failure: the run is reported as
 ---
 
 ### Decision and else: conditional branching
+
+This action uses OpenSysML decision and guarded succession extensions with no
+SysML v2 production. See the
+[conformance audit](../reference/grammar/conformance-audit.md).
 
 ```sysml
 action conditional {
@@ -300,6 +394,7 @@ action conditional {
 takes the first that holds; `else` is taken when none does. With `x = 15`:
 
 ```
+$ sysml -action ActionExecutorDemo::conditional examples/action-executor-demo.sysml
 ✓ Action completed
   Final state: Completed
   Results:
@@ -307,11 +402,10 @@ takes the first that holds; `else` is taken when none does. With `x = 15`:
     x = 15
 ```
 
-Set `x` to `5` and `taken` is `2`. The state-machine counterparts — fork/join pseudostates,
-choice and junction, history — are in
-[examples/state-machine-demo.sysml](../../examples/state-machine-demo.sysml) and
-[examples/combined-behavioral-demo.sysml](../../examples/combined-behavioral-demo.sysml), and
-every case the executors are held to is under
+Set `x` to `5` and `taken` is `2`. The state-machine counterparts — orthogonal regions,
+choice and junction — are in
+[examples/orthogonal-regions-demo.sysml](../../examples/orthogonal-regions-demo.sysml) and
+[examples/pseudostates-demo.sysml](../../examples/pseudostates-demo.sysml), and every case the executors are held to is under
 `internal/core/runtime/testdata/conformance/`.
 
 A run that stops short — a deadlock, or a budget reached — is reported as a check that was never

@@ -16,7 +16,9 @@ package MyModel {
 
     requirement def ReadingRequirement {
         subject sensor : Sensor;
-        require sensor.reading <= sensor.threshold;
+        require constraint {
+            sensor.reading <= sensor.threshold
+        }
     }
     requirement healthy : ReadingRequirement;
 
@@ -43,21 +45,19 @@ package MyModel {
     action calibrate {
         attribute offset = 0.0;
         first start;
-        action adjust {
+        then action adjust {
             assign offset := offset + 1.5;
         }
-        done end;
-        then start adjust;
-        then adjust end;
+        then done;
     }
 
     state Monitor {
-        initial off;
-        state warming {
-            accept after 10 then running;
-        }
+        entry;
+        then off;
+        state off;
+        state warming;
         state running;
-        off then warming;
+        transition first off then warming;
     }
 }
 ```
@@ -109,7 +109,7 @@ exit=1
 
 $ sysml -constraint MyModel::nosuch checks.sysml; echo "exit=$?"
 ✓ package MyModel
-error: unresolved reference: MyModel::nosuch
+sysml: unresolved reference: MyModel::nosuch
 exit=2
 
 $ sysml -requirement MyModel::healthy checks.sysml; echo "exit=$?"
@@ -177,28 +177,36 @@ action nodes, and `transition <source> to <target>`. They are reported as
 warnings, so a model using them still analyses cleanly. `-strict` asks the other
 question — *is this file conforming SysML v2?* — by making those warnings errors:
 
+The standard form of the monitor used below is:
+
+```sysml
+package M {
+    state monitor {
+        entry;
+        then off;
+        state off;
+        state warming;
+        transition first off then warming;
+    }
+}
+```
+
 ```bash
 $ sysml -validate monitor.sysml; echo "exit=$?"
-monitor.sysml:3:9: warning: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
-        initial off;
-        ^~~~~~~
 ✓ package M
 ✓ monitor.sysml: no errors
 exit=0
 
 $ sysml -strict -validate monitor.sysml; echo "exit=$?"
-monitor.sysml:3:9: error: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
-        initial off;
-        ^~~~~~~
-sysml: monitor.sysml did not analyse cleanly; no check was made
-exit=2
+✓ package M
+✓ monitor.sysml: no errors
+exit=0
 ```
 
-`-strict` changes nothing about what parses: the same file, the same tree, the
-same findings in the same places — only their severity, and with it the exit
-status and the tier gate. It is a portability check, so run it when a model has
-to be read by another SysML v2 tool; leave it off otherwise. Each finding names
-the standard notation to write instead, and
+`-strict` changes nothing about what parses: the same file and the same tree are
+checked, but extensions become errors. It is a portability check, so run it when
+a model has to be read by another SysML v2 tool; leave it off otherwise. Each
+finding names the standard notation to write instead, and
 [the conformance audit](../reference/grammar/conformance-audit.md) cites the
 production each extension is measured against. The same switch is `%strict` at
 the prompt ([4. The REPL](04-repl.md)), the `sysml.strictConformance` setting in
@@ -234,8 +242,8 @@ $ sysml -state MyModel::Monitor -advance 15 checks.sysml
   Time: 0.00
   Events: 1
 ✓ Advanced to 15.00 (2 event(s) processed)
-  Current state: running
-  Last event at: 10.00
+  Current state: warming
+  Last event at: 0.00
   Remaining events: 0
 ```
 

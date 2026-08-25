@@ -62,22 +62,21 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 ## Rendering a view
 
 ```
+sysml> package Demo { private import Views::*; part def Vehicle { attribute mass = 1500.0; } view summary { expose Vehicle; } view parts { expose Vehicle; render asElementTable; } }
+✓ package Demo
+
 sysml> %render Demo::summary
 Demo::summary - tree rendering (the view states no rendering; a tree is the default)
 
 part def Demo::Vehicle
-part Demo::v (Vehicle)
-view Demo::summary::detail
-  part def Demo::Wheel
+  attribute mass
 
 sysml> %render Demo::summary mermaid
 %% Demo::summary — tree rendering
 flowchart TD
   n0["part def Demo::Vehicle"]
-  n1["part Demo::v (Vehicle)"]
-  n2["view Demo::summary::detail"]
-  n3["part def Demo::Wheel"]
-  n2 --- n3
+  n1["attribute mass"]
+  n0 --- n1
 ```
 
 A view stating `render asElementTable;` — or typed by `StandardViewDefinitions::GridView` — renders
@@ -88,17 +87,17 @@ rendered one, as aligned columns at the prompt and as a Markdown table with `mar
 sysml> %render Demo::parts
 Demo::parts - table rendering (render asElementTable)
 
-Element        Kind      Type   Declared in
--------------  --------  -----  -------------
+Element        Kind       Type  Declared in
+-------------  ---------  ----  -----------
 Demo::Vehicle  part def
-wheel          part      Wheel  Demo::Vehicle
+mass           attribute        Demo::Vehicle
 
 sysml> %render Demo::parts markdown
 <!-- Demo::parts — table rendering (render asElementTable) -->
 | Element | Kind | Type | Declared in |
 | --- | --- | --- | --- |
 | Demo::Vehicle | part def |  |  |
-| wheel | part | Wheel | Demo::Vehicle |
+| mass | attribute |  | Demo::Vehicle |
 ```
 
 The rendering is **tool-defined output**: SysML v2 §10.2 specifies the notation a view is written

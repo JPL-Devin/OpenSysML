@@ -328,8 +328,11 @@ links here.
 | `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an object whose feature values did not materialize, an unresolved name, a check that could not be made, a conversion that could not be written, a misused flag or an invalid `SYSML_MAX_*` value. |
 
 ```bash
+$ printf '%s\n' 'constraint MassBudget { 1 > 2 }' > model.sysml
 $ sysml -constraint MassBudget model.sysml; echo $?      # a verdict the model decided
+✓ constraint MassBudget
 ✗ Constraint MassBudget failed
+  Assertion evaluated to false: 1 > 2
 1
 
 $ sysml -debug -quiet model.sysml; echo $?
@@ -340,9 +343,10 @@ $ SYSML_MAX_STEPS=abc sysml -e "1+1"; echo $?
 sysml: SYSML_MAX_STEPS="abc" is not an integer: set it to a positive number of evaluation steps (default 10000000)
 2
 
-$ sysml examples/state-machine-demo.sysml -convert ttl; echo $?
-sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
-2
+$ sysml examples/state-machine-demo.sysml -convert ttl -o /tmp/state-machine.ttl; echo $?
+note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
+wrote /tmp/state-machine.ttl (ttl, 2078 bytes)
+0
 ```
 
 Materializing an object is part of the run, so what it finds is a diagnostic
@@ -358,14 +362,34 @@ analysis found. A name that is no feature of the object is a request the command
 wrong, not a feature value that failed to materialize, and does not change the status.
 
 ```bash
+$ cat > model.sysml <<'EOF'
+package test {
+  part def Sub;
+  part def Craft {
+    part left : Sub;
+    part right : Sub;
+    part volumes : Sub = (left, right);
+  }
+  part craft : Craft;
+}
+EOF
 $ sysml model.sysml -instantiate test::craft -validate; echo $?
+✓ package test
+✓ Created instance of test::craft
+  ID: 1
+  Use %features test::craft to inspect
 error: feature value craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1
 sysml: model.sysml did not materialize cleanly
 2
 
 $ printf '%%instantiate test::craft\n%%features test::craft\n' | sysml model.sysml; echo $?
+✓ package test
 Instance: test::craft (ID: 1)
 Features:
+  left = Instance(ID: 2)
+    (no features)
+  right = Instance(ID: 3)
+    (no features)
   volumes: <error: feature value craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1>
 2
 ```

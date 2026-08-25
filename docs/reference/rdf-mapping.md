@@ -156,7 +156,11 @@ expression as a **tree of typed nodes** in the `expr:` namespace, so a consumer
 can query the model's semantics and not only its structure:
 
 ```sysml
-package P { attribute a : Integer; attribute total : Integer = a * 2; }
+package P {
+    private import ScalarValues::*;
+    attribute a : Integer;
+    attribute total : Integer = a * 2;
+}
 ```
 
 ```turtle
