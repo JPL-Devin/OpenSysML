@@ -133,6 +133,14 @@ relative to the repository root. The two expected v1 boundary skips are
 `unrepresentable by the typed API: ParseFile with no source`. Other skips name
 the missing capability and fail the run unless `-allow-skips` is supplied.
 
+When a covered RPC answers successfully with a non-empty top-level `error`, the
+typed API exposes `Error::Model(message)` and does not retain the rest of that
+response. The runner therefore compares a partial reconstruction,
+`{"error": message}`. This is intentionally fail-safe: an expectation that
+names another response field alongside the top-level error fails rather than
+passing. Widening this representation requires the client to carry the whole
+response on an in-band error, which is outside the v1 boundary.
+
 ## v1 boundary
 
 The current API deliberately does not include generated model-ergonomics types

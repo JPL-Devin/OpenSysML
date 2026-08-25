@@ -219,25 +219,17 @@ impl Runner {
             .filter(|name| !self.connection.capabilities().has(name))
             .cloned()
             .collect::<Vec<_>>();
-        if !missing.is_empty() && scenario.expect_without_capability.is_none() {
+        let expect = if missing.is_empty() {
+            &scenario.expect
+        } else if let Some(expect) = scenario.expect_without_capability.as_ref() {
+            expect
+        } else {
             result.outcome = "skip".to_owned();
             result.status = "-".to_owned();
             result.reason = format!("missing capability {}", missing.join(", "));
             result.duration_ms = elapsed_ms(started);
             return result;
-        }
-        let expect = if missing.is_empty() {
-            &scenario.expect
-        } else {
-            scenario.expect_without_capability.as_ref().unwrap()
         };
-        if scenario.id == "parse/naming_no_source_is_invalid" {
-            result.outcome = "skip".to_owned();
-            result.status = "-".to_owned();
-            result.reason = "unrepresentable by the typed API: ParseFile with no source".to_owned();
-            result.duration_ms = elapsed_ms(started);
-            return result;
-        }
         if !matches!(
             scenario.method(),
             "GetServerInfo"
@@ -264,6 +256,13 @@ impl Runner {
             Ok(request) => request,
             Err(error) => return errored(result, error, started),
         };
+        if scenario.method() == "ParseFile" && request_source(&request).is_none() {
+            result.outcome = "skip".to_owned();
+            result.status = "-".to_owned();
+            result.reason = "unrepresentable by the typed API: ParseFile with no source".to_owned();
+            result.duration_ms = elapsed_ms(started);
+            return result;
+        }
         match self.call(scenario.method(), &request, model.as_ref()) {
             Answer::Transport(status, message) => {
                 result.status = status.canonical_name().to_owned();
@@ -642,14 +641,20 @@ fn resolve_placeholders(
 }
 
 fn fixture_path(fixtures: &Path, name: &str) -> Result<PathBuf, String> {
-    let path = fixtures.join(name);
-    if !path.starts_with(fixtures) {
+    if Path::new(name).components().any(|component| {
+        matches!(
+            component,
+            std::path::Component::ParentDir
+                | std::path::Component::RootDir
+                | std::path::Component::Prefix(_)
+        )
+    }) {
         return Err(format!(
             "fixture {name:?} is outside {}",
             fixtures.display()
         ));
     }
-    Ok(path)
+    Ok(fixtures.join(name))
 }
 
 fn start_service(binary: &Path) -> Result<ServiceGuard, String> {
@@ -760,5 +765,36 @@ impl Options {
             }
         }
         Ok(options)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fixture_paths_reject_parent_escape() {
+        let fixtures = Path::new("/repo/conformance/fixtures");
+        assert!(fixture_path(fixtures, "vehicle.sysml").is_ok());
+        assert!(fixture_path(fixtures, "nested/vehicle.sysml").is_ok());
+        assert!(fixture_path(fixtures, "../secrets.sysml").is_err());
+    }
+
+    #[test]
+    fn empty_parse_content_is_present_oneof_source() {
+        let pool = DescriptorPool::decode(DESCRIPTOR).unwrap();
+        let descriptor = pool.get_message_by_name("sysml.ParseFileRequest").unwrap();
+        let mut deserializer = Deserializer::from_str(r#"{"content":""}"#);
+        let request = DynamicMessage::deserialize_with_options(
+            descriptor,
+            &mut deserializer,
+            &DeserializeOptions::new(),
+        )
+        .unwrap();
+        assert!(request.has_field_by_name("content"));
+        assert!(matches!(
+            request_source(&request),
+            Some(Source::Content(content)) if content.is_empty()
+        ));
     }
 }
