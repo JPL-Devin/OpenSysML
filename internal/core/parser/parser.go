@@ -1,11 +1,17 @@
 package parser
 
 import (
+	"sync"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
+
+const maxPooledTokenCapacity = 1 << 18
+
+var tokenBufferPool sync.Pool
 
 // Parser is a hand-written recursive-descent parser over a lexer token
 // stream. It buffers non-trivia tokens for lookahead and collects
@@ -88,8 +94,42 @@ type parseCheckpoint struct {
 
 // New creates a Parser for the given source file.
 func New(sf *source.SourceFile) *Parser {
-	// Models measure ~5 source bytes per non-trivia token.
-	return &Parser{src: sf, lx: lexer.New(sf), buf: make([]lexer.Token, 0, sf.Len()/5)}
+	// Real corpora run 6-14 source bytes per token; the dense tail is nearer 3,
+	// and pooled buffers absorb its growth.
+	return newParserWithBuffer(sf, nil)
+}
+
+func newParserWithBuffer(sf *source.SourceFile, buf []lexer.Token) *Parser {
+	presize := sf.Len() / 8
+	if cap(buf) < presize {
+		buf = make([]lexer.Token, 0, presize)
+	} else {
+		buf = buf[:0]
+	}
+	return &Parser{src: sf, lx: lexer.New(sf), buf: buf}
+}
+
+func recycleTokenBuffer(buf []lexer.Token) {
+	if cap(buf) == 0 || cap(buf) > maxPooledTokenCapacity {
+		return
+	}
+	tokenBufferPool.Put(buf[:0])
+}
+
+// ParseFile parses the whole source and returns its tree, errors, and warnings.
+// The parser's token buffer is recycled before this function returns.
+func ParseFile(sf *source.SourceFile) (root *ast.RootNamespace, diagnostics, warnings []Diagnostic) {
+	var buf []lexer.Token
+	if pooled := tokenBufferPool.Get(); pooled != nil {
+		buf = pooled.([]lexer.Token)
+	}
+	p := newParserWithBuffer(sf, buf)
+	defer func() {
+		recycleTokenBuffer(p.buf)
+		p.buf = nil
+	}()
+	root = p.ParseFile()
+	return root, p.Diagnostics, p.Warnings
 }
 
 // fill ensures buf holds the token n positions ahead of the cursor (pulling

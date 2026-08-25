@@ -80,8 +80,8 @@ func (l *Loader) load(name string, idx *symbols.Index) error {
 		}
 	}
 
-	p := parser.New(source.New(name, content))
-	idx.AddDocument(name, p.ParseFile())
+	root, _, _ := parser.ParseFile(source.New(name, content))
+	idx.AddDocument(name, root)
 	idx.MarkLibrary(name)
 	l.loaded = append(l.loaded, doc)
 	return nil

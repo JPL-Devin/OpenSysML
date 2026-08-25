@@ -24,8 +24,7 @@ type Document struct {
 // newDocument parses content and builds the document's local scope tree.
 func newDocument(name string, content []byte, version int) *Document {
 	sf := source.New(name, content)
-	p := parser.New(sf)
-	root := p.ParseFile()
+	root, diagnostics, warnings := parser.ParseFile(sf)
 	scope := symbols.Build(root)
 	symbols.SetDocName(scope, name)
 	return &Document{
@@ -33,8 +32,8 @@ func newDocument(name string, content []byte, version int) *Document {
 		Content:          content,
 		Version:          version,
 		AST:              root,
-		ParseDiagnostics: p.Diagnostics,
-		ParseWarnings:    p.Warnings,
+		ParseDiagnostics: diagnostics,
+		ParseWarnings:    warnings,
 		Scope:            scope,
 		sf:               sf,
 	}
