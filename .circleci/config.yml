@@ -224,9 +224,11 @@ jobs:
           name: Conformance suite
           command: make conformance
 
+      # when: always — the report matters most when the gate failed and halted the job.
       - store_artifacts:
           path: bin/conformance-report.json
           destination: conformance-report.json
+          when: always
 
       - run:
           name: Build binaries
