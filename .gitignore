@@ -36,3 +36,4 @@ coverage.txt
 
 # Generated stubs for the upcoming TypeScript and Java clients
 /gen/
+/rust/target/
