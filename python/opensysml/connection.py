@@ -71,6 +71,9 @@ STOP_TIMEOUT = 5.0
 #: Lines of a private child's stderr kept, so a failure to start can quote it.
 _STDERR_LINES_KEPT = 20
 
+#: Seconds a failed child's log is waited for, so an error can quote all of it.
+STDERR_DRAIN_TIMEOUT = 0.5
+
 #: Private services this interpreter started, keyed by the release required of
 #: them, each counting the connections holding it. One child per interpreter per
 #: requirement: its connections share the parse cache they would otherwise each
@@ -193,10 +196,12 @@ class _PrivateService:
         #: Set in a child of fork(), which inherits no right to stop it.
         self.disowned = False
         self._stderr: Deque[str] = deque(maxlen=_STDERR_LINES_KEPT)
+        #: Held to read or append the log, which one thread does while another reads.
+        self._stderr_lock = threading.Lock()
         self._reported: 'queue.Queue[Optional[str]]' = queue.Queue(maxsize=1)
         #: Set at end of file on its stdout, which only its exit closes.
         self._ended = threading.Event()
-        self._start_reader(self._read_stderr)
+        self._stderr_reader = self._start_reader(self._read_stderr)
         self._start_reader(self._read_address)
 
     def alive(self):
@@ -323,17 +328,27 @@ class _PrivateService:
         read for as long as it runs whether or not anything asks for it.
         """
         for line in self.process.stderr:
-            self._stderr.append(line.decode('utf-8', 'replace').rstrip())
+            with self._stderr_lock:
+                self._stderr.append(line.decode('utf-8', 'replace').rstrip())
 
     def _start_reader(self, target):
         """Read one of the child's pipes in a thread that cannot outlive exit."""
-        threading.Thread(target=target, daemon=True).start()
+        thread = threading.Thread(target=target, daemon=True)
+        thread.start()
+        return thread
 
     def _stderr_tail(self):
-        """What the child last logged, for an error that must explain itself."""
-        if not self._stderr:
+        """What the child last logged, for an error that must explain itself.
+
+        A child that failed has closed stderr, so its reader is given a moment to
+        finish: the log is quoted whole rather than as far as it had been read.
+        """
+        self._stderr_reader.join(timeout=STDERR_DRAIN_TIMEOUT)
+        with self._stderr_lock:
+            logged = list(self._stderr)
+        if not logged:
             return ""
-        return "; it logged: " + " | ".join(self._stderr)
+        return "; it logged: " + " | ".join(logged)
 
 
 def _private_service(version, required_release):
