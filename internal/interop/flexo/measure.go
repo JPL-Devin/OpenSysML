@@ -47,8 +47,8 @@ func uniqueProjectID(prefix string) (string, error) {
 	return prefix + "-" + hex.EncodeToString(suffix), nil
 }
 
-// property is one written property, reduced to what the read path can lose: the
-// shape a faithful read would deliver, and how many values were written for it.
+// property is one written property: the shape a faithful read would deliver,
+// and how many values were written for it.
 type property struct {
 	kind  string // "reference", "literal", "array", "object" or "null"
 	count int    // values written; more than one is multi-valued
@@ -226,9 +226,8 @@ func referencePayload(fixture []byte) ([]byte, map[string]*writtenElement, error
 	return changes, written, nil
 }
 
-// jsonProperty reduces one posted JSON value to the shape the comparison tracks.
-// An array's members are counted, so a posted collection is measured as
-// multi-valued the way several triples on one predicate are.
+// jsonProperty reduces one posted JSON value to a shape and an arity, so a
+// posted collection counts as multi-valued the way repeated triples do.
 func jsonProperty(raw json.RawMessage) property {
 	kind := deliveredKind(raw)
 	if kind != "array" {

@@ -310,11 +310,9 @@ type Listing struct {
 	IgnoredPaging bool
 }
 
-// Elements reads a commit's elements, asking for them a page at a time with the
-// pageSize and pageAfter parameters the SysML v2 API defines. A response holding
-// more than pageSize elements, or repeating elements an earlier one already
-// delivered, is a service that ignores those parameters; a repeat is never
-// counted twice, so the measurement holds however the total relates to pageSize.
+// Elements reads a commit's elements a page at a time. A page that overruns
+// pageSize or repeats an element is a service ignoring paging; the repeat is
+// dropped rather than counted twice.
 func (c *Client) Elements(ctx context.Context, project, commit string, pageSize int) (Listing, error) {
 	var listing Listing
 	seen := make(map[string]bool)

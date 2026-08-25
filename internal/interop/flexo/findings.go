@@ -125,8 +125,8 @@ func (s *SideReport) propertyCount(match func(PropertyStat) bool) int {
 	return count
 }
 
-// multiValued sums the elements that carried several values for some property,
-// and how many of those the read path returned the property for.
+// multiValued sums the elements that wrote several values for some property, and
+// how many of those the read path returned it for.
 func (s *SideReport) multiValued() (int, int) {
 	written, delivered := 0, 0
 	for _, p := range s.Properties {
