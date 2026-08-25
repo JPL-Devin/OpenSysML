@@ -145,35 +145,60 @@ func (m *Model) LookupContributedMember(sym *symbols.Symbol, name string) (*symb
 	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
 		sym = target
 	}
+	if plan, ok := m.memberPlan(sym); ok {
+		if plan == nil {
+			return m.lookupContributedByWalkResolved(sym, name, m.contributors(sym))
+		}
+		return m.lookupContributedMemberPlan(plan, name)
+	}
+	if len(m.resolvingRef) != 0 || m.supersUnstable(sym) {
+		return m.lookupContributedByWalkResolved(sym, name, m.contributors(sym))
+	}
 	contributors := m.contributors(sym)
-	var candidate *symbols.Symbol
-	candidateDepth, candidateIndex := 0, 0
+	plan := &memberPlan{}
 	for i, contributor := range contributors {
 		if contributor == nil {
 			continue
 		}
 		if contributor == sym {
+			m.memberPlans[sym] = nil
 			return m.lookupContributedByWalkResolved(sym, name, contributors)
 		}
 		table := m.libraryMemberTable(contributor)
 		if table == nil || table.sources[sym] {
+			m.memberPlans[sym] = nil
 			return m.lookupContributedByWalkResolved(sym, name, contributors)
 		}
+		plan.tables = append(plan.tables, table)
+		plan.indices = append(plan.indices, i)
+	}
+	if idx := m.resolver.Index(); idx != nil && idx.Generation() != m.memberPlanGeneration {
+		return m.lookupContributedByWalkResolved(sym, name, contributors)
+	}
+	m.memberPlans[sym] = plan
+	return m.lookupContributedMemberPlan(plan, name)
+}
+
+func (m *Model) lookupContributedMemberPlan(plan *memberPlan, name string) (*symbols.Symbol, bool) {
+	var candidate *symbols.Symbol
+	candidateDepth, candidateIndex := 0, 0
+	for i, table := range plan.tables {
 		entry, ok := table.entries[name]
 		if !ok {
 			continue
 		}
 		depth := entry.depth + 1
-		if candidate == nil || depth < candidateDepth || (depth == candidateDepth && i < candidateIndex) {
+		index := plan.indices[i]
+		if candidate == nil || depth < candidateDepth || (depth == candidateDepth && index < candidateIndex) {
 			candidate = entry.sym
 			candidateDepth = depth
-			candidateIndex = i
+			candidateIndex = index
 		}
 	}
-	if candidate != nil {
-		return candidate, true
+	if candidate == nil {
+		return nil, false
 	}
-	return nil, false
+	return candidate, true
 }
 
 func (m *Model) lookupContributedByWalk(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {

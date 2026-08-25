@@ -52,6 +52,8 @@ type Model struct {
 	implicitBaseGeneration uint64
 	memberTables           map[*symbols.Symbol]*memberTable
 	memberTableGeneration  uint64
+	memberPlans            map[*symbols.Symbol]*memberPlan
+	memberPlanGeneration   uint64
 
 	// Element-filter evaluation: conditions compiled once per expression, their
 	// verdicts memoized per candidate, and the metadata annotating each candidate
@@ -113,6 +115,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		libSymbols:       make(map[string]*symbols.Symbol),
 		implicitBaseSyms: make(map[string]*symbols.Symbol),
 		memberTables:     make(map[*symbols.Symbol]*memberTable),
+		memberPlans:      make(map[*symbols.Symbol]*memberPlan),
 
 		filterPreds:    make(map[ast.Node]*symbols.FilterPredicate),
 		filterVerdicts: make(map[filterKey]filterVerdict),

@@ -12,6 +12,11 @@ type memberTable struct {
 	sources map[*symbols.Symbol]bool
 }
 
+type memberPlan struct {
+	tables  []*memberTable
+	indices []int
+}
+
 func (m *Model) libraryMemberTable(sym *symbols.Symbol) *memberTable {
 	if sym == nil || m.resolver == nil || m.resolver.Index() == nil {
 		return nil
@@ -21,14 +26,32 @@ func (m *Model) libraryMemberTable(sym *symbols.Symbol) *memberTable {
 	if m.memberTableGeneration != generation {
 		m.memberTables = make(map[*symbols.Symbol]*memberTable)
 		m.memberTableGeneration = generation
+		m.memberPlans = make(map[*symbols.Symbol]*memberPlan)
+		m.memberPlanGeneration = generation
 	}
 	table := m.buildLibraryMemberTable(sym, make(map[*symbols.Symbol]bool), generation)
 	if idx.Generation() != generation {
 		m.memberTables = make(map[*symbols.Symbol]*memberTable)
 		m.memberTableGeneration = idx.Generation()
+		m.memberPlans = make(map[*symbols.Symbol]*memberPlan)
+		m.memberPlanGeneration = idx.Generation()
 		return nil
 	}
 	return table
+}
+
+func (m *Model) memberPlan(sym *symbols.Symbol) (*memberPlan, bool) {
+	if sym == nil || m.resolver == nil || m.resolver.Index() == nil {
+		return nil, false
+	}
+	idx := m.resolver.Index()
+	generation := idx.Generation()
+	if m.memberPlanGeneration != generation {
+		m.memberPlans = make(map[*symbols.Symbol]*memberPlan)
+		m.memberPlanGeneration = generation
+	}
+	plan, ok := m.memberPlans[sym]
+	return plan, ok
 }
 
 func (m *Model) buildLibraryMemberTable(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool, generation uint64) *memberTable {

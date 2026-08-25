@@ -135,8 +135,9 @@ func TestLibraryMemberTableSourceAndReferenceFallbacks(t *testing.T) {
 		t.Fatal("a cached table whose sources include the root was used")
 	}
 
-	got, gotOK := m.LookupContributedMember(subject, name)
 	want, wantOK := m.lookupContributedByWalk(subject, name)
+	m.memberSources = make(map[*symbols.Symbol][]*symbols.Symbol)
+	got, gotOK := m.LookupContributedMember(subject, name)
 	if got != want || gotOK != wantOK {
 		t.Fatalf("source-cycle fallback = (%v, %v), walk = (%v, %v)", got, gotOK, want, wantOK)
 	}
@@ -147,6 +148,76 @@ func TestLibraryMemberTableSourceAndReferenceFallbacks(t *testing.T) {
 	want, wantOK = m.lookupContributedByWalk(subject, name)
 	if got != want || gotOK != wantOK {
 		t.Fatalf("library-reference fallback = (%v, %v), walk = (%v, %v)", got, gotOK, want, wantOK)
+	}
+}
+
+func TestLibraryMemberPlans(t *testing.T) {
+	idx := markedStdlibIndex(t)
+	r := resolve.New(idx)
+	m := NewModel(r)
+	r.SetModel(m)
+	subject, contributor, name := findLibraryContributor(t, m, idx)
+
+	want, wantOK := m.lookupContributedByWalk(subject, name)
+	m.memberSources = make(map[*symbols.Symbol][]*symbols.Symbol)
+	got, gotOK := m.LookupContributedMember(subject, name)
+	if got != want || gotOK != wantOK {
+		t.Fatalf("positive plan = (%v, %v), walk = (%v, %v)", got, gotOK, want, wantOK)
+	}
+	plan, ok := m.memberPlans[subject]
+	if !ok || plan == nil {
+		t.Fatalf("member plan for %s = (%v, %v), want positive plan", symbols.FQNOf(subject), plan, ok)
+	}
+	if _, ok := m.memberSources[subject]; ok {
+		t.Fatalf("positive plan populated member sources for %s", symbols.FQNOf(subject))
+	}
+	if len(plan.tables) == 0 || plan.indices[0] < 0 {
+		t.Fatalf("positive plan for %s = %+v, want contributor table", symbols.FQNOf(subject), plan)
+	}
+	if _, ok := m.memberTables[contributor]; !ok {
+		t.Fatalf("positive plan did not build contributor table for %s", symbols.FQNOf(contributor))
+	}
+
+	root := parseMemberTableDocument(t, "memberplan_user.sysml", source.KindSysML, `package P {
+		part def UserBase { feature userMember; }
+		part def UserDerived :> UserBase;
+	}`)
+	idx.AddDocumentWithKind("memberplan_user.sysml", root, source.KindSysML)
+	r.ResolveDocument("memberplan_user.sysml", root)
+	derived := sym(t, sym(t, idx.DocumentRoot("memberplan_user.sysml"), "P").Scope, "UserDerived")
+	got, gotOK = m.LookupContributedMember(derived, "userMember")
+	want, wantOK = m.lookupContributedByWalk(derived, "userMember")
+	if got != want || gotOK != wantOK {
+		t.Fatalf("negative plan = (%v, %v), walk = (%v, %v)", got, gotOK, want, wantOK)
+	}
+	plan, ok = m.memberPlans[derived]
+	if !ok || plan != nil {
+		t.Fatalf("member plan for %s = (%v, %v), want cached negative plan", symbols.FQNOf(derived), plan, ok)
+	}
+
+	idx2 := markedStdlibIndex(t)
+	r2 := resolve.New(idx2)
+	m2 := NewModel(r2)
+	r2.SetModel(m2)
+	subject2, _, name2 := findLibraryContributor(t, m2, idx2)
+	if _, ok := m2.LookupContributedMember(subject2, name2); !ok {
+		t.Fatalf("initial lookup for %s did not find %q", symbols.FQNOf(subject2), name2)
+	}
+	oldPlan := m2.memberPlans[subject2]
+	oldGeneration := idx2.Generation()
+	generationRoot := parseMemberTableDocument(t, "memberplan_generation.sysml", source.KindSysML, "package Generation {}")
+	idx2.AddDocumentWithKind("memberplan_generation.sysml", generationRoot, source.KindSysML)
+	if idx2.Generation() == oldGeneration {
+		t.Fatal("adding a document did not advance the index generation")
+	}
+	if _, ok := m2.LookupContributedMember(subject2, name2); !ok {
+		t.Fatalf("post-generation lookup for %s did not find %q", symbols.FQNOf(subject2), name2)
+	}
+	if m2.memberPlanGeneration != idx2.Generation() {
+		t.Fatalf("member plan generation = %d, want %d", m2.memberPlanGeneration, idx2.Generation())
+	}
+	if m2.memberPlans[subject2] == oldPlan {
+		t.Fatal("post-generation lookup reused the old member plan")
 	}
 }
 
