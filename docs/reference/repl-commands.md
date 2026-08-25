@@ -151,7 +151,7 @@ sysml> %render Demo::parts
 Demo::parts - table rendering (render asElementTable)
 
 Element        Kind       Type   Declared in
--------------  --------  -----  -------------
+-------------  ---------  -----  -------------
 Demo::Vehicle  part def
 mass           attribute  Real   Demo::Vehicle
 wheel          part       Wheel  Demo::Vehicle
