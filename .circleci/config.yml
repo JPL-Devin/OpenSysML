@@ -118,9 +118,11 @@ jobs:
               fi
             done
 
+      # Per-package timeout: under -race, passes and model exceed go's 10m default
+      # on this executor. Matches `make test` and the GitHub Actions PR workflow.
       - run:
           name: Run tests
-          command: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+          command: go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
           environment:
             # Turns "corpus absent" into a failure rather than a skip, as the
             # GitHub Actions PR workflow already does.
