@@ -210,6 +210,10 @@ func (p *Parser) atExprStart() bool {
 		t.Kind == lexer.Star || // infinity
 		t.Kind == lexer.LParen ||
 		t.Kind == lexer.LBrace ||
+		// prefix operators (parseUnary)
+		t.Kind == lexer.Plus ||
+		t.Kind == lexer.Minus ||
+		t.Kind == lexer.Tilde ||
 		(t.Kind == lexer.Keyword && exprStartKeywords[t.KeywordID])
 }
 

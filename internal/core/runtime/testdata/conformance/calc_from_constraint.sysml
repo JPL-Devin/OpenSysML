@@ -7,6 +7,6 @@ package test {
 
 	calc margin {
 		in speed: Integer;
-		return 130 - speed;
+		130 - speed
 	}
 }

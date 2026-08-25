@@ -110,7 +110,7 @@ func w8cResultExpressions(u *ast.Usage) []ast.Node {
 func w8cIsResultExpressionNode(n ast.Node) bool {
 	switch n.(type) {
 	case *ast.Usage, *ast.Definition, *ast.Package, *ast.Namespace, *ast.Import,
-		*ast.Membership, *ast.ResultMember, *ast.Comment, *ast.Documentation,
+		*ast.Membership, *ast.Comment, *ast.Documentation,
 		*ast.ErrorNode, nil:
 		return false
 	default:

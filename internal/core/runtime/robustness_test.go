@@ -3468,7 +3468,7 @@ func testCalcUnboundParameter(t *testing.T) {
 			calc add {
 				in x: Integer;
 				in y: Integer;
-				return x + y;
+				x + y
 			}
 		}
 	`
@@ -3498,7 +3498,7 @@ func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 		package test {
 			calc grow {
 				in x: Real;
-				return exp(x);
+				exp(x)
 			}
 		}
 	`
@@ -3530,7 +3530,7 @@ func testCalcUnboundKeywordNamedParameter(t *testing.T) {
 			calc classify {
 				in 'type': Integer;
 				in 'state': Integer;
-				return 'type' + 'state';
+				'type' + 'state'
 			}
 		}
 	`
@@ -3558,7 +3558,7 @@ func testCalcTooManyArguments(t *testing.T) {
 		package test {
 			calc double {
 				in x: Integer;
-				return x * 2;
+				x * 2
 			}
 		}
 	`
@@ -3586,7 +3586,7 @@ func testCalcUnknownNamedArgument(t *testing.T) {
 		package test {
 			calc scale {
 				in x: Integer = 1;
-				return x * 2;
+				x * 2
 			}
 		}
 	`
@@ -3668,7 +3668,7 @@ func testCalcDirectRecursion(t *testing.T) {
 		package test {
 			calc countdown {
 				in n: Integer;
-				return countdown(n - 1);
+				countdown(n - 1)
 			}
 		}
 	`
@@ -3682,12 +3682,12 @@ func testCalcMutualRecursion(t *testing.T) {
 		package test {
 			calc ping {
 				in n: Integer;
-				return pong(n);
+				pong(n)
 			}
 
 			calc pong {
 				in n: Integer;
-				return ping(n);
+				ping(n)
 			}
 		}
 	`
@@ -4223,7 +4223,7 @@ func testStepBudgetExceeded(t *testing.T) {
 		package test {
 			calc deep {
 				in x : Integer;
-				return x + x + x + x + x + x + x + x;
+				x + x + x + x + x + x + x + x
 			}
 		}
 	`

@@ -27,13 +27,13 @@ type Parser struct {
 	// as a declaration name.
 	Warnings []Diagnostic
 
+	// calcBodyDepth counts the calculation bodies being parsed, so a `return`
+	// reached in a statement position inside one is read as the result
+	// parameter it declares rather than as an unknown action keyword.
+	calcBodyDepth int
+
 	pendingComment    source.Span // span of the most recent /* */ regular comment
 	hasPendingComment bool
-
-	// calcBodyDepth counts the calculation bodies being parsed, so a `return`
-	// reached in a statement position inside one is read as an early return
-	// rather than as a result parameter declaration.
-	calcBodyDepth int
 
 	// effectDepth counts the transition effects being parsed, whose statement is
 	// closed by the transition's next clause rather than by ';'.

@@ -346,12 +346,6 @@ func (d *decoder) head(el *element) (string, error) {
 		return d.conditionHead(el, "assume")
 	case mRequire:
 		return d.conditionHead(el, "require")
-	case mResult:
-		value, ok := d.stringOf(el, rdf.SysML+pValue)
-		if !ok {
-			return "", d.missing(el, "sysml:"+pValue, "a result member is the expression it returns")
-		}
-		return "return " + value, nil
 	}
 	// A succession carrying its ends as references is the one the parser builds
 	// for a `then`, written back as the edge form: `then <source> <target>;`

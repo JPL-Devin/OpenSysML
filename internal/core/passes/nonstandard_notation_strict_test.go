@@ -25,7 +25,6 @@ var extensionInventory = []string{
 	"action def A { initial a; }",
 	"action def A { final b; }",
 	"action def A { decision d; }",
-	"calc c { in a : Real; return 42; }",
 	"constraint validRange { in x : Real; assert x >= 0; }",
 	"constraint validRange { in x : Real; assume x >= 0; }",
 	"constraint validRange { in x : Real; assert not x >= 0; }",

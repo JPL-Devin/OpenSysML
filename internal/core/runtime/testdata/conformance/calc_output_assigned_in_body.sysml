@@ -66,7 +66,7 @@ package test {
 		in n : Integer;
 		out a : Integer;
 		a = n + 1;
-		return n * 100;
+		n * 100
 	}
 
 	part h {

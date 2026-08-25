@@ -8,8 +8,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-// parseCalcBody parses the body of a calc def/usage.
-// Handles BOTH generic members (parameters like 'in x: Integer;') AND result members ('return expr;').
+// parseCalcBody parses the body of a calc def/usage: its members, including the
+// `return` that declares its result parameter and its trailing expression.
 // Expects '{' already consumed.
 func (p *Parser) parseCalcBody() []ast.Node {
 	body := p.newBodyBuilder()
@@ -39,7 +39,7 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			continue
 		}
 
-		// Check for 'return' keyword → ResultMember
+		// `return` declares the result parameter (SysML.xtext ReturnParameterMember).
 		if p.isResultKeyword() {
 			body.add(p.parseResultMember())
 		} else if p.atCalcStatement() || p.atActionNodeMember() {
@@ -436,10 +436,10 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 func (p *Parser) parseActionMember() ast.Node {
 	start := p.peek().Span.Offset
 
-	// A `return` in a statement position of a calculation body is an early
-	// return: only the body's own members declare its result parameter.
+	// A `return` reached in a statement position of a calculation body declares
+	// the result parameter, as one among its members does.
 	if p.calcBodyDepth > 0 && p.isResultKeyword() {
-		return p.parseResultMemberIn(true)
+		return p.parseResultMember()
 	}
 
 	// An accept node is an action node (SysML.xtext ActionNode), so it stands
@@ -1382,28 +1382,6 @@ func (p *Parser) parseIfBranch(kind ast.IfBranchKind, start int, closeMsg string
 
 // Phase C1: Calculation and Constraint Bodies
 
-// parseResultBody parses the body of a calculation usage.
-// Expects '{' already consumed, returns list of ResultMember nodes.
-// Syntax: calc example { return x + 5; }
-func (p *Parser) parseResultBody() []ast.Node {
-	var members []ast.Node
-
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		members = append(members, p.parseResultMember())
-	}
-
-	p.expect(lexer.RBrace, "expected '}' after result body")
-	return members
-}
-
-// parseResultMember parses one result member:
-//
-//	return <expr>;         -- computed result
-//	return : Type[mult];   -- result parameter (anonymous, type-only)
-func (p *Parser) parseResultMember() ast.Node {
-	return p.parseResultMemberIn(false)
-}
-
 // atCalcStatement reports whether the calculation body continues with a
 // behavioural statement rather than a member declaration or a result
 // expression. `if` also starts a conditional expression, which is told apart by
@@ -1505,11 +1483,11 @@ func (p *Parser) atReturnedUsage() bool {
 	return specialized
 }
 
-// parseResultMemberIn parses a `return` member. In a statement position
-// (inStatement) a lone name after `return` is the value returned, since a
-// result parameter is declared among the body's own members, not inside a
-// branch or a loop.
-func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
+// parseResultMember parses a `return` member: the declaration of a result
+// parameter (SysML.xtext:1961 ReturnParameterMember), anonymous or named,
+// typed or valued. A computed result is the body's trailing expression, written
+// without `return`, so an expression after `return` is refused here.
+func (p *Parser) parseResultMember() ast.Node {
 	start := p.peek().Span.Offset
 
 	// Expect 'return' keyword
@@ -1565,8 +1543,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 	// Check for named or anonymous result parameter syntax
 	// Pattern 1: return [modifiers] name: Type[mult];  (named result parameter)
 	// Pattern 2: return [modifiers] : Type[mult];      (anonymous result parameter)
-	// Pattern 3: return expr;              (computed result)
-	// Pattern 4: return name = expr;       (computed result with binding)
+	// Pattern 4: return name = expr;       (result parameter with initializer)
 	// Pattern 5: return [modifiers] name;  (named result parameter, no type)
 	// Pattern 6: return [modifiers] name : Type { body } (with body)
 	// Pattern 7: return :>> name : Type = expr; (leading relationships before name)
@@ -1658,7 +1635,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 	// `return` introduces a return parameter, so a lone name after it declares
 	// that parameter (`calc acc : Acceleration { return a; }`) rather than
 	// referencing one.
-	if !inStatement && p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+	if p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -1732,16 +1709,18 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 		return u
 	}
 
-	// Otherwise parse as computed result (expression)
-	expr := p.ParseExpression()
-
+	// Anything else after `return` is an expression, which no production admits:
+	// the value a calculation computes is its trailing expression. The expression
+	// is still consumed, so the members after it are read as written.
+	const msg = "'return' declares a result parameter; write a computed result as the " +
+		"trailing expression of the body, without 'return'"
+	p.error(p.peek().Span, msg)
+	p.ParseExpression()
 	p.expect(lexer.Semicolon, "expected ';' after return expression")
 
-	node := &ast.ResultMember{
-		Expression: expr,
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
+	en := &ast.ErrorNode{Message: msg}
+	en.NodeSpan = p.spanFrom(start)
+	return en
 }
 
 // parseConstraintBody parses the body of a constraint usage.
@@ -1810,6 +1789,7 @@ var exprStartKeywords = map[string]bool{
 	"false": true,
 	"new":   true,
 	"if":    true,
+	"not":   true,
 }
 
 // parseConstraintMember parses one constraint member: assert/assume [not] <expr>;

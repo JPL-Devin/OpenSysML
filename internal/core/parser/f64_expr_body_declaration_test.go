@@ -24,9 +24,6 @@ func TestF64BodyExprDeclaration(t *testing.T) {
 		if m, ok := last.(*ast.Membership); ok {
 			last = m.Member
 		}
-		if rm, ok := last.(*ast.ResultMember); ok {
-			last = rm.Expression
-		}
 		var body ast.Node
 		switch e := last.(type) {
 		case *ast.InvocationExpr:

@@ -110,6 +110,12 @@ unchanged.
 | `defer <event> [, <event>]*;` | no `defer` literal; `StatePerformance::deferrable` has the semantics but no notation |
 | `transition [<name>] <src> to <tgt>;` | `to` is a literal (`SysML.xtext:1077`, `:1168`, `:1253`, `:1287`; `KerML.xtext:838`, `:1009`) but in connector, interface, message and flow ends only — `TransitionUsage` (`:1851-1880`) states its ends with `first` and `then` |
 
+A spelling that is a pure alias of a standard construct is removed rather than
+warned, so it is no longer accepted and has no row here: `return <expression>;`
+in a calculation body is now a parse error, and a computed result is written as
+the body's trailing expression (`ResultExpressionMember`, `SysML.xtext:1967`).
+`return` itself is unchanged as the result parameter declaration.
+
 ### KerML-only notation in a `.sysml` file — warning `kerml-notation`
 
 `namespace` is a literal in `KerML.xtext` only (`:125`); `SysML.xtext` has none.

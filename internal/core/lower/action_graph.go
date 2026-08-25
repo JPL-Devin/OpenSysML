@@ -628,8 +628,6 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 			lowered.Else = &block
 		}
 		return lowered
-	case *ast.ResultMember:
-		return Return{Value: m.Expression, Node: m, Scope: scope}
 	case *ast.PerformActionNode:
 		return Effect{Kind: EffectPerform, Node: m, Scope: scope}
 	case *ast.TerminateStatement:
