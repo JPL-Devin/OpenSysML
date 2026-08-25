@@ -123,6 +123,58 @@ func TestRedefinitionClosureIsCached(t *testing.T) {
 	}
 }
 
+func TestRedefinitionClosureNotCachedDuringRedefinedFeatures(t *testing.T) {
+	m, root := buildModel(t,
+		"part def A { part a; } part def B specializes A { part b redefines a; }")
+	b := sym(t, root, "B")
+	a := sym(t, root, "A").Scope.LookupLocalAll("a")[0]
+	candidate, ok := b.Scope.LookupLocal("b")
+	if !ok {
+		t.Fatal("B declares b")
+	}
+
+	// Reproduce the state RedefinedFeatures establishes before resolving its
+	// target: its memo is guarded while the computation is still active.
+	m.redefined[candidate] = nil
+	m.computingRedefinedFeatures++
+	partial, cyclic := m.redefinitionClosure(candidate)
+	m.computingRedefinedFeatures--
+	if cyclic {
+		t.Fatal("simple redefinition unexpectedly cyclic")
+	}
+	if len(partial) != 0 {
+		t.Fatalf("incomplete closure = %v, want empty guarded result", partial)
+	}
+	if _, ok := m.redefClosure[candidate]; ok {
+		t.Fatal("closure derived during RedefinedFeatures must not be cached")
+	}
+
+	delete(m.redefined, candidate)
+	if got := m.RedefinedFeatures(candidate); len(got) != 1 || got[0] != a {
+		t.Fatalf("complete redefinitions = %v, want [%v]", got, a)
+	}
+	if !m.InheritanceMasked(b, a) {
+		t.Fatal("later mask query must use the complete redefinition closure")
+	}
+	if _, ok := m.redefClosure[candidate]; !ok {
+		t.Fatal("complete closure was not cached after RedefinedFeatures finished")
+	}
+}
+
+func TestBuildMaskSkipsNilCandidates(t *testing.T) {
+	m := NewModel(nil)
+	owner := &symbols.Symbol{Name: "Owner", Scope: symbols.NewScope(nil, nil)}
+	mask := m.buildMaskFromCandidates(owner, func(yield func(*symbols.Symbol) bool) {
+		yield(nil)
+	})
+	if mask != nil {
+		t.Fatalf("nil candidates should produce no mask, got %v", mask)
+	}
+	if _, ok := m.redefClosure[nil]; ok {
+		t.Fatal("nil candidate must not create a closure-cache entry")
+	}
+}
+
 func TestRedefinitionMasksOnlyTheFeatureItNames(t *testing.T) {
 	// Two inherited features carry the name `a`; only one is redefined, so the
 	// other keeps its name and `a` stays visible (masking is by element).

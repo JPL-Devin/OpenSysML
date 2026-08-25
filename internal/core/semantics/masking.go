@@ -25,6 +25,10 @@ func (m *Model) RedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 		return cached
 	}
 	m.redefined[sym] = nil // re-entrancy guard for cyclic declarations
+	m.computingRedefinedFeatures++
+	defer func() {
+		m.computingRedefinedFeatures--
+	}()
 
 	var out []*symbols.Symbol
 	seen := make(map[*symbols.Symbol]bool)
@@ -181,6 +185,9 @@ func (m *Model) buildMaskFromCandidates(
 	mask := make(map[*symbols.Symbol]bool)
 	fallback := false
 	iterate(func(candidate *symbols.Symbol) bool {
+		if candidate == nil {
+			return true
+		}
 		closure, cyclic := m.redefinitionClosure(candidate)
 		if cyclic || closure[sym] {
 			fallback = true
@@ -214,6 +221,9 @@ func (m *Model) buildMaskFromCandidates(
 // redefinitionClosure returns the targets reached from candidate, excluding
 // edges whose target keeps the redefining feature's visible name.
 func (m *Model) redefinitionClosure(candidate *symbols.Symbol) (map[*symbols.Symbol]bool, bool) {
+	if candidate == nil {
+		return nil, false
+	}
 	if cached, ok := m.redefClosure[candidate]; ok {
 		return cached, false
 	}
@@ -240,7 +250,9 @@ func (m *Model) redefinitionClosure(candidate *symbols.Symbol) (map[*symbols.Sym
 	if cyclic {
 		return out, true
 	}
-	m.redefClosure[candidate] = out
+	if m.computingRedefinedFeatures == 0 {
+		m.redefClosure[candidate] = out
+	}
 	return out, false
 }
 

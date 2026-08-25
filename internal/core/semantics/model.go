@@ -64,9 +64,10 @@ type Model struct {
 	// redefMaskInherited is the same mask counting inherited redefinitions only.
 	redefMaskInherited map[*symbols.Symbol]map[*symbols.Symbol]bool
 	// declMask is redefMaskInherited as a declaration of a given name sees it.
-	declMask              map[declMaskKey]map[*symbols.Symbol]bool
-	redefClosure          map[*symbols.Symbol]map[*symbols.Symbol]bool
-	computingRedefClosure map[*symbols.Symbol]bool
+	declMask                   map[declMaskKey]map[*symbols.Symbol]bool
+	redefClosure               map[*symbols.Symbol]map[*symbols.Symbol]bool
+	computingRedefClosure      map[*symbols.Symbol]bool
+	computingRedefinedFeatures int
 }
 
 // declMaskKey keys the mask a declaration written in a type sees, by the type
