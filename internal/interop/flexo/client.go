@@ -302,13 +302,22 @@ func (c *Client) commitPath(project, commit string) string {
 		c.cfg.SysMLV2URL, url.PathEscape(project), url.PathEscape(commit))
 }
 
+// Listing is one element listing: the elements it delivered, the number of
+// responses it took, and whether the service ignored the paging parameters.
+type Listing struct {
+	Elements      []Element
+	Responses     int
+	IgnoredPaging bool
+}
+
 // Elements reads a commit's elements, asking for them a page at a time with the
-// pageSize and pageAfter parameters the SysML v2 API defines. It returns the
-// elements and the number of responses it took; a single response holding more
-// than pageSize elements means the service ignored the paging parameters.
-func (c *Client) Elements(ctx context.Context, project, commit string, pageSize int) ([]Element, int, error) {
-	var all []Element
-	pages := 0
+// pageSize and pageAfter parameters the SysML v2 API defines. A response holding
+// more than pageSize elements, or repeating elements an earlier one already
+// delivered, is a service that ignores those parameters; a repeat is never
+// counted twice, so the measurement holds however the total relates to pageSize.
+func (c *Client) Elements(ctx context.Context, project, commit string, pageSize int) (Listing, error) {
+	var listing Listing
+	seen := make(map[string]bool)
 	after := ""
 	for {
 		target := c.commitPath(project, commit) + "/elements?pageSize=" + strconv.Itoa(pageSize)
@@ -317,26 +326,38 @@ func (c *Client) Elements(ctx context.Context, project, commit string, pageSize 
 		}
 		content, _, err := c.do(ctx, http.MethodGet, target, nil, "", nil)
 		if err != nil {
-			return all, pages, err
+			return listing, err
 		}
 		var page []Element
 		if err := json.Unmarshal(content, &page); err != nil {
-			return all, pages, fmt.Errorf("decode elements page %d: %w", pages+1, err)
+			return listing, fmt.Errorf("decode elements page %d: %w", listing.Responses+1, err)
 		}
-		pages++
-		all = append(all, page...)
-		if len(page) >= pageSize {
-			// Paging is unimplemented in the service: one response carried the lot.
-			if len(page) > pageSize {
-				return all, pages, nil
+		listing.Responses++
+
+		fresh := 0
+		for _, element := range page {
+			if id := element.ID(); id != "" {
+				if seen[id] {
+					continue
+				}
+				seen[id] = true
 			}
-			last := page[len(page)-1].ID()
-			if last != "" && last != after && pages <= 1000 {
-				after = last
-				continue
-			}
+			listing.Elements = append(listing.Elements, element)
+			fresh++
 		}
-		return all, pages, nil
+
+		switch {
+		case len(page) > pageSize, fresh < len(page):
+			listing.IgnoredPaging = true
+			return listing, nil
+		case len(page) < pageSize:
+			return listing, nil
+		}
+		last := page[len(page)-1].ID()
+		if last == "" || last == after || listing.Responses > 1000 {
+			return listing, nil
+		}
+		after = last
 	}
 }
 

@@ -14,10 +14,11 @@ import (
 // PropertyStat is one predicate's fate across a whole side of the measurement:
 // how many elements carried it, and on how many it came back.
 type PropertyStat struct {
-	Property    string // "sysml:declaredName" written, "declaredName" delivered
-	Written     int    // elements that carried it
-	Delivered   int    // elements that returned it
-	MultiValued int    // elements that carried more than one value for it
+	Property       string // "sysml:declaredName" written, "declaredName" delivered
+	Written        int    // elements that carried it
+	Delivered      int    // elements that returned it
+	MultiValued    int    // elements that carried more than one value for it
+	MultiDelivered int    // of those, the elements that returned it
 }
 
 // ElementStat is one element's fate: whether the paged listing saw it, whether
@@ -36,18 +37,19 @@ type ElementStat struct {
 // SideReport is one direction of the comparison: the graph this project loads,
 // or the same model committed through the service's own JSON path.
 type SideReport struct {
-	Name         string // "graph-load" or "json-commit"
-	Accepted     bool   // the service took the payload
-	Commits      int    // commits the project has after the write
-	Written      int    // elements in the payload
-	Listed       int    // written elements the listing returned
-	Extra        int    // elements the listing returned that were not written
-	Pages        int    // responses the listing took, at the harness page size
-	Direct       int    // elements a direct read returned
-	Roots        int    // elements the roots endpoint returned
-	RootsInModel int    // elements the payload itself gives no owner
-	Elements     []ElementStat
-	Properties   []PropertyStat
+	Name          string // "graph-load" or "json-commit"
+	Accepted      bool   // the service took the payload
+	Commits       int    // commits the project has after the write
+	Written       int    // elements in the payload
+	Listed        int    // written elements the listing returned
+	Extra         int    // elements the listing returned that were not written
+	Pages         int    // responses the listing took, at the harness page size
+	IgnoredPaging bool   // the listing repeated or overran what the page size asked for
+	Direct        int    // elements a direct read returned
+	Roots         int    // elements the roots endpoint returned
+	RootsInModel  int    // elements the payload itself gives no owner
+	Elements      []ElementStat
+	Properties    []PropertyStat
 }
 
 // GraphStats describes the Turtle this project produced, before any service
@@ -93,17 +95,17 @@ func (r *Report) Text(header string) string {
 // element.
 func (s *SideReport) write(b *strings.Builder) {
 	fmt.Fprintf(b, "\n[%s]\naccepted\t%s\ncommits\t%d\nelements.written\t%d\nelements.listed\t%d\n"+
-		"elements.unexpected\t%d\nlisting.responses\t%d\nelements.readable-directly\t%d\n"+
-		"roots.reported\t%d\nroots.in-model\t%d\n",
-		s.Name, yesNo(s.Accepted), s.Commits, s.Written, s.Listed, s.Extra, s.Pages, s.Direct,
-		s.Roots, s.RootsInModel)
+		"elements.unexpected\t%d\nlisting.responses\t%d\nlisting.paging-ignored\t%s\n"+
+		"elements.readable-directly\t%d\nroots.reported\t%d\nroots.in-model\t%d\n",
+		s.Name, yesNo(s.Accepted), s.Commits, s.Written, s.Listed, s.Extra, s.Pages,
+		yesNo(s.IgnoredPaging), s.Direct, s.Roots, s.RootsInModel)
 
 	fmt.Fprintf(b, "\n[%s.properties]\n", s.Name)
 	properties := append([]PropertyStat(nil), s.Properties...)
 	sort.Slice(properties, func(i, j int) bool { return properties[i].Property < properties[j].Property })
 	for _, p := range properties {
-		fmt.Fprintf(b, "%s\twritten=%d\tdelivered=%d\tmulti-valued=%d\n",
-			p.Property, p.Written, p.Delivered, p.MultiValued)
+		fmt.Fprintf(b, "%s\twritten=%d\tdelivered=%d\tmulti-valued=%d/%d\n",
+			p.Property, p.Written, p.Delivered, p.MultiDelivered, p.MultiValued)
 	}
 
 	fmt.Fprintf(b, "\n[%s.elements]\n", s.Name)

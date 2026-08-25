@@ -47,17 +47,18 @@ func uniqueProjectID(prefix string) (string, error) {
 	return prefix + "-" + hex.EncodeToString(suffix), nil
 }
 
-// value is one written property value, reduced to the distinction the read path
-// can lose: whether it points at an element or carries data.
-type value struct {
-	kind string // "reference", "literal" or "array"
+// property is one written property, reduced to what the read path can lose: the
+// shape a faithful read would deliver, and how many values were written for it.
+type property struct {
+	kind  string // "reference", "literal", "array", "object" or "null"
+	count int    // values written; more than one is multi-valued
 }
 
 // writtenElement is one element as this run wrote it, on either side.
 type writtenElement struct {
 	id        string
 	metaclass string
-	props     map[string][]value // property label to its values, type excluded
+	props     map[string]property // property label to what was written, type excluded
 }
 
 // sortedIDs returns the ids of a written payload in a stable order.
@@ -158,7 +159,7 @@ func writtenFromGraph(graph *rdf.Graph) map[string]*writtenElement {
 		id := rdf.LocalName(triple.Subject.Value)
 		element := written[id]
 		if element == nil {
-			element = &writtenElement{id: id, props: map[string][]value{}}
+			element = &writtenElement{id: id, props: map[string]property{}}
 			written[id] = element
 		}
 		if triple.Predicate.Value == rdf.RDFType {
@@ -170,7 +171,12 @@ func writtenFromGraph(graph *rdf.Graph) map[string]*writtenElement {
 			kind = "reference"
 		}
 		name := label(triple.Predicate.Value)
-		element.props[name] = append(element.props[name], value{kind: kind})
+		was := element.props[name]
+		if was.count > 0 {
+			// Several triples on one predicate: a faithful read delivers an array.
+			kind = "array"
+		}
+		element.props[name] = property{kind: kind, count: was.count + 1}
 	}
 	return written
 }
@@ -190,7 +196,7 @@ func referencePayload(fixture []byte) ([]byte, map[string]*writtenElement, error
 
 	written := make(map[string]*writtenElement, len(parsed.Change))
 	for _, change := range parsed.Change {
-		element := &writtenElement{props: map[string][]value{}}
+		element := &writtenElement{props: map[string]property{}}
 		for name, raw := range change.Payload {
 			switch name {
 			case "@id":
@@ -198,7 +204,7 @@ func referencePayload(fixture []byte) ([]byte, map[string]*writtenElement, error
 			case "@type":
 				_ = json.Unmarshal(raw, &element.metaclass)
 			default:
-				element.props[name] = jsonValues(raw)
+				element.props[name] = jsonProperty(raw)
 			}
 		}
 		if element.id == "" {
@@ -220,11 +226,19 @@ func referencePayload(fixture []byte) ([]byte, map[string]*writtenElement, error
 	return changes, written, nil
 }
 
-// jsonValues reduces one posted JSON value to the kinds the comparison tracks.
-// An array counts as one value of kind "array": the service stores it whole, as
-// a JSON annotation.
-func jsonValues(raw json.RawMessage) []value {
-	return []value{{kind: deliveredKind(raw)}}
+// jsonProperty reduces one posted JSON value to the shape the comparison tracks.
+// An array's members are counted, so a posted collection is measured as
+// multi-valued the way several triples on one predicate are.
+func jsonProperty(raw json.RawMessage) property {
+	kind := deliveredKind(raw)
+	if kind != "array" {
+		return property{kind: kind, count: 1}
+	}
+	var members []json.RawMessage
+	if err := json.Unmarshal(raw, &members); err != nil {
+		return property{kind: kind, count: 1}
+	}
+	return property{kind: kind, count: len(members)}
 }
 
 // measureSide writes one payload into a fresh project and reads it back through
@@ -260,11 +274,13 @@ func (c *Client) measureSide(ctx context.Context, name, projectID string,
 	}
 	side.Commits = len(commits)
 
-	commit, delivered, pages, err := c.richestCommit(ctx, projectID, commits)
+	commit, listing, err := c.richestCommit(ctx, projectID, commits)
 	if err != nil {
 		return side, err
 	}
-	side.Pages = pages
+	delivered := listing.Elements
+	side.Pages = listing.Responses
+	side.IgnoredPaging = listing.IgnoredPaging
 
 	byID := make(map[string]Element, len(delivered))
 	for _, element := range delivered {
@@ -322,28 +338,31 @@ func (c *Client) measureSide(ctx context.Context, name, projectID string,
 // measureProperties records, for one element, which written properties came back
 // and which came back in a different shape, accumulating the per-property totals.
 func measureProperties(stat *ElementStat, element *writtenElement, read Element, properties map[string]*PropertyStat) {
-	for _, property := range sortedKeys(element.props) {
-		values := element.props[property]
-		total := properties[property]
+	for _, name := range sortedKeys(element.props) {
+		written := element.props[name]
+		total := properties[name]
 		if total == nil {
-			total = &PropertyStat{Property: property}
-			properties[property] = total
+			total = &PropertyStat{Property: name}
+			properties[name] = total
 		}
 		total.Written++
-		if len(values) > 1 {
+		if written.count > 1 {
 			total.MultiValued++
+			if _, ok := read[localName(name)]; ok {
+				total.MultiDelivered++
+			}
 		}
 
-		raw, ok := read[localName(property)]
+		raw, ok := read[localName(name)]
 		if !ok {
-			stat.Lost = append(stat.Lost, property)
+			stat.Lost = append(stat.Lost, name)
 			continue
 		}
 		stat.Delivered++
 		total.Delivered++
 
-		if want, got := values[0].kind, deliveredKind(raw); got != want {
-			stat.Shape = append(stat.Shape, fmt.Sprintf("%s:%s-as-%s", property, want, got))
+		if want, got := written.kind, deliveredKind(raw); got != want {
+			stat.Shape = append(stat.Shape, fmt.Sprintf("%s:%s-as-%s", name, want, got))
 		}
 	}
 }
@@ -379,22 +398,22 @@ func deliveredKind(raw json.RawMessage) string {
 // richestCommit picks the commit whose element listing returns the most
 // elements. The write's commit id is server-generated and the list also holds
 // the project's initial commit, so the payload is found rather than assumed.
-func (c *Client) richestCommit(ctx context.Context, project string, commits []Commit) (string, []Element, int, error) {
-	best, bestPages := "", 0
-	var bestElements []Element
+func (c *Client) richestCommit(ctx context.Context, project string, commits []Commit) (string, Listing, error) {
+	best := ""
+	var bestListing Listing
 	for _, commit := range commits {
-		elements, pages, err := c.Elements(ctx, project, commit.ID, PageSize)
+		listing, err := c.Elements(ctx, project, commit.ID, PageSize)
 		if err != nil {
-			return "", nil, 0, fmt.Errorf("list elements of %s commit: %w", project, err)
+			return "", Listing{}, fmt.Errorf("list elements of %s commit: %w", project, err)
 		}
-		if best == "" || len(elements) > len(bestElements) {
-			best, bestElements, bestPages = commit.ID, elements, pages
+		if best == "" || len(listing.Elements) > len(bestListing.Elements) {
+			best, bestListing = commit.ID, listing
 		}
 	}
 	if best == "" {
-		return "", nil, 0, fmt.Errorf("project %s has no commit to read", project)
+		return "", Listing{}, fmt.Errorf("project %s has no commit to read", project)
 	}
-	return best, bestElements, bestPages, nil
+	return best, bestListing, nil
 }
 
 // rootsInModel counts the elements the payload itself gives no owner, which is
@@ -404,10 +423,10 @@ func rootsInModel(written map[string]*writtenElement) int {
 	roots := 0
 	for _, element := range written {
 		owned := false
-		for property, values := range element.props {
-			switch localName(property) {
+		for name, written := range element.props {
+			switch localName(name) {
 			case "owner", "owningRelatedElement", "owningNamespace":
-				owned = owned || values[0].kind != "null"
+				owned = owned || written.kind != "null"
 			}
 		}
 		if !owned {

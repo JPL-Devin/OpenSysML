@@ -27,33 +27,34 @@ elements.written	29
 elements.listed	29
 elements.unexpected	0
 listing.responses	1
+listing.paging-ignored	yes
 elements.readable-directly	21
 roots.reported	29
 roots.in-model	9
 
 [graph-load.properties]
-sysml:annotatedElement	written=1	delivered=1	multi-valued=0
-sysml:argument	written=2	delivered=2	multi-valued=0
-sysml:body	written=2	delivered=2	multi-valued=0
-sysml:declaredName	written=18	delivered=18	multi-valued=0
-sysml:declaredShortName	written=1	delivered=1	multi-valued=0
-sysml:isAbstract	written=1	delivered=1	multi-valued=0
-sysml:owningNamespace	written=20	delivered=20	multi-valued=0
-sysml:qualifiedName	written=21	delivered=21	multi-valued=0
-sysml:referent	written=2	delivered=2	multi-valued=0
-sysml:specializes	written=3	delivered=2	multi-valued=1
-sysml:targetFeature	written=2	delivered=2	multi-valued=0
-sysml:type	written=6	delivered=6	multi-valued=0
-sysml:upperBound	written=1	delivered=1	multi-valued=0
-sysml:value	written=7	delivered=7	multi-valued=0
-sysx:argumentIndex	written=2	delivered=0	multi-valued=0
-sysx:declaredKeyword	written=1	delivered=0	multi-valued=0
-sysx:endForm	written=1	delivered=0	multi-valued=0
-sysx:endIndex	written=2	delivered=0	multi-valued=0
-sysx:hasBody	written=18	delivered=0	multi-valued=0
-sysx:memberIndex	written=21	delivered=0	multi-valued=0
-sysx:relatedFeature	written=1	delivered=0	multi-valued=1
-sysx:sourceText	written=9	delivered=0	multi-valued=0
+sysml:annotatedElement	written=1	delivered=1	multi-valued=0/0
+sysml:argument	written=2	delivered=2	multi-valued=0/0
+sysml:body	written=2	delivered=2	multi-valued=0/0
+sysml:declaredName	written=18	delivered=18	multi-valued=0/0
+sysml:declaredShortName	written=1	delivered=1	multi-valued=0/0
+sysml:isAbstract	written=1	delivered=1	multi-valued=0/0
+sysml:owningNamespace	written=20	delivered=20	multi-valued=0/0
+sysml:qualifiedName	written=21	delivered=21	multi-valued=0/0
+sysml:referent	written=2	delivered=2	multi-valued=0/0
+sysml:specializes	written=3	delivered=2	multi-valued=0/1
+sysml:targetFeature	written=2	delivered=2	multi-valued=0/0
+sysml:type	written=6	delivered=6	multi-valued=0/0
+sysml:upperBound	written=1	delivered=1	multi-valued=0/0
+sysml:value	written=7	delivered=7	multi-valued=0/0
+sysx:argumentIndex	written=2	delivered=0	multi-valued=0/0
+sysx:declaredKeyword	written=1	delivered=0	multi-valued=0/0
+sysx:endForm	written=1	delivered=0	multi-valued=0/0
+sysx:endIndex	written=2	delivered=0	multi-valued=0/0
+sysx:hasBody	written=18	delivered=0	multi-valued=0/0
+sysx:memberIndex	written=21	delivered=0	multi-valued=0/0
+sysx:relatedFeature	written=1	delivered=0	multi-valued=0/1
+sysx:sourceText	written=9	delivered=0	multi-valued=0/0
 
 [graph-load.elements]
 Interop	type=Package	listed=yes	direct=ok	properties=2/4	lost=sysx:hasBody,sysx:memberIndex
@@ -93,32 +94,33 @@ elements.written	33
 elements.listed	33
 elements.unexpected	0
 listing.responses	1
+listing.paging-ignored	yes
 elements.readable-directly	33
 roots.reported	1
 roots.in-model	1
 
 [json-commit.properties]
-aliasIds	written=1	delivered=1	multi-valued=0
-annotatedElement	written=1	delivered=1	multi-valued=0
-argument	written=2	delivered=2	multi-valued=0
-body	written=2	delivered=2	multi-valued=0
-connectorEnd	written=1	delivered=1	multi-valued=0
-declaredName	written=18	delivered=18	multi-valued=0
-declaredShortName	written=1	delivered=1	multi-valued=0
-documentation	written=1	delivered=1	multi-valued=0
-elementId	written=33	delivered=33	multi-valued=0
-general	written=4	delivered=4	multi-valued=0
-isAbstract	written=8	delivered=8	multi-valued=0
-ownedElement	written=7	delivered=7	multi-valued=0
-ownedSpecialization	written=3	delivered=3	multi-valued=0
-owner	written=33	delivered=33	multi-valued=0
-qualifiedName	written=21	delivered=21	multi-valued=0
-referent	written=2	delivered=2	multi-valued=0
-specific	written=4	delivered=4	multi-valued=0
-targetFeature	written=2	delivered=2	multi-valued=0
-type	written=6	delivered=6	multi-valued=0
-upperBound	written=1	delivered=1	multi-valued=0
-value	written=7	delivered=7	multi-valued=0
+aliasIds	written=1	delivered=1	multi-valued=1/1
+annotatedElement	written=1	delivered=1	multi-valued=0/0
+argument	written=2	delivered=2	multi-valued=0/0
+body	written=2	delivered=2	multi-valued=0/0
+connectorEnd	written=1	delivered=1	multi-valued=1/1
+declaredName	written=18	delivered=18	multi-valued=0/0
+declaredShortName	written=1	delivered=1	multi-valued=0/0
+documentation	written=1	delivered=1	multi-valued=0/0
+elementId	written=33	delivered=33	multi-valued=0/0
+general	written=4	delivered=4	multi-valued=0/0
+isAbstract	written=8	delivered=8	multi-valued=0/0
+ownedElement	written=7	delivered=7	multi-valued=3/3
+ownedSpecialization	written=3	delivered=3	multi-valued=1/1
+owner	written=33	delivered=33	multi-valued=0/0
+qualifiedName	written=21	delivered=21	multi-valued=0/0
+referent	written=2	delivered=2	multi-valued=0/0
+specific	written=4	delivered=4	multi-valued=0/0
+targetFeature	written=2	delivered=2	multi-valued=0/0
+type	written=6	delivered=6	multi-valued=0/0
+upperBound	written=1	delivered=1	multi-valued=0/0
+value	written=7	delivered=7	multi-valued=0/0
 
 [json-commit.elements]
 Interop	type=Package	listed=yes	direct=ok	properties=5/5
@@ -160,10 +162,10 @@ graph-load: 29 of 29 elements listed, 86 of 142 properties delivered
 json-commit: 33 of 33 elements listed, 158 of 158 properties delivered
 graph-load: 8 properties are in the sysx: extension namespace and are dropped unread — extractModelElementToJson ignores every predicate outside the sysml: vocabulary and the JSON annotation namespace (sysx:argumentIndex, sysx:declaredKeyword, sysx:endForm, sysx:endIndex, sysx:hasBody, sysx:memberIndex, sysx:relatedFeature, sysx:sourceText)
 graph-load: no element carries sysml:elementId, which the service's own paged listing query selects on; the deployed listing route ignores that query and returns every subject of the branch graph instead, so the loaded elements are visible today only because paging is unimplemented
-graph-load: 2 properties carry more than one value on some element (sysml:specializes on 1, sysx:relatedFeature on 1); a standard predicate with several values is skipped entirely unless a JSON annotation supplies the array
+graph-load: 0 of 2 multi-valued properties are delivered (sysml:specializes on 0/1, sysx:relatedFeature on 0/1); a standard predicate with several values is skipped entirely unless a JSON annotation supplies the array
 graph-load: 8 elements cannot be read directly because their ids are not [a-zA-Z0-9_-]+ — the encoder writes expression-node ids with a '.' (Interop__Battery__capacity.value, Interop__Component__mass.value, Interop__Mission___402.end0, Interop__Mission___402.end0.a0, Interop__Mission___402.end1, Interop__Mission___402.end1.a0, Interop__Rover__wheels.upperBound, Interop__Wheel__diameter.value)
 graph-load: the roots endpoint reports 29 of 29 elements as roots (9 have no owner in the model); it filters on sysml:owner and sysml:owningRelatedElement, neither of which the graph carries
 json-commit: the roots endpoint reports 1 of 33 elements as roots, 1 in the payload
-both: the element listing answered 29 elements in one response at pageSize=10 — the service accepts pageAfter/pageBefore/pageSize and ignores them
-json-commit: every multi-valued property survives, because the commit path stores each array whole as a JSON annotation literal alongside the typed triples
+both: the element listing answered every element it has in 1 response(s) at pageSize=10 — the service accepts pageAfter/pageBefore/pageSize and ignores them
+json-commit: 6 of 6 multi-valued properties are delivered (aliasIds on 1/1, connectorEnd on 1/1, ownedElement on 3/3, ownedSpecialization on 1/1), because the commit path stores each array whole as a JSON annotation literal alongside the typed triples
 graph-load: 8 of 29 subjects of the graph are expression nodes or other subjects outside the element namespace

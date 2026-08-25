@@ -47,11 +47,11 @@ func findings(report *Report, graphWritten map[string]*writtenElement) []string 
 			"visible today only because paging is unimplemented")
 	}
 
-	if multi := load.propertyCount(func(p PropertyStat) bool { return p.MultiValued > 0 }); multi > 0 {
-		add("graph-load: %d properties carry more than one value on some element (%s); a "+
-			"standard predicate with several values is skipped entirely unless a JSON "+
-			"annotation supplies the array",
-			multi, strings.Join(load.multiValuedNames(), ", "))
+	if multi, delivered := load.multiValued(); multi > 0 {
+		add("graph-load: %d of %d multi-valued properties are delivered (%s); a standard "+
+			"predicate with several values is skipped entirely unless a JSON annotation "+
+			"supplies the array",
+			delivered, multi, strings.Join(load.multiValuedNames(), ", "))
 	}
 
 	if refused := load.refusedIDs(); len(refused) > 0 {
@@ -67,10 +67,10 @@ func findings(report *Report, graphWritten map[string]*writtenElement) []string 
 	add("json-commit: the roots endpoint reports %d of %d elements as roots, %d in the payload",
 		reference.Roots, reference.Written, reference.RootsInModel)
 
-	if load.Pages == 1 && load.Listed > PageSize {
-		add("both: the element listing answered %d elements in one response at pageSize=%d — "+
-			"the service accepts pageAfter/pageBefore/pageSize and ignores them",
-			load.Listed, PageSize)
+	if load.IgnoredPaging {
+		add("both: the element listing answered every element it has in %d response(s) at "+
+			"pageSize=%d — the service accepts pageAfter/pageBefore/pageSize and ignores them",
+			load.Pages, PageSize)
 	}
 
 	if shapes := load.shapes(); len(shapes) > 0 {
@@ -82,9 +82,11 @@ func findings(report *Report, graphWritten map[string]*writtenElement) []string 
 			"(%s)", len(shapes), strings.Join(shapes, ", "))
 	}
 
-	if arrays := reference.propertyCount(func(p PropertyStat) bool { return p.MultiValued > 0 }); arrays == 0 {
-		add("json-commit: every multi-valued property survives, because the commit path " +
-			"stores each array whole as a JSON annotation literal alongside the typed triples")
+	if multi, delivered := reference.multiValued(); multi > 0 {
+		add("json-commit: %d of %d multi-valued properties are delivered (%s), because the "+
+			"commit path stores each array whole as a JSON annotation literal alongside the "+
+			"typed triples",
+			delivered, multi, strings.Join(reference.multiValuedNames(), ", "))
 	}
 
 	add("graph-load: %d of %d subjects of the graph are expression nodes or other subjects "+
@@ -123,6 +125,17 @@ func (s *SideReport) propertyCount(match func(PropertyStat) bool) int {
 	return count
 }
 
+// multiValued sums the elements that carried several values for some property,
+// and how many of those the read path returned the property for.
+func (s *SideReport) multiValued() (int, int) {
+	written, delivered := 0, 0
+	for _, p := range s.Properties {
+		written += p.MultiValued
+		delivered += p.MultiDelivered
+	}
+	return written, delivered
+}
+
 // propertyNames lists the properties with a given prefix, sorted.
 func (s *SideReport) propertyNames(prefix string) []string {
 	var names []string
@@ -135,12 +148,13 @@ func (s *SideReport) propertyNames(prefix string) []string {
 	return names
 }
 
-// multiValuedNames lists the properties some element carries several values for.
+// multiValuedNames lists the properties some element carries several values for,
+// with how many of those elements returned them.
 func (s *SideReport) multiValuedNames() []string {
 	var names []string
 	for _, p := range s.Properties {
 		if p.MultiValued > 0 {
-			names = append(names, fmt.Sprintf("%s on %d", p.Property, p.MultiValued))
+			names = append(names, fmt.Sprintf("%s on %d/%d", p.Property, p.MultiDelivered, p.MultiValued))
 		}
 	}
 	sort.Strings(names)
