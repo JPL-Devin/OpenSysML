@@ -46,6 +46,10 @@ type Model struct {
 	dimensions   map[*symbols.Symbol]dimensionResult // units to the dimension they measure in
 	dimensioning map[*symbols.Symbol]bool            // units whose dimension is being derived, to detect a cycle
 	libSymbols   map[string]*symbols.Symbol          // library elements resolved by qualified name
+	// implicitBaseSyms caches the first non-nil symbol found for each implicit
+	// base FQN, and is discarded whenever the backing index generation changes.
+	implicitBaseSyms       map[string]*symbols.Symbol
+	implicitBaseGeneration uint64
 
 	// Element-filter evaluation: conditions compiled once per expression, their
 	// verdicts memoized per candidate, and the metadata annotating each candidate
@@ -102,9 +106,10 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		unitTerms:      make(map[*symbols.Symbol]UnitTerm),
 		reducingUnit:   make(map[*symbols.Symbol]bool),
 
-		dimensions:   make(map[*symbols.Symbol]dimensionResult),
-		dimensioning: make(map[*symbols.Symbol]bool),
-		libSymbols:   make(map[string]*symbols.Symbol),
+		dimensions:       make(map[*symbols.Symbol]dimensionResult),
+		dimensioning:     make(map[*symbols.Symbol]bool),
+		libSymbols:       make(map[string]*symbols.Symbol),
+		implicitBaseSyms: make(map[string]*symbols.Symbol),
 
 		filterPreds:    make(map[ast.Node]*symbols.FilterPredicate),
 		filterVerdicts: make(map[filterKey]filterVerdict),

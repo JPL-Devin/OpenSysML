@@ -206,6 +206,9 @@ func (idx *Index) Freeze() {
 // Frozen reports whether the index has been frozen.
 func (idx *Index) Frozen() bool { return idx.frozen }
 
+// Generation returns the index mutation generation.
+func (idx *Index) Generation() uint64 { return idx.generation.get() }
+
 // NewOverlay returns an index holding everything base holds, whose own writes
 // are its own: documents it adds, the re-exports their imports surface and the
 // ones they invalidate are visible in it alone, and base is left untouched. It

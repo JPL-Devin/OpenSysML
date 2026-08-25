@@ -17,6 +17,66 @@ func TestImplicitBaseWithoutLibrary(t *testing.T) {
 	}
 }
 
+func TestImplicitBaseEarlyOutPreservesUntypedUsage(t *testing.T) {
+	m, root := stdlibModelWithDoc(t, "implicit_earlyout.sysml", "package P { part p; }")
+	p := sym(t, sym(t, root, "P").Scope, "p")
+	supers := m.DirectSupertypes(p)
+	if len(supers) != 1 || m.resolver.Index().GetFQN(supers[0]) != "Parts::Part" {
+		t.Fatalf("DirectSupertypes(p) = %v, want [Parts::Part]", supers)
+	}
+}
+
+func TestImplicitBaseCandidateCacheReusesSymbols(t *testing.T) {
+	m, root := stdlibModelWithDoc(t, "implicit_cache.sysml", `package P {
+		part def PartDef;
+		action def ActionDef;
+		state def StateDef;
+	}`)
+	p := sym(t, root, "P")
+	for _, tc := range []struct {
+		name string
+		want string
+	}{
+		{"PartDef", "Parts::Part"},
+		{"ActionDef", "Actions::Action"},
+		{"StateDef", "States::StateAction"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := sym(t, p.Scope, tc.name)
+			first := m.implicitBase(target)
+			second := m.implicitBase(target)
+			if first == nil || first != second {
+				t.Fatalf("implicit base pointers = %p, %p, want the same non-nil symbol", first, second)
+			}
+			if got := m.resolver.Index().GetFQN(first); got != tc.want {
+				t.Fatalf("implicit base FQN = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	kerml, kroot := stdlibModelWithDoc(t, "implicit_feature_cache.kerml", "package P { feature f; }")
+	feature := sym(t, sym(t, kroot, "P").Scope, "f")
+	first := kerml.implicitKerMLFeatureBase(feature)
+	second := kerml.implicitKerMLFeatureBase(feature)
+	if first == nil || first != second {
+		t.Fatalf("implicit feature base pointers = %p, %p, want the same non-nil symbol", first, second)
+	}
+	if got := kerml.resolver.Index().GetFQN(first); got != "Base::things" {
+		t.Fatalf("implicit feature base FQN = %q, want Base::things", got)
+	}
+}
+
+func TestImplicitBaseRejectsItsOwnLibrarySymbol(t *testing.T) {
+	m := stdlibModel(t)
+	part := m.symbolByFQN("Parts::Part")
+	if part == nil {
+		t.Fatal("Parts::Part is not in the standard library index")
+	}
+	if base := m.implicitBase(part); base != nil {
+		t.Fatalf("implicit base of Parts::Part = %v, want none", base)
+	}
+}
+
 // TestImplicitBaseResolvesThroughIndex covers the lookup itself against a
 // stand-in library declared in the same document.
 func TestImplicitBaseResolvesThroughIndex(t *testing.T) {

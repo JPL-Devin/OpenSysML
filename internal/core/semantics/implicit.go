@@ -245,12 +245,45 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	if declaresConjugation(sym) {
 		return nil
 	}
+	base := m.implicitBaseCandidate(fqn)
+	if base != nil && base != sym {
+		return base
+	}
+	if base == nil {
+		return nil
+	}
 	for _, base := range m.resolver.Index().LookupQualified(fqn) {
 		if base != nil && base != sym {
 			return base
 		}
 	}
 	return nil
+}
+
+func (m *Model) implicitBaseCandidate(fqn string) *symbols.Symbol {
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	idx := m.resolver.Index()
+	generation := idx.Generation()
+	if m.implicitBaseGeneration != generation {
+		m.implicitBaseSyms = make(map[string]*symbols.Symbol)
+		m.implicitBaseGeneration = generation
+	}
+	if base, ok := m.implicitBaseSyms[fqn]; ok {
+		return base
+	}
+	var base *symbols.Symbol
+	for _, candidate := range idx.LookupQualified(fqn) {
+		if candidate != nil {
+			base = candidate
+			break
+		}
+	}
+	if idx.Generation() == generation {
+		m.implicitBaseSyms[fqn] = base
+	}
+	return base
 }
 
 // declaresConjugation reports whether sym conjugates a type.
@@ -267,6 +300,17 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 	if sym == nil {
 		return false
 	}
+	relationships := RelationshipsOf(sym)
+	hasGeneralization := false
+	for _, rel := range relationships {
+		if rel != nil && GeneralizationKind(rel.Kind) {
+			hasGeneralization = true
+			break
+		}
+	}
+	if !hasGeneralization {
+		return false
+	}
 	if visiting == nil {
 		visiting = make(map[*symbols.Symbol]bool)
 	}
@@ -276,7 +320,7 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 	visiting[sym] = true
 	defer delete(visiting, sym)
 
-	for _, rel := range RelationshipsOf(sym) {
+	for _, rel := range relationships {
 		if rel == nil || !GeneralizationKind(rel.Kind) {
 			continue
 		}
@@ -361,6 +405,13 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 	if !ok || m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil
 	}
+	base := m.implicitBaseCandidate(fqn)
+	if base != nil && base != sym && !enclosedBy(sym, base) {
+		return base
+	}
+	if base == nil {
+		return nil
+	}
 	for _, base := range m.resolver.Index().LookupQualified(fqn) {
 		if base == nil || base == sym || enclosedBy(sym, base) {
 			continue
@@ -439,6 +490,13 @@ func (m *Model) implicitBaseUsage(sym *symbols.Symbol) *symbols.Symbol {
 	}
 	// A KerML feature typed by a kind with its own base subsets that base instead.
 	if typed, ok := m.declaredTypeFeatureBase(sym); ok && typed != baseUsageFQN && m.isKerMLDoc(sym) {
+		return nil
+	}
+	base := m.implicitBaseCandidate(baseUsageFQN)
+	if base != nil && base != sym && !enclosedBy(sym, base) {
+		return base
+	}
+	if base == nil {
 		return nil
 	}
 	for _, base := range m.resolver.Index().LookupQualified(baseUsageFQN) {
