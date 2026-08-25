@@ -3182,6 +3182,34 @@ PORT=$($PY -c 'import socket;s=socket.socket();s.bind(("localhost",0));print(s.g
   pidfile naming that pid with a `create_time` off by a few hundred seconds. The decoy must survive
   and the record must be replaced/removed. The old cmdline-substring scheme killed it, so this is
   the one probe that distinguishes the schemes.
+
+#### Making the orphan probe load-bearing
+
+Measured at 791ebfc9, a child exits **within ~100 ms** of its owner's death in all three modes
+(SIGKILL, `os._exit(1)`, normal exit). Two consequences for the harness:
+
+- **A probe that sleeps before looking proves nothing.** If the owner dies as soon as it has printed
+  the pid, the child is already gone by the first observation, so you cannot tell "died with its
+  owner" from "never started". Have the owner report `{'owner': pid, 'child': svc.process.pid,
+  'port': conn.port}` and then **block until a trigger file appears**; assert the child is alive
+  (`/proc/<pid>/stat` field 3 is `S`) and `ss -ltnH` shows its port, then `touch` the trigger and
+  poll for the child to leave `/proc`. Poll for disappearance rather than sleeping a fixed time.
+- **Always run the negative control**, or a broken `-exit-with-parent` reads as a pass: spawn the
+  same binary the same way but *without* the flag (`-port 0 -health-port 0 -report-address`,
+  `start_new_session=True`), `kill -9` its parent, and confirm it **does** orphan (it stays in state
+  `S`, still listening) before killing it by pid. Without this, the three death modes only prove
+  something died.
+- A child reparented after its owner's `kill -9` can appear as a **zombie** for an instant, so treat
+  state `Z` as exited rather than as a leak, and cross-check with `ss -ltn`: a defunct process holds
+  no listener. `pgrep -x sysml-grpc` alone will briefly show it.
+- Ownership state is readable without touching the wire:
+  `from opensysml.connection import _private_services` gives the per-interpreter dict, whose values
+  expose `.process.pid`, `.address`, `.refs`, `.disowned` and `.alive()`. In a `fork()`ed child the
+  dict is **empty** (`register_at_fork` disowns), and a `Connection()` there gets a pid and port of
+  its own; the parent's service must survive the fork child's whole life and death.
+- The `pysysml` placeholder test (`test_legacy_pysysml_placeholder.py`) passes in `~/pv`, where
+  `pysysml` is not installed. It only fails under an interpreter that can import another checkout's
+  `pysysml`, so run the suite with `~/pv/bin/python -m pytest` before blaming a branch for it.
 - Use `conn.load(path)` (not `load_model`) for a real RPC that proves the connection talked to the
   service rather than failing early.
 
