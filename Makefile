@@ -19,14 +19,17 @@ BUF_VERSION := v1.57.2
 
 # buf drives all protobuf codegen; override BUF to use an already-installed binary.
 BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
-# Wire-compatibility baseline: the schema as it stands on the main branch.
-BUF_BREAKING_AGAINST ?= .git#ref=origin/main,subdir=api/proto
+# Wire-compatibility baseline: the schema as it stands on the main branch. The
+# backslash escapes buf's ref separator, which make would otherwise read as a comment.
+BUF_BREAKING_AGAINST ?= .git\#ref=origin/main,subdir=api/proto
 
 # Build output directory
 BIN_DIR := bin
 PYTHON_DIR := python
 VSCODE_DIR := editors/vscode
 PYTHON ?= python3
+# buf.gen.python.yaml starts the interpreter this names.
+export PYTHON
 SITE_DIR := site
 
 all: build test python-test ## Build and test everything
@@ -99,8 +102,7 @@ proto-go: ## Regenerate Go protobuf stubs
 
 python-proto: ## Regenerate Python protobuf stubs
 	@echo "Regenerating Python protobuf stubs..."
-	@# python3 rather than $(PYTHON): that is the interpreter buf.gen.python.yaml starts.
-	@python3 -c "import grpc_tools.protoc" >/dev/null 2>&1 || { echo "Error: grpcio-tools not installed. Run: python3 -m pip install grpcio-tools"; exit 1; }
+	@$(PYTHON) -c "import grpc_tools.protoc" >/dev/null 2>&1 || { echo "Error: grpcio-tools not installed. Run: $(PYTHON) -m pip install grpcio-tools"; exit 1; }
 	$(BUF) generate --template buf.gen.python.yaml
 	@echo "✓ Regenerated Python stubs"
 
