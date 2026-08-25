@@ -33,7 +33,7 @@ func (W8DMetadataUsagePass) Run(ctx *Context, name string, root *ast.RootNamespa
 	if mc.resolver == nil || mc.model == nil {
 		return nil
 	}
-	w8dWalkSymbols(rootScope, mc.check)
+	w8dWalkSymbols(ctx, rootScope, mc.check)
 	return mc.diags
 }
 

@@ -26,7 +26,7 @@ func (W9CShortNameDistinguishabilityPass) Run(ctx *Context, name string, root *a
 	}
 	byScope := map[*symbols.Scope][]*symbols.Symbol{}
 	var order []*symbols.Scope
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		scope := sym.OwnerScope
 		if scope == nil || sym.Decl == nil {
 			return

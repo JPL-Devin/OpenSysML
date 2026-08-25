@@ -32,7 +32,7 @@ func (W8DVariabilityPass) Run(ctx *Context, name string, root *ast.RootNamespace
 		return nil
 	}
 	vc := &w8dVariabilityChecker{resolver: ctx.Resolver()}
-	w8dWalkSymbols(rootScope, vc.check)
+	w8dWalkSymbols(ctx, rootScope, vc.check)
 	return vc.diags
 }
 

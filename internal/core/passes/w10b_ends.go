@@ -31,7 +31,7 @@ func (W10BEndKindPass) Run(ctx *Context, name string, root *ast.RootNamespace) [
 		return nil
 	}
 	c := &w10bEndChecker{model: ctx.Model()}
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		switch sym.Kind {
 		case symbols.SymbolInterfaceDef:
 			c.checkEndsArePorts(sym, msgInterfaceDefEndPort)
