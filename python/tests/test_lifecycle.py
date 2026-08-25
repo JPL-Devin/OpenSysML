@@ -1,364 +1,372 @@
-"""Integration tests for auto-lifecycle: binary download, service start, model load.
+"""Tests for the lifecycle of the private service a connection starts.
 
-These tests verify the complete lifecycle from binary download to model loading.
-They can be skipped if:
-- Binary already exists (manual install)
-- Network unavailable (CI without network access)
-- GitHub releases not yet published
+A connection that is not pointed at a service of somebody else's starts one of
+its own: a child on a port the kernel gave it, reachable only by the process
+that started it, and dying with it. These tests drive that against a real
+binary, including the ways the starting process can die.
 
 Run with: pytest tests/test_lifecycle.py -v
-Skip with: pytest tests/ -k "not integration"
 """
 
-import json
-import pytest
 import os
+import signal
+import subprocess
+import sys
+import textwrap
+import time
+
 import psutil
-import shutil
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+import pytest
+
 import opensysml
 from opensysml.binary import ensure_binary, get_binary_path
-from opensysml.connection import _OWNED_SERVICES, _get_pidfile_path, _service_key
+from opensysml.connection import _private_services
 from tests.service_gate import (
-    free_port,
     service_binary,
     skip_or_fail_without_service,
 )
 
 
 @pytest.fixture
-def clean_binary():
-    """Fixture to optionally clean binary for fresh install test."""
-    # Don't automatically clean - let tests decide
-    yield
-    # Cleanup after test if needed
+def private_binary(monkeypatch):
+    """Make the service this process starts a binary that is actually here."""
+    binary = service_binary()
+    if binary is None:
+        skip_or_fail_without_service("no sysml-grpc binary is available to spawn")
+    monkeypatch.delenv("OPENSYSML_SERVICE", raising=False)
+    monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
+    monkeypatch.setattr("opensysml.connection.ensure_binary", lambda **kwargs: binary)
+    started = dict(_private_services)
+    yield binary
+    # Only what this test started: another test's connection still holds its own.
+    for key, service in list(_private_services.items()):
+        if started.get(key) is not service:
+            service.stop()
+            del _private_services[key]
+
+
+#: What a holder does before the body a test gives it: connect, and say which
+#: service that started, so the test can watch for it once the holder is dead.
+_HOLDER_PROLOGUE = """\
+import os, sys, time
+import opensysml
+from opensysml import connection
+
+connection.ensure_binary = lambda **kwargs: BINARY
+conn = opensysml.connect()
+print(conn._private.process.pid, flush=True)
+"""
+
+
+def _holder_script(body):
+    """A script that connects in an interpreter of its own and reports the child.
+
+    Args:
+        body (str): What it does once it has printed the service's pid
+
+    Returns:
+        str: The program to run
+    """
+    prologue = _HOLDER_PROLOGUE.replace('BINARY', repr(service_binary()))
+    return prologue + textwrap.dedent(body)
+
+
+def _holder(body, env=None):
+    """Run a holder script, and return it with the pid of the service it started.
+
+    Returns:
+        tuple[subprocess.Popen, psutil.Process]: The holder, and its service
+    """
+    process = subprocess.Popen(
+        [sys.executable, "-c", _holder_script(body)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        env={**os.environ, **(env or {})},
+    )
+    line = process.stdout.readline()
+    if not line:
+        process.wait(timeout=10)
+        pytest.fail(f"the holder exited with {process.returncode} without connecting")
+    return process, psutil.Process(int(line))
 
 
 @pytest.mark.integration
-class TestAutoLifecycle:
-    """Integration tests for complete auto-lifecycle."""
-    
+class TestBinaryIsAvailable:
+    """The binary a private service is started from."""
+
     def test_binary_exists_or_download(self):
-        """Verify binary exists or can be downloaded.
-        
-        Note: If GitHub releases don't exist yet, this will skip.
-        """
-        # Check if binary already exists
+        """Verify binary exists or can be downloaded."""
         binary_path = get_binary_path()
-        
         if os.path.exists(binary_path):
             pytest.skip("Binary already exists - manual install detected")
-        
-        # Try to download (will fail if releases not published)
+
         try:
             result = ensure_binary()
-            assert os.path.exists(result)
-            assert os.access(result, os.X_OK)
         except Exception as e:
             pytest.skip(f"Binary download not available yet: {e}")
-    
-    def test_service_start_with_auto_lifecycle(self, tmp_path):
-        """Verify service starts automatically when using opensysml.load().
-        
-        Tests the complete lifecycle:
-        1. Binary download (if needed)
-        2. Service auto-start (if not running)
-        3. Model load
-        """
-        # Create minimal test file
-        test_file = tmp_path / "lifecycle_test.sysml"
-        test_file.write_text("""
-            package LifecycleTest {
-                part TestPart;
-            }
-        """)
-        
-        # Use convenience API - should trigger auto-lifecycle
-        try:
-            model = opensysml.load(str(test_file))
-            
-            # Verify model loaded successfully
-            assert model is not None
-            assert model.hash is not None
-            assert model.root is not None
-            
-        except Exception as e:
-            # If binary download or service start fails, document why
-            pytest.skip(f"Auto-lifecycle not available: {e}")
-    
-    def test_service_persists_across_multiple_loads(self, tmp_path):
-        """Verify service reuses existing process for multiple loads.
-        
-        This ensures we don't spawn multiple service processes.
-        """
-        # Create two test files
-        file1 = tmp_path / "model1.sysml"
-        file1.write_text("""
-            package Model1 {
-                part Part1;
-            }
-        """)
-        
-        file2 = tmp_path / "model2.sysml"
-        file2.write_text("""
-            package Model2 {
-                part Part2;
-            }
-        """)
-        
-        try:
-            # Load first model
-            model1 = opensysml.load(str(file1))
-            assert model1 is not None
-            
-            # Load second model - should reuse service
-            model2 = opensysml.load(str(file2))
-            assert model2 is not None
-            
-            # Models should be different (different hashes)
-            assert model1.hash != model2.hash
-            
-        except Exception as e:
-            pytest.skip(f"Auto-lifecycle not available: {e}")
-    
-    def test_explicit_connect_with_auto_start(self):
-        """Verify opensysml.connect() with auto_start=True triggers lifecycle."""
-        try:
-            conn = opensysml.connect(auto_start=True)
-            assert conn is not None
-            
-            # Connection should be usable
-            # (Don't load a file - just verify connection established)
-            conn.close()
-            
-        except Exception as e:
-            pytest.skip(f"Auto-lifecycle not available: {e}")
-    
-    def test_explicit_connect_without_auto_start_requires_manual_service(self):
-        """Verify auto_start=False doesn't start service."""
-        # This test verifies that auto_start=False doesn't trigger lifecycle
-        # It will fail if service isn't already running
-        
-        # Check if service is already running
-        from opensysml.connection import Connection
-        
-        # Try connecting without auto-start
-        conn = Connection(auto_start=False)
-        
-        # Try a simple operation - will fail if service not running
-        from opensysml.proto import sysml_pb2
-        import grpc
-        
-        try:
-            # Try to get diagnostics for non-existent model
-            request = sysml_pb2.DiagnosticsRequest(model_hash="test")
-            conn._stub.GetDiagnostics(request, timeout=2)
-            
-            # If we get here, service was already running
-            conn.close()
-            
-        except grpc.RpcError as e:
-            # Expected if service not running
-            if e.code() == grpc.StatusCode.UNAVAILABLE:
-                pytest.skip("Service not running - auto_start=False working correctly")
-            elif e.code() == grpc.StatusCode.NOT_FOUND:
-                # Service is running (NOT_FOUND is expected for invalid hash)
-                conn.close()
-            else:
-                raise
+        assert os.path.exists(result)
+        assert os.access(result, os.X_OK)
 
 
 @pytest.mark.integration
-class TestLifecycleRobustness:
-    """Robustness tests for lifecycle edge cases."""
-    
-    def test_service_survives_connection_close(self, tmp_path):
-        """Verify service keeps running after connection closes.
-        
-        Service should persist when other connections active.
-        """
-        test_file = tmp_path / "persist_test.sysml"
-        test_file.write_text("""
-            package PersistTest {
-                part Part1;
-            }
-        """)
-        
+class TestPrivateService:
+    """What a connection starts for itself, and who else can reach it."""
+
+    def test_it_listens_on_a_port_the_kernel_gave_it(self, private_binary):
+        """No fixed port, and none chosen by this client, so none to collide on."""
+        with opensysml.connect() as conn:
+            assert conn.port != opensysml.DEFAULT_PORT
+            # The kernel's ephemeral range, wherever it happens to start.
+            assert conn.port > 1024
+            assert conn.host in ("127.0.0.1", "::1")
+            assert conn.server_info() is not None
+            # The address is the one the service reported, not one probed for.
+            assert conn._private.address == f"{conn.host}:{conn.port}"
+
+    def test_the_connections_of_one_interpreter_share_one_service(
+        self, private_binary
+    ):
+        """One child per interpreter, so its connections share a parse cache."""
+        with opensysml.connect() as first, opensysml.connect() as second:
+            assert second.port == first.port
+            assert second._private is first._private
+            assert first._private.refs == 2
+
+    def test_the_last_connection_released_stops_it(self, private_binary):
+        """It lives as long as something in this process is using it."""
+        first = opensysml.connect()
+        service = psutil.Process(first._private.process.pid)
+        second = opensysml.connect()
+
+        first.close()
+        assert service.is_running()
+        # Closing twice releases one hold, not two.
+        first.close()
+        assert service.is_running()
+
+        second.close()
+        _wait_gone(service)
+        assert _is_gone(service)
+
+    def test_a_connection_made_after_it_stopped_starts_another(self, private_binary):
+        """Nothing outside this process could have been using the stopped one."""
+        with opensysml.connect() as conn:
+            first = conn._private.process.pid
+        with opensysml.connect() as conn:
+            assert conn._private.process.pid != first
+            assert conn.server_info() is not None
+
+    def test_a_service_that_crashed_is_replaced(self, private_binary):
+        """A dead child is started again rather than reported to the caller."""
+        conn = opensysml.connect()
+        crashed = conn._private.process
+        psutil.Process(crashed.pid).kill()
+        crashed.wait(timeout=10)
+
+        with opensysml.connect() as replacement:
+            started = replacement._private.process
+            assert started.pid != crashed.pid
+            assert replacement.server_info() is not None
+            conn.close()
+            # Closing a connection to the crashed one spares its replacement.
+            assert replacement.server_info() is not None
+        assert started.wait(timeout=10) is not None
+
+    def test_it_records_nothing_outside_this_process(self, private_binary):
+        """Nothing outside this process may use it, so nothing is written down."""
+        state = os.path.expanduser("~/.opensysml")
+        with opensysml.connect():
+            written = os.listdir(state) if os.path.isdir(state) else []
+            assert not [name for name in written if name.endswith(".pid")]
+            assert not [name for name in written if name.endswith(".lock")]
+
+    def test_a_connection_refused_at_connect_time_leaves_nothing_running(
+        self, private_binary
+    ):
+        """A connection never returned holds nothing, so nothing is left behind."""
+        with pytest.raises(opensysml.MissingCapabilityError):
+            opensysml.connect(require_capabilities=["no-such-capability"])
+
+        assert not _private_services
+        assert not _service_processes()
+
+    def test_module_level_calls_share_the_one_service(self, private_binary, tmp_path):
+        """The convenience API is one connection, so it is one service."""
+        opensysml._default_connection = None
+        opensysml._default_connection_params = None
+        first = tmp_path / "one.sysml"
+        first.write_text("package One { part P1; }")
+        second = tmp_path / "two.sysml"
+        second.write_text("package Two { part P2; }")
+
         try:
-            # Load with explicit connection
-            conn1 = opensysml.connect(auto_start=True)
-            model1 = conn1.load(str(test_file))
-            assert model1 is not None
-            
-            # Create new connection - should find service already running
-            conn2 = opensysml.connect(auto_start=True)
-            model2 = conn2.load(str(test_file))
-            assert model2 is not None
-            
-            # Close first connection - service should persist because conn2 open
-            conn1.close()
-            
-            # Same file should have same hash
-            assert model1.hash == model2.hash
-            
-            conn2.close()
-            
-        except Exception as e:
-            pytest.skip(f"Auto-lifecycle not available: {e}")
-    
-    def test_module_level_load_reuses_connection(self, tmp_path):
-        """Verify module-level opensysml.load() reuses connection across calls."""
-        file1 = tmp_path / "reuse1.sysml"
-        file1.write_text("package Reuse1 { part P1; }")
-        
-        file2 = tmp_path / "reuse2.sysml"
-        file2.write_text("package Reuse2 { part P2; }")
-        
-        try:
-            # Clear default connection to start fresh
+            assert opensysml.load(str(first)).hash != opensysml.load(str(second)).hash
+            assert len(_service_processes()) == 1
+        finally:
+            opensysml._default_connection.close()
             opensysml._default_connection = None
             opensysml._default_connection_params = None
-            
-            # Load two models
-            model1 = opensysml.load(str(file1))
-            model2 = opensysml.load(str(file2))
-            
-            assert model1 is not None
-            assert model2 is not None
-            assert model1.hash != model2.hash
-            
-            # Should have created only one default connection
-            assert opensysml._default_connection is not None
-            
-        except Exception as e:
-            pytest.skip(f"Auto-lifecycle not available: {e}")
 
 
 @pytest.mark.integration
-class TestOwnershipOfASpawnedService:
-    """A service this process spawned, on a port and state directory of its own.
+class TestNoOrphans:
+    """The child may not outlive the process that started it, however it dies.
 
-    opensysml never stops a service it did not spawn, so these spawn their own
-    rather than asserting anything about whatever listens on the default port.
+    The mechanism is a pipe: the child holds its read end as stdin, this process
+    holds the write end and never writes to it. Whatever ends this process closes
+    every descriptor it held, the child reads end of file and exits — so this
+    needs no cleanup to run, which is what makes it survive SIGKILL. Waitable on
+    Linux and macOS alike, since both close descriptors on exit; on Windows the
+    same holds for the handle a Popen keeps, which the kernel closes with the
+    process.
     """
 
-    @pytest.fixture
-    def own_service(self, tmp_path, monkeypatch):
-        """A port and isolated state for a service this test spawns itself."""
-        binary = service_binary()
-        if binary is None:
-            skip_or_fail_without_service("no sysml-grpc binary is available to spawn")
-        monkeypatch.setenv("OPENSYSML_STATE_DIR", str(tmp_path / "state"))
-        monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
-        monkeypatch.setattr(
-            "opensysml.connection.ensure_binary", lambda **kwargs: binary
-        )
-        port = free_port()
-        yield port
-        # Only this port's bookkeeping: another test's open connection still
-        # needs its own, or the service it spawned would never be stopped.
-        record = _OWNED_SERVICES.pop(_service_key(port), None)
-        if record is not None:
-            _kill_if_running(record['pid'])
+    def test_a_parent_killed_with_sigkill_leaves_no_service(self, private_binary):
+        """The case no cleanup path can cover: nothing of the parent runs."""
+        holder, service = _holder("time.sleep(60)")
+        try:
+            holder.send_signal(signal.SIGKILL)
+            holder.wait(timeout=10)
+            _wait_gone(service)
+            assert _is_gone(service)
+        finally:
+            _kill_if_running(holder, service)
 
-    def _recorded_pid(self, port):
-        """The pid recorded for the service spawned on a port."""
-        with open(_get_pidfile_path(port)) as f:
-            return json.load(f)["pid"]
-
-    def test_the_last_reference_released_stops_the_service_exactly_once(
-        self, own_service
+    def test_an_interpreter_that_dies_abnormally_leaves_no_service(
+        self, private_binary
     ):
-        """A spawned service outlives every connection but the last."""
-        conn1 = opensysml.connect(port=own_service, auto_start=True)
-        pid = self._recorded_pid(own_service)
-        service = psutil.Process(pid)
-        assert service.is_running()
+        """os._exit runs no atexit handler, and still ends the service."""
+        holder, service = _holder("os._exit(1)")
+        try:
+            holder.wait(timeout=10)
+            assert holder.returncode == 1
+            _wait_gone(service)
+            assert _is_gone(service)
+        finally:
+            _kill_if_running(holder, service)
 
-        conn2 = opensysml.connect(port=own_service, auto_start=True)
-        # Both connections hold the one service this process spawned.
-        assert _OWNED_SERVICES[_service_key(own_service)]["refs"] == 2
+    def test_an_interpreter_that_exits_normally_leaves_no_service(
+        self, private_binary
+    ):
+        """The ordinary exit, where the connection is never closed by hand."""
+        holder, service = _holder("sys.exit(0)")
+        try:
+            holder.wait(timeout=10)
+            assert holder.returncode == 0
+            _wait_gone(service)
+            assert _is_gone(service)
+        finally:
+            _kill_if_running(holder, service)
 
-        conn1.close()
-        assert service.is_running()
-        # Closing twice releases one reference, not two.
-        conn1.close()
-        assert service.is_running()
+    @pytest.mark.skipif(
+        not hasattr(os, "fork"), reason="fork() is not available on this platform"
+    )
+    def test_a_forked_child_neither_stops_nor_inherits_the_service(
+        self, private_binary
+    ):
+        """A fork inherits the pipe but no ownership, and starts its own.
 
-        conn2.close()
-        _wait_gone(service)
-        assert not service.is_running()
-        # The record goes with it, so no dead pid is left to be trusted.
-        assert not os.path.exists(_get_pidfile_path(own_service))
-        assert _service_key(own_service) not in _OWNED_SERVICES
-
-    def test_attaching_to_it_from_this_process_holds_it(self, own_service):
-        """A connection that finds the spawned service holds it too.
-
-        Otherwise the connection that spawned it could stop it while another is
-        still using it.
+        Its copy of the write end would keep the service alive past its parent's
+        death, and closing its connection would stop a service its parent is
+        using; it gives up both at the fork.
         """
-        spawner = opensysml.connect(port=own_service, auto_start=True)
-        service = psutil.Process(self._recorded_pid(own_service))
+        holder, service = _holder(
+            """\
+            pid = os.fork()
+            if pid == 0:
+                # The fork holds no service, and starts one of its own.
+                assert not connection._private_services
+                forked = opensysml.connect()
+                print(forked._private.process.pid, flush=True)
+                forked.close()
+                os._exit(0)
+            os.waitpid(pid, 0)
+            print('parent-survived', flush=True)
+            time.sleep(60)
+            """
+        )
+        try:
+            forked_pid = int(holder.stdout.readline())
+            assert forked_pid != service.pid
+            assert holder.stdout.readline().strip() == b"parent-survived"
+            # The fork's exit left its parent's service running.
+            assert service.is_running()
+            assert not psutil.pid_exists(forked_pid) or not _is_service(forked_pid)
 
-        attached = opensysml.connect(port=own_service, auto_start=True)
-        spawner.close()
-        assert service.is_running()
+            holder.send_signal(signal.SIGKILL)
+            holder.wait(timeout=10)
+            _wait_gone(service)
+            assert _is_gone(service)
+        finally:
+            _kill_if_running(holder, service)
 
-        attached.close()
-        _wait_gone(service)
-        assert not service.is_running()
+    def test_the_service_exits_when_the_pipe_it_watches_closes(self, private_binary):
+        """The mechanism itself: end of file on stdin is the signal to stop."""
+        with opensysml.connect() as conn:
+            process = conn._private.process
+            process.stdin.close()
+            assert process.wait(timeout=10) is not None
 
-    def test_a_crashed_service_leaves_recoverable_state(self, own_service):
-        """A record whose process is gone is cleaned, and a service starts again."""
-        conn = opensysml.connect(port=own_service, auto_start=True)
-        service = psutil.Process(self._recorded_pid(own_service))
-        service.kill()
-        _wait_gone(service)
-        conn.close()
+    def test_a_disowned_service_is_never_signalled(self, private_binary):
+        """A service given up at a fork is left to end on its own.
 
-        with opensysml.connect(port=own_service, auto_start=True) as recovered:
-            started = psutil.Process(self._recorded_pid(own_service))
-            assert started.pid != service.pid
-            assert started.is_running()
-            assert recovered.server_info() is not None
-        _wait_gone(started)
-        assert not os.path.exists(_get_pidfile_path(own_service))
-
-    def test_closing_a_connection_to_a_crashed_service_spares_its_replacement(
-        self, own_service
-    ):
-        """A reference taken on a dead service is not a reference on the new one."""
-        crashed = opensysml.connect(port=own_service, auto_start=True)
-        service = psutil.Process(self._recorded_pid(own_service))
-        service.kill()
-        _wait_gone(service)
-
-        restarted_conn = opensysml.connect(port=own_service, auto_start=True)
-        restarted = psutil.Process(self._recorded_pid(own_service))
-        crashed.close()
-        assert restarted.is_running()
-        assert restarted_conn.server_info() is not None
-
-        restarted_conn.close()
-        _wait_gone(restarted)
-        assert not restarted.is_running()
+        Only this Popen's own child is ever signalled, and only while this
+        process owns it, so no pid the operating system reused can be.
+        """
+        with opensysml.connect() as conn:
+            service = conn._private
+            service.disown()
+            service.stop()
+            # Ended by the pipe closing, not by a signal from here.
+            assert service.process.wait(timeout=10) == 0
 
 
-def _kill_if_running(pid):
-    """Stop a service a failing test left behind, so the port is not held."""
+def _service_processes():
+    """The service children of this process that are still running."""
+    return [
+        child for child in psutil.Process().children()
+        if _is_service(child.pid)
+    ]
+
+
+def _is_service(pid):
+    """Whether a pid is a sysml-grpc, for a check that must not guess."""
     try:
-        process = psutil.Process(pid)
-        process.kill()
-        _wait_gone(process)
+        return "sysml-grpc" in " ".join(psutil.Process(pid).cmdline())
     except psutil.Error:
-        pass
+        return False
+
+
+def _kill_if_running(holder, service):
+    """Clean up after a failing test, so no port or process is left held."""
+    if holder.poll() is None:
+        holder.kill()
+        holder.wait(timeout=10)
+    if not _is_gone(service):
+        service.kill()
+        _wait_gone(service)
+
+
+def _is_gone(process):
+    """Whether a process has exited, counting one nobody has reaped yet.
+
+    A service whose parent was killed is reparented, and stays a zombie until
+    whatever inherited it reaps it; it is not running either way.
+
+    Args:
+        process (psutil.Process): The process to look at
+
+    Returns:
+        bool: True when it is no longer executing
+    """
+    try:
+        return not process.is_running() or process.status() == psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return True
 
 
 def _wait_gone(process, timeout=10):
     """Wait for a process to exit, so an assertion is not made on the race."""
-    try:
-        process.wait(timeout=timeout)
-    except (psutil.NoSuchProcess, psutil.TimeoutExpired):
-        pass
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and not _is_gone(process):
+        time.sleep(0.05)

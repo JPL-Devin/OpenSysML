@@ -4,6 +4,36 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### The Python client uses a private service of its own
+
+**Behavior change.** A `Connection` that names no address no longer attaches to whatever
+`sysml-grpc` happens to be listening on port 50051. It starts a **private child** of the
+interpreter instead: the child binds port 0, is given a port by the kernel and reports the
+address on its stdout, so no port is chosen, probed or retried and two interpreters starting
+at once cannot collide. One child serves every connection of the interpreter that needs the
+same service release, sharing its parse cache, and is stopped when the last of them closes.
+
+- **Connecting to a service you manage is now explicit**, and unchanged otherwise: pass a
+  host and port (`connect("localhost", 50051)` or `connect("localhost:50051")`), set
+  `OPENSYSML_SERVICE=host:port`, or pass `auto_start=False`. Such a service is never stopped
+  or replaced by the client. What is gone is *implicit* adoption — a script that happened to
+  find a service listening now starts its own, which is also what makes it reproducible.
+- **A private child cannot be orphaned.** The client holds the write end of a pipe on the
+  child's stdin and never writes to it; the child exits at end of file. The kernel closes
+  that pipe when the owning process goes away, so the child does not survive `SIGKILL`,
+  `os._exit`, a fatal interpreter error, or a crash during shutdown — cases an `atexit` hook
+  does not cover. A `fork()`ing parent disowns its inherited services in the child, so the
+  service stays with the process that started it. `sysml-grpc` gained `-report-address` and
+  `-exit-with-parent` for this, and accepts `-port 0`.
+- **The ownership records are gone**: no `~/.opensysml/sysml-grpc-<port>.pid`, no process
+  start times to authenticate a pid with, no stale-record cleanup, no lockfile, and no
+  port-collision retry. The guarantee they protected is kept by construction — the client
+  signals only the `Popen` of the child it started, so no pid it did not start, reused or
+  otherwise, can be signalled. `OPENSYSML_STATE_DIR` still moves the binary cache.
+- `filelock` and `psutil` are no longer runtime dependencies of the client.
+
 ## 0.2.1 — 2026-08-24
 
 A conformance patch, a round of performance work, and a supply-chain improvement. The

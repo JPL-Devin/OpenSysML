@@ -3,7 +3,12 @@
 import warnings
 
 from opensysml._version import VERSION as _declared_version
-from opensysml.connection import Connection, DEFAULT_PORT, split_target
+from opensysml.connection import (
+    Connection,
+    DEFAULT_PORT,
+    named_target,
+    split_target,
+)
 from opensysml.model import Model
 from opensysml.symbol import Symbol
 from opensysml.diagnostic import Diagnostic
@@ -85,13 +90,15 @@ _default_connection_params = None
 def _get_default_connection(host='localhost', port=None):
     """Get or create the default module-level connection.
     
-    If called with different host/port than last time, creates new connection.
+    If called with a different service than last time, creates new connection.
     A ``host:port`` address written as the host names the same service as the
     two given separately, so it reuses the same connection.
     
     Args:
-        host (str): Service hostname, or a ``host:port`` address
-        port (int, optional): Service port (default: 50051)
+        host (str): Hostname of an externally managed service, or a
+            ``host:port`` address naming one; unnamed, the private service this
+            interpreter starts is used
+        port (int, optional): Port of an externally managed service
     
     Returns:
         Connection: Singleton default connection
@@ -100,12 +107,13 @@ def _get_default_connection(host='localhost', port=None):
         ValueError: If host names a port that is unreadable or disagrees with port
     """
     global _default_connection, _default_connection_params
-    host, port = split_target(host, port)
-    params = (host, port)
+    # Keyed by the service named, if any, so the unnamed default is one key
+    # rather than one per spelling of it.
+    params = named_target(host, port)
     
     # Create new connection if params changed or no connection exists
     if _default_connection is None or _default_connection_params != params:
-        # Close old connection to avoid refcount leak
+        # Close old connection to avoid holding a service nothing is using
         if _default_connection is not None:
             _default_connection.close()
         _default_connection = Connection(host, port, auto_start=True)
@@ -164,13 +172,17 @@ def connect(host='localhost', port=None, auto_start=True, version=None,
     Convenience function that creates a new Connection instance.
     
     Args:
-        host (str): Service hostname, or a ``host:port`` address, whose port is
-            used when no separate port is given (default: 'localhost')
-        port (int, optional): Service port (default: 50051)
-        auto_start (bool): If True, automatically start service if not running (default: True)
+        host (str): Hostname of an externally managed service, or a
+            ``host:port`` address naming one. Naming either connects to a
+            service this client does not manage; unnamed, and with
+            $OPENSYSML_SERVICE unset, a private service is used instead
+            (default: 'localhost')
+        port (int, optional): Port of an externally managed service
+        auto_start (bool): If True, start a private service when no address is
+            named. If False, start nothing (default: True)
         version (str, optional): Release tag the service must report, or
             'latest'; defaults to $OPENSYSML_GRPC_VERSION. Checked whether the
-            service is started here or managed by the caller
+            service is private or externally managed
         require_capabilities (iterable, optional): Capability names the service
             must report, checked at connect time
     
@@ -179,8 +191,8 @@ def connect(host='localhost', port=None, auto_start=True, version=None,
 
     Raises:
         ValueError: If host names a port that is unreadable or disagrees with port
-        StaleServiceError: If another release is already listening on the
-            address and this client may not stop it
+        ConnectionError: If a private service cannot be started
+        StaleServiceError: If the service reached is another release
         MissingCapabilityError: If the service lacks a required capability
 
     Example:
@@ -188,7 +200,6 @@ def connect(host='localhost', port=None, auto_start=True, version=None,
         >>> conn.port
         50123
     """
-    host, port = split_target(host, port)
     return Connection(
         host, port, auto_start=auto_start, version=version,
         require_capabilities=require_capabilities,
