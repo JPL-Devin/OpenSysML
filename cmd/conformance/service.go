@@ -21,6 +21,10 @@ type service struct {
 	process *exec.Cmd
 	conn    *grpc.ClientConn
 	log     *os.File
+	// exited closes when the process has been reaped, so an early crash is seen
+	// rather than waited out. waitErr is read only after it closes.
+	exited  chan struct{}
+	waitErr error
 }
 
 // buildService builds cmd/sysml-grpc, so a run tests the working tree rather
@@ -62,7 +66,11 @@ func startService(ctx context.Context, binary, logPath string, cacheSize int) (*
 		return nil, fmt.Errorf("starting %s: %w", binary, err)
 	}
 
-	svc := &service{binary: binary, process: process, log: log}
+	svc := &service{binary: binary, process: process, log: log, exited: make(chan struct{})}
+	go func() {
+		svc.waitErr = process.Wait()
+		close(svc.exited)
+	}()
 	target := fmt.Sprintf("localhost:%d", port)
 	conn, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials())) //nolint:staticcheck // grpc.NewClient postdates the pinned grpc version
 	if err != nil {
@@ -82,10 +90,10 @@ func (s *service) waitReady(ctx context.Context, target, logPath string) error {
 	deadline := time.Now().Add(30 * time.Second)
 	var lastErr error
 	for time.Now().Before(deadline) {
-		if s.process.Process != nil {
-			if state := s.process.ProcessState; state != nil && state.Exited() {
-				return fmt.Errorf("the service exited before answering; its log is %s", logPath)
-			}
+		select {
+		case <-s.exited:
+			return fmt.Errorf("the service exited before answering (%v); its log is %s", s.waitErr, logPath)
+		default:
 		}
 		call, cancel := context.WithTimeout(ctx, 2*time.Second)
 		_, lastErr = s.call(call, "GetServerInfo", nil)
@@ -123,25 +131,30 @@ func (s *service) stop() {
 	}
 	if s.process != nil && s.process.Process != nil {
 		_ = s.process.Process.Kill()
-		_ = s.process.Wait()
+		<-s.exited
 	}
 	if s.log != nil {
 		_ = s.log.Close()
 	}
 }
 
-// freePorts reserves two ports by binding and releasing them.
+// freePorts reserves two distinct ports. Both listeners stay open until both
+// ports are chosen, so the second cannot be the port the first just released.
 func freePorts() (int, int, error) {
+	var listeners []net.Listener
+	defer func() {
+		for _, listener := range listeners {
+			_ = listener.Close()
+		}
+	}()
 	var ports []int
 	for range 2 {
 		listener, err := net.Listen("tcp", "localhost:0")
 		if err != nil {
 			return 0, 0, err
 		}
+		listeners = append(listeners, listener)
 		ports = append(ports, listener.Addr().(*net.TCPAddr).Port)
-		if err := listener.Close(); err != nil {
-			return 0, 0, err
-		}
 	}
 	return ports[0], ports[1], nil
 }
