@@ -298,8 +298,9 @@ npm run conformance -- --allow-skips
 ```
 
 The service-backed tests build `sysml-grpc` from this checkout on first use, or
-use `$OPENSYSML_BINARY` when it names one. `.circleci/config.yml` runs all five
-commands in the `node-test` job.
+use `$OPENSYSML_BINARY` when it names one. The `node-test` job runs all five
+commands, plus the mutation checks and a stub-drift check, in both
+`.github/workflows/pr.yml` (pull requests) and `.circleci/config.yml`.
 
 ## Release
 
