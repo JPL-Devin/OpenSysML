@@ -1,6 +1,9 @@
 package lower
 
 import (
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -103,6 +106,226 @@ func TestToStateGraph_TopLevelPseudostateHasNoOwner(t *testing.T) {
 	if owner, ok := graph.PseudostateOwner[pick]; ok {
 		t.Errorf("PseudostateOwner[pick] = %v, want no owner", owner)
 	}
+}
+
+func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
+	standard := stateDefinitionIn(t, `
+		package test {
+			state def Machine parallel {
+				state left {
+					entry; then lstart;
+					state lstart;
+					state ldone;
+					lstart then ldone;
+				}
+				state right {
+					entry; then rstart;
+					state rstart;
+					state rdone;
+					rstart then rdone;
+				}
+			}
+		}
+	`)
+	explicit := stateDefinitionIn(t, `
+		package test {
+			state def Machine {
+				region left {
+					initial lstart;
+					state lstart;
+					state ldone;
+					lstart then ldone;
+				}
+				region right {
+					initial rstart;
+					state rstart;
+					state rdone;
+					rstart then rdone;
+				}
+			}
+		}
+	`)
+
+	parallelGraph, err := ToStateGraph(standard, nil)
+	if err != nil {
+		t.Fatalf("parallel ToStateGraph: %v", err)
+	}
+	regionGraph, err := ToStateGraph(explicit, nil)
+	if err != nil {
+		t.Fatalf("region ToStateGraph: %v", err)
+	}
+	if parallelGraph.Initial != nil {
+		t.Fatalf("parallel graph initial = %v, want nil", parallelGraph.Initial.Name)
+	}
+	if len(parallelGraph.TopRegions) != 2 || len(regionGraph.TopRegions) != 2 {
+		t.Fatalf("top regions: parallel=%d explicit=%d, want 2 each",
+			len(parallelGraph.TopRegions), len(regionGraph.TopRegions))
+	}
+	for i, region := range parallelGraph.TopRegions {
+		want := regionGraph.TopRegions[i]
+		if region.Name != want.Name {
+			t.Errorf("region %d name = %q, want %q", i, region.Name, want.Name)
+		}
+		if got, wantState := parallelGraph.RegionInitials[region].Name, regionGraph.RegionInitials[want].Name; got != wantState {
+			t.Errorf("region %q initial = %q, want %q", region.Name, got, wantState)
+		}
+		var gotStates, wantStates []string
+		seenGot := make(map[string]bool)
+		for state, owner := range parallelGraph.RegionOf {
+			if owner == region && !seenGot[state.Name] {
+				gotStates = append(gotStates, state.Name)
+				seenGot[state.Name] = true
+			}
+		}
+		seenWant := make(map[string]bool)
+		for state, owner := range regionGraph.RegionOf {
+			if owner == want && !seenWant[state.Name] {
+				wantStates = append(wantStates, state.Name)
+				seenWant[state.Name] = true
+			}
+		}
+		sort.Strings(gotStates)
+		sort.Strings(wantStates)
+		if !reflect.DeepEqual(gotStates, wantStates) {
+			t.Errorf("region %q states = %v, want %v", region.Name, gotStates, wantStates)
+		}
+	}
+	if got, want := transitionShape(parallelGraph), transitionShape(regionGraph); !reflect.DeepEqual(got, want) {
+		t.Errorf("transitions = %v, want %v", got, want)
+	}
+}
+
+func TestToStateGraph_ParallelStateUsage(t *testing.T) {
+	graph, err := ToStateGraph(stateUsageIn(t, `
+		package test {
+			state Machine parallel {
+				state left {
+					entry; then idle;
+					state idle;
+				}
+				state right {
+					entry; then ready;
+					state ready;
+				}
+			}
+		}
+	`), nil)
+	if err != nil {
+		t.Fatalf("parallel state usage: %v", err)
+	}
+	if graph.Initial != nil {
+		t.Fatalf("parallel state usage initial = %v, want nil", graph.Initial.Name)
+	}
+	if len(graph.TopRegions) != 2 {
+		t.Fatalf("parallel state usage regions = %d, want 2", len(graph.TopRegions))
+	}
+}
+
+func TestToStateGraph_ParallelWithoutInitialFailsClearly(t *testing.T) {
+	graph, err := ToStateGraph(stateDefinitionIn(t, `
+		package test {
+			state def Machine parallel {
+				state left {
+					state idle;
+				}
+			}
+		}
+	`), nil)
+	if err == nil {
+		t.Fatal("parallel state without a region initial succeeded")
+	}
+	if !strings.Contains(err.Error(), "region left has no initial state") {
+		t.Fatalf("error = %q, want missing region initial", err)
+	}
+	_ = graph
+}
+
+func TestToStateGraph_NestedParallelRegions(t *testing.T) {
+	graph, err := ToStateGraph(stateDefinitionIn(t, `
+		package test {
+			state def Machine {
+				initial start;
+				state start;
+				state outer parallel {
+					state left {
+						entry; then idle;
+						state idle;
+					}
+					state right {
+						entry; then ready;
+						state ready;
+					}
+				}
+				start then outer;
+			}
+		}
+	`), nil)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+	outer := stateNamed(graph, "outer")
+	if outer == nil {
+		t.Fatal("outer state not collected")
+	}
+	regions := graph.CompositeStates[outer]
+	if len(regions) != 2 {
+		t.Fatalf("outer regions = %d, want 2", len(regions))
+	}
+	for _, region := range regions {
+		if graph.RegionOwner[region] != outer {
+			t.Errorf("region %q owner = %v, want outer", region.Name, graph.RegionOwner[region])
+		}
+		if graph.RegionInitials[region] == nil {
+			t.Errorf("region %q has no initial", region.Name)
+		}
+	}
+}
+
+// stateDefinitionIn returns the first state definition in src.
+func stateDefinitionIn(t *testing.T, src string) *ast.Definition {
+	t.Helper()
+	p := parser.New(source.New("test.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("parse errors: %v", p.Diagnostics)
+	}
+	var found *ast.Definition
+	var walk func([]ast.Node)
+	walk = func(members []ast.Node) {
+		for _, member := range members {
+			switch n := unwrapMembership(member).(type) {
+			case *ast.Package:
+				walk(n.Members)
+			case *ast.Definition:
+				if n.Kind == ast.DefState && found == nil {
+					found = n
+				}
+			}
+		}
+	}
+	walk(root.Members)
+	if found == nil {
+		t.Fatal("no state definition found")
+	}
+	return found
+}
+
+func transitionShape(graph *StateGraph) map[string][]string {
+	shape := make(map[string][]string)
+	for source, transitions := range graph.Transitions {
+		for _, transition := range transitions {
+			sourceState, sourceOK := source.(*ast.StateNode)
+			targetState, targetOK := transition.Target.(*ast.StateNode)
+			if !sourceOK || !targetOK {
+				continue
+			}
+			shape[sourceState.Name] = append(shape[sourceState.Name], targetState.Name)
+		}
+	}
+	for source := range shape {
+		sort.Strings(shape[source])
+	}
+	return shape
 }
 
 // An endpoint naming no vertex leaves its edge out of the graph rather than

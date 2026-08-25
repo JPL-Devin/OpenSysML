@@ -32,6 +32,10 @@ type StateGraph struct {
 	// nodes lowering derives from it.
 	declOf map[*ast.StateNode]ast.Node
 
+	// regionDecl: synthesized region → the direct substate that supplies its
+	// body, since the scope tree is keyed by that substate rather than the region.
+	regionDecl map[*ast.StateRegion]ast.Node
+
 	// vertexOf: the declaration an endpoint resolves to → the graph node standing
 	// for it, the state node built from it or the pseudostate itself.
 	vertexOf map[ast.Node]ast.Node
@@ -153,35 +157,26 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
 	graph.Attributes = lowerAttributes(members)
 
-	if err := collectVertices(graph, members, scope); err != nil {
+	if err := collectVertices(graph, members, scope, stateMachineIsParallel(stateMachineDecl)); err != nil {
 		return nil, err
 	}
 
 	// Second pass: identify composite states with regions AND handle top-level regions
 	// Check for top-level regions (state machine itself has regions as members)
-	hasTopLevelRegions := false
+	hasTopLevelRegions := len(graph.TopRegions) > 0
 	for _, member := range members {
 		actualMember := unwrapMembership(member)
 		if region, ok := actualMember.(*ast.StateRegion); ok {
 			hasTopLevelRegions = true
 			graph.TopRegions = append(graph.TopRegions, region)
-			if graph.RegionInitials[region] == nil {
-				return nil, fmt.Errorf("top-level region %s has no initial state", region.Name)
-			}
 		}
 	}
-
 	// Also handle states that have regions as sub-members
 	for _, state := range graph.States {
 		if len(state.Regions) > 0 {
 			graph.CompositeStates[state] = state.Regions
-
 			for _, region := range state.Regions {
 				graph.RegionOwner[region] = state
-
-				if graph.RegionInitials[region] == nil {
-					return nil, fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
-				}
 			}
 		}
 	}
@@ -196,6 +191,29 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	// Third pass: collect transitions
 	if err := collectTransitions(graph, members, nil, scope); err != nil {
 		return nil, err
+	}
+	for state := range graph.designatedInitials {
+		if region := graph.RegionOf[state]; region != nil && graph.RegionInitials[region] == nil {
+			graph.RegionInitials[region] = state
+		}
+	}
+	for _, region := range graph.TopRegions {
+		if graph.RegionInitials[region] == nil {
+			if graph.regionDecl[region] != nil {
+				return nil, fmt.Errorf("region %s has no initial state", region.Name)
+			}
+			return nil, fmt.Errorf("top-level region %s has no initial state", region.Name)
+		}
+	}
+	for state, regions := range graph.CompositeStates {
+		for _, region := range regions {
+			if graph.RegionInitials[region] == nil {
+				if graph.regionDecl[region] != nil {
+					return nil, fmt.Errorf("region %s has no initial state", region.Name)
+				}
+				return nil, fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
+			}
+		}
 	}
 
 	// Find initial state (for simple machines - machines without top-level regions).
@@ -294,19 +312,23 @@ func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage) *ast.StateNode {
 		case *ast.StateRegion:
 			state.Regions = append(state.Regions, m)
 		case *ast.StateNode:
-			state.Substates = append(state.Substates, m)
+			if !usage.IsParallel {
+				state.Substates = append(state.Substates, m)
+			}
 		case *ast.PseudostateNode:
 			state.Substates = append(state.Substates, m)
 		case *ast.SubstateMember:
-			child := &ast.StateNode{Name: m.Name}
-			child.NodeSpan = m.NodeSpan
-			graph.declOf[child] = m
-			state.Substates = append(state.Substates, child)
+			if !usage.IsParallel {
+				child := &ast.StateNode{Name: m.Name}
+				child.NodeSpan = m.NodeSpan
+				graph.declOf[child] = m
+				state.Substates = append(state.Substates, child)
+			}
 		case *ast.Usage:
 			// A state declared inside a composite state is one of its substates:
 			// dropping it here would leave the hierarchy out of the graph and every
 			// transition naming a nested state unresolvable.
-			if m.Kind == ast.UsageState {
+			if m.Kind == ast.UsageState && !usage.IsParallel {
 				state.Substates = append(state.Substates, stateNodeFromUsage(graph, m))
 			}
 		}
@@ -334,6 +356,7 @@ func newStateGraph(scope *symbols.Scope, endpoints Endpoints) *StateGraph {
 		RegionOwner:      make(map[*ast.StateRegion]*ast.StateNode),
 		RegionOf:         make(map[*ast.StateNode]*ast.StateRegion),
 		Deferred:         make(map[*ast.StateNode][]ast.Node),
+		regionDecl:       make(map[*ast.StateRegion]ast.Node),
 
 		designatedInitials: make(map[*ast.StateNode]bool),
 	}
@@ -364,9 +387,20 @@ func machineMembers(stateMachineDecl ast.Node) ([]ast.Node, error) {
 
 // collectVertices records every state and pseudostate the machine body declares,
 // which are the vertices its transitions may name (UML 2.5.1 §14.2.3.9).
-func collectVertices(graph *StateGraph, members []ast.Node, scope *symbols.Scope) error {
+func collectVertices(graph *StateGraph, members []ast.Node, scope *symbols.Scope, parallel bool) error {
+	if parallel {
+		regions, err := graph.parallelRegions(members, nil, scope)
+		if err != nil {
+			return err
+		}
+		graph.TopRegions = append(graph.TopRegions, regions...)
+	}
 	for _, member := range members {
-		switch n := unwrapMembership(member).(type) {
+		actual := unwrapMembership(member)
+		if parallel && isParallelRegionMember(actual) {
+			continue
+		}
+		switch n := actual.(type) {
 		case *ast.StateNode:
 			if err := collectStates(graph, n, nil, graph.stateScope(scope, n)); err != nil {
 				return err
@@ -421,6 +455,14 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 		graph.ParentState[state] = parent
 	}
 
+	if decl, ok := graph.declOf[state].(*ast.Usage); ok && decl.IsParallel {
+		regions, err := graph.parallelRegions(decl.Members, state, scope)
+		if err != nil {
+			return err
+		}
+		state.Regions = append(state.Regions, regions...)
+	}
+
 	// Recursively collect substates
 	for _, substate := range state.Substates {
 		switch child := unwrapMembership(substate).(type) {
@@ -439,7 +481,7 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 
 	// Collect states in orthogonal regions
 	for _, region := range state.Regions {
-		if err := collectRegionStates(graph, region, state, childScope(scope, region)); err != nil {
+		if err := collectRegionStates(graph, region, state, graph.regionScope(scope, region)); err != nil {
 			return err
 		}
 	}
@@ -502,6 +544,92 @@ func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast
 		}
 	}
 	return nil
+}
+
+// stateMachineIsParallel reports whether a state definition or usage marks its
+// direct substates as orthogonal regions.
+func stateMachineIsParallel(decl ast.Node) bool {
+	switch n := decl.(type) {
+	case *ast.Definition:
+		return n.IsParallel
+	case *ast.Usage:
+		return n.IsParallel
+	default:
+		return false
+	}
+}
+
+// isParallelRegionMember reports whether a direct parallel-body member supplies
+// one region; each such substate contributes its own body as region contents.
+func isParallelRegionMember(member ast.Node) bool {
+	switch n := member.(type) {
+	case *ast.StateNode, *ast.SubstateMember:
+		return true
+	case *ast.Usage:
+		return n.Kind == ast.UsageState
+	default:
+		return false
+	}
+}
+
+// parallelRegions synthesizes the regions represented by direct substates of a
+// parallel body and lowers each substate body into the existing region IR.
+func (g *StateGraph) parallelRegions(members []ast.Node, parent *ast.StateNode, scope *symbols.Scope) ([]*ast.StateRegion, error) {
+	regions := make([]*ast.StateRegion, 0)
+	for _, member := range members {
+		actual := unwrapMembership(member)
+		if !isParallelRegionMember(actual) {
+			switch actual.(type) {
+			case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation:
+				continue
+			default:
+				return nil, fmt.Errorf("parallel state body contains unsupported member %T", actual)
+			}
+		}
+
+		name, body := parallelRegionBody(actual)
+		region := &ast.StateRegion{
+			NodeBase: ast.NodeBase{NodeSpan: actual.Span()},
+			Name:     name,
+			States:   body,
+		}
+		g.regionDecl[region] = actual
+		if err := collectRegionStates(g, region, parent, childScope(scope, actual)); err != nil {
+			return nil, err
+		}
+		regions = append(regions, region)
+	}
+	return regions, nil
+}
+
+// parallelRegionBody returns the name and body a direct substate contributes to
+// its synthesized region.
+func parallelRegionBody(member ast.Node) (string, []ast.Node) {
+	switch n := member.(type) {
+	case *ast.Usage:
+		name, _ := ast.EffectiveName(n)
+		return name, n.Members
+	case *ast.StateNode:
+		body := make([]ast.Node, 0, len(n.Entry)+len(n.Do)+len(n.Exit)+len(n.Substates))
+		body = append(body, n.Entry...)
+		body = append(body, n.Do...)
+		body = append(body, n.Exit...)
+		body = append(body, n.Substates...)
+		return n.Name, body
+	case *ast.SubstateMember:
+		return n.Name, nil
+	default:
+		return "", nil
+	}
+}
+
+// regionScope uses the source substate scope for synthesized regions and the
+// region's own scope for regions written with the extension syntax.
+func (g *StateGraph) regionScope(scope *symbols.Scope, region *ast.StateRegion) *symbols.Scope {
+	if decl := g.regionDecl[region]; decl != nil {
+		return childScope(scope, decl)
+	}
+	return childScope(scope, region)
 }
 
 // collectDeferred records the triggers a state defers, normalized the same way
