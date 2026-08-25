@@ -148,7 +148,9 @@ diffed; `python/tests/golden/vehicle_types.py` is exactly that.
 Generated classes are views, not copies: attribute access goes to the underlying
 feature value on every read, and Tier 1 behaviour is preserved. A feature value that
 failed to evaluate raises `FeatureValueError`; one holding a value of another type than the model
-declared raises `TypeMismatchError` rather than returning a wrongly typed value.
+declared raises `TypeMismatchError` rather than returning a wrongly typed value. A feature holding
+no value (Tier 1 `UNSET`) reads as `None` for a `0..1` property and as the empty list for a
+collection property.
 
 ### SysML → Python mapping
 
