@@ -62,22 +62,84 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 ## Rendering a view
 
 ```
+sysml> package Demo {
+  ...>     private import ScalarValues::*;
+  ...>     private import Views::*;
+  ...>     part def Wheel {
+  ...>         attribute diameter : Real = 16.0;
+  ...>     }
+  ...>     part def Vehicle {
+  ...>         attribute mass : Real;
+  ...>         part wheel : Wheel;
+  ...>     }
+  ...>     part vehicle : Vehicle {
+  ...>         attribute :>> mass = 1200.0;
+  ...>     }
+  ...>     concern def MassBudget {
+  ...>         subject s : Vehicle;
+  ...>         attribute maxMass : Real = 1000.0;
+  ...>         require constraint {
+  ...>             s.mass < maxMass
+  ...>         }
+  ...>     }
+  ...>     concern def Modularity {
+  ...>         subject s : Vehicle;
+  ...>         require constraint {
+  ...>             1 < 2
+  ...>         }
+  ...>     }
+  ...>     viewpoint def StructurePerspective {
+  ...>         frame concern budget : MassBudget;
+  ...>         frame concern modularity : Modularity;
+  ...>     }
+  ...>     viewpoint structure : StructurePerspective;
+  ...>     view def StructureView {
+  ...>         satisfy structure;
+  ...>         frame concern budget : MassBudget;
+  ...>         frame concern modularity : Modularity;
+  ...>     }
+  ...>     view report : StructureView {
+  ...>         expose vehicle;
+  ...>         view detail {
+  ...>             expose Wheel;
+  ...>         }
+  ...>     }
+  ...>     view summary : StructureView {
+  ...>         expose Vehicle;
+  ...>         view detail {
+  ...>             expose Wheel;
+  ...>         }
+  ...>     }
+  ...>     view parts {
+  ...>         expose Vehicle;
+  ...>         render asElementTable;
+  ...>     }
+  ...> }
+✓ package Demo
+
 sysml> %render Demo::summary
 Demo::summary - tree rendering (the view states no rendering; a tree is the default)
 
 part def Demo::Vehicle
-part Demo::v (Vehicle)
+  attribute mass (Real)
+  part wheel (Wheel)
 view Demo::summary::detail
   part def Demo::Wheel
+    attribute diameter (Real)
 
 sysml> %render Demo::summary mermaid
 %% Demo::summary — tree rendering
 flowchart TD
   n0["part def Demo::Vehicle"]
-  n1["part Demo::v (Vehicle)"]
-  n2["view Demo::summary::detail"]
-  n3["part def Demo::Wheel"]
-  n2 --- n3
+  n1["attribute mass (Real)"]
+  n0 --- n1
+  n2["part wheel (Wheel)"]
+  n0 --- n2
+  n3["view Demo::summary::detail"]
+  n4["part def Demo::Wheel"]
+  n5["attribute diameter (Real)"]
+  n4 --- n5
+  n3 --- n4
 ```
 
 A view stating `render asElementTable;` — or typed by `StandardViewDefinitions::GridView` — renders
@@ -88,16 +150,18 @@ rendered one, as aligned columns at the prompt and as a Markdown table with `mar
 sysml> %render Demo::parts
 Demo::parts - table rendering (render asElementTable)
 
-Element        Kind      Type   Declared in
--------------  --------  -----  -------------
+Element        Kind       Type   Declared in
+-------------  ---------  -----  -------------
 Demo::Vehicle  part def
-wheel          part      Wheel  Demo::Vehicle
+mass           attribute  Real   Demo::Vehicle
+wheel          part       Wheel  Demo::Vehicle
 
 sysml> %render Demo::parts markdown
 <!-- Demo::parts — table rendering (render asElementTable) -->
 | Element | Kind | Type | Declared in |
 | --- | --- | --- | --- |
 | Demo::Vehicle | part def |  |  |
+| mass | attribute | Real | Demo::Vehicle |
 | wheel | part | Wheel | Demo::Vehicle |
 ```
 
