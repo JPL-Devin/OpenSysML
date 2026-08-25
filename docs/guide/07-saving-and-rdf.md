@@ -181,11 +181,11 @@ and [`examples/repl-behavioral-demo.sysml`](../../examples/repl-behavioral-demo.
 convert too, as do most `parser_features_demo_*.kerml` files (except
 `..._advanced_bodies.kerml`, which computes a value, and two that each declare
 one name twice). The behavior a body states converts as well — states, regions,
-substates, action nodes, assignments and transitions all have a mapping. The
-action-semantics example below now converts successfully. Some other files still
-refuse constructs that the RDF graph cannot rebuild faithfully, such as computed
-operator expressions, duplicate names, and unnamed declarations; the refusal
-names the source construct and recommends saving the original SysML instead:
+substates, action nodes, assignments and transitions all have a mapping. What is
+refused is what the notation could not be rebuilt from: an expression the graph
+would have to compute, a name two members of one body share, or a declaration
+with no name. A refusal names the construct it stopped at and points at saving
+the source instead:
 
 ```bash
 $ sysml examples/parser_features_demo_action_semantics.sysml -convert ttl -o /tmp/action-semantics.ttl; echo $?
@@ -200,7 +200,7 @@ For example, an advanced body with an operator expression is still refused:
 $ sysml examples/parser_features_demo_advanced_bodies.kerml -convert ttl; echo $?
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 sysml: cannot convert the operator expr at examples/parser_features_demo_advanced_bodies.kerml:87:9: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
-exit=2
+2
 ```
 
 ---
