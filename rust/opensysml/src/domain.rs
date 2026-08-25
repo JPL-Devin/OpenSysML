@@ -233,10 +233,7 @@ pub enum Value {
     Unset,
 }
 
-pub(crate) fn value_from_wire(
-    value: wire::Value,
-    capabilities: &Capabilities,
-) -> Result<Value, Error> {
+pub(crate) fn value_from_wire(value: wire::Value) -> Result<Value, Error> {
     let Some(kind) = value.kind else {
         return Err(Error::Decode("Value has no kind".to_owned()));
     };
@@ -249,7 +246,7 @@ pub(crate) fn value_from_wire(
         wire::value::Kind::Sequence(v) => Ok(Value::Sequence(
             v.elements
                 .into_iter()
-                .map(|item| value_from_wire(item, capabilities))
+                .map(value_from_wire)
                 .collect::<Result<_, _>>()?,
         )),
         wire::value::Kind::Null(_) => Ok(Value::Null),
@@ -277,24 +274,12 @@ pub(crate) fn value_from_wire(
                 unit_term,
             }))
         }
-        wire::value::Kind::EnumLiteral(v) => {
-            capabilities.require(
-                "enum_values",
-                "connect to a service advertising enum_values",
-            )?;
-            Ok(Value::EnumLiteral(EnumLiteral {
-                literal_id: v.literal_id,
-                enumeration_id: v.enumeration_id,
-                name: v.name,
-            }))
-        }
-        wire::value::Kind::Unset(_) => {
-            capabilities.require(
-                "unset_value",
-                "connect to a service advertising unset_value",
-            )?;
-            Ok(Value::Unset)
-        }
+        wire::value::Kind::EnumLiteral(v) => Ok(Value::EnumLiteral(EnumLiteral {
+            literal_id: v.literal_id,
+            enumeration_id: v.enumeration_id,
+            name: v.name,
+        })),
+        wire::value::Kind::Unset(_) => Ok(Value::Unset),
     }
 }
 
@@ -358,16 +343,12 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub(crate) fn from_wire(
-        wire: wire::Instance,
-        capabilities: &Capabilities,
-    ) -> Result<Self, Error> {
+    pub(crate) fn from_wire(wire: wire::Instance) -> Result<Self, Error> {
         let features = wire
             .feature_values
             .iter()
             .map(|(name, value)| {
-                FeatureValue::from_wire(value.clone(), capabilities)
-                    .map(|item| (name.clone(), item))
+                FeatureValue::from_wire(value.clone()).map(|item| (name.clone(), item))
             })
             .collect::<Result<_, _>>()?;
         Ok(Self { wire, features })
@@ -404,21 +385,13 @@ pub struct FeatureValue {
 }
 
 impl FeatureValue {
-    fn from_wire(wire: wire::FeatureValue, capabilities: &Capabilities) -> Result<Self, Error> {
-        capabilities.require(
-            "feature_values",
-            "connect to a service advertising feature_values",
-        )?;
-        let value = wire
-            .value
-            .clone()
-            .map(|item| value_from_wire(item, capabilities))
-            .transpose()?;
+    fn from_wire(wire: wire::FeatureValue) -> Result<Self, Error> {
+        let value = wire.value.clone().map(value_from_wire).transpose()?;
         let values = wire
             .values
             .iter()
             .cloned()
-            .map(|item| value_from_wire(item, capabilities))
+            .map(value_from_wire)
             .collect::<Result<_, _>>()?;
         Ok(Self {
             wire,
@@ -485,7 +458,7 @@ impl Evaluation {
 #[derive(Clone, Debug)]
 pub struct Model {
     wire: wire::ParseFileResponse,
-    root: Symbol,
+    root: Option<Symbol>,
     diagnostics: Vec<Diagnostic>,
     connection: Connection,
 }
@@ -495,11 +468,9 @@ impl Model {
         wire: wire::ParseFileResponse,
         connection: Connection,
     ) -> Result<Self, Error> {
-        let root_wire = wire
-            .root
-            .clone()
-            .ok_or_else(|| Error::Decode("parse response has no root".to_owned()))?;
-        let root = Symbol::new(root_wire, connection.inner.clone(), wire.model_hash.clone());
+        let root = wire.root.clone().map(|root_wire| {
+            Symbol::new(root_wire, connection.inner.clone(), wire.model_hash.clone())
+        });
         let diagnostics = wire
             .diagnostics
             .iter()
@@ -514,6 +485,18 @@ impl Model {
         })
     }
 
+    pub(crate) fn from_hash(hash: &str, connection: Connection) -> Self {
+        Self {
+            wire: wire::ParseFileResponse {
+                model_hash: hash.to_owned(),
+                ..Default::default()
+            },
+            root: None,
+            diagnostics: Vec::new(),
+            connection,
+        }
+    }
+
     /// The response this was built from; for conformance tooling and debugging.
     pub fn wire(&self) -> &wire::ParseFileResponse {
         &self.wire
@@ -526,9 +509,9 @@ impl Model {
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
-    /// Root namespace symbol.
-    pub fn root(&self) -> &Symbol {
-        &self.root
+    /// Root namespace symbol, if this handle includes one.
+    pub fn root(&self) -> Option<&Symbol> {
+        self.root.as_ref()
     }
     /// Evaluate an expression and return its domain value.
     pub fn eval(&self, expr: &str) -> Result<Value, Error> {
@@ -558,20 +541,17 @@ pub struct Instantiation {
 }
 
 impl Instantiation {
-    pub(crate) fn from_wire(
-        wire: wire::InstantiateResponse,
-        capabilities: &Capabilities,
-    ) -> Result<Self, Error> {
+    pub(crate) fn from_wire(wire: wire::InstantiateResponse) -> Result<Self, Error> {
         let instance_wire = wire
             .instance
             .clone()
             .ok_or_else(|| Error::Decode("instantiate response has no instance".to_owned()))?;
-        let instance = Instance::from_wire(instance_wire, capabilities)?;
+        let instance = Instance::from_wire(instance_wire)?;
         let instances = wire
             .instances
             .iter()
             .cloned()
-            .map(|item| Instance::from_wire(item, capabilities))
+            .map(Instance::from_wire)
             .collect::<Result<_, _>>()?;
         Ok(Self {
             instance,
@@ -594,16 +574,8 @@ impl Instantiation {
 mod tests {
     use super::*;
 
-    fn capabilities(names: &[&str]) -> Capabilities {
-        Capabilities::new(wire::ServerInfoResponse {
-            version: "test".to_owned(),
-            capabilities: names.iter().map(|name| (*name).to_owned()).collect(),
-        })
-    }
-
     #[test]
     fn value_arms_are_decoded_without_loss() {
-        let caps = capabilities(&["enum_values", "unset_value"]);
         let sequence = wire::Value {
             kind: Some(wire::value::Kind::Sequence(wire::ValueSequence {
                 elements: vec![
@@ -616,7 +588,7 @@ mod tests {
                 ],
             })),
         };
-        let result = value_from_wire(sequence, &caps);
+        let result = value_from_wire(sequence);
         assert_eq!(
             result.ok(),
             Some(Value::Sequence(vec![Value::Integer(7), Value::Real(2.5)]))
@@ -624,15 +596,10 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_value_capability_is_explicit() {
-        let result = value_from_wire(
-            wire::Value {
-                kind: Some(wire::value::Kind::Unset(true)),
-            },
-            &capabilities(&[]),
-        );
-        assert!(
-            matches!(result, Err(Error::MissingCapability { capability, .. }) if capability == "unset_value")
-        );
+    fn value_arms_are_decoded_without_capability_gates() {
+        let result = value_from_wire(wire::Value {
+            kind: Some(wire::value::Kind::Unset(true)),
+        });
+        assert_eq!(result.ok(), Some(Value::Unset));
     }
 }

@@ -27,27 +27,21 @@ fn parse_eval_and_navigation() {
     let Some(connection) = service_or_skip() else {
         return;
     };
-    let model = match connection.parse_content("package Demo {}", &Default::default()) {
-        Ok(model) => model,
-        Err(error) => {
-            if env::var("OPENSYSML_REQUIRE_SERVICE").ok().as_deref() == Some("1") {
-                panic!("parse failed: {error}");
-            }
-            eprintln!("skipping unavailable fixture: {error}");
-            return;
-        }
-    };
+    let model = connection
+        .parse_content("package Demo {}", &Default::default())
+        .unwrap_or_else(|error| panic!("parse failed: {error}"));
     assert!(!model.hash().is_empty());
-    match model.eval("2 + 2") {
-        Ok(Value::Integer(4)) | Ok(Value::Real(4.0)) => {}
-        Ok(value) => panic!("unexpected evaluation value: {value:?}"),
-        Err(error) => panic!("evaluation failed: {error}"),
-    }
-    assert!(model.root().wire().id.is_empty() || model.root().id().contains("Demo"));
-    let adopted = match connection.model_by_hash(model.hash()) {
-        Ok(model) => model,
-        Err(error) => panic!("adopting parsed model failed: {error}"),
-    };
+    assert_eq!(
+        model
+            .eval("2 + 2")
+            .unwrap_or_else(|error| panic!("evaluation failed: {error}")),
+        Value::Integer(4)
+    );
+    assert_eq!(
+        model.root().expect("parsed model has a root").kind(),
+        "RootNamespace"
+    );
+    let adopted = connection.model_by_hash(model.hash());
     assert_eq!(adopted.hash(), model.hash());
 }
 
@@ -98,8 +92,39 @@ fn unknown_model_hash_is_a_transport_service_error() {
     let Some(connection) = service_or_skip() else {
         return;
     };
-    let result = connection.model_by_hash("definitely-unknown-model-hash");
-    eprintln!("unknown hash result: {result:?}");
+    let result = connection.diagnostics("definitely-unknown-model-hash");
+    assert!(matches!(
+        result,
+        Err(Error::Service {
+            status: opensysml::Status::NotFound,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn unknown_model_hash_symbol_is_a_transport_service_error() {
+    let Some(connection) = service_or_skip() else {
+        return;
+    };
+    let result = connection
+        .model_by_hash("no-such-model")
+        .symbol("Demo::missing");
+    assert!(matches!(
+        result,
+        Err(Error::Service {
+            status: opensysml::Status::NotFound,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn unknown_model_hash_evaluation_is_a_transport_service_error() {
+    let Some(connection) = service_or_skip() else {
+        return;
+    };
+    let result = connection.model_by_hash("no-such-model").eval("2 + 2");
     assert!(matches!(
         result,
         Err(Error::Service {
@@ -165,11 +190,18 @@ fn killing_the_parent_leaves_no_private_service() {
     let Some(binary) = env::var_os("CARGO_BIN_EXE_child_probe")
         .map(PathBuf::from)
         .or_else(|| {
-            let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("target")
-                .join("debug")
-                .join("child_probe");
-            candidate.is_file().then_some(candidate)
+            std::env::current_exe().ok().and_then(|executable| {
+                executable
+                    .ancestors()
+                    .map(|directory| {
+                        directory.join("examples").join(if cfg!(windows) {
+                            "child_probe.exe"
+                        } else {
+                            "child_probe"
+                        })
+                    })
+                    .find(|candidate| candidate.is_file())
+            })
         })
     else {
         eprintln!("skipping SIGKILL lifecycle test: child_probe was not built");

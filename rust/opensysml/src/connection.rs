@@ -20,19 +20,18 @@ const START_TIMEOUT: Duration = Duration::from_millis(2500);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 const STDERR_LINES_KEPT: usize = 20;
 
-static PRIVATE_SERVICES: OnceLock<
-    Mutex<std::collections::HashMap<Option<String>, Weak<PrivateService>>>,
-> = OnceLock::new();
+static PRIVATE_SERVICE: OnceLock<Mutex<Weak<PrivateService>>> = OnceLock::new();
 static HTTP_AGENT: OnceLock<ureq::Agent> = OnceLock::new();
 
-fn services() -> &'static Mutex<std::collections::HashMap<Option<String>, Weak<PrivateService>>> {
-    PRIVATE_SERVICES.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+fn private_service() -> &'static Mutex<Weak<PrivateService>> {
+    PRIVATE_SERVICE.get_or_init(|| Mutex::new(Weak::new()))
 }
 
 fn http_agent() -> &'static ureq::Agent {
     HTTP_AGENT.get_or_init(|| {
         ureq::Agent::config_builder()
             .http_status_as_error(false)
+            .timeout_connect(Some(Duration::from_secs(5)))
             .build()
             .into()
     })
@@ -54,25 +53,15 @@ pub(crate) struct ConnectionInner {
 impl Connection {
     /// Start or join the process-wide private sysml-grpc child.
     pub fn private() -> Result<Self, Error> {
-        Self::private_for_version(env::var("OPENSYSML_GRPC_VERSION").ok())
-    }
-
-    /// Start or join the process-wide private child for an explicit release.
-    pub fn private_with_version(version: Option<String>) -> Result<Self, Error> {
-        Self::private_for_version(version)
-    }
-
-    fn private_for_version(version: Option<String>) -> Result<Self, Error> {
         let private = {
-            let mut registry = services()
+            let mut registry = private_service()
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let key = version.clone();
-            if let Some(existing) = registry.get(&key).and_then(Weak::upgrade) {
+            if let Some(existing) = registry.upgrade() {
                 existing
             } else {
-                let started = Arc::new(PrivateService::start(version.as_deref())?);
-                registry.insert(key, Arc::downgrade(&started));
+                let started = Arc::new(PrivateService::start()?);
+                *registry = Arc::downgrade(&started);
                 started
             }
         };
@@ -95,7 +84,7 @@ impl Connection {
     }
 
     fn from_target(address: String, private: Option<Arc<PrivateService>>) -> Result<Self, Error> {
-        let info_wire = Self::rpc_raw(&address, "GetServerInfo", wire::ServerInfoRequest {})?;
+        let info_wire = Self::rpc_raw_at(&address, "GetServerInfo", wire::ServerInfoRequest {})?;
         let info = ServerInfo::from_wire(info_wire);
         Ok(Self {
             inner: Arc::new(ConnectionInner {
@@ -172,40 +161,27 @@ impl Connection {
         Model::from_wire(response, self.clone())
     }
 
-    /// Adopt a model hash held by the caller without reparsing its source.
-    pub fn model_by_hash(&self, hash: &str) -> Result<Model, Error> {
-        let diagnostics: wire::DiagnosticsResponse = self.rpc(
+    /// Retrieve diagnostics for a model cached by the service.
+    pub fn diagnostics(&self, model_hash: &str) -> Result<Vec<crate::Diagnostic>, Error> {
+        let response: wire::DiagnosticsResponse = self.rpc(
             "GetDiagnostics",
             wire::DiagnosticsRequest {
-                model_hash: hash.to_owned(),
+                model_hash: model_hash.to_owned(),
             },
         )?;
-        if !diagnostics.error.is_empty() {
-            return Err(Error::Model(diagnostics.error));
+        if !response.error.is_empty() {
+            return Err(Error::Model(response.error));
         }
-        let root = match self.get_symbol(hash, "") {
-            Ok(root) => root,
-            Err(Error::Model(message)) if message.starts_with("symbol not found:") => Symbol::new(
-                wire::SymbolInfo {
-                    id: String::new(),
-                    name: String::new(),
-                    kind: "RootNamespace".to_owned(),
-                    ..Default::default()
-                },
-                self.inner.clone(),
-                hash.to_owned(),
-            ),
-            Err(error) => return Err(error),
-        };
-        Model::from_wire(
-            wire::ParseFileResponse {
-                model_hash: hash.to_owned(),
-                root: Some(root.wire().clone()),
-                diagnostics: diagnostics.diagnostics,
-                error: String::new(),
-            },
-            self.clone(),
-        )
+        Ok(response
+            .diagnostics
+            .into_iter()
+            .map(crate::Diagnostic::from)
+            .collect())
+    }
+
+    /// Create a handle for a hash obtained elsewhere; the service decides whether it remains cached.
+    pub fn model_by_hash(&self, hash: &str) -> Model {
+        Model::from_hash(hash, self.clone())
     }
 
     /// Return the process identifier of the private child, for diagnostics only.
@@ -262,7 +238,7 @@ impl Connection {
             .result
             .clone()
             .ok_or_else(|| Error::Decode("evaluate response has no result".to_owned()))?;
-        let result = crate::domain::value_from_wire(result_wire, self.capabilities())?;
+        let result = crate::domain::value_from_wire(result_wire)?;
         Ok(Evaluation::new(result, response))
     }
 
@@ -271,10 +247,6 @@ impl Connection {
         model_hash: &str,
         symbol_id: &str,
     ) -> Result<Instantiation, Error> {
-        self.capabilities().require(
-            "feature_values",
-            "connect to a service advertising feature_values",
-        )?;
         let response: wire::InstantiateResponse = self.rpc(
             "Instantiate",
             wire::InstantiateRequest {
@@ -285,7 +257,7 @@ impl Connection {
         if !response.error.is_empty() {
             return Err(Error::Model(response.error.clone()));
         }
-        Instantiation::from_wire(response, self.capabilities())
+        Instantiation::from_wire(response)
     }
 
     fn rpc<T, R>(&self, method: &str, request: T) -> Result<R, Error>
@@ -294,14 +266,6 @@ impl Connection {
         R: Message + Default,
     {
         Self::rpc_raw_at(&self.inner.base_url, method, request)
-    }
-
-    fn rpc_raw<T, R>(address: &str, method: &str, request: T) -> Result<R, Error>
-    where
-        T: Message,
-        R: Message + Default,
-    {
-        Self::rpc_raw_at(address, method, request)
     }
 
     fn rpc_raw_at<T, R>(address: &str, method: &str, request: T) -> Result<R, Error>
@@ -381,7 +345,10 @@ fn split_target(target: &str) -> Result<(String, u16), Error> {
             )));
         };
         let host = &rest[..end];
-        let port = rest.get(end + 2..).and_then(|value| value.parse().ok());
+        let port = rest
+            .get(end + 1..)
+            .and_then(|value| value.strip_prefix(':'))
+            .and_then(|value| value.parse().ok());
         return port
             .map(|port| (host.to_owned(), port))
             .ok_or_else(|| Error::Transport(format!("invalid service address {target:?}")));
@@ -403,7 +370,7 @@ struct PrivateService {
 }
 
 impl PrivateService {
-    fn start(version: Option<&str>) -> Result<Self, Error> {
+    fn start() -> Result<Self, Error> {
         let binary = resolve_binary()?;
         let mut command = Command::new(&binary);
         command.args([
@@ -464,27 +431,28 @@ impl PrivateService {
         let address = match address_receiver.recv_timeout(START_TIMEOUT) {
             Ok(Some(address)) if !address.is_empty() => address,
             Ok(_) => {
+                drop(stdin);
                 let code = process
                     .try_wait()
                     .ok()
                     .flatten()
                     .and_then(|status| status.code());
                 let message = format!("exited with code {code:?} without serving an address");
-                terminate_process(&mut process);
+                terminate_process(&mut process, Duration::ZERO);
                 return Err(Error::ServiceStart(format!(
                     "{message}; {}",
                     stderr_tail(&tail)
                 )));
             }
             Err(_) => {
-                terminate_process(&mut process);
+                drop(stdin);
+                terminate_process(&mut process, Duration::ZERO);
                 return Err(Error::ServiceStart(format!(
                     "did not report a listening address within 2.5s; {}",
                     stderr_tail(&tail)
                 )));
             }
         };
-        let _ = version;
         Ok(Self {
             process: Mutex::new(process),
             stdin: Mutex::new(stdin),
@@ -506,7 +474,7 @@ impl Drop for PrivateService {
             stdin.take();
         }
         if let Ok(mut process) = self.process.lock() {
-            terminate_process(&mut process);
+            terminate_process(&mut process, Duration::from_secs(2));
         }
     }
 }
@@ -523,15 +491,18 @@ fn stderr_tail(tail: &Arc<Mutex<VecDeque<String>>>) -> String {
     }
 }
 
-fn terminate_process(process: &mut Child) {
+fn terminate_process(process: &mut Child, grace: Duration) {
     if process.try_wait().ok().flatten().is_some() {
         return;
     }
-    let _ = process.kill();
     let deadline = Instant::now() + STOP_TIMEOUT;
+    let grace_deadline = std::cmp::min(Instant::now() + grace, deadline);
     while Instant::now() < deadline {
         if process.try_wait().ok().flatten().is_some() {
             return;
+        }
+        if Instant::now() >= grace_deadline {
+            break;
         }
         thread::sleep(Duration::from_millis(10));
     }
@@ -550,20 +521,25 @@ fn resolve_binary() -> Result<PathBuf, Error> {
     } else {
         looked_in.push("$OPENSYSML_GRPC_BINARY".to_owned());
     }
-    let home_candidate = PathBuf::from(env::var_os("HOME").unwrap_or_default())
-        .join(".opensysml")
-        .join("bin")
-        .join(if cfg!(windows) {
-            "sysml-grpc.exe"
-        } else {
-            "sysml-grpc"
-        });
+    #[cfg(windows)]
+    let home = env::var_os("USERPROFILE").unwrap_or_default();
+    #[cfg(not(windows))]
+    let home = env::var_os("HOME").unwrap_or_default();
+    let home_candidate =
+        PathBuf::from(home)
+            .join(".opensysml")
+            .join("bin")
+            .join(if cfg!(windows) {
+                "sysml-grpc.exe"
+            } else {
+                "sysml-grpc"
+            });
     looked_in.push(home_candidate.display().to_string());
     if home_candidate.is_file() {
         return Ok(home_candidate);
     }
     looked_in.push("sysml-grpc on PATH".to_owned());
-    if let Ok(path) = env::var_os("PATH").ok_or(()) {
+    if let Some(path) = env::var_os("PATH") {
         for directory in env::split_paths(&path) {
             let candidate = directory.join(if cfg!(windows) {
                 "sysml-grpc.exe"
@@ -609,5 +585,20 @@ mod tests {
             split_target("[::1]:9000").ok(),
             Some(("::1".to_owned(), 9000))
         );
+    }
+
+    #[test]
+    fn host_targets_are_split() {
+        assert_eq!(
+            split_target("localhost:9000").ok(),
+            Some(("localhost".to_owned(), 9000))
+        );
+    }
+
+    #[test]
+    fn malformed_targets_are_rejected() {
+        for target in ["localhost", "localhost:not-a-port", "[::1", "[::1]9000"] {
+            assert!(split_target(target).is_err(), "{target} should be rejected");
+        }
     }
 }

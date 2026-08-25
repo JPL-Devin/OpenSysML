@@ -5,11 +5,11 @@ edition = "2021"
 rust-version = "1.83"
 description = "Blocking Rust client for the OpenSysML sysml-grpc service"
 license = "Apache-2.0"
-
-[[bin]]
-name = "child_probe"
-path = "src/bin/child_probe.rs"
-test = false
+repository = "https://github.com/JPL-Devin/OpenSysML"
+homepage = "https://github.com/JPL-Devin/OpenSysML"
+documentation = "https://docs.rs/opensysml"
+keywords = ["sysml", "modeling", "grpc"]
+categories = ["api-bindings"]
 
 [dependencies]
 prost = "=0.14.1"

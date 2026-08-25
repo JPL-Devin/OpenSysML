@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use thiserror::Error;
 
 /// Canonical status names used by gRPC and Connect.
@@ -33,13 +34,60 @@ pub enum Status {
     Aborted,
     /// The caller attempted an operation outside its range.
     OutOfRange,
-    /// The operation is not implemented.
+    /// The service encountered an internal error.
     Internal,
     /// The service cannot provide the requested data.
     DataLoss,
 }
 
 impl Status {
+    /// Return the canonical gRPC status name.
+    pub fn canonical_name(&self) -> &'static str {
+        match self {
+            Self::Ok => "OK",
+            Self::Cancelled => "CANCELLED",
+            Self::Unknown => "UNKNOWN",
+            Self::InvalidArgument => "INVALID_ARGUMENT",
+            Self::DeadlineExceeded => "DEADLINE_EXCEEDED",
+            Self::NotFound => "NOT_FOUND",
+            Self::Unimplemented => "UNIMPLEMENTED",
+            Self::Unavailable => "UNAVAILABLE",
+            Self::Unauthenticated => "UNAUTHENTICATED",
+            Self::PermissionDenied => "PERMISSION_DENIED",
+            Self::AlreadyExists => "ALREADY_EXISTS",
+            Self::ResourceExhausted => "RESOURCE_EXHAUSTED",
+            Self::FailedPrecondition => "FAILED_PRECONDITION",
+            Self::Aborted => "ABORTED",
+            Self::OutOfRange => "OUT_OF_RANGE",
+            Self::Internal => "INTERNAL",
+            Self::DataLoss => "DATA_LOSS",
+        }
+    }
+
+    /// Parse a canonical gRPC status name.
+    pub fn from_canonical_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "OK" => Self::Ok,
+            "CANCELLED" => Self::Cancelled,
+            "UNKNOWN" => Self::Unknown,
+            "INVALID_ARGUMENT" => Self::InvalidArgument,
+            "DEADLINE_EXCEEDED" => Self::DeadlineExceeded,
+            "NOT_FOUND" => Self::NotFound,
+            "UNIMPLEMENTED" => Self::Unimplemented,
+            "UNAVAILABLE" => Self::Unavailable,
+            "UNAUTHENTICATED" => Self::Unauthenticated,
+            "PERMISSION_DENIED" => Self::PermissionDenied,
+            "ALREADY_EXISTS" => Self::AlreadyExists,
+            "RESOURCE_EXHAUSTED" => Self::ResourceExhausted,
+            "FAILED_PRECONDITION" => Self::FailedPrecondition,
+            "ABORTED" => Self::Aborted,
+            "OUT_OF_RANGE" => Self::OutOfRange,
+            "INTERNAL" => Self::Internal,
+            "DATA_LOSS" => Self::DataLoss,
+            _ => return None,
+        })
+    }
+
     pub(crate) fn from_connect_code(code: &str) -> Self {
         match code.to_ascii_lowercase().as_str() {
             "ok" => Self::Ok,
@@ -60,6 +108,47 @@ impl Status {
             "data_loss" => Self::DataLoss,
             _ => Self::Unknown,
         }
+    }
+}
+
+impl FromStr for Status {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::from_canonical_name(value).ok_or(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Status;
+    use std::str::FromStr;
+
+    #[test]
+    fn canonical_names_round_trip() {
+        let statuses = [
+            Status::Ok,
+            Status::Cancelled,
+            Status::Unknown,
+            Status::InvalidArgument,
+            Status::DeadlineExceeded,
+            Status::NotFound,
+            Status::Unimplemented,
+            Status::Unavailable,
+            Status::Unauthenticated,
+            Status::PermissionDenied,
+            Status::AlreadyExists,
+            Status::ResourceExhausted,
+            Status::FailedPrecondition,
+            Status::Aborted,
+            Status::OutOfRange,
+            Status::Internal,
+            Status::DataLoss,
+        ];
+        for status in statuses {
+            assert_eq!(Status::from_str(status.canonical_name()), Ok(status));
+        }
+        assert_eq!(Status::from_canonical_name("not_found"), None);
     }
 }
 
