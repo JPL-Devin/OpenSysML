@@ -1,5 +1,8 @@
 #![allow(missing_docs)]
 
+// Its own test binary: the private child is process-wide, so a test elsewhere
+// holding a connection in parallel would keep it alive past the drop below.
+
 use std::env;
 use std::path::PathBuf;
 use std::thread;
