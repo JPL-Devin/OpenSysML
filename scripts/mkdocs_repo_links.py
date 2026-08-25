@@ -1,8 +1,10 @@
-"""Rewrite links that leave docs/ so they resolve on the published site.
+"""Rewrite links to unpublished or out-of-docs files to the repository.
 
 A page's `../../examples/foo.sysml` is a real file on GitHub but has no page on the
 site, so it is rewritten to the repository here instead of being hard-coded in the
-page. Links inside docs/ are left as written, so MkDocs still validates them.
+page. A link to a docs/ page excluded from the published site follows the same rule.
+Links to published pages inside docs/ are left as written, so MkDocs still validates
+them.
 """
 
 import logging
@@ -17,7 +19,14 @@ FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 
-def _rewrite(target: str, page_dir: Path, docs_dir: Path, repo_root: Path, repo_url: str) -> str:
+def _rewrite(
+    target: str,
+    page_dir: Path,
+    docs_dir: Path,
+    repo_root: Path,
+    repo_url: str,
+    files,
+) -> str:
     if not target or target.startswith(("#", "/")) or SCHEME.match(target):
         return target
 
@@ -28,9 +37,16 @@ def _rewrite(target: str, page_dir: Path, docs_dir: Path, repo_root: Path, repo_
     resolved = (page_dir / path).resolve()
     if resolved == docs_dir or docs_dir in resolved.parents:
         # A directory is a listing on GitHub; here it means the section's index.
+        relative = resolved.relative_to(docs_dir).as_posix()
         if resolved.is_dir() and (resolved / "README.md").is_file():
-            return f"{path.rstrip('/')}/README.md" + (f"#{fragment}" if fragment else "")
-        return target
+            readme = f"{relative.rstrip('/')}/README.md".lstrip("/")
+            readme_file = files.get_file_from_path(readme)
+            if readme_file and readme_file.inclusion.is_included():
+                local = f"{path.rstrip('/')}/README.md"
+                return local + (f"#{fragment}" if fragment else "")
+        file = files.get_file_from_path(relative)
+        if file and file.inclusion.is_included():
+            return target
 
     try:
         relative = resolved.relative_to(repo_root)
@@ -53,7 +69,7 @@ def on_page_markdown(markdown: str, page, config, files) -> str:
     page_dir = (docs_dir / page.file.src_uri).resolve().parent
 
     def substitute(match: re.Match) -> str:
-        target = _rewrite(match.group(2), page_dir, docs_dir, repo_root, repo_url)
+        target = _rewrite(match.group(2), page_dir, docs_dir, repo_root, repo_url, files)
         return f"{match.group(1)}{target}{match.group(3)}"
 
     out, fence = [], ""
