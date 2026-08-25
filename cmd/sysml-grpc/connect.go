@@ -5,11 +5,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -18,11 +20,10 @@ import (
 	sysmlgrpc "github.com/Open-MBEE/OpenSysML/internal/grpc"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
+	"google.golang.org/protobuf/proto"
 )
 
-// Transports this binary can serve. The default is the grpc-go server this
-// service has always been; connect is an evaluation prototype documented in
-// docs/internals/design/transport-evaluation.md.
+// Transports this binary can serve.
 const (
 	transportGRPC    = "grpc"
 	transportConnect = "connect"
@@ -33,6 +34,10 @@ const (
 // SysMLService under /sysml.SysMLService/, gRPC server reflection, and the
 // health endpoint that otherwise needs a port of its own.
 func connectHandler(svc *sysmlgrpc.Service, ver string) http.Handler {
+	return connectHandlerWithOptions(svc, ver, nil)
+}
+
+func connectHandlerWithOptions(svc *sysmlgrpc.Service, ver string, origins map[string]struct{}) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(protoconnect.NewSysMLServiceHandler(
 		sysmlgrpc.NewConnectAdapter(svc),
@@ -46,22 +51,38 @@ func connectHandler(svc *sysmlgrpc.Service, ver string) http.Handler {
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
 
 	mux.Handle("/health", healthHandler(ver))
-	return mux
+	if len(origins) == 0 {
+		return mux
+	}
+	return corsMiddleware(mux, origins)
 }
 
 // serveConnect serves gRPC, gRPC-Web and the Connect protocol on one port until
 // the context is cancelled. h2c carries HTTP/2 in cleartext, which is how an
 // existing gRPC client reaches an address that offers no TLS.
-func serveConnect(ctx context.Context, lis net.Listener, svc *sysmlgrpc.Service, ver string) error {
+func serveConnect(ctx context.Context, lis net.Listener, svc *sysmlgrpc.Service, ver string, origins map[string]struct{}, certFile, keyFile string) error {
 	srv := &http.Server{
-		Handler:           h2c.NewHandler(connectHandler(svc, ver), &http2.Server{}),
+		Handler:           h2c.NewHandler(connectHandlerWithOptions(svc, ver, origins), &http2.Server{}),
 		ReadHeaderTimeout: 10 * time.Second,
+	}
+	if certFile != "" {
+		srv.Handler = connectHandlerWithOptions(svc, ver, origins)
+		srv.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			NextProtos: []string{"h2", "http/1.1"},
+		}
 	}
 
 	errs := make(chan error, 1)
 	go func() {
+		if certFile != "" {
+			slog.Info("Connect server listening",
+				"addr", lis.Addr(), "protocols", "grpc, grpc-web, connect", "security", "TLS")
+			errs <- srv.ServeTLS(lis, certFile, keyFile)
+			return
+		}
 		slog.Info("Connect server listening",
-			"addr", lis.Addr(), "protocols", "grpc, grpc-web, connect")
+			"addr", lis.Addr(), "protocols", "grpc, grpc-web, connect", "security", "cleartext/h2c")
 		errs <- srv.Serve(lis)
 	}()
 
@@ -90,6 +111,17 @@ func connectLoggingInterceptor() connect.UnaryInterceptorFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			start := time.Now()
 			res, err := next(ctx, req)
+			if err == nil && strings.Contains(strings.ToLower(req.Header().Get("Content-Type")), "json") {
+				if message, ok := res.Any().(proto.Message); ok {
+					size := proto.Size(message)
+					if size >= 256*1024 {
+						slog.Warn("large JSON response",
+							"procedure", req.Spec().Procedure,
+							"response_size", size,
+							"message", "a protobuf body is several times cheaper for large answers")
+					}
+				}
+			}
 			dur := time.Since(start)
 			if err != nil {
 				slog.Error("Connect call failed",

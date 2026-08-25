@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"syscall"
 
 	_ "github.com/Open-MBEE/OpenSysML/api/proto" // registers the schema this runner reflects over
@@ -36,16 +37,28 @@ func main() {
 		run       = flag.String("run", "", "run only the scenarios whose id matches this regular expression")
 		verbose   = flag.Bool("v", false, "print each scenario's normalized response")
 		allowSkip = flag.Bool("allow-skips", false, "treat a scenario skipped for a missing capability as a pass")
+		protocols = flag.String("protocols", "grpc,connect,connect-json", "Comma-separated protocols to test")
+		transport = flag.String("transport", "connect", "server transport (connect or grpc)")
 	)
 	flag.Parse()
 
-	if err := runSuite(*dir, *binary, *repoRoot, *report, *run, *verbose, *allowSkip); err != nil {
+	if err := runSuite(*dir, *binary, *repoRoot, *report, *run, *verbose, *allowSkip, *protocols, *transport); err != nil {
 		fmt.Fprintf(os.Stderr, "conformance: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool) error {
+func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool, protocolList, transport string) error {
+	protocols, err := parseProtocols(protocolList)
+	if err != nil {
+		return err
+	}
+	if transport != transportConnect && transport != transportGRPC {
+		return fmt.Errorf("unknown -transport %q; want connect or grpc", transport)
+	}
+	if err := validateProtocols(protocols, transport); err != nil {
+		return err
+	}
 	var filter *regexp.Regexp
 	if run != "" {
 		compiled, err := regexp.Compile(run)
@@ -76,39 +89,109 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 		}
 		binary = built
 	}
-	svc, err := startService(ctx, binary, filepath.Join(workDir, "service.log"), len(scenarios)+16)
+	svc, err := startServiceWithTransport(ctx, binary, filepath.Join(workDir, "service.log"), len(scenarios)+16, transport)
 	if err != nil {
 		return err
 	}
 	defer svc.stop()
 
-	runner := &runner{
-		service:     svc,
-		fixtures:    filepath.Join(dir, "fixtures"),
-		models:      map[Model]string{},
-		verbose:     verbose,
-		out:         os.Stdout,
-		scenarioLog: os.Stdout,
+	reportData := &Report{Service: svc.binary}
+	for _, protocol := range protocols {
+		c, err := svc.client(protocol)
+		if err != nil {
+			return err
+		}
+		runner := &runner{
+			service: svc, client: c,
+			fixtures: filepath.Join(dir, "fixtures"),
+			models:   map[Model]string{}, verbose: verbose,
+			out: os.Stdout, scenarioLog: os.Stdout,
+		}
+		if err := runner.readCapabilities(ctx); err != nil {
+			return err
+		}
+		summary := runner.runAll(ctx, scenarios, filter)
+		c.close()
+		reportData.Protocols = append(reportData.Protocols, summary)
+		reportData.Total += summary.Total
+		reportData.Passed += summary.Passed
+		reportData.Failed += summary.Failed
+		reportData.Skipped += summary.Skipped
+		reportData.Errored += summary.Errored
+		if summary.Failed > 0 || summary.Errored > 0 {
+			reportData.failure = true
+		}
+		if summary.Skipped > 0 {
+			reportData.hasSkip = true
+		}
 	}
-	if err := runner.readCapabilities(ctx); err != nil {
+	if err := writeReport(report, reportData); err != nil {
 		return err
 	}
-
-	summary := runner.runAll(ctx, scenarios, filter)
-	if err := writeReport(report, summary); err != nil {
-		return err
+	if reportData.failure {
+		return fmt.Errorf("%d of %d scenarios failed", reportData.Failed+reportData.Errored, reportData.Total)
 	}
-	if summary.Failed > 0 || summary.Errored > 0 {
-		return fmt.Errorf("%d of %d scenarios failed", summary.Failed+summary.Errored, summary.Total)
-	}
-	if summary.Skipped > 0 && !allowSkip {
-		return fmt.Errorf("%d scenarios were skipped for missing capabilities; pass -allow-skips to accept that", summary.Skipped)
+	if reportData.hasSkip && !allowSkip {
+		return fmt.Errorf("%d scenarios were skipped for missing capabilities; pass -allow-skips to accept that", reportData.Skipped)
 	}
 	return nil
 }
 
+func validateProtocols(protocols []string, transport string) error {
+	if transport == transportGRPC {
+		for _, protocol := range protocols {
+			if protocol != "grpc" {
+				return fmt.Errorf("protocol %q requires -transport connect; grpc transport only supports grpc", protocol)
+			}
+		}
+	}
+	return nil
+}
+
+const (
+	transportConnect = "connect"
+	transportGRPC    = "grpc"
+)
+
+var knownProtocols = map[string]struct{}{"grpc": {}, "connect": {}, "connect-json": {}}
+
+func parseProtocols(value string) ([]string, error) {
+	var protocols []string
+	seen := map[string]struct{}{}
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := knownProtocols[item]; !ok {
+			return nil, fmt.Errorf("unknown protocol %q; want grpc, connect or connect-json", item)
+		}
+		if _, ok := seen[item]; ok {
+			return nil, fmt.Errorf("protocol %q is listed more than once", item)
+		}
+		seen[item] = struct{}{}
+		protocols = append(protocols, item)
+	}
+	if len(protocols) == 0 {
+		return nil, errors.New("-protocols must name at least one protocol")
+	}
+	return protocols, nil
+}
+
+type Report struct {
+	Service   string     `json:"service"`
+	Total     int        `json:"total"`
+	Passed    int        `json:"passed"`
+	Failed    int        `json:"failed"`
+	Skipped   int        `json:"skipped"`
+	Errored   int        `json:"errored"`
+	Protocols []*Summary `json:"protocols"`
+	failure   bool
+	hasSkip   bool
+}
+
 // writeReport writes the summary as JSON, to a file or to stdout.
-func writeReport(path string, summary *Summary) error {
+func writeReport(path string, summary *Report) error {
 	if path == "" {
 		return nil
 	}

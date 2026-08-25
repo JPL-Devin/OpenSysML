@@ -128,7 +128,8 @@ func (s *service) scan(r io.Reader) {
 	for lines.Scan() {
 		line := lines.Text()
 		s.logs.add(line)
-		if announced || !strings.Contains(line, "gRPC server listening") {
+		if announced || (!strings.Contains(line, "gRPC server listening") &&
+			!strings.Contains(line, "Connect server listening")) {
 			continue
 		}
 		if addr, ok := listeningAddr(line); ok {

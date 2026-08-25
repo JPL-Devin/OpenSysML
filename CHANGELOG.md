@@ -4,6 +4,33 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### Connect is the default server transport
+
+`sysml-grpc` now serves gRPC, gRPC-Web and the Connect protocol on one port, so a browser or
+a plain `curl` reaches the service without a proxy and without generated code. Existing gRPC
+clients — the `opensysml` Python client, `grpcurl`, any generated `grpc-go` stub — reach the
+new default unchanged; `-transport grpc` still serves the gRPC-only server for anything that
+needs exactly the old surface.
+
+`GET /health` answers on the main port. `-health-port` still binds its second listener and
+still works, now with a deprecation warning, and `-health-port 0` turns it off; the default
+becomes `0` in a later release. Nothing in this repository polls it — the Python readiness
+probe is a gRPC call.
+
+Two browser prerequisites are now configurable rather than absent: `-cors-allowed-origins`
+takes exact origins and refuses `*` at startup, and `-tls-cert`/`-tls-key` serve every
+protocol over HTTPS on the same port. `application/grpc-web-text` remains unimplemented and
+answers 415, which affects no `fetch`-based client.
+
+Protobuf is the body encoding to use: a 468 KB `Query` answer costs ~6.5 ms as protobuf and
+~40 ms as JSON, from `protojson` CPU rather than the 9.7% extra bytes. JSON is the debugging
+affordance, a large JSON response now logs a warning, and
+[reference/service-transports.md](docs/reference/service-transports.md) says so where a client
+author will read it. The conformance suite runs every scenario once per protocol so the second
+surface cannot rot.
+
 ## 0.2.1 — 2026-08-24
 
 A conformance patch, a round of performance work, and a supply-chain improvement. The
