@@ -207,13 +207,44 @@ a faster executor.
 - Runs over a large model spend their time in collection, not in the executor
   (above). Reducing what a load leaves behind is the lever, since the live model
   is what each cycle scans.
-- Resolving inherited library features in every definition body roughly doubled
-  what loading costs in both time and allocation, and the reductions above
-  recover part of that rather than all of it: loading is still about twice what
-  it was before every definition body inherited its library base. The work is
-  linear in the model and semantically required, so what is left to win is in
-  the scans it walks. Hot callers now use non-copying member iteration, while
-  callers that need an owned slice continue to use `symbols.Scope.AllMembers`.
+- Resolving inherited library features in every definition body costs about 1.3x
+  a load at 12 000 elements — 0.757s to 1.007s — and the factor grows with the
+  model. Earlier notes here put it at 2x; that figure came from a much older
+  baseline carrying unrelated changes, so do not repeat it. Allocated *bytes*
+  went down (647.5 to 529.7 MiB) while allocation *count* went up (4.54M to
+  6.03M), and it is the count the regression follows: parsing is unchanged at
+  450ms, resolution goes 90ms to 200ms, the validation passes 130ms to 420ms and
+  the collector's mark workers 440ms to 640ms. The work is linear in the model
+  and semantically required, so what is left to win is in the scans it walks.
+  Hot callers now use non-copying member iteration, while callers that need an
+  owned slice continue to use `symbols.Scope.AllMembers`.
+- Flattening each type's inherited members into an in-memory table was measured
+  and rejected. The table was built by merging a type's direct-supertype tables
+  with its own scope, name-indexed so a lookup became one probe, cached per index
+  generation for library types only, with a per-symbol plan so a lookup on a user
+  type cost one map hit and one probe. Against the same clean models it came out
+  a wash: 0.981s to 0.983s at 12 000 elements, allocation count 6,077,232 to
+  6,070,375, peak resident mixed (−5.7 MiB at 3 000, −10.2 MiB at 6 000, +5.8 MiB
+  at 12 000). The reason is that `semantics.Model.MemberSources` already memoizes
+  its breadth-first closure and hits that cache about 92% of the time, so a
+  lookup was already close to a single map probe, and the whole inherited-member
+  cluster is only ~3.5% of a clean load's allocated objects and ~7% of its CPU —
+  parsing and symbol building dominate both. A table therefore relocates that
+  work rather than removing it: on a clean 12 000-element model only eight
+  library types are reached at all, and building their tables plus the per-type
+  plans costs about what the closures cost. Two intermediate shapes were
+  distinctly worse — recomputing the contributor set per lookup instead of
+  hitting the memoized closure (+1.3M allocations), and rebuilding a table on
+  every attempt when a build failed and cached nothing (+286k allocations).
+  Do not revisit this without moving the tables off the load: built when the
+  library index is built, persisted alongside the other library facts and shared
+  by pointer, no table build and no per-type closure happens during an analysis
+  at all, which is where the remaining win is.
+- Two facts about the bundled library came out of that measurement.
+  `Performances::Evaluation` appears among its own contributors, a self-edge the
+  breadth-first walk hides by seeding its visited set with the starting symbol,
+  and `Calculations::Calculation` and `Constraints::ConstraintCheck` are reached
+  through a member that is not itself a library symbol.
 - The “small scopes could use a slice instead of a map” lever is closed:
   flat declaration-ordered storage replaces the eager map, and scopes above the
   threshold build a lookup index lazily. The measured scope shape is why the
