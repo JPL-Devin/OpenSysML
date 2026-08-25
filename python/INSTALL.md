@@ -25,6 +25,9 @@ pip install -e "python/[dev]"
 
 ## Running tests
 
+Install with `[dev]`: the lifecycle tests inspect processes through `psutil`,
+which the package itself does not need.
+
 From the repository root:
 
 ```bash
@@ -37,9 +40,14 @@ pytest -v python/tests/
 # Run specific test file
 pytest python/tests/test_connection.py
 
-# Run integration tests (requires sysml-grpc service)
+# Run integration tests (requires the sysml-grpc binary)
 pytest -m integration python/tests/
 ```
+
+A test that connects without naming a service starts a private `sysml-grpc`
+child from `~/.opensysml/bin`, so put a built binary there (`make build-grpc &&
+cp bin/sysml-grpc ~/.opensysml/bin/`). To run against a service you started
+yourself, set `OPENSYSML_SERVICE=host:port`.
 
 ## Package structure
 
