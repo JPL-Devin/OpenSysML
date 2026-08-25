@@ -3,6 +3,6 @@ package test {
 	
 	requirement UserAuth {
 		actor user = userId;
-		require user > 0;
+		require constraint { user > 0 }
 	}
 }

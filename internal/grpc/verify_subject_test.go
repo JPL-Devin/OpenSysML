@@ -14,7 +14,7 @@ const nestedSubjectModelSource = `package Demo {
 	part def Wheel {
 		attribute pressure = 30.0;
 		constraint inflated {
-			assert pressure > 20.0;
+			pressure > 20.0
 		}
 	}
 	part def Car {
@@ -76,7 +76,7 @@ const ambiguousSubjectModelSource = `package Demo {
 	part def Bolt {
 		attribute torque = 1.0;
 		constraint tight {
-			assert torque > 10.0;
+			torque > 10.0
 		}
 	}
 	part def Axle {

@@ -16,11 +16,11 @@ func TestRequirementEvaluation_RequireWithLiteral(t *testing.T) {
 	src := `
 		package test {
 			requirement SafeSpeed {
-				require 50 < 100;
+				require constraint { 50 < 100 }
 			}
 			
 			requirement UnsafeSpeed {
-				require 150 < 100;
+				require constraint { 150 < 100 }
 			}
 		}
 	`
@@ -78,8 +78,8 @@ func TestRequirementEvaluation_Assume(t *testing.T) {
 	src := `
 		package test {
 			requirement WithAssumption {
-				assume 1 > 100;  // false assumption, but should pass
-				require 5 > 3;   // true requirement
+				assume constraint { 1 > 100 }  // false assumption, but should pass
+				require constraint { 5 > 3 }   // true requirement
 			}
 		}
 	`
@@ -173,8 +173,8 @@ func TestRequirementEvaluation_Complete(t *testing.T) {
 			requirement SafetyReq {
 				subject vehicle : Vehicle;
 				actor driver : Driver;
-				assume vehicle != null;
-				require 50 < 100;
+				assume constraint { vehicle != null }
+				require constraint { 50 < 100 }
 			}
 		}
 	`

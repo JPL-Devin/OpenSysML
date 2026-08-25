@@ -6,7 +6,7 @@ package test {
 
 	package Limits {
 		requirement massLimit {
-			require test::mass < 100.0;
+			require constraint { test::mass < 100.0 }
 		}
 	}
 

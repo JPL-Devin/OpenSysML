@@ -3781,7 +3781,7 @@ func testConstraintMissingFeature(t *testing.T) {
 	src := `
 		package test {
 			constraint broken {
-				assert nonexistent > 0; // 'nonexistent' feature doesn't exist
+				nonexistent > 0 // 'nonexistent' feature doesn't exist
 			}
 		}
 	`
@@ -4152,7 +4152,7 @@ func testRequirementFeatureWithoutAValue(t *testing.T) {
 			requirement def TouchdownRequirement {
 				attribute actualVerticalSpeed;
 				attribute maxVerticalSpeed = 1.5;
-				require actualVerticalSpeed <= maxVerticalSpeed;
+				require constraint { actualVerticalSpeed <= maxVerticalSpeed }
 			}
 		}
 	`
@@ -4190,7 +4190,7 @@ func testRequirementFeaturesValuedFromEachOther(t *testing.T) {
 			requirement def R {
 				attribute a = b;
 				attribute b = a;
-				require a <= b;
+				require constraint { a <= b }
 			}
 		}
 	`
@@ -5038,7 +5038,7 @@ func testQuantityIncommensurableComparison(t *testing.T) {
 			requirement def Touchdown {
 				attribute speed = 1.5 [m/s];
 				attribute duration = 2.0 [s];
-				require speed <= duration;
+				require constraint { speed <= duration }
 			}
 		}
 	`))
@@ -6710,7 +6710,7 @@ func testOperationConstraintBodyCannotBeEvaluated(t *testing.T) {
 	src := `
 	package test {
 		part def Tank {
-			constraint broken { assert missing > 0; }
+			constraint broken { missing > 0 }
 		}
 	}`
 	ctx, inst, err := instantiateInSource(t, src, "test::Tank")
