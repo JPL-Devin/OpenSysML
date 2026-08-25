@@ -1,0 +1,206 @@
+{
+  "scenarios": [
+    {
+      "id": "verify_constraint/a_holding_constraint_holds_on_declared_values",
+      "rpc": "VerifyConstraint",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Vehicle::massPositive"
+      },
+      "expect": {
+        "response": {
+          "verdict": {
+            "kind": "constraint",
+            "element_id": "Demo::Vehicle::massPositive",
+            "holds": true
+          }
+        },
+        "absent": [
+          "verdict.error"
+        ]
+      }
+    },
+    {
+      "id": "verify_constraint/a_false_constraint_names_the_condition_that_failed",
+      "description": "False with no error is the model's own answer, and the condition is named as written.",
+      "rpc": "VerifyConstraint",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Vehicle::massLight"
+      },
+      "expect": {
+        "response": {
+          "verdict": {
+            "holds": false
+          }
+        },
+        "non_empty": [
+          "verdict.condition"
+        ],
+        "absent": [
+          "verdict.error"
+        ]
+      }
+    },
+    {
+      "id": "verify_constraint/a_subject_is_verified_against_that_objects_values",
+      "description": "The subject's mass is 1200, so a constraint false on the default is asked again about the object.",
+      "rpc": "VerifyConstraint",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Vehicle::massPositive",
+        "subject_symbol_id": "Demo::sedan"
+      },
+      "expect": {
+        "response": {
+          "verdict": {
+            "holds": true
+          }
+        },
+        "non_empty": [
+          "verdict.instance_type_id"
+        ]
+      }
+    },
+    {
+      "id": "verify_constraint/a_symbol_of_another_kind_is_the_wrong_kind",
+      "description": "Naming a part where a constraint belongs is a wrong request, not an undecided verdict.",
+      "rpc": "VerifyConstraint",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::sedan"
+      },
+      "expect": {
+        "response": {
+          "verdict": {
+            "failure_reason": "FAILURE_REASON_WRONG_KIND",
+            "holds": false
+          }
+        },
+        "non_empty": [
+          "verdict.error"
+        ]
+      }
+    },
+    {
+      "id": "verify_requirement/a_satisfied_requirement_holds",
+      "rpc": "VerifyRequirement",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Vehicle::lightEnough"
+      },
+      "expect": {
+        "response": {
+          "verdict": {
+            "kind": "requirement",
+            "holds": true
+          }
+        }
+      }
+    },
+    {
+      "id": "verify_requirement/an_unsatisfied_requirement_does_not_hold",
+      "rpc": "VerifyRequirement",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::Vehicle::tiny"
+      },
+      "expect": {
+        "response": {
+          "verdict": {
+            "holds": false
+          }
+        },
+        "absent": [
+          "verdict.error"
+        ]
+      }
+    },
+    {
+      "id": "verify_satisfaction/every_assertion_gets_a_verdict",
+      "description": "The model asserts two satisfactions of the same subject, one of which fails.",
+      "rpc": "VerifySatisfaction",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}"
+      },
+      "expect": {
+        "counts": {
+          "verdicts": 2
+        },
+        "response": {
+          "verdicts": [
+            {
+              "kind": "satisfy",
+              "holds": true
+            },
+            {
+              "kind": "satisfy",
+              "holds": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "verify_satisfaction/a_scope_limits_the_assertions_evaluated",
+      "rpc": "VerifySatisfaction",
+      "requires_capabilities": [
+        "verification"
+      ],
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::analysis"
+      },
+      "expect": {
+        "counts": {
+          "verdicts": 2
+        }
+      }
+    }
+  ]
+}

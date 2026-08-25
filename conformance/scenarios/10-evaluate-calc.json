@@ -1,0 +1,52 @@
+{
+  "scenarios": [
+    {
+      "id": "evaluate_calc/positional_arguments_are_applied_in_order",
+      "rpc": "EvaluateCalc",
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::add",
+        "arguments": [
+          {
+            "int_value": 2
+          },
+          {
+            "int_value": 3
+          }
+        ]
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "int_value": 5
+          }
+        },
+        "absent": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "evaluate_calc/a_symbol_of_another_kind_is_the_wrong_kind",
+      "rpc": "EvaluateCalc",
+      "model": {
+        "fixture": "verification.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "Demo::sedan"
+      },
+      "expect": {
+        "response": {
+          "failure_reason": "FAILURE_REASON_WRONG_KIND"
+        },
+        "non_empty": [
+          "error"
+        ]
+      }
+    }
+  ]
+}

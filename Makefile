@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -44,6 +44,12 @@ build-grpc: ## Build sysml-grpc binary
 	@mkdir -p $(BIN_DIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/sysml-grpc ./cmd/sysml-grpc
 	@echo "✓ Built $(BIN_DIR)/sysml-grpc ($(VERSION))"
+
+conformance: ## Run the language-independent conformance suite against sysml-grpc
+	@echo "Running the conformance suite..."
+	@mkdir -p $(BIN_DIR)
+	go run ./cmd/conformance -report $(BIN_DIR)/conformance-report.json
+	@echo "✓ Conformance suite passed ($(BIN_DIR)/conformance-report.json)"
 
 test: ## Run all tests
 	@echo "Running tests..."

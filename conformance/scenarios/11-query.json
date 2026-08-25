@@ -1,0 +1,236 @@
+{
+  "scenarios": [
+    {
+      "id": "query/an_absent_constraint_considers_the_whole_model",
+      "description": "Enumeration reaches nested elements, in document order.",
+      "rpc": "Query",
+      "requires_capabilities": [
+        "query"
+      ],
+      "model": {
+        "fixture": "query.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query": {}
+      },
+      "expect": {
+        "contains_all": {
+          "elements.*.id": [
+            "Demo",
+            "Demo::Vehicle",
+            "Demo::Vehicle::mass",
+            "Demo::Wheel",
+            "Demo::vehicle",
+            "Demo::vehicle::wheels",
+            "Demo::vehicle::vin",
+            "Demo::spare"
+          ]
+        }
+      }
+    },
+    {
+      "id": "query/a_type_constraint_filters_by_metamodel_type",
+      "rpc": "Query",
+      "requires_capabilities": [
+        "query"
+      ],
+      "model": {
+        "fixture": "query.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query": {
+          "where": {
+            "primitive": {
+              "property": "@type",
+              "operator": "PRIMITIVE_OPERATOR_EQUAL",
+              "value": [
+                "PartUsage"
+              ]
+            }
+          }
+        }
+      },
+      "expect": {
+        "counts": {
+          "elements": 3
+        },
+        "contains_all": {
+          "elements.*.id": [
+            "Demo::vehicle",
+            "Demo::vehicle::wheels",
+            "Demo::spare"
+          ]
+        }
+      }
+    },
+    {
+      "id": "query/a_scope_considers_that_element_and_its_nested",
+      "rpc": "Query",
+      "requires_capabilities": [
+        "query"
+      ],
+      "model": {
+        "fixture": "query.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query": {
+          "scope": [
+            "Demo::vehicle"
+          ]
+        }
+      },
+      "expect": {
+        "counts": {
+          "elements": 3
+        },
+        "contains_all": {
+          "elements.*.id": [
+            "Demo::vehicle",
+            "Demo::vehicle::wheels",
+            "Demo::vehicle::vin"
+          ]
+        }
+      }
+    },
+    {
+      "id": "query/a_selection_projects_only_those_properties",
+      "description": "Identity and type stay reported outside properties, which carries just what was asked for.",
+      "rpc": "Query",
+      "requires_capabilities": [
+        "query"
+      ],
+      "model": {
+        "fixture": "query.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query": {
+          "select": [
+            "name",
+            "owner"
+          ],
+          "where": {
+            "primitive": {
+              "property": "qualifiedName",
+              "operator": "PRIMITIVE_OPERATOR_EQUAL",
+              "value": [
+                "Demo::vehicle::wheels"
+              ]
+            }
+          }
+        }
+      },
+      "expect": {
+        "counts": {
+          "elements": 1,
+          "elements.0.properties": 2
+        },
+        "response": {
+          "elements": [
+            {
+              "id": "Demo::vehicle::wheels",
+              "type": "PartUsage",
+              "properties": {
+                "name": "wheels",
+                "owner": "Demo::vehicle"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "query/an_unknown_scope_fails_the_call",
+      "description": "A scope the model does not have is a wrong request, not an empty answer.",
+      "rpc": "Query",
+      "requires_capabilities": [
+        "query"
+      ],
+      "model": {
+        "fixture": "query.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query": {
+          "scope": [
+            "Demo::Missing"
+          ]
+        }
+      },
+      "expect": {
+        "status": "INVALID_ARGUMENT"
+      }
+    },
+    {
+      "id": "query/an_unset_operator_fails_the_call",
+      "rpc": "Query",
+      "requires_capabilities": [
+        "query"
+      ],
+      "model": {
+        "fixture": "query.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query": {
+          "where": {
+            "primitive": {
+              "property": "@type",
+              "value": [
+                "PartUsage"
+              ]
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": "INVALID_ARGUMENT"
+      }
+    },
+    {
+      "id": "query/an_oslc_text_query_is_parsed",
+      "description": "The text form is a client-facing alternative to the structured query.",
+      "rpc": "Query",
+      "requires_capabilities": [
+        "oslc_query"
+      ],
+      "model": {
+        "fixture": "query.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "oslc_query": "oslc.where=rdf:type=\"PartUsage\"&oslc.select=sysml:name"
+      },
+      "expect": {
+        "counts": {
+          "elements": 3
+        }
+      },
+      "expect_without_capability": {
+        "status": "UNIMPLEMENTED"
+      }
+    },
+    {
+      "id": "query/naming_both_query_forms_is_invalid",
+      "rpc": "Query",
+      "requires_capabilities": [
+        "query",
+        "oslc_query"
+      ],
+      "model": {
+        "fixture": "query.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query": {},
+        "oslc_query": "sysml:type=PartUsage"
+      },
+      "expect": {
+        "status": "INVALID_ARGUMENT"
+      }
+    }
+  ]
+}

@@ -218,6 +218,16 @@ jobs:
               }
             done
 
+      # The conformance suite: the runner builds and starts sysml-grpc itself, so
+      # this gate proves the whole path a client takes, not a pre-started service.
+      - run:
+          name: Conformance suite
+          command: make conformance
+
+      - store_artifacts:
+          path: bin/conformance-report.json
+          destination: conformance-report.json
+
       - run:
           name: Build binaries
           command: |
