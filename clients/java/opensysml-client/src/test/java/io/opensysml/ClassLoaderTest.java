@@ -59,8 +59,10 @@ class ClassLoaderTest {
     return urls.toArray(new URL[0]);
   }
 
+  // Generous: on 17 the JDK's own HttpClient selector thread outlives the closed client until it
+  // is collected, and until that thread exits it pins the loader that created the client.
   private static boolean collected(List<WeakReference<ClassLoader>> loaders) throws Exception {
-    for (int attempt = 0; attempt < 20; attempt++) {
+    for (int attempt = 0; attempt < 300; attempt++) {
       System.gc();
       Thread.sleep(100);
       if (loaders.stream().allMatch(reference -> reference.get() == null)) {

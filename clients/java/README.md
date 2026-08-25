@@ -157,12 +157,14 @@ Per platform:
   on the service side.
 - **A classloader that is unloaded**: the child is not tied to the classloader,
   so a host that undeploys an application without closing its connections would
-  leave a service running until its JVM exits. `ClassLoaderTest` loads two
-  isolated copies of the client, checks each owns a different child, and checks
-  that closing the connections leaves neither. Nothing the client starts is a
-  non-daemon thread, so an unloaded copy holds no thread either: the HTTP
-  executor and the child's output pumps are daemon threads
-  (`opensysml-http-*`, `opensysml-service-*`).
+  leave a service running until its JVM exits. `ClassLoaderTest` loads three
+  isolated copies of the client, checks each owns a different child, checks that
+  closing the connections leaves none, and checks the copies are collectable.
+  Nothing the client starts is a non-daemon thread, so an unloaded copy holds no
+  thread either: the HTTP executor and the child's output pumps are daemon threads
+  (`opensysml-http-*`, `opensysml-service-*`). Collection is not instant, though —
+  on 17 the JDK's own `HttpClient-N-SelectorManager` thread outlives a closed
+  client until the client is collected, and pins the loader meanwhile.
 
 ## Thread safety
 

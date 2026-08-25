@@ -37,12 +37,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Every failure is unchecked; see {@link OpenSysMLException} for the one exception rule.
  *
- * {@snippet lang = java :
+ * <pre>{@code
  * try (Connection connection = Connection.open()) {
  *   Model model = connection.load(Path.of("vehicle.sysml"));
  *   Value mass = model.evalInContext("mass", "Demo::Vehicle");
  * }
- * }
+ * }</pre>
  */
 public final class Connection implements AutoCloseable {
 
