@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance test lint clean install help python-test python-install proto proto-go python-proto proto-ts proto-java proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg test lint clean install help python-test python-install proto proto-go python-proto proto-ts proto-java proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -59,6 +59,12 @@ conformance: ## Run the language-independent conformance suite against sysml-grp
 	@mkdir -p $(BIN_DIR)
 	go run ./cmd/conformance -report $(BIN_DIR)/conformance-report.json
 	@echo "✓ Conformance suite passed ($(BIN_DIR)/conformance-report.json)"
+
+conformance-pkg: ## Run the conformance suite through the public Go API (pkg/opensysml)
+	@echo "Running the conformance suite through pkg/opensysml..."
+	@mkdir -p $(BIN_DIR)
+	go run ./cmd/conformance -protocols pkg,pkg-connect -allow-skips -report $(BIN_DIR)/conformance-pkg-report.json
+	@echo "✓ Conformance suite passed through pkg/opensysml ($(BIN_DIR)/conformance-pkg-report.json)"
 
 test: ## Run all tests
 	@echo "Running tests..."
