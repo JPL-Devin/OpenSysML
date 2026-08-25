@@ -94,15 +94,16 @@ type parseCheckpoint struct {
 
 // New creates a Parser for the given source file.
 func New(sf *source.SourceFile) *Parser {
-	// Real corpora run 6-14 source bytes per token; the dense tail is nearer 3,
-	// and pooled buffers absorb its growth.
 	return newParserWithBuffer(sf, nil)
 }
 
 func newParserWithBuffer(sf *source.SourceFile, buf []lexer.Token) *Parser {
-	presize := sf.Len() / 8
+	// Most source bytes become tokens after trivia is removed.
+	presize := sf.Len() / 5
 	if cap(buf) < presize {
-		buf = make([]lexer.Token, 0, presize)
+		fresh := make([]lexer.Token, 0, presize)
+		recycleTokenBuffer(buf)
+		buf = fresh
 	} else {
 		buf = buf[:0]
 	}
