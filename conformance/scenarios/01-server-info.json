@@ -1,0 +1,34 @@
+{
+  "scenarios": [
+    {
+      "id": "server_info/reports_the_capabilities_clients_negotiate_on",
+      "description": "A client selects behaviour by capability name, not by version string, so every name these scenarios require must be reported.",
+      "rpc": "GetServerInfo",
+      "request": {},
+      "expect": {
+        "non_empty": [
+          "capabilities"
+        ],
+        "response": {
+          "version": "${version}"
+        },
+        "contains_all": {
+          "capabilities": [
+            "type_facts",
+            "convert",
+            "verification",
+            "query",
+            "oslc_query",
+            "enum_values",
+            "evaluate_subject",
+            "symbol_attributes",
+            "unset_value",
+            "apply_edits",
+            "strict_conformance",
+            "feature_values"
+          ]
+        }
+      }
+    }
+  ]
+}

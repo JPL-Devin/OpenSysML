@@ -1,0 +1,160 @@
+{
+  "scenarios": [
+    {
+      "id": "evaluate/arithmetic_is_an_integer",
+      "description": "An integral expression answers int_value, not real_value: the arm is the type.",
+      "rpc": "Evaluate",
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "2 + 2"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "int_value": 4
+          }
+        }
+      }
+    },
+    {
+      "id": "evaluate/a_boolean_is_a_boolean",
+      "rpc": "Evaluate",
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "true and false"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "bool_value": false
+          }
+        },
+        "absent": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "evaluate/a_declarations_default_is_read_without_a_subject",
+      "description": "With no subject the definition's own default is what the feature holds.",
+      "rpc": "Evaluate",
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "mass",
+        "context_symbol_id": "Demo::Vehicle"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "real_value": 1500.0
+          }
+        }
+      }
+    },
+    {
+      "id": "evaluate/a_subject_is_evaluated_against_that_objects_value",
+      "description": "The subject redefines mass, so the same expression answers the object's value rather than the definition's.",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "evaluate_subject"
+      ],
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "mass",
+        "subject_symbol_id": "Demo::sedan"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "real_value": 1200.0
+          }
+        }
+      }
+    },
+    {
+      "id": "evaluate/an_absent_subject_is_reported",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "evaluate_subject"
+      ],
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "mass",
+        "subject_symbol_id": "Demo::nope"
+      },
+      "expect": {
+        "non_empty": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "evaluate/an_enumeration_literal_arrives_as_the_literal",
+      "description": "A literal travels as the declaration it names, so a client can tell it from a string.",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "enum_values"
+      ],
+      "model": {
+        "fixture": "enumeration.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "D::Color::red"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "enum_literal": {
+              "literal_id": "D::Color::red",
+              "enumeration_id": "D::Color"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "evaluate/an_unparsable_expression_is_reported_in_band",
+      "description": "A bad expression is an answer about the expression, not a transport failure.",
+      "rpc": "Evaluate",
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "invalid syntax ((("
+      },
+      "expect": {
+        "non_empty": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "evaluate/an_unknown_model_is_not_found",
+      "rpc": "Evaluate",
+      "request": {
+        "model_hash": "no-such-model",
+        "expression": "2 + 2"
+      },
+      "expect": {
+        "status": "NOT_FOUND"
+      }
+    }
+  ]
+}
