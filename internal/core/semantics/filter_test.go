@@ -14,7 +14,7 @@ import (
 // src, and returns the model, the condition, and the scope it is written in.
 func filterOf(t *testing.T, src, cond string) (*Model, symbols.ElementFilter, *symbols.Scope) {
 	t.Helper()
-	m, root := buildModel(t, src)
+	m, root := buildModelNamed(t, "t.kerml", src)
 	p := parser.New(source.New("<filter>", []byte(cond)))
 	expr := p.ParseExpression()
 	if expr == nil || len(p.Diagnostics) != 0 {

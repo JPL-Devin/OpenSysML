@@ -11,18 +11,23 @@ import (
 // filterDiags returns the element-filter findings of src.
 func filterDiags(t *testing.T, src string) []Diagnostic {
 	t.Helper()
-	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
-	idx := newTestIndex()
-	idx.AddDocument("<t>", root)
-	idx.ExpandWildcardImports()
-
 	var out []Diagnostic
-	for _, d := range Analyze("<t>", root, nil, idx) {
+	for _, d := range analyzeFilterSource(t, src) {
 		if strings.HasPrefix(d.Code, "filter-") {
 			out = append(out, d)
 		}
 	}
 	return out
+}
+
+func analyzeFilterSource(t *testing.T, src string) []Diagnostic {
+	t.Helper()
+	const name = "<t>.kerml"
+	root := parser.New(source.New(name, []byte(src))).ParseFile()
+	idx := newTestIndex()
+	idx.AddDocument(name, root)
+	idx.ExpandWildcardImports()
+	return Analyze(name, root, nil, idx)
 }
 
 // only returns the findings with one code.
@@ -62,7 +67,9 @@ func TestFilterNotBooleanIsReported(t *testing.T) {
 		{"a namespace filter", filterMetadata + "package P { public import Belt; filter 3; }"},
 		{"an import filter", filterMetadata + "package P { public import Belt[42]; }"},
 		{"an operand of a boolean operator", filterMetadata + "package P { filter @Safety and 7; }"},
-		{"an element reference where a truth value is needed", filterMetadata + "package P { filter Safety implies @Safety; }"},
+		{"a typed element reference where a truth value is needed", filterMetadata + "package P { feature n : ScalarValues::Integer; filter n; }"},
+		{"an unresolved bare reference", filterMetadata + "package P { filter Undefined; }"},
+		{"an unresolved feature chain", filterMetadata + "package P { filter a.b.c; }"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			diags := only(filterDiags(t, tc.src), "filter-not-boolean")
@@ -90,13 +97,18 @@ func TestFilterNotEvaluableIsReported(t *testing.T) {
 		name string
 		src  string
 	}{
-		{"an unsupported operator", filterMetadata + "package P { filter @Safety + 1; }"},
 		{"an indexed condition", filterMetadata + "package P { filter @Safety[1]; }"},
+		{"an invocation", filterMetadata + "package P { filter coll->select(x); }"},
+		{"a Boolean-result operator", filterMetadata + "package P { filter ~(1 as Integer); }"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			diags := only(filterDiags(t, tc.src), "filter-not-evaluable")
+			all := filterDiags(t, tc.src)
+			diags := only(all, "filter-not-evaluable")
 			if len(diags) == 0 {
 				t.Fatalf("the condition is not evaluable but nothing was reported")
+			}
+			if got := len(only(all, "filter-not-boolean")); got != 0 {
+				t.Fatalf("got %d filter-not-boolean diagnostics, want none: %v", got, all)
 			}
 			if diags[0].Severity != SeverityError {
 				t.Errorf("severity = %v, want an error", diags[0].Severity)
@@ -106,6 +118,35 @@ func TestFilterNotEvaluableIsReported(t *testing.T) {
 			}
 			if diags[0].Message != msgFilterNotEvaluable {
 				t.Errorf("message = %q, want %q", diags[0].Message, msgFilterNotEvaluable)
+			}
+		})
+	}
+}
+
+func TestUnsupportedFilterResultReportsModelLevelRule(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cond string
+		code string
+	}{
+		{"an unsupported operator", "@Safety + 1", "filter-not-evaluable"},
+		{"a feature chain", "a.b.c", "filter-not-boolean"},
+		{"a conditional", "if c ? a else b", "filter-not-evaluable"},
+		{"a cast", "x as Integer", "filter-not-evaluable"},
+		{"an unresolved reference", "Undefined", "filter-not-boolean"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := filterDiags(t, filterMetadata+"package P { filter "+tc.cond+"; }")
+			if got := len(only(diags, tc.code)); got != 1 {
+				t.Fatalf("got %d %s diagnostics, want one: %v", got, tc.code, diags)
+			}
+			for _, code := range []string{"filter-not-evaluable", "filter-not-evaluated", "filter-not-boolean"} {
+				if code == tc.code {
+					continue
+				}
+				if got := len(only(diags, code)); got != 0 {
+					t.Fatalf("got %d %s diagnostics, want none: %v", got, code, diags)
+				}
 			}
 		})
 	}
@@ -152,4 +193,107 @@ func TestFilterReportsEachFaultOnceOnTheMembership(t *testing.T) {
 			t.Errorf("the diagnostic has no span: %v", d)
 		}
 	}
+}
+
+func TestChainFilterDiagnosticsUseSemanticResultAndEvaluability(t *testing.T) {
+	const boolChain = `
+		package R1 {
+			private import ScalarValues::*;
+			metaclass M { var feature a : Boolean[1]; }
+			metaclass N { var feature m : M[1]; }
+		}
+		package Q { filter R1::N::m.a; }
+	`
+	const intChain = `
+		package R1 {
+			private import ScalarValues::*;
+			metaclass M { var feature a : Integer[1]; }
+			metaclass N { var feature m : M[1]; }
+		}
+		package Q { filter R1::N::m.a; }
+	`
+	const comparison = `
+		package R1 {
+			private import ScalarValues::*;
+			metaclass M { var feature a : Integer[1]; }
+			metaclass N { var feature m : M[1]; }
+		}
+		package Q { filter R1::N::m.a > 2; }
+	`
+	const structChain = `
+		package R1 {
+			private import ScalarValues::*;
+			struct S { feature x : Boolean[1]; }
+			struct T { feature s : S[1]; }
+		}
+		package Q { filter R1::T::s.x; }
+	`
+	const libraryChain = `package Q { filter KerML::Root::Element::owner.name == "P1"; }`
+	const packageChain = `
+		package R1 {
+			private import ScalarValues::*;
+			metaclass M { var feature a : Boolean[1]; }
+			feature p : M[1];
+		}
+		package Q { filter R1::p.a; }
+	`
+
+	type wantDiagnostic struct {
+		code     string
+		severity Severity
+		message  string
+		text     string
+	}
+	tests := []struct {
+		name string
+		src  string
+		want []wantDiagnostic
+	}{
+		{"metaclass Boolean chain", boolChain, []wantDiagnostic{
+			{"filter-not-evaluated", SeverityWarning, msgFilterNotEvaluated, "filter R1::N::m.a"},
+			{"feature-reference-featuring-types", SeverityError, msgSubsettingFeaturingTypes, "R1::N::m"},
+		}},
+		{"metaclass integer chain", intChain, []wantDiagnostic{
+			{"filter-not-boolean", SeverityError, msgFilterNotBoolean, "filter R1::N::m.a"},
+		}},
+		{"chain comparison", comparison, []wantDiagnostic{
+			{"filter-not-evaluated", SeverityWarning, msgFilterNotEvaluated, "filter R1::N::m.a > 2"},
+			{"feature-reference-featuring-types", SeverityError, msgSubsettingFeaturingTypes, "R1::N::m"},
+		}},
+		{"struct-featured chain", structChain, []wantDiagnostic{
+			{"filter-not-evaluable", SeverityError, msgFilterNotEvaluable, "filter R1::T::s.x"},
+		}},
+		{"library metaclass chain", libraryChain, []wantDiagnostic{
+			{"filter-not-evaluated", SeverityWarning, msgFilterNotEvaluated, "filter KerML::Root::Element::owner.name"},
+		}},
+		{"package-level chain", packageChain, []wantDiagnostic{
+			{"filter-not-evaluated", SeverityWarning, msgFilterNotEvaluated, "filter R1::p.a"},
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := analyzeFilterSource(t, tc.src)
+			if len(diags) != len(tc.want) {
+				t.Fatalf("got %d diagnostics, want %d: %v", len(diags), len(tc.want), diags)
+			}
+			for i, want := range tc.want {
+				got := diags[i]
+				if got.Code != want.code || got.Severity != want.severity || got.Message != want.message {
+					t.Errorf("diagnostic %d = %#v, want code=%q severity=%v message=%q", i, got, want.code, want.severity, want.message)
+				}
+				if !strings.Contains(stringForSpan(t, tc.src, got.Span), want.text) {
+					t.Errorf("diagnostic %d span text = %q, want it to contain %q", i, stringForSpan(t, tc.src, got.Span), want.text)
+				}
+			}
+		})
+	}
+}
+
+func stringForSpan(t *testing.T, src string, span source.Span) string {
+	t.Helper()
+	if span.Offset < 0 || span.Offset+span.Len > len(src) {
+		t.Fatalf("span %#v is outside source of length %d", span, len(src))
+	}
+	return src[span.Offset : span.Offset+span.Len]
 }

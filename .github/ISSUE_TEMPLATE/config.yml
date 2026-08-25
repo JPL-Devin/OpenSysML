@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question, idea, or feature request
+    url: https://github.com/Open-MBEE/OpenSysML/discussions
+    about: Anything that is not a defect, a conformance gap, or an objection to a ruling starts as a discussion.
+  - name: Documentation
+    url: https://opensysml.org/
+    about: The handbook, CLI/REPL reference, internals, and the measured compliance status.

@@ -2,7 +2,7 @@
 
 How to profile `sysml`, what a large model costs today, and what the measurements
 say about where the remaining cost is. Figures below were taken on an
-`Intel Xeon Platinum 8175M @ 2.50GHz`, Go 1.23, `GOMAXPROCS=8`; treat them as
+`Intel Xeon Platinum 8559C`, Go 1.25, `GOMAXPROCS=8`; treat them as
 ratios rather than absolutes.
 
 ## Profiling a run
@@ -69,39 +69,38 @@ action, a state machine or a part usage.
 
 | elements | load wall | allocated | live heap held |
 | -------- | --------- | --------- | -------------- |
-| 0        | 80 ms     | 32 MiB    | 14 MiB         |
-| 250      | 106 ms    | 44 MiB    | 16 MiB         |
-| 1 000    | 186 ms    | 83 MiB    | 24 MiB         |
-| 4 000    | 538 ms    | 242 MiB   | 55 MiB         |
+| 0        | 0.23 ms   | 112 KiB   | 32 KiB         |
+| 250      | 19 ms     | 11.7 MiB  | 2.5 MiB        |
+| 1 000    | 69 ms     | 46 MiB    | 9.8 MiB        |
+| 4 000    | 307 ms    | 187 MiB   | 39 MiB         |
 
-Two things follow from the `elements=0` row. A session costs about **14 MiB held
-and 32 MiB allocated before it holds any model of its own**: that is the standard
-library, which every session indexes so that names such as a quantity's unit
-resolve. And each session holds its own copy — a process serving many sessions
-(the LSP, a server) pays that per session, not once.
+The `elements=0` row is what a session costs before it holds a model of its own:
+**32 KiB held and 112 KiB allocated**. The standard library is no longer indexed
+eagerly per session, so a process serving many sessions (the LSP, a server) no
+longer pays a multi-megabyte floor for each one.
 
 Above that baseline a model costs roughly **10 KiB held per element**, and
-allocates roughly **50 KiB per element** while loading, most of it short-lived
+allocates roughly **48 KiB per element** while loading, most of it short-lived
 parser and resolution garbage.
 
-Whole-binary scaling on `-validate` over generated models, before and after the
-fixes described below:
+Whole-binary scaling on `-validate` over generated models in standard notation,
+which report nothing:
 
-| elements | wall (before) | peak RSS (before) | wall (now) | peak RSS (now) |
-| -------- | ------------- | ----------------- | ---------- | -------------- |
-| 4 000    | 1.64 s        | 140 MiB           | 0.59 s     | 105 MiB        |
-| 8 000    | 6.35 s        | 249 MiB           | 1.13 s     | 196 MiB        |
-| 16 000   | 25.64 s       | 492 MiB           | 2.19 s     | 353 MiB        |
+| elements | wall   | peak RSS |
+| -------- | ------ | -------- |
+| 3 000    | 0.33 s | 107 MiB  |
+| 6 000    | 0.55 s | 161 MiB  |
+| 12 000   | 1.03 s | 277 MiB  |
 
-Before, doubling the model roughly quadrupled the time: loading was quadratic in
-the size of the model. A 4 000-element model allocated 840 MiB to end up holding
-55 MiB; it now allocates 242 MiB. Now both time and memory grow linearly with the
-model — 4 000, 8 000 and 16 000 elements allocate 242, 451 and 873 MiB.
+Both time and memory grow linearly with the model. This change cut live heap held
+by 6.9% (8.5% at 4,000 elements) and allocations by about 2%, with output
+byte-identical. Loading was quadratic once — doubling the model roughly
+quadrupled the time — for the reasons below.
 
 ### What made it quadratic
 
-Three scans over a namespace's members, each performed once per member of that
-namespace:
+The load path had several costs, including three scans over a namespace's
+members, each performed once per member of that namespace:
 
 - `passes.checkRedefinition` searched the enclosing scope for the symbol owning
   it, copying the scope's member-name list for every declaration checked. It cost
@@ -116,6 +115,65 @@ namespace:
 - `resolve.importsOf` rebuilt a namespace's import list on every unqualified name
   lookup made in it. The tree is immutable after parsing, so the resolver
   memoizes it.
+- Every scope allocated a member map even when it had no named members, and a
+  populated key also paid map-bucket overhead plus a separate one-element slice.
+  The eager per-scope member map is gone: scopes now store named members in
+  declaration order, scan small scopes, and build a lookup index lazily only
+  above the 12-entry threshold.
+
+### What made reporting findings quadratic
+
+Reporting a finding needs the line and column its offset falls on, which
+`SourceFile.Lines()` answers from a line index over the whole file. The index was
+rebuilt on every call, and the calls are made once per finding, so validating a
+model that reports something cost the file's size times the number of findings: a
+16 000-element model that warns on every usage took 123 s and allocated 258 GiB,
+against 1.0 s over the same model that warns on nothing. A source file's content
+is immutable, so the index is now built once per file and reused, and the REPL's
+diagnostic paths hold one index per submission rather than one per finding. That
+model now takes 2.1 s and allocates 1.4 GiB — around 570 B allocated per finding
+reported, flat in the size of the file.
+
+Materialization rollback had the same shape. A failed creation drops every object
+it reached, which it used to identify by copying the whole live-instance key set
+before each (also nested) materialization — 81% of all memory allocated while
+instantiating. The context now records instance registrations in an append-only
+log and marks its length, so a rollback walks only what the failed creation
+added.
+
+### Where a load's allocation goes
+
+A load allocates substantially more than the model it leaves behind holds, and a
+CPU profile of it is spent in the collector, so allocation volume is what a
+load's wall time follows. The load's major allocation sources include:
+
+- The validation passes each walked the document's symbol tree themselves, copying
+  every scope's member list on the way — 17 traversals of the same tree per
+  document. The passes of one run share a `Context`, which now holds the
+  traversal, and the walk is made once.
+- A scope used to allocate a member map and a separate member-order slice even
+  when it held no named member. Flat declaration-ordered storage removes both
+  costs from empty scopes and avoids per-key buckets and one-element slices from
+  populated scopes.
+- `parser.fill` grows the token buffer as it reads. The parser sizes that buffer
+  from source length; the estimate suits dense models and over-allocates on
+  sparse ones.
+- A wildcard import surfaces a name by enumerating the target namespace's direct
+  children (`symbols.Index.LookupDirectChildren`), which rebuilt and re-sorted
+  that list on every unqualified lookup made through the import. The index now
+  keeps the list per namespace and visibility, and drops what it kept whenever a
+  write lands in any of its tables, so a lookup after an edit is recomputed.
+
+The scope representation is shaped by the actual models. In the standard
+library, 10,666 scopes contain no named members 70.5% of the time, 99.3% contain
+at most eight named members, and the largest contains 516. A generated model
+reaches 16,000 named members in one scope. The former representation therefore
+paid for maps on roughly 72% of scopes that never used one, while a populated
+member cost roughly 80 bytes of map and slice overhead for 24 bytes of data. A
+linear scan is appropriate for the common small scopes; the lazy index prevents
+the large scopes from becoming quadratic.
+
+Diagnostics, resolution results and exit status are byte-identical.
 
 ## What running a model costs
 
@@ -126,17 +184,17 @@ run being measured.
 
 | elements | start state machine | evaluate calculation | instantiate part def |
 | -------- | ------------------- | -------------------- | -------------------- |
-| 250      | 26 µs, 4.0 KiB      | 23 µs, 3.7 KiB       | 20 µs, 1.6 KiB       |
-| 1 000    | 82 µs, 4.0 KiB      | 77 µs, 3.7 KiB       | 73 µs, 1.6 KiB       |
-| 4 000    | 334 µs, 4.0 KiB     | 435 µs, 3.7 KiB      | 329 µs, 1.6 KiB      |
+| 250      | 12 µs, 5.3 KiB      | 12 µs, 4.5 KiB       | 11 µs, 2.8 KiB       |
+| 1 000    | 36 µs, 5.3 KiB      | 36 µs, 4.5 KiB       | 34 µs, 2.8 KiB       |
+| 4 000    | 202 µs, 5.3 KiB     | 199 µs, 4.5 KiB      | 198 µs, 2.8 KiB      |
 
 Execution memory is **flat in the size of the model** — a run allocates a few
 kilobytes whatever the surrounding model — so memory pressure from executing
 models is not where a large model hurts; loading it is.
 
 Execution *time*, however, grows with the size of the surrounding model: starting
-the same three-state machine takes 13 times longer in a 4 000-element model than
-in a 250-element one, while allocating exactly the same memory. A CPU profile of
+the same three-state machine takes about 17 times longer in a 4 000-element model
+than in a 250-element one, while allocating exactly the same memory. A CPU profile of
 that benchmark is spent in the garbage collector — `runtime.scanobject` and its
 neighbors account for over half of it — so the cost is collection scanning the
 live model, paid by whatever allocates next, rather than work the run itself does.
@@ -146,12 +204,53 @@ a faster executor.
 
 ## Notes for further work
 
-- The parser's token buffer (`parser.fill`) is now the largest single source of
-  allocation while loading, at about 54% of a large model's total. It grows the
-  buffer as it reads; sizing it from the source length would cut most of that,
-  and with it much of the collector pressure a load creates.
 - Runs over a large model spend their time in collection, not in the executor
   (above). Reducing what a load leaves behind is the lever, since the live model
   is what each cycle scans.
-- A session holds its own standard-library index (14 MiB). Sharing one index
-  across sessions in one process would remove that per-session floor.
+- Resolving inherited library features in every definition body costs about 1.3x
+  a load at 12 000 elements — 0.757s to 1.007s — and the factor grows with the
+  model. Earlier notes here put it at 2x; that figure came from a much older
+  baseline carrying unrelated changes, so do not repeat it. Allocated *bytes*
+  went down (647.5 to 529.7 MiB) while allocation *count* went up (4.54M to
+  6.03M), and it is the count the regression follows: parsing is unchanged at
+  450ms, resolution goes 90ms to 200ms, the validation passes 130ms to 420ms and
+  the collector's mark workers 440ms to 640ms. The work is linear in the model
+  and semantically required, so what is left to win is in the scans it walks.
+  Hot callers now use non-copying member iteration, while callers that need an
+  owned slice continue to use `symbols.Scope.AllMembers`.
+- Flattening each type's inherited members into an in-memory table was measured
+  and rejected. The table was built by merging a type's direct-supertype tables
+  with its own scope, name-indexed so a lookup became one probe, cached per index
+  generation for library types only, with a per-symbol plan so a lookup on a user
+  type cost one map hit and one probe. Against the same clean models it came out
+  a wash: 0.981s to 0.983s at 12 000 elements, allocation count 6,077,232 to
+  6,070,375, peak resident mixed (−5.7 MiB at 3 000, −10.2 MiB at 6 000, +5.8 MiB
+  at 12 000). The reason is that `semantics.Model.MemberSources` already memoizes
+  its breadth-first closure and hits that cache about 92% of the time, so a
+  lookup was already close to a single map probe, and the whole inherited-member
+  cluster is only ~3.5% of a clean load's allocated objects and ~7% of its CPU —
+  parsing and symbol building dominate both. A table therefore relocates that
+  work rather than removing it: on a clean 12 000-element model only eight
+  library types are reached at all, and building their tables plus the per-type
+  plans costs about what the closures cost. Two intermediate shapes were
+  distinctly worse — recomputing the contributor set per lookup instead of
+  hitting the memoized closure (+1.3M allocations), and rebuilding a table on
+  every attempt when a build failed and cached nothing (+286k allocations).
+  Do not revisit this without moving the tables off the load: built when the
+  library index is built, persisted alongside the other library facts and shared
+  by pointer, no table build and no per-type closure happens during an analysis
+  at all, which is where the remaining win is.
+- Two facts about the bundled library came out of that measurement.
+  `Performances::Evaluation` appears among its own contributors, a self-edge the
+  breadth-first walk hides by seeding its visited set with the starting symbol,
+  and `Calculations::Calculation` and `Constraints::ConstraintCheck` are reached
+  through a member that is not itself a library symbol.
+- The “small scopes could use a slice instead of a map” lever is closed:
+  flat declaration-ordered storage replaces the eager map, and scopes above the
+  threshold build a lookup index lazily. The measured scope shape is why the
+  threshold matters.
+- Recycling parser token buffers across parses was measured and rejected. It
+  reduced allocated bytes by only 1.6% while increasing wall time by 3.8% and
+  peak RSS by 0.8%. The source-bytes-per-token ratio is 13.8 on the standard
+  library but 5.6 on generated models, so no fixed presize divisor serves both;
+  do not revisit this lever without new evidence.

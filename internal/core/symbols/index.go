@@ -2,6 +2,7 @@ package symbols
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -35,8 +36,12 @@ type Index struct {
 	// base is the frozen index this one reads through to, and frozen bars this
 	// one from being written: a shared base must not change under the indexes
 	// built over it.
-	base   *Index
-	frozen bool
+	base                     *Index
+	frozen                   bool
+	generation               *indexGeneration
+	directChildrenMu         sync.Mutex
+	directChildrenGeneration uint64
+	directChildrenCache      map[directChildrenKey][]*Symbol
 
 	docRoots      *layer[string, *Scope]      // document name -> root scope
 	docOfRoot     *layer[*Scope, string]      // root scope -> document name
@@ -145,6 +150,11 @@ type nsChange struct {
 	lost   bool
 }
 
+type directChildrenKey struct {
+	prefix        string
+	allowsPrivate bool
+}
+
 // WildcardImport is one `import X::*` declaration: the target's raw qualified
 // name text, whether the import was declared private, and the filter condition
 // restricting what it brings in (`import X::*[@Safety]`), which is zero for an
@@ -157,25 +167,28 @@ type WildcardImport struct {
 
 // NewIndex creates an empty index.
 func NewIndex() *Index {
+	gen := &indexGeneration{}
 	return &Index{
-		docRoots:      newLayer[string, *Scope](),
-		docOfRoot:     newLayer[*Scope, string](),
-		docKinds:      newLayer[string, source.Kind](),
-		fqn:           newLayer[string, []*Symbol](),
-		contributions: newLayer[string, []fqnEntry](),
-		wildcardMeta:  newLayer[string, map[string][]WildcardImport](),
-		reexported:    newLayer[string, map[*Symbol]bool](),
-		hidden:        newLayer[string, map[*Symbol]bool](),
-		reexportDocs:  newLayer[reexportKey, map[string]*reexportClaim](),
-		docReexports:  newLayer[string, map[reexportKey]bool](),
-		declaredAt:    newLayer[*Symbol, string](),
-		children:      newLayer[string, map[string]bool](),
-		bySegment:     newLayer[string, map[string]bool](),
-		dirtyNS:       make(map[string]nsChange),
-		lastTargets:   newLayer[string, []resolvedImport](),
-		libraryDocs:   newLayer[string, bool](),
-		librarySyms:   newLayer[*Symbol, bool](),
-		nsFilters:     newLayer[string, map[string][]ElementFilter](),
+		generation:          gen,
+		directChildrenCache: make(map[directChildrenKey][]*Symbol),
+		docRoots:            newLayer[string, *Scope](gen),
+		docOfRoot:           newLayer[*Scope, string](gen),
+		docKinds:            newLayer[string, source.Kind](gen),
+		fqn:                 newLayer[string, []*Symbol](gen),
+		contributions:       newLayer[string, []fqnEntry](gen),
+		wildcardMeta:        newLayer[string, map[string][]WildcardImport](gen),
+		reexported:          newLayer[string, map[*Symbol]bool](gen),
+		hidden:              newLayer[string, map[*Symbol]bool](gen),
+		reexportDocs:        newLayer[reexportKey, map[string]*reexportClaim](gen),
+		docReexports:        newLayer[string, map[reexportKey]bool](gen),
+		declaredAt:          newLayer[*Symbol, string](gen),
+		children:            newLayer[string, map[string]bool](gen),
+		bySegment:           newLayer[string, map[string]bool](gen),
+		dirtyNS:             make(map[string]nsChange),
+		lastTargets:         newLayer[string, []resolvedImport](gen),
+		libraryDocs:         newLayer[string, bool](gen),
+		librarySyms:         newLayer[*Symbol, bool](gen),
+		nsFilters:           newLayer[string, map[string][]ElementFilter](gen),
 	}
 }
 
@@ -205,26 +218,29 @@ func NewOverlay(base *Index) *Index {
 	if base.base != nil {
 		panic("symbols: NewOverlay cannot stack over an overlay")
 	}
+	gen := &indexGeneration{}
 	return &Index{
-		base:          base,
-		docRoots:      overLayer(base.docRoots),
-		docOfRoot:     overLayer(base.docOfRoot),
-		docKinds:      overLayer(base.docKinds),
-		fqn:           overLayer(base.fqn),
-		contributions: overLayer(base.contributions),
-		wildcardMeta:  overLayer(base.wildcardMeta),
-		reexported:    overLayer(base.reexported),
-		hidden:        overLayer(base.hidden),
-		reexportDocs:  overLayer(base.reexportDocs),
-		docReexports:  overLayer(base.docReexports),
-		declaredAt:    overLayer(base.declaredAt),
-		children:      overLayer(base.children),
-		bySegment:     overLayer(base.bySegment),
-		dirtyNS:       make(map[string]nsChange),
-		lastTargets:   overLayer(base.lastTargets),
-		libraryDocs:   overLayer(base.libraryDocs),
-		librarySyms:   overLayer(base.librarySyms),
-		nsFilters:     overLayer(base.nsFilters),
+		base:                base,
+		generation:          gen,
+		directChildrenCache: make(map[directChildrenKey][]*Symbol),
+		docRoots:            overLayer(base.docRoots, gen),
+		docOfRoot:           overLayer(base.docOfRoot, gen),
+		docKinds:            overLayer(base.docKinds, gen),
+		fqn:                 overLayer(base.fqn, gen),
+		contributions:       overLayer(base.contributions, gen),
+		wildcardMeta:        overLayer(base.wildcardMeta, gen),
+		reexported:          overLayer(base.reexported, gen),
+		hidden:              overLayer(base.hidden, gen),
+		reexportDocs:        overLayer(base.reexportDocs, gen),
+		docReexports:        overLayer(base.docReexports, gen),
+		declaredAt:          overLayer(base.declaredAt, gen),
+		children:            overLayer(base.children, gen),
+		bySegment:           overLayer(base.bySegment, gen),
+		dirtyNS:             make(map[string]nsChange),
+		lastTargets:         overLayer(base.lastTargets, gen),
+		libraryDocs:         overLayer(base.libraryDocs, gen),
+		librarySyms:         overLayer(base.librarySyms, gen),
+		nsFilters:           overLayer(base.nsFilters, gen),
 	}
 }
 
@@ -1111,42 +1127,40 @@ func clearMark(marks *layer[string, map[*Symbol]bool], fqn string, sym *Symbol) 
 // contribution of the named document.
 func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 	seen := make(map[*Symbol]bool)
-	for _, syms := range scope.members {
-		for _, sym := range syms {
-			if seen[sym] {
-				continue // symbol registered under both short and primary key
-			}
-			seen[sym] = true
+	for _, sym := range scope.syms {
+		if seen[sym] {
+			continue // symbol registered under both short and primary key
+		}
+		seen[sym] = true
 
-			// Index under primary FQN
-			fqn := joinFQN(prefix, sym.Name)
-			idx.register(fqn, sym)
-			idx.declaredAt.set(sym, fqn)
-			idx.addContribution(doc, fqnEntry{fqn: fqn, sym: sym})
+		// Index under primary FQN
+		fqn := joinFQN(prefix, sym.Name)
+		idx.register(fqn, sym)
+		idx.declaredAt.set(sym, fqn)
+		idx.addContribution(doc, fqnEntry{fqn: fqn, sym: sym})
 
-			// Also index under short name FQN if different
-			// Try cached shortName first (for stdlib), fallback to extracting from Decl
-			shortName := sym.ShortName
-			if shortName == "" {
-				shortName = shortNameOf(sym.Decl)
-			}
-			if shortName != "" && shortName != sym.Name {
-				shortFQN := joinFQN(prefix, shortName)
-				idx.register(shortFQN, sym)
-				idx.addContribution(doc, fqnEntry{fqn: shortFQN, sym: sym})
-			}
+		// Also index under short name FQN if different
+		// Try cached shortName first (for stdlib), fallback to extracting from Decl
+		shortName := sym.ShortName
+		if shortName == "" {
+			shortName = shortNameOf(sym.Decl)
+		}
+		if shortName != "" && shortName != sym.Name {
+			shortFQN := joinFQN(prefix, shortName)
+			idx.register(shortFQN, sym)
+			idx.addContribution(doc, fqnEntry{fqn: shortFQN, sym: sym})
+		}
 
-			// Extract wildcard imports and filters from packages/namespaces
-			if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
-				if wildcards := extractWildcardImports(sym.Decl, sym.Scope); len(wildcards) > 0 {
-					idx.setWildcardImports(fqn, doc, wildcards)
-				}
-				idx.SetNamespaceFilters(fqn, doc, extractNamespaceFilters(sym.Decl, sym.Scope))
+		// Extract wildcard imports and filters from packages/namespaces
+		if sym.Kind == SymbolPackage || sym.Kind == SymbolNamespace {
+			if wildcards := extractWildcardImports(sym.Decl, sym.Scope); len(wildcards) > 0 {
+				idx.setWildcardImports(fqn, doc, wildcards)
 			}
+			idx.SetNamespaceFilters(fqn, doc, extractNamespaceFilters(sym.Decl, sym.Scope))
+		}
 
-			if sym.Scope != nil {
-				idx.indexScope(doc, sym.Scope, fqn)
-			}
+		if sym.Scope != nil {
+			idx.indexScope(doc, sym.Scope, fqn)
 		}
 	}
 }
@@ -1412,16 +1426,42 @@ func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
 	if prefix == "" {
 		return nil // a document root's members are reached through its scope
 	}
+	return idx.lookupDirectChildren(directChildrenKey{
+		prefix:        prefix,
+		allowsPrivate: true,
+	})
+}
+
+func (idx *Index) lookupDirectChildren(key directChildrenKey) []*Symbol {
+	generation := idx.generation.get()
+	idx.directChildrenMu.Lock()
+	if idx.directChildrenGeneration != generation {
+		idx.directChildrenCache = make(map[directChildrenKey][]*Symbol)
+		idx.directChildrenGeneration = generation
+	}
+	if out, ok := idx.directChildrenCache[key]; ok {
+		idx.directChildrenMu.Unlock()
+		return out
+	}
+	idx.directChildrenMu.Unlock()
+
 	var out []*Symbol
 	seen := make(map[*Symbol]bool)
-	for _, fqn := range idx.childKeys(prefix) {
+	for _, fqn := range idx.childKeys(key.prefix) {
+		hidden := idx.hidden.at(fqn)
 		for _, sym := range idx.fqn.at(fqn) {
-			if !seen[sym] {
-				seen[sym] = true
-				out = append(out, sym)
+			if seen[sym] || (!key.allowsPrivate && hidden[sym]) {
+				continue
 			}
+			seen[sym] = true
+			out = append(out, sym)
 		}
 	}
+	idx.directChildrenMu.Lock()
+	if idx.generation.get() == generation {
+		idx.directChildrenCache[key] = out
+	}
+	idx.directChildrenMu.Unlock()
 	return out
 }
 
@@ -1464,22 +1504,10 @@ func (idx *Index) LookupDirectChildrenFrom(prefix, fromFQN string) []*Symbol {
 	if prefix == "" {
 		return nil // a document root's members are reached through its scope
 	}
-	if withinNamespace(fromFQN, prefix) {
-		return idx.LookupDirectChildren(prefix)
-	}
-	var out []*Symbol
-	seen := make(map[*Symbol]bool)
-	for _, fqn := range idx.childKeys(prefix) {
-		hidden := idx.hidden.at(fqn)
-		for _, sym := range idx.fqn.at(fqn) {
-			if seen[sym] || hidden[sym] {
-				continue
-			}
-			seen[sym] = true
-			out = append(out, sym)
-		}
-	}
-	return out
+	return idx.lookupDirectChildren(directChildrenKey{
+		prefix:        prefix,
+		allowsPrivate: withinNamespace(fromFQN, prefix),
+	})
 }
 
 // GetFQN returns the fully-qualified name for a symbol by walking its owner scope chain.

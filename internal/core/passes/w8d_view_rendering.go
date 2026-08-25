@@ -28,7 +28,7 @@ func (W8DViewRenderingPass) Run(ctx *Context, name string, root *ast.RootNamespa
 		return nil
 	}
 	var diags []Diagnostic
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		msg, ok := w8dViewRenderingMessage(sym.Decl)
 		if !ok {
 			return

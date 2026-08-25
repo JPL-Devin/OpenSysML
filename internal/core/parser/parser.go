@@ -88,7 +88,8 @@ type parseCheckpoint struct {
 
 // New creates a Parser for the given source file.
 func New(sf *source.SourceFile) *Parser {
-	return &Parser{src: sf, lx: lexer.New(sf)}
+	// Models measure ~5 source bytes per non-trivia token.
+	return &Parser{src: sf, lx: lexer.New(sf), buf: make([]lexer.Token, 0, sf.Len()/5)}
 }
 
 // fill ensures buf holds the token n positions ahead of the cursor (pulling

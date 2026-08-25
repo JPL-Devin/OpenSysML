@@ -5,8 +5,8 @@
   "conformance": "auto",
   "totals": {
     "cases": 120,
-    "bothReject": 117,
-    "pilotOnlyRejects": 3,
+    "bothReject": 120,
+    "pilotOnlyRejects": 0,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -29,8 +29,8 @@
     {
       "source": "grammar",
       "cases": 79,
-      "bothReject": 76,
-      "pilotOnlyRejects": 3,
+      "bothReject": 79,
+      "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
@@ -247,12 +247,9 @@
       "source": "grammar",
       "rule": "'part' is a reserved keyword, not a NAME token (SysML.xtext terminal ID / PartKeyword).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 3: no viable alternative at input 'part'"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "grammar/g16-expose-without-name.sysml",
@@ -655,12 +652,9 @@
       "source": "grammar",
       "rule": "an alias name comes from the ID terminal, so 'part' cannot spell it",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: extraneous input 'part' expecting 'for'"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "grammar/k01-specializes-without-target.kerml",
@@ -676,13 +670,9 @@
       "source": "grammar",
       "rule": "'part def' is a SysML production; the KerML grammar has no such keyword (KerML.xtext RootNamespace).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 2,
-      "pilot": [
-        "line 3: no viable alternative at input 'def'",
-        "line 3: no viable alternative at input 'P'"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
     },
     {
       "path": "grammar/k03-feature-typing-without-type.kerml",
@@ -1169,8 +1159,8 @@
     ],
     "totals": {
       "cases": 120,
-      "bothReject": 117,
-      "pilotOnlyRejects": 3,
+      "bothReject": 120,
+      "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },

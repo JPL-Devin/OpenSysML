@@ -4,6 +4,127 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.2.1 — 2026-08-24
+
+A conformance patch, a round of performance work, and a supply-chain improvement. The
+rejection oracle against the pinned OMG pilot (`2026-05`, jupyter-sysml-kernel 0.60.1) now
+stands at 120 of 120 both-reject under default mode — the three reserved-keyword cases that
+previously only the pilot rejected are errors by default — and every implementation-side
+divergence the conformance records adjudicated as fixable is closed. Reporting findings on a
+large model no longer costs its size times its findings, and loading one is faster and holds
+less memory; every conformance oracle is byte-identical before and after. Releases now
+publish a cosign-signed checksum manifest, and the Python client verifies it. No API was
+removed or renamed.
+
+### Reserved keyword names are errors by default
+
+- **A reserved keyword used as a name is rejected in default mode**, not only under
+  `-strict`: a keyword as a declaration name (`part if;`), a keyword behind an alias, and a
+  SysML keyword used as a name in KerML. Parser recovery still produces a usable AST and the
+  diagnostic still lands on the offending name; strict mode is unchanged, and no other
+  notation extension was tightened. This closes the last three pilot-only rejection cases:
+  120 of 120 negative cases both-reject, none by the pilot alone.
+
+### Diagnostics the reference declares and 0.2.0 missed
+
+- **A member-leading succession shorthand** (`then x;` opening a member) is diagnosed as
+  nonstandard notation instead of accepted in silence.
+- **Duplicate state and transition member names are reported.** State members and named
+  transitions carried no declaration-name span, so the name-distinguishability rule never saw
+  them; two states of one name in one body now warn as any other duplicate does.
+- **Feature accessibility over behavioral bodies is corrected**: a shared `accept` payload is
+  accessible from sibling nodes, references in state and transition bodies resolve in their
+  own scopes rather than the enclosing one, and a body's implicit result expression is
+  checked like an explicit one.
+- **A textual representation accepts a short name**: `rep <ocl> inOCL language "ocl" /* … */`
+  parses like the named and anonymous forms; contents remain unevaluated.
+- **A transition guard that is not Boolean, and a subsetting whose kinds cannot relate, are
+  reported even when the file has an unrelated syntax error.** Both checks now gate
+  themselves per element rather than per document, so an error elsewhere in the file no
+  longer silences them; an element whose own declaration failed to parse stays quiet.
+- **A non-Boolean element filter reports the reference's rule by name**: a filter condition
+  whose result cannot be Boolean is diagnosed as `Must have a Boolean result`, matching the
+  pinned validator word for word, beside the model-level-evaluability requirement it already
+  reported. Constant-folded filters such as `filter 1 + 2 * 3 > 0;` stay accepted.
+- **Feature accessibility is checked inside element-filter conditions** — the `filter`
+  member and the `[...]` clause of an import — with the candidate element as the featuring
+  context: a library-declared referent passes, a feature of a user-declared type is
+  reported, matching the pinned validator's boundary on both sides.
+- **A chain-shaped filter condition is diagnosed by the rule it breaks**, read off the
+  compiled predicate's resolved result type rather than the expression's shape: a condition
+  the specification forbids reports `Must have a Boolean result` or `Must be model-level
+  evaluable` as the reference does, while a condition only our evaluator cannot compute
+  becomes a non-blocking warning — which also lets the accessibility check above speak on
+  chains it previously never reached.
+
+### Conformance records match the implementation
+
+- The divergence follow-up rows that lagged earlier fixes are closed against live runs of the
+  pinned validators, with pinning tests and fixtures added where coverage was missing — among
+  them a cold/warm library-cache test proving a cached library symbol keeps its declaration,
+  metamodel type and abstractness. Refreshed baselines: differential 353 files, 324 fully
+  agreeing (84 diagnostics only ours, 65 only the pilot's); Xpect 1,295 of 1,323 rows agreeing
+  (248 wording-only), 28 disagreeing. All oracles remain advisory.
+- The semantic-rule map is re-measured for this release: of 727 tracked rules, 646 are
+  faithful, 74 approximate, 1 not implemented and 6 deliberately divergent, each divergence
+  named in its row. The roadmap reflects this release's targets and gate counts.
+
+### Validating, loading and rolling back cost what they should
+
+- **A source file's line index is built once and reused.** Locating a finding rebuilt the
+  whole-file index on every call, so validating a model that reports something cost the
+  file's size times the number of findings: a 16 000-element model warning on every usage
+  took 123 s and allocated 258 GiB, and now takes 2.1 s and allocates 1.4 GiB. No diagnostic,
+  position or message changed.
+- **A failed creation rolls back from a log instead of a snapshot.** Every object
+  materialization copied the live-instance set beforehand — 81% of everything allocated
+  while instantiating; the context now records each registration and a rollback walks only
+  what the failed creation added (156.6 KiB to 2.8 KiB per 250-element instantiation).
+- **Loading a model does each traversal once.** Validation shared one ordered symbol
+  traversal per analysis instead of re-collecting it per pass, direct-child lookups are
+  cached with generation-based invalidation, redefinition closures are computed once and
+  reused, and scope members are iterated in place instead of through copied slices. The
+  lexer's token buffer is pre-sized from the source length.
+- **A scope stores its members flat and indexes them lazily.** Most scopes never hold a
+  named member, and most that do hold a handful, so the per-scope map is gone: names and
+  symbols live in two declaration-ordered slices, scanned up to twelve names and indexed on
+  demand above that. Loading holds ~7% less live heap; a whole-binary validation of a
+  12 000-element model runs ~5% faster at lower peak memory.
+- **Member iteration is deterministic.** Scope members, FQN registration and duplicate
+  declarations now follow declaration order everywhere Go map order previously leaked
+  through; for duplicate declarations the first declared wins, pinned by tests. No
+  diagnostic, position, message or execution result changed anywhere in this section —
+  the differential, Xpect and rejection oracles are byte-identical before and after.
+
+### The release manifest is signed
+
+- **`build-release` signs `dist/SHA256SUMS.txt`** with cosign keyless using the release
+  pipeline's OIDC identity and publishes the sigstore bundle beside it as
+  `SHA256SUMS.txt.bundle`. Nothing changes for a caller downloading binaries directly.
+
+### Python client (`opensysml` 0.3.1)
+
+- **A core release published after this client can now be installed.** Previously every
+  installable core release needed a digest pinned in this client, so a new core release
+  required a new PyPI release. Now, for a release with no pin, the client downloads the
+  release's `SHA256SUMS.txt.bundle`, verifies it against the release pipeline's identity with
+  sigstore, and takes the asset digest from the verified manifest. Pins stay authoritative:
+  where one exists it wins, and a verified manifest that disagrees with a pin is reported as
+  a mismatch, never used as a downgrade.
+- **`sigstore` is an optional dependency, imported on demand.** An install without it refuses
+  to verify an unpinned release — exactly the previous behavior — rather than failing to
+  import `opensysml`.
+- The `v0.2.1` digests are pinned after the core release's assets publish, before
+  `opensysml-v0.3.1` is tagged.
+
+### Project
+
+- The documentation site is published at [opensysml.org](https://opensysml.org/); the old
+  GitHub Pages address redirects there.
+- GitHub issue forms and a pull request template.
+- Reader-facing documentation no longer uses internal work-item labels, and
+  `scripts/check-doc-ids.py` keeps it that way.
+
 ## 0.2.0 — 2026-08-24
 
 Three more advisory oracles now judge this implementation against the pinned OMG pilot

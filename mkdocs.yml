@@ -1,8 +1,9 @@
 # The site is the docs/ tree unmodified: every page stays a Markdown file read on
-# GitHub, and MkDocs is only the renderer.
+# GitHub, and MkDocs is only the renderer. The one exception is the landing page,
+# which frames docs/README.md with a hero that only makes sense on a web page.
 site_name: OpenSysML
 site_description: A SysML v2 and KerML implementation in Go — language server, REPL, execution runtime, Python client
-site_url: https://open-mbee.github.io/OpenSysML/
+site_url: https://opensysml.org/
 repo_url: https://github.com/Open-MBEE/OpenSysML
 repo_name: Open-MBEE/OpenSysML
 edit_uri: edit/main/docs/
@@ -12,6 +13,9 @@ docs_dir: docs
 
 theme:
   name: material
+  # overrides/ holds the landing page template only; every documentation page uses
+  # the theme as shipped.
+  custom_dir: overrides
   features:
     - navigation.instant
     - navigation.tracking
@@ -41,10 +45,12 @@ theme:
 plugins:
   - search
 
-# Links out of docs/ (examples/, Go sources, CONTRIBUTING.md) are correct on GitHub
-# and 404 here, so the hook rewrites those to the repository at build time.
+# repo_links: links out of docs/ (examples/, Go sources, CONTRIBUTING.md) are correct
+# on GitHub and 404 here, so they are rewritten to the repository at build time.
+# landing: docs/README.md is rendered with the landing page template.
 hooks:
   - scripts/mkdocs_repo_links.py
+  - scripts/mkdocs_landing.py
 
 markdown_extensions:
   - admonition

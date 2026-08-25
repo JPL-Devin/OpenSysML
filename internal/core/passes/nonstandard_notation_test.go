@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 )
 
 // wantNotation asserts one warning per want, matched by code and message
@@ -294,6 +296,8 @@ func TestNamedFinalNodeAndTwoEndedThenAreExtensions(t *testing.T) {
 	wantNotation(t, "a.sysml", "action def A { done end; }", CodeNonstandardNotation, "`done <name>;`")
 	wantNotation(t, "a.sysml", "action def A { action a; action b; then a b; }",
 		CodeNonstandardNotation, "`then <source> <target>;`")
+	wantNotation(t, "a.sysml", "state def S { state a; state b; a then b; }",
+		CodeNonstandardNotation, "`<source> then <target>;`")
 	wantSilent(t, "a.sysml", "action def A { action a; action b; first a then b; }")
 	wantSilent(t, "a.sysml", "action def A { action a; first a; then done; }")
 }
@@ -322,7 +326,11 @@ func TestRequirementConstraintOutsideARequirementBodyIsAnExtension(t *testing.T)
 // k02: the KerML grammar has no `part` declaration, so a SysML declaration
 // keyword in a .kerml file is reported, and the KerML spelling is silent.
 func TestSysMLDeclarationInKerMLIsReported(t *testing.T) {
-	wantNotation(t, "a.kerml", "package P { part def Wheel; }", CodeSysMLNotation, "`part` is SysML notation")
+	got := notationDiags(t, "a.kerml", "package P { part def Wheel; }", conformance.ModeDefault)
+	if len(got) != 1 || got[0].Severity != SeverityError || got[0].Code != CodeSysMLNotation ||
+		!strings.Contains(got[0].Message, "`part` is SysML notation") {
+		t.Errorf("got %+v, want one sysml-notation error", got)
+	}
 	wantSilent(t, "a.kerml", "package P { struct Wheel; }")
 	wantSilent(t, "a.sysml", "package P { part def Wheel; }")
 }

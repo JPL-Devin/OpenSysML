@@ -29,7 +29,7 @@ func (W10BRelatedElementsPass) Run(ctx *Context, name string, root *ast.RootName
 	}
 	model := ctx.Model()
 	var diags []Diagnostic
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		if !w10bRelatesElements(sym) {
 			return
 		}

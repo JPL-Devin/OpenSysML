@@ -59,16 +59,19 @@ func TestValidateDoesNotCallAReportedErrorNone(t *testing.T) {
 	rejectReport(t, got, ": no errors")
 }
 
-// The parser's keyword-as-name warning and the strict escalation of it are one
-// finding, so a strict run reports the span once.
-func TestStrictReportsAKeywordAsNameOnce(t *testing.T) {
+func TestKeywordAsNameReportsOnceInEitherMode(t *testing.T) {
 	binary := buildCLI(t)
 	const keywordName = "package P {\n    part def part;\n}\n"
 
-	wantReport(t, check(t, binary, keywordName, "-validate"), 0,
-		"warning: \"part\" is a reserved keyword; write 'part' to use it as a name")
-
-	strict := check(t, binary, keywordName, "-validate", "-strict")
-	wantReport(t, strict, 2, "error: \"part\" is a reserved keyword, not a name the ID terminal admits")
-	rejectReport(t, strict, "warning:")
+	for _, tc := range []struct {
+		status int
+		args   []string
+	}{
+		{0, []string{"-validate"}},
+		{2, []string{"-validate", "-strict"}},
+	} {
+		got := check(t, binary, keywordName, tc.args...)
+		wantReport(t, got, tc.status, "error: \"part\" is a reserved keyword, not a name the ID terminal admits")
+		rejectReport(t, got, "warning:")
+	}
 }

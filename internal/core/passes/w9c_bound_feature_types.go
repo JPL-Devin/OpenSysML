@@ -28,7 +28,7 @@ func (W9CBoundFeatureTypesPass) Run(ctx *Context, name string, root *ast.RootNam
 	if c.model == nil || c.resolver == nil {
 		return nil
 	}
-	w8dWalkSymbols(rootScope, c.check)
+	w8dWalkSymbols(ctx, rootScope, c.check)
 	return c.diags
 }
 

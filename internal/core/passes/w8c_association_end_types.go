@@ -26,7 +26,7 @@ func (AssociationEndTypesPass) Run(ctx *Context, name string, root *ast.RootName
 		return nil
 	}
 	c := &associationEndTypesChecker{resolver: ctx.Resolver(), model: ctx.Model()}
-	w := &w8cWalker{seen: make(map[*symbols.Symbol]bool)}
+	w := &w8cWalker{ctx: ctx, seen: make(map[*symbols.Symbol]bool)}
 	w.walk(rootScope, c.check)
 	return c.diags
 }
@@ -41,15 +41,15 @@ func (c *associationEndTypesChecker) check(assoc *symbols.Symbol) {
 	if !w8cIsAssociation(assoc) || assoc.Scope == nil {
 		return
 	}
-	for _, end := range assoc.Scope.AllMembers() {
+	assoc.Scope.ForEachMember(func(end *symbols.Symbol) bool {
 		u, ok := w8cUsageOf(end)
 		if !ok || !u.IsEnd {
-			continue
+			return true
 		}
 		// An end with no declared type still has exactly one — the implicit
 		// Links::Link end type — so only two or more unrelated types conflict.
 		if len(c.endTypes(assoc, end)) < 2 {
-			continue
+			return true
 		}
 		c.diags = append(c.diags, Diagnostic{
 			Severity: SeverityError,
@@ -58,7 +58,8 @@ func (c *associationEndTypesChecker) check(assoc *symbols.Symbol) {
 			Code:     "association-end-types",
 			Source:   "constraint",
 		})
-	}
+		return true
+	})
 }
 
 // endTypes returns the effective type set of an owned association end: its own
@@ -70,13 +71,14 @@ func (c *associationEndTypesChecker) endTypes(assoc, end *symbols.Symbol) []*sym
 		if super == nil || super.Scope == nil || end.Name == "" {
 			continue
 		}
-		for _, inherited := range super.Scope.AllMembers() {
+		super.Scope.ForEachMember(func(inherited *symbols.Symbol) bool {
 			u, ok := w8cUsageOf(inherited)
 			if !ok || !u.IsEnd || inherited.Name != end.Name {
-				continue
+				return true
 			}
 			types = append(types, c.declaredTypes(inherited)...)
-		}
+			return true
+		})
 	}
 	return w8cMostSpecific(c.model, types)
 }

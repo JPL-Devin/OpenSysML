@@ -1,0 +1,108 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="PrefixMetadataAndKeywordlessMembers" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="M"))
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="N"))
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="service"))
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="original"))
+      (Membership visibility="default"
+        (Definition kind="port" abstract=false variation=false name="PortDef"))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="Req1"))
+      (Membership visibility="default"
+        (Usage kind="part" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="part" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="part" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (PrefixMetadata type="M")))
+      (Membership visibility="default"
+        (Usage kind="part" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (PrefixMetadata type="M")
+          (PrefixMetadata type="N")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="z1" ref=true direction="none" composite=false derived=false ordered=false nonunique=false
+          (PrefixMetadata type="M")))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="z2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (PrefixMetadata type="M")))
+      (Membership visibility="default"
+        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
+          (PrefixMetadata type="M")
+          (ConnectorEnd target="a"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="b"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="P"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="sd" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (PrefixMetadata type="service")
+              (Relationship kind="typing" target=PortDef
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="connection" abstract=false variation=false name="D"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="r1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+              (PrefixMetadata type="original")
+              (Relationship kind="typing" target=Req1
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="scalarQuantities" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="distance" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="volume" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="distancePerVolume" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="subsets" target=scalarQuantities
+            (*ast.QualifiedName))
+          (OperatorExpr operator="/"
+            (FeatureReference name="distance")
+            (FeatureReference name="volume"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="T1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralReal value="10.0")))
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="Collection"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="elements" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ScalarValues::Integer
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))))
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="Bounded"
+          (Relationship kind="specializes" target=Collection
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="value" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=elements
+                (*ast.QualifiedName))
+              (Relationship kind="typing" target=ScalarValues::Integer
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="enum" abstract=false variation=false name="Speeds"
+          (Membership visibility="default"
+            (Usage kind="enum" name="slow" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="enum" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralReal value="60.0")))))
+      (Membership visibility="default"
+        (Comment about="" locale="\"en_US\""))
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="V"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="m" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Definition kind="analysis case" abstract=false variation=false name="A"
+          (Membership visibility="default"
+            (Usage kind="subject" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=V
+                (*ast.QualifiedName))))
+          (FeatureChainExpr member="m"
+            (FeatureReference name="v")))))))

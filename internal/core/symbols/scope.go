@@ -1,6 +1,9 @@
 package symbols
 
 import (
+	"math"
+	"sync/atomic"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
@@ -9,16 +12,19 @@ import (
 // its parent and child scopes.
 type Scope struct {
 	parent           *Scope
-	owner            *Symbol              // the symbol that owns this scope (for inheritance lookup)
-	node             ast.Node             // the owning declaration node
-	members          map[string][]*Symbol // name key -> symbols defined under that key (in definition order)
-	memberOrder      []string             // name keys in first-seen order (for deterministic enumeration)
-	anonymousMembers []*Symbol            // anonymous symbols (no name) that aren't in members map
+	owner            *Symbol                            // the symbol that owns this scope (for inheritance lookup)
+	node             ast.Node                           // the owning declaration node
+	names            []string                           // named members in declaration order
+	syms             []*Symbol                          // named members in declaration order
+	memberIndex      atomic.Pointer[map[string][]int32] // lazily built lookup index for larger scopes
+	anonymousMembers []*Symbol                          // anonymous symbols (no name)
 	children         []*Scope
 	childByNode      map[ast.Node]*Scope // declaration node -> the child scope it owns
 	bodyLocal        bool                // declarations live only inside the owning body
 	docName          string              // document this scope tree belongs to (stamped by SetDocName)
 }
+
+const memberIndexThreshold = 12
 
 // DocName is the document this scope belongs to, or "" when none was stamped.
 func (s *Scope) DocName() string { return s.docName }
@@ -26,9 +32,8 @@ func (s *Scope) DocName() string { return s.docName }
 // NewScope creates an empty scope with the given parent and owning node.
 func NewScope(parent *Scope, node ast.Node) *Scope {
 	return &Scope{
-		parent:  parent,
-		node:    node,
-		members: make(map[string][]*Symbol),
+		parent: parent,
+		node:   node,
 	}
 }
 
@@ -82,10 +87,9 @@ func (s *Scope) Define(name string, sym *Symbol) {
 	if name == "" {
 		return
 	}
-	if _, ok := s.members[name]; !ok {
-		s.memberOrder = append(s.memberOrder, name)
-	}
-	s.members[name] = append(s.members[name], sym)
+	s.names = append(s.names, name)
+	s.syms = append(s.syms, sym)
+	s.memberIndex.Store(nil)
 }
 
 // DefineAnonymous adds an anonymous symbol (without name) to this scope.
@@ -110,7 +114,7 @@ func (s *Scope) AnonymousMembers() []*Symbol {
 // LookupLocal returns the first symbol defined under name in this scope only.
 // A declared name wins over an effective one taken from a referenced feature.
 func (s *Scope) LookupLocal(name string) (*Symbol, bool) {
-	syms := s.members[name]
+	syms := s.LookupLocalAll(name)
 	if len(syms) == 0 {
 		return nil, false
 	}
@@ -138,22 +142,129 @@ func PreferDeclared(syms []*Symbol) []*Symbol {
 
 // LookupLocalAll returns every symbol defined under name in this scope only.
 func (s *Scope) LookupLocalAll(name string) []*Symbol {
-	return s.members[name]
-}
-
-// MemberNames returns the member keys of this scope in declaration order.
-func (s *Scope) MemberNames() []string {
-	out := make([]string, len(s.memberOrder))
-	copy(out, s.memberOrder)
+	if len(s.names) == 0 {
+		return nil
+	}
+	if len(s.names) <= memberIndexThreshold {
+		first := -1
+		count := 0
+		for i, memberName := range s.names {
+			if memberName != name {
+				continue
+			}
+			if first == -1 {
+				first = i
+			}
+			count++
+		}
+		if first == -1 {
+			return nil
+		}
+		if count == 1 {
+			return s.syms[first : first+1 : first+1]
+		}
+		out := make([]*Symbol, 0, count)
+		for i, memberName := range s.names {
+			if memberName == name {
+				out = append(out, s.syms[i])
+			}
+		}
+		return out
+	}
+	index := s.loadMemberIndex()
+	indices := (*index)[name]
+	if len(indices) == 0 {
+		return nil
+	}
+	if len(indices) == 1 {
+		i := int(indices[0])
+		return s.syms[i : i+1 : i+1]
+	}
+	out := make([]*Symbol, len(indices))
+	for i, memberIndex := range indices {
+		out[i] = s.syms[memberIndex]
+	}
 	return out
 }
 
-// AllMembers returns all symbols in this scope (including anonymous members).
+func (s *Scope) loadMemberIndex() *map[string][]int32 {
+	if index := s.memberIndex.Load(); index != nil {
+		return index
+	}
+	built := make(map[string][]int32)
+	for i, name := range s.names {
+		built[name] = append(built[name], memberIndexOf(i))
+	}
+	if s.memberIndex.CompareAndSwap(nil, &built) {
+		return &built
+	}
+	return s.memberIndex.Load()
+}
+
+func memberIndexOf(i int) int32 {
+	if i > math.MaxInt32 {
+		panic("scope member index exceeds int32 capacity")
+	}
+	return int32(i) // #nosec G115 -- bounds checked against math.MaxInt32 above.
+}
+
+// MemberNames returns the distinct member keys of this scope in declaration order.
+func (s *Scope) MemberNames() []string {
+	if len(s.names) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(s.names))
+	if len(s.names) > memberIndexThreshold {
+		index := s.loadMemberIndex()
+		for i, name := range s.names {
+			indices := (*index)[name]
+			if len(indices) > 0 && int(indices[0]) == i {
+				out = append(out, name)
+			}
+		}
+		return out
+	}
+	for _, name := range s.names {
+		duplicate := false
+		for _, existing := range out {
+			if existing == name {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
+// AllMembers returns named and anonymous symbols in declaration order, with named members first.
 func (s *Scope) AllMembers() []*Symbol {
 	var all []*Symbol
-	for _, syms := range s.members {
-		all = append(all, syms...)
-	}
-	all = append(all, s.anonymousMembers...)
+	s.ForEachMember(func(sym *Symbol) bool {
+		all = append(all, sym)
+		return true
+	})
 	return all
+}
+
+// ForEachMember visits named and anonymous symbols in declaration order, with named members first.
+func (s *Scope) ForEachMember(yield func(*Symbol) bool) {
+	if s == nil || yield == nil {
+		return
+	}
+	namedLen := len(s.syms)
+	for i := 0; i < namedLen; i++ {
+		if !yield(s.syms[i]) {
+			return
+		}
+	}
+	anonymousLen := len(s.anonymousMembers)
+	for i := 0; i < anonymousLen; i++ {
+		if !yield(s.anonymousMembers[i]) {
+			return
+		}
+	}
 }

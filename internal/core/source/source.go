@@ -1,6 +1,8 @@
 // Package source owns file content and byte-offset span types.
 package source
 
+import "sync"
+
 // Span is a byte range within a SourceFile: [Offset, Offset+Len).
 type Span struct {
 	Offset int
@@ -21,6 +23,8 @@ type SourceFile struct {
 	name    string
 	content []byte
 	kind    Kind
+	lines   sync.Once
+	index   *LineIndex
 }
 
 // New creates a SourceFile from a name and its raw bytes.
@@ -48,9 +52,12 @@ func (sf *SourceFile) Text(sp Span) string {
 	return string(sf.content[sp.Offset:sp.End()])
 }
 
-// Lines returns a LineIndex for this file (recomputed each call; cache at call site if hot).
+// Lines returns the cached line index for this file, building it on first use.
 // Col is a byte column (1-based). LSP requires UTF-16 code-unit columns; that
 // conversion is an LSP-layer concern (Plan 06), not the source package.
 func (sf *SourceFile) Lines() *LineIndex {
-	return newLineIndex(sf.content)
+	sf.lines.Do(func() {
+		sf.index = newLineIndex(sf.content)
+	})
+	return sf.index
 }

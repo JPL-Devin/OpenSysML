@@ -250,7 +250,7 @@ github.com/Open-MBEE/OpenSysML
 
 Documentation is organized by what a reader wants, not by the feature that landed. Four areas,
 mapped in [docs/README.md](docs/README.md) and published as
-<https://open-mbee.github.io/OpenSysML/>:
+<https://opensysml.org/>:
 
 - **[docs/guide/](docs/guide/)** — *how do I use it?* A numbered handbook read in order.
 - **[docs/reference/](docs/reference/)** — *what does this flag, command, API or triple mean?*
@@ -317,9 +317,16 @@ See [ARCHITECTURE.md](docs/internals/architecture.md) for detailed design.
 
 ## Getting Help
 
-- **GitHub Issues:** Bug reports, feature requests
-- **Discussions:** Questions, ideas, help
-- **Pull Requests:** Code contributions
+- **GitHub Issues:** three forms, picked when you open one — a **tool bug** (OpenSysML does
+  something other than what it documents), a **spec conformance gap** (it disagrees with SysML v2
+  or KerML, so name the clause), or an **objection to a ruling** (the behavior is deliberate and
+  you are arguing the interpretation is wrong). Check
+  [spec-compliance.md](docs/project/spec-compliance.md) and
+  [omg-issues.md](docs/project/omg-issues.md) first: a known divergence is usually already a row
+  there with the reasoning behind it.
+- **Discussions:** questions, ideas, feature requests
+- **Pull Requests:** code contributions. The template asks for the specification basis of a
+  behavior change and how it was verified.
 
 ## Code of Conduct
 

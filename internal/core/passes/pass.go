@@ -58,6 +58,8 @@ type Context struct {
 
 	resolver *resolve.Resolver
 	model    *semantics.Model
+	w8dCache map[*symbols.Scope][]*symbols.Symbol
+	w8cCache map[*symbols.Scope][]*symbols.Symbol
 	// failures is where the tiers below the pass now running found blocking
 	// faults, so an element-scoped pass can gate itself per element.
 	failures []source.Span

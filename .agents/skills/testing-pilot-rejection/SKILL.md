@@ -31,8 +31,8 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
-As of wave 11, with a fresh library cache:
-`120 case(s): 117 both reject, 3 only the pilot rejects, 0 only we reject, 0 both accept`,
+As of the default-mode reserved-keyword tightening, with a fresh library cache:
+`120 case(s): 120 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it.
 
@@ -45,7 +45,7 @@ separately, so a strict agreement never reads as a default one.
 
 ```bash
 go run ./cmd/pilot-reject -conformance default -out build/pilot-reject-default
-# as of wave 10G+10C plus g60: 109 agreements, 11 gaps — the numbers strict mode leaves alone
+# as of the reserved-keyword tightening: 115 agreements, 5 gaps — the numbers strict mode leaves alone
 go run ./cmd/pilot-reject -conformance lenient   # must fail: unknown conformance policy
 ```
 
@@ -98,6 +98,54 @@ jq '.cases[] | select(.bucket=="pilot-only-rejects") | {path, rule, pilot}' buil
 The corpus file itself is the minimal reproducer. `docs/project/pilot-rejection.md` maps each gap
 to the package its root cause is likely in. Gaps are findings to report, not to fix from this
 harness's PRs.
+
+## Verifying a severity change that closes gaps (notation escalations)
+
+When a PR escalates a notation diagnostic so cases move from `pilot-only-rejects` into
+`both reject`, the live harness is expected to *disagree* with the committed baseline until its
+separate refresh, so `cmp` against the baseline is the wrong check. Attribute the delta instead:
+
+```bash
+git worktree add /home/ubuntu/wt-main origin/main
+# run the harness from main, but over the branch checkout's corpus and the provisioned validators
+cd /home/ubuntu/wt-main && go run ./cmd/pilot-reject -repo /path/to/branch/checkout -out /tmp/mn
+```
+
+A `main` run whose JSON is byte-identical to `docs/project/pilot-rejection-baseline.json` proves the
+baseline is not otherwise stale, so any branch/main difference belongs to the PR. Build a
+`main`-binary control (`go build -o /tmp/sysml-main ./cmd/sysml`) too — a severity flip is only
+demonstrated by showing `warning:` on main and `error:` on the branch at the *same* span and code.
+
+Useful surfaces, cheapest first:
+
+- **CLI:** `sysml -validate -debug <file>` prints `[syntax/<code>]` with `-debug`, so span+code
+  stability is checkable in one line.
+- **Editor:** drive `bin/sysml-lsp` over stdio and read `diagnostics[].severity` (`1` = error,
+  `2` = warning). `initializationOptions.strictConformance = true` selects strict. A default-mode
+  `2 → 1` flip is the cheapest proof the change reached the editor path.
+- **REPL:** `%strict on` re-runs the buffer, so both modes are observable in one session.
+
+**Error severity does not mean a non-zero exit.** Notation diagnostics set `Notation = true`, so
+`Diagnostic.Blocking()` stays false in default mode: the CLI prints `error:` yet still exits **0**
+with `no error that stops a check; the notation reported above does not conform`, and
+`-instantiate`/`-constraint` still succeed. Only strict mode exits 2. Expect this and assert it
+deliberately — treating exit 0 as a failure will send you chasing a non-bug, and asserting only the
+exit code would miss the change entirely.
+
+Adversarial checks worth running for such a PR:
+
+- **No span carries both a warning and an error** (the escalated error must replace, not duplicate,
+  the parser warning). Keep a pre-escalation build as a *live* vacuity control: it should show one
+  span with both severities where the current build shows zero.
+- **Strict must never be more permissive than default.** Sweep every construct that can declare a
+  reserved keyword as its name in both modes and require the same count in each.
+- **Corpus/stdlib regression scan.** Diff severity-normalised diagnostics between the two binaries
+  over `examples/pilot-corpora`, `examples/sysml-v2-training` and `internal/core/libs/stdlib`. Note
+  this is **structurally vacuous** for `reserved-keyword-name`/`sysml-notation` (0 hits corpus-wide,
+  since OMG corpora contain no such names) — report it as a regression control and state the 0-hit
+  count, never as coverage proof. Two traps: prefix rows with `awk -v f="$F" '{print f" "$0}'`
+  rather than `sed "s|^|$F |"` (corpus paths contain `/` and spaces), and **sort before diffing** if
+  you parallelise with `xargs -P`, or output interleaving fakes a huge diff.
 
 ## Limitations
 

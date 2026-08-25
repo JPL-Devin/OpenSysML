@@ -394,6 +394,45 @@ func TestIndexShortNameNotDuplicatedInFQN(t *testing.T) {
 	}
 }
 
+func TestIndexScopeRegistrationOrderIsDeterministic(t *testing.T) {
+	sf := source.New("duplicate.sysml", []byte("package P { namespace A; namespace B; namespace A; }"))
+	p := parser.New(sf)
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected parse diagnostics: %v", p.Diagnostics)
+	}
+	scope := Build(root)
+
+	first := NewIndex()
+	first.indexScope("duplicate.sysml", scope, "")
+	second := NewIndex()
+	second.indexScope("duplicate.sysml", scope, "")
+
+	for _, fqn := range []string{"P", "P::A", "P::B"} {
+		got, want := first.LookupQualified(fqn), second.LookupQualified(fqn)
+		if len(got) != len(want) {
+			t.Fatalf("LookupQualified(%q) lengths = %d and %d", fqn, len(got), len(want))
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Fatalf("LookupQualified(%q)[%d] differs: %p and %p", fqn, i, got[i], want[i])
+			}
+		}
+	}
+
+	pkg, ok := scope.LookupLocal("P")
+	if !ok {
+		t.Fatal("scope missing package P")
+	}
+	as := pkg.Scope.LookupLocalAll("A")
+	if len(as) != 2 {
+		t.Fatalf("package P has %d A members, want 2", len(as))
+	}
+	if got := first.Declaring("P::A"); got != as[0] {
+		t.Fatalf("Declaring(P::A) = %p, want first declaration %p", got, as[0])
+	}
+}
+
 func TestIndexRemoveDocument(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "a.sysml", "package P { namespace N; }")
@@ -494,6 +533,50 @@ func TestLookupDirectChildrenFromDropsPrivatelyImportedNames(t *testing.T) {
 	}
 	if got := len(idx.LookupDirectChildren("Mid")); got != 2 {
 		t.Errorf("LookupDirectChildren(Mid) = %d symbols, want 2", got)
+	}
+}
+
+func TestLookupDirectChildrenFromSharesVisibilityCache(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "base.sysml", "package Base { namespace Hidden; }")
+	addDoc(t, idx, "mid.sysml", "package Mid { private import Base::*; namespace Own; }")
+	idx.ExpandWildcardImports()
+
+	idx.LookupDirectChildrenFrom("Mid", "Other")
+	idx.LookupDirectChildrenFrom("Mid", "Another")
+	if got := len(idx.directChildrenCache); got != 1 {
+		t.Fatalf("direct-children cache has %d entries for equivalent visibility lookups, want 1", got)
+	}
+}
+
+func TestLookupDirectChildrenInvalidatesAfterWrite(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package P { namespace A; }")
+	if got := len(idx.LookupDirectChildren("P")); got != 1 {
+		t.Fatalf("initial direct children = %d, want 1", got)
+	}
+
+	addDoc(t, idx, "b.sysml", "package P { namespace B; }")
+	got := idx.LookupDirectChildren("P")
+	if len(got) != 2 {
+		t.Fatalf("direct children after write = %d, want 2", len(got))
+	}
+	if got[0].Name != "A" || got[1].Name != "B" {
+		t.Fatalf("direct children after write = %q, want [A B]", []string{got[0].Name, got[1].Name})
+	}
+}
+
+func TestLookupDirectChildrenCachesIdenticalLookup(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "a.sysml", "package P { namespace A; }")
+
+	first := idx.LookupDirectChildren("P")
+	second := idx.LookupDirectChildren("P")
+	if len(idx.directChildrenCache) != 1 {
+		t.Fatalf("direct-children cache has %d entries, want 1", len(idx.directChildrenCache))
+	}
+	if len(first) == 0 || &first[0] != &second[0] {
+		t.Fatal("identical direct-children lookup did not return the cached slice")
 	}
 }
 

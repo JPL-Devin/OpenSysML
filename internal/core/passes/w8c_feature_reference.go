@@ -26,8 +26,9 @@ func (FeatureReferencePass) Run(ctx *Context, name string, root *ast.RootNamespa
 		model:    ctx.Model(),
 		resolver: ctx.Resolver(),
 	}}
-	w := &w8cWalker{seen: map[*symbols.Symbol]bool{}}
+	w := &w8cWalker{ctx: ctx, seen: map[*symbols.Symbol]bool{}}
 	w.walk(rootScope, c.checkSymbol)
+	c.walkFilters(rootScope, make(map[*symbols.Scope]bool))
 	return c.diags
 }
 
@@ -59,64 +60,192 @@ type featureReferenceChecker struct {
 	diags []Diagnostic
 }
 
-func (c *featureReferenceChecker) checkSymbol(sym *symbols.Symbol) {
-	u, ok := sym.Decl.(*ast.Usage)
-	if !ok || u.Value == nil {
-		return
+// refSite is where a reference is written: the declaration owning it, and
+// whether it stands in that declaration's body, which the declaration features.
+type refSite struct {
+	sym             *symbols.Symbol
+	inBody          bool
+	inElementFilter bool
+}
+
+// accessibleFrom reports whether target is reachable from the site.
+func (c *featureReferenceChecker) accessibleFrom(site refSite, target *symbols.Symbol) bool {
+	if site.inBody && site.sym != nil && c.cc.featuredWithin(target, site.sym) {
+		return true
 	}
+	return c.cc.redefinedAccessible(site.sym, target, map[*symbols.Symbol]bool{})
+}
+
+func (c *featureReferenceChecker) checkSymbol(sym *symbols.Symbol) {
 	scope := sym.OwnerScope
 	if sym.Scope != nil {
 		scope = sym.Scope
 	}
-	c.walkExpr(sym, scope, u.Value)
+	switch d := sym.Decl.(type) {
+	case *ast.Usage:
+		c.walkExpr(refSite{sym: sym}, scope, d.Value)
+		c.walkMembers(refSite{sym: sym, inBody: true}, scope, d.Members)
+	case *ast.Definition:
+		c.walkMembers(refSite{sym: sym, inBody: true}, scope, d.Members)
+	}
+}
+
+// walkFilters visits every namespace filter in the document's scope tree.
+func (c *featureReferenceChecker) walkFilters(scope *symbols.Scope, seen map[*symbols.Scope]bool) {
+	if scope == nil || seen[scope] {
+		return
+	}
+	seen[scope] = true
+	for _, f := range symbols.NamespaceFiltersIn(scope) {
+		c.walkExpr(refSite{inElementFilter: true}, f.Scope, f.Expr)
+	}
+	for _, f := range symbols.ImportFiltersIn(scope) {
+		c.walkExpr(refSite{inElementFilter: true}, f.Scope, f.Expr)
+	}
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
+		if sym != nil {
+			c.walkFilters(sym.Scope, seen)
+		}
+		return true
+	})
+}
+
+// walkMembers visits the expressions a body writes outside a declaration of its
+// own: constraint conditions, calc results, guards and assignments. A nested
+// declaration is a symbol and is visited as one, so it is skipped here.
+func (c *featureReferenceChecker) walkMembers(site refSite, scope *symbols.Scope, members []ast.Node) {
+	for _, m := range members {
+		if mem, ok := m.(*ast.Membership); ok {
+			m = mem.Member
+		}
+		c.walkMember(site, scope, m)
+	}
+}
+
+// walkMember visits one body member. Members owning a scope of their own resolve
+// their expressions in it, as the type checker does.
+func (c *featureReferenceChecker) walkMember(site refSite, scope *symbols.Scope, m ast.Node) {
+	switch n := m.(type) {
+	case *ast.ConstraintMember:
+		c.walkExpr(site, scope, n.Expression)
+		c.walkMembers(site, scope, n.Body)
+	case *ast.ResultMember:
+		c.walkExpr(site, scope, n.Expression)
+	case *ast.AssumeMember:
+		c.walkExpr(site, scope, n.Expression)
+		c.walkExpr(site, scope, n.Value)
+		c.walkMembers(site, symbols.ConstraintBodyScope(scope, n), n.Body)
+	case *ast.RequireMember:
+		c.walkExpr(site, scope, n.Expression)
+		c.walkExpr(site, scope, n.Value)
+		c.walkMembers(site, symbols.ConstraintBodyScope(scope, n), n.Body)
+	case *ast.SubjectMember:
+		c.walkExpr(site, scope, n.BindingExpr)
+	case *ast.AssignmentActionNode:
+		c.walkExpr(site, scope, n.Value)
+	case *ast.ActionExecutionNode:
+		c.walkExpr(site, scope, n.Expression)
+	case *ast.IfActionNode:
+		c.walkExpr(site, scope, n.Condition)
+		for _, branch := range n.Branches() {
+			c.walkMember(site, scope, branch)
+		}
+	case *ast.IfBranchNode:
+		c.walkMembers(site, childScopeOr(scope, n), n.Body)
+	case *ast.WhileLoopActionNode:
+		body := childScopeOr(scope, n)
+		c.walkExpr(site, scope, n.Collection)
+		c.walkExpr(site, body, n.Condition)
+		c.walkExpr(site, body, n.Until)
+		c.walkMembers(site, body, n.Body)
+	case *ast.TransitionMember:
+		// A trigger's parameters are visible to the guard and the effect only.
+		body := symbols.TriggerScope(scope, n)
+		c.walkExpr(site, body, n.Guard)
+		if change, ok := n.Trigger.(*ast.ChangeEvent); ok {
+			c.walkExpr(site, scope, change.Condition)
+		}
+		c.walkMembers(site, body, n.Effect)
+		c.walkMembers(site, body, n.Members)
+	case *ast.StateNode:
+		body := childScopeOr(scope, n)
+		c.walkMembers(site, body, n.Entry)
+		c.walkMembers(site, body, n.Do)
+		c.walkMembers(site, body, n.Exit)
+		c.walkMembers(site, body, n.Substates)
+		for _, region := range n.Regions {
+			c.walkMember(site, body, region)
+		}
+	case *ast.StateRegion:
+		c.walkMembers(site, childScopeOr(scope, n), n.States)
+	case *ast.InitialNode:
+		c.walkMembers(site, childScopeOr(scope, n), n.Members)
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		c.walkMembers(site, childScopeOr(scope, m), ast.NodeBodyMembers(m))
+	case *ast.SendStatement:
+		c.walkExpr(site, scope, n.Message)
+		c.walkExpr(site, scope, n.Target)
+		c.walkExpr(site, scope, n.Receiver)
+		c.walkMembers(site, childScopeOr(scope, n), n.Members)
+	case *ast.EntryMember:
+		c.walkMembers(site, scope, n.Actions)
+	case *ast.DoMember:
+		c.walkMembers(site, scope, n.Actions)
+	case *ast.ExitMember:
+		c.walkMembers(site, scope, n.Actions)
+	default:
+		// A bare expression member is a body's implicit result, as in a calc
+		// body whose result is its last expression.
+		c.walkExpr(site, scope, m)
+	}
 }
 
 // walkExpr visits the references an expression names. Nested declarations are
 // symbols of their own and are visited as such.
-func (c *featureReferenceChecker) walkExpr(sym *symbols.Symbol, scope *symbols.Scope, n ast.Node) {
+func (c *featureReferenceChecker) walkExpr(site refSite, scope *symbols.Scope, n ast.Node) {
 	switch e := n.(type) {
 	case nil:
 		return
 	case *ast.FeatureReference:
-		c.checkReferent(sym, scope, e, e.Span())
+		c.checkReferent(site, scope, e, e.Span())
 	case *ast.FeatureChainExpr:
-		c.walkExpr(sym, scope, e.Operand)
+		c.walkExpr(site, scope, e.Operand)
 		span := e.Span()
 		if e.Member != nil {
 			span = e.Member.Span()
 		}
-		c.checkReferent(sym, scope, e, span)
+		c.checkReferent(site, scope, e, span)
 	case *ast.OperatorExpr:
 		// These operators name types rather than features.
 		if w8cTypeOperators[e.Operator] {
 			return
 		}
 		for _, o := range e.Operands {
-			c.walkExpr(sym, scope, o)
+			c.walkExpr(site, scope, o)
 		}
 	case *ast.IndexExpr:
-		c.walkExpr(sym, scope, e.Operand)
-		c.walkExpr(sym, scope, e.Index)
+		c.walkExpr(site, scope, e.Operand)
+		c.walkExpr(site, scope, e.Index)
 	case *ast.InvocationExpr:
 		// An invocation names its function, and may pass one as an argument,
 		// so neither position is a feature reference.
 	case *ast.ConstructorExpr:
 		for _, a := range e.Args {
-			c.walkExpr(sym, scope, a)
+			c.walkExpr(site, scope, a)
 		}
 	case *ast.SequenceExpr:
 		for _, el := range e.Elements {
-			c.walkExpr(sym, scope, el)
+			c.walkExpr(site, scope, el)
 		}
 	}
 }
 
 // checkReferent reports a referent that is not a feature, or a feature that the
 // naming context cannot reach.
-func (c *featureReferenceChecker) checkReferent(sym *symbols.Symbol, scope *symbols.Scope, ref ast.Node, span source.Span) {
+func (c *featureReferenceChecker) checkReferent(site refSite, scope *symbols.Scope, ref ast.Node, span source.Span) {
 	chain, isChain := ref.(*ast.FeatureChainExpr)
 	target, ok := c.cc.resolver.ResolveTarget(scope, ref)
-	if !ok || target == nil || target == sym {
+	if !ok || target == nil || target == site.sym {
 		return
 	}
 	if !isUsageKind(target.Kind) {
@@ -156,17 +285,21 @@ func (c *featureReferenceChecker) checkReferent(sym *symbols.Symbol, scope *symb
 			return
 		}
 	}
-	if c.cc.redefinedAccessible(sym, target, map[*symbols.Symbol]bool{}) {
+	if site.inElementFilter {
+		if c.cc.libraryDeclared(target) {
+			return
+		}
+	} else if c.accessibleFrom(site, target) {
 		return
 	}
 	// A feature of an implicit node (an accept parameter's action) has no
 	// nameable dot path, and our scoping shares it with sibling nodes (W6C row
 	// ~952, a deliberate divergence from the reference).
-	if w8cOwnedByImplicitNode(target) {
+	if w8cOwnedByImplicitNode(target) || w8cAcceptPayload(target) {
 		return
 	}
 	msg, code := msgSubsettingFeaturingTypes, "feature-reference-featuring-types"
-	if isChain {
+	if isChain && !site.inElementFilter {
 		msg, code = msgReferentIsFeature, "feature-reference-referent"
 	}
 	c.diags = append(c.diags, Diagnostic{
@@ -176,6 +309,33 @@ func (c *featureReferenceChecker) checkReferent(sym *symbols.Symbol, scope *symb
 		Code:     code,
 		Source:   "constraint",
 	})
+}
+
+// w8cAcceptPayload reports whether target is the payload an accept node binds,
+// which the nodes of one action body share (resolve.acceptPayloadsIn), so a
+// sibling node's body reaches it under its bare name.
+func w8cAcceptPayload(target *symbols.Symbol) bool {
+	if target == nil || target.OwnerScope == nil {
+		return false
+	}
+	owner := target.OwnerScope.Owner()
+	if owner == nil {
+		return false
+	}
+	node, ok := owner.Decl.(*ast.Usage)
+	if !ok || node.Kind != ast.UsageAction {
+		return false
+	}
+	for _, member := range node.Members {
+		if mem, ok := member.(*ast.Membership); ok {
+			member = mem.Member
+		}
+		payload, ok := member.(*ast.Usage)
+		if ok && payload.IsAccept && payload.Value == nil && payload.Ident.Name == target.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // w8cOwnedByImplicitNode reports whether target is owned by an unnamed usage,

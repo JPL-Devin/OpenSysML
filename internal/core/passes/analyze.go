@@ -18,6 +18,8 @@ func DefaultRegistry() *Registry {
 	reg.Register(NameResolutionPass{})
 	reg.Register(StateTransitionPass{})
 	reg.Register(TypeCheckPass{})
+	reg.Register(TransitionGuardPass{})
+	reg.Register(KerMLSubsettingMetaclassPass{})
 	reg.Register(RedefinitionDirectionPass{})
 	reg.Register(ElementFilterPass{})
 	reg.Register(ConstraintPass{})

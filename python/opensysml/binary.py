@@ -12,6 +12,13 @@ from opensysml.errors import (
     ChecksumMismatchError,
     ConnectionError,
     UnpinnedReleaseError,
+    UnsignedReleaseError,
+)
+from opensysml.signing import (
+    BUNDLE_ASSET,
+    MANIFEST_ASSET,
+    signer_for,
+    verified_manifest_digest,
 )
 
 # Releases publish sysml-grpc-<goos>-<goarch> raw, with a .sha256 sidecar.
@@ -123,35 +130,51 @@ def unpinned_downloads_allowed(github_repo=None):
     return repo in [named.strip() for named in allowed.split(',')]
 
 
-def expected_digest(version, asset, served_digest, github_repo=None):
-    """The digest a download must have, preferring the pin over what was served.
+def expected_digest(version, asset, served_digest, github_repo=None,
+                    verified_digest=None, unverified_reason=None):
+    """The digest a download must have, from the pin or the signed manifest.
+
+    The pin wins wherever there is one, and a verified manifest contradicting it
+    is a failure rather than a reason to prefer either. Where there is no pin, a
+    digest taken from a manifest signed by the release pipeline stands in for
+    one; nothing else does.
 
     Args:
         version (str): Release tag, resolved (never 'latest')
         asset (str): Asset name (e.g. 'sysml-grpc-linux-amd64')
         served_digest (str): Digest from the .sha256 served beside the binary
         github_repo (str, optional): GitHub repository (owner/repo)
+        verified_digest (str, optional): Digest from the release's signed
+            checksum manifest, once its signature verified
+        unverified_reason (str, optional): Why there is no verified digest, said
+            in the refusal when there is no pin either
 
     Returns:
         str: The digest to verify the download against
 
     Raises:
         ChecksumMismatchError: If the served digest contradicts the pinned one,
-            which is a release republished with another binary
-        UnpinnedReleaseError: If nothing is pinned for it and same-origin trust
-            was not allowed explicitly
+            which is a release republished with another binary, or if a verified
+            manifest contradicts the pin
+        UnpinnedReleaseError: If nothing is pinned for it, no signed manifest
+            vouched for it, and same-origin trust was not allowed explicitly
     """
     repo = github_repo or default_github_repo()
     pinned = pinned_digest(version, asset, repo)
     if pinned is None:
+        if verified_digest is not None:
+            # Signed by the pipeline that built the release, so it is not the
+            # origin vouching for itself: as good as a pin.
+            return verified_digest
         if not unpinned_downloads_allowed(repo):
+            unverified = f" and {unverified_reason}" if unverified_reason else ""
             raise UnpinnedReleaseError(
-                f"opensysml pins no SHA-256 digest for {asset} of {version} of {repo}, so "
-                f"the only checksum available is the one served beside the binary, which "
-                f"a compromised release would serve too. Upgrade opensysml to a release "
-                f"that pins {version}, ask for a pinned release with version=, or accept "
-                f"same-origin trust for this repository by setting "
-                f"${ALLOW_UNPINNED_ENV}={repo} (or =1 for any repository)."
+                f"opensysml pins no SHA-256 digest for {asset} of {version} of {repo}"
+                f"{unverified}, so the only checksum available is the one served beside "
+                f"the binary, which a compromised release would serve too. Upgrade "
+                f"opensysml to a release that pins {version}, ask for a pinned release "
+                f"with version=, or accept same-origin trust for this repository by "
+                f"setting ${ALLOW_UNPINNED_ENV}={repo} (or =1 for any repository)."
             )
         warnings.warn(
             f"opensysml pins no digest for {asset} of {version} of {repo}; verifying it "
@@ -161,6 +184,12 @@ def expected_digest(version, asset, served_digest, github_repo=None):
             stacklevel=3,
         )
         return served_digest
+    if verified_digest is not None and verified_digest != pinned:
+        raise ChecksumMismatchError(
+            f"Checksum mismatch for {asset} of {version}: the signed {MANIFEST_ASSET} "
+            f"of {repo} lists {verified_digest}, but opensysml pins {pinned}. The "
+            f"release was rebuilt after this opensysml pinned it; it was not installed."
+        )
     if served_digest != pinned:
         raise ChecksumMismatchError(
             f"Checksum mismatch for {asset} of {version}: {repo} serves {served_digest}, "
@@ -168,6 +197,62 @@ def expected_digest(version, asset, served_digest, github_repo=None):
             f"or the download is being tampered with; it was not installed."
         )
     return pinned
+
+
+def release_download_url(version, asset, github_repo=None):
+    """URL a release publishes an asset at.
+
+    Args:
+        version (str): Release tag, resolved (never 'latest')
+        asset (str): Asset name (e.g. 'SHA256SUMS.txt')
+        github_repo (str, optional): GitHub repository (owner/repo)
+
+    Returns:
+        str: Download URL
+    """
+    repo = github_repo or default_github_repo()
+    return f'https://github.com/{repo}/releases/download/{version}/{asset}'
+
+
+def signed_manifest_digest(version, asset, github_repo=None):
+    """The digest for an asset from the release's signed checksum manifest.
+
+    Args:
+        version (str): Release tag, resolved (never 'latest')
+        asset (str): Asset name (e.g. 'sysml-grpc-linux-amd64')
+        github_repo (str, optional): GitHub repository (owner/repo)
+
+    Returns:
+        str: SHA-256 hex digest, from a manifest the release pipeline signed
+
+    Raises:
+        UnsignedReleaseError: If the release publishes no signature this client
+            can check, or nothing could be verified
+        ManifestSignatureError: If the signature does not verify
+    """
+    repo = github_repo or default_github_repo()
+    signer = signer_for(repo)
+    if signer is None:
+        raise UnsignedReleaseError(
+            f"opensysml knows no release pipeline identity for {repo}, so a signed "
+            f"{MANIFEST_ASSET} of it would not be verifiable"
+        )
+
+    downloaded = {}
+    for name in (MANIFEST_ASSET, BUNDLE_ASSET):
+        url = release_download_url(version, name, repo)
+        try:
+            with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
+                downloaded[name] = response.read()
+        except (OSError, http.client.HTTPException) as e:
+            raise UnsignedReleaseError(
+                f"{version} of {repo} publishes no readable {name} ({url}: {e}), so "
+                f"its checksums carry no signature to verify"
+            )
+
+    return verified_manifest_digest(
+        downloaded[MANIFEST_ASSET], downloaded[BUNDLE_ASSET], asset, signer
+    )
 
 
 def resolve_latest_version(github_repo=None):
@@ -380,9 +465,11 @@ def download_binary(version='latest', github_repo=None):
         str: Path to downloaded binary
     
     Raises:
-        ChecksumMismatchError: If the download does not match the digest pinned
-            for it, or the release serves a digest contradicting the pin
-        UnpinnedReleaseError: If nothing is pinned for the release
+        ChecksumMismatchError: If the download does not match the digest expected
+            for it, the release serves a digest contradicting the pin, or the
+            signature on its checksum manifest does not verify
+        UnpinnedReleaseError: If nothing is pinned for the release and its
+            checksum manifest carries no signature that could be verified
         ConnectionError: If the download or its installation fails
     """
     github_repo = github_repo or default_github_repo()
@@ -392,9 +479,10 @@ def download_binary(version='latest', github_repo=None):
     binary_name = release_asset_name()
 
     # Construct URLs
-    base_url = f'https://github.com/{github_repo}/releases/download/{version}'
-    binary_url = f'{base_url}/{binary_name}'
-    checksum_url = f'{base_url}/{binary_name}.sha256'
+    binary_url = release_download_url(version, binary_name, github_repo)
+    checksum_url = release_download_url(
+        version, binary_name + '.sha256', github_repo
+    )
     
     binary_path = get_binary_path()
     os.makedirs(os.path.dirname(binary_path), exist_ok=True)
@@ -406,10 +494,22 @@ def download_binary(version='latest', github_repo=None):
         
         # Parse checksum (format: "hexdigest  filename\n")
         served_checksum = checksum_content.split()[0]
+        # A release nothing is pinned for is vouched for by the signature on its
+        # checksum manifest instead, which the origin cannot forge.
+        verified_checksum = unverified_reason = None
+        if pinned_digest(version, binary_name, github_repo) is None:
+            try:
+                verified_checksum = signed_manifest_digest(
+                    version, binary_name, github_repo
+                )
+            except UnsignedReleaseError as e:
+                unverified_reason = str(e)
         # The pinned digest wins, so a release republished with another binary
         # cannot vouch for itself through the sidecar it serves.
         expected_checksum = expected_digest(
-            version, binary_name, served_checksum, github_repo
+            version, binary_name, served_checksum, github_repo,
+            verified_digest=verified_checksum,
+            unverified_reason=unverified_reason,
         )
         
         # Download binary

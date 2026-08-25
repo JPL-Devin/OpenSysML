@@ -31,7 +31,7 @@ func (W10BIndividualTypingPass) Run(ctx *Context, name string, root *ast.RootNam
 	}
 	resolver := ctx.Resolver()
 	var diags []Diagnostic
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		u, ok := sym.Decl.(*ast.Usage)
 		if !ok || (!u.IsIndividual && u.Kind != ast.UsageIndividual) {
 			return
@@ -92,7 +92,7 @@ func (W10BPortionOwnerPass) Run(ctx *Context, name string, root *ast.RootNamespa
 		return nil
 	}
 	var diags []Diagnostic
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		u, ok := sym.Decl.(*ast.Usage)
 		if !ok || u.Portion == ast.PortionNone || w10bOwnedByOccurrence(sym) {
 			return

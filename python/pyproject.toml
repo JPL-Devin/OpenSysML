@@ -36,6 +36,9 @@ dependencies = [
     "protobuf>=7.35.1",
     "filelock>=3.0.0",
     "psutil>=5.9.0",
+    # Verifies the sigstore bundle a core release publishes over its checksum
+    # manifest, which is what lets a release newer than this client install.
+    "sigstore>=4.5.0,<5",
 ]
 
 [project.optional-dependencies]

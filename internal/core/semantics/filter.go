@@ -302,6 +302,13 @@ func UnevaluableClassification(reason string, span source.Span) error {
 func (m *Model) compileFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExpr) *symbols.FilterPredicate {
 	span := spanOf(e)
 	if e.Member == nil || len(e.Member.Parts) != 1 {
+		if e.Member != nil {
+			resultType, ok := m.resolver.ResolveTarget(scope, e)
+			if !ok || resultType == nil {
+				return unresolvedReference(span, "a feature chain does not resolve")
+			}
+			return evaluatorUnsupported(span, chainLimitation, resultType)
+		}
 		return unsupported(span, "a filter condition reads a single feature of an annotation")
 	}
 	feature := e.Member.Parts[0].Text
@@ -314,7 +321,13 @@ func (m *Model) compileFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExp
 		if !ok {
 			return unsupported(span, fmt.Sprintf("the metadata type %s does not resolve", qnText(operand.TargetType)))
 		}
-		return &symbols.FilterPredicate{Op: symbols.FilterFeature, TypeFQN: typeFQN, Feature: feature, Span: span}
+		return &symbols.FilterPredicate{
+			Op:         symbols.FilterFeature,
+			TypeFQN:    typeFQN,
+			Feature:    feature,
+			ResultType: m.filterMemberType(typeFQN, feature),
+			Span:       span,
+		}
 	case *ast.OperatorExpr:
 		// `self.f` and `(self as T).f` are written this way too; only the
 		// annotation form carries a metadata type to read the feature from.
@@ -323,12 +336,29 @@ func (m *Model) compileFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExp
 			if !ok {
 				return unsupported(span, fmt.Sprintf("the metadata type %s does not resolve", qnText(operand.TypeRef)))
 			}
-			return &symbols.FilterPredicate{Op: symbols.FilterFeature, TypeFQN: typeFQN, Feature: feature, Span: span}
+			return &symbols.FilterPredicate{
+				Op:         symbols.FilterFeature,
+				TypeFQN:    typeFQN,
+				Feature:    feature,
+				ResultType: m.filterMemberType(typeFQN, feature),
+				Span:       span,
+			}
 		}
 	case *ast.FeatureReference:
 		return m.compileFeatureChainRead(scope, operand, feature, span)
 	}
-	return unsupported(span, chainLimitation)
+	if root := chainRoot(e); root != nil {
+		if rootSym, ok := m.resolver.ResolveTarget(scope, root); ok {
+			if reason, notEvaluable := m.referenceNotEvaluable(rootSym); notEvaluable {
+				return unsupported(span, reason)
+			}
+		}
+	}
+	resultType, ok := m.resolver.ResolveTarget(scope, e)
+	if !ok || resultType == nil {
+		return unresolvedReference(span, "a feature chain does not resolve")
+	}
+	return evaluatorUnsupported(span, chainLimitation, resultType)
 }
 
 // chainLimitation is the reason a chain outside the evaluable subset reports.
@@ -339,30 +369,33 @@ const chainLimitation = "a filter condition reads a feature through a chain of f
 // constant value ([KerML, 7.4.9] isModelLevelEvaluable).
 func (m *Model) compileFeatureChainRead(scope *symbols.Scope, operand *ast.FeatureReference, feature string, span source.Span) *symbols.FilterPredicate {
 	if operand.Name == nil {
-		return unsupported(span, chainLimitation)
+		return unresolvedReference(span, "the chain operand names nothing")
 	}
 	root, ok := m.resolver.ResolveQualified(scope, operand.Name)
 	if !ok || root == nil {
-		return unsupported(span, fmt.Sprintf("%s does not resolve", qnText(operand.Name)))
+		return unresolvedReference(span, fmt.Sprintf("%s does not resolve", qnText(operand.Name)))
 	}
-	if owner := m.ownerOf(root); isFeaturingType(owner) {
-		return unsupported(span, fmt.Sprintf(
-			"%s is featured within type %s and is not model-level evaluable",
-			qnText(operand.Name), m.fqnOf(owner)))
+	if reason, notEvaluable := m.referenceNotEvaluable(root); notEvaluable {
+		return unsupported(span, reason)
 	}
 	read, ok := m.LookupMember(root, feature)
 	if !ok || read == nil {
-		return unsupported(span, fmt.Sprintf("%s has no feature %s to read", qnText(operand.Name), feature))
+		return unresolvedReference(span, fmt.Sprintf("%s has no feature %s to read", qnText(operand.Name), feature))
 	}
 	usage, isUsage := read.Decl.(*ast.Usage)
 	if !isUsage || usage.Value == nil {
-		return unsupported(span, chainLimitation)
+		return evaluatorUnsupported(span, chainLimitation, read)
 	}
 	v, ok := evalConst(usage.Value)
 	if !ok {
-		return unsupported(span, chainLimitation)
+		return evaluatorUnsupported(span, chainLimitation, read)
 	}
-	return &symbols.FilterPredicate{Op: symbols.FilterConst, Value: constValue(v), Span: span}
+	return &symbols.FilterPredicate{
+		Op:         symbols.FilterConst,
+		Value:      constValue(v),
+		ResultType: read,
+		Span:       span,
+	}
 }
 
 // compileReference compiles a name a filter condition uses as a value: a feature
@@ -375,7 +408,7 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 	}
 	sym, ok := m.resolver.ResolveQualified(scope, qn)
 	if !ok || sym == nil {
-		return unsupported(span, fmt.Sprintf("%s does not resolve", qnText(qn)))
+		return unresolvedReference(span, fmt.Sprintf("%s does not resolve", qnText(qn)))
 	}
 	if owner := m.ownerOf(sym); owner != nil && isMetadataType(owner) {
 		ownerFQN := m.fqnOf(owner)
@@ -383,29 +416,90 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 			return unsupported(span, fmt.Sprintf("the metadata type of %s has no qualified name", qnText(qn)))
 		}
 		return &symbols.FilterPredicate{
-			Op:      symbols.FilterFeature,
-			TypeFQN: ownerFQN,
-			Feature: simpleSymbolName(sym),
-			Span:    span,
+			Op:         symbols.FilterFeature,
+			TypeFQN:    ownerFQN,
+			Feature:    simpleSymbolName(sym),
+			ResultType: sym,
+			Span:       span,
 		}
 	}
-	if owner := m.ownerOf(sym); isFeaturingType(owner) {
-		typeFQN := m.fqnOf(owner)
-		if typeFQN != "" {
-			return unsupported(span, fmt.Sprintf(
-				"%s is featured within type %s and is not model-level evaluable",
-				qnText(qn), typeFQN))
-		}
+	if reason, notEvaluable := m.referenceNotEvaluable(sym); notEvaluable {
+		return unsupported(span, reason)
 	}
 	fqn := m.fqnOf(sym)
 	if fqn == "" {
 		return unsupported(span, fmt.Sprintf("%s has no qualified name to compare", qnText(qn)))
 	}
 	return &symbols.FilterPredicate{
-		Op:    symbols.FilterConst,
-		Value: symbols.FilterValue{Kind: symbols.FilterValueRef, RefFQN: fqn},
-		Span:  span,
+		Op:         symbols.FilterConst,
+		Value:      symbols.FilterValue{Kind: symbols.FilterValueRef, RefFQN: fqn},
+		ResultType: sym,
+		Span:       span,
 	}
+}
+
+func (m *Model) filterMemberType(typeFQN, feature string) *symbols.Symbol {
+	typ := m.symbolByFQN(typeFQN)
+	if typ == nil {
+		return nil
+	}
+	member, _ := m.LookupMember(typ, feature)
+	return member
+}
+
+func chainRoot(n ast.Node) ast.Node {
+	for {
+		chain, ok := n.(*ast.FeatureChainExpr)
+		if !ok {
+			return n
+		}
+		n = chain.Operand
+	}
+}
+
+func (m *Model) referenceNotEvaluable(sym *symbols.Symbol) (string, bool) {
+	if sym == nil {
+		return "the reference does not resolve", true
+	}
+	if resolved, ok := m.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
+		sym = resolved
+	}
+	owner := m.ownerOf(sym)
+	if isMetadataType(owner) {
+		return "", false
+	}
+	if isFeaturingType(owner) {
+		return fmt.Sprintf(
+			"%s is featured within type %s and is not model-level evaluable",
+			m.fqnOf(sym), m.fqnOf(owner)), true
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value == nil {
+		return "", false
+	}
+	if !m.ModelLevelEvaluable(sym.OwnerScope, usage.Value) {
+		return fmt.Sprintf("%s is not model-level evaluable", m.fqnOf(sym)), true
+	}
+	return "", false
+}
+
+func unresolvedReference(span source.Span, reason string) *symbols.FilterPredicate {
+	return &symbols.FilterPredicate{
+		Op:              symbols.FilterUnsupported,
+		UnsupportedKind: symbols.FilterUnsupportedNotBoolean,
+		Reason:          reason,
+		Span:            span,
+	}
+}
+
+func describeResultType(sym *symbols.Symbol) string {
+	if sym == nil {
+		return "an unsupported expression"
+	}
+	if name := simpleSymbolName(sym); name != "" {
+		return "a " + name + " result"
+	}
+	return "a non-Boolean result"
 }
 
 func isFeaturingType(sym *symbols.Symbol) bool {
@@ -437,7 +531,7 @@ func isFeaturingType(sym *symbols.Symbol) bool {
 		symbols.SymbolCalcUsage, symbols.SymbolConstraintUsage,
 		symbols.SymbolRequirementUsage, symbols.SymbolCaseUsage,
 		symbols.SymbolAnalysisCaseUsage, symbols.SymbolVerificationCaseUsage,
-		symbols.SymbolUseCaseUsage:
+		symbols.SymbolUseCaseUsage, symbols.SymbolKerMLType:
 		return true
 	}
 	return false
@@ -794,12 +888,20 @@ func (m *Model) symbolByFQN(fqn string) *symbols.Symbol {
 // value. Reason describes the fault for a diagnostic message, and Span locates
 // the part of the condition at fault.
 type FilterProblem struct {
-	// NotBoolean distinguishes a condition that has a value but not a boolean
-	// one from one that cannot be evaluated at all.
-	NotBoolean bool
-	Reason     string
-	Span       source.Span
+	// Kind distinguishes a specification fault from an evaluator limitation.
+	Kind   FilterProblemKind
+	Reason string
+	Span   source.Span
 }
+
+// FilterProblemKind classifies a filter condition fault.
+type FilterProblemKind uint8
+
+const (
+	FilterProblemNotBoolean FilterProblemKind = iota
+	FilterProblemNotEvaluable
+	FilterProblemUnsupported
+)
 
 // CheckElementFilter reports the faults of a filter condition, in the order they
 // appear in it. It is what the validation pass reports: the same compiled
@@ -812,19 +914,25 @@ type FilterProblem struct {
 func (m *Model) CheckElementFilter(f symbols.ElementFilter) []FilterProblem {
 	pred := m.CompileElementFilter(f)
 	if pred == nil {
-		return []FilterProblem{{Reason: "the condition is empty", Span: f.Span}}
+		return []FilterProblem{{Kind: FilterProblemNotEvaluable, Reason: "the condition is empty", Span: f.Span}}
 	}
 	// The constraints are on the membership stating the condition (KerML 8.2.4),
 	// so each fault is reported there, once.
 	var out []FilterProblem
-	seen := map[bool]bool{}
-	for _, p := range appendFilterProblems(nil, pred, true) {
-		if seen[p.NotBoolean] {
+	seen := map[FilterProblemKind]bool{}
+	for _, p := range m.appendFilterProblems(nil, pred, true) {
+		if seen[p.Kind] {
 			continue
 		}
-		seen[p.NotBoolean] = true
+		seen[p.Kind] = true
 		p.Span = f.Span
 		out = append(out, p)
+	}
+	for _, p := range out {
+		if p.Kind != FilterProblemNotBoolean {
+			continue
+		}
+		return dropUnsupportedProblems(out)
 	}
 	return out
 }
@@ -832,25 +940,59 @@ func (m *Model) CheckElementFilter(f symbols.ElementFilter) []FilterProblem {
 // appendFilterProblems collects the faults of a compiled condition. wantBool
 // says whether the position the predicate occupies needs a truth value: the
 // condition as a whole does, as does every operand of a boolean operator.
-func appendFilterProblems(out []FilterProblem, p *symbols.FilterPredicate, wantBool bool) []FilterProblem {
+func (m *Model) appendFilterProblems(out []FilterProblem, p *symbols.FilterPredicate, wantBool bool) []FilterProblem {
 	if p == nil {
 		return out
 	}
 	if p.Op == symbols.FilterUnsupported {
-		return append(out, FilterProblem{Reason: p.Reason, Span: p.Span})
+		if p.UnsupportedKind == symbols.FilterUnsupportedNotBoolean {
+			if wantBool {
+				out = append(out, FilterProblem{
+					Kind:   FilterProblemNotBoolean,
+					Reason: p.Reason,
+					Span:   p.Span,
+				})
+			}
+			return out
+		}
+		kind := FilterProblemNotEvaluable
+		if p.UnsupportedKind == symbols.FilterUnsupportedEvaluator {
+			kind = FilterProblemUnsupported
+		}
+		out = append(out, FilterProblem{Kind: kind, Reason: p.Reason, Span: p.Span})
+		if wantBool && m.filterYieldsBool(p) == filterNotBool {
+			out = append(out, FilterProblem{
+				Kind:   FilterProblemNotBoolean,
+				Reason: describeResultType(p.ResultType),
+				Span:   p.Span,
+			})
+		}
+		return out
 	}
-	if wantBool && filterYieldsBool(p) == filterNotBool {
+	if wantBool && m.filterYieldsBool(p) == filterNotBool {
 		out = append(out, FilterProblem{
-			NotBoolean: true,
-			Reason:     describeValueKind(p.Value.Kind),
-			Span:       p.Span,
+			Kind:   FilterProblemNotBoolean,
+			Reason: describeValueKind(p.Value.Kind),
+			Span:   p.Span,
 		})
 	}
 	operandsWantBool := isFilterBoolOp(p.Op)
 	for _, operand := range p.Operands {
-		out = appendFilterProblems(out, operand, operandsWantBool)
+		out = m.appendFilterProblems(out, operand, operandsWantBool)
 	}
 	return out
+}
+
+// dropUnsupportedProblems keeps specification faults when a Boolean fault
+// already explains why the condition cannot be accepted.
+func dropUnsupportedProblems(problems []FilterProblem) []FilterProblem {
+	filtered := make([]FilterProblem, 0, len(problems))
+	for _, problem := range problems {
+		if problem.Kind != FilterProblemUnsupported {
+			filtered = append(filtered, problem)
+		}
+	}
+	return filtered
 }
 
 // filterBoolness is what is known about the kind of value a compiled condition
@@ -864,9 +1006,9 @@ const (
 )
 
 // filterYieldsBool reports what is known about a predicate's value kind. The
-// value of an annotation feature is only known once a candidate is at hand, so a
-// feature read is neither.
-func filterYieldsBool(p *symbols.FilterPredicate) filterBoolness {
+// value of an annotation feature is only known once a candidate is at hand, so
+// its declared result type is used when available.
+func (m *Model) filterYieldsBool(p *symbols.FilterPredicate) filterBoolness {
 	switch p.Op {
 	case symbols.FilterClassify, symbols.FilterMetaClassify, symbols.FilterNot,
 		symbols.FilterAnd, symbols.FilterOr, symbols.FilterXor, symbols.FilterImplies,
@@ -877,8 +1019,33 @@ func filterYieldsBool(p *symbols.FilterPredicate) filterBoolness {
 		if p.Value.Kind == symbols.FilterValueBool {
 			return filterIsBool
 		}
+		if p.Value.Kind == symbols.FilterValueRef && p.ResultType != nil {
+			switch prim := m.PrimTypeOf(p.ResultType); prim {
+			case PrimBoolean:
+				return filterIsBool
+			case PrimUnknown:
+				return filterBoolUnknown
+			default:
+				return filterNotBool
+			}
+		}
+		if p.Value.Kind == symbols.FilterValueRef {
+			return filterBoolUnknown
+		}
 		return filterNotBool
-	default: // symbols.FilterFeature, symbols.FilterUnsupported
+	case symbols.FilterFeature, symbols.FilterUnsupported:
+		if p.ResultType != nil {
+			switch prim := m.PrimTypeOf(p.ResultType); prim {
+			case PrimBoolean:
+				return filterIsBool
+			case PrimUnknown:
+				return filterBoolUnknown
+			default:
+				return filterNotBool
+			}
+		}
+		return filterBoolUnknown
+	default:
 		return filterBoolUnknown
 	}
 }
@@ -897,7 +1064,22 @@ func isFilterBoolOp(op symbols.FilterOp) bool {
 // unsupported builds the predicate node for a condition the evaluator cannot
 // decide, carrying the reason a diagnostic reports.
 func unsupported(span source.Span, reason string) *symbols.FilterPredicate {
-	return &symbols.FilterPredicate{Op: symbols.FilterUnsupported, Reason: reason, Span: span}
+	return &symbols.FilterPredicate{
+		Op:              symbols.FilterUnsupported,
+		UnsupportedKind: symbols.FilterUnsupportedNotEvaluable,
+		Reason:          reason,
+		Span:            span,
+	}
+}
+
+func evaluatorUnsupported(span source.Span, reason string, resultType *symbols.Symbol) *symbols.FilterPredicate {
+	return &symbols.FilterPredicate{
+		Op:              symbols.FilterUnsupported,
+		UnsupportedKind: symbols.FilterUnsupportedEvaluator,
+		Reason:          reason,
+		ResultType:      resultType,
+		Span:            span,
+	}
 }
 
 // binaryFilterOp maps a binary operator of a filter condition to its predicate

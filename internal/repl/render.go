@@ -207,10 +207,11 @@ func renderDiagnostics(diags []passes.Diagnostic, src string, locate func(offset
 		return nil
 	}
 	sf := source.New(docName, []byte(src))
+	lineIndex := sf.Lines()
 	lines := strings.Split(src, "\n")
 	var out []string
 	for _, d := range diags {
-		p := sf.Lines().PosAt(d.Span.Offset)
+		p := lineIndex.PosAt(d.Span.Offset)
 		file, baseLine := locate(d.Span.Offset)
 		where := ""
 		if file != "" {

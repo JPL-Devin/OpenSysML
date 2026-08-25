@@ -64,7 +64,10 @@ type Model struct {
 	// redefMaskInherited is the same mask counting inherited redefinitions only.
 	redefMaskInherited map[*symbols.Symbol]map[*symbols.Symbol]bool
 	// declMask is redefMaskInherited as a declaration of a given name sees it.
-	declMask map[declMaskKey]map[*symbols.Symbol]bool
+	declMask                   map[declMaskKey]map[*symbols.Symbol]bool
+	redefClosure               map[*symbols.Symbol]map[*symbols.Symbol]bool
+	computingRedefClosure      map[*symbols.Symbol]bool
+	computingRedefinedFeatures int
 }
 
 // declMaskKey keys the mask a declaration written in a type sees, by the type
@@ -108,10 +111,12 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		filterTypes:    make(map[string]*symbols.Symbol),
 		annotations:    make(map[*symbols.Symbol][]annotation),
 
-		redefined:          make(map[*symbols.Symbol][]*symbols.Symbol),
-		redefMask:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
-		redefMaskInherited: make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
-		declMask:           make(map[declMaskKey]map[*symbols.Symbol]bool),
+		redefined:             make(map[*symbols.Symbol][]*symbols.Symbol),
+		redefMask:             make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
+		redefMaskInherited:    make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
+		declMask:              make(map[declMaskKey]map[*symbols.Symbol]bool),
+		redefClosure:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
+		computingRedefClosure: make(map[*symbols.Symbol]bool),
 	}
 	if resolver != nil {
 		resolver.SetModel(m)

@@ -42,7 +42,7 @@ func (W8DConnectorFeaturingPass) Run(ctx *Context, name string, root *ast.RootNa
 	}
 	cc := &constraintChecker{model: ctx.Model(), resolver: ctx.Resolver(), seen: make(map[*symbols.Symbol]bool)}
 	var diags []Diagnostic
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		u, ok := sym.Decl.(*ast.Usage)
 		if !ok || !w8dConnectorKinds[u.Kind] {
 			return
