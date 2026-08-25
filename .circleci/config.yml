@@ -426,18 +426,17 @@ jobs:
       - checkout
 
       - run:
-          name: Install Rust 1.83
+          name: Verify Rust 1.83
           command: |
-            rustup toolchain install 1.83.0 --profile minimal
-            rustup default 1.83.0
             rustc --version
             cargo --version
 
+      - go/install:
+          version: "1.25.0"
+
       - run:
-          name: Install Go
+          name: Verify Go version
           command: |
-            sudo apt-get update
-            sudo apt-get install -y golang
             go version
 
       - run:
