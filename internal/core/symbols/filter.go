@@ -69,6 +69,17 @@ const (
 	FilterFeature
 )
 
+// FilterUnsupportedKind distinguishes a specification fault from a limitation
+// of the evaluator for a FilterUnsupported predicate.
+type FilterUnsupportedKind uint8
+
+const (
+	// FilterUnsupportedNotEvaluable is a model-level evaluability fault.
+	FilterUnsupportedNotEvaluable FilterUnsupportedKind = iota
+	// FilterUnsupportedEvaluator is a specification-clean evaluator limitation.
+	FilterUnsupportedEvaluator
+)
+
 // FilterPredicate is an element-filter condition compiled to the form the
 // evaluator runs: a tree over the candidate element, with every element the
 // condition names resolved to its fully-qualified name. Compiling before
@@ -91,6 +102,14 @@ type FilterPredicate struct {
 	// Reason says why a FilterUnsupported node cannot be evaluated, phrased for
 	// a diagnostic message.
 	Reason string
+
+	// UnsupportedKind says whether Reason is a model-level evaluability fault
+	// or a limitation of the OpenSysML evaluator.
+	UnsupportedKind FilterUnsupportedKind
+
+	// ResultType is the resolved terminal feature for a reference or chain. It
+	// lets semantic validation determine Boolean-ness without evaluating it.
+	ResultType *Symbol
 
 	// Span locates the part of the condition this node came from.
 	Span source.Span
