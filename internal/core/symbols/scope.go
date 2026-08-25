@@ -170,18 +170,7 @@ func (s *Scope) LookupLocalAll(name string) []*Symbol {
 		}
 		return out
 	}
-	index := s.memberIndex.Load()
-	if index == nil {
-		built := make(map[string][]int32)
-		for i, memberName := range s.names {
-			built[memberName] = append(built[memberName], int32(i))
-		}
-		if s.memberIndex.CompareAndSwap(nil, &built) {
-			index = &built
-		} else {
-			index = s.memberIndex.Load()
-		}
-	}
+	index := s.loadMemberIndex()
 	indices := (*index)[name]
 	if len(indices) == 0 {
 		return nil
@@ -191,10 +180,24 @@ func (s *Scope) LookupLocalAll(name string) []*Symbol {
 		return s.syms[i : i+1 : i+1]
 	}
 	out := make([]*Symbol, len(indices))
-	for i, index := range indices {
-		out[i] = s.syms[index]
+	for i, memberIndex := range indices {
+		out[i] = s.syms[memberIndex]
 	}
 	return out
+}
+
+func (s *Scope) loadMemberIndex() *map[string][]int32 {
+	if index := s.memberIndex.Load(); index != nil {
+		return index
+	}
+	built := make(map[string][]int32)
+	for i, name := range s.names {
+		built[name] = append(built[name], int32(i))
+	}
+	if s.memberIndex.CompareAndSwap(nil, &built) {
+		return &built
+	}
+	return s.memberIndex.Load()
 }
 
 // MemberNames returns the distinct member keys of this scope in declaration order.
@@ -202,19 +205,33 @@ func (s *Scope) MemberNames() []string {
 	if len(s.names) == 0 {
 		return nil
 	}
-	seen := make(map[string]struct{}, len(s.names))
 	out := make([]string, 0, len(s.names))
+	if index := s.memberIndex.Load(); index != nil {
+		for i, name := range s.names {
+			indices := (*index)[name]
+			if len(indices) > 0 && indices[0] == int32(i) {
+				out = append(out, name)
+			}
+		}
+		return out
+	}
 	for _, name := range s.names {
-		if _, ok := seen[name]; ok {
+		duplicate := false
+		for _, existing := range out {
+			if existing == name {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
 			continue
 		}
-		seen[name] = struct{}{}
 		out = append(out, name)
 	}
 	return out
 }
 
-// AllMembers returns all symbols in declaration order (including anonymous members).
+// AllMembers returns named and anonymous symbols in declaration order, with named members first.
 func (s *Scope) AllMembers() []*Symbol {
 	var all []*Symbol
 	s.ForEachMember(func(sym *Symbol) bool {
@@ -224,7 +241,7 @@ func (s *Scope) AllMembers() []*Symbol {
 	return all
 }
 
-// ForEachMember visits all symbols in declaration order, with named members preceding anonymous members.
+// ForEachMember visits named and anonymous symbols in declaration order, with named members first.
 func (s *Scope) ForEachMember(yield func(*Symbol) bool) {
 	if s == nil || yield == nil {
 		return

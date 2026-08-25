@@ -101,6 +101,41 @@ func TestScopeLookupRepeatedKeyOrderAndMemberNameDeduplication(t *testing.T) {
 	}
 }
 
+func TestScopeMembersPreserveInterleavedDeclarationOrder(t *testing.T) {
+	s := NewScope(nil, nil)
+	first := &Symbol{Name: "first"}
+	second := &Symbol{Name: "second"}
+	third := &Symbol{Name: "third"}
+	s.Define("a", first)
+	s.Define("b", second)
+	s.Define("a", third)
+
+	want := []*Symbol{first, second, third}
+	for i, got := range s.AllMembers() {
+		if got != want[i] {
+			t.Fatalf("AllMembers()[%d] = %p, want %p", i, got, want[i])
+		}
+	}
+	var got []*Symbol
+	s.ForEachMember(func(sym *Symbol) bool {
+		got = append(got, sym)
+		return true
+	})
+	if len(got) != len(want) {
+		t.Fatalf("ForEachMember visited %d symbols, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ForEachMember()[%d] = %p, want %p", i, got[i], want[i])
+		}
+	}
+	for i, got := range s.Members() {
+		if got != want[i] {
+			t.Fatalf("Members()[%d] = %p, want %p", i, got, want[i])
+		}
+	}
+}
+
 func TestScopeLookupSingleResultHasCappedCapacity(t *testing.T) {
 	s := NewScope(nil, nil)
 	first := &Symbol{Name: "first"}

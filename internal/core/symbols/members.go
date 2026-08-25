@@ -1,8 +1,8 @@
 package symbols
 
-// Members returns the distinct symbols declared directly in this scope, in
-// definition order. A symbol registered under both its short and primary name
-// appears once. Callers must not mutate the returned slice's symbols.
+// Members returns distinct symbols declared directly in this scope in
+// declaration order, with duplicate keys interleaved as declared.
+// A symbol registered under both its short and primary name appears once.
 func (s *Scope) Members() []*Symbol {
 	seen := map[*Symbol]bool{}
 	var out []*Symbol
