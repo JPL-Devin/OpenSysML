@@ -1,7 +1,9 @@
 version: v2
-# TypeScript stubs for the planned npm client. Not committed and not run in CI:
-# `make proto-ts` writes to gen/ts/ so the client can adopt it when it lands.
-# Remote plugins need network access to the Buf Schema Registry.
+# TypeScript stubs for the npm client in clients/node. Committed, like the Python
+# stubs, so `npm install` needs neither buf nor network. Run via `make proto-ts`
+# (which `make proto` includes). The plugin version is pinned inline and fetched
+# by npx, the way the Go entries are fetched by `go run`.
 plugins:
-  - remote: buf.build/bufbuild/es:v2.10.0
-    out: gen/ts
+  - local: ["npx", "--yes", "@bufbuild/protoc-gen-es@2.14.0"]
+    out: clients/node/src/generated
+    opt: target=ts,import_extension=.js
