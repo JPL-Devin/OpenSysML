@@ -30,7 +30,7 @@ func (W8DFlowEndPass) Run(ctx *Context, name string, root *ast.RootNamespace) []
 	}
 	resolver := ctx.Resolver()
 	var diags []Diagnostic
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		u, ok := sym.Decl.(*ast.Usage)
 		if !ok || u.Kind != ast.UsageFlow || u.FlowEnds == nil {
 			return

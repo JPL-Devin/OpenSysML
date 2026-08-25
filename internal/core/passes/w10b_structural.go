@@ -34,7 +34,7 @@ func (W10BStructuralPass) Run(ctx *Context, name string, root *ast.RootNamespace
 		return nil
 	}
 	c := &w10bStructuralChecker{}
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		c.check(sym.Decl)
 	})
 	return c.diags

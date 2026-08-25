@@ -1,9 +1,11 @@
 package parser
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -71,5 +73,30 @@ func TestAmbiguousTerminatorCarriesNoFix(t *testing.T) {
 func TestCleanParseHasNoDiagnostics(t *testing.T) {
 	if diags := diagnose(t, "package P {\n    part def Wheel;\n}\n"); len(diags) != 0 {
 		t.Errorf("diagnostics = %+v, want none", diags)
+	}
+}
+
+func TestLargeSourceParseIsStable(t *testing.T) {
+	var src strings.Builder
+	src.WriteString("package P {\n")
+	for i := 0; i < 4000; i++ {
+		src.WriteString("    namespace N")
+		src.WriteString(strconv.Itoa(i))
+		src.WriteString(";\n")
+	}
+	src.WriteString("}\n")
+
+	parse := func() (string, []Diagnostic) {
+		p := New(source.New("large.sysml", []byte(src.String())))
+		root := p.ParseFile()
+		return ast.Dump(root), p.Diagnostics
+	}
+	firstDump, firstDiags := parse()
+	secondDump, secondDiags := parse()
+	if firstDump != secondDump {
+		t.Fatal("large source parse changed between identical parses")
+	}
+	if len(firstDiags) != 0 || len(secondDiags) != 0 {
+		t.Fatalf("large source diagnostics = %v and %v, want none", firstDiags, secondDiags)
 	}
 }

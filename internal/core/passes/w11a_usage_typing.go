@@ -54,7 +54,7 @@ func (W11AUsageTypingPass) Run(ctx *Context, name string, root *ast.RootNamespac
 		return nil
 	}
 	c := &w11aUsageChecker{resolver: ctx.Resolver()}
-	w8dWalkSymbols(rootScope, c.check)
+	w8dWalkSymbols(ctx, rootScope, c.check)
 	return c.diags
 }
 

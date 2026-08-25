@@ -61,7 +61,7 @@ func (W8DOccurrenceTypingPass) Run(ctx *Context, name string, root *ast.RootName
 		return nil
 	}
 	oc := &w8dOccurrenceChecker{resolver: ctx.Resolver()}
-	w8dWalkSymbols(rootScope, oc.check)
+	w8dWalkSymbols(ctx, rootScope, oc.check)
 	return oc.diags
 }
 

@@ -69,18 +69,18 @@ action, a state machine or a part usage.
 
 | elements | load wall | allocated | live heap held |
 | -------- | --------- | --------- | -------------- |
-| 0        | 0.17 ms   | 115 KiB   | 32 KiB         |
-| 250      | 25 ms     | 19 MiB    | 2.7 MiB        |
-| 1 000    | 96 ms     | 80 MiB    | 11 MiB         |
-| 4 000    | 402 ms    | 329 MiB   | 43 MiB         |
+| 0        | 0.21 ms   | 115 KiB   | 33 KiB         |
+| 250      | 20 ms     | 13 MiB    | 2.7 MiB        |
+| 1 000    | 77 ms     | 51 MiB    | 11 MiB         |
+| 4 000    | 346 ms    | 207 MiB   | 43 MiB         |
 
 The `elements=0` row is what a session costs before it holds a model of its own:
-**32 KiB held and 115 KiB allocated**. The standard library is no longer indexed
+**33 KiB held and 115 KiB allocated**. The standard library is no longer indexed
 eagerly per session, so a process serving many sessions (the LSP, a server) no
 longer pays a multi-megabyte floor for each one.
 
 Above that baseline a model costs roughly **11 KiB held per element**, and
-allocates roughly **80 KiB per element** while loading, most of it short-lived
+allocates roughly **54 KiB per element** while loading, most of it short-lived
 parser and resolution garbage.
 
 Whole-binary scaling on `-validate` over generated models in standard notation,
@@ -88,9 +88,9 @@ which report nothing:
 
 | elements | wall   | peak RSS |
 | -------- | ------ | -------- |
-| 3 000    | 0.41 s | 138 MiB  |
-| 6 000    | 0.71 s | 207 MiB  |
-| 12 000   | 1.40 s | 335 MiB  |
+| 3 000    | 0.37 s | 121 MiB  |
+| 6 000    | 0.69 s | 194 MiB  |
+| 12 000   | 1.27 s | 300 MiB  |
 
 Both time and memory grow linearly with the model. Loading was quadratic once —
 doubling the model roughly quadrupled the time — for the reasons below.
@@ -134,6 +134,30 @@ instantiating. The context now records instance registrations in an append-only
 log and marks its length, so a rollback walks only what the failed creation
 added.
 
+### Where a load's allocation goes
+
+A load allocates about 15 times what the model it leaves behind holds, and a CPU
+profile of it is spent in the collector, so allocation volume is what a load's
+wall time follows. Three sources accounted for half of it:
+
+- The validation passes each walked the document's symbol tree themselves, copying
+  every scope's member list on the way — 17 traversals of the same tree per
+  document. The passes of one run share a `Context`, which now holds the
+  traversal, and the walk is made once.
+- `parser.fill` grew the token buffer as it read, which was the largest single
+  source of allocation while loading. Models measure about five source bytes per
+  non-trivia token, so the buffer is sized from the source length instead.
+- A wildcard import surfaces a name by enumerating the target namespace's direct
+  children (`symbols.Index.LookupDirectChildren`), which rebuilt and re-sorted
+  that list on every unqualified lookup made through the import. The index now
+  keeps the list per namespace and visibility, and drops what it kept whenever a
+  write lands in any of its tables, so a lookup after an edit is recomputed.
+
+Together these cut a 4 000-element load by 23% in time and 37% in allocation,
+and `-validate` over a 12 000-element model from 1.40 s and 908 MiB allocated to
+1.27 s and 610 MiB, with peak RSS down from 335 to 300 MiB. Diagnostics,
+resolution results and exit status are byte-identical.
+
 ## What running a model costs
 
 Runs are measured against an already-loaded model, with the session's runtime
@@ -163,15 +187,14 @@ a faster executor.
 
 ## Notes for further work
 
-- The parser's token buffer (`parser.fill`) is the largest single source of
-  allocation while loading, at about 35% of a large model's total. It grows the
-  buffer as it reads; sizing it from the source length would cut most of that,
-  and with it much of the collector pressure a load creates.
 - Runs over a large model spend their time in collection, not in the executor
   (above). Reducing what a load leaves behind is the lever, since the live model
   is what each cycle scans.
 - Resolving inherited library features in every definition body roughly doubled
-  what loading costs in both time and allocation, against the figures the
-  quadratic fixes above left. It is linear in the model, and the scope and
-  member scans it walks (`symbols.Scope.AllMembers`,
-  `symbols.Index.LookupDirectChildrenFrom`) are where that time goes.
+  what loading costs in both time and allocation, and the reductions above
+  recover part of that rather than all of it: loading is still about twice what
+  it was before every definition body inherited its library base. The work is
+  linear in the model and semantically required, so what is left to win is in
+  the scans it walks — `symbols.Scope.AllMembers` copies a scope's member list
+  per call, and the scope, inheritance and redefinition walkers each traverse
+  the document separately from the shared symbol traversal.

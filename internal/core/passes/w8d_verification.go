@@ -25,7 +25,7 @@ func (W8DVerificationPass) Run(ctx *Context, name string, root *ast.RootNamespac
 		return nil
 	}
 	var diags []Diagnostic
-	w8dWalkSymbols(rootScope, func(sym *symbols.Symbol) {
+	w8dWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
 		if !w8dIsVerify(sym) || w8dLegalVerification(sym) {
 			return
 		}

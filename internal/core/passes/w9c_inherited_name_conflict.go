@@ -41,7 +41,7 @@ func (W9CInheritedNameConflictPass) Run(ctx *Context, name string, root *ast.Roo
 	if c.model == nil {
 		return nil
 	}
-	w8dWalkSymbols(rootScope, c.check)
+	w8dWalkSymbols(ctx, rootScope, c.check)
 	return c.diags
 }
 

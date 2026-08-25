@@ -65,7 +65,7 @@ func (W11AKerMLSpecializationPass) Run(ctx *Context, name string, root *ast.Root
 		return nil
 	}
 	c := &w11aSpecializationChecker{resolver: ctx.Resolver()}
-	w8dWalkSymbols(rootScope, c.check)
+	w8dWalkSymbols(ctx, rootScope, c.check)
 	return c.diags
 }
 
