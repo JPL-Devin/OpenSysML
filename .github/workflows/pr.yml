@@ -367,6 +367,7 @@ jobs:
         run: |
           rustup toolchain install 1.83.0 --profile minimal
           rustup default 1.83.0
+          rustup component add rustfmt clippy --toolchain 1.83.0
           rustc --version
           cargo --version
 
