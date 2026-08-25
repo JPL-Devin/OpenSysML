@@ -145,7 +145,7 @@ func TestUnsupportedFilterResultReportsModelLevelRule(t *testing.T) {
 					continue
 				}
 				if got := len(only(diags, code)); got != 0 {
-					t.Fatalf("got %d filter-not-boolean diagnostics, want none: %v", got, diags)
+					t.Fatalf("got %d %s diagnostics, want none: %v", got, code, diags)
 				}
 			}
 		})
