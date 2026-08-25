@@ -145,6 +145,44 @@ func (m *Model) LookupContributedMember(sym *symbols.Symbol, name string) (*symb
 	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
 		sym = target
 	}
+	var candidate *symbols.Symbol
+	candidateDepth, candidateIndex := 0, 0
+	for i, contributor := range m.contributors(sym) {
+		if contributor == nil || contributor == sym {
+			continue
+		}
+		table := m.libraryMemberTable(contributor)
+		if table == nil {
+			return m.lookupContributedByWalkResolved(sym, name)
+		}
+		entry, ok := table[name]
+		if !ok {
+			continue
+		}
+		depth := entry.depth + 1
+		if candidate == nil || depth < candidateDepth || (depth == candidateDepth && i < candidateIndex) {
+			candidate = entry.sym
+			candidateDepth = depth
+			candidateIndex = i
+		}
+	}
+	if candidate != nil {
+		return candidate, true
+	}
+	return nil, false
+}
+
+func (m *Model) lookupContributedByWalk(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if sym == nil || name == "" {
+		return nil, false
+	}
+	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+		sym = target
+	}
+	return m.lookupContributedByWalkResolved(sym, name)
+}
+
+func (m *Model) lookupContributedByWalkResolved(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
 	for _, sup := range m.MemberSources(sym) {
 		if sup.Scope != nil {
 			if s, ok := sup.Scope.LookupLocal(name); ok {

@@ -50,6 +50,8 @@ type Model struct {
 	// base FQN, and is discarded whenever the backing index generation changes.
 	implicitBaseSyms       map[string]*symbols.Symbol
 	implicitBaseGeneration uint64
+	memberTables           map[*symbols.Symbol]map[string]memberEntry
+	memberTableGeneration  uint64
 
 	// Element-filter evaluation: conditions compiled once per expression, their
 	// verdicts memoized per candidate, and the metadata annotating each candidate
@@ -110,6 +112,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		dimensioning:     make(map[*symbols.Symbol]bool),
 		libSymbols:       make(map[string]*symbols.Symbol),
 		implicitBaseSyms: make(map[string]*symbols.Symbol),
+		memberTables:     make(map[*symbols.Symbol]map[string]memberEntry),
 
 		filterPreds:    make(map[ast.Node]*symbols.FilterPredicate),
 		filterVerdicts: make(map[filterKey]filterVerdict),
