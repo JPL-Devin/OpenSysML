@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance test lint clean install help python-test python-install proto proto-go python-proto proto-ts proto-java proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -15,12 +15,21 @@ LDFLAGS := -X main.Version=$(VERSION) \
 # Static-analysis tool versions, pinned so CI and local runs agree
 STATICCHECK_VERSION := 2025.1.1
 GOSEC_VERSION := v2.22.5
+BUF_VERSION := v1.57.2
+
+# buf drives all protobuf codegen; override BUF to use an already-installed binary.
+BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
+# Wire-compatibility baseline: the schema as it stands on the main branch. The
+# backslash escapes buf's ref separator, which make would otherwise read as a comment.
+BUF_BREAKING_AGAINST ?= .git\#ref=origin/main,subdir=api/proto
 
 # Build output directory
 BIN_DIR := bin
 PYTHON_DIR := python
 VSCODE_DIR := editors/vscode
 PYTHON ?= python3
+# buf.gen.python.yaml starts the interpreter this names.
+export PYTHON
 SITE_DIR := site
 
 all: build test python-test ## Build and test everything
@@ -90,18 +99,36 @@ version: ## Show version information
 	@echo "Build time: $(BUILD_TIME)"
 	@echo "Go version: $(GO_VERSION)"
 
+proto: proto-go python-proto ## Regenerate all protobuf stubs
+
+proto-go: ## Regenerate Go protobuf stubs
+	@echo "Regenerating Go protobuf stubs..."
+	$(BUF) generate
+	@echo "✓ Regenerated Go stubs"
+
 python-proto: ## Regenerate Python protobuf stubs
 	@echo "Regenerating Python protobuf stubs..."
 	@$(PYTHON) -c "import grpc_tools.protoc" >/dev/null 2>&1 || { echo "Error: grpcio-tools not installed. Run: $(PYTHON) -m pip install grpcio-tools"; exit 1; }
-	$(PYTHON) -m grpc_tools.protoc --proto_path=api/proto \
-	       --python_out=$(PYTHON_DIR)/opensysml/proto \
-	       --pyi_out=$(PYTHON_DIR)/opensysml/proto \
-	       --grpc_python_out=$(PYTHON_DIR)/opensysml/proto \
-	       api/proto/sysml.proto
-	@# generated stubs import each other by top-level name; make it package-relative
-	sed -i.bak 's/^import sysml_pb2 as sysml__pb2$$/from . import sysml_pb2 as sysml__pb2/' $(PYTHON_DIR)/opensysml/proto/sysml_pb2_grpc.py
-	@rm -f $(PYTHON_DIR)/opensysml/proto/sysml_pb2_grpc.py.bak
+	$(BUF) generate --template buf.gen.python.yaml
 	@echo "✓ Regenerated Python stubs"
+
+# The upcoming clients: generated on demand into gen/, never committed.
+proto-ts: ## Generate TypeScript stubs into gen/ts (for the planned npm client)
+	$(BUF) generate --template buf.gen.ts.yaml
+
+proto-java: ## Generate Java stubs into gen/java (for the planned Java client)
+	$(BUF) generate --template buf.gen.java.yaml
+
+proto-rust: ## Generate Rust stubs into gen/rust (for the planned Rust client)
+	$(BUF) generate --template buf.gen.rust.yaml
+
+proto-lint: ## Lint the protobuf schema
+	$(BUF) lint
+	@echo "✓ Proto lint passed"
+
+proto-breaking: ## Check the protobuf schema for wire-breaking changes against main
+	$(BUF) breaking --against '$(BUF_BREAKING_AGAINST)'
+	@echo "✓ No breaking schema changes"
 
 python-install: ## Install Python package in editable mode
 	@echo "Installing opensysml..."

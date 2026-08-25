@@ -4897,3 +4897,67 @@ Measure with `python3 /home/ubuntu/perf/timeit.py <cmd>` (wall + peak RSS; GNU `
 Baseline observed for the line-index memoization: m4000 8.06s→0.55s, m8000 31.7s→1.07s,
 m16000 124.3s→2.18s, clean models unchanged (~0.43s / ~1.4s). Clean-model load being slower than
 some older baseline is a **separate known regression**, not a perf-PR failure.
+
+## Testing generated typed views (Tier 2) over a live service
+
+The typed helpers in `python/opensysml/typed.py` are only reachable through *generated* modules, so
+assert on generated code, never on hand-built protobuf messages:
+
+```bash
+/home/ubuntu/pv/bin/python -m opensysml.generate /abs/model.sysml -o /abs/out_types.py
+grep -nE "_t\.(optional_|list_)?feature_value" /abs/out_types.py
+```
+
+`_accessor()` in `generate.py` picks the helper purely from multiplicity: collection →
+`_t.list_feature_value`, `0..1` → `_t.optional_feature_value`, otherwise `_t.feature_value`. So the
+model's multiplicity is the only lever for which helper a property compiles to. Generation needs the
+service to report `type_facts`; check with
+`opensysml.connect(auto_start=False).server_info().capabilities`.
+
+**Tier 1 read shapes for valueless features** (observed via `instance[name]`, and matching the
+REPL's `%features`) — know these before designing a no-value test, or an assertion can be vacuous:
+
+| declaration | Tier 1 value |
+|---|---|
+| `attribute x : Real;` (required) | `UNSET` (`<unset>`) |
+| `attribute x : Real [0..1];` | `UNSET` |
+| `attribute x : Real [0..1] = null;` | `None` |
+| `attribute x : Real [0..*];` / `[0..3]` | `[]` (**never** bare `UNSET`) |
+| `attribute x : Real [1..*];` | `[<unset>]` — a list *containing* `UNSET` |
+| `attribute x : Real [2..5];` | `[<unset>, <unset>]` |
+| `part p : Def [0..*];` (valueless) | `[]` |
+
+Consequences worth writing into any report:
+
+- A `value is UNSET` guard inside `list_feature_value` is **unreachable from real models** — valueless
+  collections already arrive as `[]`. Test a collection change against the pre-fix code to check
+  whether the assertion actually discriminates.
+- Lower-bounded collections (`[1..*]`, `[2..5]`) still raise
+  `TypeMismatchError: expected float, got <unset>` because the `UNSET` sits in the list *elements*,
+  which the per-item decoder sees. If a change claims "collections holding no value read empty",
+  probe these two shapes explicitly.
+
+**Cheap non-vacuity control without touching the checkout** (no worktree, no reinstall): copy the
+package next to your scratch script, swap in the parent revision's file, and re-run the same script
+with `PYTHONPATH`:
+
+```bash
+cp -r python/opensysml /home/ubuntu/scratch/prefix/
+git show <fix-sha>^:python/opensysml/typed.py > /home/ubuntu/scratch/prefix/opensysml/typed.py
+PYTHONPATH=/home/ubuntu/scratch/prefix /home/ubuntu/pv/bin/python run.py   # must fail where the fix bites
+```
+
+Client API traps for these harnesses: `Connection` has **no** `evaluate()` — the expression escape
+hatch is `Model.eval("1 + 1")` (or `connection.eval`). And an `Instance` is not iterable over feature
+*names*: `{k: inst[k] for k in inst}` dies with `TypeError: bad argument type for built-in
+operation`; list the names yourself.
+
+A cyclic derived attribute is the negative control that a no-value change did not swallow real
+evaluation errors:
+
+```sysml
+part def Loop { attribute a : Real = b + 1.0; attribute b : Real = a + 1.0; }
+```
+
+reading `a` must still raise `FeatureValueError: … cyclic feature value dependency: Loop.a`, and the
+service must still answer `model.eval("1 + 1")` afterwards.

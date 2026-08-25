@@ -38,8 +38,20 @@ func main() {
 		cacheSize  = flag.Int("cache-size", 100, "Maximum number of cached parsed files")
 		logLevel   = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 		showVer    = flag.Bool("version", false, "Show version and exit")
+		transport  = flag.String("transport", transportGRPC,
+			"Transport to serve: grpc (grpc-go, the default), connect (gRPC, gRPC-Web and "+
+				"the Connect protocol on one port), or stdio (one client over stdin/stdout). "+
+				"connect and stdio are evaluation prototypes; see "+
+				"docs/internals/design/transport-evaluation.md")
 	)
 	flag.Parse()
+
+	switch *transport {
+	case transportGRPC, transportConnect, transportStdio:
+	default:
+		fmt.Fprintf(os.Stderr, "sysml-grpc: unknown -transport %q; want grpc, connect or stdio\n", *transport)
+		os.Exit(2)
+	}
 
 	if *showVer {
 		fmt.Printf("sysml-grpc version %s\n", Version)
@@ -69,6 +81,7 @@ func main() {
 		"version", Version,
 		"commit", Commit,
 		"buildTime", BuildTime,
+		"transport", *transport,
 	)
 
 	// Create gRPC service (cache is internal to the service)
@@ -81,6 +94,12 @@ func main() {
 	// Build the standard library indexes in the background, so the first model to
 	// arrive does not pay for the library and startup stays prompt.
 	svc.Prewarm()
+
+	if *transport == transportStdio {
+		// The pipe is the session: there is no port to bind, nothing to poll
+		// for readiness, and the client's exit closes stdin, which ends this.
+		os.Exit(runStdio(svc))
+	}
 
 	// Start health check server
 	healthSrv := &http.Server{
@@ -102,6 +121,36 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Graceful shutdown
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+
+	if *transport == transportConnect {
+		serveCtx, cancelServe := context.WithCancel(context.Background())
+		served := make(chan error, 1)
+		go func() { served <- serveConnect(serveCtx, lis, svc, Version) }()
+
+		select {
+		case err := <-served:
+			cancelServe()
+			if err != nil {
+				slog.Error("Connect server failed", "error", err)
+				stopHealthServer(healthSrv)
+				svc.Close()
+				os.Exit(1)
+			}
+		case <-shutdown:
+			slog.Info("Shutting down gracefully...")
+			cancelServe()
+			if err := <-served; err != nil {
+				slog.Warn("Connect server shutdown error", "error", err)
+			}
+		}
+		svc.Close()
+		stopHealthServer(healthSrv)
+		return
+	}
+
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			loggingInterceptor(),
@@ -109,10 +158,6 @@ func main() {
 	)
 	pb.RegisterSysMLServiceServer(grpcServer, svc)
 	reflection.Register(grpcServer) // Enable server reflection for grpcurl/grpcui
-
-	// Graceful shutdown
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		slog.Info("gRPC server listening", "addr", lis.Addr())
@@ -126,14 +171,7 @@ func main() {
 	slog.Info("Shutting down gracefully...")
 	svc.Close()
 
-	// Stop health check server
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := healthSrv.Shutdown(ctx); err != nil {
-		slog.Warn("Health check server shutdown error", "error", err)
-	} else {
-		slog.Info("Health check server stopped")
-	}
+	stopHealthServer(healthSrv)
 
 	// Stop gRPC server
 	stopped := make(chan struct{})
@@ -148,6 +186,18 @@ func main() {
 	case <-time.After(30 * time.Second):
 		slog.Warn("Forcing gRPC server shutdown after timeout")
 		grpcServer.Stop()
+	}
+}
+
+// stopHealthServer shuts the health check server down, allowing it a moment to
+// finish the requests it has in hand.
+func stopHealthServer(healthSrv *http.Server) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := healthSrv.Shutdown(ctx); err != nil {
+		slog.Warn("Health check server shutdown error", "error", err)
+	} else {
+		slog.Info("Health check server stopped")
 	}
 }
 
