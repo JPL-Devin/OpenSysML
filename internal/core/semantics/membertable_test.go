@@ -109,10 +109,18 @@ func TestLibraryMemberTableReferenceGuard(t *testing.T) {
 		t.Fatal("a user reference in flight blocked a library member table")
 	}
 	delete(m.resolvingRef, userReference)
+	delete(m.memberTables, actions)
 
 	m.resolvingRef[actions] = true
 	if table := m.libraryMemberTable(actions); table != nil {
 		t.Fatal("a library reference in flight produced a library member table")
+	}
+	if _, ok := m.memberTables[actions]; ok {
+		t.Fatal("a transient library-reference failure was cached")
+	}
+	delete(m.resolvingRef, actions)
+	if table := m.libraryMemberTable(actions); table == nil {
+		t.Fatal("a library member table was not rebuilt after the transient failure")
 	}
 }
 
@@ -184,7 +192,9 @@ func TestLibraryMemberPlans(t *testing.T) {
 	}`)
 	idx.AddDocumentWithKind("memberplan_user.sysml", root, source.KindSysML)
 	r.ResolveDocument("memberplan_user.sysml", root)
-	derived := sym(t, sym(t, idx.DocumentRoot("memberplan_user.sysml"), "P").Scope, "UserDerived")
+	pkg := sym(t, idx.DocumentRoot("memberplan_user.sysml"), "P")
+	base := sym(t, pkg.Scope, "UserBase")
+	derived := sym(t, pkg.Scope, "UserDerived")
 	got, gotOK = m.LookupContributedMember(derived, "userMember")
 	want, wantOK = m.lookupContributedByWalk(derived, "userMember")
 	if got != want || gotOK != wantOK {
@@ -193,6 +203,12 @@ func TestLibraryMemberPlans(t *testing.T) {
 	plan, ok = m.memberPlans[derived]
 	if !ok || plan != nil {
 		t.Fatalf("member plan for %s = (%v, %v), want cached negative plan", symbols.FQNOf(derived), plan, ok)
+	}
+	if table, ok := m.memberTables[base]; !ok || table != nil {
+		t.Fatalf("member table for %s = (%v, %v), want cached permanent negative", symbols.FQNOf(base), table, ok)
+	}
+	if table := m.libraryMemberTable(base); table != nil {
+		t.Fatal("cached permanent negative unexpectedly produced a table")
 	}
 
 	idx2 := markedStdlibIndex(t)
