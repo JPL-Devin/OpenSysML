@@ -29,6 +29,15 @@ func TestRemovedActionNodeAliasesAreReported(t *testing.T) {
 	}
 }
 
+// A bare `then final;` is a succession target, so it reads as a reference to a
+// member named `final` rather than as the final node it once spelled.
+func TestThenFinalIsASuccessionTargetNotAFinalNode(t *testing.T) {
+	root := parseClean(t, "package P { action def A { first a; action a; then final; } }")
+	if dump := ast.Dump(root); strings.Contains(dump, "FinalNode") {
+		t.Errorf("`then final;` still parsed to a final node:\n%s", dump)
+	}
+}
+
 // The pinned grammars reserve none of the three words, so each still names a
 // feature an action body declares and a succession reads.
 func TestRemovedActionNodeAliasesRemainOrdinaryNames(t *testing.T) {

@@ -19,9 +19,12 @@ rather than kept:
 - `decision <name>;` → write `decide <name>;` (`SysML.xtext:1672`).
 
 None of the three words is reserved by the pinned grammars, so each still names a feature
-(`attribute final : Boolean;`, `action initial;`). An action body that writes one of the removed
-constructs is reported, and a leftover `then final;` fails as the undefined succession target it
-now is rather than being read as a final node. The **state** markers `initial <state>;` and
+(`attribute final : Boolean;`, `action initial;`). An action body that writes `initial <name>;`,
+`final <name>;` or `decision <name>;` is reported as the parse error it now is. A bare
+`then final;` is a **succession target**, not a node, so it is read as a reference to a member named
+`final`: where nothing declares one, the model analyses clean and fails when the action is run
+(`succession edge references undefined target node "final"`) — the same as any other undefined
+succession target. The **state** markers `initial <state>;` and
 `final <state>;` in a state body are unaffected, and so is `done <name>;`; both keep their
 existing warnings.
 
