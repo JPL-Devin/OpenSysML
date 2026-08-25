@@ -6,6 +6,25 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### The action nodes spelled `initial`, `final` and `decision` are removed
+
+**Breaking change** for models that used them. Each was an OpenSysML-only alias of a node the
+standard notation already spells, so the alias and its `nonstandard-notation` warning are gone
+rather than kept:
+
+- `initial <name> [then <target>];` in an action body → write `first <name> [then <target>];`
+  (`SysML.xtext:1385`).
+- `final [<name>];`, including the bare `then final;` → write `done [<name>];`, a reference to
+  the library feature `Actions::Action::done`.
+- `decision <name>;` → write `decide <name>;` (`SysML.xtext:1672`).
+
+None of the three words is reserved by the pinned grammars, so each still names a feature
+(`attribute final : Boolean;`, `action initial;`). An action body that writes one of the removed
+constructs is reported, and a leftover `then final;` fails as the undefined succession target it
+now is rather than being read as a final node. The **state** markers `initial <state>;` and
+`final <state>;` in a state body are unaffected, and so is `done <name>;`; both keep their
+existing warnings.
+
 ### The Python client uses a private service of its own
 
 **Behavior change.** A `Connection` that names no address no longer attaches to whatever

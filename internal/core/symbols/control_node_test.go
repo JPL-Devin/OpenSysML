@@ -33,7 +33,7 @@ func TestControlNodeSymbols(t *testing.T) {
 		fork Jump;
 		join Land;
 		merge M;
-		decision D;
+		decide D;
 	}
 }`
 	scope := actionBodyScope(t, src)
@@ -60,7 +60,7 @@ func TestUnnamedControlNodesRegisterNothing(t *testing.T) {
 		fork;
 		join;
 		merge;
-		decision;
+		decide;
 	}
 }`
 	if names := actionBodyScope(t, src).MemberNames(); len(names) != 0 {

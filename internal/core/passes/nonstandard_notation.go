@@ -180,19 +180,11 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.initialNode(n)
 			w.walkActionBody(n.Members)
 		case *ast.FinalNode:
-			switch {
-			case n.Keyword == "final":
-				w.extension(keywordSpan(n, n.Keyword), "`final` as an action node",
-					"the standard spelling of the node is `done`, the library feature")
-			case n.Name != "":
-				w.extension(keywordSpan(n, n.Keyword), "`done <name>;`",
+			if n.Name != "" {
+				w.extension(keywordSpan(n, "done"), "`done <name>;`",
 					"`done` is a library feature a succession names, not a keyword that declares a node")
 			}
 		case *ast.DecisionNode:
-			if n.Keyword == "decision" {
-				w.extension(keywordSpan(n, n.Keyword), "`decision` as an action node",
-					"the standard spelling of the node is `decide`")
-			}
 			w.walkActionBody(n.Members)
 		case *ast.TransitionMember:
 			if n.ToSpan.Len > 0 {
@@ -304,18 +296,14 @@ func isRequirementReferenceExpression(node ast.Node) bool {
 	}
 }
 
-// initialNode reports the `initial` spelling of the node, and a one-ended `first
-// <node>;` outside an action body: InitialNodeMember is reachable from
-// ActionBodyItem alone (SysML.xtext:1376), never from DefinitionBodyItem (:516).
+// initialNode reports a one-ended `first <node>;` outside an action body:
+// InitialNodeMember is reachable from ActionBodyItem alone (SysML.xtext:1376),
+// never from DefinitionBodyItem (:516).
 func (w *notationWalker) initialNode(n *ast.InitialNode) {
-	switch {
-	case n.Keyword == "initial":
-		w.extension(keywordSpan(n, n.Keyword), "`initial` as an action node",
-			"the standard spelling of the node is `first`")
 	// A recovered `first <source> then <target>` reads as a one-ended node, so
 	// only a document that parsed cleanly is judged here.
-	case !w.inActionBody && n.Successor == nil && w.parsedClean:
-		w.extension(keywordSpan(n, n.Keyword), "a one-ended `first <node>;` outside an action body",
+	if !w.inActionBody && n.Successor == nil && w.parsedClean {
+		w.extension(keywordSpan(n, "first"), "a one-ended `first <node>;` outside an action body",
 			"only an action body admits it; elsewhere a succession names both ends, `first <source> then <target>`")
 	}
 }

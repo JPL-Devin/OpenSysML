@@ -183,9 +183,7 @@ var actionNodeKeywords = map[string]bool{
 	"join":      true,
 	"merge":     true,
 	"decide":    true,
-	"decision":  true,
 	"done":      true,
-	"final":     true,
 }
 
 // namesEdgeEnd reports whether a keyword after `then` names an edge end rather
