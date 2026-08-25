@@ -65,25 +65,37 @@ from the session's.
 
 Loading is parse, scope building, name resolution and the validation passes —
 what `sysml -validate` does. Each element is a part definition, a calculation, an
-action, a state machine or a part usage. On the current load path, an interleaved
-comparison against `origin/main` shows:
+action, a state machine or a part usage.
 
-| measurement | branch versus `origin/main` |
-| ----------- | --------------------------- |
-| `BenchmarkLoadModel` live-B/op | **-6.85%** geomean, **-8.49%** at 4,000 elements |
-| `BenchmarkLoadModel` B/op | **-1.59%** geomean |
-| `BenchmarkLoadModel` allocs/op | **-1.88%** geomean, **-2.38%** at 4,000 elements |
-| `BenchmarkLoadModel` sec/op | **-5.60%** geomean |
+| elements | load wall | allocated | live heap held |
+| -------- | --------- | --------- | -------------- |
+| 0        | 0.23 ms   | 112 KiB   | 32 KiB         |
+| 250      | 19 ms     | 11.7 MiB  | 2.5 MiB        |
+| 1 000    | 69 ms     | 46 MiB    | 9.8 MiB        |
+| 4 000    | 307 ms    | 187 MiB   | 39 MiB         |
 
-Whole-binary `-validate` over the 12,000-element clean model, measured in seven
-interleaved repetitions, went from **1.076 s to 1.027 s** median wall time,
-**540.8 to 529.7 MiB** allocated, and **6.161M to 6.031M** allocations. Median
-peak RSS went from **290.0 to 283.3 MB**. The branch was faster in every paired
-repetition; the 1,000-element benchmark point is the only individually
-significant time result (`p=0.032`).
+The `elements=0` row is what a session costs before it holds a model of its own:
+**32 KiB held and 112 KiB allocated**. The standard library is no longer indexed
+eagerly per session, so a process serving many sessions (the LSP, a server) no
+longer pays a multi-megabyte floor for each one.
 
-Both time and memory grow roughly linearly with the model. Loading was quadratic
-once — doubling the model roughly quadrupled the time — for the reasons below.
+Above that baseline a model costs roughly **10 KiB held per element**, and
+allocates roughly **48 KiB per element** while loading, most of it short-lived
+parser and resolution garbage.
+
+Whole-binary scaling on `-validate` over generated models in standard notation,
+which report nothing:
+
+| elements | wall   | peak RSS |
+| -------- | ------ | -------- |
+| 3 000    | 0.33 s | 107 MiB  |
+| 6 000    | 0.55 s | 161 MiB  |
+| 12 000   | 1.03 s | 277 MiB  |
+
+Both time and memory grow linearly with the model. This change cut live heap held
+by 6.9% (8.5% at 4,000 elements) and allocations by about 2%, with output
+byte-identical. Loading was quadratic once — doubling the model roughly
+quadrupled the time — for the reasons below.
 
 ### What made it quadratic
 
@@ -133,7 +145,7 @@ added.
 
 A load allocates substantially more than the model it leaves behind holds, and a
 CPU profile of it is spent in the collector, so allocation volume is what a
-load's wall time follows. The reductions now cover three major sources:
+load's wall time follows. The load's major allocation sources include:
 
 - The validation passes each walked the document's symbol tree themselves, copying
   every scope's member list on the way — 17 traversals of the same tree per
@@ -143,6 +155,9 @@ load's wall time follows. The reductions now cover three major sources:
   when it held no named member. Flat declaration-ordered storage removes both
   costs from empty scopes and avoids per-key buckets and one-element slices from
   populated scopes.
+- `parser.fill` grows the token buffer as it reads. The parser sizes that buffer
+  from source length; the estimate suits dense models and over-allocates on
+  sparse ones.
 - A wildcard import surfaces a name by enumerating the target namespace's direct
   children (`symbols.Index.LookupDirectChildren`), which rebuilt and re-sorted
   that list on every unqualified lookup made through the import. The index now
