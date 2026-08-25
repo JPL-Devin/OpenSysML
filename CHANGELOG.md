@@ -31,7 +31,8 @@ same service release, sharing its parse cache, and is stopped when the last of t
   start times to authenticate a pid with, no stale-record cleanup, no lockfile, and no
   port-collision retry. The guarantee they protected is kept by construction — the client
   signals only the `Popen` of the child it started, so no pid it did not start, reused or
-  otherwise, can be signalled. `OPENSYSML_STATE_DIR` still moves the binary cache.
+  otherwise, can be signalled. `OPENSYSML_STATE_DIR` moved those records and nothing else,
+  so it no longer has any effect; the binary is cached in `~/.opensysml/bin` as before.
 - `filelock` and `psutil` are no longer runtime dependencies of the client.
 
 ## 0.2.1 — 2026-08-24

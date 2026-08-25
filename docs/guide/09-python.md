@@ -56,9 +56,10 @@ binary, so it catches corruption but not a republished release. A release this
 cached binary rather than trusting the served checksum; `export
 OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1` for any repository, which a
 fork's releases do not need) accepts same-origin trust explicitly for the repository
-it names, with a warning. `OPENSYSML_STATE_DIR` moves the state directory
-(`~/.opensysml`) holding the binary cache; a service the client starts is a
-private child of the interpreter and keeps no state there.
+it names, with a warning. The binary is cached in `~/.opensysml/bin`; a service the
+client starts is a private child of the interpreter and keeps no state on disk, so
+`OPENSYSML_STATE_DIR`, which moved the service records only, no longer does
+anything.
 
 The published releases up to v0.0.4 carry the `sysml`/`sysml-lsp` archives only;
 `sysml-grpc` binaries are published from the next release onward, so until then
