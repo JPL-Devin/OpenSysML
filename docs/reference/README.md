@@ -9,6 +9,8 @@ why. The handbook that puts them in order is [the guide](../guide/).
 - **[Environment variables](environment.md)** — the bounds one run may spend, and paths
 - **[Go API](api.md)** — the public API of every package
 - **[Python API](python-api.md)** — `opensysml`, its generated typed classes and latency
+- **[Service transports](service-transports.md)** — what `sysml-grpc` serves on one port, which
+  body encoding a client should choose, and the flags for CORS, TLS and health
 - **[RDF mapping](rdf-mapping.md)** — which triples a model becomes, what is not mapped, and
   why the mapping is experimental
 - **[OSLC Query text](oslc-query.md)** — element-identification query syntax and semantics

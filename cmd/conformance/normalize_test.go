@@ -16,8 +16,23 @@ func TestOnlySetFieldsAreNormalized(t *testing.T) {
 	if _, ok := tree["error"]; ok {
 		t.Errorf("error is present, want it absent when unset: %v", tree)
 	}
-	if got, _ := lookup(tree, "result.int_value"); got != float64(4) {
-		t.Errorf("result.int_value = %v, want 4", got)
+	if got, _ := lookup(tree, "result.int_value"); got != integer(4) {
+		t.Errorf("result.int_value = %v (%T), want the integer 4", got, got)
+	}
+}
+
+// TestIntegralFieldsStayIntegral verifies an int field does not become a
+// float64, which would compare it within the Real tolerance.
+func TestIntegralFieldsStayIntegral(t *testing.T) {
+	tree := newNormalizer("").normalize((&pb.DiagnosticsResponse{
+		Diagnostics: []*pb.Diagnostic{{Span: &pb.Span{StartLine: 7}}},
+	}).ProtoReflect())
+	got, _ := lookup(tree, "diagnostics.0.span.start_line")
+	if _, isFloat := got.(float64); isFloat {
+		t.Errorf("start_line = %v is a float64, want an integer", got)
+	}
+	if got != integer(7) {
+		t.Errorf("start_line = %v (%T), want the integer 7", got, got)
 	}
 }
 

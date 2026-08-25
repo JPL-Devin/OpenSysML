@@ -133,6 +133,7 @@ nav:
       - Language server: reference/lsp.md
       - Go API: reference/api.md
       - Python API: reference/python-api.md
+      - Service transports: reference/service-transports.md
       - RDF mapping: reference/rdf-mapping.md
       - Grammar: reference/grammar/README.md
       - Grammar conformance audit: reference/grammar/conformance-audit.md

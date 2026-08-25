@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"slices"
@@ -11,7 +12,9 @@ import (
 
 // tolerance is the relative difference two Real values may have and still be
 // the same value: enough for a different summation order, far below any
-// difference a model would state.
+// difference a model would state. It applies to Real alone; an integral field
+// is compared exactly, since a tolerance there would let large counts and ids
+// differ and still pass.
 const tolerance = 1e-9
 
 // check compares a normalized response against one expectation, returning one
@@ -189,21 +192,61 @@ func match(path string, want, got any) []string {
 			failures = append(failures, match(join(path, strconv.Itoa(i)), expected[i], actual[i])...)
 		}
 		return failures
+	case json.Number:
+		return matchNumber(path, expected.String(), got)
 	case float64:
-		number, ok := got.(float64)
-		if !ok {
-			return []string{fmt.Sprintf("%s: %s, want the number %v", at(path), render(got), expected)}
-		}
-		if !near(number, expected) {
-			return []string{fmt.Sprintf("%s: %v, want %v", at(path), number, expected)}
-		}
-		return nil
+		return matchNumber(path, strconv.FormatFloat(expected, 'g', -1, 64), got)
 	default:
 		if fmt.Sprint(want) != fmt.Sprint(got) {
 			return []string{fmt.Sprintf("%s: %s, want %s", at(path), render(got), render(want))}
 		}
 		return nil
 	}
+}
+
+// matchNumber compares an expected number, written as the literal a scenario
+// holds, against the value in the response.
+func matchNumber(path, want string, got any) []string {
+	switch actual := got.(type) {
+	case integer:
+		return matchIntegral(path, want, strconv.FormatInt(int64(actual), 10))
+	case unsigned:
+		return matchIntegral(path, want, strconv.FormatUint(uint64(actual), 10))
+	case float64:
+		number, err := strconv.ParseFloat(want, 64)
+		if err != nil || !near(actual, number) {
+			return []string{fmt.Sprintf("%s: %v, want %s", at(path), actual, want)}
+		}
+		return nil
+	default:
+		return []string{fmt.Sprintf("%s: %s, want the number %s", at(path), render(got), want)}
+	}
+}
+
+// matchIntegral compares an integral field by its digits, so no difference is
+// lost to floating point on the way.
+func matchIntegral(path, want, got string) []string {
+	digits, ok := integerLiteral(want)
+	if !ok || digits != got {
+		return []string{fmt.Sprintf("%s: %s, want %s", at(path), got, want)}
+	}
+	return nil
+}
+
+// integerLiteral is an expected number as the digits of a whole number, also
+// accepting the "1500.0" and "1.5e3" spellings of one.
+func integerLiteral(text string) (string, bool) {
+	if _, err := strconv.ParseInt(text, 10, 64); err == nil {
+		return text, true
+	}
+	if _, err := strconv.ParseUint(text, 10, 64); err == nil {
+		return text, true
+	}
+	number, err := strconv.ParseFloat(text, 64)
+	if err != nil || number != math.Trunc(number) || math.Abs(number) >= 1<<63 {
+		return "", false
+	}
+	return strconv.FormatInt(int64(number), 10), true
 }
 
 // near reports whether two Real values are the same within tolerance.
@@ -222,6 +265,13 @@ func isDefault(want any) bool {
 		return !value
 	case float64:
 		return value == 0
+	case integer:
+		return value == 0
+	case unsigned:
+		return value == 0
+	case json.Number:
+		number, err := strconv.ParseFloat(value.String(), 64)
+		return err == nil && number == 0
 	case string:
 		return value == ""
 	case []any:

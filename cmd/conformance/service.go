@@ -1,25 +1,172 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
-// service is a sysml-grpc the runner started, and the connection to it.
+// client is the protocol-neutral interface used by conformance scenarios.
+type client interface {
+	protocol() string
+	call(context.Context, string, protoreflect.Message) (protoreflect.Message, error)
+	close()
+}
+
+type grpcClient struct{ conn *grpc.ClientConn }
+
+func (c *grpcClient) protocol() string { return "grpc" }
+func (c *grpcClient) close()           {}
+func (c *grpcClient) call(ctx context.Context, method string, request protoreflect.Message) (protoreflect.Message, error) {
+	descriptor, err := methodByName(method)
+	if err != nil {
+		return nil, err
+	}
+	if request == nil {
+		request = dynamicpb.NewMessage(descriptor.Input())
+	}
+	response := dynamicpb.NewMessage(descriptor.Output())
+	path := fmt.Sprintf("/%s/%s", serviceName, descriptor.Name())
+	if err := c.conn.Invoke(ctx, path, request.Interface(), response.Interface()); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+type connectClient struct {
+	httpClient *http.Client
+	baseURL    string
+	json       bool
+}
+
+func (c *connectClient) protocol() string {
+	if c.json {
+		return "connect-json"
+	}
+	return "connect"
+}
+
+func (c *connectClient) close() {}
+
+func (c *connectClient) call(ctx context.Context, method string, request protoreflect.Message) (protoreflect.Message, error) {
+	descriptor, err := methodByName(method)
+	if err != nil {
+		return nil, err
+	}
+	if request == nil {
+		request = dynamicpb.NewMessage(descriptor.Input())
+	}
+	var body []byte
+	contentType := "application/proto"
+	if c.json {
+		body, err = protojson.Marshal(request.Interface())
+		contentType = "application/json"
+	} else {
+		body, err = proto.Marshal(request.Interface())
+	}
+	if err != nil {
+		return nil, fmt.Errorf("marshal %s request: %w", method, err)
+	}
+	url := fmt.Sprintf("%s/%s/%s", c.baseURL, serviceName, descriptor.Name())
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpRequest.Header.Set("Content-Type", contentType)
+	response, err := c.httpClient.Do(httpRequest)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	data, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		var problem struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(data, &problem) != nil {
+			return nil, status.Error(codes.Unknown, response.Status)
+		}
+		return nil, status.Error(connectCode(problem.Code), problem.Message)
+	}
+	result := dynamicpb.NewMessage(descriptor.Output())
+	if c.json {
+		err = protojson.Unmarshal(data, result)
+	} else {
+		err = proto.Unmarshal(data, result)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal %s response: %w", method, err)
+	}
+	return result, nil
+}
+
+func connectCode(name string) codes.Code {
+	switch strings.ToLower(name) {
+	case "canceled":
+		return codes.Canceled
+	case "unknown":
+		return codes.Unknown
+	case "invalid_argument":
+		return codes.InvalidArgument
+	case "deadline_exceeded":
+		return codes.DeadlineExceeded
+	case "not_found":
+		return codes.NotFound
+	case "already_exists":
+		return codes.AlreadyExists
+	case "permission_denied":
+		return codes.PermissionDenied
+	case "resource_exhausted":
+		return codes.ResourceExhausted
+	case "failed_precondition":
+		return codes.FailedPrecondition
+	case "aborted":
+		return codes.Aborted
+	case "out_of_range":
+		return codes.OutOfRange
+	case "unimplemented":
+		return codes.Unimplemented
+	case "internal":
+		return codes.Internal
+	case "unavailable":
+		return codes.Unavailable
+	case "data_loss":
+		return codes.DataLoss
+	case "unauthenticated":
+		return codes.Unauthenticated
+	default:
+		return codes.Unknown
+	}
+}
+
+// service is a sysml-grpc process the runner started.
 type service struct {
 	binary  string
 	process *exec.Cmd
 	conn    *grpc.ClientConn
+	target  string
 	log     *os.File
 	// exited closes when the process has been reaped, so an early crash is seen
 	// rather than waited out. waitErr is read only after it closes.
@@ -44,6 +191,10 @@ func buildService(repoRoot, outDir string) (string, error) {
 
 // startService starts the service on a free port and waits until it answers.
 func startService(ctx context.Context, binary, logPath string, cacheSize int) (*service, error) {
+	return startServiceWithTransport(ctx, binary, logPath, cacheSize, transportConnect)
+}
+
+func startServiceWithTransport(ctx context.Context, binary, logPath string, cacheSize int, transport string) (*service, error) {
 	port, healthPort, err := freePorts()
 	if err != nil {
 		return nil, err
@@ -58,6 +209,7 @@ func startService(ctx context.Context, binary, logPath string, cacheSize int) (*
 		"-health-port", fmt.Sprint(healthPort),
 		"-cache-size", fmt.Sprint(cacheSize),
 		"-log-level", "error",
+		"-transport", transport,
 	)
 	process.Stdout = log
 	process.Stderr = log
@@ -78,11 +230,25 @@ func startService(ctx context.Context, binary, logPath string, cacheSize int) (*
 		return nil, err
 	}
 	svc.conn = conn
+	svc.target = target
 	if err := svc.waitReady(ctx, target, logPath); err != nil {
 		svc.stop()
 		return nil, err
 	}
 	return svc, nil
+}
+
+func (s *service) client(protocol string) (client, error) {
+	switch protocol {
+	case "grpc":
+		return &grpcClient{conn: s.conn}, nil
+	case "connect":
+		return &connectClient{httpClient: http.DefaultClient, baseURL: "http://" + s.target}, nil
+	case "connect-json":
+		return &connectClient{httpClient: http.DefaultClient, baseURL: "http://" + s.target, json: true}, nil
+	default:
+		return nil, fmt.Errorf("unknown protocol %q", protocol)
+	}
 }
 
 // waitReady calls GetServerInfo until the service answers it.

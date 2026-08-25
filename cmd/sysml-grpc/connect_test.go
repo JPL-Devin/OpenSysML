@@ -5,13 +5,21 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
@@ -20,6 +28,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -36,7 +45,7 @@ func connectServer(t *testing.T) string {
 	}
 	t.Cleanup(svc.Close)
 
-	srv := httptest.NewServer(h2c.NewHandler(connectHandler(svc, "test"), &http2.Server{}))
+	srv := httptest.NewServer(h2c.NewHandler(connectHandler(svc, "test", nil), &http2.Server{}))
 	t.Cleanup(srv.Close)
 	return srv.URL
 }
@@ -185,4 +194,135 @@ func TestConnectReportsStatusCodes(t *testing.T) {
 	if got := connect.CodeOf(err); got != connect.CodeNotFound {
 		t.Errorf("code = %s, want %s", got, connect.CodeNotFound)
 	}
+}
+
+func TestConnectRejectsGRPCWebText(t *testing.T) {
+	url := connectServer(t)
+	request, err := http.NewRequest(http.MethodPost, url+"/sysml.SysMLService/GetServerInfo", strings.NewReader(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/grpc-web-text")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusUnsupportedMediaType {
+		t.Fatalf("status = %d, want 415", response.StatusCode)
+	}
+}
+
+func TestServeConnectTLS(t *testing.T) {
+	svc, err := sysmlgrpc.NewService(4, "test")
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(svc.Close)
+	certFile, keyFile := writeTestCertificate(t)
+	certificate, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(certificate) {
+		t.Fatal("append test certificate")
+	}
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	served := make(chan error, 1)
+	go func() {
+		served <- serveConnect(ctx, lis, svc, "test", nil, certFile, keyFile)
+	}()
+
+	address := lis.Addr().String()
+	httpClient := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: "127.0.0.1", RootCAs: roots},
+	}}
+	var response *http.Response
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		request, requestErr := http.NewRequest(http.MethodGet, "https://"+address+"/health", nil)
+		if requestErr == nil {
+			response, err = httpClient.Do(request)
+			if err == nil {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err != nil || response == nil {
+		t.Fatalf("TLS health request: %v", err)
+	}
+	response.Body.Close()
+	if response.ProtoMajor != 1 {
+		t.Errorf("TLS JSON client used HTTP/%d, want HTTP/1.1", response.ProtoMajor)
+	}
+
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+		MinVersion: tls.VersionTLS12,
+		ServerName: "127.0.0.1",
+		RootCAs:    roots,
+	})))
+	if err != nil {
+		t.Fatalf("grpc dial: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := pb.NewSysMLServiceClient(conn)
+	if _, err := client.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source: &pb.ParseFileRequest_Content{Content: connectTestModel},
+	}); err != nil {
+		t.Fatalf("TLS ParseFile: %v", err)
+	}
+	cancel()
+	select {
+	case err := <-served:
+		if err != nil {
+			t.Fatalf("serveConnect: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serveConnect did not stop")
+	}
+}
+
+func writeTestCertificate(t *testing.T) (string, string) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		t.Fatalf("serial: %v", err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "127.0.0.1"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("CreateCertificate: %v", err)
+	}
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatalf("MarshalPKCS8PrivateKey: %v", err)
+	}
+	dir := t.TempDir()
+	certFile := dir + "/cert.pem"
+	keyFile := dir + "/key.pem"
+	if err := os.WriteFile(certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
+		t.Fatalf("write cert: %v", err)
+	}
+	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0600); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+	return certFile, keyFile
 }

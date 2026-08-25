@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,8 @@ func response() map[string]any {
 			map[string]any{"id": "Demo::spare", "type": "PartUsage"},
 		},
 		"capabilities": []any{"query", "convert"},
+		"step_count":   integer(1_000_000_000_000),
+		"withheld":     unsigned(3),
 	}
 }
 
@@ -72,6 +75,39 @@ func TestRealsCompareWithinTolerance(t *testing.T) {
 		"mass": map[string]any{"value": map[string]any{"real_value": 1500.1}},
 	}}}
 	assertFails(t, &Expect{Response: beyond}, "1500.1")
+}
+
+// TestIntegersCompareExactly verifies the Real tolerance does not reach an
+// integral field, where it would let a large count differ and still pass.
+func TestIntegersCompareExactly(t *testing.T) {
+	assertPasses(t, &Expect{Response: map[string]any{"step_count": 1_000_000_000_000.0}})
+	// Within 1e-9 relative of the actual value, so a tolerance would accept it.
+	assertFails(t, &Expect{Response: map[string]any{"step_count": 1_000_000_000_500.0}}, "step_count")
+	assertPasses(t, &Expect{Response: map[string]any{"withheld": 3.0}})
+	assertFails(t, &Expect{Response: map[string]any{"withheld": 4.0}}, "withheld")
+}
+
+// TestIntegersCompareByTheirDigits verifies an expectation a float64 cannot
+// hold exactly is still compared exactly.
+func TestIntegersCompareByTheirDigits(t *testing.T) {
+	huge := response()
+	huge["step_count"] = integer(9_007_199_254_740_993) // 2^53 + 1
+	if failures := check(&Expect{Response: map[string]any{
+		"step_count": json.Number("9007199254740993"),
+	}}, huge); len(failures) > 0 {
+		t.Fatalf("expectation failed: %s", strings.Join(failures, "; "))
+	}
+	if failures := check(&Expect{Response: map[string]any{
+		"step_count": json.Number("9007199254740992"),
+	}}, huge); len(failures) == 0 {
+		t.Fatal("9007199254740992 matched 9007199254740993, want a mismatch")
+	}
+}
+
+// TestAnIntegerExpectationRejectsANonNumber verifies an integral field is not
+// silently matched by whatever else is there.
+func TestAnIntegerExpectationRejectsANonNumber(t *testing.T) {
+	assertFails(t, &Expect{Response: map[string]any{"content": 1.0}}, "want the number")
 }
 
 // TestADefaultExpectationMatchesAnUnsetField verifies an unset field and one

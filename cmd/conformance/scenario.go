@@ -79,6 +79,9 @@ func loadScenarios(dir string) ([]*Scenario, error) {
 		var suite suiteFile
 		decoder := json.NewDecoder(strings.NewReader(string(data)))
 		decoder.DisallowUnknownFields()
+		// Expected numbers stay as their literals, so a whole number too large
+		// for a float64 is still compared by its digits.
+		decoder.UseNumber()
 		if err := decoder.Decode(&suite); err != nil {
 			return nil, fmt.Errorf("%s: %w", entry, err)
 		}

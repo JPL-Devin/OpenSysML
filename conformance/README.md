@@ -10,11 +10,16 @@ make conformance                       # the CI gate; writes bin/conformance-rep
 go run ./cmd/conformance -v             # print each scenario's normalized response
 go run ./cmd/conformance -run evaluate  # only the scenarios whose id matches
 go run ./cmd/conformance -binary ./bin/sysml-grpc   # test a binary already built
+go run ./cmd/conformance -protocols grpc,connect,connect-json
 ```
 
-`-report <file>` writes the machine-readable summary (`-` writes it to stdout): totals, the
-capabilities the service reported, and one entry per scenario with its outcome, status, duration
-and, when it disagreed, the list of mismatches.
+`-report <file>` writes the machine-readable summary (`-` writes it to stdout). The top-level
+object contains aggregate totals and a `protocols` list. Each protocol entry retains the
+capabilities and one result per scenario with its outcome, status, duration and, when it
+disagreed, the list of mismatches. The default protocols are `grpc`, `connect` (protobuf body)
+and `connect-json` (JSON body); all three runs use one service process. Use `-transport grpc
+-protocols grpc` to exercise a grpc-go-only service. Connect protocol clients issue unary POSTs
+to `/sysml.SysMLService/<Method>` with `application/proto` or `application/json` bodies.
 
 ## Layout
 

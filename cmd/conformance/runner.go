@@ -37,6 +37,7 @@ type Result struct {
 
 // Summary is the machine-readable report of a run.
 type Summary struct {
+	Protocol     string    `json:"protocol"`
 	Service      string    `json:"service"`
 	Capabilities []string  `json:"capabilities"`
 	Total        int       `json:"total"`
@@ -50,6 +51,7 @@ type Summary struct {
 // runner executes scenarios against one service.
 type runner struct {
 	service      *service
+	client       client
 	fixtures     string
 	capabilities []string
 	models       map[Model]string // fixture → the hash the service gave its parse
@@ -63,7 +65,7 @@ type runner struct {
 func (r *runner) readCapabilities(ctx context.Context) error {
 	call, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	response, err := r.service.call(call, "GetServerInfo", nil)
+	response, err := r.client.call(call, "GetServerInfo", nil)
 	if err != nil {
 		return fmt.Errorf("GetServerInfo: %w", err)
 	}
@@ -78,7 +80,7 @@ func (r *runner) readCapabilities(ctx context.Context) error {
 
 // runAll executes every scenario matching filter and reports as it goes.
 func (r *runner) runAll(ctx context.Context, scenarios []*Scenario, filter *regexp.Regexp) *Summary {
-	summary := &Summary{Service: r.service.binary, Capabilities: r.capabilities}
+	summary := &Summary{Protocol: r.client.protocol(), Service: r.service.binary, Capabilities: r.capabilities}
 	for _, scenario := range scenarios {
 		if filter != nil && !filter.MatchString(scenario.ID) {
 			continue
@@ -98,7 +100,8 @@ func (r *runner) runAll(ctx context.Context, scenarios []*Scenario, filter *rege
 		}
 		r.report(result)
 	}
-	fmt.Fprintf(r.out, "\n%d scenarios: %d passed, %d failed, %d skipped, %d in error\n",
+	fmt.Fprintf(r.out, "\n[%s] %d scenarios: %d passed, %d failed, %d skipped, %d in error\n",
+		r.client.protocol(),
 		summary.Total, summary.Passed, summary.Failed, summary.Skipped, summary.Errored)
 	return summary
 }
@@ -151,7 +154,7 @@ func (r *runner) run(ctx context.Context, scenario *Scenario) *Result {
 
 	call, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	response, callErr := r.service.call(call, scenario.method(), request)
+	response, callErr := r.client.call(call, scenario.method(), request)
 
 	wantStatus := expect.Status
 	if wantStatus == "" {
@@ -311,7 +314,7 @@ func (r *runner) modelHash(ctx context.Context, model Model) (string, error) {
 
 	call, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	response, err := r.service.call(call, "ParseFile", request)
+	response, err := r.client.call(call, "ParseFile", request)
 	if err != nil {
 		return "", fmt.Errorf("parsing fixture %q: %w", model.Fixture, err)
 	}
