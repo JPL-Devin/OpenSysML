@@ -34,8 +34,8 @@ func EncodeElementID(qualifiedName string) string {
 	return b.String()
 }
 
-// owningMembershipSuffix ends a membership's id. EncodeElementID cannot produce
-// `_o` — a '_' there starts `__` or a hex escape — so the two id spaces are disjoint.
+// owningMembershipSuffix ends a membership's id. An encoded id never ends in a
+// lone '_', so no element id ends in `_om` and the two id spaces are disjoint.
 const owningMembershipSuffix = "_om"
 
 // OwningMembershipID returns the id of the OwningMembership that owns the
@@ -56,8 +56,8 @@ func DecodeOwningMembershipID(id string) (string, bool) {
 }
 
 // expressionPositionSeparator joins an expression node's id to the position it
-// holds. EncodeElementID cannot produce `_p` either, so an expression id
-// collides with neither an element id nor a membership id.
+// holds. An encoded id never ends in a lone '_', so an expression id collides
+// with neither an element id nor a membership id.
 const expressionPositionSeparator = "_p"
 
 // ExpressionNodeID returns the id of the expression node at position under the
@@ -69,25 +69,40 @@ func ExpressionNodeID(owner, position string) string {
 }
 
 // DecodeExpressionNodeID reverses ExpressionNodeID, returning the qualified name
-// of the element the node belongs to and the positions leading down to it.
+// of the element the node belongs to and the positions leading down to it. An
+// encoded id can hold `_p` itself — `::p` encodes to `__p` — so the owner is the
+// shortest prefix before a separator that is a well-formed id on its own; a `_p`
+// inside an encoded id leaves a prefix ending in a lone '_', which never is.
 func DecodeExpressionNodeID(id string) (string, []string, bool) {
-	parts := strings.Split(id, expressionPositionSeparator)
-	if len(parts) < 2 {
-		return "", nil, false
+	for from := 0; from < len(id); {
+		next := strings.Index(id[from:], expressionPositionSeparator)
+		if next < 0 {
+			break
+		}
+		at := from + next
+		if owner, ok := DecodeElementID(id[:at]); ok {
+			if positions, ok := decodeExpressionPositions(id[at+len(expressionPositionSeparator):]); ok {
+				return owner, positions, true
+			}
+		}
+		from = at + 1
 	}
-	owner, ok := DecodeElementID(parts[0])
-	if !ok {
-		return "", nil, false
-	}
-	positions := make([]string, 0, len(parts)-1)
-	for _, part := range parts[1:] {
+	return "", nil, false
+}
+
+// decodeExpressionPositions decodes the separated positions under an owner id. A
+// position holds no `::`, so an encoded one cannot hold the separator.
+func decodeExpressionPositions(rest string) ([]string, bool) {
+	parts := strings.Split(rest, expressionPositionSeparator)
+	positions := make([]string, 0, len(parts))
+	for _, part := range parts {
 		position, ok := DecodeElementID(part)
 		if !ok {
-			return "", nil, false
+			return nil, false
 		}
 		positions = append(positions, position)
 	}
-	return owner, positions, true
+	return positions, true
 }
 
 // DecodeElementID reverses EncodeElementID, reporting whether id is a

@@ -267,8 +267,8 @@ The rules the tree follows:
   element therefore never collide, and the IRIs are deterministic, like element
   IRIs. The `_p` marker and the encoding of the position keep a node's id inside
   `[A-Za-z0-9_-]+`, the alphabet the SysML v2 API's `requireValidId` accepts, and
-  it can never be read as an element id or a membership id, because element ids
-  never contain `_p`.
+  it can never be read as an element id or a membership id, because an element id
+  never ends in a lone `_`.
 - **Every node carries `sysx:sourceText`**, the notation it was written as. The
   tree is *additive*: the text is what a conversion back to notation is written
   from, so exactness does not depend on the tree being complete, and

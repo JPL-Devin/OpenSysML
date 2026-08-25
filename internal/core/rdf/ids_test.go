@@ -102,6 +102,8 @@ func TestOwningMembershipIDRoundTripsAndCannotCollide(t *testing.T) {
 func TestExpressionNodeIDRoundTripsAndCannotCollide(t *testing.T) {
 	for _, qname := range []string{
 		"Vehicle", "Demo::Rover::wheels", "A_B::C", "日本::語", "A::B_pvalue",
+		// A name segment starting with 'p' puts the separator inside the owner id.
+		"A::part", "Demo::port::p", "P::p::pvalue",
 	} {
 		for _, positions := range [][]string{
 			{"value"}, {"upperBound"}, {"condition", "a0"}, {"end0"}, {"a b"},
