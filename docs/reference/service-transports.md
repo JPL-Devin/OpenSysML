@@ -48,8 +48,10 @@ plus `json_format` decode CPU, so a faster link does not help and the cost falls
 ends. Small answers show no measurable difference between the encodings, which is why the
 warning is about large ones.
 
-The server says so at runtime rather than only here: a JSON-encoded response over 256 KiB
-logs a warning naming the procedure and the size. There is no cheaper JSON path to switch to
+The server says so at runtime rather than only here: a JSON-encoded response whose message
+exceeds 256 KiB logs a warning naming the procedure and the size. The check thresholds
+`proto.Size`, so it costs no second encoding — the number logged is the protobuf size of the
+answer, a few percent under what the JSON body will weigh. There is no cheaper JSON path to switch to
 — `connect-go` marshals such a response once, not twice, so there is no double marshal to
 remove, and `protojson` has no streaming encoder to substitute. The mitigation available is
 the choice of encoding, and it belongs to the client.
