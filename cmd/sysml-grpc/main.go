@@ -126,10 +126,8 @@ func main() {
 			}
 		}()
 		if *transport == transportConnect {
-			slog.Warn("separate health listener is deprecated",
-				"/health", "served on the main port",
-				"health-port", "set to 0 to disable the second listener",
-				"default", "will become disabled in a future release")
+			slog.Warn("the separate health listener is deprecated; /health is served on the main port and -health-port 0 disables it",
+				"health_port", *healthPort)
 		}
 	}
 

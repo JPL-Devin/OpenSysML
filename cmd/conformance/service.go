@@ -24,6 +24,7 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
+// client is the protocol-neutral interface used by conformance scenarios.
 type client interface {
 	protocol() string
 	call(context.Context, string, protoreflect.Message) (protoreflect.Message, error)

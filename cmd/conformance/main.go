@@ -25,8 +25,14 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// serviceName is the service every scenario addresses.
-const serviceName = "sysml.SysMLService"
+const (
+	// serviceName is the service every scenario addresses.
+	serviceName      = "sysml.SysMLService"
+	transportConnect = "connect"
+	transportGRPC    = "grpc"
+)
+
+var knownProtocols = map[string]struct{}{"grpc": {}, "connect": {}, "connect-json": {}}
 
 func main() {
 	var (
@@ -148,13 +154,6 @@ func validateProtocols(protocols []string, transport string) error {
 	return nil
 }
 
-const (
-	transportConnect = "connect"
-	transportGRPC    = "grpc"
-)
-
-var knownProtocols = map[string]struct{}{"grpc": {}, "connect": {}, "connect-json": {}}
-
 func parseProtocols(value string) ([]string, error) {
 	var protocols []string
 	seen := map[string]struct{}{}
@@ -178,6 +177,7 @@ func parseProtocols(value string) ([]string, error) {
 	return protocols, nil
 }
 
+// Report contains aggregate and per-protocol conformance results.
 type Report struct {
 	Service   string     `json:"service"`
 	Total     int        `json:"total"`

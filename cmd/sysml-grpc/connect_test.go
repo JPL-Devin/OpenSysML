@@ -45,7 +45,7 @@ func connectServer(t *testing.T) string {
 	}
 	t.Cleanup(svc.Close)
 
-	srv := httptest.NewServer(h2c.NewHandler(connectHandler(svc, "test"), &http2.Server{}))
+	srv := httptest.NewServer(h2c.NewHandler(connectHandler(svc, "test", nil), &http2.Server{}))
 	t.Cleanup(srv.Close)
 	return srv.URL
 }
@@ -315,8 +315,9 @@ func writeTestCertificate(t *testing.T) (string, string) {
 	if err != nil {
 		t.Fatalf("MarshalPKCS8PrivateKey: %v", err)
 	}
-	certFile := t.TempDir() + "/cert.pem"
-	keyFile := t.TempDir() + "/key.pem"
+	dir := t.TempDir()
+	certFile := dir + "/cert.pem"
+	keyFile := dir + "/key.pem"
 	if err := os.WriteFile(certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
 		t.Fatalf("write cert: %v", err)
 	}

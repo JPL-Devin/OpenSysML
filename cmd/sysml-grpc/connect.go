@@ -33,11 +33,7 @@ const (
 // connectHandler builds the routes a Connect server answers: every RPC of
 // SysMLService under /sysml.SysMLService/, gRPC server reflection, and the
 // health endpoint that otherwise needs a port of its own.
-func connectHandler(svc *sysmlgrpc.Service, ver string) http.Handler {
-	return connectHandlerWithOptions(svc, ver, nil)
-}
-
-func connectHandlerWithOptions(svc *sysmlgrpc.Service, ver string, origins map[string]struct{}) http.Handler {
+func connectHandler(svc *sysmlgrpc.Service, ver string, origins map[string]struct{}) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(protoconnect.NewSysMLServiceHandler(
 		sysmlgrpc.NewConnectAdapter(svc),
@@ -61,16 +57,18 @@ func connectHandlerWithOptions(svc *sysmlgrpc.Service, ver string, origins map[s
 // the context is cancelled. h2c carries HTTP/2 in cleartext, which is how an
 // existing gRPC client reaches an address that offers no TLS.
 func serveConnect(ctx context.Context, lis net.Listener, svc *sysmlgrpc.Service, ver string, origins map[string]struct{}, certFile, keyFile string) error {
+	handler := connectHandler(svc, ver, origins)
 	srv := &http.Server{
-		Handler:           h2c.NewHandler(connectHandlerWithOptions(svc, ver, origins), &http2.Server{}),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	if certFile != "" {
-		srv.Handler = connectHandlerWithOptions(svc, ver, origins)
 		srv.TLSConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			NextProtos: []string{"h2", "http/1.1"},
 		}
+	} else {
+		srv.Handler = h2c.NewHandler(handler, &http2.Server{})
 	}
 
 	errs := make(chan error, 1)
@@ -115,10 +113,9 @@ func connectLoggingInterceptor() connect.UnaryInterceptorFunc {
 				if message, ok := res.Any().(proto.Message); ok {
 					size := proto.Size(message)
 					if size >= 256*1024 {
-						slog.Warn("large JSON response",
+						slog.Warn("large JSON response; a protobuf body is several times cheaper for large answers",
 							"procedure", req.Spec().Procedure,
-							"response_size", size,
-							"message", "a protobuf body is several times cheaper for large answers")
+							"protobuf_size_bytes", size)
 					}
 				}
 			}
