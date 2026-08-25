@@ -65,6 +65,64 @@ func TestRedefinitionMasksTransitivelyRedefinedFeatures(t *testing.T) {
 	}
 }
 
+func TestRedefinitionClosureSkipsNamesakeIntermediate(t *testing.T) {
+	m, root := buildModel(t,
+		"part def A { part a; } part def B specializes A { part :>> a; }"+
+			" part def C specializes B { part c redefines B::a; }")
+	a := sym(t, root, "A").Scope.LookupLocalAll("a")[0]
+	ba := sym(t, root, "B").Scope.LookupLocalAll("a")[0]
+	c := sym(t, root, "C")
+	if !m.InheritanceMasked(c, ba) {
+		t.Fatalf("C's redefinition must mask B::a")
+	}
+	if m.InheritanceMasked(c, a) {
+		t.Fatalf("B::a's namesake edge must not mask A::a")
+	}
+}
+
+func TestCyclicRedefinitionMaskTerminates(t *testing.T) {
+	m, root := buildModel(t,
+		"part def A { part a redefines b; part b redefines a; }"+
+			" part def B specializes A {}")
+	if names := visibleNames(m, sym(t, root, "B")); len(names) != 0 {
+		t.Fatalf("cyclic redefinitions should mask both inherited features: %v", names)
+	}
+}
+
+func TestRedefinitionMaskFallsBackWhenClosureReachesOwner(t *testing.T) {
+	m := NewModel(nil)
+	owner := &symbols.Symbol{Name: "Owner", Scope: symbols.NewScope(nil, nil)}
+	candidate := &symbols.Symbol{Name: "candidate"}
+	m.redefined[candidate] = []*symbols.Symbol{owner}
+	mask := m.buildMaskFromCandidates(owner, func(yield func(*symbols.Symbol) bool) {
+		yield(candidate)
+	})
+	if len(mask) != 0 {
+		t.Fatalf("owner-dependent fallback produced mask %v, want empty", mask)
+	}
+}
+
+func TestRedefinitionClosureIsCached(t *testing.T) {
+	m, root := buildModel(t,
+		"part def A { part a; } part def B specializes A { part b redefines a; }")
+	b := sym(t, root, "B")
+	candidate, ok := b.Scope.LookupLocal("b")
+	if !ok {
+		t.Fatal("B declares b")
+	}
+	first, cyclic := m.redefinitionClosure(candidate)
+	if cyclic {
+		t.Fatal("simple redefinition unexpectedly cyclic")
+	}
+	if _, ok := m.redefClosure[candidate]; !ok {
+		t.Fatal("redefinition closure was not cached")
+	}
+	second, cyclic := m.redefinitionClosure(candidate)
+	if cyclic || len(second) != len(first) {
+		t.Fatalf("cached redefinition closure = %v, %v; want %v, false", second, cyclic, first)
+	}
+}
+
 func TestRedefinitionMasksOnlyTheFeatureItNames(t *testing.T) {
 	// Two inherited features carry the name `a`; only one is redefined, so the
 	// other keeps its name and `a` stays visible (masking is by element).
