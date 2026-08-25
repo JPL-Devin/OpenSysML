@@ -4961,3 +4961,106 @@ part def Loop { attribute a : Real = b + 1.0; attribute b : Real = a + 1.0; }
 
 reading `a` must still raise `FeatureValueError: … cyclic feature value dependency: Loop.a`, and the
 service must still answer `model.eval("1 + 1")` afterwards.
+
+## `sysml-grpc -transport {grpc|connect|stdio}` (transport prototypes, PR #563 class)
+
+`cmd/sysml-grpc` can serve three transports. Test each against the *same* build so a
+difference is the transport and not the service.
+
+```bash
+export PATH=/usr/local/go/bin:$HOME/go/bin:$PATH   # grpcurl lives in ~/go/bin
+make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/sysml-grpc   # never test a stale copy
+pkill -x sysml-grpc                                # -x, never -f
+```
+
+The Python client needs a protobuf the ambient interpreter does not have. The blueprint
+provisions `~/pv`, but it can be stale — check before trusting it, and reinstall if needed:
+
+```bash
+~/pv/bin/python -c "import opensysml, grpc, google.protobuf as p; print(p.__version__)" \
+  || ~/pv/bin/pip install -e python/
+```
+
+Client API names that are easy to guess wrong: `Connection(port=…, auto_start=False)`,
+then `server_info()`, `load_from_content(content)` → a `Model` whose hash is `m.hash`
+(not `model_hash`), `eval(expr, model_hash)`, `query(model_hash, …)`. There is no
+`get_server_info`/`parse_file`.
+
+### Connect transport
+
+`-transport connect -port P` puts gRPC, gRPC-Web, the Connect protocol, reflection and
+`/health` on port P. Note the separate `-health-port` server **still binds** in this mode, so
+`/health` answers on both ports; "the 8081 port stops being necessary" is a statement about
+future work, not something the flag already does.
+
+Probes worth running, in this order:
+
+```bash
+grpcurl -plaintext localhost:P list                       # reflection
+grpcurl -plaintext localhost:P list sysml.SysMLService | wc -l   # RPC count (15 today)
+curl -s --http1.1 -i -X POST http://localhost:P/sysml.SysMLService/ParseFile \
+  -H "Content-Type: application/json" -d '{"content":"package Demo { part def Rover { attribute mass = 12.5; } }"}'
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  http://localhost:P/sysml.SysMLService/GetServerInfo -H "Content-Type: application/grpc-web-text"
+```
+
+Expectations that are easy to misread as bugs:
+- An `int64` over Connect-**JSON** is a JSON **string** (`{"result":{"intValue":"7"}}`); over
+  Connect-**protobuf** it is a number. Both are correct.
+- A failed call over Connect-JSON is an HTTP status plus `{"code":"not_found","message":…}`,
+  not gRPC trailers.
+- `application/grpc-web-text` answers **415**: connect-go (checked at v1.20) ships
+  `application/grpc-web`, `+json` and `+proto` but no base64 text variant. Confirm with
+  `grep -rn "grpc-web-text" ~/go/pkg/mod/connectrpc.com/connect@vX.Y.Z/`.
+- gRPC-Web binary needs the 5-byte length prefix (`struct.pack(">BI", 0, len(msg)) + msg`) and
+  answers a message frame plus a trailer frame carrying `grpc-status: 0`.
+
+`ParseFile` of `package Demo { part def Rover { attribute mass = 12.5; } }` hashes to
+`6245ef4849a9019f3cbc64b03a54880f61d0fc3178f9be9d204d026f8007e78d` on every transport — a
+cheap cross-transport identity check.
+
+### stdio transport
+
+`-transport stdio` serves one client over pipes with LSP framing. Drive it from Python with
+three pipes and a stderr drainer (an undrained stderr can deadlock the child), and parse
+stdout **strictly** — read the headers, then exactly `Content-Length` bytes. That strictness is
+what proves the "stdout carries frames only" claim: run with `-log-level debug`, issue N calls,
+close stdin, and assert the remaining stdout is empty.
+
+Two encodings:
+- `Content-Type: application/json` with a JSON-RPC 2.0 envelope (`jsonrpc`/`id`/`method`/`params`).
+- `Content-Type: application/proto` plus `Sysml-Method` and `Sysml-Id`; the body is the bare
+  protobuf request. Replies carry `Sysml-Id`, `Sysml-Status-Code` and, on failure,
+  `Sysml-Status-Message` with an empty body.
+
+Status codes are the gRPC ones: unknown `modelHash` → 5 (`NotFound`), unknown method → 12,
+decode failures → 3. Compare any surprise against the same call over gRPC before calling it a
+bug — e.g. `Query` with no `query` field is `InvalidArgument "query is unset"` on *both*
+transports, and unknown JSON fields are silently discarded (`DiscardUnknown`), so
+`{"bogusField":1}` surfaces as the *next* validation error, not as an unknown-field error.
+
+Distinguish two classes of bad input, because they behave differently by design:
+- **Body-level** (non-JSON body, `jsonrpc:"1.0"`, unknown method, wrong-typed field) — answered
+  with an error frame; the session continues, and a following valid call must still succeed.
+- **Framing-level** (missing/unparseable/negative `Content-Length`, a header line with no
+  colon, a truncated body) — fatal: the process logs `stdio session ended in a protocol error`
+  to stderr and exits **1**. That is not a crash; check for `panic` in stderr to tell them apart.
+
+An oversized `Content-Length` is rejected before any allocation (`… exceeds the
+134217728-byte limit`), so watch for a *fast* exit rather than for RSS growth — the process is
+usually gone before `/proc/<pid>/status` can be read.
+
+Concurrency is the headline claim: pipeline a large `Query` (use the 73 KB
+`examples/pilot-corpora/sysml-examples/Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml`)
+followed by a cheap `Evaluate` and `GetServerInfo` **without reading in between**; the small
+answers arrive first, so ids are mandatory. Closing stdin ends a healthy session with exit 0.
+
+### The benchmark harness
+
+`~/pv/bin/python python/scripts/bench_transports.py --iterations 30 --spawns 3 --json out.json`
+runs in a couple of minutes and reproduces the published *shape*: large-model `Query` costs
+~6-7 ms in protobuf on all transports and ~40-47 ms in JSON (≈6-7×, serialization CPU, not
+bytes), cold start is ~4 ms for stdio vs ~6-8 ms over TCP, and every small-payload cell has an
+sd of the same order as its p50 — quote those as noise, never as a per-call transport win. The
+reported payload sizes (467,971 proto / 513,339 JSON for the large `Query`) are stable enough
+to diff against a document's table verbatim.
