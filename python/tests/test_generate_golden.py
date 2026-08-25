@@ -247,8 +247,9 @@ def test_check_passes_for_an_unchanged_model_and_fails_for_a_changed_one(tmp_pat
     source.write_text(FIXTURE.read_text())
     output = tmp_path / "demo_types.py"
     env = dict(os.environ)
-    # An isolated HOME keeps each CLI run's refcount from stopping the service.
-    env["HOME"] = str(tmp_path)
+    # The CLI runs are pointed at the service this test gates on, rather than each
+    # starting a private child of its own.
+    env["OPENSYSML_SERVICE"] = "localhost:50051"
 
     def run(*args):
         return subprocess.run(
@@ -286,9 +287,9 @@ def test_generated_classes_read_a_live_instance(tmp_path):
     """The documented workflow works end to end against a live service."""
     output = tmp_path / "demo_types.py"
     env = dict(os.environ)
-    # The CLI connects through the auto-start path, whose refcount lives under
-    # $HOME; an isolated HOME keeps its exit from shutting the service down.
-    env["HOME"] = str(tmp_path)
+    # The CLI is pointed at the service this test gates on, the same one it reads
+    # the generated classes against below.
+    env["OPENSYSML_SERVICE"] = "localhost:50051"
     result = subprocess.run(
         [sys.executable, "-m", "opensysml.generate", str(FIXTURE), "-o", str(output)],
         cwd=PYTHON_ROOT,

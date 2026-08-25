@@ -311,10 +311,12 @@ jobs:
         working-directory: python
         run: |
           pip install -e .
-          pip install pytest pytest-mock
+          pip install pytest pytest-mock psutil
 
-      # The integration tests need a service to talk to; without one they skip,
-      # which exercises nothing, so one runs here for the rest of the job.
+      # The integration tests connect to a service on the standard port with
+      # auto_start=False, the explicit opt-in to one the client does not manage;
+      # without it they skip, exercising nothing, so one runs here for the rest of
+      # the job. Tests naming no address start a private child of their own.
       - name: Start sysml-grpc service
         run: |
           chmod +x ~/.opensysml/bin/sysml-grpc

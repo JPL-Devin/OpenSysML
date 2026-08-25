@@ -37,7 +37,7 @@ package MyModel {
     calc def Margin {
         in reading;
         in threshold;
-        return threshold - reading;
+        threshold - reading
     }
 
     action calibrate {

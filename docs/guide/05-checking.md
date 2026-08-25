@@ -80,7 +80,7 @@ part System {
 sysml> calc distance {
   ...>     in x;
   ...>     in y;
-  ...>     return (x * x + y * y);
+  ...>     x * x + y * y
   ...> }
 ✓ calc distance
 

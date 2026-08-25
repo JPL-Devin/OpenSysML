@@ -25,8 +25,8 @@ class TestModuleLevelAPI:
             # Call load
             result = opensysml.load("test.sysml")
             
-            # Should create default connection with auto_start=True
-            MockConnection.assert_called_once_with('localhost', 50051, auto_start=True)
+            # No port named, so the connection starts a private child of its own.
+            MockConnection.assert_called_once_with('localhost', None, auto_start=True)
             
             # Should delegate to Connection.load(), not asking for strict loading
             mock_conn.load.assert_called_once_with(
@@ -147,9 +147,9 @@ class TestModuleLevelAPI:
             # Call connect
             result = opensysml.connect()
             
-            # Should create new connection with defaults
+            # No port named, so the connection starts a private child of its own.
             MockConnection.assert_called_once_with(
-                'localhost', 50051, auto_start=True, version=None,
+                'localhost', None, auto_start=True, version=None,
                 require_capabilities=None,
             )
             

@@ -1,37 +1,18 @@
 """Tests for Connection class."""
 
 import grpc
+import io
 import os
 import pytest
-import tempfile
+import subprocess
 import time
-from contextlib import ExitStack
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from opensysml.connection import (
     Connection,
-    START_PROBE_RPC_TIMEOUT,
-    START_TIMEOUT,
-    _OWNED_SERVICES,
-    _get_lockfile_path,
-    _service_key,
+    _private_services,
 )
-from opensysml.errors import OpenSysMLError, ServiceError
+from opensysml.errors import ConnectionError, OpenSysMLError, ServiceError
 from opensysml.proto import sysml_pb2
-
-
-@pytest.fixture
-def tmp_home(tmp_path, monkeypatch):
-    """Isolate HOME and the state dir, so no real service state is touched."""
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("OPENSYSML_STATE_DIR", str(home / ".opensysml"))
-    before = set(_OWNED_SERVICES)
-    yield home
-    # Only this test's records: another test's connection still needs its own.
-    for key in set(_OWNED_SERVICES) - before:
-        del _OWNED_SERVICES[key]
 
 
 def test_connection_init():
@@ -210,376 +191,196 @@ def test_connection_context_manager():
             # __exit__ should have called close() which closes the channel
             mock_chan_instance.close.assert_called_once()
 
-
-# --- Task 2: Service Auto-Start Tests ---
-
-
-def test_probe_service_running():
-    """Test _probe_service returns True when service responds."""
-    with patch('grpc.insecure_channel') as mock_channel:
-        mock_chan_instance = Mock()
-        mock_channel.return_value = mock_chan_instance
-        
-        mock_stub = Mock()
-        # Mock GetDiagnostics RPC success
-        mock_stub.GetDiagnostics.return_value = sysml_pb2.DiagnosticsResponse(diagnostics=[])
-        
-        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
-            conn = Connection(auto_start=False)
-            result = conn._probe_service('localhost', 50051, timeout=1.0)
-            
-            assert result is True
-            mock_stub.GetDiagnostics.assert_called_once()
+# --- Private service tests, against a child that is only mocked ---
 
 
-def test_probe_service_not_running():
-    """Test _probe_service returns False when service not reachable."""
-    with patch('grpc.insecure_channel') as mock_channel:
-        mock_chan_instance = Mock()
-        mock_channel.return_value = mock_chan_instance
-        
-        # Use real grpc._channel._InactiveRpcError for proper isinstance check
-        # Create a mock that raises UNAVAILABLE status
-        from grpc import _channel
-        
-        # Create state object for _InactiveRpcError
-        state = Mock()
-        state.code = grpc.StatusCode.UNAVAILABLE
-        state.details = "Connection refused"
-        
-        mock_error = _channel._InactiveRpcError(state)
-        
-        mock_stub = Mock()
-        # Mock GetDiagnostics RPC failure
-        mock_stub.GetDiagnostics.side_effect = mock_error
-        
-        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
-            conn = Connection(auto_start=False)
-            result = conn._probe_service('localhost', 50051, timeout=1.0)
-            
-            assert result is False
+class _FakeChild:
+    """A Popen stand-in that has bound an address and is still running."""
+
+    def __init__(self, stdout=b"", stderr=b"", code=None):
+        self.pid = os.getpid()
+        self.stdin = Mock()
+        self.stdout = io.BytesIO(stdout)
+        self.stderr = io.BytesIO(stderr)
+        self.args = []
+        self._code = code
+        self.terminated = False
+
+    def poll(self):
+        return self._code
+
+    def terminate(self):
+        self.terminated = True
+        self._code = -15
+
+    def kill(self):
+        self.terminate()
+
+    def wait(self, timeout=None):
+        return self._code
 
 
-def test_ensure_service_already_running():
-    """Test _ensure_service doesn't start if service already running."""
-    with patch('grpc.insecure_channel'):
-        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-            conn = Connection(auto_start=False)
-            
-            # Mock _probe_service to return True (already running)
-            with patch.object(conn, '_probe_service', return_value=True):
-                with patch('subprocess.Popen') as mock_popen:
-                    conn._ensure_service()
-                    
-                    # Should not start subprocess
-                    mock_popen.assert_not_called()
-
-
-def test_ensure_service_starts_when_needed(tmp_home):
-    """Test _ensure_service starts subprocess when service not running."""
-    binary_path = '/path/to/sysml-grpc'
-    with patch('grpc.insecure_channel'):
-        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-            # Patch ensure_binary at module level before creating Connection
-            with patch('opensysml.connection.ensure_binary', return_value=binary_path):
-                # Mock only binary existence check
-                real_exists = os.path.exists
-                def mock_exists(path):
-                    if path == binary_path:
-                        return True
-                    return real_exists(path)
-                
-                with patch('os.path.exists', side_effect=mock_exists):
-                    conn = Connection(auto_start=False)
-                    
-                    # Mock _probe_service: False initially, then True after start
-                    probe_results = [False, True]
-                    with patch.object(conn, '_probe_service', side_effect=probe_results):
-                        with patch('subprocess.Popen') as mock_popen:
-                            mock_process = Mock()
-                            # A pid that exists, so the record written for it
-                            # can authenticate the process it names.
-                            mock_process.pid = os.getpid()
-                            # A running process polls as None.
-                            mock_process.poll.return_value = None
-                            mock_popen.return_value = mock_process
-                            
-                            with patch('atexit.register') as mock_atexit:
-                                with patch('time.sleep'):
-                                    conn._ensure_service()
-                                    
-                                    # Should start subprocess
-                                    mock_popen.assert_called_once()
-                                    args = mock_popen.call_args
-                                    assert args[0][0] == ['/path/to/sysml-grpc', '-port', '50051']
-                                    assert args[1]['start_new_session'] is True
-                                    
-                                    # Should register cleanup
-                                    mock_atexit.assert_called_once()
-                                    
-                                    # Should store process
-                                    assert conn._process == mock_process
-
-
-def test_ensure_service_timeout(tmp_home):
-    """Test _ensure_service raises if service doesn't start in time."""
-    with patch('grpc.insecure_channel'):
-        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-            # Patch ensure_binary at module level before creating Connection
-            with patch('opensysml.connection.ensure_binary', return_value='/path/to/sysml-grpc'):
-                with patch('os.path.exists', return_value=True):  # Mock binary exists
-                    conn = Connection(auto_start=False)
-                    
-                    # Mock _probe_service: always returns False (never starts)
-                    with patch.object(conn, '_probe_service', return_value=False):
-                        with patch('subprocess.Popen') as mock_popen:
-                            mock_popen.return_value = Mock(pid=12345)
-                            mock_popen.return_value.poll.return_value = None
-                            with patch('time.sleep'):  # Speed up test
-                                from opensysml.errors import ConnectionError
-                                try:
-                                    conn._ensure_service()
-                                    assert False, "Expected ConnectionError"
-                                except ConnectionError as e:
-                                    assert "Service failed to start" in str(e)
-
-
-def _spawning_connection(port=50051):
-    """A connection whose _ensure_service starts a mocked binary.
-
-    Returns:
-        tuple: the connection, and the ExitStack holding the patches to close
-    """
-    binary_path = '/path/to/sysml-grpc'
-    real_exists = os.path.exists
-
-    def mock_exists(path):
-        return True if path == binary_path else real_exists(path)
-
-    stack = ExitStack()
-    stack.enter_context(patch('grpc.insecure_channel'))
-    stack.enter_context(patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'))
-    stack.enter_context(
-        patch('opensysml.connection.ensure_binary', return_value=binary_path)
+@pytest.fixture
+def private_child(monkeypatch):
+    """Patch out the binary and the spawn; yields a factory of fake children."""
+    monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
+    monkeypatch.delenv("OPENSYSML_SERVICE", raising=False)
+    monkeypatch.setattr(
+        "opensysml.connection.ensure_binary", lambda version=None: "/bin/sysml-grpc"
     )
-    stack.enter_context(patch('os.path.exists', side_effect=mock_exists))
-    stack.enter_context(patch('atexit.register'))
-    popen = stack.enter_context(patch('subprocess.Popen'))
-    process = Mock()
-    # A pid that exists, so the record written for it authenticates.
-    process.pid = os.getpid()
-    process.poll.return_value = None
-    popen.return_value = process
-    conn = Connection(port=port, auto_start=False)
-    return conn, stack
+    monkeypatch.setattr(os.path, "exists", lambda path: True)
+    stub = Mock()
+    stub.GetServerInfo.return_value = sysml_pb2.ServerInfoResponse(
+        version="v0.0.7", capabilities=[]
+    )
+    monkeypatch.setattr(
+        "opensysml.proto.sysml_pb2_grpc.SysMLServiceStub", lambda channel: stub
+    )
+    monkeypatch.setattr(grpc, "insecure_channel", Mock())
+    calls = []
+
+    def start(child):
+        def popen(args, **kwargs):
+            calls.append((args, kwargs))
+            child.args = args
+            return child
+
+        monkeypatch.setattr(subprocess, "Popen", popen)
+        return calls
+
+    yield start
+    _private_services.clear()
 
 
-def test_started_service_is_probed_before_any_sleep(tmp_home):
-    """The spawned service is asked at once, so answering costs no delay."""
-    conn, stack = _spawning_connection()
-    events = []
+def test_a_private_child_is_given_a_port_rather_than_sent_to_one(private_child):
+    """The child binds :0 and reports it, so no free port is chosen and raced for."""
+    calls = private_child(_FakeChild(stdout=b"127.0.0.1:34567\n"))
 
-    def probe(*args, **kwargs):
-        events.append('probe')
-        # The first probe is the pre-spawn one; the service answers the next.
-        return len(events) > 1
+    with Connection() as conn:
+        assert conn.host == "127.0.0.1" and conn.port == 34567
 
-    with stack:
-        with patch.object(conn, '_probe_service', side_effect=probe):
-            with patch('time.sleep', side_effect=lambda s: events.append('sleep')):
-                conn._ensure_service()
-
-    assert events == ['probe', 'probe']  # no sleep before the service answered
+    args, kwargs = calls[0]
+    assert args == [
+        "/bin/sysml-grpc", "-port", "0", "-health-port", "0",
+        "-report-address", "-exit-with-parent",
+    ]
+    assert kwargs["stdin"] is subprocess.PIPE
+    assert kwargs["start_new_session"] is True
 
 
-def test_service_that_never_answers_fails_within_the_waiting_bound(tmp_home):
-    """A service that never comes up raises the same error, still bounded."""
-    conn, stack = _spawning_connection()
-    probes = []
+def test_a_child_that_serves_nothing_is_reported_not_dialled(private_child):
+    """A child that exits without an address is an error naming what it logged."""
+    private_child(_FakeChild(stderr=b"bind: address already in use\n", code=1))
 
-    def probe(*args, **kwargs):
-        probes.append(time.monotonic())
-        return False
+    with pytest.raises(ConnectionError) as excinfo:
+        Connection()
 
-    started = time.monotonic()
-    with stack:
-        with patch.object(conn, '_probe_service', side_effect=probe):
-            with pytest.raises(OpenSysMLError) as excinfo:
-                conn._ensure_service()
-    elapsed = time.monotonic() - started
-
-    assert "Service failed to start" in str(excinfo.value)
-    assert START_TIMEOUT <= elapsed < START_TIMEOUT + 1.0
-    # Backing off, not busy-spinning: a bounded number of probes covers the wait.
-    assert 4 < len(probes) < 25
+    assert "without serving an address" in str(excinfo.value)
+    assert "address already in use" in str(excinfo.value)
 
 
-def test_a_probe_that_answers_nothing_may_not_outlive_the_bound(tmp_home):
-    """A port accepting without answering spends a probe's timeout, not the wait.
-
-    Each probe is given at most what is left of the bound, so the wait is over
-    when the bound is, rather than one whole RPC timeout later.
-    """
-    conn, stack = _spawning_connection()
-
-    def deaf(host, port, timeout=None):
-        # As a probe of a port that accepts and never answers does. Only the
-        # probes of the started service are given a timeout here.
-        time.sleep(timeout or 0)
-        return False
+def test_the_wait_for_an_address_is_the_module_constant(private_child, monkeypatch):
+    """START_TIMEOUT is the seam: shortening it shortens the wait for an address."""
+    read_fd, write_fd = os.pipe()
+    silent = _FakeChild()
+    silent.stdout = os.fdopen(read_fd, "rb")
+    private_child(silent)
+    monkeypatch.setattr("opensysml.connection.START_TIMEOUT", 0.2)
 
     started = time.monotonic()
-    with stack:
-        with patch('opensysml.connection.START_TIMEOUT', 0.4):
-            with patch.object(conn, '_probe_service', side_effect=deaf):
-                with pytest.raises(OpenSysMLError):
-                    conn._ensure_service()
+    with pytest.raises(ConnectionError) as excinfo:
+        Connection()
     elapsed = time.monotonic() - started
+    os.close(write_fd)
 
-    assert 0.4 <= elapsed < 0.4 + START_PROBE_RPC_TIMEOUT
-
-
-def test_waiting_bound_is_the_module_constant(tmp_home):
-    """START_TIMEOUT is the seam: shortening it shortens the wait."""
-    conn, stack = _spawning_connection()
-
-    started = time.monotonic()
-    with stack:
-        with patch('opensysml.connection.START_TIMEOUT', 0.2):
-            with patch.object(conn, '_probe_service', return_value=False):
-                with pytest.raises(OpenSysMLError):
-                    conn._ensure_service()
-    elapsed = time.monotonic() - started
-
-    assert 0.2 <= elapsed < 0.9
+    assert "did not report a listening address" in str(excinfo.value)
+    assert 0.2 <= elapsed < 1.0
 
 
-def test_cleanup_service_releases_one_reference_of_a_service_still_in_use():
-    """A released reference leaves a service other connections still hold."""
-    with patch('grpc.insecure_channel'):
-        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-            conn = Connection(auto_start=False)
-            conn._holds_refcount = True
-            conn._referenced_service = (12345, 1.0)
-            key = _service_key(conn.port)
-            _OWNED_SERVICES[key] = {'pid': 12345, 'create_time': 1.0, 'refs': 2}
+def test_a_child_that_could_not_start_leaves_no_service_held(private_child):
+    """A connection that raised holds nothing, so the next one starts afresh."""
+    private_child(_FakeChild(code=1))
 
-            try:
-                with patch('opensysml.connection._stop_process') as mock_stop:
-                    conn._cleanup_service()
+    with pytest.raises(ConnectionError):
+        Connection()
 
-                    mock_stop.assert_not_called()
-                    assert _OWNED_SERVICES[key]['refs'] == 1
-                    assert conn._process is None
-            finally:
-                _OWNED_SERVICES.pop(key, None)
+    assert not _private_services
 
 
-def test_cleanup_service_without_a_reference_touches_nothing():
-    """Attaching to a service this process did not spawn takes no reference.
+def test_naming_an_address_starts_nothing(private_child):
+    """Naming a service is the opt-in to one this client does not manage."""
+    private_child(_FakeChild(stdout=b"127.0.0.1:34567\n"))
 
-    Closing must therefore leave the ownership of whoever did spawn it alone.
-    """
-    with patch('grpc.insecure_channel'):
-        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-            conn = Connection(auto_start=False)
-            key = _service_key(conn.port)
-            _OWNED_SERVICES[key] = {'pid': 12345, 'create_time': 1.0, 'refs': 1}
+    with Connection(port=50099) as conn:
+        assert conn._private is None
+        assert conn.port == 50099
 
-            try:
-                with patch('opensysml.connection._stop_process') as mock_stop:
-                    conn._cleanup_service()
-
-                    mock_stop.assert_not_called()
-                    assert _OWNED_SERVICES[key]['refs'] == 1
-            finally:
-                _OWNED_SERVICES.pop(key, None)
+    assert not _private_services
 
 
-def test_auto_start_enabled():
-    """Test auto_start=True triggers _ensure_service."""
-    with patch('grpc.insecure_channel'):
-        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-            with patch('opensysml.connection.Connection._ensure_service') as mock_ensure:
-                conn = Connection(auto_start=True)
-                
-                mock_ensure.assert_called_once()
+def test_naming_a_service_in_the_environment_starts_nothing(
+    private_child, monkeypatch
+):
+    """$OPENSYSML_SERVICE names one too, for a caller that passes no arguments."""
+    private_child(_FakeChild(stdout=b"127.0.0.1:34567\n"))
+    monkeypatch.setenv("OPENSYSML_SERVICE", "example.com:9111")
+
+    with Connection() as conn:
+        assert conn._private is None
+        assert (conn.host, conn.port) == ("example.com", 9111)
+
+    assert not _private_services
 
 
-def test_auto_start_disabled():
-    """Test auto_start=False skips _ensure_service."""
-    with patch('grpc.insecure_channel'):
-        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-            with patch('opensysml.connection.Connection._ensure_service') as mock_ensure:
-                conn = Connection(auto_start=False)
-                
-                mock_ensure.assert_not_called()
+def _reporting_child(address=b"127.0.0.1:34567\n"):
+    """A fake child whose stdout stays open after the address, as a pipe does."""
+    read_fd, write_fd = os.pipe()
+    os.write(write_fd, address)
+    child = _FakeChild()
+    child.stdout = os.fdopen(read_fd, "rb")
+    child.stdin = os.fdopen(write_fd, "wb")
+    return child
 
 
-# --- Task 1: Lockfile Coordination Tests ---
+def test_the_connections_of_one_interpreter_share_one_child(private_child):
+    """One child per interpreter, so several connections cost one spawn."""
+    calls = private_child(_reporting_child())
+
+    with Connection() as first, Connection() as second:
+        assert first.port == second.port == 34567
+        assert first._private is second._private
+        assert first._private.refs == 2
+
+    assert len(calls) == 1
 
 
-def test_ensure_service_uses_lockfile(tmp_home):
-    """Test that _ensure_service acquires lockfile before starting service."""
-    binary_path = '/path/to/sysml-grpc'
-    with patch('opensysml.connection.ensure_binary') as mock_ensure:
-        mock_ensure.return_value = binary_path
-        
-        # Mock binary existence check
-        real_exists = os.path.exists
-        def mock_exists(path):
-            if path == binary_path:
-                return True
-            return real_exists(path)
-        
-        with patch('os.path.exists', side_effect=mock_exists):
-            with patch('subprocess.Popen') as mock_popen:
-                mock_popen.return_value = Mock(pid=os.getpid())
-                mock_popen.return_value.poll.return_value = None
-                
-                # Mock time.sleep to skip retries
-                with patch('time.sleep'):
-                    with patch('grpc.insecure_channel'):
-                        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-                            conn = Connection(auto_start=False)
-                            
-                            # Mock _probe_service: False initially, then True after start
-                            with patch.object(conn, '_probe_service', side_effect=[False, True]):
-                                with patch('atexit.register'):
-                                    # Just verify _ensure_service completes without error
-                                    # (FileLock usage is implicit - if lockfile wasn't acquired,
-                                    # concurrent tests would race and fail randomly)
-                                    conn._ensure_service()
-                                    
-                                    # Verify service was started (proves lockfile was acquired)
-                                    assert mock_popen.called
+def test_the_last_connection_released_stops_the_child(private_child):
+    """The child is stopped when nothing in this process still holds it."""
+    child = _reporting_child()
+    private_child(child)
+
+    first = Connection()
+    second = Connection()
+    first.close()
+    assert not child.terminated
+
+    second.close()
+    assert child.terminated
+    assert not _private_services
 
 
-def test_concurrent_ensure_service_blocks(tmp_home):
-    """Test that second process blocks while first starts service."""
-    import os
-    import pytest
-    from filelock import FileLock, Timeout
+def test_auto_start_enabled(private_child):
+    """A connection that names no address starts a private child."""
+    private_child(_FakeChild(stdout=b"127.0.0.1:34567\n"))
 
-    # Per port: two services on different ports do not wait on each other.
-    lockfile_path = _get_lockfile_path(50051)
-    
-    # Simulate first process holding lock
-    lock1 = FileLock(lockfile_path, timeout=0.1)
-    lock1.acquire()
-    
-    try:
-        # Second process should timeout trying to acquire
-        from opensysml.errors import ConnectionError
-        with pytest.raises(ConnectionError, match="Timeout acquiring service lockfile"):
-            with patch('opensysml.connection.ensure_binary', return_value='/path/to/binary'):
-                with patch('os.path.exists', return_value=True):
-                    with patch('subprocess.Popen') as mock_popen:
-                        mock_popen.return_value = Mock(pid=12345)
-                        with patch('grpc.insecure_channel'):
-                            with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-                                conn = Connection(auto_start=False)
-                                with patch.object(conn, '_probe_service', return_value=False):
-                                    conn._ensure_service()
-    finally:
-        lock1.release()
+    with Connection(auto_start=True) as conn:
+        assert conn._private is not None
+
+
+def test_auto_start_disabled(private_child):
+    """auto_start=False starts nothing and dials the standard port."""
+    private_child(_FakeChild(stdout=b"127.0.0.1:34567\n"))
+
+    with Connection(auto_start=False) as conn:
+        assert conn._private is None
+        assert conn.port == 50051

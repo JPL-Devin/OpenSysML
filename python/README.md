@@ -43,22 +43,74 @@ Every call goes through the `sysml-grpc` service, which `opensysml` starts for y
 
 ## Service ownership
 
-`opensysml` never stops a service it did not start.
+`opensysml` uses a service of its own, and never stops a service it did not
+start.
 
-- A connection that finds a healthy service already listening uses it and takes
-  no ownership of it: nothing is recorded, and closing the connection leaves the
-  service running. Whoever started it decides when it stops.
-- A service `opensysml` starts is recorded in
-  `~/.opensysml/sysml-grpc-<port>.pid` (`$OPENSYSML_STATE_DIR` overrides the
-  directory) as the service's pid and process start time, plus the pid and start
-  time of the process that started it. Only that process stops it, and only when
-  the last connection holding it is closed or the interpreter exits.
-- The start times are what authenticate the record: a pid is re-checked against
-  the start time written for it, so a pid the operating system has since reused
-  is treated as a stale record — cleaned up, never signalled. A command line
-  that merely looks like `sysml-grpc` is not identity and is never acted on.
-- A service that crashes leaves a record whose process is gone; the next
-  connection detects that, removes it and starts a service of its own.
+- A connection made without naming a service starts a **private child** of this
+  interpreter. The child binds port 0, so the kernel assigns the port, and it
+  reports the address it was given on its stdout — no port is chosen, probed or
+  retried by the client, and two interpreters starting at once cannot collide.
+- One private child serves **every** connection of an interpreter that needs the
+  same service release. The first of them starts it; it stops when the last one
+  closes, or when the interpreter exits. Sharing it shares its parse cache,
+  which is what makes a second connection cheap (see below).
+- Its lifetime is this interpreter's. Nothing is recorded on disk about it, no
+  other process adopts it, and a service another process left listening is
+  neither reused nor cleaned up.
+- Connecting to a service `opensysml` did not start is explicit: pass a host and
+  port (`opensysml.connect("localhost", 50051)`, or `connect("localhost:50051")`),
+  set `$OPENSYSML_SERVICE=host:port`, or pass `auto_start=False` to require a
+  service the caller manages. Closing such a connection leaves it running.
+
+### No orphans
+
+The client holds the write end of the child's **stdin pipe** and never writes to
+it; the child reads its stdin and shuts down on end of file. Nothing else holds
+that write end, so the pipe closes when the owning process goes away — and it is
+the kernel that closes it, not any code of ours. That survives what an `atexit`
+hook or a supervisor thread does not: `SIGKILL`, `os._exit`, a fatal interpreter
+error, and a crash during shutdown. On an orderly close the client also closes
+stdin itself and then signals the child, so exit is prompt rather than eventual.
+
+The client signals only through the `Popen` object of the child it started, so no
+pid it did not start — including one the operating system has since reused —
+can be signalled. That guarantee no longer needs a start-time check to hold,
+because there is no pid on disk to re-authenticate.
+
+Per platform:
+
+- **Linux** and **macOS**: the child is started in a session of its own
+  (`start_new_session=True`), so a `SIGINT` or `SIGHUP` sent to the client's
+  process group does not reach it; stdin is what ends it. Other children the
+  client spawns do not inherit the write end, since CPython closes descriptors
+  across `subprocess` by default, so it has exactly one holder.
+- **Windows**: the operating system closes the same anonymous pipe when the
+  owning process exits, however it exits, so the guarantee is unchanged. Windows
+  has no `fork()`, so the case below cannot arise there.
+- **`fork()`**: the forked child inherits the write end, which would hold the
+  service open past its owner. An `os.register_at_fork` hook therefore disowns
+  the inherited services in the new process and closes its copy of the pipe: the
+  service stays tied to the process that started it, and a forked child that
+  connects starts one of its own.
+
+The single limitation is deliberate: a service reached explicitly is not tied to
+the client's lifetime, because the client does not own it.
+
+### Cost of a private child
+
+Measured on Linux with `python/scripts/measure_private_service.py` (n=20):
+
+|                                                       |     p50 |     p95 |
+| ----------------------------------------------------- | ------: | ------: |
+| first connection: spawn, bind, report, handshake      |  7.0 ms |  9.1 ms |
+| a later connection joining this interpreter's child   |  0.6 ms |  1.0 ms |
+| a child per connection, rather than one shared        | 29.6 ms | 54.6 ms |
+| parsing a model the shared child has already parsed   |  0.3 ms |  1.2 ms |
+| the same parse in a child of that connection's own    | 139.8 ms | 269.6 ms |
+
+The last two rows are why the child is per interpreter rather than per
+connection: a child per connection would not only spawn N times, it would parse
+each model N times, against a cache hit some 500x cheaper.
 
 ## Pinned release digests
 

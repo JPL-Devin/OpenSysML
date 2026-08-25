@@ -34,8 +34,6 @@ classifiers = [
 dependencies = [
     "grpcio>=1.83.0",
     "protobuf>=7.35.1",
-    "filelock>=3.0.0",
-    "psutil>=5.9.0",
     # Verifies the sigstore bundle a core release publishes over its checksum
     # manifest, which is what lets a release newer than this client install.
     "sigstore>=4.5.0,<5",
@@ -45,6 +43,9 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-mock>=3.10.0",
+    # The lifecycle tests inspect processes; the client itself signals only its
+    # own child, through the Popen object that started it.
+    "psutil>=5.9.0",
     "grpcio-tools>=1.83.0",
     "mypy>=1.8.0",
     # Stubs for the untyped dependencies, so `mypy opensysml` checks the calls
