@@ -29,20 +29,19 @@ plus loopback — is a few hundred microseconds.
 
 ### Starting the service
 
-A `Connection` that starts `sysml-grpc` itself probes the service immediately and
-then on a doubling backoff (10 ms, 20 ms, 40 ms … capped at 250 ms), so a service
-that answers in milliseconds costs milliseconds: ~17 ms on the machine above,
-against a fixed 500 ms wait before 0.0.9. That wait is bounded by
-`opensysml.connection.START_TIMEOUT` (2.5 s) — sleeping and probing together, since
-no probe is given more than what is left of it — after which `ConnectionError` is
-raised. A probe of a port nothing listens on is refused in a few milliseconds
-rather than spending the per-probe RPC timeout, and a port that accepts without
-answering costs the remaining bound, not another whole timeout on top of it. The
-probe deciding whether to adopt a service already listening is made before that
-wait starts and has its own 5 s timeout, so an address held by something that
-never answers is reported in ~7.5 s. `Connection(auto_start=False)`
-costs ~0.3 ms and the first RPC on it ~1 ms; `import opensysml` is ~120 ms, mostly
-`grpc` (~48 ms), `filelock` and the generated protobuf modules.
+A `Connection` that names no address starts a private `sysml-grpc` child, which
+binds the port the kernel gives it and reports the address on stdout. There is no
+readiness backoff to tune: the client waits for that one line, and the first
+`GetServerInfo` — which it makes anyway, to check the release — is the readiness
+check, since the address is reported only once the listener is bound. The wait
+for the line is bounded by `opensysml.connection.START_TIMEOUT` (2.5 s), after
+which `ConnectionError` is raised naming the last lines the child logged; a child
+that exits instead of reporting closes stdout, and is reported at its exit rather
+than at the timeout. Starting and reaching one costs ~7.0 ms p50 / ~9.1 ms p95 on
+the machine above, and a second connection in the same interpreter joins that
+child for ~0.6 ms. `Connection(auto_start=False)` costs ~0.3 ms and the first RPC
+on it ~1 ms; `import opensysml` is ~120 ms, mostly `grpc` (~48 ms) and the
+generated protobuf modules.
 
 ### Real-time analytics
 
@@ -200,45 +199,42 @@ dodge one.
   `TypedObject` provides (`instance`, `from_instance`, `sysml_id`) gets a trailing
   underscore (`instance_`); the SysML feature name it reads is unchanged.
 
-`opensysml.connect(host, port, auto_start=True)` returns a `Connection` when you
-want to manage the service yourself; the module-level functions share a lazily
-created singleton connection instead. A `host:port` address written as the host
-is read as one — `connect("localhost:50123")` reaches port 50123 — and a port
-named twice with two values raises `ValueError` naming the disagreement rather
+`opensysml.connect(host, port, auto_start=True)` returns a `Connection` of your
+own; the module-level functions share a lazily created singleton connection
+instead. Naming a host and port, writing `host:port` as the host, or setting
+`$OPENSYSML_SERVICE=host:port`, is the opt-in to a service this client does not
+manage; with none of them the connection reaches a private child of this
+interpreter. A `host:port` address written as the host is read as one —
+`connect("localhost:50123")` reaches port 50123 — and a port named twice with
+two values raises `ValueError` naming the disagreement rather
 than timing out against an address nobody asked for. The helpers taking
 `host`/`port` (`load`, `evaluate`, `convert`, `instantiate`) read it the same way.
 
-`opensysml` never stops a service it did not start. A service it starts is
-reference-counted *within the process that started it* and stopped when the last
-connection holding it is closed or the interpreter exits; a connection that
-attaches to a service already listening takes no reference and leaves it running,
-whatever it does. The service is recorded in `~/.opensysml/sysml-grpc-<port>.pid`
-(`$OPENSYSML_STATE_DIR` overrides the directory) as its pid and process start time
-plus the pid and start time of the process that started it, and every one of
-those pids is re-checked against the start time written for it — a pid the
-operating system has reused is a stale record, cleaned up rather than signalled,
-and a command line that merely looks like `sysml-grpc` is not identity. A service
-that crashes leaves such a record; the next connection removes it and starts one
-of its own.
+`opensysml` never stops a service it did not start, and never uses one it was not
+pointed at. A private child is reference-counted within the interpreter that
+started it — one child per release requirement, shared by that interpreter's
+connections, stopped when the last is closed or the interpreter exits — and
+dies with that interpreter however it dies, because it exits at end of file on a
+stdin pipe only that process holds. Nothing about it is written to disk, so there
+is no record to authenticate, no pid outside its own `Popen` to signal, and no
+stale state for a later run to clean up. A connection to a service you manage
+takes no reference and leaves it running, whatever it does.
 
-A service *already listening* on the port is checked the way the cached binary
-is: it is asked what it is with `GetServerInfo`, and a release other than the one
-asked for raises `StaleServiceError` naming the mismatch and the remedy, instead
-of serving an old build whose first newer call fails as a
-`MissingCapabilityError`. `connect(version=…, require_capabilities=[…])` asks
-explicitly; `OPENSYSML_GRPC_VERSION` asks for a release for the binary cache and
-the running service alike, and with neither set whatever answers is accepted.
-Such a service is stopped only when this process started it, no connection of its
-own still holds it, and the binary that would be started in its place can be
-shown to be the release asked for — a service you are running deliberately is
-never killed, and one is never stopped only to start the same build again, so
-the remedy asks you to stop it, name another port, or accept what is running. A
-service that only lacks a required *capability* is therefore always reported as
-`MissingCapabilityError`, never replaced: capabilities come with a release, so
-restarting the same binary would report the same ones, and the class you catch
-does not depend on who started the service. `auto_start=False` checks the release
-too — reporting a mismatch stops nothing, so it needs no ownership — but stays
-lazy: a service of yours that is not listening yet is checked once it answers.
+A service *you* manage is checked the way the cached binary is: it is asked what
+it is with `GetServerInfo`, and a release other than the one asked for raises
+`StaleServiceError` naming the mismatch and the remedy, instead of serving an old
+build whose first newer call fails as a `MissingCapabilityError`.
+`connect(version=…, require_capabilities=[…])` asks explicitly;
+`OPENSYSML_GRPC_VERSION` asks for a release for the binary cache and the running
+service alike, and with neither set whatever answers is accepted. Such a service
+is never stopped or replaced to satisfy the check — the remedy asks you to stop
+it, point the client elsewhere, or accept what is running — and the check stays
+lazy: a service of yours that is not listening yet is checked once it answers. A
+private child cannot be a mismatch to begin with, since children are held per
+requirement, so a connection asking for another release starts its own rather
+than joining one. A service that only lacks a required *capability* is reported as
+`MissingCapabilityError`: capabilities come with a release, so the class you
+catch does not depend on who started the service.
 
 ## Development
 

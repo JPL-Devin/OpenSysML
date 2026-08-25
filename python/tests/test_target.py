@@ -135,6 +135,7 @@ class TestModuleHelpersReadAnAddress:
         assert "different ports" in stderr
 
     def test_an_address_reaches_the_port_it_names(self):
+        # The address is read where the target is: by the connection itself.
         with patch('opensysml.Connection') as connection:
             opensysml.load("demo.sysml", "localhost:50123")
-        assert connection.call_args[0] == ("localhost", 50123)
+        assert connection.call_args[0] == ("localhost:50123", None)

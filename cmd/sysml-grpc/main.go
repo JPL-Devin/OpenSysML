@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -33,12 +34,18 @@ var (
 
 func main() {
 	var (
-		port       = flag.Int("port", 50051, "gRPC server port")
-		healthPort = flag.Int("health-port", 8081, "Health check HTTP port")
-		cacheSize  = flag.Int("cache-size", 100, "Maximum number of cached parsed files")
-		logLevel   = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
-		showVer    = flag.Bool("version", false, "Show version and exit")
-		transport  = flag.String("transport", transportConnect,
+		port          = flag.Int("port", 50051, "gRPC server port")
+		healthPort    = flag.Int("health-port", 8081, "Health check HTTP port")
+		cacheSize     = flag.Int("cache-size", 100, "Maximum number of cached parsed files")
+		logLevel      = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+		showVer       = flag.Bool("version", false, "Show version and exit")
+		reportAddress = flag.Bool("report-address", false,
+			"Print the address to dial on stdout, as one line, once the listener is "+
+				"bound; with -port 0 this is how a client learns the port the kernel chose")
+		exitWithParent = flag.Bool("exit-with-parent", false,
+			"Exit at end of file on stdin, so a child cannot outlive the process that "+
+				"holds the write end of a pipe on it, SIGKILL included")
+		transport = flag.String("transport", transportConnect,
 			"Transport to serve: connect (default; gRPC, gRPC-Web and Connect on one port), "+
 				"grpc (grpc-go only), or stdio (an evaluation prototype over stdin/stdout)")
 		corsOrigins = flag.String("cors-allowed-origins", "", "Comma-separated exact origins allowed for browser CORS")
@@ -61,6 +68,21 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "sysml-grpc: %v\n", err)
 		os.Exit(2)
+	}
+
+	if *transport == transportStdio {
+		switch {
+		case *exitWithParent:
+			fmt.Fprintln(os.Stderr,
+				"sysml-grpc: -exit-with-parent is not for -transport stdio, whose stdin is "+
+					"the session and already ends it at end of file")
+			os.Exit(2)
+		case *reportAddress:
+			fmt.Fprintln(os.Stderr,
+				"sysml-grpc: -report-address is not for -transport stdio, which binds no "+
+					"address and speaks the protocol itself on stdout")
+			os.Exit(2)
+		}
 	}
 
 	if *showVer {
@@ -138,9 +160,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The port is the kernel's under -port 0, so report the bound one before
+	// serving: a client waiting on this line cannot miss the address it must dial.
+	if *reportAddress {
+		if _, err := fmt.Fprintln(os.Stdout, dialAddress(lis.Addr())); err != nil {
+			slog.Error("Failed to report the listening address", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	// Graceful shutdown
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+	if *exitWithParent {
+		go exitWhenStdinCloses(shutdown)
+	}
 
 	if *transport == transportConnect {
 		serveCtx, cancelServe := context.WithCancel(context.Background())
@@ -204,6 +238,31 @@ func main() {
 		slog.Warn("Forcing gRPC server shutdown after timeout")
 		grpcServer.Stop()
 	}
+}
+
+// dialAddress renders a listening address as one a client can dial: a wildcard
+// host answers on the loopback address, which is where a private child is wanted.
+func dialAddress(addr net.Addr) string {
+	host, port, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return addr.String()
+	}
+	switch host {
+	case "", "::", "0.0.0.0":
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, port)
+}
+
+// exitWhenStdinCloses asks for shutdown once stdin reaches end of file, which is
+// what the pipe on it does when the process holding the other end dies, however
+// it dies. Reading also discards anything sent, so a writer cannot block.
+func exitWhenStdinCloses(shutdown chan<- os.Signal) {
+	if _, err := io.Copy(io.Discard, os.Stdin); err != nil {
+		slog.Debug("stdin read ended", "error", err)
+	}
+	slog.Info("stdin closed, exiting with the process that started this service")
+	shutdown <- syscall.SIGTERM
 }
 
 // stopHealthServer shuts the health check server down, allowing it a moment to
