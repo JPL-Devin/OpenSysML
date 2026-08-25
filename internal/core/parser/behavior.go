@@ -62,7 +62,7 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			// If expression-start but NOT name-declaration pattern, parse as implicit return
 			// A `var`-prefixed declaration is a member, not the value of an
 			// expression naming a feature `var` (KerML BasicFeaturePrefix).
-			if p.atExprStart() && !isNameDecl && !p.atVarDeclaration() {
+			if p.atUnaryExprStart() && !isNameDecl && !p.atVarDeclaration() {
 				// Parse as implicit return expression
 				body.add(p.ParseExpression())
 			} else {
@@ -1789,7 +1789,6 @@ var exprStartKeywords = map[string]bool{
 	"false": true,
 	"new":   true,
 	"if":    true,
-	"not":   true,
 }
 
 // parseConstraintMember parses one constraint member: assert/assume [not] <expr>;
