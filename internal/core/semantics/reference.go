@@ -99,10 +99,16 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 	if cached, ok := m.memberSources[sym]; ok {
 		return cached
 	}
+	return m.memberSourcesFrom(sym, m.contributors(sym))
+}
 
+func (m *Model) memberSourcesFrom(sym *symbols.Symbol, contributors []*symbols.Symbol) []*symbols.Symbol {
+	if cached, ok := m.memberSources[sym]; ok {
+		return cached
+	}
 	var order []*symbols.Symbol
 	visited := map[*symbols.Symbol]bool{sym: true}
-	queue := m.contributors(sym)
+	queue := contributors
 	provisional := m.supersUnstable(sym)
 	for len(queue) > 0 {
 		cur := queue[0]

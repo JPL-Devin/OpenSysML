@@ -13,11 +13,8 @@ import (
 )
 
 func TestLibraryMemberLookupMatchesWalk(t *testing.T) {
-	idx := stdlibIndex(t)
+	idx := markedStdlibIndex(t)
 	stdlibPaths := stdlibDocumentPaths(t)
-	for _, path := range stdlibPaths {
-		idx.MarkLibrary(path)
-	}
 	sysmlRoot := parseMemberTableDocument(t, "membertable_user.sysml", source.KindSysML, `package P {
 		part def UserBase { feature userMember; }
 		part def UserDerived :> UserBase;
@@ -94,6 +91,102 @@ func TestLibraryMemberLookupMatchesWalk(t *testing.T) {
 		t.Fatalf("member table cache after generation change = generation %d, %d entries; want %d, one entry",
 			m.memberTableGeneration, len(m.memberTables), idx.Generation())
 	}
+}
+
+func TestLibraryMemberTableReferenceGuard(t *testing.T) {
+	idx := markedStdlibIndex(t)
+	r := resolve.New(idx)
+	m := NewModel(r)
+	r.SetModel(m)
+	actions := m.symbolByFQN("Actions")
+	if actions == nil {
+		t.Fatal("Actions is not in the standard library index")
+	}
+
+	userReference := &symbols.Symbol{Name: "userReference"}
+	m.resolvingRef[userReference] = true
+	if table := m.libraryMemberTable(actions); table == nil {
+		t.Fatal("a user reference in flight blocked a library member table")
+	}
+	delete(m.resolvingRef, userReference)
+
+	m.resolvingRef[actions] = true
+	if table := m.libraryMemberTable(actions); table != nil {
+		t.Fatal("a library reference in flight produced a library member table")
+	}
+}
+
+func TestLibraryMemberTableSourceAndReferenceFallbacks(t *testing.T) {
+	idx := markedStdlibIndex(t)
+	r := resolve.New(idx)
+	m := NewModel(r)
+	r.SetModel(m)
+	subject, contributor, name := findLibraryContributor(t, m, idx)
+
+	m.memberTableGeneration = idx.Generation()
+	m.memberTables[contributor] = &memberTable{
+		entries: map[string]memberEntry{},
+		sources: map[*symbols.Symbol]bool{
+			contributor: true,
+			subject:     true,
+		},
+	}
+	if table := m.libraryMemberTable(subject); table != nil {
+		t.Fatal("a cached table whose sources include the root was used")
+	}
+
+	got, gotOK := m.LookupContributedMember(subject, name)
+	want, wantOK := m.lookupContributedByWalk(subject, name)
+	if got != want || gotOK != wantOK {
+		t.Fatalf("source-cycle fallback = (%v, %v), walk = (%v, %v)", got, gotOK, want, wantOK)
+	}
+
+	delete(m.memberTables, contributor)
+	m.resolvingRef[contributor] = true
+	got, gotOK = m.LookupContributedMember(subject, name)
+	want, wantOK = m.lookupContributedByWalk(subject, name)
+	if got != want || gotOK != wantOK {
+		t.Fatalf("library-reference fallback = (%v, %v), walk = (%v, %v)", got, gotOK, want, wantOK)
+	}
+}
+
+func markedStdlibIndex(t *testing.T) *symbols.Index {
+	t.Helper()
+	idx := stdlibIndex(t)
+	for _, path := range stdlibDocumentPaths(t) {
+		idx.MarkLibrary(path)
+	}
+	return idx
+}
+
+func findLibraryContributor(t *testing.T, m *Model, idx *symbols.Index) (*symbols.Symbol, *symbols.Symbol, string) {
+	t.Helper()
+	for _, path := range stdlibDocumentPaths(t) {
+		for _, subject := range walkMemberTableSymbols(idx.DocumentRoot(path)) {
+			if !idx.Library(subject) {
+				continue
+			}
+			for _, contributor := range m.contributors(subject) {
+				if contributor == nil || !idx.Library(contributor) {
+					continue
+				}
+				if contributor.Scope != nil {
+					for _, name := range contributor.Scope.MemberNames() {
+						return subject, contributor, name
+					}
+				}
+				for _, member := range idx.LookupDirectChildren(contributor.Name) {
+					name := member.Name
+					if lastIdx := lastDoubleColon(name); lastIdx >= 0 {
+						name = name[lastIdx+2:]
+					}
+					return subject, contributor, name
+				}
+			}
+		}
+	}
+	t.Fatal("standard library has no library contributor with a member")
+	return nil, nil, ""
 }
 
 func parseMemberTableDocument(t *testing.T, name string, kind source.Kind, text string) *ast.RootNamespace {

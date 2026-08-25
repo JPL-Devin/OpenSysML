@@ -7,28 +7,42 @@ type memberEntry struct {
 	depth int
 }
 
-func (m *Model) libraryMemberTable(sym *symbols.Symbol) map[string]memberEntry {
+type memberTable struct {
+	entries map[string]memberEntry
+	sources map[*symbols.Symbol]bool
+}
+
+func (m *Model) libraryMemberTable(sym *symbols.Symbol) *memberTable {
 	if sym == nil || m.resolver == nil || m.resolver.Index() == nil {
 		return nil
 	}
 	idx := m.resolver.Index()
 	generation := idx.Generation()
 	if m.memberTableGeneration != generation {
-		m.memberTables = make(map[*symbols.Symbol]map[string]memberEntry)
+		m.memberTables = make(map[*symbols.Symbol]*memberTable)
 		m.memberTableGeneration = generation
 	}
 	table := m.buildLibraryMemberTable(sym, make(map[*symbols.Symbol]bool), generation)
 	if idx.Generation() != generation {
-		m.memberTables = make(map[*symbols.Symbol]map[string]memberEntry)
+		m.memberTables = make(map[*symbols.Symbol]*memberTable)
 		m.memberTableGeneration = idx.Generation()
 		return nil
 	}
 	return table
 }
 
-func (m *Model) buildLibraryMemberTable(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool, generation uint64) map[string]memberEntry {
+func (m *Model) buildLibraryMemberTable(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool, generation uint64) *memberTable {
 	idx := m.resolver.Index()
-	if idx.Generation() != generation || !idx.Library(sym) || len(m.resolvingRef) != 0 || m.supersUnstable(sym) {
+	if idx.Generation() != generation {
+		return nil
+	}
+	if !idx.Library(sym) {
+		return nil
+	}
+	if libraryReferenceInFlight(idx, m.resolvingRef) {
+		return nil
+	}
+	if m.supersUnstable(sym) {
 		return nil
 	}
 	if visiting[sym] {
@@ -40,7 +54,7 @@ func (m *Model) buildLibraryMemberTable(sym *symbols.Symbol, visiting map[*symbo
 	visiting[sym] = true
 	defer delete(visiting, sym)
 
-	table := make(map[string]memberEntry)
+	entries := make(map[string]memberEntry)
 	firstSteps := make(map[string]int)
 	if sym.Scope != nil {
 		for _, name := range sym.Scope.MemberNames() {
@@ -48,10 +62,13 @@ func (m *Model) buildLibraryMemberTable(sym *symbols.Symbol, visiting map[*symbo
 			if !ok {
 				continue
 			}
-			if !idx.Library(member) || m.supersUnstable(member) {
+			if !idx.Library(member) {
 				return nil
 			}
-			table[name] = memberEntry{sym: member}
+			if m.supersUnstable(member) {
+				return nil
+			}
+			entries[name] = memberEntry{sym: member}
 			firstSteps[name] = -1
 		}
 	} else {
@@ -60,46 +77,77 @@ func (m *Model) buildLibraryMemberTable(sym *symbols.Symbol, visiting map[*symbo
 			if lastIdx := lastDoubleColon(name); lastIdx >= 0 {
 				name = name[lastIdx+2:]
 			}
-			if _, exists := table[name]; exists {
+			if _, exists := entries[name]; exists {
 				continue
 			}
-			if !idx.Library(member) || m.supersUnstable(member) {
+			if !idx.Library(member) {
 				return nil
 			}
-			table[name] = memberEntry{sym: member}
+			if m.supersUnstable(member) {
+				return nil
+			}
+			entries[name] = memberEntry{sym: member}
 			firstSteps[name] = -1
 		}
 	}
 
-	for i, contributor := range m.contributors(sym) {
+	contributors := m.contributors(sym)
+	sources := map[*symbols.Symbol]bool{sym: true}
+	for i, contributor := range contributors {
 		if contributor == nil || contributor == sym {
 			continue
 		}
-		if !idx.Library(contributor) || m.supersUnstable(contributor) {
+		if !idx.Library(contributor) {
+			return nil
+		}
+		if m.supersUnstable(contributor) {
 			return nil
 		}
 		contributorTable := m.buildLibraryMemberTable(contributor, visiting, generation)
 		if contributorTable == nil {
 			return nil
 		}
-		for name, entry := range contributorTable {
+		if contributorTable.sources[sym] {
+			return nil
+		}
+		for source := range contributorTable.sources {
+			sources[source] = true
+		}
+		for name, entry := range contributorTable.entries {
 			candidate := memberEntry{sym: entry.sym, depth: entry.depth + 1}
-			current, exists := table[name]
+			current, exists := entries[name]
 			if !exists || candidate.depth < current.depth ||
 				(candidate.depth == current.depth && i < firstSteps[name]) {
-				table[name] = candidate
+				entries[name] = candidate
 				firstSteps[name] = i
 			}
 		}
 	}
-	for _, entry := range table {
-		if entry.sym == nil || m.supersUnstable(entry.sym) {
+	for _, entry := range entries {
+		if entry.sym == nil {
+			return nil
+		}
+		if m.supersUnstable(entry.sym) {
 			return nil
 		}
 	}
-	if idx.Generation() != generation || len(m.resolvingRef) != 0 {
+	if idx.Generation() != generation {
 		return nil
 	}
+	if libraryReferenceInFlight(idx, m.resolvingRef) {
+		return nil
+	}
+	table := &memberTable{entries: entries, sources: sources}
 	m.memberTables[sym] = table
 	return table
+}
+
+// A user reference cannot change library-only tables, but a library reference can.
+func libraryReferenceInFlight(idx *symbols.Index, refs map[*symbols.Symbol]bool) bool {
+	for sym := range refs {
+		if idx.Library(sym) {
+			return true
+		}
+	}
+	return false
 }
