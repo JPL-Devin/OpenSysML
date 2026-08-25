@@ -148,7 +148,7 @@ func (s *Scope) MemberNames() []string {
 	return out
 }
 
-// AllMembers returns all symbols in this scope (including anonymous members).
+// AllMembers returns all symbols in declaration order (including anonymous members).
 func (s *Scope) AllMembers() []*Symbol {
 	var all []*Symbol
 	s.ForEachMember(func(sym *Symbol) bool {
@@ -158,8 +158,7 @@ func (s *Scope) AllMembers() []*Symbol {
 	return all
 }
 
-// ForEachMember visits all symbols in this scope, stopping when yield returns
-// false. Named members precede anonymous members.
+// ForEachMember visits all symbols in declaration order, with named members preceding anonymous members.
 func (s *Scope) ForEachMember(yield func(*Symbol) bool) {
 	if s == nil || yield == nil {
 		return
