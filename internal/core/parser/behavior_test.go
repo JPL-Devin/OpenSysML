@@ -14,13 +14,13 @@ func parseActionTest(t *testing.T, input string) []ast.Node {
 	src := source.New("test.sysml", []byte(input))
 	p := New(src)
 
-	// Consume opening brace (parseActionBody expects it consumed)
+	// Consume opening brace (parseActionBodyMixed expects it consumed)
 	_, ok := p.accept(lexer.LBrace)
 	if !ok {
 		t.Fatalf("expected '{', got %v", p.peek().Kind)
 	}
 
-	return p.parseActionBody()
+	return p.parseActionBodyMixed()
 }
 
 func TestParseAction_Simple(t *testing.T) {
@@ -160,21 +160,17 @@ func TestParseAction_Decision(t *testing.T) {
 
 // Phase C1 Tests
 
-func parseResultMembersTest(t *testing.T, input string) (*Parser, []ast.Node) {
+func parseCalcBodyTest(t *testing.T, input string) (*Parser, []ast.Node) {
 	src := source.New("test.sysml", []byte(input))
 	p := New(src)
 
-	// Consume opening brace
+	// Consume opening brace (parseCalcBody expects it consumed)
 	_, ok := p.accept(lexer.LBrace)
 	if !ok {
 		t.Fatalf("expected '{', got %v", p.peek().Kind)
 	}
 
-	var members []ast.Node
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		members = append(members, p.parseResultMember())
-	}
-	return p, members
+	return p, p.parseCalcBody()
 }
 
 func parseConstraintBodyTest(t *testing.T, input string) []ast.Node {
@@ -197,7 +193,7 @@ func TestParseResultMember_Parameters(t *testing.T) {
 		return r : Real = b * 2;
 	}`
 
-	p, nodes := parseResultMembersTest(t, input)
+	p, nodes := parseCalcBodyTest(t, input)
 
 	if len(nodes) != 2 {
 		t.Fatalf("expected 2 nodes, got %d", len(nodes))
@@ -226,7 +222,7 @@ func TestParseResultMember_Parameters(t *testing.T) {
 func TestParseResultMember_ExpressionRefused(t *testing.T) {
 	for _, src := range []string{"b * 2", "42", "sqrt(b)", "P::a", "a.b"} {
 		t.Run(src, func(t *testing.T) {
-			p, nodes := parseResultMembersTest(t, "{\n\t\treturn "+src+";\n\t\treturn r : Real;\n\t}")
+			p, nodes := parseCalcBodyTest(t, "{\n\t\treturn "+src+";\n\t\treturn r : Real;\n\t}")
 
 			if len(nodes) != 2 {
 				t.Fatalf("expected 2 nodes, got %d", len(nodes))

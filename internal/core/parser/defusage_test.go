@@ -226,7 +226,7 @@ func TestParseDefinitionBodyVisibility(t *testing.T) {
 	}
 }
 
-// TestParseActionUsageIntegration verifies parseActionBody is invoked for action usages.
+// TestParseActionUsageIntegration verifies parseActionBodyMixed is invoked for action usages.
 func TestParseActionUsageIntegration(t *testing.T) {
 	src := `action example {
 		first startNode;

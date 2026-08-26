@@ -106,9 +106,8 @@ func (p *Parser) parseCalcBody() []ast.Node {
 	return body.finish()
 }
 
-// parseActionBody parses the body of an action usage.
-// Expects '{' already consumed, returns list of action nodes + edges.
-// parseActionBodyMixed handles action bodies with BOTH declarations and behavioral statements
+// parseActionBodyMixed parses the body of an action or state node: both
+// declarations and behavioral statements. Expects '{' already consumed.
 // Syntax: { in item x; action nested {...}; first nested then ...; flow ...; }
 func (p *Parser) parseActionBodyMixed() []ast.Node {
 	body := p.newBodyBuilder()
@@ -205,18 +204,6 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}' after action body")
 	return body.finish()
-}
-
-// parseActionBody handles pure behavioral bodies (legacy - for inline action statements)
-func (p *Parser) parseActionBody() []ast.Node {
-	var members []ast.Node
-
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		members = append(members, p.parseActionMember())
-	}
-
-	p.expect(lexer.RBrace, "expected '}' after action body")
-	return members
 }
 
 // parseNodeBody reads the body an action or state node production ends in
