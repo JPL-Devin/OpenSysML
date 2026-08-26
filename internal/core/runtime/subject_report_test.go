@@ -11,7 +11,7 @@ const nestedSatisfySrc = `package test {
 	part def Inner {
 		attribute mass : Real = 1.0;
 		requirement lim {
-			require mass < 10.0;
+			require constraint { mass < 10.0 }
 		}
 	}
 	part def Outer {
@@ -32,7 +32,7 @@ const ownConditionsSatisfySrc = `package test {
 	part def Box {
 		attribute size = 1.0;
 		satisfy requirement fits {
-			require size < 10.0;
+			require constraint { size < 10.0 }
 		}
 	}
 	part big : Box {

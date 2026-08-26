@@ -391,6 +391,90 @@ func TestOneRegionsInnerTransitionLeavesAConcurrentRegionsOwnTransition(t *testi
 	assertVisits(t, exec.stateVisits, "start", "Working", "lstart", "rstart", "l1", "r1", "l2", "r2")
 }
 
+// Region-internal transitions complete an orthogonal machine only when every
+// top-level region reaches a final state, regardless of the source spelling.
+func TestOrthogonalMachineCompletesAfterAllRegionFinalStates(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "standard parallel",
+			body: `state Machine parallel {
+				attribute exits : Integer = 0;
+				exit action bye { assign exits := exits + 1; }
+				state left {
+					entry; then lstart;
+					state lstart;
+					final ldone;
+					transition lstart to ldone when First;
+				}
+				state right {
+					entry; then rstart;
+					state rstart;
+					final rdone;
+					transition rstart to rdone when Second;
+				}
+			}`,
+		},
+		{
+			name: "explicit regions",
+			body: `state Machine {
+				attribute exits : Integer = 0;
+				exit action bye { assign exits := exits + 1; }
+				region left {
+					initial lstart;
+					state lstart;
+					final ldone;
+					transition lstart to ldone when First;
+				}
+				region right {
+					initial rstart;
+					state rstart;
+					final rdone;
+					transition rstart to rdone when Second;
+				}
+			}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exec := stateExecutorForSource(t, "Machine", "package test {\n"+tt.body+"\n}")
+
+			exec.SendSignal("First", nil)
+			if err := exec.RunToCompletion(); err != nil {
+				t.Fatalf("run after First: %v", err)
+			}
+			if got := exec.State(); got != StateSuspended {
+				t.Fatalf("state after First = %v, want StateSuspended", got)
+			}
+			if got := exec.StateData()["exits"].Const.Int; got != 0 {
+				t.Fatalf("exit behavior after First ran %d times, want 0", got)
+			}
+
+			exec.SendSignal("Second", nil)
+			if err := exec.RunToCompletion(); err != nil {
+				t.Fatalf("run after Second: %v", err)
+			}
+			if got := exec.State(); got != StateCompleted {
+				t.Fatalf("state after Second = %v, want StateCompleted", got)
+			}
+			if got := exec.StateData()["exits"].Const.Int; got != 1 {
+				t.Fatalf("exit behavior ran %d times, want 1", got)
+			}
+
+			exec.SendSignal("Second", nil)
+			if err := exec.RunToCompletion(); err != nil {
+				t.Fatalf("rerun after completion: %v", err)
+			}
+			if got := exec.StateData()["exits"].Const.Int; got != 1 {
+				t.Fatalf("exit behavior ran %d times after completion, want 1", got)
+			}
+		})
+	}
+}
+
 // A timed transition looping back to its own simple state re-arms its timer, so
 // it fires once per period rather than only the first time.
 func TestTimedSelfTransitionFiresEveryPeriod(t *testing.T) {

@@ -6,6 +6,25 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### A keyworded inline condition is no longer accepted
+
+**Breaking change.** `assert <expression>;` and `assume <expression>;` in a constraint body, and
+`assume <expression>;` and `require <expression>;` in a requirement-style body, were an OpenSysML
+extension no SysML v2 production admits, warned as `nonstandard-notation`. They are now a parse
+error, and the warning for them is gone.
+
+- In a constraint body, write the condition on its own: `constraint MassBudget { total <= limit }`
+  instead of `constraint MassBudget { assert total <= limit; }`.
+- In a requirement body, which admits no keyword-less condition, wrap it in a constraint:
+  `requirement R { require constraint { power > 0 } }` instead of
+  `requirement R { require power > 0; }`.
+- A negated condition keeps its truth value in the expression: `assert not (x < 0);` becomes
+  `not (x < 0)`.
+- What the keywords still state is unchanged: `assert [not] <reference>;`,
+  `assert constraint { … }`, `assert constraint C;`, `assume`/`require <reference>;` and
+  `assume`/`require constraint [name] { … }`. The separate warning for `assume`/`require` used
+  outside a requirement body is unchanged too.
+
 ### The action nodes spelled `initial`, `final` and `decision` are removed
 
 **Breaking change** for models that used them. Each was an OpenSysML-only alias of a node the

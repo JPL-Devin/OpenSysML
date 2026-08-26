@@ -1,5 +1,5 @@
 package test {
 	requirement SafeSpeed {
-		require 150 < 200;
+		require constraint { 150 < 200 }
 	}
 }
