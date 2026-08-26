@@ -1,15 +1,86 @@
 {
   "validator": "build/pilot-sysml-validator/validate-sysml-batch",
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
+  "provenance": {
+    "pilotTag": "2026-05",
+    "pilotArtifact": "0.60.1",
+    "errataRegistry": "sha256:9e4470b0e2d84904d1644045898ae9a038efe1cfb1ad9ed476124bba747c1ba1",
+    "tools": [
+      {
+        "name": "pilot-sysml-validator",
+        "source": "scripts/pilot-sysml-validator/ValidateSysML.java",
+        "sourceDigest": "sha256:8270fc4804a9ba21b82d996e6125fa29aa8c03062ae36fcdce28d2841020dda1",
+        "release": "2026-05 (jupyter-sysml-kernel 0.60.1)"
+      },
+      {
+        "name": "pilot-kerml-validator",
+        "source": "scripts/pilot-kerml-validator/ValidateKerML.java",
+        "sourceDigest": "sha256:2876971d040f3d8846b00c878887044aeb957a342569d602ad8f79f884d75d96",
+        "release": "2026-05 (jupyter-sysml-kernel 0.60.1)"
+      }
+    ],
+    "inputs": [
+      {
+        "name": "training",
+        "dir": "examples/sysml-v2-training",
+        "origin": "pinned",
+        "files": 100,
+        "digest": "sha256:07e537e50ff0802af87d53d91aa6bf8e849d5e8661514ba4a63127eb719cf5e7"
+      },
+      {
+        "name": "pilot-examples",
+        "dir": "examples/pilot-corpora/sysml-examples",
+        "origin": "pinned",
+        "files": 98,
+        "digest": "sha256:fbe879beccaf499e4e3f3a0fd73e650a192a2ffbac5b177b8f124cf33306e227"
+      },
+      {
+        "name": "pilot-validation",
+        "dir": "examples/pilot-corpora/sysml-validation",
+        "origin": "pinned",
+        "files": 56,
+        "digest": "sha256:eecda5e89c573bd9bd88103160dd0eb6f019de997cfb561fa144c630b2c07b88"
+      },
+      {
+        "name": "kerml-examples",
+        "dir": "examples/pilot-corpora/kerml-examples",
+        "origin": "pinned",
+        "files": 58,
+        "digest": "sha256:3b442e918ebca05f8307cdd585386be0c6ea274444deacd12bf32793f439dc1f"
+      },
+      {
+        "name": "testdata",
+        "dir": "testdata",
+        "origin": "ours",
+        "files": 15,
+        "digest": "sha256:31ef9de543e308ffaa8f19eb7bf0ede99314e20116059d1f84c5902b85c082e5"
+      },
+      {
+        "name": "examples",
+        "dir": "examples",
+        "origin": "ours",
+        "files": 22,
+        "digest": "sha256:a49ba219deb1dafbe824d431e0ad500465074bc985d37c8c9335a6b4b14d1f73"
+      },
+      {
+        "name": "probes",
+        "dir": "cmd/pilot-diff/testdata",
+        "origin": "ours",
+        "files": 4,
+        "digest": "sha256:b0153c55bbfcdacabab911725dc44e0e7f4d3a501a281b1f3f2a13cda19737c6"
+      }
+    ],
+    "recorded": "2026-08-26"
+  },
   "totals": {
     "files": 353,
     "filesFullyAgreeing": 324,
     "agreement": 32,
-    "severityMismatch": 9,
+    "severityMismatch": 8,
     "openSysMLOnly": 27,
-    "pilotOnly": 82,
-    "openSysMLDiagnostics": 68,
-    "pilotDiagnostics": 123
+    "pilotOnly": 61,
+    "openSysMLDiagnostics": 67,
+    "pilotDiagnostics": 101
   },
   "roots": [
     {
@@ -659,169 +730,35 @@
         "files": 22,
         "filesFullyAgreeing": 15,
         "agreement": 0,
-        "severityMismatch": 8,
+        "severityMismatch": 7,
         "openSysMLOnly": 7,
-        "pilotOnly": 56,
-        "openSysMLDiagnostics": 15,
-        "pilotDiagnostics": 64
+        "pilotOnly": 35,
+        "openSysMLDiagnostics": 14,
+        "pilotDiagnostics": 42
       },
       "files": [
         {
           "path": "action-executor-demo.sysml",
           "agreement": [],
-          "severityMismatch": [
-            {
-              "line": 9,
-              "category": "syntax",
-              "openSysMLSeverity": "warning",
-              "pilotSeverity": "error",
-              "count": 1
-            }
-          ],
+          "severityMismatch": [],
           "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 9,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 9,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 14,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 14,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 17,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 18,
+              "line": 16,
               "severity": "warning",
               "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 27,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 27,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 28,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 28,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 29,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 29,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 33,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 34,
-              "severity": "error",
-              "category": "kind-mismatch",
               "count": 1
             },
             {
               "line": 35,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 37,
               "severity": "warning",
               "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 51,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 51,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 52,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 52,
-              "severity": "error",
-              "category": "unresolved-reference",
               "count": 1
             },
             {
               "line": 55,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 56,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 57,
               "severity": "warning",
               "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 67,
-              "severity": "error",
-              "category": "syntax",
               "count": 1
             }
           ]
@@ -1375,11 +1312,11 @@
       "files": 353,
       "filesFullyAgreeing": 325,
       "agreement": 32,
-      "severityMismatch": 9,
+      "severityMismatch": 8,
       "openSysMLOnly": 26,
-      "pilotOnly": 82,
-      "openSysMLDiagnostics": 67,
-      "pilotDiagnostics": 123
+      "pilotOnly": 61,
+      "openSysMLDiagnostics": 66,
+      "pilotDiagnostics": 101
     },
     "findings": [
       {

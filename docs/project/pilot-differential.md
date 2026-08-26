@@ -201,9 +201,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 15 | 8 | 36 | 53 | 32 | 1 | 3 | 20 |
-| `examples` | 22 | 15 | 15 | 64 | 0 | 8 | 7 | 56 |
+| `examples` | 22 | 15 | 14 | 42 | 0 | 7 | 7 | 35 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **353** | **324** | **68** | **123** | **32** | **9** | **27** | **82** |
+| **Total** | **353** | **324** | **67** | **101** | **32** | **8** | **27** | **61** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **8** and
@@ -216,16 +216,37 @@ them, and removing `initial <state>;` and `transition <src> to <tgt>;` retired 2
 demos are now written in the standard spellings the warning does not fire on. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **11**. `severity-only` (9) holds pairs of the same shape:
+reference corpora is **11**. `severity-only` (8) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
+
+### Feature-initialization round
+
+The reference's own diagnostics moved for the first time in several rounds, and none of our
+columns did. Writing an output's value as an initializer instead of a separate binding —
+`out result : Real = x * 2.0;` in place of `out result : Real;` followed by
+`bind result = x * 2.0;` — is notation the reference parses, so its error recovery no longer
+cascades through the rest of the file. The movement is entirely one file,
+`examples/action-executor-demo.sysml`, whose pilot-only rows fall 24 → **3**:
+
+| Count | Before the initializer rewrite | Now |
+|---|---:|---:|
+| only pilot | 82 | **61** |
+| pilot diagnostics | 123 | **101** |
+| severity-only | 9 | **8** |
+| overall: fully agreeing / only ours / our diagnostics | 324 / 27 / 68 | **324 / 27 / 67** |
+
+The one diagnostic of ours that left is its severity-only partner: the line it warned on is the
+`bind` that the rewrite removed, so neither tool has anything to report there. Agreement (**32**),
+fully agreeing files (**324**), only-ours (**27**) and every OMG root are unmoved, so nothing here
+is a conformance change: it is our own demo written in a spelling the reference accepts.
 
 ### Step 2 resolver round
 
 The control is a fresh-cache run of merge base `bbd3b2ec`; the head is an independent
 fresh-cache run of this tree:
 
-| Oracle | Control | Head |
+| Oracle | Control (`bbd3b2ec`) | Head — **historical snapshot**, measured at `bbd3b2ec`'s round, not the current figure |
 |---|---:|---:|
 | Xpect | 1293 agree / 248 wording-only / 30 disagree | 1293 / 248 / 30 |
 | Differential | 321 fully agreeing / 92 only ours / 148 diagnostics of ours | 324 / 83 / 139 |
@@ -251,7 +272,7 @@ severity-only, only-pilot, Xpect, and rejection do not move:
 
 Independent fresh-cache reports from exact base `4b9baf2d` and this tree are byte-equivalent:
 
-| Oracle | Base `4b9baf2d` | Step 3 |
+| Oracle | Base `4b9baf2d` | Step 3 — **historical snapshot**, measured at `4b9baf2d`'s round, not the current figure |
 |---|---:|---:|
 | Xpect | 1293 agree / 248 wording-only / 30 disagree | 1295 / 248 / 28 |
 | Differential | 324 fully agreeing / 83 only ours / 66 only pilot | 324 / 83 / 66 |
@@ -365,7 +386,7 @@ Per category, the only-ours totals are: `pilot-examples` 5 `unmapped`, 1 `kind-m
 `units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 11 `kind-mismatch`, 4 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 12 syntax, 16 `kind-mismatch`, 14 `unmapped`, 14 `unresolved-reference` — all of them
+`examples` 11 syntax, 3 `kind-mismatch`, 14 `unmapped`, 7 `unresolved-reference` — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -397,17 +418,17 @@ columns below are the only combined measurements. "At #356" is the state the adj
 written against, "F60–F69" the round of #358–#364, "wave 3" the round of #372–#376, "wave 4" the
 round of #383/#391/#387/#388/#382, "wave 5" the round of #403/#405/#397/#396/#398, "wave 6" the
 round of #408–#415, "wave 7A" #424, "wave 8" everything landed on `main` between 7A and 8G (#438),
-"wave 9" the round of #449–#455, "wave 12A" #500, and "now" the member-leading-succession diagnostic round (#526). The wave-3 and wave-5 reason columns are dropped for width; those reasons survive in the K- and S-class tables below and in this page's history:
+"wave 9" the round of #449–#455, "wave 12A" #500, and the last column the member-leading-succession diagnostic round (#526) — every column of that table, including its last, is the figure measured at its own round and none of them is the current measurement, which is the Results table above. The wave-3 and wave-5 reason columns are dropped for width; those reasons survive in the K- and S-class tables below and in this page's history:
 
 For round 3, the fresh control column is the `1af78d94` base, before the wave-12F changes:
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **324 / 27 / 68** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **324 / 27 / 67** |
 | `pilot-examples`: only ours | **43** | **8** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **56** |
+| `examples`: only pilot | **40** | **35** |
 | `examples`: fully agreeing | **15** | **15** |
 | `unmapped`, our side | **20** | **18** |
 
@@ -424,9 +445,9 @@ unmoved.
 
 This control is measured independently from the wave-12F head: its Xpect result is **1287 agree,
 248 wording-only, 36 disagree**, and its rejection result is **116 both reject / 4 only pilot
-rejects / 0 only ours rejects / 0 both accept**. The head is the `Now` column below.
+rejects / 0 only ours rejects / 0 both accept**. The head is the last measured column below.
 
-| Count | At #356 | After F60–F69 | After wave 3 | After wave 4 | After wave 5 | After wave 6 | After wave 7A | After wave 8 | After wave 9 | After wave 10 | After wave 11 | After wave 12A | Now | Reason for the wave-12F move | Reason for the wave-12A move | Reason for the wave-11 move | Reason for the wave-10 move | Reason for the wave-9 move | Reason for the 8G move | Reason for the wave-6 move |
+| Count | At #356 | After F60–F69 | After wave 3 | After wave 4 | After wave 5 | After wave 6 | After wave 7A | After wave 8 | After wave 9 | After wave 10 | After wave 11 | After wave 12A | At wave 12F (`bbd3b2ec`) — **historical snapshot**, not the current figure | Reason for the wave-12F move | Reason for the wave-12A move | Reason for the wave-11 move | Reason for the wave-10 move | Reason for the wave-9 move | Reason for the 8G move | Reason for the wave-6 move |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | overall: fully agreeing / only ours / our diagnostics | 221 / 560 / 596 | 254 / 343 / 379 | 273 / 281 / 317 | 283 / 232 / 268 | 291 / 167 / 203 | **297 / 161 / 199** | 300 / 147 / 185 | 308 / 119 / 157 | 309 / 119 / 157 | 311 / 142 / 191 | **317 / 119 / 168** | **317 / 119 / 175** | **321 / 92 / 148** | Wave 12F closes 27 only-ours diagnostics on the reference's own corpora: fully agreeing 317 → **321**, only ours 119 → **92**, our diagnostics 175 → **148**. The pilot's columns (122 diagnostics, 66 only-pilot), agreement (**32**) and severity-only (**24**) are all unmoved, so every movement this round is a false positive of ours disappearing: 23 rows are the connector-end parser fix, 4 the anonymous-`enum`-value parse fix. No only-ours row was added, and no remaining row changed bucket because of 12A's `must have` → `kind-mismatch` mapping. | Wave 12A narrows tier gating from the document to the element: agreement 25 → **32** and only-pilot 73 → **66**, our diagnostics 168 → **175**, with only-ours unmoved at **119**. Every one of the seven is a pilot row we now also report on a subject whose own resolution failed, on `testdata` (`parse/expressions.sysml` ×5, `passes/errors.sysml`, `resolve/errors.sysml`). | Wave 11 with the fresh-cache correction: fully agreeing 311 → **317**, only ours 142 → **119**, our diagnostics 191 → **168**. Four of the 23 retired rows are the stale-library-cache measurement correction (a fresh-cache run of the pre-wave-11 tree measures 138 only-ours, not 142); the other 19 are 11F's resolver work — the `Vehicle` diamond family and the redefinition canonicalization — plus 11E's and 11D's rules. The pilot's columns (122 diagnostics, 73 only-pilot), agreement (25) and severity-only (24) are all unmoved, so every movement this round is a false positive of ours disappearing. | No wave-10 slice owned this oracle and it moved anyway: 10C's conformance modes made the non-standard-notation warning fire by default on our own `examples/` demos (+35 only-ours, all true positives about those models), while 10B's and 10D's rule and parser work retired 12 rows on the reference's own corpora (82 → 70). Fully agreeing 309 → **311**, agreement 23 → **25**, severity-only 15 → **24** and only-pilot 85 → **73**, the last two because a line the pilot errors on and we now warn on leaves only-pilot for severity-only. **Read the 119 → 142 by root**: our diagnostics against the reference corpora fell; our warnings about our own examples rose. | Wave 9 moves this oracle by exactly one file, and moves the reference's column instead: only-pilot **137 → 85**. Both are 9B's: its notation warnings added 34 only-ours rows, and rewriting the two example models that provoked them to the spec spelling retired the same 34 — so our column returns to 119 rather than staying at 153 — while the pilot's parse of `examples/repl-behavioral-demo.sysml` now completes (the file becomes fully agreeing, the +1) and its parse of `examples/phase-c-behavioral-bodies.sysml` reaches line 147 instead of stopping at line 60, retiring 52 of its rows. 9A, 9C and 9D moved the Xpect and scope oracles, not this one; 9F moved the rejection oracle. | 8G (#438) measured its own delta against a clean rerun of its merge-base, 306 / 125 / 163 → **308 / 119 / 157**: prefix metadata on `require`/`assume` retires 5 only-ours rows on `Metadata Examples/RequirementMetadataExample.sysml` and a leading `not satisfy` the last one on `Simple Tests/RequirementTest.sysml`, so both files are now fully agreeing. `Simple Tests/DecisionTest.sysml` keeps 2 rows that change category, syntax → `kind-mismatch`: a guarded succession now parses as the transition it is, and `resolve.isVertex` rejects its action-node ends (pinned for wave 8A). The rest of this column is the waves that landed between 7A and 8G. Earlier 7A (#424): −14 only-ours and +3 fully-agreeing files. F93's metaclass-reflection fix removes 3 on `kerml-examples` and 4 on `testdata`, and F68's implied transition members remove 9 on `pilot-examples`, against +3 new `unmapped` specialization-cycle rows on `Simple Tests/PartTest.sysml` that a since-removed error of ours had been masking. The reference's column (137 / 175), agreement (22) and severity-only (16) are all unchanged, so every movement in this round is a false positive of ours disappearing. | Wave 6: −6 only-ours and +6 fully-agreeing files, from #409 (F90, −7 on `kerml-examples`) and #415 (F69's three metadata name conflicts, −3 on `pilot-examples`), against +4 only-ours that #409 deliberately added as committed F93 reproducers on `testdata`. **Agreement moves for the first time, 20 → 22**, because #415 implemented the reference's duplicate-owned-member-name warning (P4) and two pilot-only rows became agreed ones; the reference's diagnostic total (175) is unchanged, and its only-pilot column falls 139 → 137 by exactly those two. Severity-only (16) is unchanged for the fifth round. The round's real result is the Xpect `linkedName` column, not this one. |
 | `pilot-examples`: only ours | 314 | 167 | 138 | 109 | 101 | **98** | 91 | 68 | 68 | 63 | **43** | **43** | **16** | −27, all of it here: the n-ary connector ends of `AHFSequences.sysml` and `CauseAndEffectExample.sysml` now parse, so their end names resolve, and `SimpleVehicleModel.sysml`'s `enum = 60 [mm];` members are no longer read as a member named `enum`. `unresolved-reference` 32 → **9** and `unmapped` 9 → **5**. | Unchanged — wave 12A moved the agreement and only-pilot columns, not this row. | −20: `Annex_A_VehicleViews.sysml` 14 → 6 (all 8 duplicate-inherited-name rows, 11F) and `SysML v2 Spec Annex A SimpleVehicleModel.sysml` 10 → 5, with `unmapped` 17 → 9 and `kind-mismatch` 9 → 1. `unresolved-reference` 36 → 32, of which 4 are the cache correction rather than a fix. | −5, and the mix is almost entirely new: all 31 syntax rows are gone (10D parses them), against `unresolved-reference` 27 → 36, `unmapped` 5 → 17 and `kind-mismatch` 4 → 9 unmasked in files that now reach the later tiers. `Annex_A_VehicleViews.sysml` +8 (two groups of four `Duplicate of inherited member name … from Vehicle, vehicle_b` — a false positive of ours where one feature arrives through two supertypes) against `SimpleVehicleModel.sysml` 24 → 10. | Unchanged — no wave-9 item touched this root's diagnostics. | −23 since 7A; 8G's own share is 5, the `RequirementMetadataExample.sysml` prefix-metadata rows. Earlier −7: `Interaction Sequencing Examples/ServerSequenceRealization-2.sysml` 7 → 1 and `ServerSequenceOutsideRealization-2.sysml` 4 → 1 on F68's implied transition members (−9), against the +3 `unmapped` cycle rows unmasked on `Simple Tests/PartTest.sysml`. `unresolved-reference` 37 → 27; the 57 syntax rows are unmoved and are 7C's. | −3, all `unmapped`, all #415: the three `name conflict: … is already the name of the inherited feature ModelingMetadata::…` rows on `Metadata Examples/IssueMetadataExample.sysml` (1) and `RationaleMetadataExample.sysml` (2). Both files are now fully agreeing, which is the +2 in this root's fully-agreeing column. This page previously called those three a **deliberate one-sided check of ours (F69) that stays**; #415 read the reference's `checkMembershipDistinguishability` and found our version wrong in both severity and scope, so the claim that they were intentional is withdrawn. Every other category in this root is unmoved — its 57 syntax and 37 `unresolved-reference` rows are wave 7's. |
@@ -2042,6 +2063,34 @@ The JSON carries tuples and counts but no message text, so it diffs cleanly; the
 carries the messages for adjudication. When the baseline is refreshed, the verdicts above must
 be re-adjudicated the same way [training-examples.md](training-examples.md) requires — a
 moved count is a claim about one of the two implementations, and it needs a reason.
+
+`-update` records a run as the committed baseline; `-check` re-runs the comparison and fails
+unless the fresh report reproduces it, printing the differing fields. Both flags exist on all
+three oracles, and `-check` is what a reader should run before quoting a figure.
+
+### How this record is kept true
+
+A baseline states what one run measured, so three mechanisms keep it from quietly ceasing to
+describe this repository:
+
+- **Provenance in every baseline.** `provenance` records the pinned tag and artifact, a digest of
+  each validator bridge's source, and a digest and file count of every corpus root the run
+  compared, alongside the ISO date it was recorded. No absolute path is an identity, so two
+  machines that agree on the pin and the inputs record the same provenance.
+- **A Java-free guard in the normal suite.** `TestCommittedBaselineStatesThisRepositorysProvenance`
+  (in each oracle's package) compares that record against the repository as it stands. If the pin
+  moves, a bridge is edited or a corpus this repository owns changes and a baseline is not
+  re-recorded, it fails naming the field, the recorded value, the current value and the exact
+  refresh command. It reads only committed files.
+- **A scheduled Java-backed reproduction.** `.github/workflows/oracle-reproduction.yml` installs
+  Java, provisions the pinned validators and corpora and runs all three oracles with `-check`
+  daily and on demand. Its failure distinguishes a moved provenance — the pinned reference or an
+  input changed underneath the baseline, so investigate the provisioning — from moved counts with
+  matching provenance, which is an implementation movement to adjudicate and then re-record.
+
+The Java-free guard cannot see a movement in the reference's own behaviour, and the scheduled run
+is not a required check, because both the corpora and the validator are unvendored network
+fetches. Together they bound how long a stale figure can survive to about a day.
 
 ---
 

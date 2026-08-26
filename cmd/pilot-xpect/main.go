@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Open-MBEE/OpenSysML/internal/baseline"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/errata"
 )
@@ -42,15 +43,17 @@ func main() {
 	repo := flag.String("repo", "", "repository root (default: the module root containing this command)")
 	out := flag.String("out", "", "output directory for the reports (default: <repo>/build/pilot-xpect)")
 	jobs := flag.Int("jobs", runtime.NumCPU(), "number of .xt files to compare in parallel")
+	update := flag.Bool("update", false, "record this run as "+committedBaseline)
+	check := flag.Bool("check", false, "fail unless this run reproduces "+committedBaseline)
 	flag.Parse()
 
-	if err := run(*repo, *out, *jobs); err != nil {
+	if err := run(*repo, *out, *jobs, *update, *check); err != nil {
 		fmt.Fprintf(os.Stderr, "pilot-xpect: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, out string, jobs int) error {
+func run(repo, out string, jobs int, update, check bool) error {
 	var err error
 	if repo == "" {
 		repo, err = moduleRoot()
@@ -105,6 +108,17 @@ func run(repo, out string, jobs int) error {
 	if len(report.Suites) == 0 {
 		return fmt.Errorf("no suite found under build/pilot-xpect-corpus; run scripts/download-pilot-xpect.sh")
 	}
+	inputs, err := suiteInputs(repo)
+	if err != nil {
+		return err
+	}
+	if report.Provenance, err = provenance(repo, overlay, inputs); err != nil {
+		return err
+	}
+	// Only a recorded baseline is dated, so two plain runs stay byte-identical.
+	if update {
+		report.Provenance.Recorded = baseline.Today()
+	}
 	report.summarize()
 	erratum.summarize()
 	report.Errata.Totals = erratum.Totals
@@ -114,7 +128,18 @@ func run(repo, out string, jobs int) error {
 	} else {
 		report.Errata.Note = "adjudicated again over a corrected copy of the suites; the published corpus is unchanged on disk"
 	}
-	return writeReports(out, report)
+	fresh, err := writeReports(out, report)
+	if err != nil {
+		return err
+	}
+	committed := filepath.Join(repo, filepath.FromSlash(committedBaseline))
+	if update {
+		return baseline.Write(committed, fresh)
+	}
+	if check {
+		return baseline.Reproduces(committed, fresh)
+	}
+	return nil
 }
 
 // compareAll adjudicates every file, in parallel but into a fixed order, so the

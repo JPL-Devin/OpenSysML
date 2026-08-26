@@ -2,6 +2,28 @@
   "pilot": "2026-05",
   "corpus": "build/pilot-xpect-corpus",
   "library": "the suite's own /library* copies, loaded per fixture as its XPECT_SETUP declares them",
+  "provenance": {
+    "pilotTag": "2026-05",
+    "pilotArtifact": "0.60.1",
+    "errataRegistry": "sha256:9e4470b0e2d84904d1644045898ae9a038efe1cfb1ad9ed476124bba747c1ba1",
+    "inputs": [
+      {
+        "name": "kerml",
+        "dir": "build/pilot-xpect-corpus/kerml",
+        "origin": "pinned",
+        "files": 303,
+        "digest": "sha256:19bcafac88009eb303bf4f708f057aa63286a9f2f8ae530570bc3f93acce6966"
+      },
+      {
+        "name": "sysml",
+        "dir": "build/pilot-xpect-corpus/sysml",
+        "origin": "pinned",
+        "files": 125,
+        "digest": "sha256:b983514e909341cf9411b4ff96b99f06983722680eb589fd5dccbf2e6bdc3846"
+      }
+    ],
+    "recorded": "2026-08-26"
+  },
   "totals": {
     "files": 428,
     "filesUnparsed": 0,
