@@ -127,7 +127,7 @@ func TestParseAction_Decision(t *testing.T) {
 	}
 
 	// Check unguarded succession
-	succession, ok := nodes[3].(*ast.Usage)
+	succession, ok := unwrapMember(t, nodes[3]).(*ast.Usage)
 	if !ok {
 		t.Errorf("node 3: expected *ast.Usage, got %T", nodes[3])
 	} else {
@@ -137,7 +137,7 @@ func TestParseAction_Decision(t *testing.T) {
 	}
 
 	// Check guarded succession
-	cfEdge, ok := nodes[4].(*ast.TransitionMember)
+	cfEdge, ok := unwrapMember(t, nodes[4]).(*ast.TransitionMember)
 	if !ok {
 		t.Errorf("node 4: expected *ast.TransitionMember, got %T", nodes[4])
 	} else {
