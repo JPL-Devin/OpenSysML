@@ -199,6 +199,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.ResolveQualified(scope, d.Successor)
 		}
 		r.resolveExpr(scope, d.Guard)
+	case *ast.SuccessionEdge:
+		r.resolveSuccessionEdge(scope, d)
+	case *ast.ControlFlowEdge:
+		r.resolveControlFlowEdge(scope, d)
 	case *ast.FinalNode:
 		// Final nodes have no references
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:

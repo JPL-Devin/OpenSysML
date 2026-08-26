@@ -129,7 +129,7 @@ func TestParseAction_Decision(t *testing.T) {
 	// Check unguarded succession
 	succession, ok := unwrapMember(t, nodes[3]).(*ast.Usage)
 	if !ok {
-		t.Errorf("node 3: expected *ast.Usage, got %T", nodes[3])
+		t.Errorf("node 3: expected *ast.Usage, got %T", unwrapMember(t, nodes[3]))
 	} else {
 		if succession.Kind != ast.UsageSuccession || len(succession.ConnectorEnds) != 2 {
 			t.Errorf("node 3: expected two-ended succession, got %+v", succession)
@@ -139,7 +139,7 @@ func TestParseAction_Decision(t *testing.T) {
 	// Check guarded succession
 	cfEdge, ok := unwrapMember(t, nodes[4]).(*ast.TransitionMember)
 	if !ok {
-		t.Errorf("node 4: expected *ast.TransitionMember, got %T", nodes[4])
+		t.Errorf("node 4: expected *ast.TransitionMember, got %T", unwrapMember(t, nodes[4]))
 	} else {
 		if cfEdge.Source == nil || cfEdge.Target == nil {
 			t.Errorf("guarded succession missing source or target")

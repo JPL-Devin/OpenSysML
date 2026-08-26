@@ -1,0 +1,80 @@
+package resolve
+
+import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+// resolveSuccessionEdge resolves the ends a succession names, the members
+// lowering sequences the token flow over: a misspelled one is reported here
+// rather than only when the model runs.
+func (r *Resolver) resolveSuccessionEdge(scope *symbols.Scope, edge *ast.SuccessionEdge) {
+	r.resolveEdgeEnd(scope, edge.Source, edge.SourceMember, edge.SourceImplied)
+	r.resolveEdgeEnd(scope, edge.Target, edge.TargetMember, edge.TargetImplied)
+}
+
+// resolveControlFlowEdge resolves the ends of a guarded branch of a decision.
+func (r *Resolver) resolveControlFlowEdge(scope *symbols.Scope, edge *ast.ControlFlowEdge) {
+	r.resolveEdgeEnd(scope, edge.Source, edge.SourceMember, edge.SourceImplied)
+	r.resolveEdgeEnd(scope, edge.Target, edge.TargetMember, edge.TargetImplied)
+}
+
+// resolveEdgeEnd resolves an end the author named. An end bound to a member by
+// position, or one the notation supplied from the member beside the keyword,
+// names nothing an author could misspell: lowering reads that member itself.
+func (r *Resolver) resolveEdgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, member ast.Node, implied bool) {
+	if qn == nil || len(qn.Parts) == 0 || member != nil || implied {
+		return
+	}
+	// In a machine, an end names a vertex the way a transition's does — a nested
+	// or region-local one included, which is what lowering reads it as.
+	if inStateMachine(scope) {
+		r.resolveMachineEnd(scope, qn)
+		return
+	}
+	r.ResolveQualified(scope, qn)
+}
+
+// resolveMachineEnd reports an end of a machine naming nothing, reaching a
+// vertex the way a transition's endpoint does. What the name reached is left
+// unjudged: the kind check a transition endpoint gets belongs to the notation
+// this end is written in, not to resolving the name.
+func (r *Resolver) resolveMachineEnd(scope *symbols.Scope, qn *ast.QualifiedName) {
+	var found bool
+	r.aside(func() { _, found = r.lookupEndpoint(scope, qn) })
+	if found {
+		return
+	}
+	last := qn.Parts[len(qn.Parts)-1]
+	r.report(Diagnostic{
+		Span:    qn.Span(),
+		Message: r.endpointMessage(scope, qn),
+		Code:    "unresolved",
+		Fixes:   endpointFixes(last.Text, last.Span, r.vertexSuggestions(scope, qn)),
+	})
+}
+
+// inStateMachine reports whether an edge written in scope belongs to a state
+// machine, the body a vertex lookup applies to; an action body or anything else
+// is not one.
+func inStateMachine(scope *symbols.Scope) bool {
+	for s := scope; s != nil; s = s.Parent() {
+		switch n := s.Node().(type) {
+		case *ast.Definition:
+			if n.Kind == ast.DefState {
+				return true
+			}
+			if n.Kind == ast.DefAction {
+				return false
+			}
+		case *ast.Usage:
+			if n.Kind == ast.UsageState {
+				return true
+			}
+			if n.Kind == ast.UsageAction {
+				return false
+			}
+		}
+	}
+	return false
+}
