@@ -175,8 +175,8 @@ sysml> %advance 30
 | Workspace/reindex/file watching | ✅ Complete |
 | Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (145 golden ASTs, 255 negative tests) |
 | Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 104 calc/constraint/requirement/satisfy cases passing) |
-| Action execution engine (Tier 5) | ✅ Complete (62 conformance cases passing) |
-| State machine runtime (Tier 5) | ✅ Complete (71 conformance cases: transitions, accept events, sourceless) |
+| Action execution engine (Tier 5) | ✅ Complete (69 conformance cases passing) |
+| State machine runtime (Tier 5) | ✅ Complete (79 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete — `%constraint`, `%requirement`, `%satisfy` and `%calc` also answer from the command line (`-constraint`, `-requirement`, `-satisfy`, `-calc`) and over gRPC, on one evaluation |
 | Model save to notation (`%save model.sysml`, `sysml -convert sysml`) | ✅ Complete — writes the source through the formatter, so comments and spacing survive |
 | SysML ↔ RDF Turtle conversion (`%save model.ttl`, `sysml -convert ttl`) | 🧪 **Experimental** — packages, definitions, usages, ports, connections, values, documentation, and the nodes an action or state body states (260 of 334 `examples/` models convert; what is not mapped is refused with the construct named), but the vocabulary may change without a compatibility path. Every run says so; see [the RDF mapping's status](docs/reference/rdf-mapping.md#status-experimental) and [worked example](examples/rdf-interop-demo.sysml) |
@@ -204,9 +204,9 @@ What these numbers cannot show: the OMG corpora are demonstrations rather than a
 <!-- doc-counts:end refereed-figures -->
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
-**Test coverage:** 8,047 tests and subtests (8,039 pass, 8 skip themselves; 3,809 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 145 golden ASTs, 255 negatives, 360 conformance cases, 112 golden traces, 212 runtime robustness cases, 15 gRPC conformance cases and 8 gRPC robustness cases.
+**Test coverage:** 8,324 tests and subtests (8,315 pass, 9 skip themselves; 3,940 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 145 golden ASTs, 255 negatives, 374 conformance cases, 114 golden traces, 253 runtime robustness cases, 15 gRPC conformance cases and 8 gRPC robustness cases.
 **Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement/satisfy functional. Action/state executors handle nested invocation, control flow keywords, loop and conditional statements and the send statement (360/360 conformance cases passing). Coverage is self-assessed against the specification text and the normative library: the pinned OMG pilot implementation evaluates expressions but does not execute actions or state machines headlessly, so no external implementation currently adjudicates these rows. See [spec compliance](docs/project/spec-compliance.md).
+**Behavioral execution:** Calc/constraint/requirement/satisfy functional. Action/state executors handle nested invocation, control flow keywords, loop and conditional statements and the send statement (374/374 conformance cases passing). Coverage is self-assessed against the specification text and the normative library: the pinned OMG pilot implementation evaluates expressions but does not execute actions or state machines headlessly, so no external implementation currently adjudicates these rows. See [spec compliance](docs/project/spec-compliance.md).
 **Reference differential:** 353 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (`2026-05`), 324 in full agreement; every divergence is enumerated and adjudicated in [the differential](docs/project/pilot-differential.md), reproducible with `go run ./cmd/pilot-diff`.
 **Rejection oracle:** the reverse direction — do we reject what the reference rejects? 120 hand-written invalid models validated by both implementations, 120 rejected by both, 0 the pinned pilot rejects and we accept; every permissiveness gap is enumerated with a reproducer and likely root cause in [the rejection oracle](docs/project/pilot-rejection.md), reproducible with `go run ./cmd/pilot-reject`. We wrote all 120 cases, so the count measures our coverage of the rejection surface, not our conformance — a sample, not a proof.
 **Training examples:** 100/100 files clean, gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [training examples](docs/project/training-examples.md) for analysis.
@@ -324,7 +324,7 @@ go build -o bin/sysml-grpc ./cmd/sysml-grpc
 
 **Installation:**
 ```bash
-pip install opensysml          # from PyPI, once the first release is published
+pip install opensysml          # from PyPI
 
 # Or from a checkout, in development mode
 pip install -e python/

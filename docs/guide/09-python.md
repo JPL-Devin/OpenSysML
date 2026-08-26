@@ -10,7 +10,7 @@ The full API surface, the generated typed classes and the measured latency are
 ## Installation
 
 ```bash
-pip install opensysml             # from PyPI, once the first release is published
+pip install opensysml             # from PyPI
 pip install -e python/          # or from a checkout, at the repository root
 ```
 
