@@ -233,17 +233,18 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **61** |
-| pilot diagnostics | 123 | **101** |
+| only pilot | 82 | **58** |
+| pilot diagnostics | 123 | **103** |
 | severity-only | 9 | **8** |
 
 The one diagnostic of ours that left is its severity-only partner: the line it warned on is the
 `bind` that the rewrite removed, so neither tool has anything to report there. At this round the
 combined figures were 324 fully agreeing / 27 only ours / 68 → 67 our diagnostics — agreement, fully
 agreeing files, only-ours and every OMG root were unmoved by the rewrite, so nothing here is a
-conformance change: it is our own demo written in a spelling the reference accepts. The interface-flow
-pairing round below moved those three afterwards, and the Results table above states them as they are
-now.
+conformance change: it is our own demo written in a spelling the reference accepts. The rewrite itself
+left only-pilot at 61 and pilot diagnostics at 101; the `Now` column tracks the current baseline, so it
+also carries the interface-flow pairing round and the library-inherited-name round that followed, and the
+Results table above states every figure as it is now.
 
 ### Step 2 resolver round
 

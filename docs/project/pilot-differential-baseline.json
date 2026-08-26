@@ -52,8 +52,8 @@
         "name": "testdata",
         "dir": "testdata",
         "origin": "ours",
-        "files": 15,
-        "digest": "sha256:31ef9de543e308ffaa8f19eb7bf0ede99314e20116059d1f84c5902b85c082e5"
+        "files": 17,
+        "digest": "sha256:e05c49ce7bea2559ab9fe69072b2fb1465bd719d719a6a186a3df8e601adffa1"
       },
       {
         "name": "examples",
