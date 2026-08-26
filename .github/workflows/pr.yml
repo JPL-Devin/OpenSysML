@@ -343,23 +343,35 @@ jobs:
     if: always()
     needs:
       - build
+      - docs
+      - python-test
       - race-tests
       - static-and-integrity
+      - vscode-extension
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify required checks
         env:
           BUILD_RESULT: ${{ needs.build.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          PYTHON_TEST_RESULT: ${{ needs.python-test.result }}
           RACE_TESTS_RESULT: ${{ needs.race-tests.result }}
           STATIC_AND_INTEGRITY_RESULT: ${{ needs.static-and-integrity.result }}
+          VSCODE_EXTENSION_RESULT: ${{ needs.vscode-extension.result }}
         run: |
           if [ "$BUILD_RESULT" != success ] ||
+             [ "$DOCS_RESULT" != success ] ||
+             [ "$PYTHON_TEST_RESULT" != success ] ||
              [ "$RACE_TESTS_RESULT" != success ] ||
-             [ "$STATIC_AND_INTEGRITY_RESULT" != success ]; then
+             [ "$STATIC_AND_INTEGRITY_RESULT" != success ] ||
+             [ "$VSCODE_EXTENSION_RESULT" != success ]; then
             echo "build=$BUILD_RESULT"
+            echo "docs=$DOCS_RESULT"
+            echo "python-test=$PYTHON_TEST_RESULT"
             echo "race-tests=$RACE_TESTS_RESULT"
             echo "static-and-integrity=$STATIC_AND_INTEGRITY_RESULT"
+            echo "vscode-extension=$VSCODE_EXTENSION_RESULT"
             exit 1
           fi
 
