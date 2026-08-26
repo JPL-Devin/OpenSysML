@@ -1,6 +1,6 @@
 # OpenSysML — Roadmap
 
-Baseline: `main` @ `79fa3366`, verified locally on 2026-08-25 with Go 1.25.0.
+Baseline: `main` @ `22f47533`, verified locally on 2026-08-26 with Go 1.25.0.
 Read `AGENTS.md` first; it governs everything below.
 
 0.2.1 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
@@ -187,8 +187,8 @@ literals fall in the datatypes it maps (`xsd:boolean`, `xsd:integer`,
 ## D3 — make a converted graph readable through Flexo, and prove it
 
 D3 is not "run the harness": the harness is landed and the graph fails it today, for reasons
-that are known. Five sub-items, of which the identity question (D3.1) and the harness itself
-(D3.5) are done.
+that are known. Of its five sub-items only collection-valued properties (**D3.4**) remain —
+identity (D3.1), element ids (D3.2), ownership (D3.3) and the harness itself (D3.5) are done.
 
 ### D3.1 — element identity: qualified names cannot address an element
 
@@ -444,16 +444,15 @@ closed as well. What is left is:
 1. **R3**/**R4**/**R5** as the hardware and account access appears: a real Mac to install the
    tap's darwin bottle on, an Apple Developer and an OV/EV certificate to sign with, and a
    marketplace publisher for the extension. None of the three gates the others.
-2. **Track D** is independent of the rest and can run whenever. Take **D3** first, in its own
-   order: **D3.2**/**D3.3**/**D3.4** on the identity **D3.1** settled, then the **D3.5**
-   harness, which is the first thing that can confirm or refute the interop claim — it is
-   landed and measures the gap, so those three show up as movement in
-   `internal/interop/flexo/testdata/interop_expected.txt`. **D7** next, since it is mechanical
-   now that identity is stable, then **D2** — a succession end that refers to an unnamed member
-   belongs with it, both wanting real end triples rather than names or text — and **D1** last,
-   as the largest piece of design. **D8** (the OWL-ontology output profile) is optional and
-   additive: its domain/range gate is already in the suite, but the profile only becomes fully
-   conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
+2. **Track D** is independent of the rest and can run whenever. Take **D3.4** first, the last
+   of D3 — the harness is landed and measures the gap, so it and everything after it show up as
+   movement in `internal/interop/flexo/testdata/interop_expected.txt` rather than as a claim.
+   **D7** next, since it is mechanical now that identity is stable, then **D2** — a succession
+   end that refers to an unnamed member belongs with it, both wanting real end triples rather
+   than names or text — and **D1** last, as the largest piece of design. **D8** (the
+   OWL-ontology output profile) is optional and additive: its domain/range gate is already in
+   the suite, but the profile only becomes fully conformant behind D2 and D1, so it does not
+   belong ahead of them.
 3. **L3** is what remains of the library work: `Model.Eval` folding library value expressions
    and the solver taking library-declared conditions. It is independent of the release section
    and of Track D.
