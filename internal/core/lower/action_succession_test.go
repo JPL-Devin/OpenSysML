@@ -39,6 +39,56 @@ func TestToActionGraph_ExplicitSuccessionUsage(t *testing.T) {
 	}
 }
 
+func TestToActionGraph_ImpliedEndpointsOnControlFlow(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action seq {
+			first start;
+			decide firstCheck;
+			succession first start then firstCheck;
+			if true then done;
+			else secondCheck;
+			decide secondCheck;
+			if false then done;
+			else done;
+		}
+	`)
+
+	start := namedActionNode(t, graph, "start")
+	done := namedActionNode(t, graph, "done")
+	firstCheck := namedActionNode(t, graph, "firstCheck")
+	secondCheck := namedActionNode(t, graph, "secondCheck")
+
+	if edges := graph.Edges[firstCheck]; len(edges) != 2 || edges[0] != done || edges[1] != secondCheck {
+		t.Fatalf("firstCheck edges = %v, want [done secondCheck]", edges)
+	}
+	if edges := graph.Edges[secondCheck]; len(edges) != 2 || edges[0] != done || edges[1] != done {
+		t.Fatalf("secondCheck edges = %v, want [done done]", edges)
+	}
+	if len(graph.Finals) != 1 || graph.Finals[0] != done {
+		t.Fatalf("final nodes = %v, want one shared implied done node", graph.Finals)
+	}
+	if edges := graph.Edges[start]; len(edges) != 1 || edges[0] != firstCheck {
+		t.Fatalf("start edges = %v, want [firstCheck]", edges)
+	}
+}
+
+func TestToActionGraph_ImpliedEndpointOnInitialSuccessor(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action seq {
+			first start then done;
+		}
+	`)
+
+	start := namedActionNode(t, graph, "start")
+	done := namedActionNode(t, graph, "done")
+	if edges := graph.Edges[start]; len(edges) != 1 || edges[0] != done {
+		t.Fatalf("start edges = %v, want [done]", edges)
+	}
+	if len(graph.Finals) != 1 || graph.Finals[0] != done {
+		t.Fatalf("final nodes = %v, want one shared implied done node", graph.Finals)
+	}
+}
+
 func TestToActionGraph_ExplicitSuccessionFeatureChain(t *testing.T) {
 	graph := actionGraphFor(t, `
 		action seq {

@@ -396,7 +396,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				if named, ok := firstNode[n]; ok {
 					sourceNode = named
 				}
-				targetNode := findNodeByName(graph.Nodes, n.Successor)
+				targetNode := resolveActionEndpoint(graph, n.Successor, false)
 				if targetNode == nil {
 					return nil, fmt.Errorf("initial node %s successor references undefined target %s", n.Name, edgeEndName(n.Successor))
 				}
@@ -411,7 +411,10 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			}
 		case *ast.SuccessionEdge:
 			sourceNode := resolveEnd(graph.Nodes, n.Source, n.SourceMember)
-			targetNode := resolveEnd(graph.Nodes, n.Target, n.TargetMember)
+			if n.SourceMember == nil {
+				sourceNode = resolveActionEndpoint(graph, n.Source, true)
+			}
+			targetNode := resolveActionEndpointForEdge(graph, n.Target, n.TargetMember, false)
 
 			if sourceNode == nil {
 				return nil, fmt.Errorf("succession edge references undefined source node %s", edgeEnd(n.Source, n.SourceMember))
@@ -422,8 +425,8 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
 			graph.recordSuccession(sourceNode, targetNode, n)
 		case *ast.ControlFlowEdge:
-			sourceNode := resolveEnd(graph.Nodes, n.Source, n.SourceMember)
-			targetNode := resolveEnd(graph.Nodes, n.Target, n.TargetMember)
+			sourceNode := resolveActionEndpointForEdge(graph, n.Source, n.SourceMember, true)
+			targetNode := resolveActionEndpointForEdge(graph, n.Target, n.TargetMember, false)
 
 			if sourceNode == nil {
 				return nil, fmt.Errorf("control flow edge references undefined source %s", edgeEnd(n.Source, n.SourceMember))
@@ -476,8 +479,8 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				}
 				sourceRef := connectorEndReference(n.ConnectorEnds[0])
 				targetRef := connectorEndReference(n.ConnectorEnds[1])
-				sourceNode := resolveSuccessionUsageEnd(graph, sourceRef, true)
-				targetNode := resolveSuccessionUsageEnd(graph, targetRef, false)
+				sourceNode := resolveActionEndpoint(graph, sourceRef, true)
+				targetNode := resolveActionEndpoint(graph, targetRef, false)
 				if sourceNode == nil {
 					return nil, fmt.Errorf("action succession references undefined source node %s", successionEndText(sourceRef))
 				}
@@ -839,8 +842,15 @@ func resolveEnd(nodes []ast.Node, qname *ast.QualifiedName, member ast.Node) ast
 	return findNodeByName(nodes, qname)
 }
 
-// resolveSuccessionUsageEnd resolves an action succession end or its implied start/done node.
-func resolveSuccessionUsageEnd(graph *ActionGraph, ref ast.Node, source bool) ast.Node {
+// resolveActionEndpoint resolves an action edge end or its implied start/done node.
+func resolveActionEndpointForEdge(graph *ActionGraph, ref ast.Node, member ast.Node, source bool) ast.Node {
+	if member != nil {
+		return resolveEnd(graph.Nodes, nil, member)
+	}
+	return resolveActionEndpoint(graph, ref, source)
+}
+
+func resolveActionEndpoint(graph *ActionGraph, ref ast.Node, source bool) ast.Node {
 	node := findNodeByReference(graph.Nodes, ref)
 	if node != nil {
 		return node
@@ -854,6 +864,11 @@ func resolveSuccessionUsageEnd(graph *ActionGraph, ref ast.Node, source bool) as
 		return initial
 	}
 	if !source && name == "done" {
+		for _, final := range graph.Finals {
+			if getNodeName(final) == "done" {
+				return final
+			}
+		}
 		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "done", Keyword: "done"}
 		graph.Finals = append(graph.Finals, final)
 		graph.Nodes = append(graph.Nodes, final)
