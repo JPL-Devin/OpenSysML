@@ -22,9 +22,8 @@ var extensionInventory = []string{
 	"state def S { exit point p; }",
 	"state def S { state a { defer e; } }",
 	"state def S { state a; state b; transition a to b; }",
-	"action def A { initial a; }",
-	"action def A { final b; }",
-	"action def A { decision d; }",
+	"action def A { done end; }",
+	"part def P { part a; first a; }",
 }
 
 // notationDiags runs the pass over a document in the named mode.

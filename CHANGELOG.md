@@ -25,6 +25,28 @@ error, and the warning for them is gone.
   `assume`/`require constraint [name] { … }`. The separate warning for `assume`/`require` used
   outside a requirement body is unchanged too.
 
+### The action nodes spelled `initial`, `final` and `decision` are removed
+
+**Breaking change** for models that used them. Each was an OpenSysML-only alias of a node the
+standard notation already spells, so the alias and its `nonstandard-notation` warning are gone
+rather than kept:
+
+- `initial <name> [then <target>];` in an action body → write `first <name> [then <target>];`
+  (`SysML.xtext:1385`).
+- `final [<name>];`, including the bare `then final;` → write `done [<name>];`, a reference to
+  the library feature `Actions::Action::done`.
+- `decision <name>;` → write `decide <name>;` (`SysML.xtext:1672`).
+
+None of the three words is reserved by the pinned grammars, so each still names a feature
+(`attribute final : Boolean;`, `action initial;`). An action body that writes `initial <name>;`,
+`final <name>;` or `decision <name>;` is reported as the parse error it now is. A bare
+`then final;` is a **succession target**, not a node, so it is read as a reference to a member named
+`final`: where nothing declares one, the model analyses clean and fails when the action is run
+(`succession edge references undefined target node "final"`) — the same as any other undefined
+succession target. The **state** markers `initial <state>;` and
+`final <state>;` in a state body are unaffected, and so is `done <name>;`; both keep their
+existing warnings.
+
 ### `return <expression>;` is no longer accepted in a calculation body
 
 **Breaking change.** A computed calculation result is written as the body's trailing
@@ -67,6 +89,21 @@ same service release, sharing its parse cache, and is stopped when the last of t
   otherwise, can be signalled. `OPENSYSML_STATE_DIR` moved those records and nothing else,
   so it no longer has any effect; the binary is cached in `~/.opensysml/bin` as before.
 - `filelock` and `psutil` are no longer runtime dependencies of the client.
+
+### What Flexo MMS does with our RDF is now measured, not argued
+
+An opt-in gate loads a model's Turtle into a running Flexo MMS stack through Layer 1's graph
+endpoint, reads it back through the SysML v2 API, and compares that against the same model
+posted through that service's own commit path. It records a per-element, per-property report
+that a human adjudicates, so the mapping's interoperability is a number that moves rather than
+a claim: today every element of the fixture is listed and 86 of its 142 properties are
+delivered, against 158 of 158 for the service's own payloads. The reference mapping documents
+what the difference is made of.
+
+The gate needs Docker and stays out of `go test ./...`: it skips loudly unless `FLEXO_INTEROP`
+is set, and with it set an absent stack fails instead of skipping.
+`.agents/skills/flexo-interop` documents the stack, the token and the traps. Nothing about the
+RDF encoding changed.
 
 ### Connect is the default server transport
 
