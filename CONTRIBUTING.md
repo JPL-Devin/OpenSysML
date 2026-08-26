@@ -29,6 +29,11 @@ which makes a missing corpus a failure there instead of a skip.
 
 ## Development Workflow
 
+For an implementation-focused tour of the core pipeline and practical recipes
+for changing syntax, semantics, lowering, and runtime behavior, read
+[DEVELOPING.md](DEVELOPING.md). It is repository-only developer documentation
+and is not published on the website.
+
 ### Building
 
 ```bash

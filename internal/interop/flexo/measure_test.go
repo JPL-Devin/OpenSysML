@@ -59,8 +59,8 @@ func TestReportTextIsDeterministic(t *testing.T) {
 }
 
 // The fixture is what the round trip is measured on, so its graph must hold the
-// shapes the measurement is about: an extension property, a multi-valued
-// standard property, and an expression node the service cannot address.
+// shapes the measurement is about: an extension property and a multi-valued
+// standard property. Every id it writes must be one the service accepts.
 func TestFixtureGraphCoversTheGaps(t *testing.T) {
 	model, err := os.ReadFile(fixturePath)
 	if err != nil {
@@ -76,10 +76,11 @@ func TestFixtureGraphCoversTheGaps(t *testing.T) {
 		t.Errorf("the fixture writes %d subjects, too few to measure anything", len(written))
 	}
 
-	var extension, multiValued, unaddressable int
+	var extension, multiValued int
 	for id, element := range written {
 		if !validElementID(id) {
-			unaddressable++
+			t.Errorf("%s is not an id the service accepts, so a direct read of it "+
+				"is refused before the store is touched", id)
 		}
 		for name, encoded := range element.props {
 			if strings.HasPrefix(name, "sysx:") {
@@ -98,9 +99,6 @@ func TestFixtureGraphCoversTheGaps(t *testing.T) {
 	}
 	if multiValued == 0 {
 		t.Error("the fixture writes no multi-valued property, so that gap is unmeasured")
-	}
-	if unaddressable == 0 {
-		t.Error("the fixture writes no id the service would refuse, so that gap is unmeasured")
 	}
 	if _, ok := written[rdf.EncodeElementID("Interop")]; !ok {
 		t.Error("the fixture's root package is missing from its graph")
