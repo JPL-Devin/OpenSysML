@@ -395,12 +395,12 @@ func (r *Resolver) resolveTrigger(scope *symbols.Scope, trigger ast.Node) {
 	}
 }
 
-// parameterizedByName reports whether sym is a case or requirement — including
+// ParameterizedByName reports whether sym is a case or requirement — including
 // a concern or viewpoint, which are requirements — whose subject, actors and
 // stakeholders redefine the inherited ones by name (SysML 7.18.4, 7.19.4). That
 // is not modelled and not distinguishable from an ordinary feature here, so the
 // conflict rule skips such a body entirely.
-func parameterizedByName(sym *symbols.Symbol) bool {
+func ParameterizedByName(sym *symbols.Symbol) bool {
 	switch decl := sym.Decl.(type) {
 	case *ast.Usage:
 		switch decl.Kind {

@@ -52,8 +52,8 @@
         "name": "testdata",
         "dir": "testdata",
         "origin": "ours",
-        "files": 15,
-        "digest": "sha256:31ef9de543e308ffaa8f19eb7bf0ede99314e20116059d1f84c5902b85c082e5"
+        "files": 17,
+        "digest": "sha256:e05c49ce7bea2559ab9fe69072b2fb1465bd719d719a6a186a3df8e601adffa1"
       },
       {
         "name": "examples",
@@ -73,14 +73,14 @@
     "recorded": "2026-08-26"
   },
   "totals": {
-    "files": 353,
-    "filesFullyAgreeing": 325,
-    "agreement": 32,
+    "files": 355,
+    "filesFullyAgreeing": 328,
+    "agreement": 37,
     "severityMismatch": 8,
-    "openSysMLOnly": 26,
-    "pilotOnly": 61,
-    "openSysMLDiagnostics": 66,
-    "pilotDiagnostics": 101
+    "openSysMLOnly": 27,
+    "pilotOnly": 58,
+    "openSysMLDiagnostics": 72,
+    "pilotDiagnostics": 103
   },
   "roots": [
     {
@@ -343,14 +343,14 @@
       "name": "testdata",
       "dir": "testdata",
       "totals": {
-        "files": 15,
-        "filesFullyAgreeing": 8,
-        "agreement": 32,
+        "files": 17,
+        "filesFullyAgreeing": 10,
+        "agreement": 34,
         "severityMismatch": 1,
         "openSysMLOnly": 3,
         "pilotOnly": 20,
-        "openSysMLDiagnostics": 36,
-        "pilotDiagnostics": 53
+        "openSysMLDiagnostics": 38,
+        "pilotDiagnostics": 55
       },
       "files": [
         {
@@ -669,6 +669,26 @@
           ]
         },
         {
+          "path": "passes/inherited_name_library_base.sysml",
+          "agreement": [
+            {
+              "line": 7,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 11,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 1
+            }
+          ],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": []
+        },
+        {
           "path": "resolve/errors.sysml",
           "agreement": [
             {
@@ -714,12 +734,12 @@
       "dir": "examples",
       "totals": {
         "files": 22,
-        "filesFullyAgreeing": 15,
-        "agreement": 0,
+        "filesFullyAgreeing": 16,
+        "agreement": 3,
         "severityMismatch": 7,
-        "openSysMLOnly": 7,
-        "pilotOnly": 35,
-        "openSysMLDiagnostics": 14,
+        "openSysMLOnly": 8,
+        "pilotOnly": 32,
+        "openSysMLDiagnostics": 18,
         "pilotDiagnostics": 42
       },
       "files": [
@@ -751,10 +771,7 @@
         },
         {
           "path": "orthogonal-regions-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
+          "agreement": [
             {
               "line": 12,
               "severity": "warning",
@@ -767,7 +784,10 @@
               "category": "unmapped",
               "count": 1
             }
-          ]
+          ],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": []
         },
         {
           "path": "phase-c-behavioral-bodies.sysml",
@@ -791,7 +811,14 @@
         },
         {
           "path": "pseudostates-demo.sysml",
-          "agreement": [],
+          "agreement": [
+            {
+              "line": 10,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 1
+            }
+          ],
           "severityMismatch": [
             {
               "line": 12,
@@ -803,6 +830,12 @@
           ],
           "openSysMLOnly": [
             {
+              "line": 28,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
               "line": 30,
               "severity": "warning",
               "category": "syntax",
@@ -810,12 +843,6 @@
             }
           ],
           "pilotOnly": [
-            {
-              "line": 10,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
             {
               "line": 12,
               "severity": "error",
@@ -1141,19 +1168,24 @@
       "count": 7
     },
     {
+      "side": "opensysml",
+      "message": "Duplicate of inherited member name 'start' from StateAction",
+      "count": 5
+    },
+    {
+      "side": "pilot",
+      "message": "Duplicate of inherited member name 'done' from Action",
+      "count": 5
+    },
+    {
       "side": "pilot",
       "message": "Must be an accessible feature (use dot notation for nesting)",
       "count": 5
     },
     {
       "side": "pilot",
-      "message": "Duplicate of inherited member name 'done' from Action",
-      "count": 4
-    },
-    {
-      "side": "pilot",
       "message": "Duplicate of inherited member name 'start' from StateAction",
-      "count": 3
+      "count": 4
     },
     {
       "side": "opensysml",
@@ -1193,6 +1225,11 @@
     {
       "side": "opensysml",
       "message": "C3 participates in a specialization cycle",
+      "count": 1
+    },
+    {
+      "side": "opensysml",
+      "message": "Duplicate of inherited member name 'done' from Action",
       "count": 1
     },
     {
@@ -1298,14 +1335,14 @@
       }
     ],
     "totals": {
-      "files": 353,
-      "filesFullyAgreeing": 327,
-      "agreement": 32,
+      "files": 355,
+      "filesFullyAgreeing": 330,
+      "agreement": 37,
       "severityMismatch": 8,
-      "openSysMLOnly": 24,
-      "pilotOnly": 61,
-      "openSysMLDiagnostics": 64,
-      "pilotDiagnostics": 101
+      "openSysMLOnly": 25,
+      "pilotOnly": 58,
+      "openSysMLDiagnostics": 70,
+      "pilotDiagnostics": 103
     },
     "findings": [
       {

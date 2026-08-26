@@ -49,7 +49,7 @@ func (r *Resolver) checkOwnedNames(scope *symbols.Scope) {
 // inherited any more, which is how the name is legitimately reused.
 func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 	owner := scope.Owner()
-	if r.model == nil || owner == nil || parameterizedByName(owner) {
+	if r.model == nil || owner == nil || ParameterizedByName(owner) {
 		return
 	}
 	// Nothing is inherited without a supertype, and collecting the inherited
@@ -62,11 +62,11 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 	if len(inherited) == 0 {
 		return
 	}
-	owned, aliases := distinguishableMembers(scope)
+	owned, aliases := DistinguishableMembers(scope)
 	declared := map[string]bool{}
 	for _, sym := range append(owned, aliases...) {
 		declared[sym.Name] = true
-		if implicitlyRedefined(sym) || r.hasUnresolvedRedefinition(sym) {
+		if ImplicitlyRedefined(sym) || r.hasUnresolvedRedefinition(sym) {
 			continue
 		}
 		dups := r.duplicatesOf(sym, inherited[sym.Name])
@@ -123,7 +123,7 @@ func (r *Resolver) withoutImplicitlyRedefined(
 	for _, sym := range members {
 		hidden := false
 		for _, other := range members {
-			if other == sym || !implicitlyRedefined(other) {
+			if other == sym || !ImplicitlyRedefined(other) {
 				continue
 			}
 			if r.inheritsFrom(ownerOf(other), ownerOf(sym), model) {
@@ -226,7 +226,7 @@ func (r *Resolver) inheritableMembers(sup *symbols.Symbol, model supertypeLookup
 		out = append(out, r.inheritableMembers(next, model, seen)...)
 	}
 	if sup.Scope != nil {
-		owned, aliases := distinguishableMembers(sup.Scope)
+		owned, aliases := DistinguishableMembers(sup.Scope)
 		for _, sym := range append(owned, aliases...) {
 			if sym.Visibility != ast.VisibilityPrivate {
 				out = append(out, sym)
@@ -424,11 +424,11 @@ func ownerNames(sym *symbols.Symbol, dups []*symbols.Symbol) []string {
 	return out
 }
 
-// declaredMembers is distinguishableMembers restricted to members declaring a
+// declaredMembers is DistinguishableMembers restricted to members declaring a
 // name of their own: an effective name our model borrows from a reference is not
 // reliable enough to report an owned duplicate on.
 func declaredMembers(scope *symbols.Scope) (owned, aliases []*symbols.Symbol) {
-	owned, aliases = distinguishableMembers(scope)
+	owned, aliases = DistinguishableMembers(scope)
 	return declaredOnly(owned), declaredOnly(aliases)
 }
 
@@ -442,9 +442,10 @@ func declaredOnly(syms []*symbols.Symbol) []*symbols.Symbol {
 	return out
 }
 
-// distinguishableMembers splits the members of scope whose names the
-// distinguishability rules compare into owned members and aliases.
-func distinguishableMembers(scope *symbols.Scope) (owned, aliases []*symbols.Symbol) {
+// DistinguishableMembers splits the members of scope whose names the
+// distinguishability rules compare into owned members and aliases. Exported for
+// the library-base half of the rule in internal/core/passes.
+func DistinguishableMembers(scope *symbols.Scope) (owned, aliases []*symbols.Symbol) {
 	for _, name := range scope.MemberNames() {
 		for _, sym := range scope.LookupLocalAll(name) {
 			// A member declaring both a short and a primary name is registered
@@ -502,12 +503,12 @@ func hasTypingRelationship(decl *ast.Usage) bool {
 	return false
 }
 
-// implicitlyRedefined reports whether a member takes an inherited feature's name
+// ImplicitlyRedefined reports whether a member takes an inherited feature's name
 // by implicitly redefining it: a behavior parameter matched by position, and the
 // subject, actors, stakeholders and objective of a requirement or case
 // (KerML 7.3.4.5, SysML 7.18.4).
-func implicitlyRedefined(sym *symbols.Symbol) bool {
-	if isParameter(sym) {
+func ImplicitlyRedefined(sym *symbols.Symbol) bool {
+	if isParameter(sym) || inMetadataUsageBody(sym) {
 		return true
 	}
 	switch decl := sym.Decl.(type) {
@@ -525,6 +526,21 @@ func implicitlyRedefined(sym *symbols.Symbol) bool {
 		}
 		switch decl.Kind {
 		case ast.UsageSubject, ast.UsageActor, ast.UsageStakeholder, ast.UsageObjective:
+			return true
+		}
+	}
+	return false
+}
+
+// inMetadataUsageBody reports whether sym is a member of a metadata usage body,
+// where the name is always an owned redefinition (SysML.xtext MetadataBodyUsage).
+func inMetadataUsageBody(sym *symbols.Symbol) bool {
+	for owner := ownerOf(sym); owner != nil; owner = ownerOf(owner) {
+		usage, ok := owner.Decl.(*ast.Usage)
+		if !ok {
+			return false
+		}
+		if usage.Kind == ast.UsageMetadata {
 			return true
 		}
 	}

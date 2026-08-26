@@ -238,6 +238,88 @@ func TestW9CShortNameDistinguishability(t *testing.T) {
 	}
 }
 
+// A member reusing a name its one library base supplies is indistinguishable
+// from it: `state start;` against StatePerformances::StateAction::start
+// (examples/orthogonal-regions-demo.sysml:12).
+func TestW9COwnedNameAgainstOneLibraryBaseWarns(t *testing.T) {
+	src := `package Test {
+	state S {
+		state start;
+		state idle;
+	}
+}`
+	for _, warm := range []bool{false, true} {
+		got := w9cMessages(w9cLibraryDiags(t, src, warm), msgW9CDuplicateInherited)
+		want := []string{msgW9CDuplicateInherited + " 'start' from StateAction"}
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Errorf("warm=%v: got %v, want %v", warm, got, want)
+		}
+	}
+}
+
+// Redefining or subsetting the inherited feature makes the reused name its own
+// name, so nothing is indistinguishable; an unreused name is silent too.
+func TestW9COwnedNameSpecializingItsLibraryBaseStaysSilent(t *testing.T) {
+	srcs := []string{
+		`package Test {
+	state S {
+		state :>> start;
+	}
+}`,
+		`package Test {
+	state S {
+		state redefines start;
+	}
+}`,
+		`package Test {
+	state S {
+		state begin;
+	}
+}`,
+	}
+	for _, src := range srcs {
+		for _, warm := range []bool{false, true} {
+			if got := w9cMessages(w9cLibraryDiags(t, src, warm), msgW9CDuplicateInherited); len(got) != 0 {
+				t.Errorf("warm=%v: %s got %v, want none", warm, src, got)
+			}
+		}
+	}
+}
+
+// The fixtures the pinned validate-sysml is compared against: it reports the
+// same two warnings on the first and is silent on the second.
+func TestW9CInheritedNameLibraryBaseFixtures(t *testing.T) {
+	got := w9cMessages(libraryFixtureDiags(t, "inherited_name_library_base.sysml"), msgW9CDuplicateInherited)
+	want := []string{
+		msgW9CDuplicateInherited + " 'start' from StateAction",
+		msgW9CDuplicateInherited + " 'done' from Action",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if diags := libraryFixtureDiags(t, "inherited_name_library_base_clean.sysml"); len(diags) != 0 {
+		t.Errorf("clean fixture: got %v, want none", diags)
+	}
+}
+
+// A metadata usage body names owned redefinitions of the metadata definition's
+// features (SysML.xtext MetadataBodyUsage), so reusing those names is silent
+// (examples/pilot-corpora RationaleMetadataExample.sysml:11).
+func TestW9CMetadataBodyNamesStaySilent(t *testing.T) {
+	src := `package Test {
+	private import ModelingMetadata::Rationale;
+	part engine;
+	metadata why : Rationale about engine {
+		text = "because";
+	}
+}`
+	for _, warm := range []bool{false, true} {
+		if got := w9cMessages(w9cLibraryDiags(t, src, warm), msgW9CDuplicateInherited); len(got) != 0 {
+			t.Errorf("warm=%v: got %v, want none", warm, got)
+		}
+	}
+}
+
 // A standard library package outside the standard library is a warning
 // (LibraryPackage_invalid_notStandard.kerml.xt:15); a plain library package is not.
 func TestW9CUserStandardLibraryPackage(t *testing.T) {
