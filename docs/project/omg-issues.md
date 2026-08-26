@@ -37,19 +37,22 @@ vendored body and is recorded here for review against a future OMG release.
 
 ## Defects in published OMG example models
 
-These rows are true positives found by OpenSysML's quantity analysis in models published with the
-OMG example corpora. The pinned pilot is silent because it does not perform the corresponding
-static dimensional check.
+These rows are true positives found by OpenSysML's static analysis in models published with the
+OMG example corpora. The pinned pilot is silent on each because it does not perform the
+corresponding check.
 
 | Example | Expression as published | Defect | Specification reading | Status |
 |---|---|---|---|---|
 | `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml:38` | `22/2*25.4 + 110 [mm]` | `[mm]` binds only to `110`, so `+` combines a dimensionless value with a length | KerML 1.0 §8.2.5.8.1–8.2.5.8.2 makes the bracket construction a primary expression; SysML v2.0 §9.8.9.1 requires addition operands to have the same quantity dimension. The evident intended spelling is `(22/2*25.4 + 110) [mm]`. | **not filed** |
 | `Analysis Examples/Turbojet Stage Analysis.sysml:25` | `1/(2 * Cp) * V^2 + T_static`, with `Cp : DimensionOneValue`, `V : VolumeValue`, and `T_static : TemperatureValue` | the declared types make the operands L^6 and Θ | SysML v2.0 §9.8.9.1 requires addition operands to have the same quantity dimension and top-level quantity type. The formula needs dimensionally appropriate parameter declarations or conversion before addition. | **not filed** |
+| `Individuals Examples/AnalysisIndividualExample.sysml:86` | `individual action :>> fuelConsumption : FuelEconomyAnalysis_1` | the redefining action is typed by the enclosing analysis definition, which does not conform to the redefined feature's `FuelConsumption` | KerML 7.4.9 and 8.3.4.2 make a redefinition a subsetting, so the redefining feature's type must conform to the redefined one's. The file declares `individual action def FuelConsumption_1 :> FuelConsumption` and never uses it: that is the intended type. | **not filed** |
 
-They form one adjudicated quantity-commensurability family in
-[the false-positive audit](wave12f-false-positives.md): OpenSysML retains both warnings, and
-nothing has been posted upstream. Both are also entries of the declared errata overlay — the geometry row with a
-correction, the turbojet row without one — quoted verbatim with their derivations in
+The first two rows form one adjudicated quantity-commensurability family in
+[the false-positive audit](wave12f-false-positives.md), and the third is the corpus instance of the
+subsetting-conformance divergence adjudicated in [wave11e-decisions.md](wave11e-decisions.md):
+OpenSysML retains all three diagnostics, and nothing has been posted upstream. All three are
+entries of the declared errata overlay — the geometry and individuals rows with a correction, the
+turbojet row without one — quoted verbatim with their derivations in
 [the fourth section](#the-errata-overlay-entries-for-these-models).
 
 ---
@@ -223,8 +226,9 @@ The second section's rows are also entries of the declared errata overlay
 (`internal/errata`, [the declared errata overlay](wave14-errata.md)): the published bytes on
 disk are never edited, and a row that carries a correction has that correction
 applied to the *second* figure every oracle reports, never to the headline one.
-The overlay adds no category and reclassifies nothing — both rows stay the
-adjudicated quantity-commensurability family recorded in the false-positive audit.
+The overlay adds no category and reclassifies nothing — the two quantity rows stay the adjudicated
+commensurability family recorded in the false-positive audit, and the individuals row stays the
+subsetting-conformance divergence.
 
 An entry is accepted only with a specification citation and a written
 derivation, and only while its as-published text still matches the corpus on
@@ -236,6 +240,7 @@ closed by a guess.
 |---|---|---:|---|---|---|
 | dimensionless addend | `sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml` | 38 | SysML v2 §9.8.9.1 | corrected | **not filed** — drafted below, awaiting maintainer authorisation |
 | mismatched dimensions | `sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml` | 25 | SysML v2 §9.8.9.1 | documented without a correction | **not filed** — drafted below, awaiting maintainer authorisation |
+| non-conforming redefinition | `sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml` | 86 | KerML 7.4.9, 8.3.4.2 | corrected | **not filed** — drafted below, awaiting maintainer authorisation |
 
 Filing is the user's decision: nothing here has been posted to
 `Systems-Modeling/SysML-v2-Pilot-Implementation` or any other upstream repository.
@@ -292,3 +297,34 @@ unit and a dimension on the example's behalf.
 So this row is **documented without a correction**. The overlay carries it for
 provenance only; both figures every oracle reports keep the published text, and
 OpenSysML's warning at that line stays in the differential census.
+
+### `fuelConsumption : FuelEconomyAnalysis_1` redefines an action typed by `FuelConsumption` (pilot `2026-05`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Published, `Individuals Examples/AnalysisIndividualExample.sysml`:86:
+
+```sysml
+individual action :>> fuelConsumption : FuelEconomyAnalysis_1 {
+```
+
+Corrected by the overlay:
+
+```sysml
+individual action :>> fuelConsumption : FuelConsumption_1 {
+```
+
+The redefined feature is `action fuelConsumption : FuelConsumption` of
+`FuelEconomyAnalysis`, and **KerML 7.4.9** and **8.3.4.2** make a redefinition a
+subsetting, whose subsetting feature's type must conform to the subsetted one's.
+`FuelEconomyAnalysis_1` is the individual *analysis* definition specializing the
+enclosing `FuelEconomyAnalysis`, so it conforms to nothing that `FuelConsumption`
+specializes and the published model is unsatisfiable. Two lines above, the same
+file declares `individual action def FuelConsumption_1 :> FuelConsumption` and
+never mentions it again: the individual counterpart of the redefined feature's
+type, which is what line 86 evidently meant to name. Substituting it clears our
+error and leaves the rest of the file's verdict unchanged.
+
+The pinned pilot validates subsetting conformance nowhere, so it is silent on
+both texts, and the correction changes our verdict and not the pilot's.
