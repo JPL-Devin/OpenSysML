@@ -114,6 +114,15 @@ one state substate per region, `entry; then <state>;`, a transition targeting
 | `entry point <name>;`, `exit point <name>;` | `entry`/`exit` are literals only as state subaction kinds (`:1777`, `:1793`); no `point` literal exists |
 | `defer <event> [, <event>]*;` | no `defer` literal; `StatePerformance::deferrable` has the semantics but no notation |
 
+Two further findings are position rules rather than spellings: the construct is
+standard where a production admits it and ours everywhere else, so the warning
+names the position, not the keyword.
+
+| Construct | Where it is standard | Why it is not standard elsewhere |
+|-----------|----------------------|----------------------------------|
+| `assume <constraint>;`, `require <constraint>;` | a requirement, concern, viewpoint or objective body | `RequirementConstraintMember` (`SysML.xtext:2039`) is the only production that admits it |
+| a one-ended `first <node>;` | an action body | `InitialNodeMember` is reachable from `ActionBodyItem` alone (`:1376`), never from `DefinitionBodyItem` (`:516`); elsewhere a succession names both ends, `first <source> then <target>` |
+
 ### Removed extension notation — no longer accepted
 
 A keyworded inline condition — `assert <expression>;` or `assume <expression>;`
