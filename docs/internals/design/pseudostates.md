@@ -296,9 +296,9 @@ Fork and join are declared like choice and junction:
 state Machine {
     initial init;
     state idle;
-    state running {
-        region left  { initial ls; state working;  succession first ls then working; }
-        region right { initial rs; state watching; succession first rs then watching; }
+    state running parallel {
+        state left  { initial ls; state working;  succession first ls then working; }
+        state right { initial rs; state watching; succession first rs then watching; }
     }
     fork split;
     join sync;
@@ -369,12 +369,12 @@ the pseudostate routes along ends decides how much of the configuration moves,
 per UML's least common ancestor rule:
 
 ```sysml
-state def RegionChoice {
+state def RegionChoice parallel {
     attribute mode : Integer = 2;
 
-    region left  { initial lstart; state lidle; state lfast; state lslow;
-                   succession first lstart then lidle; transition lidle to pick; }
-    region right { initial rstart; state rwatch; succession first rstart then rwatch; }
+    state left  { initial lstart; state lidle; state lfast; state lslow;
+                  succession first lstart then lidle; transition lidle to pick; }
+    state right { initial rstart; state rwatch; succession first rstart then rwatch; }
 
     choice pick;
 

@@ -11,19 +11,19 @@ package Test {
 		attribute restarts : Integer = 0;
 
 		initial start;
-		state running {
+		state running parallel {
 			deep history resume;
 
-			region left {
+			state left {
 				initial ls;
 				state lidle;
 
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				initial rstart;
-				state wrapper {
-					region inner {
+				state wrapper parallel {
+					state inner {
 						initial istart;
 						state deepState {
 							entry { deepEntries = deepEntries + 1; }

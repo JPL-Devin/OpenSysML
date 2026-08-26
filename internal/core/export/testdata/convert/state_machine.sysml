@@ -42,7 +42,7 @@ package StateMachine {
         join sync;
         shallow history recent;
         deep history deepest;
-        region primary {
+        state primary parallel {
             state ready;
         }
     }

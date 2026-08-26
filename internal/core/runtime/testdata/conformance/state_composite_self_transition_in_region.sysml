@@ -6,14 +6,14 @@ package Test {
 		attribute log : Integer = 0;
 
 		initial start;
-		state Outer {
-			region left {
+		state Outer parallel {
+			state left {
 				initial lstart;
-				state Grouping {
+				state Grouping parallel {
 					entry { log = log * 10 + 1; }
 					exit { log = log * 10 + 2; }
 
-					region inner {
+					state inner {
 						initial gstart;
 						state g1 {
 							entry { log = log * 10 + 3; }
@@ -27,7 +27,7 @@ package Test {
 				succession first lstart then Grouping;
 				transition Grouping to Grouping when restart do assign log := log * 10 + 9;
 			}
-			region right {
+			state right {
 				initial rstart;
 				state Watching {
 					entry { log = log * 10 + 7; }

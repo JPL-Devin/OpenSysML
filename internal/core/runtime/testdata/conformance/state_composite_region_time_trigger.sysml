@@ -6,8 +6,8 @@ package test {
 		attribute log : Integer = 0;
 
 		initial start;
-		state Working {
-			region left {
+		state Working parallel {
+			state left {
 				initial lstart;
 				state Grouping {
 					exit { log = log * 10 + 2; }
@@ -25,7 +25,7 @@ package test {
 				transition lstart to Step1;
 			}
 
-			region right {
+			state right {
 				initial rstart;
 				state Watching;
 

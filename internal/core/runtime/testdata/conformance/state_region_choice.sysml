@@ -1,10 +1,10 @@
 // A choice reached from inside an orthogonal region whose branch stays in that
 // region moves only that region; its sibling keeps the state it was in.
 package Test {
-	state def RegionChoice {
+	state def RegionChoice parallel {
 		attribute mode : Integer = 2;
 
-		region left {
+		state left {
 			initial lstart;
 			state lidle;
 			state lfast;
@@ -14,7 +14,7 @@ package Test {
 			transition lidle to pick;
 		}
 
-		region right {
+		state right {
 			initial rstart;
 			state rwatch;
 

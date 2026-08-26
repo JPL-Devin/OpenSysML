@@ -1873,14 +1873,14 @@ func testStateCrossRegionTransitionsPingPong(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			initial init;
-			state running {
-				region left {
+			state running parallel {
+				state left {
 					initial ls;
 					state lidle;
 					succession first ls then lidle;
 					transition lidle to rtarget;
 				}
-				region right {
+				state right {
 					initial rs;
 					state ridle;
 					state rtarget;
@@ -2197,8 +2197,8 @@ func testStaleCompositeTimerInARegion(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			initial init;
-			state working {
-				region left {
+			state working parallel {
+				state left {
 					initial lstart;
 					state grouping {
 						state step1;
@@ -2209,7 +2209,7 @@ func testStaleCompositeTimerInARegion(t *testing.T) {
 					transition lstart to step1;
 					transition grouping to moved accept skip;
 				}
-				region right {
+				state right {
 					initial rstart;
 					state watching;
 					succession first rstart then watching;
@@ -2238,11 +2238,11 @@ func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			initial init;
-			state outer {
-				region left {
+			state outer parallel {
+				state left {
 					initial lstart;
-					state grouping {
-						region inner {
+					state grouping parallel {
+						state inner {
 							initial gstart;
 							state g1;
 							state g2;
@@ -2252,7 +2252,7 @@ func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
 					}
 					transition lstart to grouping;
 				}
-				region right {
+				state right {
 					initial rstart;
 					state watching;
 					transition rstart to watching;
@@ -2933,14 +2933,14 @@ func testForkBranchesShareRegion(t *testing.T) {
 		state Machine {
 			initial init;
 			state ready;
-			state working {
-				region left {
+			state working parallel {
+				state left {
 					initial ls;
 					state a;
 					state b;
 					succession first ls then a;
 				}
-				region right {
+				state right {
 					initial rs;
 					state c;
 					succession first rs then c;
@@ -2992,17 +2992,17 @@ func testJoinWithOneIncomingBranch(t *testing.T) {
 // resting on a pseudostate.
 func testRegionPseudostateWithoutSatisfiedGuard(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
-		state Machine {
+		state Machine parallel {
 			attribute x : Integer = 9;
 
-			region left {
+			state left {
 				initial ls;
 				state a;
 				state b;
 				succession first ls then a;
 				transition a to merge;
 			}
-			region right {
+			state right {
 				initial rs;
 				state c;
 				succession first rs then c;
@@ -3025,14 +3025,14 @@ func testRegionPseudostateWithoutSatisfiedGuard(t *testing.T) {
 // looping forever.
 func testRegionPseudostateCycle(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
-		state Machine {
-			region left {
+		state Machine parallel {
+			state left {
 				initial ls;
 				state a;
 				succession first ls then a;
 				transition a to first;
 			}
-			region right {
+			state right {
 				initial rs;
 				state c;
 				succession first rs then c;
@@ -3468,9 +3468,10 @@ func testStateDanglingTransition(t *testing.T) {
 func testParallelStateBodyUnsupportedMember(t *testing.T) {
 	src := `
 		package test {
+			action def Warm;
 			state Machine parallel {
 				state left;
-				transition left to left;
+				perform Warm;
 			}
 		}
 	`
@@ -3485,7 +3486,7 @@ func testParallelStateBodyUnsupportedMember(t *testing.T) {
 	}
 	_, err := ctx.CreateStateExecutor(sym)
 	if err == nil {
-		t.Fatal("parallel state with a direct transition succeeded")
+		t.Fatal("parallel state with an unsupported member succeeded")
 	}
 	if !strings.Contains(err.Error(), "parallel state body contains unsupported member") {
 		t.Fatalf("error = %v, want unsupported parallel-body member", err)

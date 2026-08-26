@@ -1,0 +1,37 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="state" abstract=false variation=false name="RegionChoice" parallel=true
+      (Membership visibility="default"
+        (Usage kind="attribute" name="mode" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Integer
+            (*ast.QualifiedName))
+          (LiteralInteger value="2")))
+      (Membership visibility="default"
+        (Usage kind="state" name="left" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.StateNode)
+          (SubstateMember name="lidle")
+          (SubstateMember name="lfast")
+          (SubstateMember name="lslow")
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="lstart"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="lidle"
+                (*ast.QualifiedName))))
+          (TransitionMember source="lidle" target="pick")
+          (TransitionMember source="pick" target="lfast"
+            (OperatorExpr operator="=="
+              (FeatureReference name="mode")
+              (LiteralInteger value="2")))
+          (TransitionMember source="pick" target="lslow")))
+      (Membership visibility="default"
+        (Usage kind="state" name="right" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.StateNode)
+          (SubstateMember name="rwatch")
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="rstart"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="rwatch"
+                (*ast.QualifiedName))))))
+      (PseudostateNode kind="choice" name="pick"))))

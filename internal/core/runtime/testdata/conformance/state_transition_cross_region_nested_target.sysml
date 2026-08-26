@@ -9,8 +9,8 @@ package Test {
 		attribute innerExits : Integer = 0;
 
 		initial start;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial lstart;
 				state lmid;
 				state lidle;
@@ -19,12 +19,12 @@ package Test {
 				succession first lmid then lidle;
 				transition lidle to rtarget if crossed == 0;
 			}
-			region right {
+			state right {
 				initial rstart;
-				state wrapper {
+				state wrapper parallel {
 					entry { wrapperEntries = wrapperEntries + 1; }
 
-					region inner {
+					state inner {
 						initial istart;
 						state ridle { exit { innerExits = innerExits + 1; } }
 						state rtarget { entry { crossed = 1; } }

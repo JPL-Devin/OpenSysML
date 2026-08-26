@@ -5,15 +5,15 @@ package Test {
 		attribute log : Integer = 0;
 
 		initial start;
-		state Outer {
+		state Outer parallel {
 			exit { log = log * 10 + 1; }
 
-			region left {
+			state left {
 				initial lstart;
-				state Grouping {
+				state Grouping parallel {
 					exit { log = log * 10 + 2; }
 
-					region inner {
+					state inner {
 						initial gstart;
 						state g1 {
 							exit { log = log * 10 + 3; }
@@ -25,7 +25,7 @@ package Test {
 
 				succession first lstart then Grouping;
 			}
-			region right {
+			state right {
 				initial rstart;
 				state Watching {
 					exit { log = log * 10 + 4; }
