@@ -23,6 +23,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
 	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
 	t.Run("explicit_succession_missing_endpoint", testExplicitSuccessionMissingEndpoint)
+	t.Run("control_flow_missing_endpoint", testControlFlowMissingEndpoint)
 	t.Run("merge_without_a_successor", testMergeWithoutASuccessor)
 	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
 	t.Run("first_node_with_a_second_succession", testFirstNodeWithASecondSuccession)
@@ -3133,6 +3134,29 @@ func testExplicitSuccessionMissingEndpoint(t *testing.T) {
 	_, err := ctx.CreateActionExecutor(sym)
 	if err == nil || !strings.Contains(err.Error(), "action succession references undefined source node") {
 		t.Fatalf("error = %v, want an explicit succession source diagnostic", err)
+	}
+}
+
+func testControlFlowMissingEndpoint(t *testing.T) {
+	src := `
+		package test {
+			action broken {
+				first start;
+				decide check;
+				succession first start then check;
+				if true then missing;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "broken", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action broken not found")
+	}
+
+	_, err := ctx.CreateActionExecutor(sym)
+	if err == nil || !strings.Contains(err.Error(), `control flow edge references undefined target "missing"`) {
+		t.Fatalf("error = %v, want an undefined control-flow target diagnostic", err)
 	}
 }
 

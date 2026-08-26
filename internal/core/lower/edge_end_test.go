@@ -67,10 +67,10 @@ func TestSequencedPerformIsANode(t *testing.T) {
 		t.Fatalf("the performed action is no node of the graph: %v", graph.Nodes)
 	}
 	x := nodeNamed(t, graph, "x")
-	if got := graph.Edges[x]; len(got) != 1 || got[0] != perform {
+	if got := graph.Edges[x]; len(got) != 1 || got[0].Target != perform {
 		t.Fatalf("x has successors %v, want the performed action", got)
 	}
-	if len(graph.Edges[perform]) != 1 || graph.Edges[perform][0] != graph.Finals[0] {
+	if len(graph.Edges[perform]) != 1 || graph.Edges[perform][0].Target != graph.Finals[0] {
 		t.Fatalf("performed action has successors %v, want the final node", graph.Edges[perform])
 	}
 }

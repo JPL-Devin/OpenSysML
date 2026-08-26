@@ -300,15 +300,15 @@ func (r *Renderer) actionNode(decl ast.Node, kind, name string, scope *symbols.S
 		}
 	}
 	for _, src := range graph.Nodes {
-		for _, target := range graph.Edges[src] {
-			to, ok := nodes[target]
+		for _, edge := range graph.Edges[src] {
+			to, ok := nodes[edge.Target]
 			if !ok {
 				out.Notices = append(out.Notices, fmt.Sprintf("succession from %s in %s leaves the action's own nodes; no edge is drawn",
 					notationName(behaviorNodeName(src)), name))
 				continue
 			}
 			label := ""
-			if guard := graph.Guards[src][target]; guard != nil {
+			if guard := edge.Guard; guard != nil {
 				if text := r.nodeText(doc, guard); text != "" {
 					label = "[" + text + "]"
 				} else {
@@ -316,7 +316,7 @@ func (r *Renderer) actionNode(decl ast.Node, kind, name string, scope *symbols.S
 				}
 			}
 			out.Edges = append(out.Edges, Edge{From: nodes[src].ID, To: to.ID, Label: label, Kind: EdgeSuccession,
-				Origin: nodeOrigin(doc, graph.Successions[src][target])})
+				Origin: nodeOrigin(doc, edge.Decl)})
 		}
 		for _, flow := range graph.DataFlows[src] {
 			to, ok := nodes[flow.Target]
