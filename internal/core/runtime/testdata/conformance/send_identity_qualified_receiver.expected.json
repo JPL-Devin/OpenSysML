@@ -4,8 +4,8 @@
   "performers": [
     {
       "object": "SendIdentityQualified::solo",
-      "finalState": "heard",
-      "stateVisits": ["start", "waiting", "heard"]
+      "finalState": "done",
+      "stateVisits": ["start", "waiting", "done"]
     }
   ]
 }

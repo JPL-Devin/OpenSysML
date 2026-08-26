@@ -13,7 +13,6 @@ package Debug {
 				count = count + 1;
 			}
 		}
-		final done;
 
 		succession first init then busy;
 		succession first busy then done;

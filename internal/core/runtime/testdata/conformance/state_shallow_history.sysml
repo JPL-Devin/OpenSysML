@@ -11,7 +11,6 @@ package Test {
             history resume;
         }
         state away;
-        final done;
 
         succession first start then first;
 

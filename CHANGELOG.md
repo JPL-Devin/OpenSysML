@@ -90,6 +90,37 @@ error, and the warning for them is gone.
   `assume`/`require constraint [name] { … }`. The separate warning for `assume`/`require` used
   outside a requirement body is unchanged too.
 
+### The state final marker is removed; a machine completes on a transition to `done`
+
+**Breaking change** for models that used it. `final <state>;` in a state body was an
+OpenSysML-only notation no SysML v2 production admits — `StateBodyItem` has no such member and no
+`final` literal appears in the pinned grammars — warned as `nonstandard-notation`. It is now a
+parse error, and the warning for it is gone.
+
+What replaces it is the completion the standard library already gives every state: a machine
+completes when a transition reaches `done`.
+
+```sysml
+state monitor {
+    entry; then running;
+    state running;
+    transition first running accept Stop then done;   // was: final stopped;
+}
+```
+
+Entering completion runs the exit actions of the states it leaves and reports the machine
+completed, exactly as entering a marked state did; an orthogonal machine completes only once every
+concurrent region has reached `done` — the machine's own regions and those of a composite state
+alike, so a region completing leaves its siblings running. Completion is
+now computed while lowering and carried in the state graph the runtime executes, so it is a property
+of the machine rather than of its syntax.
+
+Completion is **stated, not inferred**: a state with no outgoing transition does not complete on
+its own, because an ancestor or cross-region transition may still leave it. A machine naming a state
+of its own `done` reaches that state, unchanged. `final` is reserved by no pinned grammar, so it
+still names a state or a feature (`state final;`, `attribute final : Boolean;`); a state body that
+writes `final <state>;` is reported as the parse error it now is.
+
 ### The state initial marker and the `to` transition spelling are removed
 
 **Breaking change** for models that used them. Both were OpenSysML-only aliases of notation the
@@ -110,9 +141,7 @@ rather than kept:
 `transition <source> to <target>;` is reported as the parse error it now is — in particular
 `transition a to b;` does not quietly become a transition between other ends.
 
-The `final <state>;` marker **stays** for now: the runtime completes a machine when a state that
-marker names is entered, and terminates an orthogonal machine when every region has reached one, so
-it is not a spelling alias of `state <name>;` and dropping it would change what a model means.
+The `final <state>;` marker is removed too, described below.
 
 ### The orthogonal-region member is no longer accepted
 
@@ -159,8 +188,8 @@ None of the three words is reserved by the pinned grammars, so each still names 
 `final <name>;` or `decision <name>;` is reported as the parse error it now is. A bare
 `then final;` is a **succession target**, not a node, so it is read as a reference to a member named
 `final`: where nothing declares one, `sysml -validate` reports an unresolved reference at the name —
-the same as any other undefined succession target (see below). The **state** marker `final <state>;` in a
-state body is unaffected; the state marker `initial <state>;` is removed too, described above. Named
+the same as any other undefined succession target (see below). The **state** markers
+`final <state>;` and `initial <state>;` are removed as well, both described above. Named
 action final syntax `done <name>;`
 remains rejected as described above.
 

@@ -2422,8 +2422,6 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 	if w, ok := p.atStateNotationWord(); ok {
 		p.advance()
 		switch w {
-		case "final":
-			return p.parseFinalState(start)
 		case "choice":
 			return p.parsePseudostate(start, w, ast.PseudostateChoice)
 		case "junction":
@@ -2957,35 +2955,6 @@ func (p *Parser) parseSubstateMember(start int) ast.Node {
 	node := &ast.SubstateMember{
 		Name:     name,
 		NameSpan: nameToken.Span,
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
-}
-
-// parseFinalState parses: final <name>;
-func (p *Parser) parseFinalState(start int) ast.Node {
-	// 'final' already consumed
-
-	// Expect identifier or keyword for state name
-	if !p.atNameOrKeyword() {
-		p.error(p.peek().Span, "expected identifier after 'final'")
-		en := &ast.ErrorNode{Message: "expected identifier after 'final'"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
-			p.advance()
-		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
-	p.advance()
-
-	p.expect(lexer.Semicolon, "expected ';' after final state name")
-
-	node := &ast.StateNode{
-		Name:    name,
-		IsFinal: true,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node

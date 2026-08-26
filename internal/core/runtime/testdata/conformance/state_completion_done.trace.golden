@@ -1,0 +1,16 @@
+exit: start
+enter: working (entry action)
+stmt action body
+  stmt assign log
+      eval feature log -> ""
+      eval literal "in;" -> "in;"
+    eval operator + -> "in;"
+transition: start -> working
+exit: working (exit action)
+stmt action body
+  stmt assign log
+      eval feature log -> "in;"
+      eval literal "out;" -> "out;"
+    eval operator + -> "in;out;"
+enter: done
+transition: working -> done (event: accept Stop)

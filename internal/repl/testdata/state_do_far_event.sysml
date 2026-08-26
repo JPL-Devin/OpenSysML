@@ -13,7 +13,6 @@ package Debug {
 			}
 			accept after 100 then done;
 		}
-		final done;
 
 		succession first init then working;
 	}

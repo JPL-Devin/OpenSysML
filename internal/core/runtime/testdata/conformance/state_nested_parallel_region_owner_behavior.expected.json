@@ -4,8 +4,8 @@
         {"signal": "Ping", "args": null},
         {"signal": "Leave", "args": null}
     ],
-    "finalState": "finished",
-    "stateVisits": ["start", "outer", "a1", "b1", "done", "finished"],
+    "finalState": "done",
+    "stateVisits": ["start", "outer", "a1", "b1", "waited", "done"],
     "outputs": {
         "worked": {"type": "Integer", "value": 1}
     }

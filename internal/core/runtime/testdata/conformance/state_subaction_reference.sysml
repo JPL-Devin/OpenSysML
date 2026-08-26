@@ -31,7 +31,6 @@ package test {
             exit Bump;
         }
 
-        final done;
 
         succession first init then active;
         succession first active then done;

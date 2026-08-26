@@ -35,7 +35,6 @@ func TestStateBodyBehaviorsAreLowered(t *testing.T) {
             do { worked = 2; }
             exit { exited = 3; }
         }
-        final done;
 
         succession first init then active;
         succession first active then done;
@@ -76,7 +75,6 @@ func TestStateEntryPerformsAction(t *testing.T) {
         state active {
             entry perform action bump : Bump;
         }
-        final done;
 
         succession first init then active;
         succession first active then done;
@@ -116,7 +114,6 @@ func TestStateDoExitAndTransitionEffectPerformAction(t *testing.T) {
             do perform action working : Bump;
             exit perform action bump : Bump;
         }
-        final done;
 
         succession first init then active;
         transition first active do { perform action bumpAgain : Bump; } then done;
@@ -158,7 +155,6 @@ func TestStateSubactionByReferencePerformsAction(t *testing.T) {
             entry Bump;
             exit Bump;
         }
-        final done;
 
         succession first init then active;
         succession first active then done;
@@ -182,7 +178,6 @@ func TestStateEntryPerformsUnresolvedAction(t *testing.T) {
         state active {
             entry perform action bump : NoSuchAction;
         }
-        final done;
 
         succession first init then active;
         succession first active then done;

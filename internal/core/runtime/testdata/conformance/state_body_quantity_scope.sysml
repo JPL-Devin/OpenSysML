@@ -28,7 +28,6 @@ package test {
 		state fast {
 			entry { assign verdict := "fast"; assign touchdown := speed + 0.5 [m/s]; }
 		}
-		final done;
 
 		succession first start then falling;
 

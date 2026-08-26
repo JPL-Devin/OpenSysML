@@ -14,7 +14,6 @@ package Debug {
 			}
 		}
 		state armed;
-		final done;
 
 		succession first init then waiting;
 		transition first waiting accept when ready then armed;

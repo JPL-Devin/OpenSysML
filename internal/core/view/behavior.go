@@ -112,15 +112,15 @@ func (r *Renderer) regionNode(region *ast.StateRegion, doc string, ids *nodeIDs)
 }
 
 // stateNode renders one state with what the machine says about it: whether it is
-// the state entered first, a final state, and the behaviors it runs.
+// the state entered first, whether entering it completes, and what it runs.
 func (r *Renderer) stateNode(state *ast.StateNode, graph *lower.StateGraph, doc string, ids *nodeIDs) *Node {
 	node := &Node{ID: ids.take(), Kind: "state", Name: notationName(state.Name), Origin: nodeOrigin(doc, state)}
 	var detail []string
 	if graph.IsInitial(state) || graph.Initial == state || initialOfRegion(graph, state) {
 		detail = append(detail, "initial")
 	}
-	if state.IsFinal {
-		detail = append(detail, "final")
+	if graph.Completes(state) {
+		detail = append(detail, "completes")
 	}
 	if behaviors := graph.Behaviors[state]; behaviors != nil {
 		for _, part := range []struct {

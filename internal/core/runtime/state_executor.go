@@ -1046,7 +1046,7 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 		return fmt.Errorf("schedule events: %w", err)
 	}
 
-	if err := e.completeIfFinalState(targetState); err != nil {
+	if err := e.completeIfDone(targetState); err != nil {
 		return fmt.Errorf("complete state machine: %w", err)
 	}
 
@@ -1059,13 +1059,10 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 	return nil
 }
 
-// completeIfFinalState completes a machine when a final target is reached. An
-// orthogonal machine completes only after every top-level region is final.
-func (e *StateExecutor) completeIfFinalState(target *ast.StateNode) error {
-	if target == nil || !target.IsFinal {
-		return nil
-	}
-	if len(e.graph.TopRegions) > 0 && !e.parallelMachineComplete() {
+// completeIfDone completes a machine when a completion vertex is reached, which
+// an orthogonal region reaching one does only once its siblings completed too.
+func (e *StateExecutor) completeIfDone(target *ast.StateNode) error {
+	if !e.graph.Completes(target) || !e.machineComplete(target) {
 		return nil
 	}
 	if err := e.exitMachine(); err != nil {
@@ -1075,15 +1072,52 @@ func (e *StateExecutor) completeIfFinalState(target *ast.StateNode) error {
 	return nil
 }
 
-// parallelMachineComplete reports whether every top-level region reached a
-// final state, which is the completion condition for an orthogonal machine.
-func (e *StateExecutor) parallelMachineComplete() bool {
-	if len(e.graph.TopRegions) == 0 {
+// machineComplete reports whether every region concurrent with the one that
+// reached a completion vertex completed, outward to the machine's own regions.
+func (e *StateExecutor) machineComplete(target *ast.StateNode) bool {
+	region := e.graph.RegionOf[target]
+	for {
+		var owner *ast.StateNode
+		siblings := e.graph.TopRegions
+		if region != nil {
+			if regionOwner := e.graph.RegionOwner[region]; regionOwner != nil {
+				owner = regionOwner
+				siblings = e.graph.CompositeStates[regionOwner]
+			}
+		}
+		for _, sibling := range siblings {
+			if !e.regionComplete(sibling) {
+				return false
+			}
+		}
+		if owner == nil {
+			return true
+		}
+		region = e.enclosingRegion(owner)
+	}
+}
+
+// regionComplete reports whether region reached its completion vertex.
+func (e *StateExecutor) regionComplete(region *ast.StateRegion) bool {
+	active, ok := e.activeConfig.regionStates[region]
+	return ok && e.stateComplete(active)
+}
+
+// stateComplete reports whether state is a completion vertex, or a composite
+// state whose every orthogonal region completed.
+func (e *StateExecutor) stateComplete(state *ast.StateNode) bool {
+	if state == nil {
 		return false
 	}
-	for _, region := range e.graph.TopRegions {
-		state, active := e.activeConfig.regionStates[region]
-		if !active || !state.IsFinal {
+	if e.graph.Completes(state) {
+		return true
+	}
+	regions := e.graph.CompositeStates[state]
+	if len(regions) == 0 {
+		return false
+	}
+	for _, region := range regions {
+		if !e.regionComplete(region) {
 			return false
 		}
 	}

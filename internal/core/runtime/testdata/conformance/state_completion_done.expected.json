@@ -1,0 +1,21 @@
+{
+  "type": "state",
+  "events": [
+    {
+      "signal": "Stop"
+    }
+  ],
+  "finalState": "done",
+  "stateVisits": [
+    "start",
+    "working",
+    "done"
+  ],
+  "outputs": {
+    "log": {
+      "type": "String",
+      "value": "in;out;"
+    }
+  },
+  "trace": true
+}

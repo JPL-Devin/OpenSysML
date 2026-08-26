@@ -13,7 +13,6 @@ package Test {
             history resume;
         }
         state away;
-        final done;
 
         transition first start then first;
         transition first first then second;

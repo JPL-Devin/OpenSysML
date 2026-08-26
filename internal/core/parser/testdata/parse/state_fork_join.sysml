@@ -18,7 +18,6 @@ state ParallelSplit {
 	}
 	fork split;
 	join sync;
-	final done;
 
 	succession first start then ready;
 	transition first ready then split;

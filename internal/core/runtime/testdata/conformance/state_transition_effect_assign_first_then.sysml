@@ -9,7 +9,6 @@ package test {
         entry; then init;
         state init;
         state active;
-        final done;
 
         succession first init then active;
         transition first active do assign counter := counter + 1 then done;

@@ -10,7 +10,6 @@ package test {
         state off {
             entry assign seen := seen + 1;
         }
-        final done;
 
         succession first off then done;
     }

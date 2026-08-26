@@ -23,7 +23,6 @@ package 'My Pkg' {
   state 'spin up' {
     entry; then init;
     state init;
-    final done;
     succession first init then done;
   }
 }

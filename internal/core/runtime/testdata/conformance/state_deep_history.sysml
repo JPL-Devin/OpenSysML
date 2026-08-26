@@ -13,7 +13,6 @@ package Test {
             deep history resume;
         }
         state away;
-        final done;
 
         succession first start then inner;
 
