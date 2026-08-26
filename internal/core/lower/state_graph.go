@@ -827,23 +827,10 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 			if n.Kind == ast.UsageSuccession {
 
 				if len(n.ConnectorEnds) == 2 {
-					// ConnectorEnds[0] is source, ConnectorEnds[1] is target
-					// States could be in Target field OR Reference field
+					// Connector-end targets name the source and target states.
 
-					// Try Target first, then Reference
-					var sourceQName, targetQName *ast.QualifiedName
-
-					if n.ConnectorEnds[0].Target != nil {
-						sourceQName, _ = n.ConnectorEnds[0].Target.(*ast.QualifiedName)
-					} else if n.ConnectorEnds[0].Reference != nil {
-						sourceQName, _ = n.ConnectorEnds[0].Reference.(*ast.QualifiedName)
-					}
-
-					if n.ConnectorEnds[1].Target != nil {
-						targetQName, _ = n.ConnectorEnds[1].Target.(*ast.QualifiedName)
-					} else if n.ConnectorEnds[1].Reference != nil {
-						targetQName, _ = n.ConnectorEnds[1].Reference.(*ast.QualifiedName)
-					}
+					sourceQName, _ := connectorEndReference(n.ConnectorEnds[0]).(*ast.QualifiedName)
+					targetQName, _ := connectorEndReference(n.ConnectorEnds[1]).(*ast.QualifiedName)
 
 					if sourceQName != nil && targetQName != nil {
 						sourceVertex := graph.endpointVertex(scope, sourceQName)
