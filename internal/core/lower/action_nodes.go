@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -89,6 +90,7 @@ func collectActionNodes(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph
 		}
 	}
 
+	collectInheritedActionNodes(graph, members)
 	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
 	graph.Attributes = lowerAttributes(members)
 	// `first a then b;` names the node the flow starts at rather than declaring an
@@ -98,4 +100,75 @@ func collectActionNodes(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph
 		return nil, nil, nil, err
 	}
 	return graph, members, firstNode, nil
+}
+
+func collectInheritedActionNodes(graph *ActionGraph, members []ast.Node) {
+	for _, member := range members {
+		switch n := unwrapMembership(member).(type) {
+		case *ast.InitialNode:
+			ensureInheritedActionNode(graph, n.Successor)
+		case *ast.SuccessionEdge:
+			if n.SourceMember == nil && !n.SourceImplied {
+				ensureInheritedActionNode(graph, n.Source)
+			}
+			if n.TargetMember == nil && !n.TargetImplied {
+				ensureInheritedActionNode(graph, n.Target)
+			}
+		case *ast.ControlFlowEdge:
+			if n.SourceMember == nil && !n.SourceImplied {
+				ensureInheritedActionNode(graph, n.Source)
+			}
+			if n.TargetMember == nil && !n.TargetImplied {
+				ensureInheritedActionNode(graph, n.Target)
+			}
+		case *ast.TransitionMember:
+			if n.Source != nil {
+				ensureInheritedActionNode(graph, n.Source)
+			}
+			ensureInheritedActionNode(graph, n.Target)
+		case *ast.Usage:
+			if n.Kind == ast.UsageSuccession && len(n.ConnectorEnds) == 2 {
+				ensureInheritedActionNode(graph, connectorEndReference(n.ConnectorEnds[0]))
+				ensureInheritedActionNode(graph, connectorEndReference(n.ConnectorEnds[1]))
+			}
+		}
+	}
+}
+
+func ensureInheritedActionNode(graph *ActionGraph, ref ast.Node) ast.Node {
+	qn := actionEndpointQualifiedName(ref)
+	if qn == nil {
+		return nil
+	}
+	decl, declaringScope, found, _ := resolve.ActionNodeInScope(graph.Scope, qn)
+	if !found || decl == nil {
+		return nil
+	}
+	for _, node := range graph.Nodes {
+		if node == decl {
+			return node
+		}
+	}
+	graph.Nodes = append(graph.Nodes, decl)
+	switch n := decl.(type) {
+	case *ast.Usage:
+		lowerBody(graph, n, childScope(declaringScope, n))
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode, *ast.ActionExecutionNode:
+		lowerNodeBody(graph, n, ast.NodeBodyMembers(n), declaringScope)
+	case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode,
+		*ast.SendStatement, *ast.TerminateStatement:
+		graph.Bodies[n] = []Statement{lowerStatement(n, declaringScope)}
+	}
+	return decl
+}
+
+func actionEndpointQualifiedName(ref ast.Node) *ast.QualifiedName {
+	if qn := ast.AsQualifiedName(ref); qn != nil {
+		return qn
+	}
+	chain, ok := ref.(*ast.FeatureChainExpr)
+	if !ok {
+		return nil
+	}
+	return actionEndpointQualifiedName(chain.Operand)
 }

@@ -779,6 +779,9 @@ func resolveActionEndpoint(graph *ActionGraph, ref ast.Node, source bool) ast.No
 	if node != nil {
 		return node
 	}
+	if node = ensureInheritedActionNode(graph, ref); node != nil {
+		return node
+	}
 
 	name := ast.SimpleName(ref)
 	if !impliedMarker(name, source, graph.Initial == nil) {

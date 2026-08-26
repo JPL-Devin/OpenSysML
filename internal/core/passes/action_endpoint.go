@@ -3,6 +3,7 @@ package passes
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -133,11 +134,6 @@ func (c *actionEndpointChecker) checkBody(decl ast.Node, scope *symbols.Scope) {
 			if v.Kind != ast.UsageSuccession || len(v.ConnectorEnds) != 2 {
 				continue
 			}
-			// An inherited succession redefinition restates a flow rather than
-			// adding an independently lowered action body.
-			if redefinesUsage(v) {
-				continue
-			}
 			c.checkEndpoint(scope, nodes, hasInitial, connectorEndReference(v.ConnectorEnds[0]), true, v)
 			c.checkEndpoint(scope, nodes, hasInitial, connectorEndReference(v.ConnectorEnds[1]), false, v)
 		}
@@ -161,7 +157,8 @@ func (c *actionEndpointChecker) checkEndpoint(
 		return
 	}
 	sym, ok := c.ctx.Resolver().EndpointSymbol(scope, qn)
-	if !ok || sym == nil || c.ctx.DownstreamOfFailure(sym.Decl) ||
+	_, _, _, uncertain := resolve.ActionNodeInScope(scope, qn)
+	if uncertain || !ok || sym == nil || c.ctx.DownstreamOfFailure(sym.Decl) ||
 		c.ctx.DownstreamOfFailure(subject) {
 		return
 	}
@@ -172,16 +169,6 @@ func (c *actionEndpointChecker) checkEndpoint(
 		Code:     CodeEndpointNotANode,
 		Source:   "action-endpoint",
 	})
-}
-
-// redefinesUsage identifies inherited succession redefinitions, not new flows.
-func redefinesUsage(usage *ast.Usage) bool {
-	for _, rel := range usage.Relationships {
-		if rel != nil && rel.Kind == ast.RelRedefines {
-			return true
-		}
-	}
-	return false
 }
 
 // connectorEndReference preserves feature-chain references used by action flows.

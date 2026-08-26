@@ -565,6 +565,43 @@ func TestActionEndpointPassDiagnosticAgreesWithLowering(t *testing.T) {
 	}
 }
 
+func TestActionEndpointPassInheritedNodes(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{
+			name: "inherited action node",
+			src: `action def Base { action a; }
+				action def Derived :> Base { first start then a; }`,
+		},
+		{
+			name: "inherited non-node",
+			src: `action def Base { attribute a; }
+				action def Derived :> Base { first start then a; }`,
+			want: 1,
+		},
+		{
+			name: "unknown supertype",
+			src:  `action def Derived :> Missing { first start then a; }`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, root := nameresCtx(t, "a.sysml", test.src)
+			ctx.Model()
+			got := ActionEndpointPass{}.Run(ctx, "a.sysml", root)
+			if len(got) != test.want {
+				t.Fatalf("got %d diagnostics %+v, want %d", len(got), got, test.want)
+			}
+			if test.want == 1 && got[0].Code != CodeEndpointNotANode {
+				t.Fatalf("got code %q, want %q", got[0].Code, CodeEndpointNotANode)
+			}
+		})
+	}
+}
+
 // The tier agrees with the lowerer about which endpoint names are implicit: a
 // name lowering resolves is silent here, and a name lowering fails on is
 // reported here, so the diagnostic arrives at validation time instead.
