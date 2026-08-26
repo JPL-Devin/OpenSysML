@@ -6,6 +6,23 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Succession endpoints are checked against their enclosing body
+
+State-machine succession and transition spellings now report a resolved endpoint
+that is not a state or pseudostate, using the existing `not-a-vertex` diagnostic.
+Action bodies report a resolved endpoint that is not an action node with the
+`endpoint-not-a-node` diagnostic before lowering. Positional, implied, unresolved,
+and flow endpoints retain their existing behavior. Inherited action nodes are
+also collected lazily when named by an endpoint and lowered into executable
+edges. The same routing removes a false unresolved-reference diagnostic for
+`succession` and `then` ends naming nested or region-local vertices, covered by
+`internal/core/parser/testdata/parse/state_history_entry_exit.sysml`,
+`internal/core/runtime/testdata/conformance/state_deep_history.sysml`, and
+`internal/core/runtime/testdata/conformance/state_shallow_history.sysml`.
+Feature-chain endpoints rooted in a part usage are accepted during validation,
+while execution still reports the existing lowering error because invoking an
+action through that feature chain is not yet supported.
+
 ### RDF output states element ids and ownership
 
 A converted graph now carries the two things a SysML v2 API service needs to address it.

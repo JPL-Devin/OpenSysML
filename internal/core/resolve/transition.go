@@ -94,6 +94,162 @@ func VertexInScope(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool)
 	return nil, false
 }
 
+// ActionNodeInScope finds an inherited action node from the scope tree alone.
+// The final bool reports an unresolved generalization that makes absence uncertain.
+func ActionNodeInScope(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool, bool) {
+	if scope == nil || qn == nil || len(qn.Parts) == 0 {
+		return nil, nil, false, false
+	}
+	body := enclosingActionScope(scope)
+	if body == nil {
+		return nil, nil, false, false
+	}
+	name := qn.Parts[len(qn.Parts)-1].Text
+	if len(qn.Parts) == 1 {
+		if _, ok := body.LookupLocal(name); ok {
+			return nil, nil, false, false
+		}
+	}
+	var qualifier *symbols.Symbol
+	if len(qn.Parts) > 1 {
+		var ok bool
+		qualifier, ok = lookupScopeParts(body.Parent(), qn.Parts[:len(qn.Parts)-1])
+		if !ok {
+			return nil, nil, false, false
+		}
+	}
+	return inheritedActionNode(body, name, qualifier, make(map[*symbols.Symbol]bool))
+}
+
+func enclosingActionScope(scope *symbols.Scope) *symbols.Scope {
+	for s := scope; s != nil; s = s.Parent() {
+		switch n := s.Node().(type) {
+		case *ast.Definition:
+			if n.Kind == ast.DefAction {
+				return s
+			}
+		case *ast.Usage:
+			if n.Kind == ast.UsageAction {
+				return s
+			}
+		}
+	}
+	return nil
+}
+
+func inheritedActionNode(body *symbols.Scope, name string, qualifier *symbols.Symbol, seen map[*symbols.Symbol]bool) (ast.Node, *symbols.Scope, bool, bool) {
+	var rels []*ast.Relationship
+	switch n := body.Node().(type) {
+	case *ast.Definition:
+		rels = n.Relationships
+	case *ast.Usage:
+		rels = n.Relationships
+	default:
+		return nil, nil, false, false
+	}
+	var uncertain bool
+	for _, rel := range rels {
+		if rel == nil || (rel.Kind != ast.RelSpecializes && rel.Kind != ast.RelTyping &&
+			rel.Kind != ast.RelSubsets && rel.Kind != ast.RelRedefines) {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		qn, ok := target.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		super, ok := lookupScopeQualified(body.Parent(), qn)
+		if !ok || super == nil {
+			uncertain = true
+			continue
+		}
+		if qualifier != nil && super != qualifier {
+			continue
+		}
+		if seen[super] {
+			continue
+		}
+		seen[super] = true
+		superBody := super.Scope
+		if superBody == nil {
+			continue
+		}
+		if member, found := superBody.LookupLocal(name); found {
+			if isActionNode(member.Decl) {
+				return member.Decl, superBody, true, uncertain
+			}
+			continue
+		}
+		found, foundScope, inherited, unknown := inheritedActionNode(superBody, name, qualifier, seen)
+		if inherited {
+			return found, foundScope, true, uncertain || unknown
+		}
+		uncertain = uncertain || unknown
+	}
+	return nil, nil, false, uncertain
+}
+
+func lookupScopeParts(scope *symbols.Scope, parts []ast.NameSegment) (*symbols.Symbol, bool) {
+	if scope == nil || len(parts) == 0 {
+		return nil, false
+	}
+	partsText := make([]string, len(parts))
+	for i, part := range parts {
+		partsText[i] = part.Text
+	}
+	return lookupScopePartsText(scope, partsText)
+}
+
+func lookupScopeQualified(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	if scope == nil || qn == nil || len(qn.Parts) == 0 {
+		return nil, false
+	}
+	parts := qualifiedParts(qn)
+	return lookupScopePartsText(scope, parts)
+}
+
+func lookupScopePartsText(scope *symbols.Scope, parts []string) (*symbols.Symbol, bool) {
+	if scope == nil || len(parts) == 0 {
+		return nil, false
+	}
+	for s := scope; s != nil; s = s.Parent() {
+		sym, ok := s.LookupLocal(parts[0])
+		if !ok {
+			continue
+		}
+		for _, part := range parts[1:] {
+			if sym.Scope == nil {
+				sym = nil
+				break
+			}
+			sym, ok = sym.Scope.LookupLocal(part)
+			if !ok {
+				sym = nil
+				break
+			}
+		}
+		if sym != nil {
+			return sym, true
+		}
+	}
+	return nil, false
+}
+
+func isActionNode(decl ast.Node) bool {
+	switch n := decl.(type) {
+	case *ast.Usage:
+		return n.Kind == ast.UsageAction
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode,
+		*ast.ActionExecutionNode, *ast.WhileLoopActionNode, *ast.IfActionNode,
+		*ast.AssignmentActionNode, *ast.SendStatement, *ast.TerminateStatement:
+		return true
+	}
+	return false
+}
+
 // lookupEndpoint finds what an endpoint names: the declaration ordinary lookup
 // reaches, or else a vertex of the enclosing machine, which a transition may
 // name across a region or into a nested state (`TransitionUsage::source` and
