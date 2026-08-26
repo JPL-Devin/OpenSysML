@@ -93,8 +93,6 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 // (calc results, constraints, guards, conditions, assignments).
 func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	switch m := n.(type) {
-	case *ast.ResultMember:
-		tc.expr.infer(scope, m.Expression)
 	case *ast.ConstraintMember:
 		tc.expr.checkBoolean(scope, m.Expression, "constraint expression")
 		tc.walk(scope, m.Body)

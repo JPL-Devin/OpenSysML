@@ -211,19 +211,52 @@ worth checking against whichever client is meant to consume the graph.
 
 ### D3.2 — `sysml:elementId` is required and is not emitted
 
-Paged listing selects on `?e sysml:elementId ?id` (`listElementsConstructQuery`) and
-`QueryApi` rewrites an `@id` constraint to `sysml:elementId`, so without that triple our
-elements are invisible to paged listing and unreachable by query, even when a direct
-construct on the IRI would find them. Emit it on every element, carrying the D3.1 id.
+**Done.** Every element carries `sysml:elementId`, holding exactly the id its own IRI
+ends in, so the triple and the reader's `urnSuffix`-derived `@id` cannot disagree
+(`internal/core/export/rdf_out.go` `head`, `ownership_graph_test.go`). Paged listing
+selects on `?e sysml:elementId ?id` (`listElementsConstructQuery`) and `QueryApi`
+rewrites an `@id` constraint to it, so without the triple an element was invisible to
+both even though a direct construct on the IRI found it.
+
+An **expression node carries one too**. Its id was `<owner id>.<position>`, which
+`requireValidId` rejects, so a direct read of a node was refused with 400 before the store
+was touched — measured against a live service. The position is now joined with `_p` and
+encoded, keeping the id inside `[a-zA-Z0-9_-]+` and disjoint from element and membership
+ids (`internal/core/rdf/ids.go` `ExpressionNodeID`, `ids_test.go`), and the node states that
+id in `sysml:elementId`. A node is still not a model element — no `qualifiedName`, no
+ownership, reachable only from the position that holds it — so writing expressions as
+elements owned through memberships remains D1.
 
 ### D3.3 — ownership: every element reads as a root
 
-The roots endpoint filters on `sysml:owner` and `sysml:owningRelatedElement` being
-unbound or `rdf:nil`. We emit only `sysml:owningNamespace`, so *every* element passes
-that filter and the model has no tree. Emit the API's ownership properties as element
-references, and decide explicitly whether to materialize `OwningMembership` elements:
-the API's payloads reach members through memberships, and a consumer walking
-`ownedMember`/`ownedRelationship` finds nothing in our compact projection.
+**Done.** Ownership is materialized as the abstract syntax states it, so the roots
+endpoint — which filters on `sysml:owner` and `sysml:owningRelatedElement` being unbound
+or `rdf:nil` — sees one root per document instead of every element
+(`internal/core/export/rdf_out.go` `owningMembership`/`relationshipOwnership`,
+`internal/core/rdf/ids.go` `OwningMembershipID`, `docs/reference/rdf-mapping.md`
+§ Ownership):
+
+- every member states `sysml:owner` as an element reference, plus
+  `sysml:owningMembership`/`sysml:owningRelationship`, or `sysml:owningRelatedElement`
+  where a relationship owns it;
+- a namespace member is owned through a minted `OwningMembership`, a type's feature
+  through a `FeatureMembership` (both concrete in KerML), each with its own IRI,
+  `sysml:elementId`, `memberElement`/`ownedMemberElement`/`ownedRelatedElement`,
+  `owningRelatedElement` and `membershipOwningNamespace`, and the owner's
+  `ownedMember`/`ownedMembership`/`ownedRelationship` — and `ownedFeature`/
+  `ownedFeatureMembership` for a feature — so a client walking the payloads from a root
+  reaches every member;
+- a relationship a namespace declares (an import, a dependency, a state's entry
+  membership) is owned directly rather than through a minted membership, which is also
+  what keeps namespace collection properties off a relationship's domain;
+- membership ids are `rdf.OwningMembershipID`: the member's id plus `_om`, deterministic,
+  reversible, and unable to collide with an element id;
+- visibility moves to the membership, which is where the metamodel declares it;
+- the decoder traverses memberships, still takes identity from `sysml:qualifiedName`, and
+  still accepts the compact `sysml:owningNamespace`-only shape; a membership missing an
+  end is a typed error naming `sysml:memberElement`.
+
+Not demonstrated: a graph loaded into a live Flexo instance and read back. That is D3.5.
 
 ### D3.4 — collection-valued properties need the JSON annotation
 
@@ -233,7 +266,7 @@ Anything multi-valued we emit as bare repeated triples is silently dropped on re
 the encoder must write both forms for collections, and the decoder must accept the
 annotation form when reading a foreign graph.
 
-### D3.5 — the harness, once D3.1–D3.4 are in
+### D3.5 — the harness, once D3.4 is in
 
 Layer 1's `src/test/resources/docker-compose.yml` brings up Fuseki, MinIO and the store
 service; `deploy/` generates `cluster.trig` for cluster init; the service needs
@@ -266,6 +299,12 @@ listing ignores `pageSize`/`pageAfter` and returns every subject of the branch g
 never applies its own `sysml:elementId` filter — elements missing `elementId` are visible today
 only for that reason — and project delete is a soft annotation that leaves the Layer 1 branch
 behind.
+
+That run measured the output as it stood before **D3.2**/**D3.3** landed: every element now
+carries `sysml:elementId` and its ownership, and no `expr:` node id holds a `.` any more. The
+recorded expectation has not been re-measured against the current output, so the movement those
+two make is still unmeasured; a stack has to be brought up and
+`go test ./internal/interop/flexo -run TestFlexoInterop -update-flexo` re-run for it.
 
 ## D1 — expressions are carried as source text, not as triples
 
@@ -342,8 +381,8 @@ structural decisions (`internal/core/export/convert.go`), so the profile is most
 layer: property name → defining metaclass. Generate that table from `SysML.owl` and vendor it
 rather than hand-writing 400 entries, so it can be regenerated when the ontology version moves.
 
-Two things the flag does not buy. Full instance-level conformance still needs the membership and
-relationship elements (D3.3) and real triples where we currently write `sysx:sourceText` (D1, D2):
+Two things the flag does not buy. Full instance-level conformance still needs real triples where
+we currently write `sysx:sourceText` (D1, D2):
 `sysx:` has no place in that ontology at all, so an ontology-profile graph is conformant only as
 far as those items have landed, and the profile should say so where it is documented. What it does
 buy immediately is a **validation gate we do not have**: the TBox declares domain and range for
@@ -373,8 +412,8 @@ must be concrete" check that would have caught D7's abstract `sysml:Import` is n
 this table and is not implemented — D7's abstract-metaclass audit stays manual.
 
 The gate is `TestGoldenGraphsMatchOntology` (`internal/core/export/ontology_gate_test.go`), reading
-the golden graphs from `testdata/convert` dynamically. Against the 24 of them it finds **135 triples
-in 49 distinct metaclass/property violations**: 41 triples (11 keys) whose property is declared on a
+the golden graphs from `testdata/convert` dynamically. Against the 24 of them it finds **133 triples
+in 48 distinct metaclass/property violations**: 39 triples (10 keys) whose property is declared on a
 metaclass that is not the subject's or an ancestor of it, 40 (14) typed by a class the ontology does
 not declare, 34 (17) naming a property no metaclass declares, and 20 (7) giving an object property a
 literal (D7). No datatype property gets an IRI, and no subject carrying SysML properties lacks an
@@ -382,8 +421,9 @@ literal (D7). No datatype property gets an IRI, and no subject carrying SysML pr
 `testdata/ontology-known-violations.txt` and the gate fails on anything new, so the encoder was left
 alone. The inventory is also the profile's own work list, since it sorts the gap into four causes:
 properties the metamodel declares on a relationship or membership element that we collapse into the
-element (`value` → `FeatureValue`, the multiplicity bounds → `MultiplicityRange`, `visibility` →
-`Membership`, `isNegated` → `Invariant`, a transition's ends → `Connector`) — D3.3; names as
+element (`value` → `FeatureValue`, the multiplicity bounds → `MultiplicityRange`, `isNegated` →
+`Invariant`, a transition's ends → `Connector`) — the same collapse D3.3 undid for ownership and
+visibility; names as
 literals — D7 and D2; 12 metaclasses of our own `sysx:` namespace plus two names the 202407
 rendering does not have at all (`FlowUsage`, which it calls `FlowConnectionUsage`, and
 `TerminateActionUsage`); and 17 properties we write into the SysML namespace that no metaclass
@@ -393,7 +433,7 @@ declares, each either a relationship the metamodel reifies as an element (`speci
 regardless of this item.
 
 Scope: the profile plumbing is the remainder, and is about one session's work now that the table and
-the gate exist; conformance beyond that is gated on D3.3, D2 and D1 rather than on this item.
+the gate exist; conformance beyond that is gated on D2 and D1 rather than on this item.
 
 # Suggested sequencing
 

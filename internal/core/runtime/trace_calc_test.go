@@ -17,12 +17,12 @@ func TestCalcTraceIsStableAcrossRuns(t *testing.T) {
 			calc combine {
 				in a : Integer;
 				in b : Integer = 4;
-				return double(a) + double(b);
+				double(a) + double(b)
 			}
 
 			calc double {
 				in x : Integer;
-				return x * 2;
+				x * 2
 			}
 		}
 	`
@@ -154,7 +154,7 @@ func TestCalcTraceRecordsFailure(t *testing.T) {
 			calc add {
 				in x : Integer;
 				in y : Integer;
-				return x + y;
+				x + y
 			}
 		}
 	`

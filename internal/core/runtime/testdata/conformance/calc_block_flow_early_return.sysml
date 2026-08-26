@@ -10,7 +10,7 @@ package test {
 			seen = i;
 			action check {
 				if seen > 1 {
-					return seen;
+					return : Integer = seen;
 				}
 			}
 			seen = 0;

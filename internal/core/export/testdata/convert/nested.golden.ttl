@@ -7,38 +7,104 @@
 elmt:Outer
     a sysml:Package ;
     sysml:qualifiedName "Outer" ;
+    sysml:elementId "Outer" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Outer" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Outer__Inner ;
+    sysml:ownedMembership elmt:Outer__Inner_om ;
+    sysml:ownedRelationship elmt:Outer__Inner_om .
 
 elmt:Outer__Inner
     a sysml:Package ;
     sysml:qualifiedName "Outer::Inner" ;
-    sysml:owningNamespace elmt:Outer ;
+    sysml:elementId "Outer__Inner" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Outer ;
+    sysml:owner elmt:Outer ;
+    sysml:owningRelationship elmt:Outer__Inner_om ;
+    sysml:owningMembership elmt:Outer__Inner_om ;
     sysml:declaredName "Inner" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Outer__Inner__Widget, elmt:Outer__Inner__Sub ;
+    sysml:ownedMembership elmt:Outer__Inner__Widget_om, elmt:Outer__Inner__Sub_om ;
+    sysml:ownedRelationship elmt:Outer__Inner__Widget_om, elmt:Outer__Inner__Sub_om .
+
+elmt:Outer__Inner_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Outer__Inner_om" ;
+    sysml:owner elmt:Outer ;
+    sysml:memberElement elmt:Outer__Inner ;
+    sysml:ownedMemberElement elmt:Outer__Inner ;
+    sysml:ownedRelatedElement elmt:Outer__Inner ;
+    sysml:owningRelatedElement elmt:Outer ;
+    sysml:membershipOwningNamespace elmt:Outer .
 
 elmt:Outer__Inner__Widget
     a sysml:PartDefinition ;
     sysml:qualifiedName "Outer::Inner::Widget" ;
-    sysml:owningNamespace elmt:Outer__Inner ;
+    sysml:elementId "Outer__Inner__Widget" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Outer__Inner ;
+    sysml:owner elmt:Outer__Inner ;
+    sysml:owningRelationship elmt:Outer__Inner__Widget_om ;
+    sysml:owningMembership elmt:Outer__Inner__Widget_om ;
     sysml:declaredName "Widget" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Outer__Inner__Widget_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Outer__Inner__Widget_om" ;
+    sysml:owner elmt:Outer__Inner ;
+    sysml:memberElement elmt:Outer__Inner__Widget ;
+    sysml:ownedMemberElement elmt:Outer__Inner__Widget ;
+    sysml:ownedRelatedElement elmt:Outer__Inner__Widget ;
+    sysml:owningRelatedElement elmt:Outer__Inner ;
+    sysml:membershipOwningNamespace elmt:Outer__Inner .
 
 elmt:Outer__Inner__Sub
     a sysml:Namespace ;
     sysml:qualifiedName "Outer::Inner::Sub" ;
-    sysml:owningNamespace elmt:Outer__Inner ;
+    sysml:elementId "Outer__Inner__Sub" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Outer__Inner ;
+    sysml:owner elmt:Outer__Inner ;
+    sysml:owningRelationship elmt:Outer__Inner__Sub_om ;
+    sysml:owningMembership elmt:Outer__Inner__Sub_om ;
     sysml:declaredName "Sub" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Outer__Inner__Sub__Gear ;
+    sysml:ownedMembership elmt:Outer__Inner__Sub__Gear_om ;
+    sysml:ownedRelationship elmt:Outer__Inner__Sub__Gear_om .
+
+elmt:Outer__Inner__Sub_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Outer__Inner__Sub_om" ;
+    sysml:owner elmt:Outer__Inner ;
+    sysml:memberElement elmt:Outer__Inner__Sub ;
+    sysml:ownedMemberElement elmt:Outer__Inner__Sub ;
+    sysml:ownedRelatedElement elmt:Outer__Inner__Sub ;
+    sysml:owningRelatedElement elmt:Outer__Inner ;
+    sysml:membershipOwningNamespace elmt:Outer__Inner .
 
 elmt:Outer__Inner__Sub__Gear
     a sysml:PartDefinition ;
     sysml:qualifiedName "Outer::Inner::Sub::Gear" ;
-    sysml:owningNamespace elmt:Outer__Inner__Sub ;
+    sysml:elementId "Outer__Inner__Sub__Gear" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Outer__Inner__Sub ;
+    sysml:owner elmt:Outer__Inner__Sub ;
+    sysml:owningRelationship elmt:Outer__Inner__Sub__Gear_om ;
+    sysml:owningMembership elmt:Outer__Inner__Sub__Gear_om ;
     sysml:declaredName "Gear" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Outer__Inner__Sub__Gear_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Outer__Inner__Sub__Gear_om" ;
+    sysml:owner elmt:Outer__Inner__Sub ;
+    sysml:memberElement elmt:Outer__Inner__Sub__Gear ;
+    sysml:ownedMemberElement elmt:Outer__Inner__Sub__Gear ;
+    sysml:ownedRelatedElement elmt:Outer__Inner__Sub__Gear ;
+    sysml:owningRelatedElement elmt:Outer__Inner__Sub ;
+    sysml:membershipOwningNamespace elmt:Outer__Inner__Sub .
