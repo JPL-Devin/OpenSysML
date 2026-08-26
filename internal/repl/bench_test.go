@@ -47,8 +47,7 @@ func syntheticModel(parts int) string {
     }
     action def Act%[1]d {
         in x : Real;
-        out y : Real;
-        bind y = x * 2.0;
+        out y : Real = x * 2.0;
     }
     state SM%[1]d {
         entry; then start;

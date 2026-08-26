@@ -207,11 +207,9 @@ func TestStandardNotationIsSilent(t *testing.T) {
 	}
 }
 
-// F104: `bind` relates two features, so a binding whose right side is an
-// expression is ours, while a feature-valued one is standard.
-func TestExpressionValuedBindingIsAnExtension(t *testing.T) {
-	wantNotation(t, "a.sysml", "part def P { attribute a; attribute b; bind a = b * 2; }",
-		CodeNonstandardNotation, "`bind <feature> = <expression>;`")
+// `bind` relates two features (SysML.xtext:1020), so the standard
+// feature-valued forms are silent.
+func TestFeatureValuedBindingIsSilent(t *testing.T) {
 	wantSilent(t, "a.sysml", "part def P { attribute a; attribute b; bind a = b; }")
 	wantSilent(t, "a.sysml", "part def P { part a { attribute x; } attribute b; bind b = a.x; }")
 }

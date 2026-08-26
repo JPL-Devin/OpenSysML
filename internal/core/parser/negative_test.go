@@ -280,6 +280,9 @@ func TestNegative(t *testing.T) {
 		{"binding_end_chain_trailing_dot_qualified", "package P { part c; binding bind R::a. = c; }"},
 		{"binding_end_unterminated", "package P { part a; binding bind R::a }"},
 		{"binding_end_no_target", "package P { part a; binding bind R::a = ; }"},
+		// An expression is not a ConnectorEndMember, so a binding whose right
+		// side is one is rejected (see TestBindingEndFailuresAreDistinguishable).
+		{"binding_end_expression", "package P { part def D { attribute a; attribute b; bind a = b * 2; } }"},
 
 		// A connection, interface or flow usage stating its ends where its name
 		// would go still states both ends and closes the body it opens.
@@ -375,6 +378,80 @@ func TestRemovedSuccessionFormsProduceDiagnosticsAndErrorNodes(t *testing.T) {
 			}
 			if strings.Contains(dump, tt.forbiddenNode) {
 				t.Fatalf("unexpected %s for removed spelling:\n%s", tt.forbiddenNode, dump)
+			}
+		})
+	}
+}
+
+// An expression binding end is rejected with its own message, so it stays
+// distinguishable from an end that is missing altogether.
+func TestBindingEndFailuresAreDistinguishable(t *testing.T) {
+	const expressionMessage = "a binding end names a feature, not an expression"
+	tests := []struct {
+		name        string
+		src         string
+		wantMessage bool
+	}{
+		{"expression_end", "package P { part def D { attribute a; attribute b; bind a = b * 2; } }", true},
+		{"expression_end_named_binding", "package P { part def D { attribute a; attribute b; binding bb bind a = b + 1; } }", true},
+		{"expression_end_literal", "package P { part def D { attribute a; bind a = 2; } }", true},
+		{"missing_right_end", "package P { part def D { attribute a; attribute b; binding bb bind a = ; } }", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("parser panicked: %v", r)
+				}
+			}()
+			p := New(source.New(tt.name+".sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) == 0 {
+				t.Fatal("expected a diagnostic")
+			}
+			if !strings.Contains(ast.Dump(root), "ErrorNode") {
+				t.Fatalf("expected an ErrorNode:\n%s", ast.Dump(root))
+			}
+			var found bool
+			for _, d := range p.Diagnostics {
+				if strings.Contains(d.Message, expressionMessage) {
+					found = true
+				}
+			}
+			if found != tt.wantMessage {
+				t.Fatalf("expression-end message present = %v, want %v: %v", found, tt.wantMessage, p.Diagnostics)
+			}
+		})
+	}
+}
+
+// The standard binding forms stay accepted: unqualified, chained, qualified
+// and indexed ends (`bind [0..*] base.edges = [0..*] be;` in the Geometry library).
+func TestStandardBindingFormsRemainValid(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"simple", "part def D { attribute a; attribute b; bind a = b; }"},
+		{"chain", "part def D { part a { attribute x; } attribute b; bind b = a.x; }"},
+		{"named_qualified", "package R { part a; } package P { part c; binding b1 bind R::a = c; }"},
+		{"indexed_ends", "part def D { part base { part edges[0..*]; } part be[0..*]; bind [0..*] base.edges = [0..*] be; }"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New(source.New(tt.name+".sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) != 0 {
+				t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+			}
+			if strings.Contains(ast.Dump(root), "ErrorNode") {
+				t.Fatalf("unexpected ErrorNode:\n%s", ast.Dump(root))
 			}
 		})
 	}

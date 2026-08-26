@@ -134,6 +134,14 @@ in a calculation body is now a parse error, and a computed result is written as
 the body's trailing expression (`ResultExpressionMember`, `SysML.xtext:1967`).
 `return` itself is unchanged as the result parameter declaration.
 
+`bind <feature> = <expression>;` is removed the same way: a binding relates two
+`ConnectorEndMember`s (`BindingConnectorAsUsage`, `SysML.xtext:1020`), so an
+expression right end is now a parse error. Write the expression as the
+feature's value (`out result : Real = x * 2.0;`), or declare a feature holding
+the result and bind to it (`attribute b2 = a + 1;` then `binding bind b = b2;`).
+Standard bindings — `bind a = b;`, with qualified, chained and indexed ends —
+are unchanged.
+
 The same holds for the two state-machine aliases. `initial <state>;` stated where
 a machine starts, which `EntryTransitionMember` (`SysML.xtext:1796-1801`) states
 as `entry; then <state>;`, and `transition [<name>] <src> to <tgt>;` stated a

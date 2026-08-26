@@ -106,7 +106,6 @@ func TestExtensionFindingsFollowTheMode(t *testing.T) {
 	for _, tc := range []struct {
 		name, file, src, code string
 	}{
-		{"binding", "a.sysml", "part def P { attribute a; attribute b; bind a = b * 2; }", CodeNonstandardNotation},
 		{"one_ended_first", "a.sysml", "part def P { part a; first a; }", CodeNonstandardNotation},
 		{"requirement_constraint", "a.sysml", "analysis def An { attribute size; require constraint { size >= 1 } }", CodeNonstandardNotation},
 	} {
