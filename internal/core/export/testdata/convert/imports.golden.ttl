@@ -7,15 +7,22 @@
 elmt:Importer
     a sysml:Package ;
     sysml:qualifiedName "Importer" ;
+    sysml:elementId "Importer" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Importer" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedRelationship elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 ;
+    sysml:ownedImport elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 .
 
 elmt:Importer___400
     a sysml:Import ;
     sysml:qualifiedName "Importer::@0" ;
-    sysml:owningNamespace elmt:Importer ;
+    sysml:elementId "Importer___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Importer ;
+    sysml:owner elmt:Importer ;
+    sysml:owningRelatedElement elmt:Importer ;
+    sysml:importOwningNamespace elmt:Importer ;
     sysml:visibility "private" ;
     sysml:importedNamespace "ISQ" ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
@@ -24,8 +31,12 @@ elmt:Importer___400
 elmt:Importer___401
     a sysml:Import ;
     sysml:qualifiedName "Importer::@1" ;
-    sysml:owningNamespace elmt:Importer ;
+    sysml:elementId "Importer___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Importer ;
+    sysml:owner elmt:Importer ;
+    sysml:owningRelatedElement elmt:Importer ;
+    sysml:importOwningNamespace elmt:Importer ;
     sysml:visibility "private" ;
     sysml:importedNamespace "ScalarValues::Real" ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -33,8 +44,12 @@ elmt:Importer___401
 elmt:Importer___402
     a sysml:Import ;
     sysml:qualifiedName "Importer::@2" ;
-    sysml:owningNamespace elmt:Importer ;
+    sysml:elementId "Importer___402" ;
     sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Importer ;
+    sysml:owner elmt:Importer ;
+    sysml:owningRelatedElement elmt:Importer ;
+    sysml:importOwningNamespace elmt:Importer ;
     sysml:visibility "private" ;
     sysml:importedNamespace "Deep" ;
     sysx:isRecursive "true"^^xsd:boolean ;

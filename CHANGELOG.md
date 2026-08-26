@@ -6,6 +6,31 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### RDF output states element ids and ownership
+
+A converted graph now carries the two things a SysML v2 API service needs to address it.
+Every element states `sysml:elementId` — exactly the id its own IRI ends in, so the triple
+and an id derived from the IRI cannot disagree — and containment is stated as the abstract
+syntax does: `sysml:owner` and `sysml:owningRelatedElement` as element references, with a
+materialized `OwningMembership`, or a `FeatureMembership` where a type owns a feature,
+between owner and member. Each membership is an element of its own with a deterministic IRI,
+its own `sysml:elementId`, and the member and owner wiring a client walking from a root
+follows; a relationship a namespace declares, such as an import, owns its member directly.
+Visibility moves to the membership that declares it. A document now has one root instead of
+every element reading as one.
+
+The nodes of an expression graph are addressable too: a node's IRI held a `.` and the name
+of the position it sits in, which an API service restricting ids to `[a-zA-Z0-9_-]+` refuses
+outright, so the position is now joined with `_p` and encoded the way an element id is, and
+the node states that id in `sysml:elementId`. A node is still not a model element.
+
+`.ttl` output changes shape accordingly, and every graph regenerates. Reading is
+backward compatible: a graph carrying only the previous compact `sysml:owningNamespace`
+shape still converts unchanged, and that property is still written.
+[reference/rdf-mapping.md](docs/reference/rdf-mapping.md) documents the ownership shape.
+Loading a graph into a live triplestore and reading it back through the API is still not
+demonstrated, and collection-valued properties still carry no JSON annotation.
+
 ### A keyworded inline condition is no longer accepted
 
 **Breaking change.** `assert <expression>;` and `assume <expression>;` in a constraint body, and
@@ -96,9 +121,9 @@ An opt-in gate loads a model's Turtle into a running Flexo MMS stack through Lay
 endpoint, reads it back through the SysML v2 API, and compares that against the same model
 posted through that service's own commit path. It records a per-element, per-property report
 that a human adjudicates, so the mapping's interoperability is a number that moves rather than
-a claim: today every element of the fixture is listed and 86 of its 142 properties are
-delivered, against 158 of 158 for the service's own payloads. The reference mapping documents
-what the difference is made of.
+a claim: measured before element ids and ownership were stated, every element of the fixture was
+listed and 86 of its 142 properties delivered, against 158 of 158 for the service's own
+payloads. The reference mapping documents what the difference is made of.
 
 The gate needs Docker and stays out of `go test ./...`: it skips loudly unless `FLEXO_INTEROP`
 is set, and with it set an absent stack fails instead of skipping.

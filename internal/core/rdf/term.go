@@ -208,6 +208,12 @@ func (g *Graph) Object(subject Term, predicate string) (Term, bool) {
 	return Term{}, false
 }
 
+// HasProperty reports whether the subject states the predicate at all.
+func (g *Graph) HasProperty(subject Term, predicate string) bool {
+	_, ok := g.Object(subject, predicate)
+	return ok
+}
+
 // Lexical returns the lexical form of the first object of (subject,
 // predicate), for a property whose value is read as text regardless of whether
 // it was written as an IRI or a literal.
