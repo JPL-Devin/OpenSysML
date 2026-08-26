@@ -832,9 +832,8 @@ func TestMessageLeftForACompletedMachineDoesNotBlockANewObject(t *testing.T) {
 				state working {
 					entry; then inner;
 					state inner;
-					final wrapped;
 					accept Ping then working;
-					succession first inner then wrapped;
+					succession first inner then done;
 				}
 			}
 		}

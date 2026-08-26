@@ -288,7 +288,7 @@ main.sysml  package Main { import Lib::*; part w : Widget; }
   will not remind you.
 - **Semantic tokens beat TextMate for declared names**, so a word that a new TextMate rule colours
   may still render plain where the LSP marks it as a usage/variable. Example: with the F9
-  `keyword.other.contextual` rule, `final off;` / `region r { }` / `entry point p;` colour as
+  `keyword.other.contextual` rule, `defer Alarm;` / `region r { }` / `entry point p;` colour as
   keywords, but `attribute point : ScalarValues::Real;` keeps the plain identifier colour. Pick the
   screenshot line accordingly, and prove the scope with **Developer: Inspect Editor Tokens and
   Colors** (`region` → `keyword.other.contextual.source.sysml`, foreground `#FF7B72`).

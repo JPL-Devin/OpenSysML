@@ -10,7 +10,6 @@ package MemberThenOrderTest {
 		then state fourth;
 
 		state third;
-		final done;
 
 		succession first start then second;
 		succession first fourth then third;

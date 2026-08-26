@@ -10,7 +10,6 @@ package StateAcceptPayload {
         state start;
         state idle;
         state alerting;
-        final done;
 
         succession first start then idle;
 

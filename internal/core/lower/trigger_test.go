@@ -15,7 +15,6 @@ func TestTriggerClassification_SignalTrigger(t *testing.T) {
 				entry; then start;
 				state start;
 				state waiting;
-				final done;
 				
 				succession first start then waiting;
 				transition first waiting when powerOn then done;
@@ -117,7 +116,6 @@ func TestTriggerClassification_ChangeEvent(t *testing.T) {
 				entry; then start;
 				state start;
 				state waiting;
-				final done;
 				
 				succession first start then waiting;
 				transition first waiting when x > 5 then done;
@@ -193,7 +191,6 @@ func TestTriggerClassification_NilCompletion(t *testing.T) {
 				entry; then start;
 				state start;
 				state waiting;
-				final done;
 				
 				succession first start then waiting;
 				transition first waiting then done;
@@ -265,7 +262,6 @@ func TestTriggerClassification_CallTrigger(t *testing.T) {
 				entry; then start;
 				state start;
 				state waiting;
-				final done;
 
 				succession first start then waiting;
 				transition first waiting accept setSpeed(value) then done;

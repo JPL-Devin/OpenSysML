@@ -9,7 +9,6 @@ package JunctionTest {
         junction routeDecision;
         state highPriority;
         state normalPriority;
-        final done;
         
         succession first init then start;
         transition first start then routeDecision;

@@ -22,7 +22,6 @@ package test {
 		state again {
 			entry { assign i := i + 1; }
 		}
-		final done;
 
 		succession first start then step;
 

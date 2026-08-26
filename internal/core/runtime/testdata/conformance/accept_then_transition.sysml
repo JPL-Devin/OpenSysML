@@ -7,7 +7,6 @@ package Test {
             accept go then active;
         }
         state active;
-        final done;
         
         succession first init then waiting;
         succession first active then done;

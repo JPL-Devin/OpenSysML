@@ -1,0 +1,15 @@
+{
+  "type": "state",
+  "events": [
+    {
+      "signal": "Stop"
+    }
+  ],
+  "finalState": "done",
+  "stateVisits": [
+    "start",
+    "working",
+    "done"
+  ],
+  "trace": true
+}

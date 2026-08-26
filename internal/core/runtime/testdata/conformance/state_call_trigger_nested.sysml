@@ -8,7 +8,6 @@ package CallTriggerNestedTest {
             accept turnOn(level) then lit;
         }
         state lit;
-        final done;
 
         succession first start then standby;
         succession first lit then done;

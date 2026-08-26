@@ -92,7 +92,6 @@ func TestActionMessageReachesStateMachine(t *testing.T) {
 			entry; then init;
 			state init;
 			state waiting;
-			final done;
 			succession first init then waiting;
 			transition first waiting when Ping then done;
 		}
@@ -161,7 +160,6 @@ func TestSendOfNamedTypeReachesStateMachine(t *testing.T) {
 			entry; then start;
 			state start;
 			state waiting { entry { send Ping to Driver; } }
-			final done;
 			succession first start then waiting;
 			transition first waiting when Ping then done;
 		}
@@ -182,7 +180,6 @@ func TestStateMachineLeavesForeignSignalPending(t *testing.T) {
 			entry; then start;
 			state start;
 			state waiting { entry { send Pong to Driver; } }
-			final done;
 			succession first start then waiting;
 			transition first waiting when Ping then done;
 		}
@@ -416,7 +413,6 @@ func TestPortRoutedMessageDoesNotReachStateMachine(t *testing.T) {
 			entry; then init;
 			state init;
 			state waiting;
-			final done;
 			succession first init then waiting;
 			transition first waiting when Ping then done;
 		}
@@ -861,7 +857,6 @@ func TestAddressedSendToQualifiedNameReachesReceiver(t *testing.T) {
 			entry; then init;
 			state init;
 			state waiting;
-			final done;
 			succession first init then waiting;
 			transition first waiting when Ping then done;
 		}

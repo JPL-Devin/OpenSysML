@@ -152,7 +152,7 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 		}`},
 		{"named pseudostates", `package P {
 			state S {
-				entry; then i; state i; state a; fork f; join j; final done;
+				entry; then i; state i; state a; fork f; join j;
 				succession first i then a;
 				transition first a then f;
 				transition first f then j;

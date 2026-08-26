@@ -8,7 +8,6 @@ package Test {
         state start;
         state busy;
         state ready;
-        final done;
 
         succession first start then busy;
 

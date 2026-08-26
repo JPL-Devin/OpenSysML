@@ -305,7 +305,6 @@ state Machine {
     }
     fork split;
     join sync;
-    final done;
 
     succession first init then idle;
     transition first idle then split;

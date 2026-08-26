@@ -132,8 +132,7 @@ func TestContext_ExecuteState(t *testing.T) {
 		Name: "idle",
 	}
 	done := &ast.StateNode{
-		Name:    "done",
-		IsFinal: true,
+		Name: "done",
 	}
 
 	trans := &ast.TransitionEdge{
@@ -263,8 +262,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 		},
 	}
 	done := &ast.StateNode{
-		Name:    "done",
-		IsFinal: true,
+		Name: "done",
 	}
 	trans := &ast.TransitionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "processing"}}},

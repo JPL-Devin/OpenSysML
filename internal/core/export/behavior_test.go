@@ -136,7 +136,6 @@ func TestBehavioralStatementsRoundTrip(t *testing.T) {
 func TestStateMembersRoundTrip(t *testing.T) {
 	members := map[string]string{
 		"entry succession":     "entry;\n        then launch;",
-		"final state":          "final stopped;",
 		"start state":          "state launch;",
 		"substate":             "state waiting;",
 		"empty entry":          "entry;",

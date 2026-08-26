@@ -33,7 +33,6 @@
                     (*ast.QualifiedName))))))))
       (PseudostateNode kind="fork" name="split")
       (PseudostateNode kind="join" name="sync")
-      (*ast.StateNode)
       (Membership visibility="default"
         (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (ConnectorEnd target="start"
