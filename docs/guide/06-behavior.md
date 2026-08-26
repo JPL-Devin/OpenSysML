@@ -266,8 +266,7 @@ $ sysml -action ActionExecutorDemo::sequential examples/action-executor-demo.sys
 
 ### Fork and join: parallel paths
 
-This action uses OpenSysML fork and join extensions with no SysML v2 production.
-See the [conformance audit](../reference/grammar/conformance-audit.md).
+`fork` and `join` are action node literals, so this action is standard notation.
 
 ```sysml
 action forkJoin {
@@ -317,8 +316,8 @@ A branch that never arrives is a deadlock, not a failure: the run is reported as
 
 ### Decision and else: conditional branching
 
-This action uses the OpenSysML `decide` extension with no SysML v2 production.
-See the [conformance audit](../reference/grammar/conformance-audit.md).
+`decide` with a guarded branch and an `else` branch is standard notation; the
+OpenSysML spelling `decision` is the one that warns.
 
 ```sysml
 action conditional {
