@@ -82,7 +82,6 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		if n.Name != "" {
 			e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, n.Name))
 		}
-		e.writtenKeyword(subject, n, "first", "initial")
 		e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
 		if successor := qualifiedText(n.Successor); successor != "" {
 			e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, successor))
@@ -117,7 +116,6 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 	case *ast.DecisionNode:
 		head(rdf.SysMLTerm(mDecision))
 		e.name(subject, n.Name)
-		e.writtenKeyword(subject, n, "decision", "decide")
 		return true, nil
 
 	case *ast.ActionExecutionNode:
@@ -622,7 +620,7 @@ func behaviorNameAndMembers(node ast.Node) (string, []ast.Node, bool) {
 func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 	switch el.metaclass {
 	case mInitialNode:
-		words := []string{d.keywordOr(el, "first")}
+		words := []string{"first"}
 		start, err := d.referenceText(el, rdf.SysML+pSourceFeature)
 		if err != nil {
 			return "", true, err
@@ -647,7 +645,7 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 		return strings.Join(words, " "), true, nil
 
 	case mFork, mJoin, mMerge, mDecision:
-		words := []string{d.keywordOr(el, controlNodeKeyword[el.metaclass])}
+		words := []string{controlNodeKeyword[el.metaclass]}
 		return strings.Join(append(words, d.identWords(el)...), " "), true, nil
 
 	case mActionExecution:
@@ -741,7 +739,7 @@ var controlNodeKeyword = map[string]string{
 	mFork:     "fork",
 	mJoin:     "join",
 	mMerge:    "merge",
-	mDecision: "decision",
+	mDecision: "decide",
 }
 
 // successionHead writes a succession back using standard end notation.

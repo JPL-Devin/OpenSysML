@@ -347,6 +347,27 @@ vs. theirs for one model — is the actual compliance statement, and it is what 
 the RDF path off experimental. Keep it out of `go test ./...`: an opt-in build tag or
 environment gate, like the corpus gate.
 
+**Landed, ahead of D3.1–D3.4 rather than after them**, as `internal/interop/flexo` and the
+`FLEXO_INTEROP` gate `TestFlexoInterop`, documented in `.agents/skills/flexo-interop`. It
+measures the gap instead of asserting the fix, so D3.1–D3.4 show up as movement in
+`internal/interop/flexo/testdata/interop_expected.txt`. Two corrections to the setup described
+above, from doing it: the published `openmbee/*` images are enough (no source build, no MinIO,
+no regenerated `cluster.trig` — use `flexo-mms-sysmlv2/docker-compose/docker-compose.yml`,
+which brings up the SysML v2 API as well), and the `sysmlv2` org that `POST /projects` needs is
+not seeded by cluster init, so the harness creates it.
+
+What the first run measures: 29 of 29 elements listed and 86 of 142 properties delivered on the
+graph-load side, against 33 of 33 and 158 of 158 for the same model posted through the service's
+own commit path. The 56 lost properties are the `sysx:` namespace plus multi-valued standard
+properties (**D1**/**D2**/**D3.4**); no element carries `sysml:elementId` (**D3.2**) and none
+carries `sysml:owner`, so all 29 read as roots (**D3.3**); the eight `expr:` node ids carry a
+`.` and are refused by a direct read, which is **D3.1**'s identity question reaching the
+expression nodes too. Two deployed behaviors differ from what the sources suggest: the element
+listing ignores `pageSize`/`pageAfter` and returns every subject of the branch graph, so it also
+never applies its own `sysml:elementId` filter — elements missing `elementId` are visible today
+only for that reason — and project delete is a soft annotation that leaves the Layer 1 branch
+behind.
+
 ## D1 — expressions are carried as source text, not as triples
 
 Feature values, multiplicity bounds, filter conditions and succession guards are stored as

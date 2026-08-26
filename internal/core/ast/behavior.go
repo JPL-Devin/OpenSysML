@@ -12,9 +12,6 @@ type InitialNode struct {
 	Name      string         // optional identifier for edge referencing
 	Successor *QualifiedName // optional target for implicit succession (from `first X then Y` syntax)
 	Guard     Node           // optional guard condition for succession
-	// Keyword is the word the node was written with, `first` or `initial`: only
-	// the first is SysML v2 notation.
-	Keyword string
 	// Members are the members of the body the succession was written with
 	// (`first start then continue { … }`), and HasBody that it was written with
 	// one rather than ended by ';'.
@@ -64,11 +61,8 @@ type DecisionNode struct {
 	NodeBase
 	Name     string
 	NameSpan source.Span // span of Name, empty for an unnamed node
-	// Keyword is the word the node was written with, `decide` or `decision`:
-	// only the first is SysML v2 notation.
-	Keyword string
-	Members []Node // body members, as on ForkNode
-	HasBody bool
+	Members  []Node      // body members, as on ForkNode
+	HasBody  bool
 }
 
 // NodeBodyMembers returns the members of the body an action node declares, and

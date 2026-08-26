@@ -23,7 +23,7 @@ const guardModel = `
 				assign i := i + 1;
 				assign log := log + t.d;
 			}
-			decision check;
+			decide check;
 			done;
 			succession first start then bump;
 			succession first bump then check;

@@ -88,7 +88,7 @@ func TestParseAction_ForkJoin(t *testing.T) {
 func TestParseAction_Decision(t *testing.T) {
 	input := `{
 		first start;
-		decision check;
+		decide check;
 		done;
 		succession first start then check;
 		succession first check if true then done;

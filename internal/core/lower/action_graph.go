@@ -865,7 +865,7 @@ func resolveSuccessionUsageEnd(graph *ActionGraph, ref ast.Node, source bool) as
 
 	name := ast.SimpleName(ref)
 	if source && name == "start" && graph.Initial == nil {
-		initial := &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "start", Keyword: "first"}
+		initial := &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "start"}
 		graph.Initial = initial
 		graph.Nodes = append(graph.Nodes, initial)
 		return initial

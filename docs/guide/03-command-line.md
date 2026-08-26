@@ -174,8 +174,8 @@ whole, so a reference from one file to a declaration in another resolves.
 
 OpenSysML accepts a few notations of its own that no SysML v2 production admits —
 the `initial`/`final` state markers, `region`, `defer`, the `choice`, `junction`,
-`history` and `entry`/`exit point` pseudostates, the `initial`/`final`/`decision`
-action nodes, and `transition <source> to <target>`. They are reported as
+`history` and `entry`/`exit point` pseudostates, `done <name>;`, and
+`transition <source> to <target>`. They are reported as
 warnings, so a model using them still analyses cleanly. `-strict` asks the other
 question — *is this file conforming SysML v2?* — by making those warnings errors:
 

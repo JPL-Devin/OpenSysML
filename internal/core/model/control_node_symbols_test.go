@@ -12,7 +12,7 @@ func TestSuccessionNamesControlNode(t *testing.T) {
 		{"fork", `package P { action def F { first start; fork Jump; action S; first start then Jump; first Jump then S; } }`},
 		{"join", `package P { action def F { first start; join Land; action S; first start then S; first S then Land; } }`},
 		{"merge", `package P { action def F { first start; merge M; action S; first start then S; first S then M; } }`},
-		{"decision", `package P { action def F { first start; decision D; action S; first start then S; first S then D; } }`},
+		{"decision", `package P { action def F { first start; decide D; action S; first start then S; first S then D; } }`},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -26,7 +26,7 @@ func TestSuccessionNamesControlNode(t *testing.T) {
 // TestUnnamedControlNodeStillResolves covers unnamed control nodes: they
 // declare no name, so they register none and the body still resolves.
 func TestUnnamedControlNodeStillResolves(t *testing.T) {
-	src := `package P { action def F { first start; fork; join; merge; decision; action S; first start then S; } }`
+	src := `package P { action def F { first start; fork; join; merge; decide; action S; first start then S; } }`
 	if got := diagnose(t, "control_unnamed", src); len(got) > 0 {
 		t.Errorf("unexpected findings: %v", got)
 	}

@@ -17,15 +17,20 @@ each of these is a deliberate property of it rather than a defect to report:
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
   of record.
-- **Interoperability is not yet supported.** The `sysml:` vocabulary and the
-  `elmt:` element base match Flexo MMS's `Namespaces.kt`, and OpenSysML's
-  element ids — the part of the IRI after the final `:` — match that service's
-  `requireValidId` (`[a-zA-Z0-9_-]+`), but known API mismatches remain. The
-  reader ignores predicates outside `sysml:` and
-  `urn:sysmlv2:annotation:json:`, so OpenSysML's `sysx:` triples do not survive
-  that path. Paged listing and query additionally require `sysml:elementId`,
-  while roots filtering uses `sysml:owner` and `sysml:owningRelatedElement`;
-  these are roadmap D3 work, not consequences of matching namespaces.
+- **Interoperability is not yet supported**, and this is now measured rather
+  than argued. A round trip through a running Flexo MMS stack delivers every
+  element of the reference fixture but only 86 of its 142 properties, while the
+  same model posted through that service's own commit path loses nothing; the
+  losses are the 56 properties in the `sysx:` namespace, which the reader
+  ignores, plus standard properties carrying more than one value, which it skips
+  without a JSON annotation. No element carries `sysml:elementId`, which paged
+  listing and query select on, and none carries `sysml:owner`, so the whole
+  model reads as roots. Expression node ids contain a `.` and are refused by a
+  direct element read (`requireValidId`, `[a-zA-Z0-9_-]+`); element ids proper
+  satisfy it. These are roadmap D3 work, not consequences of matching
+  namespaces. The measurement is `internal/interop/flexo`, an opt-in gate
+  described in `.agents/skills/flexo-interop`, and its committed report is the
+  record of what moves as that work lands.
 
 Every surface reports this where it is used: the command line writes a `note:` to
 stderr, `%save` prints one, and `ConvertResponse` carries `experimental` and
@@ -48,10 +53,12 @@ The `sysml:` vocabulary and the `elmt:` element base match the ones the
 [Flexo MMS SysML v2 service](https://github.com/Open-MBEE/flexo-mms-sysmlv2)
 writes into its triplestore (`Namespaces.kt`). That service derives an
 element's `@id` from the substring after the final `:`, and `requireValidId`
-permits only `[a-zA-Z0-9_-]+`; OpenSysML's encoded element ids satisfy both.
-Other mismatches remain: the reader ignores predicates outside `sysml:` and
-`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path,
-and paged listing and query require `sysml:elementId`, while roots filtering
+permits only `[a-zA-Z0-9_-]+`; OpenSysML's encoded element ids satisfy both,
+though the `expr:` node ids do not — they carry a `.`, and that service refuses
+to read one directly. Other mismatches remain: the reader ignores predicates
+outside `sysml:` and
+`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path;
+paged listing and query require `sysml:elementId`, while roots filtering
 uses `sysml:owner` and `sysml:owningRelatedElement`; these are roadmap D3
 work. See [Status](#status-experimental).
 
@@ -228,15 +235,15 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 
 | written | metaclass | carries |
 |---|---|---|
-| `first x;`, `initial x;` | `sysx:InitialNode` | `sysml:sourceFeature` (the member the body starts at — a reference, not a name it declares), `sysml:targetFeature`, `sysx:guard`, `sysx:declaredKeyword` |
-| `done;`, `final;` | `sysx:FinalNode` | `sysx:declaredKeyword` |
+| `first x;` | `sysx:InitialNode` | `sysml:sourceFeature` (the member the body starts at — a reference, not a name it declares), `sysml:targetFeature`, `sysx:guard` |
+| `done;` | `sysx:FinalNode` | `sysx:declaredKeyword` |
 | `action a;`, `action a { x + 1 }` | `sysx:ActionExecutionNode` | `sysml:references` or `sysx:expression` |
 | `perform a;` | `sysml:PerformActionUsage` | `sysx:expression` (the action performed) |
 | `assign x := 1;` | `sysml:AssignmentActionUsage` | `sysx:target`, `sysml:value`, `sysx:assignmentOperator` when it is not `:=` |
 | `send M(x) to p;`, `… via p;` | `sysml:SendActionUsage` | `sysx:payload`, `sysx:receiver`, `sysx:isVia` |
 | `terminate;`, `terminate x;` | `sysml:TerminateActionUsage` | `sysx:expression` |
 | `accept sig : Signal;`, `accept when c;` | the usage's own metaclass | `sysml:isAccept`, and `sysx:declaredKeyword "accept"` where the optional `action` was not written |
-| `fork`, `join`, `merge`, `decision` | `sysml:ForkNode`, `JoinNode`, `MergeNode`, `DecisionNode` | `sysml:declaredName` |
+| `fork`, `join`, `merge`, `decide` | `sysml:ForkNode`, `JoinNode`, `MergeNode`, `DecisionNode` | `sysml:declaredName` |
 | `succession first a then b;`, `if g then b;`, `else b;` | `sysml:SuccessionAsUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:guard`, `sysx:isElse`, `sysx:declaredKeyword` |
 | `while c { … }`, `loop { … } until c;` | `sysml:WhileLoopActionUsage` | `sysx:whileCondition`, `sysx:untilCondition` |
 | `for x in c { … }` | `sysml:ForLoopActionUsage` | `sysx:loopVariable`, `sysx:collection` |

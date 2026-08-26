@@ -22,9 +22,7 @@ var extensionInventory = []string{
 	"state def S { exit point p; }",
 	"state def S { state a { defer e; } }",
 	"state def S { state a; state b; transition a to b; }",
-	"action def A { initial a; }",
-	"action def A { final; }",
-	"action def A { decision d; }",
+	"part def P { part a; first a; }",
 	"calc c { in a : Real; return 42; }",
 }
 

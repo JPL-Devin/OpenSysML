@@ -108,17 +108,6 @@ func TestStateExtensionsAreReported(t *testing.T) {
 	}
 }
 
-// The action node spellings that stand in for a standard one are reported.
-func TestActionNodeExtensionSpellingsAreReported(t *testing.T) {
-	for _, tc := range []struct{ src, want string }{
-		{"action def A { initial a; }", "`initial` as an action node"},
-		{"action def A { final; }", "`final` as an action node"},
-		{"action def A { decision d; }", "`decision` as an action node"},
-	} {
-		wantNotation(t, "a.sysml", tc.src, CodeNonstandardNotation, tc.want)
-	}
-}
-
 // `transition <source> to <target>;` is ours; the standard form states its ends
 // with `first` and `then`.
 func TestTransitionToSpellingIsReported(t *testing.T) {
