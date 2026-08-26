@@ -10,7 +10,6 @@ package Debug {
 		state working {
 			accept after 5 then done;
 		}
-		final done;
 
 		succession first init then waiting;
 	}

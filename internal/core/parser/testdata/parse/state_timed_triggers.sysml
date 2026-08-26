@@ -8,7 +8,6 @@ state TimedTriggers {
         accept at 15 then done;
         accept when working then done;
     }
-    final done;
 
     succession first start then waiting;
 }

@@ -15,7 +15,6 @@ package test {
 			attribute localGain : Real = 4.0;
 			entry { assign result := localGain + pkgBonus; }
 		}
-		final done;
 
 		succession first start then working;
 		succession first working then done;

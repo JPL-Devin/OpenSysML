@@ -112,7 +112,6 @@ func TestElementBudgetIsReleasedByEveryStep(t *testing.T) {
 				state again {
 					entry { assign i := i + 1; }
 				}
-				final done;
 
 				succession first start then step;
 

@@ -22,7 +22,6 @@ package ForkJoinTest {
         }
         fork split;
         join sync;
-        final done;
 
         succession first init then ready;
         transition first ready then split;

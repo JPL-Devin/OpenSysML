@@ -10,7 +10,6 @@ package ChoiceTest {
         state heating;
         state cooling;
         state normal;
-        final done;
         
         succession first start then idle;
         transition first idle then tempCheck;

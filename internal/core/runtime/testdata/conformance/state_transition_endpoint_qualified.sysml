@@ -18,7 +18,6 @@ package test {
                 entry { assign marker := 2; }
             }
         }
-        final done;
 
         transition first start then beta::work;
         transition first beta::work when Leave then done;

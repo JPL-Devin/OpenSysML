@@ -18,7 +18,6 @@ package test {
             accept after 1 then done;
         }
         state later;
-        final done;
 
         succession first init then waiting;
     }

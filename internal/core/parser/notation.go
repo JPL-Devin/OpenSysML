@@ -16,7 +16,6 @@ var notationWords = map[string]bool{
 	"deep":     true,
 	"defer":    true,
 	"done":     true,
-	"final":    true,
 	"history":  true,
 	"junction": true,
 	"shallow":  true,
@@ -113,7 +112,7 @@ func (p *Parser) atStateNotationWord() (string, bool) {
 	}
 	w := p.src.Text(p.peek().Span)
 	switch w {
-	case "final", "choice", "junction", "history":
+	case "choice", "junction", "history":
 		// `<word> <name>;`
 		if p.peekIsName(1) && p.peekN(2).Kind == lexer.Semicolon {
 			return w, true

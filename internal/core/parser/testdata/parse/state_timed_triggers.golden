@@ -17,7 +17,6 @@
           (TransitionMember source="" target="done"
             (ChangeEvent
               (FeatureReference name="working")))))
-      (*ast.StateNode)
       (Membership visibility="default"
         (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (ConnectorEnd target="start"

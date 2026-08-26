@@ -173,23 +173,25 @@ whole, so a reference from one file to a declaration in another resolves.
 ## Strict conformance
 
 OpenSysML accepts a few notations of its own that no SysML v2 production admits —
-the `final` state marker, `defer`, and the `choice`, `junction`, `history` and
+`defer`, and the `choice`, `junction`, `history` and
 `entry`/`exit point` pseudostates. They are reported as
 warnings, so a model using them still analyses cleanly. `-strict` asks the other
 question — *is this file conforming SysML v2?* — by making those warnings errors:
 
-The monitor below deliberately uses the `final` extension so the difference is
+The monitor below deliberately uses the `defer` extension so the difference is
 visible:
 
 ```sysml
 package M {
+    attribute def Alarm;
     state monitor {
         entry; then off;
-        state off;
-        state warming {
-            accept after 10 then running;
+        state off {
+            defer Alarm;
         }
-        final running;
+        state warming {
+            accept after 10 then done;
+        }
         succession first off then warming;
     }
 }
@@ -197,23 +199,24 @@ package M {
 
 ```bash
 $ sysml -validate monitor.sysml; echo "exit=$?"
-monitor.sysml:8:9: warning: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
-        final running;
-        ^~~~~
+monitor.sysml:6:13: warning: `defer <event>;` is an OpenSysML extension with no SysML v2 production: no notation states a deferred event
+            defer Alarm;
+            ^~~~~
 ✓ package M
 ✓ monitor.sysml: no errors
 exit=0
 
 $ sysml -strict -validate monitor.sysml; echo "exit=$?"
-monitor.sysml:8:9: error: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
-        final running;
-        ^~~~~
+monitor.sysml:6:13: error: `defer <event>;` is an OpenSysML extension with no SysML v2 production: no notation states a deferred event
+            defer Alarm;
+            ^~~~~
 sysml: monitor.sysml did not analyse cleanly; no check was made
 exit=2
 ```
 
-The standard spelling is `state running;`, reached by
-`transition first warming then running;`. `-strict` changes nothing about what parses:
+There is no standard spelling for a deferred event, so a portable model states
+the machine's completion with `then done;` — as `warming` above does — and drops
+the `defer`. `-strict` changes nothing about what parses:
 the same file, the same tree, the same findings in the same places — only their
 severity, and with it the exit status and the tier gate. It is a portability check,
 so run it when a model has to be read by another SysML v2 tool; leave it off

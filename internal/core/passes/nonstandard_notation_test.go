@@ -92,7 +92,6 @@ func TestFeaturedByInKerMLIsSilent(t *testing.T) {
 // construct.
 func TestStateExtensionsAreReported(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{"state def S { final b; }", "`final <state>;`"},
 		{"state def S { choice c; }", "`choice <name>;`"},
 		{"state def S { junction j; }", "`junction <name>;`"},
 		{"state def S { history h; }", "history"},
@@ -133,7 +132,7 @@ func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 	src := `state def S {
 		state a;
 		choice c;
-		final b;
+		junction j;
 	}`
 	root, pd, idx := analyzeInputs(t, "a.sysml", src)
 	if len(pd) != 0 {
@@ -147,7 +146,7 @@ func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 		line, length int
 	}{
 		{3, len("choice")},
-		{4, len("final")},
+		{4, len("junction")},
 	} {
 		if line := strings.Count(src[:got[i].Span.Offset], "\n") + 1; line != want.line {
 			t.Errorf("diagnostic %d is on line %d, want %d", i, line, want.line)

@@ -227,7 +227,7 @@ func TestSendFromAStateMachineReachesEnclosingPartPorts(t *testing.T) {
 						attribute got : Integer = 0;
 						entry; then start;
 						state start;
-						final done;`+body+`
+						`+body+`
 					}
 				}
 			}`))

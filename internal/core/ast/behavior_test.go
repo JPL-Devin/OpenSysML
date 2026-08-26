@@ -95,7 +95,6 @@ func TestStateNode_AllFields(t *testing.T) {
 	state := &StateNode{
 		NodeBase:  NodeBase{NodeSpan: span},
 		Name:      "CompositeFinal",
-		IsFinal:   true,
 		Entry:     []Node{},
 		Do:        []Node{},
 		Exit:      []Node{},
@@ -105,9 +104,6 @@ func TestStateNode_AllFields(t *testing.T) {
 
 	if state.Name != "CompositeFinal" {
 		t.Errorf("expected name 'CompositeFinal', got %q", state.Name)
-	}
-	if !state.IsFinal {
-		t.Error("expected IsFinal=true")
 	}
 	if len(state.Substates) != 1 {
 		t.Errorf("expected 1 substate, got %d", len(state.Substates))

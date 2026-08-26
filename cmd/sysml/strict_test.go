@@ -4,11 +4,14 @@ import "testing"
 
 // extensionModel uses OpenSysML notation no SysML v2 production admits.
 const extensionModel = `package Mission {
+    attribute def Alarm;
     state def Monitor {
         entry; then off;
-        state off;
-        final on;
-        transition first off then on;
+        state off {
+            defer Alarm;
+        }
+        state on;
+        transition first off accept Alarm then on;
     }
 }
 `

@@ -34,7 +34,7 @@ contextually where our own notation needs it — the treatment `point`, `on` and
 | `deep` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `defer` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `done` | absent | absent | absent | unreserve; **silent** — see "`done` is a library name, not notation" |
-| `final` | absent | absent | absent | unreserve; state notation (warning); the action node spelled `final` is no longer accepted, write `done` |
+| `final` | absent | absent | absent | unreserve; **an ordinary name only** — neither the action node nor the state marker spelled `final` is accepted, write `done` |
 | `history` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `initial` | absent | absent | absent | unreserve; **an ordinary name only** — neither the action node nor the state marker spelled `initial` is accepted, write `first <name>` and `entry; then <state>;` |
 | `junction` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
@@ -57,8 +57,9 @@ references to `Actions::Action::done`, a feature of the standard library, not a
 keyword. Our parser reads `done;` as an anonymous final node and `then done;`
 as a succession targeting the `done` library feature. Both stay **silent**:
 warning on them would warn on OMG-authored files, which the classification
-forbids. An action-node `final` spelling is no longer accepted; `final` state
-markers remain separate extension warnings.
+forbids. In a state body `then done;` names the same library feature and states
+that the machine completes; the `final <state>;` marker that once spelled it is
+no longer accepted.
 
 ## Verdict per construct
 
@@ -99,15 +100,15 @@ unchanged.
 
 The removed OpenSysML-only spellings `then <source> <target>;`, member-leading
 `<source> then <target>;`, `done <name>;`, the orthogonal-region member
-`region <name> { … }`, the state marker `initial <state>;` and
+`region <name> { … }`, the state markers `initial <state>;` and `final <state>;`
+and
 `transition [<name>] <src> to <tgt>;` are no longer accepted. Use
 `succession first <source> then <target>;`, `done;`, a `parallel` state body with
-one state substate per region, `entry; then <state>;` and
-`transition [<name>] first <src> … then <tgt>;` instead.
+one state substate per region, `entry; then <state>;`, a transition targeting
+`done` and `transition [<name>] first <src> … then <tgt>;` instead.
 
 | Construct | Why it is not standard |
 |-----------|------------------------|
-| `final <name>;` in a state body | `StateBodyItem` (`SysML.xtext:1755-1770`) has no such member; no `final` literal anywhere |
 | `choice <name>;`, `junction <name>;` | no literal; no pseudostate production of any kind |
 | `history <name>;`, `shallow history <name>;`, `deep history <name>;` | same |
 | `entry point <name>;`, `exit point <name>;` | `entry`/`exit` are literals only as state subaction kinds (`:1777`, `:1793`); no `point` literal exists |
@@ -184,19 +185,19 @@ in a `.sysml` file — the same treatment `namespace` gets in the other directio
 Everything above is a grammar citation except these, recorded so a reviewer can
 disagree with them:
 
-- **`done` silent, `final` warned.** No grammar has either literal. `done` is
-  classified standard because the OMG corpora write it (as a library-feature
-  reference) and a warning there would be a false positive; `final` appears in
-  no OMG file. `final` is warned as a **state** marker only: the action node it
-  once spelled is no longer accepted at all.
+- **`done` silent.** No grammar has the literal. `done` is classified standard
+  because the OMG corpora write it (as a library-feature reference) and a warning
+  there would be a false positive; `final` appears in no OMG file and is no
+  longer notation in any position.
 - **An alias of a standard node is removed, not warned.** The action nodes
   spelled `initial`, `final` and `decision` were pure aliases of `first`, `done`
   and `decide`, so they are gone rather than diagnosed; each word stays an
-  ordinary name. The state marker `initial <state>;` and the transition spelling
-  `transition <src> to <tgt>;` are gone for the same reason.
-- **The `final` state marker stays.** It is not an alias: the runtime completes a
-  machine when a state it marked is entered, which a plain `state <name>;` does
-  not state, so removing it would change what a model means.
+  ordinary name. The state markers `initial <state>;` and `final <state>;` and the
+  transition spelling `transition <src> to <tgt>;` are gone for the same reason.
+- **Completion is stated, not inferred.** A machine completes when a transition
+  reaches `done`, the library end shot the OMG corpora already write in a state
+  body; a state with no outgoing transition does not complete on its own, because
+  an ancestor or cross-region transition may still leave it.
 - **State-body `fork`/`join` silent.** They are action node literals, and
   `StateBodyItem` admits a `BehaviorUsageMember`, so we read them as standard in
   a state body even though the pilot's state examples do not use them there.

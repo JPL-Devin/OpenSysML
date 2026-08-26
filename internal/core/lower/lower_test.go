@@ -71,7 +71,6 @@ func TestToStateGraph_Simple(t *testing.T) {
 				entry; then start;
 				state start;
 				state idle;
-				final done;
 				
 				succession first start then idle;
 				succession first idle then done;

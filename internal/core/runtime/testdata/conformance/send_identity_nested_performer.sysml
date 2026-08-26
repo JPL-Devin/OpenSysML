@@ -22,10 +22,9 @@ package SendIdentityNested {
 			state sending {
 				entry send 7 to reader;
 			}
-			final heard;
 
 			succession first start then sending;
-			transition first sending do perform Listen then heard;
+			transition first sending do perform Listen then done;
 		}
 	}
 

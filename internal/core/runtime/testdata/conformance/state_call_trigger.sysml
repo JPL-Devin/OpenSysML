@@ -8,7 +8,6 @@ package CallTriggerTest {
         state idle;
         state braking;
         state cruising;
-        final done;
 
         succession first start then idle;
 

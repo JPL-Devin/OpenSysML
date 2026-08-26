@@ -54,7 +54,6 @@ func syntheticModel(parts int) string {
         state start;
         state idle;
         state running;
-        final done;
 
         succession first start then idle;
         transition first idle then running;

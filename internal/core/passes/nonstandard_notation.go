@@ -270,12 +270,8 @@ func (w *notationWalker) requirementConstraint(n *ast.Usage) {
 		"only a requirement, concern, viewpoint or objective body admits it")
 }
 
-// stateNode reports the `final` state marker, then descends.
+// stateNode descends into the members of a state.
 func (w *notationWalker) stateNode(n *ast.StateNode) {
-	if n.IsFinal {
-		w.extension(keywordSpan(n, "final"), "`final <state>;`",
-			"a final state is reached by a transition, and is written `state <name>;`")
-	}
 	w.walkActionBody(n.Entry)
 	w.walkActionBody(n.Do)
 	w.walkActionBody(n.Exit)

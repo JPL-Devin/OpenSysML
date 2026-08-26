@@ -208,13 +208,9 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		return true, e.encode(n.Body, fqn, subject)
 
 	case *ast.StateNode:
-		// A state of a state machine, including the `final <name>;` marker, whose
-		// keyword the graph records.
+		// A state of a state machine.
 		head(rdf.SysMLTerm(mStateUsage))
 		e.name(subject, n.Name)
-		if n.IsFinal {
-			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("final"))
-		}
 		members := stateBody(n)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(len(members) > 0))
 		return true, e.encode(members, fqn, subject)

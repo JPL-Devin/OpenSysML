@@ -13,7 +13,6 @@ package test {
 			entry { send Ping to Driver; }
 		}
 
-		final done;
 
 		succession first start then waiting;
 
