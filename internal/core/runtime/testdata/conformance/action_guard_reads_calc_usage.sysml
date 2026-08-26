@@ -16,7 +16,7 @@ package test {
             assign i := i + 1;
             assign log := log + t.d;
         }
-        decision check;
+        decide check;
         done fin;
 
         then start bump;

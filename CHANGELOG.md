@@ -25,6 +25,28 @@ error, and the warning for them is gone.
   `assume`/`require constraint [name] { … }`. The separate warning for `assume`/`require` used
   outside a requirement body is unchanged too.
 
+### The action nodes spelled `initial`, `final` and `decision` are removed
+
+**Breaking change** for models that used them. Each was an OpenSysML-only alias of a node the
+standard notation already spells, so the alias and its `nonstandard-notation` warning are gone
+rather than kept:
+
+- `initial <name> [then <target>];` in an action body → write `first <name> [then <target>];`
+  (`SysML.xtext:1385`).
+- `final [<name>];`, including the bare `then final;` → write `done [<name>];`, a reference to
+  the library feature `Actions::Action::done`.
+- `decision <name>;` → write `decide <name>;` (`SysML.xtext:1672`).
+
+None of the three words is reserved by the pinned grammars, so each still names a feature
+(`attribute final : Boolean;`, `action initial;`). An action body that writes `initial <name>;`,
+`final <name>;` or `decision <name>;` is reported as the parse error it now is. A bare
+`then final;` is a **succession target**, not a node, so it is read as a reference to a member named
+`final`: where nothing declares one, the model analyses clean and fails when the action is run
+(`succession edge references undefined target node "final"`) — the same as any other undefined
+succession target. The **state** markers `initial <state>;` and
+`final <state>;` in a state body are unaffected, and so is `done <name>;`; both keep their
+existing warnings.
+
 ### A Node/TypeScript client, `@opensysml/client`
 
 `clients/node/` is a second first-class client: `load`, `loads`, `eval`, symbol lookup and

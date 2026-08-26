@@ -99,8 +99,7 @@ func TestBehavioralStatementsRoundTrip(t *testing.T) {
 		"fork":                "fork split;",
 		"join":                "join sync;",
 		"merge":               "merge gather;",
-		"decision":            "decision pick;",
-		"decide keyword":      "decide pick;",
+		"decision":            "decide pick;",
 		"perform":             "perform brake;",
 		"action node":         "action Brake;",
 		"assignment":          "assign log := speed;",
@@ -236,7 +235,7 @@ func TestUnsupportedBehavioralShapesAreReported(t *testing.T) {
 // so it belongs to the OpenSysML namespace and is read from there on its own —
 // without the branch's keyword having to say `else` as well.
 func TestElseBranchIsMarkedUnderTheExtensionNamespace(t *testing.T) {
-	src := "package P {\n\taction def A {\n\t\tdecision d;\n\t\tif x then a;\n\t\telse b;\n\t\taction a;\n\t\taction b;\n\t\tattribute x : Boolean;\n\t}\n}"
+	src := "package P {\n\taction def A {\n\t\tdecide d;\n\t\tif x then a;\n\t\telse b;\n\t\taction a;\n\t\taction b;\n\t\tattribute x : Boolean;\n\t}\n}"
 	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
