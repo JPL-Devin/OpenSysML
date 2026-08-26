@@ -149,16 +149,26 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			redefines, others := ast.SplitRedefinitions(end.Relationships)
 			r.resolveRelationships(redefinitionScope, end, redefines)
 			r.resolveRelationships(endScope, end, others)
+			endpointKind := d.Kind == ast.UsageSuccession || d.Kind == ast.UsageTransition
+			resolveAsEndpoint := endpointKind && inStateMachine(endScope) && !declaresName
 			if end.Target != nil && !declaresName {
 				if qn, ok := end.Target.(*ast.QualifiedName); ok {
-					r.ResolveQualified(endScope, qn)
+					if resolveAsEndpoint {
+						r.ResolveEndpoint(endScope, qn)
+					} else {
+						r.ResolveQualified(endScope, qn)
+					}
 				} else {
 					r.resolveExpr(endScope, end.Target)
 				}
 			}
 			if end.Reference != nil {
 				if qn, ok := end.Reference.(*ast.QualifiedName); ok {
-					r.ResolveQualified(endScope, qn)
+					if resolveAsEndpoint {
+						r.ResolveEndpoint(endScope, qn)
+					} else {
+						r.ResolveQualified(endScope, qn)
+					}
 				} else {
 					r.resolveExpr(endScope, end.Reference)
 				}

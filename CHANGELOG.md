@@ -6,6 +6,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Succession endpoints are checked against their enclosing body
+
+State-machine succession and transition spellings now report a resolved endpoint
+that is not a state or pseudostate, using the existing `not-a-vertex` diagnostic.
+Action bodies report a resolved endpoint that is not an action node with the
+`endpoint-not-a-node` diagnostic before lowering. Positional, implied, unresolved,
+and flow endpoints retain their existing behavior.
+
 ### RDF output states element ids and ownership
 
 A converted graph now carries the two things a SysML v2 API service needs to address it.

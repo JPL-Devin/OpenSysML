@@ -17,6 +17,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(NonstandardNotationPass{})
 	reg.Register(NameResolutionPass{})
 	reg.Register(StateTransitionPass{})
+	reg.Register(ActionEndpointPass{})
 	reg.Register(TypeCheckPass{})
 	reg.Register(TransitionGuardPass{})
 	reg.Register(KerMLSubsettingMetaclassPass{})

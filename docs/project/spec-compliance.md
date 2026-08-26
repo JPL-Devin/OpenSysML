@@ -6,11 +6,20 @@
 
 ---
 
+### Endpoint diagnostics
+
+The endpoint rows below include the analysis-time checks added for all named
+succession, decision-branch, and transition spellings. State-machine names use
+`resolve.ResolveEndpoint` and its `not-a-vertex` diagnostic; action names use
+`passes.ActionEndpointPass` and the node set collected by
+`lower.ActionNodes`, with `endpoint-not-a-node`. The focused cases are in
+`passes/succession_endpoint_test.go`, including the lowering agreement checks.
+
 ## Current Implementation Status
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 734 semantic rules: **652 ✅ faithful, 75 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 735 semantic rules: **653 ✅ faithful, 75 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -430,6 +439,7 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
+| A named succession or transition endpoint that resolves to a non-vertex or non-action node is reported during analysis; positional, implied, unresolved and flow ends remain unchanged | `resolve/transition.go` `ResolveEndpoint`; `resolve/edge.go` and `resolve/document.go`; `passes/action_endpoint.go` `ActionEndpointPass`; `lower/action_nodes.go` `ActionNodes` and `ActionEndpointAccepted` | `passes/succession_endpoint_test.go:TestResolvedStateEndpointNotVertexIsReported`, `:TestActionEndpointPassReportsResolvedNonNodes`, `:TestEndpointDiagnosticAgreesWithLowering` | ✅ Faithful |
 | Initial state identification | `lower/state_graph.go:ToStateGraph`; `state_executor.go:686` initialize | `state_simple.sysml` | ✅ Faithful |
 | A succession out of a state body's own entry subaction names the state it starts in (`entry; then off;`), which is how a machine designates where it starts | `lower/state_graph.go` collectTransitions SuccessionEdge case + `isEntrySubaction` | `lower/state_notation_test.go:TestToStateGraph_EntrySuccessionNamesInitialState`, `state_entry_succession_initial.sysml` conformance, `parser/testdata/parse/behavior_exhibit_state_body.golden` | ✅ Faithful |
 | A transition out of a state body's own entry action names the state it starts in (`entry action initial { } transition initial then off;`), the entry action standing in for a start pseudostate (SysML v2 §7.19.3) | `ast/state_entry.go` `EntryActions`/`StateEntryActions`/`IsEntryAction`; `resolve/transition.go` `startAction`; `passes/state_transition.go` `machine.startActions`; `lower/state_graph.go` `startsAt` | `resolve/transition_test.go`, `passes/state_transition_test.go:TestTransitionOutOfEntryActionIsLegal`, `lower/state_notation_test.go`, `state_entry_action_transition_initial.sysml` conformance | ✅ Faithful (an ordinary action named as an endpoint is still reported) |

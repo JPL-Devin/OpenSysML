@@ -6,6 +6,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 )
 
 // endpointDiags runs the name-resolution tier over src, the tier an endpoint
@@ -157,12 +158,6 @@ func TestEndpointsThatResolveStaySilent(t *testing.T) {
 			state beta;
 			then work;
 		} }`,
-		"machine end naming no vertex": `package P { state def M {
-			attribute t = 0;
-			entry; then s1;
-			state s1;
-			then t;
-		} }`,
 		"end outside a machine or an action body": `package P { part def D {
 			action def A { action x; }
 			perform action p;
@@ -185,12 +180,120 @@ func TestEndpointsThatResolveStaySilent(t *testing.T) {
 				transition first idle accept Ping do action log then busy;
 			}
 		}`,
+		"feature-chain action node": `package P { action def A {
+			action source { attribute pin; }
+			action target;
+			succession first source.pin then target;
+		} }`,
 	}
 
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {
 			if got := endpointDiags(t, src); len(got) != 0 {
 				t.Fatalf("expected no diagnostics, got %+v", got)
+			}
+		})
+	}
+}
+
+func TestResolvedStateEndpointNotVertexIsReported(t *testing.T) {
+	cases := map[string]string{
+		"machine end naming no vertex": `package P { state def M {
+			attribute t = 0;
+			entry; then s1;
+			state s1;
+			then t;
+		} }`,
+		"succession": `package P { state def M {
+			attribute mode = 0;
+			entry; then idle;
+			state idle;
+			succession first idle then mode;
+		} }`,
+		"then": `package P { state def M {
+			attribute mode = 0;
+			entry; then idle;
+			state idle;
+			then mode;
+		} }`,
+		"transition": `package P { state def M {
+			attribute mode = 0;
+			entry; then idle;
+			state idle;
+			transition first idle then mode;
+		} }`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := endpointDiags(t, src)
+			if len(got) != 1 {
+				t.Fatalf("expected one diagnostic for the endpoint, got %+v", got)
+			}
+			if got[0].Code != resolve.CodeNotAVertex {
+				t.Fatalf("got code %q, want %q", got[0].Code, resolve.CodeNotAVertex)
+			}
+			covered := src[got[0].Span.Offset : got[0].Span.Offset+got[0].Span.Len]
+			if covered != "mode" && covered != "t" {
+				t.Fatalf("expected the span to cover the endpoint name, it covers %q", covered)
+			}
+		})
+	}
+}
+
+func TestActionEndpointPassReportsResolvedNonNodes(t *testing.T) {
+	cases := map[string]string{
+		"succession": `package P { action def A {
+			attribute flag = 0;
+			action a;
+			succession first a then flag;
+		} }`,
+		"then": `package P { action def A {
+			attribute flag = 0;
+			action a;
+			first a;
+			then flag;
+		} }`,
+		"transition": `package P { action def A {
+			attribute flag = 0;
+			action a;
+			transition first a then flag;
+		} }`,
+		"decision branch": `package P { action def A {
+			first start;
+			action a;
+			attribute flag = 0;
+			if true then flag;
+		} }`,
+		"default decision branch": `package P { action def A {
+			first start;
+			action a;
+			attribute flag = 0;
+			if true then a;
+			else flag;
+		} }`,
+		"transition source": `package P { action def A {
+			attribute flag = 0;
+			action a;
+			transition first flag then a;
+		} }`,
+		"first marker": `package P { action def A {
+			attribute flag = 0;
+			action a;
+			first a then flag;
+		} }`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctx, root := nameresCtx(t, "a.sysml", src)
+			got := ActionEndpointPass{}.Run(ctx, "a.sysml", root)
+			if len(got) != 1 {
+				t.Fatalf("expected one diagnostic for the endpoint, got %+v", got)
+			}
+			if got[0].Code != CodeEndpointNotANode || got[0].Source != "action-endpoint" {
+				t.Fatalf("got code %q source %q, want action endpoint diagnostic", got[0].Code, got[0].Source)
+			}
+			if covered := strings.TrimSpace(src[got[0].Span.Offset : got[0].Span.Offset+got[0].Span.Len]); covered != "flag" {
+				t.Fatalf("expected the span to cover flag, it covers %q", covered)
 			}
 		})
 	}
