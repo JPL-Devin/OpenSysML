@@ -1,0 +1,5 @@
+{
+	"type": "state",
+	"finalState": "ldone+active",
+	"stateVisits": ["waiting", "active", "ldone"]
+}
