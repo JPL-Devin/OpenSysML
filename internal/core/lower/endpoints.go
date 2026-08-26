@@ -6,6 +6,14 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// connectorEndReference returns the feature a connector end attaches to.
+func connectorEndReference(end *ast.ConnectorEnd) ast.Node {
+	if end == nil {
+		return nil
+	}
+	return end.AttachedTarget()
+}
+
 // Endpoints resolves the vertex a transition endpoint names, implemented by the
 // name-resolution tier (*resolve.Resolver) so lowering matches no names itself.
 type Endpoints interface {

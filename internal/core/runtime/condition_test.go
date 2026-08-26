@@ -48,7 +48,7 @@ func TestRequirementConditionSeesOwnAttributes(t *testing.T) {
 			requirement own {
 				attribute a = -1.2;
 				attribute b = 1.5;
-				require abs(a) <= b;
+				require constraint { abs(a) <= b }
 			}
 			requirement touchdown : TouchdownRequirement {
 				attribute :>> actualVerticalSpeed = 1.2;
@@ -120,9 +120,8 @@ func TestRequirementAssumptionIsNotRequired(t *testing.T) {
 		package test {
 			requirement pessimistic {
 				attribute a = 2.0;
-				assume a <= 1.0;
 				assume constraint { a <= 1.0 }
-				require a <= 3.0;
+				require constraint { a <= 3.0 }
 			}
 		}
 	`
@@ -143,7 +142,7 @@ func TestRequirementWithOnlyAssumptionsIsSatisfied(t *testing.T) {
 		package test {
 			requirement assumed {
 				attribute a = 2.0;
-				assume a <= 3.0;
+				assume constraint { a <= 3.0 }
 			}
 		}
 	`
@@ -164,7 +163,7 @@ func TestNegatedConstraintWithOnlyAssumptionsIsNotAVerdict(t *testing.T) {
 		package test {
 			part def Rig {
 				attribute a = 2.0;
-				assert not constraint cn { assume a > 1.0 }
+				assert not constraint cn { assume constraint { a > 1.0 } }
 			}
 		}
 	`
@@ -283,7 +282,7 @@ func TestParameterBoundToSameNamedFeature(t *testing.T) {
 		package test {
 			constraint def MassLimit {
 				in mass;
-				assert mass <= 1500.0;
+				mass <= 1500.0
 			}
 			part def Vehicle {
 				attribute mass = 1200.0;

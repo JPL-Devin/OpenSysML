@@ -24,8 +24,8 @@ const bodyRefSource = `package P {
 	calc def Plain { return r = speed; }
 	constraint inRange { speed > 0 }
 	requirement Req {
-		assume speed > 0;
-		require speed < 100;
+		assume constraint { speed > 0 }
+		require constraint { speed < 100 }
 	}
 	action drive {
 		attribute local : Integer = 0;

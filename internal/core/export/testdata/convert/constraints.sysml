@@ -21,20 +21,24 @@ package Constraints {
             mass > 0
         }
         constraint bounds {
-            assert mass > 0;
-            assume mass != 0;
-            assert not mass > 1000;
+            mass > 0
+            mass != 0
+            not (mass > 1000)
             assert constraint inner {
                 mass < 1000
             }
         }
         requirement lightEnough {
             subject r : Rover;
-            assume r.mass > 0;
+            assume constraint {
+                r.mass > 0
+            }
             require constraint {
                 r.mass < 100
             }
-            require r.mass < 200;
+            require constraint {
+                r.mass < 200
+            }
             require MassLimit;
             assume MassLimit {
                 in m = r.mass;

@@ -16,7 +16,7 @@ func VertexDecls(stateMachineDecl ast.Node, scope *symbols.Scope) (map[ast.Node]
 	}
 	// Collecting vertices resolves no endpoint, so the graph needs none.
 	graph := newStateGraph(scope, nil)
-	if err := collectVertices(graph, members, scope); err != nil {
+	if err := collectVertices(graph, members, scope, stateMachineIsParallel(stateMachineDecl)); err != nil {
 		return nil, err
 	}
 	vertices := make(map[ast.Node]bool, len(graph.vertexOf))

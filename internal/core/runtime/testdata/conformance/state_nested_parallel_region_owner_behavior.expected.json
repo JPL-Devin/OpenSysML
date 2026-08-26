@@ -1,0 +1,12 @@
+{
+    "type": "state",
+    "events": [
+        {"signal": "Ping", "args": null},
+        {"signal": "Leave", "args": null}
+    ],
+    "finalState": "finished",
+    "stateVisits": ["start", "outer", "a1", "b1", "done", "finished"],
+    "outputs": {
+        "worked": {"type": "Integer", "value": 1}
+    }
+}

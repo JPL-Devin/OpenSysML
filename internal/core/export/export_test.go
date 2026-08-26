@@ -213,17 +213,17 @@ func TestKindKeywordSynonymsSurviveRDF(t *testing.T) {
 }
 
 // A condition member states a condition rather than declaring a feature, so
-// each form it is written in has to come back as written: the keyword it states
-// the condition with, its negation, and the nesting of a braced condition.
+// each form it is written in has to come back as written: the constraint it
+// asserts, its negation, a bare condition, and a nested condition body.
 func TestConditionMembersSurviveRDF(t *testing.T) {
 	for _, member := range []string{
-		"assert mass > 0;",
-		"assume mass != 0;",
-		"assert not mass > 1000;",
+		"assert Light;",
+		"assert not Light;",
 		"mass < 1000;",
+		"assume constraint {\n            mass != 0;\n        }",
 		"assert constraint inner {\n            mass < 1000;\n        }",
 	} {
-		src := "package P {\n\tattribute mass;\n\tconstraint c {\n\t\t" + member + "\n\t}\n}"
+		src := "package P {\n\tattribute mass;\n\tconstraint def Light;\n\tconstraint c {\n\t\t" + member + "\n\t}\n}"
 		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 		if err != nil {
 			t.Fatalf("%s: to turtle: %v", member, err)
@@ -239,11 +239,10 @@ func TestConditionMembersSurviveRDF(t *testing.T) {
 }
 
 // A requirement's assumptions and required conditions are members of the same
-// kind, written as a condition, as the constraint they state, or as a body.
+// kind, written as the constraint they state or as a nested condition body.
 func TestRequirementConditionsSurviveRDF(t *testing.T) {
 	for _, member := range []string{
-		"assume mass > 0;",
-		"require mass < 100;",
+		"assume constraint {\n            mass > 0;\n        }",
 		"require Light;",
 		"require constraint {\n            mass < 100;\n        }",
 	} {

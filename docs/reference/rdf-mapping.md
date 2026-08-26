@@ -17,17 +17,25 @@ each of these is a deliberate property of it rather than a defect to report:
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
   of record.
-- **Interoperability is not yet demonstrated.** The `sysml:` vocabulary and the
-  `elmt:` element base match Flexo MMS's `Namespaces.kt`, OpenSysML's element
-  ids — the part of the IRI after the final `:` — match that service's
-  `requireValidId` (`[a-zA-Z0-9_-]+`), every element carries the
-  `sysml:elementId` paged listing and query select on, and ownership is written
-  as the memberships and owner references the roots endpoint filters on. What
-  no test here shows is a graph loaded into a live service and read back; that
-  is separate work. Known mismatches remain: the reader ignores predicates
-  outside `sysml:` and `urn:sysmlv2:annotation:json:`, so OpenSysML's `sysx:`
-  triples do not survive that path, and collection properties are not annotated
-  as JSON the way that reader expects.
+- **Interoperability is not yet demonstrated**, and the gap is measured rather
+  than argued. The `sysml:` vocabulary and the `elmt:` element base match Flexo
+  MMS's `Namespaces.kt`; OpenSysML's ids — the part of an IRI after the final
+  `:`, for an element and for an expression node alike — match that service's
+  `requireValidId` (`[a-zA-Z0-9_-]+`); every element carries the
+  `sysml:elementId` paged listing and query select on; and ownership is written
+  as the memberships and owner references the roots endpoint filters on. A round
+  trip through a running Flexo MMS stack, measured before that was written,
+  delivered every element of the reference fixture but only 86 of its 142
+  properties, while the same model posted through the service's own commit path
+  lost nothing. What no test here shows is a graph carrying the current output
+  loaded into a live service and read back; that is separate work. Known
+  mismatches remain: the reader ignores predicates outside `sysml:` and
+  `urn:sysmlv2:annotation:json:`, so the 56 `sysx:` properties of that fixture
+  do not survive the path, and a standard property carrying more than one value
+  is skipped for want of a JSON annotation. The measurement is
+  `internal/interop/flexo`, an opt-in gate described in
+  `.agents/skills/flexo-interop`, and its committed report is the record of what
+  moves as the rest lands.
 
 Every surface reports this where it is used: the command line writes a `note:` to
 stderr, `%save` prints one, and `ConvertResponse` carries `experimental` and
@@ -50,10 +58,12 @@ The `sysml:` vocabulary and the `elmt:` element base match the ones the
 [Flexo MMS SysML v2 service](https://github.com/Open-MBEE/flexo-mms-sysmlv2)
 writes into its triplestore (`Namespaces.kt`). That service derives an
 element's `@id` from the substring after the final `:`, and `requireValidId`
-permits only `[a-zA-Z0-9_-]+`; OpenSysML's encoded element ids satisfy both.
+permits only `[a-zA-Z0-9_-]+`; OpenSysML's encoded element ids satisfy both, and
+so do the `expr:` node ids — a node's id held a `.` until the position was joined
+with `_p` and encoded instead, and that service refused to read one directly.
 Other mismatches remain: the reader ignores predicates outside `sysml:` and
-`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path,
-and collection properties carry no JSON annotation. See
+`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path, and
+collection properties carry no JSON annotation. See
 [Status](#status-experimental).
 
 OpenSysML's own additions are namespaced separately as `sysx:` so a consumer can
@@ -238,7 +248,11 @@ expression as a **tree of typed nodes** in the `expr:` namespace, so a consumer
 can query the model's semantics and not only its structure:
 
 ```sysml
-package P { attribute a : Integer; attribute total : Integer = a * 2; }
+package P {
+    private import ScalarValues::*;
+    attribute a : Integer;
+    attribute total : Integer = a * 2;
+}
 ```
 
 ```turtle

@@ -127,7 +127,6 @@ elmt:Quoted_20Names__Rover_20Model__mass_20limit___400
     sysml:owner elmt:Quoted_20Names__Rover_20Model__mass_20limit ;
     sysml:owningRelationship elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om ;
     sysml:owningMembership elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om ;
-    sysx:declaredKeyword "assert" ;
     sysx:condition expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition .
 
 elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om

@@ -35,6 +35,10 @@ type Parser struct {
 	// rather than as a result parameter declaration.
 	calcBodyDepth int
 
+	// constraintCalcDepth counts the calculation bodies that are constraint
+	// bodies, whose bare expressions are the conditions the constraint states.
+	constraintCalcDepth int
+
 	// effectDepth counts the transition effects being parsed, whose statement is
 	// closed by the transition's next clause rather than by ';'.
 	effectDepth int

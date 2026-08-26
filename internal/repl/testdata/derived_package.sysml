@@ -14,7 +14,7 @@ package Derived {
 		attribute total = mass + engine.derated;
 
 		constraint massOK {
-			assert mass < 2000.0;
+			mass < 2000.0
 		}
 
 		requirement lightEnough {
@@ -26,7 +26,7 @@ package Derived {
 		attribute mass = 2500.0;
 
 		constraint massOK {
-			assert mass < 2000.0;
+			mass < 2000.0
 		}
 
 		requirement lightEnough {

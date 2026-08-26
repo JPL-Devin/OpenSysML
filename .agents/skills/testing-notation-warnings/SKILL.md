@@ -207,7 +207,7 @@ snippet and read the diagnostics. Asking for `%validate` prints
 Driving the REPL non-interactively (`%%` is needed because `printf` eats a single `%`):
 
 ```bash
-printf 'calc d { in a; return a * 2.0; }\nconstraint k { in x; assert x >= 0; }\n%%strict on\n%%quit\n' | bin/sysml
+printf 'calc d { in a; return a * 2.0; }\nconstraint k { in x; x >= 0 }\n%%strict on\n%%quit\n' | bin/sysml
 ```
 
 ## The notation pass runs even when the file has resolution errors
@@ -260,7 +260,9 @@ warned line numbers. For the `return` / `assert` family the shapes that matter:
   (a result *parameter declaration*, not a computed result), a keyword-less trailing condition
   `{ in x : Real; x >= 0 }`, `assert constraint c1 : C;`, `assert satisfy R by q;`,
   `assume #goal constraint m;`
-- warned: `return a * 2.0;`, `return 42;`, `assert x >= 0;`, `assert not x < 0;`, `assume x >= 0;`
+- warned: `return a * 2.0;`, `return 42;`
+- rejected outright (no longer a warning): `assert x >= 0;`, `assert not x < 0;`,
+  `assume x >= 0;`, `require x > 0;` — a keyworded inline condition is a parse error
 
 ## Refereeing the boundary against the pinned pilot
 
@@ -284,10 +286,12 @@ The single most likely coverage gap when a rule covers "assert/assume conditions
 **constraint** body is `*ast.ConstraintMember` (fields `Keyword`, `IsNegated`, `Expression`, `Name`,
 `Body`), but the same-looking condition in a **requirement** body is `*ast.AssumeMember` /
 `*ast.RequireMember` (`internal/core/ast/behavior.go`, "Phase C2: Requirement Body Members"), with a
-different field set. A rule keyed on `*ast.ConstraintMember` therefore covers
-`constraint c { assert x >= 0; }` and misses `requirement r { assume x > 0; }` and
-`requirement r { require x > 0; }` — both of which the pinned pilot rejects with
-`no viable alternative at input 'assume'` / `'require'`. `examples/phase-c-behavioral-bodies.sysml`
+different field set. A rule keyed on `*ast.ConstraintMember` therefore covers a constraint-body condition and
+misses the requirement-body ones. The keyworded inline condition
+(`constraint c { assert x >= 0; }`, `requirement r { require x > 0; }`) is now rejected by the
+parser rather than warned, matching the pinned pilot's
+`no viable alternative at input 'assert'` / `'assume'` / `'require'`; the placement rule for
+`assume`/`require` outside a requirement body is a separate, retained warning. `examples/phase-c-behavioral-bodies.sysml`
 contains both families, so always grep the whole keyword inventory of a fixture
 (`grep -n 'assert \|assume \|require '`) and reconcile *every* line against warned/not-warned rather
 than only checking the lines the task named.
