@@ -37,12 +37,11 @@ func TestConstraintReferenceMemberForms(t *testing.T) {
 			require Q::a;
 			assume Q::b;
 			require Q::c : C;
-			require Q::d { require 1 < 2; }
-			require 1 < 2;
+			require Q::d { require constraint { 1 < 2 } }
 		}
 	}`)
-	if len(members) != 5 {
-		t.Fatalf("members = %d, want 5", len(members))
+	if len(members) != 4 {
+		t.Fatalf("members = %d, want 4", len(members))
 	}
 
 	first, ok := members[0].(*ast.RequireMember)
@@ -83,14 +82,6 @@ func TestConstraintReferenceMemberForms(t *testing.T) {
 	if fourth.Reference == nil || !fourth.HasBody || len(fourth.Body) != 1 {
 		t.Errorf("member 3: reference=%v hasBody=%v body=%d, want a reference with a one-condition body",
 			fourth.Reference, fourth.HasBody, len(fourth.Body))
-	}
-
-	fifth, ok := members[4].(*ast.RequireMember)
-	if !ok {
-		t.Fatalf("member 4 = %T, want *ast.RequireMember", members[4])
-	}
-	if fifth.Expression == nil || fifth.Reference != nil {
-		t.Errorf("member 4: expression=%v reference=%v, want a condition expression", fifth.Expression, fifth.Reference)
 	}
 }
 

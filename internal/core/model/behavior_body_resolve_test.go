@@ -42,9 +42,9 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 		{"calc return operand", `package P { calc c { return zzz + 1; } }`},
 		{"calc def return parameter value", `package P { calc def C { return r = zzz; } }`},
 		{"constraint assertion", `package P { constraint k { zzz > 1 } }`},
-		{"constraint def assertion", `package P { constraint def K { assert zzz > 1; } }`},
-		{"requirement assumption", `package P { requirement r { assume zzz > 1; } }`},
-		{"requirement condition", `package P { requirement r { require zzz > 1; } }`},
+		{"constraint def assertion", `package P { constraint def K { zzz > 1 } }`},
+		{"requirement assumption", `package P { requirement r { assume constraint { zzz > 1 } } }`},
+		{"requirement condition", `package P { requirement r { require constraint { zzz > 1 } } }`},
 		{"action assignment value", `package P {
 			private import ScalarValues::*;
 			action a { attribute v : Integer = 0; assign v := zzz; }
@@ -204,12 +204,12 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 		{"requirement actor binding", `package P {
 			private import ScalarValues::*;
 			attribute userId : Integer = 42;
-			requirement U { actor user = userId; require user > 0; }
+			requirement U { actor user = userId; require constraint { user > 0 } }
 		}`},
 		{"requirement subject", `package P {
 			private import ScalarValues::*;
 			part def Vehicle { attribute speed : Integer = 0; }
-			requirement R { subject v : Vehicle; require v.speed > 0; }
+			requirement R { subject v : Vehicle; require constraint { v.speed > 0 } }
 		}`},
 	}
 

@@ -1,0 +1,428 @@
+{
+  "comment": [
+    "The same model as model.sysml, written the way the Flexo MMS SysML v2 service's own",
+    "commit path takes it: SysML v2 JSON changes with standard metamodel properties only.",
+    "Posting this and reading it back establishes what that read path can carry, which is",
+    "the ground truth the Turtle load is measured against. Element ids repeat the ids",
+    "OpenSysML encodes, except that expression nodes are named with '_' where OpenSysML",
+    "writes '.', because the service's requireValidId rejects a dot.",
+    "The 'comment' key is documentation for a reader; the harness posts only 'change'."
+  ],
+  "@type": "Commit",
+  "change": [
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "Package",
+        "@id": "Interop",
+        "elementId": "Interop",
+        "declaredName": "Interop",
+        "qualifiedName": "Interop",
+        "owner": null,
+        "ownedElement": [
+          {"@id": "Interop___400"},
+          {"@id": "Interop__Component"},
+          {"@id": "Interop__Powered"},
+          {"@id": "Interop__Battery"},
+          {"@id": "Interop__Wheel"},
+          {"@id": "Interop__TelemetryPort"},
+          {"@id": "Interop__Rover"},
+          {"@id": "Interop__GroundStation"},
+          {"@id": "Interop__Mission"},
+          {"@id": "Interop___409"}
+        ]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "Documentation",
+        "@id": "Interop___400",
+        "elementId": "Interop___400",
+        "qualifiedName": "Interop::@0",
+        "owner": {"@id": "Interop"},
+        "body": " A rover and its ground link. "
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "Interop__Component",
+        "elementId": "Interop__Component",
+        "declaredName": "Component",
+        "qualifiedName": "Interop::Component",
+        "isAbstract": false,
+        "owner": {"@id": "Interop"},
+        "ownedElement": [{"@id": "Interop__Component__mass"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "AttributeUsage",
+        "@id": "Interop__Component__mass",
+        "elementId": "Interop__Component__mass",
+        "declaredName": "mass",
+        "qualifiedName": "Interop::Component::mass",
+        "owner": {"@id": "Interop__Component"},
+        "value": {"@id": "Interop__Component__mass_value"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "LiteralRational",
+        "@id": "Interop__Component__mass_value",
+        "elementId": "Interop__Component__mass_value",
+        "owner": {"@id": "Interop__Component__mass"},
+        "value": 0.0
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "Interop__Powered",
+        "elementId": "Interop__Powered",
+        "declaredName": "Powered",
+        "qualifiedName": "Interop::Powered",
+        "isAbstract": false,
+        "owner": {"@id": "Interop"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "Interop__Battery",
+        "elementId": "Interop__Battery",
+        "declaredName": "Battery",
+        "declaredShortName": "bat",
+        "qualifiedName": "Interop::Battery",
+        "isAbstract": false,
+        "owner": {"@id": "Interop"},
+        "ownedElement": [{"@id": "Interop__Battery__capacity"}],
+        "ownedSpecialization": [
+          {"@id": "Interop__Battery__spec0"},
+          {"@id": "Interop__Battery__spec1"}
+        ]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "Subclassification",
+        "@id": "Interop__Battery__spec0",
+        "elementId": "Interop__Battery__spec0",
+        "owner": {"@id": "Interop__Battery"},
+        "specific": {"@id": "Interop__Battery"},
+        "general": {"@id": "Interop__Component"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "Subclassification",
+        "@id": "Interop__Battery__spec1",
+        "elementId": "Interop__Battery__spec1",
+        "owner": {"@id": "Interop__Battery"},
+        "specific": {"@id": "Interop__Battery"},
+        "general": {"@id": "Interop__Powered"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "AttributeUsage",
+        "@id": "Interop__Battery__capacity",
+        "elementId": "Interop__Battery__capacity",
+        "declaredName": "capacity",
+        "qualifiedName": "Interop::Battery::capacity",
+        "owner": {"@id": "Interop__Battery"},
+        "value": {"@id": "Interop__Battery__capacity_value"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "LiteralRational",
+        "@id": "Interop__Battery__capacity_value",
+        "elementId": "Interop__Battery__capacity_value",
+        "owner": {"@id": "Interop__Battery__capacity"},
+        "value": 1500.0
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "Interop__Wheel",
+        "elementId": "Interop__Wheel",
+        "declaredName": "Wheel",
+        "qualifiedName": "Interop::Wheel",
+        "isAbstract": true,
+        "owner": {"@id": "Interop"},
+        "ownedElement": [{"@id": "Interop__Wheel__diameter"}],
+        "ownedSpecialization": [{"@id": "Interop__Wheel__spec0"}],
+        "documentation": [{"@id": "Interop___409"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "Subclassification",
+        "@id": "Interop__Wheel__spec0",
+        "elementId": "Interop__Wheel__spec0",
+        "owner": {"@id": "Interop__Wheel"},
+        "specific": {"@id": "Interop__Wheel"},
+        "general": {"@id": "Interop__Component"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "AttributeUsage",
+        "@id": "Interop__Wheel__diameter",
+        "elementId": "Interop__Wheel__diameter",
+        "declaredName": "diameter",
+        "qualifiedName": "Interop::Wheel::diameter",
+        "owner": {"@id": "Interop__Wheel"},
+        "value": {"@id": "Interop__Wheel__diameter_value"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "LiteralRational",
+        "@id": "Interop__Wheel__diameter_value",
+        "elementId": "Interop__Wheel__diameter_value",
+        "owner": {"@id": "Interop__Wheel__diameter"},
+        "value": 0.25
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PortDefinition",
+        "@id": "Interop__TelemetryPort",
+        "elementId": "Interop__TelemetryPort",
+        "declaredName": "TelemetryPort",
+        "qualifiedName": "Interop::TelemetryPort",
+        "isAbstract": false,
+        "owner": {"@id": "Interop"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "Interop__Rover",
+        "elementId": "Interop__Rover",
+        "declaredName": "Rover",
+        "qualifiedName": "Interop::Rover",
+        "isAbstract": false,
+        "aliasIds": ["rover", "Interop::Rover"],
+        "owner": {"@id": "Interop"},
+        "ownedElement": [
+          {"@id": "Interop__Rover__battery"},
+          {"@id": "Interop__Rover__wheels"},
+          {"@id": "Interop__Rover__telemetry"}
+        ],
+        "ownedSpecialization": [{"@id": "Interop__Rover__spec0"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "Subclassification",
+        "@id": "Interop__Rover__spec0",
+        "elementId": "Interop__Rover__spec0",
+        "owner": {"@id": "Interop__Rover"},
+        "specific": {"@id": "Interop__Rover"},
+        "general": {"@id": "Interop__Component"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartUsage",
+        "@id": "Interop__Rover__battery",
+        "elementId": "Interop__Rover__battery",
+        "declaredName": "battery",
+        "qualifiedName": "Interop::Rover::battery",
+        "owner": {"@id": "Interop__Rover"},
+        "type": [{"@id": "Interop__Battery"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartUsage",
+        "@id": "Interop__Rover__wheels",
+        "elementId": "Interop__Rover__wheels",
+        "declaredName": "wheels",
+        "qualifiedName": "Interop::Rover::wheels",
+        "owner": {"@id": "Interop__Rover"},
+        "type": [{"@id": "Interop__Wheel"}],
+        "upperBound": {"@id": "Interop__Rover__wheels_upperBound"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "LiteralInteger",
+        "@id": "Interop__Rover__wheels_upperBound",
+        "elementId": "Interop__Rover__wheels_upperBound",
+        "owner": {"@id": "Interop__Rover__wheels"},
+        "value": 6
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PortUsage",
+        "@id": "Interop__Rover__telemetry",
+        "elementId": "Interop__Rover__telemetry",
+        "declaredName": "telemetry",
+        "qualifiedName": "Interop::Rover::telemetry",
+        "owner": {"@id": "Interop__Rover"},
+        "type": [{"@id": "Interop__TelemetryPort"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "Interop__GroundStation",
+        "elementId": "Interop__GroundStation",
+        "declaredName": "GroundStation",
+        "qualifiedName": "Interop::GroundStation",
+        "isAbstract": false,
+        "owner": {"@id": "Interop"},
+        "ownedElement": [{"@id": "Interop__GroundStation__uplink"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PortUsage",
+        "@id": "Interop__GroundStation__uplink",
+        "elementId": "Interop__GroundStation__uplink",
+        "declaredName": "uplink",
+        "qualifiedName": "Interop::GroundStation::uplink",
+        "owner": {"@id": "Interop__GroundStation"},
+        "type": [{"@id": "Interop__TelemetryPort"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "Interop__Mission",
+        "elementId": "Interop__Mission",
+        "declaredName": "Mission",
+        "qualifiedName": "Interop::Mission",
+        "isAbstract": false,
+        "owner": {"@id": "Interop"},
+        "ownedElement": [
+          {"@id": "Interop__Mission__rover"},
+          {"@id": "Interop__Mission__station"},
+          {"@id": "Interop__Mission___402"}
+        ]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartUsage",
+        "@id": "Interop__Mission__rover",
+        "elementId": "Interop__Mission__rover",
+        "declaredName": "rover",
+        "qualifiedName": "Interop::Mission::rover",
+        "owner": {"@id": "Interop__Mission"},
+        "type": [{"@id": "Interop__Rover"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartUsage",
+        "@id": "Interop__Mission__station",
+        "elementId": "Interop__Mission__station",
+        "declaredName": "station",
+        "qualifiedName": "Interop::Mission::station",
+        "owner": {"@id": "Interop__Mission"},
+        "type": [{"@id": "Interop__GroundStation"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "ConnectionUsage",
+        "@id": "Interop__Mission___402",
+        "elementId": "Interop__Mission___402",
+        "qualifiedName": "Interop::Mission::@2",
+        "owner": {"@id": "Interop__Mission"},
+        "connectorEnd": [
+          {"@id": "Interop__Mission___402_end0"},
+          {"@id": "Interop__Mission___402_end1"}
+        ]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "FeatureChainExpression",
+        "@id": "Interop__Mission___402_end0",
+        "elementId": "Interop__Mission___402_end0",
+        "owner": {"@id": "Interop__Mission___402"},
+        "targetFeature": {"@id": "Interop__Rover__telemetry"},
+        "argument": [{"@id": "Interop__Mission___402_end0_a0"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "FeatureReferenceExpression",
+        "@id": "Interop__Mission___402_end0_a0",
+        "elementId": "Interop__Mission___402_end0_a0",
+        "owner": {"@id": "Interop__Mission___402_end0"},
+        "referent": {"@id": "Interop__Mission__rover"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "FeatureChainExpression",
+        "@id": "Interop__Mission___402_end1",
+        "elementId": "Interop__Mission___402_end1",
+        "owner": {"@id": "Interop__Mission___402"},
+        "targetFeature": {"@id": "Interop__GroundStation__uplink"},
+        "argument": [{"@id": "Interop__Mission___402_end1_a0"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "FeatureReferenceExpression",
+        "@id": "Interop__Mission___402_end1_a0",
+        "elementId": "Interop__Mission___402_end1_a0",
+        "owner": {"@id": "Interop__Mission___402_end1"},
+        "referent": {"@id": "Interop__Mission__station"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "Comment",
+        "@id": "Interop___409",
+        "elementId": "Interop___409",
+        "qualifiedName": "Interop::@9",
+        "owner": {"@id": "Interop"},
+        "annotatedElement": [{"@id": "Interop__Wheel"}],
+        "body": " Diameter is in metres. "
+      }
+    }
+  ]
+}

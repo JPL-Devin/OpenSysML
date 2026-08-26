@@ -12,9 +12,6 @@ type InitialNode struct {
 	Name      string         // optional identifier for edge referencing
 	Successor *QualifiedName // optional target for implicit succession (from `first X then Y` syntax)
 	Guard     Node           // optional guard condition for succession
-	// Keyword is the word the node was written with, `first` or `initial`: only
-	// the first is SysML v2 notation.
-	Keyword string
 	// Members are the members of the body the succession was written with
 	// (`first start then continue { … }`), and HasBody that it was written with
 	// one rather than ended by ';'.
@@ -26,8 +23,6 @@ type InitialNode struct {
 type FinalNode struct {
 	NodeBase
 	Name string
-	// Keyword is the word the node was written with, `done` or `final`.
-	Keyword string
 }
 
 // ForkNode splits execution into concurrent flows (1 incoming → N outgoing).
@@ -65,11 +60,8 @@ type DecisionNode struct {
 	NodeBase
 	Name     string
 	NameSpan source.Span // span of Name, empty for an unnamed node
-	// Keyword is the word the node was written with, `decide` or `decision`:
-	// only the first is SysML v2 notation.
-	Keyword string
-	Members []Node // body members, as on ForkNode
-	HasBody bool
+	Members  []Node      // body members, as on ForkNode
+	HasBody  bool
 }
 
 // NodeBodyMembers returns the members of the body an action node declares, and
@@ -412,8 +404,8 @@ type ResultMember struct {
 	Expression Node // the value expression
 }
 
-// ConstraintMember represents an assertion/assumption in a constraint body.
-// Syntax: assert <expression>; or assume <expression>;
+// ConstraintMember represents a condition of a constraint body.
+// Syntax: <expression> or assert [not] <reference>; or assert constraint { … }
 type ConstraintMember struct {
 	NodeBase
 	IsAssert bool // true for 'assert', false for 'assume'
@@ -447,12 +439,12 @@ type SubjectMember struct {
 }
 
 // AssumeMember represents an assumption in a requirement body.
-// Syntax: assume <expression>; OR assume constraint { <expression>... } OR assume <Q::r> { body }
+// Syntax: assume <reference>; OR assume constraint { <expression>... } OR assume <Q::r> { body }
 type AssumeMember struct {
 	NodeBase
 	// Prefix metadata written before the declaration: `assume #goal constraint c;`.
 	Prefixes   []*PrefixMetadata
-	Expression Node           // assumption condition (for expression form)
+	Expression Node           // the reference the member states, when written as one
 	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
 	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
 	// Declaration of the constraint the member owns, when it is written with
@@ -468,12 +460,12 @@ type AssumeMember struct {
 }
 
 // RequireMember represents a requirement constraint.
-// Syntax: require <expression>; OR require constraint { <expression>... } OR require <Q::r> { body }
+// Syntax: require <reference>; OR require constraint { <expression>... } OR require <Q::r> { body }
 type RequireMember struct {
 	NodeBase
 	// Prefix metadata written before the declaration: `require #goal r;`.
 	Prefixes   []*PrefixMetadata
-	Expression Node           // requirement condition (for expression form)
+	Expression Node           // the reference the member states, when written as one
 	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
 	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form
 	// Declaration of the constraint the member owns, when it is written with

@@ -1,27 +1,24 @@
 (RootNamespace
   (Membership visibility="default"
+    (Definition kind="constraint" abstract=false variation=false name="Positive"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Real
+            (*ast.QualifiedName))))
+      (ConstraintMember assert=true negated=false
+        (OperatorExpr operator=">"
+          (FeatureReference name="x")
+          (LiteralInteger value="0")))))
+  (Membership visibility="default"
     (Definition kind="constraint" abstract=false variation=false name="BacktrackedConditions"
       (Membership visibility="default"
         (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=Real
             (*ast.QualifiedName))))
-      (Membership visibility="default"
-        (Usage kind="attribute" name="constraint" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
-          (Relationship kind="typing" target=Real
-            (*ast.QualifiedName))))
       (ConstraintMember assert=true negated=false keyword="assert"
-        (OperatorExpr operator=">"
-          (FeatureReference name="constraint")
-          (LiteralInteger value="0")))
-      (ConstraintMember assert=true negated=false keyword="assert"
-        (OperatorExpr operator="=="
-          (FeatureReference name="constraint")
-          (FeatureReference name="x")))
-      (ConstraintMember assert=true negated=false keyword="assert"
-        (OperatorExpr operator=">"
-          (FeatureChainExpr member="x"
-            (FeatureReference name="constraint"))
-          (LiteralInteger value="0")))
+        (FeatureReference name="Positive"))
+      (ConstraintMember assert=true negated=true keyword="assert"
+        (FeatureReference name="Positive"))
       (ConstraintMember assert=true negated=false keyword="assert" name="positive"
         (ConstraintMember assert=true negated=false
           (OperatorExpr operator=">"
@@ -32,9 +29,11 @@
           (OperatorExpr operator="<"
             (FeatureReference name="x")
             (LiteralInteger value="10"))))
-      (ConstraintMember assert=true negated=false keyword="assert"
-        (FeatureReference name="constraint"))
       (ConstraintMember assert=true negated=false
         (OperatorExpr operator=">"
           (FeatureReference name="x")
-          (LiteralInteger value="0"))))))
+          (LiteralInteger value="0")))
+      (ConstraintMember assert=true negated=false
+        (OperatorExpr operator="<"
+          (FeatureReference name="x")
+          (LiteralInteger value="100"))))))

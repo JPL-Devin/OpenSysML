@@ -840,7 +840,7 @@ func resolveActionEndpoint(graph *ActionGraph, ref ast.Node, source bool) ast.No
 
 	name := ast.SimpleName(ref)
 	if source && name == "start" && graph.Initial == nil {
-		initial := &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "start", Keyword: "first"}
+		initial := &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "start"}
 		graph.Initial = initial
 		graph.Nodes = append(graph.Nodes, initial)
 		return initial
@@ -851,7 +851,7 @@ func resolveActionEndpoint(graph *ActionGraph, ref ast.Node, source bool) ast.No
 				return final
 			}
 		}
-		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "done", Keyword: "done"}
+		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "done"}
 		graph.Finals = append(graph.Finals, final)
 		graph.Nodes = append(graph.Nodes, final)
 		return final

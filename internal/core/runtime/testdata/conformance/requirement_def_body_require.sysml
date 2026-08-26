@@ -4,6 +4,6 @@ package test {
     requirement def MassBudgetCheck {
         attribute actual = 1.2;
         attribute limit = 1.5;
-        require actual <= limit;
+        require constraint { actual <= limit }
     }
 }

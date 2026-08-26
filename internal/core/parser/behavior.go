@@ -5,8 +5,17 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
+
+// parseConstraintCalcBody parses a constraint body that declares parameters,
+// where a bare expression states a condition rather than a result.
+func (p *Parser) parseConstraintCalcBody() []ast.Node {
+	p.constraintCalcDepth++
+	defer func() { p.constraintCalcDepth-- }()
+	return p.parseCalcBody()
+}
 
 // parseCalcBody parses the body of a calc def/usage.
 // Handles BOTH generic members (parameters like 'in x: Integer;') AND result members ('return expr;').
@@ -15,6 +24,14 @@ func (p *Parser) parseCalcBody() []ast.Node {
 	body := p.newBodyBuilder()
 	p.calcBodyDepth++
 	defer func() { p.calcBodyDepth-- }()
+
+	// The mark applies to this body only, so a calculation nested in it reads
+	// its own bare expression as a result again.
+	constraintConditions := p.constraintCalcDepth > 0
+	if constraintConditions {
+		p.constraintCalcDepth--
+		defer func() { p.constraintCalcDepth++ }()
+	}
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
@@ -63,8 +80,13 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			// A `var`-prefixed declaration is a member, not the value of an
 			// expression naming a feature `var` (KerML BasicFeaturePrefix).
 			if p.atExprStart() && !isNameDecl && !p.atVarDeclaration() {
-				// Parse as implicit return expression
-				body.add(p.ParseExpression())
+				// In a constraint body a bare expression is a condition the
+				// constraint states, not a calculated result.
+				if constraintConditions {
+					body.add(p.parseConstraintMember())
+				} else {
+					body.add(p.ParseExpression())
+				}
 			} else {
 				// Parse as generic body member (parameters, etc.)
 				body.add(p.parseBodyMember())
@@ -450,16 +472,8 @@ func (p *Parser) parseActionMember() ast.Node {
 
 	// The words of our own node notation are names the lexer does not reserve,
 	// so they are matched by the shape around them (see notation.go).
-	if w, ok := p.atActionNodeWord(); ok {
-		tok := p.advance()
-		switch w {
-		case "initial":
-			return p.parseInitialNode(tok)
-		case "done", "final":
-			return p.parseFinalNode(tok)
-		case "decision":
-			return p.parseDecisionNode(tok)
-		}
+	if _, ok := p.atActionNodeWord(); ok {
+		return p.parseFinalNode(p.advance())
 	}
 
 	// A `first` end reached through a feature chain is a SuccessionAsUsage
@@ -597,7 +611,6 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 		Name:      name,
 		Successor: successor,
 		Guard:     guard,
-		Keyword:   p.wordText(tok),
 		Members:   members,
 		HasBody:   hasBody,
 	}
@@ -617,10 +630,7 @@ func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 
 	p.expect(lexer.Semicolon, "expected ';' after final node")
 
-	node := &ast.FinalNode{
-		Name:    name,
-		Keyword: p.wordText(tok),
-	}
+	node := &ast.FinalNode{Name: name}
 	node.NodeSpan = p.spanFrom(start)
 	return node
 }
@@ -678,7 +688,6 @@ func (p *Parser) parseDecisionNode(tok lexer.Token) ast.Node {
 	node := &ast.DecisionNode{
 		Name:     name,
 		NameSpan: nameSpan,
-		Keyword:  p.wordText(tok),
 		Members:  members,
 		HasBody:  hasBody,
 	}
@@ -837,7 +846,7 @@ func (p *Parser) atNamespaceSuccession() bool {
 // startsActionBodyItem reports whether the token n ahead, the first inside a
 // braced action body, begins an action body item (SysML.xtext ActionBodyItem)
 // rather than an expression. Only words that cannot begin an expression qualify,
-// so `done` and `decision` count only in the node shape (see notation.go).
+// so `done` counts only in the node shape (see notation.go).
 func (p *Parser) startsActionBodyItem(n int) bool {
 	if p.peekN(n).Kind == lexer.Identifier {
 		_, ok := p.actionNodeWordAt(n)
@@ -1810,12 +1819,14 @@ var exprStartKeywords = map[string]bool{
 	"false": true,
 	"new":   true,
 	"if":    true,
+	"not":   true,
 }
 
-// parseConstraintMember parses one constraint member: assert/assume [not] <expr>;
-// Also supports bare expressions (implicit assert): inv name { expr }
+// parseConstraintMember parses one constraint member: a bare condition, an
+// asserted reference (`assert c;`) or a nested constraint (`assert constraint { … }`).
 func (p *Parser) parseConstraintMember() ast.Node {
 	start := p.peek().Span.Offset
+	keywordSpan := p.peek().Span
 
 	var isAssert bool
 	var isNegated bool
@@ -1834,8 +1845,9 @@ func (p *Parser) parseConstraintMember() ast.Node {
 		isAssert = true // Default to assert for bare expressions
 	}
 
-	// Check for optional 'not' keyword
-	if p.acceptKeyword("not") {
+	// `not` negates what a keyword states (SysML.xtext AssertConstraintUsage);
+	// a bare condition keeps it as the unary operator of its expression.
+	if keyword != "" && p.acceptKeyword("not") {
 		isNegated = true
 	}
 
@@ -1846,10 +1858,20 @@ func (p *Parser) parseConstraintMember() ast.Node {
 	}
 
 	// Parse expression
+	exprStart := p.peek().Span.Offset
 	expr := p.ParseExpression()
 
 	// Semicolon is optional for constraint expressions (especially in inv bodies)
-	p.accept2(lexer.Semicolon)
+	semi, hasSemi := p.accept(lexer.Semicolon)
+
+	// A keyword states a reference or a `constraint` declaration; the condition
+	// itself is written on its own (SysML.xtext AssertConstraintUsage).
+	if keyword != "" && !isConditionReference(expr) {
+		p.errorWithFixes(keywordSpan,
+			fmt.Sprintf("`%s` states a constraint reference or a `constraint` declaration, "+
+				"not a condition: write the condition on its own", keyword),
+			p.assertedConditionFixes(keywordSpan, exprStart, semi, hasSemi, isNegated)...)
+	}
 
 	node := &ast.ConstraintMember{
 		IsAssert:   isAssert,
@@ -1859,6 +1881,60 @@ func (p *Parser) parseConstraintMember() ast.Node {
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
+}
+
+// isConditionReference reports whether expr is the reference an `assert`,
+// `assume` or `require` member states (SysML.xtext OwnedReferenceSubsetting).
+func isConditionReference(expr ast.Node) bool {
+	switch expr.(type) {
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
+		return true
+	default:
+		return false
+	}
+}
+
+// assertedConditionFixes rewrites `assert <condition>;` as the bare condition,
+// keeping a negation as `not (…)` so the condition means what it did.
+func (p *Parser) assertedConditionFixes(keyword source.Span, exprStart int, semi lexer.Token, hasSemi, negated bool) []quickfix.Fix {
+	prefix := source.Span{Offset: keyword.Offset, Len: exprStart - keyword.Offset}
+	if prefix.Len <= 0 {
+		return nil
+	}
+	if !negated {
+		edits := []quickfix.Edit{quickfix.Replace(prefix, "")}
+		if hasSemi {
+			edits = append(edits, quickfix.Replace(semi.Span, ""))
+		}
+		return []quickfix.Fix{{Title: "write the condition without `" + p.src.Text(keyword) + "`", Edits: edits, Preferred: true}}
+	}
+	// Without the semicolon there is nowhere to close the parenthesis.
+	if !hasSemi {
+		return nil
+	}
+	return []quickfix.Fix{{
+		Title:     "write the condition as `not (…)`",
+		Edits:     []quickfix.Edit{quickfix.Replace(prefix, "not ("), quickfix.Replace(semi.Span, ")")},
+		Preferred: true,
+	}}
+}
+
+// requirementConditionFixes rewrites `require <condition>;` as the constraint
+// declaration a requirement body admits (SysML.xtext RequirementConstraintUsage).
+func (p *Parser) requirementConditionFixes(keyword source.Span, exprStart int, semi lexer.Token, hasSemi bool) []quickfix.Fix {
+	prefix := source.Span{Offset: keyword.Offset, Len: exprStart - keyword.Offset}
+	if prefix.Len <= 0 || !hasSemi {
+		return nil
+	}
+	word := p.src.Text(keyword)
+	return []quickfix.Fix{{
+		Title: "state the condition as `" + word + " constraint { … }`",
+		Edits: []quickfix.Edit{
+			quickfix.Replace(prefix, word+" constraint { "),
+			quickfix.Replace(semi.Span, " }"),
+		},
+		Preferred: true,
+	}}
 }
 
 // Phase C2: Requirement Bodies
@@ -2102,10 +2178,8 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 		return node
 	}
 
-	// Otherwise parse as simple expression
-	expr := p.ParseExpression()
-
-	p.expect(lexer.Semicolon, "expected ';' after assume expression")
+	// Otherwise the member states a condition inline, which no production admits.
+	expr := p.parseRequirementCondition(start, "assume")
 
 	node := &ast.AssumeMember{
 		Expression: expr,
@@ -2149,16 +2223,35 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 		return node
 	}
 
-	// Otherwise parse as expression: require <expr>;
-	expr := p.ParseExpression()
-
-	p.expect(lexer.Semicolon, "expected ';' after require expression")
+	// Otherwise the member states a condition inline, which no production admits.
+	expr := p.parseRequirementCondition(start, "require")
 
 	node := &ast.RequireMember{
 		Expression: expr,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
+}
+
+// parseRequirementCondition parses what an `assume`/`require` member states
+// where neither a `constraint` declaration nor a qualified reference followed.
+// A bare name is the reference form; anything else is a condition stated inline,
+// which RequirementConstraintUsage does not admit.
+func (p *Parser) parseRequirementCondition(start int, keyword string) ast.Node {
+	keywordSpan := source.Span{Offset: start, Len: len(keyword)}
+	exprStart := p.peek().Span.Offset
+	expr := p.ParseExpression()
+	semi, hasSemi := p.accept(lexer.Semicolon)
+	if !hasSemi {
+		p.expect(lexer.Semicolon, "expected ';' after "+keyword+" expression")
+	}
+	if !isConditionReference(expr) {
+		p.errorWithFixes(keywordSpan,
+			fmt.Sprintf("`%s` states a constraint reference or a `constraint` declaration, "+
+				"not a condition: state the condition as `%s constraint { … }`", keyword, keyword),
+			p.requirementConditionFixes(keywordSpan, exprStart, semi, hasSemi)...)
+	}
+	return expr
 }
 
 // ownedConstraintDecl is the declaration and body of the constraint an
