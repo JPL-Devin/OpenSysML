@@ -19,15 +19,15 @@ func TestErrorMessages(t *testing.T) {
 			part def Wheel;
 			calc countdown {
 				in n: Integer;
-				return countdown(n - 1);
+				countdown(n - 1)
 			}
 			calc inner {
 				in n: Integer;
-				return n / 0;
+				n / 0
 			}
 			calc outer {
 				in n: Integer;
-				return inner(n);
+				inner(n)
 			}
 			constraint def Bounded {
 				1 < 2
@@ -89,11 +89,11 @@ func TestNestedCalcNamesTheFailingCalc(t *testing.T) {
 		package test {
 			calc inner {
 				in n: Integer;
-				return n / 0;
+				n / 0
 			}
 			calc outer {
 				in n: Integer;
-				return inner(n);
+				inner(n)
 			}
 		}
 	`

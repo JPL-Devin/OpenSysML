@@ -4,6 +4,6 @@ package test {
 	calc scale {
 		in x: Integer;
 		in factor: Integer = 3;
-		return x * factor;
+		x * factor
 	}
 }

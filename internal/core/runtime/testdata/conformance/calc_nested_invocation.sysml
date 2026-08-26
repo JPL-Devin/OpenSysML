@@ -4,11 +4,11 @@ package test {
 	calc combine {
 		in a: Integer;
 		in b: Integer;
-		return double(a) + double(b);
+		double(a) + double(b)
 	}
 
 	calc double {
 		in x: Integer;
-		return x * 2;
+		x * 2
 	}
 }

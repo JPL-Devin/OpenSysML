@@ -566,10 +566,9 @@ func (e *ActionExecutor) stepToken(tokenIdx int) error {
 // enabledSuccessions returns the successions a token at node may take, in
 // declaration order: a guard that does not hold leaves no link to pass along
 // (TransitionPerformance::transitionLink is HappensBefore[0..1]), so it is pruned.
-func (e *ActionExecutor) enabledSuccessions(node ast.Node) ([]ast.Node, error) {
+func (e *ActionExecutor) enabledSuccessions(node ast.Node) ([]lower.ActionEdge, error) {
 	declared := e.graph.Edges[node]
-	guards := e.graph.Guards[node]
-	if len(declared) == 0 || len(guards) == 0 {
+	if len(declared) == 0 {
 		return declared, nil
 	}
 
@@ -577,14 +576,14 @@ func (e *ActionExecutor) enabledSuccessions(node ast.Node) ([]ast.Node, error) {
 	ec.Push(e.data)
 	defer ec.beginStep()()
 
-	enabled := make([]ast.Node, 0, len(declared))
-	for _, succ := range declared {
-		holds, err := e.guardHolds(ec, node, guards[succ])
+	enabled := make([]lower.ActionEdge, 0, len(declared))
+	for _, edge := range declared {
+		holds, err := e.guardHolds(ec, node, edge.Guard)
 		if err != nil {
 			return nil, err
 		}
 		if holds {
-			enabled = append(enabled, succ)
+			enabled = append(enabled, edge)
 		}
 	}
 	return enabled, nil
@@ -629,7 +628,7 @@ func (e *ActionExecutor) stepInitialNode(tokenIdx int) error {
 	}
 
 	// Move token to first successor (initial should have exactly 1)
-	token.Location = successors[0]
+	token.Location = successors[0].Target
 	return nil
 }
 
@@ -676,10 +675,10 @@ func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 
 	// Create N tokens (one per successor)
 	newTokens := make([]Token, 0, len(successors))
-	for _, succ := range successors {
+	for _, edge := range successors {
 		newToken := Token{
 			ID:       e.nextTokenID,
-			Location: succ,
+			Location: edge.Target,
 		}
 		e.nextTokenID++
 		newTokens = append(newTokens, newToken)
@@ -757,7 +756,7 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 	// features, so there is nothing per-branch left to merge here.
 	outputToken := Token{
 		ID:       e.nextTokenID,
-		Location: successors[0],
+		Location: successors[0].Target,
 	}
 	e.nextTokenID++
 
@@ -771,8 +770,8 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 func (e *ActionExecutor) getIncomingEdges(node ast.Node) []ast.Node {
 	incoming := make([]ast.Node, 0)
 	for source, targets := range e.graph.Edges {
-		for _, target := range targets {
-			if target == node {
+		for _, edge := range targets {
+			if edge.Target == node {
 				incoming = append(incoming, source)
 				break // Only count each source once
 			}
@@ -821,7 +820,7 @@ func (e *ActionExecutor) stepMergeNode(tokenIdx int) error {
 		return err
 	}
 	e.mergeVisited[mergeNode] = true
-	token.Location = successors[0]
+	token.Location = successors[0].Target
 	return nil
 }
 
@@ -853,35 +852,30 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 	// 1. Evaluate all guarded edges first
 	// 2. If none match, use unguarded edge as fallback (else branch)
 
-	var unguardedEdge ast.Node
+	var unguardedEdge *lower.ActionEdge
 
 	// Pass 1: Check guarded edges
-	for _, succ := range successors {
-		// Get guard for this edge (if any)
-		var guard ast.Node
-		if guards, ok := e.graph.Guards[decisionNode]; ok {
-			guard = guards[succ]
-		}
-
+	for i := range successors {
+		edge := &successors[i]
 		// No guard = remember for fallback
-		if guard == nil {
-			unguardedEdge = succ
+		if edge.Guard == nil {
+			unguardedEdge = edge
 			continue
 		}
 
-		holds, err := e.guardHolds(ec, decisionNode, guard)
+		holds, err := e.guardHolds(ec, decisionNode, edge.Guard)
 		if err != nil {
 			return err
 		}
 		if holds {
-			token.Location = succ
+			token.Location = edge.Target
 			return nil
 		}
 	}
 
 	// Pass 2: Use unguarded edge as fallback
 	if unguardedEdge != nil {
-		token.Location = unguardedEdge
+		token.Location = unguardedEdge.Target
 		return nil
 	}
 
@@ -948,7 +942,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		return nil
 	}
 
-	token.Location = successors[0]
+	token.Location = successors[0].Target
 	return nil
 }
 
@@ -1055,7 +1049,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return nil
 	}
 
-	token.Location = successors[0]
+	token.Location = successors[0].Target
 	return nil
 }
 
@@ -1112,7 +1106,7 @@ func (e *ActionExecutor) stepStatementNode(tokenIdx int) error {
 		return nil
 	}
 
-	token.Location = successors[0]
+	token.Location = successors[0].Target
 	return nil
 }
 

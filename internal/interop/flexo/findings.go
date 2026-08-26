@@ -56,13 +56,12 @@ func findings(report *Report, graphWritten map[string]*writtenElement) []string 
 
 	if refused := load.refusedIDs(); len(refused) > 0 {
 		add("graph-load: %d elements cannot be read directly because their ids are not "+
-			"[a-zA-Z0-9_-]+ — the encoder writes expression-node ids with a '.' (%s)",
+			"[a-zA-Z0-9_-]+, which requireValidId demands (%s)",
 			len(refused), strings.Join(refused, ", "))
 	}
 
 	add("graph-load: the roots endpoint reports %d of %d elements as roots (%d have no owner "+
-		"in the model); it filters on sysml:owner and sysml:owningRelatedElement, neither of "+
-		"which the graph carries",
+		"in the model); it filters on sysml:owner and sysml:owningRelatedElement",
 		load.Roots, load.Written, load.RootsInModel)
 	add("json-commit: the roots endpoint reports %d of %d elements as roots, %d in the payload",
 		reference.Roots, reference.Written, reference.RootsInModel)

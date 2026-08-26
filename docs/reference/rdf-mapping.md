@@ -17,20 +17,25 @@ each of these is a deliberate property of it rather than a defect to report:
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
   of record.
-- **Interoperability is not yet supported**, and this is now measured rather
-  than argued. A round trip through a running Flexo MMS stack delivers every
-  element of the reference fixture but only 86 of its 142 properties, while the
-  same model posted through that service's own commit path loses nothing; the
-  losses are the 56 properties in the `sysx:` namespace, which the reader
-  ignores, plus standard properties carrying more than one value, which it skips
-  without a JSON annotation. No element carries `sysml:elementId`, which paged
-  listing and query select on, and none carries `sysml:owner`, so the whole
-  model reads as roots. Expression node ids contain a `.` and are refused by a
-  direct element read (`requireValidId`, `[a-zA-Z0-9_-]+`); element ids proper
-  satisfy it. These are roadmap D3 work, not consequences of matching
-  namespaces. The measurement is `internal/interop/flexo`, an opt-in gate
-  described in `.agents/skills/flexo-interop`, and its committed report is the
-  record of what moves as that work lands.
+- **Interoperability is not yet demonstrated**, and the gap is measured rather
+  than argued. The `sysml:` vocabulary and the `elmt:` element base match Flexo
+  MMS's `Namespaces.kt`; OpenSysML's ids — the part of an IRI after the final
+  `:`, for an element and for an expression node alike — match that service's
+  `requireValidId` (`[a-zA-Z0-9_-]+`); every element carries the
+  `sysml:elementId` paged listing and query select on; and ownership is written
+  as the memberships and owner references the roots endpoint filters on. A round
+  trip through a running Flexo MMS stack, measured before that was written,
+  delivered every element of the reference fixture but only 86 of its 142
+  properties, while the same model posted through the service's own commit path
+  lost nothing. What no test here shows is a graph carrying the current output
+  loaded into a live service and read back; that is separate work. Known
+  mismatches remain: the reader ignores predicates outside `sysml:` and
+  `urn:sysmlv2:annotation:json:`, so the 56 `sysx:` properties of that fixture
+  do not survive the path, and a standard property carrying more than one value
+  is skipped for want of a JSON annotation. The measurement is
+  `internal/interop/flexo`, an opt-in gate described in
+  `.agents/skills/flexo-interop`, and its committed report is the record of what
+  moves as the rest lands.
 
 Every surface reports this where it is used: the command line writes a `note:` to
 stderr, `%save` prints one, and `ConvertResponse` carries `experimental` and
@@ -53,14 +58,13 @@ The `sysml:` vocabulary and the `elmt:` element base match the ones the
 [Flexo MMS SysML v2 service](https://github.com/Open-MBEE/flexo-mms-sysmlv2)
 writes into its triplestore (`Namespaces.kt`). That service derives an
 element's `@id` from the substring after the final `:`, and `requireValidId`
-permits only `[a-zA-Z0-9_-]+`; OpenSysML's encoded element ids satisfy both,
-though the `expr:` node ids do not — they carry a `.`, and that service refuses
-to read one directly. Other mismatches remain: the reader ignores predicates
-outside `sysml:` and
-`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path;
-paged listing and query require `sysml:elementId`, while roots filtering
-uses `sysml:owner` and `sysml:owningRelatedElement`; these are roadmap D3
-work. See [Status](#status-experimental).
+permits only `[a-zA-Z0-9_-]+`; OpenSysML's encoded element ids satisfy both, and
+so do the `expr:` node ids — a node's id held a `.` until the position was joined
+with `_p` and encoded instead, and that service refused to read one directly.
+Other mismatches remain: the reader ignores predicates outside `sysml:` and
+`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path, and
+collection properties carry no JSON annotation. See
+[Status](#status-experimental).
 
 OpenSysML's own additions are namespaced separately as `sysx:` so a consumer can
 tell them from the standard vocabulary and ignore them if it wants only standard
@@ -79,7 +83,8 @@ elmt:Demo         a sysml:Package ;
     sysml:qualifiedName "Demo" .
 elmt:Demo__Vehicle a sysml:PartDefinition ;
     sysml:qualifiedName "Demo::Vehicle" ;
-    sysml:owningNamespace elmt:Demo .
+    sysml:elementId "Demo__Vehicle" ;
+    sysml:owner elmt:Demo .
 ```
 
 The encoding (`rdf.EncodeElementID`) works over the UTF-8 bytes of the
@@ -106,7 +111,15 @@ takes it from.
   tables in `internal/core/export/kinds.go` are the source of truth, and the
   reverse direction is derived from them so the two cannot disagree.
 - `sysml:declaredName`, `sysml:declaredShortName`, `sysml:qualifiedName`
-- `sysml:owningNamespace` — the containing element (absent on a root)
+- `sysml:elementId` — the id the element's own IRI ends in, which is what the
+  SysML v2 API addresses it by. Every element carries one, including the
+  memberships below and the expression nodes of
+  [Expressions](#expressions)
+- Ownership, described under [Ownership](#ownership): `sysml:owner`, plus
+  `sysml:owningMembership` and `sysml:owningRelationship`, or
+  `sysml:owningRelatedElement` for an element a relationship owns
+- `sysml:owningNamespace` — the containing element (absent on a root), kept
+  alongside `sysml:owner` as the compact spelling earlier releases wrote
 - `sysml:visibility`, `sysml:direction`
 - Feature flags, written only when true, so an absent flag reads as false:
   `isAbstract`, `isVariation`, `isVariant`, `isReference`, `isComposite`, `isDerived`,
@@ -148,12 +161,84 @@ Metaclass names with no counterpart in the OMG vocabulary are typed in the
 `sysx:` namespace rather than `sysml:`, so a consumer can tell them from the
 standard metaclasses: `sysx:Alias`, `sysx:FilterMember`,
 `sysx:MultiplicityDeclaration`, `sysx:ConstraintMember`, `sysx:AssumeMember`,
-`sysx:RequireMember`, `sysx:ResultMember`, and the behavioral ones listed under
+`sysx:RequireMember`, and the behavioral ones listed under
 [Behavior](#behavior).
 
 Comments, documentation and textual representations convert as their own
 elements (`sysml:Comment`, `sysml:Documentation`, `sysml:TextualRepresentation`)
 carrying `sysml:body`.
+
+### Ownership
+
+The notation states containment by nesting; the abstract syntax states it as a
+membership element between the owner and the member, and that is what the SysML
+v2 API's payloads carry. The mapping materializes those memberships.
+
+A namespace owning an ordinary member mints one membership element:
+
+```
+package Demo { part def Vehicle { attribute mass; } }
+```
+
+```turtle
+elmt:Demo
+    a sysml:Package ;
+    sysml:elementId "Demo" ;
+    sysml:ownedMember elmt:Demo__Vehicle ;
+    sysml:ownedMembership elmt:Demo__Vehicle_om ;
+    sysml:ownedRelationship elmt:Demo__Vehicle_om .
+
+elmt:Demo__Vehicle_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Demo__Vehicle_om" ;
+    sysml:owner elmt:Demo ;
+    sysml:memberElement elmt:Demo__Vehicle ;
+    sysml:ownedMemberElement elmt:Demo__Vehicle ;
+    sysml:ownedRelatedElement elmt:Demo__Vehicle ;
+    sysml:owningRelatedElement elmt:Demo ;
+    sysml:membershipOwningNamespace elmt:Demo .
+
+elmt:Demo__Vehicle
+    a sysml:PartDefinition ;
+    sysml:elementId "Demo__Vehicle" ;
+    sysml:owner elmt:Demo ;
+    sysml:owningRelationship elmt:Demo__Vehicle_om ;
+    sysml:owningMembership elmt:Demo__Vehicle_om .
+```
+
+- A membership's id is the member's id with `_om` appended, which no element id
+  can be: an `_` in an element id starts either `__` for `::` or a hex escape.
+  It is minted by `rdf.OwningMembershipID`, so it is deterministic and reverses
+  to the member's qualified name.
+- A **type owning a feature** — a usage or a state inside a definition — mints a
+  `sysml:FeatureMembership` instead, and adds `sysml:ownedMemberFeature` and
+  `sysml:owningType` on it and `sysml:ownedFeature` and
+  `sysml:ownedFeatureMembership` on the owner. `FeatureMembership` specializes
+  `OwningMembership`, so the `_om` id and the properties above still apply.
+- A **relationship a namespace declares** — an import, a dependency, a state's
+  entry membership — is owned directly, with `sysml:owningRelatedElement` on it
+  and `sysml:ownedRelationship` on the owner, and no membership between. An
+  import also states `sysml:importOwningNamespace` and `sysml:ownedImport`.
+- An element a **relationship** owns — the action of an entry membership — states
+  the relationship in `sysml:owner` and `sysml:owningMembership`, and the
+  relationship states it in `sysml:memberElement`.
+- **Visibility belongs to the membership.** `private part wheel;` writes
+  `sysml:visibility "private"` on the membership, which is where the metamodel
+  declares the property; a relationship that states its own visibility, such as
+  an import, keeps it on itself.
+- A membership is **not** a declaration of its own: it carries no
+  `sysml:qualifiedName`, and reading a graph back traverses it as the ownership
+  edge it stands for rather than writing it out. A membership the notation does
+  name, such as a `sysml:StateSubactionMembership`, has a qualified name and is
+  written back.
+- **The compact shape still reads.** `sysml:owningNamespace` is still written,
+  and a graph carrying only it — what earlier releases wrote — converts back
+  unchanged. A membership that states neither of its ends is reported as
+  unsupported naming `sysml:memberElement`, rather than dropping the member.
+
+Tests: `ownership_graph_test.go` (element ids, roots, membership wiring, the
+tree coming back from the memberships with `sysx:sourceText` and
+`sysml:owningNamespace` stripped, the compact shape, malformed memberships).
 
 ## Expressions
 
@@ -173,15 +258,16 @@ package P {
 ```turtle
 elmt:P__total
     a sysml:AttributeUsage ;
-    sysml:value expr:P__total.value .
+    sysml:value expr:P__total_pvalue .
 
-expr:P__total.value
+expr:P__total_pvalue
     a sysml:OperatorExpression ;
     sysx:sourceText "a * 2" ;
+    sysml:elementId "P__total_pvalue" ;
     sysx:operator "*" ;
-    sysml:argument expr:P__total.value.a0, expr:P__total.value.a1 .
+    sysml:argument expr:P__total_pvalue_pa0, expr:P__total_pvalue_pa1 .
 
-expr:P__total.value.a0
+expr:P__total_pvalue_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "a" ;
     sysml:referent elmt:P__a ;
@@ -190,10 +276,13 @@ expr:P__total.value.a0
 
 The rules the tree follows:
 
-- **A node's IRI is its owner and its position**: `expr:<owner id>.<slot>`, and a
-  nested operand appends its own index (`.a0`, `.a1`). Two expressions of one
+- **A node's IRI is its owner and its position**: `expr:<owner id>_p<slot>`, and
+  a nested operand appends its own index (`_pa0`, `_pa1`). Two expressions of one
   element therefore never collide, and the IRIs are deterministic, like element
-  IRIs.
+  IRIs. The `_p` marker and the encoding of the position keep a node's id inside
+  `[A-Za-z0-9_-]+`, the alphabet the SysML v2 API's `requireValidId` accepts, and
+  it can never be read as an element id or a membership id, because an element id
+  never ends in a lone `_`.
 - **Every node carries `sysx:sourceText`**, the notation it was written as. The
   tree is *additive*: the text is what a conversion back to notation is written
   from, so exactness does not depend on the tree being complete, and
@@ -211,9 +300,12 @@ The rules the tree follows:
 - **A feature reference links to the element** it names (`sysml:referent`) when
   that element is in the graph, and carries its name as a literal when it
   resolves outside it — the same rule the declaration-head relationships follow.
-- **An expression node is not a model element.** It has no
-  `sysml:qualifiedName` and no `sysml:owningNamespace`, and reading a graph back
-  never turns one into a declaration.
+- **A node carries `sysml:elementId`**, the id its own IRI ends in, so it can be
+  read and queried by that id like an element. It is still not a model element:
+  it has no `sysml:qualifiedName` and no ownership properties, it is reached only
+  from the position that holds it, and reading a graph back never turns one into
+  a declaration. Writing expressions as elements owned through memberships is
+  separate work.
 - **A graph from another tool is read from its structure** when it carries no
   `sysx:sourceText`: the supported shapes above are written back as notation, and
   a shape this mapping cannot write — a missing operator, an operand count an
@@ -420,7 +512,7 @@ condition as `sysx:condition`: a constraint body's conditions (`assert`,
 `sysml:isNegated`), a nested `assert constraint [name] { … }`, a requirement's
 `assume`/`require` members in all three forms (an expression, the constraint
 they name, or a body), `subject s : X;` as the `sysml:SubjectMembership` it
-declares, and `return <expr>;`. The `assert` prefixing a named usage
+declares. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
 themselves are notation, with the limits stated above.
 

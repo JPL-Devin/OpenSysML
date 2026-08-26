@@ -4,6 +4,6 @@ package test {
 	calc remainder {
 		in n: Integer;
 		in d: Integer;
-		return n % d;
+		n % d
 	}
 }

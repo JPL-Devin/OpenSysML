@@ -387,13 +387,12 @@ package Q {
 
     calc echo {
         in q;
-        // Parenthesized: a bare name after `return` declares the return feature.
-        return (q);
+        q
     }
 
     calc overHalfATonne {
         in q;
-        return q > 500.0 [SI::kg];
+        q > 500.0 [SI::kg]
     }
 
     action addHalfATonne {

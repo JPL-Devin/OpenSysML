@@ -33,4 +33,6 @@
             (Usage kind="attribute" name="b" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Real
                 (*ast.QualifiedName))))
-          (*ast.ResultMember))))))
+          (OperatorExpr operator="+"
+            (FeatureReference name="a")
+            (FeatureReference name="b")))))))

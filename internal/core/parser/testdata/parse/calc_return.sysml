@@ -14,6 +14,5 @@ calc def AdvancedCalculation {
 	// return member (required)
 	return : Real {
 		temp = inner(x);
-		return temp + y;
 	}
 }
