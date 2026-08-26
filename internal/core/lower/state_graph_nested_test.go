@@ -221,8 +221,55 @@ func TestToStateGraph_ParallelStateUsage(t *testing.T) {
 	}
 }
 
+func TestToStateGraph_ParallelStateBehaviorsAndDeferredEvents(t *testing.T) {
+	graph, err := ToStateGraph(stateUsageIn(t, `
+		package test {
+			state Machine parallel {
+				entry action begin { }
+				do action work { }
+				exit action finish { }
+				state left {
+					defer Ping;
+					entry; then idle;
+					state idle;
+				}
+				state right {
+					entry; then ready;
+					state ready;
+				}
+			}
+		}
+	`), nil)
+	if err != nil {
+		t.Fatalf("parallel state behaviors: %v", err)
+	}
+	if graph.Machine == nil {
+		t.Fatal("parallel machine root was not lowered")
+	}
+	if got := len(graph.Behaviors[graph.Machine].Entry); got != 1 {
+		t.Fatalf("parallel machine entry behaviors = %d, want 1", got)
+	}
+	if got := len(graph.Behaviors[graph.Machine].Do); got != 1 {
+		t.Fatalf("parallel machine do behaviors = %d, want 1", got)
+	}
+	if got := len(graph.Behaviors[graph.Machine].Exit); got != 1 {
+		t.Fatalf("parallel machine exit behaviors = %d, want 1", got)
+	}
+	idle := stateNamed(graph, "idle")
+	if idle == nil {
+		t.Fatal("left region's idle state was not lowered")
+	}
+	left := graph.ParentState[idle]
+	if left == nil || left.Name != "left" {
+		t.Fatalf("idle parent = %v, want graph-only left region state", left)
+	}
+	if got := len(graph.Deferred[left]); got != 1 {
+		t.Fatalf("left deferred triggers = %d, want 1", got)
+	}
+}
+
 func TestToStateGraph_ParallelWithoutInitialFailsClearly(t *testing.T) {
-	graph, err := ToStateGraph(stateDefinitionIn(t, `
+	_, err := ToStateGraph(stateDefinitionIn(t, `
 		package test {
 			state def Machine parallel {
 				state left {
@@ -237,7 +284,9 @@ func TestToStateGraph_ParallelWithoutInitialFailsClearly(t *testing.T) {
 	if !strings.Contains(err.Error(), "region left has no initial state") {
 		t.Fatalf("error = %q, want missing region initial", err)
 	}
-	_ = graph
+	if !strings.Contains(err.Error(), "entry; then <state>;") {
+		t.Fatalf("error = %q, want initial-state notation guidance", err)
+	}
 }
 
 func TestToStateGraph_NestedParallelRegions(t *testing.T) {

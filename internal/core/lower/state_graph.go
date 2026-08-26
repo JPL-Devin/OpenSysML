@@ -27,6 +27,14 @@ type StateGraph struct {
 	// executable statements by the time it is reached.
 	Behaviors map[*ast.StateNode]*StateBehaviors
 
+	// HiddenStates are graph-only composite owners synthesized for parallel
+	// regions. They execute behaviors but are not user-visible state visits.
+	HiddenStates map[*ast.StateNode]bool
+
+	// Machine is the graph-only root state for a parallel machine's own entry,
+	// do and exit behaviors. Its regions are represented by TopRegions instead.
+	Machine *ast.StateNode
+
 	// declOf: synthesized state → the declaration it was built from, since the
 	// scope tree is keyed by what the scope builder saw rather than by the state
 	// nodes lowering derives from it.
@@ -156,6 +164,15 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 
 	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
 	graph.Attributes = lowerAttributes(members)
+	if stateMachineIsParallel(stateMachineDecl) {
+		graph.Machine = parallelMachineState(stateMachineDecl, members)
+		graph.StateScopes[graph.Machine] = scope
+		graph.Behaviors[graph.Machine] = &StateBehaviors{
+			Entry: LowerBehaviors(graph.Machine.Entry, scope),
+			Do:    LowerBehaviors(graph.Machine.Do, scope),
+			Exit:  LowerBehaviors(graph.Machine.Exit, scope),
+		}
+	}
 
 	if err := collectVertices(graph, members, scope, stateMachineIsParallel(stateMachineDecl)); err != nil {
 		return nil, err
@@ -200,7 +217,7 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	for _, region := range graph.TopRegions {
 		if graph.RegionInitials[region] == nil {
 			if graph.regionDecl[region] != nil {
-				return nil, fmt.Errorf("region %s has no initial state", region.Name)
+				return nil, fmt.Errorf("region %s has no initial state; write `entry; then <state>;` inside the region", region.Name)
 			}
 			return nil, fmt.Errorf("top-level region %s has no initial state", region.Name)
 		}
@@ -209,7 +226,7 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 		for _, region := range regions {
 			if graph.RegionInitials[region] == nil {
 				if graph.regionDecl[region] != nil {
-					return nil, fmt.Errorf("region %s has no initial state", region.Name)
+					return nil, fmt.Errorf("region %s has no initial state; write `entry; then <state>;` inside the region", region.Name)
 				}
 				return nil, fmt.Errorf("region %s in state %s has no initial state", region.Name, state.Name)
 			}
@@ -345,6 +362,7 @@ func newStateGraph(scope *symbols.Scope, endpoints Endpoints) *StateGraph {
 		endpoints:        endpoints,
 		StateScopes:      make(map[*ast.StateNode]*symbols.Scope),
 		Behaviors:        make(map[*ast.StateNode]*StateBehaviors),
+		HiddenStates:     make(map[*ast.StateNode]bool),
 		declOf:           make(map[*ast.StateNode]ast.Node),
 		States:           make([]*ast.StateNode, 0),
 		Pseudostates:     make([]*ast.PseudostateNode, 0),
@@ -454,13 +472,41 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 	if parent != nil {
 		graph.ParentState[state] = parent
 	}
+	return collectStateContents(graph, state, scope)
+}
 
+// collectGraphOnlyState records a synthesized state's behavior and hierarchy
+// without exposing the region owner as a user-visible graph vertex.
+func collectGraphOnlyState(graph *StateGraph, state *ast.StateNode, parent *ast.StateNode, scope *symbols.Scope) error {
+	graph.HiddenStates[state] = true
+	graph.StateScopes[state] = scope
+	graph.Behaviors[state] = &StateBehaviors{
+		Entry: LowerBehaviors(state.Entry, scope),
+		Do:    LowerBehaviors(state.Do, scope),
+		Exit:  LowerBehaviors(state.Exit, scope),
+	}
+	if parent != nil {
+		graph.ParentState[state] = parent
+	}
+	if err := collectDeferred(graph, state); err != nil {
+		return err
+	}
+	return collectStateContents(graph, state, scope)
+}
+
+func collectStateContents(graph *StateGraph, state *ast.StateNode, scope *symbols.Scope) error {
 	if decl, ok := graph.declOf[state].(*ast.Usage); ok && decl.IsParallel {
 		regions, err := graph.parallelRegions(decl.Members, state, scope)
 		if err != nil {
 			return err
 		}
 		state.Regions = append(state.Regions, regions...)
+	}
+	if len(state.Regions) > 0 {
+		graph.CompositeStates[state] = state.Regions
+		for _, region := range state.Regions {
+			graph.RegionOwner[region] = state
+		}
 	}
 
 	// Recursively collect substates
@@ -580,8 +626,13 @@ func (g *StateGraph) parallelRegions(members []ast.Node, parent *ast.StateNode, 
 		actual := unwrapMembership(member)
 		if !isParallelRegionMember(actual) {
 			switch actual.(type) {
-			case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation:
+			case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation,
+				*ast.EntryMember, *ast.DoMember, *ast.ExitMember:
 				continue
+			case *ast.Usage:
+				if actual.(*ast.Usage).Kind == ast.UsageAttribute {
+					continue
+				}
 			default:
 				return nil, fmt.Errorf("parallel state body contains unsupported member %T", actual)
 			}
@@ -594,12 +645,61 @@ func (g *StateGraph) parallelRegions(members []ast.Node, parent *ast.StateNode, 
 			States:   body,
 		}
 		g.regionDecl[region] = actual
-		if err := collectRegionStates(g, region, parent, childScope(scope, actual)); err != nil {
+		wrapper := parallelRegionState(g, actual)
+		before := len(g.States)
+		if err := collectGraphOnlyState(g, wrapper, parent, childScope(scope, actual)); err != nil {
 			return nil, err
+		}
+		for _, state := range g.States[before:] {
+			if g.ParentState[state] == wrapper {
+				g.RegionOf[state] = region
+			}
 		}
 		regions = append(regions, region)
 	}
 	return regions, nil
+}
+
+// parallelMachineState preserves behaviors owned by the parallel state itself.
+func parallelMachineState(decl ast.Node, members []ast.Node) *ast.StateNode {
+	state := &ast.StateNode{NodeBase: ast.NodeBase{NodeSpan: decl.Span()}}
+	switch n := decl.(type) {
+	case *ast.Usage:
+		state.Name, _ = ast.EffectiveName(n)
+	case *ast.Definition:
+		state.Name = n.Ident.Name
+	}
+	for _, member := range members {
+		switch n := unwrapMembership(member).(type) {
+		case *ast.EntryMember:
+			state.Entry = append(state.Entry, n.Actions...)
+		case *ast.DoMember:
+			state.Do = append(state.Do, n.Actions...)
+		case *ast.ExitMember:
+			state.Exit = append(state.Exit, n.Actions...)
+		}
+	}
+	return state
+}
+
+// parallelRegionState creates the graph state for a direct substate that owns
+// a synthesized region, preserving its behaviors and deferred triggers.
+func parallelRegionState(graph *StateGraph, member ast.Node) *ast.StateNode {
+	switch n := member.(type) {
+	case *ast.Usage:
+		return stateNodeFromUsage(graph, n)
+	case *ast.StateNode:
+		return n
+	case *ast.SubstateMember:
+		state := &ast.StateNode{
+			NodeBase: ast.NodeBase{NodeSpan: n.NodeSpan},
+			Name:     n.Name,
+		}
+		graph.declOf[state] = n
+		return state
+	default:
+		return &ast.StateNode{}
+	}
 }
 
 // parallelRegionBody returns the name and body a direct substate contributes to
@@ -610,11 +710,15 @@ func parallelRegionBody(member ast.Node) (string, []ast.Node) {
 		name, _ := ast.EffectiveName(n)
 		return name, n.Members
 	case *ast.StateNode:
-		body := make([]ast.Node, 0, len(n.Entry)+len(n.Do)+len(n.Exit)+len(n.Substates))
+		body := make([]ast.Node, 0, len(n.Entry)+len(n.Do)+len(n.Exit)+len(n.Defer)+len(n.Substates)+len(n.Regions))
 		body = append(body, n.Entry...)
 		body = append(body, n.Do...)
 		body = append(body, n.Exit...)
+		body = append(body, n.Defer...)
 		body = append(body, n.Substates...)
+		for _, region := range n.Regions {
+			body = append(body, region)
+		}
 		return n.Name, body
 	case *ast.SubstateMember:
 		return n.Name, nil

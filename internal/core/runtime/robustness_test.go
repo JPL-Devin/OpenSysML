@@ -3470,6 +3470,9 @@ func testParallelStateRegionWithoutInitial(t *testing.T) {
 	if !strings.Contains(err.Error(), "region left has no initial state") {
 		t.Fatalf("error = %v, want missing region initial", err)
 	}
+	if !strings.Contains(err.Error(), "entry; then <state>;") {
+		t.Fatalf("error = %v, want initial-state notation guidance", err)
+	}
 }
 
 // testSourcelessAcceptAtTopLevel: sourceless accept...then at top level should error
