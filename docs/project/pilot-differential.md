@@ -414,10 +414,10 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
 our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
 shorthands went first (only ours 84 → **34**, our diagnostics 141 → **50**); removing
-`initial <state>;` and `transition <source> to <target>;` takes it to **28** and **70**. The
-demos are now written in the standard spellings, so the warning that fired on 56 of their lines
-has nothing left to report there. `examples`: only pilot rises 39 → **61** and severity-only
-falls 25 → **10** for the same reason and without either tool changing what it detects: the
+`initial <state>;` and `transition <source> to <target>;` takes it to **27** and **68**. The
+demos are now written in the standard spellings, so the warning that fired on 57 of their lines
+has nothing left to report there. `examples`: only pilot rises 39 → **56** and severity-only
+falls 25 → **9** for the same reason and without either tool changing what it detects: the
 pilot errors on those lines either way, and the rows it errors on are no longer paired with a
 warning of ours. Agreement (**32**), fully agreeing files (**324**) and every OMG root are
 unmoved.
