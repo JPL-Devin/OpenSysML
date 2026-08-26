@@ -402,6 +402,12 @@ never applies its own `sysml:elementId` filter — elements missing `elementId` 
 only for that reason — and project delete is a soft annotation that leaves the Layer 1 branch
 behind.
 
+That run measured the output as it stood before **D3.2**/**D3.3** landed: every element now
+carries `sysml:elementId` and its ownership, and no `expr:` node id holds a `.` any more. The
+recorded expectation has not been re-measured against the current output, so the movement those
+two make is still unmeasured; a stack has to be brought up and
+`go test ./internal/interop/flexo -run TestFlexoInterop -update-flexo` re-run for it.
+
 ## D1 — expressions are carried as source text, not as triples
 
 Feature values, multiplicity bounds, filter conditions and succession guards are stored as

@@ -85,9 +85,9 @@ An opt-in gate loads a model's Turtle into a running Flexo MMS stack through Lay
 endpoint, reads it back through the SysML v2 API, and compares that against the same model
 posted through that service's own commit path. It records a per-element, per-property report
 that a human adjudicates, so the mapping's interoperability is a number that moves rather than
-a claim: today every element of the fixture is listed and 86 of its 142 properties are
-delivered, against 158 of 158 for the service's own payloads. The reference mapping documents
-what the difference is made of.
+a claim: measured before element ids and ownership were stated, every element of the fixture was
+listed and 86 of its 142 properties delivered, against 158 of 158 for the service's own
+payloads. The reference mapping documents what the difference is made of.
 
 The gate needs Docker and stays out of `go test ./...`: it skips loudly unless `FLEXO_INTEROP`
 is set, and with it set an absent stack fails instead of skipping.
