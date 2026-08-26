@@ -115,13 +115,13 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 				state left {
 					entry; then lstart;
 					state lstart;
-					state ldone;
+					final ldone;
 					lstart then ldone;
 				}
 				state right {
 					entry; then rstart;
 					state rstart;
-					state rdone;
+					final rdone;
 					rstart then rdone;
 				}
 			}
@@ -133,13 +133,13 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 				region left {
 					initial lstart;
 					state lstart;
-					state ldone;
+					final ldone;
 					lstart then ldone;
 				}
 				region right {
 					initial rstart;
 					state rstart;
-					state rdone;
+					final rdone;
 					rstart then rdone;
 				}
 			}
@@ -178,16 +178,32 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 			}
 		}
 		seenWant := make(map[string]bool)
+		var gotFinal, wantFinal []string
 		for state, owner := range regionGraph.RegionOf {
 			if owner == want && !seenWant[state.Name] {
 				wantStates = append(wantStates, state.Name)
 				seenWant[state.Name] = true
 			}
 		}
+		for state, owner := range parallelGraph.RegionOf {
+			if owner == region && state.IsFinal {
+				gotFinal = append(gotFinal, state.Name)
+			}
+		}
+		for state, owner := range regionGraph.RegionOf {
+			if owner == want && state.IsFinal {
+				wantFinal = append(wantFinal, state.Name)
+			}
+		}
 		sort.Strings(gotStates)
 		sort.Strings(wantStates)
 		if !reflect.DeepEqual(gotStates, wantStates) {
 			t.Errorf("region %q states = %v, want %v", region.Name, gotStates, wantStates)
+		}
+		sort.Strings(gotFinal)
+		sort.Strings(wantFinal)
+		if !reflect.DeepEqual(gotFinal, wantFinal) {
+			t.Errorf("region %q final states = %v, want %v", region.Name, gotFinal, wantFinal)
 		}
 	}
 	if got, want := transitionShape(parallelGraph), transitionShape(regionGraph); !reflect.DeepEqual(got, want) {
@@ -266,6 +282,44 @@ func TestToStateGraph_ParallelStateBehaviorsAndDeferredEvents(t *testing.T) {
 	if got := len(graph.Deferred[left]); got != 1 {
 		t.Fatalf("left deferred triggers = %d, want 1", got)
 	}
+}
+
+func TestToStateGraph_ParallelBodyNonRegionMembers(t *testing.T) {
+	t.Run("port is not a region", func(t *testing.T) {
+		graph, err := ToStateGraph(stateUsageIn(t, `
+			package test {
+				state Machine parallel {
+					port p;
+					state left {
+						entry; then idle;
+						state idle;
+					}
+				}
+			}
+		`), nil)
+		if err != nil {
+			t.Fatalf("parallel state with port: %v", err)
+		}
+		if len(graph.TopRegions) != 1 || graph.TopRegions[0].Name != "left" {
+			t.Fatalf("parallel regions = %v, want only left (not port)", graph.TopRegions)
+		}
+	})
+
+	t.Run("perform is rejected", func(t *testing.T) {
+		_, err := ToStateGraph(stateUsageIn(t, `
+			package test {
+				state Machine parallel {
+					perform action work;
+				}
+			}
+		`), nil)
+		if err == nil {
+			t.Fatal("parallel state with perform succeeded")
+		}
+		if !strings.Contains(err.Error(), "parallel state body contains unsupported member") {
+			t.Fatalf("error = %v, want unsupported parallel-body member", err)
+		}
+	})
 }
 
 func TestToStateGraph_ParallelWithoutInitialFailsClearly(t *testing.T) {

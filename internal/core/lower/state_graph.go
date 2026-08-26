@@ -69,6 +69,10 @@ type StateGraph struct {
 	// CompositeStates: state → regions
 	CompositeStates map[*ast.StateNode][]*ast.StateRegion
 
+	// CompositeStateOrder preserves declaration order for deterministic runtime
+	// selection of an active composite owner.
+	CompositeStateOrder []*ast.StateNode
+
 	// RegionInitials: region → initial state
 	RegionInitials map[*ast.StateRegion]*ast.StateNode
 
@@ -191,10 +195,7 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	// Also handle states that have regions as sub-members
 	for _, state := range graph.States {
 		if len(state.Regions) > 0 {
-			graph.CompositeStates[state] = state.Regions
-			for _, region := range state.Regions {
-				graph.RegionOwner[region] = state
-			}
+			graph.recordCompositeState(state)
 		}
 	}
 
@@ -357,24 +358,25 @@ func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage) *ast.StateNode {
 // whose endpoints resolve through endpoints.
 func newStateGraph(scope *symbols.Scope, endpoints Endpoints) *StateGraph {
 	return &StateGraph{
-		Scope:            scope,
-		vertexOf:         make(map[ast.Node]ast.Node),
-		endpoints:        endpoints,
-		StateScopes:      make(map[*ast.StateNode]*symbols.Scope),
-		Behaviors:        make(map[*ast.StateNode]*StateBehaviors),
-		HiddenStates:     make(map[*ast.StateNode]bool),
-		declOf:           make(map[*ast.StateNode]ast.Node),
-		States:           make([]*ast.StateNode, 0),
-		Pseudostates:     make([]*ast.PseudostateNode, 0),
-		PseudostateOwner: make(map[*ast.PseudostateNode]*ast.StateNode),
-		Transitions:      make(map[ast.Node][]*Transition),
-		CompositeStates:  make(map[*ast.StateNode][]*ast.StateRegion),
-		RegionInitials:   make(map[*ast.StateRegion]*ast.StateNode),
-		ParentState:      make(map[*ast.StateNode]*ast.StateNode),
-		RegionOwner:      make(map[*ast.StateRegion]*ast.StateNode),
-		RegionOf:         make(map[*ast.StateNode]*ast.StateRegion),
-		Deferred:         make(map[*ast.StateNode][]ast.Node),
-		regionDecl:       make(map[*ast.StateRegion]ast.Node),
+		Scope:               scope,
+		vertexOf:            make(map[ast.Node]ast.Node),
+		endpoints:           endpoints,
+		StateScopes:         make(map[*ast.StateNode]*symbols.Scope),
+		Behaviors:           make(map[*ast.StateNode]*StateBehaviors),
+		HiddenStates:        make(map[*ast.StateNode]bool),
+		declOf:              make(map[*ast.StateNode]ast.Node),
+		States:              make([]*ast.StateNode, 0),
+		Pseudostates:        make([]*ast.PseudostateNode, 0),
+		PseudostateOwner:    make(map[*ast.PseudostateNode]*ast.StateNode),
+		Transitions:         make(map[ast.Node][]*Transition),
+		CompositeStates:     make(map[*ast.StateNode][]*ast.StateRegion),
+		CompositeStateOrder: make([]*ast.StateNode, 0),
+		RegionInitials:      make(map[*ast.StateRegion]*ast.StateNode),
+		ParentState:         make(map[*ast.StateNode]*ast.StateNode),
+		RegionOwner:         make(map[*ast.StateRegion]*ast.StateNode),
+		RegionOf:            make(map[*ast.StateNode]*ast.StateRegion),
+		Deferred:            make(map[*ast.StateNode][]ast.Node),
+		regionDecl:          make(map[*ast.StateRegion]ast.Node),
 
 		designatedInitials: make(map[*ast.StateNode]bool),
 	}
@@ -503,10 +505,7 @@ func collectStateContents(graph *StateGraph, state *ast.StateNode, scope *symbol
 		state.Regions = append(state.Regions, regions...)
 	}
 	if len(state.Regions) > 0 {
-		graph.CompositeStates[state] = state.Regions
-		for _, region := range state.Regions {
-			graph.RegionOwner[region] = state
-		}
+		graph.recordCompositeState(state)
 	}
 
 	// Recursively collect substates
@@ -532,6 +531,18 @@ func collectStateContents(graph *StateGraph, state *ast.StateNode, scope *symbol
 		}
 	}
 	return nil
+}
+
+// recordCompositeState registers a state's regions while retaining their
+// declaration order for deterministic consumers.
+func (g *StateGraph) recordCompositeState(state *ast.StateNode) {
+	if _, exists := g.CompositeStates[state]; !exists {
+		g.CompositeStateOrder = append(g.CompositeStateOrder, state)
+	}
+	g.CompositeStates[state] = state.Regions
+	for _, region := range state.Regions {
+		g.RegionOwner[region] = state
+	}
 }
 
 // stateScope returns the scope state's body was declared in, given the scope of
@@ -630,9 +641,11 @@ func (g *StateGraph) parallelRegions(members []ast.Node, parent *ast.StateNode, 
 				*ast.EntryMember, *ast.DoMember, *ast.ExitMember:
 				continue
 			case *ast.Usage:
-				if actual.(*ast.Usage).Kind == ast.UsageAttribute {
+				usage := actual.(*ast.Usage)
+				if usage.Kind == ast.UsageAttribute || usage.Kind == ast.UsagePort {
 					continue
 				}
+				return nil, fmt.Errorf("parallel state body contains unsupported member %T", actual)
 			default:
 				return nil, fmt.Errorf("parallel state body contains unsupported member %T", actual)
 			}

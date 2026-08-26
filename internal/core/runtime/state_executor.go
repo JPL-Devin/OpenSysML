@@ -1048,7 +1048,7 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 
 	// Check if final state
 	if targetState.IsFinal {
-		if e.graph.Machine == nil || e.parallelMachineComplete() {
+		if len(e.graph.TopRegions) == 0 || e.parallelMachineComplete() {
 			if err := e.exitMachine(); err != nil {
 				return fmt.Errorf("exit state machine: %w", err)
 			}
@@ -1423,11 +1423,12 @@ func (e *StateExecutor) exitToward(stop *ast.StateNode) error {
 }
 
 // activeCompositeOwner returns the deepest composite state whose orthogonal
-// regions hold the active configuration, or nil when no region is active. It
+// regions hold the active configuration, or nil when no region is active.
 func (e *StateExecutor) activeCompositeOwner() *ast.StateNode {
 	var deepest *ast.StateNode
 	depth := -1
-	for state, regions := range e.graph.CompositeStates {
+	for _, state := range e.graph.CompositeStateOrder {
+		regions := e.graph.CompositeStates[state]
 		for _, region := range regions {
 			if _, active := e.activeConfig.regionStates[region]; active {
 				if d := len(e.getParentChain(state)); d > depth {
