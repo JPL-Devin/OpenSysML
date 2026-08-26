@@ -703,6 +703,54 @@ func TestConstraintInterfaceEndConjugation(t *testing.T) {
 	}
 }
 
+// An interface's own flow pairs differently named directed features, so the
+// same-name fallback does not apply.
+func TestConstraintInterfaceFlowPairsDirectedFeatures(t *testing.T) {
+	complementary := constraintDiags(t, `port def Source { out item sent; }
+	port def Target { in item received; }
+	interface def Link {
+		end a : Source;
+		end b : Target;
+		flow a.sent to b.received;
+	}`)
+	if hasCode(complementary, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for paired flow features: %v", complementary)
+	}
+
+	reversed := constraintDiags(t, `port def Source { out item sent; }
+	port def Target { in item received; }
+	interface def Link {
+		end a : Target;
+		end b : Source;
+		flow b.sent to a.received;
+	}`)
+	if hasCode(reversed, "port-conjugation") {
+		t.Errorf("unexpected port-conjugation diagnostic for reversed paired flow features: %v", reversed)
+	}
+
+	nonComplementary := constraintDiags(t, `port def Source { out item sent; }
+	port def Target { out item received; }
+	interface def Link {
+		end a : Source;
+		end b : Target;
+		flow a.sent to b.received;
+	}`)
+	if !hasCode(nonComplementary, "port-conjugation") {
+		t.Errorf("expected port-conjugation diagnostic for non-complementary flow features, got %v", nonComplementary)
+	}
+
+	unpaired := constraintDiags(t, `port def Source { out item sent; }
+	port def Target { in item received; }
+	interface def Link {
+		end a : Source;
+		end b : Target;
+		flow a.sent to b;
+	}`)
+	if !hasCode(unpaired, "port-conjugation") {
+		t.Errorf("expected port-conjugation diagnostic for unpaired flow feature, got %v", unpaired)
+	}
+}
+
 // A `variant` whose owner is not a variation offers no choice, so it is an error
 // as it is in the reference.
 func TestConstraintVariantOutsideVariation(t *testing.T) {
