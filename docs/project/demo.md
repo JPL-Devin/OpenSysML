@@ -86,12 +86,12 @@ package Rover {
     }
 
     constraint MassBudget {
-        assert 180.0 <= 200.0;
+        180.0 <= 200.0
     }
 
     requirement PowerMargin {
-        assume 600.0 > 0.0;
-        require 600.0 >= 450.0;
+        assume constraint { 600.0 > 0.0 }
+        require constraint { 600.0 >= 450.0 }
     }
 }
 EOF
@@ -169,7 +169,7 @@ sysml> %requirement Rover::PowerMargin
 A failure is not a bare `false` — it names the assertion that decided the verdict:
 
 ```console
-sysml> constraint TooHeavy { assert 210.0 <= 200.0; }
+sysml> constraint TooHeavy { 210.0 <= 200.0 }
 ✓ constraint TooHeavy
 
 sysml> %constraint TooHeavy

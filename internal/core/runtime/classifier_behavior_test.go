@@ -132,8 +132,8 @@ const invokeFixture = `
 		exhibit state modes { entry; then holding; state holding; }
 		calc capacity { in bonus : Integer; return total : Integer = level + bonus; }
 		calc rawCapacity { return : Integer = level + 1; }
-		constraint acceptable { in minimum : Integer; assert level >= minimum; }
-		constraint rejected { assert level > 10; }
+		constraint acceptable { in minimum : Integer; level >= minimum }
+		constraint rejected { level > 10 }
 	}
 `
 

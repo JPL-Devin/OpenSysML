@@ -37,7 +37,7 @@ func syntheticModel(parts int) string {
         attribute power : Real;
         part sub : Comp%[2]d;
         constraint MassOK {
-            assert mass > 0.0;
+            mass > 0.0
         }
     }
     calc def Calc%[1]d {

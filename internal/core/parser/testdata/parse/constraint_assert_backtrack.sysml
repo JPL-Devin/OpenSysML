@@ -1,25 +1,28 @@
+// The parser must tell the forms `assert` admits apart, so it attempts the
+// nested `constraint` declaration and rewinds to the reference form when the
+// word after the keyword is not `constraint`.
+constraint def Positive {
+	in attribute x : Real;
+	x > 0
+}
+
 constraint def BacktrackedConditions {
 	in attribute x : Real;
-	in attribute constraint : Real;
 
-	// A condition may start with the word `constraint` used as a feature name.
-	// The nested-constraint attempt consumes it, finds no body, and must rewind
-	// so the condition is read whole.
-	assert constraint > 0;
-	assert constraint == x;
-	assert constraint.x > 0;
+	// Reference forms: the attempt at a nested declaration rewinds.
+	assert Positive;
+	assert not Positive;
 
-	// The nested form with a name and a body is still read as a nested constraint.
+	// Declaration forms, with and without a name.
 	assert constraint positive {
 		x > 0
 	}
-
-	// Anonymous nested constraint: the attempt rewinds over the missing name only.
 	assert constraint {
 		x < 10
 	}
 
-	// Semicolons are optional between conditions, so a rewound `constraint`
-	// followed by another condition reads as two members rather than one.
-	assert constraint x > 0;
+	// Semicolons are optional between conditions, so two conditions read as two
+	// members rather than one.
+	x > 0
+	x < 100
 }

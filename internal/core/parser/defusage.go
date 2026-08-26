@@ -2070,7 +2070,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			p.advance() // {
 			if hasCalcBody {
 				// Parse as calc body with structured parameters
-				members = p.parseCalcBody()
+				members = p.parseConstraintCalcBody()
 			} else {
 				members = p.parseConstraintBody()
 			}

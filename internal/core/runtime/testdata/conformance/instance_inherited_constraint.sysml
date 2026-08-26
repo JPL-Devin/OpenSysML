@@ -4,12 +4,12 @@
 package test {
     constraint def PositiveMargin {
         attribute margin = 5.0;
-        assert margin > 0.0;
+        margin > 0.0
     }
 
     constraint def NegativeMargin {
         attribute margin = -5.0;
-        assert margin > 0.0;
+        margin > 0.0
     }
 
     part def Vehicle {

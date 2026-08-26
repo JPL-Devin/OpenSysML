@@ -255,7 +255,6 @@ elmt:Constraints__Rover__bounds___400
     sysml:qualifiedName "Constraints::Rover::bounds::@0" ;
     sysml:owningNamespace elmt:Constraints__Rover__bounds ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysx:declaredKeyword "assert" ;
     sysx:condition expr:Constraints__Rover__bounds___400.condition .
 
 expr:Constraints__Rover__bounds___400.condition
@@ -281,7 +280,6 @@ elmt:Constraints__Rover__bounds___401
     sysml:qualifiedName "Constraints::Rover::bounds::@1" ;
     sysml:owningNamespace elmt:Constraints__Rover__bounds ;
     sysx:memberIndex "1"^^xsd:integer ;
-    sysx:declaredKeyword "assume" ;
     sysx:condition expr:Constraints__Rover__bounds___401.condition .
 
 expr:Constraints__Rover__bounds___401.condition
@@ -307,23 +305,28 @@ elmt:Constraints__Rover__bounds___402
     sysml:qualifiedName "Constraints::Rover::bounds::@2" ;
     sysml:owningNamespace elmt:Constraints__Rover__bounds ;
     sysx:memberIndex "2"^^xsd:integer ;
-    sysx:declaredKeyword "assert" ;
-    sysml:isNegated "true"^^xsd:boolean ;
     sysx:condition expr:Constraints__Rover__bounds___402.condition .
 
 expr:Constraints__Rover__bounds___402.condition
     a sysml:OperatorExpression ;
-    sysx:sourceText "mass > 1000" ;
-    sysml:operator ">" ;
-    sysml:argument expr:Constraints__Rover__bounds___402.condition.a0, expr:Constraints__Rover__bounds___402.condition.a1 .
+    sysx:sourceText "not (mass > 1000)" ;
+    sysml:operator "not" ;
+    sysml:argument expr:Constraints__Rover__bounds___402.condition.a0 .
 
 expr:Constraints__Rover__bounds___402.condition.a0
+    a sysml:OperatorExpression ;
+    sysx:sourceText "mass > 1000" ;
+    sysml:operator ">" ;
+    sysml:argument expr:Constraints__Rover__bounds___402.condition.a0.a0, expr:Constraints__Rover__bounds___402.condition.a0.a1 ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Constraints__Rover__bounds___402.condition.a0.a0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "mass" ;
     sysml:referent elmt:Constraints__Rover__mass ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Constraints__Rover__bounds___402.condition.a1
+expr:Constraints__Rover__bounds___402.condition.a0.a1
     a sysml:LiteralInteger ;
     sysx:sourceText "1000" ;
     sysml:value "1000"^^xsd:integer ;
@@ -385,28 +388,35 @@ elmt:Constraints__Rover__lightEnough___401
     sysml:qualifiedName "Constraints::Rover::lightEnough::@1" ;
     sysml:owningNamespace elmt:Constraints__Rover__lightEnough ;
     sysx:memberIndex "1"^^xsd:integer ;
-    sysx:condition expr:Constraints__Rover__lightEnough___401.condition .
+    sysx:hasBody "true"^^xsd:boolean .
 
-expr:Constraints__Rover__lightEnough___401.condition
+elmt:Constraints__Rover__lightEnough___401___400
+    a sysx:ConstraintMember ;
+    sysml:qualifiedName "Constraints::Rover::lightEnough::@1::@0" ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough___401 ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:condition expr:Constraints__Rover__lightEnough___401___400.condition .
+
+expr:Constraints__Rover__lightEnough___401___400.condition
     a sysml:OperatorExpression ;
     sysx:sourceText "r.mass > 0" ;
     sysml:operator ">" ;
-    sysml:argument expr:Constraints__Rover__lightEnough___401.condition.a0, expr:Constraints__Rover__lightEnough___401.condition.a1 .
+    sysml:argument expr:Constraints__Rover__lightEnough___401___400.condition.a0, expr:Constraints__Rover__lightEnough___401___400.condition.a1 .
 
-expr:Constraints__Rover__lightEnough___401.condition.a0
+expr:Constraints__Rover__lightEnough___401___400.condition.a0
     a sysml:FeatureChainExpression ;
     sysx:sourceText "r.mass" ;
-    sysml:argument expr:Constraints__Rover__lightEnough___401.condition.a0.a0 ;
+    sysml:argument expr:Constraints__Rover__lightEnough___401___400.condition.a0.a0 ;
     sysml:targetFeature elmt:Constraints__Rover__mass ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Constraints__Rover__lightEnough___401.condition.a0.a0
+expr:Constraints__Rover__lightEnough___401___400.condition.a0.a0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "r" ;
     sysml:referent elmt:Constraints__Rover__lightEnough__r ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Constraints__Rover__lightEnough___401.condition.a1
+expr:Constraints__Rover__lightEnough___401___400.condition.a1
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
     sysml:value "0"^^xsd:integer ;
@@ -456,28 +466,35 @@ elmt:Constraints__Rover__lightEnough___403
     sysml:qualifiedName "Constraints::Rover::lightEnough::@3" ;
     sysml:owningNamespace elmt:Constraints__Rover__lightEnough ;
     sysx:memberIndex "3"^^xsd:integer ;
-    sysx:condition expr:Constraints__Rover__lightEnough___403.condition .
+    sysx:hasBody "true"^^xsd:boolean .
 
-expr:Constraints__Rover__lightEnough___403.condition
+elmt:Constraints__Rover__lightEnough___403___400
+    a sysx:ConstraintMember ;
+    sysml:qualifiedName "Constraints::Rover::lightEnough::@3::@0" ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough___403 ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:condition expr:Constraints__Rover__lightEnough___403___400.condition .
+
+expr:Constraints__Rover__lightEnough___403___400.condition
     a sysml:OperatorExpression ;
     sysx:sourceText "r.mass < 200" ;
     sysml:operator "<" ;
-    sysml:argument expr:Constraints__Rover__lightEnough___403.condition.a0, expr:Constraints__Rover__lightEnough___403.condition.a1 .
+    sysml:argument expr:Constraints__Rover__lightEnough___403___400.condition.a0, expr:Constraints__Rover__lightEnough___403___400.condition.a1 .
 
-expr:Constraints__Rover__lightEnough___403.condition.a0
+expr:Constraints__Rover__lightEnough___403___400.condition.a0
     a sysml:FeatureChainExpression ;
     sysx:sourceText "r.mass" ;
-    sysml:argument expr:Constraints__Rover__lightEnough___403.condition.a0.a0 ;
+    sysml:argument expr:Constraints__Rover__lightEnough___403___400.condition.a0.a0 ;
     sysml:targetFeature elmt:Constraints__Rover__mass ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Constraints__Rover__lightEnough___403.condition.a0.a0
+expr:Constraints__Rover__lightEnough___403___400.condition.a0.a0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "r" ;
     sysml:referent elmt:Constraints__Rover__lightEnough__r ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Constraints__Rover__lightEnough___403.condition.a1
+expr:Constraints__Rover__lightEnough___403___400.condition.a1
     a sysml:LiteralInteger ;
     sysx:sourceText "200" ;
     sysml:value "200"^^xsd:integer ;

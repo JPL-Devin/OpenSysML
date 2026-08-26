@@ -101,7 +101,7 @@ func TestRequirementViolationIsAVerdictNotAnError(t *testing.T) {
 // a violated assertion, and reads as one rather than as a model that failed.
 func TestConstraintEvaluationErrorIsNotAViolation(t *testing.T) {
 	s := NewSession()
-	s.Submit(`package Bad { constraint broken { assert nonexistent > 0; } }`)
+	s.Submit(`package Bad { constraint broken { nonexistent > 0 } }`)
 	got := run(t, s, "%constraint Bad::broken")
 	wants(t, got, "? Constraint Bad::broken could not be evaluated", "Error:")
 	rejects(t, got, "Assertion evaluated to false", "Constraint Bad::broken failed", "✗")

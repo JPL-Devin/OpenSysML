@@ -9,24 +9,25 @@ import (
 )
 
 // A condition may be stated in a requirement definition as well as in a usage,
-// in either spelling, and after ordinary declarations.
+// as the constraint it names or as a nested constraint, and after ordinary
+// declarations.
 func TestRequirementConditionForms(t *testing.T) {
 	cases := []struct {
 		name string
 		src  string
 	}{
-		{"def body require", "package P { requirement def R { attribute a = 1.0; attribute b = 2.0; require a <= b; } }"},
-		{"def body require first", "package P { requirement def R { require a <= b; attribute a = 1.0; attribute b = 2.0; } }"},
-		{"usage body require", "package P { requirement r { attribute a = 1.0; attribute b = 2.0; require a <= b; } }"},
-		{"def body require constraint", "package P { requirement def R { attribute a = 1.0; require constraint { a <= 2.0 } } }"},
-		{"usage body require constraint", "package P { requirement r { attribute a = 1.0; require constraint { a <= 2.0 } } }"},
-		{"def body assume", "package P { requirement def R { attribute a = 1.0; assume a <= 2.0; require a <= 3.0; } }"},
+		{"def body require", "package P { requirement def R { attribute a = 1.0; attribute b = 2.0; require constraint { a <= b } } }"},
+		{"def body require first", "package P { requirement def R { require constraint { a <= b } attribute a = 1.0; attribute b = 2.0; } }"},
+		{"usage body require", "package P { requirement r { attribute a = 1.0; attribute b = 2.0; require constraint { a <= b } } }"},
+		{"def body require reference", "package P { constraint def C; requirement def R { require P::C; } }"},
+		{"usage body require reference", "package P { constraint def C; requirement r { require P::C; } }"},
+		{"def body assume", "package P { requirement def R { attribute a = 1.0; assume constraint { a <= 2.0 } require constraint { a <= 3.0 } } }"},
 		{"def body assume constraint", "package P { requirement def R { attribute a = 1.0; assume constraint { a <= 2.0 } } }"},
-		{"concern def body require", "package P { concern def C { attribute a = 1.0; require a <= 2.0; } }"},
-		{"viewpoint def body require", "package P { viewpoint def V { attribute a = 1.0; require a <= 2.0; } }"},
-		{"satisfy body require", "package P { requirement q; part x; part c { satisfy requirement q by x { require 1.0 <= 2.0; } } }"},
-		{"subject redefines inherited", "package P { requirement def R { subject subj : Thing[1] :>> Other::subj; require 1.0 <= 2.0; } }"},
-		{"bare subject", "package P { viewpoint def V { subject; require 1.0 <= 2.0; } }"},
+		{"concern def body require", "package P { concern def C { attribute a = 1.0; require constraint { a <= 2.0 } } }"},
+		{"viewpoint def body require", "package P { viewpoint def V { attribute a = 1.0; require constraint { a <= 2.0 } } }"},
+		{"satisfy body require", "package P { requirement q; part x; part c { satisfy requirement q by x { require constraint { 1.0 <= 2.0 } } } }"},
+		{"subject redefines inherited", "package P { requirement def R { subject subj : Thing[1] :>> Other::subj; require constraint { 1.0 <= 2.0 } } }"},
+		{"bare subject", "package P { viewpoint def V { subject; require constraint { 1.0 <= 2.0 } } }"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -39,8 +40,7 @@ func TestRequirementConditionForms(t *testing.T) {
 	}
 }
 
-// The braced spelling keeps every condition of the nested constraint, and the
-// direct spelling keeps its expression.
+// The braced spelling keeps every condition of the nested constraint it states.
 func TestRequireMemberRetainsConditions(t *testing.T) {
 	src := `package P {
 		requirement def R {
@@ -49,7 +49,7 @@ func TestRequireMemberRetainsConditions(t *testing.T) {
 				a <= 2.0
 				a <= 3.0
 			}
-			require a <= 4.0;
+			require constraint { a <= 4.0 }
 		}
 	}`
 	p := New(source.New("t.sysml", []byte(src)))
@@ -58,8 +58,8 @@ func TestRequireMemberRetainsConditions(t *testing.T) {
 		t.Errorf("unexpected diagnostic: %s", d.Message)
 	}
 	dump := ast.Dump(root)
-	if got := strings.Count(dump, "(ConstraintMember"); got != 2 {
-		t.Errorf("nested conditions kept = %d, want 2\n%s", got, dump)
+	if got := strings.Count(dump, "(ConstraintMember"); got != 3 {
+		t.Errorf("nested conditions kept = %d, want 3\n%s", got, dump)
 	}
 	if got := strings.Count(dump, "(RequireMember"); got != 2 {
 		t.Errorf("require members = %d, want 2\n%s", got, dump)

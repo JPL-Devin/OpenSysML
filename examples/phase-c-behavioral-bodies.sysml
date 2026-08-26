@@ -91,7 +91,7 @@ package PhaseC {
     constraint def NonNegative {
         in value : Real;
 
-        not value < 0
+        not (value < 0)
     }
     
     requirement safeBraking {

@@ -1,9 +1,9 @@
 package test {
 	requirement ParentReq {
-		require 10 < 20;
+		require constraint { 10 < 20 }
 		
 		requirement NestedReq {
-			require 5 < 10;
+			require constraint { 5 < 10 }
 		}
 	}
 }

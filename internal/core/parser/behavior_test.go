@@ -242,9 +242,9 @@ func TestParseResultBody_Multiple(t *testing.T) {
 	}
 }
 
-func TestParseConstraintBody_Assert(t *testing.T) {
+func TestParseConstraintBody_Condition(t *testing.T) {
 	input := `{
-		assert x > 0;
+		x > 0
 	}`
 
 	nodes := parseConstraintBodyTest(t, input)
@@ -271,7 +271,7 @@ func TestParseConstraintBody_Assert(t *testing.T) {
 
 func TestParseConstraintBody_AssertNot(t *testing.T) {
 	input := `{
-		assert not z < 0;
+		assert not z;
 	}`
 
 	nodes := parseConstraintBodyTest(t, input)
@@ -298,7 +298,7 @@ func TestParseConstraintBody_AssertNot(t *testing.T) {
 
 func TestParseConstraintBody_Assume(t *testing.T) {
 	input := `{
-		assume y != null;
+		assume y;
 	}`
 
 	nodes := parseConstraintBodyTest(t, input)
@@ -325,9 +325,9 @@ func TestParseConstraintBody_Assume(t *testing.T) {
 
 func TestParseConstraintBody_Multiple(t *testing.T) {
 	input := `{
-		assert x > 0;
-		assume y != null;
-		assert not z < 0;
+		x > 0
+		assume y;
+		assert not z;
 	}`
 
 	nodes := parseConstraintBodyTest(t, input)
@@ -336,7 +336,7 @@ func TestParseConstraintBody_Multiple(t *testing.T) {
 		t.Fatalf("expected 3 nodes, got %d", len(nodes))
 	}
 
-	// Check first: assert x > 0
+	// Check first: x > 0
 	c1, ok := nodes[0].(*ast.ConstraintMember)
 	if !ok {
 		t.Errorf("node 0: expected *ast.ConstraintMember, got %T", nodes[0])
@@ -346,7 +346,7 @@ func TestParseConstraintBody_Multiple(t *testing.T) {
 		}
 	}
 
-	// Check second: assume y != null
+	// Check second: assume y
 	c2, ok := nodes[1].(*ast.ConstraintMember)
 	if !ok {
 		t.Errorf("node 1: expected *ast.ConstraintMember, got %T", nodes[1])
@@ -356,7 +356,7 @@ func TestParseConstraintBody_Multiple(t *testing.T) {
 		}
 	}
 
-	// Check third: assert not z < 0
+	// Check third: assert not z
 	c3, ok := nodes[2].(*ast.ConstraintMember)
 	if !ok {
 		t.Errorf("node 2: expected *ast.ConstraintMember, got %T", nodes[2])
@@ -411,7 +411,7 @@ func TestParseRequirementBody_Subject(t *testing.T) {
 
 func TestParseRequirementBody_Assume(t *testing.T) {
 	input := `{
-		assume x > 0;
+		assume constraint { x > 0 }
 	}`
 
 	nodes := parseRequirementBodyTest(t, input)
@@ -424,8 +424,8 @@ func TestParseRequirementBody_Assume(t *testing.T) {
 	if !ok {
 		t.Errorf("node 0: expected *ast.AssumeMember, got %T", nodes[0])
 	} else {
-		if assume.Expression == nil {
-			t.Errorf("AssumeMember.Expression is nil")
+		if len(assume.Body) == 0 {
+			t.Errorf("AssumeMember.Body is empty")
 		}
 	}
 }
@@ -488,7 +488,7 @@ func TestParseRequirementBody_Actor(t *testing.T) {
 func TestParseRequirementBody_Complete(t *testing.T) {
 	input := `{
 		subject vehicle : Vehicle;
-		assume vehicle.speed > 0;
+		assume constraint { vehicle.speed > 0 }
 		require vehicle.brakes.functional;
 		actor driver : Driver;
 	}`

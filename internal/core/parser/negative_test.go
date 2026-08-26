@@ -56,7 +56,7 @@ func TestNegative(t *testing.T) {
 		// A require member referencing a requirement takes specializations and a
 		// body, so neither may be left half written.
 		{"require_reference_no_specialization_type", "requirement r { require Q::x : ; }"},
-		{"require_reference_unclosed_body", "requirement r { require Q::x { require x > 0; }"},
+		{"require_reference_unclosed_body", "requirement r { require Q::x { require constraint { x > 0 } }"},
 		// Prefix metadata needs a name, and the declaration after it a terminator.
 		{"require_prefix_metadata_no_type", "requirement r { require #; }"},
 		{"require_prefix_metadata_unterminated", "requirement r { require #goal c }"},

@@ -1,7 +1,6 @@
 package passes
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -158,56 +157,14 @@ func TestReferenceReturnsStaySilent(t *testing.T) {
 	}
 }
 
-func TestKeywordedConstraintConditionsAreReported(t *testing.T) {
-	for _, tc := range []struct {
-		name, keyword string
-	}{
-		{"assert", "assert"},
-		{"assume", "assume"},
-		{"negated_assert", "assert"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			expr := "x >= 0"
-			if tc.name == "negated_assert" {
-				expr = "not x >= 0"
-			}
-			src := fmt.Sprintf("constraint validRange { in x : Real; %s %s; }", tc.keyword, expr)
-			wantNotation(t, "a.sysml", src, CodeNonstandardNotation,
-				fmt.Sprintf("`%s <expression>;`", tc.keyword))
-		})
-	}
-}
-
-func TestKeywordedRequirementConditionsAreReported(t *testing.T) {
-	for _, tc := range []struct {
-		name, src string
-	}{
-		{"requirement_assume", "requirement r { attribute x : Real; assume x > 0; }"},
-		{"requirement_require", "requirement r { attribute x : Real; require x > 0; }"},
-		{"concern", "concern def c { attribute x : Real; require x > 0; }"},
-		{"viewpoint", "viewpoint v { attribute x : Real; require x > 0; }"},
-		{"objective", "objective o { attribute x : Real; require x > 0; }"},
-		{"case_nested_requirement", "case def c { requirement r { require x > 0; } }"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			keyword := "require"
-			if tc.name == "requirement_assume" {
-				keyword = "assume"
-			}
-			wantNotation(t, "a.sysml", tc.src, CodeNonstandardNotation,
-				fmt.Sprintf("`%s <expression>;`", keyword))
-		})
-	}
-}
-
 func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 	src := `calc c {
 		in x : Real;
 		return x * 2;
 	}
-	constraint validRange {
-		in x : Real;
-		assert x >= 0;
+	calc d {
+		in y : Real;
+		return y + 1;
 	}`
 	root, pd, idx := analyzeInputs(t, "a.sysml", src)
 	if len(pd) != 0 {
@@ -221,7 +178,7 @@ func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 		line, length int
 	}{
 		{3, len("return")},
-		{7, len("assert")},
+		{7, len("return")},
 	} {
 		if line := strings.Count(src[:got[i].Span.Offset], "\n") + 1; line != want.line {
 			t.Errorf("diagnostic %d is on line %d, want %d", i, line, want.line)
