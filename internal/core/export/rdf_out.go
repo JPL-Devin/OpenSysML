@@ -454,8 +454,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return e.encode(n.Members, fqn, subject)
 
 	case *ast.ConstraintMember:
-		// A condition of a constraint body, written inline (`assert x > 0;`) or
-		// as a nested constraint (`assert constraint [name] { … }`).
+		// A condition of a constraint body, written bare (`x > 0`) or as a
+		// nested constraint (`assert constraint [name] { … }`).
 		head(rdf.OpenSysMLTerm(mConstraint))
 		if n.Name != "" {
 			e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.Name))

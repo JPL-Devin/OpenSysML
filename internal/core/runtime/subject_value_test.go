@@ -19,11 +19,11 @@ func TestRequirementSubjectDeclarationValue(t *testing.T) {
 	src := `package test {
 		requirement Bound {
 			subject speed : Real = 50;
-			require speed < 100;
+			require constraint { speed < 100 }
 		}
 		requirement Defaulted {
 			subject speed : Real default 150;
-			require speed < 100;
+			require constraint { speed < 100 }
 		}
 	}`
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()

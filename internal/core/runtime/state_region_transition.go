@@ -352,6 +352,9 @@ func (e *StateExecutor) moveBetweenRegions(
 	if err := e.scheduleFromEntered(leaf); err != nil {
 		return err
 	}
+	if err := e.completeIfFinalState(target); err != nil {
+		return fmt.Errorf("complete state machine: %w", err)
+	}
 	e.recordTransitionTrace(trans, source, target)
 	return nil
 }
@@ -466,6 +469,9 @@ func (e *StateExecutor) enterOutside(trans *lower.Transition, source, lca, targe
 		return err
 	}
 	if target.IsFinal {
+		if err := e.exitMachine(); err != nil {
+			return fmt.Errorf("exit state machine: %w", err)
+		}
 		e.state = StateCompleted
 	}
 	e.recordTransitionTrace(trans, source, target)

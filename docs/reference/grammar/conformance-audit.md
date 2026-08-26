@@ -110,6 +110,21 @@ unchanged.
 | `defer <event> [, <event>]*;` | no `defer` literal; `StatePerformance::deferrable` has the semantics but no notation |
 | `transition [<name>] <src> to <tgt>;` | `to` is a literal (`SysML.xtext:1077`, `:1168`, `:1253`, `:1287`; `KerML.xtext:838`, `:1009`) but in connector, interface, message and flow ends only — `TransitionUsage` (`:1851-1880`) states its ends with `first` and `then` |
 
+### Removed extension notation — no longer accepted
+
+A keyworded inline condition — `assert <expression>;` or `assume <expression>;`
+in a constraint body, `assume <expression>;` or `require <expression>;` in a
+requirement-style body — was an OpenSysML extension and is now a parse error:
+`AssertConstraintUsage` (`SysML.xtext:2007-2013`) and
+`RequirementConstraintUsage` (`:2066-2071`) admit a reference subsetting or a
+`constraint` declaration after the keyword, never an expression. The standard
+spellings, which are unchanged, are a keyword-less condition in a constraint
+body (`total <= limit`), `assert [not] <reference>;`,
+`assert constraint { … }`, and `assume`/`require constraint { … }` in a
+requirement body — a requirement body admits no keyword-less condition
+(`RequirementBodyItem`, `:2039-2047`). A removed negation keeps its truth value
+as `not (…)` inside the condition.
+
 A spelling that is a pure alias of a standard construct is removed rather than
 warned, so it is no longer accepted and has no row here: `return <expression>;`
 in a calculation body is now a parse error, and a computed result is written as

@@ -35,6 +35,10 @@ type Parser struct {
 	pendingComment    source.Span // span of the most recent /* */ regular comment
 	hasPendingComment bool
 
+	// constraintCalcDepth counts the calculation bodies that are constraint
+	// bodies, whose bare expressions are the conditions the constraint states.
+	constraintCalcDepth int
+
 	// effectDepth counts the transition effects being parsed, whose statement is
 	// closed by the transition's next clause rather than by ';'.
 	effectDepth int

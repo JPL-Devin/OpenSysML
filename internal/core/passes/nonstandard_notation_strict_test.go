@@ -25,11 +25,6 @@ var extensionInventory = []string{
 	"action def A { initial a; }",
 	"action def A { final b; }",
 	"action def A { decision d; }",
-	"constraint validRange { in x : Real; assert x >= 0; }",
-	"constraint validRange { in x : Real; assume x >= 0; }",
-	"constraint validRange { in x : Real; assert not x >= 0; }",
-	"requirement r { attribute x : Real; assume x > 0; }",
-	"requirement r { attribute x : Real; require x > 0; }",
 }
 
 // notationDiags runs the pass over a document in the named mode.

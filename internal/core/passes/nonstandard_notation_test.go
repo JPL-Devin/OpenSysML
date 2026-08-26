@@ -1,7 +1,6 @@
 package passes
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -146,65 +145,26 @@ func TestResultParametersAndTrailingExpressionsStaySilent(t *testing.T) {
 	}
 }
 
-func TestKeywordedConstraintConditionsAreReported(t *testing.T) {
-	for _, tc := range []struct {
-		name, keyword string
-	}{
-		{"assert", "assert"},
-		{"assume", "assume"},
-		{"negated_assert", "assert"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			expr := "x >= 0"
-			if tc.name == "negated_assert" {
-				expr = "not x >= 0"
-			}
-			src := fmt.Sprintf("constraint validRange { in x : Real; %s %s; }", tc.keyword, expr)
-			wantNotation(t, "a.sysml", src, CodeNonstandardNotation,
-				fmt.Sprintf("`%s <expression>;`", tc.keyword))
-		})
-	}
-}
-
-func TestKeywordedRequirementConditionsAreReported(t *testing.T) {
-	for _, tc := range []struct {
-		name, src string
-	}{
-		{"requirement_assume", "requirement r { attribute x : Real; assume x > 0; }"},
-		{"requirement_require", "requirement r { attribute x : Real; require x > 0; }"},
-		{"concern", "concern def c { attribute x : Real; require x > 0; }"},
-		{"viewpoint", "viewpoint v { attribute x : Real; require x > 0; }"},
-		{"objective", "objective o { attribute x : Real; require x > 0; }"},
-		{"case_nested_requirement", "case def c { requirement r { require x > 0; } }"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			keyword := "require"
-			if tc.name == "requirement_assume" {
-				keyword = "assume"
-			}
-			wantNotation(t, "a.sysml", tc.src, CodeNonstandardNotation,
-				fmt.Sprintf("`%s <expression>;`", keyword))
-		})
-	}
-}
-
 func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
-	src := `constraint validRange {
-		in x : Real;
-		assert x >= 0;
+	src := `state def S {
+		state a;
+		state b;
+		initial a;
+		final b;
 	}`
 	root, pd, idx := analyzeInputs(t, "a.sysml", src)
 	if len(pd) != 0 {
 		t.Fatalf("%s: parse errors %+v", src, pd)
 	}
 	got := (NonstandardNotationPass{}).Run(NewContext("a.sysml", idx, pd), "a.sysml", root)
-	if len(got) != 1 {
-		t.Fatalf("%s: got %d diagnostics %+v, want 1", src, len(got), got)
+	if len(got) != 2 {
+		t.Fatalf("%s: got %d diagnostics %+v, want 2", src, len(got), got)
 	}
 	for i, want := range []struct {
 		line, length int
 	}{
-		{3, len("assert")},
+		{4, len("initial")},
+		{5, len("final")},
 	} {
 		if line := strings.Count(src[:got[i].Span.Offset], "\n") + 1; line != want.line {
 			t.Errorf("diagnostic %d is on line %d, want %d", i, line, want.line)
