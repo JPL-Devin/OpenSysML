@@ -51,7 +51,6 @@ elmt:Quoted_20Names__Rover_20Model__mass_20limit___400
     sysml:qualifiedName "Quoted Names::Rover Model::mass limit::@0" ;
     sysml:owningNamespace elmt:Quoted_20Names__Rover_20Model__mass_20limit ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysx:declaredKeyword "assert" ;
     sysx:condition expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition .
 
 expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition

@@ -1,6 +1,6 @@
 package test {
-    // Negated constraint (assert not)
+    // Negated condition
     constraint TestNegation {
-        assert not false;  // not false = true
+        not (false)  // not false = true
     }
 }

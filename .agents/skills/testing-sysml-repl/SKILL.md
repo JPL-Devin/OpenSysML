@@ -2674,7 +2674,7 @@ object whose type conforms to the type declaring the condition, else declared de
   `"status": "unresolved"`, `"exit": 2` and the same `?` line.
 - CLI checks refuse to run at all on a model that does not analyse cleanly
   (`… did not analyse cleanly; no check was made`, exit 2), so an unevaluable-verdict fixture must
-  itself be error-free — put the `assert nonexistent > 0` style constraint in a *separate* file
+  itself be error-free — put the `nonexistent > 0` style constraint in a *separate* file
   from the unbound-subject requirement, or the CLI never reaches the verdict.
 - PR #180 made `%eval` pick the same subject as the checks (`Session.subjectFor`): with `P::hot`
   instantiated, `%eval P::Sensor::reading` answers `= 140.00 (on P::hot ID: 1)`; with `P::hot` and

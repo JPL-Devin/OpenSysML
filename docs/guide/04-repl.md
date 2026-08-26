@@ -7,7 +7,7 @@ command answers about.
 ```
 $ sysml
 SysML v2 REPL — %help for commands, Ctrl-D to exit
-sysml> import ScalarValues::*;
+sysml> private import ScalarValues::*;
 ✓ import ScalarValues::*
 sysml> package Demo { part def Wheel { attribute diameter : Real = 16.0; } }
 ✓ package Demo
@@ -155,14 +155,71 @@ The verdicts and the treatment of a nested view's framing are this tool's choice
 verification verdict semantics non-normative.
 
 ```
+sysml> package Demo {
+  ...>     private import ScalarValues::*;
+  ...>     private import Views::*;
+  ...>     part def Wheel {
+  ...>         attribute diameter : Real = 16.0;
+  ...>     }
+  ...>     part def Vehicle {
+  ...>         attribute mass : Real;
+  ...>         part wheel : Wheel;
+  ...>     }
+  ...>     part vehicle : Vehicle {
+  ...>         attribute :>> mass = 1200.0;
+  ...>     }
+  ...>     concern def MassBudget {
+  ...>         subject s : Vehicle;
+  ...>         attribute maxMass : Real = 1000.0;
+  ...>         require constraint {
+  ...>             s.mass < maxMass
+  ...>         }
+  ...>     }
+  ...>     concern def Modularity {
+  ...>         subject s : Vehicle;
+  ...>         require constraint {
+  ...>             1 < 2
+  ...>         }
+  ...>     }
+  ...>     viewpoint def StructurePerspective {
+  ...>         frame concern budget : MassBudget;
+  ...>         frame concern modularity : Modularity;
+  ...>     }
+  ...>     viewpoint structure : StructurePerspective;
+  ...>     view def StructureView {
+  ...>         satisfy structure;
+  ...>         frame concern budget : MassBudget;
+  ...>         frame concern modularity : Modularity;
+  ...>     }
+  ...>     view report : StructureView {
+  ...>         expose vehicle;
+  ...>         view detail {
+  ...>             expose Wheel;
+  ...>         }
+  ...>     }
+  ...>     view summary : StructureView {
+  ...>         expose Vehicle;
+  ...>         view detail {
+  ...>             expose Wheel;
+  ...>         }
+  ...>     }
+  ...>     view parts {
+  ...>         expose Vehicle;
+  ...>         render asElementTable;
+  ...>     }
+  ...> }
+✓ package Demo
+
 sysml> %view Demo::report
 view Demo::report
   exposes
     Demo::vehicle (partUsage)
+  nested views
+    Demo::report::detail (viewUsage)
   viewpoint conformance
     satisfy structure (from Demo::StructureView): violated
       concern budget: violated
-        Demo::vehicle: satisfaction satisfy MassBudget by Demo::vehicle: require condition evaluated to false: s.mass < 1000.0
+        Demo::vehicle: satisfaction satisfy MassBudget by Demo::vehicle: require condition evaluated to false: s.mass < maxMass
       concern modularity: conforms
 ```
 
@@ -182,9 +239,11 @@ sysml> %render Demo::summary
 Demo::summary - tree rendering (the view states no rendering; a tree is the default)
 
 part def Demo::Vehicle
-part Demo::v (Vehicle)
+  attribute mass (Real)
+  part wheel (Wheel)
 view Demo::summary::detail
   part def Demo::Wheel
+    attribute diameter (Real)
 ```
 
 A view stating `render asElementTable;` renders as rows instead — the exposed elements, what they
@@ -214,6 +273,9 @@ sysml> %eval in Demo::Vehicle : mass * 2
 ✓ mass * 2 (in Demo::Vehicle)
   = 3000.00
 sysml> %instantiate Demo::Vehicle
+✓ Created instance of Demo::Vehicle
+  ID: 1
+  Use %features Demo::Vehicle to inspect
 sysml> %eval in Demo::Vehicle : mass * 2
 ✓ mass * 2 (on Demo::Vehicle ID: 1)
   = 3000.00

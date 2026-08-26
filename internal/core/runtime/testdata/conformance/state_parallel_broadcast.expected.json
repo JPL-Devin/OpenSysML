@@ -1,0 +1,6 @@
+{
+	"type": "state",
+	"events": [{"signal": "Tick"}],
+	"finalState": "ldone+rdone",
+	"stateVisits": ["lidle", "ridle", "ldone", "rdone"]
+}

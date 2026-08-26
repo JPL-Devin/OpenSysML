@@ -13,11 +13,11 @@ package 'My Pkg' {
 	}
 
 	constraint 'light enough' {
-		assert 5.0 < 10.0;
+		5.0 < 10.0
 	}
 
 	requirement 'Safe Mass' {
-		require 1200.0 < 2000.0;
+		require constraint { 1200.0 < 2000.0 }
 	}
 
 	action 'run it' {

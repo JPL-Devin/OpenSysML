@@ -15,7 +15,7 @@ func TestConstraintEvaluation_Assert(t *testing.T) {
 	src := `
 		package test {
 			constraint PositiveValue {
-				assert value > 0;
+				value > 0
 			}
 		}
 	`
@@ -58,11 +58,11 @@ func TestConstraintEvaluation_AssertWithLiteral(t *testing.T) {
 	src := `
 		package test {
 			constraint AlwaysTrue {
-				assert 5 > 3;
+				5 > 3
 			}
 			
 			constraint AlwaysFalse {
-				assert 2 > 10;
+				2 > 10
 			}
 		}
 	`
@@ -120,7 +120,7 @@ func TestConstraintEvaluation_Assume(t *testing.T) {
 	src := `
 		package test {
 			constraint WithAssumption {
-				assume 1 > 5;  // false assumption, but should pass
+				assume constraint { 1 > 5 }  // false assumption, but should pass
 			}
 		}
 	`
@@ -162,7 +162,7 @@ func TestConstraintEvaluation_Negation(t *testing.T) {
 	src := `
 		package test {
 			constraint NotNegative {
-				assert not (3 < 0);
+				not (3 < 0)
 			}
 		}
 	`

@@ -11,7 +11,7 @@ package Nested {
 		part engine : Engine {
 			attribute mass = 5.0;
 			constraint light {
-				assert mass < 10.0;
+				mass < 10.0
 			}
 		}
 	}

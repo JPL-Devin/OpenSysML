@@ -1,0 +1,6 @@
+exit: lstart
+enter: ldone
+transition: lstart -> ldone
+exit: rstart
+enter: rdone
+transition: rstart -> rdone
