@@ -26,22 +26,25 @@ env:
 
 jobs:
   race-tests:
-    name: Race tests
+    name: Go race tests
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Download modules
+      - name: Download Go modules
         run: go mod download
 
       # The solver is an external process, never linked in: the solver-dependent
       # tests need one on PATH to run rather than skip.
-      - name: Install z3
+      - name: Install Z3
         run: |
           sudo apt-get update
           sudo apt-get install -y z3
@@ -71,7 +74,7 @@ jobs:
       - name: Download the OMG training corpus
         run: ./scripts/download-training-examples.sh
 
-      - name: Verify the corpus is present
+      - name: Verify the OMG training corpus
         run: |
           count=$(find examples/sysml-v2-training -name '*.sysml' | wc -l)
           echo "training corpus: $count .sysml files"
@@ -91,7 +94,7 @@ jobs:
       - name: Download the OMG pilot corpora
         run: ./scripts/download-pilot-corpora.sh
 
-      - name: Verify the pilot corpora are present
+      - name: Verify the OMG pilot corpora
         run: |
           for root in sysml-examples sysml-validation kerml-examples; do
             count=$(find "examples/pilot-corpora/$root" -type f \( -name '*.sysml' -o -name '*.kerml' \) | wc -l)
@@ -104,29 +107,34 @@ jobs:
 
       # Per-package timeout: under -race, passes and model run within 1% of go's 10m
       # default. Matches `make test`.
-      - name: Run tests
-        run: go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
+      - name: Run Go race tests
+        run: make test
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage.txt
+          if-no-files-found: error
 
   static-and-integrity:
-    name: Static and integrity checks
+    name: Go static and integrity checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Download modules
+      - name: Download Go modules
         run: go mod download
 
-      - name: Install z3
+      - name: Install Z3
         run: |
           sudo apt-get update
           sudo apt-get install -y z3
@@ -150,7 +158,7 @@ jobs:
       - name: Download the OMG training corpus
         run: ./scripts/download-training-examples.sh
 
-      - name: Verify the corpus is present
+      - name: Verify the OMG training corpus
         run: |
           count=$(find examples/sysml-v2-training -name '*.sysml' | wc -l)
           echo "training corpus: $count .sysml files"
@@ -168,7 +176,7 @@ jobs:
       - name: Download the OMG pilot corpora
         run: ./scripts/download-pilot-corpora.sh
 
-      - name: Verify the pilot corpora are present
+      - name: Verify the OMG pilot corpora
         run: |
           for root in sysml-examples sysml-validation kerml-examples; do
             count=$(find "examples/pilot-corpora/$root" -type f \( -name '*.sysml' -o -name '*.kerml' \) | wc -l)
@@ -179,7 +187,7 @@ jobs:
             fi
           done
 
-      - name: Check gofmt
+      - name: Check Go formatting
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
@@ -188,7 +196,7 @@ jobs:
             exit 1
           fi
 
-      - name: Run go vet
+      - name: Run Go vet
         run: go vet ./...
 
       - name: Run static analysis (staticcheck + gosec)
@@ -197,7 +205,7 @@ jobs:
       # Re-run the corpus gate on its own so its verdict is legible in the log
       # and a skip is impossible to miss. TestCorpusGates is the shared
       # cache-independence case over all four OMG roots, which skips with them.
-      - name: Corpus gate
+      - name: Run training corpus gate
         run: |
           set -o pipefail
           go test -count=1 -v ./internal/core/model -run 'TestTrainingExamples|TestCorpusGates' | tee corpus-gate.log
@@ -211,7 +219,7 @@ jobs:
       # verdict lines are the reviewable output, and a skip must not pass.
       # It gates our own diagnostics only; the comparison against the reference
       # implementation (cmd/pilot-diff) needs Java validators and is not run here.
-      - name: Pilot corpora gate
+      - name: Run pilot corpora gate
         run: |
           set -o pipefail
           go test -count=1 -v ./internal/core/model -run 'TestPilotCorpora' | tee pilot-corpora-gate.log
@@ -223,7 +231,7 @@ jobs:
 
       # Re-run the solver gate on its own, as the corpus gate is, so a skip
       # cannot hide behind a green suite.
-      - name: Solver gate
+      - name: Run solver gate (Z3)
         run: |
           set -o pipefail
           go test -count=1 -v ./internal/core/solve ./internal/repl -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck|TestSolve|TestConfigure|TestSynthesis|TestPinned|TestFixed|TestOptimize|TestOptimum' | tee solver-gate.log
@@ -234,7 +242,7 @@ jobs:
 
       # The differential gate compares the solver against the normative
       # evaluator; its summary counts make coverage drift reviewable in the log.
-      - name: Differential agreement gate
+      - name: Run solver differential gate
         run: |
           set -o pipefail
           go test -count=1 -v ./internal/core/solve -run TestDifferential | tee differential-gate.log
@@ -247,7 +255,7 @@ jobs:
       # Portability: the same subset run against both verified backends, so a
       # feature one of them refuses is reported rather than discovered by a user.
       # OPENSYSML_REQUIRE_SMT makes an absent solver a failure, not a skip.
-      - name: Portability gate
+      - name: Run solver portability gate
         run: |
           set -o pipefail
           for solver in z3 cvc5; do
@@ -262,7 +270,7 @@ jobs:
 
       # The solver gate again against the second backend, not only the
       # portability subset: what z3 answers, cvc5 must answer too.
-      - name: Second backend gate
+      - name: Run solver gate (cvc5)
         run: |
           set -o pipefail
           OPENSYSML_SMT=cvc5 go test -count=1 -v ./internal/core/solve ./internal/repl \
@@ -278,7 +286,7 @@ jobs:
       # must still report one. OPENSYSML_SMT names an executable that does not
       # exist, which is discovery's absent case, and the requirement flag is
       # dropped so a skip is the expected outcome here.
-      - name: Solver-absent gate
+      - name: Run solver-absent gate
         run: |
           set -o pipefail
           env -u OPENSYSML_REQUIRE_SMT OPENSYSML_SMT=/nonexistent/no-such-solver \
@@ -295,15 +303,18 @@ jobs:
   build:
     name: Build binaries
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Download modules
+      - name: Download Go modules
         run: go mod download
 
       - name: Build binaries
@@ -320,10 +331,12 @@ jobs:
           ./bin/sysml-lsp --version
           ls -lh bin/
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: binaries
           path: bin/
+          if-no-files-found: error
 
   build-and-test:
     name: Build and test
@@ -333,8 +346,9 @@ jobs:
       - race-tests
       - static-and-integrity
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Verify required jobs passed
+      - name: Verify required checks
         env:
           BUILD_RESULT: ${{ needs.build.result }}
           RACE_TESTS_RESULT: ${{ needs.race-tests.result }}
@@ -352,10 +366,13 @@ jobs:
   vscode-extension:
     name: VS Code extension
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
@@ -363,73 +380,79 @@ jobs:
 
       # Type-check, bundle and package. The generated TextMate grammars are
       # gated by go test ./editors/... in the job above.
-      - name: Package the extension
-        working-directory: editors/vscode
-        run: |
-          npm ci
-          npm run package
+      - name: Package the VS Code extension
+        run: make vscode-package
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload VS Code extension artifact
+        uses: actions/upload-artifact@v4
         with:
           name: vscode-extension
           path: editors/vscode/opensysml-sysml.vsix
+          if-no-files-found: error
 
   docs:
     name: Documentation site
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: docs-requirements.txt
 
-      - name: Install the toolchain
-        run: pip install -r docs-requirements.txt
+      - name: Install documentation toolchain
+        run: make docs-install
 
       # --strict: a link or anchor a moved page left behind fails here rather than
       # publishing a 404 from main.
-      - name: Build the site
-        run: mkdocs build --strict --site-dir site
+      - name: Build documentation site
+        run: make docs
 
   python-test:
     name: Python client tests
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
         with:
           name: binaries
           path: bin
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install sysml-grpc binary
+      - name: Install sysml-grpc
         run: |
           mkdir -p ~/.opensysml/bin
           cp bin/sysml-grpc ~/.opensysml/bin/
           chmod +x ~/.opensysml/bin/sysml-grpc
 
-      - name: Install Python package
-        working-directory: python
+      - name: Install Python client
         run: |
-          pip install -e .
+          make python-install
           pip install pytest pytest-mock psutil
 
       # The integration tests connect to a service on the standard port with
       # auto_start=False, the explicit opt-in to one the client does not manage;
       # without it they skip, exercising nothing, so one runs here for the rest of
       # the job. Tests naming no address start a private child of their own.
-      - name: Start sysml-grpc service
+      - name: Start sysml-grpc
+        run: nohup ~/.opensysml/bin/sysml-grpc -port 50051 > /tmp/sysml-grpc.log 2>&1 &
+
+      - name: Wait for sysml-grpc
         run: |
-          chmod +x ~/.opensysml/bin/sysml-grpc
-          nohup ~/.opensysml/bin/sysml-grpc -port 50051 > /tmp/sysml-grpc.log 2>&1 &
           python3 - <<'PY'
           import socket, sys, time
 
@@ -445,11 +468,10 @@ jobs:
 
       # OPENSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
       # service is provided here, so its absence is the bug, not a pass.
-      - name: Run Python tests
-        working-directory: python
+      - name: Run Python client tests
         env:
           OPENSYSML_REQUIRE_SERVICE: 1
-        run: pytest tests/ -v
+        run: make python-test
 
-      - name: Verify import
+      - name: Verify Python client import
         run: python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"
