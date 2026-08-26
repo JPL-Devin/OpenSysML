@@ -123,7 +123,6 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.kermlRelationships(n.Relationships)
 			w.sysmlDeclaration(n, n.Keyword)
 			w.keywordAsName(n.Ident)
-			w.binding(n)
 			w.requirementConstraint(n)
 			w.walkDeclaration(n.Members, n)
 		case *ast.Import:
@@ -246,15 +245,6 @@ func admitsActionBodyItems(node ast.Node) bool {
 	return false
 }
 
-func isReferenceExpression(node ast.Node) bool {
-	switch node.(type) {
-	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
-		return true
-	default:
-		return false
-	}
-}
-
 // initialNode reports a one-ended `first <node>;` outside an action body:
 // InitialNodeMember is reachable from ActionBodyItem alone (SysML.xtext:1376),
 // never from DefinitionBodyItem (:516).
@@ -265,17 +255,6 @@ func (w *notationWalker) initialNode(n *ast.InitialNode) {
 		w.extension(keywordSpan(n, "first"), "a one-ended `first <node>;` outside an action body",
 			"only an action body admits it; elsewhere a succession names both ends, `first <source> then <target>`")
 	}
-}
-
-// binding reports a binding whose right side is an expression: `bind` relates two
-// ConnectorEndMembers (SysML.xtext:1020), so `bind a = b;` is legal and
-// `bind a = b * 2;` is ours.
-func (w *notationWalker) binding(n *ast.Usage) {
-	if n.Kind != ast.UsageBinding || n.Value == nil || isReferenceExpression(n.Value) {
-		return
-	}
-	w.extension(n.Value.Span(), "`bind <feature> = <expression>;`",
-		"a binding relates two features, so bind the expression's result feature instead")
 }
 
 // requirementConstraint reports an `assume`/`require` member outside a requirement

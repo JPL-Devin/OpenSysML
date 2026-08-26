@@ -31,6 +31,18 @@ shape still converts unchanged, and that property is still written.
 Loading a graph into a live triplestore and reading it back through the API is still not
 demonstrated, and collection-valued properties still carry no JSON annotation.
 
+### An expression as a binding's right end is no longer accepted
+
+**Breaking change.** `bind <feature> = <expression>;` — a binding whose right side is an
+expression rather than a feature, such as `bind result = x * 2.0;` — was an OpenSysML
+extension no SysML v2 production admits, warned as `nonstandard-notation`. It is now a parse
+error, and the warning for it is gone: a binding relates two connector ends, so each side must
+name a feature. Write the expression as the feature's value instead
+(`out result : Real = x * 2.0;`), or, where the feature is declared elsewhere, declare a
+feature holding the result and bind to it (`attribute b2 = a + 1;` then `binding bind b = b2;`).
+Standard bindings — `bind a = b;`, including qualified, chained and indexed ends — are
+unchanged.
+
 ### A keyworded inline condition is no longer accepted
 
 **Breaking change.** `assert <expression>;` and `assume <expression>;` in a constraint body, and

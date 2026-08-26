@@ -243,17 +243,6 @@ action sequential {
 One token spawns at `start`, moves to `compute`, which runs its body, and is consumed at
 `done`:
 
-When the named backing file is loaded, the first command below prints:
-
-```
-✓ package ActionExecutorDemo
-examples/action-executor-demo.sysml:9:23: warning: `bind <feature> = <expression>;` is an OpenSysML extension with no SysML v2 production: a binding relates two features, so bind the expression's result feature instead
-        bind result = x * 2.0;
-                      ^~~~~~~
-```
-
-The command-specific result then follows:
-
 ```
 $ sysml -action ActionExecutorDemo::sequential examples/action-executor-demo.sysml
 ✓ Action completed

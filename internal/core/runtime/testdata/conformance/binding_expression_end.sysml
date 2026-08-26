@@ -3,6 +3,7 @@ package test {
         attribute a = 5;
         attribute b;
         attribute sibling = 8;
-        binding bind b = a + 1;
+        attribute b2 = a + 1;
+        binding bind b = b2;
     }
 }

@@ -4,9 +4,7 @@ package ActionExecutorDemo {
     // A calculation an action can bind an output from, with no control flow.
     action def SimpleAction {
         in x : Real;
-        out result : Real;
-
-        bind result = x * 2.0;
+        out result : Real = x * 2.0;
     }
 
     // Sequential: start -> compute -> end.

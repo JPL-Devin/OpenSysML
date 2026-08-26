@@ -84,7 +84,6 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("binding_three_binding_ring", testBindingThreeBindingRing)
 	t.Run("binding_cycle_with_value", testBindingCycleWithValue)
 	t.Run("binding_unrelated_expression_does_not_poison_read", testBindingUnrelatedExpressionDoesNotPoisonRead)
-	t.Run("binding_expression_end_cannot_receive", testBindingExpressionEndCannotReceive)
 	t.Run("binding_result_tracks_later_mutation", testBindingResultTracksLaterMutation)
 	t.Run("binding_nested_container_is_not_a_cycle", testBindingNestedContainerIsNotACycle)
 	t.Run("nested_calc_usage_unbound_input", testNestedCalcUsageUnboundInput)
@@ -553,7 +552,8 @@ func testBindingUnrelatedExpressionDoesNotPoisonRead(t *testing.T) {
 			attribute a = 5;
 			attribute b;
 			attribute sibling = 8;
-			binding bind b = a + 1;
+			attribute b2 = a + 1;
+			binding bind b = b2;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -573,27 +573,6 @@ func testBindingUnrelatedExpressionDoesNotPoisonRead(t *testing.T) {
 	}
 	if got := fv.HeldValue().Const.Int; got != 6 {
 		t.Errorf("b = %d, want 6", got)
-	}
-}
-
-func testBindingExpressionEndCannotReceive(t *testing.T) {
-	idx, _, ctx := buildRuntime(t, "<binding-expression-end>", parseAndBuild(t, `package P {
-		part def Sys {
-			attribute a;
-			attribute b = 7;
-			binding bind b = a + 1;
-		}
-	}`))
-	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
-	if err != nil {
-		t.Fatalf("instantiate: %v", err)
-	}
-	_, err = inst.GetFeatureValue(ctx, "b")
-	if !errors.Is(err, ErrBindingEnd) {
-		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingEnd", err)
-	}
-	if !strings.Contains(err.Error(), "a + 1") || !strings.Contains(err.Error(), "b") {
-		t.Errorf("binding endpoint error %q does not name both ends", err)
 	}
 }
 
