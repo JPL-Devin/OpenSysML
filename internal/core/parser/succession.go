@@ -303,6 +303,7 @@ func (b *bodyBuilder) add(m ast.Node) {
 	if b.last != "" {
 		if source := unnamedEdgeSource(m); source != nil {
 			*source = memberReference(b.last, b.lastSpan)
+			markImpliedSource(m)
 		}
 	} else if b.lastNode != nil {
 		bindPositionalSource(memberNode(m), b.lastNode)
@@ -343,6 +344,17 @@ func bindPositionalSource(m ast.Node, source ast.Node) {
 		if unnamedEdgeSource(edge) != nil {
 			edge.Source, edge.SourceMember = nil, source
 		}
+	}
+}
+
+// markImpliedSource records that the source end of an edge member is the member
+// before it, which the notation supplied rather than the author naming it.
+func markImpliedSource(m ast.Node) {
+	switch edge := m.(type) {
+	case *ast.SuccessionEdge:
+		edge.SourceImplied = true
+	case *ast.ControlFlowEdge:
+		edge.SourceImplied = true
 	}
 }
 
@@ -405,8 +417,10 @@ func (b *bodyBuilder) finish() []ast.Node {
 // spanned at the keyword so diagnostics point at what the author wrote.
 func synthesizeSuccession(source string, sourceSpan source.Span, target string, targetSpan, at source.Span) *ast.SuccessionEdge {
 	edge := &ast.SuccessionEdge{
-		Source: memberReference(source, sourceSpan),
-		Target: memberReference(target, targetSpan),
+		Source:        memberReference(source, sourceSpan),
+		Target:        memberReference(target, targetSpan),
+		SourceImplied: true,
+		TargetImplied: true,
 	}
 	edge.NodeSpan = at
 	return edge

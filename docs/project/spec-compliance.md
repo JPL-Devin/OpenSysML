@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 733 semantic rules: **651 ✅ faithful, 75 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 734 semantic rules: **652 ✅ faithful, 75 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -927,6 +927,7 @@ semantics layer over the conjugation parity of the typing/specialization chain.
 | Binding connector ends (`binding [1] bind [0..*] a.b = [0..*] c`) | `parser/defusage.go` `parseUsage` UsageBinding | `libs/reserved_keyword_name_test.go` (the library's `ShapeItems.sysml` sites) | ✅ Faithful (`bind` is the ends keyword, formerly read as the connector's name) |
 | Named argument resolution | `document.go:205` (no name resolution) | `requirement_invocation_test.go` | ✅ Faithful |
 | Control flow node registration | `builder.go` InitialNode/FinalNode | `transition_first_test.go` | ✅ Faithful |
+| An end a succession or a decision branch names is a reference, resolved where the name is written (`succession first start then zzz;`, `then zzz;`, `if c then zzz;`, `else zzz;`) | `resolve/edge.go` `resolveSuccessionEdge`/`resolveControlFlowEdge`, reached from `resolve/document.go` `resolveDecl` and surfaced by `passes/nameres.go` (code `unresolved`) | `passes/succession_endpoint_test.go` `TestEndpointNamingNoMemberIsReported`, `:TestEndpointsThatResolveStaySilent`, `:TestEndpointDiagnosticAgreesWithLowering` | ✅ Faithful (an end the notation supplies rather than the author naming it — the source a one-name `then <target>;` takes from the member before it, and either end bound by position — names no reference: `ast/behavior.go` `SourceImplied`/`TargetImplied` and `SourceMember`/`TargetMember` record that, and lowering reads the member itself. `start` and `done` resolve as the features `Actions::Action` declares, the names lowering also treats as implicit) |
 | Redefinition target lookup | `document.go:328` searchInheritedFeatureViaIndex | `localclock_test.go` | ✅ Faithful |
 | References in behavioral bodies (calc return, constraint/assume/require, assignment, entry/do/exit, transition guard and effect) | `resolve/document.go` `resolveDecl` | `model/behavior_body_resolve_test.go` `TestBehaviorBodyReferencesAreResolved` | ✅ Faithful |
 | State def bodies are state bodies whatever their first member is | `parser/defusage.go` DefState case (always `parseStateBody`) | `parse/state_def_region_pseudostate.golden` (a state def whose first member is an attribute, followed by regions) | ✅ Faithful |

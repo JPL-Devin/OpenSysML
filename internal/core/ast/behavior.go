@@ -295,6 +295,13 @@ type SuccessionEdge struct {
 	// beside the keyword as written, set once when the body is parsed.
 	SourceMember Node
 	TargetMember Node
+	// SourceImplied and TargetImplied mark an end the notation supplied rather
+	// than the author writing it: the source a one-name `then <target>;` takes
+	// from the member before it, and the ends of the edge a member-attached
+	// `then` desugars to. Such a name is a member's own, not a reference written
+	// in the model.
+	SourceImplied bool
+	TargetImplied bool
 	// Members are the body an action target succession carries
 	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody).
 	Members []Node
@@ -315,6 +322,10 @@ type ControlFlowEdge struct {
 	// without a name (`then decide; if x then a; else b;`) reach it this way.
 	SourceMember Node
 	TargetMember Node
+	// SourceImplied and TargetImplied mark an end the notation supplied rather
+	// than the author writing it, as on SuccessionEdge.
+	SourceImplied bool
+	TargetImplied bool
 }
 
 // ObjectFlowEdge is data flow between action parameters/pins (Tier 5).

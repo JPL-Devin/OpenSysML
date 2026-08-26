@@ -283,3 +283,44 @@ func TestPositionalSuccessionEndIsTheMemberItself(t *testing.T) {
 			edges[1].SourceMember, edges[1].TargetMember, sends[0], sends[1])
 	}
 }
+
+// An end the notation supplies — the source a one-name `then <target>;` takes
+// from the member before it, and both ends of the edge a member-attached `then`
+// desugars to — is marked as such, since it names a member rather than being a
+// reference the author wrote and could misspell.
+func TestSuppliedSuccessionEndsAreMarkedImplied(t *testing.T) {
+	p := New(source.New("implied.sysml", []byte(
+		"action def A { action a; then b; action b; then action c; }")))
+	file := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+
+	var edges []*ast.SuccessionEdge
+	for _, member := range file.Members {
+		m, ok := member.(*ast.Membership)
+		if !ok {
+			continue
+		}
+		def, ok := m.Member.(*ast.Definition)
+		if !ok {
+			continue
+		}
+		for _, defMember := range def.Members {
+			if edge, ok := defMember.(*ast.SuccessionEdge); ok {
+				edges = append(edges, edge)
+			}
+		}
+	}
+	if len(edges) != 2 {
+		t.Fatalf("parsed %d successions, want 2", len(edges))
+	}
+	if !edges[0].SourceImplied || edges[0].TargetImplied {
+		t.Errorf("`then b;` has source implied=%t target implied=%t, want the source only",
+			edges[0].SourceImplied, edges[0].TargetImplied)
+	}
+	if !edges[1].SourceImplied || !edges[1].TargetImplied {
+		t.Errorf("a member-attached `then` has source implied=%t target implied=%t, want both",
+			edges[1].SourceImplied, edges[1].TargetImplied)
+	}
+}

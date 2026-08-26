@@ -74,11 +74,23 @@ None of the three words is reserved by the pinned grammars, so each still names 
 (`attribute final : Boolean;`, `action initial;`). An action body that writes `initial <name>;`,
 `final <name>;` or `decision <name>;` is reported as the parse error it now is. A bare
 `then final;` is a **succession target**, not a node, so it is read as a reference to a member named
-`final`: where nothing declares one, the model analyses clean and fails when the action is run
-(`succession edge references undefined target node "final"`) — the same as any other undefined
-succession target. The **state** markers `initial <state>;` and
+`final`: where nothing declares one, `sysml -validate` reports an unresolved reference at the name —
+the same as any other undefined succession target (see below). The **state** markers `initial <state>;` and
 `final <state>;` in a state body are unaffected. Named action final syntax `done <name>;`
 remains rejected as described above.
+
+### An undefined succession or transition endpoint is reported at validation time
+
+A succession or transition end naming a member nothing declares — `succession first start then zzz;`,
+the guarded `succession first a if c then zzz;`, `then zzz;`, a decision's `if c then zzz;` and
+`else zzz;`, and `transition first idle then zzz;` — is now an `unresolved` error of the
+name-resolution tier, reported at the name itself. It used to analyse clean and fail only when the
+action or state machine was executed, so a model could pass `sysml -validate` and still be
+unrunnable. The lowering errors remain as the last check.
+
+The endpoints the notation supplies are unaffected: `start` and `done` are the features
+`Actions::Action` declares, an end bound to the member beside a member-attached `then` names nothing,
+and a declared `done;` final node is reached as before.
 
 ### `return <expression>;` is no longer accepted in a calculation body
 
