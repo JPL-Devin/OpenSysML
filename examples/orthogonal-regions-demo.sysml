@@ -1,33 +1,31 @@
 package OrthogonalRegionsDemo {
     private import ScalarValues::*;
     
-    // Demonstrates concurrent orthogonal regions in state machines
-    // Each region executes independently and processes events in parallel
+    // Demonstrates concurrent orthogonal regions in state machines.
+    // Each region executes independently and processes events in parallel.
     
     // Example: Traffic Light with Pedestrian Crossing
-    state def TrafficLight {
+    state def TrafficLight parallel {
         // Vehicle signal region
-        region vehicleSignal {
-            initial start;
+        state vehicleSignal {
             state red;
             state yellow;
             state green;
             
-            then start red;
-            transition red to yellow;
-            transition yellow to green;
-            transition green to red;
+            entry; then red;
+            transition first red then yellow;
+            transition first yellow then green;
+            transition first green then red;
         }
         
         // Pedestrian signal region (runs concurrently)
-        region pedestrianSignal {
-            initial start;
+        state pedestrianSignal {
             state dontWalk;
             state walk;
             
-            then start dontWalk;
-            transition dontWalk to walk;
-            transition walk to dontWalk;
+            entry; then dontWalk;
+            transition first dontWalk then walk;
+            transition first walk then dontWalk;
         }
         
         // Key concepts:
