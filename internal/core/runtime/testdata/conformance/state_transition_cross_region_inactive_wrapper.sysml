@@ -8,23 +8,27 @@ package Test {
 		attribute rtargetExits : Integer = 0;
 		attribute ridleExits : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state running {
 			region left {
-				initial ls;
+				entry; then ls;
+				state ls;
 				state lidle;
 
 				succession first ls then lidle;
-				transition lidle to rtarget if crossed == 0;
+				transition first lidle if crossed == 0 then rtarget;
 			}
 			region right {
-				initial rs;
+				entry; then rs;
+				state rs;
 				state ridle { exit { ridleExits = ridleExits + 1; } }
 				state wrapper {
 					entry { wrapperEntries = wrapperEntries + 1; }
 
 					region inner {
-						initial is;
+						entry; then is;
+						state is;
 						state istart;
 						state rtarget {
 							entry { crossed = 1; }
@@ -41,6 +45,6 @@ package Test {
 		state done;
 
 		succession first start then running;
-		transition rtarget to done if crossed == 1;
+		transition first rtarget if crossed == 1 then done;
 	}
 }

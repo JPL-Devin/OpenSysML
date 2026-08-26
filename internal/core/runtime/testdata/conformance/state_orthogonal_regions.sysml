@@ -2,26 +2,28 @@ package Test {
 	state def TrafficLight {
 		// Pedestrian region - controls walk/don't walk signals
 		region pedestrian {
-			initial start;
+			entry; then start;
+			state start;
 			state Walk;
 			state DontWalk;
 			
 			succession first start then Walk;
-			transition Walk to DontWalk when pedestrianTimer;
-			transition DontWalk to Walk when pedestrianTimer;
+			transition first Walk when pedestrianTimer then DontWalk;
+			transition first DontWalk when pedestrianTimer then Walk;
 		}
 		
 		// Vehicle region - controls traffic light colors
 		region vehicle {
-			initial start;
+			entry; then start;
+			state start;
 			state Green;
 			state Yellow;
 			state Red;
 			
 			succession first start then Green;
-			transition Green to Yellow when vehicleTimer;
-			transition Yellow to Red when vehicleTimer;
-			transition Red to Green when vehicleTimer;
+			transition first Green when vehicleTimer then Yellow;
+			transition first Yellow when vehicleTimer then Red;
+			transition first Red when vehicleTimer then Green;
 		}
 	}
 }

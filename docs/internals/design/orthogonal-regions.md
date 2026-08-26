@@ -282,22 +282,24 @@ func (p *parser) parseStateMember(members []ast.Node) ast.Node {
 ```sysml
 state def TrafficLight {
     region pedestrian {
-        initial start;
+        entry; then start;
+        state start;
         state Walk;
         state DontWalk;
         first start then Walk;
-        transition Walk to DontWalk when timer > 5;
+        transition first Walk when timer > 5 then DontWalk;
     }
     
     region vehicle {
-        initial start;
+        entry; then start;
+        state start;
         state Green;
         state Yellow;
         state Red;
         first start then Green;
-        transition Green to Yellow when timer > 30;
-        transition Yellow to Red when timer > 3;
-        transition Red to Green when timer > 20;
+        transition first Green when timer > 30 then Yellow;
+        transition first Yellow when timer > 3 then Red;
+        transition first Red when timer > 20 then Green;
     }
 }
 ```
@@ -312,18 +314,21 @@ state def TrafficLight {
 
 ```sysml
 state def Parallel {
-    initial start;
+    entry; then start;
+    state start;
     state Sequential;
     
     state Composite {
         region A {
-            initial startA;
+            entry; then startA;
+            state startA;
             state TaskA;
             first startA then TaskA;
         }
         
         region B {
-            initial startB;
+            entry; then startB;
+            state startB;
             state TaskB;
             first startB then TaskB;
         }
@@ -332,7 +337,7 @@ state def Parallel {
     state Done;
     
     // FORK: Sequential → Composite (enters both regions)
-    transition Sequential to Composite when fork;
+    transition first Sequential when fork then Composite;
     
     // JOIN: Both regions must be in specific states
     transition join {

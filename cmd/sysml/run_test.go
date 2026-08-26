@@ -40,7 +40,8 @@ const behaviorModel = `package Mission {
     }
 
     state Cycle {
-        initial init;
+        entry; then init;
+        state init;
         state waiting {
             accept after 10 then working;
         }

@@ -14,7 +14,8 @@ func TestToStateGraph_DeferNotation(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state busy {
 					defer Ping, setSpeed(value);
 				}
@@ -66,7 +67,8 @@ func TestToStateGraph_DeferInMachineBodyIsReported(t *testing.T) {
 	_, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				defer Ping;
 				state busy;
 				succession first start then busy;
@@ -89,13 +91,15 @@ func TestToStateGraph_DeferInRegionBodyIsReported(t *testing.T) {
 			state Machine {
 				state outer {
 					region left {
-						initial lstart;
+						entry; then lstart;
+						state lstart;
 						defer Ping;
 						state lwork;
 						succession first lstart then lwork;
 					}
 					region right {
-						initial rstart;
+						entry; then rstart;
+						state rstart;
 						state rwork;
 						succession first rstart then rwork;
 					}
@@ -118,7 +122,8 @@ func TestToStateGraph_HistoryAndPointNotation(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state outer {
 					state a;
 					history resume;
@@ -267,9 +272,9 @@ func TestToStateGraph_EntryActionNamesInitialStateFromScopeAlone(t *testing.T) {
 	}
 }
 
-// Each spelling that designates an initial state records it on the graph and
-// leaves the parsed states as written (AST immutability).
-func TestToStateGraph_InitialDesignationDoesNotMutateAST(t *testing.T) {
+// Each spelling that designates an initial state records it on the graph, which
+// is where the runtime reads it from.
+func TestToStateGraph_InitialDesignationIsRecordedOnTheGraph(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		body string
@@ -300,8 +305,8 @@ func TestToStateGraph_InitialDesignationDoesNotMutateAST(t *testing.T) {
 				t.Error("expected the graph to report its initial state as initial")
 			}
 			for _, state := range graph.States {
-				if state.IsInitial {
-					t.Errorf("lowering wrote IsInitial onto the parsed state %q", state.Name)
+				if state != graph.Initial && graph.IsInitial(state) {
+					t.Errorf("state %q designated initial as well", state.Name)
 				}
 			}
 		})

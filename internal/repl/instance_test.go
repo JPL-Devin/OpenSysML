@@ -532,7 +532,7 @@ func TestEndedActionSessionExplainsItselfToEveryCommand(t *testing.T) {
 func TestEndedStateSessionExplainsItselfToEveryCommand(t *testing.T) {
 	s := loadFixture(t, "testdata/state_debug.sysml")
 	run(t, s, "%state Cycle")
-	s.Submit("package Debug {\n\tstate Cycle {\n\t\tinitial init;\n\t\tfinal done;\n\tsuccession first tinit then done;\n\t}\n}")
+	s.Submit("package Debug {\n\tstate Cycle {\n\t\tentry; then init;\n\t\tstate init;\n\t\tfinal done;\n\tsuccession first tinit then done;\n\t}\n}")
 
 	const why = `the state machine session for "Cycle" ended when Debug::Cycle was redeclared at submission 2`
 	wants(t, run(t, s, "%current"), why)

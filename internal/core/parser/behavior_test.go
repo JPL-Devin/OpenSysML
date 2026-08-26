@@ -127,7 +127,7 @@ func TestParseAction_Decision(t *testing.T) {
 	}
 
 	// Check unguarded succession
-	succession, ok := nodes[3].(*ast.Usage)
+	succession, ok := unwrapMember(t, nodes[3]).(*ast.Usage)
 	if !ok {
 		t.Errorf("node 3: expected *ast.Usage, got %T", nodes[3])
 	} else {
@@ -137,7 +137,7 @@ func TestParseAction_Decision(t *testing.T) {
 	}
 
 	// Check guarded succession
-	cfEdge, ok := nodes[4].(*ast.TransitionMember)
+	cfEdge, ok := unwrapMember(t, nodes[4]).(*ast.TransitionMember)
 	if !ok {
 		t.Errorf("node 4: expected *ast.TransitionMember, got %T", nodes[4])
 	} else {
@@ -632,7 +632,7 @@ func TestParseStateBody_Substate(t *testing.T) {
 
 func TestParseStateBody_Transition(t *testing.T) {
 	input := `{
-		transition Active to Idle when timeout;
+		transition first Active when timeout then Idle;
 	}`
 
 	nodes := parseStateBodyTest(t, input)
@@ -722,7 +722,7 @@ func TestParseStateBody_AcceptTransitionTriggerKinds(t *testing.T) {
 
 func TestParseStateBody_TransitionWithGuardAndEffect(t *testing.T) {
 	input := `{
-		transition Running to Stopped if ready do { action finalize; };
+		transition first Running if ready do { action finalize; } then Stopped;
 	}`
 
 	nodes := parseStateBodyTest(t, input)
@@ -752,7 +752,7 @@ func TestParseStateBody_Complete(t *testing.T) {
 		exit { action cleanup; }
 		state Active;
 		state Idle;
-		transition Active to Idle when timeout;
+		transition first Active when timeout then Idle;
 	}`
 
 	nodes := parseStateBodyTest(t, input)

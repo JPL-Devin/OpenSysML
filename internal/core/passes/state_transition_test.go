@@ -77,13 +77,15 @@ func TestTransitionTargetInSiblingRegionIsLegal(t *testing.T) {
 	state def M {
 		state a parallel {
 			state r1 {
-				initial i1;
+				entry; then i1;
+				state i1;
 				state x;
 				succession first i1 then x;
-				transition x to y;
+				transition first x then y;
 			}
 			state r2 {
-				initial i2;
+				entry; then i2;
+				state i2;
 				state y;
 				succession first i2 then y;
 			}
@@ -98,17 +100,20 @@ func TestTransitionTargetInSiblingRegionKeywordIsLegal(t *testing.T) {
 	wantClean(t, `package test {
 	state def M {
 		attribute crossed;
-		initial start;
+		entry; then start;
+		state start;
 		state running {
 			region left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state lidle;
 
 				succession first lstart then lidle;
-				transition lidle to rtarget;
+				transition first lidle then rtarget;
 			}
 			region right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state ridle;
 				state rtarget;
 
@@ -125,12 +130,13 @@ func TestTransitionTargetInSiblingRegionKeywordIsLegal(t *testing.T) {
 // illegal however well the name resolves.
 func TestTransitionTargetInUnrelatedMachineIsIllegal(t *testing.T) {
 	wantOneError(t, `package test {
-	state def Other { initial s; state running; succession first s then running; }
+	state def Other { entry; then s; state s; state running; succession first s then running; }
 	state def M {
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		succession first i then busy;
-		transition busy to Other::running;
+		transition first busy then Other::running;
 	}
 }`, CodeEndpointNotOfMachine, "Other::running")
 }
@@ -138,9 +144,10 @@ func TestTransitionTargetInUnrelatedMachineIsIllegal(t *testing.T) {
 // The same endpoint written as a succession is the same violation.
 func TestSuccessionTargetInUnrelatedMachineIsIllegal(t *testing.T) {
 	wantOneError(t, `package test {
-	state def Other { initial s; state running; succession first s then running; }
+	state def Other { entry; then s; state s; state running; succession first s then running; }
 	state def M {
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		succession first i then busy;
 		succession first busy then Other::running;
@@ -153,15 +160,17 @@ func TestSuccessionTargetInUnrelatedMachineIsIllegal(t *testing.T) {
 func TestTransitionToEntryPointIsLegal(t *testing.T) {
 	wantClean(t, `package test {
 	state def M {
-		initial i;
+		entry; then i;
+		state i;
 		state comp {
 			entry point ep;
-			initial ci;
+			entry; then ci;
+			state ci;
 			state cs;
 			succession first ci then cs;
 		}
 		succession first i then comp;
-		transition comp to comp::ep;
+		transition first comp then comp::ep;
 	}
 }`)
 }
@@ -172,10 +181,11 @@ func TestTransitionTargetResolvingToNonVertexIsIllegal(t *testing.T) {
 	src := `package test {
 	state def M {
 		attribute count;
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		succession first i then busy;
-		transition busy to count;
+		transition first busy then count;
 	}
 }`
 	got := analyzeTransitions(t, src)
@@ -195,7 +205,8 @@ func TestTransitionTargetResolvingToNonVertexIsIllegal(t *testing.T) {
 func TestSourcelessAcceptTransitionIsLegal(t *testing.T) {
 	wantClean(t, `package test {
 	state def M {
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		state done;
 		succession first i then busy;
@@ -211,11 +222,12 @@ func TestSourcelessAcceptTransitionIsLegal(t *testing.T) {
 func TestJunctionChainTerminatingNowhereIsIllegal(t *testing.T) {
 	wantOneError(t, `package test {
 	state def M {
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		junction j;
 		succession first i then busy;
-		transition busy to j;
+		transition first busy then j;
 	}
 }`, CodeNoOutgoingTransition, "junction j has no outgoing transition")
 }
@@ -225,13 +237,14 @@ func TestJunctionChainTerminatingNowhereIsIllegal(t *testing.T) {
 func TestJunctionWithOutgoingTransitionIsLegal(t *testing.T) {
 	wantClean(t, `package test {
 	state def M {
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		state done;
 		junction j;
 		succession first i then busy;
-		transition busy to j;
-		transition j to done;
+		transition first busy then j;
+		transition first j then done;
 	}
 }`)
 }
@@ -263,12 +276,13 @@ func TestDeadEndJunctionIsReportedBesideASameNamedOneThatRoutes(t *testing.T) {
 func TestJunctionLeftBySuccessionIsLegal(t *testing.T) {
 	wantClean(t, `package test {
 	state def M {
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		state done;
 		junction j;
 		succession first i then busy;
-		transition busy to j;
+		transition first busy then j;
 		succession first j then done;
 	}
 }`)
@@ -280,12 +294,13 @@ func TestJunctionLeftBySuccessionIsLegal(t *testing.T) {
 func TestTransitionToFirstMarkerIsIllegal(t *testing.T) {
 	wantOneError(t, `package test {
 	state def M {
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		state other;
 		first marker then other;
 		succession first i then busy;
-		transition busy to marker;
+		transition first busy then marker;
 	}
 }`, CodeEndpointNotOfMachine, "marker")
 }
@@ -294,11 +309,12 @@ func TestTransitionToFirstMarkerIsIllegal(t *testing.T) {
 func TestTransitionToFinalStateIsLegal(t *testing.T) {
 	wantClean(t, `package test {
 	state def M {
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		final done;
 		succession first i then busy;
-		transition busy to done;
+		transition first busy then done;
 	}
 }`)
 }
@@ -306,12 +322,13 @@ func TestTransitionToFinalStateIsLegal(t *testing.T) {
 // A machine written as a usage is checked like one written as a definition.
 func TestStateUsageMachineIsChecked(t *testing.T) {
 	wantOneError(t, `package test {
-	state def Other { initial s; state running; succession first s then running; }
+	state def Other { entry; then s; state s; state running; succession first s then running; }
 	state machine {
-		initial i;
+		entry; then i;
+		state i;
 		state busy;
 		succession first i then busy;
-		transition busy to Other::running;
+		transition first busy then Other::running;
 	}
 }`, CodeEndpointNotOfMachine, "Other::running")
 }
@@ -326,7 +343,7 @@ func TestTransitionOutOfEntryActionIsLegal(t *testing.T) {
 		transition start then busy;
 		state busy;
 		state done;
-		transition busy to done;
+		transition first busy then done;
 	}
 }`)
 }

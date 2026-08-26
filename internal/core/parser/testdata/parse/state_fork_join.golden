@@ -1,7 +1,9 @@
 (RootNamespace
   (Membership visibility="default"
     (Usage kind="state" name="ParallelSplit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-      (*ast.StateNode)
+      (EntryMember)
+      (SuccessionEdge source="@entry" target="start")
+      (SubstateMember name="start")
       (SubstateMember name="ready")
       (Membership visibility="default"
         (Usage kind="state" name="working" ref=false direction="none" composite=false derived=false ordered=false nonunique=false

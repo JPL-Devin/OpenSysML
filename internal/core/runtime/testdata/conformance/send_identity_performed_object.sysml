@@ -25,7 +25,8 @@ package SendIdentityPerformed {
 
 	part def Node {
 		state Listen {
-			initial start;
+			entry; then start;
+			state start;
 
 			state waiting {
 				entry send 7 to worker;

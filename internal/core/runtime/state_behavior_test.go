@@ -28,7 +28,8 @@ func TestStateBodyBehaviorsAreLowered(t *testing.T) {
         attribute worked : Integer = 0;
         attribute exited : Integer = 0;
 
-        initial init;
+        entry; then init;
+        state init;
         state active {
             entry { entered = 1; }
             do { worked = 2; }
@@ -70,7 +71,8 @@ func TestStateEntryPerformsAction(t *testing.T) {
     state Machine {
         attribute counter : Integer = 1;
 
-        initial init;
+        entry; then init;
+        state init;
         state active {
             entry perform action bump : Bump;
         }
@@ -108,7 +110,8 @@ func TestStateDoExitAndTransitionEffectPerformAction(t *testing.T) {
     state Machine {
         attribute counter : Integer = 1;
 
-        initial init;
+        entry; then init;
+        state init;
         state active {
             do perform action working : Bump;
             exit perform action bump : Bump;
@@ -116,7 +119,7 @@ func TestStateDoExitAndTransitionEffectPerformAction(t *testing.T) {
         final done;
 
         succession first init then active;
-        transition active to done do { perform action bumpAgain : Bump; }
+        transition first active do { perform action bumpAgain : Bump; } then done;
     }
 }`, "Machine")
 
@@ -149,7 +152,8 @@ func TestStateSubactionByReferencePerformsAction(t *testing.T) {
     state Machine {
         attribute counter : Integer = 1;
 
-        initial init;
+        entry; then init;
+        state init;
         state active {
             entry Bump;
             exit Bump;
@@ -173,7 +177,8 @@ func TestStateSubactionByReferencePerformsAction(t *testing.T) {
 func TestStateEntryPerformsUnresolvedAction(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
     state Machine {
-        initial init;
+        entry; then init;
+        state init;
         state active {
             entry perform action bump : NoSuchAction;
         }

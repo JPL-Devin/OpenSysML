@@ -129,8 +129,7 @@ func TestContext_ExecuteState(t *testing.T) {
 
 	// Create simple state machine: idle →[after 5]→ done (final)
 	idle := &ast.StateNode{
-		Name:      "idle",
-		IsInitial: true,
+		Name: "idle",
 	}
 	done := &ast.StateNode{
 		Name:    "done",
@@ -151,7 +150,7 @@ func TestContext_ExecuteState(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "TestStateMachine"},
-			Members: []ast.Node{idle, done, trans},
+			Members: []ast.Node{entryStart("idle"), idle, done, trans},
 		},
 	}
 
@@ -249,8 +248,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 	// Create state machine with entry action
 	// State 'processing' executes the action on entry
 	processing := &ast.StateNode{
-		Name:      "processing",
-		IsInitial: true,
+		Name: "processing",
 		Entry: []ast.Node{
 			&ast.ActionExecutionNode{
 				Name: "entryAction",
@@ -282,7 +280,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "ProcessingStateMachine"},
-			Members: []ast.Node{processing, done, trans},
+			Members: []ast.Node{entryStart("processing"), processing, done, trans},
 		},
 	}
 

@@ -8,26 +8,28 @@ package OrthogonalRegionsDemo {
     state def TrafficLight {
         // Vehicle signal region
         region vehicleSignal {
-            initial start;
+            entry; then start;
+            state start;
             state red;
             state yellow;
             state green;
             
             succession first start then red;
-            transition red to yellow;
-            transition yellow to green;
-            transition green to red;
+            transition first red then yellow;
+            transition first yellow then green;
+            transition first green then red;
         }
         
         // Pedestrian signal region (runs concurrently)
         region pedestrianSignal {
-            initial start;
+            entry; then start;
+            state start;
             state dontWalk;
             state walk;
             
             succession first start then dontWalk;
-            transition dontWalk to walk;
-            transition walk to dontWalk;
+            transition first dontWalk then walk;
+            transition first walk then dontWalk;
         }
         
         // Key concepts:

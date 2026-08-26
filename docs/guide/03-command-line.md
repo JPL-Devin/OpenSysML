@@ -173,23 +173,23 @@ whole, so a reference from one file to a declaration in another resolves.
 ## Strict conformance
 
 OpenSysML accepts a few notations of its own that no SysML v2 production admits —
-the `initial`/`final` state markers, `region`, `defer`, the `choice`, `junction`,
-`history` and `entry`/`exit point` pseudostates, `done <name>;`, and
-`transition <source> to <target>`. They are reported as
+the `final` state marker, `region`, `defer`, and the `choice`, `junction`,
+`history` and `entry`/`exit point` pseudostates. They are reported as
 warnings, so a model using them still analyses cleanly. `-strict` asks the other
 question — *is this file conforming SysML v2?* — by making those warnings errors:
 
-The monitor below deliberately uses the `initial` extension and named succession
-so the difference is visible:
+The monitor below deliberately uses the `final` extension so the difference is
+visible:
 
 ```sysml
 package M {
     state monitor {
-        initial off;
+        entry; then off;
+        state off;
         state warming {
             accept after 10 then running;
         }
-        state running;
+        final running;
         succession first off then warming;
     }
 }
@@ -197,29 +197,23 @@ package M {
 
 ```bash
 $ sysml -validate monitor.sysml; echo "exit=$?"
+monitor.sysml:8:9: warning: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
+        final running;
+        ^~~~~
 ✓ package M
-monitor.sysml:3:9: warning: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
-        initial off;
-        ^~~~~~~
-monitor.sysml:8:9: warning: `<source> then <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        succession first off then warming;
-        ^~~~
 ✓ monitor.sysml: no errors
 exit=0
 
 $ sysml -strict -validate monitor.sysml; echo "exit=$?"
-monitor.sysml:3:9: error: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
-        initial off;
-        ^~~~~~~
-monitor.sysml:8:9: error: `<source> then <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        succession first off then warming;
-        ^~~~
+monitor.sysml:8:9: error: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
+        final running;
+        ^~~~~
 sysml: monitor.sysml did not analyse cleanly; no check was made
 exit=2
 ```
 
-The standard spelling is `entry; then off;` with
-`transition first off then warming;`. `-strict` changes nothing about what parses:
+The standard spelling is `state running;`, reached by
+`transition first warming then running;`. `-strict` changes nothing about what parses:
 the same file, the same tree, the same findings in the same places — only their
 severity, and with it the exit status and the tier gate. It is a portability check,
 so run it when a model has to be read by another SysML v2 tool; leave it off

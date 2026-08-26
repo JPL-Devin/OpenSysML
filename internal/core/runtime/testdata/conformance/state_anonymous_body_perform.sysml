@@ -20,7 +20,8 @@ package test {
     state TestAnonymousBodyPerform {
         attribute counter : Integer = 0;
 
-        initial init;
+        entry; then init;
+        state init;
 
         state active {
             entry action {

@@ -34,7 +34,8 @@ func deferringMachine(defers bool) *ast.Usage {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			busy,
 			&ast.StateNode{Name: "ready"},
 			&ast.StateNode{Name: "done", IsFinal: true},
@@ -96,7 +97,8 @@ func TestCompositeStateDefersForItsSubstates(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			outer,
 			&ast.StateNode{Name: "ready"},
 			&ast.StateNode{Name: "done", IsFinal: true},
@@ -133,7 +135,8 @@ func TestDeferredEventsKeepTheirArrivalOrder(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			busy,
 			&ast.StateNode{Name: "ready"},
 			&ast.StateNode{Name: "gotPing"},
@@ -167,7 +170,8 @@ func orthogonalDeferMachine(handlesPing bool) *ast.Usage {
 	left := &ast.StateRegion{
 		Name: "left",
 		States: []ast.Node{
-			&ast.StateNode{Name: "lstart", IsInitial: true},
+			entryStart("lstart"),
+			&ast.StateNode{Name: "lstart"},
 			lwait,
 			&ast.StateNode{Name: "lopen"},
 			&ast.StateNode{Name: "lping"},
@@ -178,7 +182,8 @@ func orthogonalDeferMachine(handlesPing bool) *ast.Usage {
 	}
 
 	rightStates := []ast.Node{
-		&ast.StateNode{Name: "rstart", IsInitial: true},
+		entryStart("rstart"),
+		&ast.StateNode{Name: "rstart"},
 		&ast.StateNode{Name: "rwait"},
 		&ast.StateNode{Name: "rping"},
 		transitionMember("rstart", "rwait"),
@@ -249,7 +254,8 @@ func TestEventBlockedByAGuardIsStillDeferred(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			busy,
 			&ast.StateNode{Name: "wrong"},
 			&ast.StateNode{Name: "ready"},
@@ -282,20 +288,23 @@ func TestEventBlockedByAGuardIsStillDeferred(t *testing.T) {
 func TestExitedNestedRegionDoesNotReactToTheSameEvent(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 			state co {
 				region a {
-					initial astart;
+					entry; then astart;
+					state astart;
 					state a1;
 					succession first astart then a1;
-					transition a1 to out accept Ping;
+					transition first a1 accept Ping then out;
 				}
 				region b {
-					initial bstart;
+					entry; then bstart;
+					state bstart;
 					state b1;
 					state b2;
 					succession first bstart then b1;
-					transition b1 to b2 accept Ping;
+					transition first b1 accept Ping then b2;
 				}
 			}
 			state out;
@@ -329,7 +338,8 @@ func TestRecalledEventPrecedesLaterArrivals(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			busy,
 			&ast.StateNode{Name: "ready"},
 			&ast.StateNode{Name: "gotPing", IsFinal: true},

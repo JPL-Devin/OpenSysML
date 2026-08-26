@@ -6,10 +6,12 @@ package test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state Working {
 			region slow {
-				initial sstart;
+				entry; then sstart;
+				state sstart;
 				state sWaiting {
 					accept after 1 [min] then sDone;
 				}
@@ -17,11 +19,12 @@ package test {
 					entry { log = log * 10 + 2; }
 				}
 
-				transition sstart to sWaiting;
+				transition first sstart then sWaiting;
 			}
 
 			region fast {
-				initial fstart;
+				entry; then fstart;
+				state fstart;
 				state fWaiting {
 					accept after 30 [s] then fDone;
 				}
@@ -29,7 +32,7 @@ package test {
 					entry { log = log * 10 + 1; }
 				}
 
-				transition fstart to fWaiting;
+				transition first fstart then fWaiting;
 			}
 		}
 

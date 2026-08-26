@@ -36,7 +36,7 @@ contextually where our own notation needs it — the treatment `point`, `on` and
 | `done` | absent | absent | absent | unreserve; **silent** — see "`done` is a library name, not notation" |
 | `final` | absent | absent | absent | unreserve; state notation (warning); the action node spelled `final` is no longer accepted, write `done` |
 | `history` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
-| `initial` | absent | absent | absent | unreserve; state notation (warning); the action node spelled `initial` is no longer accepted, write `first` |
+| `initial` | absent | absent | absent | unreserve; **an ordinary name only** — neither the action node nor the state marker spelled `initial` is accepted, write `first <name>` and `entry; then <state>;` |
 | `junction` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `region` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `shallow` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
@@ -99,18 +99,19 @@ unchanged.
 
 The removed OpenSysML-only spellings `then <source> <target>;`, member-leading
 `<source> then <target>;`, and `done <name>;` are no longer accepted. Use
-`succession first <source> then <target>;` and `done;` instead.
+`succession first <source> then <target>;` and `done;` instead. The state-machine
+spellings `initial <state>;` and `transition [<name>] <src> to <tgt>;` are no
+longer accepted either: write `entry; then <state>;` and
+`transition [<name>] first <src> … then <tgt>;`.
 
 | Construct | Why it is not standard |
 |-----------|------------------------|
-| `initial <name>;` in a state body | `StateBodyItem` (`SysML.xtext:1755-1770`) has no such member; the standard way to mark the first state is `entry; then <state>;` (`EntryTransitionMember`, `:1796-1801`) |
-| `final <name>;` in a state body | same; no `final` literal anywhere |
+| `final <name>;` in a state body | `StateBodyItem` (`SysML.xtext:1755-1770`) has no such member; no `final` literal anywhere |
 | `region <name> { … }` | no `region` literal; the standard orthogonality marker is `parallel` (`:1745`) |
 | `choice <name>;`, `junction <name>;` | no literal; no pseudostate production of any kind |
 | `history <name>;`, `shallow history <name>;`, `deep history <name>;` | same |
 | `entry point <name>;`, `exit point <name>;` | `entry`/`exit` are literals only as state subaction kinds (`:1777`, `:1793`); no `point` literal exists |
 | `defer <event> [, <event>]*;` | no `defer` literal; `StatePerformance::deferrable` has the semantics but no notation |
-| `transition [<name>] <src> to <tgt>;` | `to` is a literal (`SysML.xtext:1077`, `:1168`, `:1253`, `:1287`; `KerML.xtext:838`, `:1009`) but in connector, interface, message and flow ends only — `TransitionUsage` (`:1851-1880`) states its ends with `first` and `then` |
 
 ### Removed extension notation — no longer accepted
 
@@ -132,6 +133,15 @@ warned, so it is no longer accepted and has no row here: `return <expression>;`
 in a calculation body is now a parse error, and a computed result is written as
 the body's trailing expression (`ResultExpressionMember`, `SysML.xtext:1967`).
 `return` itself is unchanged as the result parameter declaration.
+
+The same holds for the two state-machine aliases. `initial <state>;` stated where
+a machine starts, which `EntryTransitionMember` (`SysML.xtext:1796-1801`) states
+as `entry; then <state>;`, and `transition [<name>] <src> to <tgt>;` stated a
+transition's ends, which `TransitionUsage` (`:1851-1880`) states with `first` and
+`then`; `to` is a literal (`:1077`, `:1168`, `:1253`, `:1287`; `KerML.xtext:838`,
+`:1009`) in connector, interface, message and flow ends only. Both are parse
+errors now, and `initial` — reserved by neither grammar — stays an ordinary
+name.
 
 ### KerML-only notation in a `.sysml` file — warning `kerml-notation`
 
@@ -174,9 +184,11 @@ disagree with them:
 - **An alias of a standard node is removed, not warned.** The action nodes
   spelled `initial`, `final` and `decision` were pure aliases of `first`, `done`
   and `decide`, so they are gone rather than diagnosed; each word stays an
-  ordinary name.
+  ordinary name. The state marker `initial <state>;` and the transition spelling
+  `transition <src> to <tgt>;` are gone for the same reason.
+- **The `final` state marker stays.** It is not an alias: the runtime completes a
+  machine when a state it marked is entered, which a plain `state <name>;` does
+  not state, so removing it would change what a model means.
 - **State-body `fork`/`join` silent.** They are action node literals, and
   `StateBodyItem` admits a `BehaviorUsageMember`, so we read them as standard in
   a state body even though the pilot's state examples do not use them there.
-- **`transition <src> to <tgt>` warned.** `to` is a literal, but not in any
-  transition production, so the construct is ours.

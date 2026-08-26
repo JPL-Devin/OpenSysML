@@ -255,7 +255,7 @@ func TestNegative(t *testing.T) {
 		{"decision_else_no_target", "action def A { action m; first m; then decide; else; }"},
 		{"transition_trigger_no_target", "state def S { state a; transition first a accept Ping; }"},
 		{"transition_two_triggers", "state def S { state a; state b; transition first a accept Ping accept Pong then b; }"},
-		{"transition_two_targets", "state def S { state a; state b; transition a to b then b; }"},
+		{"transition_two_targets", "state def S { state a; state b; transition first a then b then b; }"},
 		{"transition_do_without_action", "state def S { state a; state b; transition first a do then b; }"},
 		{"exhibit_state_unclosed_body", "part def P { exhibit state modes { state off; }"},
 		{"namespace_succession_no_target", "package Q { part p; first p then; }"},
@@ -266,10 +266,10 @@ func TestNegative(t *testing.T) {
 		// A transition takes exactly one ';', which its effect statement shares
 		// (SysML.xtext TransitionUsage ends with ActionBody); a second one is not
 		// an empty member.
-		{"transition_effect_perform_two_semicolons", "state def S { state a; state b; transition a to b do perform Bump ;; }"},
-		{"transition_effect_assign_two_semicolons", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 ;; }"},
-		{"transition_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 }"},
-		{"transition_braced_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do { assign x := 1; } }"},
+		{"transition_effect_perform_two_semicolons", "state def S { state a; state b; transition first a do perform Bump then b ;; }"},
+		{"transition_effect_assign_two_semicolons", "state def S { attribute x; state a; state b; transition first a do assign x := 1 then b ;; }"},
+		{"transition_effect_no_semicolon", "state def S { attribute x; state a; state b; transition first a do assign x := 1 then b }"},
+		{"transition_braced_effect_no_semicolon", "state def S { attribute x; state a; state b; transition first a do { assign x := 1; } then b }"},
 		// A binding end names a feature by a qualified name or a chain of them,
 		// so neither qualification nor chaining may end in nothing.
 		{"binding_end_qualification_no_name", "package P { part c; binding bind R:: = c; }"},

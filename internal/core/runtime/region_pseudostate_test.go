@@ -57,22 +57,24 @@ func TestRegionLocalChoiceMovesOnlyItsRegion(t *testing.T) {
 		attribute rightEntries : Integer = 0;
 
 		region left {
-			initial ls;
+			entry; then ls;
+			state ls;
 			state lstart;
 			state lnext;
 			state lother;
 			succession first ls then lstart;
-			transition lstart to pick;
+			transition first lstart then pick;
 		}
 		region right {
-			initial rs;
+			entry; then rs;
+			state rs;
 			state rstart { entry { rightEntries = rightEntries + 1; } }
 			succession first rs then rstart;
 		}
 		choice pick;
 
-		transition pick to lnext if x == 2;
-		transition pick to lother;
+		transition first pick if x == 2 then lnext;
+		transition first pick then lother;
 	}
 }`)
 
@@ -90,22 +92,24 @@ func TestRegionLocalChoiceTakesElseBranch(t *testing.T) {
 		attribute x : Integer = 7;
 
 		region left {
-			initial ls;
+			entry; then ls;
+			state ls;
 			state lstart;
 			state lguarded;
 			state lelse;
 			succession first ls then lstart;
-			transition lstart to pick;
+			transition first lstart then pick;
 		}
 		region right {
-			initial rs;
+			entry; then rs;
+			state rs;
 			state rstart;
 			succession first rs then rstart;
 		}
 		choice pick;
 
-		transition pick to lguarded if x == 2;
-		transition pick to lelse;
+		transition first pick if x == 2 then lguarded;
+		transition first pick then lelse;
 	}
 }`)
 
@@ -118,22 +122,24 @@ func TestRegionLocalJunctionChainIsFollowed(t *testing.T) {
 	exec := runStateMachine(t, "Machine", `package P {
 	state Machine {
 		region left {
-			initial ls;
+			entry; then ls;
+			state ls;
 			state a;
 			state b;
 			succession first ls then a;
-			transition a to merge;
+			transition first a then merge;
 		}
 		region right {
-			initial rs;
+			entry; then rs;
+			state rs;
 			state c;
 			succession first rs then c;
 		}
 		junction merge;
 		junction relay;
 
-		transition merge to relay;
-		transition relay to b;
+		transition first merge then relay;
+		transition first relay then b;
 	}
 }`)
 
@@ -150,20 +156,22 @@ func TestRegionPseudostateLeavingEveryRegion(t *testing.T) {
 		attribute rightExits : Integer = 0;
 
 		region left {
-			initial ls;
+			entry; then ls;
+			state ls;
 			state lstart { exit { leftExits = leftExits + 1; } }
 			succession first ls then lstart;
-			transition lstart to pick;
+			transition first lstart then pick;
 		}
 		region right {
-			initial rs;
+			entry; then rs;
+			state rs;
 			state rstart { exit { rightExits = rightExits + 1; } }
 			succession first rs then rstart;
 		}
 		choice pick;
 		state outside;
 
-		transition pick to outside if x == 1;
+		transition first pick if x == 1 then outside;
 	}
 }`)
 
@@ -188,16 +196,19 @@ func TestRegionPseudostateIntoSiblingRegionExitsSourceOnly(t *testing.T) {
 	state Machine {
 		attribute x : Integer = 1;
 
-		initial init;
+		entry; then init;
+		state init;
 		state running {
 			region left {
-				initial ls;
+				entry; then ls;
+				state ls;
 				state lstart;
 				succession first ls then lstart;
-				transition lstart to cross if x == 1;
+				transition first lstart if x == 1 then cross;
 			}
 			region right {
-				initial rs;
+				entry; then rs;
+				state rs;
 				state rstart;
 				state rtarget { entry { x = 2; } }
 				succession first rs then rstart;
@@ -206,7 +217,7 @@ func TestRegionPseudostateIntoSiblingRegionExitsSourceOnly(t *testing.T) {
 		choice cross;
 
 		succession first init then running;
-		transition cross to rtarget if x == 1;
+		transition first cross if x == 1 then rtarget;
 	}
 }`)
 
@@ -229,8 +240,8 @@ func TestRegionPseudostateExitRecordsHistory(t *testing.T) {
 	outer := &ast.StateNode{
 		Name: "outer",
 		Regions: []*ast.StateRegion{
-			{Name: "left", States: []ast.Node{&ast.StateNode{Name: "lstart", IsInitial: true}, lwork}},
-			{Name: "right", States: []ast.Node{&ast.StateNode{Name: "rstart", IsInitial: true}, rwork}},
+			{Name: "left", States: []ast.Node{entryStart("lstart"), &ast.StateNode{Name: "lstart"}, lwork}},
+			{Name: "right", States: []ast.Node{entryStart("rstart"), &ast.StateNode{Name: "rstart"}, rwork}},
 		},
 		Substates: []ast.Node{history},
 	}
@@ -238,7 +249,8 @@ func TestRegionPseudostateExitRecordsHistory(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			outer,
 			&ast.StateNode{Name: "away"},
 			&ast.PseudostateNode{Kind: ast.PseudostateExit, Name: "out"},
@@ -280,25 +292,28 @@ func TestRegionPseudostateExitOrderIsDeterministic(t *testing.T) {
 		attribute x : Integer = 1;
 
 		region left {
-			initial ls;
+			entry; then ls;
+			state ls;
 			state lstart;
 			succession first ls then lstart;
-			transition lstart to pick;
+			transition first lstart then pick;
 		}
 		region middle {
-			initial ms;
+			entry; then ms;
+			state ms;
 			state mstart;
 			succession first ms then mstart;
 		}
 		region right {
-			initial rs;
+			entry; then rs;
+			state rs;
 			state rstart;
 			succession first rs then rstart;
 		}
 		choice pick;
 		state outside;
 
-		transition pick to outside if x == 1;
+		transition first pick if x == 1 then outside;
 	}
 }`
 

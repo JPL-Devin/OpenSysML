@@ -6,7 +6,8 @@ package Test {
 		attribute log : Integer = 0;
 
 		region work {
-			initial wstart;
+			entry; then wstart;
+			state wstart;
 			state waiting {
 				accept after 10 then late;
 			}
@@ -17,11 +18,12 @@ package Test {
 				entry { log = log * 10 + 1; }
 			}
 
-			transition wstart to waiting;
-			transition waiting to away accept pause;
+			transition first wstart then waiting;
+			transition first waiting accept pause then away;
 		}
 		region clock {
-			initial cstart;
+			entry; then cstart;
+			state cstart;
 			state c0 {
 				accept after 12 then c1;
 			}
@@ -29,7 +31,7 @@ package Test {
 				entry { log = log * 10 + 2; }
 			}
 
-			transition cstart to c0;
+			transition first cstart then c0;
 		}
 	}
 }

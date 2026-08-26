@@ -3,7 +3,8 @@ package SignalTest {
     // must fire the transition whose trigger matches the injected signal.
     // Injecting sigB must reach pathB (finalState = "done"), NOT pathA.
     state Discriminator {
-        initial start;
+        entry; then start;
+        state start;
         state waiting;
         state pathA;
         state pathB;
@@ -11,10 +12,10 @@ package SignalTest {
 
         succession first start then waiting;
 
-        transition waiting to pathA when sigA;
-        transition waiting to pathB when sigB;
+        transition first waiting when sigA then pathA;
+        transition first waiting when sigB then pathB;
 
-        transition pathA to done;
-        transition pathB to done;
+        transition first pathA then done;
+        transition first pathB then done;
     }
 }

@@ -20,11 +20,12 @@ package test {
     state TestTransitionEffectPerform {
         attribute counter : Integer = 1;
 
-        initial init;
+        entry; then init;
+        state init;
         state active;
         final done;
 
         succession first init then active;
-        transition active to done do perform Bump;
+        transition first active do perform Bump then done;
     }
 }

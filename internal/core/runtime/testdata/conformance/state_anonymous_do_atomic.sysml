@@ -7,7 +7,8 @@ package Test {
         attribute seq : Integer = 0;
 
         region left {
-            initial lstart;
+            entry; then lstart;
+            state lstart;
             state lwork {
                 do action {
                     assign seq := seq * 10 + 1;
@@ -22,7 +23,8 @@ package Test {
         }
 
         region right {
-            initial rstart;
+            entry; then rstart;
+            state rstart;
             state rwork {
                 do action {
                     assign seq := seq * 10 + 4;

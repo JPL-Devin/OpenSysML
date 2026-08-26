@@ -391,11 +391,10 @@ func newStateGraph(scope *symbols.Scope, endpoints Endpoints) *StateGraph {
 	}
 }
 
-// IsInitial reports whether the machine starts in state, either because it was
-// written `initial` or because a transition out of the body's entry action named
-// it.
+// IsInitial reports whether the machine starts in state, which a transition out
+// of the body's entry action designates.
 func (g *StateGraph) IsInitial(state *ast.StateNode) bool {
-	return state != nil && (state.IsInitial || g.designatedInitials[state])
+	return state != nil && g.designatedInitials[state]
 }
 
 // designateInitial records state as one the machine starts in.
@@ -1140,7 +1139,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 
 			// `entry; then off;` — a succession out of the body's own entry
 			// subaction names the state it starts in (SysML 7.19.3), the same as
-			// `initial start; succession first start then off;`.
+			// a named entry action with a succession out of it does.
 			if sourceVertex == nil && isEntrySubaction(n.SourceMember) {
 				if target, ok := targetVertex.(*ast.StateNode); ok {
 					graph.designateInitial(target)
@@ -1199,6 +1198,12 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 			}
 			if err := collectTransitions(graph, n.Substates, n, stateScope); err != nil {
 				return err
+			}
+			// The state's own regions carry successions of their own.
+			for _, region := range n.Regions {
+				if err := collectTransitions(graph, []ast.Node{region}, nil, stateScope); err != nil {
+					return err
+				}
 			}
 		case *ast.StateRegion:
 			// Regions are orthogonal: a transition in one inherits no containing

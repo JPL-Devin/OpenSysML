@@ -68,7 +68,8 @@ func TestToStateGraph_Simple(t *testing.T) {
 	src := `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state idle;
 				final done;
 				
@@ -208,7 +209,8 @@ func TestToStateGraph_Regions(t *testing.T) {
 		package test {
 			state TrafficLight {
 				region vehicle {
-					initial v_start;
+					entry; then v_start;
+					state v_start;
 					state Red;
 					state Green;
 					succession first v_start then Red;
@@ -216,7 +218,8 @@ func TestToStateGraph_Regions(t *testing.T) {
 				}
 				
 				region pedestrian {
-					initial p_start;
+					entry; then p_start;
+					state p_start;
 					state Walk;
 					state DontWalk;
 					succession first p_start then Walk;
@@ -281,7 +284,8 @@ func TestToStateGraph_Pseudostates(t *testing.T) {
 	src := `
 		package test {
 			state Router {
-				initial start;
+				entry; then start;
+				state start;
 				choice c;
 				state lowPriority;
 				state highPriority;

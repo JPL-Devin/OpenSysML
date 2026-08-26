@@ -4,18 +4,21 @@ package Test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state Working {
 			region left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state deep {
 					region inner {
-						initial dstart;
+						entry; then dstart;
+						state dstart;
 						state d1;
 						state d2;
 
 						succession first dstart then d1;
-						transition d1 to d2 when Tick do assign log := log * 10 + 1;
+						transition first d1 when Tick do assign log := log * 10 + 1 then d2;
 					}
 				}
 
@@ -23,12 +26,13 @@ package Test {
 			}
 
 			region right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state r1;
 				state r2;
 
 				succession first rstart then r1;
-				transition r1 to r2 when Tick do assign log := log * 10 + 2;
+				transition first r1 when Tick do assign log := log * 10 + 2 then r2;
 			}
 		}
 

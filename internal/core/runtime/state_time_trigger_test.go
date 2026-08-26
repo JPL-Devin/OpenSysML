@@ -44,7 +44,8 @@ func TestTimeTriggerUnitIsConverted(t *testing.T) {
 			exec := libStateExecutor(t, "Machine", `package test {
 				private import SI::*;
 				state Machine {
-					initial start;
+					entry; then start;
+					state start;
 					state waiting {
 						accept after `+tc.duration+` then done;
 					}
@@ -75,7 +76,8 @@ func TestTimeTriggerSubSecondUnit(t *testing.T) {
 			}
 		}
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				accept after 500 [ms] then done;
 			}
@@ -98,7 +100,8 @@ func TestTimeTriggerAbsoluteInstantWithUnit(t *testing.T) {
 	exec := libStateExecutor(t, "Machine", `package test {
 		private import SI::*;
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				accept at 2 [min] then done;
 			}
@@ -121,7 +124,8 @@ func TestTimeTriggerRejectsNonTimeDimension(t *testing.T) {
 	exec := libStateExecutor(t, "Machine", `package test {
 		private import SI::*;
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				accept after 5 [kg] then done;
 			}

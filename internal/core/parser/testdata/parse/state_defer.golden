@@ -3,7 +3,9 @@
     (Package name="Deferral" library=false standard=false
       (Membership visibility="default"
         (Usage kind="state" name="Controller" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (*ast.StateNode)
+          (EntryMember)
+          (SuccessionEdge source="@entry" target="start")
+          (SubstateMember name="start")
           (Membership visibility="default"
             (Usage kind="state" name="busy" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (DeferMember

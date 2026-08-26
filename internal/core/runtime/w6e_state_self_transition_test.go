@@ -10,14 +10,15 @@ func TestSimpleSelfTransitionExitsAndReEntersItsState(t *testing.T) {
 		state sm {
 			attribute log : Integer = 0;
 
-			initial start;
+			entry; then start;
+			state start;
 			state s {
 				entry { log = log * 10 + 1; }
 				exit { log = log * 10 + 2; }
 			}
 
 			succession first start then s;
-			transition s to s accept again do assign log := log * 10 + 9;
+			transition first s accept again do assign log := log * 10 + 9 then s;
 		}
 	}`)
 
@@ -43,17 +44,19 @@ func TestSimpleSelfTransitionInARegionLeavesSiblingRegionsAlone(t *testing.T) {
 			attribute other : Integer = 0;
 
 			region left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state l1 {
 					entry { log = log * 10 + 1; }
 					exit { log = log * 10 + 2; }
 				}
 				succession first lstart then l1;
-				transition l1 to l1 accept again do assign log := log * 10 + 9;
+				transition first l1 accept again do assign log := log * 10 + 9 then l1;
 			}
 
 			region right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state r1 {
 					entry { other = other * 10 + 1; }
 					exit { other = other * 10 + 2; }

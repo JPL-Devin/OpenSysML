@@ -48,7 +48,7 @@ func TestStateExecutor_Initialize(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 
 	// Build state machine: initialState → finalState
-	initialState := &ast.StateNode{Name: "initial", IsInitial: true}
+	initialState := &ast.StateNode{Name: "initial"}
 	finalState := &ast.StateNode{Name: "final", IsFinal: true}
 
 	stateMachine := &symbols.Symbol{
@@ -58,6 +58,7 @@ func TestStateExecutor_Initialize(t *testing.T) {
 			Kind:  ast.UsageState,
 			Ident: ast.Identification{Name: "SimpleStateMachine"},
 			Members: []ast.Node{
+				entryStart("initial"),
 				initialState,
 				finalState,
 			},
@@ -124,8 +125,7 @@ func TestStateExecutor_EntryBehavior(t *testing.T) {
 
 	// State with entry action: entry { x = 42 }
 	initialState := &ast.StateNode{
-		Name:      "initial",
-		IsInitial: true,
+		Name: "initial",
 		Entry: []ast.Node{
 			&ast.ActionExecutionNode{
 				Name:       "entryAction",
@@ -140,7 +140,7 @@ func TestStateExecutor_EntryBehavior(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "EntryBehaviorMachine"},
-			Members: []ast.Node{initialState},
+			Members: []ast.Node{entryStart("initial"), initialState},
 		},
 	}
 
@@ -164,8 +164,7 @@ func TestStateExecutor_ExitBehavior(t *testing.T) {
 
 	// Two states with exit behavior on first
 	stateA := &ast.StateNode{
-		Name:      "stateA",
-		IsInitial: true,
+		Name: "stateA",
 		Exit: []ast.Node{
 			&ast.ActionExecutionNode{
 				Name:       "exitAction",
@@ -189,7 +188,7 @@ func TestStateExecutor_ExitBehavior(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "ExitBehaviorMachine"},
-			Members: []ast.Node{stateA, stateB, transition},
+			Members: []ast.Node{entryStart("stateA"), stateA, stateB, transition},
 		},
 	}
 
@@ -215,8 +214,7 @@ func TestStateExecutor_TimeEvent(t *testing.T) {
 
 	// State machine: stateA --[after 10]-> stateB
 	stateA := &ast.StateNode{
-		Name:      "stateA",
-		IsInitial: true,
+		Name: "stateA",
 	}
 	stateB := &ast.StateNode{
 		Name:    "stateB",
@@ -238,7 +236,7 @@ func TestStateExecutor_TimeEvent(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "TimeEventMachine"},
-			Members: []ast.Node{stateA, stateB, transition},
+			Members: []ast.Node{entryStart("stateA"), stateA, stateB, transition},
 		},
 	}
 
@@ -294,7 +292,7 @@ func TestStateExecutor_AbsoluteTimeEvent(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 
 	// stateA --[after 10]-> stateB --[at 15]-> stateC
-	stateA := &ast.StateNode{Name: "stateA", IsInitial: true}
+	stateA := &ast.StateNode{Name: "stateA"}
 	stateB := &ast.StateNode{Name: "stateB"}
 	stateC := &ast.StateNode{Name: "stateC", IsFinal: true}
 
@@ -315,7 +313,7 @@ func TestStateExecutor_AbsoluteTimeEvent(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "AbsoluteTimeMachine"},
-			Members: []ast.Node{stateA, stateB, stateC, relative, absolute},
+			Members: []ast.Node{entryStart("stateA"), stateA, stateB, stateC, relative, absolute},
 		},
 	}
 
@@ -346,8 +344,7 @@ func TestStateExecutor_ChangeEvent(t *testing.T) {
 
 	// State machine: stateA --[when x > 5]-> stateB
 	stateA := &ast.StateNode{
-		Name:      "stateA",
-		IsInitial: true,
+		Name: "stateA",
 	}
 	stateB := &ast.StateNode{
 		Name:    "stateB",
@@ -375,7 +372,7 @@ func TestStateExecutor_ChangeEvent(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "ChangeEventMachine"},
-			Members: []ast.Node{stateA, stateB, transition},
+			Members: []ast.Node{entryStart("stateA"), stateA, stateB, transition},
 		},
 	}
 
@@ -417,8 +414,7 @@ func TestStateExecutor_GuardCondition(t *testing.T) {
 
 	// State machine: stateA --[after 1][x > 5]-> stateB
 	stateA := &ast.StateNode{
-		Name:      "stateA",
-		IsInitial: true,
+		Name: "stateA",
 	}
 	stateB := &ast.StateNode{
 		Name:    "stateB",
@@ -447,7 +443,7 @@ func TestStateExecutor_GuardCondition(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "GuardMachine"},
-			Members: []ast.Node{stateA, stateB, transition},
+			Members: []ast.Node{entryStart("stateA"), stateA, stateB, transition},
 		},
 	}
 
@@ -502,7 +498,7 @@ func TestStateExecutor_Integration_SimpleTransitions(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 
 	// State machine: idle → working → done
-	idle := &ast.StateNode{Name: "idle", IsInitial: true}
+	idle := &ast.StateNode{Name: "idle"}
 	working := &ast.StateNode{Name: "working"}
 	done := &ast.StateNode{Name: "done", IsFinal: true}
 
@@ -523,7 +519,7 @@ func TestStateExecutor_Integration_SimpleTransitions(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "WorkflowMachine"},
-			Members: []ast.Node{idle, working, done, trans1, trans2},
+			Members: []ast.Node{entryStart("idle"), idle, working, done, trans1, trans2},
 		},
 	}
 
@@ -576,7 +572,7 @@ func TestStateExecutor_Integration_TransitionEffects(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 
 	// State machine with transition effect: stateA --[after 1 / counter++]-> stateB
-	stateA := &ast.StateNode{Name: "stateA", IsInitial: true}
+	stateA := &ast.StateNode{Name: "stateA"}
 	stateB := &ast.StateNode{Name: "stateB", IsFinal: true}
 
 	// Transition with effect that increments counter
@@ -598,7 +594,7 @@ func TestStateExecutor_Integration_TransitionEffects(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "EffectMachine"},
-			Members: []ast.Node{stateA, stateB, transition},
+			Members: []ast.Node{entryStart("stateA"), stateA, stateB, transition},
 		},
 	}
 
@@ -640,8 +636,7 @@ func TestStateExecutor_HierarchicalStates(t *testing.T) {
 	//   standalone
 
 	childA := &ast.StateNode{
-		Name:      "childA",
-		IsInitial: true,
+		Name: "childA",
 	}
 
 	childB := &ast.StateNode{
@@ -650,7 +645,7 @@ func TestStateExecutor_HierarchicalStates(t *testing.T) {
 
 	composite := &ast.StateNode{
 		Name:      "composite",
-		Substates: []ast.Node{childA, childB},
+		Substates: []ast.Node{entryStart("childA"), childA, childB},
 	}
 
 	standalone := &ast.StateNode{
@@ -663,7 +658,7 @@ func TestStateExecutor_HierarchicalStates(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "HierarchicalSM"},
-			Members: []ast.Node{composite, standalone},
+			Members: []ast.Node{entryStart("composite"), composite, standalone},
 		},
 	}
 
@@ -724,8 +719,7 @@ func TestStateExecutor_HierarchicalEntryExit(t *testing.T) {
 	// Verify entry/exit actions execute in order
 
 	childState := &ast.StateNode{
-		Name:      "childState",
-		IsInitial: true,
+		Name: "childState",
 		Entry: []ast.Node{
 			&ast.ActionExecutionNode{
 				Name:       "enterChild",
@@ -754,7 +748,7 @@ func TestStateExecutor_HierarchicalEntryExit(t *testing.T) {
 				Expression: &ast.LiteralInteger{Value: "10"},
 			},
 		},
-		Substates: []ast.Node{childState},
+		Substates: []ast.Node{entryStart("childState"), childState},
 	}
 
 	siblingState := &ast.StateNode{
@@ -781,7 +775,7 @@ func TestStateExecutor_HierarchicalEntryExit(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "HierarchicalEntryExitSM"},
-			Members: []ast.Node{parentState, siblingState, transition},
+			Members: []ast.Node{entryStart("parentState"), parentState, siblingState, transition},
 		},
 	}
 
@@ -841,19 +835,17 @@ func TestStateExecutor_StateStackTracking(t *testing.T) {
 	// Transition: deepNested →[after 1]→ standalone
 
 	deepNested := &ast.StateNode{
-		Name:      "deepNested",
-		IsInitial: true,
+		Name: "deepNested",
 	}
 
 	nested := &ast.StateNode{
 		Name:      "nested",
-		IsInitial: true,
-		Substates: []ast.Node{deepNested},
+		Substates: []ast.Node{entryStart("deepNested"), deepNested},
 	}
 
 	composite := &ast.StateNode{
 		Name:      "composite",
-		Substates: []ast.Node{nested},
+		Substates: []ast.Node{entryStart("nested"), nested},
 	}
 
 	standalone := &ast.StateNode{
@@ -872,7 +864,7 @@ func TestStateExecutor_StateStackTracking(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "StateStackSM"},
-			Members: []ast.Node{composite, standalone, transition},
+			Members: []ast.Node{entryStart("composite"), composite, standalone, transition},
 		},
 	}
 
@@ -935,8 +927,7 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 	//   execute →[after 1]→ done (exits processing parent)
 
 	validate := &ast.StateNode{
-		Name:      "validate",
-		IsInitial: true,
+		Name: "validate",
 		Entry: []ast.Node{
 			&ast.ActionExecutionNode{
 				Name:       "validateEntry",
@@ -969,12 +960,11 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 				Expression: &ast.LiteralInteger{Value: "3"},
 			},
 		},
-		Substates: []ast.Node{validate, execute},
+		Substates: []ast.Node{entryStart("validate"), validate, execute},
 	}
 
 	ready := &ast.StateNode{
-		Name:      "ready",
-		IsInitial: true,
+		Name: "ready",
 		Entry: []ast.Node{
 			&ast.ActionExecutionNode{
 				Name:       "readyEntry",
@@ -985,7 +975,7 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 
 	workflow := &ast.StateNode{
 		Name:      "workflow",
-		Substates: []ast.Node{ready, processing},
+		Substates: []ast.Node{entryStart("ready"), ready, processing},
 	}
 
 	done := &ast.StateNode{
@@ -1023,7 +1013,7 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "HierarchicalWorkflowSM"},
-			Members: []ast.Node{workflow, done, trans1, trans2, trans3},
+			Members: []ast.Node{entryStart("workflow"), workflow, done, trans1, trans2, trans3},
 		},
 	}
 
@@ -1126,7 +1116,7 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 	// States: red (initial, 30s) → green (25s) → yellow (5s) → off (final)
 	// Total cycle: 30 + 25 + 5 = 60 seconds
 
-	red := &ast.StateNode{Name: "red", IsInitial: true}
+	red := &ast.StateNode{Name: "red"}
 	green := &ast.StateNode{Name: "green"}
 	yellow := &ast.StateNode{Name: "yellow"}
 	off := &ast.StateNode{Name: "off", IsFinal: true}
@@ -1187,7 +1177,7 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "TrafficLight"},
-			Members: []ast.Node{red, green, yellow, off, trans1, trans2, trans3},
+			Members: []ast.Node{entryStart("red"), red, green, yellow, off, trans1, trans2, trans3},
 		},
 	}
 
