@@ -92,7 +92,7 @@ func TestParseAction_ForkJoin(t *testing.T) {
 func TestParseAction_Decision(t *testing.T) {
 	input := `{
 		first start;
-		decision check;
+		decide check;
 		done success;
 		then start check;
 		then check success if true;
@@ -178,7 +178,7 @@ func TestParseAction_Decision(t *testing.T) {
 
 // Phase C1 Tests
 
-func parseResultBodyTest(t *testing.T, input string) []ast.Node {
+func parseResultMembersTest(t *testing.T, input string) (*Parser, []ast.Node) {
 	src := source.New("test.sysml", []byte(input))
 	p := New(src)
 
@@ -188,7 +188,11 @@ func parseResultBodyTest(t *testing.T, input string) []ast.Node {
 		t.Fatalf("expected '{', got %v", p.peek().Kind)
 	}
 
-	return p.parseResultBody()
+	var members []ast.Node
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		members = append(members, p.parseResultMember())
+	}
+	return p, members
 }
 
 func parseConstraintBodyTest(t *testing.T, input string) []ast.Node {
@@ -204,59 +208,57 @@ func parseConstraintBodyTest(t *testing.T, input string) []ast.Node {
 	return p.parseConstraintBody()
 }
 
-func TestParseResultBody_Simple(t *testing.T) {
-	input := `{
-		return x + 5;
-	}`
-
-	nodes := parseResultBodyTest(t, input)
-
-	if len(nodes) != 1 {
-		t.Fatalf("expected 1 node, got %d", len(nodes))
-	}
-
-	result, ok := nodes[0].(*ast.ResultMember)
-	if !ok {
-		t.Errorf("node 0: expected *ast.ResultMember, got %T", nodes[0])
-	} else {
-		if result.Expression == nil {
-			t.Errorf("ResultMember.Expression is nil")
-		}
-		// Check it's an operator expression (x + 5)
-		if _, ok := result.Expression.(*ast.OperatorExpr); !ok {
-			t.Errorf("ResultMember.Expression: expected *ast.OperatorExpr, got %T", result.Expression)
-		}
-	}
-}
-
-// A lone name after 'return' declares the return parameter; an expression is a
-// computed result.
-func TestParseResultBody_Multiple(t *testing.T) {
+// Every `return` declares the result parameter, named or typed.
+func TestParseResultMember_Parameters(t *testing.T) {
 	input := `{
 		return a;
-		return b * 2;
+		return r : Real = b * 2;
 	}`
 
-	nodes := parseResultBodyTest(t, input)
+	p, nodes := parseResultMembersTest(t, input)
 
 	if len(nodes) != 2 {
 		t.Fatalf("expected 2 nodes, got %d", len(nodes))
 	}
-
-	u, ok := nodes[0].(*ast.Usage)
-	if !ok {
-		t.Errorf("node 0: expected *ast.Usage, got %T", nodes[0])
-	} else {
-		if u.Ident.Name != "a" {
-			t.Errorf("node 0: name = %q, want %q", u.Ident.Name, "a")
-		}
-		if u.Direction != ast.DirOut {
-			t.Errorf("node 0: direction = %v, want out", u.Direction)
-		}
+	if len(p.Diagnostics) != 0 {
+		t.Errorf("diagnostics = %v, want none", p.Diagnostics)
 	}
 
-	if _, ok := nodes[1].(*ast.ResultMember); !ok {
-		t.Errorf("node 1: expected *ast.ResultMember, got %T", nodes[1])
+	for i, want := range []string{"a", "r"} {
+		u, ok := nodes[i].(*ast.Usage)
+		if !ok {
+			t.Errorf("node %d: expected *ast.Usage, got %T", i, nodes[i])
+			continue
+		}
+		if u.Ident.Name != want {
+			t.Errorf("node %d: name = %q, want %q", i, u.Ident.Name, want)
+		}
+		if u.Direction != ast.DirOut || !u.IsResult {
+			t.Errorf("node %d: direction = %v, isResult = %v, want out result", i, u.Direction, u.IsResult)
+		}
+	}
+}
+
+// An expression after `return` states no production: it is refused, and the
+// members after it are still read.
+func TestParseResultMember_ExpressionRefused(t *testing.T) {
+	for _, src := range []string{"b * 2", "42", "sqrt(b)", "P::a", "a.b"} {
+		t.Run(src, func(t *testing.T) {
+			p, nodes := parseResultMembersTest(t, "{\n\t\treturn "+src+";\n\t\treturn r : Real;\n\t}")
+
+			if len(nodes) != 2 {
+				t.Fatalf("expected 2 nodes, got %d", len(nodes))
+			}
+			if _, ok := nodes[0].(*ast.ErrorNode); !ok {
+				t.Errorf("node 0: expected *ast.ErrorNode, got %T", nodes[0])
+			}
+			if len(p.Diagnostics) == 0 {
+				t.Errorf("expected a diagnostic for `return %s;`", src)
+			}
+			if _, ok := nodes[1].(*ast.Usage); !ok {
+				t.Errorf("node 1: expected *ast.Usage, got %T", nodes[1])
+			}
+		})
 	}
 }
 

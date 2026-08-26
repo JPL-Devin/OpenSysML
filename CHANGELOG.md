@@ -45,6 +45,31 @@ sources and javadoc jars, and [releasing.md](docs/project/releasing.md) says wha
 maintainer must obtain — a verified namespace, a GPG key, Central portal tokens — before a
 first upload.
 
+### RDF output states element ids and ownership
+
+A converted graph now carries the two things a SysML v2 API service needs to address it.
+Every element states `sysml:elementId` — exactly the id its own IRI ends in, so the triple
+and an id derived from the IRI cannot disagree — and containment is stated as the abstract
+syntax does: `sysml:owner` and `sysml:owningRelatedElement` as element references, with a
+materialized `OwningMembership`, or a `FeatureMembership` where a type owns a feature,
+between owner and member. Each membership is an element of its own with a deterministic IRI,
+its own `sysml:elementId`, and the member and owner wiring a client walking from a root
+follows; a relationship a namespace declares, such as an import, owns its member directly.
+Visibility moves to the membership that declares it. A document now has one root instead of
+every element reading as one.
+
+The nodes of an expression graph are addressable too: a node's IRI held a `.` and the name
+of the position it sits in, which an API service restricting ids to `[a-zA-Z0-9_-]+` refuses
+outright, so the position is now joined with `_p` and encoded the way an element id is, and
+the node states that id in `sysml:elementId`. A node is still not a model element.
+
+`.ttl` output changes shape accordingly, and every graph regenerates. Reading is
+backward compatible: a graph carrying only the previous compact `sysml:owningNamespace`
+shape still converts unchanged, and that property is still written.
+[reference/rdf-mapping.md](docs/reference/rdf-mapping.md) documents the ownership shape.
+Loading a graph into a live triplestore and reading it back through the API is still not
+demonstrated, and collection-valued properties still carry no JSON annotation.
+
 ### A keyworded inline condition is no longer accepted
 
 **Breaking change.** `assert <expression>;` and `assume <expression>;` in a constraint body, and
@@ -63,6 +88,42 @@ error, and the warning for them is gone.
   `assert constraint { … }`, `assert constraint C;`, `assume`/`require <reference>;` and
   `assume`/`require constraint [name] { … }`. The separate warning for `assume`/`require` used
   outside a requirement body is unchanged too.
+
+### The action nodes spelled `initial`, `final` and `decision` are removed
+
+**Breaking change** for models that used them. Each was an OpenSysML-only alias of a node the
+standard notation already spells, so the alias and its `nonstandard-notation` warning are gone
+rather than kept:
+
+- `initial <name> [then <target>];` in an action body → write `first <name> [then <target>];`
+  (`SysML.xtext:1385`).
+- `final [<name>];`, including the bare `then final;` → write `done [<name>];`, a reference to
+  the library feature `Actions::Action::done`.
+- `decision <name>;` → write `decide <name>;` (`SysML.xtext:1672`).
+
+None of the three words is reserved by the pinned grammars, so each still names a feature
+(`attribute final : Boolean;`, `action initial;`). An action body that writes `initial <name>;`,
+`final <name>;` or `decision <name>;` is reported as the parse error it now is. A bare
+`then final;` is a **succession target**, not a node, so it is read as a reference to a member named
+`final`: where nothing declares one, the model analyses clean and fails when the action is run
+(`succession edge references undefined target node "final"`) — the same as any other undefined
+succession target. The **state** markers `initial <state>;` and
+`final <state>;` in a state body are unaffected, and so is `done <name>;`; both keep their
+existing warnings.
+
+### `return <expression>;` is no longer accepted in a calculation body
+
+**Breaking change.** A computed calculation result is written as the body's trailing
+expression, with no keyword — `calc def Add { in x; in y; x + y }` — which is what the
+standard grammar admits and what OpenSysML already executed. The OpenSysML-only spelling
+`return x + y;` had no production of its own; it is now a parse error suggesting the
+trailing-expression form, and the `nonstandard-notation` warning that reported it is gone.
+
+`return` itself is unchanged: it still declares the result parameter of a calculation, so
+`return r : ScalarValues::Real;`, `return r : ScalarValues::Real = x + 1;` and the bare
+`return r;` — a result parameter named `r` — all keep working. A trailing expression must be
+the last item of the body, so a body that wrote its `return` before other members needs
+those members moved above the expression.
 
 ### The Python client uses a private service of its own
 
@@ -99,9 +160,9 @@ An opt-in gate loads a model's Turtle into a running Flexo MMS stack through Lay
 endpoint, reads it back through the SysML v2 API, and compares that against the same model
 posted through that service's own commit path. It records a per-element, per-property report
 that a human adjudicates, so the mapping's interoperability is a number that moves rather than
-a claim: today every element of the fixture is listed and 86 of its 142 properties are
-delivered, against 158 of 158 for the service's own payloads. The reference mapping documents
-what the difference is made of.
+a claim: measured before element ids and ownership were stated, every element of the fixture was
+listed and 86 of its 142 properties delivered, against 158 of 158 for the service's own
+payloads. The reference mapping documents what the difference is made of.
 
 The gate needs Docker and stays out of `go test ./...`: it skips loudly unless `FLEXO_INTEROP`
 is set, and with it set an absent stack fails instead of skipping.

@@ -8,429 +8,941 @@
 elmt:LoopsAndConditionals
     a sysml:Package ;
     sysml:qualifiedName "LoopsAndConditionals" ;
+    sysml:elementId "LoopsAndConditionals" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "LoopsAndConditionals" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Tick, elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Tick_om, elmt:LoopsAndConditionals__Control_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Tick_om, elmt:LoopsAndConditionals__Control_om .
 
 elmt:LoopsAndConditionals__Tick
     a sysml:ActionDefinition ;
     sysml:qualifiedName "LoopsAndConditionals::Tick" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals ;
+    sysml:elementId "LoopsAndConditionals__Tick" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals ;
+    sysml:owner elmt:LoopsAndConditionals ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Tick_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Tick_om ;
     sysml:declaredName "Tick" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:LoopsAndConditionals__Tick_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Tick_om" ;
+    sysml:owner elmt:LoopsAndConditionals ;
+    sysml:memberElement elmt:LoopsAndConditionals__Tick ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Tick ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Tick ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals .
 
 elmt:LoopsAndConditionals__Control
     a sysml:ActionDefinition ;
     sysml:qualifiedName "LoopsAndConditionals::Control" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals ;
+    sysml:elementId "LoopsAndConditionals__Control" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals ;
+    sysml:owner elmt:LoopsAndConditionals ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control_om ;
     sysml:declaredName "Control" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control__count, elmt:LoopsAndConditionals__Control__total, elmt:LoopsAndConditionals__Control__tick, elmt:LoopsAndConditionals__Control___403, elmt:LoopsAndConditionals__Control___404, elmt:LoopsAndConditionals__Control___405, elmt:LoopsAndConditionals__Control___406, elmt:LoopsAndConditionals__Control___407, elmt:LoopsAndConditionals__Control___408, elmt:LoopsAndConditionals__Control___409 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control__count_om, elmt:LoopsAndConditionals__Control__total_om, elmt:LoopsAndConditionals__Control__tick_om, elmt:LoopsAndConditionals__Control___403_om, elmt:LoopsAndConditionals__Control___404_om, elmt:LoopsAndConditionals__Control___405_om, elmt:LoopsAndConditionals__Control___406_om, elmt:LoopsAndConditionals__Control___407_om, elmt:LoopsAndConditionals__Control___408_om, elmt:LoopsAndConditionals__Control___409_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control__count_om, elmt:LoopsAndConditionals__Control__total_om, elmt:LoopsAndConditionals__Control__tick_om, elmt:LoopsAndConditionals__Control___403_om, elmt:LoopsAndConditionals__Control___404_om, elmt:LoopsAndConditionals__Control___405_om, elmt:LoopsAndConditionals__Control___406_om, elmt:LoopsAndConditionals__Control___407_om, elmt:LoopsAndConditionals__Control___408_om, elmt:LoopsAndConditionals__Control___409_om ;
+    sysml:ownedFeature elmt:LoopsAndConditionals__Control__count, elmt:LoopsAndConditionals__Control__total, elmt:LoopsAndConditionals__Control__tick, elmt:LoopsAndConditionals__Control___403, elmt:LoopsAndConditionals__Control___404, elmt:LoopsAndConditionals__Control___405, elmt:LoopsAndConditionals__Control___406, elmt:LoopsAndConditionals__Control___407, elmt:LoopsAndConditionals__Control___408, elmt:LoopsAndConditionals__Control___409 ;
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control__count_om, elmt:LoopsAndConditionals__Control__total_om, elmt:LoopsAndConditionals__Control__tick_om, elmt:LoopsAndConditionals__Control___403_om, elmt:LoopsAndConditionals__Control___404_om, elmt:LoopsAndConditionals__Control___405_om, elmt:LoopsAndConditionals__Control___406_om, elmt:LoopsAndConditionals__Control___407_om, elmt:LoopsAndConditionals__Control___408_om, elmt:LoopsAndConditionals__Control___409_om .
+
+elmt:LoopsAndConditionals__Control_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control_om" ;
+    sysml:owner elmt:LoopsAndConditionals ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals .
 
 elmt:LoopsAndConditionals__Control__count
     a sysml:ReferenceUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::count" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control__count" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control__count_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control__count_om ;
     sysml:declaredName "count" ;
     sysml:direction "in" ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:LoopsAndConditionals__Control__count_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control__count_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control__count ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control__count ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control__count ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control__count ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
+
 elmt:LoopsAndConditionals__Control__total
     a sysml:AttributeUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::total" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control__total" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control__total_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control__total_om ;
     sysml:declaredName "total" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:LoopsAndConditionals__Control__total_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control__total_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control__total ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control__total ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control__total ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control__total ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
 
 elmt:LoopsAndConditionals__Control__tick
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::tick" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control__tick" ;
     sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control__tick_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control__tick_om ;
     sysml:declaredName "tick" ;
     sysml:type elmt:LoopsAndConditionals__Tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:LoopsAndConditionals__Control__tick_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control__tick_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control__tick ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control__tick ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control__tick ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control__tick ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
+
 elmt:LoopsAndConditionals__Control___403
     a sysml:WhileLoopActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@3" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control___403" ;
     sysx:memberIndex "3"^^xsd:integer ;
-    sysx:whileCondition expr:LoopsAndConditionals__Control___403.whileCondition ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___403_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___403_om ;
+    sysx:whileCondition expr:LoopsAndConditionals__Control___403_pwhileCondition ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___403___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___403___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___403___400_om ;
+    sysml:ownedFeature elmt:LoopsAndConditionals__Control___403___400 ;
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___403___400_om .
 
-expr:LoopsAndConditionals__Control___403.whileCondition
+elmt:LoopsAndConditionals__Control___403_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___403_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___403 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___403 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___403 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___403 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
+
+expr:LoopsAndConditionals__Control___403_pwhileCondition
     a sysml:OperatorExpression ;
     sysx:sourceText "count > 0" ;
+    sysml:elementId "LoopsAndConditionals__Control___403_pwhileCondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___403.whileCondition.a0, expr:LoopsAndConditionals__Control___403.whileCondition.a1 .
+    sysml:argument expr:LoopsAndConditionals__Control___403_pwhileCondition_pa0, expr:LoopsAndConditionals__Control___403_pwhileCondition_pa1 .
 
-expr:LoopsAndConditionals__Control___403.whileCondition.a0
+expr:LoopsAndConditionals__Control___403_pwhileCondition_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "count" ;
+    sysml:elementId "LoopsAndConditionals__Control___403_pwhileCondition_pa0" ;
     sysml:referent elmt:LoopsAndConditionals__Control__count ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:LoopsAndConditionals__Control___403.whileCondition.a1
+expr:LoopsAndConditionals__Control___403_pwhileCondition_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "LoopsAndConditionals__Control___403_pwhileCondition_pa1" ;
     sysml:value "0"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___403___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@3::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___403 ;
+    sysml:elementId "LoopsAndConditionals__Control___403___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___403 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___403 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___403___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___403___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:LoopsAndConditionals__Control___403___400_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___403___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___403 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___403___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___403___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___403___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___403 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___403 ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___403___400 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control___403 .
+
 elmt:LoopsAndConditionals__Control___404
     a sysml:WhileLoopActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@4" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control___404" ;
     sysx:memberIndex "4"^^xsd:integer ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___404_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___404_om ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___404___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___404___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___404___400_om ;
+    sysml:ownedFeature elmt:LoopsAndConditionals__Control___404___400 ;
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___404___400_om .
+
+elmt:LoopsAndConditionals__Control___404_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___404_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___404 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___404 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___404 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___404 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
 
 elmt:LoopsAndConditionals__Control___404___400
     a sysml:AssignmentActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@4::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___404 ;
+    sysml:elementId "LoopsAndConditionals__Control___404___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___404 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___404 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___404___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___404___400_om ;
     sysx:declaredKeyword "assign" ;
-    sysx:target expr:LoopsAndConditionals__Control___404___400.target ;
-    sysml:value expr:LoopsAndConditionals__Control___404___400.value .
+    sysx:target expr:LoopsAndConditionals__Control___404___400_ptarget ;
+    sysml:value expr:LoopsAndConditionals__Control___404___400_pvalue .
 
-expr:LoopsAndConditionals__Control___404___400.target
+elmt:LoopsAndConditionals__Control___404___400_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___404___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___404 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___404___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___404___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___404___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___404 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___404 ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___404___400 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control___404 .
+
+expr:LoopsAndConditionals__Control___404___400_ptarget
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "total" ;
+    sysml:elementId "LoopsAndConditionals__Control___404___400_ptarget" ;
     sysml:referent elmt:LoopsAndConditionals__Control__total .
 
-expr:LoopsAndConditionals__Control___404___400.value
+expr:LoopsAndConditionals__Control___404___400_pvalue
     a sysml:OperatorExpression ;
     sysx:sourceText "total + 1" ;
+    sysml:elementId "LoopsAndConditionals__Control___404___400_pvalue" ;
     sysml:operator "+" ;
-    sysml:argument expr:LoopsAndConditionals__Control___404___400.value.a0, expr:LoopsAndConditionals__Control___404___400.value.a1 .
+    sysml:argument expr:LoopsAndConditionals__Control___404___400_pvalue_pa0, expr:LoopsAndConditionals__Control___404___400_pvalue_pa1 .
 
-expr:LoopsAndConditionals__Control___404___400.value.a0
+expr:LoopsAndConditionals__Control___404___400_pvalue_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "total" ;
+    sysml:elementId "LoopsAndConditionals__Control___404___400_pvalue_pa0" ;
     sysml:referent elmt:LoopsAndConditionals__Control__total ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:LoopsAndConditionals__Control___404___400.value.a1
+expr:LoopsAndConditionals__Control___404___400_pvalue_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "1" ;
+    sysml:elementId "LoopsAndConditionals__Control___404___400_pvalue_pa1" ;
     sysml:value "1"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___405
     a sysml:WhileLoopActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@5" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control___405" ;
     sysx:memberIndex "5"^^xsd:integer ;
-    sysx:untilCondition expr:LoopsAndConditionals__Control___405.untilCondition ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___405_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___405_om ;
+    sysx:untilCondition expr:LoopsAndConditionals__Control___405_puntilCondition ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___405___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___405___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___405___400_om ;
+    sysml:ownedFeature elmt:LoopsAndConditionals__Control___405___400 ;
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___405___400_om .
 
-expr:LoopsAndConditionals__Control___405.untilCondition
+elmt:LoopsAndConditionals__Control___405_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___405_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___405 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___405 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___405 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___405 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
+
+expr:LoopsAndConditionals__Control___405_puntilCondition
     a sysml:OperatorExpression ;
     sysx:sourceText "total > 100" ;
+    sysml:elementId "LoopsAndConditionals__Control___405_puntilCondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___405.untilCondition.a0, expr:LoopsAndConditionals__Control___405.untilCondition.a1 .
+    sysml:argument expr:LoopsAndConditionals__Control___405_puntilCondition_pa0, expr:LoopsAndConditionals__Control___405_puntilCondition_pa1 .
 
-expr:LoopsAndConditionals__Control___405.untilCondition.a0
+expr:LoopsAndConditionals__Control___405_puntilCondition_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "total" ;
+    sysml:elementId "LoopsAndConditionals__Control___405_puntilCondition_pa0" ;
     sysml:referent elmt:LoopsAndConditionals__Control__total ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:LoopsAndConditionals__Control___405.untilCondition.a1
+expr:LoopsAndConditionals__Control___405_puntilCondition_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "100" ;
+    sysml:elementId "LoopsAndConditionals__Control___405_puntilCondition_pa1" ;
     sysml:value "100"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___405___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@5::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___405 ;
+    sysml:elementId "LoopsAndConditionals__Control___405___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___405 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___405 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___405___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___405___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:LoopsAndConditionals__Control___405___400_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___405___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___405 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___405___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___405___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___405___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___405 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___405 ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___405___400 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control___405 .
+
 elmt:LoopsAndConditionals__Control___406
     a sysml:ForLoopActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@6" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control___406" ;
     sysx:memberIndex "6"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___406_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___406_om ;
     sysx:loopVariable "idx" ;
-    sysx:collection expr:LoopsAndConditionals__Control___406.collection ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:collection expr:LoopsAndConditionals__Control___406_pcollection ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___406___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___406___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___406___400_om ;
+    sysml:ownedFeature elmt:LoopsAndConditionals__Control___406___400 ;
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___406___400_om .
 
-expr:LoopsAndConditionals__Control___406.collection
+elmt:LoopsAndConditionals__Control___406_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___406_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___406 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___406 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___406 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___406 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
+
+expr:LoopsAndConditionals__Control___406_pcollection
     a sysml:OperatorExpression ;
     sysx:sourceText "1..10" ;
+    sysml:elementId "LoopsAndConditionals__Control___406_pcollection" ;
     sysml:operator ".." ;
-    sysml:argument expr:LoopsAndConditionals__Control___406.collection.a0, expr:LoopsAndConditionals__Control___406.collection.a1 .
+    sysml:argument expr:LoopsAndConditionals__Control___406_pcollection_pa0, expr:LoopsAndConditionals__Control___406_pcollection_pa1 .
 
-expr:LoopsAndConditionals__Control___406.collection.a0
+expr:LoopsAndConditionals__Control___406_pcollection_pa0
     a sysml:LiteralInteger ;
     sysx:sourceText "1" ;
+    sysml:elementId "LoopsAndConditionals__Control___406_pcollection_pa0" ;
     sysml:value "1"^^xsd:integer ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:LoopsAndConditionals__Control___406.collection.a1
+expr:LoopsAndConditionals__Control___406_pcollection_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "10" ;
+    sysml:elementId "LoopsAndConditionals__Control___406_pcollection_pa1" ;
     sysml:value "10"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___406___400
     a sysml:AssignmentActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@6::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___406 ;
+    sysml:elementId "LoopsAndConditionals__Control___406___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___406 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___406 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___406___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___406___400_om ;
     sysx:declaredKeyword "assign" ;
-    sysx:target expr:LoopsAndConditionals__Control___406___400.target ;
-    sysml:value expr:LoopsAndConditionals__Control___406___400.value .
+    sysx:target expr:LoopsAndConditionals__Control___406___400_ptarget ;
+    sysml:value expr:LoopsAndConditionals__Control___406___400_pvalue .
 
-expr:LoopsAndConditionals__Control___406___400.target
+elmt:LoopsAndConditionals__Control___406___400_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___406___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___406 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___406___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___406___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___406___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___406 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___406 ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___406___400 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control___406 .
+
+expr:LoopsAndConditionals__Control___406___400_ptarget
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "total" ;
+    sysml:elementId "LoopsAndConditionals__Control___406___400_ptarget" ;
     sysml:referent elmt:LoopsAndConditionals__Control__total .
 
-expr:LoopsAndConditionals__Control___406___400.value
+expr:LoopsAndConditionals__Control___406___400_pvalue
     a sysml:OperatorExpression ;
     sysx:sourceText "total + idx" ;
+    sysml:elementId "LoopsAndConditionals__Control___406___400_pvalue" ;
     sysml:operator "+" ;
-    sysml:argument expr:LoopsAndConditionals__Control___406___400.value.a0, expr:LoopsAndConditionals__Control___406___400.value.a1 .
+    sysml:argument expr:LoopsAndConditionals__Control___406___400_pvalue_pa0, expr:LoopsAndConditionals__Control___406___400_pvalue_pa1 .
 
-expr:LoopsAndConditionals__Control___406___400.value.a0
+expr:LoopsAndConditionals__Control___406___400_pvalue_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "total" ;
+    sysml:elementId "LoopsAndConditionals__Control___406___400_pvalue_pa0" ;
     sysml:referent elmt:LoopsAndConditionals__Control__total ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:LoopsAndConditionals__Control___406___400.value.a1
+expr:LoopsAndConditionals__Control___406___400_pvalue_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "idx" ;
+    sysml:elementId "LoopsAndConditionals__Control___406___400_pvalue_pa1" ;
     sysml:referent "idx" ;
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___407
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@7" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control___407" ;
     sysx:memberIndex "7"^^xsd:integer ;
-    sysx:condition expr:LoopsAndConditionals__Control___407.condition .
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___407_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___407_om ;
+    sysx:condition expr:LoopsAndConditionals__Control___407_pcondition ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___407___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___407___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___407___400_om .
 
-expr:LoopsAndConditionals__Control___407.condition
+elmt:LoopsAndConditionals__Control___407_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___407_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___407 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___407 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___407 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___407 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
+
+expr:LoopsAndConditionals__Control___407_pcondition
     a sysml:OperatorExpression ;
     sysx:sourceText "count > 0" ;
+    sysml:elementId "LoopsAndConditionals__Control___407_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___407.condition.a0, expr:LoopsAndConditionals__Control___407.condition.a1 .
+    sysml:argument expr:LoopsAndConditionals__Control___407_pcondition_pa0, expr:LoopsAndConditionals__Control___407_pcondition_pa1 .
 
-expr:LoopsAndConditionals__Control___407.condition.a0
+expr:LoopsAndConditionals__Control___407_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "count" ;
+    sysml:elementId "LoopsAndConditionals__Control___407_pcondition_pa0" ;
     sysml:referent elmt:LoopsAndConditionals__Control__count ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:LoopsAndConditionals__Control___407.condition.a1
+expr:LoopsAndConditionals__Control___407_pcondition_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "LoopsAndConditionals__Control___407_pcondition_pa1" ;
     sysml:value "0"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___407___400
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@7::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___407 ;
+    sysml:elementId "LoopsAndConditionals__Control___407___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___407 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___407 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___407___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___407___400_om ;
     sysx:branchKind "then" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___407___400___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___407___400___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___407___400___400_om .
+
+elmt:LoopsAndConditionals__Control___407___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___407___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___407 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___407___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___407___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___407___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___407 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___407 .
 
 elmt:LoopsAndConditionals__Control___407___400___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@7::@0::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___407___400 ;
+    sysml:elementId "LoopsAndConditionals__Control___407___400___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___407___400 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___407___400 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___407___400___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___407___400___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:LoopsAndConditionals__Control___407___400___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___407___400___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___407___400 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___407___400___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___407___400___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___407___400___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___407___400 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___407___400 .
+
 elmt:LoopsAndConditionals__Control___408
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control___408" ;
     sysx:memberIndex "8"^^xsd:integer ;
-    sysx:condition expr:LoopsAndConditionals__Control___408.condition .
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___408_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___408_om ;
+    sysx:condition expr:LoopsAndConditionals__Control___408_pcondition ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___408___400, elmt:LoopsAndConditionals__Control___408___401 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___408___400_om, elmt:LoopsAndConditionals__Control___408___401_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___400_om, elmt:LoopsAndConditionals__Control___408___401_om .
 
-expr:LoopsAndConditionals__Control___408.condition
+elmt:LoopsAndConditionals__Control___408_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___408_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___408 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___408 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___408 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___408 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
+
+expr:LoopsAndConditionals__Control___408_pcondition
     a sysml:OperatorExpression ;
     sysx:sourceText "count > 0" ;
+    sysml:elementId "LoopsAndConditionals__Control___408_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___408.condition.a0, expr:LoopsAndConditionals__Control___408.condition.a1 .
+    sysml:argument expr:LoopsAndConditionals__Control___408_pcondition_pa0, expr:LoopsAndConditionals__Control___408_pcondition_pa1 .
 
-expr:LoopsAndConditionals__Control___408.condition.a0
+expr:LoopsAndConditionals__Control___408_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "count" ;
+    sysml:elementId "LoopsAndConditionals__Control___408_pcondition_pa0" ;
     sysml:referent elmt:LoopsAndConditionals__Control__count ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:LoopsAndConditionals__Control___408.condition.a1
+expr:LoopsAndConditionals__Control___408_pcondition_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "LoopsAndConditionals__Control___408_pcondition_pa1" ;
     sysml:value "0"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___408___400
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408 ;
+    sysml:elementId "LoopsAndConditionals__Control___408___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___408 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___408___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___408___400_om ;
     sysx:branchKind "then" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___408___400___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___408___400___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___400___400_om .
+
+elmt:LoopsAndConditionals__Control___408___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___408___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___408 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___408___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___408___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___408___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___408 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___408 .
 
 elmt:LoopsAndConditionals__Control___408___400___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8::@0::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408___400 ;
+    sysml:elementId "LoopsAndConditionals__Control___408___400___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408___400 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___408___400 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___408___400___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___408___400___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:LoopsAndConditionals__Control___408___400___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___408___400___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___408___400 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___408___400___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___408___400___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___408___400___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___408___400 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___408___400 .
+
 elmt:LoopsAndConditionals__Control___408___401
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8::@1" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408 ;
+    sysml:elementId "LoopsAndConditionals__Control___408___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___408 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___408___401_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___408___401_om ;
     sysx:branchKind "else" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___408___401___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___408___401___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___401___400_om .
+
+elmt:LoopsAndConditionals__Control___408___401_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___408___401_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___408 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___408___401 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___408___401 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___408___401 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___408 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___408 .
 
 elmt:LoopsAndConditionals__Control___408___401___400
     a sysml:AssignmentActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8::@1::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408___401 ;
+    sysml:elementId "LoopsAndConditionals__Control___408___401___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408___401 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___408___401 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___408___401___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___408___401___400_om ;
     sysx:declaredKeyword "assign" ;
-    sysx:target expr:LoopsAndConditionals__Control___408___401___400.target ;
-    sysml:value expr:LoopsAndConditionals__Control___408___401___400.value .
+    sysx:target expr:LoopsAndConditionals__Control___408___401___400_ptarget ;
+    sysml:value expr:LoopsAndConditionals__Control___408___401___400_pvalue .
 
-expr:LoopsAndConditionals__Control___408___401___400.target
+elmt:LoopsAndConditionals__Control___408___401___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___408___401___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___408___401 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___408___401___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___408___401___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___408___401___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___408___401 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___408___401 .
+
+expr:LoopsAndConditionals__Control___408___401___400_ptarget
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "total" ;
+    sysml:elementId "LoopsAndConditionals__Control___408___401___400_ptarget" ;
     sysml:referent elmt:LoopsAndConditionals__Control__total .
 
-expr:LoopsAndConditionals__Control___408___401___400.value
+expr:LoopsAndConditionals__Control___408___401___400_pvalue
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "LoopsAndConditionals__Control___408___401___400_pvalue" ;
     sysml:value "0"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___409
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:elementId "LoopsAndConditionals__Control___409" ;
     sysx:memberIndex "9"^^xsd:integer ;
-    sysx:condition expr:LoopsAndConditionals__Control___409.condition .
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___409_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___409_om ;
+    sysx:condition expr:LoopsAndConditionals__Control___409_pcondition ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___409___400, elmt:LoopsAndConditionals__Control___409___401 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___400_om, elmt:LoopsAndConditionals__Control___409___401_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___400_om, elmt:LoopsAndConditionals__Control___409___401_om .
 
-expr:LoopsAndConditionals__Control___409.condition
+elmt:LoopsAndConditionals__Control___409_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___409_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___409 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___409 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___409 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control ;
+    sysml:ownedMemberFeature elmt:LoopsAndConditionals__Control___409 ;
+    sysml:owningType elmt:LoopsAndConditionals__Control .
+
+expr:LoopsAndConditionals__Control___409_pcondition
     a sysml:OperatorExpression ;
     sysx:sourceText "count > 0" ;
+    sysml:elementId "LoopsAndConditionals__Control___409_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___409.condition.a0, expr:LoopsAndConditionals__Control___409.condition.a1 .
+    sysml:argument expr:LoopsAndConditionals__Control___409_pcondition_pa0, expr:LoopsAndConditionals__Control___409_pcondition_pa1 .
 
-expr:LoopsAndConditionals__Control___409.condition.a0
+expr:LoopsAndConditionals__Control___409_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "count" ;
+    sysml:elementId "LoopsAndConditionals__Control___409_pcondition_pa0" ;
     sysml:referent elmt:LoopsAndConditionals__Control__count ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:LoopsAndConditionals__Control___409.condition.a1
+expr:LoopsAndConditionals__Control___409_pcondition_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "LoopsAndConditionals__Control___409_pcondition_pa1" ;
     sysml:value "0"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___409___400
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409 ;
+    sysml:elementId "LoopsAndConditionals__Control___409___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___409___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___409___400_om ;
     sysx:branchKind "then" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___409___400___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___400___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___400___400_om .
+
+elmt:LoopsAndConditionals__Control___409___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___409___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___409___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___409___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___409___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___409 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___409 .
 
 elmt:LoopsAndConditionals__Control___409___400___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@0::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___400 ;
+    sysml:elementId "LoopsAndConditionals__Control___409___400___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___400 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409___400 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___409___400___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___409___400___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:LoopsAndConditionals__Control___409___400___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___409___400___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409___400 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___409___400___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___409___400___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___409___400___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___409___400 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___409___400 .
+
 elmt:LoopsAndConditionals__Control___409___401
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@1" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409 ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___409___401_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___409___401_om ;
     sysx:branchKind "else" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___409___401___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___401___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___401___400_om .
+
+elmt:LoopsAndConditionals__Control___409___401_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___409___401 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___409___401 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___409___401 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___409 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___409 .
 
 elmt:LoopsAndConditionals__Control___409___401___400
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@1::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401 ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysx:condition expr:LoopsAndConditionals__Control___409___401___400.condition .
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409___401 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___409___401___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___409___401___400_om ;
+    sysx:condition expr:LoopsAndConditionals__Control___409___401___400_pcondition ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___409___401___400___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___401___400___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___401___400___400_om .
 
-expr:LoopsAndConditionals__Control___409___401___400.condition
+elmt:LoopsAndConditionals__Control___409___401___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409___401 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___409___401___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___409___401___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___409___401___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___409___401 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___409___401 .
+
+expr:LoopsAndConditionals__Control___409___401___400_pcondition
     a sysml:OperatorExpression ;
     sysx:sourceText "total > 0" ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___409___401___400.condition.a0, expr:LoopsAndConditionals__Control___409___401___400.condition.a1 .
+    sysml:argument expr:LoopsAndConditionals__Control___409___401___400_pcondition_pa0, expr:LoopsAndConditionals__Control___409___401___400_pcondition_pa1 .
 
-expr:LoopsAndConditionals__Control___409___401___400.condition.a0
+expr:LoopsAndConditionals__Control___409___401___400_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "total" ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400_pcondition_pa0" ;
     sysml:referent elmt:LoopsAndConditionals__Control__total ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:LoopsAndConditionals__Control___409___401___400.condition.a1
+expr:LoopsAndConditionals__Control___409___401___400_pcondition_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400_pcondition_pa1" ;
     sysml:value "0"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:LoopsAndConditionals__Control___409___401___400___400
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@1::@0::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401___400 ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401___400 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409___401___400 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___409___401___400___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___409___401___400___400_om ;
     sysx:branchKind "then" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:LoopsAndConditionals__Control___409___401___400___400___400 ;
+    sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___401___400___400___400_om ;
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___401___400___400___400_om .
+
+elmt:LoopsAndConditionals__Control___409___401___400___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409___401___400 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___409___401___400___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___409___401___400___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___409___401___400___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___409___401___400 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___409___401___400 .
 
 elmt:LoopsAndConditionals__Control___409___401___400___400___400
     a sysml:AssignmentActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@1::@0::@0::@0" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401___400___400 ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400___400___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401___400___400 ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409___401___400___400 ;
+    sysml:owningRelationship elmt:LoopsAndConditionals__Control___409___401___400___400___400_om ;
+    sysml:owningMembership elmt:LoopsAndConditionals__Control___409___401___400___400___400_om ;
     sysx:declaredKeyword "assign" ;
-    sysx:target expr:LoopsAndConditionals__Control___409___401___400___400___400.target ;
-    sysml:value expr:LoopsAndConditionals__Control___409___401___400___400___400.value .
+    sysx:target expr:LoopsAndConditionals__Control___409___401___400___400___400_ptarget ;
+    sysml:value expr:LoopsAndConditionals__Control___409___401___400___400___400_pvalue .
 
-expr:LoopsAndConditionals__Control___409___401___400___400___400.target
+elmt:LoopsAndConditionals__Control___409___401___400___400___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400___400___400_om" ;
+    sysml:owner elmt:LoopsAndConditionals__Control___409___401___400___400 ;
+    sysml:memberElement elmt:LoopsAndConditionals__Control___409___401___400___400___400 ;
+    sysml:ownedMemberElement elmt:LoopsAndConditionals__Control___409___401___400___400___400 ;
+    sysml:ownedRelatedElement elmt:LoopsAndConditionals__Control___409___401___400___400___400 ;
+    sysml:owningRelatedElement elmt:LoopsAndConditionals__Control___409___401___400___400 ;
+    sysml:membershipOwningNamespace elmt:LoopsAndConditionals__Control___409___401___400___400 .
+
+expr:LoopsAndConditionals__Control___409___401___400___400___400_ptarget
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "total" ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400___400___400_ptarget" ;
     sysml:referent elmt:LoopsAndConditionals__Control__total .
 
-expr:LoopsAndConditionals__Control___409___401___400___400___400.value
+expr:LoopsAndConditionals__Control___409___401___400___400___400_pvalue
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
+    sysml:elementId "LoopsAndConditionals__Control___409___401___400___400___400_pvalue" ;
     sysml:value "0"^^xsd:integer .

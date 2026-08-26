@@ -1645,6 +1645,10 @@ not this slice's to change. No corpus row depends on it — `examples/repl-behav
 `nonstandard-notation` code, spanned on the keyword — so each of the five rows pairs with a warning of
 ours at the same line and category instead of standing alone.
 
+Since superseded: the computed form is no longer accepted at all, so it is a parse error rather than a
+warning, and `return (a);` — an expression, not a `UsageElement` — goes with it. Only `return a;` and
+`return result : Real = <expr>;` remain, as the result parameter declarations they are.
+
 #### W2 — `assert <expression>;` in a constraint body (2, our defect, fixed)
 
 `AssertConstraintUsage` (`SysML.xtext:2007`) takes a reference subsetting or a constraint

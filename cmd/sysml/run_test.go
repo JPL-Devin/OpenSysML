@@ -25,7 +25,7 @@ const behaviorModel = `package Mission {
     calc def Fall {
         in t;
         in g;
-        return g * t * t;
+        g * t * t
     }
 
     action tally {

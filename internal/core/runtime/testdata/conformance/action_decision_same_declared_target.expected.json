@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"outputs": {
+		"c": {"type": "Boolean", "value": true},
+		"result": {"type": "Integer", "value": 42}
+	}
+}

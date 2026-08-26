@@ -3,6 +3,6 @@ package test {
 	// base case of a recursive calculation stops the recursion.
 	calc countdown {
 		in n: Integer;
-		return if n <= 0 ? 0 else countdown(n - 1);
+		if n <= 0 ? 0 else countdown(n - 1)
 	}
 }

@@ -108,17 +108,6 @@ func TestStateExtensionsAreReported(t *testing.T) {
 	}
 }
 
-// The action node spellings that stand in for a standard one are reported.
-func TestActionNodeExtensionSpellingsAreReported(t *testing.T) {
-	for _, tc := range []struct{ src, want string }{
-		{"action def A { initial a; }", "`initial` as an action node"},
-		{"action def A { final b; }", "`final` as an action node"},
-		{"action def A { decision d; }", "`decision` as an action node"},
-	} {
-		wantNotation(t, "a.sysml", tc.src, CodeNonstandardNotation, tc.want)
-	}
-}
-
 // `transition <source> to <target>;` is ours; the standard form states its ends
 // with `first` and `then`.
 func TestTransitionToSpellingIsReported(t *testing.T) {
@@ -127,29 +116,17 @@ func TestTransitionToSpellingIsReported(t *testing.T) {
 		CodeNonstandardNotation, "`transition <source> to <target>;`")
 }
 
-func TestComputedReturnExpressionsAreReported(t *testing.T) {
-	for _, tc := range []struct {
-		name, src string
-	}{
-		{"literal", "calc c { in a : Real; return 42; }"},
-		{"arithmetic", "calc c { in basePrice : Real; return basePrice * 2.0; }"},
-		{"invocation", "calc c { in dx : Real; return sqrt(dx*dx); }"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			wantNotation(t, "a.sysml", tc.src, CodeNonstandardNotation,
-				"`return <expression>;`")
-		})
-	}
-}
-
-func TestReferenceReturnsStaySilent(t *testing.T) {
+// A `return` declares a result parameter, which is standard, and a computed
+// result is the body's trailing expression, which is standard too.
+func TestResultParametersAndTrailingExpressionsStaySilent(t *testing.T) {
 	for _, tc := range []struct {
 		name, src string
 	}{
 		{"bare_name", "calc c { in a : Real; return a; }"},
-		{"qualified_name", "calc c { in a : Real; return P::a; }"},
-		{"dotted_feature_chain", "calc c { in a : Real; return a.b; }"},
 		{"named_result_parameter", "calc c { return result : Real = 1.0; }"},
+		{"trailing_literal", "calc c { in a : Real; 42 }"},
+		{"trailing_arithmetic", "calc c { in basePrice : Real; basePrice * 2.0 }"},
+		{"trailing_invocation", "calc c { in dx : Real; sqrt(dx*dx) }"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			wantSilent(t, "a.sysml", tc.src)
@@ -158,13 +135,11 @@ func TestReferenceReturnsStaySilent(t *testing.T) {
 }
 
 func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
-	src := `calc c {
-		in x : Real;
-		return x * 2;
-	}
-	calc d {
-		in y : Real;
-		return y + 1;
+	src := `state def S {
+		state a;
+		state b;
+		initial a;
+		final b;
 	}`
 	root, pd, idx := analyzeInputs(t, "a.sysml", src)
 	if len(pd) != 0 {
@@ -177,8 +152,8 @@ func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 	for i, want := range []struct {
 		line, length int
 	}{
-		{3, len("return")},
-		{7, len("return")},
+		{4, len("initial")},
+		{5, len("final")},
 	} {
 		if line := strings.Count(src[:got[i].Span.Offset], "\n") + 1; line != want.line {
 			t.Errorf("diagnostic %d is on line %d, want %d", i, line, want.line)

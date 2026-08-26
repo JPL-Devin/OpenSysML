@@ -5,6 +5,6 @@ package test {
     
     // Test qualified name resolution
     calc testQualified {
-        return test::inner::value;
+        test::inner::value
     }
 }

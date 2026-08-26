@@ -13,6 +13,6 @@ package ReturnUsages {
 	calc def Sum {
 		in a : Real;
 		in b : Real;
-		return a + b;
+		a + b
 	}
 }

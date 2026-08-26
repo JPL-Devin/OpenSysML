@@ -23,6 +23,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
 	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
 	t.Run("explicit_succession_missing_endpoint", testExplicitSuccessionMissingEndpoint)
+	t.Run("control_flow_missing_endpoint", testControlFlowMissingEndpoint)
 	t.Run("merge_without_a_successor", testMergeWithoutASuccessor)
 	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
 	t.Run("first_node_with_a_second_succession", testFirstNodeWithASecondSuccession)
@@ -3136,6 +3137,29 @@ func testExplicitSuccessionMissingEndpoint(t *testing.T) {
 	}
 }
 
+func testControlFlowMissingEndpoint(t *testing.T) {
+	src := `
+		package test {
+			action broken {
+				first start;
+				decide check;
+				succession first start then check;
+				if true then missing;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "broken", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action broken not found")
+	}
+
+	_, err := ctx.CreateActionExecutor(sym)
+	if err == nil || !strings.Contains(err.Error(), `control flow edge references undefined target "missing"`) {
+		t.Fatalf("error = %v, want an undefined control-flow target diagnostic", err)
+	}
+}
+
 func testMergeWithoutASuccessor(t *testing.T) {
 	src := `
 		package test {
@@ -3548,7 +3572,7 @@ func testCalcUnboundParameter(t *testing.T) {
 			calc add {
 				in x: Integer;
 				in y: Integer;
-				return x + y;
+				x + y
 			}
 		}
 	`
@@ -3578,7 +3602,7 @@ func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 		package test {
 			calc grow {
 				in x: Real;
-				return exp(x);
+				exp(x)
 			}
 		}
 	`
@@ -3610,7 +3634,7 @@ func testCalcUnboundKeywordNamedParameter(t *testing.T) {
 			calc classify {
 				in 'type': Integer;
 				in 'state': Integer;
-				return 'type' + 'state';
+				'type' + 'state'
 			}
 		}
 	`
@@ -3638,7 +3662,7 @@ func testCalcTooManyArguments(t *testing.T) {
 		package test {
 			calc double {
 				in x: Integer;
-				return x * 2;
+				x * 2
 			}
 		}
 	`
@@ -3666,7 +3690,7 @@ func testCalcUnknownNamedArgument(t *testing.T) {
 		package test {
 			calc scale {
 				in x: Integer = 1;
-				return x * 2;
+				x * 2
 			}
 		}
 	`
@@ -3748,7 +3772,7 @@ func testCalcDirectRecursion(t *testing.T) {
 		package test {
 			calc countdown {
 				in n: Integer;
-				return countdown(n - 1);
+				countdown(n - 1)
 			}
 		}
 	`
@@ -3762,12 +3786,12 @@ func testCalcMutualRecursion(t *testing.T) {
 		package test {
 			calc ping {
 				in n: Integer;
-				return pong(n);
+				pong(n)
 			}
 
 			calc pong {
 				in n: Integer;
-				return ping(n);
+				ping(n)
 			}
 		}
 	`
@@ -4303,7 +4327,7 @@ func testStepBudgetExceeded(t *testing.T) {
 		package test {
 			calc deep {
 				in x : Integer;
-				return x + x + x + x + x + x + x + x;
+				x + x + x + x + x + x + x + x
 			}
 		}
 	`

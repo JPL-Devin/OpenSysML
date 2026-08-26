@@ -9,6 +9,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -17,23 +18,43 @@ const (
 	pDeclaredName      = "declaredName"
 	pDeclaredShortName = "declaredShortName"
 	pQualifiedName     = "qualifiedName"
+	pElementID         = "elementId"
 	pOwningNamespace   = "owningNamespace"
 	pVisibility        = "visibility"
-	pDirection         = "direction"
-	pLowerBound        = "lowerBound"
-	pUpperBound        = "upperBound"
-	pValue             = "value"
-	pImportedNamespace = "importedNamespace"
-	pAliasFor          = "aliasedElement"
-	pClient            = "client"
-	pSupplier          = "supplier"
-	pBody              = "body"
-	pLanguage          = "language"
-	pLocale            = "locale"
-	pAnnotatedElement  = "annotatedElement"
-	pIsImportAll       = "isImportAll"
-	pSourceFeature     = "sourceFeature"
-	pTargetFeature     = "targetFeature"
+	// The ownership properties of the abstract syntax: an element's owner and
+	// the OwningMembership between them, written from both ends.
+	pOwner                     = "owner"
+	pOwningRelationship        = "owningRelationship"
+	pOwningMembership          = "owningMembership"
+	pOwnedRelationship         = "ownedRelationship"
+	pOwnedMembership           = "ownedMembership"
+	pOwnedMember               = "ownedMember"
+	pMemberElement             = "memberElement"
+	pOwnedMemberElement        = "ownedMemberElement"
+	pOwnedRelatedElement       = "ownedRelatedElement"
+	pOwningRelatedElement      = "owningRelatedElement"
+	pMembershipOwningNamespace = "membershipOwningNamespace"
+	pOwnedMemberFeature        = "ownedMemberFeature"
+	pOwningType                = "owningType"
+	pOwnedFeature              = "ownedFeature"
+	pOwnedFeatureMembership    = "ownedFeatureMembership"
+	pOwnedImport               = "ownedImport"
+	pImportOwningNamespace     = "importOwningNamespace"
+	pDirection                 = "direction"
+	pLowerBound                = "lowerBound"
+	pUpperBound                = "upperBound"
+	pValue                     = "value"
+	pImportedNamespace         = "importedNamespace"
+	pAliasFor                  = "aliasedElement"
+	pClient                    = "client"
+	pSupplier                  = "supplier"
+	pBody                      = "body"
+	pLanguage                  = "language"
+	pLocale                    = "locale"
+	pAnnotatedElement          = "annotatedElement"
+	pIsImportAll               = "isImportAll"
+	pSourceFeature             = "sourceFeature"
+	pTargetFeature             = "targetFeature"
 )
 
 // Property names in the OpenSysML extension namespace: declaration order,
@@ -78,19 +99,26 @@ const (
 // an expression, carried as the text it was written as rather than as a name.
 const dtExpression = "Expression"
 
+// The metaclasses of the membership elements ownership is materialized as: a
+// type owns a feature through a FeatureMembership, and every other namespace
+// member is owned through an OwningMembership. Both are concrete in KerML.
+const (
+	mOwningMembership  = "OwningMembership"
+	mFeatureMembership = "FeatureMembership"
+)
+
 // Metaclass names for the constructs that have no SysML metaclass of their own
 // in this mapping.
 const (
 	mAlias        = "Alias"
 	mFilter       = "FilterMember"
 	mMultiplicity = "MultiplicityDeclaration"
-	// The members that state a condition or a result rather than declaring a
-	// feature: the conditions of a constraint body, a requirement's assumptions
-	// and required conditions, and a calculation's result expression.
+	// The members that state a condition rather than declaring a feature: the
+	// conditions of a constraint body and a requirement's assumptions and
+	// required conditions.
 	mConstraint = "ConstraintMember"
 	mAssume     = "AssumeMember"
 	mRequire    = "RequireMember"
-	mResult     = "ResultMember"
 )
 
 // boolProperty pairs an RDF property name with the AST flag it mirrors. Only
@@ -230,12 +258,23 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 	head := func(metaclass rdf.Term) {
 		e.graph.Add(subject, rdf.IRI(rdf.RDFType), metaclass)
 		e.graph.Add(subject, e.sysml(pQualifiedName), rdf.String(fqn))
+		// The id an API reader addresses the element by, which is the id its own
+		// IRI ends in, so the two cannot disagree.
+		e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
+		e.graph.Add(subject, e.sysx(xMemberIndex), rdf.Int(index))
+		membership := rdf.Term{}
 		if ownerTerm.Value != "" {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
+			membership = e.owningMembership(subject, ownerTerm, fqn)
 		}
-		e.graph.Add(subject, e.sysx(xMemberIndex), rdf.Int(index))
 		if keyword := visibilityKeyword(visibility); keyword != "" {
-			e.graph.Add(subject, e.sysml(pVisibility), rdf.String(keyword))
+			// The membership states the visibility a member is declared with; a
+			// relationship, such as an import, states its own.
+			visible := subject
+			if membership.Value != "" {
+				visible = membership
+			}
+			e.graph.Add(visible, e.sysml(pVisibility), rdf.String(keyword))
 		}
 	}
 
@@ -475,11 +514,6 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		head(rdf.OpenSysMLTerm(mRequire))
 		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
 
-	case *ast.ResultMember:
-		head(rdf.OpenSysMLTerm(mResult))
-		e.expression(subject, e.sysml(pValue), pValue, owner, n.Expression)
-		return nil
-
 	case *ast.SubjectMember:
 		// A subject parameter is a usage of its own (SysML v2 8.2.2.16), so it
 		// is mapped as the SubjectMembership a `subject s : X` declares.
@@ -516,6 +550,103 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		What: fmt.Sprintf("the %s at %s", nodeDescription(node), e.where(node)),
 		Note: rdfLimitationsNote,
 	}
+}
+
+// owningMembership wires a member to its owner the way the abstract syntax does,
+// returning the membership minted between them, or the empty term when no
+// membership stands between the two. The API's payloads reach a member through
+// its membership, so a compact owner triple alone leaves a client walking down
+// from a root with nothing to follow.
+func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf.Term {
+	ownerClass, memberClass := e.metaclassOf(owner), e.metaclassOf(member)
+	switch {
+	case isRelationship(ownerClass):
+		// A relationship owns its related element itself, as a state's entry
+		// membership owns the action it states.
+		e.relationshipOwnership(member, owner, ownerClass, memberClass)
+		return rdf.Term{}
+	case isRelationship(memberClass):
+		// A namespace owns a relationship it declares — an import, a dependency,
+		// a membership — as an owned relationship, with no membership between.
+		e.graph.Add(member, e.sysml(pOwner), owner)
+		e.graph.Add(member, e.sysml(pOwningRelatedElement), owner)
+		e.graph.Add(owner, e.sysml(pOwnedRelationship), member)
+		if ontology.IsAncestorOrSelf(memberClass, "Import") {
+			e.graph.Add(member, e.sysml(pImportOwningNamespace), owner)
+			e.graph.Add(owner, e.sysml(pOwnedImport), member)
+		}
+		return rdf.Term{}
+	}
+	// A type owns a feature through a FeatureMembership, which is the membership
+	// the API's payloads carry for it; anything else through an OwningMembership.
+	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && ontology.IsAncestorOrSelf(ownerClass, "Type")
+	membership := rdf.OwningMembershipIRI(memberFQN)
+	e.graph.Add(member, e.sysml(pOwner), owner)
+	e.graph.Add(member, e.sysml(pOwningRelationship), membership)
+	e.graph.Add(member, e.sysml(pOwningMembership), membership)
+
+	metaclass := mOwningMembership
+	if feature {
+		metaclass = mFeatureMembership
+	}
+	e.graph.Add(membership, rdf.IRI(rdf.RDFType), e.sysml(metaclass))
+	e.graph.Add(membership, e.sysml(pElementID), rdf.String(rdf.LocalName(membership.Value)))
+	// The namespace owns the membership too, so it is not read as a root.
+	e.graph.Add(membership, e.sysml(pOwner), owner)
+	e.graph.Add(membership, e.sysml(pMemberElement), member)
+	e.graph.Add(membership, e.sysml(pOwnedMemberElement), member)
+	e.graph.Add(membership, e.sysml(pOwnedRelatedElement), member)
+	e.graph.Add(membership, e.sysml(pOwningRelatedElement), owner)
+	e.graph.Add(membership, e.sysml(pMembershipOwningNamespace), owner)
+
+	e.graph.Add(owner, e.sysml(pOwnedMember), member)
+	e.graph.Add(owner, e.sysml(pOwnedMembership), membership)
+	e.graph.Add(owner, e.sysml(pOwnedRelationship), membership)
+	if feature {
+		e.graph.Add(membership, e.sysml(pOwnedMemberFeature), member)
+		e.graph.Add(membership, e.sysml(pOwningType), owner)
+		e.graph.Add(owner, e.sysml(pOwnedFeature), member)
+		e.graph.Add(owner, e.sysml(pOwnedFeatureMembership), membership)
+	}
+	return membership
+}
+
+// relationshipOwnership wires a member owned by a relationship rather than by a
+// namespace, such as a state's entry action. A relationship owns its related
+// element itself, so no membership is minted between them.
+func (e *encoder) relationshipOwnership(member, owner rdf.Term, ownerClass, memberClass string) {
+	e.graph.Add(member, e.sysml(pOwner), owner)
+	e.graph.Add(owner, e.sysml(pOwnedRelatedElement), member)
+	if isRelationship(memberClass) {
+		// A relationship states the element that owns it, not an owning
+		// relationship of its own.
+		e.graph.Add(member, e.sysml(pOwningRelatedElement), owner)
+		e.graph.Add(owner, e.sysml(pOwnedRelationship), member)
+		return
+	}
+	e.graph.Add(member, e.sysml(pOwningRelationship), owner)
+	if ontology.IsAncestorOrSelf(ownerClass, "Membership") {
+		e.graph.Add(member, e.sysml(pOwningMembership), owner)
+		e.graph.Add(owner, e.sysml(pMemberElement), member)
+	}
+	if ontology.IsAncestorOrSelf(ownerClass, "OwningMembership") {
+		e.graph.Add(owner, e.sysml(pOwnedMemberElement), member)
+	}
+	if ontology.IsAncestorOrSelf(ownerClass, mFeatureMembership) && ontology.IsAncestorOrSelf(memberClass, "Feature") {
+		e.graph.Add(owner, e.sysml(pOwnedMemberFeature), member)
+	}
+}
+
+// metaclassOf is the ontology name of the metaclass a subject is typed with,
+// which is empty for a metaclass this mapping invents.
+func (e *encoder) metaclassOf(subject rdf.Term) string {
+	return ontology.LocalName(e.graph.Type(subject))
+}
+
+// isRelationship reports whether a metaclass relates elements rather than
+// containing them, which decides whether ownership needs a membership.
+func isRelationship(metaclass string) bool {
+	return ontology.IsAncestorOrSelf(metaclass, "Relationship") && !ontology.IsAncestorOrSelf(metaclass, "Namespace")
 }
 
 // condition emits the three forms a condition member is written in: an inline

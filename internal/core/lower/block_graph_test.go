@@ -46,7 +46,7 @@ func TestBlockDeclaringAnActionNodeIsLoweredToAFlow(t *testing.T) {
 	}
 	for i := 0; i+1 < len(flow.Nodes); i++ {
 		successors := flow.Edges[flow.Nodes[i]]
-		if len(successors) != 1 || successors[0] != flow.Nodes[i+1] {
+		if len(successors) != 1 || successors[0].Target != flow.Nodes[i+1] {
 			t.Errorf("node %d succeeds to %v, want the node written after it", i, successors)
 		}
 	}

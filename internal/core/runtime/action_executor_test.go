@@ -71,7 +71,7 @@ func TestActionExecutor_GraphExtraction(t *testing.T) {
 	}
 
 	successors, ok := exec.graph.Edges[initial]
-	if !ok || len(successors) != 1 || successors[0] != final {
+	if !ok || len(successors) != 1 || successors[0].Target != final {
 		t.Error("expected edge from initial to final")
 	}
 }

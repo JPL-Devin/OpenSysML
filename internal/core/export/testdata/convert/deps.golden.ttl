@@ -7,31 +7,66 @@
 elmt:Deps
     a sysml:Package ;
     sysml:qualifiedName "Deps" ;
+    sysml:elementId "Deps" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Deps" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Deps__A, elmt:Deps__B ;
+    sysml:ownedMembership elmt:Deps__A_om, elmt:Deps__B_om ;
+    sysml:ownedRelationship elmt:Deps__A_om, elmt:Deps__B_om, elmt:Deps___402, elmt:Deps__named .
 
 elmt:Deps__A
     a sysml:PartDefinition ;
     sysml:qualifiedName "Deps::A" ;
-    sysml:owningNamespace elmt:Deps ;
+    sysml:elementId "Deps__A" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Deps ;
+    sysml:owner elmt:Deps ;
+    sysml:owningRelationship elmt:Deps__A_om ;
+    sysml:owningMembership elmt:Deps__A_om ;
     sysml:declaredName "A" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Deps__A_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Deps__A_om" ;
+    sysml:owner elmt:Deps ;
+    sysml:memberElement elmt:Deps__A ;
+    sysml:ownedMemberElement elmt:Deps__A ;
+    sysml:ownedRelatedElement elmt:Deps__A ;
+    sysml:owningRelatedElement elmt:Deps ;
+    sysml:membershipOwningNamespace elmt:Deps .
 
 elmt:Deps__B
     a sysml:PartDefinition ;
     sysml:qualifiedName "Deps::B" ;
-    sysml:owningNamespace elmt:Deps ;
+    sysml:elementId "Deps__B" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Deps ;
+    sysml:owner elmt:Deps ;
+    sysml:owningRelationship elmt:Deps__B_om ;
+    sysml:owningMembership elmt:Deps__B_om ;
     sysml:declaredName "B" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Deps__B_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Deps__B_om" ;
+    sysml:owner elmt:Deps ;
+    sysml:memberElement elmt:Deps__B ;
+    sysml:ownedMemberElement elmt:Deps__B ;
+    sysml:ownedRelatedElement elmt:Deps__B ;
+    sysml:owningRelatedElement elmt:Deps ;
+    sysml:membershipOwningNamespace elmt:Deps .
 
 elmt:Deps___402
     a sysml:Dependency ;
     sysml:qualifiedName "Deps::@2" ;
-    sysml:owningNamespace elmt:Deps ;
+    sysml:elementId "Deps___402" ;
     sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Deps ;
+    sysml:owner elmt:Deps ;
+    sysml:owningRelatedElement elmt:Deps ;
     sysml:client elmt:Deps__A ;
     sysml:supplier elmt:Deps__B ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -39,8 +74,11 @@ elmt:Deps___402
 elmt:Deps__named
     a sysml:Dependency ;
     sysml:qualifiedName "Deps::named" ;
-    sysml:owningNamespace elmt:Deps ;
+    sysml:elementId "Deps__named" ;
     sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:Deps ;
+    sysml:owner elmt:Deps ;
+    sysml:owningRelatedElement elmt:Deps ;
     sysml:declaredName "named" ;
     sysml:client elmt:Deps__A ;
     sysml:supplier elmt:Deps__B ;

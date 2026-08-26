@@ -7,38 +7,109 @@
 elmt:Colors
     a sysml:Package ;
     sysml:qualifiedName "Colors" ;
+    sysml:elementId "Colors" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Colors" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Colors__Color ;
+    sysml:ownedMembership elmt:Colors__Color_om ;
+    sysml:ownedRelationship elmt:Colors__Color_om .
 
 elmt:Colors__Color
     a sysml:EnumerationDefinition ;
     sysml:qualifiedName "Colors::Color" ;
-    sysml:owningNamespace elmt:Colors ;
+    sysml:elementId "Colors__Color" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Colors ;
+    sysml:owner elmt:Colors ;
+    sysml:owningRelationship elmt:Colors__Color_om ;
+    sysml:owningMembership elmt:Colors__Color_om ;
     sysml:declaredName "Color" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Colors__Color__red, elmt:Colors__Color__green, elmt:Colors__Color__blue ;
+    sysml:ownedMembership elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om ;
+    sysml:ownedRelationship elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om ;
+    sysml:ownedFeature elmt:Colors__Color__red, elmt:Colors__Color__green, elmt:Colors__Color__blue ;
+    sysml:ownedFeatureMembership elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om .
+
+elmt:Colors__Color_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Colors__Color_om" ;
+    sysml:owner elmt:Colors ;
+    sysml:memberElement elmt:Colors__Color ;
+    sysml:ownedMemberElement elmt:Colors__Color ;
+    sysml:ownedRelatedElement elmt:Colors__Color ;
+    sysml:owningRelatedElement elmt:Colors ;
+    sysml:membershipOwningNamespace elmt:Colors .
 
 elmt:Colors__Color__red
     a sysml:EnumerationUsage ;
     sysml:qualifiedName "Colors::Color::red" ;
-    sysml:owningNamespace elmt:Colors__Color ;
+    sysml:elementId "Colors__Color__red" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Colors__Color ;
+    sysml:owner elmt:Colors__Color ;
+    sysml:owningRelationship elmt:Colors__Color__red_om ;
+    sysml:owningMembership elmt:Colors__Color__red_om ;
     sysml:declaredName "red" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Colors__Color__red_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Colors__Color__red_om" ;
+    sysml:owner elmt:Colors__Color ;
+    sysml:memberElement elmt:Colors__Color__red ;
+    sysml:ownedMemberElement elmt:Colors__Color__red ;
+    sysml:ownedRelatedElement elmt:Colors__Color__red ;
+    sysml:owningRelatedElement elmt:Colors__Color ;
+    sysml:membershipOwningNamespace elmt:Colors__Color ;
+    sysml:ownedMemberFeature elmt:Colors__Color__red ;
+    sysml:owningType elmt:Colors__Color .
 
 elmt:Colors__Color__green
     a sysml:EnumerationUsage ;
     sysml:qualifiedName "Colors::Color::green" ;
-    sysml:owningNamespace elmt:Colors__Color ;
+    sysml:elementId "Colors__Color__green" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Colors__Color ;
+    sysml:owner elmt:Colors__Color ;
+    sysml:owningRelationship elmt:Colors__Color__green_om ;
+    sysml:owningMembership elmt:Colors__Color__green_om ;
     sysml:declaredName "green" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Colors__Color__green_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Colors__Color__green_om" ;
+    sysml:owner elmt:Colors__Color ;
+    sysml:memberElement elmt:Colors__Color__green ;
+    sysml:ownedMemberElement elmt:Colors__Color__green ;
+    sysml:ownedRelatedElement elmt:Colors__Color__green ;
+    sysml:owningRelatedElement elmt:Colors__Color ;
+    sysml:membershipOwningNamespace elmt:Colors__Color ;
+    sysml:ownedMemberFeature elmt:Colors__Color__green ;
+    sysml:owningType elmt:Colors__Color .
 
 elmt:Colors__Color__blue
     a sysml:EnumerationUsage ;
     sysml:qualifiedName "Colors::Color::blue" ;
-    sysml:owningNamespace elmt:Colors__Color ;
+    sysml:elementId "Colors__Color__blue" ;
     sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Colors__Color ;
+    sysml:owner elmt:Colors__Color ;
+    sysml:owningRelationship elmt:Colors__Color__blue_om ;
+    sysml:owningMembership elmt:Colors__Color__blue_om ;
     sysml:declaredName "blue" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Colors__Color__blue_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Colors__Color__blue_om" ;
+    sysml:owner elmt:Colors__Color ;
+    sysml:memberElement elmt:Colors__Color__blue ;
+    sysml:ownedMemberElement elmt:Colors__Color__blue ;
+    sysml:ownedRelatedElement elmt:Colors__Color__blue ;
+    sysml:owningRelatedElement elmt:Colors__Color ;
+    sysml:membershipOwningNamespace elmt:Colors__Color ;
+    sysml:ownedMemberFeature elmt:Colors__Color__blue ;
+    sysml:owningType elmt:Colors__Color .
