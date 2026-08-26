@@ -324,7 +324,7 @@ go build -o bin/sysml-grpc ./cmd/sysml-grpc
 
 **Installation:**
 ```bash
-pip install opensysml          # from PyPI, once the first release is published
+pip install opensysml          # from PyPI
 
 # Or from a checkout, in development mode
 pip install -e python/
