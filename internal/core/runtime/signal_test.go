@@ -274,7 +274,7 @@ func TestSendViaPortToNestedReceiver(t *testing.T) {
 				}
 				done;
 				succession first groupStart then if;
-				succession first if then groupEnd;
+				succession first if then done;
 			}
 			action receiver accept value : Integer via receiverPort {
 				assign got := value;
