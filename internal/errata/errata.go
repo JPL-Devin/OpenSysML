@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
@@ -107,6 +106,15 @@ func Registry() []Entry {
 		AsPublished: "\t    \treturn : TemperatureValue = 1/(2 * Cp) * V^2 + T_static;",
 		Citation:    "SysML v2 §9.8.9.1",
 		Derivation:  "V is a VolumeValue and Cp dimensionless, so the first operand has dimension L^6 while T_static has Θ; no reading of the published text shares a dimension, so the defect is documented without a correction.",
+	}, {
+		ID:          "F111",
+		Heading:     "`fuelConsumption : FuelEconomyAnalysis_1` redefines an action typed by `FuelConsumption`",
+		Path:        "examples/pilot-corpora/sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml",
+		Line:        86,
+		AsPublished: "\t\t\tindividual action :>> fuelConsumption : FuelEconomyAnalysis_1 {",
+		Corrected:   "\t\t\tindividual action :>> fuelConsumption : FuelConsumption_1 {",
+		Citation:    "KerML 7.4.9, 8.3.4.2",
+		Derivation:  "a redefinition is a subsetting, so the redefining feature's type must conform to the redefined one's, and an analysis definition is not a FuelConsumption; the file declares `individual action def FuelConsumption_1 :> FuelConsumption` and uses it nowhere else, which is the conforming type the line names by mistake.",
 	}}
 }
 
@@ -200,41 +208,6 @@ func Apply(entry Entry, content []byte) ([]byte, error) {
 	}
 	lines[entry.Line-1] = entry.Corrected
 	return []byte(strings.Join(lines, "\n")), nil
-}
-
-// Rewrite applies the entry covering a repository-relative path, if any. It
-// returns the content unchanged for a file no entry corrects.
-func (o *Overlay) Rewrite(path string, content []byte) ([]byte, bool, error) {
-	entry, ok := o.byPath[path]
-	if !ok || !entry.Corrects() {
-		return content, false, nil
-	}
-	corrected, err := Apply(entry, content)
-	if err != nil {
-		return nil, false, err
-	}
-	return corrected, true, nil
-}
-
-// Verify checks every entry against the bytes on disk under repo. Files absent
-// from the checkout are reported so a caller can distinguish an undownloaded
-// corpus from a rotted entry.
-func (o *Overlay) Verify(repo string) (missing []string, err error) {
-	for _, entry := range o.Entries() {
-		content, readErr := os.ReadFile(filepath.Join(repo, filepath.FromSlash(entry.Path))) // #nosec G304 -- the path is a declared registry entry under the given repository root
-		if readErr != nil {
-			if os.IsNotExist(readErr) {
-				missing = append(missing, entry.Path)
-				continue
-			}
-			return missing, readErr
-		}
-		if _, applyErr := Apply(entry, content); applyErr != nil {
-			return missing, applyErr
-		}
-	}
-	sort.Strings(missing)
-	return missing, nil
 }
 
 // Materialize copies the corpus root at repo/dir into dst and applies every

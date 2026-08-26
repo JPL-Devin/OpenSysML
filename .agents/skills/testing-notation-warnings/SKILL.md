@@ -207,7 +207,7 @@ snippet and read the diagnostics. Asking for `%validate` prints
 Driving the REPL non-interactively (`%%` is needed because `printf` eats a single `%`):
 
 ```bash
-printf 'calc d { in a; return a * 2.0; }\nconstraint k { in x; assert x >= 0; }\n%%strict on\n%%quit\n' | bin/sysml
+printf 'state def S { state a { defer Ping; } }\nconstraint k { in x; x >= 0 }\n%%strict on\n%%quit\n' | bin/sysml
 ```
 
 ## The notation pass runs even when the file has resolution errors
@@ -255,12 +255,16 @@ A fixture of only-legal spellings that stays silent is indistinguishable from a 
 fires. Put the must-warn and must-stay-silent shapes in **one** file and assert the exact set of
 warned line numbers. For the `return` / `assert` family the shapes that matter:
 
-- silent: `return a;`, `return P::q;`, `return (a);` (the parser unwraps the parens, so a
-  parenthesised bare reference is still a reference expression), `return result : Real = a;`
-  (a result *parameter declaration*, not a computed result), a keyword-less trailing condition
-  `{ in x : Real; x >= 0 }`, `assert constraint c1 : C;`, `assert satisfy R by q;`,
-  `assume #goal constraint m;`
-- warned: `return a * 2.0;`, `return 42;`, `assert x >= 0;`, `assert not x < 0;`, `assume x >= 0;`
+- silent: `return a;` and `return result : Real = a;` (result *parameter declarations*, not
+  computed results), a keyword-less trailing expression `{ in x : Real; x * 2.0 }`, a keyword-less
+  trailing condition `{ in x : Real; x >= 0 }`, `assert constraint c1 : C;`,
+  `assert satisfy R by q;`, `assume #goal constraint m;`
+- warned: a state's `defer Ping;`
+- rejected outright (no longer a warning): `return a * 2.0;`, `return 42;`, `assert x >= 0;`,
+  `assert not x < 0;`, `assume x >= 0;`, `require x > 0;` — a computed `return` expression and a
+  keyworded inline condition are parse errors. So are the removed state-machine notations
+  `initial a;`, `final b;` and `transition a to b;`; write `entry; then a;`,
+  `transition first a then done;` and `transition first a then b;`
 
 ## Refereeing the boundary against the pinned pilot
 
@@ -284,16 +288,15 @@ The single most likely coverage gap when a rule covers "assert/assume conditions
 **constraint** body is `*ast.ConstraintMember` (fields `Keyword`, `IsNegated`, `Expression`, `Name`,
 `Body`), but the same-looking condition in a **requirement** body is `*ast.AssumeMember` /
 `*ast.RequireMember` (`internal/core/ast/behavior.go`, "Phase C2: Requirement Body Members"), with a
-different field set. A rule keyed on `*ast.ConstraintMember` therefore covers
-`constraint c { assert x >= 0; }` and misses `requirement r { assume x > 0; }` and
-`requirement r { require x > 0; }` — both of which the pinned pilot rejects with
-`no viable alternative at input 'assume'` / `'require'`. `examples/phase-c-behavioral-bodies.sysml`
+different field set. A rule keyed on `*ast.ConstraintMember` therefore covers a constraint-body condition and
+misses the requirement-body ones. The keyworded inline condition
+(`constraint c { assert x >= 0; }`, `requirement r { require x > 0; }`) is now rejected by the
+parser rather than warned, matching the pinned pilot's
+`no viable alternative at input 'assert'` / `'assume'` / `'require'`; the placement rule for
+`assume`/`require` outside a requirement body is a separate, retained warning. `examples/phase-c-behavioral-bodies.sysml`
 contains both families, so always grep the whole keyword inventory of a fixture
 (`grep -n 'assert \|assume \|require '`) and reconcile *every* line against warned/not-warned rather
 than only checking the lines the task named.
-
-Likewise `*ast.ResultMember` (`return <expr>;` in a calc body) is separate from any
-requirement/action result spelling.
 
 ## Verify oracle baselines against a LIVE run, not just against the docs
 
@@ -524,6 +527,59 @@ Point the *same* parsing logic at `g15-keyword-as-name.sysml` on a build that pr
 regex that silently matches nothing looks identical to a clean result. Note g15 lives under
 `cmd/pilot-reject/testdata/`, which is *outside* the usual corpus roots, so the corpus scan alone
 never touches the one file that exercises the pair.
+
+## Testing the *removal* of a notation spelling (the mirror image of adding a rule)
+
+When a PR deletes an OpenSysML-only spelling (e.g. the ACTION-node aliases `initial <name> [then
+<target>];`, `final [<name>];`, `decision <name>;` in favour of `first`/`done`/`decide`), the
+emit site in `nonstandard_notation.go` disappears **and** the parser stops matching the word, so the
+warning is replaced by a parser error. Test it as a pair of claims, not one:
+
+1. **Each removed spelling must now produce a located error**, not silence. `bin/sysml -validate
+   <f>` should print `<f>:<l>:<c>: error: expected a body member` with the caret under the removed
+   word, and exit **2**. One fixture per construct — parser recovery cascades and invents
+   `expected a namespace member` errors on the closing braces if you put several in one file.
+2. **The word must still work as an ordinary name**, because these words are *unreserved*
+   (`internal/core/lexer/contextual.go`, `parser/notation.go` `notationWords`). Put
+   `attribute final : Boolean;`, `action initial;`, `out decision : Boolean;`, a kindless `final;`
+   and a kindless `decision;`, and `first initial then final2;` in one clean file: default mode must
+   exit 0 and `-convert sysml` must reproduce every member verbatim.
+
+**The `then <word>;` shape is the trap.** A removed word reached as a *succession end* is not a node
+at all, so no notation rule sees it and the parser accepts it as a reference to a target with that
+name. `action def A { first a; action a; then final; }` therefore validates **clean, exit 0, even
+under `-strict`**, where the old build warned at the `final` span — and the only surface that
+complains is execution: `bin/sysml -action A <f>` fails with
+`lower action graph: succession edge references undefined target node "final"`. Confirm the same
+output for `then zzz;` to establish whether it is a general permissiveness of the resolver rather
+than something the branch introduced, and report it either way — the user asking for "bare
+`then final;` diagnosed" will not get that from `-validate`.
+
+**Always build a merge-base contrast binary**; "the alias is gone" is only observable as a
+difference. `git worktree add /tmp/wt-old $(git merge-base origin/main HEAD)` then
+`go build -C /tmp/wt-old -o /tmp/old-sysml ./cmd/sysml` — build **in the worktree**, since a plain
+`go build ./cmd/sysml` from the repo root compiles the branch again and every comparison then reports
+IDENTICAL (~2 min cold). Then assert the *unchanged* neighbours are
+byte-identical rather than merely present:
+
+```bash
+for f in state_markers.sysml oneended_first.sysml; do for m in "" "-strict"; do
+  a=$(bin/sysml -validate $m $f 2>&1; echo exit=$?); b=$(/tmp/old-sysml -validate $m $f 2>&1; echo exit=$?)
+  [ "$a" = "$b" ] && echo "IDENTICAL $f [$m]" || diff <(echo "$b") <(echo "$a"); done; done
+```
+
+A whole-repo sweep of the same comparison (`examples`, `testdata`, `internal/core/*/testdata`;
+~1440 files, ~4 min serial) is the false-positive control, and it is *non-vacuous* here because the
+hand-written removed-spelling fixtures above do differ under the identical method — cite that as the
+control rather than reporting "0 differences" alone.
+
+**Editor surfaces move too.** Removing the word from `lexer.contextualWords` drops it from LSP
+completion and from the generated TextMate grammars. Both are cheap to assert:
+`grep -o decision editors/vscode/syntaxes/*.json | wc -l` (expect 0 new vs 2 old), and a completion
+request in an action body counted old vs new (283 → 282 labels, `decision` absent, `decide` still
+offered). Drive completion with a *persistent* `Popen` + a reader thread and `time.sleep` between
+messages — `subprocess.run` with all messages piped at once returns **empty stdout and rc 0** from
+`bin/sysml-lsp`, which looks exactly like "no completions offered".
 
 ## Devin Secrets Needed
 

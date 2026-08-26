@@ -11,5 +11,5 @@ stmt assign quick
       eval literal 18.0 -> 18.0
     eval index -> 18.0 [SI::km/SI::h]
   eval operator >= -> true
-step 3: token 1@end
+step 3: token 1@done
 step 4: no active tokens

@@ -5,7 +5,8 @@ package Test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state Working {
 			exit { log = log * 10 + 9; }
 			state Step1 {
@@ -15,13 +16,13 @@ package Test {
 				entry { log = log * 10 + 2; }
 			}
 
-			transition Step1 to Step2 when Abort;
+			transition first Step1 when Abort then Step2;
 		}
 		state Done {
 			entry { log = log * 10 + 9; }
 		}
 
-		start then Step1;
-		transition Working to Done when Abort;
+		succession first start then Step1;
+		transition first Working when Abort then Done;
 	}
 }

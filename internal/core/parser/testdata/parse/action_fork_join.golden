@@ -20,10 +20,40 @@
         (Usage kind="action" name="right" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (*ast.AssignmentActionNode)))
       (JoinNode name="sync")
-      (FinalNode name="end")
-      (SuccessionEdge source="start" target="split")
-      (SuccessionEdge source="split" target="left")
-      (SuccessionEdge source="split" target="right")
-      (SuccessionEdge source="left" target="sync")
-      (SuccessionEdge source="right" target="sync")
-      (SuccessionEdge source="sync" target="end"))))
+      (FinalNode)
+      (Membership visibility="default"
+        (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="start"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="split"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="split"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="left"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="split"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="right"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="left"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="sync"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="right"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="sync"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="sync"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="done"
+            (*ast.QualifiedName)))))))

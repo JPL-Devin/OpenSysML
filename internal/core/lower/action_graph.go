@@ -27,16 +27,8 @@ type ActionGraph struct {
 	// Nodes in the graph (InitialNode, FinalNode, ExecutionNode, etc.)
 	Nodes []ast.Node
 
-	// Edges: source node → list of target nodes
-	Edges map[ast.Node][]ast.Node
-
-	// Guards: source → target → guard expression
-	Guards map[ast.Node]map[ast.Node]ast.Node
-
-	// Successions: source → target → the declaration the edge was written as, for
-	// a consumer that reports where an edge comes from. An edge a lowering
-	// sequences without a declaration of its own carries none.
-	Successions map[ast.Node]map[ast.Node]ast.Node
+	// Edges: source node → successions in declaration order.
+	Edges map[ast.Node][]ActionEdge
 
 	// DataFlows: source node → list of object flows
 	DataFlows map[ast.Node][]ObjectFlow
@@ -63,16 +55,12 @@ type ActionGraph struct {
 	StatementRuns map[ast.Node]bool
 }
 
-// recordSuccession records the declaration an edge between two nodes was
-// written as.
-func (g *ActionGraph) recordSuccession(source, target, decl ast.Node) {
-	if g.Successions == nil {
-		g.Successions = make(map[ast.Node]map[ast.Node]ast.Node)
-	}
-	if g.Successions[source] == nil {
-		g.Successions[source] = make(map[ast.Node]ast.Node)
-	}
-	g.Successions[source][target] = decl
+// ActionEdge is one succession out of a node: the target it reaches, the guard
+// it carries, and the declaration it was written as.
+type ActionEdge struct {
+	Target ast.Node
+	Guard  ast.Node
+	Decl   ast.Node
 }
 
 // Statement is one lowered statement in an action node's body. Statements are
@@ -304,79 +292,7 @@ type ObjectFlow struct {
 // itself owns — which every expression the graph carries is evaluated in.
 // Returns error if graph is malformed (e.g., no initial node, dangling edges).
 func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, error) {
-	graph := &ActionGraph{
-		Scope:       scope,
-		Nodes:       make([]ast.Node, 0),
-		Edges:       make(map[ast.Node][]ast.Node),
-		Guards:      make(map[ast.Node]map[ast.Node]ast.Node),
-		Successions: make(map[ast.Node]map[ast.Node]ast.Node),
-		DataFlows:   make(map[ast.Node][]ObjectFlow),
-		Bodies:      make(map[ast.Node][]Statement),
-		Accepts:     make(map[ast.Node]Accept),
-		Finals:      make([]ast.Node, 0),
-	}
-
-	// Extract members from Usage or Definition
-	var members []ast.Node
-	switch n := actionDecl.(type) {
-	case *ast.Usage:
-		members = n.Members
-	case *ast.Definition:
-		members = n.Members
-	default:
-		return nil, fmt.Errorf("action must be Usage or Definition, got %T", actionDecl)
-	}
-
-	// A succession can bind a member with no name of its own by position, which
-	// is what puts an action node member written as a statement (`then send …;`,
-	// `then loop action { … } until c;`) in the token flow.
-	sequenced := sequencedMembers(members)
-
-	// First pass: collect nodes
-	for _, member := range members {
-		actualMember := unwrapMembership(member)
-
-		switch n := actualMember.(type) {
-		case *ast.InitialNode:
-			if graph.Initial != nil {
-				return nil, fmt.Errorf("action has multiple initial nodes")
-			}
-			graph.Initial = n
-			graph.Nodes = append(graph.Nodes, n)
-			lowerNodeBody(graph, n, n.Members, scope)
-		case *ast.FinalNode:
-			graph.Finals = append(graph.Finals, n)
-			graph.Nodes = append(graph.Nodes, n)
-		case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode, *ast.ActionExecutionNode:
-			graph.Nodes = append(graph.Nodes, n)
-			lowerNodeBody(graph, n, ast.NodeBodyMembers(n), scope)
-		case *ast.Usage:
-			// Nested action usage (treat as execution node)
-			if n.Kind == ast.UsageAction {
-				graph.Nodes = append(graph.Nodes, n)
-				lowerBody(graph, n, childScope(scope, n))
-			}
-		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode,
-			*ast.SendStatement, *ast.TerminateStatement:
-			if !sequenced[actualMember] {
-				// A statement is executed as part of an action node's body; written
-				// directly among the action's own members, with no succession
-				// binding it, it has no position in the token flow.
-				return nil, fmt.Errorf("%s written directly in an action body has no position in the token flow: declare it inside an action node", statementKeyword(n))
-			}
-			// An action node member of its own: a node whose body is the one
-			// statement it was written as, run when a token reaches it.
-			graph.Nodes = append(graph.Nodes, n)
-			graph.Bodies[n] = []Statement{lowerStatement(n, scope)}
-		}
-	}
-
-	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
-	graph.Attributes = lowerAttributes(members)
-
-	// `first a then b;` names the node the flow starts at rather than declaring an
-	// initial node of its own, so a itself is the initial node and holds the edge.
-	firstNode, err := resolveFirstNode(graph)
+	graph, members, firstNode, err := collectActionNodes(actionDecl, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -396,22 +312,19 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				if named, ok := firstNode[n]; ok {
 					sourceNode = named
 				}
-				targetNode := findNodeByName(graph.Nodes, n.Successor)
+				targetNode := resolveActionEndpoint(graph, n.Successor, false)
 				if targetNode == nil {
 					return nil, fmt.Errorf("initial node %s successor references undefined target %s", n.Name, edgeEndName(n.Successor))
 				}
-				graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
-				graph.recordSuccession(sourceNode, targetNode, n)
-				if n.Guard != nil {
-					if graph.Guards[sourceNode] == nil {
-						graph.Guards[sourceNode] = make(map[ast.Node]ast.Node)
-					}
-					graph.Guards[sourceNode][targetNode] = n.Guard
-				}
+				graph.Edges[sourceNode] = append(graph.Edges[sourceNode], ActionEdge{
+					Target: targetNode,
+					Guard:  n.Guard,
+					Decl:   n,
+				})
 			}
 		case *ast.SuccessionEdge:
-			sourceNode := resolveEnd(graph.Nodes, n.Source, n.SourceMember)
-			targetNode := resolveEnd(graph.Nodes, n.Target, n.TargetMember)
+			sourceNode := resolveActionEndpointForEdge(graph, n.Source, n.SourceMember, true)
+			targetNode := resolveActionEndpointForEdge(graph, n.Target, n.TargetMember, false)
 
 			if sourceNode == nil {
 				return nil, fmt.Errorf("succession edge references undefined source node %s", edgeEnd(n.Source, n.SourceMember))
@@ -419,11 +332,13 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			if targetNode == nil {
 				return nil, fmt.Errorf("succession edge references undefined target node %s", edgeEnd(n.Target, n.TargetMember))
 			}
-			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
-			graph.recordSuccession(sourceNode, targetNode, n)
+			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], ActionEdge{
+				Target: targetNode,
+				Decl:   n,
+			})
 		case *ast.ControlFlowEdge:
-			sourceNode := resolveEnd(graph.Nodes, n.Source, n.SourceMember)
-			targetNode := resolveEnd(graph.Nodes, n.Target, n.TargetMember)
+			sourceNode := resolveActionEndpointForEdge(graph, n.Source, n.SourceMember, true)
+			targetNode := resolveActionEndpointForEdge(graph, n.Target, n.TargetMember, false)
 
 			if sourceNode == nil {
 				return nil, fmt.Errorf("control flow edge references undefined source %s", edgeEnd(n.Source, n.SourceMember))
@@ -431,16 +346,25 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			if targetNode == nil {
 				return nil, fmt.Errorf("control flow edge references undefined target %s", edgeEnd(n.Target, n.TargetMember))
 			}
-			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
-			graph.recordSuccession(sourceNode, targetNode, n)
-
-			// Store guard expression
-			if n.Guard != nil {
-				if graph.Guards[sourceNode] == nil {
-					graph.Guards[sourceNode] = make(map[ast.Node]ast.Node)
-				}
-				graph.Guards[sourceNode][targetNode] = n.Guard
+			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], ActionEdge{
+				Target: targetNode,
+				Guard:  n.Guard,
+				Decl:   n,
+			})
+		case *ast.TransitionMember:
+			sourceNode := resolveActionEndpoint(graph, n.Source, true)
+			targetNode := resolveActionEndpoint(graph, n.Target, false)
+			if sourceNode == nil {
+				return nil, fmt.Errorf("succession references undefined source node %s", edgeEndName(n.Source))
 			}
+			if targetNode == nil {
+				return nil, fmt.Errorf("succession references undefined target node %s", edgeEndName(n.Target))
+			}
+			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], ActionEdge{
+				Target: targetNode,
+				Guard:  n.Guard,
+				Decl:   n,
+			})
 		case *ast.ObjectFlowEdge:
 			sourceNode, sourcePin := parsePinReference(graph.Nodes, n.Source)
 			targetNode, targetPin := parsePinReference(graph.Nodes, n.Target)
@@ -459,6 +383,37 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				Decl:      n,
 			})
 		case *ast.Usage:
+			if n.Kind == ast.UsageSuccession {
+				if len(n.ConnectorEnds) != 2 {
+					return nil, fmt.Errorf("action succession must have exactly two connector ends, got %d", len(n.ConnectorEnds))
+				}
+				if n.Multiplicity != nil {
+					return nil, fmt.Errorf("action succession has unsupported multiplicity")
+				}
+				if n.HasBody || len(n.Members) != 0 {
+					return nil, fmt.Errorf("action succession has unsupported body")
+				}
+				for i, end := range n.ConnectorEnds {
+					if end.Multiplicity != nil {
+						return nil, fmt.Errorf("action succession end %d has unsupported multiplicity", i+1)
+					}
+				}
+				sourceRef := connectorEndReference(n.ConnectorEnds[0])
+				targetRef := connectorEndReference(n.ConnectorEnds[1])
+				sourceNode := resolveActionEndpoint(graph, sourceRef, true)
+				targetNode := resolveActionEndpoint(graph, targetRef, false)
+				if sourceNode == nil {
+					return nil, fmt.Errorf("action succession references undefined source node %s", successionEndText(sourceRef))
+				}
+				if targetNode == nil {
+					return nil, fmt.Errorf("action succession references undefined target node %s", successionEndText(targetRef))
+				}
+				graph.Edges[sourceNode] = append(graph.Edges[sourceNode], ActionEdge{
+					Target: targetNode,
+					Decl:   n,
+				})
+				continue
+			}
 			if n.Kind != ast.UsageFlow || n.FlowEnds == nil {
 				continue
 			}
@@ -628,8 +583,6 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 			lowered.Else = &block
 		}
 		return lowered
-	case *ast.ResultMember:
-		return Return{Value: m.Expression, Node: m, Scope: scope}
 	case *ast.PerformActionNode:
 		return Effect{Kind: EffectPerform, Node: m, Scope: scope}
 	case *ast.TerminateStatement:
@@ -810,6 +763,75 @@ func resolveEnd(nodes []ast.Node, qname *ast.QualifiedName, member ast.Node) ast
 	return findNodeByName(nodes, qname)
 }
 
+// resolveActionEndpointForEdge resolves an edge end, which the notation may have
+// bound to a member by position rather than named.
+func resolveActionEndpointForEdge(graph *ActionGraph, ref ast.Node, member ast.Node, source bool) ast.Node {
+	if member != nil {
+		return resolveEnd(graph.Nodes, nil, member)
+	}
+	return resolveActionEndpoint(graph, ref, source)
+}
+
+// resolveActionEndpoint resolves an action edge end, or the implied start/done
+// node it names when the body declares no such node.
+func resolveActionEndpoint(graph *ActionGraph, ref ast.Node, source bool) ast.Node {
+	node := findNodeByReference(graph.Nodes, ref)
+	if node != nil {
+		return node
+	}
+	if node = ensureInheritedActionNode(graph, ref); node != nil {
+		return node
+	}
+
+	name := ast.SimpleName(ref)
+	if !impliedMarker(name, source, graph.Initial == nil) {
+		return nil
+	}
+	if source {
+		initial := &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "start"}
+		graph.Initial = initial
+		graph.Nodes = append(graph.Nodes, initial)
+		return initial
+	}
+	for _, final := range graph.Finals {
+		if getNodeName(final) == "done" {
+			return final
+		}
+	}
+	final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}}
+	graph.Finals = append(graph.Finals, final)
+	graph.Nodes = append(graph.Nodes, final)
+	return final
+}
+
+// findNodeByReference resolves a plain name or a chain to its graph-node root.
+// A chain attaches to the node whose body contains that feature.
+func findNodeByReference(nodes []ast.Node, ref ast.Node) ast.Node {
+	if qname := ast.AsQualifiedName(ref); qname != nil {
+		return findNodeByName(nodes, qname)
+	}
+	chain, ok := ref.(*ast.FeatureChainExpr)
+	if !ok {
+		return nil
+	}
+	for {
+		operand := chain.Operand
+		if nested, ok := operand.(*ast.FeatureChainExpr); ok {
+			chain = nested
+			continue
+		}
+		return findNodeByName(nodes, ast.AsQualifiedName(operand))
+	}
+}
+
+// successionEndText formats an endpoint for an action-succession diagnostic.
+func successionEndText(ref ast.Node) string {
+	if text := FeaturePath(ref); text != "" {
+		return strconv.Quote(text)
+	}
+	return "an unnamed node"
+}
+
 // sequencedMembers collects the members of a body that an edge binds to one of
 // its ends by position, the members a `then` sequences without a name.
 func sequencedMembers(members []ast.Node) map[ast.Node]bool {
@@ -867,7 +889,9 @@ func getNodeName(node ast.Node) string {
 	case *ast.InitialNode:
 		return n.Name
 	case *ast.FinalNode:
-		return n.Name
+		// The node declares no name of its own: a succession reaches it by the
+		// name of the library feature it is, `done`.
+		return "done"
 	case *ast.ForkNode:
 		return n.Name
 	case *ast.JoinNode:

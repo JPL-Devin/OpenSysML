@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -593,11 +594,11 @@ package Demo {
 // kinds a parsed declaration can have.
 func TestMetamodelTypeNameCoversEveryKind(t *testing.T) {
 	for kind := symbols.SymbolPackage; kind <= symbols.SymbolConnectorEnd; kind++ {
-		if MetamodelTypeName(kind) == "" {
+		if corequery.MetamodelTypeName(kind) == "" {
 			t.Errorf("symbol kind %q has no metamodel type name", kind)
 		}
 	}
-	if MetamodelTypeName(symbols.SymbolUnknown) != "" {
+	if corequery.MetamodelTypeName(symbols.SymbolUnknown) != "" {
 		t.Error("an unclassified declaration must have no metamodel type name")
 	}
 }

@@ -24,7 +24,7 @@ attribute logic = flag and true; // Boolean
 
 **Feature References:**
 ```sysml
-part Wheel {
+part def Wheel {
     attribute diameter = 16.0;
 }
 
@@ -80,7 +80,7 @@ part System {
 sysml> calc distance {
   ...>     in x;
   ...>     in y;
-  ...>     return (x * x + y * y);
+  ...>     x * x + y * y
   ...> }
 ✓ calc distance
 
@@ -92,8 +92,7 @@ sysml> %calc distance 3 4
 **Constraints:**
 ```sysml
 sysml> constraint ValidSpeed {
-  ...>     assert 65 > 0;
-  ...>     assert 65 <= 120;
+  ...>     65 > 0 and 65 <= 120
   ...> }
 ✓ constraint ValidSpeed
 
@@ -104,8 +103,8 @@ sysml> %constraint ValidSpeed
 **Requirements:**
 ```sysml
 sysml> requirement SafetyReq {
-  ...>     assume 65 > 0;
-  ...>     require 100 > 50;
+  ...>     assume constraint { 65 > 0 }
+  ...>     require constraint { 100 > 50 }
   ...> }
 ✓ requirement SafetyReq
 

@@ -23,9 +23,9 @@ func TestBlockDeclaringAnActionNodeIsLoweredToAFlow(t *testing.T) {
 					assign total := total - 1;
 				}
 			}
-			done end;
-			then start accumulate;
-			then accumulate end;
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
 		}
 	`)
 
@@ -46,7 +46,7 @@ func TestBlockDeclaringAnActionNodeIsLoweredToAFlow(t *testing.T) {
 	}
 	for i := 0; i+1 < len(flow.Nodes); i++ {
 		successors := flow.Edges[flow.Nodes[i]]
-		if len(successors) != 1 || successors[0] != flow.Nodes[i+1] {
+		if len(successors) != 1 || successors[0].Target != flow.Nodes[i+1] {
 			t.Errorf("node %d succeeds to %v, want the node written after it", i, successors)
 		}
 	}
@@ -100,9 +100,9 @@ func TestBlockFlowNestsTwoLevels(t *testing.T) {
 					}
 				}
 			}
-			done end;
-			then start accumulate;
-			then accumulate end;
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
 		}
 	`)
 
@@ -142,12 +142,12 @@ func TestBlockStatingItsOwnEdgeKeepsItsStatements(t *testing.T) {
 					action bump {
 						assign total := total + 1;
 					}
-					then bump bump;
+					succession first bump then bump;
 				}
 			}
-			done end;
-			then start accumulate;
-			then accumulate end;
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
 		}
 	`)
 
@@ -180,9 +180,9 @@ func TestNestedActionParametersAreLowered(t *testing.T) {
 					}
 				}
 			}
-			done end;
-			then start accumulate;
-			then accumulate end;
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
 		}
 	`)
 

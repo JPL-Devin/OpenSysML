@@ -12,7 +12,7 @@ package test {
 		action idle assign low := 1;
 
 		first check;
-		then check alert if level > 10;
-		then check idle if level > 5;
+		succession first check if level > 10 then alert;
+		succession first check if level > 5 then idle;
 	}
 }

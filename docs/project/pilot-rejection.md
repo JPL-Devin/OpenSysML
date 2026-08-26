@@ -104,14 +104,18 @@ It writes `build/pilot-reject/pilot-reject.txt` and `build/pilot-reject/pilot-re
 JSON is committed as [pilot-rejection-baseline.json](pilot-rejection-baseline.json); the reports
 carry no timestamps or absolute paths, so repeated runs are byte-identical
 (`cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.json`).
+`-update` records a run as that baseline and `-check` fails unless a fresh run reproduces it.
 
 ## Totals
+
+**Only this section states the current baseline**; the per-round figures further down are as
+measured at their own round and are not the current baseline.
 
 Under the default `-conformance auto`:
 
 ```
 120 case(s): 120 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
-  of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
+  of which 2 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
@@ -121,7 +125,7 @@ Under the default `-conformance auto`:
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The corpus grew from 79 cases to 119 in wave 10G and to 120 with `g60` (an `alias` named by a
-keyword), and the default-mode gap count is now 5 of 120: only the intended `extensions/`
+keyword), and the default-mode gap count is now 2 of 120: only the intended `extensions/`
 notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
@@ -133,26 +137,30 @@ rules closed eleven `xpect/` gaps (`p08`, `p17`, `p20`,
 `p21`, `p22`, `p25`, `p26`, `p27`, `p28`, `p32`, `p33`). No case in the corpus is
 accepted by both implementations.
 
-The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
-extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 115 agreements and 5 gaps, which is what `-conformance
+The two strict-only agreements are `x05` and `x06`: OpenSysML notation
+extensions that the default mode accepts on purpose and strict mode reports as errors. `x01` (the
+initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
+list when that notation was removed: each is now a parse error in either mode, so both
+implementations reject it by default. Judged in
+the default mode the same corpus gives 118 agreements and 2 gaps, which is what `-conformance
 default` prints. `-conformance strict` gives 120 and 0. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
-(wave 8B) — and only the five `extensions/` cases belong to strict mode.
+(wave 8B) — and only the two `extensions/` cases belong to strict mode.
 
-Read those five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in
+Read those two as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
 because we authored all 120 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
-The two `extensions/` cases that agree in either mode (`x02` choice, `x03` junction) are rejected
+Two of the `extensions/` cases that agree in either mode (`x02` choice, `x03` junction) are rejected
 by us for a different reason than by the pilot: our own state-connectivity validation flags a pseudostate
 with no outgoing transition, while the pilot rejects the notation itself. The bucket records
-rejection, not agreement on the rule.
+rejection, not agreement on the rule. The other three (`x01`, `x04`, `x07`) agree on the notation:
+we no longer accept it either.
 
 ## Permissiveness gaps
 
@@ -276,16 +284,16 @@ transition) is rejected by us with `expected '{' or ';'` — our parser does not
 by us as a transition endpoint that is not a vertex. The bucket records rejection, not agreement on
 the rule.
 
-### Should the default mode reject the five `extensions/` cases?
+### Should the default mode reject the `extensions/` cases?
 
-Per the specification, **yes**. `initial`, `region`, `defer`, `history` and `transition <src> to
-<tgt>` appear in no production of the pinned grammars — `StateBodyItem` has no initial, history or
-deferral member, concurrency is spelled `state ... parallel`, and `TransitionUsage` connects with
-`first ... then`. The SysML v2 textual notation is defined by that grammar, so a model using them
+Per the specification, **yes**. `region`, `defer` and `history` appear in no production of the
+pinned grammars — `StateBodyItem` has no history or deferral member and concurrency is spelled
+`state ... parallel`. The same held for `initial` and `transition <src> to <tgt>`, which is why
+they were removed; both are now errors in either mode. The SysML v2 textual notation is defined by that grammar, so a model using them
 is not a conforming SysML v2 model, and a tool asked whether it conforms must say no. Accepting
 them by default is therefore not "conformance we argued" but a **superset we chose**: OpenSysML's
 default mode implements a dialect, and the honest statement of `-conformance auto` agreement on
-`x01`, `x04`, `x05`, `x06`, `x07` is that the strict question has an answer we agree on while the
+`x05`, `x06` is that the strict question has an answer we agree on while the
 default pipeline a user gets accepts notation the reference rejects as a syntax error. What makes
 the choice defensible is not the extensions' usefulness but that the conforming question remains
 askable: [strict mode](../guide/03-command-line.md#strict-conformance) reports every one of them as
@@ -315,6 +323,13 @@ this document after applying the three approved closures to
 [pilot-rejection-baseline.json](pilot-rejection-baseline.json). The README and skill remain
 checked against that committed baseline until its separate refresh. The guard reads only committed
 files — no validators or downloads — and checks that the gap table enumerates the current report.
+
+`TestCommittedBaselineStatesThisRepositorysProvenance` guards the baseline's own `provenance`
+block — the pinned tag and artifact, each validator bridge's source digest, and the negative
+corpus's digest and case count — against what this repository currently pins, and the daily
+`.github/workflows/oracle-reproduction.yml` re-runs this oracle with `-check` where Java is
+available. [pilot-differential.md](pilot-differential.md#how-this-record-is-kept-true) describes
+both and what each of them cannot catch.
 
 
 ## The declared errata overlay

@@ -361,23 +361,13 @@ variable and the context, rather than letting PyPI answer with a 403 that reads
 like a permissions problem. It never echoes the token and never prints the
 environment.
 
-### First upload versus later ones
+### The token the job uses
 
-`opensysml` does not exist on PyPI yet
-(`https://pypi.org/pypi/opensysml/json` → 404), and a project-scoped token cannot
-be created for a project that does not exist. So:
-
-1. **Before the first release**, create an **account-scoped** API token
-   (PyPI → Account settings → API tokens → *Add API token*, scope *Entire
-   account*) and put it in the `PyPI` context as `PYPI_API_TOKEN`. Treat
-   it as a credential that can publish anything the account owns.
-2. **Immediately after the first upload succeeds**, replace it: create a token
-   scoped to the `opensysml` project only, update `PYPI_API_TOKEN` in the context,
-   and **revoke the account-scoped token**. This step is part of the first
-   release, not a follow-up — leaving an account-scoped token in CI is the
-   avoidable risk here.
-3. Add a second owner/maintainer to the PyPI project at the same time, so the
-   project is not tied to one account.
+`opensysml` exists on PyPI (0.3.0 and 0.3.1 are published), so the token in the
+`PyPI` context as `PYPI_API_TOKEN` must be **scoped to the `opensysml` project**,
+never account-scoped: an account-scoped token in CI can publish anything the
+account owns. Keep a second owner/maintainer on the PyPI project as well, so it is
+not tied to one account.
 
 PyPI trusted publishing (OIDC) is not an option: the supported providers are
 GitHub Actions, Google Cloud, ActiveState and GitLab CI/CD, and CircleCI support

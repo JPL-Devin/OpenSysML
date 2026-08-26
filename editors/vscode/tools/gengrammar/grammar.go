@@ -56,7 +56,7 @@ var keywordGroups = []struct {
 		rule:  "keywords-control",
 		scope: "keyword.control",
 		keywords: []string{
-			// The words our state notation adds (`region`, `initial`, `done`) are not
+			// The words our state notation adds (`initial`, `done`) are not
 			// here: the lexer does not reserve them, so they are in "keywords-contextual".
 			"accept", "after", "assert", "assign", "at", "decide",
 			"do", "else", "entry", "exhibit", "exit", "first",

@@ -18,5 +18,5 @@ calc bounded : Acceleration {
 
 calc computed {
 	in x : Real;
-	return x * 2;
+	x * 2
 }

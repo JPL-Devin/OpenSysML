@@ -12,9 +12,6 @@ type InitialNode struct {
 	Name      string         // optional identifier for edge referencing
 	Successor *QualifiedName // optional target for implicit succession (from `first X then Y` syntax)
 	Guard     Node           // optional guard condition for succession
-	// Keyword is the word the node was written with, `first` or `initial`: only
-	// the first is SysML v2 notation.
-	Keyword string
 	// Members are the members of the body the succession was written with
 	// (`first start then continue { … }`), and HasBody that it was written with
 	// one rather than ended by ';'.
@@ -25,9 +22,6 @@ type InitialNode struct {
 // FinalNode is the termination point for action execution.
 type FinalNode struct {
 	NodeBase
-	Name string
-	// Keyword is the word the node was written with, `done` or `final`.
-	Keyword string
 }
 
 // ForkNode splits execution into concurrent flows (1 incoming → N outgoing).
@@ -65,11 +59,8 @@ type DecisionNode struct {
 	NodeBase
 	Name     string
 	NameSpan source.Span // span of Name, empty for an unnamed node
-	// Keyword is the word the node was written with, `decide` or `decision`:
-	// only the first is SysML v2 notation.
-	Keyword string
-	Members []Node // body members, as on ForkNode
-	HasBody bool
+	Members  []Node      // body members, as on ForkNode
+	HasBody  bool
 }
 
 // NodeBodyMembers returns the members of the body an action node declares, and
@@ -216,15 +207,17 @@ func (n *IfActionNode) Branches() []*IfBranchNode {
 	return branches
 }
 
+// DoneFeature is the name of the end shot every state inherits from the standard
+// library (`Systems Library/States.sysml`), which a transition enters to complete.
+const DoneFeature = "done"
+
 // StateNode represents a state in a state machine (simple, composite, or orthogonal).
 type StateNode struct {
 	NodeBase
-	Name      string
-	IsInitial bool   // initial state marker
-	IsFinal   bool   // final state marker
-	Entry     []Node // entry behaviors (action sequence)
-	Do        []Node // do action (ongoing action)
-	Exit      []Node // exit behaviors (action sequence)
+	Name  string
+	Entry []Node // entry behaviors (action sequence)
+	Do    []Node // do action (ongoing action)
+	Exit  []Node // exit behaviors (action sequence)
 	// Defer names the events the state defers while it is active: an event no
 	// transition of the active configuration handles is retained instead of
 	// dropped, and delivered again once no active state defers it.
@@ -304,6 +297,13 @@ type SuccessionEdge struct {
 	// beside the keyword as written, set once when the body is parsed.
 	SourceMember Node
 	TargetMember Node
+	// SourceImplied and TargetImplied mark an end the notation supplied rather
+	// than the author writing it: the source a one-name `then <target>;` takes
+	// from the member before it, and the ends of the edge a member-attached
+	// `then` desugars to. Such a name is a member's own, not a reference written
+	// in the model.
+	SourceImplied bool
+	TargetImplied bool
 	// Members are the body an action target succession carries
 	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody).
 	Members []Node
@@ -324,6 +324,10 @@ type ControlFlowEdge struct {
 	// without a name (`then decide; if x then a; else b;`) reach it this way.
 	SourceMember Node
 	TargetMember Node
+	// SourceImplied and TargetImplied mark an end the notation supplied rather
+	// than the author writing it, as on SuccessionEdge.
+	SourceImplied bool
+	TargetImplied bool
 }
 
 // ObjectFlowEdge is data flow between action parameters/pins (Tier 5).
@@ -405,15 +409,8 @@ func (*CallEvent) triggerEvent() {}
 
 // Phase C1: Calculation and Constraint Body Members
 
-// ResultMember represents a return expression in a calculation body.
-// Syntax: return <expression>;
-type ResultMember struct {
-	NodeBase
-	Expression Node // the value expression
-}
-
-// ConstraintMember represents an assertion/assumption in a constraint body.
-// Syntax: assert <expression>; or assume <expression>;
+// ConstraintMember represents a condition of a constraint body.
+// Syntax: <expression> or assert [not] <reference>; or assert constraint { … }
 type ConstraintMember struct {
 	NodeBase
 	IsAssert bool // true for 'assert', false for 'assume'
@@ -447,12 +444,12 @@ type SubjectMember struct {
 }
 
 // AssumeMember represents an assumption in a requirement body.
-// Syntax: assume <expression>; OR assume constraint { <expression>... } OR assume <Q::r> { body }
+// Syntax: assume <reference>; OR assume constraint { <expression>... } OR assume <Q::r> { body }
 type AssumeMember struct {
 	NodeBase
 	// Prefix metadata written before the declaration: `assume #goal constraint c;`.
 	Prefixes   []*PrefixMetadata
-	Expression Node           // assumption condition (for expression form)
+	Expression Node           // the reference the member states, when written as one
 	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
 	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
 	// Declaration of the constraint the member owns, when it is written with
@@ -468,12 +465,12 @@ type AssumeMember struct {
 }
 
 // RequireMember represents a requirement constraint.
-// Syntax: require <expression>; OR require constraint { <expression>... } OR require <Q::r> { body }
+// Syntax: require <reference>; OR require constraint { <expression>... } OR require <Q::r> { body }
 type RequireMember struct {
 	NodeBase
 	// Prefix metadata written before the declaration: `require #goal r;`.
 	Prefixes   []*PrefixMetadata
-	Expression Node           // requirement condition (for expression form)
+	Expression Node           // the reference the member states, when written as one
 	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
 	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form
 	// Declaration of the constraint the member owns, when it is written with
@@ -548,9 +545,6 @@ type TransitionMember struct {
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName
-	// ToSpan spans the `to` of the second spelling, and is empty when the
-	// transition was written the standard way.
-	ToSpan source.Span
 	// Members and HasBody carry the body a transition may declare, since both
 	// TransitionUsage and TargetTransitionUsage end in ActionBody
 	// (`then starting { … }`).

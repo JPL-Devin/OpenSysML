@@ -22,6 +22,8 @@ import (
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
 	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
+	t.Run("explicit_succession_missing_endpoint", testExplicitSuccessionMissingEndpoint)
+	t.Run("control_flow_missing_endpoint", testControlFlowMissingEndpoint)
 	t.Run("merge_without_a_successor", testMergeWithoutASuccessor)
 	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
 	t.Run("first_node_with_a_second_succession", testFirstNodeWithASecondSuccession)
@@ -35,9 +37,14 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_transition_endpoint_never_resolved", testStateTransitionEndpointNeverResolved)
 	t.Run("state_transition_endpoint_naming_a_first_marker", testStateTransitionEndpointNamingAFirstMarker)
 	t.Run("state_junction_without_an_outgoing_transition", testStateJunctionWithoutAnOutgoingTransition)
+	t.Run("state_event_after_completion", testStateEventAfterCompletion)
+	t.Run("state_completion_rests_in_done", testStateCompletionRestsInDone)
+	t.Run("state_nested_region_completion_keeps_siblings_running", testStateNestedRegionCompletionKeepsSiblingsRunning)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
+	t.Run("parallel_state_body_unsupported_member", testParallelStateBodyUnsupportedMember)
+	t.Run("parallel_state_region_without_initial", testParallelStateRegionWithoutInitial)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("calc_calls_an_unimported_extension_function", testCalcCallsAnUnimportedExtensionFunction)
@@ -80,7 +87,6 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("binding_three_binding_ring", testBindingThreeBindingRing)
 	t.Run("binding_cycle_with_value", testBindingCycleWithValue)
 	t.Run("binding_unrelated_expression_does_not_poison_read", testBindingUnrelatedExpressionDoesNotPoisonRead)
-	t.Run("binding_expression_end_cannot_receive", testBindingExpressionEndCannotReceive)
 	t.Run("binding_result_tracks_later_mutation", testBindingResultTracksLaterMutation)
 	t.Run("binding_nested_container_is_not_a_cycle", testBindingNestedContainerIsNotACycle)
 	t.Run("nested_calc_usage_unbound_input", testNestedCalcUsageUnboundInput)
@@ -549,7 +555,8 @@ func testBindingUnrelatedExpressionDoesNotPoisonRead(t *testing.T) {
 			attribute a = 5;
 			attribute b;
 			attribute sibling = 8;
-			binding bind b = a + 1;
+			attribute b2 = a + 1;
+			binding bind b = b2;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -569,27 +576,6 @@ func testBindingUnrelatedExpressionDoesNotPoisonRead(t *testing.T) {
 	}
 	if got := fv.HeldValue().Const.Int; got != 6 {
 		t.Errorf("b = %d, want 6", got)
-	}
-}
-
-func testBindingExpressionEndCannotReceive(t *testing.T) {
-	idx, _, ctx := buildRuntime(t, "<binding-expression-end>", parseAndBuild(t, `package P {
-		part def Sys {
-			attribute a;
-			attribute b = 7;
-			binding bind b = a + 1;
-		}
-	}`))
-	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
-	if err != nil {
-		t.Fatalf("instantiate: %v", err)
-	}
-	_, err = inst.GetFeatureValue(ctx, "b")
-	if !errors.Is(err, ErrBindingEnd) {
-		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingEnd", err)
-	}
-	if !strings.Contains(err.Error(), "a + 1") || !strings.Contains(err.Error(), "b") {
-		t.Errorf("binding endpoint error %q does not name both ends", err)
 	}
 }
 
@@ -806,8 +792,8 @@ func testSuccessionGuardFailureModes(t *testing.T) {
 				action alert assign high := 1;
 				action idle assign low := 1;
 				first check;
-				then check alert if level > 10;
-				then check idle if level > 5;
+				succession first check if level > 10 then alert;
+				succession first check if level > 5 then idle;
 			`,
 			want: ErrAmbiguousSuccession,
 		},
@@ -1473,14 +1459,14 @@ func testDerivedFeatureValueOverMissingFeature(t *testing.T) {
 func testStateSubactionReferenceOfMissingAction(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state active {
 				entry noSuchAction;
 			}
-			final done;
 
-			init then active;
-			active then done;
+			succession first init then active;
+			succession first active then done;
 		}
 	}`, "Machine")
 
@@ -1497,8 +1483,8 @@ func testStateSubactionReferenceFeatureChain(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
 		action def CoolDown {
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 
 		state Machine {
@@ -1506,14 +1492,14 @@ func testStateSubactionReferenceFeatureChain(t *testing.T) {
 				action coolDown : CoolDown;
 			}
 
-			initial init;
+			entry; then init;
+			state init;
 			state active {
 				exit controller.coolDown;
 			}
-			final done;
 
-			init then active;
-			active then done;
+			succession first init then active;
+			succession first active then done;
 		}
 	}`, "Machine")
 
@@ -1531,10 +1517,10 @@ func testPerformOfMissingAction(t *testing.T) {
 		action outer {
 			first start;
 			perform action doIt references missingAction;
-			done end;
+			done;
 
-			then start doIt;
-			then doIt end;
+			succession first start then doIt;
+			succession first doIt then done;
 		}
 	}`, "outer")
 
@@ -1552,10 +1538,10 @@ func testPerformReferenceCycle(t *testing.T) {
 		action outer {
 			first start;
 			perform action doIt references outer;
-			done end;
+			done;
 
-			then start doIt;
-			then doIt end;
+			succession first start then doIt;
+			succession first doIt then done;
 		}
 	}`, "outer")
 
@@ -1587,7 +1573,8 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			&ast.StateNode{
 				Name:  "busy",
 				Defer: []ast.Node{&ast.TimeEvent{Duration: &ast.LiteralInteger{Value: "1"}}},
@@ -1615,11 +1602,11 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 func testStateTransitionEndpointMisspelled(t *testing.T) {
 	src := `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
-			final done;
-			init then busy;
-			transition busy to donee;
+			succession first init then busy;
+			transition first busy then donee;
 		}
 	}`
 	file := parseAndBuild(t, src)
@@ -1676,11 +1663,11 @@ func testStateTransitionEndpointMisspelled(t *testing.T) {
 func testStateTransitionEndpointNeverResolved(t *testing.T) {
 	src := `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
-			final done;
-			init then busy;
-			transition busy to donee;
+			succession first init then busy;
+			transition first busy then donee;
 		}
 	}`
 	file := parseAndBuild(t, src)
@@ -1723,15 +1710,17 @@ func testStateTransitionEndpointNeverResolved(t *testing.T) {
 func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 	src := `package test {
 		state Other {
-			initial start;
+			entry; then start;
+			state start;
 			state running;
-			start then running;
+			succession first start then running;
 		}
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
-			init then busy;
-			transition busy to Other::running;
+			succession first init then busy;
+			transition first busy then Other::running;
 		}
 	}`
 	file := parseAndBuild(t, src)
@@ -1769,12 +1758,13 @@ func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
 	src := `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
 			state other;
 			first marker then other;
-			init then busy;
-			transition busy to marker;
+			succession first init then busy;
+			transition first busy then marker;
 		}
 	}`
 	file := parseAndBuild(t, src)
@@ -1802,14 +1792,104 @@ func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
 // testStateJunctionWithoutAnOutgoingTransition: a junction no transition leaves
 // routes a transition reaching it nowhere, which the state transition check
 // reports; reaching it at run time errors rather than panicking or hanging.
+// testStateEventAfterCompletion: a signal sent to a machine that already reached
+// `done` is discarded, leaving it completed rather than restarting or panicking.
+func testStateEventAfterCompletion(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			entry; then init;
+			state init;
+			transition first init accept stop then done;
+		}
+	}`)
+	exec.SendSignal("stop", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Fatalf("expected StateCompleted, got %s", exec.State())
+	}
+	exec.SendSignal("stop", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run after completion: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Errorf("the machine left completion on a late signal, state %s", exec.State())
+	}
+}
+
+// testStateCompletionRestsInDone: a completed machine names `done` as the state
+// it came to rest in, so a caller reading the configuration sees a state, not nil.
+func testStateCompletionRestsInDone(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			entry; then init;
+			state init;
+			state busy;
+			succession first init then busy;
+			transition first busy accept stop then done;
+		}
+	}`)
+	exec.SendSignal("stop", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Fatalf("expected StateCompleted, got %s", exec.State())
+	}
+	assertCurrentState(t, exec, ast.DoneFeature)
+}
+
+// testStateNestedRegionCompletionKeepsSiblingsRunning: a region of a composite
+// state reaching `done` leaves its sibling region running, and events it keeps
+// answering are still delivered rather than dropped by an early completion.
+func testStateNestedRegionCompletionKeepsSiblingsRunning(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			entry; then busy;
+			state busy parallel {
+				state left {
+					entry; then lstart;
+					state lstart;
+					transition first lstart accept stop then done;
+				}
+				state right {
+					entry; then rstart;
+					state rstart;
+					state rbusy;
+					transition first rstart accept go then rbusy;
+				}
+			}
+		}
+	}`)
+	exec.SendSignal("stop", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() == StateCompleted {
+		t.Fatalf("the machine completed with the sibling region still running")
+	}
+	exec.SendSignal("go", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run after the first region completed: %v", err)
+	}
+	if exec.State() == StateCompleted {
+		t.Errorf("the machine completed while the sibling region rests outside `done`")
+	}
+	if got := finalStateName(t, exec); got != "done+rbusy" {
+		t.Errorf("expected the regions in done+rbusy, got %q", got)
+	}
+}
+
 func testStateJunctionWithoutAnOutgoingTransition(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
 			junction stuck;
-			init then busy;
-			transition busy to stuck;
+			succession first init then busy;
+			transition first busy then stuck;
 		}
 	}`)
 	if err := exec.initialize(); err != nil {
@@ -1843,7 +1923,8 @@ func testStateTransitionWithoutATarget(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			&ast.StateNode{Name: "busy"},
 			dangling,
 		},
@@ -1868,23 +1949,26 @@ func testStateTransitionWithoutATarget(t *testing.T) {
 func testStateCrossRegionTransitionsPingPong(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
-			state running {
-				region left {
-					initial ls;
+			entry; then init;
+			state init;
+			state running parallel {
+				state left {
+					entry; then ls;
+					state ls;
 					state lidle;
-					then ls lidle;
-					transition lidle to rtarget;
+					succession first ls then lidle;
+					transition first lidle then rtarget;
 				}
-				region right {
-					initial rs;
+				state right {
+					entry; then rs;
+					state rs;
 					state ridle;
 					state rtarget;
-					then rs ridle;
-					transition rtarget to lidle;
+					succession first rs then ridle;
+					transition first rtarget then lidle;
 				}
 			}
-			init then running;
+			succession first init then running;
 		}
 	}`)
 	exec.ctx.maxStateEvents = 50
@@ -1912,11 +1996,11 @@ func testStateTransitionEffectReadsAnUnknownFeature(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			attribute counter : Integer = 0;
-			initial init;
+			entry; then init;
+			state init;
 			state active;
-			final done;
-			init then active;
-			transition active to done do assign counter := missingName + 1;
+			succession first init then active;
+			transition first active do assign counter := missingName + 1 then done;
 		}
 	}`)
 	err := exec.RunToCompletion()
@@ -1943,7 +2027,8 @@ func testNonTerminatingDoBehavior(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			spin,
 			transitionMember("init", "spin"),
 			transitionMember("spin", "spin"),
@@ -1967,15 +2052,16 @@ func testNonTerminatingDoBehavior(t *testing.T) {
 func testEmptyAnonymousActionBody(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 			state quiet {
 				entry action { }
 				do action { }
 				exit action { }
 			}
 			state done;
-			then start quiet;
-			then quiet done;
+			succession first start then quiet;
+			succession first quiet then done;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -1993,7 +2079,8 @@ func testNonTerminatingAnonymousDoBody(t *testing.T) {
 	err := stateRunErrorForSource(t, "Machine", `package test {
 		state Machine {
 			attribute c : Integer = 0;
-			initial start;
+			entry; then start;
+			state start;
 			state spin {
 				do action {
 					while true {
@@ -2002,8 +2089,8 @@ func testNonTerminatingAnonymousDoBody(t *testing.T) {
 				}
 			}
 			state done;
-			then start spin;
-			then spin done;
+			succession first start then spin;
+			succession first spin then done;
 		}
 	}`)
 	if !errors.Is(err, ErrStepLimitExceeded) {
@@ -2019,13 +2106,14 @@ func testBehaviorPerformingAnActionAndStatingABody(t *testing.T) {
 		action def Bump;
 		state Machine {
 			attribute c : Integer = 0;
-			initial start;
+			entry; then start;
+			state start;
 			state working {
 				entry action mixed : Bump { assign c := c + 1; }
 			}
 			state done;
-			then start working;
-			then working done;
+			succession first start then working;
+			succession first working then done;
 		}
 	}`)
 	if err == nil {
@@ -2043,11 +2131,11 @@ func testQualifiedAssignmentTargetInAStateEffect(t *testing.T) {
 		package other { attribute c : Integer = 0; }
 		state Machine {
 			attribute c : Integer = 0;
-			initial init;
+			entry; then init;
+			state init;
 			state active;
-			final done;
-			init then active;
-			transition active to done do assign other::c := 1;
+			succession first init then active;
+			transition first active do assign other::c := 1 then done;
 		}
 	}`)
 	if err == nil {
@@ -2113,11 +2201,12 @@ func stateExecutorForSource(t *testing.T, name, src string) *StateExecutor {
 func testCallOfUnhandledOperation(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting;
 			state moving;
-			init then waiting;
-			transition waiting to moving accept go();
+			succession first init then waiting;
+			transition first waiting accept go() then moving;
 		}
 	}`)
 	exec.InvokeOperation("halt", nil)
@@ -2137,19 +2226,20 @@ func testCallOfUnhandledOperation(t *testing.T) {
 func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state outer {
 				state middle {
 					state inner;
 					state other;
-					transition inner to other accept step;
+					transition first inner accept step then other;
 				}
 				state recovered;
-				transition middle to recovered accept abort;
+				transition first middle accept abort then recovered;
 			}
 			state stopped;
-			init then inner;
-			transition outer to stopped accept shutdown;
+			succession first init then inner;
+			transition first outer accept shutdown then stopped;
 		}
 	}`)
 	exec.SendSignal("unknown", nil)
@@ -2168,12 +2258,13 @@ func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
 func testCompositeSelfTransitionWithNoSubstateToReEnter(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state Working {
 				state Step1;
 			}
-			init then Working::Step1;
-			transition Working to Working accept restart;
+			succession first init then Working::Step1;
+			transition first Working accept restart then Working;
 		}
 	}`)
 	exec.SendSignal("restart", nil)
@@ -2192,26 +2283,29 @@ func testCompositeSelfTransitionWithNoSubstateToReEnter(t *testing.T) {
 func testStaleCompositeTimerInARegion(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
-			state working {
-				region left {
-					initial lstart;
+			entry; then init;
+			state init;
+			state working parallel {
+				state left {
+					entry; then lstart;
+					state lstart;
 					state grouping {
 						state step1;
 						accept after 5 then late;
 					}
 					state moved;
 					state late;
-					transition lstart to step1;
-					transition grouping to moved accept skip;
+					transition first lstart then step1;
+					transition first grouping accept skip then moved;
 				}
-				region right {
-					initial rstart;
+				state right {
+					entry; then rstart;
+					state rstart;
 					state watching;
-					then rstart watching;
+					succession first rstart then watching;
 				}
 			}
-			init then working;
+			succession first init then working;
 		}
 	}`)
 	exec.SendSignal("skip", nil)
@@ -2233,32 +2327,36 @@ func testStaleCompositeTimerInARegion(t *testing.T) {
 func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
-			state outer {
-				region left {
-					initial lstart;
-					state grouping {
-						region inner {
-							initial gstart;
+			entry; then init;
+			state init;
+			state outer parallel {
+				state left {
+					entry; then lstart;
+					state lstart;
+					state grouping parallel {
+						state inner {
+							entry; then gstart;
+							state gstart;
 							state g1;
 							state g2;
-							transition gstart to g1;
-							transition g1 to g2 accept advance;
+							transition first gstart then g1;
+							transition first g1 accept advance then g2;
 						}
 					}
-					transition lstart to grouping;
+					transition first lstart then grouping;
 				}
-				region right {
-					initial rstart;
+				state right {
+					entry; then rstart;
+					state rstart;
 					state watching;
-					transition rstart to watching;
+					transition first rstart then watching;
 				}
 				deep history resume;
 			}
 			state away;
-			init then outer;
-			transition outer to away accept leave;
-			transition away to resume accept back;
+			succession first init then outer;
+			transition first outer accept leave then away;
+			transition first away accept back then resume;
 		}
 	}`)
 	for _, signal := range []string{"advance", "leave", "back"} {
@@ -2281,11 +2379,12 @@ func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
 func testCallArgumentOfWrongType(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting;
 			state moving;
-			init then waiting;
-			transition waiting to moving accept setSpeed(value) if value > 0;
+			succession first init then waiting;
+			transition first waiting accept setSpeed(value) if value > 0 then moving;
 		}
 	}`)
 	exec.InvokeOperation("setSpeed", map[string]Value{
@@ -2308,7 +2407,8 @@ func testHistoryOutsideCompositeState(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			&ast.StateNode{Name: "away"},
 			&ast.PseudostateNode{Kind: ast.PseudostateShallowHistory, Name: "H"},
 			transitionMember("init", "away"),
@@ -2342,7 +2442,8 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			outer,
 			&ast.StateNode{Name: "away"},
 			transitionMember("init", "away"),
@@ -2374,10 +2475,10 @@ func testSendViaUnconnectedPort(t *testing.T) {
 			first start;
 			action sender { send 42 via outPort; }
 			action reader accept msg : Integer via inPort;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err == nil {
@@ -2394,9 +2495,9 @@ func testRoutedSendViaUnknownPort(t *testing.T) {
 			first start;
 			action sender { send 42 via missing to reader; }
 			action reader accept msg : Integer;
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	var typed *UnknownSendPortError
@@ -2426,10 +2527,10 @@ func testRoutedSendPortTypeMismatch(t *testing.T) {
 			first start;
 			action sender { send IntMessage via outPort to reader; }
 			action reader accept msg : Integer via inPort;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	var typed *SendPortTypeMismatchError
@@ -2456,10 +2557,10 @@ func testRoutedSendPortTypeMatch(t *testing.T) {
 			first start;
 			action sender { send IntMessage via outPort to reader; }
 			action reader accept : IntMessage via inPort;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err != nil {
@@ -2479,10 +2580,10 @@ func testRoutedSendScalarTypedFlowMismatch(t *testing.T) {
 			first start;
 			action sender { send 42 via outPort to reader; }
 			action reader accept msg : Integer via inPort;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	var typed *SendPortTypeMismatchError
@@ -2502,9 +2603,9 @@ func testRoutedSendUnreachableReceiver(t *testing.T) {
 			connect outPort to inPort;
 			first start;
 			action sender { send 42 via outPort to missing; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	var typed *UnreachableSendReceiverError
@@ -2530,10 +2631,10 @@ func testRoutedSendReceiverNameMismatchDeadlock(t *testing.T) {
 			action sender { send 42 via outPort to receiver; }
 			action receiver;
 			action sibling accept msg : Integer via inPort;
-			done end;
-			then start sender;
-			then sender sibling;
-			then sibling end;
+			done;
+			succession first start then sender;
+			succession first sender then sibling;
+			succession first sibling then done;
 		}
 	}`)
 	if err == nil {
@@ -2597,9 +2698,9 @@ func testSendAddressedToAnUnreachableTarget(t *testing.T) {
 		action pipeline {
 			first start;
 			action sender { send 42 to alpha.leaf.count; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	if err == nil {
@@ -2621,9 +2722,9 @@ func testSendAddressedThroughSeveralOccurrences(t *testing.T) {
 		action pipeline {
 			first start;
 			action sender { send 42 to nodes.inPort; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	if err == nil {
@@ -2646,10 +2747,10 @@ func testSendAddressedToAPartNoSiblingTakes(t *testing.T) {
 			first start;
 			action s { send Ping() to receiver; }
 			action other accept p : Ping;
-			done end;
-			then start s;
-			then s other;
-			then other end;
+			done;
+			succession first start then s;
+			succession first s then other;
+			succession first other then done;
 		}
 	}`)
 	if err == nil {
@@ -2669,9 +2770,9 @@ func testInjectedMessageNamesAReceiverNoAcceptHas(t *testing.T) {
 		action pipeline {
 			first start;
 			action other accept n : Integer;
-			done end;
-			then start other;
-			then other end;
+			done;
+			succession first start then other;
+			succession first other then done;
 		}
 	}`))
 	exec, err := ctx.CreateActionExecutor(oneSymbol(t, idx, "P::pipeline"))
@@ -2701,7 +2802,7 @@ func testSendAddressedToAnObjectThatCannotBeBuilt(t *testing.T) {
 				port inPort : PingPort;
 				attribute a = b + 1.0;
 				attribute b = a + 1.0;
-				action listen { first start; done end; then start end; }
+				action listen { first start; done; succession first start then done; }
 			}
 			part alpha : Node;
 		}
@@ -2743,9 +2844,9 @@ func testAcceptDeadlockNeverSatisfied(t *testing.T) {
 			action pipeline {
 				first start;
 				action reader accept n : Integer;
-				done end;
-				then start reader;
-				then reader end;
+				done;
+				succession first start then reader;
+				succession first reader then done;
 			}
 		}`)
 		done <- err
@@ -2785,15 +2886,15 @@ func testAcceptDeadlockReportsEveryWaitingAccept(t *testing.T) {
 			action recorder { assign got := n; }
 			action listener accept text : String;
 			join sync;
-			done end;
-			then start sender;
-			then sender split;
-			then split reader;
-			then split listener;
-			then reader recorder;
-			then recorder sync;
-			then listener sync;
-			then sync end;
+			done;
+			succession first start then sender;
+			succession first sender then split;
+			succession first split then reader;
+			succession first split then listener;
+			succession first reader then recorder;
+			succession first recorder then sync;
+			succession first listener then sync;
+			succession first sync then done;
 		}
 	}`)
 	if err == nil {
@@ -2824,9 +2925,9 @@ func testAcceptStatementDeadlockInALoop(t *testing.T) {
 						accept n : Integer;
 					}
 				}
-				done end;
-				then start waiter;
-				then waiter end;
+				done;
+				succession first start then waiter;
+				succession first waiter then done;
 			}
 		}`)
 		done <- err
@@ -2852,12 +2953,12 @@ func testAcceptStatementDeadlockInALoop(t *testing.T) {
 func testNonNumericTimeTrigger(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting {
 				accept at "noon" then done;
 			}
-			final done;
-			init then waiting;
+			succession first init then waiting;
 		}
 	}`)
 	if err == nil {
@@ -2875,12 +2976,13 @@ func testTimeTriggerOfANonTimeDimension(t *testing.T) {
 		package test {
 			private import SI::*;
 			state Machine {
-				initial init;
+				entry; then init;
+				state init;
 				state waiting {
 					accept after 5 [kg] then done;
 				}
 				state done;
-				init then waiting;
+				succession first init then waiting;
 			}
 		}
 	`))
@@ -2902,12 +3004,13 @@ func testChangeConditionThatNeverHolds(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			attribute ready : Boolean = false;
-			initial init;
+			entry; then init;
+			state init;
 			state waiting {
 				accept when ready then done;
 			}
 			state done;
-			init then waiting;
+			succession first init then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -2927,28 +3030,30 @@ func testChangeConditionThatNeverHolds(t *testing.T) {
 func testForkBranchesShareRegion(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state ready;
-			state working {
-				region left {
-					initial ls;
+			state working parallel {
+				state left {
+					entry; then ls;
+					state ls;
 					state a;
 					state b;
-					then ls a;
+					succession first ls then a;
 				}
-				region right {
-					initial rs;
+				state right {
+					entry; then rs;
+					state rs;
 					state c;
-					then rs c;
+					succession first rs then c;
 				}
 			}
 			fork split;
-			final done;
 
-			init then ready;
-			transition ready to split;
-			transition split to a;
-			transition split to b;
+			succession first init then ready;
+			transition first ready then split;
+			transition first split then a;
+			transition first split then b;
 		}
 	}`)
 	if err == nil {
@@ -2964,14 +3069,14 @@ func testForkBranchesShareRegion(t *testing.T) {
 func testJoinWithOneIncomingBranch(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state ready;
 			join sync;
-			final done;
 
-			init then ready;
-			transition ready to sync;
-			transition sync to done;
+			succession first init then ready;
+			transition first ready then sync;
+			transition first sync then done;
 		}
 	}`)
 	if err == nil {
@@ -2988,24 +3093,26 @@ func testJoinWithOneIncomingBranch(t *testing.T) {
 // resting on a pseudostate.
 func testRegionPseudostateWithoutSatisfiedGuard(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
-		state Machine {
+		state Machine parallel {
 			attribute x : Integer = 9;
 
-			region left {
-				initial ls;
+			state left {
+				entry; then ls;
+				state ls;
 				state a;
 				state b;
-				then ls a;
-				transition a to merge;
+				succession first ls then a;
+				transition first a then merge;
 			}
-			region right {
-				initial rs;
+			state right {
+				entry; then rs;
+				state rs;
 				state c;
-				then rs c;
+				succession first rs then c;
 			}
 			junction merge;
 
-			transition merge to b if x == 1;
+			transition first merge if x == 1 then b;
 		}
 	}`)
 	if err == nil {
@@ -3021,23 +3128,25 @@ func testRegionPseudostateWithoutSatisfiedGuard(t *testing.T) {
 // looping forever.
 func testRegionPseudostateCycle(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
-		state Machine {
-			region left {
-				initial ls;
+		state Machine parallel {
+			state left {
+				entry; then ls;
+				state ls;
 				state a;
-				then ls a;
-				transition a to first;
+				succession first ls then a;
+				transition first a then first;
 			}
-			region right {
-				initial rs;
+			state right {
+				entry; then rs;
+				state rs;
 				state c;
-				then rs c;
+				succession first rs then c;
 			}
 			junction first;
 			junction second;
 
-			transition first to second;
-			transition second to first;
+			transition first first then second;
+			transition first second then first;
 		}
 	}`)
 	if err == nil {
@@ -3058,10 +3167,10 @@ func testDeadlockJoinStarvation(t *testing.T) {
 				first start;
 				action stranded;
 				join sync;
-				done end;
-				then start sync;
-				then stranded sync;
-				then sync end;
+				done;
+				succession first start then sync;
+				succession first stranded then sync;
+				succession first sync then done;
 			}
 		}
 	`
@@ -3092,7 +3201,7 @@ func testForkWithoutASuccessor(t *testing.T) {
 			action broken {
 				first start;
 				fork split;
-				then start split;
+				succession first start then split;
 			}
 		}
 	`
@@ -3112,13 +3221,57 @@ func testForkWithoutASuccessor(t *testing.T) {
 	}
 }
 
+func testExplicitSuccessionMissingEndpoint(t *testing.T) {
+	src := `
+		package test {
+			action broken {
+				action compute;
+				succession first missing then compute;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "broken", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action broken not found")
+	}
+
+	_, err := ctx.CreateActionExecutor(sym)
+	if err == nil || !strings.Contains(err.Error(), "action succession references undefined source node") {
+		t.Fatalf("error = %v, want an explicit succession source diagnostic", err)
+	}
+}
+
+func testControlFlowMissingEndpoint(t *testing.T) {
+	src := `
+		package test {
+			action broken {
+				first start;
+				decide check;
+				succession first start then check;
+				if true then missing;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "broken", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action broken not found")
+	}
+
+	_, err := ctx.CreateActionExecutor(sym)
+	if err == nil || !strings.Contains(err.Error(), `control flow edge references undefined target "missing"`) {
+		t.Fatalf("error = %v, want an undefined control-flow target diagnostic", err)
+	}
+}
+
 func testMergeWithoutASuccessor(t *testing.T) {
 	src := `
 		package test {
 			action broken {
 				first start;
 				merge converge;
-				then start converge;
+				succession first start then converge;
 			}
 		}
 	`
@@ -3193,7 +3346,7 @@ func testFirstNodeWithASecondSuccession(t *testing.T) {
 				action s2;
 				action s3;
 				first s1 then s2;
-				then s1 s3;
+				succession first s1 then s3;
 			}
 		}
 	`
@@ -3253,8 +3406,8 @@ func testFirstNamingAFinalNode(t *testing.T) {
 			action seq {
 				attribute x = 0;
 				action s1 { assign x := 7; }
-				done fin;
-				first fin then s1;
+				done;
+				first done then s1;
 			}
 		}
 	`
@@ -3267,7 +3420,7 @@ func testFirstNamingAFinalNode(t *testing.T) {
 
 	if _, err := ctx.CreateActionExecutor(sym); err == nil {
 		t.Fatal("a first end naming a final node lowered without an error")
-	} else if !strings.Contains(err.Error(), "final node fin") {
+	} else if !strings.Contains(err.Error(), "final node done") {
 		t.Fatalf("error = %q, want it to name the final node", err)
 	}
 }
@@ -3285,14 +3438,14 @@ func testForkBranchesAssigningTheSameFeature(t *testing.T) {
 				action left { assign x := 1; }
 				action right { assign x := 2; }
 				join sync;
-				done end;
+				done;
 
-				then start split;
-				then split left;
-				then split right;
-				then left sync;
-				then right sync;
-				then sync end;
+				succession first start then split;
+				succession first split then left;
+				succession first split then right;
+				succession first left then sync;
+				succession first right then sync;
+				succession first sync then done;
 			}
 		}
 	`
@@ -3348,10 +3501,10 @@ func testDecisionNoSatisfiedGuard(t *testing.T) {
 
 				first start;
 				action selected;
-				done end;
+				done;
 
-				then start choose;
-				then selected end;
+				succession first start then choose;
+				succession first selected then done;
 
 				decide choose;
 				if enabled then selected;
@@ -3379,8 +3532,9 @@ func testStateDanglingTransition(t *testing.T) {
 	src := `
 		package test {
 			state Machine {
-				initial init;
-				init then nowhere; // 'nowhere' state doesn't exist
+				entry; then init;
+				state init;
+				succession first init then nowhere; // 'nowhere' state doesn't exist
 			}
 		}
 	`
@@ -3417,15 +3571,73 @@ func testStateDanglingTransition(t *testing.T) {
 	t.Log("ProcessNextEvent succeeded (dangling transition not exercised)")
 }
 
+func testParallelStateBodyUnsupportedMember(t *testing.T) {
+	src := `
+		package test {
+			action def Warm;
+			state Machine parallel {
+				state left;
+				perform Warm;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("parallel state not found")
+	}
+	_, err := ctx.CreateStateExecutor(sym)
+	if err == nil {
+		t.Fatal("parallel state with an unsupported member succeeded")
+	}
+	if !strings.Contains(err.Error(), "parallel state body contains unsupported member") {
+		t.Fatalf("error = %v, want unsupported parallel-body member", err)
+	}
+}
+
+func testParallelStateRegionWithoutInitial(t *testing.T) {
+	src := `
+		package test {
+			state Machine parallel {
+				state left;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("parallel state not found")
+	}
+	_, err := ctx.CreateStateExecutor(sym)
+	if err == nil {
+		t.Fatal("parallel state with no region initial succeeded")
+	}
+	if !strings.Contains(err.Error(), "region left has no initial state") {
+		t.Fatalf("error = %v, want missing region initial", err)
+	}
+	if !strings.Contains(err.Error(), "entry; then <state>;") {
+		t.Fatalf("error = %v, want initial-state notation guidance", err)
+	}
+}
+
 // testSourcelessAcceptAtTopLevel: sourceless accept...then at top level should error
 func testSourcelessAcceptAtTopLevel(t *testing.T) {
 	src := `
 		package test {
 			state Machine {
-				initial init;
+				entry; then init;
+				state init;
 				state waiting;
 				state active;
-				init then waiting;
+				succession first init then waiting;
 				accept go then active; // ERROR: sourceless at top level
 			}
 		}
@@ -3468,7 +3680,7 @@ func testCalcUnboundParameter(t *testing.T) {
 			calc add {
 				in x: Integer;
 				in y: Integer;
-				return x + y;
+				x + y
 			}
 		}
 	`
@@ -3498,7 +3710,7 @@ func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 		package test {
 			calc grow {
 				in x: Real;
-				return exp(x);
+				exp(x)
 			}
 		}
 	`
@@ -3530,7 +3742,7 @@ func testCalcUnboundKeywordNamedParameter(t *testing.T) {
 			calc classify {
 				in 'type': Integer;
 				in 'state': Integer;
-				return 'type' + 'state';
+				'type' + 'state'
 			}
 		}
 	`
@@ -3558,7 +3770,7 @@ func testCalcTooManyArguments(t *testing.T) {
 		package test {
 			calc double {
 				in x: Integer;
-				return x * 2;
+				x * 2
 			}
 		}
 	`
@@ -3586,7 +3798,7 @@ func testCalcUnknownNamedArgument(t *testing.T) {
 		package test {
 			calc scale {
 				in x: Integer = 1;
-				return x * 2;
+				x * 2
 			}
 		}
 	`
@@ -3668,7 +3880,7 @@ func testCalcDirectRecursion(t *testing.T) {
 		package test {
 			calc countdown {
 				in n: Integer;
-				return countdown(n - 1);
+				countdown(n - 1)
 			}
 		}
 	`
@@ -3682,12 +3894,12 @@ func testCalcMutualRecursion(t *testing.T) {
 		package test {
 			calc ping {
 				in n: Integer;
-				return pong(n);
+				pong(n)
 			}
 
 			calc pong {
 				in n: Integer;
-				return ping(n);
+				ping(n)
 			}
 		}
 	`
@@ -3781,7 +3993,7 @@ func testConstraintMissingFeature(t *testing.T) {
 	src := `
 		package test {
 			constraint broken {
-				assert nonexistent > 0; // 'nonexistent' feature doesn't exist
+				nonexistent > 0 // 'nonexistent' feature doesn't exist
 			}
 		}
 	`
@@ -4152,7 +4364,7 @@ func testRequirementFeatureWithoutAValue(t *testing.T) {
 			requirement def TouchdownRequirement {
 				attribute actualVerticalSpeed;
 				attribute maxVerticalSpeed = 1.5;
-				require actualVerticalSpeed <= maxVerticalSpeed;
+				require constraint { actualVerticalSpeed <= maxVerticalSpeed }
 			}
 		}
 	`
@@ -4190,7 +4402,7 @@ func testRequirementFeaturesValuedFromEachOther(t *testing.T) {
 			requirement def R {
 				attribute a = b;
 				attribute b = a;
-				require a <= b;
+				require constraint { a <= b }
 			}
 		}
 	`
@@ -4223,7 +4435,7 @@ func testStepBudgetExceeded(t *testing.T) {
 		package test {
 			calc deep {
 				in x : Integer;
-				return x + x + x + x + x + x + x + x;
+				x + x + x + x + x + x + x + x
 			}
 		}
 	`
@@ -4312,9 +4524,9 @@ func testNonTerminatingLoopExhaustsStepBudget(t *testing.T) {
 						assign total := total + 1;
 					}
 				}
-				done end;
-				then start spin;
-				then spin end;
+				done;
+				succession first start then spin;
+				succession first spin then done;
 			}
 		}
 	`
@@ -4357,9 +4569,9 @@ func testLoopBodyDeclarationDoesNotLeak(t *testing.T) {
 						}
 					}
 				}
-				done end;
-				then start accumulate;
-				then accumulate end;
+				done;
+				succession first start then accumulate;
+				succession first accumulate then done;
 			}
 		}
 	`
@@ -4405,9 +4617,9 @@ func testLoopBodyOfUnexecutableStatement(t *testing.T) {
 						assign total := total + 1;
 					}
 				}
-				done end;
-				then start accumulate;
-				then accumulate end;
+				done;
+				succession first start then accumulate;
+				succession first accumulate then done;
 			}
 		}
 	`
@@ -4445,9 +4657,9 @@ func testBlockFlowOfUnexecutableMember(t *testing.T) {
 						part inner;
 					}
 				}
-				done end;
-				then start accumulate;
-				then accumulate end;
+				done;
+				succession first start then accumulate;
+				succession first accumulate then done;
 			}
 		}
 	`
@@ -4483,9 +4695,9 @@ func testNonTerminatingLoopPerformingAnAction(t *testing.T) {
 						assign total := total + 1;
 					}
 				}
-				done end;
-				then start spin;
-				then spin end;
+				done;
+				succession first start then spin;
+				succession first spin then done;
 			}
 
 			action bump {
@@ -4494,9 +4706,9 @@ func testNonTerminatingLoopPerformingAnAction(t *testing.T) {
 				action run {
 					assign spun := 1;
 				}
-				done finish;
-				then begin run;
-				then run finish;
+				done;
+				succession first begin then run;
+				succession first run then done;
 			}
 		}
 	`
@@ -4553,9 +4765,9 @@ func testForOverAScalar(t *testing.T) {
 						assign visited := visited + 1;
 					}
 				}
-				done end;
-				then start iterate;
-				then iterate end;
+				done;
+				succession first start then iterate;
+				succession first iterate then done;
 			}
 		}
 	`
@@ -4597,8 +4809,8 @@ func testStatementDirectlyInAnActionBody(t *testing.T) {
 						attribute total : Integer = 0;
 						first start;
 						` + stmt + `
-						done end;
-						then start end;
+						done;
+						succession first start then done;
 					}
 				}
 			`
@@ -4637,10 +4849,10 @@ func testFlowEndNamingNoNode(t *testing.T) {
 						first start;
 						action generate { out engineTorque : Integer; assign engineTorque := 1; }
 						action amplify { in torqueIn : Integer; }
-						done end;
-						then start generate;
-						then generate amplify;
-						then amplify end;
+						done;
+						succession first start then generate;
+						succession first generate then amplify;
+						succession first amplify then done;
 						` + flow + `
 					}
 				}
@@ -4672,10 +4884,10 @@ func testFlowNamingNoPin(t *testing.T) {
 			first start;
 			action generate { out engineTorque : Integer; assign engineTorque := 1; }
 			action amplify { in engineTorque : Integer; }
-			done end;
-			then start generate;
-			then generate amplify;
-			then amplify end;
+			done;
+			succession first start then generate;
+			succession first generate then amplify;
+			succession first amplify then done;
 			flow generateToAmplify from generate to amplify;
 		}
 	}`)
@@ -4698,10 +4910,10 @@ func testAcceptPayloadWithoutAValue(t *testing.T) {
 			first start;
 			action sender { send Ping() to reader; }
 			action reader accept p : Ping;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err == nil {
@@ -4725,10 +4937,10 @@ func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
 			first start;
 			action reader { assign seen := msg; }
 			action waiter accept msg : Integer;
-			done end;
-			then start reader;
-			then reader waiter;
-			then waiter end;
+			done;
+			succession first start then reader;
+			succession first reader then waiter;
+			succession first waiter then done;
 		}
 	}`)
 	if !errors.Is(err, ErrUnresolvedReference) {
@@ -4749,10 +4961,10 @@ func testFlowFromANodeThatProducedNothing(t *testing.T) {
 				first start;
 				action generate { out engineTorque : Integer; }
 				action amplify { in torqueIn : Integer; }
-				done end;
-				then start generate;
-				then generate amplify;
-				then amplify end;
+				done;
+				succession first start then generate;
+				succession first generate then amplify;
+				succession first amplify then done;
 				flow generateToAmplify from generate.engineTorque to amplify.torqueIn;
 			}
 		}
@@ -4790,10 +5002,10 @@ func testActionAcceptTimeTrigger(t *testing.T) {
 						first start;
 						action waitForIt ` + trigger + `;
 						action work { assign done := 1; }
-						done end;
-						then start waitForIt;
-						then waitForIt work;
-						then work end;
+						done;
+						succession first start then waitForIt;
+						succession first waitForIt then work;
+						succession first work then done;
 					}
 				}
 			`
@@ -4823,9 +5035,9 @@ func testActionAcceptNonBooleanChangeTrigger(t *testing.T) {
 				attribute temp : Integer = 10;
 				first start;
 				action awaitWarm accept when temp;
-				done end;
-				then start awaitWarm;
-				then awaitWarm end;
+				done;
+				succession first start then awaitWarm;
+				succession first awaitWarm then done;
 			}
 		}
 	`
@@ -4851,8 +5063,8 @@ func testActionBodyUnresolvedUnit(t *testing.T) {
 			action descend {
 				attribute h : Real = 500.0 [furlong];
 				first start;
-				done end;
-				then start end;
+				done;
+				succession first start then done;
 			}
 		}
 	`))
@@ -4882,9 +5094,9 @@ func testActionBodyUnresolvedFeature(t *testing.T) {
 				action bump {
 					assign total := missingName + 1;
 				}
-				done end;
-				then start bump;
-				then bump end;
+				done;
+				succession first start then bump;
+				succession first bump then done;
 			}
 		}
 	`))
@@ -4910,9 +5122,10 @@ func testStateBodyUnresolvedUnit(t *testing.T) {
 			public import ScalarValues::*;
 			state monitor {
 				attribute speed : Real = 1.5 [knot];
-				initial start;
+				entry; then start;
+				state start;
 				state running;
-				start then running;
+				succession first start then running;
 			}
 		}
 	`))
@@ -5038,7 +5251,7 @@ func testQuantityIncommensurableComparison(t *testing.T) {
 			requirement def Touchdown {
 				attribute speed = 1.5 [m/s];
 				attribute duration = 2.0 [s];
-				require speed <= duration;
+				require constraint { speed <= duration }
 			}
 		}
 	`))
@@ -6710,7 +6923,7 @@ func testOperationConstraintBodyCannotBeEvaluated(t *testing.T) {
 	src := `
 	package test {
 		part def Tank {
-			constraint broken { assert missing > 0; }
+			constraint broken { missing > 0 }
 		}
 	}`
 	ctx, inst, err := instantiateInSource(t, src, "test::Tank")

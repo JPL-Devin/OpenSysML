@@ -1,14 +1,14 @@
-// A calc whose body returns a value keeps that value to itself: an output states
-// its own binding, and reading it answers that binding rather than whatever the
-// `return` computed, even when the invocation hands that output back.
+// A calc whose body computes a result keeps that value to itself: an output
+// states its own binding, and reading it answers that binding rather than the
+// result expression, even when the invocation hands that output back.
 package test {
 	private import ScalarValues::*;
 
-	// The return and the output compute different things.
+	// The result expression and the output compute different things.
 	calc def Apart {
 		in n : Integer;
 		out a : Integer = n + 1;
-		return n * 100;
+		n * 100
 	}
 
 	// The return names the output, so the two agree.
@@ -18,12 +18,12 @@ package test {
 		return r;
 	}
 
-	// Two valued outputs designate no result, and the return is the invocation's.
+	// Two valued outputs designate no result, so the result expression is the invocation's.
 	calc def Both {
 		in n : Integer;
 		out a : Integer = n + 1;
 		out b : Integer = n + 2;
-		return n * 100;
+		n * 100
 	}
 
 	part h {

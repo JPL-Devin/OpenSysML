@@ -27,10 +27,10 @@ package test {
 			}
 		}
 
-		done end;
+		done;
 
-		then start choose;
-		then choose end;
+		succession first start then choose;
+		succession first choose then done;
 	}
 
 	action def Halve {
@@ -43,9 +43,9 @@ package test {
 			assign halved := result / 2;
 		}
 
-		done finish;
+		done;
 
-		then begin compute;
-		then compute finish;
+		succession first begin then compute;
+		succession first compute then done;
 	}
 }

@@ -2,6 +2,7 @@ package rdf
 
 import (
 	"regexp"
+	"slices"
 	"testing"
 )
 
@@ -70,6 +71,64 @@ func TestDecodeElementIDRejectsMalformedIDs(t *testing.T) {
 	} {
 		if got, ok := DecodeElementID(id); ok {
 			t.Errorf("DecodeElementID(%q) = %q, want a rejection", id, got)
+		}
+	}
+}
+
+// A membership id is the member's id plus a marker no element id can carry, so
+// it is reversible and can never name an element.
+func TestOwningMembershipIDRoundTripsAndCannotCollide(t *testing.T) {
+	for _, qname := range []string{
+		"Vehicle", "Demo::Vehicle", "A_B::C", "Importer::@0", "日本::語", "A::B_om",
+	} {
+		id := OwningMembershipID(qname)
+		if !idAlphabet.MatchString(id) {
+			t.Errorf("OwningMembershipID(%q) = %q is outside [A-Za-z0-9_-]+", qname, id)
+		}
+		if got, ok := DecodeOwningMembershipID(id); !ok || got != qname {
+			t.Errorf("DecodeOwningMembershipID(%q) = %q, %v, want %q", id, got, ok, qname)
+		}
+		if _, ok := DecodeElementID(id); ok {
+			t.Errorf("%q decodes as an element id, so a membership can be mistaken for an element", id)
+		}
+		if other, ok := DecodeOwningMembershipID(EncodeElementID(qname)); ok {
+			t.Errorf("the element id of %q reads as the membership of %q", qname, other)
+		}
+	}
+}
+
+// An expression node's id is its owner's id plus the positions leading to it, so
+// it is reversible, valid where an element id is, and never names an element.
+func TestExpressionNodeIDRoundTripsAndCannotCollide(t *testing.T) {
+	for _, qname := range []string{
+		"Vehicle", "Demo::Rover::wheels", "A_B::C", "日本::語", "A::B_pvalue",
+		// A name segment starting with 'p' puts the separator inside the owner id.
+		"A::part", "Demo::port::p", "P::p::pvalue",
+	} {
+		for _, positions := range [][]string{
+			{"value"}, {"upperBound"}, {"condition", "a0"}, {"end0"}, {"a b"},
+		} {
+			id := EncodeElementID(qname)
+			for _, position := range positions {
+				id = ExpressionNodeID(id, position)
+			}
+			if !idAlphabet.MatchString(id) {
+				t.Errorf("the id %q of %q at %v is outside [A-Za-z0-9_-]+", id, qname, positions)
+			}
+			owner, got, ok := DecodeExpressionNodeID(id)
+			if !ok || owner != qname || !slices.Equal(got, positions) {
+				t.Errorf("DecodeExpressionNodeID(%q) = %q, %v, %v, want %q, %v",
+					id, owner, got, ok, qname, positions)
+			}
+			if _, ok := DecodeElementID(id); ok {
+				t.Errorf("%q decodes as an element id, so a node can be mistaken for an element", id)
+			}
+			if _, ok := DecodeOwningMembershipID(id); ok {
+				t.Errorf("%q decodes as a membership id", id)
+			}
+		}
+		if _, _, ok := DecodeExpressionNodeID(EncodeElementID(qname)); ok {
+			t.Errorf("the element id of %q reads as an expression node", qname)
 		}
 	}
 }

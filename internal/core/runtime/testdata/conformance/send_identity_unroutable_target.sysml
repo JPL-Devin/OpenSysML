@@ -15,8 +15,8 @@ package SendIdentityUnroutable {
 	action ship {
 		first start;
 		action sender { send Ping() to alpha.count; }
-		done end;
-		then start sender;
-		then sender end;
+		done;
+		succession first start then sender;
+		succession first sender then done;
 	}
 }

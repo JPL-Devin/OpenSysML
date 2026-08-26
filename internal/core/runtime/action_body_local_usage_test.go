@@ -23,9 +23,9 @@ func TestActionBodyLocalUsageBindsCurrentValues(t *testing.T) {
 					calc t : Twice { in k = v; }
 					assign r := t.d;
 				}
-				done end;
-				then start go;
-				then go end;
+				done;
+				succession first start then go;
+				succession first go then done;
 			}
 		}
 	`
@@ -65,9 +65,9 @@ func TestActionBodyLocalUsageBindsPerIteration(t *testing.T) {
 						assign acc := acc + t.d;
 					}
 				}
-				done end;
-				then start go;
-				then go end;
+				done;
+				succession first start then go;
+				succession first go then done;
 			}
 		}
 	`

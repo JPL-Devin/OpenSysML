@@ -46,9 +46,10 @@ func TestClassifierBehaviorAnnotatedBodyIsABody(t *testing.T) {
 			part def Monitor {
 				exhibit state modes {
 					doc /* the operating modes */
-					initial start;
+					entry; then start;
+					state start;
 					state idle;
-					start then idle;
+					succession first start then idle;
 				}
 			}
 		}

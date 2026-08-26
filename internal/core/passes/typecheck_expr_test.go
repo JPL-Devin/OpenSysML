@@ -86,21 +86,21 @@ func TestExprUntypedFeatureBindingSkipped(t *testing.T) {
 
 func TestExprAddIntegerAndStringRejected(t *testing.T) {
 	wantOneDiag(t,
-		`package P { calc def c { return 1 + "s"; } }`,
+		`package P { calc def c { 1 + "s" } }`,
 		"operator '+' is not defined for Natural and String")
 }
 
 func TestExprStringConcatenationOK(t *testing.T) {
-	wantNoDiags(t, `package P { calc def c { return "a" + "b"; } }`)
+	wantNoDiags(t, `package P { calc def c { "a" + "b" } }`)
 }
 
 func TestExprIntegerRealMixOK(t *testing.T) {
-	wantNoDiags(t, `package P { calc def c { return 1 + 2.5; } }`)
+	wantNoDiags(t, `package P { calc def c { 1 + 2.5 } }`)
 }
 
 func TestExprDivisionOfStringsRejected(t *testing.T) {
 	wantOneDiag(t,
-		`package P { calc def c { return "a" / "b"; } }`,
+		`package P { calc def c { "a" / "b" } }`,
 		"operator '/' requires numeric operands")
 }
 
@@ -131,24 +131,24 @@ func TestExprRealDivisionStaysReal(t *testing.T) {
 
 func TestExprNotOnIntegerRejected(t *testing.T) {
 	wantOneDiag(t,
-		`package P { calc def c { return not 3; } }`,
+		`package P { calc def c { not 3 } }`,
 		"operator 'not' requires a Boolean operand")
 }
 
 func TestExprAndOnIntegerRejected(t *testing.T) {
 	wantOneDiag(t,
-		`package P { calc def c { return 1 and true; } }`,
+		`package P { calc def c { 1 and true } }`,
 		"requires Boolean operands")
 }
 
 func TestExprComparisonOfBooleanRejected(t *testing.T) {
 	wantOneDiag(t,
-		`package P { calc def c { return true < false; } }`,
+		`package P { calc def c { true < false } }`,
 		"operator '<' is not defined for Boolean and Boolean")
 }
 
 func TestExprEqualityAcrossDisjointTypesWarns(t *testing.T) {
-	diags := exprDiags(t, `package P { calc def c { return 1 == "a"; } }`)
+	diags := exprDiags(t, `package P { calc def c { 1 == "a" } }`)
 	if len(diags) != 1 {
 		t.Fatalf("expected exactly one type diagnostic, got %v", diags)
 	}
@@ -158,7 +158,7 @@ func TestExprEqualityAcrossDisjointTypesWarns(t *testing.T) {
 }
 
 func TestExprInequalityAcrossDisjointTypesWarnsAlwaysTrue(t *testing.T) {
-	diags := exprDiags(t, `package P { calc def c { return 1 != "a"; } }`)
+	diags := exprDiags(t, `package P { calc def c { 1 != "a" } }`)
 	if len(diags) != 1 {
 		t.Fatalf("expected exactly one type diagnostic, got %v", diags)
 	}
@@ -168,7 +168,7 @@ func TestExprInequalityAcrossDisjointTypesWarnsAlwaysTrue(t *testing.T) {
 }
 
 func TestExprNumericEqualityOK(t *testing.T) {
-	wantNoDiags(t, `package P { calc def c { return 1 == 2.0; } }`)
+	wantNoDiags(t, `package P { calc def c { 1 == 2.0 } }`)
 }
 
 func TestExprConstraintMustBeBoolean(t *testing.T) {
@@ -188,7 +188,7 @@ func TestExprTransitionGuardMustBeBoolean(t *testing.T) {
 			state def S {
 				state a;
 				state b;
-				transition a to b if temp;
+				transition first a if temp then b;
 			}
 		}
 	}`, "transition guard must be Boolean, found Integer")
@@ -204,7 +204,7 @@ func TestExprChangeEventConditionMustBeBoolean(t *testing.T) {
 			state def S {
 				state a;
 				state b;
-				transition a to b when temp + 1;
+				transition first a when temp + 1 then b;
 			}
 		}
 	}`, "change event condition must be Boolean, found Integer")
@@ -217,7 +217,7 @@ func TestExprChangeEventConditionOK(t *testing.T) {
 			state def S {
 				state a;
 				state b;
-				transition a to b when temp > 5;
+				transition first a when temp > 5 then b;
 			}
 		}
 	}`)
@@ -260,7 +260,7 @@ func TestExprTransitionGuardComparisonOK(t *testing.T) {
 			state def S {
 				state a;
 				state b;
-				transition a to b if temp > 5;
+				transition first a if temp > 5 then b;
 			}
 		}
 	}`)
@@ -269,38 +269,38 @@ func TestExprTransitionGuardComparisonOK(t *testing.T) {
 const calcAdd = `calc def add {
 	in a : ScalarValues::Integer;
 	in b : ScalarValues::Integer;
-	return a + b;
+	a + b
 }
 `
 
 func TestExprInvocationTooFewArguments(t *testing.T) {
 	wantOneDiag(t,
-		`package P { `+calcAdd+` calc c { return add(1); } }`,
+		`package P { `+calcAdd+` calc c { add(1) } }`,
 		"add requires 2 argument(s), found 1")
 }
 
 func TestExprInvocationTooManyArguments(t *testing.T) {
 	wantOneDiag(t,
-		`package P { `+calcAdd+` calc c { return add(1, 2, 3); } }`,
+		`package P { `+calcAdd+` calc c { add(1, 2, 3) } }`,
 		"add takes 2 argument(s), found 3")
 }
 
 // An argument expression is typed once, so an error inside it is reported once.
 func TestExprInvocationArgumentErrorReportedOnce(t *testing.T) {
 	wantOneDiag(t,
-		`package P { `+calcAdd+` calc c { return add(1 + "s", 2); } }`,
+		`package P { `+calcAdd+` calc c { add(1 + "s", 2) } }`,
 		`operator '+' is not defined for Natural and String`)
 }
 
 func TestExprInvocationCorrectArityOK(t *testing.T) {
-	wantNoDiags(t, `package P { `+calcAdd+` calc c { return add(1, 2); } }`)
+	wantNoDiags(t, `package P { `+calcAdd+` calc c { add(1, 2) } }`)
 }
 
 func TestExprInvocationThroughAliasChecksArguments(t *testing.T) {
 	const model = `package P {
 		` + calcAdd + `
 		alias addAlias for add;
-		calc c { return addAlias(%s); }
+		calc c { addAlias(%s) }
 	}`
 	wantOneDiag(t, fmt.Sprintf(model, `1`), "add requires 2 argument(s), found 1")
 	wantOneDiag(t, fmt.Sprintf(model, `1, "two"`),
@@ -310,7 +310,7 @@ func TestExprInvocationThroughAliasChecksArguments(t *testing.T) {
 
 func TestExprInvocationArgumentTypeMismatch(t *testing.T) {
 	wantOneDiag(t,
-		`package P { `+calcAdd+` calc c { return add(1, "two"); } }`,
+		`package P { `+calcAdd+` calc c { add(1, "two") } }`,
 		`argument 2 of add expects Integer, found String`)
 }
 
@@ -319,15 +319,15 @@ func TestExprInvocationDefaultedParameterOptional(t *testing.T) {
 		calc def scale {
 			in a : ScalarValues::Integer;
 			in factor : ScalarValues::Integer = 2;
-			return a * factor;
+			a * factor
 		}
-		calc c { return scale(3); }
+		calc c { scale(3) }
 	}`)
 }
 
 func TestExprInvocationUnknownNamedArgument(t *testing.T) {
 	wantOneDiag(t,
-		`package P { `+calcAdd+` calc c { return add(a = 1, c = 2); } }`,
+		`package P { `+calcAdd+` calc c { add(a = 1, c = 2) } }`,
 		`add has no parameter named "c"`)
 }
 
@@ -335,12 +335,12 @@ func TestExprInvocationUnknownNamedArgument(t *testing.T) {
 // no parameter for it (runtime/eval.go reports the same call).
 func TestExprInvocationReceiverWithNamedArguments(t *testing.T) {
 	wantOneDiag(t,
-		`package P { `+calcAdd+` calc c { return 1->add(a = 1, b = 2); } }`,
+		`package P { `+calcAdd+` calc c { 1->add(a = 1, b = 2) } }`,
 		"add cannot be called with a receiver and named arguments")
 }
 
 func TestExprInvocationNamedArgumentsOK(t *testing.T) {
-	wantNoDiags(t, `package P { `+calcAdd+` calc c { return add(a = 1, b = 2); } }`)
+	wantNoDiags(t, `package P { `+calcAdd+` calc c { add(a = 1, b = 2) } }`)
 }
 
 func TestExprLiteralConformsToNatural(t *testing.T) {
@@ -357,12 +357,12 @@ func TestExprNegatedLiteralIsNotNatural(t *testing.T) {
 }
 
 func TestExprArrowFormReceiverCountsAsFirstArgument(t *testing.T) {
-	wantNoDiags(t, `package P { `+calcAdd+` calc c { return 1->add(2); } }`)
+	wantNoDiags(t, `package P { `+calcAdd+` calc c { 1->add(2) } }`)
 }
 
 func TestExprArrowFormArityStillChecked(t *testing.T) {
 	wantOneDiag(t,
-		`package P { `+calcAdd+` calc c { return 1->add(2, 3); } }`,
+		`package P { `+calcAdd+` calc c { 1->add(2, 3) } }`,
 		"add takes 2 argument(s), found 3")
 }
 
@@ -370,7 +370,7 @@ func TestExprInheritedParametersCounted(t *testing.T) {
 	wantNoDiags(t, `package P {
 		`+calcAdd+`
 		calc def Add2 :> add;
-		calc c { return Add2(1, 2); }
+		calc c { Add2(1, 2) }
 	}`)
 }
 
@@ -382,7 +382,7 @@ func TestExprPartiallyRedefinedParametersKeepInheritedSignature(t *testing.T) {
 		calc def AddPositive :> add {
 			in a :>> a : ScalarValues::Real;
 		}
-		calc c { return AddPositive(1, 2); }
+		calc c { AddPositive(1, 2) }
 	}`)
 }
 
@@ -393,7 +393,7 @@ func TestExprMultipleSupertypesKeepDeclarationOrder(t *testing.T) {
 		calc def First { in first : ScalarValues::String; }
 		calc def Second { in second : ScalarValues::Integer; }
 		calc def Both :> First, Second;
-		calc c { return Both(%s); }
+		calc c { Both(%s) }
 	}`
 	wantNoDiags(t, fmt.Sprintf(model, `"s", 1`))
 	// Were the supertypes folded in reverse, `second` would come first and the
@@ -409,7 +409,7 @@ func TestExprRedefinedParameterTypeChecked(t *testing.T) {
 		calc def AddText :> add {
 			in a :>> a : ScalarValues::String;
 		}
-		calc c { return AddText(1, 2); }
+		calc c { AddText(1, 2) }
 	}`, "argument 1 of AddText expects String, found Natural")
 }
 
@@ -421,7 +421,7 @@ func TestExprRenamedParameterRedefinesByPosition(t *testing.T) {
 		calc def Convert :> add {
 			in x : ScalarValues::String;
 		}
-		calc c { return Convert(%s); }
+		calc c { Convert(%s) }
 	}`
 	// `x` redefines `a`, so the signature stays (x, b), not (a, b, x).
 	wantOneDiag(t, fmt.Sprintf(model, `1, 2`),
@@ -436,7 +436,7 @@ func TestExprRedeclaredParametersMatchByPositionNotName(t *testing.T) {
 	const model = `package P {
 		calc def Swap { in a : ScalarValues::String; in b : ScalarValues::Integer; }
 		calc def Swapped :> Swap { in b : ScalarValues::String; in a : ScalarValues::Integer; }
-		calc c { return Swapped(%s); }
+		calc c { Swapped(%s) }
 	}`
 	wantNoDiags(t, fmt.Sprintf(model, `"s", 1`))
 	// Matched by name instead, the signature would be (a : Integer, b : String)
@@ -453,7 +453,7 @@ func TestExprOutParameterOccupiesAPosition(t *testing.T) {
 	const model = `package P {
 		calc def C { in a : ScalarValues::String; in b : ScalarValues::Integer; }
 		calc def D :> C { out y; in x : ScalarValues::Integer; }
-		calc c { return D(%s); }
+		calc c { D(%s) }
 	}`
 	// D's parameters are (y, x, a): `x` is at position 1, so it redefines `b`,
 	// and `a` is inherited because `out y` does not redefine it.
@@ -465,7 +465,7 @@ func TestExprOutParameterOccupiesAPosition(t *testing.T) {
 	wantNoDiags(t, `package P {
 		calc def C { in a : ScalarValues::Integer; in b : ScalarValues::Integer; }
 		calc def D :> C { out y; }
-		calc c { return D(1, 2); }
+		calc c { D(1, 2) }
 	}`)
 }
 
@@ -476,7 +476,7 @@ func TestExprExplicitRedefinitionClaimsItsTarget(t *testing.T) {
 	const model = `package P {
 		calc def C { in a : ScalarValues::String; in b : ScalarValues::Integer; }
 		calc def D :> C { in bb :>> b; }
-		calc c { return D(%s); }
+		calc c { D(%s) }
 	}`
 	// D's parameters are (bb, a), not (bb, b).
 	wantNoDiags(t, fmt.Sprintf(model, `1, "s"`))
@@ -491,7 +491,7 @@ func TestExprPositionalClaimIsByDeclarationIndex(t *testing.T) {
 	const model = `package P {
 		calc def C { in a : ScalarValues::String; in b : ScalarValues::Integer; in c : ScalarValues::Boolean; }
 		calc def D :> C { in z :>> c; in w; }
-		calc c { return D(%s); }
+		calc c { D(%s) }
 	}`
 	// D's parameters are (z, w, a): `z` claims `c`, `w` claims `b` by position.
 	wantOneDiag(t, fmt.Sprintf(model, `true, 1, "s", 1`),
@@ -503,14 +503,14 @@ func TestExprTypedCalcUsageInheritsParameters(t *testing.T) {
 	wantNoDiags(t, `package P {
 		`+calcAdd+`
 		calc myAdd : add;
-		calc c { return myAdd(1, 2); }
+		calc c { myAdd(1, 2) }
 	}`)
 }
 
 func TestExprParameterlessCalcRejectsArguments(t *testing.T) {
 	wantOneDiag(t, `package P {
-		calc def zero { return 0; }
-		calc c { return zero(1); }
+		calc def zero { 0 }
+		calc c { zero(1) }
 	}`, "zero takes 0 argument(s), found 1")
 }
 

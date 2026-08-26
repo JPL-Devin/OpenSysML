@@ -2,9 +2,10 @@
 
 ## Overview
 
-Implement orthogonal regions (concurrent substates) for state machines. `region` is an OpenSysML
-extension: SysML v2 has no notation for it, and the bundled libraries have no region performance,
-so UML 2.5.1 §14.2.3.3 is the reference semantics. The nearest library anchor is that only
+Implement orthogonal regions (concurrent substates) for state machines. The notation is standard:
+a state whose body is marked `parallel` (`SysML.xtext:1745`, `StateUsage::isParallel`) makes each of
+its state substates a region. The bundled libraries have no region performance, so UML 2.5.1
+§14.2.3.3 is the reference semantics. The nearest library anchor is that only
 `States.sysml` `exclusiveStates` are sequenced (`succession stateSequencing first [0..1]
 exclusiveStates then [0..1] exclusiveStates`), so substates outside that set are not ordered
 against each other; concurrency across regions is not derived from it.
@@ -245,59 +246,49 @@ func (e *StateExecutor) fireTransition(trans *TransitionEdge, event *Event) erro
 }
 ```
 
-## Parser Changes
+## Notation and lowering
 
-**Need to populate `StateNode.Regions` field:**
+The notation carries no region member: orthogonality is the `parallel` marker before a state body,
+and each state substate of a parallel body is one region, in declaration order.
 
-```go
-func (p *parser) parseStateMember(members []ast.Node) ast.Node {
-    // ... existing entry/exit/do/transition parsing ...
-    
-    // NEW: Parse region keyword
-    if p.acceptKeyword("region") {
-        region := &ast.StateRegion{
-            Name: p.expectIdent().Name,
-        }
-        p.expect(token.LBrace)
-        
-        // Parse states within region
-        for !p.at(token.RBrace) {
-            if state := p.parseStateMember(members); state != nil {
-                region.States = append(region.States, state)
-            }
-        }
-        
-        p.expect(token.RBrace)
-        return region
-    }
-    
-    // ... rest of existing logic ...
+```sysml
+state working parallel {
+    state left { entry; then building; state building; }
+    state right { entry; then checking; state checking; }
 }
 ```
+
+`internal/core/lower/state_graph.go` synthesizes one `ast.StateRegion` per state substate
+(`parallelRegions`, `isParallelRegionMember`), named after that substate, and fills `RegionOf`,
+`RegionOwner`, `RegionInitials` and `CompositeStates` from it. The parallel state itself keeps what
+it declares directly — its behaviors, `defer`, its pseudostates and the edges between them — so a
+choice its regions branch through is owned by the parallel state, not by a region.
 
 ## Test Cases
 
 ### Conformance Test: state_orthogonal_regions.sysml
 
 ```sysml
-state def TrafficLight {
-    region pedestrian {
-        initial start;
+state def TrafficLight parallel {
+    state pedestrian {
+        entry; then start;
+        state start;
         state Walk;
         state DontWalk;
         first start then Walk;
-        transition Walk to DontWalk when timer > 5;
+        transition first Walk when timer > 5 then DontWalk;
     }
     
-    region vehicle {
-        initial start;
+    state vehicle {
+        entry; then start;
+        state start;
         state Green;
         state Yellow;
         state Red;
         first start then Green;
-        transition Green to Yellow when timer > 30;
-        transition Yellow to Red when timer > 3;
-        transition Red to Green when timer > 20;
+        transition first Green when timer > 30 then Yellow;
+        transition first Yellow when timer > 3 then Red;
+        transition first Red when timer > 20 then Green;
     }
 }
 ```
@@ -312,18 +303,21 @@ state def TrafficLight {
 
 ```sysml
 state def Parallel {
-    initial start;
+    entry; then start;
+    state start;
     state Sequential;
     
-    state Composite {
-        region A {
-            initial startA;
+    state Composite parallel {
+        state A {
+            entry; then startA;
+            state startA;
             state TaskA;
             first startA then TaskA;
         }
         
-        region B {
-            initial startB;
+        state B {
+            entry; then startB;
+            state startB;
             state TaskB;
             first startB then TaskB;
         }
@@ -332,7 +326,7 @@ state def Parallel {
     state Done;
     
     // FORK: Sequential → Composite (enters both regions)
-    transition Sequential to Composite when fork;
+    transition first Sequential when fork then Composite;
     
     // JOIN: Both regions must be in specific states
     transition join {
@@ -345,7 +339,7 @@ state def Parallel {
 
 ## Implementation Plan
 
-1. **Phase 1:** Update AST + Parser (populate Regions field)
+1. **Phase 1:** Synthesize a region per state substate of a `parallel` body when lowering
 2. **Phase 2:** Add StateConfiguration struct + activeConfig field
 3. **Phase 3:** Refactor enterState/exitState to handle regions
 4. **Phase 4:** Update ProcessNextEvent to broadcast events

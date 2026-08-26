@@ -31,5 +31,4 @@
         (Membership visibility="default"
           (Usage kind="enum" name="temp" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
             (InvocationExpr type="inner"
-              (FeatureReference name="x"))))
-        (*ast.ResultMember)))))
+              (FeatureReference name="x"))))))))

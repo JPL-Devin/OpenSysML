@@ -3,5 +3,5 @@ stmt assign total
     eval feature total -> 0
     eval literal 3 -> 3
   eval operator + -> 3
-step 2: token 1@end
+step 2: token 1@done
 step 3: no active tokens

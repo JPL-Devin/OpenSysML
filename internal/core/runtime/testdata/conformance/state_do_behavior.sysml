@@ -3,15 +3,15 @@ package test {
     state TestDo {
         attribute result : Integer = 0;
         
-        initial init;
+        entry; then init;
+        state init;
         state processing {
             do {
                 result = result + 10;
             }
         }
-        final done;
         
-        init then processing;
-        processing then done;
+        succession first init then processing;
+        succession first processing then done;
     }
 }

@@ -3,22 +3,22 @@ package JunctionTest {
         attribute status : String = "unknown";
         attribute priority : Integer = 2;
         
-        initial init;
+        entry; then init;
+        state init;
         state start;
         junction routeDecision;
         state highPriority;
         state normalPriority;
-        final done;
         
-        init then start;
-        transition start to routeDecision;
-        transition routeDecision to highPriority if priority > 5;
-        transition routeDecision to normalPriority;  // else branch
+        succession first init then start;
+        transition first start then routeDecision;
+        transition first routeDecision if priority > 5 then highPriority;
+        transition first routeDecision then normalPriority;  // else branch
         
         entry highPriority { assign status := "high"; }
         entry normalPriority { assign status := "normal"; }
         
-        transition highPriority to done;
-        transition normalPriority to done;
+        transition first highPriority then done;
+        transition first normalPriority then done;
     }
 }

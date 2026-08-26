@@ -191,8 +191,6 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// The node's own name is a label, not a reference.
 		c.add(scope, d.Successor)
 		c.expr(scope, d.Guard)
-	case *ast.ResultMember:
-		c.expr(scope, d.Expression)
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
 		c.walkMembers(scope, d.Body)
@@ -281,6 +279,10 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			body = child
 		}
 		c.walkMembers(body, d.Body)
+	default:
+		// A bare expression member is the body's result, as in a calc body
+		// whose result is its last expression.
+		c.expr(scope, decl)
 	}
 }
 

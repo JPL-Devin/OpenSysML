@@ -11,6 +11,8 @@ entry states the divergence, the measurement behind it, the decision, and which 
 
 Measured on `main` at `0de1181d` (wave 9 merged, including the rebaseline). Every number below is
 reproducible with the command given; none is quoted from a session report.
+Those numbers are as measured at that commit and are not the current baseline, which the generated
+block in [README](../../README.md) and [architecture](../internals/architecture.md) states.
 
 ---
 

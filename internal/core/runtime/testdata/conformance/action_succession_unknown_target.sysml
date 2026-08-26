@@ -9,6 +9,6 @@ package test {
 
 		action bump assign t := t + 1;
 
-		then bump nowhere;
+		succession first bump then nowhere;
 	}
 }

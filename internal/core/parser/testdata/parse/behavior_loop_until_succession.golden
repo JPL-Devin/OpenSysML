@@ -11,5 +11,5 @@
           (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
             (Usage kind="action" name="tick" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
       (SuccessionEdge source="begin" target="@loop")
-      (FinalNode name="")
+      (FinalNode)
       (SuccessionEdge source="@loop" target="@done"))))

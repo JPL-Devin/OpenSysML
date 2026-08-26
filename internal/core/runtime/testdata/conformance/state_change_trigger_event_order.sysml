@@ -9,7 +9,8 @@ package test {
 		attribute log : Integer = 0;
 		attribute ready : Boolean = true;
 
-		initial start;
+		entry; then start;
+		state start;
 		state A {
 			accept after 5 [s] then late;
 		}
@@ -21,9 +22,9 @@ package test {
 			entry { log = log * 10 + 3; }
 		}
 
-		start then A;
-		transition A to B accept when ready do assign log := log * 10 + 1;
-		transition A to late when Go do assign log := log * 10 + 9;
-		transition B to C when Go do assign log := log * 10 + 2;
+		succession first start then A;
+		transition first A accept when ready do assign log := log * 10 + 1 then B;
+		transition first A when Go do assign log := log * 10 + 9 then late;
+		transition first B when Go do assign log := log * 10 + 2 then C;
 	}
 }

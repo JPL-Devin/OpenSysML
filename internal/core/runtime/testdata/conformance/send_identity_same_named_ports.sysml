@@ -13,7 +13,8 @@ package SendIdentity {
 		port inPort : PingPort;
 
 		state Listen {
-			initial start;
+			entry; then start;
+			state start;
 
 			state waiting {
 				entry send Ping() to alpha.inPort;
@@ -21,7 +22,7 @@ package SendIdentity {
 			state received;
 			state strayed;
 
-			start then waiting;
+			succession first start then waiting;
 
 			transition first waiting
 				accept Ping via inPort

@@ -6,11 +6,11 @@ package test {
     state TestTransitionEffectAssignFirstThen {
         attribute counter : Integer = 0;
 
-        initial init;
+        entry; then init;
+        state init;
         state active;
-        final done;
 
-        init then active;
+        succession first init then active;
         transition first active do assign counter := counter + 1 then done;
     }
 }

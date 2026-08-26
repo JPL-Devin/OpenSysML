@@ -9,7 +9,7 @@ package Watch {
 			state idle;
 			state alerted;
 
-			transition idle to alerted accept when tripped;
+			transition first idle accept when tripped then alerted;
 		}
 
 		action trip {

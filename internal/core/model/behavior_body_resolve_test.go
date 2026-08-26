@@ -39,12 +39,12 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 		src  string
 	}{
 		{"calc return parameter value", `package P { calc c { return r = zzz; } }`},
-		{"calc return operand", `package P { calc c { return zzz + 1; } }`},
+		{"calc result operand", `package P { calc c { zzz + 1 } }`},
 		{"calc def return parameter value", `package P { calc def C { return r = zzz; } }`},
 		{"constraint assertion", `package P { constraint k { zzz > 1 } }`},
-		{"constraint def assertion", `package P { constraint def K { assert zzz > 1; } }`},
-		{"requirement assumption", `package P { requirement r { assume zzz > 1; } }`},
-		{"requirement condition", `package P { requirement r { require zzz > 1; } }`},
+		{"constraint def assertion", `package P { constraint def K { zzz > 1 } }`},
+		{"requirement assumption", `package P { requirement r { assume constraint { zzz > 1 } } }`},
+		{"requirement condition", `package P { requirement r { require constraint { zzz > 1 } } }`},
 		{"action assignment value", `package P {
 			private import ScalarValues::*;
 			action a { attribute v : Integer = 0; assign v := zzz; }
@@ -53,56 +53,59 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
-				initial i;
+				entry; then i;
+				state i;
 				state a { entry { assign v := zzz; } }
-				i then a;
+				succession first i then a;
 			}
 		}`},
 		{"state do action", `package P {
 			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
-				initial i;
+				entry; then i;
+				state i;
 				state a { do { assign v := zzz; } }
-				i then a;
+				succession first i then a;
 			}
 		}`},
 		{"state exit action", `package P {
 			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
-				initial i;
+				entry; then i;
+				state i;
 				state a { exit { assign v := zzz; } }
-				i then a;
+				succession first i then a;
 			}
 		}`},
 		{"transition guard", `package P {
-			state S { initial i; state a; state b; i then a; transition a to b if zzz; }
+			state S { entry; then i; state i; state a; state b; succession first i then a; transition first a if zzz then b; }
 		}`},
 		{"transition effect", `package P {
 			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
-				initial i; state a; state b; i then a;
-				transition a to b do { assign v := zzz; };
+				entry; then i; state i; state a; state b; succession first i then a;
+				transition first a do { assign v := zzz; } then b;
 			}
 		}`},
 		{"action accept change trigger", `package P {
-			action A { first start; action wait accept when zzz > 1; done end; then start wait; then wait end; }
+			action A { first start; action wait accept when zzz > 1; done; succession first start then wait; succession first wait then done; }
 		}`},
 		{"action accept absolute time trigger", `package P {
-			action A { first start; action wait accept at zzz; done end; then start wait; then wait end; }
+			action A { first start; action wait accept at zzz; done; succession first start then wait; succession first wait then done; }
 		}`},
 		{"action accept relative time trigger", `package P {
-			action A { first start; action wait accept after zzz; done end; then start wait; then wait end; }
+			action A { first start; action wait accept after zzz; done; succession first start then wait; succession first wait then done; }
 		}`},
 		// A call trigger's parameters belong to its own transition: another
 		// transition's guard must not see them.
 		{"call trigger parameter outside its transition", `package P {
 			state S {
-				initial i; state a; state b; state c; i then a;
-				transition a to b accept setSpeed(zzz);
-				transition b to c if zzz > 0;
+				entry; then i; state i; state a; state b; state c; succession first i then a;
+				transition first a accept setSpeed(zzz) then b;
+				transition first b if zzz > 0 then c;
 			}
 		}`},
 	}
@@ -129,44 +132,44 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 		src  string
 	}{
 		{"nested substate", `package P {
-			state S { initial i; state outer { state inner; then inner inner; } i then outer; }
+			state S { entry; then i; state i; state outer { state inner; succession first inner then inner; } i then outer; }
 		}`},
 		{"region states", `package P {
-			state S { region r { initial s; state x; then s x; } }
+			state S parallel { state r { entry; then s; state s; state x; succession first s then x; } }
 		}`},
 		{"sibling regions reuse state names", `package P {
-			state S {
-				region left { initial start; state a; then start a; }
-				region right { initial start; state b; then start b; }
+			state S parallel {
+				state left { entry; then start; state start; state a; succession first start then a; }
+				state right { entry; then start; state start; state b; succession first start then b; }
 			}
 		}`},
 		{"region body reads outer feature", `package P {
 			private import ScalarValues::*;
-			state S {
+			state S parallel {
 				attribute v : Integer = 0;
-				region r { initial s; state x { entry { assign v := 1; } } then s x; }
+				state r { entry; then s; state s; state x { entry { assign v := 1; } } succession first s then x; }
 			}
 		}`},
 		{"named pseudostates", `package P {
 			state S {
-				initial i; state a; fork f; join j; final done;
-				i then a;
-				transition a to f;
-				transition f to j;
-				transition j to done;
+				entry; then i; state i; state a; fork f; join j;
+				succession first i then a;
+				transition first a then f;
+				transition first f then j;
+				transition first j then done;
 			}
 		}`},
 		{"signal trigger", `package P {
-			state S { initial i; state a; state b; i then a; transition a to b when sigX; }
+			state S { entry; then i; state i; state a; state b; i then a; transition first a when sigX then b; }
 		}`},
 		{"call trigger parameter in guard", `package P {
-			state S { initial i; state a; state b; i then a; transition a to b accept setSpeed(value) if value > 0; }
+			state S { entry; then i; state i; state a; state b; succession first i then a; transition first a accept setSpeed(value) if value > 0 then b; }
 		}`},
 		{"call trigger parameter in effect", `package P {
 			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
-				initial i; state b; i then a;
+				entry; then i; state i; state b; succession first i then a;
 				state a { accept setSpeed(value) do { assign v := value; } then b; }
 			}
 		}`},
@@ -175,7 +178,7 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 			item def Warning;
 			state S {
 				attribute level : Integer = 0;
-				initial i; state a; state b; i then a;
+				entry; then i; state i; state a; state b; succession first i then a;
 				transition first a accept w : Warning if w != null do assign level := 1 then b;
 			}
 		}`},
@@ -186,9 +189,9 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 				attribute temp : Integer = 0;
 				first start;
 				action wait accept when temp > maxTemp;
-				done end;
-				then start wait;
-				then wait end;
+				done;
+				succession first start then wait;
+				succession first wait then done;
 			}
 		}`},
 		{"named transition trigger parameters", `package P {
@@ -196,7 +199,7 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 			item def Warning;
 			state S {
 				attribute level : Integer = 0;
-				initial i; state a; state b; state c; i then a;
+				entry; then i; state i; state a; state b; state c; succession first i then a;
 				transition alert first a accept w : Warning if w != null do assign level := 1 then b;
 				transition brake first b accept setSpeed(value) if value > 0 then c;
 			}
@@ -204,12 +207,12 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 		{"requirement actor binding", `package P {
 			private import ScalarValues::*;
 			attribute userId : Integer = 42;
-			requirement U { actor user = userId; require user > 0; }
+			requirement U { actor user = userId; require constraint { user > 0 } }
 		}`},
 		{"requirement subject", `package P {
 			private import ScalarValues::*;
 			part def Vehicle { attribute speed : Integer = 0; }
-			requirement R { subject v : Vehicle; require v.speed > 0; }
+			requirement R { subject v : Vehicle; require constraint { v.speed > 0 } }
 		}`},
 	}
 
@@ -231,7 +234,7 @@ func TestTriggerParametersDoNotEscapeTheirTransition(t *testing.T) {
 		item def Warning;
 		state S {
 			attribute level : Integer = 0;
-			initial i; state a; state b; state c; i then a;
+			entry; then i; state i; state a; state b; state c; succession first i then a;
 			transition alert first a accept w : Warning if w != null do assign level := 1 then b;
 			transition brake first b accept setSpeed(value) if value > 0 then c;
 		}

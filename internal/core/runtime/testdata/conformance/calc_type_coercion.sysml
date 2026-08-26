@@ -3,6 +3,6 @@ package test {
     calc testCoercion {
         in intVal : Integer;
         in realVal : Real;
-        return intVal + realVal;  // Integer coerced to Real
+        intVal + realVal  // Integer coerced to Real
     }
 }

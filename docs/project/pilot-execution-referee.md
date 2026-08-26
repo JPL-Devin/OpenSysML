@@ -207,8 +207,10 @@ No compliance row's status flag is changed on the strength of this work.
 
 Run it with `go run ./cmd/pilot-exec-diff` after `./scripts/download-pilot-evaluator.sh`; with the
 execution artifact absent it prints a provisioning instruction, exits 0 and writes nothing, so
-`cmd/pilot-diff` and its committed baseline are untouched. Current state of the 94 committed cases,
-the original 32 plus the 62 the expression round added:
+`cmd/pilot-diff` and its committed baseline are untouched. The bucket counts below are as measured at
+the round this record documents and are not the current baseline — `go run ./cmd/pilot-exec-diff`
+prints the current ones. State of the 94 committed cases then, the original 32 plus the 62 the
+expression round added:
 
 ```
 agree: 56 · kind-only: 1 · order-only: 0 · disagree: 1

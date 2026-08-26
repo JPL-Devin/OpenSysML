@@ -370,9 +370,9 @@ package A {
 		action inner {
 			assign mass := mass + 1.0 [SI::kg];
 		}
-		done end;
-		then start inner;
-		then inner end;
+		done;
+		succession first start then inner;
+		succession first inner then done;
 	}
 }
 `

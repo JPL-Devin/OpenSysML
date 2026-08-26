@@ -7,58 +7,157 @@
 elmt:Relations
     a sysml:Package ;
     sysml:qualifiedName "Relations" ;
+    sysml:elementId "Relations" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Relations" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Relations__Base, elmt:Relations__Sub, elmt:Relations__Other ;
+    sysml:ownedMembership elmt:Relations__Base_om, elmt:Relations__Sub_om, elmt:Relations__Other_om ;
+    sysml:ownedRelationship elmt:Relations__Base_om, elmt:Relations__Sub_om, elmt:Relations__Other_om .
 
 elmt:Relations__Base
     a sysml:PartDefinition ;
     sysml:qualifiedName "Relations::Base" ;
-    sysml:owningNamespace elmt:Relations ;
+    sysml:elementId "Relations__Base" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Relations ;
+    sysml:owner elmt:Relations ;
+    sysml:owningRelationship elmt:Relations__Base_om ;
+    sysml:owningMembership elmt:Relations__Base_om ;
     sysml:declaredName "Base" ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Relations__Base_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Relations__Base_om" ;
+    sysml:owner elmt:Relations ;
+    sysml:memberElement elmt:Relations__Base ;
+    sysml:ownedMemberElement elmt:Relations__Base ;
+    sysml:ownedRelatedElement elmt:Relations__Base ;
+    sysml:owningRelatedElement elmt:Relations ;
+    sysml:membershipOwningNamespace elmt:Relations .
 
 elmt:Relations__Sub
     a sysml:PartDefinition ;
     sysml:qualifiedName "Relations::Sub" ;
-    sysml:owningNamespace elmt:Relations ;
+    sysml:elementId "Relations__Sub" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Relations ;
+    sysml:owner elmt:Relations ;
+    sysml:owningRelationship elmt:Relations__Sub_om ;
+    sysml:owningMembership elmt:Relations__Sub_om ;
     sysml:declaredName "Sub" ;
     sysml:specializes elmt:Relations__Base ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:Relations__Sub_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Relations__Sub_om" ;
+    sysml:owner elmt:Relations ;
+    sysml:memberElement elmt:Relations__Sub ;
+    sysml:ownedMemberElement elmt:Relations__Sub ;
+    sysml:ownedRelatedElement elmt:Relations__Sub ;
+    sysml:owningRelatedElement elmt:Relations ;
+    sysml:membershipOwningNamespace elmt:Relations .
+
 elmt:Relations__Other
     a sysml:PartDefinition ;
     sysml:qualifiedName "Relations::Other" ;
-    sysml:owningNamespace elmt:Relations ;
+    sysml:elementId "Relations__Other" ;
     sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Relations ;
+    sysml:owner elmt:Relations ;
+    sysml:owningRelationship elmt:Relations__Other_om ;
+    sysml:owningMembership elmt:Relations__Other_om ;
     sysml:declaredName "Other" ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Relations__Other__b, elmt:Relations__Other__r, elmt:Relations__Other__s ;
+    sysml:ownedMembership elmt:Relations__Other__b_om, elmt:Relations__Other__r_om, elmt:Relations__Other__s_om ;
+    sysml:ownedRelationship elmt:Relations__Other__b_om, elmt:Relations__Other__r_om, elmt:Relations__Other__s_om ;
+    sysml:ownedFeature elmt:Relations__Other__b, elmt:Relations__Other__r, elmt:Relations__Other__s ;
+    sysml:ownedFeatureMembership elmt:Relations__Other__b_om, elmt:Relations__Other__r_om, elmt:Relations__Other__s_om .
+
+elmt:Relations__Other_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Relations__Other_om" ;
+    sysml:owner elmt:Relations ;
+    sysml:memberElement elmt:Relations__Other ;
+    sysml:ownedMemberElement elmt:Relations__Other ;
+    sysml:ownedRelatedElement elmt:Relations__Other ;
+    sysml:owningRelatedElement elmt:Relations ;
+    sysml:membershipOwningNamespace elmt:Relations .
 
 elmt:Relations__Other__b
     a sysml:PartUsage ;
     sysml:qualifiedName "Relations::Other::b" ;
-    sysml:owningNamespace elmt:Relations__Other ;
+    sysml:elementId "Relations__Other__b" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Relations__Other ;
+    sysml:owner elmt:Relations__Other ;
+    sysml:owningRelationship elmt:Relations__Other__b_om ;
+    sysml:owningMembership elmt:Relations__Other__b_om ;
     sysml:declaredName "b" ;
     sysml:type elmt:Relations__Base ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:Relations__Other__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Relations__Other__b_om" ;
+    sysml:owner elmt:Relations__Other ;
+    sysml:memberElement elmt:Relations__Other__b ;
+    sysml:ownedMemberElement elmt:Relations__Other__b ;
+    sysml:ownedRelatedElement elmt:Relations__Other__b ;
+    sysml:owningRelatedElement elmt:Relations__Other ;
+    sysml:membershipOwningNamespace elmt:Relations__Other ;
+    sysml:ownedMemberFeature elmt:Relations__Other__b ;
+    sysml:owningType elmt:Relations__Other .
+
 elmt:Relations__Other__r
     a sysml:PartUsage ;
     sysml:qualifiedName "Relations::Other::r" ;
-    sysml:owningNamespace elmt:Relations__Other ;
+    sysml:elementId "Relations__Other__r" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Relations__Other ;
+    sysml:owner elmt:Relations__Other ;
+    sysml:owningRelationship elmt:Relations__Other__r_om ;
+    sysml:owningMembership elmt:Relations__Other__r_om ;
     sysml:declaredName "r" ;
     sysml:redefines elmt:Relations__Other__b ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:Relations__Other__r_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Relations__Other__r_om" ;
+    sysml:owner elmt:Relations__Other ;
+    sysml:memberElement elmt:Relations__Other__r ;
+    sysml:ownedMemberElement elmt:Relations__Other__r ;
+    sysml:ownedRelatedElement elmt:Relations__Other__r ;
+    sysml:owningRelatedElement elmt:Relations__Other ;
+    sysml:membershipOwningNamespace elmt:Relations__Other ;
+    sysml:ownedMemberFeature elmt:Relations__Other__r ;
+    sysml:owningType elmt:Relations__Other .
+
 elmt:Relations__Other__s
     a sysml:PartUsage ;
     sysml:qualifiedName "Relations::Other::s" ;
-    sysml:owningNamespace elmt:Relations__Other ;
+    sysml:elementId "Relations__Other__s" ;
     sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Relations__Other ;
+    sysml:owner elmt:Relations__Other ;
+    sysml:owningRelationship elmt:Relations__Other__s_om ;
+    sysml:owningMembership elmt:Relations__Other__s_om ;
     sysml:declaredName "s" ;
     sysml:subsets elmt:Relations__Other__b ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Relations__Other__s_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Relations__Other__s_om" ;
+    sysml:owner elmt:Relations__Other ;
+    sysml:memberElement elmt:Relations__Other__s ;
+    sysml:ownedMemberElement elmt:Relations__Other__s ;
+    sysml:ownedRelatedElement elmt:Relations__Other__s ;
+    sysml:owningRelatedElement elmt:Relations__Other ;
+    sysml:membershipOwningNamespace elmt:Relations__Other ;
+    sysml:ownedMemberFeature elmt:Relations__Other__s ;
+    sysml:owningType elmt:Relations__Other .

@@ -19,11 +19,11 @@ package test {
 			assign alerted := 1;
 		}
 
-		done end;
+		done;
 
-		then start heat;
-		then heat awaitWarm;
-		then awaitWarm alert;
-		then alert end;
+		succession first start then heat;
+		succession first heat then awaitWarm;
+		succession first awaitWarm then alert;
+		succession first alert then done;
 	}
 }

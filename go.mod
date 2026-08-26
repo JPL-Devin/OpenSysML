@@ -6,7 +6,6 @@ require (
 	connectrpc.com/connect v1.20.0
 	connectrpc.com/grpcreflect v1.3.0
 	github.com/chzyer/readline v1.5.1
-	github.com/fsnotify/fsnotify v1.10.1
 	go.lsp.dev/jsonrpc2 v0.10.0
 	go.lsp.dev/protocol v0.12.0
 	go.lsp.dev/uri v0.3.0

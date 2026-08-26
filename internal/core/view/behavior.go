@@ -112,15 +112,15 @@ func (r *Renderer) regionNode(region *ast.StateRegion, doc string, ids *nodeIDs)
 }
 
 // stateNode renders one state with what the machine says about it: whether it is
-// the state entered first, a final state, and the behaviors it runs.
+// the state entered first, whether entering it completes, and what it runs.
 func (r *Renderer) stateNode(state *ast.StateNode, graph *lower.StateGraph, doc string, ids *nodeIDs) *Node {
 	node := &Node{ID: ids.take(), Kind: "state", Name: notationName(state.Name), Origin: nodeOrigin(doc, state)}
 	var detail []string
 	if graph.IsInitial(state) || graph.Initial == state || initialOfRegion(graph, state) {
 		detail = append(detail, "initial")
 	}
-	if state.IsFinal {
-		detail = append(detail, "final")
+	if graph.Completes(state) {
+		detail = append(detail, "completes")
 	}
 	if behaviors := graph.Behaviors[state]; behaviors != nil {
 		for _, part := range []struct {
@@ -300,15 +300,15 @@ func (r *Renderer) actionNode(decl ast.Node, kind, name string, scope *symbols.S
 		}
 	}
 	for _, src := range graph.Nodes {
-		for _, target := range graph.Edges[src] {
-			to, ok := nodes[target]
+		for _, edge := range graph.Edges[src] {
+			to, ok := nodes[edge.Target]
 			if !ok {
 				out.Notices = append(out.Notices, fmt.Sprintf("succession from %s in %s leaves the action's own nodes; no edge is drawn",
 					notationName(behaviorNodeName(src)), name))
 				continue
 			}
 			label := ""
-			if guard := graph.Guards[src][target]; guard != nil {
+			if guard := edge.Guard; guard != nil {
 				if text := r.nodeText(doc, guard); text != "" {
 					label = "[" + text + "]"
 				} else {
@@ -316,7 +316,7 @@ func (r *Renderer) actionNode(decl ast.Node, kind, name string, scope *symbols.S
 				}
 			}
 			out.Edges = append(out.Edges, Edge{From: nodes[src].ID, To: to.ID, Label: label, Kind: EdgeSuccession,
-				Origin: nodeOrigin(doc, graph.Successions[src][target])})
+				Origin: nodeOrigin(doc, edge.Decl)})
 		}
 		for _, flow := range graph.DataFlows[src] {
 			to, ok := nodes[flow.Target]
@@ -407,14 +407,13 @@ func actionNodeKind(node ast.Node, graph *lower.ActionGraph) string {
 	return "node"
 }
 
-// behaviorNodeName is the name a state or action graph node was declared with,
-// "" for an anonymous one.
+// behaviorNodeName is the name a state or action graph node was declared with.
 func behaviorNodeName(node ast.Node) string {
 	switch n := node.(type) {
 	case *ast.InitialNode:
 		return n.Name
 	case *ast.FinalNode:
-		return n.Name
+		return "done"
 	case *ast.ForkNode:
 		return n.Name
 	case *ast.JoinNode:

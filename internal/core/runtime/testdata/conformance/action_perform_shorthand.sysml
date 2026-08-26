@@ -11,10 +11,10 @@ package test {
 
 		perform increment;
 
-		done end;
+		done;
 
-		then start increment;
-		then increment end;
+		succession first start then increment;
+		succession first increment then done;
 	}
 
 	action increment {
@@ -27,9 +27,9 @@ package test {
 			assign result := base + 5;
 		}
 
-		done finish;
+		done;
 
-		then begin bump;
-		then bump finish;
+		succession first begin then bump;
+		succession first bump then done;
 	}
 }

@@ -28,7 +28,7 @@ jobs:
       # The solver is an external process: without one on PATH the
       # solver-dependent tests would skip rather than run.
       - run:
-          name: Install z3
+          name: Install Z3
           command: |
             sudo apt-get update
             sudo apt-get install -y z3
@@ -48,7 +48,7 @@ jobs:
             cvc5 --version | head -1
 
       - run:
-          name: Check gofmt
+          name: Check Go formatting
           command: |
             unformatted=$(gofmt -l .)
             if [ -n "$unformatted" ]; then
@@ -58,7 +58,7 @@ jobs:
             fi
       
       - run:
-          name: Run go vet
+          name: Run Go vet
           command: go vet ./...
 
       - run:
@@ -70,6 +70,12 @@ jobs:
       - run:
           name: Check for internal labels in reader-facing documentation
           command: python3 scripts/check-doc-ids.py
+
+      # An oracle total quoted outside the generated block is a snapshot, and a
+      # reader cannot tell that from a current figure unless the page says so.
+      - run:
+          name: Check quoted oracle figures name the round they measured
+          command: python3 scripts/check-doc-figures.py
 
       - run:
           name: Run static analysis (staticcheck + gosec)
@@ -128,7 +134,7 @@ jobs:
             - examples/pilot-corpora
 
       - run:
-          name: Verify the pilot corpora are present
+          name: Verify the OMG pilot corpora
           command: |
             for root in sysml-examples sysml-validation kerml-examples; do
               count=$(find "examples/pilot-corpora/$root" -type f \( -name '*.sysml' -o -name '*.kerml' \) | wc -l)
@@ -144,8 +150,8 @@ jobs:
       # no_output_timeout: go test buffers a package's output until it finishes,
       # so a >10m package looks silent and trips CircleCI's 10m default.
       - run:
-          name: Run tests
-          command: go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
+          name: Run Go race tests
+          command: make test
           no_output_timeout: 30m
           environment:
             # Turns "corpus absent" into a failure rather than a skip, as the
@@ -158,7 +164,7 @@ jobs:
       # The corpora gate alone, so its per-root verdict lines are legible in the
       # log and a skip cannot hide behind a green suite.
       - run:
-          name: Pilot corpora gate
+          name: Run pilot corpora gate
           command: |
             set -o pipefail
             go test -count=1 -v ./internal/core/model -run 'TestPilotCorpora' | tee pilot-corpora-gate.log
@@ -173,7 +179,7 @@ jobs:
       # Re-run the differential gate alone so its summary counts, which make
       # coverage drift reviewable, are visible rather than buried in the suite.
       - run:
-          name: Differential agreement gate
+          name: Run solver differential gate
           command: |
             set -o pipefail
             go test -count=1 -v ./internal/core/solve -run TestDifferential | tee differential-gate.log
@@ -190,7 +196,7 @@ jobs:
       # one of them refuses is reported here rather than found by a user. The
       # requirement flag makes an absent solver a failure rather than a skip.
       - run:
-          name: Portability gate
+          name: Run solver portability gate
           command: |
             set -o pipefail
             for solver in z3 cvc5; do
@@ -208,7 +214,7 @@ jobs:
       # The solver gate against the second backend: what z3 answers, cvc5 must
       # answer too, the portability subset alone not being the whole contract.
       - run:
-          name: Second backend gate
+          name: Run solver gate (cvc5)
           command: |
             set -o pipefail
             OPENSYSML_SMT=cvc5 go test -count=1 -v ./internal/core/solve ./internal/repl \
@@ -225,7 +231,7 @@ jobs:
       # executable that does not exist, solver-dependent tests skip and the
       # absent-solver paths must still report one.
       - run:
-          name: Run the solve and REPL tests with no solver
+          name: Run solver-absent gate
           command: |
             set -o pipefail
             env -u OPENSYSML_REQUIRE_SMT OPENSYSML_SMT=/nonexistent/no-such-solver \
@@ -242,7 +248,7 @@ jobs:
       # The conformance suite: the runner builds and starts sysml-grpc itself, so
       # this gate proves the whole path a client takes, not a pre-started service.
       - run:
-          name: Conformance suite
+          name: Run conformance suite
           command: make conformance
 
       # when: always — the report matters most when the gate failed and halted the job.
@@ -350,17 +356,16 @@ jobs:
           at: .
       
       - run:
-          name: Install sysml-grpc binary
+          name: Install sysml-grpc
           command: |
             mkdir -p ~/.opensysml/bin
             cp bin/sysml-grpc ~/.opensysml/bin/
             chmod +x ~/.opensysml/bin/sysml-grpc
       
       - run:
-          name: Install Python package
+          name: Install Python client
           command: |
-            cd python
-            pip install -e .
+            make python-install
             pip install pytest pytest-mock psutil
       
       # The integration tests connect to a service on the standard port with
@@ -369,12 +374,12 @@ jobs:
       # the rest of the job. Tests that name no address start a private child of
       # their own instead, from the binary installed above.
       - run:
-          name: Start sysml-grpc service
+          name: Start sysml-grpc
           command: ~/.opensysml/bin/sysml-grpc -port 50051
           background: true
 
       - run:
-          name: Wait for the service to answer
+          name: Wait for sysml-grpc
           command: |
             # The backslash escapes the heredoc operator for a 2.1 config; the
             # shell sees a plain heredoc.
@@ -394,10 +399,8 @@ jobs:
       # OPENSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
       # service is provided here, so its absence is the bug, not a pass.
       - run:
-          name: Run Python tests
-          command: |
-            cd python
-            OPENSYSML_REQUIRE_SERVICE=1 pytest tests/ -v
+          name: Run Python client tests
+          command: OPENSYSML_REQUIRE_SERVICE=1 make python-test
 
       # This executor has no Go toolchain, so buf comes from the official release
       # rather than `go run`, pinned by digest so a substituted asset is not run.
@@ -422,7 +425,7 @@ jobs:
             git diff --exit-code python/opensysml/proto
       
       - run:
-          name: Verify import
+          name: Verify Python client import
           command: |
             python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"
 

@@ -407,7 +407,7 @@ func nodeIdentifier(node ast.Node) string {
 	case *ast.InitialNode:
 		return controlNodeName(n.Name, "initial")
 	case *ast.FinalNode:
-		return controlNodeName(n.Name, "final")
+		return "done"
 	case *ast.ForkNode:
 		return controlNodeName(n.Name, "fork")
 	case *ast.JoinNode:

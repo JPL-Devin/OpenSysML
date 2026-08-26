@@ -93,10 +93,10 @@ func TestRestoreDropsAttemptFindings(t *testing.T) {
 	}
 }
 
-// A nested-constraint attempt that finds no body rewinds cleanly, so the
-// condition is read whole rather than missing the word the attempt consumed.
+// A nested-constraint attempt that finds no declaration rewinds cleanly, so the
+// asserted reference keeps the word the attempt consumed.
 func TestNestedConstraintAttemptRewinds(t *testing.T) {
-	src := "package p { constraint c { assert constraint x > 0; assert 1 > 0; } }"
+	src := "package p { constraint c { assert constraint; 1 > 0 } }"
 	p := New(source.New("test", []byte(src)))
 	root := p.ParseFile()
 	if root == nil {

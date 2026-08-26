@@ -14,15 +14,15 @@ package StateAcceptViaPort {
         port inPort : PingPort;
         connect outPort to inPort;
 
-        initial start;
+        entry; then start;
+        state start;
 
         state waitingGSPing {
             entry send Ping() via outPort;
         }
         state transmitting;
-        final done;
 
-        start then waitingGSPing;
+        succession first start then waitingGSPing;
 
         // The trigger is written on its own line, naming the port the accepted
         // occurrence must arrive at, and the transition carries a name of its own.
@@ -31,6 +31,6 @@ package StateAcceptViaPort {
             do assign received := 1
             then transmitting;
 
-        transition transmitting to done;
+        transition first transmitting then done;
     }
 }

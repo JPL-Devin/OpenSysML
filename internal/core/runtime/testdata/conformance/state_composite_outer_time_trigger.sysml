@@ -4,7 +4,8 @@ package test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state Working {
 			exit { log = log * 10 + 2; }
 
@@ -18,6 +19,6 @@ package test {
 			entry { log = log * 10 + 3; }
 		}
 
-		start then Step1;
+		succession first start then Step1;
 	}
 }

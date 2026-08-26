@@ -123,8 +123,6 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.kermlRelationships(n.Relationships)
 			w.sysmlDeclaration(n, n.Keyword)
 			w.keywordAsName(n.Ident)
-			w.binding(n)
-			w.successionUsage(n)
 			w.requirementConstraint(n)
 			w.walkDeclaration(n.Members, n)
 		case *ast.Import:
@@ -137,40 +135,14 @@ func (w *notationWalker) walk(members []ast.Node) {
 		case *ast.MultiplicityDecl:
 			w.keywordAsName(n.Ident)
 			w.walk(n.Members)
-		case *ast.ResultMember:
-			if n.Expression != nil && !isReferenceExpression(n.Expression) {
-				w.extension(keywordSpan(n, "return"), "`return <expression>;`",
-					"the standard spelling is a trailing expression without `return`")
-			}
 		case *ast.ConstraintMember:
-			if n.Keyword != "" && n.Expression != nil && n.Name == "" && len(n.Body) == 0 {
-				w.extension(keywordSpan(n, n.Keyword),
-					fmt.Sprintf("`%s <expression>;`", n.Keyword),
-					"the standard spelling is a keyword-less trailing condition")
-			}
 			w.walk(n.Body)
 		case *ast.AssumeMember:
-			if w.inRequirementBody && n.Expression != nil && !isRequirementReferenceExpression(n.Expression) &&
-				n.Reference == nil && n.Name == "" && len(n.Body) == 0 && !n.HasBody {
-				w.extension(keywordSpan(n, "assume"), "`assume <expression>;`",
-					"the standard spelling is a keyword-less trailing condition")
-			}
 			w.walk(n.Body)
 		case *ast.RequireMember:
-			if w.inRequirementBody && n.Expression != nil && !isRequirementReferenceExpression(n.Expression) &&
-				n.Reference == nil && n.Name == "" && len(n.Body) == 0 && !n.HasBody {
-				w.extension(keywordSpan(n, "require"), "`require <expression>;`",
-					"the standard spelling is a keyword-less trailing condition")
-			}
 			w.walk(n.Body)
-		case *ast.SuccessionEdge:
-			w.successionEdge(n)
 		case *ast.StateNode:
 			w.stateNode(n)
-		case *ast.StateRegion:
-			w.extension(keywordSpan(n, "region"), "`region <name> { … }`",
-				"the standard orthogonality marker is `parallel` before a state body")
-			w.walk(n.States)
 		case *ast.PseudostateNode:
 			w.pseudostate(n)
 		case *ast.DeferMember:
@@ -179,26 +151,9 @@ func (w *notationWalker) walk(members []ast.Node) {
 		case *ast.InitialNode:
 			w.initialNode(n)
 			w.walkActionBody(n.Members)
-		case *ast.FinalNode:
-			switch {
-			case n.Keyword == "final":
-				w.extension(keywordSpan(n, n.Keyword), "`final` as an action node",
-					"the standard spelling of the node is `done`, the library feature")
-			case n.Name != "":
-				w.extension(keywordSpan(n, n.Keyword), "`done <name>;`",
-					"`done` is a library feature a succession names, not a keyword that declares a node")
-			}
 		case *ast.DecisionNode:
-			if n.Keyword == "decision" {
-				w.extension(keywordSpan(n, n.Keyword), "`decision` as an action node",
-					"the standard spelling of the node is `decide`")
-			}
 			w.walkActionBody(n.Members)
 		case *ast.TransitionMember:
-			if n.ToSpan.Len > 0 {
-				w.extension(n.ToSpan, "`transition <source> to <target>;`",
-					"a transition states its ends with `first` and `then`")
-			}
 			w.walkActionBody(n.Effect)
 			w.walkActionBody(n.Members)
 		case *ast.EntryMember:
@@ -286,83 +241,16 @@ func admitsActionBodyItems(node ast.Node) bool {
 	return false
 }
 
-func isReferenceExpression(node ast.Node) bool {
-	switch node.(type) {
-	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
-		return true
-	default:
-		return false
-	}
-}
-
-func isRequirementReferenceExpression(node ast.Node) bool {
-	switch node.(type) {
-	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
-		return true
-	default:
-		return false
-	}
-}
-
-// initialNode reports the `initial` spelling of the node, and a one-ended `first
-// <node>;` outside an action body: InitialNodeMember is reachable from
-// ActionBodyItem alone (SysML.xtext:1376), never from DefinitionBodyItem (:516).
+// initialNode reports a one-ended `first <node>;` outside an action body:
+// InitialNodeMember is reachable from ActionBodyItem alone (SysML.xtext:1376),
+// never from DefinitionBodyItem (:516).
 func (w *notationWalker) initialNode(n *ast.InitialNode) {
-	switch {
-	case n.Keyword == "initial":
-		w.extension(keywordSpan(n, n.Keyword), "`initial` as an action node",
-			"the standard spelling of the node is `first`")
 	// A recovered `first <source> then <target>` reads as a one-ended node, so
 	// only a document that parsed cleanly is judged here.
-	case !w.inActionBody && n.Successor == nil && w.parsedClean:
-		w.extension(keywordSpan(n, n.Keyword), "a one-ended `first <node>;` outside an action body",
+	if !w.inActionBody && n.Successor == nil && w.parsedClean {
+		w.extension(keywordSpan(n, "first"), "a one-ended `first <node>;` outside an action body",
 			"only an action body admits it; elsewhere a succession names both ends, `first <source> then <target>`")
 	}
-}
-
-// successionEdge reports `then <source> <target>;`: a succession states two ends
-// only as `first … then …` (SuccessionAsUsage, SysML.xtext:1033). An end bound by
-// position is spanned outside the edge, which keeps the one-ended form silent.
-func (w *notationWalker) successionEdge(n *ast.SuccessionEdge) {
-	if !w.writtenEnd(n, n.Source) || !w.writtenEnd(n, n.Target) {
-		return
-	}
-	w.extension(keywordSpan(n, "then"), "`then <source> <target>;`",
-		"a succession names both ends as `first <source> then <target>`")
-}
-
-// successionUsage reports the state-body shorthand whose source begins the
-// usage; a standard anonymous succession begins with `first`.
-func (w *notationWalker) successionUsage(n *ast.Usage) {
-	if n.Kind != ast.UsageSuccession || n.Keyword != "" || len(n.ConnectorEnds) != 2 {
-		return
-	}
-	first := n.ConnectorEnds[0]
-	if first == nil || first.Reference == nil || first.Reference.Span().Offset != n.Span().Offset {
-		return
-	}
-	w.extension(first.Reference.Span(), "`<source> then <target>;`",
-		"a succession names both ends as `first <source> then <target>`")
-}
-
-// writtenEnd reports whether end was written inside the edge that carries it.
-func (w *notationWalker) writtenEnd(edge ast.Node, end *ast.QualifiedName) bool {
-	if end == nil || len(end.Parts) == 0 {
-		return false
-	}
-	sp, within := end.Span(), edge.Span()
-	return sp.Offset >= within.Offset && sp.Offset < within.End()
-}
-
-// binding reports a binding whose right side is an expression: `bind` relates two
-// ConnectorEndMembers (SysML.xtext:1020), so `bind a = b;` is legal and
-// `bind a = b * 2;` is ours.
-func (w *notationWalker) binding(n *ast.Usage) {
-	if n.Kind != ast.UsageBinding || n.Value == nil || isReferenceExpression(n.Value) {
-		return
-	}
-	w.extension(n.Value.Span(), "`bind <feature> = <expression>;`",
-		"a binding relates two features, so bind the expression's result feature instead")
 }
 
 // requirementConstraint reports an `assume`/`require` member outside a requirement
@@ -382,16 +270,8 @@ func (w *notationWalker) requirementConstraint(n *ast.Usage) {
 		"only a requirement, concern, viewpoint or objective body admits it")
 }
 
-// stateNode reports the `initial`/`final` state markers, then descends.
+// stateNode descends into the members of a state.
 func (w *notationWalker) stateNode(n *ast.StateNode) {
-	switch {
-	case n.IsInitial:
-		w.extension(keywordSpan(n, "initial"), "`initial <state>;`",
-			"the standard way to mark the state a machine starts in is `entry; then <state>;`")
-	case n.IsFinal:
-		w.extension(keywordSpan(n, "final"), "`final <state>;`",
-			"a final state is reached by a transition, and is written `state <name>;`")
-	}
 	w.walkActionBody(n.Entry)
 	w.walkActionBody(n.Do)
 	w.walkActionBody(n.Exit)

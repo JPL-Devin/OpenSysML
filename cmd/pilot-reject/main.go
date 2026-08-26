@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Open-MBEE/OpenSysML/internal/baseline"
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/errata"
@@ -48,15 +49,17 @@ func main() {
 	timeout := flag.Duration("timeout", 0, "per-batch timeout for the pilot validator (0: no limit)")
 	policy := flag.String("conformance", policyAuto,
 		"conformance mode our verdicts are taken under: auto (extensions/ strictly, the rest by default), default, or strict")
+	update := flag.Bool("update", false, "record this run as "+committedBaseline)
+	check := flag.Bool("check", false, "fail unless this run reproduces "+committedBaseline)
 	flag.Parse()
 
-	if err := run(*repo, *validator, *kermlValidator, *corpus, *out, *policy, *timeout); err != nil {
+	if err := run(*repo, *validator, *kermlValidator, *corpus, *out, *policy, *timeout, *update, *check); err != nil {
 		fmt.Fprintf(os.Stderr, "pilot-reject: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, validator, kermlValidator, corpus, out, policy string, timeout time.Duration) error {
+func run(repo, validator, kermlValidator, corpus, out, policy string, timeout time.Duration, update, check bool) error {
 	policy, err := parsePolicy(policy)
 	if err != nil {
 		return err
@@ -117,6 +120,13 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 	if report.Pilot, err = pilotVersion(validator); err != nil {
 		return err
 	}
+	if report.Provenance, err = provenance(repo, report.Pilot, corpusDir, overlay, files); err != nil {
+		return err
+	}
+	// Only a recorded baseline is dated, so two plain runs stay byte-identical.
+	if update {
+		report.Provenance.Recorded = baseline.Today()
+	}
 	for _, rel := range files {
 		report.Cases = append(report.Cases, *cases[rel])
 	}
@@ -125,7 +135,18 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 	if err := runErrata(report, overlay, repo, corpusDir, policy, validator, kermlValidator, out, files, batches, timeout); err != nil {
 		return err
 	}
-	return writeReports(out, report)
+	fresh, err := writeReports(out, report)
+	if err != nil {
+		return err
+	}
+	committed := filepath.Join(repo, filepath.FromSlash(committedBaseline))
+	if update {
+		return baseline.Write(committed, fresh)
+	}
+	if check {
+		return baseline.Reproduces(committed, fresh)
+	}
+	return nil
 }
 
 // adjudicate buckets every case of a corpus directory: ours in the policy's

@@ -6,14 +6,15 @@ package SendIdentityPart {
 
 	part def Node {
 		state Listen {
-			initial start;
+			entry; then start;
+			state start;
 
 			state waiting {
 				entry send Ping() to worker;
 			}
 			state heard;
 
-			start then waiting;
+			succession first start then waiting;
 
 			transition first waiting
 				accept Ping

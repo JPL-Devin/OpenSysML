@@ -50,9 +50,9 @@ state def TrafficController {
     
     choice priorityCheck;
     
-    transition Green to priorityCheck;
-    transition priorityCheck to Yellow if (emergencyVehicle);
-    transition priorityCheck to Red if (not emergencyVehicle);
+    transition first Green then priorityCheck;
+    transition first priorityCheck if (emergencyVehicle) then Yellow;
+    transition first priorityCheck if (not emergencyVehicle) then Red;
 }
 ```
 
@@ -65,9 +65,9 @@ state def SafetyMonitor {
     
     junction statusEval;
     
-    transition statusEval to Nominal if (temp < 50);
-    transition statusEval to Warning if (temp >= 50 and temp < 100);
-    transition statusEval to Critical if (temp >= 100);
+    transition first statusEval if (temp < 50) then Nominal;
+    transition first statusEval if (temp >= 50 and temp < 100) then Warning;
+    transition first statusEval if (temp >= 100) then Critical;
 }
 ```
 
@@ -87,8 +87,8 @@ state def Player {
     }
     state stopped;
 
-    transition stopped to resume when Resume;
-    transition resume to track;   // default history transition
+    transition first stopped when Resume then resume;
+    transition first resume then track;  // default history transition
 }
 ```
 
@@ -197,11 +197,12 @@ package ChoiceTest {
         
         choice checkPriority;
         
-        initial init;
+        entry; then init;
+        state init;
         transition init then Idle;
-        transition Idle accept Start to checkPriority;
-        transition checkPriority to HighPriority if (priority > 5);
-        transition checkPriority to LowPriority if (priority <= 5);
+        transition first Idle accept Start then checkPriority;
+        transition first checkPriority if (priority > 5) then HighPriority;
+        transition first checkPriority if (priority <= 5) then LowPriority;
     }
     
     state sm : Controller;
@@ -229,11 +230,12 @@ package JunctionTest {
         
         junction statusEval;
         
-        initial init;
+        entry; then init;
+        state init;
         transition init then statusEval;
-        transition statusEval to Nominal if (temp < 50);
-        transition statusEval to Warning if (temp >= 50 and temp < 100);
-        transition statusEval to Critical if (temp >= 100);
+        transition first statusEval if (temp < 50) then Nominal;
+        transition first statusEval if (temp >= 50 and temp < 100) then Warning;
+        transition first statusEval if (temp >= 100) then Critical;
     }
     
     state sm : Monitor;
@@ -294,23 +296,23 @@ Fork and join are declared like choice and junction:
 
 ```sysml
 state Machine {
-    initial init;
+    entry; then init;
+    state init;
     state idle;
-    state running {
-        region left  { initial ls; state working;  then ls working; }
-        region right { initial rs; state watching; then rs watching; }
+    state running parallel {
+        state left  { entry; then ls; state ls; state working;  succession first ls then working; }
+        state right { entry; then rs; state rs; state watching; succession first rs then watching; }
     }
     fork split;
     join sync;
-    final done;
 
-    init then idle;
-    transition idle to split;
-    transition split to working;    // one branch per region
-    transition split to watching;
-    transition working to sync;
-    transition watching to sync;
-    transition sync to done;
+    succession first init then idle;
+    transition first idle then split;
+    transition first split then working;  // one branch per region
+    transition first split then watching;
+    transition first working then sync;
+    transition first watching then sync;
+    transition first sync then done;
 }
 ```
 
@@ -369,17 +371,17 @@ the pseudostate routes along ends decides how much of the configuration moves,
 per UML's least common ancestor rule:
 
 ```sysml
-state def RegionChoice {
+state def RegionChoice parallel {
     attribute mode : Integer = 2;
 
-    region left  { initial lstart; state lidle; state lfast; state lslow;
-                   then lstart lidle; transition lidle to pick; }
-    region right { initial rstart; state rwatch; then rstart rwatch; }
+    state left  { entry; then lstart; state lstart; state lidle; state lfast; state lslow;
+                  succession first lstart then lidle; transition first lidle then pick; }
+    state right { entry; then rstart; state rstart; state rwatch; succession first rstart then rwatch; }
 
     choice pick;
 
-    transition pick to lfast if mode == 2;   // stays in region left
-    transition pick to lslow;                // else branch
+    transition first pick if mode == 2 then lfast;  // stays in region left
+    transition first pick then lslow;  // else branch
 }
 ```
 

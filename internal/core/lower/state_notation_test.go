@@ -14,11 +14,12 @@ func TestToStateGraph_DeferNotation(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state busy {
 					defer Ping, setSpeed(value);
 				}
-				start then busy;
+				succession first start then busy;
 			}
 		}
 	`), nil)
@@ -66,45 +67,16 @@ func TestToStateGraph_DeferInMachineBodyIsReported(t *testing.T) {
 	_, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				defer Ping;
 				state busy;
-				start then busy;
+				succession first start then busy;
 			}
 		}
 	`), nil)
 	if err == nil {
 		t.Fatal("expected an error for a defer in the state machine body")
-	}
-	if !strings.Contains(err.Error(), "defer must be declared inside a state") {
-		t.Errorf("expected a placement error, got: %v", err)
-	}
-}
-
-// A region is not a state either, so a defer in a region body is reported
-// rather than silently dropped.
-func TestToStateGraph_DeferInRegionBodyIsReported(t *testing.T) {
-	_, err := ToStateGraph(stateUsageIn(t, `
-		package test {
-			state Machine {
-				state outer {
-					region left {
-						initial lstart;
-						defer Ping;
-						state lwork;
-						then lstart lwork;
-					}
-					region right {
-						initial rstart;
-						state rwork;
-						then rstart rwork;
-					}
-				}
-			}
-		}
-	`), nil)
-	if err == nil {
-		t.Fatal("expected an error for a defer in a region body")
 	}
 	if !strings.Contains(err.Error(), "defer must be declared inside a state") {
 		t.Errorf("expected a placement error, got: %v", err)
@@ -118,7 +90,8 @@ func TestToStateGraph_HistoryAndPointNotation(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state outer {
 					state a;
 					history resume;
@@ -127,7 +100,7 @@ func TestToStateGraph_HistoryAndPointNotation(t *testing.T) {
 					entry point into;
 					exit point outOf;
 				}
-				start then outer;
+				succession first start then outer;
 			}
 		}
 	`), nil)
@@ -168,7 +141,7 @@ func TestToStateGraph_EntrySuccessionNamesInitialState(t *testing.T) {
 				entry; then off;
 				state off;
 				state on;
-				off then on;
+				succession first off then on;
 			}
 		}
 	`), nil)
@@ -217,10 +190,10 @@ func TestToStateGraph_EntryActionSuccessionNamesInitialState(t *testing.T) {
 		package test {
 			state Machine {
 				entry action begin { }
-				begin then off;
+				succession first begin then off;
 				state off;
 				state on;
-				off then on;
+				succession first off then on;
 			}
 		}
 	`), nil)
@@ -245,7 +218,7 @@ func TestToStateGraph_EntryActionNamesInitialStateFromScopeAlone(t *testing.T) {
 				transition begin then off;
 				state off;
 				state on;
-				off then on;
+				succession first off then on;
 			}
 		}
 	`)
@@ -267,14 +240,14 @@ func TestToStateGraph_EntryActionNamesInitialStateFromScopeAlone(t *testing.T) {
 	}
 }
 
-// Each spelling that designates an initial state records it on the graph and
-// leaves the parsed states as written (AST immutability).
-func TestToStateGraph_InitialDesignationDoesNotMutateAST(t *testing.T) {
+// Each spelling that designates an initial state records it on the graph, which
+// is where the runtime reads it from.
+func TestToStateGraph_InitialDesignationIsRecordedOnTheGraph(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		body string
 	}{
-		{"named entry action", "entry action begin { }\ntransition begin then off;"},
+		{"named entry action", "entry action begin { }\ntransition first begin then off;"},
 		{"anonymous entry", "entry; then off;"},
 		{"initial pseudostate", "first i then off;"},
 	} {
@@ -285,7 +258,7 @@ func TestToStateGraph_InitialDesignationDoesNotMutateAST(t *testing.T) {
 						`+tc.body+`
 						state off;
 						state on;
-						off then on;
+						succession first off then on;
 					}
 				}
 			`)
@@ -300,8 +273,8 @@ func TestToStateGraph_InitialDesignationDoesNotMutateAST(t *testing.T) {
 				t.Error("expected the graph to report its initial state as initial")
 			}
 			for _, state := range graph.States {
-				if state.IsInitial {
-					t.Errorf("lowering wrote IsInitial onto the parsed state %q", state.Name)
+				if state != graph.Initial && graph.IsInitial(state) {
+					t.Errorf("state %q designated initial as well", state.Name)
 				}
 			}
 		})

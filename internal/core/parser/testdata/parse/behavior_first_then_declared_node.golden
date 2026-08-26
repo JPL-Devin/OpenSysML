@@ -11,9 +11,19 @@
           (Usage kind="action" name="s1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
           (Usage kind="action" name="s2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
           (InitialNode name="s1" successor="")
-          (SuccessionEdge source="s1" target="s2")))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="s1"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="s2"
+                (*ast.QualifiedName))))))
       (Membership visibility="default"
         (Definition kind="action" abstract=false variation=false name="OwnInitialNode"
           (Usage kind="action" name="s1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
           (InitialNode name="start" successor="")
-          (SuccessionEdge source="start" target="s1"))))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="start"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="s1"
+                (*ast.QualifiedName)))))))))

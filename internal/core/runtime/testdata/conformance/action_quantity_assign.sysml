@@ -19,10 +19,10 @@ package test {
 			assign quick := speed >= 18.0 [SI::km/SI::h];
 		}
 
-		done end;
+		done;
 
-		then start compute;
-		then compute check;
-		then check end;
+		succession first start then compute;
+		succession first compute then check;
+		succession first check then done;
 	}
 }

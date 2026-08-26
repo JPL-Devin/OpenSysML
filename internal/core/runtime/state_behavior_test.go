@@ -28,16 +28,16 @@ func TestStateBodyBehaviorsAreLowered(t *testing.T) {
         attribute worked : Integer = 0;
         attribute exited : Integer = 0;
 
-        initial init;
+        entry; then init;
+        state init;
         state active {
             entry { entered = 1; }
             do { worked = 2; }
             exit { exited = 3; }
         }
-        final done;
 
-        init then active;
-        active then done;
+        succession first init then active;
+        succession first active then done;
     }
 }`, "Machine")
 
@@ -61,23 +61,23 @@ func TestStateEntryPerformsAction(t *testing.T) {
         action bumping {
             assign counter := counter + 10;
         }
-        done end;
+        done;
 
-        then start bumping;
-        then bumping end;
+        succession first start then bumping;
+        succession first bumping then done;
     }
 
     state Machine {
         attribute counter : Integer = 1;
 
-        initial init;
+        entry; then init;
+        state init;
         state active {
             entry perform action bump : Bump;
         }
-        final done;
 
-        init then active;
-        active then done;
+        succession first init then active;
+        succession first active then done;
     }
 }`, "Machine")
 
@@ -99,24 +99,24 @@ func TestStateDoExitAndTransitionEffectPerformAction(t *testing.T) {
         action bumping {
             assign counter := counter + 10;
         }
-        done end;
+        done;
 
-        then start bumping;
-        then bumping end;
+        succession first start then bumping;
+        succession first bumping then done;
     }
 
     state Machine {
         attribute counter : Integer = 1;
 
-        initial init;
+        entry; then init;
+        state init;
         state active {
             do perform action working : Bump;
             exit perform action bump : Bump;
         }
-        final done;
 
-        init then active;
-        transition active to done do { perform action bumpAgain : Bump; }
+        succession first init then active;
+        transition first active do { perform action bumpAgain : Bump; } then done;
     }
 }`, "Machine")
 
@@ -140,24 +140,24 @@ func TestStateSubactionByReferencePerformsAction(t *testing.T) {
         action bumping {
             assign counter := counter + 10;
         }
-        done end;
+        done;
 
-        then start bumping;
-        then bumping end;
+        succession first start then bumping;
+        succession first bumping then done;
     }
 
     state Machine {
         attribute counter : Integer = 1;
 
-        initial init;
+        entry; then init;
+        state init;
         state active {
             entry Bump;
             exit Bump;
         }
-        final done;
 
-        init then active;
-        active then done;
+        succession first init then active;
+        succession first active then done;
     }
 }`, "Machine")
 
@@ -173,14 +173,14 @@ func TestStateSubactionByReferencePerformsAction(t *testing.T) {
 func TestStateEntryPerformsUnresolvedAction(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
     state Machine {
-        initial init;
+        entry; then init;
+        state init;
         state active {
             entry perform action bump : NoSuchAction;
         }
-        final done;
 
-        init then active;
-        active then done;
+        succession first init then active;
+        succession first active then done;
     }
 }`, "Machine")
 

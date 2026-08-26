@@ -304,7 +304,7 @@ func (e *stmtEngine) blockFlow(block lower.Block) (stmtFlow, error) {
 		if len(successors) == 0 {
 			return flowNext, nil
 		}
-		node = successors[0]
+		node = successors[0].Target
 	}
 	return flowNext, nil
 }

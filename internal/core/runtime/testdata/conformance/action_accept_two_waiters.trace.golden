@@ -10,5 +10,5 @@ stmt assign number
   eval feature n -> 5
 stmt assign message
   eval feature t -> "go"
-step 5: token 5@end
+step 5: token 5@done
 step 6: no active tokens

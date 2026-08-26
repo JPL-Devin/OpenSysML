@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Open-MBEE/OpenSysML/internal/baseline"
 )
 
 // Case is one negative model's adjudication. The error messages are kept only
@@ -52,7 +54,10 @@ type Report struct {
 	Corpus    string `json:"corpus"`
 	// Conformance is the policy our verdicts were taken under.
 	Conformance string `json:"conformance"`
-	Totals      Totals `json:"totals"`
+	// Provenance identifies the pin, bridges and corpus this run measured, so a
+	// committed baseline can be checked without the validators.
+	Provenance baseline.Record `json:"provenance"`
+	Totals     Totals          `json:"totals"`
 	// StrictOnlyAgreements are the cases both sides reject only because ours was
 	// asked strictly: the default mode accepts them, by design.
 	StrictOnlyAgreements []string       `json:"strictOnlyAgreements,omitempty"`
@@ -100,26 +105,27 @@ func (r *Report) summarize() {
 	}
 }
 
-func writeReports(dir string, report *Report) error {
+func writeReports(dir string, report *Report) ([]byte, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
+		return nil, err
 	}
 	encoded, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
-		return err
+		return nil, err
 	}
+	encoded = append(encoded, '\n')
 	jsonPath := filepath.Join(dir, "pilot-reject.json")
-	if err := os.WriteFile(jsonPath, append(encoded, '\n'), 0o600); err != nil {
-		return err
+	if err := os.WriteFile(jsonPath, encoded, 0o600); err != nil {
+		return nil, err
 	}
 	textPath := filepath.Join(dir, "pilot-reject.txt")
 	if err := os.WriteFile(textPath, []byte(renderText(report)), 0o600); err != nil {
-		return err
+		return nil, err
 	}
 
 	fmt.Fprintf(os.Stderr, "wrote %s and %s\n", textPath, jsonPath)
 	fmt.Fprintf(os.Stderr, "%s\n", headline(report.Totals))
-	return nil
+	return encoded, nil
 }
 
 func headline(t Totals) string {

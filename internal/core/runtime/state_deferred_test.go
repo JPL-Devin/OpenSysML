@@ -34,10 +34,11 @@ func deferringMachine(defers bool) *ast.Usage {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			busy,
 			&ast.StateNode{Name: "ready"},
-			&ast.StateNode{Name: "done", IsFinal: true},
+			&ast.StateNode{Name: "done"},
 			transitionMember("init", "busy"),
 			triggeredTransition("busy", "ready", "Go"),
 			triggeredTransition("ready", "done", "Ping"),
@@ -96,10 +97,11 @@ func TestCompositeStateDefersForItsSubstates(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			outer,
 			&ast.StateNode{Name: "ready"},
-			&ast.StateNode{Name: "done", IsFinal: true},
+			&ast.StateNode{Name: "done"},
 			transitionMember("init", "inner"),
 			triggeredTransition("inner", "ready", "Go"),
 			triggeredTransition("ready", "done", "Ping"),
@@ -133,11 +135,12 @@ func TestDeferredEventsKeepTheirArrivalOrder(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			busy,
 			&ast.StateNode{Name: "ready"},
 			&ast.StateNode{Name: "gotPing"},
-			&ast.StateNode{Name: "done", IsFinal: true},
+			&ast.StateNode{Name: "done"},
 			transitionMember("init", "busy"),
 			triggeredTransition("busy", "ready", "Go"),
 			triggeredTransition("ready", "gotPing", "Ping"),
@@ -167,7 +170,8 @@ func orthogonalDeferMachine(handlesPing bool) *ast.Usage {
 	left := &ast.StateRegion{
 		Name: "left",
 		States: []ast.Node{
-			&ast.StateNode{Name: "lstart", IsInitial: true},
+			entryStart("lstart"),
+			&ast.StateNode{Name: "lstart"},
 			lwait,
 			&ast.StateNode{Name: "lopen"},
 			&ast.StateNode{Name: "lping"},
@@ -178,7 +182,8 @@ func orthogonalDeferMachine(handlesPing bool) *ast.Usage {
 	}
 
 	rightStates := []ast.Node{
-		&ast.StateNode{Name: "rstart", IsInitial: true},
+		entryStart("rstart"),
+		&ast.StateNode{Name: "rstart"},
 		&ast.StateNode{Name: "rwait"},
 		&ast.StateNode{Name: "rping"},
 		transitionMember("rstart", "rwait"),
@@ -249,11 +254,12 @@ func TestEventBlockedByAGuardIsStillDeferred(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			busy,
 			&ast.StateNode{Name: "wrong"},
 			&ast.StateNode{Name: "ready"},
-			&ast.StateNode{Name: "done", IsFinal: true},
+			&ast.StateNode{Name: "done"},
 			transitionMember("init", "busy"),
 			blocked,
 			triggeredTransition("busy", "ready", "Go"),
@@ -282,24 +288,27 @@ func TestEventBlockedByAGuardIsStillDeferred(t *testing.T) {
 func TestExitedNestedRegionDoesNotReactToTheSameEvent(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial start;
-			state co {
-				region a {
-					initial astart;
+			entry; then start;
+			state start;
+			state co parallel {
+				state a {
+					entry; then astart;
+					state astart;
 					state a1;
-					then astart a1;
-					transition a1 to out accept Ping;
+					succession first astart then a1;
+					transition first a1 accept Ping then out;
 				}
-				region b {
-					initial bstart;
+				state b {
+					entry; then bstart;
+					state bstart;
 					state b1;
 					state b2;
-					then bstart b1;
-					transition b1 to b2 accept Ping;
+					succession first bstart then b1;
+					transition first b1 accept Ping then b2;
 				}
 			}
 			state out;
-			then start co;
+			succession first start then co;
 		}
 	}`)
 
@@ -329,11 +338,12 @@ func TestRecalledEventPrecedesLaterArrivals(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			busy,
 			&ast.StateNode{Name: "ready"},
-			&ast.StateNode{Name: "gotPing", IsFinal: true},
-			&ast.StateNode{Name: "gotPong", IsFinal: true},
+			&ast.StateNode{Name: "gotPing"},
+			&ast.StateNode{Name: "gotPong"},
 			transitionMember("init", "busy"),
 			triggeredTransition("busy", "ready", "Go"),
 			triggeredTransition("ready", "gotPing", "Ping"),

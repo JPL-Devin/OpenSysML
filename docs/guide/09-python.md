@@ -10,7 +10,7 @@ The full API surface, the generated typed classes and the measured latency are
 ## Installation
 
 ```bash
-pip install opensysml             # from PyPI, once the first release is published
+pip install opensysml             # from PyPI
 pip install -e python/          # or from a checkout, at the repository root
 ```
 
@@ -111,9 +111,9 @@ except opensysml.ModelError as exc:
 ```
 
 `strict_conformance=True`, on the same three calls, asks a different question:
-whether the source is conforming SysML v2. OpenSysML's own notation — the
-`initial`/`final` markers, `region`, `defer`, the pseudostates, `transition <src>
-to <tgt>` — is then reported as an error rather than a warning
+whether the source is conforming SysML v2. OpenSysML's own notation — `defer`,
+the pseudostates — is then reported as an error rather
+than a warning
 ([3. Strict conformance](03-command-line.md#strict-conformance)). The two are
 independent: `strict` decides whether errors raise, `strict_conformance` decides
 what counts as one.
