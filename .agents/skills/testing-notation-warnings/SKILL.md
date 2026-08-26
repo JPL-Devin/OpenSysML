@@ -526,6 +526,57 @@ regex that silently matches nothing looks identical to a clean result. Note g15 
 `cmd/pilot-reject/testdata/`, which is *outside* the usual corpus roots, so the corpus scan alone
 never touches the one file that exercises the pair.
 
+## Testing the *removal* of a notation spelling (the mirror image of adding a rule)
+
+When a PR deletes an OpenSysML-only spelling (e.g. the ACTION-node aliases `initial <name> [then
+<target>];`, `final [<name>];`, `decision <name>;` in favour of `first`/`done`/`decide`), the
+emit site in `nonstandard_notation.go` disappears **and** the parser stops matching the word, so the
+warning is replaced by a parser error. Test it as a pair of claims, not one:
+
+1. **Each removed spelling must now produce a located error**, not silence. `bin/sysml -validate
+   <f>` should print `<f>:<l>:<c>: error: expected a body member` with the caret under the removed
+   word, and exit **2**. One fixture per construct — parser recovery cascades and invents
+   `expected a namespace member` errors on the closing braces if you put several in one file.
+2. **The word must still work as an ordinary name**, because these words are *unreserved*
+   (`internal/core/lexer/contextual.go`, `parser/notation.go` `notationWords`). Put
+   `attribute final : Boolean;`, `action initial;`, `out decision : Boolean;`, a kindless `final;`
+   and a kindless `decision;`, and `first initial then final2;` in one clean file: default mode must
+   exit 0 and `-convert sysml` must reproduce every member verbatim.
+
+**The `then <word>;` shape is the trap.** A removed word reached as a *succession end* is not a node
+at all, so no notation rule sees it and the parser accepts it as a reference to a target with that
+name. `action def A { first a; action a; then final; }` therefore validates **clean, exit 0, even
+under `-strict`**, where the old build warned at the `final` span — and the only surface that
+complains is execution: `bin/sysml -action A <f>` fails with
+`lower action graph: succession edge references undefined target node "final"`. Confirm the same
+output for `then zzz;` to establish whether it is a general permissiveness of the resolver rather
+than something the branch introduced, and report it either way — the user asking for "bare
+`then final;` diagnosed" will not get that from `-validate`.
+
+**Always build a merge-base contrast binary**; "the alias is gone" is only observable as a
+difference. `git worktree add /tmp/wt-old $(git merge-base origin/main HEAD)` then
+`go build -o /tmp/old-sysml ./cmd/sysml` (~2 min cold). Then assert the *unchanged* neighbours are
+byte-identical rather than merely present:
+
+```bash
+for f in state_markers.sysml oneended_first.sysml; do for m in "" "-strict"; do
+  a=$(bin/sysml -validate $m $f 2>&1; echo exit=$?); b=$(/tmp/old-sysml -validate $m $f 2>&1; echo exit=$?)
+  [ "$a" = "$b" ] && echo "IDENTICAL $f [$m]" || diff <(echo "$b") <(echo "$a"); done; done
+```
+
+A whole-repo sweep of the same comparison (`examples`, `testdata`, `internal/core/*/testdata`;
+~1440 files, ~4 min serial) is the false-positive control, and it is *non-vacuous* here because the
+hand-written removed-spelling fixtures above do differ under the identical method — cite that as the
+control rather than reporting "0 differences" alone.
+
+**Editor surfaces move too.** Removing the word from `lexer.contextualWords` drops it from LSP
+completion and from the generated TextMate grammars. Both are cheap to assert:
+`grep -o decision editors/vscode/syntaxes/*.json | wc -l` (expect 0 new vs 2 old), and a completion
+request in an action body counted old vs new (283 → 282 labels, `decision` absent, `decide` still
+offered). Drive completion with a *persistent* `Popen` + a reader thread and `time.sleep` between
+messages — `subprocess.run` with all messages piped at once returns **empty stdout and rc 0** from
+`bin/sysml-lsp`, which looks exactly like "no completions offered".
+
 ## Devin Secrets Needed
 
 None. Everything runs against the locally provisioned `build/pilot-validator` and the committed
