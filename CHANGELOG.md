@@ -4,7 +4,52 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
-## Unreleased
+## 0.3.0 — 2026-08-26
+
+Release 0.3.0 spends itself on a single question: what does this implementation accept that the
+specification does not? Since 0.2.0 the answer was a warning — thirteen OpenSysML-only spellings were
+read, reported as non-standard notation, and executed anyway. That register is now closed. Each of the
+thirteen is a parse error, the warning for it is gone, and the standard spelling that replaces it is
+documented, migrated throughout this repository's models and guide transcripts, and covered by tests.
+**A model relying on any of them no longer parses**, which is the point: an analyzer that quietly
+accepts what no production admits teaches its users a notation no other tool reads. The version is a
+minor rather than a patch for that reason.
+
+The state machine's completion semantics were re-founded in the process: a machine completes on a
+transition to the standard library's `done` rather than on a marker keyword, computed while lowering
+and carried in the graph the runtime executes, so completion is a property of the machine rather than
+of its syntax. Beyond notation, converted RDF states element ids and ownership as the abstract syntax
+does, so a SysML v2 API service can address a graph this tool produced; `sysml-grpc` speaks the
+Connect protocol by default, on the same port as gRPC and gRPC-Web; the Python client starts a private
+service of its own instead of adopting whichever one is listening; and what a real Flexo MMS stack
+does with our Turtle is now a recorded per-property measurement rather than a claim.
+
+Against the pinned OMG pilot (`2026-05`, jupyter-sysml-kernel 0.60.1), 328 of 355 files agree
+diagnostic-by-diagnostic, there is no declared `errors` row in the reference's own suites we are
+silent on, and 120 of 120 authored invalid models are rejected by both implementations.
+
+### The notation this release no longer accepts, in one table
+
+Each spelling was an OpenSysML extension warned as `nonstandard-notation`; each is now a parse error,
+and its warning is gone. None of the words involved is reserved by the pinned grammars, so
+`state final;`, `attribute initial : Boolean;` and `region` as a name keep working. Every row is
+described in full below.
+
+| No longer accepted | Write instead |
+|---|---|
+| `bind result = x * 2.0;` — an expression as a binding's right end | `out result : Real = x * 2.0;`, or bind to a feature holding the result |
+| `assert <expr>;` / `assume <expr>;` in a constraint body | the bare condition: `constraint MassBudget { total <= limit }` |
+| `assume <expr>;` / `require <expr>;` in a requirement body | a wrapped constraint: `require constraint { power > 0 }` |
+| `return <expr>;` in a calculation body | the body's trailing expression: `calc def Add { in x; in y; x + y }` |
+| `final <state>;` | `transition first running accept Stop then done;` |
+| `initial <state>;` | `entry; then <state>;` |
+| `transition <source> to <target>;` | `transition first <source> then <target>;` |
+| `region <name> { … }` | mark the owning state's body `parallel`, one `state` substate per region |
+| `initial <name>;` as an action node | `first <name> [then <target>];` |
+| `final [<name>];` as an action node | `done;`, or `then done;` as a succession target |
+| `decision <name>;` | `decide <name>;` |
+| `done <name>;` — a named action final node | `done;` |
+| `then <source> <target>;`, and a member-leading `<source> then <target>;` | `succession first <source> then <target>;` |
 
 ### A name a library supertype already supplies is reported
 
@@ -299,6 +344,28 @@ now covered by a test.
 watcher nothing reached: the language server is told which files changed by its client, and no
 command watches a directory. Building from source now resolves one module less.
 
+### Conformance figures for this release
+
+Every figure is generated from the committed baselines and gated, so none of it is typed in by hand.
+Against the pinned reference (`2026-05`, artifact `0.60.1`):
+
+- **Corpus agreement:** 328 of 355 files agree diagnostic-by-diagnostic; 27 diagnostics are ours
+  alone, 58 the reference's alone. Read by root, our diagnostics against the reference's own corpora
+  fell while our notation warnings on our own example models rose — the removed spellings reporting
+  as the errors they now are.
+- **Declared-diagnostic silence:** of the 510 declared `errors` rows in the reference's Xpect suites,
+  none is one we are silent on; 230 of 230 declared scope assertions match exactly.
+- **Permissiveness gaps:** of 120 invalid models we authored, 120 both reject, two of them only when
+  we are asked strictly. We wrote every case, so the denominator measures our corpus's reach and not
+  our conformance.
+- **Declared errata:** the registry declares three defects in the published reference material, two
+  with a specification-derived correction. The figures above are as published and stay the
+  conformance statement; the corrected-text run is reported beside them and is diagnostic only.
+- The oracle baselines now record their own provenance — the pin, the validator bridge digests and the
+  identities of the corpora compared — checked by tests that need no Java, with the Java-backed
+  reproduction on a schedule. All oracles remain advisory: they inform judgment, they do not replace
+  it.
+
 ### Fixed
 
 The conformance comparer no longer compares integral fields within the tolerance it allows a
@@ -307,6 +374,33 @@ reached counts, ids and spans as well — 1,000,000,000,500 matched 1,000,000,00
 whole number above 2^53 could not be represented exactly in the first place. Integral values
 now carry an integral type and are compared by their digits, expected numbers are read as
 literals rather than floats, and the tolerance applies to `Real` alone.
+
+- **Parallel machines and actions lower once and completely**: no duplicate nested regions; parallel
+  action edges and state behaviors preserved; explicit action successions and implied endpoints
+  lowered; explicit action starts required; an anonymous nested action final targeted correctly.
+- **Parser**: a binary operator survives a parenthesis-less arrow invocation, and a keyword binary
+  operator after a name reads as a calculation result.
+- **Semantics**: interface flow features are paired before conjugate names are required.
+- **Python client**: a failed child's log is read under a lock once drained, unset features read as no
+  value in typed views, and calls into the private service are serialized across threads.
+- **RDF**: an expression node id whose owner segment starts with `p` reverses unambiguously.
+- **Conformance harness**: two distinct ports are reserved, and a service that exits early is
+  reported instead of waited on.
+
+### Project
+
+- **buf is the single source of protobuf codegen**, replacing ad-hoc `protoc` invocations: Go stubs
+  through pinned plugins, Python stubs (including `.pyi` and the package-relative gRPC import)
+  through a local plugin bridging to `grpcio-tools`, plus `buf lint` and `buf breaking` against `main`
+  in the Makefile and in CI. Templates for TypeScript, Java and Rust clients are defined and generate
+  into an untracked directory.
+- **A language-independent gRPC conformance suite**: scenarios live as protobuf-JSON data under
+  `conformance/`, and `cmd/conformance` builds and starts the service itself, so a client in any
+  language can prove it speaks to `sysml-grpc` without re-deriving the Python suite. Every scenario
+  runs once per protocol, so the second transport surface cannot rot.
+- A core developer guide; the transport evaluation and the Connect surface documented on the site;
+  internal engineering records excluded from what is published; and the guide's transcripts and
+  examples rewritten in standard notation against the real binary.
 
 ## 0.2.1 — 2026-08-24
 
