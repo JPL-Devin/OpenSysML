@@ -632,9 +632,7 @@ func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 
 	p.expect(lexer.Semicolon, "expected ';' after final node")
 
-	node := &ast.FinalNode{
-		Keyword: p.src.Text(tok.Span),
-	}
+	node := &ast.FinalNode{}
 	node.NodeSpan = p.spanFrom(start)
 	return node
 }

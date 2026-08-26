@@ -871,7 +871,7 @@ func resolveSuccessionUsageEnd(graph *ActionGraph, ref ast.Node, source bool) as
 		return initial
 	}
 	if !source && name == "done" {
-		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Keyword: "done"}
+		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}}
 		graph.Finals = append(graph.Finals, final)
 		graph.Nodes = append(graph.Nodes, final)
 		return final

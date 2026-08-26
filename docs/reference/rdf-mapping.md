@@ -236,7 +236,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 | written | metaclass | carries |
 |---|---|---|
 | `first x;` | `sysx:InitialNode` | `sysml:sourceFeature` (the member the body starts at — a reference, not a name it declares), `sysml:targetFeature`, `sysx:guard` |
-| `done;` | `sysx:FinalNode` | `sysx:declaredKeyword` |
+| `done;` | `sysx:FinalNode` | — |
 | `action a;`, `action a { x + 1 }` | `sysx:ActionExecutionNode` | `sysml:references` or `sysx:expression` |
 | `perform a;` | `sysml:PerformActionUsage` | `sysx:expression` (the action performed) |
 | `assign x := 1;` | `sysml:AssignmentActionUsage` | `sysx:target`, `sysml:value`, `sysx:assignmentOperator` when it is not `:=` |

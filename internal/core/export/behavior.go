@@ -95,7 +95,6 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 
 	case *ast.FinalNode:
 		head(rdf.OpenSysMLTerm(mFinalNode))
-		e.writtenKeyword(subject, n, "done", "final")
 		return true, nil
 
 	case *ast.ForkNode:
@@ -641,8 +640,7 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 		return strings.Join(words, " "), true, nil
 
 	case mFinalNode:
-		words := []string{d.keywordOr(el, "done")}
-		return strings.Join(words, " "), true, nil
+		return "done", true, nil
 
 	case mFork, mJoin, mMerge, mDecision:
 		words := []string{controlNodeKeyword[el.metaclass]}
