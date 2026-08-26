@@ -18,12 +18,7 @@
                 (*ast.QualifiedName))
               (ConnectorEnd target="lidle"
                 (*ast.QualifiedName))))
-          (TransitionMember source="lidle" target="pick")
-          (TransitionMember source="pick" target="lfast"
-            (OperatorExpr operator="=="
-              (FeatureReference name="mode")
-              (LiteralInteger value="2")))
-          (TransitionMember source="pick" target="lslow")))
+          (TransitionMember source="lidle" target="pick")))
       (Membership visibility="default"
         (Usage kind="state" name="right" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (*ast.StateNode)
@@ -34,4 +29,9 @@
                 (*ast.QualifiedName))
               (ConnectorEnd target="rwatch"
                 (*ast.QualifiedName))))))
-      (PseudostateNode kind="choice" name="pick"))))
+      (PseudostateNode kind="choice" name="pick")
+      (TransitionMember source="pick" target="lfast"
+        (OperatorExpr operator="=="
+          (FeatureReference name="mode")
+          (LiteralInteger value="2")))
+      (TransitionMember source="pick" target="lslow"))))

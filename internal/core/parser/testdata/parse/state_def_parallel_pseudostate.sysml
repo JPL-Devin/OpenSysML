@@ -9,9 +9,6 @@ state def RegionChoice parallel {
 
 		succession first lstart then lidle;
 		transition lidle to pick;
-
-		transition pick to lfast if mode == 2;
-		transition pick to lslow;
 	}
 
 	state right {
@@ -22,4 +19,7 @@ state def RegionChoice parallel {
 	}
 
 	choice pick;
+
+	transition pick to lfast if mode == 2;
+	transition pick to lslow;
 }
