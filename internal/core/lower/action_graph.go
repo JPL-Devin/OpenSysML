@@ -410,10 +410,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				}
 			}
 		case *ast.SuccessionEdge:
-			sourceNode := resolveEnd(graph.Nodes, n.Source, n.SourceMember)
-			if n.SourceMember == nil {
-				sourceNode = resolveActionEndpoint(graph, n.Source, true)
-			}
+			sourceNode := resolveActionEndpointForEdge(graph, n.Source, n.SourceMember, true)
 			targetNode := resolveActionEndpointForEdge(graph, n.Target, n.TargetMember, false)
 
 			if sourceNode == nil {
@@ -842,7 +839,8 @@ func resolveEnd(nodes []ast.Node, qname *ast.QualifiedName, member ast.Node) ast
 	return findNodeByName(nodes, qname)
 }
 
-// resolveActionEndpoint resolves an action edge end or its implied start/done node.
+// resolveActionEndpointForEdge resolves an edge end, which the notation may have
+// bound to a member by position rather than named.
 func resolveActionEndpointForEdge(graph *ActionGraph, ref ast.Node, member ast.Node, source bool) ast.Node {
 	if member != nil {
 		return resolveEnd(graph.Nodes, nil, member)
@@ -850,6 +848,8 @@ func resolveActionEndpointForEdge(graph *ActionGraph, ref ast.Node, member ast.N
 	return resolveActionEndpoint(graph, ref, source)
 }
 
+// resolveActionEndpoint resolves an action edge end, or the implied start/done
+// node it names when the body declares no such node.
 func resolveActionEndpoint(graph *ActionGraph, ref ast.Node, source bool) ast.Node {
 	node := findNodeByReference(graph.Nodes, ref)
 	if node != nil {
