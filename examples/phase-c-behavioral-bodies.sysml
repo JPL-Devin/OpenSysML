@@ -144,10 +144,10 @@ package PhaseC {
         action greenLight;
         action yellowLight;
         action redLight;
-        then start greenLight;
-        then greenLight yellowLight;
-        then yellowLight redLight;
-        then redLight greenLight;
+        succession first start then greenLight;
+        succession first greenLight then yellowLight;
+        succession first yellowLight then redLight;
+        succession first redLight then greenLight;
     }
     
     action def ParallelProcessing {
@@ -158,11 +158,11 @@ package PhaseC {
         action processTask3;
         join synchronize;
         action aggregateResults;
-        then start splitWork;
-        then splitWork processTask1;
-        then splitWork processTask2;
-        then splitWork processTask3;
-        then synchronize aggregateResults;
+        succession first start then splitWork;
+        succession first splitWork then processTask1;
+        succession first splitWork then processTask2;
+        succession first splitWork then processTask3;
+        succession first synchronize then aggregateResults;
     }
     
     // ==========================================
@@ -180,9 +180,9 @@ package PhaseC {
         state Idle;
         state Paused;
         
-        transition Active to Idle when timeout;
-        transition Idle to Active when userInput;
-        transition Active to Paused if lowBattery;
+        transition first Active then Idle when timeout;
+        transition first Idle then Active when userInput;
+        transition first Active then Paused if lowBattery;
     }
     
     state def ConnectionStateMachine {
@@ -199,15 +199,15 @@ package PhaseC {
         state Connected;
         state Error;
         
-        transition Disconnected to Connecting when connectRequest;
-        transition Connecting to Connected if authSuccess do {
+        transition first Disconnected then Connecting when connectRequest;
+        transition first Connecting then Connected if authSuccess do {
             action logConnection;
             action notifyListeners;
         };
-        transition Connecting to Error if authFailure do {
+        transition first Connecting then Error if authFailure do {
             action logError;
         };
-        transition Connected to Disconnected when closeRequest do {
+        transition first Connected then Disconnected when closeRequest do {
             action flushBuffers;
         };
         
@@ -228,13 +228,13 @@ package PhaseC {
         state Cruising;
         state Braking;
         
-        transition Idling to Accelerating when gasPedalPressed;
-        transition Accelerating to Cruising if targetSpeedReached;
-        transition Cruising to Braking when brakePedalPressed;
-        transition Braking to Idling if speedZero do {
+        transition first Idling then Accelerating when gasPedalPressed;
+        transition first Accelerating then Cruising if targetSpeedReached;
+        transition first Cruising then Braking when brakePedalPressed;
+        transition first Braking then Idling if speedZero do {
             action engageHandbrake;
         };
-        transition Accelerating to Braking if emergencyDetected do {
+        transition first Accelerating then Braking if emergencyDetected do {
             action activateABS;
             action deployAirbags;
         };
@@ -273,16 +273,16 @@ package PhaseC {
         state Engaged;
         state Disengaging;
         
-        transition Monitoring to Engaged if allSystemsReady do {
+        transition first Monitoring then Engaged if allSystemsReady do {
             action notifyDriver;
             action recordEngagement;
         };
-        transition Engaged to Disengaging when driverOverride;
-        transition Engaged to Disengaging if sensorFailure do {
+        transition first Engaged then Disengaging when driverOverride;
+        transition first Engaged then Disengaging if sensorFailure do {
             action alertDriver;
             action logIncident;
         };
-        transition Disengaging to Monitoring if safeHandoff;
+        transition first Disengaging then Monitoring if safeHandoff;
         
         exit { action generateReport; }
     }

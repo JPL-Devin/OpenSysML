@@ -116,15 +116,15 @@ package SolverDemo {
         attribute drivePower : Integer;
         attribute sciencePower : Integer;
 
-        require constraint {
+        assert constraint {
             drivePower + sciencePower <= 220
         }
 
-        require constraint {
+        assert constraint {
             drivePower >= 60
         }
 
-        require constraint {
+        assert constraint {
             sciencePower >= 40
         }
 
@@ -138,11 +138,11 @@ package SolverDemo {
     analysis def MassBudget {
         attribute mass : ISQ::MassValue;
 
-        require constraint {
+        assert constraint {
             mass >= 780 [kg]
         }
 
-        require constraint {
+        assert constraint {
             mass <= 950 [kg]
         }
 
@@ -157,19 +157,19 @@ package SolverDemo {
         attribute mass : Integer;
         attribute sciencePower : Integer;
 
-        require constraint {
+        assert constraint {
             mass >= 780
         }
 
-        require constraint {
+        assert constraint {
             mass <= 950
         }
 
-        require constraint {
+        assert constraint {
             sciencePower >= 40
         }
 
-        require constraint {
+        assert constraint {
             sciencePower <= mass / 4
         }
 

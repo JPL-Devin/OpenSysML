@@ -6,6 +6,7 @@ package ActionExecutorDemo {
         in x : Real;
         out result : Real;
 
+        // OpenSysML extension: SysML v2 has no expression-valued bind production.
         bind result = x * 2.0;
     }
 
@@ -15,10 +16,8 @@ package ActionExecutorDemo {
 
         first start;
         action compute { assign result := 42 * 2; }
-        done finish;
-
-        then start compute;
-        then compute finish;
+        succession first start then compute;
+        succession first compute then done;
     }
 
     // Fork and join. A fork duplicates control, not values: both branches are
@@ -34,16 +33,14 @@ package ActionExecutorDemo {
         action middle { assign task2 := 20; }
         action right { assign task3 := 30; }
         join sync;
-        done finish;
-
-        then start split;
-        then split left;
-        then split middle;
-        then split right;
-        then left sync;
-        then middle sync;
-        then right sync;
-        then sync finish;
+        succession first start then split;
+        succession first split then left;
+        succession first split then middle;
+        succession first split then right;
+        succession first left then sync;
+        succession first middle then sync;
+        succession first right then sync;
+        succession first sync then done;
     }
 
     // Decision with an else branch: the first guard that holds is taken.
@@ -54,11 +51,9 @@ package ActionExecutorDemo {
         first start;
         action pathA { assign taken := 1; }
         action pathB { assign taken := 2; }
-        done finish;
-
-        then start check;
-        then pathA finish;
-        then pathB finish;
+        succession first start then check;
+        succession first pathA then done;
+        succession first pathB then done;
 
         decide check;
         if x > 10 then pathA;
