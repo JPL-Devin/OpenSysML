@@ -23,7 +23,6 @@ const (
 	mFinalNode       = "FinalNode"
 	mActionExecution = "ActionExecutionNode"
 	mIfBranch        = "IfBranch"
-	mStateRegion     = "StateRegion"
 	mPseudostate     = "Pseudostate"
 	mDeferMember     = "DeferMember"
 )
@@ -225,12 +224,6 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		e.name(subject, n.Name)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(false))
 		return true, nil
-
-	case *ast.StateRegion:
-		head(rdf.OpenSysMLTerm(mStateRegion))
-		e.name(subject, n.Name)
-		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
-		return true, e.encode(n.States, fqn, subject)
 
 	case *ast.EntryMember:
 		return true, e.encodeSubaction(n, n.Actions, "entry", head, subject, fqn)
@@ -593,8 +586,6 @@ func behaviorNameAndMembers(node ast.Node) (string, []ast.Node, bool) {
 		return n.Name, stateBody(n), true
 	case *ast.SubstateMember:
 		return n.Name, nil, true
-	case *ast.StateRegion:
-		return n.Name, n.States, true
 	case *ast.PseudostateNode:
 		return n.Name, nil, true
 	case *ast.EntryMember:
@@ -718,10 +709,6 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 			return "", true, d.missing(el, "sysx:"+xPseudostateKind, "a pseudostate states which kind it is")
 		}
 		words := []string{d.keywordOr(el, kind)}
-		return strings.Join(append(words, d.identWords(el)...), " "), true, nil
-
-	case mStateRegion:
-		words := []string{"region"}
 		return strings.Join(append(words, d.identWords(el)...), " "), true, nil
 	}
 	return "", false, nil

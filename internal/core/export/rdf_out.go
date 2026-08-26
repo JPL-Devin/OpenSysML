@@ -317,6 +317,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			{"isAll", n.IsAll},
 			{"isConstant", n.IsConstant},
 			{"isEvent", n.IsEvent},
+			{"isParallel", n.IsParallel},
 		})
 		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
 			return err
@@ -377,6 +378,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			{"isConjugated", n.HasConjugatedTyping()},
 			{"isAccept", n.IsAccept},
 			{"isResult", n.IsResult},
+			{"isParallel", n.IsParallel},
 		})
 		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
 			return err

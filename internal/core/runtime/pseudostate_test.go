@@ -19,14 +19,14 @@ const forkJoinMachine = `package test {
         entry; then init;
         state init;
         state idle;
-        state running {
-            region left {
+        state running parallel {
+            state left {
                 entry; then lstart;
                 state lstart;
                 state working { entry { leftRan = 1; } }
                 succession first lstart then working;
             }
-            region right {
+            state right {
                 entry; then rstart;
                 state rstart;
                 state watching { entry { rightRan = 1; } }
@@ -75,15 +75,15 @@ func TestForkBranchesMustBeInDistinctRegions(t *testing.T) {
         entry; then init;
         state init;
         state idle;
-        state running {
-            region left {
+        state running parallel {
+            state left {
                 entry; then lstart;
                 state lstart;
                 state working;
                 state alsoWorking;
                 succession first lstart then working;
             }
-            region right {
+            state right {
                 entry; then rstart;
                 state rstart;
                 state watching;
@@ -112,14 +112,14 @@ func TestJoinWaitsForEveryBranch(t *testing.T) {
         entry; then init;
         state init;
         state idle;
-        state running {
-            region left {
+        state running parallel {
+            state left {
                 entry; then lstart;
                 state lstart;
                 state working;
                 succession first lstart then working;
             }
-            region right {
+            state right {
                 entry; then rstart;
                 state rstart;
                 state watching;

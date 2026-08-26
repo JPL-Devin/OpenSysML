@@ -32,22 +32,22 @@ const forkPartialRegions = `package P {
 		entry; then init;
 		state init;
 		state ready;
-		state working {
-			region left {
+		state working parallel {
+			state left {
 				entry; then ls;
 				state ls;
 				state lstart { entry { assign leftInit := 1; } }
 				state lwork { entry { assign leftWork := 1; } }
 				succession first ls then lstart;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
 				state rstart { entry { assign rightInit := 1; } }
 				state rwork { entry { assign rightWork := 1; } }
 				succession first rs then rstart;
 			}
-			region aux {
+			state aux {
 				entry; then as;
 				state as;
 				state astart;

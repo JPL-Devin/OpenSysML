@@ -6,14 +6,14 @@ package ForkJoinTest {
         entry; then init;
         state init;
         state ready;
-        state working {
-            region left {
+        state working parallel {
+            state left {
                 entry; then leftStart;
                 state leftStart;
                 state building { entry { assign leftDone := 1; } }
                 succession first leftStart then building;
             }
-            region right {
+            state right {
                 entry; then rightStart;
                 state rightStart;
                 state checking { entry { assign rightDone := 1; } }

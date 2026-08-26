@@ -111,7 +111,7 @@ Under the default `-conformance auto`:
 
 ```
 120 case(s): 120 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
-  of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
+  of which 2 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
@@ -121,7 +121,7 @@ Under the default `-conformance auto`:
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The corpus grew from 79 cases to 119 in wave 10G and to 120 with `g60` (an `alias` named by a
-keyword), and the default-mode gap count is now 3 of 120: only the intended `extensions/`
+keyword), and the default-mode gap count is now 2 of 120: only the intended `extensions/`
 notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
@@ -133,18 +133,19 @@ rules closed eleven `xpect/` gaps (`p08`, `p17`, `p20`,
 `p21`, `p22`, `p25`, `p26`, `p27`, `p28`, `p32`, `p33`). No case in the corpus is
 accepted by both implementations.
 
-The three strict-only agreements are `x04`, `x05` and `x06`: OpenSysML notation
+The two strict-only agreements are `x05` and `x06`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. `x01` (the
-initial state marker) and `x07` (`transition <src> to <tgt>`) are now rejected in either mode, that
-notation having been removed. Judged in
-the default mode the same corpus gives 117 agreements and 3 gaps, which is what `-conformance
+initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
+list as that notation was removed: each is now a parse error in either mode, so both
+implementations reject it by default. Judged in
+the default mode the same corpus gives 118 agreements and 2 gaps, which is what `-conformance
 default` prints. `-conformance strict` gives 120 and 0. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
-(wave 8B) — and only the three `extensions/` cases belong to strict mode.
+(wave 8B) — and only the two `extensions/` cases belong to strict mode.
 
-Read those three as agreement *when asked strictly*, not as three gaps that disappeared. An opt-in
+Read those two as agreement *when asked strictly*, not as two gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
 because we authored all 120 cases ourselves, a small gap count means we ran out of questions we
@@ -154,8 +155,8 @@ rejection surface, not our conformance.
 Two of the `extensions/` cases that agree in either mode (`x02` choice, `x03` junction) are rejected
 by us for a different reason than by the pilot: our own state-connectivity validation flags a pseudostate
 with no outgoing transition, while the pilot rejects the notation itself. The bucket records
-rejection, not agreement on the rule. The other two (`x01`, `x07`) agree on the notation: we no
-longer accept it either.
+rejection, not agreement on the rule. The other three (`x01`, `x04`, `x07`) agree on the notation:
+we no longer accept it either.
 
 ## Permissiveness gaps
 
@@ -288,7 +289,7 @@ they were removed; both are now errors in either mode. The SysML v2 textual nota
 is not a conforming SysML v2 model, and a tool asked whether it conforms must say no. Accepting
 them by default is therefore not "conformance we argued" but a **superset we chose**: OpenSysML's
 default mode implements a dialect, and the honest statement of `-conformance auto` agreement on
-`x04`, `x05`, `x06` is that the strict question has an answer we agree on while the
+`x05`, `x06` is that the strict question has an answer we agree on while the
 default pipeline a user gets accepts notation the reference rejects as a syntax error. What makes
 the choice defensible is not the extensions' usefulness but that the conforming question remains
 askable: [strict mode](../guide/03-command-line.md#strict-conformance) reports every one of them as

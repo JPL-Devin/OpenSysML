@@ -10,8 +10,8 @@ package Test {
 
 		entry; then start;
 		state start;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				entry; then ls;
 				state ls;
 				state lidle;
@@ -19,14 +19,14 @@ package Test {
 				succession first ls then lidle;
 				transition first lidle if crossed == 0 then rtarget;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
 				state ridle { exit { ridleExits = ridleExits + 1; } }
-				state wrapper {
+				state wrapper parallel {
 					entry { wrapperEntries = wrapperEntries + 1; }
 
-					region inner {
+					state inner {
 						entry; then is;
 						state is;
 						state istart;

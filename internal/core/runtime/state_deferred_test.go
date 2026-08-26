@@ -290,15 +290,15 @@ func TestExitedNestedRegionDoesNotReactToTheSameEvent(t *testing.T) {
 		state Machine {
 			entry; then start;
 			state start;
-			state co {
-				region a {
+			state co parallel {
+				state a {
 					entry; then astart;
 					state astart;
 					state a1;
 					succession first astart then a1;
 					transition first a1 accept Ping then out;
 				}
-				region b {
+				state b {
 					entry; then bstart;
 					state bstart;
 					state b1;

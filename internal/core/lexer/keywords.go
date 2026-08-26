@@ -71,7 +71,7 @@ func IsIdentifier(s string) bool {
 // `point`, `chain` and `var` are (see docs/reference/grammar/README.md).
 //
 // Neither are words that are a literal in none of the pinned grammars, such as
-// the state and action notation OpenSysML adds (`region`, `initial`, `done`):
+// the state and action notation OpenSysML adds (`initial`, `done`):
 // reserving those only stops models naming features with them. See
 // docs/reference/grammar/conformance-audit.md.
 var keywordList = []string{

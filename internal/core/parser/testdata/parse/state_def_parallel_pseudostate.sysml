@@ -1,7 +1,7 @@
-state def RegionChoice {
+state def RegionChoice parallel {
 	attribute mode : Integer = 2;
 
-	region left {
+	state left {
 		entry; then lstart;
 		state lstart;
 		state lidle;
@@ -12,7 +12,7 @@ state def RegionChoice {
 		transition first lidle then pick;
 	}
 
-	region right {
+	state right {
 		entry; then rstart;
 		state rstart;
 		state rwatch;

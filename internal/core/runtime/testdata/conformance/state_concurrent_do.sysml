@@ -4,8 +4,8 @@ package Test {
     // the interleaving: left enters one step before right, then the two share
     // the machine one action at a time (1,2,4,3,5,6). A do behavior run to its
     // end at entry would give 1,2,3,4,5,6 instead.
-    state def Interleave {
-        region left {
+    state def Interleave parallel {
+        state left {
             entry; then lstart;
             state lstart;
             state lwork {
@@ -21,7 +21,7 @@ package Test {
             succession first lwork then ldone;
         }
 
-        region right {
+        state right {
             entry; then rstart;
             state rstart;
             state rwork {

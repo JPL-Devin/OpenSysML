@@ -6,9 +6,31 @@
       (SubstateMember name="start")
       (SubstateMember name="ready")
       (Membership visibility="default"
-        (Usage kind="state" name="working" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (*ast.StateRegion)
-          (*ast.StateRegion)))
+        (Usage kind="state" name="working" ref=false direction="none" composite=false derived=false ordered=false nonunique=false parallel=true
+          (Membership visibility="default"
+            (Usage kind="state" name="left" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (EntryMember)
+              (SuccessionEdge source="@entry" target="leftStart")
+              (SubstateMember name="leftStart")
+              (SubstateMember name="building")
+              (Membership visibility="default"
+                (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (ConnectorEnd target="leftStart"
+                    (*ast.QualifiedName))
+                  (ConnectorEnd target="building"
+                    (*ast.QualifiedName))))))
+          (Membership visibility="default"
+            (Usage kind="state" name="right" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (EntryMember)
+              (SuccessionEdge source="@entry" target="rightStart")
+              (SubstateMember name="rightStart")
+              (SubstateMember name="checking")
+              (Membership visibility="default"
+                (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (ConnectorEnd target="rightStart"
+                    (*ast.QualifiedName))
+                  (ConnectorEnd target="checking"
+                    (*ast.QualifiedName))))))))
       (PseudostateNode kind="fork" name="split")
       (PseudostateNode kind="join" name="sync")
       (*ast.StateNode)

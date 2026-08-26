@@ -5,9 +5,9 @@ package OrthogonalRegionsDemo {
     // Each region executes independently and processes events in parallel
     
     // Example: Traffic Light with Pedestrian Crossing
-    state def TrafficLight {
+    state def TrafficLight parallel {
         // Vehicle signal region
-        region vehicleSignal {
+        state vehicleSignal {
             entry; then start;
             state start;
             state red;
@@ -21,7 +21,7 @@ package OrthogonalRegionsDemo {
         }
         
         // Pedestrian signal region (runs concurrently)
-        region pedestrianSignal {
+        state pedestrianSignal {
             entry; then start;
             state start;
             state dontWalk;

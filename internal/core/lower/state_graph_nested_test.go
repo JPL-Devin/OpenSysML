@@ -131,14 +131,14 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 	`)
 	explicit := stateDefinitionIn(t, `
 		package test {
-			state def Machine {
-				region left {
+			state def Machine parallel {
+				state left {
 					entry; then lstart;
 					state lstart;
 					final ldone;
 					succession first lstart then ldone;
 				}
-				region right {
+				state right {
 					entry; then rstart;
 					state rstart;
 					final rdone;
@@ -322,6 +322,70 @@ func TestToStateGraph_ParallelBodyNonRegionMembers(t *testing.T) {
 			t.Fatalf("error = %v, want unsupported parallel-body member", err)
 		}
 	})
+}
+
+// A parallel state owns what its regions branch through: the pseudostate, the
+// edges leaving it, and the deferred events of the state that declares them.
+func TestToStateGraph_ParallelStateOwnsItsPseudostatesAndEdges(t *testing.T) {
+	graph, err := ToStateGraph(stateDefinitionIn(t, `
+		package test {
+			state def Machine {
+				entry; then start;
+				state start;
+				state working parallel {
+					state left {
+						entry; then lidle;
+						state lidle;
+						state lfast;
+						defer done;
+						transition first lidle then pick;
+					}
+					state right {
+						entry; then ridle;
+						state ridle;
+					}
+					choice pick;
+					transition first pick then lfast;
+				}
+				succession first start then working;
+			}
+		}
+	`), nil)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+
+	working := stateNamed(graph, "working")
+	pick := pseudostateNamed(graph, "pick")
+	if working == nil || pick == nil {
+		t.Fatalf("working = %v, pick = %v, want both collected", working, pick)
+	}
+	if owner := graph.PseudostateOwner[pick]; owner != working {
+		t.Fatalf("PseudostateOwner[pick] = %v, want working", owner)
+	}
+	lidle, lfast := stateNamed(graph, "lidle"), stateNamed(graph, "lfast")
+	if !leadsTo(graph, lidle, pick) {
+		t.Fatal("transition lidle -> pick missing")
+	}
+	if !leadsTo(graph, pick, lfast) {
+		t.Fatal("transition pick -> lfast missing")
+	}
+	left := graph.CompositeStates[working][0]
+	if got := graph.RegionOf[lidle]; got != left {
+		t.Fatalf("RegionOf[lidle] = %v, want the left region", got)
+	}
+	var leftOwner *ast.StateNode
+	for state, region := range graph.HiddenRegionOf {
+		if region == left {
+			leftOwner = state
+		}
+	}
+	if leftOwner == nil {
+		t.Fatal("no graph state stands for the left region")
+	}
+	if len(graph.Deferred[leftOwner]) == 0 {
+		t.Fatal("defer declared by a region substate was dropped")
+	}
 }
 
 func TestToStateGraph_ParallelWithoutInitialFailsClearly(t *testing.T) {
@@ -638,8 +702,8 @@ func TestSameNamedPseudostatesInSiblingRegionsAreBothCollected(t *testing.T) {
 			state Machine {
 				entry; then start;
 				state start;
-				state running {
-					region left {
+				state running parallel {
+					state left {
 						entry; then lstart;
 						state lstart;
 						state lidle;
@@ -648,7 +712,7 @@ func TestSameNamedPseudostatesInSiblingRegionsAreBothCollected(t *testing.T) {
 						succession first lidle then pick;
 						succession first pick then lidle;
 					}
-					region right {
+					state right {
 						entry; then rstart;
 						state rstart;
 						state ridle;
@@ -732,8 +796,8 @@ func TestScopelessLoweringNamesTheRegionLocalState(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				state both {
-					region left {
+				state both parallel {
+					state left {
 						entry; then li;
 						state li;
 						state idle;
@@ -741,7 +805,7 @@ func TestScopelessLoweringNamesTheRegionLocalState(t *testing.T) {
 						succession first li then idle;
 						succession first idle then done;
 					}
-					region right {
+					state right {
 						entry; then ri;
 						state ri;
 						state idle;

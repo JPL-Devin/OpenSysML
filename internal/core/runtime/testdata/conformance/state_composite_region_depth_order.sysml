@@ -7,8 +7,8 @@ package Test {
 
 		entry; then start;
 		state start;
-		state Working {
-			region left {
+		state Working parallel {
+			state left {
 				entry; then lstart;
 				state lstart;
 				state l1;
@@ -18,11 +18,11 @@ package Test {
 				transition first l1 when Tick do assign log := log * 10 + 1 then l2;
 			}
 
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
-				state deep {
-					region inner {
+				state deep parallel {
+					state inner {
 						entry; then dstart;
 						state dstart;
 						state d1;

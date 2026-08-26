@@ -340,15 +340,14 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 | `while c { … }`, `loop { … } until c;` | `sysml:WhileLoopActionUsage` | `sysx:whileCondition`, `sysx:untilCondition` |
 | `for x in c { … }` | `sysml:ForLoopActionUsage` | `sysx:loopVariable`, `sysx:collection` |
 | `if c { … } else { … }` | `sysml:IfActionUsage` + `sysx:IfBranch` per branch | `sysx:condition`, `sysx:branchKind` |
-| `state s { … }`, `final s;` | `sysml:StateUsage` | `sysml:declaredName`, `sysx:declaredKeyword`, its members |
+| `state s { … }`, `state s parallel { … }`, `final s;` | `sysml:StateUsage` | `sysml:declaredName`, `sysx:declaredKeyword`, `sysml:isParallel`, its members |
 | `entry`/`do`/`exit`, `entry do { … }` (whatever separates the `do` from the body) | `sysml:StateSubactionMembership` | `sysx:subactionKind`, `sysx:declaredKeyword`, its actions |
 | `defer sig, other;` | `sysx:DeferMember` | `sysx:deferredEvent` per event |
-| `region r { … }` | `sysx:StateRegion` | `sysml:declaredName`, its states |
 | `choice`, `junction`, `fork`, `join`, `entry point`, `exit point`, `shallow`/`deep history` | `sysx:Pseudostate` | `sysx:pseudostateKind`, `sysx:declaredKeyword` |
 | `transition [n] [first] s [accept t] [if g] [do e] then t;` | `sysml:TransitionUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:trigger`, `sysx:triggerKeyword`, `sysx:guard`, `sysx:transitionSyntax`, its effect |
 
 A state's members are held in the AST in one bucket per kind (entry, do, exit,
-defer, substates, regions); they are written back in the order they were
+defer, substates); they are written back in the order they were
 declared, taken from their source spans, so `do` before `entry` stays that way.
 
 The conditions and expressions these nodes carry are expression trees, like
@@ -493,7 +492,7 @@ reported rather than written back somewhere else
 `TestHalfNamedSuccessionInAGraphIsReported`).
 
 Every body that can carry a succession — definition, usage, action, state (a
-region included), calculation and requirement — reads these forms back as the
+parallel state's regions included), calculation and requirement — reads these forms back as the
 same node, so a second conversion yields the same graph
 (`export_test.go:TestSuccessionRoundTripsInEveryBody`). The explicit two-ended
 form reads only basic names, so a succession naming an end that needs quotes is

@@ -13,7 +13,7 @@ import (
 // — so editor surfaces that want them highlighted or offered read them here.
 var contextualWords = []string{
 	"chain", "choice", "deep", "defer", "done", "final", "history",
-	"junction", "point", "region", "shallow",
+	"junction", "point", "shallow",
 }
 
 // contextualKerMLWords are contextual in `.kerml` only: `var` is a literal of

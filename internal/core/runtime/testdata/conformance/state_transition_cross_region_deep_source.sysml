@@ -11,10 +11,10 @@ package Test {
 
 		entry; then start;
 		state start;
-		state running {
+		state running parallel {
 			entry { runningEntries = runningEntries + 1; }
 
-			region left {
+			state left {
 				entry; then ls;
 				state ls;
 				state lidle { exit { lidleExits = lidleExits + 1; } }
@@ -22,13 +22,13 @@ package Test {
 
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
-				state wrapper {
+				state wrapper parallel {
 					exit { wrapperExits = wrapperExits + 1; }
 
-					region inner {
+					state inner {
 						entry; then is;
 						state is;
 						state ideep { exit { deepExits = deepExits + 1; } }

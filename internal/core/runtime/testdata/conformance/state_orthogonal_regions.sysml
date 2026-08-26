@@ -1,7 +1,7 @@
 package Test {
-	state def TrafficLight {
+	state def TrafficLight parallel {
 		// Pedestrian region - controls walk/don't walk signals
-		region pedestrian {
+		state pedestrian {
 			entry; then start;
 			state start;
 			state Walk;
@@ -13,7 +13,7 @@ package Test {
 		}
 		
 		// Vehicle region - controls traffic light colors
-		region vehicle {
+		state vehicle {
 			entry; then start;
 			state start;
 			state Green;

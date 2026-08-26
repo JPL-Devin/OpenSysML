@@ -3,10 +3,10 @@ package Test {
     // one round, so the two regions cannot interleave inside it: this gives
     // 123456, where state_concurrent_do's one-action-per-statement `do { … }`
     // form gives 124356 for the same digits.
-    state def AtomicDo {
+    state def AtomicDo parallel {
         attribute seq : Integer = 0;
 
-        region left {
+        state left {
             entry; then lstart;
             state lstart;
             state lwork {
@@ -22,7 +22,7 @@ package Test {
             succession first lwork then ldone;
         }
 
-        region right {
+        state right {
             entry; then rstart;
             state rstart;
             state rwork {

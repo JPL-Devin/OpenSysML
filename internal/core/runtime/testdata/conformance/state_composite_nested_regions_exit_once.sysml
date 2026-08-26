@@ -6,16 +6,16 @@ package Test {
 
 		entry; then start;
 		state start;
-		state Outer {
+		state Outer parallel {
 			exit { log = log * 10 + 1; }
 
-			region left {
+			state left {
 				entry; then lstart;
 				state lstart;
-				state Grouping {
+				state Grouping parallel {
 					exit { log = log * 10 + 2; }
 
-					region inner {
+					state inner {
 						entry; then gstart;
 						state gstart;
 						state g1 {
@@ -28,7 +28,7 @@ package Test {
 
 				succession first lstart then Grouping;
 			}
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
 				state Watching {

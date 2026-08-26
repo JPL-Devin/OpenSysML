@@ -8,8 +8,8 @@ package test {
 
 		entry; then start;
 		state start;
-		state Working {
-			region slow {
+		state Working parallel {
+			state slow {
 				entry; then sstart;
 				state sstart;
 				state sWaiting {
@@ -22,7 +22,7 @@ package test {
 				transition first sstart then sWaiting;
 			}
 
-			region fast {
+			state fast {
 				entry; then fstart;
 				state fstart;
 				state fWaiting {
