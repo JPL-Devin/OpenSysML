@@ -85,6 +85,15 @@ func TestParseAction_ForkJoin(t *testing.T) {
 	}
 }
 
+// bodyMember addresses the member of a body node, which a succession written in
+// full reaches through a membership.
+func bodyMember(n ast.Node) ast.Node {
+	if m, ok := n.(*ast.Membership); ok {
+		return m.Member
+	}
+	return n
+}
+
 func TestParseAction_Decision(t *testing.T) {
 	input := `{
 		first start;
@@ -127,9 +136,9 @@ func TestParseAction_Decision(t *testing.T) {
 	}
 
 	// Check unguarded succession
-	succession, ok := nodes[3].(*ast.Usage)
+	succession, ok := bodyMember(nodes[3]).(*ast.Usage)
 	if !ok {
-		t.Errorf("node 3: expected *ast.Usage, got %T", nodes[3])
+		t.Errorf("node 3: expected *ast.Usage, got %T", bodyMember(nodes[3]))
 	} else {
 		if succession.Kind != ast.UsageSuccession || len(succession.ConnectorEnds) != 2 {
 			t.Errorf("node 3: expected two-ended succession, got %+v", succession)
@@ -137,9 +146,9 @@ func TestParseAction_Decision(t *testing.T) {
 	}
 
 	// Check guarded succession
-	cfEdge, ok := nodes[4].(*ast.TransitionMember)
+	cfEdge, ok := bodyMember(nodes[4]).(*ast.TransitionMember)
 	if !ok {
-		t.Errorf("node 4: expected *ast.TransitionMember, got %T", nodes[4])
+		t.Errorf("node 4: expected *ast.TransitionMember, got %T", bodyMember(nodes[4]))
 	} else {
 		if cfEdge.Source == nil || cfEdge.Target == nil {
 			t.Errorf("guarded succession missing source or target")
