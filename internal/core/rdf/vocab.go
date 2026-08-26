@@ -51,16 +51,24 @@ func ElementIRI(qualifiedName string) Term {
 	return IRI(Element + EncodeElementID(qualifiedName))
 }
 
+// OwningMembershipIRI returns the IRI of the OwningMembership through which a
+// namespace owns the member named by qualifiedName. It is in the element
+// namespace, since a membership is an element of the abstract syntax in its own
+// right, and its id can never collide with an element's.
+func OwningMembershipIRI(qualifiedName string) Term {
+	return IRI(Element + OwningMembershipID(qualifiedName))
+}
+
 // ExpressionPrefix is the prefix label bound to the expression namespace. It is
 // written only on a graph that carries an expression graph.
 const ExpressionPrefix = "expr"
 
-// ExpressionIRI returns the IRI of one node of an expression graph: the local
-// id of the term it hangs off — an element or an outer subexpression — followed
-// by the path to this node, so every node's identity is derived from where it
-// sits in the model rather than minted.
+// ExpressionIRI returns the IRI of one node of an expression graph: the id of
+// the term it hangs off — an element or an outer subexpression — with the
+// position it holds, so its identity comes from where it sits in the model
+// rather than being minted, and its id is valid where an element id is.
 func ExpressionIRI(owner Term, path string) Term {
-	return IRI(Expression + LocalName(owner.Value) + "." + path)
+	return IRI(Expression + ExpressionNodeID(LocalName(owner.Value), path))
 }
 
 // SysMLTerm returns the IRI of a name in the SysML vocabulary, used for both

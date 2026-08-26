@@ -132,8 +132,8 @@ const invokeFixture = `
 		exhibit state modes { entry; then holding; state holding; }
 		calc capacity { in bonus : Integer; return total : Integer = level + bonus; }
 		calc rawCapacity { return : Integer = level + 1; }
-		constraint acceptable { in minimum : Integer; assert level >= minimum; }
-		constraint rejected { assert level > 10; }
+		constraint acceptable { in minimum : Integer; level >= minimum }
+		constraint rejected { level > 10 }
 	}
 `
 
@@ -347,9 +347,9 @@ const nestedCalcInvocationFixture = `
 			action drain {
 				first start;
 				action cut { assign charge := 3; }
-				done end;
-				then start cut;
-				then cut end;
+				done;
+				succession first start then cut;
+				succession first cut then done;
 			}
 		}
 	}
@@ -565,10 +565,10 @@ func TestPerformedActionAwaitingAMessageIsWokenByASibling(t *testing.T) {
 				first start;
 				action heard accept g : Integer;
 				action mark { assign woken := 1; }
-				done end;
-				then start heard;
-				then heard mark;
-				then mark end;
+				done;
+				succession first start then heard;
+				succession first heard then mark;
+				succession first mark then done;
 			}
 
 			part def Waiter {
@@ -832,9 +832,8 @@ func TestMessageLeftForACompletedMachineDoesNotBlockANewObject(t *testing.T) {
 				state working {
 					entry; then inner;
 					state inner;
-					final wrapped;
 					accept Ping then working;
-					inner then wrapped;
+					succession first inner then done;
 				}
 			}
 		}
@@ -891,12 +890,12 @@ func TestPerformedActionDecidesOnItsOwnWrite(t *testing.T) {
 					assign alerted := 2;
 				}
 
-				done end;
+				done;
 
-				then start raise;
-				then raise check;
-				then alert end;
-				then quiet end;
+				succession first start then raise;
+				succession first raise then check;
+				succession first alert then done;
+				succession first quiet then done;
 
 				decide check;
 				if level > 0 then alert;

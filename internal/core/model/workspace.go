@@ -15,8 +15,7 @@ import (
 
 // Workspace is the single source of truth for a server/REPL session: the
 // document set plus the global symbol index. Mutations are serialized under a
-// write lock (and, in Task 5, through a single owner goroutine); reads take a
-// read lock.
+// write lock; reads take a read lock.
 type Workspace struct {
 	mu        sync.RWMutex
 	docs      map[string]*Document
@@ -105,7 +104,7 @@ func (w *Workspace) Update(name string, content []byte, version int) {
 	w.reindexLocked(name, content, version)
 }
 
-// SetOnDisk records on-disk bytes (from fsnotify). If the document is not open,
+// SetOnDisk records the bytes a file holds on disk. If the document is not open,
 // it becomes the active content and the document is reindexed.
 func (w *Workspace) SetOnDisk(name string, content []byte) {
 	w.mu.Lock()

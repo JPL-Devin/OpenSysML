@@ -6,7 +6,8 @@ package test {
     state TestTransitionEndpointQualified {
         attribute marker : Integer = 0;
 
-        initial start;
+        entry; then start;
+        state start;
         state alpha {
             state work {
                 entry { assign marker := 1; }
@@ -17,9 +18,8 @@ package test {
                 entry { assign marker := 2; }
             }
         }
-        final done;
 
-        transition start to beta::work;
-        transition beta::work to done when Leave;
+        transition first start then beta::work;
+        transition first beta::work when Leave then done;
     }
 }

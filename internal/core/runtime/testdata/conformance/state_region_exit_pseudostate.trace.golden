@@ -17,5 +17,6 @@ stmt assign exits
     eval feature exits -> 1
     eval literal 10 -> 10
   eval operator + -> 11
+exit: working
 enter: stopped
 transition: lwork -> stopped

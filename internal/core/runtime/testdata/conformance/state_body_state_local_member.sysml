@@ -9,14 +9,14 @@ package test {
 	state monitor {
 		attribute result : Real = 0.0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state working {
 			attribute localGain : Real = 4.0;
 			entry { assign result := localGain + pkgBonus; }
 		}
-		final done;
 
-		start then working;
-		working then done;
+		succession first start then working;
+		succession first working then done;
 	}
 }

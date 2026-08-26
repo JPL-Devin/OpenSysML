@@ -37,7 +37,7 @@ func syntheticModel(parts int) string {
         attribute power : Real;
         part sub : Comp%[2]d;
         constraint MassOK {
-            assert mass > 0.0;
+            mass > 0.0
         }
     }
     calc def Calc%[1]d {
@@ -47,18 +47,17 @@ func syntheticModel(parts int) string {
     }
     action def Act%[1]d {
         in x : Real;
-        out y : Real;
-        bind y = x * 2.0;
+        out y : Real = x * 2.0;
     }
     state SM%[1]d {
-        initial start;
+        entry; then start;
+        state start;
         state idle;
         state running;
-        final done;
 
-        start then idle;
-        transition idle to running;
-        transition running to done;
+        succession first start then idle;
+        transition first idle then running;
+        transition first running then done;
     }
     part inst%[1]d : Comp%[1]d {
         attribute :>> mass = %[1]d.0;

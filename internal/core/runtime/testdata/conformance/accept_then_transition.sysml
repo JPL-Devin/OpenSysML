@@ -1,14 +1,14 @@
 package Test {
     state Machine {
-        initial init;
+        entry; then init;
+        state init;
         state waiting {
             // Sourceless accept-then transition: inside waiting, accept 'go' and transition to active
             accept go then active;
         }
         state active;
-        final done;
         
-        init then waiting;
-        active then done;
+        succession first init then waiting;
+        succession first active then done;
     }
 }

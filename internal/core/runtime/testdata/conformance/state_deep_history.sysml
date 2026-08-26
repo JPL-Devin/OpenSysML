@@ -3,7 +3,8 @@
 // would restore.
 package Test {
     state DeepHistory {
-        initial start;
+        entry; then start;
+        state start;
         state outer {
             state middle {
                 state inner;
@@ -12,14 +13,13 @@ package Test {
             deep history resume;
         }
         state away;
-        final done;
 
-        start then inner;
+        succession first start then inner;
 
-        transition inner to innerTwo when Next;
-        transition innerTwo to away when Leave;
-        transition away to resume when Back;
-        transition resume to inner;
-        transition innerTwo to done when Finish;
+        transition first inner when Next then innerTwo;
+        transition first innerTwo when Leave then away;
+        transition first away when Back then resume;
+        transition first resume then inner;
+        transition first innerTwo when Finish then done;
     }
 }

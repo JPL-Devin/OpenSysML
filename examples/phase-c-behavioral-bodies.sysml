@@ -91,7 +91,7 @@ package PhaseC {
     constraint def NonNegative {
         in value : Real;
 
-        not value < 0
+        not (value < 0)
     }
     
     requirement safeBraking {
@@ -144,10 +144,10 @@ package PhaseC {
         action greenLight;
         action yellowLight;
         action redLight;
-        then start greenLight;
-        then greenLight yellowLight;
-        then yellowLight redLight;
-        then redLight greenLight;
+        succession first start then greenLight;
+        succession first greenLight then yellowLight;
+        succession first yellowLight then redLight;
+        succession first redLight then greenLight;
     }
     
     action def ParallelProcessing {
@@ -158,11 +158,11 @@ package PhaseC {
         action processTask3;
         join synchronize;
         action aggregateResults;
-        then start splitWork;
-        then splitWork processTask1;
-        then splitWork processTask2;
-        then splitWork processTask3;
-        then synchronize aggregateResults;
+        succession first start then splitWork;
+        succession first splitWork then processTask1;
+        succession first splitWork then processTask2;
+        succession first splitWork then processTask3;
+        succession first synchronize then aggregateResults;
     }
     
     // ==========================================
@@ -180,9 +180,9 @@ package PhaseC {
         state Idle;
         state Paused;
         
-        transition Active to Idle when timeout;
-        transition Idle to Active when userInput;
-        transition Active to Paused if lowBattery;
+        transition first Active when timeout then Idle;
+        transition first Idle when userInput then Active;
+        transition first Active if lowBattery then Paused;
     }
     
     state def ConnectionStateMachine {
@@ -199,17 +199,17 @@ package PhaseC {
         state Connected;
         state Error;
         
-        transition Disconnected to Connecting when connectRequest;
-        transition Connecting to Connected if authSuccess do {
+        transition first Disconnected when connectRequest then Connecting;
+        transition first Connecting if authSuccess do {
             action logConnection;
             action notifyListeners;
-        };
-        transition Connecting to Error if authFailure do {
+        } then Connected;
+        transition first Connecting if authFailure do {
             action logError;
-        };
-        transition Connected to Disconnected when closeRequest do {
+        } then Error;
+        transition first Connected when closeRequest do {
             action flushBuffers;
-        };
+        } then Disconnected;
         
         exit {
             action closeSocket;
@@ -228,16 +228,16 @@ package PhaseC {
         state Cruising;
         state Braking;
         
-        transition Idling to Accelerating when gasPedalPressed;
-        transition Accelerating to Cruising if targetSpeedReached;
-        transition Cruising to Braking when brakePedalPressed;
-        transition Braking to Idling if speedZero do {
+        transition first Idling when gasPedalPressed then Accelerating;
+        transition first Accelerating if targetSpeedReached then Cruising;
+        transition first Cruising when brakePedalPressed then Braking;
+        transition first Braking if speedZero do {
             action engageHandbrake;
-        };
-        transition Accelerating to Braking if emergencyDetected do {
+        } then Idling;
+        transition first Accelerating if emergencyDetected do {
             action activateABS;
             action deployAirbags;
-        };
+        } then Braking;
         
         exit { action shutdownEngine; }
     }
@@ -273,16 +273,16 @@ package PhaseC {
         state Engaged;
         state Disengaging;
         
-        transition Monitoring to Engaged if allSystemsReady do {
+        transition first Monitoring if allSystemsReady do {
             action notifyDriver;
             action recordEngagement;
-        };
-        transition Engaged to Disengaging when driverOverride;
-        transition Engaged to Disengaging if sensorFailure do {
+        } then Engaged;
+        transition first Engaged when driverOverride then Disengaging;
+        transition first Engaged if sensorFailure do {
             action alertDriver;
             action logIncident;
-        };
-        transition Disengaging to Monitoring if safeHandoff;
+        } then Disengaging;
+        transition first Disengaging if safeHandoff then Monitoring;
         
         exit { action generateReport; }
     }

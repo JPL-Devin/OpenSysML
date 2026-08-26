@@ -34,7 +34,7 @@ package Demo {
     calc add {
         in x;
         in y;
-        return x + y;
+        x + y
     }
 }
 '''

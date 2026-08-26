@@ -40,8 +40,6 @@ func CalcBody(members []ast.Node, scope *symbols.Scope) []Statement {
 		case *ast.SuccessionEdge:
 			// A calculation body runs its steps in declaration order, so a
 			// succession states nothing the order does not already state.
-		case *ast.ResultMember:
-			results = append(results, Return{Value: m.Expression, Node: m, Scope: scope})
 		default:
 			if isExpressionNode(member) {
 				results = append(results, Return{Value: member, Node: member, Scope: scope})

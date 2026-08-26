@@ -222,19 +222,22 @@ func (m *Model) PortsConform(a, b *symbols.Symbol) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return m.featuresMatchConjugate(m.PortFeatures(a), m.PortFeatures(b))
+	return m.featuresMatchConjugate(m.PortFeatures(a), m.PortFeatures(b), nil)
 }
 
 // featuresMatchConjugate reports whether every named directed feature in
 // features has a counterpart in others with a conforming type and the conjugate
 // direction. Undirected features carry no flow, so they impose nothing.
-func (m *Model) featuresMatchConjugate(features, others []PortFeature) bool {
+func (m *Model) featuresMatchConjugate(features, others []PortFeature, paired map[string]bool) bool {
 	for _, feature := range features {
 		if feature.Name == "" {
 			continue // an unnamed feature has nothing to be matched by name
 		}
 		if feature.Direction == ast.DirNone {
 			continue // conjugation constrains directed features only (§7.12.2)
+		}
+		if paired[feature.Name] {
+			continue // an interface flow already pairs it, whatever the other end calls it
 		}
 		match, ok := findPortFeature(others, feature.Name)
 		if !ok {
@@ -270,10 +273,102 @@ func (m *Model) InterfaceEndPortMismatch(sym *symbols.Symbol) (a, b *symbols.Sym
 	if !ok {
 		return nil, nil, false
 	}
-	if m.featuresMatchConjugate(firstFeatures, secondFeatures) {
+	paired := m.interfaceFlowPairedFeatures(sym, ends)
+	if m.featuresMatchConjugate(firstFeatures, secondFeatures, paired[ends[0]]) {
 		return nil, nil, false
 	}
 	return first, second, true
+}
+
+// interfaceFlowPairedFeatures collects, per end, the features an interface's own
+// flow declarations pair with a compatible feature on the other end (§8.2.2.14).
+func (m *Model) interfaceFlowPairedFeatures(sym *symbols.Symbol, ends []*symbols.Symbol) map[*symbols.Symbol]map[string]bool {
+	paired := make(map[*symbols.Symbol]map[string]bool)
+	if sym == nil || len(ends) != 2 {
+		return paired
+	}
+	features := make(map[*symbols.Symbol][]PortFeature, len(ends))
+	for _, end := range ends {
+		paired[end] = make(map[string]bool)
+		_, features[end], _ = m.endPortFeatures(end)
+	}
+	for _, member := range declMembers(sym) {
+		usage, ok := unwrapUsage(member)
+		if !ok || usage.Kind != ast.UsageFlow || usage.FlowEnds == nil {
+			continue
+		}
+		fromEnd, fromFeature, ok := interfaceFlowEnd(usage.FlowEnds.From)
+		if !ok {
+			continue
+		}
+		toEnd, toFeature, ok := interfaceFlowEnd(usage.FlowEnds.To)
+		if !ok || fromEnd == toEnd {
+			continue
+		}
+		var fromSym, toSym *symbols.Symbol
+		for _, end := range ends {
+			if end == nil {
+				continue
+			}
+			if end.Name == fromEnd {
+				fromSym = end
+			}
+			if end.Name == toEnd {
+				toSym = end
+			}
+		}
+		if fromSym == nil || toSym == nil {
+			continue
+		}
+		source, sourceOK := findPortFeature(features[fromSym], fromFeature)
+		target, targetOK := findPortFeature(features[toSym], toFeature)
+		if !sourceOK || !targetOK ||
+			!flowDirectionsConform(source.Direction, target.Direction) ||
+			!m.featureTypesConform(source.Symbol, target.Symbol) {
+			continue
+		}
+		paired[fromSym][fromFeature] = true
+		paired[toSym][toFeature] = true
+	}
+	return paired
+}
+
+// interfaceFlowEnd reads a flow end written as `<end>.<feature>`.
+func interfaceFlowEnd(node ast.Node) (end, feature string, ok bool) {
+	parts := interfaceFlowParts(node)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0].Text, parts[1].Text, true
+}
+
+func interfaceFlowParts(node ast.Node) []ast.NameSegment {
+	switch n := node.(type) {
+	case *ast.QualifiedName:
+		return n.Parts
+	case *ast.FeatureReference:
+		if n.Name == nil {
+			return nil
+		}
+		return n.Name.Parts
+	case *ast.FeatureChainExpr:
+		parts := interfaceFlowParts(n.Operand)
+		if n.Member == nil {
+			return parts
+		}
+		out := make([]ast.NameSegment, 0, len(parts)+len(n.Member.Parts))
+		out = append(out, parts...)
+		return append(out, n.Member.Parts...)
+	default:
+		return nil
+	}
+}
+
+// flowDirectionsConform reports whether a flow can leave source and enter target.
+func flowDirectionsConform(source, target ast.FeatureDirection) bool {
+	sourceOK := source == ast.DirOut || source == ast.DirInOut
+	targetOK := target == ast.DirIn || target == ast.DirInOut
+	return sourceOK && targetOK
 }
 
 // endPortFeatures returns the port definition typing the end feature sym and

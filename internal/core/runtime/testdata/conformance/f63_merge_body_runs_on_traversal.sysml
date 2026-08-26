@@ -15,14 +15,14 @@ package test {
 		action slower { assign ready := true; }
 		merge gate { assign mergeRuns := mergeRuns + 1; }
 		action tail { assign passed := mergeRuns; }
-		done finish;
+		done;
 
-		then start split;
-		then split gate;
-		then split slow;
-		then slow slower;
-		then slower gate;
-		then gate tail if ready;
-		then tail finish;
+		succession first start then split;
+		succession first split then gate;
+		succession first split then slow;
+		succession first slow then slower;
+		succession first slower then gate;
+		succession first gate if ready then tail;
+		succession first tail then done;
 	}
 }

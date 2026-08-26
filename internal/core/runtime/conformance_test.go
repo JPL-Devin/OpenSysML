@@ -180,6 +180,7 @@ func TestExecutionConformance(t *testing.T) {
 
 		testCount++
 		t.Run(caseName, func(t *testing.T) {
+			t.Parallel()
 			runConformanceCase(t, conformanceDir, caseName)
 		})
 	}

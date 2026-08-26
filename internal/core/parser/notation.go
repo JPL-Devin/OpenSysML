@@ -13,15 +13,11 @@ import (
 // notationWords are the unreserved words our notation matches contextually.
 var notationWords = map[string]bool{
 	"choice":   true,
-	"decision": true,
 	"deep":     true,
 	"defer":    true,
 	"done":     true,
-	"final":    true,
 	"history":  true,
-	"initial":  true,
 	"junction": true,
-	"region":   true,
 	"shallow":  true,
 }
 
@@ -66,15 +62,6 @@ func (p *Parser) notationWordAt(n int) string {
 	return ""
 }
 
-// wordText returns the word a token was written with, whether the lexer
-// reserved it or not.
-func (p *Parser) wordText(tok lexer.Token) string {
-	if tok.Kind == lexer.Keyword {
-		return tok.KeywordID
-	}
-	return p.src.Text(tok.Span)
-}
-
 // peekIsName reports whether the token n ahead can be a declared name.
 func (p *Parser) peekIsName(n int) bool {
 	switch p.peekN(n).Kind {
@@ -85,19 +72,17 @@ func (p *Parser) peekIsName(n int) bool {
 }
 
 // atActionNodeWord returns the unreserved word at the cursor when it heads an
-// action node — `done;`, `final f;`, `initial n then m;`, `decision d;` — rather
-// than naming a feature.
+// action node — `done;`, `done end;` — rather than naming a feature.
 func (p *Parser) atActionNodeWord() (string, bool) { return p.actionNodeWordAt(0) }
 
-// actionNodeWordAt is atActionNodeWord n tokens ahead of the cursor.
+// actionNodeWordAt recognizes a named `done` spelling so parseFinalNode can
+// report its diagnostic instead of cascading.
 func (p *Parser) actionNodeWordAt(n int) (string, bool) {
 	if p.peekN(n).Kind != lexer.Identifier {
 		return "", false
 	}
 	w := p.src.Text(p.peekN(n).Span)
-	switch w {
-	case "done", "final", "initial", "decision":
-	default:
+	if w != "done" {
 		return "", false
 	}
 	if p.peekN(n+1).Kind == lexer.Semicolon {
@@ -110,8 +95,8 @@ func (p *Parser) actionNodeWordAt(n int) (string, bool) {
 	case lexer.Semicolon:
 		return w, true
 	case lexer.Keyword:
-		// `initial n then m;` and its guarded form continue the edge the node
-		// starts (SysML.xtext `first` … `then`).
+		// A `then` or a guard after the name is still the node's shape, so the
+		// node parser diagnoses it rather than the word reading as an edge end.
 		if next.KeywordID == "then" || next.KeywordID == "if" {
 			return w, true
 		}
@@ -127,14 +112,9 @@ func (p *Parser) atStateNotationWord() (string, bool) {
 	}
 	w := p.src.Text(p.peek().Span)
 	switch w {
-	case "initial", "final", "choice", "junction", "history":
+	case "choice", "junction", "history":
 		// `<word> <name>;`
 		if p.peekIsName(1) && p.peekN(2).Kind == lexer.Semicolon {
-			return w, true
-		}
-	case "region":
-		// `region <name> { … }`
-		if p.peekIsName(1) && p.peekN(2).Kind == lexer.LBrace {
 			return w, true
 		}
 	case "shallow", "deep":

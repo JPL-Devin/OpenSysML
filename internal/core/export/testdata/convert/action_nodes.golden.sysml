@@ -12,7 +12,7 @@ package ActionNodes {
         fork split;
         join sync;
         merge gather;
-        decision pick;
+        decide pick;
         perform brake;
         action Brake;
         assign log := speed;
@@ -21,8 +21,8 @@ package ActionNodes {
         accept when speed > 0;
         terminate;
         terminate brake;
-        done finish;
-        then start brake;
-        succession first brake then finish;
+        done;
+        succession first start then brake;
+        succession first brake then done;
     }
 }

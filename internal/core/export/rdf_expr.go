@@ -77,6 +77,9 @@ func (e *encoder) expression(subject, property rdf.Term, slot, owner string, nod
 // Every node carries its notation, so the exact text always survives.
 func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) {
 	e.graph.Add(subject, e.sysx(xSourceText), rdf.String(e.text(node)))
+	// The id an API reader addresses the node by, as on an element: a node has no
+	// qualified name, but its position in the model gives it a valid id.
+	e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
 	switch n := node.(type) {
 	case *ast.LiteralBool:
 		e.typed(subject, mLiteralBoolean)

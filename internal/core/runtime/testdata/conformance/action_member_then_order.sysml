@@ -14,10 +14,10 @@ package test {
 		action second assign t := t * 10 + 2;
 		then action fourth assign t := t * 10 + 4;
 
-		done end;
+		done;
 
-		then start second;
-		then fourth third;
-		then third end;
+		succession first start then second;
+		succession first fourth then third;
+		succession first third then done;
 	}
 }

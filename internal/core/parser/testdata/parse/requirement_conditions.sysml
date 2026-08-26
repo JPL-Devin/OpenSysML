@@ -2,8 +2,8 @@ package Conditions {
 	requirement def MassLimit {
 		attribute mass : Real;
 		attribute limit : Real;
-		assume mass > 0.0;
-		require mass <= limit;
+		assume constraint { mass > 0.0 }
+		require constraint { mass <= limit }
 		require constraint {
 			mass <= limit
 			mass > 0.0
@@ -22,10 +22,10 @@ package Conditions {
 	}
 
 	viewpoint def Sizing {
-		require 1 < 2;
+		require constraint { 1 < 2 }
 	}
 
 	satisfy massOfVehicle by vehicle01 {
-		require 1 < 2;
+		require constraint { 1 < 2 }
 	}
 }

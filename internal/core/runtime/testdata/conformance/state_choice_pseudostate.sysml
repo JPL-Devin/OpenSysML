@@ -3,26 +3,26 @@ package ChoiceTest {
         attribute temperature : Integer = 25;
         attribute mode : String = "unknown";
         
-        initial start;
+        entry; then start;
+        state start;
         state idle;
         choice tempCheck;
         state heating;
         state cooling;
         state normal;
-        final done;
         
-        start then idle;
-        transition idle to tempCheck;
-        transition tempCheck to heating if temperature < 18;
-        transition tempCheck to cooling if temperature > 24;
-        transition tempCheck to normal;  // else branch
+        succession first start then idle;
+        transition first idle then tempCheck;
+        transition first tempCheck if temperature < 18 then heating;
+        transition first tempCheck if temperature > 24 then cooling;
+        transition first tempCheck then normal;  // else branch
         
         entry heating { assign mode := "heating"; }
         entry cooling { assign mode := "cooling"; }
         entry normal { assign mode := "normal"; }
         
-        transition heating to done;
-        transition cooling to done;
-        transition normal to done;
+        transition first heating then done;
+        transition first cooling then done;
+        transition first normal then done;
     }
 }

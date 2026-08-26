@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Open-MBEE/OpenSysML/internal/baseline"
 )
 
 // Totals is one scope's adjudication, counted twice over: assertions are XPECT
@@ -67,15 +69,18 @@ type SuiteReport struct {
 // Report is the whole run. It carries no timestamp and no absolute path, so two
 // runs over the same pin produce byte-identical output.
 type Report struct {
-	Pilot    string        `json:"pilot"`
-	Corpus   string        `json:"corpus"`
-	Library  string        `json:"library"`
-	Totals   Totals        `json:"totals"`
-	Kinds    []KindTotals  `json:"kinds"`
-	Suites   []SuiteReport `json:"suites"`
-	Unparsed []string      `json:"unparsed,omitempty"`
-	Ignored  []string      `json:"ignoredNotes,omitempty"`
-	Missing  []string      `json:"missingResources,omitempty"`
+	Pilot   string `json:"pilot"`
+	Corpus  string `json:"corpus"`
+	Library string `json:"library"`
+	// Provenance identifies the suites this run adjudicated, so a committed
+	// baseline can be checked against the repository without provisioning them.
+	Provenance baseline.Record `json:"provenance"`
+	Totals     Totals          `json:"totals"`
+	Kinds      []KindTotals    `json:"kinds"`
+	Suites     []SuiteReport   `json:"suites"`
+	Unparsed   []string        `json:"unparsed,omitempty"`
+	Ignored    []string        `json:"ignoredNotes,omitempty"`
+	Missing    []string        `json:"missingResources,omitempty"`
 	// Errata is the same adjudication with the declared corrections applied;
 	// Totals above stays the as-published headline.
 	Errata *ErrataReport `json:"errata,omitempty"`
@@ -245,21 +250,22 @@ func (t *Totals) add(other Totals) {
 	t.ForeignDiags += other.ForeignDiags
 }
 
-func writeReports(dir string, report *Report) error {
+func writeReports(dir string, report *Report) ([]byte, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
+		return nil, err
 	}
 	encoded, err := json.MarshalIndent(report.pruned(), "", "  ")
 	if err != nil {
-		return err
+		return nil, err
 	}
+	encoded = append(encoded, '\n')
 	jsonPath := filepath.Join(dir, "pilot-xpect.json")
-	if err := os.WriteFile(jsonPath, append(encoded, '\n'), 0o600); err != nil {
-		return err
+	if err := os.WriteFile(jsonPath, encoded, 0o600); err != nil {
+		return nil, err
 	}
 	textPath := filepath.Join(dir, "pilot-xpect.txt")
 	if err := os.WriteFile(textPath, []byte(renderText(report)), 0o600); err != nil {
-		return err
+		return nil, err
 	}
 
 	fmt.Fprintf(os.Stderr, "wrote %s and %s\n", textPath, jsonPath)
@@ -267,7 +273,7 @@ func writeReports(dir string, report *Report) error {
 		report.Totals.Files, report.Totals.FilesUnparsed, report.Totals.Assertions, report.Totals.Rows,
 		report.Totals.Agree, report.Totals.WordingOnly, report.Totals.Disagree,
 		report.Totals.Unlocated, report.Totals.NotAdjudicated)
-	return nil
+	return encoded, nil
 }
 
 // pruned drops the agreeing and not-adjudicated rows: the counts state how many

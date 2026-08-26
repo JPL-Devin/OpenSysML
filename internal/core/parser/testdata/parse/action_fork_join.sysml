@@ -7,12 +7,12 @@ action def ParallelWork {
 	action left { assign x := 1; }
 	action right { assign y := 2; }
 	join sync;
-	done end;
+	done;
 
-	then start split;
-	then split left;
-	then split right;
-	then left sync;
-	then right sync;
-	then sync end;
+	succession first start then split;
+	succession first split then left;
+	succession first split then right;
+	succession first left then sync;
+	succession first right then sync;
+	succession first sync then done;
 }

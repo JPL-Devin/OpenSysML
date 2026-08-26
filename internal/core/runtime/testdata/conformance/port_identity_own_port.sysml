@@ -11,14 +11,15 @@ package PortIdentity {
 		port inPort : PingPort;
 
 		state Listen {
-			initial start;
+			entry; then start;
+			state start;
 
 			state waiting {
 				entry send Ping() to inPort;
 			}
 			state received;
 
-			start then waiting;
+			succession first start then waiting;
 
 			transition first waiting
 				accept Ping via inPort

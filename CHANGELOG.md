@@ -4,7 +4,266 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
-## Unreleased
+## 0.3.0 — 2026-08-26
+
+Release 0.3.0 spends itself on a single question: what does this implementation accept that the
+specification does not? Since 0.2.0 the answer was a warning — thirteen OpenSysML-only spellings were
+read, reported as non-standard notation, and executed anyway. That register is now closed. Each of the
+thirteen is a parse error, the warning for it is gone, and the standard spelling that replaces it is
+documented, migrated throughout this repository's models and guide transcripts, and covered by tests.
+**A model relying on any of them no longer parses**, which is the point: an analyzer that quietly
+accepts what no production admits teaches its users a notation no other tool reads. The version is a
+minor rather than a patch for that reason.
+
+The state machine's completion semantics were re-founded in the process: a machine completes on a
+transition to the standard library's `done` rather than on a marker keyword, computed while lowering
+and carried in the graph the runtime executes, so completion is a property of the machine rather than
+of its syntax. Beyond notation, converted RDF states element ids and ownership as the abstract syntax
+does, so a SysML v2 API service can address a graph this tool produced; `sysml-grpc` speaks the
+Connect protocol by default, on the same port as gRPC and gRPC-Web; the Python client starts a private
+service of its own instead of adopting whichever one is listening; and what a real Flexo MMS stack
+does with our Turtle is now a recorded per-property measurement rather than a claim.
+
+Against the pinned OMG pilot (`2026-05`, jupyter-sysml-kernel 0.60.1), 328 of 355 files agree
+diagnostic-by-diagnostic, there is no declared `errors` row in the reference's own suites we are
+silent on, and 120 of 120 authored invalid models are rejected by both implementations.
+
+### The notation this release no longer accepts, in one table
+
+Each spelling was an OpenSysML extension warned as `nonstandard-notation`; each is now a parse error,
+and its warning is gone. None of the words involved is reserved by the pinned grammars, so
+`state final;`, `attribute initial : Boolean;` and `region` as a name keep working. Every row is
+described in full below.
+
+| No longer accepted | Write instead |
+|---|---|
+| `bind result = x * 2.0;` — an expression as a binding's right end | `out result : Real = x * 2.0;`, or bind to a feature holding the result |
+| `assert <expr>;` / `assume <expr>;` in a constraint body | the bare condition: `constraint MassBudget { total <= limit }` |
+| `assume <expr>;` / `require <expr>;` in a requirement body | a wrapped constraint: `require constraint { power > 0 }` |
+| `return <expr>;` in a calculation body | the body's trailing expression: `calc def Add { in x; in y; x + y }` |
+| `final <state>;` | `transition first running accept Stop then done;` |
+| `initial <state>;` | `entry; then <state>;` |
+| `transition <source> to <target>;` | `transition first <source> then <target>;` |
+| `region <name> { … }` | mark the owning state's body `parallel`, one `state` substate per region |
+| `initial <name>;` as an action node | `first <name> [then <target>];` |
+| `final [<name>];` as an action node | `done;`, or `then done;` as a succession target |
+| `decision <name>;` | `decide <name>;` |
+| `done <name>;` — a named action final node | `done;` |
+| `then <source> <target>;`, and a member-leading `<source> then <target>;` | `succession first <source> then <target>;` |
+
+### A name a library supertype already supplies is reported
+
+`state start;` inside a state, or `attribute portions;` inside a part definition, declares a
+member indistinguishable from one the declaration inherits from the standard library —
+`StatePerformances::StateAction::start`, `Occurrence::portions` — and is now a warning, as the
+reference implementation and KerML 8.2.4 have it. Only a name two library supertypes each
+supplied was reported before. A member that redefines or subsets the inherited feature is that
+feature and stays silent, as do the implicit redefinitions: a positional behavior parameter, the
+subject, actors, stakeholders and objective of a case or requirement, and the assignments in a
+metadata usage body. Three diagnostics of the reference we did not report become agreements.
+
+### Succession endpoints are checked against their enclosing body
+
+State-machine succession and transition spellings now report a resolved endpoint
+that is not a state or pseudostate, using the existing `not-a-vertex` diagnostic.
+Action bodies report a resolved endpoint that is not an action node with the
+`endpoint-not-a-node` diagnostic before lowering. Positional, implied, unresolved,
+and flow endpoints retain their existing behavior. Inherited action nodes are
+also collected lazily when named by an endpoint and lowered into executable
+edges. The same routing removes a false unresolved-reference diagnostic for
+`succession` and `then` ends naming nested or region-local vertices, covered by
+`internal/core/parser/testdata/parse/state_history_entry_exit.sysml`,
+`internal/core/runtime/testdata/conformance/state_deep_history.sysml`, and
+`internal/core/runtime/testdata/conformance/state_shallow_history.sysml`.
+Feature-chain endpoints rooted in a part usage are accepted during validation,
+while execution still reports the existing lowering error because invoking an
+action through that feature chain is not yet supported.
+
+### RDF output states element ids and ownership
+
+A converted graph now carries the two things a SysML v2 API service needs to address it.
+Every element states `sysml:elementId` — exactly the id its own IRI ends in, so the triple
+and an id derived from the IRI cannot disagree — and containment is stated as the abstract
+syntax does: `sysml:owner` and `sysml:owningRelatedElement` as element references, with a
+materialized `OwningMembership`, or a `FeatureMembership` where a type owns a feature,
+between owner and member. Each membership is an element of its own with a deterministic IRI,
+its own `sysml:elementId`, and the member and owner wiring a client walking from a root
+follows; a relationship a namespace declares, such as an import, owns its member directly.
+Visibility moves to the membership that declares it. A document now has one root instead of
+every element reading as one.
+
+The nodes of an expression graph are addressable too: a node's IRI held a `.` and the name
+of the position it sits in, which an API service restricting ids to `[a-zA-Z0-9_-]+` refuses
+outright, so the position is now joined with `_p` and encoded the way an element id is, and
+the node states that id in `sysml:elementId`. A node is still not a model element.
+
+`.ttl` output changes shape accordingly, and every graph regenerates. Reading is
+backward compatible: a graph carrying only the previous compact `sysml:owningNamespace`
+shape still converts unchanged, and that property is still written.
+[reference/rdf-mapping.md](docs/reference/rdf-mapping.md) documents the ownership shape.
+Loading a graph into a live triplestore and reading it back through the API is still not
+demonstrated, and collection-valued properties still carry no JSON annotation.
+
+### An expression as a binding's right end is no longer accepted
+
+**Breaking change.** `bind <feature> = <expression>;` — a binding whose right side is an
+expression rather than a feature, such as `bind result = x * 2.0;` — was an OpenSysML
+extension no SysML v2 production admits, warned as `nonstandard-notation`. It is now a parse
+error, and the warning for it is gone: a binding relates two connector ends, so each side must
+name a feature. Write the expression as the feature's value instead
+(`out result : Real = x * 2.0;`), or, where the feature is declared elsewhere, declare a
+feature holding the result and bind to it (`attribute b2 = a + 1;` then `binding bind b = b2;`).
+Standard bindings — `bind a = b;`, including qualified, chained and indexed ends — are
+unchanged.
+
+### A keyworded inline condition is no longer accepted
+
+**Breaking change.** `assert <expression>;` and `assume <expression>;` in a constraint body, and
+`assume <expression>;` and `require <expression>;` in a requirement-style body, were an OpenSysML
+extension no SysML v2 production admits, warned as `nonstandard-notation`. They are now a parse
+error, and the warning for them is gone.
+
+- In a constraint body, write the condition on its own: `constraint MassBudget { total <= limit }`
+  instead of `constraint MassBudget { assert total <= limit; }`.
+- In a requirement body, which admits no keyword-less condition, wrap it in a constraint:
+  `requirement R { require constraint { power > 0 } }` instead of
+  `requirement R { require power > 0; }`.
+- A negated condition keeps its truth value in the expression: `assert not (x < 0);` becomes
+  `not (x < 0)`.
+- What the keywords still state is unchanged: `assert [not] <reference>;`,
+  `assert constraint { … }`, `assert constraint C;`, `assume`/`require <reference>;` and
+  `assume`/`require constraint [name] { … }`. The separate warning for `assume`/`require` used
+  outside a requirement body is unchanged too.
+
+### The state final marker is removed; a machine completes on a transition to `done`
+
+**Breaking change** for models that used it. `final <state>;` in a state body was an
+OpenSysML-only notation no SysML v2 production admits — `StateBodyItem` has no such member and no
+`final` literal appears in the pinned grammars — warned as `nonstandard-notation`. It is now a
+parse error, and the warning for it is gone.
+
+What replaces it is the completion the standard library already gives every state: a machine
+completes when a transition reaches `done`.
+
+```sysml
+state monitor {
+    entry; then running;
+    state running;
+    transition first running accept Stop then done;   // was: final stopped;
+}
+```
+
+Entering completion runs the exit actions of the states it leaves and reports the machine
+completed, exactly as entering a marked state did; an orthogonal machine completes only once every
+concurrent region has reached `done` — the machine's own regions and those of a composite state
+alike, so a region completing leaves its siblings running. Completion is
+now computed while lowering and carried in the state graph the runtime executes, so it is a property
+of the machine rather than of its syntax.
+
+Completion is **stated, not inferred**: a state with no outgoing transition does not complete on
+its own, because an ancestor or cross-region transition may still leave it. A machine naming a state
+of its own `done` reaches that state, unchanged. `final` is reserved by no pinned grammar, so it
+still names a state or a feature (`state final;`, `attribute final : Boolean;`); a state body that
+writes `final <state>;` is reported as the parse error it now is.
+
+### The state initial marker and the `to` transition spelling are removed
+
+**Breaking change** for models that used them. Both were OpenSysML-only aliases of notation the
+pinned grammars already spell, so the aliases and their `nonstandard-notation` warnings are gone
+rather than kept:
+
+- `initial <state>;` → declare the state and start the body's entry succession at it:
+  `entry; then <state>;` (`SysML.xtext:1766` `EntryActionMember`, followed by `EntryTransitionMember`
+  at `SysML.xtext:1796`). Inside a `region`, the entry succession designates that region's start, as
+  the marker did. It lowers to the same `StateGraph` initial state, so no execution result moves.
+- `transition <source> to <target>;` → `transition first <source> then <target>;`
+  (`SysML.xtext:1854` `TransitionUsage`, whose target is introduced by `then`). Naming the
+  transition, guards, triggers and effects are unchanged: `transition t first a if g then b;`. The
+  source may also be written without `first`, as the grammar allows.
+
+`initial` is not reserved by the pinned grammars, so it still names a feature
+(`attribute initial : Boolean;`, `state initial;`). A state body that writes `initial <state>;` or
+`transition <source> to <target>;` is reported as the parse error it now is — in particular
+`transition a to b;` does not quietly become a transition between other ends.
+
+The `final <state>;` marker is removed too, described below.
+
+### The orthogonal-region member is no longer accepted
+
+**Breaking change.** `region <name> { … }` in a state body was an OpenSysML extension no SysML v2
+production admits, warned as `nonstandard-notation`. It is now a parse error, and the warning for it
+is gone. Mark the owning state's body `parallel` and write one state substate per region:
+
+```sysml
+state working parallel {
+    state left  { entry; then building; state building; }
+    state right { entry; then checking; state checking; }
+}
+```
+
+Region order becomes substate declaration order and each region keeps its name, so entry, exit,
+event broadcast, history and completion behave as before. A state whose body is `parallel` may still
+own directly what a region body could be reached from — its behaviors, `defer`, the pseudostates its
+regions branch through and the edges between them — but every *state* substate of a parallel body is
+a region, so a body that mixed one region with ordinary sequential substates has to put the region
+set in a state of its own. `region` is now an ordinary name.
+
+### Succession shorthand spellings removed
+
+**Breaking change.** OpenSysML no longer accepts named action final nodes (`done <name>;`),
+two-name succession shorthand (`then <source> <target>;`), or state-body member-leading
+successions (`<source> then <target>;`). Write `done;` for an action final node,
+`succession first <source> then <target>;` for an explicit succession, and use the same
+standard succession form in state bodies.
+
+### The action nodes spelled `initial`, `final` and `decision` are removed
+
+**Breaking change** for models that used them. Each was an OpenSysML-only alias of a node the
+standard notation already spells, so the alias and its `nonstandard-notation` warning are gone
+rather than kept:
+
+- `initial <name> [then <target>];` in an action body → write `first <name> [then <target>];`
+  (`SysML.xtext:1385`).
+- `final [<name>];` as an action node → write `done;` for the anonymous final node, or
+  `then done;` when naming the library feature `Actions::Action::done` as a succession target.
+- `decision <name>;` → write `decide <name>;` (`SysML.xtext:1672`).
+
+None of the three words is reserved by the pinned grammars, so each still names a feature
+(`attribute final : Boolean;`, `action initial;`). An action body that writes `initial <name>;`,
+`final <name>;` or `decision <name>;` is reported as the parse error it now is. A bare
+`then final;` is a **succession target**, not a node, so it is read as a reference to a member named
+`final`: where nothing declares one, `sysml -validate` reports an unresolved reference at the name —
+the same as any other undefined succession target (see below). The **state** markers
+`final <state>;` and `initial <state>;` are removed as well, both described above. Named
+action final syntax `done <name>;`
+remains rejected as described above.
+
+### An undefined succession or transition endpoint is reported at validation time
+
+A succession or transition end naming a member nothing declares — `succession first start then zzz;`,
+the guarded `succession first a if c then zzz;`, `then zzz;`, a decision's `if c then zzz;` and
+`else zzz;`, and `transition first idle then zzz;` — is now an `unresolved` error of the
+name-resolution tier, reported at the name itself. It used to analyse clean and fail only when the
+action or state machine was executed, so a model could pass `sysml -validate` and still be
+unrunnable. The lowering errors remain as the last check.
+
+The endpoints the notation supplies are unaffected: `start` and `done` are the features
+`Actions::Action` declares, an end bound to the member beside a member-attached `then` names nothing,
+and a declared `done;` final node is reached as before.
+
+### `return <expression>;` is no longer accepted in a calculation body
+
+**Breaking change.** A computed calculation result is written as the body's trailing
+expression, with no keyword — `calc def Add { in x; in y; x + y }` — which is what the
+standard grammar admits and what OpenSysML already executed. The OpenSysML-only spelling
+`return x + y;` had no production of its own; it is now a parse error suggesting the
+trailing-expression form, and the `nonstandard-notation` warning that reported it is gone.
+
+`return` itself is unchanged: it still declares the result parameter of a calculation, so
+`return r : ScalarValues::Real;`, `return r : ScalarValues::Real = x + 1;` and the bare
+`return r;` — a result parameter named `r` — all keep working. A trailing expression must be
+the last item of the body, so a body that wrote its `return` before other members needs
+those members moved above the expression.
 
 ### The Python client uses a private service of its own
 
@@ -35,6 +294,21 @@ same service release, sharing its parse cache, and is stopped when the last of t
   so it no longer has any effect; the binary is cached in `~/.opensysml/bin` as before.
 - `filelock` and `psutil` are no longer runtime dependencies of the client.
 
+### What Flexo MMS does with our RDF is now measured, not argued
+
+An opt-in gate loads a model's Turtle into a running Flexo MMS stack through Layer 1's graph
+endpoint, reads it back through the SysML v2 API, and compares that against the same model
+posted through that service's own commit path. It records a per-element, per-property report
+that a human adjudicates, so the mapping's interoperability is a number that moves rather than
+a claim: measured before element ids and ownership were stated, every element of the fixture was
+listed and 86 of its 142 properties delivered, against 158 of 158 for the service's own
+payloads. The reference mapping documents what the difference is made of.
+
+The gate needs Docker and stays out of `go test ./...`: it skips loudly unless `FLEXO_INTEROP`
+is set, and with it set an absent stack fails instead of skipping.
+`.agents/skills/flexo-interop` documents the stack, the token and the traps. Nothing about the
+RDF encoding changed.
+
 ### Connect is the default server transport
 
 `sysml-grpc` now serves gRPC, gRPC-Web and the Connect protocol on one port, so a browser or
@@ -64,6 +338,34 @@ surface cannot rot.
 any published client speaks. The transports reference says so, and the binary's wiring of it is
 now covered by a test.
 
+### One dependency fewer
+
+`github.com/fsnotify/fsnotify` is no longer a dependency. It was linked for a filesystem
+watcher nothing reached: the language server is told which files changed by its client, and no
+command watches a directory. Building from source now resolves one module less.
+
+### Conformance figures for this release
+
+Every figure is generated from the committed baselines and gated, so none of it is typed in by hand.
+Against the pinned reference (`2026-05`, artifact `0.60.1`):
+
+- **Corpus agreement:** 328 of 355 files agree diagnostic-by-diagnostic; 27 diagnostics are ours
+  alone, 58 the reference's alone. Read by root, our diagnostics against the reference's own corpora
+  fell while our notation warnings on our own example models rose — the removed spellings reporting
+  as the errors they now are.
+- **Declared-diagnostic silence:** of the 510 declared `errors` rows in the reference's Xpect suites,
+  none is one we are silent on; 230 of 230 declared scope assertions match exactly.
+- **Permissiveness gaps:** of 120 invalid models we authored, 120 both reject, two of them only when
+  we are asked strictly. We wrote every case, so the denominator measures our corpus's reach and not
+  our conformance.
+- **Declared errata:** the registry declares three defects in the published reference material, two
+  with a specification-derived correction. The figures above are as published and stay the
+  conformance statement; the corrected-text run is reported beside them and is diagnostic only.
+- The oracle baselines now record their own provenance — the pin, the validator bridge digests and the
+  identities of the corpora compared — checked by tests that need no Java, with the Java-backed
+  reproduction on a schedule. All oracles remain advisory: they inform judgment, they do not replace
+  it.
+
 ### Fixed
 
 The conformance comparer no longer compares integral fields within the tolerance it allows a
@@ -72,6 +374,33 @@ reached counts, ids and spans as well — 1,000,000,000,500 matched 1,000,000,00
 whole number above 2^53 could not be represented exactly in the first place. Integral values
 now carry an integral type and are compared by their digits, expected numbers are read as
 literals rather than floats, and the tolerance applies to `Real` alone.
+
+- **Parallel machines and actions lower once and completely**: no duplicate nested regions; parallel
+  action edges and state behaviors preserved; explicit action successions and implied endpoints
+  lowered; explicit action starts required; an anonymous nested action final targeted correctly.
+- **Parser**: a binary operator survives a parenthesis-less arrow invocation, and a keyword binary
+  operator after a name reads as a calculation result.
+- **Semantics**: interface flow features are paired before conjugate names are required.
+- **Python client**: a failed child's log is read under a lock once drained, unset features read as no
+  value in typed views, and calls into the private service are serialized across threads.
+- **RDF**: an expression node id whose owner segment starts with `p` reverses unambiguously.
+- **Conformance harness**: two distinct ports are reserved, and a service that exits early is
+  reported instead of waited on.
+
+### Project
+
+- **buf is the single source of protobuf codegen**, replacing ad-hoc `protoc` invocations: Go stubs
+  through pinned plugins, Python stubs (including `.pyi` and the package-relative gRPC import)
+  through a local plugin bridging to `grpcio-tools`, plus `buf lint` and `buf breaking` against `main`
+  in the Makefile and in CI. Templates for TypeScript, Java and Rust clients are defined and generate
+  into an untracked directory.
+- **A language-independent gRPC conformance suite**: scenarios live as protobuf-JSON data under
+  `conformance/`, and `cmd/conformance` builds and starts the service itself, so a client in any
+  language can prove it speaks to `sysml-grpc` without re-deriving the Python suite. Every scenario
+  runs once per protocol, so the second transport surface cannot rot.
+- A core developer guide; the transport evaluation and the Connect surface documented on the site;
+  internal engineering records excluded from what is published; and the guide's transcripts and
+  examples rewritten in standard notation against the real binary.
 
 ## 0.2.1 — 2026-08-24
 

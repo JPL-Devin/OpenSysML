@@ -15,10 +15,10 @@ package test {
 			send 100 to reader;
 		}
 		action reader accept msg : Integer via inPort;
-		done end;
-		then start sender;
-		then sender notifier;
-		then notifier reader;
-		then reader end;
+		done;
+		succession first start then sender;
+		succession first sender then notifier;
+		succession first notifier then reader;
+		succession first reader then done;
 	}
 }

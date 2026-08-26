@@ -10,26 +10,30 @@ package Test {
 		// Counts the region starting at its initial state: the restore must not.
 		attribute restarts : Integer = 0;
 
-		initial start;
-		state running {
+		entry; then start;
+		state start;
+		state running parallel {
 			deep history resume;
 
-			region left {
-				initial ls;
+			state left {
+				entry; then ls;
+				state ls;
 				state lidle;
 
-				then ls lidle;
+				succession first ls then lidle;
 			}
-			region right {
-				initial rstart;
-				state wrapper {
-					region inner {
-						initial istart;
+			state right {
+				entry; then rstart;
+				state rstart;
+				state wrapper parallel {
+					state inner {
+						entry; then istart;
+						state istart;
 						state deepState {
 							entry { deepEntries = deepEntries + 1; }
 						}
 
-						then istart deepState;
+						succession first istart then deepState;
 						transition out_deep
 							first deepState
 							accept after 3
@@ -45,7 +49,7 @@ package Test {
 			entry { startEntries = startEntries + 1; }
 		}
 
-		start then running;
+		succession first start then running;
 		transition back first away accept after 3 if trips == 1 then resume;
 	}
 }

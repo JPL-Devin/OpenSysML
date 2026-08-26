@@ -20,11 +20,11 @@ const verifyModelSource = `package Demo {
 		attribute mass = 1500.0;
 
 		constraint massPositive {
-			assert mass > 0.0;
+			mass > 0.0
 		}
 
 		constraint massLight {
-			assert mass < 100.0;
+			mass < 100.0
 		}
 
 		requirement lightEnough {
@@ -64,7 +64,7 @@ const verifyModelSource = `package Demo {
 	calc add {
 		in x;
 		in y;
-		return x + y;
+		x + y
 	}
 }
 `

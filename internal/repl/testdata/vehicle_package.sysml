@@ -13,18 +13,18 @@ package Demo {
 	calc add {
 		in x;
 		in y;
-		return x + y;
+		x + y
 	}
 
 	constraint withinMassLimit {
-		assert 1500.0 < 2000.0;
+		1500.0 < 2000.0
 	}
 
 	constraint overMassLimit {
-		assert 2500.0 < 2000.0;
+		2500.0 < 2000.0
 	}
 
 	requirement SafeMass {
-		require 1500.0 < 2000.0;
+		require constraint { 1500.0 < 2000.0 }
 	}
 }

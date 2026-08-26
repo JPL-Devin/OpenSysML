@@ -4,6 +4,11 @@
 > development round of this project — chronological, with no meaning outside this repository — and
 > `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
 > [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
+>
+> **Oracle figures in this record are as measured at the round it documents;
+> they are not the current baseline.** The current baseline is the generated block in
+> [README](../../README.md) and [architecture](../internals/architecture.md),
+> regenerated and gated by `make docs-counts`.
 
 Roadmap item **L2** recorded that `Registry.Run` skipped *every* pass at a strictly higher level
 once any pass emitted a blocking error, for the whole document, while the reference (EMF/Xtext)

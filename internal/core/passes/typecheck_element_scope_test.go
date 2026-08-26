@@ -11,7 +11,7 @@ func TestTransitionGuardIsElementScoped(t *testing.T) {
 	state def S {
 		state a;
 		state b;
-		transition a to b if "test";
+		transition first a if "test" then b;
 	}
 }`
 	diags := diagsIn(t, "a.sysml", src, "type")
@@ -27,7 +27,7 @@ func TestTransitionGuardUnresolvedDoesNotCascade(t *testing.T) {
 	state def S {
 		state a;
 		state b;
-		transition a to b if missing;
+		transition first a if missing then b;
 	}
 }`
 	if diags := diagsIn(t, "a.sysml", src, "type"); len(diags) != 0 {

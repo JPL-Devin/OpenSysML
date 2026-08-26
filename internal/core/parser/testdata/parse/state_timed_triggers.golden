@@ -1,7 +1,9 @@
 (RootNamespace
   (Membership visibility="default"
     (Usage kind="state" name="TimedTriggers" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-      (*ast.StateNode)
+      (EntryMember)
+      (SuccessionEdge source="@entry" target="start")
+      (SubstateMember name="start")
       (Membership visibility="default"
         (Usage kind="state" name="waiting" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (TransitionMember source="" target="working"
@@ -15,9 +17,9 @@
           (TransitionMember source="" target="done"
             (ChangeEvent
               (FeatureReference name="working")))))
-      (*ast.StateNode)
-      (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-        (ConnectorEnd target="<nil>"
-          (*ast.QualifiedName))
-        (ConnectorEnd target="<nil>"
-          (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="start"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="waiting"
+            (*ast.QualifiedName)))))))

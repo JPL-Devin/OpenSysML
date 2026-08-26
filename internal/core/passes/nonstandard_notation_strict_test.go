@@ -10,27 +10,15 @@ import (
 // extensionInventory is every construct the audit classifies as OpenSysML
 // notation: the pass must report each one in either mode.
 var extensionInventory = []string{
-	"state def S { initial a; }",
-	"state def S { final b; }",
 	"state def S { choice c; }",
 	"state def S { junction j; }",
 	"state def S { history h; }",
 	"state def S { shallow history h; }",
 	"state def S { deep history h; }",
-	"state def S { region r { state a; } }",
 	"state def S { entry point p; }",
 	"state def S { exit point p; }",
 	"state def S { state a { defer e; } }",
-	"state def S { state a; state b; transition a to b; }",
-	"action def A { initial a; }",
-	"action def A { final b; }",
-	"action def A { decision d; }",
-	"calc c { in a : Real; return 42; }",
-	"constraint validRange { in x : Real; assert x >= 0; }",
-	"constraint validRange { in x : Real; assume x >= 0; }",
-	"constraint validRange { in x : Real; assert not x >= 0; }",
-	"requirement r { attribute x : Real; assume x > 0; }",
-	"requirement r { attribute x : Real; require x > 0; }",
+	"part def P { part a; first a; }",
 }
 
 // notationDiags runs the pass over a document in the named mode.
@@ -117,10 +105,6 @@ func TestExtensionFindingsFollowTheMode(t *testing.T) {
 	for _, tc := range []struct {
 		name, file, src, code string
 	}{
-		{"binding", "a.sysml", "part def P { attribute a; attribute b; bind a = b * 2; }", CodeNonstandardNotation},
-		{"final_node", "a.sysml", "action def A { done end; }", CodeNonstandardNotation},
-		{"succession_edge", "a.sysml", "action def A { action a; action b; then a b; }", CodeNonstandardNotation},
-		{"source_then_target", "a.sysml", "state def S { state a; state b; a then b; }", CodeNonstandardNotation},
 		{"one_ended_first", "a.sysml", "part def P { part a; first a; }", CodeNonstandardNotation},
 		{"requirement_constraint", "a.sysml", "analysis def An { attribute size; require constraint { size >= 1 } }", CodeNonstandardNotation},
 	} {

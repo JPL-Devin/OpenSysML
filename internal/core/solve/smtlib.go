@@ -2,7 +2,6 @@ package solve
 
 import (
 	"fmt"
-	"io"
 	"math/big"
 	"strconv"
 	"strings"
@@ -15,12 +14,6 @@ func Script(q *Query) string {
 	var b strings.Builder
 	writeScript(&b, q, scriptOptions{})
 	return b.String()
-}
-
-// Write writes the query's script to w.
-func Write(w io.Writer, q *Query) error {
-	_, err := io.WriteString(w, Script(q))
-	return err
 }
 
 // CoreScript renders the query as a core-producing script: every assertion

@@ -30,15 +30,15 @@ contextually where our own notation needs it — the treatment `point`, `on` and
 | Word | `KerML.xtext` | `SysML.xtext` | `KerMLExpressions.xtext` | Verdict |
 |------|---------------|---------------|--------------------------|---------|
 | `choice` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
-| `decision` | absent | absent | absent | unreserve; spelling variant of standard `decide` (warning) |
+| `decision` | absent | absent | absent | unreserve; **an ordinary name only** — the action node spelled `decision` is no longer accepted, write `decide` |
 | `deep` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `defer` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `done` | absent | absent | absent | unreserve; **silent** — see "`done` is a library name, not notation" |
-| `final` | absent | absent | absent | unreserve; spelling variant of `done`/state notation (warning) |
+| `final` | absent | absent | absent | unreserve; **an ordinary name only** — neither the action node nor the state marker spelled `final` is accepted, write `done` |
 | `history` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
-| `initial` | absent | absent | absent | unreserve; spelling variant of standard `first` (warning) |
+| `initial` | absent | absent | absent | unreserve; **an ordinary name only** — neither the action node nor the state marker spelled `initial` is accepted, write `first <name>` and `entry; then <state>;` |
 | `junction` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
-| `region` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
+| `region` | absent | absent | absent | unreserve; **an ordinary name only** — the orthogonal-region member spelled `region <name> { … }` is no longer accepted, mark the owning state's body `parallel` |
 | `shallow` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 
 `done` is the acceptance test that unreserving worked: the bundled normative
@@ -54,10 +54,12 @@ Example.sysml:32`, `Control Structures Example.sysml:27`, `35. Use Cases/Use
 Case Usage Example.sysml:35`) and `snapshot junked = done;`
 (`27. Occurrences/Time Slice and Snapshot Example.sysml:25`). Those are plain
 references to `Actions::Action::done`, a feature of the standard library, not a
-keyword. Our parser still reads `done;` and `then done;` as the final node it
-always built, and the construct stays **silent**: warning on it would warn on
-OMG-authored files, which the classification forbids. `final` is our own
-spelling of the same node and is warned.
+keyword. Our parser reads `done;` as an anonymous final node and `then done;`
+as a succession targeting the `done` library feature. Both stay **silent**:
+warning on them would warn on OMG-authored files, which the classification
+forbids. In a state body `then done;` names the same library feature and states
+that the machine completes; the `final <state>;` marker that once spelled it is
+no longer accepted.
 
 ## Verdict per construct
 
@@ -96,19 +98,68 @@ ones below in either mode. The mode is what answers "is this file conforming
 SysML v2?"; the default mode's acceptance of these constructs is intended and
 unchanged.
 
+The removed OpenSysML-only spellings `then <source> <target>;`, member-leading
+`<source> then <target>;`, `done <name>;`, the orthogonal-region member
+`region <name> { … }`, the state markers `initial <state>;` and `final <state>;`
+and
+`transition [<name>] <src> to <tgt>;` are no longer accepted. Use
+`succession first <source> then <target>;`, `done;`, a `parallel` state body with
+one state substate per region, `entry; then <state>;`, a transition targeting
+`done` and `transition [<name>] first <src> … then <tgt>;` instead.
+
 | Construct | Why it is not standard |
 |-----------|------------------------|
-| `initial <name>;` in a state body | `StateBodyItem` (`SysML.xtext:1755-1770`) has no such member; the standard way to mark the first state is `entry; then <state>;` (`EntryTransitionMember`, `:1796-1801`) |
-| `final <name>;` in a state body | same; no `final` literal anywhere |
-| `initial <name> [then <target>];` action node | spelling variant of `first` (`SysML.xtext:1385`), which has the literal |
-| `final [<name>];` action node | spelling variant of the `done` reference above |
-| `decision <name>;` | spelling variant of `decide` (`SysML.xtext:1672`) |
-| `region <name> { … }` | no `region` literal; the standard orthogonality marker is `parallel` (`:1745`) |
 | `choice <name>;`, `junction <name>;` | no literal; no pseudostate production of any kind |
 | `history <name>;`, `shallow history <name>;`, `deep history <name>;` | same |
 | `entry point <name>;`, `exit point <name>;` | `entry`/`exit` are literals only as state subaction kinds (`:1777`, `:1793`); no `point` literal exists |
 | `defer <event> [, <event>]*;` | no `defer` literal; `StatePerformance::deferrable` has the semantics but no notation |
-| `transition [<name>] <src> to <tgt>;` | `to` is a literal (`SysML.xtext:1077`, `:1168`, `:1253`, `:1287`; `KerML.xtext:838`, `:1009`) but in connector, interface, message and flow ends only — `TransitionUsage` (`:1851-1880`) states its ends with `first` and `then` |
+
+Two further findings are position rules rather than spellings: the construct is
+standard where a production admits it and ours everywhere else, so the warning
+names the position, not the keyword.
+
+| Construct | Where it is standard | Why it is not standard elsewhere |
+|-----------|----------------------|----------------------------------|
+| `assume <constraint>;`, `require <constraint>;` | a requirement, concern, viewpoint or objective body | `RequirementConstraintMember` (`SysML.xtext:2039`) is the only production that admits it |
+| a one-ended `first <node>;` | an action body | `InitialNodeMember` is reachable from `ActionBodyItem` alone (`:1376`), never from `DefinitionBodyItem` (`:516`); elsewhere a succession names both ends, `first <source> then <target>` |
+
+### Removed extension notation — no longer accepted
+
+A keyworded inline condition — `assert <expression>;` or `assume <expression>;`
+in a constraint body, `assume <expression>;` or `require <expression>;` in a
+requirement-style body — was an OpenSysML extension and is now a parse error:
+`AssertConstraintUsage` (`SysML.xtext:2007-2013`) and
+`RequirementConstraintUsage` (`:2066-2071`) admit a reference subsetting or a
+`constraint` declaration after the keyword, never an expression. The standard
+spellings, which are unchanged, are a keyword-less condition in a constraint
+body (`total <= limit`), `assert [not] <reference>;`,
+`assert constraint { … }`, and `assume`/`require constraint { … }` in a
+requirement body — a requirement body admits no keyword-less condition
+(`RequirementBodyItem`, `:2039-2047`). A removed negation keeps its truth value
+as `not (…)` inside the condition.
+
+A spelling that is a pure alias of a standard construct is removed rather than
+warned, so it is no longer accepted and has no row here: `return <expression>;`
+in a calculation body is now a parse error, and a computed result is written as
+the body's trailing expression (`ResultExpressionMember`, `SysML.xtext:1967`).
+`return` itself is unchanged as the result parameter declaration.
+
+`bind <feature> = <expression>;` is removed the same way: a binding relates two
+`ConnectorEndMember`s (`BindingConnectorAsUsage`, `SysML.xtext:1020`), so an
+expression right end is now a parse error. Write the expression as the
+feature's value (`out result : Real = x * 2.0;`), or declare a feature holding
+the result and bind to it (`attribute b2 = a + 1;` then `binding bind b = b2;`).
+Standard bindings — `bind a = b;`, with qualified, chained and indexed ends —
+are unchanged.
+
+The same holds for the two state-machine aliases. `initial <state>;` stated where
+a machine starts, which `EntryTransitionMember` (`SysML.xtext:1796-1801`) states
+as `entry; then <state>;`, and `transition [<name>] <src> to <tgt>;` stated a
+transition's ends, which `TransitionUsage` (`:1851-1880`) states with `first` and
+`then`; `to` is a literal (`:1077`, `:1168`, `:1253`, `:1287`; `KerML.xtext:838`,
+`:1009`) in connector, interface, message and flow ends only. Both are parse
+errors now, and `initial` — reserved by neither grammar — stays an ordinary
+name.
 
 ### KerML-only notation in a `.sysml` file — warning `kerml-notation`
 
@@ -143,14 +194,19 @@ in a `.sysml` file — the same treatment `namespace` gets in the other directio
 Everything above is a grammar citation except these, recorded so a reviewer can
 disagree with them:
 
-- **`done` silent, `final` warned.** No grammar has either literal. `done` is
-  classified standard because the OMG corpora write it (as a library-feature
-  reference) and a warning there would be a false positive; `final` appears in
-  no OMG file.
-- **`first`/`initial`, `decide`/`decision`.** Where we accept two spellings of
-  one node, the one with the literal is silent and ours is warned.
+- **`done` silent.** No grammar has the literal. `done` is classified standard
+  because the OMG corpora write it (as a library-feature reference) and a warning
+  there would be a false positive; `final` appears in no OMG file and is no
+  longer notation in any position.
+- **An alias of a standard node is removed, not warned.** The action nodes
+  spelled `initial`, `final` and `decision` were pure aliases of `first`, `done`
+  and `decide`, so they are gone rather than diagnosed; each word stays an
+  ordinary name. The state markers `initial <state>;` and `final <state>;` and the
+  transition spelling `transition <src> to <tgt>;` are gone for the same reason.
+- **Completion is stated, not inferred.** A machine completes when a transition
+  reaches `done`, the library end shot the OMG corpora already write in a state
+  body; a state with no outgoing transition does not complete on its own, because
+  an ancestor or cross-region transition may still leave it.
 - **State-body `fork`/`join` silent.** They are action node literals, and
   `StateBodyItem` admits a `BehaviorUsageMember`, so we read them as standard in
   a state body even though the pilot's state examples do not use them there.
-- **`transition <src> to <tgt>` warned.** `to` is a literal, but not in any
-  transition production, so the construct is ours.

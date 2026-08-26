@@ -9,7 +9,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-var dumpedSuccession = regexp.MustCompile(`\(SuccessionEdge source="([^"]*)" target="([^"]*)"\)`)
+var dumpedSuccession = regexp.MustCompile(`(?s)\(SuccessionEdge source="([^"]*)" target="([^"]*)"\)|\(Usage kind="succession".*?\(ConnectorEnd target="([^"]*)".*?\(ConnectorEnd target="([^"]*)"`)
 
 // parseSuccessions returns the succession edges src parses to, as
 // "source->target" pairs in tree order, with the parser that read it.
@@ -20,7 +20,11 @@ func parseSuccessions(t *testing.T, src string) ([]string, *Parser) {
 
 	var edges []string
 	for _, m := range dumpedSuccession.FindAllStringSubmatch(dump, -1) {
-		edges = append(edges, m[1]+"->"+m[2])
+		if m[1] != "" {
+			edges = append(edges, m[1]+"->"+m[2])
+		} else {
+			edges = append(edges, m[3]+"->"+m[4])
+		}
 	}
 	return edges, p
 }
@@ -51,12 +55,12 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 		},
 		{
 			"the edge notation is unchanged",
-			"action def A { action a; action b; then a b; }",
+			"action def A { action a; action b; succession first a then b; }",
 			[]string{"a->b"},
 		},
 		{
 			"an edge is not the source of the next succession",
-			"action def A { action a; action b; then a b; then action c; }",
+			"action def A { action a; action b; succession first a then b; then action c; }",
 			[]string{"a->b", "b->c"},
 		},
 		{
@@ -70,18 +74,13 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 			[]string{"a->b"},
 		},
 		{
-			"a state body's order statement is not the source of the next succession",
-			"state def S { state a; state b; a then b; then state c; }",
-			[]string{"b->c"},
-		},
-		{
 			"a one-name edge whose target is a keyword the body declares",
-			"action def A { done end; action a; then end; }",
-			[]string{"a->end"},
+			"action def A { action a; then done; }",
+			[]string{"a->@done"},
 		},
 		{
 			"a two-name edge whose source is a keyword the body declares",
-			"action def A { action end; action b; then end b; }",
+			"action def A { action end; action b; succession first end then b; }",
 			[]string{"end->b"},
 		},
 		{
@@ -101,12 +100,12 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 		},
 		{
 			"a calculation body reads the edge form it is written back as",
-			"calc def C { part a; part b; then a b; }",
+			"calc def C { part a; part b; succession first a then b; }",
 			[]string{"a->b"},
 		},
 		{
 			"a requirement body reads the edge form it is written back as",
-			"requirement def R { part a; part b; then a b; }",
+			"requirement def R { part a; part b; succession first a then b; }",
 			[]string{"a->b"},
 		},
 	}
@@ -124,10 +123,10 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 	}
 }
 
-// A region carries the members of a state body, so a `then` attached to one of
-// its states is the same succession it would be one level up.
-func TestMemberAttachedThenInRegionDesugars(t *testing.T) {
-	p := New(source.New("region.sysml", []byte("state def S { region R { state a; then state b; } }")))
+// A nested state body carries the members of a state body, so a `then` attached
+// to one of its states is the same succession it would be one level up.
+func TestMemberAttachedThenInNestedStateDesugars(t *testing.T) {
+	p := New(source.New("nested.sysml", []byte("state def S { state R { state a; then state b; } }")))
 	file := p.ParseFile()
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
@@ -144,23 +143,35 @@ func TestMemberAttachedThenInRegionDesugars(t *testing.T) {
 			continue
 		}
 		for _, stateMember := range def.Members {
-			region, ok := stateMember.(*ast.StateRegion)
+			nested, ok := unwrapStateUsage(stateMember)
 			if !ok {
 				continue
 			}
-			for _, regionMember := range region.States {
-				if edge, ok := regionMember.(*ast.SuccessionEdge); ok {
+			for _, nestedMember := range nested.Members {
+				if edge, ok := nestedMember.(*ast.SuccessionEdge); ok {
 					edges = append(edges, edge)
 				}
 			}
 		}
 	}
 	if len(edges) != 1 {
-		t.Fatalf("succession edges in the region: %d, want 1", len(edges))
+		t.Fatalf("succession edges in the nested state: %d, want 1", len(edges))
 	}
 	if got := qnText(edges[0].Source) + "->" + qnText(edges[0].Target); got != "a->b" {
 		t.Errorf("succession %s, want a->b", got)
 	}
+}
+
+// unwrapStateUsage returns the state usage a body member declares.
+func unwrapStateUsage(member ast.Node) (*ast.Usage, bool) {
+	if m, ok := member.(*ast.Membership); ok {
+		member = m.Member
+	}
+	usage, ok := member.(*ast.Usage)
+	if !ok || usage.Kind != ast.UsageState {
+		return nil, false
+	}
+	return usage, true
 }
 
 // A one-name succession takes the member before it as its source whether or not
@@ -282,5 +293,46 @@ func TestPositionalSuccessionEndIsTheMemberItself(t *testing.T) {
 	if edges[1].SourceMember != sends[0] || edges[1].TargetMember != sends[1] {
 		t.Errorf("the second succession runs %p->%p, want %p->%p",
 			edges[1].SourceMember, edges[1].TargetMember, sends[0], sends[1])
+	}
+}
+
+// An end the notation supplies — the source a one-name `then <target>;` takes
+// from the member before it, and both ends of the edge a member-attached `then`
+// desugars to — is marked as such, since it names a member rather than being a
+// reference the author wrote and could misspell.
+func TestSuppliedSuccessionEndsAreMarkedImplied(t *testing.T) {
+	p := New(source.New("implied.sysml", []byte(
+		"action def A { action a; then b; action b; then action c; }")))
+	file := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+
+	var edges []*ast.SuccessionEdge
+	for _, member := range file.Members {
+		m, ok := member.(*ast.Membership)
+		if !ok {
+			continue
+		}
+		def, ok := m.Member.(*ast.Definition)
+		if !ok {
+			continue
+		}
+		for _, defMember := range def.Members {
+			if edge, ok := defMember.(*ast.SuccessionEdge); ok {
+				edges = append(edges, edge)
+			}
+		}
+	}
+	if len(edges) != 2 {
+		t.Fatalf("parsed %d successions, want 2", len(edges))
+	}
+	if !edges[0].SourceImplied || edges[0].TargetImplied {
+		t.Errorf("`then b;` has source implied=%t target implied=%t, want the source only",
+			edges[0].SourceImplied, edges[0].TargetImplied)
+	}
+	if !edges[1].SourceImplied || !edges[1].TargetImplied {
+		t.Errorf("a member-attached `then` has source implied=%t target implied=%t, want both",
+			edges[1].SourceImplied, edges[1].TargetImplied)
 	}
 }

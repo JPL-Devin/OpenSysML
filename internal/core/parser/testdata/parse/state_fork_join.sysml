@@ -1,27 +1,29 @@
 state ParallelSplit {
-	initial start;
+	entry; then start;
+	state start;
 	state ready;
-	state working {
-		region left {
-			initial leftStart;
+	state working parallel {
+		state left {
+			entry; then leftStart;
+			state leftStart;
 			state building;
-			then leftStart building;
+			succession first leftStart then building;
 		}
-		region right {
-			initial rightStart;
+		state right {
+			entry; then rightStart;
+			state rightStart;
 			state checking;
-			then rightStart checking;
+			succession first rightStart then checking;
 		}
 	}
 	fork split;
 	join sync;
-	final done;
 
-	start then ready;
-	transition ready to split;
-	transition split to building;
-	transition split to checking;
-	transition building to sync;
-	transition checking to sync;
-	transition sync to done;
+	succession first start then ready;
+	transition first ready then split;
+	transition first split then building;
+	transition first split then checking;
+	transition first building then sync;
+	transition first checking then sync;
+	transition first sync then done;
 }

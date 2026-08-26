@@ -1,0 +1,13 @@
+{
+  "type": "state",
+  "events": [
+    {
+      "signal": "First"
+    },
+    {
+      "signal": "Second"
+    }
+  ],
+  "finalState": "done+rbusy",
+  "trace": true
+}

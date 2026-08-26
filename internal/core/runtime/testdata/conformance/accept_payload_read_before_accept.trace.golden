@@ -7,5 +7,5 @@ stmt assign seen
     eval feature msg -> 4
     eval literal 1 -> 1
   eval operator + -> 5
-step 4: token 1@end
+step 4: token 1@done
 step 5: no active tokens

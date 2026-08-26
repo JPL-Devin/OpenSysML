@@ -19,9 +19,9 @@ func TestActionBodyActivationEndsWithTheBody(t *testing.T) {
 				calc t : Twice { in k = 3.0; }
 				first start;
 				action go { assign v := t.d; }
-				done end;
-				then start go;
-				then go end;
+				done;
+				succession first start then go;
+				succession first go then done;
 			}
 		}
 	`

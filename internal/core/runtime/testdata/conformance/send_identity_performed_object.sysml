@@ -6,10 +6,10 @@ package SendIdentityPerformed {
 
 		action reader accept n : Integer;
 
-		done fin;
+		done;
 
-		then start reader;
-		then reader fin;
+		succession first start then reader;
+		succession first reader then done;
 	}
 
 	action def Outer {
@@ -17,22 +17,23 @@ package SendIdentityPerformed {
 
 		action mid : Inner;
 
-		done fin;
+		done;
 
-		then start mid;
-		then mid fin;
+		succession first start then mid;
+		succession first mid then done;
 	}
 
 	part def Node {
 		state Listen {
-			initial start;
+			entry; then start;
+			state start;
 
 			state waiting {
 				entry send 7 to worker;
 			}
 			state heard;
 
-			start then waiting;
+			succession first start then waiting;
 
 			transition first waiting then heard do perform Outer;
 		}

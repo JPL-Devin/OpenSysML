@@ -15,25 +15,25 @@ const debugActionSrc = `package test {
 			assign total := total + 5;
 		}
 
-		done end;
+		done;
 
-		then start accumulate;
-		then accumulate end;
+		succession first start then accumulate;
+		succession first accumulate then done;
 	}
 }`
 
 const debugStateSrc = `package test {
 	state Cycle {
-		initial init;
+		entry; then init;
+		state init;
 		state waiting {
 			accept after 10 then working;
 		}
 		state working {
 			accept after 5 then done;
 		}
-		final done;
 
-		init then waiting;
+		succession first init then waiting;
 	}
 }`
 
@@ -83,7 +83,7 @@ func TestActionExecutorDebugAccessors(t *testing.T) {
 
 func TestActionExecutorNodeNames(t *testing.T) {
 	names := strings.Join(debugActionExecutor(t).NodeNames(), ",")
-	for _, want := range []string{"start", "accumulate", "end"} {
+	for _, want := range []string{"start", "accumulate", "done"} {
 		if !strings.Contains(names, want) {
 			t.Errorf("NodeNames() = %s, want it to contain %q", names, want)
 		}
@@ -137,9 +137,9 @@ func TestBreakpointNamesEitherKeyOfAShortNamedStep(t *testing.T) {
 		action <acc> :>> accumulate {
 			assign total := total + 5;
 		}
-		done end;
-		then start acc;
-		then acc end;
+		done;
+		succession first start then acc;
+		succession first acc then done;
 	}
 }`
 
@@ -257,13 +257,13 @@ func TestRunDoRoundRunsDoWorkOnly(t *testing.T) {
 	exec := stateExecutorForSource(t, "Slow", `package test {
 		state Slow {
 			attribute count = 0;
-			initial init;
+			entry; then init;
+			state init;
 			state working {
 				do { count = count + 1; }
 				accept after 100 then done;
 			}
-			final done;
-			init then working;
+			succession first init then working;
 		}
 	}`)
 
@@ -297,16 +297,18 @@ func TestRunDoRoundRunsDoWorkOnly(t *testing.T) {
 // CurrentState has no single answer to give.
 func TestActiveStatesCoversOrthogonalRegions(t *testing.T) {
 	exec := stateExecutorForSource(t, "TrafficLight", `package test {
-		state def TrafficLight {
-			region pedestrian {
-				initial start;
+		state def TrafficLight parallel {
+			state pedestrian {
+				entry; then start;
+				state start;
 				state Walk;
-				then start Walk;
+				succession first start then Walk;
 			}
-			region vehicle {
-				initial begin;
+			state vehicle {
+				entry; then begin;
+				state begin;
 				state Green;
-				then begin Green;
+				succession first begin then Green;
 			}
 		}
 	}`)

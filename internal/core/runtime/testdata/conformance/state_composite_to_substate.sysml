@@ -4,7 +4,8 @@ package Test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state Working {
 			entry { log = log * 10 + 1; }
 			exit { log = log * 10 + 2; }
@@ -19,7 +20,7 @@ package Test {
 			}
 		}
 
-		start then Working::Step1;
-		transition Working to Working::Step2 when advance do assign log := log * 10 + 9;
+		succession first start then Working::Step1;
+		transition first Working when advance do assign log := log * 10 + 9 then Working::Step2;
 	}
 }

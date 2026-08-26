@@ -65,8 +65,8 @@ conformance-rust: ## Run the conformance suite with the blocking Rust client
 	@mkdir -p $(BIN_DIR)
 	OPENSYSML_GRPC_BINARY="$(CURDIR)/$(BIN_DIR)/sysml-grpc" cargo run --manifest-path rust/Cargo.toml -p opensysml-conformance -- -binary "$(CURDIR)/$(BIN_DIR)/sysml-grpc" -report "$(CURDIR)/$(BIN_DIR)/conformance-report-rust.json"
 
-test: ## Run all tests
-	@echo "Running tests..."
+test: ## Run Go tests with race detection and coverage
+	@echo "Running Go race tests..."
 	@# Per-package timeout: under -race, passes and model run within 1% of go's 10m default.
 	go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
 
@@ -79,8 +79,8 @@ lint: ## Run static analysis (staticcheck + gosec), as CI does
 	go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -quiet -exclude-generated ./...
 	@echo "✓ Lint passed"
 
-test-short: ## Run tests without race detector (faster)
-	@echo "Running tests (short)..."
+test-short: ## Run Go tests without race detection
+	@echo "Running Go tests without race detection..."
 	go test -v ./...
 
 clean: ## Remove build artifacts
@@ -136,15 +136,15 @@ proto-breaking: ## Check the protobuf schema for wire-breaking changes against m
 	$(BUF) breaking --against '$(BUF_BREAKING_AGAINST)'
 	@echo "✓ No breaking schema changes"
 
-python-install: ## Install Python package in editable mode
+python-install: ## Install the Python client in editable mode
 	@echo "Installing opensysml..."
 	cd $(PYTHON_DIR) && pip install -e .
 	@echo "✓ Installed opensysml"
 
-python-test: ## Run Python tests
-	@echo "Running Python tests..."
+python-test: ## Run Python client tests
+	@echo "Running Python client tests..."
 	cd $(PYTHON_DIR) && pytest tests/ -v
-	@echo "✓ Python tests passed"
+	@echo "✓ Python client tests passed"
 
 vscode-grammar: ## Regenerate the VS Code TextMate grammars from the lexer keywords
 	@echo "Generating TextMate grammars..."
@@ -168,9 +168,10 @@ docs-counts: ## Regenerate and verify all derived documentation counts
 	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts
 	@echo "✓ Documentation counts and refereed figures are current"
 
-docs-check: ## Verify documentation links, and that reader-facing pages cite no internal label
+docs-check: ## Verify documentation links, that reader-facing pages cite no internal label, and that quoted oracle figures name their round
 	$(PYTHON) scripts/check-doc-links.py
 	$(PYTHON) scripts/check-doc-ids.py
+	$(PYTHON) scripts/check-doc-figures.py
 
 docs-install: ## Install the documentation site toolchain
 	$(PYTHON) -m pip install -r docs-requirements.txt

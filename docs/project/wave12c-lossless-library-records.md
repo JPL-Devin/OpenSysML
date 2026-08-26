@@ -4,6 +4,11 @@
 > development round of this project — chronological, with no meaning outside this repository — and
 > `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
 > [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
+>
+> **Oracle figures in this record are as measured at the round it documents;
+> they are not the current baseline.** The current baseline is the generated block in
+> [README](../../README.md) and [architecture](../internals/architecture.md),
+> regenerated and gated by `make docs-counts`.
 
 Roadmap item **L3** asks for library records to become *lossless*: a restored library must equal a
 parsed one, so a library keeps its members, declared values and condition bodies on both load paths.

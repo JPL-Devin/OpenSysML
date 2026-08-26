@@ -19,12 +19,15 @@ The vocabulary each triple uses, and what the mapping does not cover, is
 notation, `.ttl` for RDF Turtle:
 
 ```bash
+sysml> package Demo { private import ScalarValues::*; part def Vehicle { attribute mass : Real = 1500.0; } }
+✓ package Demo
+
 sysml> %save my_model.sysml
-saved 181 bytes of sysml to my_model.sysml (replaced the existing file)
+saved 102 bytes of sysml to my_model.sysml
 
 sysml> %save my_model.ttl
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
-saved 1872 bytes of ttl to my_model.ttl
+saved 1487 bytes of ttl to my_model.ttl
 ```
 
 A leading `~` is expanded, an existing file is replaced and the replacement is
@@ -37,11 +40,21 @@ your own text re-indented, so the syntax errors are reported as warnings and the
 work is never trapped in the REPL.
 
 ```bash
+sysml> package Demo {
+  ...>   part def Vehicle;
+  ...>   ???
+  ...> }
+3:3: error: expected a namespace member
+  ???
+  ^~
+warning: <session>: 1 syntax error(s):
+  3:3: expected a namespace member
+warning: the file is saved as typed; fix these and save again
 sysml> %save my_model.sysml
 warning: <session>: 1 syntax error(s):
-  4:6: expected a namespace member
+  3:3: expected a namespace member
 warning: the file is saved as typed; fix these and save again
-saved 181 bytes of sysml to my_model.sysml (replaced the existing file)
+saved 47 bytes of sysml to my_model.sysml
 ```
 
 `.ttl` keeps the refusal, because a graph built from a tree the parser only
@@ -152,7 +165,7 @@ documentation — all inside the mapping — so it converts and comes back:
 ```bash
 $ sysml examples/rdf-interop-demo.sysml -convert ttl -o /tmp/rover.ttl
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
-wrote /tmp/rover.ttl (ttl, 7937 bytes)
+wrote /tmp/rover.ttl (ttl, 10296 bytes)
 $ sysml /tmp/rover.ttl -convert sysml -o /tmp/rover-back.sysml
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 wrote /tmp/rover-back.sysml (sysml, 877 bytes)
@@ -170,15 +183,24 @@ convert too, as do most `parser_features_demo_*.kerml` files (except
 one name twice). The behavior a body states converts as well — states, regions,
 substates, action nodes, assignments and transitions all have a mapping. What is
 refused is what the notation could not be rebuilt from: an expression the graph
-would have to compute, a name two members of one body share, or an order whose
-ends the notation leaves implicit (how much of `examples/` converts is measured
-in
-[project/roadmap.md](../project/roadmap.md#d6--a-behavioral-node-has-no-metaclass-so-a-model-stating-steps-cannot-convert)):
+would have to compute, a name two members of one body share, or a declaration
+with no name. A refusal names the construct it stopped at and points at saving
+the source instead:
 
 ```bash
-$ sysml examples/parser_features_demo_action_semantics.sysml -convert ttl
+$ sysml examples/parser_features_demo_action_semantics.sysml -convert ttl -o /tmp/action-semantics.ttl; echo $?
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
-sysml: cannot convert the succession at examples/parser_features_demo_action_semantics.sysml:41:9: it does not name both of the members it sequences, so the order it declares cannot be written back
+wrote /tmp/action-semantics.ttl (ttl, 21671 bytes)
+0
+```
+
+For example, an advanced body with an operator expression is still refused:
+
+```bash
+$ sysml examples/parser_features_demo_advanced_bodies.kerml -convert ttl; echo $?
+note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
+sysml: cannot convert the operator expr at examples/parser_features_demo_advanced_bodies.kerml:87:9: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
+2
 ```
 
 ---

@@ -8,5 +8,5 @@ eval operator > -> true
 step 3: token 1@alert
 stmt assign alerted
   eval literal 1 -> 1
-step 4: token 1@end
+step 4: token 1@done
 step 5: no active tokens

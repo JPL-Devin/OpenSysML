@@ -16,12 +16,12 @@ package test {
             assign i := i + 1;
             assign log := log + t.d;
         }
-        decision check;
-        done fin;
+        decide check;
+        done;
 
-        then start bump;
-        then bump check;
-        then check bump if t.d < 6.0;
-        then check fin if t.d >= 6.0;
+        succession first start then bump;
+        succession first bump then check;
+        succession first check if t.d < 6.0 then bump;
+        succession first check if t.d >= 6.0 then done;
     }
 }

@@ -38,4 +38,9 @@
           (SuccessionEdge source="a" target="b")
           (Membership visibility="default"
             (Usage kind="part" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
-          (SuccessionEdge source="b" target="c"))))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="b"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="c"
+                (*ast.QualifiedName)))))))))

@@ -29,9 +29,9 @@ package test {
 			}
 		}
 
-		done end;
+		done;
 
-		then start compute;
-		then compute end;
+		succession first start then compute;
+		succession first compute then done;
 	}
 }

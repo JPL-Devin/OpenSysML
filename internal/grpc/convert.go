@@ -15,15 +15,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// SymbolToProto converts a Symbol to protobuf SymbolInfo.
-// This is the public API for gRPC service use. It builds a conversion context
-// of its own; a caller converting several symbols of one model should build one
-// with NewSymbolContext and call SymbolToProtoIn, so that name resolution is
-// memoized across the symbols.
-func SymbolToProto(sym *symbols.Symbol, idx *symbols.Index) *pb.SymbolInfo {
-	return SymbolToProtoIn(sym, NewSymbolContext(idx))
-}
-
 // SymbolToProtoIn converts a Symbol to protobuf SymbolInfo in an existing
 // conversion context.
 func SymbolToProtoIn(sym *symbols.Symbol, sc *SymbolContext) *pb.SymbolInfo {
@@ -114,20 +105,6 @@ func ParserDiagnosticToProto(diag parser.Diagnostic, sf *source.SourceFile) *pb.
 			EndLine:   int32Clamp(end.Line),
 			EndCol:    int32Clamp(end.Col),
 		},
-	}
-}
-
-// convertSpan converts source.Span → proto.Span.
-// Requires the SourceFile and LineIndex to map byte offsets to line:col.
-func convertSpan(sp source.Span, sf *source.SourceFile, li *source.LineIndex) *pb.Span {
-	start := li.PosAt(sp.Offset)
-	end := li.PosAt(sp.End())
-	return &pb.Span{
-		File:      sf.Name(),
-		StartLine: int32Clamp(start.Line),
-		StartCol:  int32Clamp(start.Col),
-		EndLine:   int32Clamp(end.Line),
-		EndCol:    int32Clamp(end.Col),
 	}
 }
 

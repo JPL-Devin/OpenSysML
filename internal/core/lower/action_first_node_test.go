@@ -26,7 +26,7 @@ func TestToActionGraph_FirstNamesADeclaredNode(t *testing.T) {
 	if graph.Initial != s1 {
 		t.Errorf("initial node = %s, want s1", nodeDescription(graph.Initial))
 	}
-	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0] != s2 {
+	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0].Target != s2 {
 		t.Errorf("s1 edges = %v, want [s2]", edges)
 	}
 	for _, node := range graph.Nodes {
@@ -44,7 +44,7 @@ func TestToActionGraph_FirstNamesADeclaredNodeSplit(t *testing.T) {
 			action s1;
 			action s2;
 			first s1;
-			then s1 s2;
+			succession first s1 then s2;
 		}
 	`)
 
@@ -54,7 +54,7 @@ func TestToActionGraph_FirstNamesADeclaredNodeSplit(t *testing.T) {
 	if graph.Initial != s1 {
 		t.Errorf("initial node = %s, want s1", nodeDescription(graph.Initial))
 	}
-	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0] != s2 {
+	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0].Target != s2 {
 		t.Errorf("s1 edges = %v, want [s2]", edges)
 	}
 }
@@ -65,7 +65,7 @@ func TestToActionGraph_FirstDeclaresItsOwnInitialNode(t *testing.T) {
 		action seq {
 			action s1;
 			first start;
-			then start s1;
+			succession first start then s1;
 		}
 	`)
 
@@ -76,7 +76,7 @@ func TestToActionGraph_FirstDeclaresItsOwnInitialNode(t *testing.T) {
 	if initial.Name != "start" {
 		t.Errorf("initial node name = %q, want %q", initial.Name, "start")
 	}
-	if edges := graph.Edges[initial]; len(edges) != 1 || edges[0] != nodeNamed(t, graph, "s1") {
+	if edges := graph.Edges[initial]; len(edges) != 1 || edges[0].Target != nodeNamed(t, graph, "s1") {
 		t.Errorf("initial edges = %v, want [s1]", edges)
 	}
 }
@@ -86,8 +86,8 @@ func TestToActionGraph_FirstNamesAFinalNode(t *testing.T) {
 	src := `
 		action seq {
 			action s1;
-			done fin;
-			first fin then s1;
+			done;
+			first done then s1;
 		}
 	`
 	p := parser.New(source.New("test.sysml", []byte(src)))
@@ -101,7 +101,7 @@ func TestToActionGraph_FirstNamesAFinalNode(t *testing.T) {
 	if err == nil {
 		t.Fatal("a first end naming a final node lowered without an error")
 	}
-	if !strings.Contains(err.Error(), "final node fin") {
+	if !strings.Contains(err.Error(), "final node done") {
 		t.Errorf("error = %q, want it to name the final node", err)
 	}
 }
@@ -121,16 +121,16 @@ func TestToActionGraph_GuardOnTheSuccessionOutOfTheFirstNode(t *testing.T) {
 	s1 := nodeNamed(t, graph, "s1")
 	s2 := nodeNamed(t, graph, "s2")
 
-	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0] != s2 {
+	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0].Target != s2 {
 		t.Fatalf("s1 edges = %v, want [s2]", edges)
 	}
-	if graph.Guards[s1][s2] == nil {
+	if graph.Edges[s1][0].Guard == nil {
 		t.Error("the guard the member states was not carried onto the succession")
 	}
 }
 
 // The same guard on a succession written as its own member out of an ordinary
-// action node (`then s1 s2 if c;`).
+// action node (`succession first s1 if c then s2;`).
 func TestToActionGraph_GuardOnASuccessionOutOfAnActionNode(t *testing.T) {
 	graph := actionGraphFor(t, `
 		action seq {
@@ -138,14 +138,17 @@ func TestToActionGraph_GuardOnASuccessionOutOfAnActionNode(t *testing.T) {
 			action s1;
 			action s2;
 			first s1;
-			then s1 s2 if x > 0;
+			succession first s1 if x > 0 then s2;
 		}
 	`)
 
 	s1 := nodeNamed(t, graph, "s1")
 	s2 := nodeNamed(t, graph, "s2")
 
-	if graph.Guards[s1][s2] == nil {
+	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0].Target != s2 {
+		t.Fatalf("s1 edges = %v, want [s2]", edges)
+	}
+	if graph.Edges[s1][0].Guard == nil {
 		t.Error("the guard the member states was not carried onto the succession")
 	}
 }

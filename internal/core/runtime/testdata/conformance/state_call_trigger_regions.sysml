@@ -1,24 +1,26 @@
 package CallTriggerRegionTest {
     // One invocation is broadcast to every orthogonal region: the regions that
     // have a matching call trigger each fire one transition, run-to-completion.
-    state def Dashboard {
-        region display {
-            initial start;
+    state def Dashboard parallel {
+        state display {
+            entry; then start;
+            state start;
             state Dimmed;
             state Lit;
 
-            then start Dimmed;
-            transition Dimmed to Lit accept wake();
+            succession first start then Dimmed;
+            transition first Dimmed accept wake() then Lit;
         }
 
-        region audio {
-            initial start;
+        state audio {
+            entry; then start;
+            state start;
             state Muted;
             state Chiming;
 
-            then start Muted;
-            transition Muted to Chiming accept wake();
-            transition Chiming to Muted accept mute();
+            succession first start then Muted;
+            transition first Muted accept wake() then Chiming;
+            transition first Chiming accept mute() then Muted;
         }
     }
 }

@@ -5,33 +5,36 @@ package Test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
-		state Working {
+		entry; then start;
+		state start;
+		state Working parallel {
 			exit { log = log * 10 + 3; }
 
-			region left {
-				initial lstart;
+			state left {
+				entry; then lstart;
+				state lstart;
 				state lwork {
 					exit { log = log * 10 + 1; }
 				}
 
-				then lstart lwork;
+				succession first lstart then lwork;
 			}
 
-			region right {
-				initial rstart;
+			state right {
+				entry; then rstart;
+				state rstart;
 				state rwork {
 					exit { log = log * 10 + 2; }
 				}
 
-				then rstart rwork;
+				succession first rstart then rwork;
 			}
 		}
 		state Done {
 			entry { log = log * 10 + 5; }
 		}
 
-		start then Working;
-		transition Working to Done when Abort do assign log := log * 10 + 4;
+		succession first start then Working;
+		transition first Working when Abort do assign log := log * 10 + 4 then Done;
 	}
 }

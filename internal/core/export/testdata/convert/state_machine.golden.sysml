@@ -29,8 +29,9 @@ package StateMachine {
         }
     }
     state def Composite {
-        initial launch;
-        final stopped;
+        entry;
+        then launch;
+        state launch;
         state waiting;
         entry action {
             perform Warm;
@@ -42,7 +43,7 @@ package StateMachine {
         join sync;
         shallow history recent;
         deep history deepest;
-        region primary {
+        state primary parallel {
             state ready;
         }
     }

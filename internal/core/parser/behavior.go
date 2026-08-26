@@ -5,16 +5,33 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-// parseCalcBody parses the body of a calc def/usage.
-// Handles BOTH generic members (parameters like 'in x: Integer;') AND result members ('return expr;').
+// parseConstraintCalcBody parses a constraint body that declares parameters,
+// where a bare expression states a condition rather than a result.
+func (p *Parser) parseConstraintCalcBody() []ast.Node {
+	p.constraintCalcDepth++
+	defer func() { p.constraintCalcDepth-- }()
+	return p.parseCalcBody()
+}
+
+// parseCalcBody parses the body of a calc def/usage: its members, including the
+// `return` that declares its result parameter and its trailing expression.
 // Expects '{' already consumed.
 func (p *Parser) parseCalcBody() []ast.Node {
 	body := p.newBodyBuilder()
 	p.calcBodyDepth++
 	defer func() { p.calcBodyDepth-- }()
+
+	// The mark applies to this body only, so a calculation nested in it reads
+	// its own bare expression as a result again.
+	constraintConditions := p.constraintCalcDepth > 0
+	if constraintConditions {
+		p.constraintCalcDepth--
+		defer func() { p.constraintCalcDepth++ }()
+	}
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
@@ -25,8 +42,8 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
-		// `then a b;` is the edge member a member-attached `then` desugars to,
-		// and so the form a converted model is written back as.
+		// A member-attached `then` desugars to `succession first a then b;`,
+		// which is the form used when writing the converted model back.
 		if p.atKeyword("then") {
 			body.add(p.parseSuccessionEdge(p.advance(), true))
 			continue
@@ -39,7 +56,7 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			continue
 		}
 
-		// Check for 'return' keyword → ResultMember
+		// `return` declares the result parameter (SysML.xtext ReturnParameterMember).
 		if p.isResultKeyword() {
 			body.add(p.parseResultMember())
 		} else if p.atCalcStatement() || p.atActionNodeMember() {
@@ -55,16 +72,24 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			// but not a declaration pattern (name followed by colon/semicolon/keyword/bracket)
 			peek1 := p.peek()
 			peek2 := p.peekN(1)
+			// A keyword binary operator after the name continues an expression
+			// (`a and b`, `x as Real`), so it is not a declaration.
 			isNameDecl := (peek1.Kind == lexer.Identifier || peek1.Kind == lexer.UnrestrictedName) &&
 				(peek2.Kind == lexer.Colon || peek2.Kind == lexer.Semicolon ||
-					peek2.Kind == lexer.Keyword || peek2.Kind == lexer.LBracket)
+					(peek2.Kind == lexer.Keyword && !wordBinaryOpKeywords[peek2.KeywordID]) ||
+					peek2.Kind == lexer.LBracket)
 
 			// If expression-start but NOT name-declaration pattern, parse as implicit return
 			// A `var`-prefixed declaration is a member, not the value of an
 			// expression naming a feature `var` (KerML BasicFeaturePrefix).
-			if p.atExprStart() && !isNameDecl && !p.atVarDeclaration() {
-				// Parse as implicit return expression
-				body.add(p.ParseExpression())
+			if p.atUnaryExprStart() && !isNameDecl && !p.atVarDeclaration() {
+				// In a constraint body a bare expression is a condition the
+				// constraint states, not a calculated result.
+				if constraintConditions {
+					body.add(p.parseConstraintMember())
+				} else {
+					body.add(p.ParseExpression())
+				}
 			} else {
 				// Parse as generic body member (parameters, etc.)
 				body.add(p.parseBodyMember())
@@ -81,9 +106,8 @@ func (p *Parser) parseCalcBody() []ast.Node {
 	return body.finish()
 }
 
-// parseActionBody parses the body of an action usage.
-// Expects '{' already consumed, returns list of action nodes + edges.
-// parseActionBodyMixed handles action bodies with BOTH declarations and behavioral statements
+// parseActionBodyMixed parses the body of an action or state node: both
+// declarations and behavioral statements. Expects '{' already consumed.
 // Syntax: { in item x; action nested {...}; first nested then ...; flow ...; }
 func (p *Parser) parseActionBodyMixed() []ast.Node {
 	body := p.newBodyBuilder()
@@ -180,18 +204,6 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}' after action body")
 	return body.finish()
-}
-
-// parseActionBody handles pure behavioral bodies (legacy - for inline action statements)
-func (p *Parser) parseActionBody() []ast.Node {
-	var members []ast.Node
-
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		members = append(members, p.parseActionMember())
-	}
-
-	p.expect(lexer.RBrace, "expected '}' after action body")
-	return members
 }
 
 // parseNodeBody reads the body an action or state node production ends in
@@ -436,10 +448,10 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 func (p *Parser) parseActionMember() ast.Node {
 	start := p.peek().Span.Offset
 
-	// A `return` in a statement position of a calculation body is an early
-	// return: only the body's own members declare its result parameter.
+	// A `return` reached in a statement position of a calculation body declares
+	// the result parameter, as one among its members does.
 	if p.calcBodyDepth > 0 && p.isResultKeyword() {
-		return p.parseResultMemberIn(true)
+		return p.parseResultMember()
 	}
 
 	// An accept node is an action node (SysML.xtext ActionNode), so it stands
@@ -450,16 +462,8 @@ func (p *Parser) parseActionMember() ast.Node {
 
 	// The words of our own node notation are names the lexer does not reserve,
 	// so they are matched by the shape around them (see notation.go).
-	if w, ok := p.atActionNodeWord(); ok {
-		tok := p.advance()
-		switch w {
-		case "initial":
-			return p.parseInitialNode(tok)
-		case "done", "final":
-			return p.parseFinalNode(tok)
-		case "decision":
-			return p.parseDecisionNode(tok)
-		}
+	if _, ok := p.atActionNodeWord(); ok {
+		return p.parseFinalNode(p.advance())
 	}
 
 	// A `first` end reached through a feature chain is a SuccessionAsUsage
@@ -559,7 +563,7 @@ func (p *Parser) parseActionMember() ast.Node {
 	return en
 }
 
-// Action node parsers — Task 9 complete. Task 10 (ActionExecutionNode + SuccessionEdge) below.
+// Action node parsers and succession edges.
 
 func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
@@ -597,7 +601,6 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 		Name:      name,
 		Successor: successor,
 		Guard:     guard,
-		Keyword:   p.wordText(tok),
 		Members:   members,
 		HasBody:   hasBody,
 	}
@@ -607,20 +610,19 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 
 func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
-	var name string
-
 	if p.atNameOrKeyword() {
 		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
+		p.error(nameToken.Span, "a final node declares no name; a succession names the `done` library feature")
 		p.advance()
+		p.expect(lexer.Semicolon, "expected ';' after final node")
+		en := &ast.ErrorNode{Message: "a final node declares no name; a succession names the `done` library feature"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after final node")
 
-	node := &ast.FinalNode{
-		Name:    name,
-		Keyword: p.wordText(tok),
-	}
+	node := &ast.FinalNode{}
 	node.NodeSpan = p.spanFrom(start)
 	return node
 }
@@ -678,7 +680,6 @@ func (p *Parser) parseDecisionNode(tok lexer.Token) ast.Node {
 	node := &ast.DecisionNode{
 		Name:     name,
 		NameSpan: nameSpan,
-		Keyword:  p.wordText(tok),
 		Members:  members,
 		HasBody:  hasBody,
 	}
@@ -810,7 +811,7 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 // atChainedThen reports whether the parser is at a `then` chaining the preceding
 // member to a keyword-introduced declaration or statement (`then action b {...}`,
 // `then send s to t;`) rather than one starting a named succession edge
-// (`then a b;`) over members of the enclosing body.
+// (`succession first a then b;`) over members of the enclosing body.
 func (p *Parser) atChainedThen() bool {
 	return p.atKeyword("then") && p.peekN(1).Kind == lexer.Keyword
 }
@@ -837,7 +838,7 @@ func (p *Parser) atNamespaceSuccession() bool {
 // startsActionBodyItem reports whether the token n ahead, the first inside a
 // braced action body, begins an action body item (SysML.xtext ActionBodyItem)
 // rather than an expression. Only words that cannot begin an expression qualify,
-// so `done` and `decision` count only in the node shape (see notation.go).
+// so `done` counts only in the node shape (see notation.go).
 func (p *Parser) startsActionBodyItem(n int) bool {
 	if p.peekN(n).Kind == lexer.Identifier {
 		_, ok := p.actionNodeWordAt(n)
@@ -859,7 +860,7 @@ func (p *Parser) startsActionBodyItem(n int) bool {
 
 // startsInlineSuccessionStatement reports whether tok, the token after a `then`,
 // starts an inline statement succession (`then assign x := 1;`) rather than a
-// named edge (`then source target;`) over members of the enclosing body.
+// named edge (`succession first source then target;`) over members of the enclosing body.
 func startsInlineSuccessionStatement(tok lexer.Token) bool {
 	if tok.Kind != lexer.Keyword {
 		return false
@@ -874,9 +875,7 @@ func startsInlineSuccessionStatement(tok lexer.Token) bool {
 	return false
 }
 
-// parseSuccessionEdge parses:
-// 1. then source target [if guard] ; (control flow edge between named nodes)
-// 2. then statement (inline statement succession)
+// parseSuccessionEdge parses implicit-source targets and inline statements.
 // allowBody admits the UsageBody of an ActionTargetSuccession (SysML.xtext:1698).
 func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 	start := tok.Span.Offset
@@ -893,14 +892,28 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 
 	// Check if there's a second name (explicit source + target)
 	var source, target *ast.QualifiedName
+	twoEnded := false
 	if !p.at(lexer.Semicolon) && !p.atKeyword("if") && (p.at(lexer.Identifier) || p.at(lexer.Keyword)) {
-		// Two-name form: then source target;
+		// Two-name form: succession first source then target;
 		source = first
 		target = p.parseQualifiedNameRelaxed()
+		twoEnded = true
 	} else {
 		// One-name form: then target; (source implicit)
 		source = &ast.QualifiedName{} // empty source
 		target = first
+	}
+
+	if twoEnded {
+		const msg = "a succession names both ends as `first <source> then <target>`"
+		p.error(first.Span(), msg)
+		for !p.at(lexer.Semicolon) && !p.atEOF() {
+			p.advance()
+		}
+		p.expect(lexer.Semicolon, "expected ';' after succession edge")
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = p.spanFrom(start)
+		return en
 	}
 
 	// Check for optional guard
@@ -1382,28 +1395,6 @@ func (p *Parser) parseIfBranch(kind ast.IfBranchKind, start int, closeMsg string
 
 // Phase C1: Calculation and Constraint Bodies
 
-// parseResultBody parses the body of a calculation usage.
-// Expects '{' already consumed, returns list of ResultMember nodes.
-// Syntax: calc example { return x + 5; }
-func (p *Parser) parseResultBody() []ast.Node {
-	var members []ast.Node
-
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		members = append(members, p.parseResultMember())
-	}
-
-	p.expect(lexer.RBrace, "expected '}' after result body")
-	return members
-}
-
-// parseResultMember parses one result member:
-//
-//	return <expr>;         -- computed result
-//	return : Type[mult];   -- result parameter (anonymous, type-only)
-func (p *Parser) parseResultMember() ast.Node {
-	return p.parseResultMemberIn(false)
-}
-
 // atCalcStatement reports whether the calculation body continues with a
 // behavioural statement rather than a member declaration or a result
 // expression. `if` also starts a conditional expression, which is told apart by
@@ -1505,11 +1496,11 @@ func (p *Parser) atReturnedUsage() bool {
 	return specialized
 }
 
-// parseResultMemberIn parses a `return` member. In a statement position
-// (inStatement) a lone name after `return` is the value returned, since a
-// result parameter is declared among the body's own members, not inside a
-// branch or a loop.
-func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
+// parseResultMember parses a `return` member: the declaration of a result
+// parameter (SysML.xtext:1961 ReturnParameterMember), anonymous or named,
+// typed or valued. A computed result is the body's trailing expression, written
+// without `return`, so an expression after `return` is refused here.
+func (p *Parser) parseResultMember() ast.Node {
 	start := p.peek().Span.Offset
 
 	// Expect 'return' keyword
@@ -1565,8 +1556,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 	// Check for named or anonymous result parameter syntax
 	// Pattern 1: return [modifiers] name: Type[mult];  (named result parameter)
 	// Pattern 2: return [modifiers] : Type[mult];      (anonymous result parameter)
-	// Pattern 3: return expr;              (computed result)
-	// Pattern 4: return name = expr;       (computed result with binding)
+	// Pattern 4: return name = expr;       (result parameter with initializer)
 	// Pattern 5: return [modifiers] name;  (named result parameter, no type)
 	// Pattern 6: return [modifiers] name : Type { body } (with body)
 	// Pattern 7: return :>> name : Type = expr; (leading relationships before name)
@@ -1658,7 +1648,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 	// `return` introduces a return parameter, so a lone name after it declares
 	// that parameter (`calc acc : Acceleration { return a; }`) rather than
 	// referencing one.
-	if !inStatement && p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+	if p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -1732,16 +1722,18 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 		return u
 	}
 
-	// Otherwise parse as computed result (expression)
-	expr := p.ParseExpression()
-
+	// Anything else after `return` is an expression, which no production admits:
+	// the value a calculation computes is its trailing expression. The expression
+	// is still consumed, so the members after it are read as written.
+	const msg = "'return' declares a result parameter; write a computed result as the " +
+		"trailing expression of the body, without 'return'"
+	p.error(p.peek().Span, msg)
+	p.ParseExpression()
 	p.expect(lexer.Semicolon, "expected ';' after return expression")
 
-	node := &ast.ResultMember{
-		Expression: expr,
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
+	en := &ast.ErrorNode{Message: msg}
+	en.NodeSpan = p.spanFrom(start)
+	return en
 }
 
 // parseConstraintBody parses the body of a constraint usage.
@@ -1810,12 +1802,14 @@ var exprStartKeywords = map[string]bool{
 	"false": true,
 	"new":   true,
 	"if":    true,
+	"not":   true,
 }
 
-// parseConstraintMember parses one constraint member: assert/assume [not] <expr>;
-// Also supports bare expressions (implicit assert): inv name { expr }
+// parseConstraintMember parses one constraint member: a bare condition, an
+// asserted reference (`assert c;`) or a nested constraint (`assert constraint { … }`).
 func (p *Parser) parseConstraintMember() ast.Node {
 	start := p.peek().Span.Offset
+	keywordSpan := p.peek().Span
 
 	var isAssert bool
 	var isNegated bool
@@ -1834,8 +1828,9 @@ func (p *Parser) parseConstraintMember() ast.Node {
 		isAssert = true // Default to assert for bare expressions
 	}
 
-	// Check for optional 'not' keyword
-	if p.acceptKeyword("not") {
+	// `not` negates what a keyword states (SysML.xtext AssertConstraintUsage);
+	// a bare condition keeps it as the unary operator of its expression.
+	if keyword != "" && p.acceptKeyword("not") {
 		isNegated = true
 	}
 
@@ -1846,10 +1841,20 @@ func (p *Parser) parseConstraintMember() ast.Node {
 	}
 
 	// Parse expression
+	exprStart := p.peek().Span.Offset
 	expr := p.ParseExpression()
 
 	// Semicolon is optional for constraint expressions (especially in inv bodies)
-	p.accept2(lexer.Semicolon)
+	semi, hasSemi := p.accept(lexer.Semicolon)
+
+	// A keyword states a reference or a `constraint` declaration; the condition
+	// itself is written on its own (SysML.xtext AssertConstraintUsage).
+	if keyword != "" && !isConditionReference(expr) {
+		p.errorWithFixes(keywordSpan,
+			fmt.Sprintf("`%s` states a constraint reference or a `constraint` declaration, "+
+				"not a condition: write the condition on its own", keyword),
+			p.assertedConditionFixes(keywordSpan, exprStart, semi, hasSemi, isNegated)...)
+	}
 
 	node := &ast.ConstraintMember{
 		IsAssert:   isAssert,
@@ -1859,6 +1864,60 @@ func (p *Parser) parseConstraintMember() ast.Node {
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
+}
+
+// isConditionReference reports whether expr is the reference an `assert`,
+// `assume` or `require` member states (SysML.xtext OwnedReferenceSubsetting).
+func isConditionReference(expr ast.Node) bool {
+	switch expr.(type) {
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
+		return true
+	default:
+		return false
+	}
+}
+
+// assertedConditionFixes rewrites `assert <condition>;` as the bare condition,
+// keeping a negation as `not (…)` so the condition means what it did.
+func (p *Parser) assertedConditionFixes(keyword source.Span, exprStart int, semi lexer.Token, hasSemi, negated bool) []quickfix.Fix {
+	prefix := source.Span{Offset: keyword.Offset, Len: exprStart - keyword.Offset}
+	if prefix.Len <= 0 {
+		return nil
+	}
+	if !negated {
+		edits := []quickfix.Edit{quickfix.Replace(prefix, "")}
+		if hasSemi {
+			edits = append(edits, quickfix.Replace(semi.Span, ""))
+		}
+		return []quickfix.Fix{{Title: "write the condition without `" + p.src.Text(keyword) + "`", Edits: edits, Preferred: true}}
+	}
+	// Without the semicolon there is nowhere to close the parenthesis.
+	if !hasSemi {
+		return nil
+	}
+	return []quickfix.Fix{{
+		Title:     "write the condition as `not (…)`",
+		Edits:     []quickfix.Edit{quickfix.Replace(prefix, "not ("), quickfix.Replace(semi.Span, ")")},
+		Preferred: true,
+	}}
+}
+
+// requirementConditionFixes rewrites `require <condition>;` as the constraint
+// declaration a requirement body admits (SysML.xtext RequirementConstraintUsage).
+func (p *Parser) requirementConditionFixes(keyword source.Span, exprStart int, semi lexer.Token, hasSemi bool) []quickfix.Fix {
+	prefix := source.Span{Offset: keyword.Offset, Len: exprStart - keyword.Offset}
+	if prefix.Len <= 0 || !hasSemi {
+		return nil
+	}
+	word := p.src.Text(keyword)
+	return []quickfix.Fix{{
+		Title: "state the condition as `" + word + " constraint { … }`",
+		Edits: []quickfix.Edit{
+			quickfix.Replace(prefix, word+" constraint { "),
+			quickfix.Replace(semi.Span, " }"),
+		},
+		Preferred: true,
+	}}
 }
 
 // Phase C2: Requirement Bodies
@@ -1878,8 +1937,8 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
-		// `then a b;` is the edge member a member-attached `then` desugars to,
-		// and so the form a converted model is written back as.
+		// A member-attached `then` desugars to `succession first a then b;`,
+		// which is the form used when writing the converted model back.
 		if p.atKeyword("then") {
 			body.add(p.parseSuccessionEdge(p.advance(), false))
 			continue
@@ -2102,10 +2161,8 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 		return node
 	}
 
-	// Otherwise parse as simple expression
-	expr := p.ParseExpression()
-
-	p.expect(lexer.Semicolon, "expected ';' after assume expression")
+	// Otherwise the member states a condition inline, which no production admits.
+	expr := p.parseRequirementCondition(start, "assume")
 
 	node := &ast.AssumeMember{
 		Expression: expr,
@@ -2149,16 +2206,35 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 		return node
 	}
 
-	// Otherwise parse as expression: require <expr>;
-	expr := p.ParseExpression()
-
-	p.expect(lexer.Semicolon, "expected ';' after require expression")
+	// Otherwise the member states a condition inline, which no production admits.
+	expr := p.parseRequirementCondition(start, "require")
 
 	node := &ast.RequireMember{
 		Expression: expr,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
+}
+
+// parseRequirementCondition parses what an `assume`/`require` member states
+// where neither a `constraint` declaration nor a qualified reference followed.
+// A bare name is the reference form; anything else is a condition stated inline,
+// which RequirementConstraintUsage does not admit.
+func (p *Parser) parseRequirementCondition(start int, keyword string) ast.Node {
+	keywordSpan := source.Span{Offset: start, Len: len(keyword)}
+	exprStart := p.peek().Span.Offset
+	expr := p.ParseExpression()
+	semi, hasSemi := p.accept(lexer.Semicolon)
+	if !hasSemi {
+		p.expect(lexer.Semicolon, "expected ';' after "+keyword+" expression")
+	}
+	if !isConditionReference(expr) {
+		p.errorWithFixes(keywordSpan,
+			fmt.Sprintf("`%s` states a constraint reference or a `constraint` declaration, "+
+				"not a condition: state the condition as `%s constraint { … }`", keyword, keyword),
+			p.requirementConditionFixes(keywordSpan, exprStart, semi, hasSemi)...)
+	}
+	return expr
 }
 
 // ownedConstraintDecl is the declaration and body of the constraint an
@@ -2304,7 +2380,7 @@ func (p *Parser) parseStateBody() []ast.Node {
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		// A member-attached `then` sequences the members either side of it; a
-		// `then` naming states (`then idle done;`) is a member of its own,
+		// `then` naming states (`succession first idle then done;`) is a member of its own,
 		// which parseStateMember reads (see succession.go).
 		if body.atSuccession() {
 			body.takeSuccession()
@@ -2346,12 +2422,6 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 	if w, ok := p.atStateNotationWord(); ok {
 		p.advance()
 		switch w {
-		case "initial":
-			return p.parseInitialState(start)
-		case "final":
-			return p.parseFinalState(start)
-		case "region":
-			return p.parseRegionMember(start)
 		case "choice":
 			return p.parsePseudostate(start, w, ast.PseudostateChoice)
 		case "junction":
@@ -2400,9 +2470,10 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 			p.advance()
 			return p.parseExitMember(start)
 		case "state":
-			// Check if this is a simple declaration (state name;) or full usage (state name { ... })
-			// Lookahead: state followed by name/keyword and semicolon → SubstateMember
-			// Otherwise → full state usage declaration
+			// Check for a simple declaration (`state name;`) or full usage
+			// (`state name { ... }`).
+			// Lookahead: a name/keyword and semicolon means SubstateMember;
+			// otherwise parse a full state usage declaration.
 			nextTok := p.peekN(1)
 			isNameOrKeyword := nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword
 			if isNameOrKeyword && p.peekN(2).Kind == lexer.Semicolon {
@@ -2418,10 +2489,8 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 			p.advance()
 			return p.parsePseudostate(start, kw, ast.PseudostateJoin)
 		case "transition":
-			// Lookahead to distinguish:
-			// 1. State machine transition: transition source to target (no name)
-			// 2. Transition usage: transition name first ... (has name + connector syntax)
-			// Check if followed by identifier + "first" keyword
+			// A named transition (`transition <name> first …`) is a declaration;
+			// an unnamed one heads a state machine transition.
 			if p.peekN(1).Kind == lexer.Identifier && p.peekN(2).Kind == lexer.Keyword && p.peekN(2).KeywordID == "first" {
 				// Transition usage - parse as general body member (declaration)
 				return p.parseBodyMember()
@@ -2437,9 +2506,7 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 			}
 			return p.parseInitialNode(p.advance())
 		case "then":
-			// Standalone succession (`then <source> <target>;`, `then <target>;`):
-			// the same edge node a member-attached `then` desugars to, so a state
-			// body carries one representation of both spellings.
+			// Standalone implicit-source succession and inline statement forms.
 			return p.parseSuccessionEdge(p.advance(), allowBody)
 		case "accept":
 			// Accept transition: accept <signal> then <state>;
@@ -2447,52 +2514,22 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 		}
 	}
 
-	// Check for succession statement: <name> then <name>;
-	// Lookahead: identifier followed by 'then' keyword
+	// A member-leading succession is not a SysML succession production.
 	if p.at(lexer.Identifier) && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "then" {
-		return p.parseSuccessionStatement(start)
+		msg := "a succession names both ends as `first <source> then <target>`"
+		p.error(p.peek().Span, msg)
+		for !p.at(lexer.Semicolon) && !p.atEOF() {
+			p.advance()
+		}
+		p.expect(lexer.Semicolon, "expected ';' after succession")
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = p.spanFrom(start)
+		return en
 	}
 
 	// Not a state-specific keyword - try parsing as general body member
 	// This allows succession, binding, feature declarations, etc. in state bodies
 	return p.parseBodyMember()
-}
-
-// parseSuccessionStatement parses: first <state> then <state>;
-// This is a succession statement in state body context (defines initial state flow)
-func (p *Parser) parseSuccessionStatement(start int) ast.Node {
-	// 'first' keyword should be consumed by caller, but check if we're at it
-	if p.atKeyword("first") {
-		p.advance()
-	}
-
-	// Parse first state reference (use relaxed parsing to allow keywords like 'off' as names)
-	firstState := p.parseQualifiedNameRelaxed()
-
-	// Expect 'then' keyword
-	if !p.acceptKeyword("then") {
-		p.error(p.peek().Span, "expected 'then' after first state")
-		en := &ast.ErrorNode{Message: "expected 'then' keyword"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-
-	// Parse second state reference (use relaxed parsing to allow keywords like 'on' as names)
-	secondState := p.parseQualifiedNameRelaxed()
-
-	// Expect semicolon
-	p.expect(lexer.Semicolon, "expected ';' after succession statement")
-
-	// Create succession usage (reuse existing AST node)
-	succession := &ast.Usage{
-		Kind: ast.UsageSuccession,
-		ConnectorEnds: []*ast.ConnectorEnd{
-			{Reference: firstState},
-			{Reference: secondState},
-		},
-	}
-	succession.NodeSpan = p.spanFrom(start)
-	return succession
 }
 
 // atAcceptNode reports whether the parser is at an accept node declaration
@@ -2787,7 +2824,7 @@ func (p *Parser) parseCallEvent(start int, operation *ast.QualifiedName) ast.Nod
 //
 //	accept <trigger> [via <port>] [if <guard>] [do <effect>] then <target>;
 func (p *Parser) parseAcceptTransition(start int) ast.Node {
-	return p.parseTransitionTail(start, ast.NameSegment{}, nil, nil, lexer.Token{})
+	return p.parseTransitionTail(start, ast.NameSegment{}, nil)
 }
 
 // stateSubactionKind names which of a state's subactions is being parsed: the
@@ -2923,120 +2960,6 @@ func (p *Parser) parseSubstateMember(start int) ast.Node {
 	return node
 }
 
-// parseInitialState parses: initial <name>;
-func (p *Parser) parseInitialState(start int) ast.Node {
-	// 'initial' already consumed
-
-	// Expect identifier or keyword for state name
-	if !p.atNameOrKeyword() {
-		p.error(p.peek().Span, "expected identifier after 'initial'")
-		en := &ast.ErrorNode{Message: "expected identifier after 'initial'"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
-			p.advance()
-		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
-	p.advance()
-
-	p.expect(lexer.Semicolon, "expected ';' after initial state name")
-
-	node := &ast.StateNode{
-		Name:      name,
-		IsInitial: true,
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
-}
-
-// parseFinalState parses: final <name>;
-func (p *Parser) parseFinalState(start int) ast.Node {
-	// 'final' already consumed
-
-	// Expect identifier or keyword for state name
-	if !p.atNameOrKeyword() {
-		p.error(p.peek().Span, "expected identifier after 'final'")
-		en := &ast.ErrorNode{Message: "expected identifier after 'final'"}
-		if !p.atEOF() && !p.at(lexer.RBrace) {
-			p.advance()
-		}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
-	p.advance()
-
-	p.expect(lexer.Semicolon, "expected ';' after final state name")
-
-	node := &ast.StateNode{
-		Name:    name,
-		IsFinal: true,
-	}
-	node.NodeSpan = p.spanFrom(start)
-	return node
-}
-
-// parseRegionMember parses: region <name> { <states> }
-func (p *Parser) parseRegionMember(start int) ast.Node {
-	// 'region' already consumed
-
-	// Expect region name
-	if !p.at(lexer.Identifier) && !p.at(lexer.Keyword) {
-		p.error(p.peek().Span, "expected region name after 'region'")
-		en := &ast.ErrorNode{Message: "expected region name"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
-	p.advance()
-
-	// Expect opening brace
-	if !p.at(lexer.LBrace) {
-		p.error(p.peek().Span, "expected '{' after region name")
-		en := &ast.ErrorNode{Message: "expected '{'"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-	p.advance() // consume '{'
-
-	// A region carries the members of a state body, a member-attached `then`
-	// among them (SysML.xtext StateBodyItem).
-	body := p.newBodyBuilder()
-	allowBody := true
-	for !p.at(lexer.RBrace) && !p.at(lexer.EOF) {
-		if body.atSuccession() {
-			body.takeSuccession()
-			continue
-		}
-		member := p.parseStateMember(allowBody)
-		allowBody = successionBodyAllowed(member, allowBody)
-		body.add(member)
-	}
-	states := body.finish()
-
-	if !p.at(lexer.RBrace) {
-		p.error(p.peek().Span, "expected '}' to close region body")
-		en := &ast.ErrorNode{Message: "expected '}'"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-	p.advance() // consume '}'
-
-	region := &ast.StateRegion{
-		Name:   name,
-		States: states,
-	}
-	region.NodeSpan = p.spanFrom(start)
-	return region
-}
-
 // atPointPseudostate reports whether the `entry`/`exit` keyword at the cursor
 // starts an entry/exit point pseudostate — `entry point <name>;` — rather than
 // an entry/exit action. `point` is matched contextually rather than reserved as
@@ -3107,25 +3030,16 @@ func (p *Parser) parsePseudostate(start int, keyword string, kind ast.Pseudostat
 	return ps
 }
 
-// parseTransitionMember parses a transition of a state machine, in either
-// spelling, with the `transition` keyword already consumed:
+// parseTransitionMember parses a transition of a state machine, with the
+// `transition` keyword already consumed (SysML.xtext `TransitionUsage`):
 //
-//	transition [<name>] first <source> [accept <trigger> [via <port>]]
+//	transition [<name>] [first] <source> [accept <trigger> [via <port>]]
 //	    [if <guard>] [do <effect>] then <target>;
-//	transition [<name>] <source> to <target> [accept …] [if …] [do …];
-//
-// The first is SysML.xtext `TransitionUsage`, which states the source with
-// `first` and the target with `then`; the second is the `to` spelling OpenSysML
-// also accepts. Both describe the same transition and give the same node.
 func (p *Parser) parseTransitionMember(start int) ast.Node {
 	var name ast.NameSegment
-	var source, target *ast.QualifiedName
-	// The `to` of the second spelling, kept so the pass that diagnoses it can
-	// point at the word.
-	var toTok lexer.Token
+	var source *ast.QualifiedName
 
-	// A name of the transition's own, which only the `first` spelling can have:
-	// in the `to` spelling the first name is the source state.
+	// A name of the transition's own, stated before the `first` marking the source.
 	if p.atName() && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "first" {
 		if seg, ok := p.parseNameSegment(); ok {
 			name = seg
@@ -3133,29 +3047,27 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 	}
 
 	switch {
-	case p.atKeyword("first") && !p.peekIsKeyword(1, "to"):
-		// `first` marks the source, unless it is itself the source: `first` is a
-		// legal state name, so `transition first to second;` names a state.
+	case p.atKeyword("first"):
 		p.advance() // consume 'first'
 		source = p.parseChainedName()
 	case p.atName() || p.at(lexer.Keyword):
+		// `first` is optional in `TransitionUsage`, so a bare source may be followed
+		// straight by its clauses: `transition idle then off;`.
 		source = p.parseChainedName()
-		switch {
-		case p.atKeyword("to"):
-			toTok = p.advance()
-			target = p.parseChainedName()
-		case p.atTransitionClause():
-			// `first` is optional in `TransitionUsage`, so a bare source may be
-			// followed straight by its clauses: `transition initial then off;`.
-		default:
-			p.error(p.peek().Span, "expected 'to' after transition source, or 'first' before it: a transition is written `transition first <source> … then <target>;` or `transition <source> to <target>;`")
-			en := &ast.ErrorNode{Message: "expected 'to' after transition source"}
+		if !p.atTransitionClause() {
+			msg := "a transition states its ends as `transition first <source> … then <target>;`"
+			p.error(p.peek().Span, msg)
+			for !p.at(lexer.Semicolon) && !p.at(lexer.RBrace) && !p.atEOF() {
+				p.advance()
+			}
+			p.accept(lexer.Semicolon)
+			en := &ast.ErrorNode{Message: msg}
 			en.NodeSpan = p.spanFrom(start)
 			return en
 		}
 	}
 
-	return p.parseTransitionTail(start, name, source, target, toTok)
+	return p.parseTransitionTail(start, name, source)
 }
 
 // atTransitionClause reports whether the parser is at a clause a transition
@@ -3166,19 +3078,15 @@ func (p *Parser) atTransitionClause() bool {
 }
 
 // parseTransitionTail parses the clauses a transition carries after its source —
-// trigger, guard, effect and, when the target was not already stated with `to`,
-// the `then` naming it — and the terminating ';'. The clauses are read in the
-// order they were written so a misordered transition is reported once, at the
-// clause that is out of place, rather than silently dropped.
-func (p *Parser) parseTransitionTail(start int, name ast.NameSegment, source, target *ast.QualifiedName, toTok lexer.Token) ast.Node {
+// trigger, guard, effect and the `then` naming its target — and the terminating
+// ';'. The clauses are read in the order they were written so a misordered
+// transition is reported once, at the clause that is out of place, rather than
+// silently dropped.
+func (p *Parser) parseTransitionTail(start int, name ast.NameSegment, source *ast.QualifiedName) ast.Node {
 	node := &ast.TransitionMember{
 		Name:     name.Text,
 		NameSpan: name.Span,
 		Source:   source,
-		Target:   target,
-	}
-	if toTok.Kind == lexer.Keyword {
-		node.ToSpan = toTok.Span
 	}
 
 	for {
@@ -3225,7 +3133,7 @@ func (p *Parser) parseTransitionTail(start int, name ast.NameSegment, source, ta
 		case p.atKeyword("then"):
 			p.advance() // consume 'then'
 			if node.Target != nil {
-				p.error(p.peek().Span, "a transition has one target: it is named either after 'to' or after 'then', not both")
+				p.error(p.peek().Span, "a transition has one target: the name after 'then'")
 			}
 			node.Target = p.parseChainedName()
 			continue

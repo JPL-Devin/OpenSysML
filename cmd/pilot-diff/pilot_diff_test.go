@@ -23,12 +23,14 @@ func TestCategorizePilot(t *testing.T) {
 		{"Subsetting/redefining feature should not have larger multiplicity upper bound", CategoryMultiplicity},
 		{"Must have at least two related elements", CategoryMultiplicity},
 		{"Duplicate of other owned member name", CategoryUnmapped},
-		// P6: only the invocation rule is a metaclass constraint; the other
-		// three stay unmapped rather than being mapped to something adjacent.
 		{"Must invoke a behavior or a behavioral feature", CategoryKindMismatch},
-		{"Must be an accessible feature (use dot notation for nesting)", CategoryUnmapped},
+		// We word these two the same way the reference does, and map our copies
+		// to kind-mismatch; mapping the reference's copies keeps the pair in one
+		// category instead of reporting a divergence that does not exist.
+		{"Must be an accessible feature (use dot notation for nesting)", CategoryKindMismatch},
+		{"Must be model-level evaluable", CategoryKindMismatch},
+		// Neither side maps this one: no category above describes a flow end.
 		{"Cannot identify flow end (use dot notation)", CategoryUnmapped},
-		{"Must be model-level evaluable", CategoryUnmapped},
 	}
 	for _, c := range cases {
 		if got := categorizePilot(c.message); got != c.want {

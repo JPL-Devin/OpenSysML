@@ -276,7 +276,7 @@ func TestNodeIdentifierNamesControlNodes(t *testing.T) {
 		want string
 	}{
 		{&ast.InitialNode{}, "initial"},
-		{&ast.FinalNode{}, "final"},
+		{&ast.FinalNode{}, "done"},
 		{&ast.ForkNode{}, "fork"},
 		{&ast.JoinNode{}, "join"},
 		{&ast.MergeNode{}, "merge"},

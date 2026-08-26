@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Open-MBEE/OpenSysML/internal/baseline"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/errata"
 )
@@ -32,6 +33,9 @@ type corpusRoot struct {
 	// Skip lists sub-paths of Dir (slash-separated, relative to Dir) that
 	// belong to another root.
 	Skip []string
+	// Pinned marks a root provisioned from the pilot pin rather than one this
+	// repository owns: the two call for different actions when they move.
+	Pinned bool
 }
 
 // languageBatch is one root's files in a single language, in comparison order.
@@ -41,10 +45,10 @@ type languageBatch struct {
 }
 
 var defaultRoots = []corpusRoot{
-	{Name: "training", Dir: "examples/sysml-v2-training"},
-	{Name: "pilot-examples", Dir: "examples/pilot-corpora/sysml-examples"},
-	{Name: "pilot-validation", Dir: "examples/pilot-corpora/sysml-validation"},
-	{Name: "kerml-examples", Dir: "examples/pilot-corpora/kerml-examples"},
+	{Name: "training", Dir: "examples/sysml-v2-training", Pinned: true},
+	{Name: "pilot-examples", Dir: "examples/pilot-corpora/sysml-examples", Pinned: true},
+	{Name: "pilot-validation", Dir: "examples/pilot-corpora/sysml-validation", Pinned: true},
+	{Name: "kerml-examples", Dir: "examples/pilot-corpora/kerml-examples", Pinned: true},
 	{Name: "testdata", Dir: "testdata"},
 	{Name: "examples", Dir: "examples", Skip: []string{"sysml-v2-training", "pilot-corpora"}},
 	// Hand-written models for behaviour classes the corpora do not cover, such
@@ -59,15 +63,17 @@ func main() {
 	syside := flag.String("syside", "", "optional Sensmetry SysIDE launcher for a third column (default: <repo>/build/syside/validate-syside if present)")
 	out := flag.String("out", "", "output directory for the reports (default: <repo>/build/pilot-diff)")
 	timeout := flag.Duration("timeout", 0, "per-batch timeout for the pilot validator (0: no limit)")
+	update := flag.Bool("update", false, "record this run as "+committedBaseline)
+	check := flag.Bool("check", false, "fail unless this run reproduces "+committedBaseline)
 	flag.Parse()
 
-	if err := run(*repo, *validator, *kermlValidator, *syside, *out, *timeout); err != nil {
+	if err := run(*repo, *validator, *kermlValidator, *syside, *out, *timeout, *update, *check); err != nil {
 		fmt.Fprintf(os.Stderr, "pilot-diff: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, validator, kermlValidator, syside, out string, timeout time.Duration) error {
+func run(repo, validator, kermlValidator, syside, out string, timeout time.Duration, update, check bool) error {
 	var err error
 	if repo == "" {
 		repo, err = moduleRoot()
@@ -114,6 +120,13 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 	report := &Report{Validator: relativeTo(repo, validator), Errata: newErrataReport(overlay)}
 	if report.Pilot, err = pilotVersion(validator); err != nil {
 		return err
+	}
+	if report.Provenance, err = provenance(repo, report.Pilot); err != nil {
+		return err
+	}
+	// Only a recorded baseline is dated, so two plain runs stay byte-identical.
+	if update {
+		report.Provenance.Recorded = baseline.Today()
 	}
 	if syside != "" {
 		version, library, err := sysideRelease(syside)
@@ -193,7 +206,18 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 	if report.Totals.Files == 0 {
 		return fmt.Errorf("no model files found under %s", repo)
 	}
-	return writeReports(out, report)
+	fresh, err := writeReports(out, report)
+	if err != nil {
+		return err
+	}
+	committed := filepath.Join(repo, filepath.FromSlash(committedBaseline))
+	if update {
+		return baseline.Write(committed, fresh)
+	}
+	if check {
+		return baseline.Reproduces(committed, fresh)
+	}
+	return nil
 }
 
 func relativeTo(repo, path string) string {

@@ -10,12 +10,12 @@ package test {
 		fork split;
 		action ignite assign ignited := 1;
 		action log assign logged := 1;
-		done end;
+		done;
 
-		then start split;
-		then split ignite if armed > 0;
-		then split log;
-		then ignite end;
-		then log end;
+		succession first start then split;
+		succession first split if armed > 0 then ignite;
+		succession first split then log;
+		succession first ignite then done;
+		succession first log then done;
 	}
 }

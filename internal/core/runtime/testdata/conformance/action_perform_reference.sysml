@@ -16,19 +16,19 @@ package test {
 				assign result := base + 5;
 			}
 
-			done finish;
+			done;
 
-			then begin bump;
-			then bump finish;
+			succession first begin then bump;
+			succession first bump then done;
 		}
 
 		first start;
 
 		perform action doIt references increment;
 
-		done end;
+		done;
 
-		then start doIt;
-		then doIt end;
+		succession first start then doIt;
+		succession first doIt then done;
 	}
 }

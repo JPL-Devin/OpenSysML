@@ -4,6 +4,11 @@
 > development round of this project — chronological, with no meaning outside this repository — and
 > `F<n>`, `K<n>` and `S<n>` name follow-up rows and diagnostic classes of
 > [pilot-differential.md](pilot-differential.md). A reader who only wants the outcome can ignore them.
+>
+> **Oracle figures in this record are as measured at the round it documents;
+> they are not the current baseline.** The current baseline is the generated block in
+> [README](../../README.md) and [architecture](../internals/architecture.md),
+> regenerated and gated by `make docs-counts`.
 
 ## The gap this closes
 
@@ -40,6 +45,7 @@ The registry as it stands:
 |---|---|---|---|
 | F82 | `sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38 | SysML v2 §9.8.9.1 | corrected — `22/2*25.4 + 110 [mm]` → `(22/2*25.4 + 110) [mm]` |
 | F83 | `sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml`:25 | SysML v2 §9.8.9.1 | documented without a correction |
+| F111 | `sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml`:86 | KerML 7.4.9, 8.3.4.2 | corrected — `fuelConsumption : FuelEconomyAnalysis_1` → `fuelConsumption : FuelConsumption_1` |
 
 ## The invariants, all of them tests
 
@@ -59,8 +65,8 @@ The registry as it stands:
 - **Documented-only entries substitute nothing.** An entry with no `Corrected`
   text is carried for provenance; both figures keep the published line.
 - **Errata are not a reclassification route.** The overlay changes no category in
-  [wave 11E](wave11e-decisions.md) terms and no analyzer behaviour. F82 stays a
-  true positive of ours; what the overlay records is that the *example* is wrong.
+  [wave 11E](wave11e-decisions.md) terms and no analyzer behaviour. F82 and F111
+  stay true positives of ours; what the overlay records is that the *examples* are wrong.
 
 ## Both figures, and which one is the statement
 
@@ -76,9 +82,9 @@ Measured on this branch with fresh caches:
 
 | Oracle | As published | With the errata applied |
 |---|---|---|
-| `pilot-diff` | 353 files, 324 fully agreeing; 32 agreed, 83 only ours, 66 only the pilot's | 353 files, **325** fully agreeing; 32 agreed, **82** only ours, 66 only the pilot's |
+| `pilot-diff` | 353 files, 325 fully agreeing; 32 agreed, 26 only ours, 61 only the pilot's | 353 files, **327** fully agreeing; 32 agreed, **24** only ours, 61 only the pilot's |
 | `pilot-xpect` | 428 `.xt` files, 1261 assertions, 1323 rows, 1295 agree, 28 disagree | identical — no declared correction lies under `build/pilot-xpect-corpus` |
-| `pilot-reject` | 120 cases: 117 both reject, 3 only the pilot rejects | identical — no declared correction lies under `cmd/pilot-reject/testdata/negative` |
+| `pilot-reject` | 120 cases: 120 both reject, 0 only the pilot rejects | identical — no declared correction lies under `cmd/pilot-reject/testdata/negative` |
 
 Where no correction applies, the oracle says so in that many words rather than
 printing a coincidentally equal number: *no declared correction lies under
@@ -94,10 +100,13 @@ that line is a finding, not a fix, so each corrected root is re-run through
 ```
 F82 …/VehicleGeometryAndCoordinateFrames.sysml:38 ours 1->0, pilot 0->0:
   our diagnostic is cleared and the pilot is silent on both texts
+F111 …/AnalysisIndividualExample.sysml:86 ours 1->0, pilot 0->0:
+  our diagnostic is cleared and the pilot is silent on both texts
 ```
 
-The pinned pilot performs no dimensional analysis, so it is silent on both texts
-and no pilot verdict changed in this wave. When one does, the finding carries
+The pinned pilot performs no dimensional analysis and validates subsetting
+conformance nowhere, so it is silent on both texts of both entries and no pilot
+verdict has changed yet. When one does, the finding carries
 `pilotVerdictChanged: true` and the report says which way it moved.
 
 ## Adding an entry

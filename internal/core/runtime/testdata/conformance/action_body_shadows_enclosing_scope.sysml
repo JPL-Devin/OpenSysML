@@ -23,9 +23,9 @@ package test {
 			assign afterBlock := h;
 		}
 
-		done end;
+		done;
 
-		then start body;
-		then body end;
+		succession first start then body;
+		succession first body then done;
 	}
 }

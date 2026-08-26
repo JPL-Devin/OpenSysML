@@ -5,5 +5,5 @@ eval operator > -> false
 step 2: token 2@log
 stmt assign logged
   eval literal 1 -> 1
-step 3: token 2@end
+step 3: token 2@done
 step 4: no active tokens

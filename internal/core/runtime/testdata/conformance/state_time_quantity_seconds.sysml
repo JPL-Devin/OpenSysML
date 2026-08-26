@@ -6,7 +6,8 @@ package test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state waiting {
 			accept after 5 [s] then done;
 		}
@@ -14,6 +15,6 @@ package test {
 			entry { log = log * 10 + 1; }
 		}
 
-		start then waiting;
+		succession first start then waiting;
 	}
 }

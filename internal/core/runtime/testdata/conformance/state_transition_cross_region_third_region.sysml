@@ -7,33 +7,37 @@ package Test {
 		attribute thirdEntries : Integer = 0;
 		attribute thirdExits : Integer = 0;
 
-		initial start;
-		state running {
-			region left {
-				initial lstart;
+		entry; then start;
+		state start;
+		state running parallel {
+			state left {
+				entry; then lstart;
+				state lstart;
 				state lidle;
 
-				then lstart lidle;
-				transition lidle to rtarget if crossed == 0;
+				succession first lstart then lidle;
+				transition first lidle if crossed == 0 then rtarget;
 			}
-			region right {
-				initial rstart;
+			state right {
+				entry; then rstart;
+				state rstart;
 				state ridle;
 				state rtarget { entry { crossed = 1; } }
 
-				then rstart ridle;
+				succession first rstart then ridle;
 			}
-			region third {
-				initial tstart;
+			state third {
+				entry; then tstart;
+				state tstart;
 				state tidle {
 					entry { thirdEntries = thirdEntries + 1; }
 					exit { thirdExits = thirdExits + 1; }
 				}
 
-				then tstart tidle;
+				succession first tstart then tidle;
 			}
 		}
 
-		start then running;
+		succession first start then running;
 	}
 }

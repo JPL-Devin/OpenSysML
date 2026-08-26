@@ -143,8 +143,6 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		buildBodyScopes(nodeBodyScope(scope, d), ast.NodeBodyMembers(d))
-	case *ast.ResultMember:
-		bodyScopesInExpr(scope, d.Expression)
 	case *ast.ConstraintMember:
 		bodyScopesInExpr(scope, d.Expression)
 		buildBodyScopes(scope, d.Body)

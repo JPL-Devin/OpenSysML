@@ -3,6 +3,35 @@
   "validator": "build/pilot-sysml-validator/validate-sysml-batch",
   "corpus": "cmd/pilot-reject/testdata/negative",
   "conformance": "auto",
+  "provenance": {
+    "pilotTag": "2026-05",
+    "pilotArtifact": "0.60.1",
+    "errataRegistry": "sha256:b7b6274a132fd9417e31bbc4938c904d0724b55bcac6599aebb03773c8aa1b74",
+    "tools": [
+      {
+        "name": "pilot-sysml-validator",
+        "source": "scripts/pilot-sysml-validator/ValidateSysML.java",
+        "sourceDigest": "sha256:8270fc4804a9ba21b82d996e6125fa29aa8c03062ae36fcdce28d2841020dda1",
+        "release": "2026-05 (jupyter-sysml-kernel 0.60.1)"
+      },
+      {
+        "name": "pilot-kerml-validator",
+        "source": "scripts/pilot-kerml-validator/ValidateKerML.java",
+        "sourceDigest": "sha256:2876971d040f3d8846b00c878887044aeb957a342569d602ad8f79f884d75d96",
+        "release": "2026-05 (jupyter-sysml-kernel 0.60.1)"
+      }
+    ],
+    "inputs": [
+      {
+        "name": "negative-corpus",
+        "dir": "cmd/pilot-reject/testdata/negative",
+        "origin": "ours",
+        "files": 120,
+        "digest": "sha256:1807bc173996cee5a9776a987e3bec4409245d16bdbb0d71e6b4d362b60cd81f"
+      }
+    ],
+    "recorded": "2026-08-26"
+  },
   "totals": {
     "cases": 120,
     "bothReject": 120,
@@ -11,11 +40,8 @@
     "bothAccept": 0
   },
   "strictOnlyAgreements": [
-    "extensions/x01-initial-state-marker.sysml",
-    "extensions/x04-orthogonal-region.sysml",
     "extensions/x05-defer-member.sysml",
-    "extensions/x06-history-member.sysml",
-    "extensions/x07-transition-to.sysml"
+    "extensions/x06-history-member.sysml"
   ],
   "sources": [
     {
@@ -52,7 +78,8 @@
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 5,
-      "defaultBucket": "pilot-only-rejects"
+      "defaultBucket": "both-reject",
+      "defaultErrors": 1
     },
     {
       "path": "extensions/x02-choice-pseudostate.sysml",
@@ -82,9 +109,10 @@
       "rule": "'region' is an OpenSysML invention; the pinned grammar spells concurrency 'state ... parallel' (SysML.xtext StateDefBody).",
       "mode": "strict",
       "bucket": "both-reject",
-      "oursErrors": 2,
+      "oursErrors": 4,
       "pilotErrors": 4,
-      "defaultBucket": "pilot-only-rejects"
+      "defaultBucket": "both-reject",
+      "defaultErrors": 4
     },
     {
       "path": "extensions/x05-defer-member.sysml",
@@ -114,7 +142,8 @@
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 4,
-      "defaultBucket": "pilot-only-rejects"
+      "defaultBucket": "both-reject",
+      "defaultErrors": 1
     },
     {
       "path": "grammar/g01-unclosed-package-body.sysml",
@@ -275,7 +304,7 @@
       "rule": "RequirementConstraintMember requires a constraint usage after the require keyword (SysML.xtext:2057 RequirementConstraintMember).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 1,
+      "oursErrors": 2,
       "pilotErrors": 2
     },
     {
@@ -725,7 +754,7 @@
       "rule": "A return member requires a feature after the return keyword (KerML.xtext:943 ReturnFeatureMember).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 1,
+      "oursErrors": 2,
       "pilotErrors": 7
     },
     {
@@ -1135,8 +1164,8 @@
     }
   ],
   "errata": {
-    "registryEntries": 2,
-    "corrections": 1,
+    "registryEntries": 3,
+    "corrections": 2,
     "documentedWithoutCorrection": 1,
     "correctionsApplied": 0,
     "entries": [
@@ -1155,6 +1184,14 @@
         "citation": "SysML v2 §9.8.9.1",
         "corrected": false,
         "derivation": "V is a VolumeValue and Cp dimensionless, so the first operand has dimension L^6 while T_static has Θ; no reading of the published text shares a dimension, so the defect is documented without a correction."
+      },
+      {
+        "id": "F111",
+        "path": "examples/pilot-corpora/sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml",
+        "line": 86,
+        "citation": "KerML 7.4.9, 8.3.4.2",
+        "corrected": true,
+        "derivation": "a redefinition is a subsetting, so the redefining feature's type must conform to the redefined one's, and an analysis definition is not a FuelConsumption; the file declares `individual action def FuelConsumption_1 :\u003e FuelConsumption` and uses it nowhere else, which is the conforming type the line names by mistake."
       }
     ],
     "totals": {

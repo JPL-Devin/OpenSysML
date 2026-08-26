@@ -94,7 +94,7 @@ package test {
 	}
 	calc def twice {
 		in n;
-		return factorial(n) + factorial(n);
+		factorial(n) + factorial(n)
 	}
 }
 `
@@ -274,14 +274,14 @@ func TestCalcResultIsAnsweredAfterTheSteps(t *testing.T) {
 }
 
 // successionModel writes a succession among the members of a calculation body,
-// the form `then a b;` a member-attached `then` is written back as.
+// the form `succession first a then b;` a member-attached `then` is written back as.
 const successionModel = `
 package test {
 	calc def sequenced {
 		in n;
 		action first;
 		action second;
-		then first second;
+		succession first first then second;
 		return : Integer = n + 1;
 	}
 }

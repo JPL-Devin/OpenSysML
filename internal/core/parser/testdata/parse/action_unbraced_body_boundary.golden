@@ -10,9 +10,19 @@
           (Membership visibility="default"
             (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (*ast.AssignmentActionNode)))
-          (FinalNode name="end")
-          (SuccessionEdge source="start" target="bump")
-          (SuccessionEdge source="bump" target="end")))
+          (FinalNode)
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="start"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="bump"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="bump"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="done"
+                (*ast.QualifiedName))))))
       (Membership visibility="default"
         (Usage kind="action" name="edgesFirst" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
@@ -22,9 +32,19 @@
           (Membership visibility="default"
             (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (*ast.AssignmentActionNode)))
-          (SuccessionEdge source="start" target="bump")
-          (SuccessionEdge source="bump" target="end")
-          (FinalNode name="end")))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="start"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="bump"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="bump"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="done"
+                (*ast.QualifiedName))))
+          (FinalNode)))
       (Membership visibility="default"
         (Usage kind="action" name="chained" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"

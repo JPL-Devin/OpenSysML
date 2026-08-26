@@ -16,31 +16,33 @@ const forkJoinMachine = `package test {
         attribute rightRan : Integer = 0;
         attribute merged : Integer = 0;
 
-        initial init;
+        entry; then init;
+        state init;
         state idle;
-        state running {
-            region left {
-                initial lstart;
+        state running parallel {
+            state left {
+                entry; then lstart;
+                state lstart;
                 state working { entry { leftRan = 1; } }
-                then lstart working;
+                succession first lstart then working;
             }
-            region right {
-                initial rstart;
+            state right {
+                entry; then rstart;
+                state rstart;
                 state watching { entry { rightRan = 1; } }
-                then rstart watching;
+                succession first rstart then watching;
             }
         }
         fork split;
         join sync;
-        final done;
 
-        init then idle;
-        transition idle to split;
-        transition split to working;
-        transition split to watching;
-        transition working to sync;
-        transition watching to sync;
-        transition sync to done;
+        succession first init then idle;
+        transition first idle then split;
+        transition first split then working;
+        transition first split then watching;
+        transition first working then sync;
+        transition first watching then sync;
+        transition first sync then done;
     }
 }`
 
@@ -69,28 +71,30 @@ func TestForkAndJoinPseudostates(t *testing.T) {
 func TestForkBranchesMustBeInDistinctRegions(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
     state Machine {
-        initial init;
+        entry; then init;
+        state init;
         state idle;
-        state running {
-            region left {
-                initial lstart;
+        state running parallel {
+            state left {
+                entry; then lstart;
+                state lstart;
                 state working;
                 state alsoWorking;
-                then lstart working;
+                succession first lstart then working;
             }
-            region right {
-                initial rstart;
+            state right {
+                entry; then rstart;
+                state rstart;
                 state watching;
-                then rstart watching;
+                succession first rstart then watching;
             }
         }
         fork split;
-        final done;
 
-        init then idle;
-        transition idle to split;
-        transition split to working;
-        transition split to alsoWorking;
+        succession first init then idle;
+        transition first idle then split;
+        transition first split then working;
+        transition first split then alsoWorking;
     }
 }`, "Machine")
 
@@ -103,33 +107,35 @@ func TestForkBranchesMustBeInDistinctRegions(t *testing.T) {
 func TestJoinWaitsForEveryBranch(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
     state Machine {
-        initial init;
+        entry; then init;
+        state init;
         state idle;
-        state running {
-            region left {
-                initial lstart;
+        state running parallel {
+            state left {
+                entry; then lstart;
+                state lstart;
                 state working;
-                then lstart working;
+                succession first lstart then working;
             }
-            region right {
-                initial rstart;
+            state right {
+                entry; then rstart;
+                state rstart;
                 state watching;
                 state stillWatching;
-                then rstart watching;
-                transition watching to stillWatching;
+                succession first rstart then watching;
+                transition first watching then stillWatching;
             }
         }
         fork split;
         join sync;
-        final done;
 
-        init then idle;
-        transition idle to split;
-        transition split to working;
-        transition split to watching;
-        transition working to sync;
-        transition stillWatching to sync;
-        transition sync to done;
+        succession first init then idle;
+        transition first idle then split;
+        transition first split then working;
+        transition first split then watching;
+        transition first working then sync;
+        transition first stillWatching then sync;
+        transition first sync then done;
     }
 }`, "Machine")
 
@@ -153,10 +159,10 @@ func TestJoinWaitsForEveryBranch(t *testing.T) {
 // machine is built on the AST directly; the `entry point`/`exit point` notation
 // is covered by the state_entry_exit_points conformance case.
 func TestEntryAndExitPointPseudostates(t *testing.T) {
-	init := &ast.StateNode{Name: "init", IsInitial: true}
+	init := &ast.StateNode{Name: "init"}
 	inner := &ast.StateNode{Name: "inner"}
 	outer := &ast.StateNode{Name: "outer", Substates: []ast.Node{inner}}
-	done := &ast.StateNode{Name: "done", IsFinal: true}
+	done := &ast.StateNode{Name: "done"}
 	entryPoint := &ast.PseudostateNode{Kind: ast.PseudostateEntry, Name: "in"}
 	exitPoint := &ast.PseudostateNode{Kind: ast.PseudostateExit, Name: "out"}
 
@@ -164,6 +170,7 @@ func TestEntryAndExitPointPseudostates(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
+			entryStart("init"),
 			init, outer, done, entryPoint, exitPoint,
 			transitionMember("init", "in"),
 			transitionMember("in", "inner"),
@@ -186,6 +193,15 @@ func TestEntryAndExitPointPseudostates(t *testing.T) {
 		if !containsState(exec.stateVisits, want) {
 			t.Errorf("state %q not visited, visits: %v", want, exec.stateVisits)
 		}
+	}
+}
+
+// entryStart designates the state a machine or region starts in, as the
+// `entry; then <name>;` succession out of the body's entry action does.
+func entryStart(name string) *ast.SuccessionEdge {
+	return &ast.SuccessionEdge{
+		SourceMember: &ast.EntryMember{},
+		Target:       &ast.QualifiedName{Parts: []ast.NameSegment{{Text: name}}},
 	}
 }
 

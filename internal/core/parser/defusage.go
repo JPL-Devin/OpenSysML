@@ -1871,7 +1871,17 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 					u.Relationships = append(u.Relationships, bindingEnd(target))
 				}
 			} else {
+				// The right side is the second ConnectorEndMember (SysML.xtext:1020),
+				// so it names a feature; an expression there is an error.
 				u.Value = p.ParseExpression()
+				if _, failed := u.Value.(*ast.ErrorNode); u.Value != nil && !failed && !bindingEndReference(u.Value) {
+					const msg = "a binding end names a feature, not an expression; " +
+						"declare a feature with the expression as its value and bind to that"
+					p.error(u.Value.Span(), msg)
+					en := &ast.ErrorNode{Message: msg}
+					en.NodeSpan = u.Value.Span()
+					u.Value = en
+				}
 			}
 		}
 
@@ -2000,7 +2010,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 					p.effectStmtStart = p.peek().Span.Offset
 				}
 				members = append(members, p.parseActionMember())
-				// Only an inline statement continues the body; `then a b;` names
+				// Only an inline statement continues the body; a succession names
 				// members of the enclosing body.
 				if !p.atKeyword("then") || !startsInlineSuccessionStatement(p.peekN(1)) {
 					break
@@ -2070,7 +2080,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			p.advance() // {
 			if hasCalcBody {
 				// Parse as calc body with structured parameters
-				members = p.parseCalcBody()
+				members = p.parseConstraintCalcBody()
 			} else {
 				members = p.parseConstraintBody()
 			}
@@ -2167,9 +2177,8 @@ func (p *Parser) parseDefUsageBodyMembers() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
-		// `then a b;` is a succession member naming two members of this body,
-		// which is the form a member-attached `then` desugars to and so the
-		// form a converted model is written back as. DefinitionBodyItem
+		// `succession first a then b;` names two members of this body, which is
+		// the form used when writing a converted model back. DefinitionBodyItem
 		// (SysML.xtext:516-524) has no TargetSuccessionMember, so it takes no body.
 		if p.atKeyword("then") {
 			body.add(p.parseSuccessionEdge(p.advance(), false))
@@ -2223,6 +2232,9 @@ func (p *Parser) parseCaseBody() []ast.Node {
 // declaration.
 func (p *Parser) atResultExpression() bool {
 	t := p.peek()
+	if p.atPrefixOperator() {
+		return true
+	}
 	if (t.Kind == lexer.Keyword && !exprStartKeywords[t.KeywordID]) || t.Kind == lexer.LBrace {
 		return false
 	}
@@ -3296,6 +3308,16 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 // it resolves outside the connector rather than as an inherited redefinition.
 func bindingEnd(target ast.Node) *ast.Relationship {
 	return &ast.Relationship{Kind: ast.RelReferences, Target: target}
+}
+
+// bindingEndReference reports whether a parsed value names a feature, as a
+// binding's right end must (SysML.xtext:1020 ConnectorEndMember).
+func bindingEndReference(n ast.Node) bool {
+	switch n.(type) {
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
+		return true
+	}
+	return false
 }
 
 // hasBindingEnd reports whether a binding already states an end.
