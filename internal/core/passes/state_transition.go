@@ -260,7 +260,7 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 			case ast.UsageState:
 				c.walkBody(m, bodyScope(scope, n), n.Members, n)
 			case ast.UsageSuccession:
-				// `succession first a then b;`, written as a connector whose two ends name vertices.
+				// A succession is a connector whose two ends name vertices.
 				if len(n.ConnectorEnds) == 2 {
 					source := connectorEndName(n.ConnectorEnds[0])
 					target := connectorEndName(n.ConnectorEnds[1])

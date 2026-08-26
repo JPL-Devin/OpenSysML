@@ -2000,7 +2000,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 					p.effectStmtStart = p.peek().Span.Offset
 				}
 				members = append(members, p.parseActionMember())
-				// Only an inline statement continues the body; `succession first a then b;` names
+				// Only an inline statement continues the body; a succession names
 				// members of the enclosing body.
 				if !p.atKeyword("then") || !startsInlineSuccessionStatement(p.peekN(1)) {
 					break

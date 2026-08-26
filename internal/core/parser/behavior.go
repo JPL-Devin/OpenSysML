@@ -2413,9 +2413,10 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 			p.advance()
 			return p.parseExitMember(start)
 		case "state":
-			// Check if this is a simple declaration (state name;) or full usage (state name { ... })
-			// Lookahead: state followed by name/keyword and semicolon → SubstateMember
-			// Otherwise → full state usage declaration
+			// Check for a simple declaration (`state name;`) or full usage
+			// (`state name { ... }`).
+			// Lookahead: a name/keyword and semicolon means SubstateMember;
+			// otherwise parse a full state usage declaration.
 			nextTok := p.peekN(1)
 			isNameOrKeyword := nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword
 			if isNameOrKeyword && p.peekN(2).Kind == lexer.Semicolon {

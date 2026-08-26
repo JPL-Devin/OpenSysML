@@ -94,18 +94,17 @@ func (p *Parser) newBodyBuilder() *bodyBuilder {
 	return &bodyBuilder{p: p}
 }
 
-// atSuccession reports whether the parser is at a `then` prefixing a body
-// member, as opposed to one starting a succession edge member (`succession first a then b;`) or
-// chaining an inline statement (`then assign x := 1;`).
+// atSuccession reports whether `then` prefixes a body member, rather than
+// starting a succession edge (`succession first a then b;`) or inline statement.
 func (b *bodyBuilder) atSuccession() bool {
 	p := b.p
 	if !p.atKeyword("then") {
 		return false
 	}
 	next := p.peekN(1)
-	// `succession first a then b;` and `then a;` name members; the edge parser reads them. The
-	// unreserved node words (`then done;`) are names to the lexer, so they are
-	// taken from the notation shape (see notation.go).
+	// `succession first a then b;` and `then a;` name members; the edge parser
+	// reads them. Unreserved node words such as `then done;` are identified by
+	// notation shape (see notation.go).
 	kw := ""
 	if next.Kind == lexer.Keyword {
 		kw = next.KeywordID

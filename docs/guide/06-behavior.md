@@ -43,7 +43,7 @@ sysml> %continue
 **State machine execution:**
 
 The following state machine uses OpenSysML extensions with no SysML v2 production
-(`initial`, `final`, and named succession notation). See the
+(`initial` and state-body `final`). See the
 [conformance audit](../reference/grammar/conformance-audit.md).
 
 ```sysml
@@ -266,7 +266,8 @@ $ sysml -action ActionExecutorDemo::sequential examples/action-executor-demo.sys
 
 ### Fork and join: parallel paths
 
-This action uses fork and join control nodes.
+This action uses OpenSysML fork and join extensions with no SysML v2 production.
+See the [conformance audit](../reference/grammar/conformance-audit.md).
 
 ```sysml
 action forkJoin {
@@ -316,7 +317,8 @@ A branch that never arrives is a deadlock, not a failure: the run is reported as
 
 ### Decision and else: conditional branching
 
-This action uses a decision with guarded successions.
+This action uses the OpenSysML `decide` extension with no SysML v2 production.
+See the [conformance audit](../reference/grammar/conformance-audit.md).
 
 ```sysml
 action conditional {
