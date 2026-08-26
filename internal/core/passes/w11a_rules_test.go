@@ -113,6 +113,42 @@ func TestW11AUsageTypedByWrongKind(t *testing.T) {
 	}
 }
 
+// The whole typing-kind family on a model whose types resolve: the pinned
+// validate-sysml reports these eight wordings at the same columns.
+func TestW11AUsageTypingKindFamily(t *testing.T) {
+	src := `package Test {
+	part def P;
+	attribute def A;
+	attribute bad : P;
+	part badPart : A;
+	item badItem : A;
+	port badPort : A;
+	action badAct : A;
+	state badState : A;
+	connection badConn : A;
+	interface badIf : A;
+}`
+	var got []string
+	for _, msg := range w11aMessages(t, src, true) {
+		if strings.HasSuffix(msg, "definitions.") {
+			got = append(got, msg)
+		}
+	}
+	want := []string{
+		"A connection must be typed by connection definitions.",
+		"A port must be typed by port definitions.",
+		"A state must be typed by state definitions.",
+		"An action must be typed by action definitions.",
+		"An attribute must be typed by attribute definitions.",
+		"An interface must be typed by interface definitions.",
+		"An occurrence, item or part must be typed by occurrence definitions.",
+		"An occurrence, item or part must be typed by occurrence definitions.",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 // A performed feature must be an action: a reference usage is not one, whatever
 // types it (ActionUsage_invalid.sysml.xt:57). `exhibit` takes the same check;
 // see docs/project/spec-compliance.md for the form it does not reach.

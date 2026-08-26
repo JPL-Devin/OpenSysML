@@ -257,6 +257,31 @@ func TestW9COwnedNameAgainstOneLibraryBaseWarns(t *testing.T) {
 	}
 }
 
+// A library base reached through user supertypes supplies its names just the
+// same; the pinned validate-sysml reports both warnings at the same columns.
+func TestW9CInheritedNameThroughUserSupertypesWarns(t *testing.T) {
+	src := `package Test {
+	private import Occurrences::Occurrence;
+	private import Actions::Action;
+	part def Base :> Occurrence;
+	part def Mid :> Base;
+	part def Leaf :> Mid { part portions; }
+	part def Ok :> Mid { part :>> portions; }
+	action def MyAct :> Action;
+	action def Sub :> MyAct { action done; }
+}`
+	for _, warm := range []bool{false, true} {
+		got := w9cMessages(w9cLibraryDiags(t, src, warm), msgW9CDuplicateInherited)
+		want := []string{
+			msgW9CDuplicateInherited + " 'portions' from Occurrence",
+			msgW9CDuplicateInherited + " 'done' from Action",
+		}
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Errorf("warm=%v: got %v, want %v", warm, got, want)
+		}
+	}
+}
+
 // Redefining or subsetting the inherited feature makes the reused name its own
 // name, so nothing is indistinguishable; an unreused name is silent too.
 func TestW9COwnedNameSpecializingItsLibraryBaseStaysSilent(t *testing.T) {

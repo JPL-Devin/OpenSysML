@@ -393,8 +393,8 @@ Two things did move here, and one is a first:
 Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 1 `kind-mismatch`, 2
 `units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax, 1 `unmapped`; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
-Only-pilot: `testdata` 11 `kind-mismatch`, 4 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 11 syntax, 3 `kind-mismatch`, 11 `unmapped`, 7 `unresolved-reference` — all of them
+Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
+`examples` 11 syntax, 8 `kind-mismatch`, 6 `unmapped`, 7 `unresolved-reference` — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -2343,12 +2343,61 @@ true positive: the identical construct at line 10 is now an agreement.
 | Rows | Where | Verdict |
 |---|---|---|
 | 6 `The opposite features 'owningType' of '…DisjoiningImpl{…}'` / `'ownedDisjoining' of '…'` | `kerml-examples`: `Types.kerml`:31, `Features.kerml`:20, `Inverses.kerml`:3, `FeatureChains.kerml`:31, `Classifiers.kerml`:13, `A-2-ModelingInstances.kerml`:9 | **Not spec-derivable.** The messages name EMF implementation classes and resource fragments and assert an opposite-reference invariant of the reference's own metamodel; KerML 1.1 states no rule a modeller could act on, and the files are valid. Left, documented. |
-| 4 `Duplicate of inherited member name 'done' from Action` | `action-executor-demo.sysml`:16,35,55, `views-demo.sysml`:96 | **Ours is right.** These are `done;` on its own, which we read as the anonymous final node of an action body; the reference has no such production and reads it as a reference usage declaring a member named `done`, which then duplicates `Actions::Action::done`. The rule is implemented — the same rule closed the `start` rows above — and does not fire because there is no named member. Left as a notation difference, recorded in the grammar conformance audit. |
-| 9 `Bound features should have conforming types`, 1 `Must be model-level evaluable`, 1 `An attribute must be typed by attribute definitions.`, 1 `An occurrence, item or part must be typed by occurrence definitions.` | `parse/expressions.sysml`:3-6, `passes/errors.sysml`:3, `resolve/errors.sysml`:3, `solver-demo.sysml`:120,124, `lex/basic.sysml`:4, `passes/import_no_visibility.sysml`:9 | **Not a rule gap: a tier boundary.** All of them sit downstream of a name-resolution or syntax error in the same file, and the rule each one would need is already implemented and fires on a valid reduced model — `bind n = w;` between an `Integer` and a `Wheel`-typed attribute draws `Bound features should have conforming types` from both implementations. Reporting them too would mean running the type tier over subjects whose types are unknown, which the tier contract forbids. Left. |
+| 4 `Duplicate of inherited member name 'done' from Action` | `action-executor-demo.sysml`:16,35,55, `views-demo.sysml`:96 | **Ours is right, re-verified.** These are `done;` on its own, which we read as the anonymous final node of an action body; the pinned `SysML.xtext` contains neither `done` nor a final-node production, so the reference reads it as a reference usage declaring a member named `done`, which then duplicates `Actions::Action::done`. The rule's *scope* is not the gap it looks like: matched runs of `validate-sysml-batch` and `bin/sysml -validate` are byte-identical on `action def Sub :> MyAct { action done; }` (both `9:35 warning: Duplicate of inherited member name 'done' from Action`), on the same collision two user supertypes below a library base (`part def Leaf :> Mid { part portions; }`, both `6:30`), and on the redefinition escape hatch (`part :>> portions;`, both silent) — so a member inherited from a library type already conflicts exactly as one inherited from a user type does. What differs is only the spelling: `then done;`, the form the OMG corpora use, is silent on both sides, and a bare `done;` appears in no OMG-authored model. Left as a notation difference, recorded in the grammar conformance audit. |
+| 9 `Bound features should have conforming types`, 1 `An attribute must be typed by attribute definitions.`, 1 `An occurrence, item or part must be typed by occurrence definitions.` | `parse/expressions.sysml`:3-6, `passes/errors.sysml`:3, `resolve/errors.sysml`:3, `solver-demo.sysml`:120,124, `lex/basic.sysml`:4, `passes/import_no_visibility.sysml`:9 | **Not a rule gap: a tier boundary.** All of them sit downstream of a name-resolution or syntax error in the same file, and the rule each one would need is already implemented and fires on a valid reduced model — `bind n = w;` between an `Integer` and a `Wheel`-typed attribute draws `Bound features should have conforming types` from both implementations. Reporting them too would mean running the type tier over subjects whose types are unknown, which the tier contract forbids. The typing-kind pair is now pinned by reproducer rather than by argument: `lex/basic.sysml` unchanged draws the reference's `Couldn't resolve reference to Type 'Real'` **and** its typing-kind error while we report the unresolved reference alone, and with `private import ScalarValues::*;` added both implementations fall silent. On a model whose types resolve the whole family agrees message-for-message and column-for-column — `attribute`, `part`, `item`, `port`, `action`, `state`, `connection` and `interface` usages each typed by `attribute def A` draw the eight reference wordings at identical spans from both. The second row sits in `passes/import_no_visibility.sysml`, one of the files the reference cannot parse, not in `resolve/errors.sysml`, which in isolation draws no typing-kind row from either implementation. |
+| 1 `Must be model-level evaluable` | `parse/expressions.sysml`:4 | **Not a rule gap: the reference reports two type-tier errors on that line and we report one.** We report `Must be model-level evaluable` there too, at the same column and in the same words, and the rule agrees in all three directions a reduced model can test: an unresolved invocation (`filter coll->select(x);`) draws it from both, a resolvable but inevaluable one over a user `calc` draws it from both, and `filter 1 + 2 > 0;` is silent in both. Until this round the row was also **miscategorized**: `categorizePilot` left the message `unmapped` while `categorizeOpenSysML` mapped our identical text to `kind-mismatch`, so the two copies could not pair at all. The pilot side now applies the same `must be` clause ours does; our diagnostic pairs with one of the reference's two errors on the line and the surplus one stays, so the count does not move — what changes is that the surplus is now read as a second copy of a rule we agree on rather than as an unmapped divergence. |
 | 5 `Duplicate of other owned member name` | `passes/import_no_visibility.sysml`:3,8,12, `semantic-layer/demo.sysml`:35,105 | **Recovery collateral, not a gap.** The fixture is *about* imports without a visibility keyword, which the pilot's grammar rejects (`no viable alternative at input '::'` on the same lines), and its recovery re-registers the fragments as duplicate members. We implement the owned-name rule, including short names. Left. |
 | 7 `Couldn't resolve reference to …` (`b`, `c`, `sciencePower`, `drivePower`, `ignite`, `start`, `touchdown`) | `parse/expressions.sysml`:3, `solver-demo.sysml`:120,124, `views-demo.sysml`:88,90,108, `pseudostates-demo.sysml`:17 | **Split, both defensible, no code change.** Three are later segments of a chain whose head we already reported unresolved (`a.b.c`), where repeating the failure per segment adds nothing; four name action or state vertices in files the reference cannot parse past, so the names are missing from *its* model rather than invented by ours. Left. |
 | 11 syntax errors (`no viable alternative at input 'entry'` / `'evaluate'` / `'if'` / `'then'`, `missing '}' at 'action'`, `mismatched input 'transition'`, `missing EOF`) | `phase-c-behavioral-bodies.sysml`:175,176, `pseudostates-demo.sysml`:12,18,19, `views-demo.sysml`:106,107,109 | **The reference failing to parse notation of ours.** These trace to retained extensions — `choice`/`junction` pseudostates, `entry;` as a bare entry marker, the inline `if`/`else` action form — for which the pinned grammar has no production. Not gaps of ours; we already warn on the non-standard ones under the conformance modes. Left. |
-| 5 `Must be an accessible feature (use dot notation for nesting)` | `semantic-layer/demo.sysml`:44,45,46,50,51 | **Left unadjudicated on purpose.** We implement this rule, and it fires elsewhere; in this file the reference reaches it through its own recovery after the duplicate-member rows above. Whether any of the five survives on a file the reference parses cleanly needs a reduced model that has not been built yet, so this is the first row the next round should pick up. |
+| 5 `Must be an accessible feature (use dot notation for nesting)` | `semantic-layer/demo.sysml`:44,45,46,50,51 | **Recovery collateral, not a gap** — the reduced model the previous round asked for now exists. All five references (`MathConstants::pi`, `::e`, `::Derived::twoPi`, and the two expression forms) transcribed into a file that declares `MathConstants` as a `package` are silent in both implementations; changing that one keyword to `namespace`, which the SysML grammar has no production for, makes the reference report `no viable alternative at input` on each namespace **and** exactly these five accessibility errors, at the same relative positions and in the same order as the file. Its recovery turns the unparsed namespace into a feature, so each qualified reference becomes a subsetting whose subsetted feature is featured within another feature and fails `canAccess`. The construct it claims to see is not the construct in the file. Left; no rule to add. The five rows carried the same categorizer asymmetry as the row above — we word this message exactly as the reference does — and are now categorized alike on both sides, which does not pair them, since we report nothing on those lines. |
+
+### The census the verdicts above account for
+
+Deduplicated by message, the 58 only-pilot occurrences distribute as follows. No entry is a rule the
+reference has and we lack: every one is either adjudicated above or a diagnostic downstream of
+notation the reference cannot parse.
+
+| Occurrences | Message | Verdict |
+|---:|---|---|
+| 12 | `Bound features should have conforming types` | implicit binding connectors the reference synthesizes, in files that already carry agreed errors |
+| 6 | `The opposite features … do not refer to each other` | the reference's own EMF metamodel invariant |
+| 5 | `Must be an accessible feature (use dot notation for nesting)` | recovery collateral of `namespace` in a `.sysml` file |
+| 5 | `Duplicate of other owned member name` | recovery collateral of imports without a visibility keyword |
+| 4 | `Duplicate of inherited member name 'done' from Action` | a bare `done;`, which the pinned grammar cannot express |
+| 2 | typing-kind (`attribute`, `occurrence/item/part`) | one downstream of an unresolved type, one in a file the reference cannot parse |
+| 1 | `Must be model-level evaluable` | reported by both; a categorizer asymmetry in this harness |
+| 23 | syntax and unresolved-reference cascades | `views-demo.sysml`, `passes/import_no_visibility.sysml`, `pseudostates-demo.sysml`, `phase-c-behavioral-bodies.sysml`, `solver-demo.sysml` — retained extensions the reference has no production for, plus what its recovery reports afterwards |
+
+Every verdict here was taken from a matched pair of runs over a reduced model, not from the corpus
+row: `build/pilot-sysml-validator/validate-sysml-batch --root <dir> <file>` against
+`bin/sysml -validate <file>`, one construct per file, comparing message, severity, line and column.
+A corpus row cannot settle any of these on its own, because in every one of these files the
+reference has already failed to parse something before it reaches the diagnostic under discussion.
+
+### One-sided categorizations, swept
+
+An asymmetric category mapping is worse than a wrong count: it makes the instrument report a
+divergence that does not exist. The report's `unmapped` block lists every message each side emits
+that no mapping claimed, which makes the whole class checkable — for each entry, put the same text
+through the other side's function and see whether it maps. Over the roots above that yields three
+findings and no others:
+
+- `Must be model-level evaluable` and `Must be an accessible feature (use dot notation for nesting)`
+  are worded identically by both implementations, and only ours mapped. **Fixed:** `categorizePilot`
+  now applies the same `must be` clause `categorizeOpenSysML` does, and `TestCategorizePilot` pins
+  both. Six rows change category; no bucket total moves.
+- `Duplicate of other owned member name`, `Duplicate of inherited member name …`, `Cannot identify
+  flow end (use dot notation)` and `… participates in a specialization cycle` are unmapped on both
+  sides. Already symmetric, and deliberately so: no category above describes them.
+- The `opposite features …` messages would be caught by our side's `type` clause, through
+  `owningType`, if it were applied to them. **Defended, not fixed:** that clause reads our own
+  vocabulary, where `type` means the type system; the reference's text is an EMF field name, and
+  mapping it would manufacture agreement for a diagnostic that states no rule. The pilot side
+  enumerates its type-tier messages instead, which is why it does not.
+
+The remaining known one-sided clause is `should be`, which the pilot side maps and ours reaches only
+through `conform`. No diagnostic of ours is worded that way, so there is nothing to categorize; if
+one is ever added, this is the clause to revisit.
 
 ## The declared errata overlay
 

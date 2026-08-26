@@ -450,7 +450,7 @@
             {
               "line": 4,
               "severity": "error",
-              "category": "unmapped",
+              "category": "kind-mismatch",
               "count": 1
             },
             {
@@ -906,31 +906,31 @@
             {
               "line": 44,
               "severity": "error",
-              "category": "unmapped",
+              "category": "kind-mismatch",
               "count": 1
             },
             {
               "line": 45,
               "severity": "error",
-              "category": "unmapped",
+              "category": "kind-mismatch",
               "count": 1
             },
             {
               "line": 46,
               "severity": "error",
-              "category": "unmapped",
+              "category": "kind-mismatch",
               "count": 1
             },
             {
               "line": 50,
               "severity": "error",
-              "category": "unmapped",
+              "category": "kind-mismatch",
               "count": 1
             },
             {
               "line": 51,
               "severity": "error",
-              "category": "unmapped",
+              "category": "kind-mismatch",
               "count": 1
             },
             {
@@ -1179,11 +1179,6 @@
     },
     {
       "side": "pilot",
-      "message": "Must be an accessible feature (use dot notation for nesting)",
-      "count": 5
-    },
-    {
-      "side": "pilot",
       "message": "Duplicate of inherited member name 'start' from StateAction",
       "count": 4
     },
@@ -1265,11 +1260,6 @@
     {
       "side": "opensysml",
       "message": "z participates in a specialization cycle",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "Must be model-level evaluable",
       "count": 1
     },
     {
