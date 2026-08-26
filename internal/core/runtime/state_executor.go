@@ -1072,9 +1072,8 @@ func (e *StateExecutor) completeIfDone(target *ast.StateNode) error {
 	return nil
 }
 
-// machineComplete reports whether a completion vertex just reached completes the
-// machine: every region concurrent with it must have completed, and so must
-// every region set enclosing that one, up to the machine's own.
+// machineComplete reports whether every region concurrent with the one that
+// reached a completion vertex completed, outward to the machine's own regions.
 func (e *StateExecutor) machineComplete(target *ast.StateNode) bool {
 	region := e.graph.RegionOf[target]
 	for {
