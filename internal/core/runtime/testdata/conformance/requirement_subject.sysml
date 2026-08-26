@@ -3,6 +3,6 @@ package test {
 	
 	requirement SafeSpeed {
 		subject subj = speed;
-		require subj < 100.0;
+		require constraint { subj < 100.0 }
 	}
 }
