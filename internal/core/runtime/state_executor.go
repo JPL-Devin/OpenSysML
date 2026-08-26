@@ -1046,14 +1046,8 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 		return fmt.Errorf("schedule events: %w", err)
 	}
 
-	// Check if final state
-	if targetState.IsFinal {
-		if len(e.graph.TopRegions) == 0 || e.parallelMachineComplete() {
-			if err := e.exitMachine(); err != nil {
-				return fmt.Errorf("exit state machine: %w", err)
-			}
-			e.state = StateCompleted
-		}
+	if err := e.completeIfFinalState(targetState); err != nil {
+		return fmt.Errorf("complete state machine: %w", err)
 	}
 
 	// Record trace
@@ -1062,6 +1056,22 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 		e.trace().RecordStateTransition(fromName, targetState.Name, eventName)
 	}
 
+	return nil
+}
+
+// completeIfFinalState completes a machine when a final target is reached. An
+// orthogonal machine completes only after every top-level region is final.
+func (e *StateExecutor) completeIfFinalState(target *ast.StateNode) error {
+	if target == nil || !target.IsFinal {
+		return nil
+	}
+	if len(e.graph.TopRegions) > 0 && !e.parallelMachineComplete() {
+		return nil
+	}
+	if err := e.exitMachine(); err != nil {
+		return err
+	}
+	e.state = StateCompleted
 	return nil
 }
 

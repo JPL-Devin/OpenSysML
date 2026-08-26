@@ -192,6 +192,15 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 			graph.TopRegions = append(graph.TopRegions, region)
 		}
 	}
+	if graph.Machine == nil && hasTopLevelRegions {
+		graph.Machine = parallelMachineState(stateMachineDecl, members)
+		graph.StateScopes[graph.Machine] = scope
+		graph.Behaviors[graph.Machine] = &StateBehaviors{
+			Entry: LowerBehaviors(graph.Machine.Entry, scope),
+			Do:    LowerBehaviors(graph.Machine.Do, scope),
+			Exit:  LowerBehaviors(graph.Machine.Exit, scope),
+		}
+	}
 	// Also handle states that have regions as sub-members
 	for _, state := range graph.States {
 		if len(state.Regions) > 0 {
