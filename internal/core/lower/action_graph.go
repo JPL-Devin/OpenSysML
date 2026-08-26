@@ -781,24 +781,24 @@ func resolveActionEndpoint(graph *ActionGraph, ref ast.Node, source bool) ast.No
 	}
 
 	name := ast.SimpleName(ref)
-	if impliedMarker(name, source, graph.Initial == nil) && source {
+	if !impliedMarker(name, source, graph.Initial == nil) {
+		return nil
+	}
+	if source {
 		initial := &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "start"}
 		graph.Initial = initial
 		graph.Nodes = append(graph.Nodes, initial)
 		return initial
 	}
-	if impliedMarker(name, source, graph.Initial == nil) && !source {
-		for _, final := range graph.Finals {
-			if getNodeName(final) == "done" {
-				return final
-			}
+	for _, final := range graph.Finals {
+		if getNodeName(final) == "done" {
+			return final
 		}
-		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}}
-		graph.Finals = append(graph.Finals, final)
-		graph.Nodes = append(graph.Nodes, final)
-		return final
 	}
-	return nil
+	final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}}
+	graph.Finals = append(graph.Finals, final)
+	graph.Nodes = append(graph.Nodes, final)
+	return final
 }
 
 // findNodeByReference resolves a plain name or a chain to its graph-node root.

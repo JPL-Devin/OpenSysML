@@ -14,10 +14,13 @@ const CodeEndpointNotANode = "endpoint-not-a-node"
 // nodes accepted by action lowering.
 type ActionEndpointPass struct{}
 
+// Level reports that this pass consumes name-resolution results.
 func (ActionEndpointPass) Level() PassLevel { return LevelNameResolution }
 
+// ElementScoped lets each endpoint subject gate independently on lower failures.
 func (ActionEndpointPass) ElementScoped() {}
 
+// Run checks named endpoints in every action body in the document.
 func (ActionEndpointPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {
 		return nil
@@ -36,32 +39,70 @@ type actionEndpointChecker struct {
 	diags []Diagnostic
 }
 
+// walk visits package, namespace, declaration, and behavioral body members.
 func (c *actionEndpointChecker) walk(scope *symbols.Scope, members []ast.Node) {
 	for _, member := range members {
-		decl := unwrapMembership(member)
-		child := bodyScope(scope, decl)
-		switch n := decl.(type) {
-		case *ast.Package:
-			c.walk(child, n.Members)
-		case *ast.Namespace:
-			c.walk(child, n.Members)
-		case *ast.Definition:
-			if n.Kind == ast.DefAction {
-				c.checkBody(n, child)
-			}
-			c.walk(child, n.Members)
-		case *ast.Usage:
-			if n.Kind == ast.UsageAction {
-				c.checkBody(n, child)
-			}
-			c.walk(child, n.Members)
-		}
+		c.walkNode(scope, unwrapMembership(member))
 	}
 }
 
+// walkNode checks action declarations and descends through every body shape.
+func (c *actionEndpointChecker) walkNode(scope *symbols.Scope, decl ast.Node) {
+	child := bodyScope(scope, decl)
+	switch n := decl.(type) {
+	case *ast.Package:
+		c.walk(child, n.Members)
+	case *ast.Namespace:
+		c.walk(child, n.Members)
+	case *ast.Definition:
+		if n.Kind == ast.DefAction {
+			c.checkBody(n, child)
+		}
+		c.walk(child, n.Members)
+	case *ast.Usage:
+		if n.Kind == ast.UsageAction {
+			c.checkBody(n, child)
+		}
+		c.walk(child, n.Members)
+	case *ast.SubjectMember:
+		c.walk(child, n.Body)
+	case *ast.EntryMember:
+		c.walk(child, n.Actions)
+	case *ast.DoMember:
+		c.walk(child, n.Actions)
+	case *ast.ExitMember:
+		c.walk(child, n.Actions)
+	case *ast.InitialNode, *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		c.walk(child, ast.NodeBodyMembers(n))
+	case *ast.StateNode:
+		c.walk(child, n.Entry)
+		c.walk(child, n.Do)
+		c.walk(child, n.Exit)
+		c.walk(child, n.Substates)
+		for _, region := range n.Regions {
+			c.walkNode(child, region)
+		}
+	case *ast.StateRegion:
+		c.walk(child, n.States)
+	case *ast.TransitionMember:
+		c.walk(child, n.Members)
+	case *ast.SendStatement:
+		c.walk(child, n.Members)
+	case *ast.WhileLoopActionNode:
+		c.walk(child, n.Body)
+	case *ast.IfActionNode:
+		for _, branch := range n.Branches() {
+			c.walkNode(child, branch)
+		}
+	case *ast.IfBranchNode:
+		c.walk(child, n.Body)
+	}
+}
+
+// checkBody checks the endpoints of one action definition or usage.
 func (c *actionEndpointChecker) checkBody(decl ast.Node, scope *symbols.Scope) {
 	nodes, hasInitial, err := lower.ActionNodes(decl, scope)
-	if err != nil || len(nodes) == 0 {
+	if err != nil {
 		return
 	}
 	for _, member := range declMembers(decl) {
@@ -92,6 +133,8 @@ func (c *actionEndpointChecker) checkBody(decl ast.Node, scope *symbols.Scope) {
 			if v.Kind != ast.UsageSuccession || len(v.ConnectorEnds) != 2 {
 				continue
 			}
+			// An inherited succession redefinition restates a flow rather than
+			// adding an independently lowered action body.
 			if redefinesUsage(v) {
 				continue
 			}
@@ -101,6 +144,7 @@ func (c *actionEndpointChecker) checkBody(decl ast.Node, scope *symbols.Scope) {
 	}
 }
 
+// checkEndpoint reports a resolved endpoint that is not an action node.
 func (c *actionEndpointChecker) checkEndpoint(
 	scope *symbols.Scope,
 	nodes []ast.Node,
@@ -130,6 +174,7 @@ func (c *actionEndpointChecker) checkEndpoint(
 	})
 }
 
+// redefinesUsage identifies inherited succession redefinitions, not new flows.
 func redefinesUsage(usage *ast.Usage) bool {
 	for _, rel := range usage.Relationships {
 		if rel != nil && rel.Kind == ast.RelRedefines {
@@ -139,6 +184,7 @@ func redefinesUsage(usage *ast.Usage) bool {
 	return false
 }
 
+// connectorEndReference preserves feature-chain references used by action flows.
 func connectorEndReference(end *ast.ConnectorEnd) ast.Node {
 	if end == nil {
 		return nil

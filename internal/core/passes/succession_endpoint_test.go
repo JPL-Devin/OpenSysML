@@ -196,6 +196,216 @@ func TestEndpointsThatResolveStaySilent(t *testing.T) {
 	}
 }
 
+func TestActionEndpointPassAcceptsLoweredNodes(t *testing.T) {
+	cases := map[string]string{
+		"implicit start": `package P { action def A {
+			action a;
+			succession first start then a;
+		} }`,
+		"implicit done": `package P { action def A {
+			first start;
+			action a;
+			then done;
+		} }`,
+		"declared final": `package P { action def A {
+			first start;
+			action a;
+			done;
+			succession first a then done;
+		} }`,
+		"positional send": `package P { action def A {
+			attribute x;
+			first start;
+			then send x() to self;
+			then done;
+		} }`,
+		"positional loop": `package P { action def A {
+			first start;
+			then loop action { action tick; } until true;
+			then done;
+		} }`,
+		"implied end": `package P { action def A {
+			action a;
+			then a;
+		} }`,
+		"control nodes": `package P { action def A {
+			first start;
+			fork split;
+			join sync;
+			merge gate;
+			decide choose;
+			succession first start then split;
+			succession first split then sync;
+			succession first sync then gate;
+			succession first gate then choose;
+		} }`,
+		"nested action usage": `package P { action def A {
+			action child;
+			action sibling;
+			succession first child then sibling;
+		} }`,
+		"sequenced if": `package P { action def A {
+			action a;
+			if true then a;
+		} }`,
+		"sequenced statements": `package P { action def A {
+			attribute x;
+			first start;
+			then while true { terminate; }
+			then assign x := 1;
+			then send x() to self;
+			then terminate;
+		} }`,
+		"feature-chain root": `package P { action def A {
+			action source { attribute pin; }
+			action target;
+			succession first source.pin then target;
+		} }`,
+		"unresolved endpoint": `package P { action def A {
+			action a;
+			succession first a then missing;
+		} }`,
+		"nested action definition": `package P { action def Outer {
+			action def Inner {
+				action leaf;
+				succession first start then leaf;
+			}
+			action next;
+			succession first start then next;
+		} }`,
+		"state body": `package P { state def M {
+			attribute mode = 0;
+			entry; then idle;
+			state idle;
+			succession first idle then mode;
+		} }`,
+		"performed action in part": `package P { part def D {
+			action def A { action x; }
+			perform action p;
+			then p;
+		} }`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctx, root := nameresCtx(t, "a.sysml", src)
+			if got := (ActionEndpointPass{}).Run(ctx, "a.sysml", root); len(got) != 0 {
+				t.Fatalf("expected no action endpoint diagnostics, got %+v", got)
+			}
+		})
+	}
+}
+
+func TestStateSuccessionEndpointSpellingsAcceptVertices(t *testing.T) {
+	targets := map[string]string{
+		"choice":      `choice pick;`,
+		"junction":    `junction pick;`,
+		"fork":        `fork pick;`,
+		"join":        `join pick;`,
+		"entry point": `entry point pick;`,
+		"exit point":  `exit point pick;`,
+		"nested":      `state outer { state pick; }`,
+	}
+	for _, spelling := range []string{"succession first idle then pick;", "then pick;"} {
+		for name, declaration := range targets {
+			t.Run(spelling+"/"+name, func(t *testing.T) {
+				src := `package P { state def M {
+					entry; then idle;
+					state idle;
+					` + declaration + `
+					` + spelling + `
+				} }`
+				if got := endpointDiags(t, src); len(got) != 0 {
+					t.Fatalf("expected no diagnostics for a legal vertex endpoint, got %+v", got)
+				}
+			})
+		}
+	}
+
+	cases := map[string]string{
+		"region-local": `package P { state def M {
+			state outer parallel {
+				state left {
+					state idle;
+					state pick;
+					succession first idle then pick;
+				}
+				state right { state other; }
+			}
+		} }`,
+		"cross-region": `package P { state def M {
+			state outer parallel {
+				state left { state idle; }
+				state right { state pick; }
+			}
+			succession first idle then pick;
+		} }`,
+		"inherited": `package P {
+			state def Base { state idle; }
+			state def Derived :> Base {
+				EDGE
+			}
+		}`,
+		"entry action source": `package P { state def M {
+			entry action begin { }
+			state idle;
+			EDGE
+		} }`,
+		"first marker source": `package P { state def M {
+			first marker then other;
+			state other;
+			state idle;
+			EDGE
+		} }`,
+	}
+	for name, src := range cases {
+		for _, spelling := range []string{"succession first idle then idle;", "then idle;"} {
+			t.Run(name+"/"+spelling, func(t *testing.T) {
+				model := strings.Replace(src, "EDGE", spelling, 1)
+				if name == "entry action source" {
+					model = strings.Replace(model, "first idle", "first begin", 1)
+				}
+				if got := endpointDiags(t, model); len(got) != 0 {
+					t.Fatalf("expected no diagnostics for a legal vertex endpoint, got %+v", got)
+				}
+			})
+		}
+	}
+}
+
+func TestActionEndpointPassFindsNestedActionDefinitions(t *testing.T) {
+	cases := map[string]string{
+		"state substate": `package P { state def M {
+			state outer {
+				action def Inner {
+					attribute flag = 0;
+					action leaf;
+					succession first leaf then flag;
+				}
+			}
+		} }`,
+		"state region": `package P { state def M {
+			state outer parallel {
+				state left {
+					action def Inner {
+						attribute flag = 0;
+						action leaf;
+						succession first leaf then flag;
+					}
+				}
+			}
+		} }`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctx, root := nameresCtx(t, "a.sysml", src)
+			got := ActionEndpointPass{}.Run(ctx, "a.sysml", root)
+			if len(got) != 1 || got[0].Code != CodeEndpointNotANode {
+				t.Fatalf("expected one nested action endpoint diagnostic, got %+v", got)
+			}
+		})
+	}
+}
+
 func TestResolvedStateEndpointNotVertexIsReported(t *testing.T) {
 	cases := map[string]string{
 		"machine end naming no vertex": `package P { state def M {
@@ -294,6 +504,62 @@ func TestActionEndpointPassReportsResolvedNonNodes(t *testing.T) {
 			}
 			if covered := strings.TrimSpace(src[got[0].Span.Offset : got[0].Span.Offset+got[0].Span.Len]); covered != "flag" {
 				t.Fatalf("expected the span to cover flag, it covers %q", covered)
+			}
+		})
+	}
+}
+
+func TestActionEndpointPassDiagnosticAgreesWithLowering(t *testing.T) {
+	cases := map[string]struct {
+		src      string
+		fails    bool
+		endpoint string
+	}{
+		"accepted action node": {
+			src: `package P { action def A {
+				action a;
+				succession first start then a;
+			} }`,
+		},
+		"undefined target node": {
+			src: `package P { action def A {
+				attribute flag = 0;
+				action a;
+				succession first a then flag;
+			} }`,
+			fails:    true,
+			endpoint: "flag",
+		},
+		"undefined source node": {
+			src: `package P { action def A {
+				attribute flag = 0;
+				action a;
+				transition first flag then a;
+			} }`,
+			fails:    true,
+			endpoint: "flag",
+		},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			decl := actionDefIn(t, parseDoc(t, "a.sysml", c.src))
+			_, err := lower.ToActionGraph(decl, nil)
+			ctx, root := nameresCtx(t, "a.sysml", c.src)
+			diags := ActionEndpointPass{}.Run(ctx, "a.sysml", root)
+			if c.fails != (err != nil) {
+				t.Fatalf("lowering error = %v, want %v", err, c.fails)
+			}
+			if !c.fails {
+				if len(diags) != 0 {
+					t.Fatalf("lowering accepts the endpoint but pass reports %+v", diags)
+				}
+				return
+			}
+			if len(diags) != 1 || diags[0].Code != CodeEndpointNotANode {
+				t.Fatalf("lowering rejects the endpoint but pass reports %+v", diags)
+			}
+			if covered := strings.TrimSpace(c.src[diags[0].Span.Offset : diags[0].Span.Offset+diags[0].Span.Len]); covered != c.endpoint {
+				t.Fatalf("expected the span to cover %s, it covers %q", c.endpoint, covered)
 			}
 		})
 	}

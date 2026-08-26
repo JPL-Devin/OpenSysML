@@ -52,6 +52,7 @@ func collectActionNodes(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph
 	}
 
 	sequenced := sequencedMembers(members)
+	// First pass: collect nodes.
 	for _, member := range members {
 		actualMember := unwrapMembership(member)
 

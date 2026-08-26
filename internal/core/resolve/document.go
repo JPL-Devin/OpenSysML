@@ -151,27 +151,23 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.resolveRelationships(endScope, end, others)
 			endpointKind := d.Kind == ast.UsageSuccession || d.Kind == ast.UsageTransition
 			resolveAsEndpoint := endpointKind && inStateMachine(endScope) && !declaresName
-			if end.Target != nil && !declaresName {
-				if qn, ok := end.Target.(*ast.QualifiedName); ok {
+			resolveEnd := func(target ast.Node) {
+				// A machine succession/transition end names a vertex like a transition endpoint.
+				if qn, ok := target.(*ast.QualifiedName); ok {
 					if resolveAsEndpoint {
 						r.ResolveEndpoint(endScope, qn)
 					} else {
 						r.ResolveQualified(endScope, qn)
 					}
 				} else {
-					r.resolveExpr(endScope, end.Target)
+					r.resolveExpr(endScope, target)
 				}
 			}
+			if end.Target != nil && !declaresName {
+				resolveEnd(end.Target)
+			}
 			if end.Reference != nil {
-				if qn, ok := end.Reference.(*ast.QualifiedName); ok {
-					if resolveAsEndpoint {
-						r.ResolveEndpoint(endScope, qn)
-					} else {
-						r.ResolveQualified(endScope, qn)
-					}
-				} else {
-					r.resolveExpr(endScope, end.Reference)
-				}
+				resolveEnd(end.Reference)
 			}
 		}
 		if d.FlowEnds != nil {

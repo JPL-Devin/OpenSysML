@@ -27,6 +27,7 @@ func (r *Resolver) resolveEdgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, m
 		return
 	}
 	if inStateMachine(scope) {
+		// In a machine, judge the end as a transition endpoint, including its kind.
 		r.ResolveEndpoint(scope, qn)
 		return
 	}
