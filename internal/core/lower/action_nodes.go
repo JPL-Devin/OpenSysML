@@ -51,6 +51,8 @@ func collectActionNodes(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph
 		return nil, nil, nil, fmt.Errorf("action must be Usage or Definition, got %T", actionDecl)
 	}
 
+	// A succession can bind a member with no name of its own by position, which is
+	// what puts a statement member (`then send …;`) in the token flow.
 	sequenced := sequencedMembers(members)
 	// First pass: collect nodes.
 	for _, member := range members {
@@ -77,6 +79,8 @@ func collectActionNodes(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph
 			}
 		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode,
 			*ast.SendStatement, *ast.TerminateStatement:
+			// A statement written among the action's own members with no succession
+			// binding it has no position in the token flow.
 			if !sequenced[actualMember] {
 				return nil, nil, nil, fmt.Errorf("%s written directly in an action body has no position in the token flow: declare it inside an action node", statementKeyword(n))
 			}
@@ -87,6 +91,8 @@ func collectActionNodes(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph
 
 	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
 	graph.Attributes = lowerAttributes(members)
+	// `first a then b;` names the node the flow starts at rather than declaring an
+	// initial node, so a itself is the initial node and holds the edge.
 	firstNode, err := resolveFirstNode(graph)
 	if err != nil {
 		return nil, nil, nil, err
