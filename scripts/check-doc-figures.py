@@ -20,10 +20,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# A quoted oracle total: an "only ours"/"only the pilot" bucket beside a number.
+# A quoted oracle total: one of the three oracles' buckets beside a number. The
+# differential names "only ours"/"only the pilot's"/"fully agreeing", the Xpect
+# suite "agree"/"wording-only"/"disagree", the rejection corpus "both reject" —
+# each written either "27 only ours" or, in a table cell, "only ours | 27".
+BUCKETS = (
+    r"only\s+(?:the\s+)?pilot(?:'s)?|only\s+ours|only\s+us|only\s+we"
+    r"|fully\s+agreeing|both\s+reject|both\s+accept"
+    r"|wording-only|location-only|disagree(?:ing)?|agree(?:ing)?"
+)
+NUMBER = r"\*{0,2}\d+\*{0,2}"
 FIGURE = re.compile(
-    r"(\d+\s+only\s+(the\s+)?pilot|only\s+(the\s+)?pilot('s)?\s*\|?\s*\*{0,2}\d+"
-    r"|\d+\s+only\s+ours|only\s+ours\s*\|?\s*\*{0,2}\d+)",
+    rf"(?:{NUMBER}\s+(?:{BUCKETS})|(?:{BUCKETS})\s*[|:]?\s*{NUMBER})",
     re.IGNORECASE,
 )
 
@@ -45,12 +53,7 @@ def scanned_files() -> list[Path]:
 
 
 def normalized(text: str) -> str:
-    """Collapse the disclaimer to one line however the page wrapped or quoted it.
-
-    Markdown lets the sentence break across lines, emphasise a word inside it and
-    sit inside a blockquote, so the phrase is searched for after dropping the
-    per-line quote markers, the emphasis runs and the line breaks.
-    """
+    """Drop blockquote markers, emphasis and line breaks so a wrapped disclaimer still matches."""
     lines = (re.sub(r"^\s*>+\s*", "", line) for line in text.splitlines())
     return " ".join(" ".join(lines).replace("*", "").replace("_", "").split())
 
