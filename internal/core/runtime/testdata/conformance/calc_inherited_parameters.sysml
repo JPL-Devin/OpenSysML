@@ -8,7 +8,7 @@ package test {
 		calc def Scale {
 			in x: Integer;
 			in factor: Integer = 2;
-			return x * factor;
+			x * factor
 		}
 	}
 }

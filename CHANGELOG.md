@@ -47,6 +47,20 @@ succession target. The **state** markers `initial <state>;` and
 `final <state>;` in a state body are unaffected, and so is `done <name>;`; both keep their
 existing warnings.
 
+### `return <expression>;` is no longer accepted in a calculation body
+
+**Breaking change.** A computed calculation result is written as the body's trailing
+expression, with no keyword — `calc def Add { in x; in y; x + y }` — which is what the
+standard grammar admits and what OpenSysML already executed. The OpenSysML-only spelling
+`return x + y;` had no production of its own; it is now a parse error suggesting the
+trailing-expression form, and the `nonstandard-notation` warning that reported it is gone.
+
+`return` itself is unchanged: it still declares the result parameter of a calculation, so
+`return r : ScalarValues::Real;`, `return r : ScalarValues::Real = x + 1;` and the bare
+`return r;` — a result parameter named `r` — all keep working. A trailing expression must be
+the last item of the body, so a body that wrote its `return` before other members needs
+those members moved above the expression.
+
 ### The Python client uses a private service of its own
 
 **Behavior change.** A `Connection` that names no address no longer attaches to whatever

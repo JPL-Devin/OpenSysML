@@ -213,6 +213,21 @@ func (p *Parser) atExprStart() bool {
 		(t.Kind == lexer.Keyword && exprStartKeywords[t.KeywordID])
 }
 
+// atPrefixOperator reports whether the current token is a prefix operator that
+// parseUnary reads (`-x`, `not x`).
+func (p *Parser) atPrefixOperator() bool {
+	t := p.peek()
+	return t.Kind == lexer.Plus || t.Kind == lexer.Minus || t.Kind == lexer.Tilde ||
+		p.atKeyword("not")
+}
+
+// atUnaryExprStart reports whether the current token can start an expression,
+// a prefix operator included. The bare `atExprStart` is the narrower set an
+// argument written without parentheses admits.
+func (p *Parser) atUnaryExprStart() bool {
+	return p.atExprStart() || p.atPrefixOperator()
+}
+
 // parsePostfixes applies zero or more postfix operators to expr.
 func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 	for {

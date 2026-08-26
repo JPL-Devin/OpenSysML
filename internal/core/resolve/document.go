@@ -203,8 +203,6 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// Final nodes have no references
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes have no references to resolve (names are just labels)
-	case *ast.ResultMember:
-		r.resolveExpr(scope, d.Expression)
 	case *ast.ConstraintMember:
 		r.resolveExpr(scope, d.Expression)
 		r.walkMembers(scope, d.Body)
@@ -308,6 +306,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			body = child
 		}
 		r.walkMembers(body, d.Body)
+	default:
+		// A bare expression member is the body's result, as in a calc body
+		// whose result is its last expression.
+		r.resolveExpr(scope, decl)
 	}
 }
 

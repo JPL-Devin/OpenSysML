@@ -8,6 +8,6 @@ package test {
 	calc scale {
 		in x: Integer;
 		in factor: Integer = 2;
-		return x * factor;
+		x * factor
 	}
 }

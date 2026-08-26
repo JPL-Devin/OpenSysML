@@ -8,7 +8,7 @@ from opensysml import typed as _t
 SYSML_GENERATOR_VERSION = "3"
 """Emission schema this module was generated with."""
 
-SYSML_MODEL_HASH = "sha256:39d1cdf3793c10674555d3cd10e45918071fd36794d5fb8152d5d50f87c14200"
+SYSML_MODEL_HASH = "sha256:5de1c3af83b4648d93eee56452426983c93c7caa2b399ba6f2e15024eca6925e"
 """Hash of the model source this module was generated from."""
 
 

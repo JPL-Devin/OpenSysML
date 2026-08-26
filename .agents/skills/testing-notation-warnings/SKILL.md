@@ -207,7 +207,7 @@ snippet and read the diagnostics. Asking for `%validate` prints
 Driving the REPL non-interactively (`%%` is needed because `printf` eats a single `%`):
 
 ```bash
-printf 'calc d { in a; return a * 2.0; }\nconstraint k { in x; x >= 0 }\n%%strict on\n%%quit\n' | bin/sysml
+printf 'state def S { state a; initial a; }\nconstraint k { in x; x >= 0 }\n%%strict on\n%%quit\n' | bin/sysml
 ```
 
 ## The notation pass runs even when the file has resolution errors
@@ -255,14 +255,14 @@ A fixture of only-legal spellings that stays silent is indistinguishable from a 
 fires. Put the must-warn and must-stay-silent shapes in **one** file and assert the exact set of
 warned line numbers. For the `return` / `assert` family the shapes that matter:
 
-- silent: `return a;`, `return P::q;`, `return (a);` (the parser unwraps the parens, so a
-  parenthesised bare reference is still a reference expression), `return result : Real = a;`
-  (a result *parameter declaration*, not a computed result), a keyword-less trailing condition
-  `{ in x : Real; x >= 0 }`, `assert constraint c1 : C;`, `assert satisfy R by q;`,
-  `assume #goal constraint m;`
-- warned: `return a * 2.0;`, `return 42;`
-- rejected outright (no longer a warning): `assert x >= 0;`, `assert not x < 0;`,
-  `assume x >= 0;`, `require x > 0;` — a keyworded inline condition is a parse error
+- silent: `return a;` and `return result : Real = a;` (result *parameter declarations*, not
+  computed results), a keyword-less trailing expression `{ in x : Real; x * 2.0 }`, a keyword-less
+  trailing condition `{ in x : Real; x >= 0 }`, `assert constraint c1 : C;`,
+  `assert satisfy R by q;`, `assume #goal constraint m;`
+- warned: the state markers `initial a;` / `final b;`, `transition a to b;`
+- rejected outright (no longer a warning): `return a * 2.0;`, `return 42;`, `assert x >= 0;`,
+  `assert not x < 0;`, `assume x >= 0;`, `require x > 0;` — a computed `return` expression and a
+  keyworded inline condition are parse errors
 
 ## Refereeing the boundary against the pinned pilot
 
@@ -295,9 +295,6 @@ parser rather than warned, matching the pinned pilot's
 contains both families, so always grep the whole keyword inventory of a fixture
 (`grep -n 'assert \|assume \|require '`) and reconcile *every* line against warned/not-warned rather
 than only checking the lines the task named.
-
-Likewise `*ast.ResultMember` (`return <expr>;` in a calc body) is separate from any
-requirement/action result spelling.
 
 ## Verify oracle baselines against a LIVE run, not just against the docs
 
