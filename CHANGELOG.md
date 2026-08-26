@@ -54,6 +54,21 @@ same service release, sharing its parse cache, and is stopped when the last of t
   so it no longer has any effect; the binary is cached in `~/.opensysml/bin` as before.
 - `filelock` and `psutil` are no longer runtime dependencies of the client.
 
+### What Flexo MMS does with our RDF is now measured, not argued
+
+An opt-in gate loads a model's Turtle into a running Flexo MMS stack through Layer 1's graph
+endpoint, reads it back through the SysML v2 API, and compares that against the same model
+posted through that service's own commit path. It records a per-element, per-property report
+that a human adjudicates, so the mapping's interoperability is a number that moves rather than
+a claim: today every element of the fixture is listed and 86 of its 142 properties are
+delivered, against 158 of 158 for the service's own payloads. The reference mapping documents
+what the difference is made of.
+
+The gate needs Docker and stays out of `go test ./...`: it skips loudly unless `FLEXO_INTEROP`
+is set, and with it set an absent stack fails instead of skipping.
+`.agents/skills/flexo-interop` documents the stack, the token and the traps. Nothing about the
+RDF encoding changed.
+
 ### Connect is the default server transport
 
 `sysml-grpc` now serves gRPC, gRPC-Web and the Connect protocol on one port, so a browser or
