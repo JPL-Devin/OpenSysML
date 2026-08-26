@@ -200,17 +200,19 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-examples` | 98 | 94 | 7 | 0 | 0 | 0 | 7 | 0 |
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
-| `testdata` | 15 | 8 | 36 | 53 | 32 | 1 | 3 | 20 |
-| `examples` | 22 | 15 | 14 | 42 | 0 | 7 | 7 | 35 |
+| `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
+| `examples` | 22 | 16 | 18 | 42 | 3 | 7 | 8 | 32 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **353** | **325** | **66** | **101** | **32** | **8** | **26** | **61** |
+| **Total** | **355** | **328** | **72** | **103** | **37** | **8** | **27** | **58** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
 `pilot-validation` 1 → **0**, with `kerml-examples` unmoved at 3. Our diagnostics on those roots
 therefore fall 20 → **10**. The
-`examples` root carries 7, and all 7 of its rows are one check firing on them: the
-non-standard-notation warning (6 `require` outside a requirement body, 1 `junction`).
+`examples` root carries 8: seven are one check firing on them, the non-standard-notation warning
+(6 `require` outside a requirement body, 1 `junction`), and the eighth is the
+library-inherited-name warning on `pseudostates-demo.sysml`:28 described in
+[Owned names against library-inherited members](#owned-names-against-library-inherited-members).
 It carried 64 before the two removals of alias notation: the succession shorthands retired 30 of
 them, and removing `initial <state>;` and `transition <src> to <tgt>;` retired 27 more, since the
 demos are now written in the standard spellings the warning does not fire on. **Those that remain are
@@ -362,10 +364,10 @@ Two things did move here, and one is a first:
   is correct and expected here.
 
 Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 1 `kind-mismatch`, 2
-`units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax; `testdata` 2
+`units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax, 1 `unmapped`; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 11 `kind-mismatch`, 4 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 11 syntax, 3 `kind-mismatch`, 14 `unmapped`, 7 `unresolved-reference` — all of them
+`examples` 11 syntax, 3 `kind-mismatch`, 11 `unmapped`, 7 `unresolved-reference` — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -403,13 +405,13 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **325 / 26 / 66** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **328 / 27 / 72** |
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **35** |
-| `examples`: fully agreeing | **15** | **15** |
-| `unmapped`, our side | **20** | **17** |
+| `examples`: only pilot | **40** | **32** |
+| `examples`: fully agreeing | **15** | **16** |
+| `unmapped`, our side | **20** | **23** |
 
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
 our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
@@ -2263,14 +2265,14 @@ redefinitions of the metadata definition's features (`MetadataBodyUsage` in the 
 second members of those names. Fixtures: `testdata/passes/inherited_name_library_base.sysml` (positive,
 two warnings) and `..._clean.sysml` (negative, silent on both sides).
 
-Movement, against a fresh clean-cache control of the same tree with the change stashed:
+Movement, against the clean-cache run this branch merges (the census `main` records):
 
 | Count | Control | This round |
 |---|---:|---:|
 | Files | 353 | 355 |
-| Fully agreeing | 324 | 327 |
+| Fully agreeing | 325 | 328 |
 | Agreed | 32 | 37 |
-| Only ours | 27 | 28 |
+| Only ours | 26 | 27 |
 | Only the pilot's | 61 | 58 |
 
 The two extra files are the two new fixtures, which both implementations agree on; they contribute the
@@ -2300,8 +2302,8 @@ Every root is compared a second time with the [declared errata](wave14-errata.md
 is the conformance statement; the corrected one is a secondary diagnostic and is reported beside it:
 
 ```
-353 file(s), 325 fully agreeing; 32 agreed, 26 only ours, 61 only the pilot's   (as published)
-353 file(s), 327 fully agreeing; 32 agreed, 24 only ours, 61 only the pilot's   (errata applied)
+355 file(s), 328 fully agreeing; 37 agreed, 27 only ours, 58 only the pilot's   (as published)
+355 file(s), 330 fully agreeing; 37 agreed, 25 only ours, 58 only the pilot's   (errata applied)
 ```
 
 Two corrections lie inside these roots — F82, `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38
