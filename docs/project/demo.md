@@ -82,7 +82,7 @@ package Rover {
     calc rangeKm {
         in charge : Real;
         in wattHoursPerKm : Real;
-        return charge / wattHoursPerKm;
+        charge / wattHoursPerKm
     }
 
     constraint MassBudget {
