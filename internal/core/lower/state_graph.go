@@ -636,13 +636,12 @@ func (g *StateGraph) parallelRegions(members []ast.Node, parent *ast.StateNode, 
 	for _, member := range members {
 		actual := unwrapMembership(member)
 		if !isParallelRegionMember(actual) {
-			switch actual.(type) {
+			switch actual := actual.(type) {
 			case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation,
 				*ast.EntryMember, *ast.DoMember, *ast.ExitMember:
 				continue
 			case *ast.Usage:
-				usage := actual.(*ast.Usage)
-				if usage.Kind == ast.UsageAttribute || usage.Kind == ast.UsagePort {
+				if actual.Kind == ast.UsageAttribute || actual.Kind == ast.UsagePort {
 					continue
 				}
 				return nil, fmt.Errorf("parallel state body contains unsupported member %T", actual)
