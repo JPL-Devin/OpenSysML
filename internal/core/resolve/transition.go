@@ -101,10 +101,20 @@ func ActionNodeInScope(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *
 		return nil, nil, false, false
 	}
 	name := qn.Parts[len(qn.Parts)-1].Text
-	if _, ok := body.LookupLocal(name); ok {
-		return nil, nil, false, false
+	if len(qn.Parts) == 1 {
+		if _, ok := body.LookupLocal(name); ok {
+			return nil, nil, false, false
+		}
 	}
-	return inheritedActionNode(body, name, make(map[*symbols.Symbol]bool))
+	var qualifier *symbols.Symbol
+	if len(qn.Parts) > 1 {
+		var ok bool
+		qualifier, ok = lookupScopeParts(body.Parent(), qn.Parts[:len(qn.Parts)-1])
+		if !ok {
+			return nil, nil, false, false
+		}
+	}
+	return inheritedActionNode(body, name, qualifier, make(map[*symbols.Symbol]bool))
 }
 
 func enclosingActionScope(scope *symbols.Scope) *symbols.Scope {
@@ -123,7 +133,7 @@ func enclosingActionScope(scope *symbols.Scope) *symbols.Scope {
 	return nil
 }
 
-func inheritedActionNode(body *symbols.Scope, name string, seen map[*symbols.Symbol]bool) (ast.Node, *symbols.Scope, bool, bool) {
+func inheritedActionNode(body *symbols.Scope, name string, qualifier *symbols.Symbol, seen map[*symbols.Symbol]bool) (ast.Node, *symbols.Scope, bool, bool) {
 	var rels []*ast.Relationship
 	switch n := body.Node().(type) {
 	case *ast.Definition:
@@ -136,7 +146,7 @@ func inheritedActionNode(body *symbols.Scope, name string, seen map[*symbols.Sym
 	var uncertain bool
 	for _, rel := range rels {
 		if rel == nil || (rel.Kind != ast.RelSpecializes && rel.Kind != ast.RelTyping &&
-			rel.Kind != ast.RelFeaturedBy) {
+			rel.Kind != ast.RelSubsets && rel.Kind != ast.RelRedefines) {
 			continue
 		}
 		target := rel.Target
@@ -150,6 +160,9 @@ func inheritedActionNode(body *symbols.Scope, name string, seen map[*symbols.Sym
 		super, ok := lookupScopeQualified(body.Parent(), qn)
 		if !ok || super == nil {
 			uncertain = true
+			continue
+		}
+		if qualifier != nil && super != qualifier {
 			continue
 		}
 		if seen[super] {
@@ -166,7 +179,7 @@ func inheritedActionNode(body *symbols.Scope, name string, seen map[*symbols.Sym
 			}
 			continue
 		}
-		found, foundScope, inherited, unknown := inheritedActionNode(superBody, name, seen)
+		found, foundScope, inherited, unknown := inheritedActionNode(superBody, name, qualifier, seen)
 		if inherited {
 			return found, foundScope, true, uncertain || unknown
 		}
@@ -175,11 +188,29 @@ func inheritedActionNode(body *symbols.Scope, name string, seen map[*symbols.Sym
 	return nil, nil, false, uncertain
 }
 
+func lookupScopeParts(scope *symbols.Scope, parts []ast.NameSegment) (*symbols.Symbol, bool) {
+	if scope == nil || len(parts) == 0 {
+		return nil, false
+	}
+	partsText := make([]string, len(parts))
+	for i, part := range parts {
+		partsText[i] = part.Text
+	}
+	return lookupScopePartsText(scope, partsText)
+}
+
 func lookupScopeQualified(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 	if scope == nil || qn == nil || len(qn.Parts) == 0 {
 		return nil, false
 	}
 	parts := qualifiedParts(qn)
+	return lookupScopePartsText(scope, parts)
+}
+
+func lookupScopePartsText(scope *symbols.Scope, parts []string) (*symbols.Symbol, bool) {
+	if scope == nil || len(parts) == 0 {
+		return nil, false
+	}
 	for s := scope; s != nil; s = s.Parent() {
 		sym, ok := s.LookupLocal(parts[0])
 		if !ok {

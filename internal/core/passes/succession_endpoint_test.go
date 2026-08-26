@@ -602,6 +602,51 @@ func TestActionEndpointPassInheritedNodes(t *testing.T) {
 	}
 }
 
+func TestActionEndpointPassIgnoresFeatureChainsThroughNonNodes(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{
+			name: "typed part chain",
+			src: `package P {
+				part def Vehicle { action doorClosed; }
+				part def Driver { action driverReady; }
+				action def Startup {
+					part vehicle : Vehicle;
+					part driver : Driver;
+					first vehicle.doorClosed then driver.driverReady;
+				}
+			}`,
+		},
+		{
+			name: "plain non-node remains diagnosed",
+			src: `package P {
+				part def Vehicle { action doorClosed; }
+				action def Startup {
+					part vehicle : Vehicle;
+					attribute flag = 0;
+					first vehicle.doorClosed then flag;
+				}
+			}`,
+			want: 1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, root := nameresCtx(t, "a.sysml", test.src)
+			got := ActionEndpointPass{}.Run(ctx, "a.sysml", root)
+			if len(got) != test.want {
+				t.Fatalf("got %d diagnostics %+v, want %d", len(got), got, test.want)
+			}
+			if test.want == 1 && !strings.Contains(got[0].Message, "flag") {
+				t.Fatalf("diagnostic does not name flag: %+v", got[0])
+			}
+		})
+	}
+}
+
 // The tier agrees with the lowerer about which endpoint names are implicit: a
 // name lowering resolves is silent here, and a name lowering fails on is
 // reported here, so the diagnostic arrives at validation time instead.

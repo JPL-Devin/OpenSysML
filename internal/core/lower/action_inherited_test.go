@@ -44,6 +44,25 @@ func TestToActionGraphInheritedActionNodeThroughTwoSpecializations(t *testing.T)
 	}
 }
 
+func TestToActionGraphQualifiedInheritedActionNode(t *testing.T) {
+	src := `
+		action def Base { action a; }
+		action def Derived :> Base { first start then Base::a; }
+	`
+	derived, scope, _ := inheritedActionDecl(t, src, "Derived")
+	graph, err := ToActionGraph(derived, scope)
+	if err != nil {
+		t.Fatalf("ToActionGraph: %v", err)
+	}
+	inherited := namedNode(graph, "a")
+	if inherited == nil {
+		t.Fatal("qualified inherited action node was not collected")
+	}
+	if edges := graph.Edges[graph.Initial]; len(edges) != 1 || edges[0].Target != inherited {
+		t.Fatalf("initial edges = %v, want one edge to qualified inherited a", edges)
+	}
+}
+
 func TestToActionGraphLocalActionShadowsInheritedNode(t *testing.T) {
 	src := `
 		action def Base { action a; }

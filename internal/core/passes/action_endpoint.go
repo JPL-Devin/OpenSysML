@@ -152,6 +152,11 @@ func (c *actionEndpointChecker) checkEndpoint(
 	if ref == nil || lower.ActionEndpointAccepted(nodes, hasInitial, ref, sourceEnd) {
 		return
 	}
+	// A feature chain rooted outside the action graph is legal notation; its
+	// runtime support belongs to feature-chain execution rather than this check.
+	if _, ok := ref.(*ast.FeatureChainExpr); ok {
+		return
+	}
 	qn := actionEndpointName(ref)
 	if qn == nil {
 		return

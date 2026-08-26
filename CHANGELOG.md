@@ -19,6 +19,9 @@ edges. The same routing removes a false unresolved-reference diagnostic for
 `internal/core/parser/testdata/parse/state_history_entry_exit.sysml`,
 `internal/core/runtime/testdata/conformance/state_deep_history.sysml`, and
 `internal/core/runtime/testdata/conformance/state_shallow_history.sysml`.
+Feature-chain endpoints rooted in a part usage are accepted during validation,
+while execution still reports the existing lowering error because invoking an
+action through that feature chain is not yet supported.
 
 ### RDF output states element ids and ownership
 
