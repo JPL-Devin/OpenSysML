@@ -5,7 +5,7 @@
 **Reference:** the OMG pilot implementation's own Xpect test suites, [`org.omg.kerml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-05/org.omg.kerml.xpect.tests) and [`org.omg.sysml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-05/org.omg.sysml.xpect.tests), at release `2026-05` — the same pin as the corpora and the reference validators (`scripts/pilot-pin.sh`)
 **Provision:** `./scripts/download-pilot-xpect.sh` (writes `build/pilot-xpect-corpus/{kerml,sysml}`, gitignored, not vendored — under `build/` rather than `examples/` because the `.kerml`/`.sysml` models the suites ship are inputs to this harness, and everything that walks `examples/` would otherwise adopt them)
 **Run:** `go run ./cmd/pilot-xpect` (writes `build/pilot-xpect/pilot-xpect.txt` and `build/pilot-xpect/pilot-xpect.json`)
-**Baseline:** the last committed run is [pilot-xpect-baseline.json](pilot-xpect-baseline.json), which carries every non-agreeing row, so a later run can be diffed against it
+**Baseline:** the last committed run is [pilot-xpect-baseline.json](pilot-xpect-baseline.json), which carries every non-agreeing row, so a later run can be diffed against it; `-update` re-records it and `-check` fails unless a fresh run reproduces it
 **Status:** advisory only — nothing here gates CI, for the same reason [pilot-differential.md](pilot-differential.md) does not: the corpus is an unvendored network fetch at the pinned tag, and this is a report, not a ratchet
 
 **Labels:** the short labels in this record are internal cross-references, not specification or
@@ -202,8 +202,16 @@ duplicate-member-name, visibility and wave-9C library rules written against the 
 wording, so they match by construction rather than by luck. `noErrors` and `linkedName` are
 wording-independent, and they are where this oracle adjudicates most directly.
 
+Every figure above is checked against the committed baseline by
+`TestPilotXpectDocumentCountsMatchBaseline`, and the baseline's own provenance — the pin, the
+suite digests and the declared errata — by
+`TestCommittedBaselineStatesThisRepositorysProvenance`; both read only committed files. A daily
+Java-backed run re-checks the measurement itself, as described in
+[pilot-differential.md](pilot-differential.md#how-this-record-is-kept-true).
+
 Movement since the first run of this harness (the harness itself is unchanged; every difference is a
-change in our behaviour):
+change in our behaviour). The `Now` column is checked against the committed baseline; the `First
+run` column is that run's own measurement:
 
 | Kind | First run | Now | What moved |
 |---|---|---|---|
@@ -216,8 +224,9 @@ change in our behaviour):
 **These tables and the baseline are a fresh-cache run after the transition-guard and KerML
 subsetting-metaclass rules became element-scoped.** Agreement is unchanged, while four rows now
 carry their own diagnostics: `same-location` 7 → **10**, `same-line` 6 → **7**, and
-`elsewhere-in-file` 6 → **2**. The differential census is byte-identical, including 84 only-ours
-diagnostics. The largest movement in wave 11 was detection, not classification: the 11
+`elsewhere-in-file` 6 → **2**. The differential census was byte-identical across that round,
+including the 84 only-ours diagnostics it measured then; the current figure is in
+[pilot-differential.md](pilot-differential.md)'s Results table. The largest movement in wave 11 was detection, not classification: the 11
 `severity-differs` `errors` rows are **0**, because wave 11A implemented the usage-typing and
 specialization rules the pilot declares there instead of adjusting a severity, and 11F canonicalized
 the resolver's inherited-name warning that had been standing in their place. `errors` silence falls

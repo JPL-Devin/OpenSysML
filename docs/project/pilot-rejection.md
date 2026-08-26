@@ -104,6 +104,7 @@ It writes `build/pilot-reject/pilot-reject.txt` and `build/pilot-reject/pilot-re
 JSON is committed as [pilot-rejection-baseline.json](pilot-rejection-baseline.json); the reports
 carry no timestamps or absolute paths, so repeated runs are byte-identical
 (`cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.json`).
+`-update` records a run as that baseline and `-check` fails unless a fresh run reproduces it.
 
 ## Totals
 
@@ -319,6 +320,13 @@ this document after applying the three approved closures to
 [pilot-rejection-baseline.json](pilot-rejection-baseline.json). The README and skill remain
 checked against that committed baseline until its separate refresh. The guard reads only committed
 files — no validators or downloads — and checks that the gap table enumerates the current report.
+
+`TestCommittedBaselineStatesThisRepositorysProvenance` guards the baseline's own `provenance`
+block — the pinned tag and artifact, each validator bridge's source digest, and the negative
+corpus's digest and case count — against what this repository currently pins, and the daily
+`.github/workflows/oracle-reproduction.yml` re-runs this oracle with `-check` where Java is
+available. [pilot-differential.md](pilot-differential.md#how-this-record-is-kept-true) describes
+both and what each of them cannot catch.
 
 
 ## The declared errata overlay

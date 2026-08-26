@@ -18,7 +18,7 @@ func TestRunDispatchesBothLanguagesInOneRoot(t *testing.T) {
 	validator, kermlValidator := writeMixedRoot(t, repo, sysmlLog, kermlLog)
 
 	out := filepath.Join(repo, "out")
-	if err := run(repo, validator, kermlValidator, "", out, 0); err != nil {
+	if err := run(repo, validator, kermlValidator, "", out, 0, false, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,7 +64,7 @@ func TestRunReportsTheMissingKerMLValidator(t *testing.T) {
 	repo := t.TempDir()
 	validator, _ := writeMixedRoot(t, repo, filepath.Join(repo, "sysml-args.txt"), filepath.Join(repo, "kerml-args.txt"))
 
-	err := run(repo, validator, filepath.Join(repo, "absent", "validate-kerml"), "", filepath.Join(repo, "out"), 0)
+	err := run(repo, validator, filepath.Join(repo, "absent", "validate-kerml"), "", filepath.Join(repo, "out"), 0, false, false)
 	if err == nil || !strings.Contains(err.Error(), "download-pilot-kerml-validator.sh") {
 		t.Fatalf("run() error = %v", err)
 	}
@@ -85,6 +85,12 @@ func writeMixedRoot(t *testing.T, repo, sysmlLog, kermlLog string) (string, stri
 		}
 		return path
 	}
+
+	// The run records its provenance, so a synthetic repository needs the pin
+	// and the bridge sources it identifies its inputs by.
+	write("scripts/pilot-pin.sh", "PILOT_TAG=\"${PILOT_TAG:-2026-05}\"\nPILOT_ARTIFACT_VERSION=\"${PILOT_ARTIFACT_VERSION:-0.60.1}\"\n", 0o644)
+	write("scripts/pilot-sysml-validator/ValidateSysML.java", "class ValidateSysML {}\n", 0o644)
+	write("scripts/pilot-kerml-validator/ValidateKerML.java", "class ValidateKerML {}\n", 0o644)
 
 	write("mixed/Model.sysml", "package P;\n", 0o644)
 	write("mixed/Lib.kerml", "package Q;\n", 0o644)
