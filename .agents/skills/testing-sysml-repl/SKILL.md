@@ -2075,6 +2075,57 @@ Three cheap, high-signal sweeps:
 Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
 (`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
 
+### Calc-body member dispatch (trailing result expressions vs declarations)
+
+A calculation body's *last member* may be a bare expression that is the calc's result
+(`calc def Add { in x; in y; x + y }`). The parser decides per member whether it is looking at a
+declaration or at that result expression, and every change to that predicate has broken a
+neighbouring shape at least once. Test all four families on the same build, because they are
+independent code paths and passing one says nothing about the others:
+
+1. **Prefix operators** at the start of a trailing expression: `-x`, `+x`, `~x`, `not flag`.
+2. **Parenthesis-less arrow invocations followed by a binary operator**: `xs->size - 1`,
+   `xs->size + 1`, `-xs->size`, `xs->reduce '*'`, `xs->collect Twice`, `xs->includes(3)`. These
+   share the argument-start predicate with the prefix family, so broadening one has silently
+   broken the other (`expected an expression` on `xs->size - 1`).
+3. **Word (keyword) binary operators**, which lex as keywords and so can be mistaken for a
+   declaration head: `a and b`, `x or y`, `x xor y`, `x implies y`, `x as Real`,
+   `x istype Real`, `x hastype Real`, `x meta …`. The failure signature is
+   `error: expected a body member` with the caret on the keyword.
+4. **Genuine declarations that must still win**: `x : Real;` inside the same body, `return r;`,
+   `return r : Real = a;` — plus the quoted-keyword name form `in 'and'; 'and'`, which must stay
+   a valid declaration *and* reference.
+
+Adversarial cases that must diagnose and never panic: `a and;`, `a as;`, `a and b and`,
+`a implies`, an unquoted `in and;` (expect `"and" is a reserved keyword, not a name … write
+'and' to use it as a name`). Wrap each in `timeout 20` and assert on the *exit code plus the
+first diagnostic line*, not just "it printed something".
+
+Validation is not enough for these — evaluate them too, since only execution proves the trailing
+expression became the result: `./bin/sysml -calc 'p::andc(true,false)' -calc 'p::orc(true,false)'
+… file.sysml` accepts repeated `-calc` flags and prints one `= value` per invocation. Two
+operators parse and validate but are **not evaluable** on any revision (verify against a parent
+binary before reporting them as a regression): `~` → `unsupported operator: '~': bitwise
+complement is declared by no function library the runtime applies`, and `as` →
+`unsupported operator: 'as': a cast needs the runtime type of a value, which values do not carry
+yet`.
+
+Fixture hygiene for these files: use `public import ScalarValues::*;` (a bare
+`import ScalarValues::*;` is itself a diagnostic), and import `SequenceFunctions` /
+`ControlFunctions` / `NumericalFunctions` for arrow and operator-name shapes. Trailing
+expressions *are* name-resolved as of PR #581, so a body that validated clean on an older binary
+can now report `unresolved reference: <name>` — that is the intended tightening, not a bug. The
+committed conformance fixtures `internal/core/runtime/testdata/conformance/calc_simple_add.sysml`
+and `calc_unary_operators.sysml` lack the ScalarValues import and therefore exit 2 on
+`unresolved reference: Integer/Boolean` **on the parent binary too**; judge such a run by the
+absence of parse/`return`-related diagnostics, not by the exit code.
+
+REPL trap when testing refusals: after **any** submission fails to parse, the poisoned line
+stays in the session buffer, so a later `%eval <symbol>` reports `error: parse failed: <first
+error>` for the rest of the session (reproducible on old binaries — pre-existing). `%eval 1 + 1`
+and fresh `calc` declarations still work, so this is not a crash; restart `bin/sysml` between
+error cases instead of assuming the buffer recovers.
+
 ### Naming changes that reach lowering and the runtime
 
 When a parser change alters which declarations carry a name (e.g. `ast.EffectiveName` deriving the
