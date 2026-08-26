@@ -14,6 +14,10 @@ project; the numbering is chronological and carries no external meaning. `F<n>` 
 follow-up table in [pilot-differential.md](pilot-differential.md), and `K<n>`/`S<n>` its KerML and
 SysML diagnostic classes. A reader who only wants the verdicts can ignore all of them.
 
+**Differential figures quoted in this record are as measured at the round they document, not the
+current baseline** — the current one is the generated block in [README](../../README.md) and
+[architecture](../internals/architecture.md), regenerated and gated by `make docs-counts`.
+
 [pilot-differential.md](pilot-differential.md) compares us against *observed* pilot behaviour: it runs
 the pinned validator and records what it says. That answers "do we agree with the reference?" but not
 "was the reference's behaviour intended?" — the question that has kept several rows there advisory.

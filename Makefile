@@ -162,9 +162,10 @@ docs-counts: ## Regenerate and verify all derived documentation counts
 	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts
 	@echo "✓ Documentation counts and refereed figures are current"
 
-docs-check: ## Verify documentation links, and that reader-facing pages cite no internal label
+docs-check: ## Verify documentation links, that reader-facing pages cite no internal label, and that quoted oracle figures name their round
 	$(PYTHON) scripts/check-doc-links.py
 	$(PYTHON) scripts/check-doc-ids.py
+	$(PYTHON) scripts/check-doc-figures.py
 
 docs-install: ## Install the documentation site toolchain
 	$(PYTHON) -m pip install -r docs-requirements.txt

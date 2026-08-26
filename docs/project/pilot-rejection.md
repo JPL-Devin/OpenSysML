@@ -108,6 +108,9 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 
 ## Totals
 
+**Only this section states the current baseline**; the per-round figures further down are as
+measured at their own round and are not the current baseline.
+
 Under the default `-conformance auto`:
 
 ```

@@ -185,6 +185,12 @@ also listed in a table of its own, rather than being mapped to something adjacen
 report look tidy. Tuples are compared as multisets, so when one side reports a tuple three
 times and the other twice, two are agreement and the third stays a disagreement.
 
+**Only the Results table below states the current baseline.** Every other figure on this page —
+the per-round tables, the movement history, the follow-up rows — is as measured at its own round
+and is not the current baseline; the [README](../../README.md) and
+[architecture](../internals/architecture.md) blocks restate the current one from the committed
+baseline, regenerated and gated by `make docs-counts`.
+
 Buckets per file: **agreement**, **only ours** (candidate false positives), **only the
 pilot's** (candidate gaps), and **severity-only** — a (line, category) both implementations
 flag with different severities. The last exists so such a pair is neither counted as agreement
