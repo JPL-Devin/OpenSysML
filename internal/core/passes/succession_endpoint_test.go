@@ -157,6 +157,12 @@ func TestEndpointsThatResolveStaySilent(t *testing.T) {
 			state beta;
 			then work;
 		} }`,
+		"machine end naming no vertex": `package P { state def M {
+			attribute t = 0;
+			entry; then s1;
+			state s1;
+			then t;
+		} }`,
 		"end outside a machine or an action body": `package P { part def D {
 			action def A { action x; }
 			perform action p;
