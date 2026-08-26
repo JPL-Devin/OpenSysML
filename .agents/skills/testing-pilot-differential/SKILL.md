@@ -22,8 +22,8 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
   (written by the new script), not from the DeciSym `pom.xml`.
 - `-validator /nonexistent` now says `run ./scripts/download-pilot-sysml-validator.sh`.
 - Measured after removing the state initial marker and the `to` transition spelling, with a fresh library cache: `353 file(s), 324 fully agreeing; 32 agreed,
-  28 only ours, 87 only the pilot's`, JSON totals `openSysMLDiagnostics 70 / pilotDiagnostics
-  129 / severityMismatch 10`; ~70 s wall, byte-identical across runs *and* after a from-scratch
+  27 only ours, 82 only the pilot's`, JSON totals `openSysMLDiagnostics 68 / pilotDiagnostics
+  123 / severityMismatch 9`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
 - **`cmd/pilot-diff` has no `-jobs` flag.** Its full flag set is
@@ -136,7 +136,7 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
 but only while the baseline is current. Check that first. As of the rebaseline after removing the
 `initial <state>;` and `transition <source> to <target>;` alias notation it **is**
-current: a live run gives `353 file(s), 324 fully agreeing; 32 agreed, 28 only ours, 87 only the
+current: a live run gives `353 file(s), 324 fully agreeing; 32 agreed, 27 only ours, 82 only the
 pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
 "Results" table matches. That rebaseline covers two rounds, because the succession-shorthand
 removal before it landed without refreshing the baseline; a control run of its merge commit gives

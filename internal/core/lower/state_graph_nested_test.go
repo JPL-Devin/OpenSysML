@@ -135,13 +135,11 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 				state left {
 					entry; then lstart;
 					state lstart;
-					state lstart;
 					final ldone;
 					succession first lstart then ldone;
 				}
 				state right {
 					entry; then rstart;
-					state rstart;
 					state rstart;
 					final rdone;
 					succession first rstart then rdone;

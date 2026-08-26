@@ -37,9 +37,9 @@ func TestContextualWordsDifferPerLanguage(t *testing.T) {
 	}
 	// `on` is a literal in neither pinned grammar and syntax in no position of
 	// ours, so it is a plain name and must not be offered as syntax. `initial`
-	// is the same since neither the action node nor the state marker it spelled
-	// is accepted.
-	for _, w := range []string{"on", "initial"} {
+	// and `region` are the same now that neither the markers they spelled nor the
+	// orthogonal-region member is accepted.
+	for _, w := range []string{"on", "initial", "region"} {
 		if has(sysml, w) || has(kerml, w) {
 			t.Errorf("%q is offered as a contextual word; it is an ordinary name", w)
 		}
