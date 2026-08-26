@@ -64,6 +64,12 @@ surface cannot rot.
 any published client speaks. The transports reference says so, and the binary's wiring of it is
 now covered by a test.
 
+### One dependency fewer
+
+`github.com/fsnotify/fsnotify` is no longer a dependency. It was linked for a filesystem
+watcher nothing reached: the language server is told which files changed by its client, and no
+command watches a directory. Building from source now resolves one module less.
+
 ### Fixed
 
 The conformance comparer no longer compares integral fields within the tolerance it allows a
