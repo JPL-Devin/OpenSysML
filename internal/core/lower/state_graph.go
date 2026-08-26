@@ -526,6 +526,9 @@ func collectStateContents(graph *StateGraph, state *ast.StateNode, scope *symbol
 
 	// Collect states in orthogonal regions
 	for _, region := range state.Regions {
+		if graph.regionDecl[region] != nil {
+			continue
+		}
 		if err := collectRegionStates(graph, region, state, graph.regionScope(scope, region)); err != nil {
 			return err
 		}

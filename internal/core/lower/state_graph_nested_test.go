@@ -350,13 +350,14 @@ func TestToStateGraph_NestedParallelRegions(t *testing.T) {
 				initial start;
 				state start;
 				state outer parallel {
-					state left {
-						entry; then idle;
-						state idle;
+					state a {
+						do action work { }
+						entry; then a1;
+						state a1;
 					}
-					state right {
-						entry; then ready;
-						state ready;
+					state b {
+						entry; then b1;
+						state b1;
 					}
 				}
 				start then outer;
@@ -380,6 +381,24 @@ func TestToStateGraph_NestedParallelRegions(t *testing.T) {
 		}
 		if graph.RegionInitials[region] == nil {
 			t.Errorf("region %q has no initial", region.Name)
+		}
+	}
+	for _, name := range []string{"a1", "b1"} {
+		var matches []*ast.StateNode
+		for _, state := range graph.States {
+			if state.Name == name {
+				matches = append(matches, state)
+			}
+		}
+		if len(matches) != 1 {
+			t.Fatalf("%s states = %d, want one", name, len(matches))
+		}
+		parent := graph.ParentState[matches[0]]
+		if parent == nil || !graph.HiddenStates[parent] {
+			t.Fatalf("%s parent = %v, want hidden region owner", name, parent)
+		}
+		if graph.RegionOf[matches[0]] == nil {
+			t.Fatalf("%s has no owning region", name)
 		}
 	}
 }
