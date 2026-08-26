@@ -127,6 +127,12 @@ requirement body — a requirement body admits no keyword-less condition
 (`RequirementBodyItem`, `:2039-2047`). A removed negation keeps its truth value
 as `not (…)` inside the condition.
 
+A spelling that is a pure alias of a standard construct is removed rather than
+warned, so it is no longer accepted and has no row here: `return <expression>;`
+in a calculation body is now a parse error, and a computed result is written as
+the body's trailing expression (`ResultExpressionMember`, `SysML.xtext:1967`).
+`return` itself is unchanged as the result parameter declaration.
+
 ### KerML-only notation in a `.sysml` file — warning `kerml-notation`
 
 `namespace` is a literal in `KerML.xtext` only (`:125`); `SysML.xtext` has none.

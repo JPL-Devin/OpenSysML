@@ -148,7 +148,7 @@ Metaclass names with no counterpart in the OMG vocabulary are typed in the
 `sysx:` namespace rather than `sysml:`, so a consumer can tell them from the
 standard metaclasses: `sysx:Alias`, `sysx:FilterMember`,
 `sysx:MultiplicityDeclaration`, `sysx:ConstraintMember`, `sysx:AssumeMember`,
-`sysx:RequireMember`, `sysx:ResultMember`, and the behavioral ones listed under
+`sysx:RequireMember`, and the behavioral ones listed under
 [Behavior](#behavior).
 
 Comments, documentation and textual representations convert as their own
@@ -422,7 +422,7 @@ condition as `sysx:condition`: a constraint body's conditions (`assert`,
 `sysml:isNegated`), a nested `assert constraint [name] { … }`, a requirement's
 `assume`/`require` members in all three forms (an expression, the constraint
 they name, or a body), `subject s : X;` as the `sysml:SubjectMembership` it
-declares, and `return <expr>;`. The `assert` prefixing a named usage
+declares. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
 themselves are notation, with the limits stated above.
 

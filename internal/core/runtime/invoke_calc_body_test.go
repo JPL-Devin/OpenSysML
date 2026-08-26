@@ -94,7 +94,7 @@ package test {
 	}
 	calc def twice {
 		in n;
-		return factorial(n) + factorial(n);
+		factorial(n) + factorial(n)
 	}
 }
 `

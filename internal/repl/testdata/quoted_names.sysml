@@ -9,7 +9,7 @@ package 'My Pkg' {
 	calc 'add up' {
 		in x;
 		in y;
-		return x + y;
+		x + y
 	}
 
 	constraint 'light enough' {

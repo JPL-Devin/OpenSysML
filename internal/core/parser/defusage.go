@@ -2222,6 +2222,9 @@ func (p *Parser) parseCaseBody() []ast.Node {
 // declaration.
 func (p *Parser) atResultExpression() bool {
 	t := p.peek()
+	if p.atPrefixOperator() {
+		return true
+	}
 	if (t.Kind == lexer.Keyword && !exprStartKeywords[t.KeywordID]) || t.Kind == lexer.LBrace {
 		return false
 	}

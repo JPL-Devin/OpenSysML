@@ -79,8 +79,7 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 	graph := &ActionGraph{
 		Scope:     scope,
 		Nodes:     make([]ast.Node, 0, len(members)),
-		Edges:     make(map[ast.Node][]ast.Node),
-		Guards:    make(map[ast.Node]map[ast.Node]ast.Node),
+		Edges:     make(map[ast.Node][]ActionEdge),
 		DataFlows: make(map[ast.Node][]ObjectFlow),
 		Bodies:    make(map[ast.Node][]Statement),
 		Accepts:   make(map[ast.Node]Accept),
@@ -121,7 +120,7 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 		graph.Initial = graph.Nodes[0]
 	}
 	for i := 0; i+1 < len(graph.Nodes); i++ {
-		graph.Edges[graph.Nodes[i]] = []ast.Node{graph.Nodes[i+1]}
+		graph.Edges[graph.Nodes[i]] = []ActionEdge{{Target: graph.Nodes[i+1]}}
 	}
 	return graph
 }

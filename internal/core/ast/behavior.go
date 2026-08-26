@@ -396,13 +396,6 @@ func (*CallEvent) triggerEvent() {}
 
 // Phase C1: Calculation and Constraint Body Members
 
-// ResultMember represents a return expression in a calculation body.
-// Syntax: return <expression>;
-type ResultMember struct {
-	NodeBase
-	Expression Node // the value expression
-}
-
 // ConstraintMember represents a condition of a constraint body.
 // Syntax: <expression> or assert [not] <reference>; or assert constraint { … }
 type ConstraintMember struct {

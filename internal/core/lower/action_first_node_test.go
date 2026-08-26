@@ -26,7 +26,7 @@ func TestToActionGraph_FirstNamesADeclaredNode(t *testing.T) {
 	if graph.Initial != s1 {
 		t.Errorf("initial node = %s, want s1", nodeDescription(graph.Initial))
 	}
-	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0] != s2 {
+	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0].Target != s2 {
 		t.Errorf("s1 edges = %v, want [s2]", edges)
 	}
 	for _, node := range graph.Nodes {
@@ -54,7 +54,7 @@ func TestToActionGraph_FirstNamesADeclaredNodeSplit(t *testing.T) {
 	if graph.Initial != s1 {
 		t.Errorf("initial node = %s, want s1", nodeDescription(graph.Initial))
 	}
-	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0] != s2 {
+	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0].Target != s2 {
 		t.Errorf("s1 edges = %v, want [s2]", edges)
 	}
 }
@@ -76,7 +76,7 @@ func TestToActionGraph_FirstDeclaresItsOwnInitialNode(t *testing.T) {
 	if initial.Name != "start" {
 		t.Errorf("initial node name = %q, want %q", initial.Name, "start")
 	}
-	if edges := graph.Edges[initial]; len(edges) != 1 || edges[0] != nodeNamed(t, graph, "s1") {
+	if edges := graph.Edges[initial]; len(edges) != 1 || edges[0].Target != nodeNamed(t, graph, "s1") {
 		t.Errorf("initial edges = %v, want [s1]", edges)
 	}
 }
@@ -121,10 +121,10 @@ func TestToActionGraph_GuardOnTheSuccessionOutOfTheFirstNode(t *testing.T) {
 	s1 := nodeNamed(t, graph, "s1")
 	s2 := nodeNamed(t, graph, "s2")
 
-	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0] != s2 {
+	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0].Target != s2 {
 		t.Fatalf("s1 edges = %v, want [s2]", edges)
 	}
-	if graph.Guards[s1][s2] == nil {
+	if graph.Edges[s1][0].Guard == nil {
 		t.Error("the guard the member states was not carried onto the succession")
 	}
 }
@@ -145,7 +145,10 @@ func TestToActionGraph_GuardOnASuccessionOutOfAnActionNode(t *testing.T) {
 	s1 := nodeNamed(t, graph, "s1")
 	s2 := nodeNamed(t, graph, "s2")
 
-	if graph.Guards[s1][s2] == nil {
+	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0].Target != s2 {
+		t.Fatalf("s1 edges = %v, want [s2]", edges)
+	}
+	if graph.Edges[s1][0].Guard == nil {
 		t.Error("the guard the member states was not carried onto the succession")
 	}
 }

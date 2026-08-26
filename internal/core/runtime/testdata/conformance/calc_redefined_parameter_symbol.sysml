@@ -6,14 +6,14 @@ package test {
 	// (KerML 7.3.4.5), so it must still be a parameter of the invocation.
 	calc def Scaled :> lib::Scale {
 		in :>> factor = 3;
-		return x * factor;
+		x * factor
 	}
 
 	package lib {
 		calc def Scale {
 			in x : Integer;
 			in factor : Integer = 2;
-			return x * factor;
+			x * factor
 		}
 	}
 }

@@ -84,13 +84,12 @@ const (
 	mAlias        = "Alias"
 	mFilter       = "FilterMember"
 	mMultiplicity = "MultiplicityDeclaration"
-	// The members that state a condition or a result rather than declaring a
-	// feature: the conditions of a constraint body, a requirement's assumptions
-	// and required conditions, and a calculation's result expression.
+	// The members that state a condition rather than declaring a feature: the
+	// conditions of a constraint body and a requirement's assumptions and
+	// required conditions.
 	mConstraint = "ConstraintMember"
 	mAssume     = "AssumeMember"
 	mRequire    = "RequireMember"
-	mResult     = "ResultMember"
 )
 
 // boolProperty pairs an RDF property name with the AST flag it mirrors. Only
@@ -474,11 +473,6 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 	case *ast.RequireMember:
 		head(rdf.OpenSysMLTerm(mRequire))
 		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
-
-	case *ast.ResultMember:
-		head(rdf.OpenSysMLTerm(mResult))
-		e.expression(subject, e.sysml(pValue), pValue, owner, n.Expression)
-		return nil
 
 	case *ast.SubjectMember:
 		// A subject parameter is a usage of its own (SysML v2 8.2.2.16), so it

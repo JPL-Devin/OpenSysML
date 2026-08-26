@@ -39,7 +39,7 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 		src  string
 	}{
 		{"calc return parameter value", `package P { calc c { return r = zzz; } }`},
-		{"calc return operand", `package P { calc c { return zzz + 1; } }`},
+		{"calc result operand", `package P { calc c { zzz + 1 } }`},
 		{"calc def return parameter value", `package P { calc def C { return r = zzz; } }`},
 		{"constraint assertion", `package P { constraint k { zzz > 1 } }`},
 		{"constraint def assertion", `package P { constraint def K { zzz > 1 } }`},

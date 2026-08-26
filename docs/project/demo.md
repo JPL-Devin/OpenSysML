@@ -82,7 +82,7 @@ package Rover {
     calc rangeKm {
         in charge : Real;
         in wattHoursPerKm : Real;
-        return charge / wattHoursPerKm;
+        charge / wattHoursPerKm
     }
 
     constraint MassBudget {
@@ -584,8 +584,8 @@ echoes it, `%clear` resets it, and `%verbosity quiet|normal|debug` sets how much
   namespace they came from drops them, with a note naming the submission that ended them.
 - **`clear` is not a REPL command.** At the `sysml> ` prompt it is parsed as SysML and leaves an
   unresolved session error that is then reported under later commands. `%clear` is the command.
-- **`-convert … -to ttl` covers structure.** A model with `calc` result members or state substates is
-  rejected (`cannot convert the *ast.ResultMember at …`) rather than silently exported, so use a
-  structural model for the RDF demo, as in §10.
+- **`-convert … -to ttl` covers structure.** A model with a `calc` result expression or state
+  substates is rejected (`cannot convert the operator expr at …`) rather than silently exported, so
+  use a structural model for the RDF demo, as in §10.
 - **Library types need an import.** `Real` comes from `ScalarValues`, quantities from `ISQ`/`SI`.
 - `%help` lists every meta-command if a question goes somewhere unplanned.

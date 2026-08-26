@@ -136,11 +136,6 @@ func (w *notationWalker) walk(members []ast.Node) {
 		case *ast.MultiplicityDecl:
 			w.keywordAsName(n.Ident)
 			w.walk(n.Members)
-		case *ast.ResultMember:
-			if n.Expression != nil && !isReferenceExpression(n.Expression) {
-				w.extension(keywordSpan(n, "return"), "`return <expression>;`",
-					"the standard spelling is a trailing expression without `return`")
-			}
 		case *ast.ConstraintMember:
 			w.walk(n.Body)
 		case *ast.AssumeMember:
