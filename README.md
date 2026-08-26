@@ -70,14 +70,14 @@ Features:
 
 **Behavioral execution:**
 ```bash
-sysml> calc add { in x; in y; return x + y; }
+sysml> calc add { in x; in y; x + y }
 ✓ calc add
 
 sysml> %calc add 10 20
 ✓ add(10, 20)
   = 30
 
-sysml> constraint ValidSpeed { assert 65 <= 120; }
+sysml> constraint ValidSpeed { 65 <= 120 }
 ✓ constraint ValidSpeed
 
 sysml> %constraint ValidSpeed
@@ -86,6 +86,9 @@ sysml> %constraint ValidSpeed
 
 **Action & state debugging:**
 ```bash
+sysml> action MyWorkflow { attribute result = 0; first start; then action compute { assign result := 42; } then done; }
+✓ action MyWorkflow
+
 sysml> %action MyWorkflow
 ✓ Started action executor for "MyWorkflow"
   State: Running
@@ -107,6 +110,7 @@ Use %tokens to inspect, %step or %continue to resume
 sysml> %tokens
 Active tokens (1):
   Token 1 @ compute
+  Values:
     result = 0
 
 sysml> %continue
@@ -114,6 +118,9 @@ sysml> %continue
   Final state: Completed
   Results:
     result = 42
+
+sysml> state TrafficLight { entry; then red; state red; state green; transition first red then green; }
+✓ state TrafficLight
 
 sysml> %state TrafficLight
 ✓ Started state machine executor for "TrafficLight"
@@ -126,8 +133,8 @@ Use %events to see queue, %current for state, %advance <time> to step
 sysml> %advance 30
 ✓ Advanced to 30.00 (1 event(s) processed)
   Current state: green
-  Last event at: 30.00
-  Remaining events: 1
+  Last event at: 0.00
+  Remaining events: 0
 ```
 
 **See [examples/repl-behavioral-demo.sysml](examples/repl-behavioral-demo.sysml) for comprehensive demos.**

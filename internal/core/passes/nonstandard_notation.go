@@ -143,25 +143,10 @@ func (w *notationWalker) walk(members []ast.Node) {
 					"the standard spelling is a trailing expression without `return`")
 			}
 		case *ast.ConstraintMember:
-			if n.Keyword != "" && n.Expression != nil && n.Name == "" && len(n.Body) == 0 {
-				w.extension(keywordSpan(n, n.Keyword),
-					fmt.Sprintf("`%s <expression>;`", n.Keyword),
-					"the standard spelling is a keyword-less trailing condition")
-			}
 			w.walk(n.Body)
 		case *ast.AssumeMember:
-			if w.inRequirementBody && n.Expression != nil && !isRequirementReferenceExpression(n.Expression) &&
-				n.Reference == nil && n.Name == "" && len(n.Body) == 0 && !n.HasBody {
-				w.extension(keywordSpan(n, "assume"), "`assume <expression>;`",
-					"the standard spelling is a keyword-less trailing condition")
-			}
 			w.walk(n.Body)
 		case *ast.RequireMember:
-			if w.inRequirementBody && n.Expression != nil && !isRequirementReferenceExpression(n.Expression) &&
-				n.Reference == nil && n.Name == "" && len(n.Body) == 0 && !n.HasBody {
-				w.extension(keywordSpan(n, "require"), "`require <expression>;`",
-					"the standard spelling is a keyword-less trailing condition")
-			}
 			w.walk(n.Body)
 		case *ast.SuccessionEdge:
 			w.successionEdge(n)
@@ -287,15 +272,6 @@ func admitsActionBodyItems(node ast.Node) bool {
 }
 
 func isReferenceExpression(node ast.Node) bool {
-	switch node.(type) {
-	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
-		return true
-	default:
-		return false
-	}
-}
-
-func isRequirementReferenceExpression(node ast.Node) bool {
 	switch node.(type) {
 	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
 		return true

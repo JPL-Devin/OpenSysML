@@ -7,10 +7,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
-// A constraint that declares its parameters still states its conditions with
-// `assert`/`assume`: the parameters decide which body parser reads the body, and
-// both read conditions.
-func TestConstraintWithParametersAsserts(t *testing.T) {
+// A constraint that declares its parameters still states bare conditions: the
+// parameters decide which body parser reads the body, and both read conditions.
+func TestConstraintWithParametersStatesConditions(t *testing.T) {
 	const src = `package P {
     private import ScalarValues::*;
 
@@ -18,9 +17,9 @@ func TestConstraintWithParametersAsserts(t *testing.T) {
         in x : Real;
         in initialized : Boolean;
 
-        assert x >= 0;
-        assert not x > 100;
-        assume initialized;
+        x >= 0
+        not (x > 100)
+        initialized
     }
 }`
 

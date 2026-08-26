@@ -1,0 +1,8 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"leftValue": {"type": "Integer", "value": 1},
+		"rightValue": {"type": "Integer", "value": 2}
+	}
+}

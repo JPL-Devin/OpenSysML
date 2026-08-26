@@ -1,0 +1,8 @@
+{
+	"type": "state",
+	"finalState": "lidle+ridle",
+	"stateVisits": ["lidle", "ridle"],
+	"outputs": {
+		"entered": {"type": "Integer", "value": 1}
+	}
+}
