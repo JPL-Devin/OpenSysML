@@ -21,9 +21,8 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
 - The pin `cmd/pilot-diff` reports comes from `build/pilot-sysml-validator/pilot-pin.txt`
   (written by the new script), not from the DeciSym `pom.xml`.
 - `-validator /nonexistent` now says `run ./scripts/download-pilot-sysml-validator.sh`.
-- Measured after the output-initializer rewrite in `examples/action-executor-demo.sysml`, with a
-  fresh library cache: `353 file(s), 324 fully agreeing; 32 agreed,
-  27 only ours, 61 only the pilot's`, JSON totals `openSysMLDiagnostics 67 / pilotDiagnostics
+- Measured after the interface-flow pairing fix, with a fresh library cache: `353 file(s), 325 fully agreeing; 32 agreed,
+  26 only ours, 61 only the pilot's`, JSON totals `openSysMLDiagnostics 66 / pilotDiagnostics
   101 / severityMismatch 8`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
@@ -136,8 +135,8 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
 but only while the baseline is current. Check that first. As of the rebaseline after the
-output-initializer rewrite in `examples/action-executor-demo.sysml` it **is**
-current: a live run gives `353 file(s), 324 fully agreeing; 32 agreed, 27 only ours, 61 only the
+interface-flow pairing fix it **is**
+current: a live run gives `353 file(s), 325 fully agreeing; 32 agreed, 26 only ours, 61 only the
 pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
 "Results" table matches. That rebaseline covers two rounds, because the succession-shorthand
 removal before it landed without refreshing the baseline; a control run of its merge commit gives
