@@ -52,11 +52,11 @@ func assertRegionConfig(t *testing.T, exec *StateExecutor, want map[string]strin
 // their entry behaviors do not run again.
 func TestRegionLocalChoiceMovesOnlyItsRegion(t *testing.T) {
 	exec := runStateMachine(t, "Machine", `package P {
-	state Machine {
+	state Machine parallel {
 		attribute x : Integer = 2;
 		attribute rightEntries : Integer = 0;
 
-		region left {
+		state left {
 			initial ls;
 			state lstart;
 			state lnext;
@@ -64,7 +64,7 @@ func TestRegionLocalChoiceMovesOnlyItsRegion(t *testing.T) {
 			succession first ls then lstart;
 			transition lstart to pick;
 		}
-		region right {
+		state right {
 			initial rs;
 			state rstart { entry { rightEntries = rightEntries + 1; } }
 			succession first rs then rstart;
@@ -86,10 +86,10 @@ func TestRegionLocalChoiceMovesOnlyItsRegion(t *testing.T) {
 // the else branch, inside an orthogonal region as anywhere else.
 func TestRegionLocalChoiceTakesElseBranch(t *testing.T) {
 	exec := runStateMachine(t, "Machine", `package P {
-	state Machine {
+	state Machine parallel {
 		attribute x : Integer = 7;
 
-		region left {
+		state left {
 			initial ls;
 			state lstart;
 			state lguarded;
@@ -97,7 +97,7 @@ func TestRegionLocalChoiceTakesElseBranch(t *testing.T) {
 			succession first ls then lstart;
 			transition lstart to pick;
 		}
-		region right {
+		state right {
 			initial rs;
 			state rstart;
 			succession first rs then rstart;
@@ -116,15 +116,15 @@ func TestRegionLocalChoiceTakesElseBranch(t *testing.T) {
 // and a chain of them is followed to the state it ends at.
 func TestRegionLocalJunctionChainIsFollowed(t *testing.T) {
 	exec := runStateMachine(t, "Machine", `package P {
-	state Machine {
-		region left {
+	state Machine parallel {
+		state left {
 			initial ls;
 			state a;
 			state b;
 			succession first ls then a;
 			transition a to merge;
 		}
-		region right {
+		state right {
 			initial rs;
 			state c;
 			succession first rs then c;
@@ -149,16 +149,19 @@ func TestRegionPseudostateLeavingEveryRegion(t *testing.T) {
 		attribute leftExits : Integer = 0;
 		attribute rightExits : Integer = 0;
 
-		region left {
-			initial ls;
-			state lstart { exit { leftExits = leftExits + 1; } }
-			succession first ls then lstart;
-			transition lstart to pick;
-		}
-		region right {
-			initial rs;
-			state rstart { exit { rightExits = rightExits + 1; } }
-			succession first rs then rstart;
+		entry; then running;
+		state running parallel {
+			state left {
+				initial ls;
+				state lstart { exit { leftExits = leftExits + 1; } }
+				succession first ls then lstart;
+				transition lstart to pick;
+			}
+			state right {
+				initial rs;
+				state rstart { exit { rightExits = rightExits + 1; } }
+				succession first rs then rstart;
+			}
 		}
 		choice pick;
 		state outside;
@@ -189,14 +192,14 @@ func TestRegionPseudostateIntoSiblingRegionExitsSourceOnly(t *testing.T) {
 		attribute x : Integer = 1;
 
 		initial init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial ls;
 				state lstart;
 				succession first ls then lstart;
 				transition lstart to cross if x == 1;
 			}
-			region right {
+			state right {
 				initial rs;
 				state rstart;
 				state rtarget { entry { x = 2; } }
@@ -279,21 +282,24 @@ func TestRegionPseudostateExitOrderIsDeterministic(t *testing.T) {
 	state Machine {
 		attribute x : Integer = 1;
 
-		region left {
-			initial ls;
-			state lstart;
-			succession first ls then lstart;
-			transition lstart to pick;
-		}
-		region middle {
-			initial ms;
-			state mstart;
-			succession first ms then mstart;
-		}
-		region right {
-			initial rs;
-			state rstart;
-			succession first rs then rstart;
+		entry; then running;
+		state running parallel {
+			state left {
+				initial ls;
+				state lstart;
+				succession first ls then lstart;
+				transition lstart to pick;
+			}
+			state middle {
+				initial ms;
+				state mstart;
+				succession first ms then mstart;
+			}
+			state right {
+				initial rs;
+				state rstart;
+				succession first rs then rstart;
+			}
 		}
 		choice pick;
 		state outside;

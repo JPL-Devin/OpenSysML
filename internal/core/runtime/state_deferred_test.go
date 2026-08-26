@@ -283,14 +283,14 @@ func TestExitedNestedRegionDoesNotReactToTheSameEvent(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			initial start;
-			state co {
-				region a {
+			state co parallel {
+				state a {
 					initial astart;
 					state a1;
 					succession first astart then a1;
 					transition a1 to out accept Ping;
 				}
-				region b {
+				state b {
 					initial bstart;
 					state b1;
 					state b2;

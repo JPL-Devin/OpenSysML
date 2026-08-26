@@ -79,7 +79,7 @@ func TestStateMachineMetaclasses(t *testing.T) {
 	turtle := toTurtle(t, filepath.Join("testdata", "convert", "state_machine.sysml"))
 	for _, want := range []string{
 		"sysml:StateUsage", "sysml:StateSubactionMembership", "sysml:TransitionUsage",
-		"sysx:Pseudostate", "sysx:StateRegion", "sysx:DeferMember",
+		"sysx:Pseudostate", "sysx:DeferMember",
 		"sysx:subactionKind", "sysx:trigger", "sysx:guard",
 		"sysml:sourceFeature", "sysml:targetFeature",
 	} {
@@ -159,10 +159,9 @@ func TestStateMembersRoundTrip(t *testing.T) {
 		"nested state":         "state working {\n            entry perform Warm;\n        }",
 		"nested transition":    "state working {\n            state a;\n            transition first a then a;\n        }",
 		"nested substates":     "state working {\n            state first_gear;\n            state second_gear;\n        }",
-		"nested regions":       "state working {\n            region left {\n                state stopped;\n            }\n            region right {\n                state moving;\n            }\n        }",
+		"nested regions":       "state working parallel {\n            state left {\n                state stopped;\n            }\n            state right {\n                state moving;\n            }\n        }",
 		"nested full body":     "state working {\n            entry perform Warm;\n            do action spin : Warm;\n            exit perform Warm;\n            defer sig;\n            state deeper;\n        }",
 		"unordered subactions": "state working {\n            do action spin : Warm;\n            entry perform Warm;\n        }",
-		"region":               "region primary {\n            state idle;\n        }",
 		"transition first":     "transition first idle then idle;",
 		"transition to":        "transition idle to idle;",
 		"named transition":     "transition go first idle then idle;",

@@ -123,10 +123,10 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 	}
 }
 
-// A region carries the members of a state body, so a `then` attached to one of
-// its states is the same succession it would be one level up.
-func TestMemberAttachedThenInRegionDesugars(t *testing.T) {
-	p := New(source.New("region.sysml", []byte("state def S { region R { state a; then state b; } }")))
+// A nested state body carries the members of a state body, so a `then` attached
+// to one of its states is the same succession it would be one level up.
+func TestMemberAttachedThenInNestedStateDesugars(t *testing.T) {
+	p := New(source.New("nested.sysml", []byte("state def S { state R { state a; then state b; } }")))
 	file := p.ParseFile()
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
@@ -143,23 +143,35 @@ func TestMemberAttachedThenInRegionDesugars(t *testing.T) {
 			continue
 		}
 		for _, stateMember := range def.Members {
-			region, ok := stateMember.(*ast.StateRegion)
+			nested, ok := unwrapStateUsage(stateMember)
 			if !ok {
 				continue
 			}
-			for _, regionMember := range region.States {
-				if edge, ok := regionMember.(*ast.SuccessionEdge); ok {
+			for _, nestedMember := range nested.Members {
+				if edge, ok := nestedMember.(*ast.SuccessionEdge); ok {
 					edges = append(edges, edge)
 				}
 			}
 		}
 	}
 	if len(edges) != 1 {
-		t.Fatalf("succession edges in the region: %d, want 1", len(edges))
+		t.Fatalf("succession edges in the nested state: %d, want 1", len(edges))
 	}
 	if got := qnText(edges[0].Source) + "->" + qnText(edges[0].Target); got != "a->b" {
 		t.Errorf("succession %s, want a->b", got)
 	}
+}
+
+// unwrapStateUsage returns the state usage a body member declares.
+func unwrapStateUsage(member ast.Node) (*ast.Usage, bool) {
+	if m, ok := member.(*ast.Membership); ok {
+		member = m.Member
+	}
+	usage, ok := member.(*ast.Usage)
+	if !ok || usage.Kind != ast.UsageState {
+		return nil, false
+	}
+	return usage, true
 }
 
 // A one-name succession takes the member before it as its source whether or not

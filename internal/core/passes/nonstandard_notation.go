@@ -144,10 +144,6 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.walk(n.Body)
 		case *ast.StateNode:
 			w.stateNode(n)
-		case *ast.StateRegion:
-			w.extension(keywordSpan(n, "region"), "`region <name> { … }`",
-				"the standard orthogonality marker is `parallel` before a state body")
-			w.walk(n.States)
 		case *ast.PseudostateNode:
 			w.pseudostate(n)
 		case *ast.DeferMember:

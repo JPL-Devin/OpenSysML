@@ -6,15 +6,15 @@ package Test {
 		attribute crossed : Integer = 0;
 
 		initial start;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial lstart;
 				state lidle;
 
 				succession first lstart then lidle;
 				transition lidle to cross if crossed == 0;
 			}
-			region right {
+			state right {
 				initial rstart;
 				state ridle;
 				state rtarget { entry { crossed = 1; } }

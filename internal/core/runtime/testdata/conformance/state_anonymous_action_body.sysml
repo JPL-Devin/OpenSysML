@@ -8,7 +8,7 @@ package Test {
 
         initial start;
 
-        state working {
+        state working parallel {
             entry action {
                 attribute k : Integer = 3;
                 while k > 0 {
@@ -19,7 +19,7 @@ package Test {
             do action { assign log := log * 10 + 8; }
             exit action { assign log := log * 10 + 9; }
 
-            region inside {
+            state inside {
                 initial nstart;
                 state nested {
                     entry action { assign log := log * 10 + 7; }

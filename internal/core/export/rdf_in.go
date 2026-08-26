@@ -384,9 +384,18 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	if err != nil {
 		return err
 	}
+	// `parallel` marks a state's substates orthogonal, and only a body may
+	// follow it, so a parallel state with none has no notation.
+	parallel := d.boolOf(el, rdf.SysML+"isParallel")
 	if len(children) == 0 && !d.boolOf(el, rdf.OpenSysML+xHasBody) {
+		if parallel {
+			return d.missing(el, "sysx:"+xHasBody, "a parallel state states its regions in a body")
+		}
 		b.WriteString(";\n")
 		return nil
+	}
+	if parallel {
+		b.WriteString(" parallel")
 	}
 	b.WriteString(" {\n")
 	for _, child := range children {

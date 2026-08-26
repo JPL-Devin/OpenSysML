@@ -6,10 +6,10 @@ package Test {
 		attribute log : Integer = 0;
 
 		initial start;
-		state Working {
+		state Working parallel {
 			exit { log = log * 10 + 3; }
 
-			region left {
+			state left {
 				initial lstart;
 				state lwork {
 					exit { log = log * 10 + 1; }
@@ -18,7 +18,7 @@ package Test {
 				succession first lstart then lwork;
 			}
 
-			region right {
+			state right {
 				initial rstart;
 				state rwork {
 					exit { log = log * 10 + 2; }

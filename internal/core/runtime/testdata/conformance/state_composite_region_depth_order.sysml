@@ -6,8 +6,8 @@ package Test {
 		attribute log : Integer = 0;
 
 		initial start;
-		state Working {
-			region left {
+		state Working parallel {
+			state left {
 				initial lstart;
 				state l1;
 				state l2;
@@ -16,10 +16,10 @@ package Test {
 				transition l1 to l2 when Tick do assign log := log * 10 + 1;
 			}
 
-			region right {
+			state right {
 				initial rstart;
-				state deep {
-					region inner {
+				state deep parallel {
+					state inner {
 						initial dstart;
 						state d1;
 						state d2;

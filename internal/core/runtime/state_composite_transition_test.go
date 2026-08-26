@@ -193,13 +193,13 @@ func TestOneEventTakesACompositesTransitionOnce(t *testing.T) {
 			attribute log : Integer = 0;
 
 			initial start;
-			state Working {
-				region left {
+			state Working parallel {
+				state left {
 					initial lstart;
 					state l1;
 					succession first lstart then l1;
 				}
-				region right {
+				state right {
 					initial rstart;
 					state r1;
 					succession first rstart then r1;
@@ -259,18 +259,18 @@ func TestChangeConditionOnACompositeStateFiresWhileASubstateIsActive(t *testing.
 // the other regions still move on the conditions they watch, one transition each.
 func TestGuardBlockedChangeConditionDoesNotSilenceTheOtherRegions(t *testing.T) {
 	exec := stateExecutorForSource(t, "sm", `package test {
-		state sm {
+		state sm parallel {
 			attribute ready : Boolean = false;
 			attribute allowed : Boolean = false;
 
-			region left {
+			state left {
 				initial lstart;
 				state l1;
 				state lmoved;
 				transition lstart to l1;
 				transition l1 to lmoved accept when ready if allowed;
 			}
-			region right {
+			state right {
 				initial rstart;
 				state r1;
 				state rmoved;
@@ -317,15 +317,15 @@ func TestChangeConditionTakesTheInnermostTransitionOnly(t *testing.T) {
 			attribute ready : Boolean = false;
 
 			initial start;
-			state Working {
-				region left {
+			state Working parallel {
+				state left {
 					initial lstart;
 					state l1;
 					state l2;
 					transition lstart to l1;
 					transition l1 to l2 accept when ready;
 				}
-				region right {
+				state right {
 					initial rstart;
 					state r1;
 					transition rstart to r1;
@@ -361,8 +361,8 @@ func TestOneRegionsInnerTransitionLeavesAConcurrentRegionsOwnTransition(t *testi
 	exec := stateExecutorForSource(t, "sm", `package test {
 		state sm {
 			initial start;
-			state Working {
-				region left {
+			state Working parallel {
+				state left {
 					initial lstart;
 					state l1;
 					state l2;
@@ -371,7 +371,7 @@ func TestOneRegionsInnerTransitionLeavesAConcurrentRegionsOwnTransition(t *testi
 					transition l1 to l2 accept e;
 				}
 
-				region right {
+				state right {
 					initial rstart;
 					state r1;
 					state r2;
@@ -419,16 +419,16 @@ func TestOrthogonalMachineCompletesAfterAllRegionFinalStates(t *testing.T) {
 		},
 		{
 			name: "explicit regions",
-			body: `state Machine {
+			body: `state Machine parallel {
 				attribute exits : Integer = 0;
 				exit action bye { assign exits := exits + 1; }
-				region left {
+				state left {
 					initial lstart;
 					state lstart;
 					final ldone;
 					transition lstart to ldone when First;
 				}
-				region right {
+				state right {
 					initial rstart;
 					state rstart;
 					final rdone;

@@ -8,22 +8,22 @@ package Test {
 		attribute thirdExits : Integer = 0;
 
 		initial start;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial lstart;
 				state lidle;
 
 				succession first lstart then lidle;
 				transition lidle to rtarget if crossed == 0;
 			}
-			region right {
+			state right {
 				initial rstart;
 				state ridle;
 				state rtarget { entry { crossed = 1; } }
 
 				succession first rstart then ridle;
 			}
-			region third {
+			state third {
 				initial tstart;
 				state tidle {
 					entry { thirdEntries = thirdEntries + 1; }

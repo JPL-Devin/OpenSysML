@@ -640,8 +640,8 @@ elmt:StateMachine__Composite
     sysml:ownedMember elmt:StateMachine__Composite__launch, elmt:StateMachine__Composite__stopped, elmt:StateMachine__Composite__waiting, elmt:StateMachine__Composite___404, elmt:StateMachine__Composite__pick, elmt:StateMachine__Composite__meet, elmt:StateMachine__Composite__split, elmt:StateMachine__Composite__sync, elmt:StateMachine__Composite__recent, elmt:StateMachine__Composite__deepest, elmt:StateMachine__Composite__primary ;
     sysml:ownedMembership elmt:StateMachine__Composite__launch_om, elmt:StateMachine__Composite__stopped_om, elmt:StateMachine__Composite__waiting_om, elmt:StateMachine__Composite___404_om, elmt:StateMachine__Composite__pick_om, elmt:StateMachine__Composite__meet_om, elmt:StateMachine__Composite__split_om, elmt:StateMachine__Composite__sync_om, elmt:StateMachine__Composite__recent_om, elmt:StateMachine__Composite__deepest_om, elmt:StateMachine__Composite__primary_om ;
     sysml:ownedRelationship elmt:StateMachine__Composite__launch_om, elmt:StateMachine__Composite__stopped_om, elmt:StateMachine__Composite__waiting_om, elmt:StateMachine__Composite___403, elmt:StateMachine__Composite___404_om, elmt:StateMachine__Composite__pick_om, elmt:StateMachine__Composite__meet_om, elmt:StateMachine__Composite__split_om, elmt:StateMachine__Composite__sync_om, elmt:StateMachine__Composite__recent_om, elmt:StateMachine__Composite__deepest_om, elmt:StateMachine__Composite__primary_om ;
-    sysml:ownedFeature elmt:StateMachine__Composite__launch, elmt:StateMachine__Composite__stopped, elmt:StateMachine__Composite__waiting ;
-    sysml:ownedFeatureMembership elmt:StateMachine__Composite__launch_om, elmt:StateMachine__Composite__stopped_om, elmt:StateMachine__Composite__waiting_om .
+    sysml:ownedFeature elmt:StateMachine__Composite__launch, elmt:StateMachine__Composite__stopped, elmt:StateMachine__Composite__waiting, elmt:StateMachine__Composite__primary ;
+    sysml:ownedFeatureMembership elmt:StateMachine__Composite__launch_om, elmt:StateMachine__Composite__stopped_om, elmt:StateMachine__Composite__waiting_om, elmt:StateMachine__Composite__primary_om .
 
 elmt:StateMachine__Composite_om
     a sysml:OwningMembership ;
@@ -943,7 +943,7 @@ elmt:StateMachine__Composite__deepest_om
     sysml:membershipOwningNamespace elmt:StateMachine__Composite .
 
 elmt:StateMachine__Composite__primary
-    a sysx:StateRegion ;
+    a sysml:StateUsage ;
     sysml:qualifiedName "StateMachine::Composite::primary" ;
     sysml:elementId "StateMachine__Composite__primary" ;
     sysx:memberIndex "11"^^xsd:integer ;
@@ -952,20 +952,25 @@ elmt:StateMachine__Composite__primary
     sysml:owningRelationship elmt:StateMachine__Composite__primary_om ;
     sysml:owningMembership elmt:StateMachine__Composite__primary_om ;
     sysml:declaredName "primary" ;
+    sysml:isParallel "true"^^xsd:boolean ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:StateMachine__Composite__primary__ready ;
     sysml:ownedMembership elmt:StateMachine__Composite__primary__ready_om ;
-    sysml:ownedRelationship elmt:StateMachine__Composite__primary__ready_om .
+    sysml:ownedRelationship elmt:StateMachine__Composite__primary__ready_om ;
+    sysml:ownedFeature elmt:StateMachine__Composite__primary__ready ;
+    sysml:ownedFeatureMembership elmt:StateMachine__Composite__primary__ready_om .
 
 elmt:StateMachine__Composite__primary_om
-    a sysml:OwningMembership ;
+    a sysml:FeatureMembership ;
     sysml:elementId "StateMachine__Composite__primary_om" ;
     sysml:owner elmt:StateMachine__Composite ;
     sysml:memberElement elmt:StateMachine__Composite__primary ;
     sysml:ownedMemberElement elmt:StateMachine__Composite__primary ;
     sysml:ownedRelatedElement elmt:StateMachine__Composite__primary ;
     sysml:owningRelatedElement elmt:StateMachine__Composite ;
-    sysml:membershipOwningNamespace elmt:StateMachine__Composite .
+    sysml:membershipOwningNamespace elmt:StateMachine__Composite ;
+    sysml:ownedMemberFeature elmt:StateMachine__Composite__primary ;
+    sysml:owningType elmt:StateMachine__Composite .
 
 elmt:StateMachine__Composite__primary__ready
     a sysml:StateUsage ;
@@ -980,11 +985,13 @@ elmt:StateMachine__Composite__primary__ready
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__Composite__primary__ready_om
-    a sysml:OwningMembership ;
+    a sysml:FeatureMembership ;
     sysml:elementId "StateMachine__Composite__primary__ready_om" ;
     sysml:owner elmt:StateMachine__Composite__primary ;
     sysml:memberElement elmt:StateMachine__Composite__primary__ready ;
     sysml:ownedMemberElement elmt:StateMachine__Composite__primary__ready ;
     sysml:ownedRelatedElement elmt:StateMachine__Composite__primary__ready ;
     sysml:owningRelatedElement elmt:StateMachine__Composite__primary ;
-    sysml:membershipOwningNamespace elmt:StateMachine__Composite__primary .
+    sysml:membershipOwningNamespace elmt:StateMachine__Composite__primary ;
+    sysml:ownedMemberFeature elmt:StateMachine__Composite__primary__ready ;
+    sysml:owningType elmt:StateMachine__Composite__primary .

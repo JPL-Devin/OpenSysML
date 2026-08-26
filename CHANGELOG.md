@@ -50,6 +50,26 @@ error, and the warning for them is gone.
   `assume`/`require constraint [name] { … }`. The separate warning for `assume`/`require` used
   outside a requirement body is unchanged too.
 
+### The orthogonal-region member is no longer accepted
+
+**Breaking change.** `region <name> { … }` in a state body was an OpenSysML extension no SysML v2
+production admits, warned as `nonstandard-notation`. It is now a parse error, and the warning for it
+is gone. Mark the owning state's body `parallel` and write one state substate per region:
+
+```sysml
+state working parallel {
+    state left  { entry; then building; state building; }
+    state right { entry; then checking; state checking; }
+}
+```
+
+Region order becomes substate declaration order and each region keeps its name, so entry, exit,
+event broadcast, history and completion behave as before. A state whose body is `parallel` may still
+own directly what a region body could be reached from — its behaviors, `defer`, the pseudostates its
+regions branch through and the edges between them — but every *state* substate of a parallel body is
+a region, so a body that mixed one region with ordinary sequential substates has to put the region
+set in a state of its own. `region` is now an ordinary name.
+
 ### Succession shorthand spellings removed
 
 **Breaking change.** OpenSysML no longer accepts named action final nodes (`done <name>;`),

@@ -99,15 +99,15 @@ func TestTransitionTargetInSiblingRegionKeywordIsLegal(t *testing.T) {
 	state def M {
 		attribute crossed;
 		initial start;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial lstart;
 				state lidle;
 
 				succession first lstart then lidle;
 				transition lidle to rtarget;
 			}
-			region right {
+			state right {
 				initial rstart;
 				state ridle;
 				state rtarget;
@@ -241,15 +241,15 @@ func TestJunctionWithOutgoingTransitionIsLegal(t *testing.T) {
 func TestDeadEndJunctionIsReportedBesideASameNamedOneThatRoutes(t *testing.T) {
 	wantOneError(t, `package test {
 	state def M {
-		state both {
-			region left {
+		state both parallel {
+			state left {
 				state lidle;
 				state ldone;
 				junction pick;
 				succession first lidle then pick;
 				succession first pick then ldone;
 			}
-			region right {
+			state right {
 				state ridle;
 				junction pick;
 				succession first ridle then pick;

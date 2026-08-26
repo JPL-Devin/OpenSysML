@@ -7,8 +7,8 @@ package test {
 		attribute log : Integer = 0;
 
 		initial start;
-		state Working {
-			region slow {
+		state Working parallel {
+			state slow {
 				initial sstart;
 				state sWaiting {
 					accept after 1 [min] then sDone;
@@ -20,7 +20,7 @@ package test {
 				transition sstart to sWaiting;
 			}
 
-			region fast {
+			state fast {
 				initial fstart;
 				state fWaiting {
 					accept after 30 [s] then fDone;

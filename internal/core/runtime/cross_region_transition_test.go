@@ -15,22 +15,22 @@ func TestCrossRegionTransitionExitsSourceOnly(t *testing.T) {
 		attribute runningExits : Integer = 0;
 
 		initial init;
-		state running {
+		state running parallel {
 			exit { runningExits = runningExits + 1; }
 
-			region left {
+			state left {
 				initial ls;
 				state lidle { exit { sourceExits = sourceExits + 1; } }
 				succession first ls then lidle;
 				transition lidle to rtarget if crossed == 0;
 			}
-			region right {
+			state right {
 				initial rs;
 				state ridle;
 				state rtarget { entry { crossed = crossed + 1; } }
 				succession first rs then ridle;
 			}
-			region other {
+			state other {
 				initial os;
 				state oidle {
 					entry { otherEntries = otherEntries + 1; }
@@ -72,8 +72,8 @@ func TestCrossRegionTransitionIntoNestedTargetExitsTheAbandonedState(t *testing.
 		attribute wrapperEntries : Integer = 0;
 
 		initial init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial ls;
 				state lmid;
 				state lidle;
@@ -81,12 +81,12 @@ func TestCrossRegionTransitionIntoNestedTargetExitsTheAbandonedState(t *testing.
 				succession first lmid then lidle;
 				transition lidle to rtarget if crossed == 0;
 			}
-			region right {
+			state right {
 				initial rs;
-				state wrapper {
+				state wrapper parallel {
 					entry { wrapperEntries = wrapperEntries + 1; }
 
-					region inner {
+					state inner {
 						initial is;
 						state ridle { exit { innerExits = innerExits + 1; } }
 						state rtarget { entry { crossed = crossed + 1; } }
@@ -124,18 +124,18 @@ func TestCrossRegionTransitionIntoInactiveCompositeRecordsTheEnteredState(t *tes
 		attribute rtargetExits : Integer = 0;
 
 		initial init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial ls;
 				state lidle;
 				succession first ls then lidle;
 				transition lidle to rtarget if crossed == 0;
 			}
-			region right {
+			state right {
 				initial rs;
 				state ridle;
-				state wrapper {
-					region inner {
+				state wrapper parallel {
+					state inner {
 						initial is;
 						state istart;
 						state rtarget {
@@ -175,19 +175,19 @@ func TestCrossRegionTransitionFromDeeperRegionExitsUpToTheSharedLevel(t *testing
 		attribute wrapperExits : Integer = 0;
 
 		initial init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial ls;
 				state lidle { exit { lidleExits = lidleExits + 1; } }
 				state lstate;
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				initial rs;
-				state wrapper {
+				state wrapper parallel {
 					exit { wrapperExits = wrapperExits + 1; }
 
-					region inner {
+					state inner {
 						initial is;
 						state ideep { exit { deepExits = deepExits + 1; } }
 						succession first is then ideep;
@@ -223,20 +223,20 @@ func TestCrossRegionTransitionFromARegionOwnedByASubstate(t *testing.T) {
 		attribute midExits : Integer = 0;
 
 		initial init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial ls;
 				state lidle { exit { lidleExits = lidleExits + 1; } }
 				state lstate;
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				initial rs;
 				state wrapper {
-					state mid {
+					state mid parallel {
 						exit { midExits = midExits + 1; }
 
-						region inner {
+						state inner {
 							initial is;
 							state ideep;
 							succession first is then ideep;
@@ -305,16 +305,16 @@ func TestTransitionOutOfCompositeStateExitsEveryRegion(t *testing.T) {
 		attribute runningExits : Integer = 0;
 
 		initial init;
-		state running {
+		state running parallel {
 			exit { runningExits = runningExits + 1; }
 
-			region left {
+			state left {
 				initial ls;
 				state lidle { exit { leftExits = leftExits + 1; } }
 				succession first ls then lidle;
 				transition lidle to done;
 			}
-			region right {
+			state right {
 				initial rs;
 				state ridle { exit { rightExits = rightExits + 1; } }
 				succession first rs then ridle;
@@ -349,21 +349,21 @@ func TestTransitionOutOfCompositeStateExitsNestedStatesOnce(t *testing.T) {
 		attribute deepExits : Integer = 0;
 
 		initial init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial ls;
 				state lidle;
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				initial rs;
 				state wrapper {
 					exit { wrapperExits = wrapperExits + 1; }
 
-					state mid {
+					state mid parallel {
 						exit { midExits = midExits + 1; }
 
-						region inner {
+						state inner {
 							initial is;
 							state ideep { exit { deepExits = deepExits + 1; } }
 							succession first is then ideep;
