@@ -5103,3 +5103,73 @@ bytes), cold start is ~4 ms for stdio vs ~6-8 ms over TCP, and every small-paylo
 sd of the same order as its p50 — quote those as noise, never as a per-call transport win. The
 reported payload sizes (467,971 proto / 513,339 JSON for the large `Query`) are stable enough
 to diff against a document's table verbatim.
+
+## Driving state-machine completion (`then done;`) and its surfaces
+
+There is **no `%send`/signal-injection meta-command**. A machine whose transitions are triggered by
+`accept <SignalName>` will sit `quiesced` forever in the REPL — the signal lists in
+`internal/core/runtime/testdata/conformance/*.expected.json` are the *conformance harness*, not the
+REPL. To drive a machine interactively, write fixtures with **timed triggers**
+(`state a { accept after 5 then done; }`) and step them with `%advance <t>`; each region can be given
+a different delay so a partial configuration is observable. `sysml <model> -state <name>` only
+*starts* the executor and prints the initial configuration — it does not run to completion, so use
+the REPL for completion claims.
+
+Completion (a transition whose endpoint is the unqualified `done`) shows up as, in order,
+`Current state: done`, a blank line, and ``✓ State machine completed (a transition reached `done`)``;
+`%current` then reports `Execution state: Completed`. Useful shapes when testing it:
+
+- **Exit action of the completing state:** give the source state `exit assign log := "...";` and read
+  `State data:` in `%current` after completion — that proves entering `done` ran the exit behaviors.
+- **Orthogonal machines** must stay `Running` while the configuration is e.g. `done | rstart`, and
+  only report completion at `done | done`.
+- **A machine declaring its own `state done;`** resolves the endpoint to that state: it is entered as
+  an ordinary state (`Running`) and can transition onward. This is the key "not silently completed" case.
+- **A qualified endpoint (`Other::done`) or `done` as a transition *source*** is a typed error at
+  executor creation (`lower state machine: transition endpoint … names a state that is not a vertex of
+  this state machine`, or `no initial state found`) — never a panic and never a completion.
+- **Nested orthogonal regions are the discriminating shape.** A `done` reached inside a region owned by
+  a *composite* state (so `graph.TopRegions` does not describe it) must **not** complete the machine
+  while a sibling region is still active; `completeIfDone`/`machineComplete` walk outward through each
+  enclosing region set (`RegionOwner`/`CompositeStates`) and require every concurrent region to have
+  completed. An implementation that only checks `graph.TopRegions` completes early and still prints the
+  same completion line, so always drive the fixture with *staggered* `accept after N` delays and assert
+  `Execution state: Running` at the first completion:
+
+  ```sysml
+  state def M { entry; then outer;
+      state outer parallel {
+          state r1 { entry; then x; state x { accept after 5 then done; } }
+          state r2 { entry; then y; state y { accept after 7 then done; } } } }
+  ```
+  `%advance 5` → `done | y` + `Running`, no completion line; `%advance 2` → `done | done` + `Completed`.
+  Add a *two-level* variant (a `parallel` state inside a region of another `parallel` state) whose inner
+  region finishes **after** an outer sibling region, so the walk is exercised in both directions and
+  order-independently. Contrast against a binary from the commit before the fix — the buggy behaviour is
+  a completion line at the *first* region's timestamp with the sibling still in its own state.
+- `then done;` in an **action** body is unrelated: it is the action final node, checked with
+  `sysml <model> -action <name>` (expect `Action completed` and the result values).
+
+### Seeing a state view (`completes` detail)
+
+The `(initial)` / `(completes)` state details only appear in a **state rendering**. A view is only a
+state rendering if it specializes the standard view definition by its qualified name:
+
+```sysml
+view MView : StandardViewDefinitions::StateTransitionView { expose M; }
+```
+
+`view def StateTransitionView;` declared locally, or `render asTreeDiagram;`, both fall back to the
+tree rendering, which prints only `state a` and hides the detail. `render Views::asTreeDiagram;` is
+the correct spelling for a rendering reference (bare `asTreeDiagram` is unresolved).
+
+### Removed state-body notation
+
+`state def S { state s; final s; }` is a **parse** error, reported identically at every surface:
+CLI `-validate` → `4:9: error: expected a body member` with a caret under `final` and exit 2; the REPL
+prints the same located error for `%load` and for a typed-in declaration; `bin/sysml-lsp` publishes
+severity **1**, code `syntax`, on the `final` token's range. `final` itself is unreserved, so
+`attribute final : ScalarValues::Boolean;`, `state final;` and `transition first final … ` still parse
+(they only trigger the ordinary duplicate-name warning when both are declared). A cheap non-vacuity
+check for a removed diagnostic is `strings bin/sysml | grep -c '<removed message fragment>'` compared
+against the contrast binary.
