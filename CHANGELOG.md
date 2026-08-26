@@ -6,6 +6,17 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### A name a library supertype already supplies is reported
+
+`state start;` inside a state, or `attribute portions;` inside a part definition, declares a
+member indistinguishable from one the declaration inherits from the standard library —
+`StatePerformances::StateAction::start`, `Occurrence::portions` — and is now a warning, as the
+reference implementation and KerML 8.2.4 have it. Only a name two library supertypes each
+supplied was reported before. A member that redefines or subsets the inherited feature is that
+feature and stays silent, as do the implicit redefinitions: a positional behavior parameter, the
+subject, actors, stakeholders and objective of a case or requirement, and the assignments in a
+metadata usage body. Three diagnostics of the reference we did not report become agreements.
+
 ### RDF output states element ids and ownership
 
 A converted graph now carries the two things a SysML v2 API service needs to address it.

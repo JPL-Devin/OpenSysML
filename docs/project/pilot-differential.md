@@ -192,7 +192,7 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-05`, 353 files)
+## Results (pilot `2026-05`, 355 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -200,23 +200,25 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-examples` | 98 | 93 | 8 | 0 | 0 | 0 | 8 | 0 |
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
-| `testdata` | 15 | 8 | 36 | 53 | 32 | 1 | 3 | 20 |
-| `examples` | 22 | 15 | 15 | 64 | 0 | 8 | 7 | 56 |
+| `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
+| `examples` | 22 | 16 | 18 | 42 | 3 | 7 | 8 | 32 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **353** | **324** | **68** | **123** | **32** | **9** | **27** | **82** |
+| **Total** | **355** | **327** | **73** | **103** | **37** | **8** | **28** | **58** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **8** and
 `pilot-validation` 1 → **0**, with `kerml-examples` unmoved at 3. Our diagnostics on those roots
 therefore fall 20 → **11**. The
-`examples` root carries 7, and all 7 of its rows are one check firing on them: the
-non-standard-notation warning (6 `require` outside a requirement body, 1 `junction`).
+`examples` root carries 8: seven are one check firing on them, the
+non-standard-notation warning (6 `require` outside a requirement body, 1 `junction`), and the
+eighth is the library-inherited-name warning on `pseudostates-demo.sysml`:28 described in
+[Owned names against library-inherited members](#owned-names-against-library-inherited-members).
 It carried 64 before the two removals of alias notation: the succession shorthands retired 30 of
 them, and removing `initial <state>;` and `transition <src> to <tgt>;` retired 27 more, since the
 demos are now written in the standard spellings the warning does not fire on. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **11**. `severity-only` (9) holds pairs of the same shape:
+reference corpora is **11**. `severity-only` (8) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
 
@@ -362,10 +364,10 @@ Two things did move here, and one is a first:
   is correct and expected here.
 
 Per category, the only-ours totals are: `pilot-examples` 5 `unmapped`, 1 `kind-mismatch`, 2
-`units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax; `testdata` 2
+`units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax, 1 `unmapped`; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 11 `kind-mismatch`, 4 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 12 syntax, 16 `kind-mismatch`, 14 `unmapped`, 14 `unresolved-reference` — all of them
+`examples` 11 syntax, 3 `kind-mismatch`, 11 `unmapped`, 7 `unresolved-reference` — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -403,13 +405,13 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **324 / 27 / 68** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **327 / 28 / 73** |
 | `pilot-examples`: only ours | **43** | **8** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **56** |
-| `examples`: fully agreeing | **15** | **15** |
-| `unmapped`, our side | **20** | **18** |
+| `examples`: only pilot | **40** | **32** |
+| `examples`: fully agreeing | **15** | **16** |
+| `unmapped`, our side | **20** | **24** |
 
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
 our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
@@ -2167,6 +2169,80 @@ own `Must have a Boolean result` can agree with the pilot's identical string ins
 `unmapped`. No diagnostic of ours in the corpus carried that wording before wave 12A.
 
 
+## The only-pilot column: why the baseline was stale, and what is adjudicated
+
+An **only-pilot** row is a diagnostic the reference reports and we do not, so the column measures our
+permissiveness. This round re-measures it from a cleared cache, closes the one genuinely
+spec-derivable rule in it, and records a verdict for every remaining row so the column is a decision
+list rather than raw output.
+
+### The committed baseline was stale, and one commit explains all of it
+
+The committed baseline recorded `353 files, 324 fully agreeing; 32 agreed, 27 only ours, 82 only the
+pilot's` with 68/123 diagnostics. A fresh clean-cache run of the same tree measures **61** only-pilot
+and 101 pilot diagnostics, only-ours unmoved at 27. That is not an environment difference: a run under
+a fresh `XDG_CACHE_HOME` is byte-identical to the ambient-cache one, the pinned artifact is unchanged,
+and the whole 21-row gap sits on a single file, `examples/action-executor-demo.sysml`, which the
+baseline credits with 24 pilot-only rows against 3 today. The file changed after the baseline was
+recorded — `out result : Real;` plus a separate `bind result = x * 2.0;` became
+`out result : Real = x * 2.0;` — and the pilot's cascade of binding and typing diagnostics on the
+uninitialized output went with it. So the baseline was simply not re-recorded with that commit, and
+re-recording it here is a measurement correction with no rule movement in it.
+
+### Owned names against library-inherited members
+
+**Verdict: a real gap of ours, implemented.** The reference's name-distinguishability rule compares a
+type's owned member names against everything it inherits (KerML 8.2.4 with 8.4.3.2), including from
+**library** supertypes. Our resolver-tier rule deliberately walks only the document's own supertypes,
+and the pass beside it that does read library bases only reported a name two of them each supply — a
+diamond — so a member colliding with the *one* base its declaration implies went unreported. Reduced
+reproducer, which the pinned `validate-sysml` and `bin/sysml -validate` now answer identically at the
+same line and column:
+
+```sysml
+package Q { part def Q { attribute portions; } }   // 'portions' is Occurrence::portions
+package S { state S { state start; } }             // 'start' is StatePerformances::StateAction::start
+```
+
+The pass now checks owned and alias member names against the library bases as well as base-against-base,
+with the exemptions the rule itself implies: a member that redefines or subsets the inherited feature
+*is* that feature and is silent; a member whose declared redefinition target does not resolve is not
+evidence of a duplicate; behavior parameters and the subject, actors, stakeholders and objective of a
+case or requirement are implicit redefinitions; and the assignments in a metadata usage body are owned
+redefinitions of the metadata definition's features (`MetadataBodyUsage` in the pinned grammar), not
+second members of those names. Fixtures: `testdata/passes/inherited_name_library_base.sysml` (positive,
+two warnings) and `..._clean.sysml` (negative, silent on both sides).
+
+Movement, against a fresh clean-cache control of the same tree with the change stashed:
+
+| Count | Control | This round |
+|---|---:|---:|
+| Files | 353 | 355 |
+| Fully agreeing | 324 | 327 |
+| Agreed | 32 | 37 |
+| Only ours | 27 | 28 |
+| Only the pilot's | 61 | 58 |
+
+The two extra files are the two new fixtures, which both implementations agree on; they contribute the
+two new agreed diagnostics on `testdata`. Three previously only-pilot rows became agreements —
+`orthogonal-regions-demo.sysml`:12,26 and `pseudostates-demo.sysml`:10, each a `state start;` inside a
+state. The one **new** only-ours row is `pseudostates-demo.sysml`:28, the same `state start;` one
+region further down; the reference is silent there only because its grammar rejects `junction` and the
+bare `entry;` earlier in that file and its recovery never reaches the declaration. It is a defended
+true positive: the identical construct at line 10 is now an agreement.
+
+### Adjudicated and deliberately left
+
+| Rows | Where | Verdict |
+|---|---|---|
+| 6 `The opposite features 'owningType' of '…DisjoiningImpl{…}'` / `'ownedDisjoining' of '…'` | `kerml-examples`: `Types.kerml`:31, `Features.kerml`:20, `Inverses.kerml`:3, `FeatureChains.kerml`:31, `Classifiers.kerml`:13, `A-2-ModelingInstances.kerml`:9 | **Not spec-derivable.** The messages name EMF implementation classes and resource fragments and assert an opposite-reference invariant of the reference's own metamodel; KerML 1.1 states no rule a modeller could act on, and the files are valid. Left, documented. |
+| 4 `Duplicate of inherited member name 'done' from Action` | `action-executor-demo.sysml`:16,35,55, `views-demo.sysml`:96 | **Ours is right.** These are `done;` on its own, which we read as the anonymous final node of an action body; the reference has no such production and reads it as a reference usage declaring a member named `done`, which then duplicates `Actions::Action::done`. The rule is implemented — the same rule closed the `start` rows above — and does not fire because there is no named member. Left as a notation difference, recorded in the grammar conformance audit. |
+| 9 `Bound features should have conforming types`, 1 `Must be model-level evaluable`, 1 `An attribute must be typed by attribute definitions.`, 1 `An occurrence, item or part must be typed by occurrence definitions.` | `parse/expressions.sysml`:3-6, `passes/errors.sysml`:3, `resolve/errors.sysml`:3, `solver-demo.sysml`:120,124, `lex/basic.sysml`:4, `passes/import_no_visibility.sysml`:9 | **Not a rule gap: a tier boundary.** All of them sit downstream of a name-resolution or syntax error in the same file, and the rule each one would need is already implemented and fires on a valid reduced model — `bind n = w;` between an `Integer` and a `Wheel`-typed attribute draws `Bound features should have conforming types` from both implementations. Reporting them too would mean running the type tier over subjects whose types are unknown, which the tier contract forbids. Left. |
+| 5 `Duplicate of other owned member name` | `passes/import_no_visibility.sysml`:3,8,12, `semantic-layer/demo.sysml`:35,105 | **Recovery collateral, not a gap.** The fixture is *about* imports without a visibility keyword, which the pilot's grammar rejects (`no viable alternative at input '::'` on the same lines), and its recovery re-registers the fragments as duplicate members. We implement the owned-name rule, including short names. Left. |
+| 7 `Couldn't resolve reference to …` (`b`, `c`, `sciencePower`, `drivePower`, `ignite`, `start`, `touchdown`) | `parse/expressions.sysml`:3, `solver-demo.sysml`:120,124, `views-demo.sysml`:88,90,108, `pseudostates-demo.sysml`:17 | **Split, both defensible, no code change.** Three are later segments of a chain whose head we already reported unresolved (`a.b.c`), where repeating the failure per segment adds nothing; four name action or state vertices in files the reference cannot parse past, so the names are missing from *its* model rather than invented by ours. Left. |
+| 11 syntax errors (`no viable alternative at input 'entry'` / `'evaluate'` / `'if'` / `'then'`, `missing '}' at 'action'`, `mismatched input 'transition'`, `missing EOF`) | `phase-c-behavioral-bodies.sysml`:175,176, `pseudostates-demo.sysml`:12,18,19, `views-demo.sysml`:106,107,109 | **The reference failing to parse notation of ours.** These trace to retained extensions — `choice`/`junction` pseudostates, `entry;` as a bare entry marker, the inline `if`/`else` action form — for which the pinned grammar has no production. Not gaps of ours; we already warn on the non-standard ones under the conformance modes. Left. |
+| 5 `Must be an accessible feature (use dot notation for nesting)` | `semantic-layer/demo.sysml`:44,45,46,50,51 | **Left unadjudicated on purpose.** We implement this rule, and it fires elsewhere; in this file the reference reaches it through its own recovery after the duplicate-member rows above. Whether any of the five survives on a file the reference parses cleanly needs a reduced model that has not been built yet, so this is the first row the next round should pick up. |
+
 ## The declared errata overlay
 
 Every root is compared a second time with the [declared errata](wave14-errata.md) applied to a
@@ -2174,8 +2250,8 @@ Every root is compared a second time with the [declared errata](wave14-errata.md
 is the conformance statement; the corrected one is a secondary diagnostic and is reported beside it:
 
 ```
-353 file(s), 324 fully agreeing; 32 agreed, 84 only ours, 65 only the pilot's   (as published)
-353 file(s), 325 fully agreeing; 32 agreed, 83 only ours, 65 only the pilot's   (errata applied)
+355 file(s), 327 fully agreeing; 37 agreed, 28 only ours, 58 only the pilot's   (as published)
+355 file(s), 328 fully agreeing; 37 agreed, 27 only ours, 58 only the pilot's   (errata applied)
 ```
 
 One correction lies inside these roots — F82, `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38
