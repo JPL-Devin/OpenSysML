@@ -151,6 +151,17 @@ func TestEndpointsThatResolveStaySilent(t *testing.T) {
 			then loop action { action b; } until true;
 			then done;
 		} }`,
+		"nested vertex of a machine": `package P { state def M {
+			entry; then alpha;
+			state alpha { state work; }
+			state beta;
+			then work;
+		} }`,
+		"end outside a machine or an action body": `package P { part def D {
+			action def A { action x; }
+			perform action p;
+			then p;
+		} }`,
 		"transition ends": `package P { state def M {
 			entry; then idle;
 			state idle;
@@ -223,6 +234,47 @@ func TestEndpointDiagnosticAgreesWithLowering(t *testing.T) {
 				t.Fatalf("lowering fails on the endpoint but the tier reports %+v", diags)
 			}
 		})
+	}
+}
+
+// In a machine an end names a vertex the way a transition's does, so a nested or
+// region-local one lowering reaches must stay silent here too.
+func TestStateMachineEndpointAgreesWithLowering(t *testing.T) {
+	const src = `package P { state def M {
+		entry; then alpha;
+		state alpha { state work; }
+		state beta;
+		then work;
+	} }`
+
+	ctx, root := nameresCtx(t, "a.sysml", src)
+	if got := (NameResolutionPass{}).Run(ctx, "a.sysml", root); len(got) != 0 {
+		t.Fatalf("expected no diagnostics for a nested vertex, got %+v", got)
+	}
+
+	machine := ctx.Index.LookupQualified("P::M")
+	if len(machine) != 1 {
+		t.Fatalf("looked up %d symbols for P::M, want the machine", len(machine))
+	}
+	sym := machine[0]
+	scope := sym.Scope
+	if scope == nil {
+		scope = sym.OwnerScope
+	}
+	graph, err := lower.ToStateGraphWithEndpoints(sym.Decl, scope, ctx.Resolver())
+	if err != nil {
+		t.Fatalf("lowering the machine: %v", err)
+	}
+	var found bool
+	for _, transitions := range graph.Transitions {
+		for _, trans := range transitions {
+			if state, ok := trans.Target.(*ast.StateNode); ok && state.Name == "work" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatal("lowering resolved no transition into the nested work, so the case does not test agreement")
 	}
 }
 

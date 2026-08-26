@@ -26,5 +26,36 @@ func (r *Resolver) resolveEdgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, m
 	if qn == nil || len(qn.Parts) == 0 || member != nil || implied {
 		return
 	}
+	// In a machine, an end names a vertex the way a transition's does — a nested
+	// or region-local one included, which is what lowering reads it as.
+	if inStateMachine(scope) {
+		r.ResolveEndpoint(scope, qn)
+		return
+	}
 	r.ResolveQualified(scope, qn)
+}
+
+// inStateMachine reports whether an edge written in scope belongs to a state
+// machine, the body a vertex lookup applies to; an action body or anything else
+// is not one.
+func inStateMachine(scope *symbols.Scope) bool {
+	for s := scope; s != nil; s = s.Parent() {
+		switch n := s.Node().(type) {
+		case *ast.Definition:
+			if n.Kind == ast.DefState {
+				return true
+			}
+			if n.Kind == ast.DefAction {
+				return false
+			}
+		case *ast.Usage:
+			if n.Kind == ast.UsageState {
+				return true
+			}
+			if n.Kind == ast.UsageAction {
+				return false
+			}
+		}
+	}
+	return false
 }
