@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -35,6 +36,10 @@ func TestNegative(t *testing.T) {
 		{"state_entry_no_keyword", "state s { entry }"},
 		{"action_dangling_fork", "action a { fork }"},
 		{"transition_then_only", "transition first then"},
+		{"named_final_node", "action a { done finish; }"},
+		{"named_final_keyword", "action a { final finish; }"},
+		{"two_ended_then", "action a { action start; action finish; then start finish; }"},
+		{"state_member_then", "state s { state start; state finish; start then finish; }"},
 		{"requirement_empty_require", "requirement r { require }"},
 		{"calc_empty_return", "calc c { return }"},
 		{"calc_while_no_condition", "calc def C { while { i = i + 1; } }"},
@@ -329,6 +334,73 @@ func TestNegative(t *testing.T) {
 
 			if len(p.Diagnostics) == 0 {
 				t.Errorf("Expected parse errors for malformed input, got none.\nInput: %s", tt.input)
+			}
+		})
+	}
+}
+
+func TestRemovedSuccessionFormsProduceDiagnosticsAndErrorNodes(t *testing.T) {
+	tests := []struct {
+		name          string
+		src           string
+		forbiddenNode string
+	}{
+		{"two_ended_then", "action def A { action a; action b; then a b; }", "SuccessionEdge"},
+		{"state_member_then", "state def S { state a; state b; a then b; }", "SuccessionEdge"},
+		{"named_done", "action def A { done end; }", "FinalNode"},
+		{"guarded_two_ended_then", "action def A { action a; action b; then a b if x > 0; }", "ControlFlowEdge"},
+		{"malformed_named_done", "action def A { done a b; }", "FinalNode"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("parser panicked: %v", r)
+				}
+			}()
+			p := New(source.New(tt.name+".sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) == 0 {
+				t.Fatal("expected a diagnostic")
+			}
+			dump := ast.Dump(root)
+			if !strings.Contains(dump, "ErrorNode") {
+				t.Fatalf("expected an ErrorNode:\n%s", dump)
+			}
+			if strings.Contains(dump, tt.forbiddenNode) {
+				t.Fatalf("unexpected %s for removed spelling:\n%s", tt.forbiddenNode, dump)
+			}
+		})
+	}
+}
+
+func TestStandardSuccessionFormsRemainValid(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"implicit_target", "action def A { action a; then a; }"},
+		{"implicit_done", "action def A { action a; then done; }"},
+		{"explicit_succession", "action def A { action a; action b; succession first a then b; }"},
+		{"guarded_succession", "action def A { attribute g = true; action a; action b; succession first a if g then b; }"},
+		{"ordinary_done_name", "action def A { attribute done : Boolean; }"},
+		{"ordinary_done_state_name", "state def S { state done; }"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New(source.New(tt.name+".sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) != 0 {
+				t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+			}
+			if strings.Contains(ast.Dump(root), "ErrorNode") {
+				t.Fatalf("unexpected ErrorNode:\n%s", ast.Dump(root))
 			}
 		})
 	}

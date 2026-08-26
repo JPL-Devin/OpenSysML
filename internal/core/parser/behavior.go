@@ -42,8 +42,8 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
-		// `then a b;` is the edge member a member-attached `then` desugars to,
-		// and so the form a converted model is written back as.
+		// A member-attached `then` desugars to `succession first a then b;`,
+		// which is the form used when writing the converted model back.
 		if p.atKeyword("then") {
 			body.add(p.parseSuccessionEdge(p.advance(), true))
 			continue
@@ -576,7 +576,7 @@ func (p *Parser) parseActionMember() ast.Node {
 	return en
 }
 
-// Action node parsers — Task 9 complete. Task 10 (ActionExecutionNode + SuccessionEdge) below.
+// Action node parsers and succession edges.
 
 func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
@@ -623,17 +623,19 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 
 func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
-	var name string
-
 	if p.atNameOrKeyword() {
 		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
+		p.error(nameToken.Span, "a final node declares no name; a succession names the `done` library feature")
 		p.advance()
+		p.expect(lexer.Semicolon, "expected ';' after final node")
+		en := &ast.ErrorNode{Message: "a final node declares no name; a succession names the `done` library feature"}
+		en.NodeSpan = p.spanFrom(start)
+		return en
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after final node")
 
-	node := &ast.FinalNode{Name: name}
+	node := &ast.FinalNode{}
 	node.NodeSpan = p.spanFrom(start)
 	return node
 }
@@ -822,7 +824,7 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 // atChainedThen reports whether the parser is at a `then` chaining the preceding
 // member to a keyword-introduced declaration or statement (`then action b {...}`,
 // `then send s to t;`) rather than one starting a named succession edge
-// (`then a b;`) over members of the enclosing body.
+// (`succession first a then b;`) over members of the enclosing body.
 func (p *Parser) atChainedThen() bool {
 	return p.atKeyword("then") && p.peekN(1).Kind == lexer.Keyword
 }
@@ -871,7 +873,7 @@ func (p *Parser) startsActionBodyItem(n int) bool {
 
 // startsInlineSuccessionStatement reports whether tok, the token after a `then`,
 // starts an inline statement succession (`then assign x := 1;`) rather than a
-// named edge (`then source target;`) over members of the enclosing body.
+// named edge (`succession first source then target;`) over members of the enclosing body.
 func startsInlineSuccessionStatement(tok lexer.Token) bool {
 	if tok.Kind != lexer.Keyword {
 		return false
@@ -886,9 +888,7 @@ func startsInlineSuccessionStatement(tok lexer.Token) bool {
 	return false
 }
 
-// parseSuccessionEdge parses:
-// 1. then source target [if guard] ; (control flow edge between named nodes)
-// 2. then statement (inline statement succession)
+// parseSuccessionEdge parses implicit-source targets and inline statements.
 // allowBody admits the UsageBody of an ActionTargetSuccession (SysML.xtext:1698).
 func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 	start := tok.Span.Offset
@@ -905,14 +905,28 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 
 	// Check if there's a second name (explicit source + target)
 	var source, target *ast.QualifiedName
+	twoEnded := false
 	if !p.at(lexer.Semicolon) && !p.atKeyword("if") && (p.at(lexer.Identifier) || p.at(lexer.Keyword)) {
-		// Two-name form: then source target;
+		// Two-name form: succession first source then target;
 		source = first
 		target = p.parseQualifiedNameRelaxed()
+		twoEnded = true
 	} else {
 		// One-name form: then target; (source implicit)
 		source = &ast.QualifiedName{} // empty source
 		target = first
+	}
+
+	if twoEnded {
+		const msg = "a succession names both ends as `first <source> then <target>`"
+		p.error(first.Span(), msg)
+		for !p.at(lexer.Semicolon) && !p.atEOF() {
+			p.advance()
+		}
+		p.expect(lexer.Semicolon, "expected ';' after succession edge")
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = p.spanFrom(start)
+		return en
 	}
 
 	// Check for optional guard
@@ -1936,8 +1950,8 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
-		// `then a b;` is the edge member a member-attached `then` desugars to,
-		// and so the form a converted model is written back as.
+		// A member-attached `then` desugars to `succession first a then b;`,
+		// which is the form used when writing the converted model back.
 		if p.atKeyword("then") {
 			body.add(p.parseSuccessionEdge(p.advance(), false))
 			continue
@@ -2379,7 +2393,7 @@ func (p *Parser) parseStateBody() []ast.Node {
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		// A member-attached `then` sequences the members either side of it; a
-		// `then` naming states (`then idle done;`) is a member of its own,
+		// `then` naming states (`succession first idle then done;`) is a member of its own,
 		// which parseStateMember reads (see succession.go).
 		if body.atSuccession() {
 			body.takeSuccession()
@@ -2475,9 +2489,10 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 			p.advance()
 			return p.parseExitMember(start)
 		case "state":
-			// Check if this is a simple declaration (state name;) or full usage (state name { ... })
-			// Lookahead: state followed by name/keyword and semicolon → SubstateMember
-			// Otherwise → full state usage declaration
+			// Check for a simple declaration (`state name;`) or full usage
+			// (`state name { ... }`).
+			// Lookahead: a name/keyword and semicolon means SubstateMember;
+			// otherwise parse a full state usage declaration.
 			nextTok := p.peekN(1)
 			isNameOrKeyword := nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword
 			if isNameOrKeyword && p.peekN(2).Kind == lexer.Semicolon {
@@ -2512,9 +2527,7 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 			}
 			return p.parseInitialNode(p.advance())
 		case "then":
-			// Standalone succession (`then <source> <target>;`, `then <target>;`):
-			// the same edge node a member-attached `then` desugars to, so a state
-			// body carries one representation of both spellings.
+			// Standalone implicit-source succession and inline statement forms.
 			return p.parseSuccessionEdge(p.advance(), allowBody)
 		case "accept":
 			// Accept transition: accept <signal> then <state>;
@@ -2522,52 +2535,22 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 		}
 	}
 
-	// Check for succession statement: <name> then <name>;
-	// Lookahead: identifier followed by 'then' keyword
+	// A member-leading succession is not a SysML succession production.
 	if p.at(lexer.Identifier) && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "then" {
-		return p.parseSuccessionStatement(start)
+		msg := "a succession names both ends as `first <source> then <target>`"
+		p.error(p.peek().Span, msg)
+		for !p.at(lexer.Semicolon) && !p.atEOF() {
+			p.advance()
+		}
+		p.expect(lexer.Semicolon, "expected ';' after succession")
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = p.spanFrom(start)
+		return en
 	}
 
 	// Not a state-specific keyword - try parsing as general body member
 	// This allows succession, binding, feature declarations, etc. in state bodies
 	return p.parseBodyMember()
-}
-
-// parseSuccessionStatement parses: first <state> then <state>;
-// This is a succession statement in state body context (defines initial state flow)
-func (p *Parser) parseSuccessionStatement(start int) ast.Node {
-	// 'first' keyword should be consumed by caller, but check if we're at it
-	if p.atKeyword("first") {
-		p.advance()
-	}
-
-	// Parse first state reference (use relaxed parsing to allow keywords like 'off' as names)
-	firstState := p.parseQualifiedNameRelaxed()
-
-	// Expect 'then' keyword
-	if !p.acceptKeyword("then") {
-		p.error(p.peek().Span, "expected 'then' after first state")
-		en := &ast.ErrorNode{Message: "expected 'then' keyword"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-
-	// Parse second state reference (use relaxed parsing to allow keywords like 'on' as names)
-	secondState := p.parseQualifiedNameRelaxed()
-
-	// Expect semicolon
-	p.expect(lexer.Semicolon, "expected ';' after succession statement")
-
-	// Create succession usage (reuse existing AST node)
-	succession := &ast.Usage{
-		Kind: ast.UsageSuccession,
-		ConnectorEnds: []*ast.ConnectorEnd{
-			{Reference: firstState},
-			{Reference: secondState},
-		},
-	}
-	succession.NodeSpan = p.spanFrom(start)
-	return succession
 }
 
 // atAcceptNode reports whether the parser is at an accept node declaration

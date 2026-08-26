@@ -16,7 +16,7 @@ package test {
 		}
 		final done;
 
-		start then working;
-		working then done;
+		succession first start then working;
+		succession first working then done;
 	}
 }

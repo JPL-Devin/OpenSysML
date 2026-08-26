@@ -17,9 +17,9 @@ package test {
 			}
 		}
 
-		done end;
+		done;
 
-		then start choose;
-		then choose end;
+		succession first start then choose;
+		succession first choose then done;
 	}
 }

@@ -22,7 +22,7 @@ func TestSimpleSelfTransitionThatNeverSettlesIsBounded(t *testing.T) {
 				exit { log = log + 1; }
 			}
 
-			start then s;
+			succession first start then s;
 			transition s to s do assign log := log + 1;
 		}
 	}`)
@@ -82,7 +82,7 @@ func TestSimpleSelfTransitionEffectReadingAnUnknownFeatureIsReported(t *testing.
 				exit { log = log + 1; }
 			}
 
-			start then s;
+			succession first start then s;
 			transition s to s accept again do assign log := missingName + 1;
 		}
 	}`)

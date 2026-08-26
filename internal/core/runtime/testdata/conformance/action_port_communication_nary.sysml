@@ -21,12 +21,12 @@ package test {
 		action recordB {
 			assign atB := msgB;
 		}
-		done end;
-		then start sender;
-		then sender receiverA;
-		then receiverA recordA;
-		then recordA receiverB;
-		then receiverB recordB;
-		then recordB end;
+		done;
+		succession first start then sender;
+		succession first sender then receiverA;
+		succession first receiverA then recordA;
+		succession first recordA then receiverB;
+		succession first receiverB then recordB;
+		succession first recordB then done;
 	}
 }

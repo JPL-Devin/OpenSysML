@@ -11,8 +11,8 @@ func TestToActionGraph_Simple(t *testing.T) {
 	src := `
 		action test {
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 	`
 
@@ -72,8 +72,8 @@ func TestToStateGraph_Simple(t *testing.T) {
 				state idle;
 				final done;
 				
-				start then idle;
-				idle then done;
+				succession first start then idle;
+				succession first idle then done;
 			}
 		}
 	`
@@ -146,14 +146,14 @@ func TestToActionGraph_ForkJoinMergeDecision(t *testing.T) {
 			action a1;
 			action a2;
 			join j;
-			done end;
+			done;
 			
-			then start f;
-			then f a1;
-			then f a2;
-			then a1 j;
-			then a2 j;
-			then j end;
+			succession first start then f;
+			succession first f then a1;
+			succession first f then a2;
+			succession first a1 then j;
+			succession first a2 then j;
+			succession first j then done;
 		}
 	`
 
@@ -211,16 +211,16 @@ func TestToStateGraph_Regions(t *testing.T) {
 					initial v_start;
 					state Red;
 					state Green;
-					v_start then Red;
-					Red then Green;
+					succession first v_start then Red;
+					succession first Red then Green;
 				}
 				
 				region pedestrian {
 					initial p_start;
 					state Walk;
 					state DontWalk;
-					p_start then Walk;
-					Walk then DontWalk;
+					succession first p_start then Walk;
+					succession first Walk then DontWalk;
 				}
 			}
 		}
@@ -286,7 +286,7 @@ func TestToStateGraph_Pseudostates(t *testing.T) {
 				state lowPriority;
 				state highPriority;
 				
-				start then c;
+				succession first start then c;
 			}
 		}
 	`

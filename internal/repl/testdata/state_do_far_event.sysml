@@ -14,6 +14,6 @@ package Debug {
 		}
 		final done;
 
-		init then working;
+		succession first init then working;
 	}
 }

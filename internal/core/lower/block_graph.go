@@ -60,11 +60,13 @@ func isFlowNode(member ast.Node) bool {
 // declaring one keeps its statement form, so it is reported rather than
 // half-executed.
 func outsideBlockFlow(member ast.Node) bool {
-	switch member.(type) {
+	switch m := member.(type) {
 	case *ast.InitialNode, *ast.FinalNode, *ast.SuccessionEdge, *ast.ControlFlowEdge,
-		*ast.ObjectFlowEdge, *ast.ForkNode, *ast.JoinNode, *ast.MergeNode,
+		*ast.ObjectFlowEdge, *ast.TransitionMember, *ast.ForkNode, *ast.JoinNode, *ast.MergeNode,
 		*ast.DecisionNode, *ast.ActionExecutionNode:
 		return true
+	case *ast.Usage:
+		return m.Kind == ast.UsageSuccession
 	default:
 		return false
 	}

@@ -6,5 +6,5 @@ step 2: token 1@low
 stmt assign selected
   eval literal 1 -> 1
 step 3: token 1@converge
-step 4: token 1@end
+step 4: token 1@done
 step 5: no active tokens

@@ -51,6 +51,16 @@
                     (FeatureReference name="m")))
                 (*ast.AssignmentActionNode)
                 (*ast.AssignmentActionNode))))
-          (FinalNode name="end")
-          (SuccessionEdge source="start" target="integrate")
-          (SuccessionEdge source="integrate" target="end"))))))
+          (FinalNode)
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="start"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="integrate"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="integrate"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="done"
+                (*ast.QualifiedName)))))))))

@@ -9,7 +9,7 @@ package CallTriggerNestedTest {
         state lit;
         final done;
 
-        start then standby;
-        lit then done;
+        succession first start then standby;
+        succession first lit then done;
     }
 }

@@ -407,14 +407,13 @@ func actionNodeKind(node ast.Node, graph *lower.ActionGraph) string {
 	return "node"
 }
 
-// behaviorNodeName is the name a state or action graph node was declared with,
-// "" for an anonymous one.
+// behaviorNodeName is the name a state or action graph node was declared with.
 func behaviorNodeName(node ast.Node) string {
 	switch n := node.(type) {
 	case *ast.InitialNode:
 		return n.Name
 	case *ast.FinalNode:
-		return n.Name
+		return "done"
 	case *ast.ForkNode:
 		return n.Name
 	case *ast.JoinNode:

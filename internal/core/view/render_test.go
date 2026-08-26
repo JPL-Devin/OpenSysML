@@ -177,7 +177,7 @@ func TestStateRenderingComesFromTheLoweredGraph(t *testing.T) {
 func TestActionRenderingComesFromTheLoweredGraph(t *testing.T) {
 	rendering := render(t, "action.sysml", "FlowViews::driveView")
 	names := nodeNames(rendering.Roots)
-	for _, want := range []string{"start", "provide", "monitor", "split", "sync", "check", "finish", "record"} {
+	for _, want := range []string{"start", "provide", "monitor", "split", "sync", "check", "done", "record"} {
 		if !names[want] {
 			t.Errorf("action rendering has no node %q; nodes: %v", want, sortedKeys(names))
 		}

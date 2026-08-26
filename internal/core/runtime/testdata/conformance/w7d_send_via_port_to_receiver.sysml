@@ -19,13 +19,13 @@ package W7D {
 		}
 		fork split;
 		join sync;
-		done end;
-		then start sender;
-		then sender split;
-		then split receiver;
-		then split sibling;
-		then receiver sync;
-		then sibling sync;
-		then sync end;
+		done;
+		succession first start then sender;
+		succession first sender then split;
+		succession first split then receiver;
+		succession first split then sibling;
+		succession first receiver then sync;
+		succession first sibling then sync;
+		succession first sync then done;
 	}
 }

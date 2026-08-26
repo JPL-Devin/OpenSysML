@@ -78,7 +78,8 @@ func (p *Parser) peekIsName(n int) bool {
 // action node — `done;`, `done end;` — rather than naming a feature.
 func (p *Parser) atActionNodeWord() (string, bool) { return p.actionNodeWordAt(0) }
 
-// actionNodeWordAt is atActionNodeWord n tokens ahead of the cursor.
+// actionNodeWordAt recognizes a named `done` spelling so parseFinalNode can
+// report its diagnostic instead of cascading.
 func (p *Parser) actionNodeWordAt(n int) (string, bool) {
 	if p.peekN(n).Kind != lexer.Identifier {
 		return "", false

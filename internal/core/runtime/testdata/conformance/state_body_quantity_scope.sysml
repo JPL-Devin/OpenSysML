@@ -29,7 +29,7 @@ package test {
 		}
 		final done;
 
-		start then falling;
+		succession first start then falling;
 
 		transition falling to slow if speed <= pkgLimit;
 		transition falling to fast;

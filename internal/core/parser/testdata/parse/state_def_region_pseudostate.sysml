@@ -7,7 +7,7 @@ state def RegionChoice {
 		state lfast;
 		state lslow;
 
-		then lstart lidle;
+		succession first lstart then lidle;
 		transition lidle to pick;
 	}
 
@@ -15,7 +15,7 @@ state def RegionChoice {
 		initial rstart;
 		state rwatch;
 
-		then rstart rwatch;
+		succession first rstart then rwatch;
 	}
 
 	choice pick;

@@ -2,8 +2,8 @@ package parser
 
 // Member-attached `then` (SysML.xtext EmptySuccessionMember): the keyword
 // sequences the member before it with the member after it, so it describes
-// neither and is desugared into the *ast.SuccessionEdge the `then a b;` form
-// builds — the node lowering and RDF already honour.
+// neither and is desugared into the same edge representation used by
+// `succession first a then b;`.
 //
 // The grammar admits it only before an occurrence usage, so anything else after
 // it is an error. A member with no name has no name for an end to reference, so
@@ -94,18 +94,17 @@ func (p *Parser) newBodyBuilder() *bodyBuilder {
 	return &bodyBuilder{p: p}
 }
 
-// atSuccession reports whether the parser is at a `then` prefixing a body
-// member, as opposed to one starting a succession edge member (`then a b;`) or
-// chaining an inline statement (`then assign x := 1;`).
+// atSuccession reports whether `then` prefixes a body member, rather than
+// starting a succession edge (`succession first a then b;`) or inline statement.
 func (b *bodyBuilder) atSuccession() bool {
 	p := b.p
 	if !p.atKeyword("then") {
 		return false
 	}
 	next := p.peekN(1)
-	// `then a b;` and `then a;` name members; the edge parser reads them. The
-	// unreserved node words (`then done;`) are names to the lexer, so they are
-	// taken from the notation shape (see notation.go).
+	// `succession first a then b;` and `then a;` name members; the edge parser
+	// reads them. Unreserved node words such as `then done;` are identified by
+	// notation shape (see notation.go).
 	kw := ""
 	if next.Kind == lexer.Keyword {
 		kw = next.KeywordID
@@ -115,8 +114,8 @@ func (b *bodyBuilder) atSuccession() bool {
 		return false
 	}
 	if b.namesEdgeEnd(kw) {
-		// `then end;` and `then end b;`: a keyword this body declares a member
-		// with names an edge end, not the kind of a member being declared.
+		// `then done;`: a keyword this body declares a member with names an edge
+		// end, not the kind of a member being declared.
 		return false
 	}
 	if _, ok := namespaceMemberKeywords[kw]; ok {
@@ -130,7 +129,7 @@ func (b *bodyBuilder) atSuccession() bool {
 		return true
 	}
 	if actionNodeKeywords[kw] {
-		// An action node member (SysML.xtext ActionNodeMember): `then fork f;`,
+		// An action node member (SysML.xtext ActionNodeMember): `succession first fork then f;`,
 		// `then merge;`, `then send x via p;`, `then loop action { … } until c;`,
 		// `then done;`. Taken here so the `then` sequences the node the keyword
 		// declares, rather than being read as an edge naming the keyword itself.
@@ -145,7 +144,7 @@ func (b *bodyBuilder) atSuccession() bool {
 		_, isUsage := p.usageKind(kw)
 		_, isDef := p.definitionKind(kw)
 		if !isUsage && !isDef {
-			// `then first x;` and the guarded forms: edges with their own parsers.
+			// `first x;` and the guarded forms: edges with their own parsers.
 			return false
 		}
 		// A `perform` declares an occurrence usage, so a `then` between it and a
@@ -383,7 +382,7 @@ func isEdgeMember(m ast.Node) bool {
 	case *ast.SuccessionEdge, *ast.ControlFlowEdge, *ast.ObjectFlowEdge, *ast.TransitionMember:
 		return true
 	case *ast.Usage:
-		// `a then b;` and the connector forms are usages of an edge kind.
+		// `succession first a then b;` and the connector forms are usages of an edge kind.
 		switch n.Kind {
 		case ast.UsageSuccession, ast.UsageTransition, ast.UsageConnector,
 			ast.UsageFlow, ast.UsageBinding:
@@ -447,7 +446,7 @@ func memberDeclaredName(member ast.Node) string {
 	case *ast.InitialNode:
 		return n.Name
 	case *ast.FinalNode:
-		return n.Name
+		return ""
 	case *ast.ForkNode:
 		return n.Name
 	case *ast.JoinNode:

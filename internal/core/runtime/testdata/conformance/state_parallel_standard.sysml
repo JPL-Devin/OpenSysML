@@ -4,13 +4,13 @@ package ParallelStandard {
 			entry; then lstart;
 			state lstart;
 			state ldone;
-			lstart then ldone;
+			succession first lstart then ldone;
 		}
 		state right {
 			entry; then rstart;
 			state rstart;
 			state rdone;
-			rstart then rdone;
+			succession first rstart then rdone;
 		}
 	}
 }

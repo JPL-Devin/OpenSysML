@@ -6,7 +6,7 @@ package Test {
 			state Walk;
 			state DontWalk;
 			
-			then start Walk;
+			succession first start then Walk;
 			transition Walk to DontWalk when pedestrianTimer;
 			transition DontWalk to Walk when pedestrianTimer;
 		}
@@ -18,7 +18,7 @@ package Test {
 			state Yellow;
 			state Red;
 			
-			then start Green;
+			succession first start then Green;
 			transition Green to Yellow when vehicleTimer;
 			transition Yellow to Red when vehicleTimer;
 			transition Red to Green when vehicleTimer;

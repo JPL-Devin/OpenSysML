@@ -15,10 +15,10 @@ const debugActionSrc = `package test {
 			assign total := total + 5;
 		}
 
-		done end;
+		done;
 
-		then start accumulate;
-		then accumulate end;
+		succession first start then accumulate;
+		succession first accumulate then done;
 	}
 }`
 
@@ -33,7 +33,7 @@ const debugStateSrc = `package test {
 		}
 		final done;
 
-		init then waiting;
+		succession first init then waiting;
 	}
 }`
 
@@ -83,7 +83,7 @@ func TestActionExecutorDebugAccessors(t *testing.T) {
 
 func TestActionExecutorNodeNames(t *testing.T) {
 	names := strings.Join(debugActionExecutor(t).NodeNames(), ",")
-	for _, want := range []string{"start", "accumulate", "end"} {
+	for _, want := range []string{"start", "accumulate", "done"} {
 		if !strings.Contains(names, want) {
 			t.Errorf("NodeNames() = %s, want it to contain %q", names, want)
 		}
@@ -137,9 +137,9 @@ func TestBreakpointNamesEitherKeyOfAShortNamedStep(t *testing.T) {
 		action <acc> :>> accumulate {
 			assign total := total + 5;
 		}
-		done end;
-		then start acc;
-		then acc end;
+		done;
+		succession first start then acc;
+		succession first acc then done;
 	}
 }`
 
@@ -263,7 +263,7 @@ func TestRunDoRoundRunsDoWorkOnly(t *testing.T) {
 				accept after 100 then done;
 			}
 			final done;
-			init then working;
+			succession first init then working;
 		}
 	}`)
 
@@ -301,12 +301,12 @@ func TestActiveStatesCoversOrthogonalRegions(t *testing.T) {
 			region pedestrian {
 				initial start;
 				state Walk;
-				then start Walk;
+				succession first start then Walk;
 			}
 			region vehicle {
 				initial begin;
 				state Green;
-				then begin Green;
+				succession first begin then Green;
 			}
 		}
 	}`)

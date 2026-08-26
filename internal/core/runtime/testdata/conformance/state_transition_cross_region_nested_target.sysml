@@ -15,8 +15,8 @@ package Test {
 				state lmid;
 				state lidle;
 
-				then lstart lmid;
-				then lmid lidle;
+				succession first lstart then lmid;
+				succession first lmid then lidle;
 				transition lidle to rtarget if crossed == 0;
 			}
 			region right {
@@ -29,14 +29,14 @@ package Test {
 						state ridle { exit { innerExits = innerExits + 1; } }
 						state rtarget { entry { crossed = 1; } }
 
-						then istart ridle;
+						succession first istart then ridle;
 					}
 				}
 
-				then rstart wrapper;
+				succession first rstart then wrapper;
 			}
 		}
 
-		start then running;
+		succession first start then running;
 	}
 }

@@ -11,7 +11,7 @@ package StateAcceptPayload {
         state alerting;
         final done;
 
-        start then idle;
+        succession first start then idle;
 
         // The accept names its payload, so the value the received occurrence
         // carries is readable by the transition's effect.

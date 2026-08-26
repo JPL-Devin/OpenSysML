@@ -11,8 +11,8 @@ package test {
 		}
 		decide check;
 
-		then start prepare;
-		then prepare check;
+		succession first start then prepare;
+		succession first prepare then check;
 		if c then done;
 		else done;
 	}

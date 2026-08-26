@@ -333,11 +333,11 @@ package Mission {
         first start;
         action rollForward { assign metersDriven := metersDriven + 10; }
         action takeSample  { assign samples := samples + 1; }
-        done end;
+        done;
 
-        then start rollForward;
-        then rollForward takeSample;
-        then takeSample end;
+        succession first start then rollForward;
+        succession first rollForward then takeSample;
+        succession first takeSample then done;
     }
 
     state rover {

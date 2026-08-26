@@ -9,7 +9,7 @@ flowchart TD
     end
     n7["fork split"]
     n8["join sync"]
-    n9["final finish"]
+    n9["final done"]
     n10["action park"]
     n11["decision check"]
   end

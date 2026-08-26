@@ -5,8 +5,8 @@ package UnroutableSend {
 		port lonely;
 		first start;
 		action sender { send 42 via lonely; }
-		done end;
-		then start sender;
-		then sender end;
+		done;
+		succession first start then sender;
+		succession first sender then done;
 	}
 }

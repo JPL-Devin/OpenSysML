@@ -22,11 +22,11 @@ package test {
 			assign stopped := 1;
 		}
 
-		done end;
+		done;
 
-		then start finish;
-		then finish interrupt;
-		then interrupt record;
-		then record end;
+		succession first start then finish;
+		succession first finish then interrupt;
+		succession first interrupt then record;
+		succession first record then done;
 	}
 }

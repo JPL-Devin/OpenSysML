@@ -9,7 +9,7 @@ package CallTriggerTest {
         state cruising;
         final done;
 
-        start then idle;
+        succession first start then idle;
 
         transition idle to cruising accept setSpeed(value) if value > 0;
         transition idle to braking accept brake();

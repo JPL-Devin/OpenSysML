@@ -12,11 +12,11 @@ package test {
 		fork split { assign x := 1; }
 		action left { assign y := x + 1; }
 		join sync { assign z := y + 1; }
-		done end;
+		done;
 
-		then start split;
-		then split left;
-		then left sync;
-		then sync end;
+		succession first start then split;
+		succession first split then left;
+		succession first left then sync;
+		succession first sync then done;
 	}
 }

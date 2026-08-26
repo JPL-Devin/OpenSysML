@@ -231,7 +231,7 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 			}
 			c.checkEndpoint(m, scope, n.Target, true, nil)
 		case *ast.SuccessionEdge:
-			// `off then busy;`, whose source is elided by the `entry; then off;` form.
+			// `succession first off then busy;`, whose source is elided by the `entry; then off;` form.
 			if n.Source != nil {
 				m.markLeft(c.checkEndpoint(m, scope, n.Source, false, c.startsOf(m, scope, n.Target, true, starts)), n.Source)
 			}
@@ -260,7 +260,7 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 			case ast.UsageState:
 				c.walkBody(m, bodyScope(scope, n), n.Members, n)
 			case ast.UsageSuccession:
-				// `a then b;`, written as a connector whose two ends name vertices.
+				// A succession is a connector whose two ends name vertices.
 				if len(n.ConnectorEnds) == 2 {
 					source := connectorEndName(n.ConnectorEnds[0])
 					target := connectorEndName(n.ConnectorEnds[1])

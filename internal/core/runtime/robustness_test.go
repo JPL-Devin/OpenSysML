@@ -810,8 +810,8 @@ func testSuccessionGuardFailureModes(t *testing.T) {
 				action alert assign high := 1;
 				action idle assign low := 1;
 				first check;
-				then check alert if level > 10;
-				then check idle if level > 5;
+				succession first check if level > 10 then alert;
+				succession first check if level > 5 then idle;
 			`,
 			want: ErrAmbiguousSuccession,
 		},
@@ -1483,8 +1483,8 @@ func testStateSubactionReferenceOfMissingAction(t *testing.T) {
 			}
 			final done;
 
-			init then active;
-			active then done;
+			succession first init then active;
+			succession first active then done;
 		}
 	}`, "Machine")
 
@@ -1501,8 +1501,8 @@ func testStateSubactionReferenceFeatureChain(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
 		action def CoolDown {
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 
 		state Machine {
@@ -1516,8 +1516,8 @@ func testStateSubactionReferenceFeatureChain(t *testing.T) {
 			}
 			final done;
 
-			init then active;
-			active then done;
+			succession first init then active;
+			succession first active then done;
 		}
 	}`, "Machine")
 
@@ -1535,10 +1535,10 @@ func testPerformOfMissingAction(t *testing.T) {
 		action outer {
 			first start;
 			perform action doIt references missingAction;
-			done end;
+			done;
 
-			then start doIt;
-			then doIt end;
+			succession first start then doIt;
+			succession first doIt then done;
 		}
 	}`, "outer")
 
@@ -1556,10 +1556,10 @@ func testPerformReferenceCycle(t *testing.T) {
 		action outer {
 			first start;
 			perform action doIt references outer;
-			done end;
+			done;
 
-			then start doIt;
-			then doIt end;
+			succession first start then doIt;
+			succession first doIt then done;
 		}
 	}`, "outer")
 
@@ -1622,7 +1622,7 @@ func testStateTransitionEndpointMisspelled(t *testing.T) {
 			initial init;
 			state busy;
 			final done;
-			init then busy;
+			succession first init then busy;
 			transition busy to donee;
 		}
 	}`
@@ -1683,7 +1683,7 @@ func testStateTransitionEndpointNeverResolved(t *testing.T) {
 			initial init;
 			state busy;
 			final done;
-			init then busy;
+			succession first init then busy;
 			transition busy to donee;
 		}
 	}`
@@ -1729,12 +1729,12 @@ func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 		state Other {
 			initial start;
 			state running;
-			start then running;
+			succession first start then running;
 		}
 		state Machine {
 			initial init;
 			state busy;
-			init then busy;
+			succession first init then busy;
 			transition busy to Other::running;
 		}
 	}`
@@ -1777,7 +1777,7 @@ func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
 			state busy;
 			state other;
 			first marker then other;
-			init then busy;
+			succession first init then busy;
 			transition busy to marker;
 		}
 	}`
@@ -1812,7 +1812,7 @@ func testStateJunctionWithoutAnOutgoingTransition(t *testing.T) {
 			initial init;
 			state busy;
 			junction stuck;
-			init then busy;
+			succession first init then busy;
 			transition busy to stuck;
 		}
 	}`)
@@ -1877,18 +1877,18 @@ func testStateCrossRegionTransitionsPingPong(t *testing.T) {
 				region left {
 					initial ls;
 					state lidle;
-					then ls lidle;
+					succession first ls then lidle;
 					transition lidle to rtarget;
 				}
 				region right {
 					initial rs;
 					state ridle;
 					state rtarget;
-					then rs ridle;
+					succession first rs then ridle;
 					transition rtarget to lidle;
 				}
 			}
-			init then running;
+			succession first init then running;
 		}
 	}`)
 	exec.ctx.maxStateEvents = 50
@@ -1919,7 +1919,7 @@ func testStateTransitionEffectReadsAnUnknownFeature(t *testing.T) {
 			initial init;
 			state active;
 			final done;
-			init then active;
+			succession first init then active;
 			transition active to done do assign counter := missingName + 1;
 		}
 	}`)
@@ -1978,8 +1978,8 @@ func testEmptyAnonymousActionBody(t *testing.T) {
 				exit action { }
 			}
 			state done;
-			then start quiet;
-			then quiet done;
+			succession first start then quiet;
+			succession first quiet then done;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -2006,8 +2006,8 @@ func testNonTerminatingAnonymousDoBody(t *testing.T) {
 				}
 			}
 			state done;
-			then start spin;
-			then spin done;
+			succession first start then spin;
+			succession first spin then done;
 		}
 	}`)
 	if !errors.Is(err, ErrStepLimitExceeded) {
@@ -2028,8 +2028,8 @@ func testBehaviorPerformingAnActionAndStatingABody(t *testing.T) {
 				entry action mixed : Bump { assign c := c + 1; }
 			}
 			state done;
-			then start working;
-			then working done;
+			succession first start then working;
+			succession first working then done;
 		}
 	}`)
 	if err == nil {
@@ -2050,7 +2050,7 @@ func testQualifiedAssignmentTargetInAStateEffect(t *testing.T) {
 			initial init;
 			state active;
 			final done;
-			init then active;
+			succession first init then active;
 			transition active to done do assign other::c := 1;
 		}
 	}`)
@@ -2120,7 +2120,7 @@ func testCallOfUnhandledOperation(t *testing.T) {
 			initial init;
 			state waiting;
 			state moving;
-			init then waiting;
+			succession first init then waiting;
 			transition waiting to moving accept go();
 		}
 	}`)
@@ -2152,7 +2152,7 @@ func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
 				transition middle to recovered accept abort;
 			}
 			state stopped;
-			init then inner;
+			succession first init then inner;
 			transition outer to stopped accept shutdown;
 		}
 	}`)
@@ -2176,7 +2176,7 @@ func testCompositeSelfTransitionWithNoSubstateToReEnter(t *testing.T) {
 			state Working {
 				state Step1;
 			}
-			init then Working::Step1;
+			succession first init then Working::Step1;
 			transition Working to Working accept restart;
 		}
 	}`)
@@ -2212,10 +2212,10 @@ func testStaleCompositeTimerInARegion(t *testing.T) {
 				region right {
 					initial rstart;
 					state watching;
-					then rstart watching;
+					succession first rstart then watching;
 				}
 			}
-			init then working;
+			succession first init then working;
 		}
 	}`)
 	exec.SendSignal("skip", nil)
@@ -2260,7 +2260,7 @@ func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
 				deep history resume;
 			}
 			state away;
-			init then outer;
+			succession first init then outer;
 			transition outer to away accept leave;
 			transition away to resume accept back;
 		}
@@ -2288,7 +2288,7 @@ func testCallArgumentOfWrongType(t *testing.T) {
 			initial init;
 			state waiting;
 			state moving;
-			init then waiting;
+			succession first init then waiting;
 			transition waiting to moving accept setSpeed(value) if value > 0;
 		}
 	}`)
@@ -2378,10 +2378,10 @@ func testSendViaUnconnectedPort(t *testing.T) {
 			first start;
 			action sender { send 42 via outPort; }
 			action reader accept msg : Integer via inPort;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err == nil {
@@ -2398,9 +2398,9 @@ func testRoutedSendViaUnknownPort(t *testing.T) {
 			first start;
 			action sender { send 42 via missing to reader; }
 			action reader accept msg : Integer;
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	var typed *UnknownSendPortError
@@ -2430,10 +2430,10 @@ func testRoutedSendPortTypeMismatch(t *testing.T) {
 			first start;
 			action sender { send IntMessage via outPort to reader; }
 			action reader accept msg : Integer via inPort;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	var typed *SendPortTypeMismatchError
@@ -2460,10 +2460,10 @@ func testRoutedSendPortTypeMatch(t *testing.T) {
 			first start;
 			action sender { send IntMessage via outPort to reader; }
 			action reader accept : IntMessage via inPort;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err != nil {
@@ -2483,10 +2483,10 @@ func testRoutedSendScalarTypedFlowMismatch(t *testing.T) {
 			first start;
 			action sender { send 42 via outPort to reader; }
 			action reader accept msg : Integer via inPort;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	var typed *SendPortTypeMismatchError
@@ -2506,9 +2506,9 @@ func testRoutedSendUnreachableReceiver(t *testing.T) {
 			connect outPort to inPort;
 			first start;
 			action sender { send 42 via outPort to missing; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	var typed *UnreachableSendReceiverError
@@ -2534,10 +2534,10 @@ func testRoutedSendReceiverNameMismatchDeadlock(t *testing.T) {
 			action sender { send 42 via outPort to receiver; }
 			action receiver;
 			action sibling accept msg : Integer via inPort;
-			done end;
-			then start sender;
-			then sender sibling;
-			then sibling end;
+			done;
+			succession first start then sender;
+			succession first sender then sibling;
+			succession first sibling then done;
 		}
 	}`)
 	if err == nil {
@@ -2601,9 +2601,9 @@ func testSendAddressedToAnUnreachableTarget(t *testing.T) {
 		action pipeline {
 			first start;
 			action sender { send 42 to alpha.leaf.count; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	if err == nil {
@@ -2625,9 +2625,9 @@ func testSendAddressedThroughSeveralOccurrences(t *testing.T) {
 		action pipeline {
 			first start;
 			action sender { send 42 to nodes.inPort; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	if err == nil {
@@ -2650,10 +2650,10 @@ func testSendAddressedToAPartNoSiblingTakes(t *testing.T) {
 			first start;
 			action s { send Ping() to receiver; }
 			action other accept p : Ping;
-			done end;
-			then start s;
-			then s other;
-			then other end;
+			done;
+			succession first start then s;
+			succession first s then other;
+			succession first other then done;
 		}
 	}`)
 	if err == nil {
@@ -2673,9 +2673,9 @@ func testInjectedMessageNamesAReceiverNoAcceptHas(t *testing.T) {
 		action pipeline {
 			first start;
 			action other accept n : Integer;
-			done end;
-			then start other;
-			then other end;
+			done;
+			succession first start then other;
+			succession first other then done;
 		}
 	}`))
 	exec, err := ctx.CreateActionExecutor(oneSymbol(t, idx, "P::pipeline"))
@@ -2705,7 +2705,7 @@ func testSendAddressedToAnObjectThatCannotBeBuilt(t *testing.T) {
 				port inPort : PingPort;
 				attribute a = b + 1.0;
 				attribute b = a + 1.0;
-				action listen { first start; done end; then start end; }
+				action listen { first start; done; succession first start then done; }
 			}
 			part alpha : Node;
 		}
@@ -2747,9 +2747,9 @@ func testAcceptDeadlockNeverSatisfied(t *testing.T) {
 			action pipeline {
 				first start;
 				action reader accept n : Integer;
-				done end;
-				then start reader;
-				then reader end;
+				done;
+				succession first start then reader;
+				succession first reader then done;
 			}
 		}`)
 		done <- err
@@ -2789,15 +2789,15 @@ func testAcceptDeadlockReportsEveryWaitingAccept(t *testing.T) {
 			action recorder { assign got := n; }
 			action listener accept text : String;
 			join sync;
-			done end;
-			then start sender;
-			then sender split;
-			then split reader;
-			then split listener;
-			then reader recorder;
-			then recorder sync;
-			then listener sync;
-			then sync end;
+			done;
+			succession first start then sender;
+			succession first sender then split;
+			succession first split then reader;
+			succession first split then listener;
+			succession first reader then recorder;
+			succession first recorder then sync;
+			succession first listener then sync;
+			succession first sync then done;
 		}
 	}`)
 	if err == nil {
@@ -2828,9 +2828,9 @@ func testAcceptStatementDeadlockInALoop(t *testing.T) {
 						accept n : Integer;
 					}
 				}
-				done end;
-				then start waiter;
-				then waiter end;
+				done;
+				succession first start then waiter;
+				succession first waiter then done;
 			}
 		}`)
 		done <- err
@@ -2861,7 +2861,7 @@ func testNonNumericTimeTrigger(t *testing.T) {
 				accept at "noon" then done;
 			}
 			final done;
-			init then waiting;
+			succession first init then waiting;
 		}
 	}`)
 	if err == nil {
@@ -2884,7 +2884,7 @@ func testTimeTriggerOfANonTimeDimension(t *testing.T) {
 					accept after 5 [kg] then done;
 				}
 				state done;
-				init then waiting;
+				succession first init then waiting;
 			}
 		}
 	`))
@@ -2911,7 +2911,7 @@ func testChangeConditionThatNeverHolds(t *testing.T) {
 				accept when ready then done;
 			}
 			state done;
-			init then waiting;
+			succession first init then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -2938,18 +2938,18 @@ func testForkBranchesShareRegion(t *testing.T) {
 					initial ls;
 					state a;
 					state b;
-					then ls a;
+					succession first ls then a;
 				}
 				region right {
 					initial rs;
 					state c;
-					then rs c;
+					succession first rs then c;
 				}
 			}
 			fork split;
 			final done;
 
-			init then ready;
+			succession first init then ready;
 			transition ready to split;
 			transition split to a;
 			transition split to b;
@@ -2973,7 +2973,7 @@ func testJoinWithOneIncomingBranch(t *testing.T) {
 			join sync;
 			final done;
 
-			init then ready;
+			succession first init then ready;
 			transition ready to sync;
 			transition sync to done;
 		}
@@ -2999,13 +2999,13 @@ func testRegionPseudostateWithoutSatisfiedGuard(t *testing.T) {
 				initial ls;
 				state a;
 				state b;
-				then ls a;
+				succession first ls then a;
 				transition a to merge;
 			}
 			region right {
 				initial rs;
 				state c;
-				then rs c;
+				succession first rs then c;
 			}
 			junction merge;
 
@@ -3029,13 +3029,13 @@ func testRegionPseudostateCycle(t *testing.T) {
 			region left {
 				initial ls;
 				state a;
-				then ls a;
+				succession first ls then a;
 				transition a to first;
 			}
 			region right {
 				initial rs;
 				state c;
-				then rs c;
+				succession first rs then c;
 			}
 			junction first;
 			junction second;
@@ -3062,10 +3062,10 @@ func testDeadlockJoinStarvation(t *testing.T) {
 				first start;
 				action stranded;
 				join sync;
-				done end;
-				then start sync;
-				then stranded sync;
-				then sync end;
+				done;
+				succession first start then sync;
+				succession first stranded then sync;
+				succession first sync then done;
 			}
 		}
 	`
@@ -3096,7 +3096,7 @@ func testForkWithoutASuccessor(t *testing.T) {
 			action broken {
 				first start;
 				fork split;
-				then start split;
+				succession first start then split;
 			}
 		}
 	`
@@ -3166,7 +3166,7 @@ func testMergeWithoutASuccessor(t *testing.T) {
 			action broken {
 				first start;
 				merge converge;
-				then start converge;
+				succession first start then converge;
 			}
 		}
 	`
@@ -3241,7 +3241,7 @@ func testFirstNodeWithASecondSuccession(t *testing.T) {
 				action s2;
 				action s3;
 				first s1 then s2;
-				then s1 s3;
+				succession first s1 then s3;
 			}
 		}
 	`
@@ -3301,8 +3301,8 @@ func testFirstNamingAFinalNode(t *testing.T) {
 			action seq {
 				attribute x = 0;
 				action s1 { assign x := 7; }
-				done fin;
-				first fin then s1;
+				done;
+				first done then s1;
 			}
 		}
 	`
@@ -3315,7 +3315,7 @@ func testFirstNamingAFinalNode(t *testing.T) {
 
 	if _, err := ctx.CreateActionExecutor(sym); err == nil {
 		t.Fatal("a first end naming a final node lowered without an error")
-	} else if !strings.Contains(err.Error(), "final node fin") {
+	} else if !strings.Contains(err.Error(), "final node done") {
 		t.Fatalf("error = %q, want it to name the final node", err)
 	}
 }
@@ -3333,14 +3333,14 @@ func testForkBranchesAssigningTheSameFeature(t *testing.T) {
 				action left { assign x := 1; }
 				action right { assign x := 2; }
 				join sync;
-				done end;
+				done;
 
-				then start split;
-				then split left;
-				then split right;
-				then left sync;
-				then right sync;
-				then sync end;
+				succession first start then split;
+				succession first split then left;
+				succession first split then right;
+				succession first left then sync;
+				succession first right then sync;
+				succession first sync then done;
 			}
 		}
 	`
@@ -3396,10 +3396,10 @@ func testDecisionNoSatisfiedGuard(t *testing.T) {
 
 				first start;
 				action selected;
-				done end;
+				done;
 
-				then start choose;
-				then selected end;
+				succession first start then choose;
+				succession first selected then done;
 
 				decide choose;
 				if enabled then selected;
@@ -3428,7 +3428,7 @@ func testStateDanglingTransition(t *testing.T) {
 		package test {
 			state Machine {
 				initial init;
-				init then nowhere; // 'nowhere' state doesn't exist
+				succession first init then nowhere; // 'nowhere' state doesn't exist
 			}
 		}
 	`
@@ -3529,7 +3529,7 @@ func testSourcelessAcceptAtTopLevel(t *testing.T) {
 				initial init;
 				state waiting;
 				state active;
-				init then waiting;
+				succession first init then waiting;
 				accept go then active; // ERROR: sourceless at top level
 			}
 		}
@@ -4416,9 +4416,9 @@ func testNonTerminatingLoopExhaustsStepBudget(t *testing.T) {
 						assign total := total + 1;
 					}
 				}
-				done end;
-				then start spin;
-				then spin end;
+				done;
+				succession first start then spin;
+				succession first spin then done;
 			}
 		}
 	`
@@ -4461,9 +4461,9 @@ func testLoopBodyDeclarationDoesNotLeak(t *testing.T) {
 						}
 					}
 				}
-				done end;
-				then start accumulate;
-				then accumulate end;
+				done;
+				succession first start then accumulate;
+				succession first accumulate then done;
 			}
 		}
 	`
@@ -4509,9 +4509,9 @@ func testLoopBodyOfUnexecutableStatement(t *testing.T) {
 						assign total := total + 1;
 					}
 				}
-				done end;
-				then start accumulate;
-				then accumulate end;
+				done;
+				succession first start then accumulate;
+				succession first accumulate then done;
 			}
 		}
 	`
@@ -4549,9 +4549,9 @@ func testBlockFlowOfUnexecutableMember(t *testing.T) {
 						part inner;
 					}
 				}
-				done end;
-				then start accumulate;
-				then accumulate end;
+				done;
+				succession first start then accumulate;
+				succession first accumulate then done;
 			}
 		}
 	`
@@ -4587,9 +4587,9 @@ func testNonTerminatingLoopPerformingAnAction(t *testing.T) {
 						assign total := total + 1;
 					}
 				}
-				done end;
-				then start spin;
-				then spin end;
+				done;
+				succession first start then spin;
+				succession first spin then done;
 			}
 
 			action bump {
@@ -4598,9 +4598,9 @@ func testNonTerminatingLoopPerformingAnAction(t *testing.T) {
 				action run {
 					assign spun := 1;
 				}
-				done finish;
-				then begin run;
-				then run finish;
+				done;
+				succession first begin then run;
+				succession first run then done;
 			}
 		}
 	`
@@ -4657,9 +4657,9 @@ func testForOverAScalar(t *testing.T) {
 						assign visited := visited + 1;
 					}
 				}
-				done end;
-				then start iterate;
-				then iterate end;
+				done;
+				succession first start then iterate;
+				succession first iterate then done;
 			}
 		}
 	`
@@ -4701,8 +4701,8 @@ func testStatementDirectlyInAnActionBody(t *testing.T) {
 						attribute total : Integer = 0;
 						first start;
 						` + stmt + `
-						done end;
-						then start end;
+						done;
+						succession first start then done;
 					}
 				}
 			`
@@ -4741,10 +4741,10 @@ func testFlowEndNamingNoNode(t *testing.T) {
 						first start;
 						action generate { out engineTorque : Integer; assign engineTorque := 1; }
 						action amplify { in torqueIn : Integer; }
-						done end;
-						then start generate;
-						then generate amplify;
-						then amplify end;
+						done;
+						succession first start then generate;
+						succession first generate then amplify;
+						succession first amplify then done;
 						` + flow + `
 					}
 				}
@@ -4776,10 +4776,10 @@ func testFlowNamingNoPin(t *testing.T) {
 			first start;
 			action generate { out engineTorque : Integer; assign engineTorque := 1; }
 			action amplify { in engineTorque : Integer; }
-			done end;
-			then start generate;
-			then generate amplify;
-			then amplify end;
+			done;
+			succession first start then generate;
+			succession first generate then amplify;
+			succession first amplify then done;
 			flow generateToAmplify from generate to amplify;
 		}
 	}`)
@@ -4802,10 +4802,10 @@ func testAcceptPayloadWithoutAValue(t *testing.T) {
 			first start;
 			action sender { send Ping() to reader; }
 			action reader accept p : Ping;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err == nil {
@@ -4829,10 +4829,10 @@ func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
 			first start;
 			action reader { assign seen := msg; }
 			action waiter accept msg : Integer;
-			done end;
-			then start reader;
-			then reader waiter;
-			then waiter end;
+			done;
+			succession first start then reader;
+			succession first reader then waiter;
+			succession first waiter then done;
 		}
 	}`)
 	if !errors.Is(err, ErrUnresolvedReference) {
@@ -4853,10 +4853,10 @@ func testFlowFromANodeThatProducedNothing(t *testing.T) {
 				first start;
 				action generate { out engineTorque : Integer; }
 				action amplify { in torqueIn : Integer; }
-				done end;
-				then start generate;
-				then generate amplify;
-				then amplify end;
+				done;
+				succession first start then generate;
+				succession first generate then amplify;
+				succession first amplify then done;
 				flow generateToAmplify from generate.engineTorque to amplify.torqueIn;
 			}
 		}
@@ -4894,10 +4894,10 @@ func testActionAcceptTimeTrigger(t *testing.T) {
 						first start;
 						action waitForIt ` + trigger + `;
 						action work { assign done := 1; }
-						done end;
-						then start waitForIt;
-						then waitForIt work;
-						then work end;
+						done;
+						succession first start then waitForIt;
+						succession first waitForIt then work;
+						succession first work then done;
 					}
 				}
 			`
@@ -4927,9 +4927,9 @@ func testActionAcceptNonBooleanChangeTrigger(t *testing.T) {
 				attribute temp : Integer = 10;
 				first start;
 				action awaitWarm accept when temp;
-				done end;
-				then start awaitWarm;
-				then awaitWarm end;
+				done;
+				succession first start then awaitWarm;
+				succession first awaitWarm then done;
 			}
 		}
 	`
@@ -4955,8 +4955,8 @@ func testActionBodyUnresolvedUnit(t *testing.T) {
 			action descend {
 				attribute h : Real = 500.0 [furlong];
 				first start;
-				done end;
-				then start end;
+				done;
+				succession first start then done;
 			}
 		}
 	`))
@@ -4986,9 +4986,9 @@ func testActionBodyUnresolvedFeature(t *testing.T) {
 				action bump {
 					assign total := missingName + 1;
 				}
-				done end;
-				then start bump;
-				then bump end;
+				done;
+				succession first start then bump;
+				succession first bump then done;
 			}
 		}
 	`))
@@ -5016,7 +5016,7 @@ func testStateBodyUnresolvedUnit(t *testing.T) {
 				attribute speed : Real = 1.5 [knot];
 				initial start;
 				state running;
-				start then running;
+				succession first start then running;
 			}
 		}
 	`))

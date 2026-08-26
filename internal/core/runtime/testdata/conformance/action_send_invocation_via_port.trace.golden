@@ -5,5 +5,5 @@ step 2: token 1@receive
 step 3: token 1@record
 stmt assign received
   eval feature msg -> 7
-step 4: token 1@end
+step 4: token 1@done
 step 5: no active tokens

@@ -19,7 +19,7 @@ func TestPositionalEdgeEndNamesTheNotation(t *testing.T) {
 	}{
 		{
 			name: "a declaration that is no action node",
-			src:  `action test { first start; then part { } done end; }`,
+			src:  `action test { first start; then part { } done; }`,
 			want: `anonymous part usage`,
 		},
 	}
@@ -53,7 +53,7 @@ func TestSequencedPerformIsANode(t *testing.T) {
 			action x;
 			then perform doIt;
 			then done;
-			then start x;
+			succession first start then x;
 		}
 	`)
 

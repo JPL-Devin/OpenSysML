@@ -3,7 +3,7 @@ package test {
 		out result: Integer;
 		
 		first start;
-		done end;
-		then start end;
+		done;
+		succession first start then done;
 	}
 }

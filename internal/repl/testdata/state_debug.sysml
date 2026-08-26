@@ -11,6 +11,6 @@ package Debug {
 		}
 		final done;
 
-		init then waiting;
+		succession first init then waiting;
 	}
 }

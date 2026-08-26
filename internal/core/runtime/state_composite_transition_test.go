@@ -18,7 +18,7 @@ func TestCompositeStateHandlesEventItsSubstateDoesNot(t *testing.T) {
 				transition Step1 to Step2 accept next;
 			}
 			state Done;
-			start then Step1;
+			succession first start then Step1;
 			transition Working to Done accept abort;
 		}
 	}`)
@@ -45,7 +45,7 @@ func TestFalseGuardInsideACompositeStateFallsOutward(t *testing.T) {
 				transition Step1 to Step2 accept abort if ready;
 			}
 			state Done;
-			start then Step1;
+			succession first start then Step1;
 			transition Working to Done accept abort;
 		}
 	}`)
@@ -75,7 +75,7 @@ func TestTransitionOutOfAnIntermediateCompositeStateKeepsItsOwnerActive(t *testi
 				state Recovered;
 				transition Middle to Recovered accept abort;
 			}
-			start then Inner;
+			succession first start then Inner;
 			transition Outer to Done accept shutdown;
 			state Done;
 		}
@@ -105,7 +105,7 @@ func TestOuterCompositeStateStillHandlesItsEventAfterASubstateMoved(t *testing.T
 				state Recovered;
 				transition Middle to Recovered accept abort;
 			}
-			start then Inner;
+			succession first start then Inner;
 			transition Outer to Done accept shutdown;
 			state Done;
 		}
@@ -132,7 +132,7 @@ func TestEventNoLevelAcceptsLeavesTheConfigurationAlone(t *testing.T) {
 				transition Step1 to Step2 accept next;
 			}
 			state Done;
-			start then Step1;
+			succession first start then Step1;
 			transition Working to Done accept abort;
 		}
 	}`)
@@ -160,7 +160,7 @@ func TestOneEventTakesOneTransitionPerActiveLeaf(t *testing.T) {
 			}
 			state Idle;
 			state Done;
-			start then Working::Step1;
+			succession first start then Working::Step1;
 			transition Step1 to Idle accept e;
 			transition Idle to Done accept e;
 		}
@@ -197,15 +197,15 @@ func TestOneEventTakesACompositesTransitionOnce(t *testing.T) {
 				region left {
 					initial lstart;
 					state l1;
-					then lstart l1;
+					succession first lstart then l1;
 				}
 				region right {
 					initial rstart;
 					state r1;
-					then rstart r1;
+					succession first rstart then r1;
 				}
 			}
-			start then Working;
+			succession first start then Working;
 			transition Working to Working accept restart do assign log := log + 1;
 		}
 	}`)
@@ -236,7 +236,7 @@ func TestChangeConditionOnACompositeStateFiresWhileASubstateIsActive(t *testing.
 				accept when ready then Done;
 			}
 			state Done;
-			start then Step1;
+			succession first start then Step1;
 		}
 	}`)
 
@@ -333,7 +333,7 @@ func TestChangeConditionTakesTheInnermostTransitionOnly(t *testing.T) {
 				accept when ready then Done;
 			}
 			state Done;
-			start then Working;
+			succession first start then Working;
 		}
 	}`)
 
@@ -367,7 +367,7 @@ func TestOneRegionsInnerTransitionLeavesAConcurrentRegionsOwnTransition(t *testi
 					state l1;
 					state l2;
 
-					then lstart l1;
+					succession first lstart then l1;
 					transition l1 to l2 accept e;
 				}
 
@@ -376,11 +376,11 @@ func TestOneRegionsInnerTransitionLeavesAConcurrentRegionsOwnTransition(t *testi
 					state r1;
 					state r2;
 
-					then rstart r1;
+					succession first rstart then r1;
 					transition r1 to r2 accept e;
 				}
 			}
-			start then Working;
+			succession first start then Working;
 		}
 	}`)
 
@@ -484,7 +484,7 @@ func TestTimedSelfTransitionFiresEveryPeriod(t *testing.T) {
 
 			initial start;
 			state s;
-			start then s;
+			succession first start then s;
 			transition s to s accept after 1 do assign ticks := ticks + 1;
 		}
 	}`)

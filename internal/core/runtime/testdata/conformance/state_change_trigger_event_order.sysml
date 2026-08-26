@@ -21,7 +21,7 @@ package test {
 			entry { log = log * 10 + 3; }
 		}
 
-		start then A;
+		succession first start then A;
 		transition A to B accept when ready do assign log := log * 10 + 1;
 		transition A to late when Go do assign log := log * 10 + 9;
 		transition B to C when Go do assign log := log * 10 + 2;

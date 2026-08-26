@@ -14,7 +14,7 @@ package test {
 
 		final done;
 
-		start then waiting;
+		succession first start then waiting;
 
 		transition waiting to done when Ping;
 	}

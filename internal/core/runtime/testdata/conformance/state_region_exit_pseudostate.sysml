@@ -9,7 +9,7 @@ package Test {
 			initial lstart;
 			state lwork { exit { exits = exits + 1; } }
 
-			then lstart lwork;
+			succession first lstart then lwork;
 			transition lwork to leave;
 		}
 
@@ -17,7 +17,7 @@ package Test {
 			initial rstart;
 			state rwork { exit { exits = exits + 10; } }
 
-			then rstart rwork;
+			succession first rstart then rwork;
 		}
 
 		choice leave;

@@ -44,7 +44,7 @@ func TestRemovedActionNodeAliasesRemainOrdinaryNames(t *testing.T) {
 	for _, src := range []string{
 		"package P { action def A { attribute initial : Boolean; attribute final : Boolean; attribute decision : Boolean; } }",
 		"package P { action def A { action initial; action final; first initial then final; } }",
-		"package P { action def A { in decision : Boolean; action a; action b; then a b if decision; } }",
+		"package P { action def A { in decision : Boolean; action a; action b; succession first a if decision then b; } }",
 		// A kindless member named by an unreserved word is a feature, as it is for
 		// every other such word.
 		"package P { action def A { final; decision; } }",
@@ -55,7 +55,7 @@ func TestRemovedActionNodeAliasesRemainOrdinaryNames(t *testing.T) {
 
 // The standard spellings the aliases stood in for keep parsing to their nodes.
 func TestStandardActionNodeSpellingsStillParse(t *testing.T) {
-	root := parseClean(t, "package P { action def A { first a; action a; decide d; done end; then a d; then d end; } }")
+	root := parseClean(t, "package P { action def A { first a; action a; decide d; done; succession first a then d; succession first d then done; } }")
 	dump := ast.Dump(root)
 	for _, want := range []string{"InitialNode", "DecisionNode", "FinalNode"} {
 		if !strings.Contains(dump, want) {

@@ -22,19 +22,19 @@ const forkJoinMachine = `package test {
             region left {
                 initial lstart;
                 state working { entry { leftRan = 1; } }
-                then lstart working;
+                succession first lstart then working;
             }
             region right {
                 initial rstart;
                 state watching { entry { rightRan = 1; } }
-                then rstart watching;
+                succession first rstart then watching;
             }
         }
         fork split;
         join sync;
         final done;
 
-        init then idle;
+        succession first init then idle;
         transition idle to split;
         transition split to working;
         transition split to watching;
@@ -76,18 +76,18 @@ func TestForkBranchesMustBeInDistinctRegions(t *testing.T) {
                 initial lstart;
                 state working;
                 state alsoWorking;
-                then lstart working;
+                succession first lstart then working;
             }
             region right {
                 initial rstart;
                 state watching;
-                then rstart watching;
+                succession first rstart then watching;
             }
         }
         fork split;
         final done;
 
-        init then idle;
+        succession first init then idle;
         transition idle to split;
         transition split to working;
         transition split to alsoWorking;
@@ -109,13 +109,13 @@ func TestJoinWaitsForEveryBranch(t *testing.T) {
             region left {
                 initial lstart;
                 state working;
-                then lstart working;
+                succession first lstart then working;
             }
             region right {
                 initial rstart;
                 state watching;
                 state stillWatching;
-                then rstart watching;
+                succession first rstart then watching;
                 transition watching to stillWatching;
             }
         }
@@ -123,7 +123,7 @@ func TestJoinWaitsForEveryBranch(t *testing.T) {
         join sync;
         final done;
 
-        init then idle;
+        succession first init then idle;
         transition idle to split;
         transition split to working;
         transition split to watching;

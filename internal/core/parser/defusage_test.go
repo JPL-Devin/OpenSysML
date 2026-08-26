@@ -230,8 +230,8 @@ func TestParseDefinitionBodyVisibility(t *testing.T) {
 func TestParseActionUsageIntegration(t *testing.T) {
 	src := `action example {
 		first startNode;
-		done endNode;
-		then startNode endNode;
+		done;
+		succession first startNode then endNode;
 	}`
 	u, ok := parseOneMember(t, src).(*ast.Usage)
 	if !ok {
@@ -254,25 +254,30 @@ func TestParseActionUsageIntegration(t *testing.T) {
 	}
 
 	// Verify FinalNode
-	final, ok := u.Members[1].(*ast.FinalNode)
-	if !ok || final.Name != "endNode" {
-		t.Fatalf("member[1]: expected FinalNode endNode, got %T", u.Members[1])
+	if _, ok := u.Members[1].(*ast.FinalNode); !ok {
+		t.Fatalf("member[1]: expected FinalNode, got %T", u.Members[1])
 	}
 
-	// Verify SuccessionEdge
-	edge, ok := u.Members[2].(*ast.SuccessionEdge)
+	// Verify Succession
+	membership, ok := u.Members[2].(*ast.Membership)
 	if !ok {
-		t.Fatalf("member[2]: expected SuccessionEdge, got %T", u.Members[2])
+		t.Fatalf("member[2]: expected Membership, got %T", u.Members[2])
 	}
-	if edge.Source == nil || edge.Target == nil {
-		t.Fatalf("edge missing source/target")
+	edge, ok := membership.Member.(*ast.Usage)
+	if !ok || edge.Kind != ast.UsageSuccession {
+		t.Fatalf("member[2]: expected succession Usage, got %T", membership.Member)
 	}
 	// QualifiedName.Parts[0].Text holds the identifier
-	if len(edge.Source.Parts) == 0 || edge.Source.Parts[0].Text != "startNode" {
-		t.Fatalf("edge source: expected startNode, got %+v", edge.Source)
+	if len(edge.ConnectorEnds) != 2 {
+		t.Fatalf("succession has %d ends, want 2", len(edge.ConnectorEnds))
 	}
-	if len(edge.Target.Parts) == 0 || edge.Target.Parts[0].Text != "endNode" {
-		t.Fatalf("edge target: expected endNode, got %+v", edge.Target)
+	source, ok := edge.ConnectorEnds[0].Target.(*ast.QualifiedName)
+	if !ok || len(source.Parts) == 0 || source.Parts[0].Text != "startNode" {
+		t.Fatalf("succession source: expected startNode, got %+v", edge.ConnectorEnds[0].Target)
+	}
+	target, ok := edge.ConnectorEnds[1].Target.(*ast.QualifiedName)
+	if !ok || len(target.Parts) == 0 || target.Parts[0].Text != "endNode" {
+		t.Fatalf("succession target: expected endNode, got %+v", edge.ConnectorEnds[1].Target)
 	}
 }
 

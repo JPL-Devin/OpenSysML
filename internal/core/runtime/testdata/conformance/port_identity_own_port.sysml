@@ -18,7 +18,7 @@ package PortIdentity {
 			}
 			state received;
 
-			start then waiting;
+			succession first start then waiting;
 
 			transition first waiting
 				accept Ping via inPort

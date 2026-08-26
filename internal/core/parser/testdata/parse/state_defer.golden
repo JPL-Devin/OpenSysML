@@ -11,11 +11,12 @@
                 (CallEvent operation="setSpeed" parameters=[value]))))
           (SubstateMember name="ready")
           (*ast.StateNode)
-          (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-            (ConnectorEnd target="<nil>"
-              (*ast.QualifiedName))
-            (ConnectorEnd target="<nil>"
-              (*ast.QualifiedName)))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="start"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="busy"
+                (*ast.QualifiedName))))
           (TransitionMember source="busy" target="ready"
             (FeatureReference name="Go"))
           (TransitionMember source="ready" target="done"

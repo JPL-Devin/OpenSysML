@@ -9,19 +9,19 @@ package ForkJoinTest {
             region left {
                 initial leftStart;
                 state building { entry { assign leftDone := 1; } }
-                then leftStart building;
+                succession first leftStart then building;
             }
             region right {
                 initial rightStart;
                 state checking { entry { assign rightDone := 1; } }
-                then rightStart checking;
+                succession first rightStart then checking;
             }
         }
         fork split;
         join sync;
         final done;
 
-        init then ready;
+        succession first init then ready;
         transition ready to split;
         transition split to building;
         transition split to checking;

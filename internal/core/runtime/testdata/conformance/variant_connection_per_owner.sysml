@@ -28,7 +28,7 @@ package VariantRouting {
 			state arrived;
 			state diverted;
 
-			start then sending;
+			succession first start then sending;
 
 			transition first sending
 				accept Ping via inPort

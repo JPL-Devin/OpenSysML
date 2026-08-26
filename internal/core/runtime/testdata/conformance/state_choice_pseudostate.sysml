@@ -11,7 +11,7 @@ package ChoiceTest {
         state normal;
         final done;
         
-        start then idle;
+        succession first start then idle;
         transition idle to tempCheck;
         transition tempCheck to heating if temperature < 18;
         transition tempCheck to cooling if temperature > 24;

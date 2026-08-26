@@ -95,7 +95,7 @@ func TestBehavioralStatementsRoundTrip(t *testing.T) {
 	actions := map[string]string{
 		"initial node":        "first start;",
 		"guarded initial":     "first start if speed > 0 then brake;",
-		"final node":          "done finish;",
+		"final node":          "done;",
 		"fork":                "fork split;",
 		"join":                "join sync;",
 		"merge":               "merge gather;",
@@ -111,7 +111,7 @@ func TestBehavioralStatementsRoundTrip(t *testing.T) {
 		"terminate":           "terminate;",
 		"terminate a node":    "terminate brake;",
 		"succession":          "succession first brake then finish;",
-		"edge succession":     "done finish;\n        then brake finish;",
+		"edge succession":     "done;\n        succession first brake then finish;",
 		"while loop":          "while speed > 0 {\n            perform brake;\n        }",
 		"loop":                "loop {\n            perform brake;\n        }",
 		"loop until":          "loop {\n            perform brake;\n        } until speed > 0;",

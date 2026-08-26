@@ -26,7 +26,7 @@ func parseActionTest(t *testing.T, input string) []ast.Node {
 func TestParseAction_Simple(t *testing.T) {
 	input := `{
 		first startNode;
-		done endNode;
+		done;
 	}`
 
 	nodes := parseActionTest(t, input)
@@ -46,13 +46,9 @@ func TestParseAction_Simple(t *testing.T) {
 	}
 
 	// Check FinalNode
-	final, ok := nodes[1].(*ast.FinalNode)
+	_, ok = nodes[1].(*ast.FinalNode)
 	if !ok {
 		t.Errorf("node 1: expected *ast.FinalNode, got %T", nodes[1])
-	} else {
-		if final.Name != "endNode" {
-			t.Errorf("FinalNode.Name: expected 'endNode', got '%s'", final.Name)
-		}
 	}
 }
 
@@ -93,9 +89,9 @@ func TestParseAction_Decision(t *testing.T) {
 	input := `{
 		first start;
 		decide check;
-		done success;
-		then start check;
-		then check success if true;
+		done;
+		succession first start then check;
+		succession first check if true then done;
 	}`
 
 	nodes := parseActionTest(t, input)
@@ -125,46 +121,32 @@ func TestParseAction_Decision(t *testing.T) {
 	}
 
 	// Check FinalNode
-	final, ok := nodes[2].(*ast.FinalNode)
+	_, ok = nodes[2].(*ast.FinalNode)
 	if !ok {
 		t.Errorf("node 2: expected *ast.FinalNode, got %T", nodes[2])
+	}
+
+	// Check unguarded succession
+	succession, ok := nodes[3].(*ast.Usage)
+	if !ok {
+		t.Errorf("node 3: expected *ast.Usage, got %T", nodes[3])
 	} else {
-		if final.Name != "success" {
-			t.Errorf("FinalNode.Name: expected 'success', got '%s'", final.Name)
+		if succession.Kind != ast.UsageSuccession || len(succession.ConnectorEnds) != 2 {
+			t.Errorf("node 3: expected two-ended succession, got %+v", succession)
 		}
 	}
 
-	// Check SuccessionEdge: then start check
-	succEdge, ok := nodes[3].(*ast.SuccessionEdge)
+	// Check guarded succession
+	cfEdge, ok := nodes[4].(*ast.TransitionMember)
 	if !ok {
-		t.Errorf("node 3: expected *ast.SuccessionEdge, got %T", nodes[3])
+		t.Errorf("node 4: expected *ast.TransitionMember, got %T", nodes[4])
 	} else {
-		if succEdge.Source == nil {
-			t.Errorf("SuccessionEdge.Source is nil")
-		} else if len(succEdge.Source.Parts) != 1 || succEdge.Source.Parts[0].Text != "start" {
-			t.Errorf("SuccessionEdge.Source: expected 'start', got '%v'", succEdge.Source.Parts)
-		}
-		if succEdge.Target == nil {
-			t.Errorf("SuccessionEdge.Target is nil")
-		} else if len(succEdge.Target.Parts) != 1 || succEdge.Target.Parts[0].Text != "check" {
-			t.Errorf("SuccessionEdge.Target: expected 'check', got '%v'", succEdge.Target.Parts)
-		}
-	}
-
-	// Check ControlFlowEdge: then check success if true
-	cfEdge, ok := nodes[4].(*ast.ControlFlowEdge)
-	if !ok {
-		t.Errorf("node 4: expected *ast.ControlFlowEdge, got %T", nodes[4])
-	} else {
-		if cfEdge.Source == nil {
-			t.Errorf("ControlFlowEdge.Source is nil")
+		if cfEdge.Source == nil || cfEdge.Target == nil {
+			t.Errorf("guarded succession missing source or target")
 		} else if len(cfEdge.Source.Parts) != 1 || cfEdge.Source.Parts[0].Text != "check" {
-			t.Errorf("ControlFlowEdge.Source: expected 'check', got '%v'", cfEdge.Source.Parts)
-		}
-		if cfEdge.Target == nil {
-			t.Errorf("ControlFlowEdge.Target is nil")
-		} else if len(cfEdge.Target.Parts) != 1 || cfEdge.Target.Parts[0].Text != "success" {
-			t.Errorf("ControlFlowEdge.Target: expected 'success', got '%v'", cfEdge.Target.Parts)
+			t.Errorf("guarded succession source: expected 'check', got '%v'", cfEdge.Source.Parts)
+		} else if len(cfEdge.Target.Parts) != 1 || cfEdge.Target.Parts[0].Text != "done" {
+			t.Errorf("guarded succession target: expected 'done', got '%v'", cfEdge.Target.Parts)
 		}
 		if cfEdge.Guard == nil {
 			t.Errorf("ControlFlowEdge.Guard is nil")

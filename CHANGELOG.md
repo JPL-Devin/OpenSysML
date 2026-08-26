@@ -50,6 +50,14 @@ error, and the warning for them is gone.
   `assume`/`require constraint [name] { … }`. The separate warning for `assume`/`require` used
   outside a requirement body is unchanged too.
 
+### Succession shorthand spellings removed
+
+**Breaking change.** OpenSysML no longer accepts named action final nodes (`done <name>;`),
+two-name succession shorthand (`then <source> <target>;`), or state-body member-leading
+successions (`<source> then <target>;`). Write `done;` for an action final node,
+`succession first <source> then <target>;` for an explicit succession, and use the same
+standard succession form in state bodies.
+
 ### The action nodes spelled `initial`, `final` and `decision` are removed
 
 **Breaking change** for models that used them. Each was an OpenSysML-only alias of a node the
@@ -58,8 +66,8 @@ rather than kept:
 
 - `initial <name> [then <target>];` in an action body → write `first <name> [then <target>];`
   (`SysML.xtext:1385`).
-- `final [<name>];`, including the bare `then final;` → write `done [<name>];`, a reference to
-  the library feature `Actions::Action::done`.
+- `final [<name>];` as an action node → write `done;` for the anonymous final node, or
+  `then done;` when naming the library feature `Actions::Action::done` as a succession target.
 - `decision <name>;` → write `decide <name>;` (`SysML.xtext:1672`).
 
 None of the three words is reserved by the pinned grammars, so each still names a feature
@@ -69,8 +77,8 @@ None of the three words is reserved by the pinned grammars, so each still names 
 `final`: where nothing declares one, the model analyses clean and fails when the action is run
 (`succession edge references undefined target node "final"`) — the same as any other undefined
 succession target. The **state** markers `initial <state>;` and
-`final <state>;` in a state body are unaffected, and so is `done <name>;`; both keep their
-existing warnings.
+`final <state>;` in a state body are unaffected. Named action final syntax `done <name>;`
+remains rejected as described above.
 
 ### `return <expression>;` is no longer accepted in a calculation body
 

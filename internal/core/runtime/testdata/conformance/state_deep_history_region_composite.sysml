@@ -18,7 +18,7 @@ package Test {
 				initial ls;
 				state lidle;
 
-				then ls lidle;
+				succession first ls then lidle;
 			}
 			region right {
 				initial rstart;
@@ -29,7 +29,7 @@ package Test {
 							entry { deepEntries = deepEntries + 1; }
 						}
 
-						then istart deepState;
+						succession first istart then deepState;
 						transition out_deep
 							first deepState
 							accept after 3
@@ -45,7 +45,7 @@ package Test {
 			entry { startEntries = startEntries + 1; }
 		}
 
-		start then running;
+		succession first start then running;
 		transition back first away accept after 3 if trips == 1 then resume;
 	}
 }

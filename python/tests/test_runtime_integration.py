@@ -246,9 +246,9 @@ class TestRuntimeIntegration:
                 action inner {
                     assign result := result + 5;
                 }
-                done end;
-                then start inner;
-                then inner end;
+                done;
+                succession first start then inner;
+                succession first inner then done;
             }
         }
         '''
@@ -273,8 +273,8 @@ class TestRuntimeIntegration:
                 state Running;
                 final done;
 
-                init then Running;
-                Running then done;
+                succession first init then Running;
+                succession first Running then done;
             }
         }
         '''
@@ -300,17 +300,17 @@ class TestRuntimeIntegration:
                 action inner {
                     assign result := result + 5;
                 }
-                done end;
-                then start inner;
-                then inner end;
+                done;
+                succession first start then inner;
+                succession first inner then done;
             }
             state Machine {
                 initial init;
                 state Running;
                 final done;
 
-                init then Running;
-                Running then done;
+                succession first init then Running;
+                succession first Running then done;
             }
         }
         '''

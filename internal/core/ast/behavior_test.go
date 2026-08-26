@@ -11,7 +11,7 @@ func TestActionNodeConstruction(t *testing.T) {
 
 	nodes := []Node{
 		&InitialNode{NodeBase: NodeBase{NodeSpan: span}, Name: "start"},
-		&FinalNode{NodeBase: NodeBase{NodeSpan: span}, Name: "end"},
+		&FinalNode{NodeBase: NodeBase{NodeSpan: span}},
 		&ForkNode{NodeBase: NodeBase{NodeSpan: span}, Name: "split"},
 		&JoinNode{NodeBase: NodeBase{NodeSpan: span}, Name: "sync"},
 		&MergeNode{NodeBase: NodeBase{NodeSpan: span}, Name: "merge"},

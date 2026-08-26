@@ -18,7 +18,7 @@ func TestToStateGraph_DeferNotation(t *testing.T) {
 				state busy {
 					defer Ping, setSpeed(value);
 				}
-				start then busy;
+				succession first start then busy;
 			}
 		}
 	`), nil)
@@ -69,7 +69,7 @@ func TestToStateGraph_DeferInMachineBodyIsReported(t *testing.T) {
 				initial start;
 				defer Ping;
 				state busy;
-				start then busy;
+				succession first start then busy;
 			}
 		}
 	`), nil)
@@ -92,12 +92,12 @@ func TestToStateGraph_DeferInRegionBodyIsReported(t *testing.T) {
 						initial lstart;
 						defer Ping;
 						state lwork;
-						then lstart lwork;
+						succession first lstart then lwork;
 					}
 					region right {
 						initial rstart;
 						state rwork;
-						then rstart rwork;
+						succession first rstart then rwork;
 					}
 				}
 			}
@@ -127,7 +127,7 @@ func TestToStateGraph_HistoryAndPointNotation(t *testing.T) {
 					entry point into;
 					exit point outOf;
 				}
-				start then outer;
+				succession first start then outer;
 			}
 		}
 	`), nil)
@@ -168,7 +168,7 @@ func TestToStateGraph_EntrySuccessionNamesInitialState(t *testing.T) {
 				entry; then off;
 				state off;
 				state on;
-				off then on;
+				succession first off then on;
 			}
 		}
 	`), nil)
@@ -217,10 +217,10 @@ func TestToStateGraph_EntryActionSuccessionNamesInitialState(t *testing.T) {
 		package test {
 			state Machine {
 				entry action begin { }
-				begin then off;
+				succession first begin then off;
 				state off;
 				state on;
-				off then on;
+				succession first off then on;
 			}
 		}
 	`), nil)
@@ -245,7 +245,7 @@ func TestToStateGraph_EntryActionNamesInitialStateFromScopeAlone(t *testing.T) {
 				transition begin then off;
 				state off;
 				state on;
-				off then on;
+				succession first off then on;
 			}
 		}
 	`)
@@ -274,7 +274,7 @@ func TestToStateGraph_InitialDesignationDoesNotMutateAST(t *testing.T) {
 		name string
 		body string
 	}{
-		{"named entry action", "entry action begin { }\ntransition begin then off;"},
+		{"named entry action", "entry action begin { }\ntransition first begin then off;"},
 		{"anonymous entry", "entry; then off;"},
 		{"initial pseudostate", "first i then off;"},
 	} {
@@ -285,7 +285,7 @@ func TestToStateGraph_InitialDesignationDoesNotMutateAST(t *testing.T) {
 						`+tc.body+`
 						state off;
 						state on;
-						off then on;
+						succession first off then on;
 					}
 				}
 			`)

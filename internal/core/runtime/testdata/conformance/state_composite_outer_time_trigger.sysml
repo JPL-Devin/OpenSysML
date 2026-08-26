@@ -18,6 +18,6 @@ package test {
 			entry { log = log * 10 + 3; }
 		}
 
-		start then Step1;
+		succession first start then Step1;
 	}
 }

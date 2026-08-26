@@ -12,9 +12,9 @@ package test {
 			assign gain := sqrt(16.0) + 2.0 ** 3;
 		}
 
-		done end;
+		done;
 
-		then start compute;
-		then compute end;
+		succession first start then compute;
+		succession first compute then done;
 	}
 }

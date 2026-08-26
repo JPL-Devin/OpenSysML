@@ -9,7 +9,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-var dumpedSuccession = regexp.MustCompile(`\(SuccessionEdge source="([^"]*)" target="([^"]*)"\)`)
+var dumpedSuccession = regexp.MustCompile(`(?s)\(SuccessionEdge source="([^"]*)" target="([^"]*)"\)|\(Usage kind="succession".*?\(ConnectorEnd target="([^"]*)".*?\(ConnectorEnd target="([^"]*)"`)
 
 // parseSuccessions returns the succession edges src parses to, as
 // "source->target" pairs in tree order, with the parser that read it.
@@ -20,7 +20,11 @@ func parseSuccessions(t *testing.T, src string) ([]string, *Parser) {
 
 	var edges []string
 	for _, m := range dumpedSuccession.FindAllStringSubmatch(dump, -1) {
-		edges = append(edges, m[1]+"->"+m[2])
+		if m[1] != "" {
+			edges = append(edges, m[1]+"->"+m[2])
+		} else {
+			edges = append(edges, m[3]+"->"+m[4])
+		}
 	}
 	return edges, p
 }
@@ -51,12 +55,12 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 		},
 		{
 			"the edge notation is unchanged",
-			"action def A { action a; action b; then a b; }",
+			"action def A { action a; action b; succession first a then b; }",
 			[]string{"a->b"},
 		},
 		{
 			"an edge is not the source of the next succession",
-			"action def A { action a; action b; then a b; then action c; }",
+			"action def A { action a; action b; succession first a then b; then action c; }",
 			[]string{"a->b", "b->c"},
 		},
 		{
@@ -70,18 +74,13 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 			[]string{"a->b"},
 		},
 		{
-			"a state body's order statement is not the source of the next succession",
-			"state def S { state a; state b; a then b; then state c; }",
-			[]string{"b->c"},
-		},
-		{
 			"a one-name edge whose target is a keyword the body declares",
-			"action def A { done end; action a; then end; }",
-			[]string{"a->end"},
+			"action def A { action a; then done; }",
+			[]string{"a->@done"},
 		},
 		{
 			"a two-name edge whose source is a keyword the body declares",
-			"action def A { action end; action b; then end b; }",
+			"action def A { action end; action b; succession first end then b; }",
 			[]string{"end->b"},
 		},
 		{
@@ -101,12 +100,12 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 		},
 		{
 			"a calculation body reads the edge form it is written back as",
-			"calc def C { part a; part b; then a b; }",
+			"calc def C { part a; part b; succession first a then b; }",
 			[]string{"a->b"},
 		},
 		{
 			"a requirement body reads the edge form it is written back as",
-			"requirement def R { part a; part b; then a b; }",
+			"requirement def R { part a; part b; succession first a then b; }",
 			[]string{"a->b"},
 		},
 	}

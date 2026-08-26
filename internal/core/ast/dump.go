@@ -631,7 +631,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		writeChildren(b, depth, kids)
 		return
 	case *FinalNode:
-		fmt.Fprintf(b, `(FinalNode name=%q)`, v.Name)
+		fmt.Fprint(b, `(FinalNode)`)
 	case *ForkNode:
 		fmt.Fprintf(b, `(ForkNode name=%q`, v.Name)
 		writeChildren(b, depth, v.Members)

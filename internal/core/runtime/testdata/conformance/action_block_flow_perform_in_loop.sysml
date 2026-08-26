@@ -19,10 +19,10 @@ package test {
 			}
 		}
 
-		done end;
+		done;
 
-		then start iterate;
-		then iterate end;
+		succession first start then iterate;
+		succession first iterate then done;
 	}
 	action def Bump {
 		in i : Integer;
@@ -34,10 +34,10 @@ package test {
 			assign doubled := i * 2;
 		}
 
-		done end;
+		done;
 
-		then start compute;
-		then compute end;
+		succession first start then compute;
+		succession first compute then done;
 	}
 
 }

@@ -13,9 +13,9 @@ package test {
 			} until total > 0;
 		}
 
-		done end;
+		done;
 
-		then start accumulate;
-		then accumulate end;
+		succession first start then accumulate;
+		succession first accumulate then done;
 	}
 }

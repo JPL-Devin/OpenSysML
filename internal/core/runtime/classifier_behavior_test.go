@@ -347,9 +347,9 @@ const nestedCalcInvocationFixture = `
 			action drain {
 				first start;
 				action cut { assign charge := 3; }
-				done end;
-				then start cut;
-				then cut end;
+				done;
+				succession first start then cut;
+				succession first cut then done;
 			}
 		}
 	}
@@ -565,10 +565,10 @@ func TestPerformedActionAwaitingAMessageIsWokenByASibling(t *testing.T) {
 				first start;
 				action heard accept g : Integer;
 				action mark { assign woken := 1; }
-				done end;
-				then start heard;
-				then heard mark;
-				then mark end;
+				done;
+				succession first start then heard;
+				succession first heard then mark;
+				succession first mark then done;
 			}
 
 			part def Waiter {
@@ -834,7 +834,7 @@ func TestMessageLeftForACompletedMachineDoesNotBlockANewObject(t *testing.T) {
 					state inner;
 					final wrapped;
 					accept Ping then working;
-					inner then wrapped;
+					succession first inner then wrapped;
 				}
 			}
 		}
@@ -891,12 +891,12 @@ func TestPerformedActionDecidesOnItsOwnWrite(t *testing.T) {
 					assign alerted := 2;
 				}
 
-				done end;
+				done;
 
-				then start raise;
-				then raise check;
-				then alert end;
-				then quiet end;
+				succession first start then raise;
+				succession first raise then check;
+				succession first alert then done;
+				succession first quiet then done;
 
 				decide check;
 				if level > 0 then alert;

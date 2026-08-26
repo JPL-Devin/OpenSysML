@@ -222,19 +222,7 @@ func TestExpressionValuedBindingIsAnExtension(t *testing.T) {
 	wantSilent(t, "a.sysml", "part def P { part a { attribute x; } attribute b; bind b = a.x; }")
 }
 
-// F105: `done` is a library feature a succession names, and a succession states
-// its ends with `first` and `then`.
-func TestNamedFinalNodeAndTwoEndedThenAreExtensions(t *testing.T) {
-	wantNotation(t, "a.sysml", "action def A { done end; }", CodeNonstandardNotation, "`done <name>;`")
-	wantNotation(t, "a.sysml", "action def A { action a; action b; then a b; }",
-		CodeNonstandardNotation, "`then <source> <target>;`")
-	wantNotation(t, "a.sysml", "state def S { state a; state b; a then b; }",
-		CodeNonstandardNotation, "`<source> then <target>;`")
-	wantSilent(t, "a.sysml", "action def A { action a; action b; first a then b; }")
-	wantSilent(t, "a.sysml", "action def A { action a; first a; then done; }")
-}
-
-// F106: an InitialNodeMember is reachable from ActionBodyItem alone, so a
+// An InitialNodeMember is reachable from ActionBodyItem alone, so a
 // one-ended `first` is standard in an action body and ours in a part body.
 func TestOneEndedFirstOutsideAnActionBodyIsAnExtension(t *testing.T) {
 	wantNotation(t, "a.sysml", "part def P { part a; first a; }",

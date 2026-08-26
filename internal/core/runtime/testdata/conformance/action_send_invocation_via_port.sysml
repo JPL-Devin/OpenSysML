@@ -27,11 +27,11 @@ package test {
 			assign received := msg;
 		}
 
-		done end;
+		done;
 
-		then start transmit;
-		then transmit receive;
-		then receive record;
-		then record end;
+		succession first start then transmit;
+		succession first transmit then receive;
+		succession first receive then record;
+		succession first record then done;
 	}
 }

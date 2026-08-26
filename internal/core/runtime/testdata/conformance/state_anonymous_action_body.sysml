@@ -27,13 +27,13 @@ package Test {
                     exit action { }
                 }
 
-                then nstart nested;
+                succession first nstart then nested;
             }
         }
 
         state done;
 
-        then start working;
-        then working done;
+        succession first start then working;
+        succession first working then done;
     }
 }

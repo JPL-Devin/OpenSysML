@@ -54,10 +54,11 @@ Example.sysml:32`, `Control Structures Example.sysml:27`, `35. Use Cases/Use
 Case Usage Example.sysml:35`) and `snapshot junked = done;`
 (`27. Occurrences/Time Slice and Snapshot Example.sysml:25`). Those are plain
 references to `Actions::Action::done`, a feature of the standard library, not a
-keyword. Our parser still reads `done;` and `then done;` as the final node it
-always built, and the construct stays **silent**: warning on it would warn on
-OMG-authored files, which the classification forbids. `final` was our own
-spelling of the same node and is no longer accepted as one.
+keyword. Our parser reads `done;` as an anonymous final node and `then done;`
+as a succession targeting the `done` library feature. Both stay **silent**:
+warning on them would warn on OMG-authored files, which the classification
+forbids. An action-node `final` spelling is no longer accepted; `final` state
+markers remain separate extension warnings.
 
 ## Verdict per construct
 
@@ -95,6 +96,10 @@ diagnostics and nothing else, so the tree, the spans and the messages are the
 ones below in either mode. The mode is what answers "is this file conforming
 SysML v2?"; the default mode's acceptance of these constructs is intended and
 unchanged.
+
+The removed OpenSysML-only spellings `then <source> <target>;`, member-leading
+`<source> then <target>;`, and `done <name>;` are no longer accepted. Use
+`succession first <source> then <target>;` and `done;` instead.
 
 | Construct | Why it is not standard |
 |-----------|------------------------|

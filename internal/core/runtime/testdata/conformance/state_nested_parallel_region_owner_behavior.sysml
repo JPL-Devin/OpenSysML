@@ -23,7 +23,7 @@ package NestedParallelRegionOwner {
         state done;
         final finished;
 
-        start then outer;
+        succession first start then outer;
         transition outer to done when Leave;
         transition done to finished when Ping;
     }

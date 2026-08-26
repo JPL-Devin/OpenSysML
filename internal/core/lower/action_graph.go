@@ -421,6 +421,20 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				Guard:  n.Guard,
 				Decl:   n,
 			})
+		case *ast.TransitionMember:
+			sourceNode := resolveActionEndpoint(graph, n.Source, true)
+			targetNode := resolveActionEndpoint(graph, n.Target, false)
+			if sourceNode == nil {
+				return nil, fmt.Errorf("succession references undefined source node %s", edgeEndName(n.Source))
+			}
+			if targetNode == nil {
+				return nil, fmt.Errorf("succession references undefined target node %s", edgeEndName(n.Target))
+			}
+			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], ActionEdge{
+				Target: targetNode,
+				Guard:  n.Guard,
+				Decl:   n,
+			})
 		case *ast.ObjectFlowEdge:
 			sourceNode, sourcePin := parsePinReference(graph.Nodes, n.Source)
 			targetNode, targetPin := parsePinReference(graph.Nodes, n.Target)
@@ -849,7 +863,7 @@ func resolveActionEndpoint(graph *ActionGraph, ref ast.Node, source bool) ast.No
 				return final
 			}
 		}
-		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "done"}
+		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}}
 		graph.Finals = append(graph.Finals, final)
 		graph.Nodes = append(graph.Nodes, final)
 		return final
@@ -942,7 +956,9 @@ func getNodeName(node ast.Node) string {
 	case *ast.InitialNode:
 		return n.Name
 	case *ast.FinalNode:
-		return n.Name
+		// The node declares no name of its own: a succession reaches it by the
+		// name of the library feature it is, `done`.
+		return "done"
 	case *ast.ForkNode:
 		return n.Name
 	case *ast.JoinNode:

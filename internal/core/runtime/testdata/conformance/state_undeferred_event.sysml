@@ -9,7 +9,7 @@ package Test {
         state ready;
         final done;
 
-        start then busy;
+        succession first start then busy;
 
         transition busy to ready when Go;
         transition ready to done when Ping;

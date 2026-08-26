@@ -25,7 +25,7 @@ package NestedParallelBehavior {
         }
         state done;
 
-        start then outer;
+        succession first start then outer;
         transition outer to done when Finish;
     }
 }

@@ -14,6 +14,6 @@ package test {
 			entry { log = log * 10 + 1; }
 		}
 
-		start then waiting;
+		succession first start then waiting;
 	}
 }

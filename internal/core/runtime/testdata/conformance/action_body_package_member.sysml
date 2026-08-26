@@ -17,10 +17,10 @@ package test {
 				assign r := pkgLevel + 1.0;
 			}
 
-			done end;
+			done;
 
-			then start bump;
-			then bump end;
+			succession first start then bump;
+			succession first bump then done;
 		}
 	}
 }

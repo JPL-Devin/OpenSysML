@@ -60,5 +60,5 @@ stmt for i
                 eval feature sum -> 33
                 eval feature scaled -> 30
               eval operator + -> 63
-step 2: token 1@end
+step 2: token 1@done
 step 3: no active tokens

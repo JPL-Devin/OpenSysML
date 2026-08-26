@@ -297,14 +297,14 @@ state Machine {
     initial init;
     state idle;
     state running {
-        region left  { initial ls; state working;  then ls working; }
-        region right { initial rs; state watching; then rs watching; }
+        region left  { initial ls; state working;  succession first ls then working; }
+        region right { initial rs; state watching; succession first rs then watching; }
     }
     fork split;
     join sync;
     final done;
 
-    init then idle;
+    succession first init then idle;
     transition idle to split;
     transition split to working;    // one branch per region
     transition split to watching;
@@ -373,8 +373,8 @@ state def RegionChoice {
     attribute mode : Integer = 2;
 
     region left  { initial lstart; state lidle; state lfast; state lslow;
-                   then lstart lidle; transition lidle to pick; }
-    region right { initial rstart; state rwatch; then rstart rwatch; }
+                   succession first lstart then lidle; transition lidle to pick; }
+    region right { initial rstart; state rwatch; succession first rstart then rwatch; }
 
     choice pick;
 

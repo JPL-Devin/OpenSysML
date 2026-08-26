@@ -13,13 +13,13 @@ package FirstNamingADeclaredNode {
 		action s1;
 		action s2;
 		first s1;
-		then s1 s2;
+		succession first s1 then s2;
 	}
 
 	// A `first` end naming nothing the body declares is an initial node of its own.
 	action def OwnInitialNode {
 		action s1;
 		first start;
-		then start s1;
+		succession first start then s1;
 	}
 }

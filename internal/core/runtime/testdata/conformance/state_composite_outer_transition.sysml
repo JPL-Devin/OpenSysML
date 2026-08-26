@@ -19,7 +19,7 @@ package Test {
 			entry { log = log * 10 + 4; }
 		}
 
-		start then Step1;
+		succession first start then Step1;
 		transition Working to Done when Abort do assign log := log * 10 + 3;
 	}
 }

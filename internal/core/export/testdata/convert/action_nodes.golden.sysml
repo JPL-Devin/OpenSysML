@@ -21,8 +21,8 @@ package ActionNodes {
         accept when speed > 0;
         terminate;
         terminate brake;
-        done finish;
-        then start brake;
-        succession first brake then finish;
+        done;
+        succession first start then brake;
+        succession first brake then done;
     }
 }

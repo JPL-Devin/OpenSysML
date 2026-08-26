@@ -41,9 +41,9 @@ func testControlNodeBodyNeverTerminates(t *testing.T) {
 				fork split {
 					while n >= 0 { assign n := n + 1; }
 				}
-				done end;
-				then start split;
-				then split end;
+				done;
+				succession first start then split;
+				succession first split then done;
 			}
 		}
 	`
@@ -63,10 +63,10 @@ func testControlNodeBodySendsWithoutAMessage(t *testing.T) {
 				first start;
 				fork split { send to receiver { } }
 				action receiver accept n : Integer;
-				done end;
-				then start split;
-				then split receiver;
-				then receiver end;
+				done;
+				succession first start then split;
+				succession first split then receiver;
+				succession first receiver then done;
 			}
 		}
 	`
@@ -90,10 +90,10 @@ func testSendBodyDeclaresNoPayload(t *testing.T) {
 					send to receiver { }
 				}
 				action receiver accept n : Integer;
-				done end;
-				then start sender;
-				then sender receiver;
-				then receiver end;
+				done;
+				succession first start then sender;
+				succession first sender then receiver;
+				succession first receiver then done;
 			}
 		}
 	`
@@ -130,14 +130,14 @@ func testSendViaAPortToAReceiver(t *testing.T) {
 				}
 				fork split;
 				join sync;
-				done end;
-				then start sender;
-				then sender split;
-				then split receiver;
-				then split sibling;
-				then receiver sync;
-				then sibling sync;
-				then sync end;
+				done;
+				succession first start then sender;
+				succession first sender then split;
+				succession first split then receiver;
+				succession first split then sibling;
+				succession first receiver then sync;
+				succession first sibling then sync;
+				succession first sync then done;
 			}
 		}
 	`

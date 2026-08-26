@@ -20,11 +20,11 @@ package Test {
 							exit { log = log * 10 + 4; }
 						}
 
-						then gstart g1;
+						succession first gstart then g1;
 					}
 				}
 
-				then lstart Grouping;
+				succession first lstart then Grouping;
 				transition Grouping to Grouping when restart do assign log := log * 10 + 9;
 			}
 			region right {
@@ -33,10 +33,10 @@ package Test {
 					entry { log = log * 10 + 7; }
 				}
 
-				then rstart Watching;
+				succession first rstart then Watching;
 			}
 		}
 
-		start then Outer;
+		succession first start then Outer;
 	}
 }

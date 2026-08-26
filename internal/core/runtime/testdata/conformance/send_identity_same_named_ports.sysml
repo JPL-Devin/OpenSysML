@@ -21,7 +21,7 @@ package SendIdentity {
 			state received;
 			state strayed;
 
-			start then waiting;
+			succession first start then waiting;
 
 			transition first waiting
 				accept Ping via inPort

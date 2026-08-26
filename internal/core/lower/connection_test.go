@@ -16,8 +16,8 @@ func TestLowerConnectionsFromActionBody(t *testing.T) {
 			port inPort;
 			connect outPort to inPort;
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 	`)
 	if len(graph.Connections) != 1 {
@@ -43,8 +43,8 @@ func TestLowerNaryConnectionKeepsEveryEnd(t *testing.T) {
 			port p4;
 			connection link connect (p1, p2, p3, p4);
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 	`)
 	if len(graph.Connections) != 1 {
@@ -75,8 +75,8 @@ func TestLowerConnectionEndsThatDeclareTheirOwnName(t *testing.T) {
 				source references outPort to
 				target references inPort;
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 	`)
 	if len(graph.Connections) != 1 {
@@ -95,11 +95,11 @@ func TestLowerSendRecordsViaForm(t *testing.T) {
 			action viaSend { send 1 via p; }
 			action toSend { send 2 to other; }
 			action routedSend { send 3 via p to receiver; }
-			done end;
-			then start viaSend;
-			then viaSend toSend;
-			then toSend routedSend;
-			then routedSend end;
+			done;
+			succession first start then viaSend;
+			succession first viaSend then toSend;
+			succession first toSend then routedSend;
+			succession first routedSend then done;
 		}
 	`)
 	var sends []Send
@@ -144,9 +144,9 @@ func TestLowerSendRoutedReceiverKeepsFeaturePath(t *testing.T) {
 			part outer { action receiver; }
 			action sender { send 1 via p to outer.receiver; }
 			first start;
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	`)
 	var sends []Send
@@ -182,9 +182,9 @@ func TestLowerSendKeepsAddressedPath(t *testing.T) {
 			action a {
 				first start;
 				action toSend { send 2 to `+tc.target+`; }
-				done end;
-				then start toSend;
-				then toSend end;
+				done;
+				succession first start then toSend;
+				succession first toSend then done;
 			}
 		`)
 		var sends []Send
@@ -215,9 +215,9 @@ func TestLowerSendViaQualifiedPortMatchesConnectionEnds(t *testing.T) {
 			connect outer.p to inPort;
 			first start;
 			action viaSend { send 1 via outer::p; }
-			done end;
-			then start viaSend;
-			then viaSend end;
+			done;
+			succession first start then viaSend;
+			succession first viaSend then done;
 		}
 	`)
 	var via Send
@@ -242,9 +242,9 @@ func TestLowerAcceptRecordsViaPort(t *testing.T) {
 			port inPort;
 			first start;
 			action r accept msg : Integer via inPort;
-			done end;
-			then start r;
-			then r end;
+			done;
+			succession first start then r;
+			succession first r then done;
 		}
 	`)
 	if len(graph.Accepts) != 1 {
@@ -299,8 +299,8 @@ func TestLowerAnonymousNaryConnectionKeepsEveryEnd(t *testing.T) {
 			port p3;
 			connect (p1, p2, p3);
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 	`)
 	if len(graph.Connections) != 1 {
@@ -330,8 +330,8 @@ func TestLowerVariantConnectionsCarryTheirVariation(t *testing.T) {
 				variant interface indirect connect p1 to p3;
 			}
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 	`)
 	if len(graph.Connections) != 2 {
@@ -361,8 +361,8 @@ func TestLowerPlainConnectionCarriesNoVariant(t *testing.T) {
 			port inPort;
 			connect outPort to inPort;
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 	`)
 	if len(graph.Connections) != 1 {
@@ -382,8 +382,8 @@ func TestLowerConnectionEndFollowsAFeatureChain(t *testing.T) {
 			port inPort;
 			connect sensor.out to inPort;
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 	`)
 	if len(graph.Connections) != 1 {
@@ -406,8 +406,8 @@ func TestLowerBehaviorConnectionIsOwnedByTheBehavior(t *testing.T) {
 			port inPort;
 			connect outPort to inPort;
 			first start;
-			done end;
-			then start end;
+			done;
+			succession first start then done;
 		}
 	`)
 	if len(graph.Connections) != 1 {

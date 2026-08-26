@@ -22,7 +22,6 @@ type InitialNode struct {
 // FinalNode is the termination point for action execution.
 type FinalNode struct {
 	NodeBase
-	Name string
 }
 
 // ForkNode splits execution into concurrent flows (1 incoming → N outgoing).

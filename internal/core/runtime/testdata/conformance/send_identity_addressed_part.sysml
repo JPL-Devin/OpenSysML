@@ -13,7 +13,7 @@ package SendIdentityPart {
 			}
 			state heard;
 
-			start then waiting;
+			succession first start then waiting;
 
 			transition first waiting
 				accept Ping

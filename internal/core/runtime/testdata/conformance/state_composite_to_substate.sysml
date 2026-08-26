@@ -19,7 +19,7 @@ package Test {
 			}
 		}
 
-		start then Working::Step1;
+		succession first start then Working::Step1;
 		transition Working to Working::Step2 when advance do assign log := log * 10 + 9;
 	}
 }

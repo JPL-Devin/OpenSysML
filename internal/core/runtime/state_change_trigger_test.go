@@ -18,7 +18,7 @@ func TestChangeTriggerRunsWithoutAnExternalPoll(t *testing.T) {
 				accept when ready then done;
 			}
 			state done { entry { log = 1; } }
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err != nil {
@@ -48,7 +48,7 @@ func TestChangeTriggerFiresOnRiseFromDoBehavior(t *testing.T) {
 				accept when count >= 2 then done;
 			}
 			state done;
-			start then counting;
+			succession first start then counting;
 		}
 	}`)
 	if err != nil {
@@ -70,7 +70,7 @@ func TestChangeTriggerFalseConditionIsReported(t *testing.T) {
 				accept when ready then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -108,7 +108,7 @@ func TestQuiescedMachineReportsNoChangeCondition(t *testing.T) {
 				accept sig then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 		attribute def sig;
 	}`)
@@ -130,7 +130,7 @@ func TestChangeTriggerDoesNotRefireUnchangedCondition(t *testing.T) {
 			attribute laps : Integer = 0;
 			initial start;
 			state waiting;
-			start then waiting;
+			succession first start then waiting;
 			transition waiting to waiting accept when ready do assign laps := laps + 1;
 		}
 	}`)
@@ -171,7 +171,7 @@ func TestChangeTriggerGuardBlocks(t *testing.T) {
 			initial start;
 			state waiting;
 			state done;
-			start then waiting;
+			succession first start then waiting;
 			transition waiting to done accept when ready if allowed;
 		}
 	}`)
@@ -206,7 +206,7 @@ func TestChangeTriggerPollingKeepsEventBudget(t *testing.T) {
 				accept when ready then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	exec.ctx.maxStateEvents = 1
@@ -233,7 +233,7 @@ func TestChangeTriggerOnACompositeSelfTransitionFiresOnce(t *testing.T) {
 				state inner;
 				transition w0 to inner;
 			}
-			start then Working;
+			succession first start then Working;
 			transition Working to Working accept when ready do assign laps := laps + 1;
 		}
 	}`)
@@ -272,7 +272,7 @@ func TestChangeTriggerRearmsOnStateExit(t *testing.T) {
 			state working {
 				accept Back then waiting;
 			}
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -314,7 +314,7 @@ func TestChangeTriggerConsumesTheRiseForALosingTransition(t *testing.T) {
 				accept when ready then Done;
 			}
 			state Done;
-			start then Working;
+			succession first start then Working;
 		}
 	}`
 	exec := stateExecutorForSource(t, "sm", source)
@@ -377,7 +377,7 @@ func TestChangeTriggerArmsAWatchReenteredDuringThePoll(t *testing.T) {
 			transition l1 to split accept when ready;
 			transition split to l2;
 			transition split to C;
-			start then Working;
+			succession first start then Working;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -416,7 +416,7 @@ func TestSuspendReasonMakesNoClaimBeforeTheMachineIsStepped(t *testing.T) {
 				accept when ready then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if reason := exec.SuspendReason(); reason != "" {
@@ -441,7 +441,7 @@ func TestSuspendReasonMakesNoClaimOnceASignalIsQueued(t *testing.T) {
 				accept Go then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -487,7 +487,7 @@ func TestChangeTriggerKeepsAnEdgeBlockedDuringThePoll(t *testing.T) {
 					transition sWait to sDone accept when ready if allowed;
 				}
 			}
-			start then Working;
+			succession first start then Working;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -538,7 +538,7 @@ func TestChangeTriggerRecallsDeferredEvents(t *testing.T) {
 				accept Ping then done;
 			}
 			state done;
-			start then busy;
+			succession first start then busy;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {

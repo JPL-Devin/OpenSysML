@@ -49,7 +49,7 @@ func TestTimeTriggerUnitIsConverted(t *testing.T) {
 						accept after `+tc.duration+` then done;
 					}
 					state done;
-					start then waiting;
+					succession first start then waiting;
 				}
 			}`)
 			if err := exec.RunToCompletion(); err != nil {
@@ -80,7 +80,7 @@ func TestTimeTriggerSubSecondUnit(t *testing.T) {
 				accept after 500 [ms] then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -103,7 +103,7 @@ func TestTimeTriggerAbsoluteInstantWithUnit(t *testing.T) {
 				accept at 2 [min] then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -126,7 +126,7 @@ func TestTimeTriggerRejectsNonTimeDimension(t *testing.T) {
 				accept after 5 [kg] then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	err := exec.RunToCompletion()

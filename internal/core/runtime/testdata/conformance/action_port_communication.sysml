@@ -15,10 +15,10 @@ package test {
 		action processor {
 			assign result := msg;
 		}
-		done end;
-		then start sender;
-		then sender receiver;
-		then receiver processor;
-		then processor end;
+		done;
+		succession first start then sender;
+		succession first sender then receiver;
+		succession first receiver then processor;
+		succession first processor then done;
 	}
 }
