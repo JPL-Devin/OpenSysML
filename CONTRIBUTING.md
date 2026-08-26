@@ -300,6 +300,11 @@ When a change needs documenting:
   scripts/check-doc-ids.py` fails on one and runs in CI. The `docs/project/` conformance records
   are the exception: they cross-reference each other by these labels and each defines them in a
   note at the top. A real keyboard shortcut is not an internal label; spell it `<kbd>F2</kbd>`.
+- **An oracle total quoted outside the generated block is a snapshot, and says so.** The totals of
+  the differential, Xpect and rejection oracles move with every rule, fixture and pin change, so
+  only the `doc-counts` block states the current ones. A page that quotes a figure from the round it
+  documents must say it is not the current baseline; `python3 scripts/check-doc-figures.py` fails on
+  one that does not, and runs in CI.
 - **A new page goes in the `nav:` of [mkdocs.yml](mkdocs.yml)**, in the reading order of its
   area, or it is published but unreachable from the site's navigation. `make docs-install`
   once, then `make docs` builds the site the way CI does and `make docs-serve` previews it.

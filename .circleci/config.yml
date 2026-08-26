@@ -71,6 +71,12 @@ jobs:
           name: Check for internal labels in reader-facing documentation
           command: python3 scripts/check-doc-ids.py
 
+      # An oracle total quoted outside the generated block is a snapshot, and a
+      # reader cannot tell that from a current figure unless the page says so.
+      - run:
+          name: Check quoted oracle figures name the round they measured
+          command: python3 scripts/check-doc-figures.py
+
       - run:
           name: Run static analysis (staticcheck + gosec)
           command: make lint

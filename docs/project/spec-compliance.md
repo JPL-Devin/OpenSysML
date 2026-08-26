@@ -1087,7 +1087,9 @@ was established from the reference's own validator source (`SysMLValidator` /
 not its message — decide the row's status. Every rule is at the constraint or type tier and
 none double-reports what a lower tier already errored on. Re-measured on the tree merged with
 the sibling declared-rule work: Xpect 599 → 629 agreeing rows, 0 rows newly disagreeing; the differential
-(125 only ours, 137 only the pilot's) and the rejection corpus (26 both reject) unchanged.
+(125 only ours, 137 only the pilot's) and the rejection corpus (26 both reject) unchanged. Those
+three figures are as measured at that round and are not the current baseline, which the generated
+block in [README](../../README.md) and [architecture](../internals/architecture.md) states.
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
