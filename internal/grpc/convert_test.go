@@ -12,7 +12,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// TestSymbolToProto verifies exported SymbolToProto API.
+// TestSymbolToProto verifies exported SymbolToProtoIn API.
 func TestSymbolToProto(t *testing.T) {
 	sym := &symbols.Symbol{
 		Name:       "TestPart",
@@ -23,7 +23,7 @@ func TestSymbolToProto(t *testing.T) {
 
 	idx := symbols.NewIndex()
 
-	proto := SymbolToProto(sym, idx)
+	proto := SymbolToProtoIn(sym, NewSymbolContext(idx))
 
 	if proto.Name != "TestPart" {
 		t.Errorf("expected name TestPart, got %s", proto.Name)
@@ -69,12 +69,11 @@ func TestConvertSpan(t *testing.T) {
 	// Create a simple source file
 	content := []byte("line1\nline2\nline3")
 	sf := source.New("test.sysml", content)
-	li := sf.Lines()
 
 	// Span covering "line2" (bytes 6-11)
 	sp := source.Span{Offset: 6, Len: 5}
 
-	pb := convertSpan(sp, sf, li)
+	pb := DiagnosticToProto(passes.Diagnostic{Span: sp}, sf).Span
 	if pb.File != "test.sysml" {
 		t.Errorf("File: got %q, want %q", pb.File, "test.sysml")
 	}
@@ -110,7 +109,7 @@ func TestConvertSymbolBasic(t *testing.T) {
 		t.Fatal("MyPart symbol not found")
 	}
 
-	pbSym := SymbolToProto(syms[0], idx)
+	pbSym := SymbolToProtoIn(syms[0], NewSymbolContext(idx))
 	if pbSym.Id != "Test::MyPart" {
 		t.Errorf("Id: got %q, want %q", pbSym.Id, "Test::MyPart")
 	}
@@ -139,7 +138,7 @@ func TestConvertSymbolWithChildren(t *testing.T) {
 		t.Fatal("Parent symbol not found")
 	}
 
-	pbSym := SymbolToProto(parents[0], idx)
+	pbSym := SymbolToProtoIn(parents[0], NewSymbolContext(idx))
 	if len(pbSym.ChildIds) != 2 {
 		t.Fatalf("ChildIds: got %d, want 2", len(pbSym.ChildIds))
 	}
@@ -174,7 +173,7 @@ func TestConvertSymbolMetadata(t *testing.T) {
 		t.Fatal("mass symbol not found")
 	}
 
-	pbSym := SymbolToProto(syms[0], idx)
+	pbSym := SymbolToProtoIn(syms[0], NewSymbolContext(idx))
 
 	// Check metadata (parser produces "1" for single value, not "1..1")
 	if pbSym.Metadata["multiplicity"] != "1" {
@@ -207,7 +206,7 @@ package Vehicle {
 	if len(vehicles) == 0 {
 		t.Fatal("Vehicle symbol not found")
 	}
-	vehiclePb := SymbolToProto(vehicles[0], idx)
+	vehiclePb := SymbolToProtoIn(vehicles[0], NewSymbolContext(idx))
 	if vehiclePb.Id != "Vehicle" {
 		t.Errorf("Vehicle Id: got %q, want %q", vehiclePb.Id, "Vehicle")
 	}
@@ -217,7 +216,7 @@ package Vehicle {
 	if len(engines) == 0 {
 		t.Fatal("Vehicle::Engine symbol not found")
 	}
-	enginePb := SymbolToProto(engines[0], idx)
+	enginePb := SymbolToProtoIn(engines[0], NewSymbolContext(idx))
 	if enginePb.Id != "Vehicle::Engine" {
 		t.Errorf("Engine Id: got %q, want %q", enginePb.Id, "Vehicle::Engine")
 	}
@@ -230,7 +229,7 @@ package Vehicle {
 	if len(chambers) == 0 {
 		t.Fatal("Vehicle::Engine::combustionChamber symbol not found")
 	}
-	chamberPb := SymbolToProto(chambers[0], idx)
+	chamberPb := SymbolToProtoIn(chambers[0], NewSymbolContext(idx))
 	if chamberPb.Id != "Vehicle::Engine::combustionChamber" {
 		t.Errorf("combustionChamber Id: got %q, want %q", chamberPb.Id, "Vehicle::Engine::combustionChamber")
 	}

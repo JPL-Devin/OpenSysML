@@ -3,6 +3,8 @@
 package model
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -38,4 +40,9 @@ func newDocument(name string, content []byte, version int) *Document {
 		Scope:            scope,
 		sf:               sf,
 	}
+}
+
+// IsModelSource reports whether path is a SysML/KerML source file.
+func IsModelSource(path string) bool {
+	return strings.HasSuffix(path, ".sysml") || strings.HasSuffix(path, ".kerml")
 }
