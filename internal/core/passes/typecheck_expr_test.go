@@ -188,7 +188,7 @@ func TestExprTransitionGuardMustBeBoolean(t *testing.T) {
 			state def S {
 				state a;
 				state b;
-				transition a to b if temp;
+				transition first a if temp then b;
 			}
 		}
 	}`, "transition guard must be Boolean, found Integer")
@@ -204,7 +204,7 @@ func TestExprChangeEventConditionMustBeBoolean(t *testing.T) {
 			state def S {
 				state a;
 				state b;
-				transition a to b when temp + 1;
+				transition first a when temp + 1 then b;
 			}
 		}
 	}`, "change event condition must be Boolean, found Integer")
@@ -217,7 +217,7 @@ func TestExprChangeEventConditionOK(t *testing.T) {
 			state def S {
 				state a;
 				state b;
-				transition a to b when temp > 5;
+				transition first a when temp > 5 then b;
 			}
 		}
 	}`)
@@ -260,7 +260,7 @@ func TestExprTransitionGuardComparisonOK(t *testing.T) {
 			state def S {
 				state a;
 				state b;
-				transition a to b if temp > 5;
+				transition first a if temp > 5 then b;
 			}
 		}
 	}`)

@@ -135,8 +135,9 @@ func TestBehavioralStatementsRoundTrip(t *testing.T) {
 // allows: a subaction stated with braces, with a single action, or empty.
 func TestStateMembersRoundTrip(t *testing.T) {
 	members := map[string]string{
-		"initial state":        "initial launch;",
+		"entry succession":     "entry;\n        then launch;",
 		"final state":          "final stopped;",
+		"start state":          "state launch;",
 		"substate":             "state waiting;",
 		"empty entry":          "entry;",
 		"entry action":         "entry perform Warm;",
@@ -163,7 +164,6 @@ func TestStateMembersRoundTrip(t *testing.T) {
 		"nested full body":     "state working {\n            entry perform Warm;\n            do action spin : Warm;\n            exit perform Warm;\n            defer sig;\n            state deeper;\n        }",
 		"unordered subactions": "state working {\n            do action spin : Warm;\n            entry perform Warm;\n        }",
 		"transition first":     "transition first idle then idle;",
-		"transition to":        "transition idle to idle;",
 		"named transition":     "transition go first idle then idle;",
 		"trigger":              "transition first idle accept sig : Signal then idle;",
 		"guard":                "transition first idle if speed > 0 then idle;",

@@ -1,5 +1,6 @@
 state TimedTriggers {
-    initial start;
+    entry; then start;
+    state start;
     state waiting {
         accept after 10 then working;
     }

@@ -1,6 +1,7 @@
 package Deferral {
     state Controller {
-        initial start;
+        entry; then start;
+        state start;
         state busy {
             defer Ping, setSpeed(value);
         }
@@ -9,7 +10,7 @@ package Deferral {
 
         succession first start then busy;
 
-        transition busy to ready when Go;
-        transition ready to done when Ping;
+        transition first busy when Go then ready;
+        transition first ready when Ping then done;
     }
 }

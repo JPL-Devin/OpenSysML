@@ -210,13 +210,13 @@ package Test {
 	}
 }
 
-// A transition stating its ends with `to` is recognized wherever a transition
-// can be written, not only directly inside a state body, and whether the source
-// is a simple or a qualified name.
-func TestTransitionToSpellingOutsideAStateBody(t *testing.T) {
+// A transition is recognized wherever a transition can be written, not only
+// directly inside a state body, and whether its ends are simple or qualified
+// names.
+func TestTransitionOutsideAStateBody(t *testing.T) {
 	for _, src := range []string{
-		`package Test { action def A { state s1; state s2; transition s1 to s2; } }`,
-		`package Test { state def S { state a; state b; } action def A { transition S::a to S::b; } }`,
+		`package Test { action def A { state s1; state s2; transition first s1 then s2; } }`,
+		`package Test { state def S { state a; state b; } action def A { transition first S::a then S::b; } }`,
 	} {
 		p := New(source.New("test.sysml", []byte(src)))
 		root := p.ParseFile()

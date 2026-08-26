@@ -3,12 +3,13 @@ package SignalTest {
     // transition must be dropped without firing anything.
     // Injecting sigC (no transition) must leave the machine in `waiting`.
     state Unmatched {
-        initial start;
+        entry; then start;
+        state start;
         state waiting;
         state pathA;
 
         succession first start then waiting;
 
-        transition waiting to pathA when sigA;
+        transition first waiting when sigA then pathA;
     }
 }

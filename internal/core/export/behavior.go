@@ -208,14 +208,11 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		return true, e.encode(n.Body, fqn, subject)
 
 	case *ast.StateNode:
-		// A state of a state machine, including the `initial <name>;` and
-		// `final <name>;` markers, whose keyword says which of the two it is.
+		// A state of a state machine, including the `final <name>;` marker, whose
+		// keyword the graph records.
 		head(rdf.SysMLTerm(mStateUsage))
 		e.name(subject, n.Name)
-		switch {
-		case n.IsInitial:
-			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("initial"))
-		case n.IsFinal:
+		if n.IsFinal {
 			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("final"))
 		}
 		members := stateBody(n)
@@ -438,21 +435,19 @@ func (e *encoder) pseudostateKeyword(n *ast.PseudostateNode) string {
 }
 
 // transitionSyntax names the spelling a transition was written in: `first`
-// marking the source, `to` naming the target after it, or the `accept` of a
-// transition that states only its trigger.
+// marking the source, `source` stating it without that marker, or the `accept`
+// of a transition that states only its trigger.
 func (e *encoder) transitionSyntax(n *ast.TransitionMember) string {
 	if n.Source == nil {
 		return "accept"
 	}
-	// `first` is a legal state name, so `transition first to second;` names one
-	// rather than marking the source.
 	fields := strings.Fields(e.text(n))
 	for i := 1; i < len(fields) && i <= 2; i++ {
-		if fields[i] == "first" && (i+1 >= len(fields) || fields[i+1] != "to") {
+		if fields[i] == "first" {
 			return "first"
 		}
 	}
-	return "to"
+	return "source"
 }
 
 // bracedBody reports whether a body was written with braces rather than as the
@@ -1077,11 +1072,10 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 		}
 		words = append(words, "transition")
 		words = append(words, d.identWords(el)...)
-		if syntax == "to" {
-			words = append(words, source, "to", target)
-		} else {
-			words = append(words, "first", source)
+		if syntax == "first" {
+			words = append(words, "first")
 		}
+		words = append(words, source)
 	}
 	if trigger, ok := d.stringOf(el, rdf.OpenSysML+xTrigger); ok {
 		keyword := "accept"
@@ -1107,9 +1101,7 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 		}
 		words = append(words, "do", strings.TrimSuffix(effect, ";"))
 	}
-	if syntax != "to" {
-		words = append(words, "then", target)
-	}
+	words = append(words, "then", target)
 	return strings.Join(words, " "), nil
 }
 

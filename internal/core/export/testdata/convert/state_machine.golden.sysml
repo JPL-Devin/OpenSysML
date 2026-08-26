@@ -29,7 +29,9 @@ package StateMachine {
         }
     }
     state def Composite {
-        initial launch;
+        entry;
+        then launch;
+        state launch;
         final stopped;
         state waiting;
         entry action {

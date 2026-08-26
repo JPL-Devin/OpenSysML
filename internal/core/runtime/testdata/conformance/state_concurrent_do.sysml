@@ -6,7 +6,8 @@ package Test {
     // end at entry would give 1,2,3,4,5,6 instead.
     state def Interleave parallel {
         state left {
-            initial lstart;
+            entry; then lstart;
+            state lstart;
             state lwork {
                 do {
                     seq = seq * 10 + 1;
@@ -21,7 +22,8 @@ package Test {
         }
 
         state right {
-            initial rstart;
+            entry; then rstart;
+            state rstart;
             state rwork {
                 do {
                     seq = seq * 10 + 4;

@@ -155,10 +155,6 @@ func (w *notationWalker) walk(members []ast.Node) {
 		case *ast.DecisionNode:
 			w.walkActionBody(n.Members)
 		case *ast.TransitionMember:
-			if n.ToSpan.Len > 0 {
-				w.extension(n.ToSpan, "`transition <source> to <target>;`",
-					"a transition states its ends with `first` and `then`")
-			}
 			w.walkActionBody(n.Effect)
 			w.walkActionBody(n.Members)
 		case *ast.EntryMember:
@@ -295,13 +291,9 @@ func (w *notationWalker) requirementConstraint(n *ast.Usage) {
 		"only a requirement, concern, viewpoint or objective body admits it")
 }
 
-// stateNode reports the `initial`/`final` state markers, then descends.
+// stateNode reports the `final` state marker, then descends.
 func (w *notationWalker) stateNode(n *ast.StateNode) {
-	switch {
-	case n.IsInitial:
-		w.extension(keywordSpan(n, "initial"), "`initial <state>;`",
-			"the standard way to mark the state a machine starts in is `entry; then <state>;`")
-	case n.IsFinal:
+	if n.IsFinal {
 		w.extension(keywordSpan(n, "final"), "`final <state>;`",
 			"a final state is reached by a transition, and is written `state <name>;`")
 	}

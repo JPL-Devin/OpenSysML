@@ -3,7 +3,8 @@
 // through `outOf`.
 package Test {
     state EntryExitPoints {
-        initial start;
+        entry; then start;
+        state start;
         state outer {
             state inner;
         }
@@ -11,9 +12,9 @@ package Test {
         exit point outOf;
         final done;
 
-        transition start to into;
-        transition into to inner;
-        transition inner to outOf when Leave;
-        transition outOf to done;
+        transition first start then into;
+        transition first into then inner;
+        transition first inner when Leave then outOf;
+        transition first outOf then done;
     }
 }

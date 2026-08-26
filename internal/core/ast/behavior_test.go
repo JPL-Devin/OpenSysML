@@ -30,19 +30,15 @@ func TestStateNodeConstruction(t *testing.T) {
 	span := source.Span{Offset: 0, Len: 20}
 
 	state := &StateNode{
-		NodeBase:  NodeBase{NodeSpan: span},
-		Name:      "Active",
-		IsInitial: true,
-		Entry:     []Node{},
-		Do:        []Node{},
-		Exit:      []Node{},
+		NodeBase: NodeBase{NodeSpan: span},
+		Name:     "Active",
+		Entry:    []Node{},
+		Do:       []Node{},
+		Exit:     []Node{},
 	}
 
 	if state.Name != "Active" {
 		t.Errorf("expected name 'Active', got %q", state.Name)
-	}
-	if !state.IsInitial {
-		t.Error("expected IsInitial=true")
 	}
 	if state.Span().Len != 20 {
 		t.Error("span mismatch")
@@ -99,7 +95,6 @@ func TestStateNode_AllFields(t *testing.T) {
 	state := &StateNode{
 		NodeBase:  NodeBase{NodeSpan: span},
 		Name:      "CompositeFinal",
-		IsInitial: false,
 		IsFinal:   true,
 		Entry:     []Node{},
 		Do:        []Node{},

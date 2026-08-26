@@ -24,13 +24,6 @@
           (TransitionMember source="alerting" target="idle"
             (*ast.AssignmentActionNode))
           (TransitionMember source="idle" target="alerting"
-            (Membership visibility="default"
-              (Usage kind="action" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="perform"
-                (Relationship kind="references" target=Bump
-                  (*ast.QualifiedName)))))
-          (TransitionMember source="alerting" target="idle"
-            (*ast.AssignmentActionNode))
-          (TransitionMember source="idle" target="alerting"
             (*ast.AssignmentActionNode))
           (TransitionMember source="alerting" target="idle"
             (Membership visibility="default"

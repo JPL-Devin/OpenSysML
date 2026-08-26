@@ -6,7 +6,8 @@ package test {
     state TestTransitionEffectAssignFirstThen {
         attribute counter : Integer = 0;
 
-        initial init;
+        entry; then init;
+        state init;
         state active;
         final done;
 

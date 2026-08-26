@@ -11,7 +11,7 @@ import (
 
 // grpcExtension uses notation of ours: a warning by default, an error when the
 // request asks strictly.
-const grpcExtension = "package P { state def S { initial a; state a; } }"
+const grpcExtension = "package P { state def S { choice c; state a; } }"
 
 func TestServerAdvertisesStrictConformance(t *testing.T) {
 	srv := mustNewService(t, 10)

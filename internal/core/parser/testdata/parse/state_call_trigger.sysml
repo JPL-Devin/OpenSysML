@@ -1,6 +1,7 @@
 package CallTriggers {
     state Controller {
-        initial start;
+        entry; then start;
+        state start;
         state idle {
             accept brake() then stopping;
         }
@@ -9,6 +10,6 @@ package CallTriggers {
 
         succession first start then idle;
 
-        transition idle to cruising accept setSpeed(value) if value > 0;
+        transition first idle accept setSpeed(value) if value > 0 then cruising;
     }
 }

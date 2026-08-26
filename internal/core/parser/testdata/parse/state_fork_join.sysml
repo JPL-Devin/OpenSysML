@@ -1,14 +1,17 @@
 state ParallelSplit {
-	initial start;
+	entry; then start;
+	state start;
 	state ready;
 	state working parallel {
 		state left {
-			initial leftStart;
+			entry; then leftStart;
+			state leftStart;
 			state building;
 			succession first leftStart then building;
 		}
 		state right {
-			initial rightStart;
+			entry; then rightStart;
+			state rightStart;
 			state checking;
 			succession first rightStart then checking;
 		}
@@ -18,10 +21,10 @@ state ParallelSplit {
 	final done;
 
 	succession first start then ready;
-	transition ready to split;
-	transition split to building;
-	transition split to checking;
-	transition building to sync;
-	transition checking to sync;
-	transition sync to done;
+	transition first ready then split;
+	transition first split then building;
+	transition first split then checking;
+	transition first building then sync;
+	transition first checking then sync;
+	transition first sync then done;
 }

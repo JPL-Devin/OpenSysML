@@ -12,7 +12,7 @@ import (
 
 // extensionModel uses notation the pinned grammars do not admit, in the two
 // codes strict mode escalates.
-const extensionModel = "package P { state def S { initial a; state a; } }"
+const extensionModel = "package P { state def S { final a; } }"
 
 func TestWorkspaceDefaultsToTheDefaultMode(t *testing.T) {
 	ws := NewWorkspace()

@@ -104,7 +104,8 @@ func TestElementBudgetIsReleasedByEveryStep(t *testing.T) {
 			state machine {
 				attribute i : Integer = 0;
 
-				initial start;
+				entry; then start;
+				state start;
 				state step {
 					entry { assign i := i + 1; }
 				}
@@ -115,9 +116,9 @@ func TestElementBudgetIsReleasedByEveryStep(t *testing.T) {
 
 				succession first start then step;
 
-				transition step to again if (1, 2, 3)->NumericalFunctions::sum() > i;
-				transition step to done if (1, 2, 3)->NumericalFunctions::sum() <= i;
-				transition again to step;
+				transition first step if (1, 2, 3)->NumericalFunctions::sum() > i then again;
+				transition first step if (1, 2, 3)->NumericalFunctions::sum() <= i then done;
+				transition first again then step;
 			}
 		}
 	`

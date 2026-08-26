@@ -54,7 +54,8 @@ func shallowHistoryMachine() *ast.Usage {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			outer,
 			&ast.StateNode{Name: "away"},
 			transitionMember("init", "first"),
@@ -131,7 +132,8 @@ func TestDeepHistoryRestoresInnermostSubstate(t *testing.T) {
 				Kind:  ast.UsageState,
 				Ident: ast.Identification{Name: "Machine"},
 				Members: []ast.Node{
-					&ast.StateNode{Name: "init", IsInitial: true},
+					entryStart("init"),
+					&ast.StateNode{Name: "init"},
 					outer,
 					&ast.StateNode{Name: "away"},
 					transitionMember("init", "inner1"),
@@ -159,7 +161,7 @@ func TestDeepHistoryRestoresInnermostSubstate(t *testing.T) {
 // regionHistoryMachine is `outer` with two orthogonal regions, each of which can
 // advance independently, and a history that restores both at once.
 func regionHistoryMachine(kind ast.PseudostateKind, nestLeft bool) *ast.Usage {
-	lstart := &ast.StateNode{Name: "lstart", IsInitial: true}
+	lstart := &ast.StateNode{Name: "lstart"}
 	lwork := &ast.StateNode{Name: "lwork"}
 	var extra []ast.Node
 	if nestLeft {
@@ -167,11 +169,11 @@ func regionHistoryMachine(kind ast.PseudostateKind, nestLeft bool) *ast.Usage {
 		lwork.Substates = []ast.Node{&ast.StateNode{Name: "ldeep"}}
 		extra = append(extra, transitionMember("lwork", "ldeep"))
 	}
-	rstart := &ast.StateNode{Name: "rstart", IsInitial: true}
+	rstart := &ast.StateNode{Name: "rstart"}
 	rwork := &ast.StateNode{Name: "rwork"}
 
-	left := &ast.StateRegion{Name: "left", States: []ast.Node{lstart, lwork}}
-	right := &ast.StateRegion{Name: "right", States: []ast.Node{rstart, rwork}}
+	left := &ast.StateRegion{Name: "left", States: []ast.Node{entryStart("lstart"), lstart, lwork}}
+	right := &ast.StateRegion{Name: "right", States: []ast.Node{entryStart("rstart"), rstart, rwork}}
 	history := &ast.PseudostateNode{Kind: kind, Name: "H"}
 	outer := &ast.StateNode{
 		Name:      "outer",
@@ -183,7 +185,8 @@ func regionHistoryMachine(kind ast.PseudostateKind, nestLeft bool) *ast.Usage {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: append([]ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			outer,
 			&ast.StateNode{Name: "away"},
 			transitionMember("init", "outer"),
@@ -245,16 +248,16 @@ func TestHistoryRestoresOrthogonalRegions(t *testing.T) {
 // region still records the state it was left in, so a deep history restores that
 // composite state and its inner configuration instead of the region's initial state.
 func TestDeepHistoryRestoresARegionLeftFromInsideItsCompositeState(t *testing.T) {
-	istart := &ast.StateNode{Name: "istart", IsInitial: true}
+	istart := &ast.StateNode{Name: "istart"}
 	ideep := &ast.StateNode{Name: "ideep"}
-	inner := &ast.StateRegion{Name: "inner", States: []ast.Node{istart, ideep}}
+	inner := &ast.StateRegion{Name: "inner", States: []ast.Node{entryStart("istart"), istart, ideep}}
 	wrapper := &ast.StateNode{Name: "wrapper", Regions: []*ast.StateRegion{inner}}
 
-	lstart := &ast.StateNode{Name: "lstart", IsInitial: true}
+	lstart := &ast.StateNode{Name: "lstart"}
 	lwork := &ast.StateNode{Name: "lwork"}
-	rstart := &ast.StateNode{Name: "rstart", IsInitial: true}
-	left := &ast.StateRegion{Name: "left", States: []ast.Node{lstart, lwork}}
-	right := &ast.StateRegion{Name: "right", States: []ast.Node{rstart, wrapper}}
+	rstart := &ast.StateNode{Name: "rstart"}
+	left := &ast.StateRegion{Name: "left", States: []ast.Node{entryStart("lstart"), lstart, lwork}}
+	right := &ast.StateRegion{Name: "right", States: []ast.Node{entryStart("rstart"), rstart, wrapper}}
 	history := &ast.PseudostateNode{Kind: ast.PseudostateDeepHistory, Name: "H"}
 	outer := &ast.StateNode{
 		Name:      "outer",
@@ -266,7 +269,8 @@ func TestDeepHistoryRestoresARegionLeftFromInsideItsCompositeState(t *testing.T)
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			outer,
 			&ast.StateNode{Name: "away"},
 			transitionMember("init", "outer"),
@@ -343,31 +347,31 @@ func TestDeepHistoryRestoresBelowRegion(t *testing.T) {
 // every composite state shares one map, so a teardown must only touch the
 // regions of the state being left.
 func TestExitingNestedRegionsKeepsSiblingRegions(t *testing.T) {
-	innerA := &ast.StateNode{Name: "innerA", IsInitial: true}
-	innerB := &ast.StateNode{Name: "innerB", IsInitial: true}
+	innerA := &ast.StateNode{Name: "innerA"}
+	innerB := &ast.StateNode{Name: "innerB"}
 	nested := &ast.StateNode{
-		Name:      "nested",
-		IsInitial: true,
+		Name: "nested",
 		Regions: []*ast.StateRegion{
-			{Name: "a", States: []ast.Node{innerA}},
-			{Name: "b", States: []ast.Node{innerB}},
+			{Name: "a", States: []ast.Node{entryStart("innerA"), innerA}},
+			{Name: "b", States: []ast.Node{entryStart("innerB"), innerB}},
 		},
 	}
 	leftDone := &ast.StateNode{Name: "leftDone"}
-	rstart := &ast.StateNode{Name: "rstart", IsInitial: true}
+	rstart := &ast.StateNode{Name: "rstart"}
 
 	outer := &ast.StateNode{
 		Name: "outer",
 		Regions: []*ast.StateRegion{
-			{Name: "left", States: []ast.Node{nested, leftDone}},
-			{Name: "right", States: []ast.Node{rstart}},
+			{Name: "left", States: []ast.Node{entryStart("nested"), nested, leftDone}},
+			{Name: "right", States: []ast.Node{entryStart("rstart"), rstart}},
 		},
 	}
 	exec := stateExecutorFor(t, &ast.Usage{
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			outer,
 			transitionMember("init", "nested"),
 			transitionMember("nested", "leftDone"),

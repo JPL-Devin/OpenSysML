@@ -4,17 +4,20 @@ package Test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state Outer parallel {
 			exit { log = log * 10 + 1; }
 
 			state left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state Grouping parallel {
 					exit { log = log * 10 + 2; }
 
 					state inner {
-						initial gstart;
+						entry; then gstart;
+						state gstart;
 						state g1 {
 							exit { log = log * 10 + 3; }
 						}
@@ -26,7 +29,8 @@ package Test {
 				succession first lstart then Grouping;
 			}
 			state right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state Watching {
 					exit { log = log * 10 + 4; }
 				}
@@ -37,6 +41,6 @@ package Test {
 		state Done;
 
 		succession first start then Outer;
-		transition Outer to Done when stop do assign log := log * 10 + 9;
+		transition first Outer when stop do assign log := log * 10 + 9 then Done;
 	}
 }

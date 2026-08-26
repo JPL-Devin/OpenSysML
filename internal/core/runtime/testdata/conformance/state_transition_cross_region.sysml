@@ -7,19 +7,22 @@ package Test {
 		attribute crossed : Integer = 0;
 		attribute reentered : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state running parallel {
 			entry { reentered = reentered + 1; }
 
 			state left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state lidle;
 
 				succession first lstart then lidle;
-				transition lidle to rtarget;
+				transition first lidle then rtarget;
 			}
 			state right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state ridle;
 				state rtarget { entry { crossed = crossed + 1; } }
 

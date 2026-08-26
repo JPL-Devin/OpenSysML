@@ -6,7 +6,8 @@ package SendIdentityPart {
 
 	part def Node {
 		state Listen {
-			initial start;
+			entry; then start;
+			state start;
 
 			state waiting {
 				entry send Ping() to worker;

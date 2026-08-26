@@ -24,7 +24,8 @@ const debugActionSrc = `package test {
 
 const debugStateSrc = `package test {
 	state Cycle {
-		initial init;
+		entry; then init;
+		state init;
 		state waiting {
 			accept after 10 then working;
 		}
@@ -257,7 +258,8 @@ func TestRunDoRoundRunsDoWorkOnly(t *testing.T) {
 	exec := stateExecutorForSource(t, "Slow", `package test {
 		state Slow {
 			attribute count = 0;
-			initial init;
+			entry; then init;
+			state init;
 			state working {
 				do { count = count + 1; }
 				accept after 100 then done;
@@ -299,12 +301,14 @@ func TestActiveStatesCoversOrthogonalRegions(t *testing.T) {
 	exec := stateExecutorForSource(t, "TrafficLight", `package test {
 		state def TrafficLight parallel {
 			state pedestrian {
-				initial start;
+				entry; then start;
+				state start;
 				state Walk;
 				succession first start then Walk;
 			}
 			state vehicle {
-				initial begin;
+				entry; then begin;
+				state begin;
 				state Green;
 				succession first begin then Green;
 			}

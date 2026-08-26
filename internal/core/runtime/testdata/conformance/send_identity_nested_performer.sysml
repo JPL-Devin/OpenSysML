@@ -16,7 +16,8 @@ package SendIdentityNested {
 
 	part def Node {
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 
 			state sending {
 				entry send 7 to reader;
@@ -24,7 +25,7 @@ package SendIdentityNested {
 			final heard;
 
 			succession first start then sending;
-			transition sending to heard do perform Listen;
+			transition first sending do perform Listen then heard;
 		}
 	}
 
