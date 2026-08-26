@@ -26,32 +26,12 @@ func (r *Resolver) resolveEdgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, m
 	if qn == nil || len(qn.Parts) == 0 || member != nil || implied {
 		return
 	}
-	// In a machine, an end names a vertex the way a transition's does — a nested
-	// or region-local one included, which is what lowering reads it as.
 	if inStateMachine(scope) {
-		r.resolveMachineEnd(scope, qn)
+		// In a machine, judge the end as a transition endpoint, including its kind.
+		r.ResolveEndpoint(scope, qn)
 		return
 	}
 	r.ResolveQualified(scope, qn)
-}
-
-// resolveMachineEnd reports an end of a machine naming nothing, reaching a
-// vertex the way a transition's endpoint does. What the name reached is left
-// unjudged: the kind check a transition endpoint gets belongs to the notation
-// this end is written in, not to resolving the name.
-func (r *Resolver) resolveMachineEnd(scope *symbols.Scope, qn *ast.QualifiedName) {
-	var found bool
-	r.aside(func() { _, found = r.lookupEndpoint(scope, qn) })
-	if found {
-		return
-	}
-	last := qn.Parts[len(qn.Parts)-1]
-	r.report(Diagnostic{
-		Span:    qn.Span(),
-		Message: r.endpointMessage(scope, qn),
-		Code:    "unresolved",
-		Fixes:   endpointFixes(last.Text, last.Span, r.vertexSuggestions(scope, qn)),
-	})
 }
 
 // inStateMachine reports whether an edge written in scope belongs to a state
