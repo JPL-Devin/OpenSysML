@@ -5,7 +5,8 @@ package test {
     // would fire at 13. Were `at` read as an offset it would fire at 15 and the
     // machine would sit in `later` instead of reaching `done`.
     state TimedTransitions {
-        initial init;
+        entry; then init;
+        state init;
         state waiting {
             accept after 10 then working;
         }

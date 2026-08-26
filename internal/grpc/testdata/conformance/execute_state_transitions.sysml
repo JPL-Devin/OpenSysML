@@ -1,6 +1,7 @@
 package test {
 	state Machine {
-		initial init;
+		entry; then init;
+		state init;
 		state Running;
 		final done;
 

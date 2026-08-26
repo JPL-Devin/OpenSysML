@@ -36,7 +36,8 @@ package 'My Pkg' {
 	}
 
 	state 'spin up' {
-		initial init;
+		entry; then init;
+		state init;
 		state waiting {
 			accept after 10 then done;
 		}

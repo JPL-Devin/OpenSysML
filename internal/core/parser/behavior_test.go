@@ -632,7 +632,7 @@ func TestParseStateBody_Substate(t *testing.T) {
 
 func TestParseStateBody_Transition(t *testing.T) {
 	input := `{
-		transition Active to Idle when timeout;
+		transition first Active when timeout then Idle;
 	}`
 
 	nodes := parseStateBodyTest(t, input)
@@ -722,7 +722,7 @@ func TestParseStateBody_AcceptTransitionTriggerKinds(t *testing.T) {
 
 func TestParseStateBody_TransitionWithGuardAndEffect(t *testing.T) {
 	input := `{
-		transition Running to Stopped if ready do { action finalize; };
+		transition first Running if ready do { action finalize; } then Stopped;
 	}`
 
 	nodes := parseStateBodyTest(t, input)
@@ -752,7 +752,7 @@ func TestParseStateBody_Complete(t *testing.T) {
 		exit { action cleanup; }
 		state Active;
 		state Idle;
-		transition Active to Idle when timeout;
+		transition first Active when timeout then Idle;
 	}`
 
 	nodes := parseStateBodyTest(t, input)

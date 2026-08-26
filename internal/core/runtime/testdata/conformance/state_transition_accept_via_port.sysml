@@ -14,7 +14,8 @@ package StateAcceptViaPort {
         port inPort : PingPort;
         connect outPort to inPort;
 
-        initial start;
+        entry; then start;
+        state start;
 
         state waitingGSPing {
             entry send Ping() via outPort;
@@ -31,6 +32,6 @@ package StateAcceptViaPort {
             do assign received := 1
             then transmitting;
 
-        transition transmitting to done;
+        transition first transmitting then done;
     }
 }

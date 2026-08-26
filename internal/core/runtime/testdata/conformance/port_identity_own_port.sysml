@@ -11,7 +11,8 @@ package PortIdentity {
 		port inPort : PingPort;
 
 		state Listen {
-			initial start;
+			entry; then start;
+			state start;
 
 			state waiting {
 				entry send Ping() to inPort;

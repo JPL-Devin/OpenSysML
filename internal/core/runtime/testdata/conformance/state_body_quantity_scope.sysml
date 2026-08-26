@@ -19,7 +19,8 @@ package test {
 		attribute touchdown : ISQSpaceTime::SpeedValue = 0.0 [m/s];
 		attribute logged : ISQSpaceTime::SpeedValue = 0.0 [m/s];
 
-		initial start;
+		entry; then start;
+		state start;
 		state falling;
 		state slow {
 			entry { assign verdict := "slow"; }
@@ -31,10 +32,10 @@ package test {
 
 		succession first start then falling;
 
-		transition falling to slow if speed <= pkgLimit;
-		transition falling to fast;
+		transition first falling if speed <= pkgLimit then slow;
+		transition first falling then fast;
 
-		transition slow to done accept after pkgDelay;
-		transition fast to done accept after pkgDelay do { assign logged := touchdown - 0.25 [m/s]; };
+		transition first slow accept after pkgDelay then done;
+		transition first fast accept after pkgDelay do { assign logged := touchdown - 0.25 [m/s]; } then done;
 	}
 }

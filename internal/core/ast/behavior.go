@@ -210,12 +210,11 @@ func (n *IfActionNode) Branches() []*IfBranchNode {
 // StateNode represents a state in a state machine (simple, composite, or orthogonal).
 type StateNode struct {
 	NodeBase
-	Name      string
-	IsInitial bool   // initial state marker
-	IsFinal   bool   // final state marker
-	Entry     []Node // entry behaviors (action sequence)
-	Do        []Node // do action (ongoing action)
-	Exit      []Node // exit behaviors (action sequence)
+	Name    string
+	IsFinal bool   // final state marker
+	Entry   []Node // entry behaviors (action sequence)
+	Do      []Node // do action (ongoing action)
+	Exit    []Node // exit behaviors (action sequence)
 	// Defer names the events the state defers while it is active: an event no
 	// transition of the active configuration handles is retained instead of
 	// dropped, and delivered again once no active state defers it.
@@ -543,9 +542,6 @@ type TransitionMember struct {
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName
-	// ToSpan spans the `to` of the second spelling, and is empty when the
-	// transition was written the standard way.
-	ToSpan source.Span
 	// Members and HasBody carry the body a transition may declare, since both
 	// TransitionUsage and TargetTransitionUsage end in ActionBody
 	// (`then starting { … }`).

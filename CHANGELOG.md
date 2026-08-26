@@ -50,6 +50,30 @@ error, and the warning for them is gone.
   `assume`/`require constraint [name] { … }`. The separate warning for `assume`/`require` used
   outside a requirement body is unchanged too.
 
+### The state initial marker and the `to` transition spelling are removed
+
+**Breaking change** for models that used them. Both were OpenSysML-only aliases of notation the
+pinned grammars already spell, so the aliases and their `nonstandard-notation` warnings are gone
+rather than kept:
+
+- `initial <state>;` → declare the state and start the body's entry succession at it:
+  `entry; then <state>;` (`SysML.xtext:1766` `EntryActionMember`, followed by `EntryTransitionMember`
+  at `SysML.xtext:1796`). Inside a `region`, the entry succession designates that region's start, as
+  the marker did. It lowers to the same `StateGraph` initial state, so no execution result moves.
+- `transition <source> to <target>;` → `transition first <source> then <target>;`
+  (`SysML.xtext:1854` `TransitionUsage`, whose target is introduced by `then`). Naming the
+  transition, guards, triggers and effects are unchanged: `transition t first a if g then b;`. The
+  source may also be written without `first`, as the grammar allows.
+
+`initial` is not reserved by the pinned grammars, so it still names a feature
+(`attribute initial : Boolean;`, `state initial;`). A state body that writes `initial <state>;` or
+`transition <source> to <target>;` is reported as the parse error it now is — in particular
+`transition a to b;` does not quietly become a transition between other ends.
+
+The `final <state>;` marker **stays** for now: the runtime completes a machine when a state that
+marker names is entered, and terminates an orthogonal machine when every region has reached one, so
+it is not a spelling alias of `state <name>;` and dropping it would change what a model means.
+
 ### The orthogonal-region member is no longer accepted
 
 **Breaking change.** `region <name> { … }` in a state body was an OpenSysML extension no SysML v2
@@ -95,8 +119,9 @@ None of the three words is reserved by the pinned grammars, so each still names 
 `final <name>;` or `decision <name>;` is reported as the parse error it now is. A bare
 `then final;` is a **succession target**, not a node, so it is read as a reference to a member named
 `final`: where nothing declares one, `sysml -validate` reports an unresolved reference at the name —
-the same as any other undefined succession target (see below). The **state** markers `initial <state>;` and
-`final <state>;` in a state body are unaffected. Named action final syntax `done <name>;`
+the same as any other undefined succession target (see below). The **state** marker `final <state>;` in a
+state body is unaffected; the state marker `initial <state>;` is removed too, described above. Named
+action final syntax `done <name>;`
 remains rejected as described above.
 
 ### An undefined succession or transition endpoint is reported at validation time

@@ -11,15 +11,16 @@ import (
 func TestCompositeStateHandlesEventItsSubstateDoesNot(t *testing.T) {
 	exec := stateExecutorForSource(t, "sm", `package test {
 		state sm {
-			initial start;
+			entry; then start;
+			state start;
 			state Working {
 				state Step1;
 				state Step2;
-				transition Step1 to Step2 accept next;
+				transition first Step1 accept next then Step2;
 			}
 			state Done;
 			succession first start then Step1;
-			transition Working to Done accept abort;
+			transition first Working accept abort then Done;
 		}
 	}`)
 
@@ -38,15 +39,16 @@ func TestFalseGuardInsideACompositeStateFallsOutward(t *testing.T) {
 		state sm {
 			attribute ready : Boolean = false;
 
-			initial start;
+			entry; then start;
+			state start;
 			state Working {
 				state Step1;
 				state Step2;
-				transition Step1 to Step2 accept abort if ready;
+				transition first Step1 accept abort if ready then Step2;
 			}
 			state Done;
 			succession first start then Step1;
-			transition Working to Done accept abort;
+			transition first Working accept abort then Done;
 		}
 	}`)
 
@@ -67,16 +69,17 @@ func TestFalseGuardInsideACompositeStateFallsOutward(t *testing.T) {
 func TestTransitionOutOfAnIntermediateCompositeStateKeepsItsOwnerActive(t *testing.T) {
 	exec := stateExecutorForSource(t, "sm", `package test {
 		state sm {
-			initial start;
+			entry; then start;
+			state start;
 			state Outer {
 				state Middle {
 					state Inner;
 				}
 				state Recovered;
-				transition Middle to Recovered accept abort;
+				transition first Middle accept abort then Recovered;
 			}
 			succession first start then Inner;
-			transition Outer to Done accept shutdown;
+			transition first Outer accept shutdown then Done;
 			state Done;
 		}
 	}`)
@@ -97,16 +100,17 @@ func TestTransitionOutOfAnIntermediateCompositeStateKeepsItsOwnerActive(t *testi
 func TestOuterCompositeStateStillHandlesItsEventAfterASubstateMoved(t *testing.T) {
 	exec := stateExecutorForSource(t, "sm", `package test {
 		state sm {
-			initial start;
+			entry; then start;
+			state start;
 			state Outer {
 				state Middle {
 					state Inner;
 				}
 				state Recovered;
-				transition Middle to Recovered accept abort;
+				transition first Middle accept abort then Recovered;
 			}
 			succession first start then Inner;
-			transition Outer to Done accept shutdown;
+			transition first Outer accept shutdown then Done;
 			state Done;
 		}
 	}`)
@@ -125,15 +129,16 @@ func TestOuterCompositeStateStillHandlesItsEventAfterASubstateMoved(t *testing.T
 func TestEventNoLevelAcceptsLeavesTheConfigurationAlone(t *testing.T) {
 	exec := stateExecutorForSource(t, "sm", `package test {
 		state sm {
-			initial start;
+			entry; then start;
+			state start;
 			state Working {
 				state Step1;
 				state Step2;
-				transition Step1 to Step2 accept next;
+				transition first Step1 accept next then Step2;
 			}
 			state Done;
 			succession first start then Step1;
-			transition Working to Done accept abort;
+			transition first Working accept abort then Done;
 		}
 	}`)
 
@@ -154,15 +159,16 @@ func TestEventNoLevelAcceptsLeavesTheConfigurationAlone(t *testing.T) {
 func TestOneEventTakesOneTransitionPerActiveLeaf(t *testing.T) {
 	source := `package test {
 		state sm {
-			initial start;
+			entry; then start;
+			state start;
 			state Working {
 				state Step1;
 			}
 			state Idle;
 			state Done;
 			succession first start then Working::Step1;
-			transition Step1 to Idle accept e;
-			transition Idle to Done accept e;
+			transition first Step1 accept e then Idle;
+			transition first Idle accept e then Done;
 		}
 	}`
 
@@ -192,21 +198,24 @@ func TestOneEventTakesACompositesTransitionOnce(t *testing.T) {
 		state sm {
 			attribute log : Integer = 0;
 
-			initial start;
+			entry; then start;
+			state start;
 			state Working parallel {
 				state left {
-					initial lstart;
+					entry; then lstart;
+					state lstart;
 					state l1;
 					succession first lstart then l1;
 				}
 				state right {
-					initial rstart;
+					entry; then rstart;
+					state rstart;
 					state r1;
 					succession first rstart then r1;
 				}
 			}
 			succession first start then Working;
-			transition Working to Working accept restart do assign log := log + 1;
+			transition first Working accept restart do assign log := log + 1 then Working;
 		}
 	}`)
 	exec.SendSignal("restart", nil)
@@ -230,7 +239,8 @@ func TestChangeConditionOnACompositeStateFiresWhileASubstateIsActive(t *testing.
 		state sm {
 			attribute ready : Boolean = false;
 
-			initial start;
+			entry; then start;
+			state start;
 			state Working {
 				state Step1;
 				accept when ready then Done;
@@ -264,18 +274,20 @@ func TestGuardBlockedChangeConditionDoesNotSilenceTheOtherRegions(t *testing.T) 
 			attribute allowed : Boolean = false;
 
 			state left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state l1;
 				state lmoved;
-				transition lstart to l1;
-				transition l1 to lmoved accept when ready if allowed;
+				transition first lstart then l1;
+				transition first l1 accept when ready if allowed then lmoved;
 			}
 			state right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state r1;
 				state rmoved;
-				transition rstart to r1;
-				transition r1 to rmoved accept when ready;
+				transition first rstart then r1;
+				transition first r1 accept when ready then rmoved;
 			}
 		}
 	}`)
@@ -316,19 +328,22 @@ func TestChangeConditionTakesTheInnermostTransitionOnly(t *testing.T) {
 		state sm {
 			attribute ready : Boolean = false;
 
-			initial start;
+			entry; then start;
+			state start;
 			state Working parallel {
 				state left {
-					initial lstart;
+					entry; then lstart;
+					state lstart;
 					state l1;
 					state l2;
-					transition lstart to l1;
-					transition l1 to l2 accept when ready;
+					transition first lstart then l1;
+					transition first l1 accept when ready then l2;
 				}
 				state right {
-					initial rstart;
+					entry; then rstart;
+					state rstart;
 					state r1;
-					transition rstart to r1;
+					transition first rstart then r1;
 				}
 				accept when ready then Done;
 			}
@@ -360,24 +375,27 @@ func TestChangeConditionTakesTheInnermostTransitionOnly(t *testing.T) {
 func TestOneRegionsInnerTransitionLeavesAConcurrentRegionsOwnTransition(t *testing.T) {
 	exec := stateExecutorForSource(t, "sm", `package test {
 		state sm {
-			initial start;
+			entry; then start;
+			state start;
 			state Working parallel {
 				state left {
-					initial lstart;
+					entry; then lstart;
+					state lstart;
 					state l1;
 					state l2;
 
 					succession first lstart then l1;
-					transition l1 to l2 accept e;
+					transition first l1 accept e then l2;
 				}
 
 				state right {
-					initial rstart;
+					entry; then rstart;
+					state rstart;
 					state r1;
 					state r2;
 
 					succession first rstart then r1;
-					transition r1 to r2 accept e;
+					transition first r1 accept e then r2;
 				}
 			}
 			succession first start then Working;
@@ -407,13 +425,13 @@ func TestOrthogonalMachineCompletesAfterAllRegionFinalStates(t *testing.T) {
 					entry; then lstart;
 					state lstart;
 					final ldone;
-					transition lstart to ldone when First;
+					transition first lstart when First then ldone;
 				}
 				state right {
 					entry; then rstart;
 					state rstart;
 					final rdone;
-					transition rstart to rdone when Second;
+					transition first rstart when Second then rdone;
 				}
 			}`,
 		},
@@ -423,16 +441,16 @@ func TestOrthogonalMachineCompletesAfterAllRegionFinalStates(t *testing.T) {
 				attribute exits : Integer = 0;
 				exit action bye { assign exits := exits + 1; }
 				state left {
-					initial lstart;
+					entry; then lstart;
 					state lstart;
 					final ldone;
-					transition lstart to ldone when First;
+					transition first lstart when First then ldone;
 				}
 				state right {
-					initial rstart;
+					entry; then rstart;
 					state rstart;
 					final rdone;
-					transition rstart to rdone when Second;
+					transition first rstart when Second then rdone;
 				}
 			}`,
 		},
@@ -482,10 +500,11 @@ func TestTimedSelfTransitionFiresEveryPeriod(t *testing.T) {
 		state sm {
 			attribute ticks : Integer = 0;
 
-			initial start;
+			entry; then start;
+			state start;
 			state s;
 			succession first start then s;
-			transition s to s accept after 1 do assign ticks := ticks + 1;
+			transition first s accept after 1 do assign ticks := ticks + 1 then s;
 		}
 	}`)
 

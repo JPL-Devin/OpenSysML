@@ -4,7 +4,7 @@ package NestedParallelRegionOwner {
     state def Machine {
         attribute worked : Integer = 0;
 
-        initial start;
+        entry; then start;
         state start;
         state outer parallel {
             state a {
@@ -24,7 +24,7 @@ package NestedParallelRegionOwner {
         final finished;
 
         succession first start then outer;
-        transition outer to done when Leave;
-        transition done to finished when Ping;
+        transition first outer when Leave then done;
+        transition first done when Ping then finished;
     }
 }

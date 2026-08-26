@@ -6,7 +6,8 @@ package StateAcceptPayload {
     state Monitor {
         attribute level : Integer = 0;
 
-        initial start;
+        entry; then start;
+        state start;
         state idle;
         state alerting;
         final done;
@@ -20,6 +21,6 @@ package StateAcceptPayload {
             do assign level := w
             then alerting;
 
-        transition alerting to done;
+        transition first alerting then done;
     }
 }

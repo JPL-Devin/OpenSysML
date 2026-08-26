@@ -29,23 +29,27 @@ const forkPartialRegions = `package P {
 		attribute rightInit : Integer = 0;
 		attribute rightWork : Integer = 0;
 
-		initial init;
+		entry; then init;
+		state init;
 		state ready;
 		state working parallel {
 			state left {
-				initial ls;
+				entry; then ls;
+				state ls;
 				state lstart { entry { assign leftInit := 1; } }
 				state lwork { entry { assign leftWork := 1; } }
 				succession first ls then lstart;
 			}
 			state right {
-				initial rs;
+				entry; then rs;
+				state rs;
 				state rstart { entry { assign rightInit := 1; } }
 				state rwork { entry { assign rightWork := 1; } }
 				succession first rs then rstart;
 			}
 			state aux {
-				initial as;
+				entry; then as;
+				state as;
 				state astart;
 				succession first as then astart;
 			}
@@ -55,12 +59,12 @@ const forkPartialRegions = `package P {
 		final done;
 
 		succession first init then ready;
-		transition ready to split;
-		transition split to lwork;
-		transition split to rwork;
-		transition lwork to sync;
-		transition rwork to sync;
-		transition sync to done;
+		transition first ready then split;
+		transition first split then lwork;
+		transition first split then rwork;
+		transition first lwork then sync;
+		transition first rwork then sync;
+		transition first sync then done;
 	}
 }`
 

@@ -8,24 +8,28 @@ package Test {
 		attribute wrapperEntries : Integer = 0;
 		attribute innerExits : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state running parallel {
 			state left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state lmid;
 				state lidle;
 
 				succession first lstart then lmid;
 				succession first lmid then lidle;
-				transition lidle to rtarget if crossed == 0;
+				transition first lidle if crossed == 0 then rtarget;
 			}
 			state right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state wrapper parallel {
 					entry { wrapperEntries = wrapperEntries + 1; }
 
 					state inner {
-						initial istart;
+						entry; then istart;
+						state istart;
 						state ridle { exit { innerExits = innerExits + 1; } }
 						state rtarget { entry { crossed = 1; } }
 

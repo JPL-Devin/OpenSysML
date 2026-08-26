@@ -6,7 +6,7 @@ import (
 )
 
 // lspExtensionModel uses OpenSysML notation no SysML v2 production admits.
-const lspExtensionModel = "package M { state def S { initial off; state off; } }"
+const lspExtensionModel = "package M { state def S { final off; } }"
 
 // The severities an editor draws: 1 error, 2 warning.
 const (

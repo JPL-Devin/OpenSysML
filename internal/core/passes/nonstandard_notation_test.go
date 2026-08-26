@@ -92,7 +92,6 @@ func TestFeaturedByInKerMLIsSilent(t *testing.T) {
 // construct.
 func TestStateExtensionsAreReported(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{"state def S { initial a; }", "`initial <state>;`"},
 		{"state def S { final b; }", "`final <state>;`"},
 		{"state def S { choice c; }", "`choice <name>;`"},
 		{"state def S { junction j; }", "`junction <name>;`"},
@@ -107,12 +106,9 @@ func TestStateExtensionsAreReported(t *testing.T) {
 	}
 }
 
-// `transition <source> to <target>;` is ours; the standard form states its ends
-// with `first` and `then`.
-func TestTransitionToSpellingIsReported(t *testing.T) {
-	wantNotation(t, "a.sysml",
-		"state def S { state a; state b; transition a to b; }",
-		CodeNonstandardNotation, "`transition <source> to <target>;`")
+// A transition stating its ends with `first` and `then` is standard.
+func TestStandardTransitionStaysSilent(t *testing.T) {
+	wantSilent(t, "a.sysml", "state def S { state a; state b; transition first a then b; }")
 }
 
 // A `return` declares a result parameter, which is standard, and a computed
@@ -136,8 +132,7 @@ func TestResultParametersAndTrailingExpressionsStaySilent(t *testing.T) {
 func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 	src := `state def S {
 		state a;
-		state b;
-		initial a;
+		choice c;
 		final b;
 	}`
 	root, pd, idx := analyzeInputs(t, "a.sysml", src)
@@ -151,8 +146,8 @@ func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 	for i, want := range []struct {
 		line, length int
 	}{
-		{4, len("initial")},
-		{5, len("final")},
+		{3, len("choice")},
+		{4, len("final")},
 	} {
 		if line := strings.Count(src[:got[i].Span.Offset], "\n") + 1; line != want.line {
 			t.Errorf("diagnostic %d is on line %d, want %d", i, line, want.line)

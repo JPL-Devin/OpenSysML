@@ -6,7 +6,8 @@ package Debug {
 		attribute ready = false;
 		attribute blocked = false;
 
-		initial init;
+		entry; then init;
+		state init;
 		state waiting {
 			do {
 				ready = true;
@@ -16,7 +17,7 @@ package Debug {
 		final done;
 
 		succession first init then waiting;
-		transition waiting to armed accept when ready;
-		transition armed to done accept when blocked;
+		transition first waiting accept when ready then armed;
+		transition first armed accept when blocked then done;
 	}
 }

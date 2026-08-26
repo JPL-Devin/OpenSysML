@@ -302,7 +302,8 @@ func TestExecuteState_SimpleStateMachine(t *testing.T) {
 	content := `
 package Test {
   state Machine {
-    initial init;
+    entry; then init;
+    state init;
     state Running;
     final done;
 

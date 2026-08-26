@@ -1,6 +1,7 @@
 package HistoryAndPoints {
     state Controller {
-        initial start;
+        entry; then start;
+        state start;
         state outer {
             state first;
             state second;
@@ -13,8 +14,8 @@ package HistoryAndPoints {
 
         succession first start then first;
 
-        transition first to second when Next;
-        transition second to away when Leave;
-        transition away to resume when Back;
+        transition first first when Next then second;
+        transition first second when Leave then away;
+        transition first away when Back then resume;
     }
 }

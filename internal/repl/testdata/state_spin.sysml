@@ -4,7 +4,8 @@ package Debug {
 	state Spin {
 		attribute n = 0;
 
-		initial init;
+		entry; then init;
+		state init;
 		state a {
 			do {
 				n = n + 1;

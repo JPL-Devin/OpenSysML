@@ -3,7 +3,8 @@
 // left `busy` for a state that handles it.
 package Test {
     state DeferredEvent {
-        initial start;
+        entry; then start;
+        state start;
         state busy {
             defer Ping;
         }
@@ -12,7 +13,7 @@ package Test {
 
         succession first start then busy;
 
-        transition busy to ready when Go;
-        transition ready to done when Ping;
+        transition first busy when Go then ready;
+        transition first ready when Ping then done;
     }
 }

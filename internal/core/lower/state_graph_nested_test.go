@@ -59,7 +59,8 @@ func TestToStateGraph_NestedPseudostateOwner(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state outer {
 					state a;
 					state b;
@@ -88,7 +89,8 @@ func TestToStateGraph_TopLevelPseudostateHasNoOwner(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				choice pick;
 				state a;
 				succession first start then pick;
@@ -131,13 +133,13 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 		package test {
 			state def Machine parallel {
 				state left {
-					initial lstart;
+					entry; then lstart;
 					state lstart;
 					final ldone;
 					succession first lstart then ldone;
 				}
 				state right {
-					initial rstart;
+					entry; then rstart;
 					state rstart;
 					final rdone;
 					succession first rstart then rdone;
@@ -328,7 +330,7 @@ func TestToStateGraph_ParallelStateOwnsItsPseudostatesAndEdges(t *testing.T) {
 	graph, err := ToStateGraph(stateDefinitionIn(t, `
 		package test {
 			state def Machine {
-				initial start;
+				entry; then start;
 				state start;
 				state working parallel {
 					state left {
@@ -336,14 +338,14 @@ func TestToStateGraph_ParallelStateOwnsItsPseudostatesAndEdges(t *testing.T) {
 						state lidle;
 						state lfast;
 						defer done;
-						transition lidle to pick;
+						transition first lidle then pick;
 					}
 					state right {
 						entry; then ridle;
 						state ridle;
 					}
 					choice pick;
-					transition pick to lfast;
+					transition first pick then lfast;
 				}
 				succession first start then working;
 			}
@@ -411,7 +413,7 @@ func TestToStateGraph_NestedParallelRegions(t *testing.T) {
 	graph, err := ToStateGraph(stateDefinitionIn(t, `
 		package test {
 			state def Machine {
-				initial start;
+				entry; then start;
 				state start;
 				state outer parallel {
 					state a {
@@ -522,10 +524,11 @@ func TestToStateGraph_EndpointNamingNoVertexLeavesTheEdgeOut(t *testing.T) {
 	machine := stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state busy;
 				succession first start then busy;
-				transition busy to nowhere;
+				transition first busy then nowhere;
 			}
 		}
 	`)
@@ -560,17 +563,20 @@ func TestToStateGraph_UnqualifiedEndpointResolvesFromWhereItIsWritten(t *testing
 	src := `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state alpha {
-					initial astart;
+					entry; then astart;
+					state astart;
 					state work;
 					succession first astart then work;
 				}
 				state beta {
-					initial bstart;
+					entry; then bstart;
+					state bstart;
 					state work;
 					succession first bstart then work;
-					transition work to done;
+					transition first work then done;
 				}
 				state done;
 				succession first start then beta;
@@ -625,7 +631,8 @@ func TestSuccessionReachesAPseudostate(t *testing.T) {
 	root, machine := parseStateUsage(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state busy;
 				junction route;
 				state done;
@@ -659,7 +666,8 @@ func TestSuccessionQualifiedTargetNamesTheVertexItQualifies(t *testing.T) {
 	root, machine := parseStateUsage(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state alpha {
 					state work;
 				}
@@ -692,10 +700,12 @@ func TestSameNamedPseudostatesInSiblingRegionsAreBothCollected(t *testing.T) {
 	root, machine := parseStateUsage(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state running parallel {
 					state left {
-						initial lstart;
+						entry; then lstart;
+						state lstart;
 						state lidle;
 						junction pick;
 						succession first lstart then lidle;
@@ -703,7 +713,8 @@ func TestSameNamedPseudostatesInSiblingRegionsAreBothCollected(t *testing.T) {
 						succession first pick then lidle;
 					}
 					state right {
-						initial rstart;
+						entry; then rstart;
+						state rstart;
 						state ridle;
 						junction pick;
 						succession first rstart then ridle;
@@ -787,14 +798,16 @@ func TestScopelessLoweringNamesTheRegionLocalState(t *testing.T) {
 			state Machine {
 				state both parallel {
 					state left {
-						initial li;
+						entry; then li;
+						state li;
 						state idle;
 						state done;
 						succession first li then idle;
 						succession first idle then done;
 					}
 					state right {
-						initial ri;
+						entry; then ri;
+						state ri;
 						state idle;
 						state ready;
 						succession first ri then idle;

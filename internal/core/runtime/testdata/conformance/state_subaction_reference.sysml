@@ -22,7 +22,8 @@ package test {
     state TestSubactionReference {
         attribute counter : Integer = 1;
 
-        initial init;
+        entry; then init;
+        state init;
 
         state active {
             entry Bump;

@@ -60,7 +60,8 @@ func TestDoBehaviorIsCancelledWhenItsStateIsExited(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			work,
 			&ast.StateNode{Name: "done", IsFinal: true},
 			transitionMember("init", "work"),
@@ -96,7 +97,8 @@ func TestUninterruptedDoBehaviorRunsEveryAction(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			work,
 			&ast.StateNode{Name: "done", IsFinal: true},
 			transitionMember("init", "work"),
@@ -127,7 +129,8 @@ func TestCompletionWaitsForTheDoBehavior(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			work,
 			&ast.StateNode{Name: "done", IsFinal: true},
 			transitionMember("init", "work"),
@@ -161,7 +164,8 @@ func TestSteppingDrivesADoBehaviorToItsEnd(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			work,
 			&ast.StateNode{Name: "done", IsFinal: true},
 			transitionMember("init", "work"),
@@ -197,14 +201,16 @@ func TestDoBehaviorsOfOrthogonalRegionsInterleave(t *testing.T) {
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
 			&ast.StateRegion{Name: "left", States: []ast.Node{
-				&ast.StateNode{Name: "lstart", IsInitial: true},
+				entryStart("lstart"),
+				&ast.StateNode{Name: "lstart"},
 				lwork,
 				&ast.StateNode{Name: "ldone"},
 				transitionMember("lstart", "lwork"),
 				transitionMember("lwork", "ldone"),
 			}},
 			&ast.StateRegion{Name: "right", States: []ast.Node{
-				&ast.StateNode{Name: "rstart", IsInitial: true},
+				entryStart("rstart"),
+				&ast.StateNode{Name: "rstart"},
 				rwork,
 				&ast.StateNode{Name: "rdone"},
 				transitionMember("rstart", "rwork"),

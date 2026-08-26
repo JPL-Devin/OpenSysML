@@ -3,7 +3,8 @@ package MemberThenOrderTest {
 	// machine follows it rather than declaration order: `fourth` is entered after
 	// `second` only because of the keyword between them.
 	state Sequenced {
-		initial start;
+		entry; then start;
+		state start;
 
 		state second;
 		then state fourth;

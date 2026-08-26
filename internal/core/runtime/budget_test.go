@@ -354,7 +354,8 @@ func TestStateBudgetsAreConfigurable(t *testing.T) {
 			Kind:  ast.UsageState,
 			Ident: ast.Identification{Name: "Machine"},
 			Members: []ast.Node{
-				&ast.StateNode{Name: "init", IsInitial: true},
+				entryStart("init"),
+				&ast.StateNode{Name: "init"},
 				&ast.StateNode{Name: "spin", Do: []ast.Node{&ast.AssignmentActionNode{
 					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "ticks"}}},
 					Value:  &ast.LiteralInteger{Value: "1"},
