@@ -83,38 +83,6 @@ func TestToStateGraph_DeferInMachineBodyIsReported(t *testing.T) {
 	}
 }
 
-// A region is not a state either, so a defer in a region body is reported
-// rather than silently dropped.
-func TestToStateGraph_DeferInRegionBodyIsReported(t *testing.T) {
-	_, err := ToStateGraph(stateUsageIn(t, `
-		package test {
-			state Machine {
-				state outer {
-					region left {
-						entry; then lstart;
-						state lstart;
-						defer Ping;
-						state lwork;
-						succession first lstart then lwork;
-					}
-					region right {
-						entry; then rstart;
-						state rstart;
-						state rwork;
-						succession first rstart then rwork;
-					}
-				}
-			}
-		}
-	`), nil)
-	if err == nil {
-		t.Fatal("expected an error for a defer in a region body")
-	}
-	if !strings.Contains(err.Error(), "defer must be declared inside a state") {
-		t.Errorf("expected a placement error, got: %v", err)
-	}
-}
-
 // History, entry and exit point pseudostates written in the textual notation
 // reach the graph with the kind their keyword names and with the composite
 // state that declares them as their owner.

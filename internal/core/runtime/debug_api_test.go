@@ -299,14 +299,14 @@ func TestRunDoRoundRunsDoWorkOnly(t *testing.T) {
 // CurrentState has no single answer to give.
 func TestActiveStatesCoversOrthogonalRegions(t *testing.T) {
 	exec := stateExecutorForSource(t, "TrafficLight", `package test {
-		state def TrafficLight {
-			region pedestrian {
+		state def TrafficLight parallel {
+			state pedestrian {
 				entry; then start;
 				state start;
 				state Walk;
 				succession first start then Walk;
 			}
-			region vehicle {
+			state vehicle {
 				entry; then begin;
 				state begin;
 				state Green;

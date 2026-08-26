@@ -135,19 +135,19 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 			state S { entry; then i; state i; state outer { state inner; succession first inner then inner; } i then outer; }
 		}`},
 		{"region states", `package P {
-			state S { region r { entry; then s; state s; state x; succession first s then x; } }
+			state S parallel { state r { entry; then s; state s; state x; succession first s then x; } }
 		}`},
 		{"sibling regions reuse state names", `package P {
-			state S {
-				region left { entry; then start; state start; state a; succession first start then a; }
-				region right { entry; then start; state start; state b; succession first start then b; }
+			state S parallel {
+				state left { entry; then start; state start; state a; succession first start then a; }
+				state right { entry; then start; state start; state b; succession first start then b; }
 			}
 		}`},
 		{"region body reads outer feature", `package P {
 			private import ScalarValues::*;
-			state S {
+			state S parallel {
 				attribute v : Integer = 0;
-				region r { entry; then s; state s; state x { entry { assign v := 1; } } succession first s then x; }
+				state r { entry; then s; state s; state x { entry { assign v := 1; } } succession first s then x; }
 			}
 		}`},
 		{"named pseudostates", `package P {

@@ -7,11 +7,11 @@ package Test {
 
 		entry; then start;
 		state start;
-		state Working {
+		state Working parallel {
 			entry { log = log * 10 + 1; }
 			exit { log = log * 10 + 2; }
 
-			region left {
+			state left {
 				entry; then lstart;
 				state lstart;
 				state l1 {

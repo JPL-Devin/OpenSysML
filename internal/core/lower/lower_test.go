@@ -207,8 +207,8 @@ func TestToActionGraph_ForkJoinMergeDecision(t *testing.T) {
 func TestToStateGraph_Regions(t *testing.T) {
 	src := `
 		package test {
-			state TrafficLight {
-				region vehicle {
+			state TrafficLight parallel {
+				state vehicle {
 					entry; then v_start;
 					state v_start;
 					state Red;
@@ -217,7 +217,7 @@ func TestToStateGraph_Regions(t *testing.T) {
 					succession first Red then Green;
 				}
 				
-				region pedestrian {
+				state pedestrian {
 					entry; then p_start;
 					state p_start;
 					state Walk;

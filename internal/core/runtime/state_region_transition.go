@@ -99,6 +99,15 @@ func (e *StateExecutor) regionContains(region *ast.StateRegion, state *ast.State
 	return false
 }
 
+// declaringRegion returns the region a state belongs to, which for a graph-only
+// region owner is the region it stands for.
+func (e *StateExecutor) declaringRegion(state *ast.StateNode) *ast.StateRegion {
+	if region := e.graph.RegionOf[state]; region != nil {
+		return region
+	}
+	return e.graph.HiddenRegionOf[state]
+}
+
 // branchesTo names, for every orthogonal region on the path from `from` down to
 // target, the deepest state of that path inside it. Entering `from` with those
 // branches therefore ends at target instead of at the regions' initial states.
@@ -106,7 +115,7 @@ func (e *StateExecutor) branchesTo(from, target *ast.StateNode) map[*ast.StateRe
 	branches := make(map[*ast.StateRegion]*ast.StateNode)
 	var region *ast.StateRegion
 	for _, state := range e.descendantChain(from, target) {
-		if declaring := e.graph.RegionOf[state]; declaring != nil {
+		if declaring := e.declaringRegion(state); declaring != nil {
 			region = declaring
 		}
 		if region != nil {
@@ -123,7 +132,7 @@ func (e *StateExecutor) branchesTo(from, target *ast.StateNode) map[*ast.StateRe
 func (e *StateExecutor) entryPlan(lca, target *ast.StateNode) (*ast.StateNode, map[*ast.StateRegion]*ast.StateNode) {
 	chain := e.descendantChain(lca, target)
 	for i := 0; i+1 < len(chain); i++ {
-		region := e.graph.RegionOf[chain[i+1]]
+		region := e.declaringRegion(chain[i+1])
 		if region != nil && e.graph.RegionOwner[region] == chain[i] {
 			return chain[i], e.branchesTo(chain[i], target)
 		}
@@ -282,7 +291,7 @@ func (e *StateExecutor) innermostActiveRegion(region *ast.StateRegion, target *a
 func (e *StateExecutor) regionUnder(state, target *ast.StateNode) *ast.StateRegion {
 	for current := target; current != nil; current = e.graph.ParentState[current] {
 		if e.graph.ParentState[current] == state {
-			return e.graph.RegionOf[current]
+			return e.declaringRegion(current)
 		}
 	}
 	return nil

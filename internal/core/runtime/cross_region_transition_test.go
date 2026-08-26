@@ -16,24 +16,24 @@ func TestCrossRegionTransitionExitsSourceOnly(t *testing.T) {
 
 		entry; then init;
 		state init;
-		state running {
+		state running parallel {
 			exit { runningExits = runningExits + 1; }
 
-			region left {
+			state left {
 				entry; then ls;
 				state ls;
 				state lidle { exit { sourceExits = sourceExits + 1; } }
 				succession first ls then lidle;
 				transition first lidle if crossed == 0 then rtarget;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
 				state ridle;
 				state rtarget { entry { crossed = crossed + 1; } }
 				succession first rs then ridle;
 			}
-			region other {
+			state other {
 				entry; then os;
 				state os;
 				state oidle {
@@ -77,8 +77,8 @@ func TestCrossRegionTransitionIntoNestedTargetExitsTheAbandonedState(t *testing.
 
 		entry; then init;
 		state init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				entry; then ls;
 				state ls;
 				state lmid;
@@ -87,13 +87,13 @@ func TestCrossRegionTransitionIntoNestedTargetExitsTheAbandonedState(t *testing.
 				succession first lmid then lidle;
 				transition first lidle if crossed == 0 then rtarget;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
-				state wrapper {
+				state wrapper parallel {
 					entry { wrapperEntries = wrapperEntries + 1; }
 
-					region inner {
+					state inner {
 						entry; then is;
 						state is;
 						state ridle { exit { innerExits = innerExits + 1; } }
@@ -133,20 +133,20 @@ func TestCrossRegionTransitionIntoInactiveCompositeRecordsTheEnteredState(t *tes
 
 		entry; then init;
 		state init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				entry; then ls;
 				state ls;
 				state lidle;
 				succession first ls then lidle;
 				transition first lidle if crossed == 0 then rtarget;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
 				state ridle;
-				state wrapper {
-					region inner {
+				state wrapper parallel {
+					state inner {
 						entry; then is;
 						state is;
 						state istart;
@@ -188,21 +188,21 @@ func TestCrossRegionTransitionFromDeeperRegionExitsUpToTheSharedLevel(t *testing
 
 		entry; then init;
 		state init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				entry; then ls;
 				state ls;
 				state lidle { exit { lidleExits = lidleExits + 1; } }
 				state lstate;
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
-				state wrapper {
+				state wrapper parallel {
 					exit { wrapperExits = wrapperExits + 1; }
 
-					region inner {
+					state inner {
 						entry; then is;
 						state is;
 						state ideep { exit { deepExits = deepExits + 1; } }
@@ -240,22 +240,22 @@ func TestCrossRegionTransitionFromARegionOwnedByASubstate(t *testing.T) {
 
 		entry; then init;
 		state init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				entry; then ls;
 				state ls;
 				state lidle { exit { lidleExits = lidleExits + 1; } }
 				state lstate;
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
 				state wrapper {
-					state mid {
+					state mid parallel {
 						exit { midExits = midExits + 1; }
 
-						region inner {
+						state inner {
 							entry; then is;
 							state is;
 							state ideep;
@@ -327,17 +327,17 @@ func TestTransitionOutOfCompositeStateExitsEveryRegion(t *testing.T) {
 
 		entry; then init;
 		state init;
-		state running {
+		state running parallel {
 			exit { runningExits = runningExits + 1; }
 
-			region left {
+			state left {
 				entry; then ls;
 				state ls;
 				state lidle { exit { leftExits = leftExits + 1; } }
 				succession first ls then lidle;
 				transition first lidle then done;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
 				state ridle { exit { rightExits = rightExits + 1; } }
@@ -374,23 +374,23 @@ func TestTransitionOutOfCompositeStateExitsNestedStatesOnce(t *testing.T) {
 
 		entry; then init;
 		state init;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				entry; then ls;
 				state ls;
 				state lidle;
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				entry; then rs;
 				state rs;
 				state wrapper {
 					exit { wrapperExits = wrapperExits + 1; }
 
-					state mid {
+					state mid parallel {
 						exit { midExits = midExits + 1; }
 
-						region inner {
+						state inner {
 							entry; then is;
 							state is;
 							state ideep { exit { deepExits = deepExits + 1; } }

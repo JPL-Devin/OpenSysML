@@ -7,8 +7,8 @@ package test {
 
 		entry; then start;
 		state start;
-		state Working {
-			region left {
+		state Working parallel {
+			state left {
 				entry; then lstart;
 				state lstart;
 				state Grouping {
@@ -27,7 +27,7 @@ package test {
 				transition first lstart then Step1;
 			}
 
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
 				state Watching;

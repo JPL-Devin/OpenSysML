@@ -7,10 +7,10 @@ package Test {
 
 		entry; then start;
 		state start;
-		state Working {
+		state Working parallel {
 			exit { log = log * 10 + 3; }
 
-			region left {
+			state left {
 				entry; then lstart;
 				state lstart;
 				state lwork {
@@ -20,7 +20,7 @@ package Test {
 				succession first lstart then lwork;
 			}
 
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
 				state rwork {

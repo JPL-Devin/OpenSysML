@@ -7,15 +7,15 @@ package Test {
 
 		entry; then start;
 		state start;
-		state Outer {
-			region left {
+		state Outer parallel {
+			state left {
 				entry; then lstart;
 				state lstart;
-				state Grouping {
+				state Grouping parallel {
 					entry { log = log * 10 + 1; }
 					exit { log = log * 10 + 2; }
 
-					region inner {
+					state inner {
 						entry; then gstart;
 						state gstart;
 						state g1 {
@@ -30,7 +30,7 @@ package Test {
 				succession first lstart then Grouping;
 				transition first Grouping when restart do assign log := log * 10 + 9 then Grouping;
 			}
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
 				state Watching {

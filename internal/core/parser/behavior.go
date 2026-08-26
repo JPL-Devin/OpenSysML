@@ -2424,8 +2424,6 @@ func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 		switch w {
 		case "final":
 			return p.parseFinalState(start)
-		case "region":
-			return p.parseRegionMember(start)
 		case "choice":
 			return p.parsePseudostate(start, w, ast.PseudostateChoice)
 		case "junction":
@@ -2991,62 +2989,6 @@ func (p *Parser) parseFinalState(start int) ast.Node {
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
-}
-
-// parseRegionMember parses: region <name> { <states> }
-func (p *Parser) parseRegionMember(start int) ast.Node {
-	// 'region' already consumed
-
-	// Expect region name
-	if !p.at(lexer.Identifier) && !p.at(lexer.Keyword) {
-		p.error(p.peek().Span, "expected region name after 'region'")
-		en := &ast.ErrorNode{Message: "expected region name"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-
-	nameToken := p.peek()
-	name := p.src.Text(nameToken.Span)
-	p.advance()
-
-	// Expect opening brace
-	if !p.at(lexer.LBrace) {
-		p.error(p.peek().Span, "expected '{' after region name")
-		en := &ast.ErrorNode{Message: "expected '{'"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-	p.advance() // consume '{'
-
-	// A region carries the members of a state body, a member-attached `then`
-	// among them (SysML.xtext StateBodyItem).
-	body := p.newBodyBuilder()
-	allowBody := true
-	for !p.at(lexer.RBrace) && !p.at(lexer.EOF) {
-		if body.atSuccession() {
-			body.takeSuccession()
-			continue
-		}
-		member := p.parseStateMember(allowBody)
-		allowBody = successionBodyAllowed(member, allowBody)
-		body.add(member)
-	}
-	states := body.finish()
-
-	if !p.at(lexer.RBrace) {
-		p.error(p.peek().Span, "expected '}' to close region body")
-		en := &ast.ErrorNode{Message: "expected '}'"}
-		en.NodeSpan = p.spanFrom(start)
-		return en
-	}
-	p.advance() // consume '}'
-
-	region := &ast.StateRegion{
-		Name:   name,
-		States: states,
-	}
-	region.NodeSpan = p.spanFrom(start)
-	return region
 }
 
 // atPointPseudostate reports whether the `entry`/`exit` keyword at the cursor

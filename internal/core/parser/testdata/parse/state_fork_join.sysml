@@ -2,14 +2,14 @@ state ParallelSplit {
 	entry; then start;
 	state start;
 	state ready;
-	state working {
-		region left {
+	state working parallel {
+		state left {
 			entry; then leftStart;
 			state leftStart;
 			state building;
 			succession first leftStart then building;
 		}
-		region right {
+		state right {
 			entry; then rightStart;
 			state rightStart;
 			state checking;

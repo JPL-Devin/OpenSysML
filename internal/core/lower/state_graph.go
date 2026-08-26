@@ -31,6 +31,10 @@ type StateGraph struct {
 	// regions. They execute behaviors but are not user-visible state visits.
 	HiddenStates map[*ast.StateNode]bool
 
+	// HiddenRegionOf: graph-only owner → the region it stands for, so a walk up
+	// the parent chain crosses it without losing which region a state is in.
+	HiddenRegionOf map[*ast.StateNode]*ast.StateRegion
+
 	// Machine is the graph-only root state for a parallel machine's own entry,
 	// do and exit behaviors. Its regions are represented by TopRegions instead.
 	Machine *ast.StateNode
@@ -219,7 +223,11 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	if err := collectTransitions(graph, members, nil, scope); err != nil {
 		return nil, err
 	}
-	for state := range graph.designatedInitials {
+	// Declaration order decides which of several initial states a region starts in.
+	for _, state := range graph.States {
+		if !graph.IsInitial(state) {
+			continue
+		}
 		if region := graph.RegionOf[state]; region != nil && graph.RegionInitials[region] == nil {
 			graph.RegionInitials[region] = state
 		}
@@ -373,6 +381,7 @@ func newStateGraph(scope *symbols.Scope, endpoints Endpoints) *StateGraph {
 		StateScopes:         make(map[*ast.StateNode]*symbols.Scope),
 		Behaviors:           make(map[*ast.StateNode]*StateBehaviors),
 		HiddenStates:        make(map[*ast.StateNode]bool),
+		HiddenRegionOf:      make(map[*ast.StateNode]*ast.StateRegion),
 		declOf:              make(map[*ast.StateNode]ast.Node),
 		States:              make([]*ast.StateNode, 0),
 		Pseudostates:        make([]*ast.PseudostateNode, 0),
@@ -640,25 +649,38 @@ func isParallelRegionMember(member ast.Node) bool {
 	}
 }
 
+// parallelOwnedMember reports whether a parallel state may own a member itself
+// rather than contribute it to a region: its behaviors, its deferred events, the
+// pseudostates its regions branch through and the edges between them.
+func parallelOwnedMember(member ast.Node) bool {
+	switch n := member.(type) {
+	case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation,
+		*ast.EntryMember, *ast.DoMember, *ast.ExitMember,
+		*ast.PseudostateNode, *ast.DeferMember,
+		*ast.SuccessionEdge, *ast.TransitionEdge, *ast.TransitionMember:
+		return true
+	case *ast.Usage:
+		switch n.Kind {
+		case ast.UsageAttribute, ast.UsagePort, ast.UsageSuccession:
+			return true
+		}
+	}
+	return false
+}
+
 // parallelRegions synthesizes the regions represented by direct substates of a
 // parallel body and lowers each substate body into the existing region IR.
 func (g *StateGraph) parallelRegions(members []ast.Node, parent *ast.StateNode, scope *symbols.Scope) ([]*ast.StateRegion, error) {
 	regions := make([]*ast.StateRegion, 0)
 	for _, member := range members {
 		actual := unwrapMembership(member)
+		// Only state substates become regions; the members a parallel state may own
+		// itself are collected with the rest of its body.
 		if !isParallelRegionMember(actual) {
-			switch actual := actual.(type) {
-			case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation,
-				*ast.EntryMember, *ast.DoMember, *ast.ExitMember:
-				continue
-			case *ast.Usage:
-				if actual.Kind == ast.UsageAttribute || actual.Kind == ast.UsagePort {
-					continue
-				}
-				return nil, fmt.Errorf("parallel state body contains unsupported member %T", actual)
-			default:
+			if !parallelOwnedMember(actual) {
 				return nil, fmt.Errorf("parallel state body contains unsupported member %T", actual)
 			}
+			continue
 		}
 
 		name, body := parallelRegionBody(actual)
@@ -669,6 +691,7 @@ func (g *StateGraph) parallelRegions(members []ast.Node, parent *ast.StateNode, 
 		}
 		g.regionDecl[region] = actual
 		wrapper := parallelRegionState(g, actual)
+		g.HiddenRegionOf[wrapper] = region
 		before := len(g.States)
 		if err := collectGraphOnlyState(g, wrapper, parent, childScope(scope, actual)); err != nil {
 			return nil, err

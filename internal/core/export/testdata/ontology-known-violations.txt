@@ -54,7 +54,6 @@ unknown-class urn:opensysml:sysml:FinalNode -                # an action's final
 unknown-class urn:opensysml:sysml:IfBranch -                 # an if/else branch, standardly an IfActionUsage's then/else parameter
 unknown-class urn:opensysml:sysml:MultiplicityDeclaration -  # a named multiplicity, standardly a MultiplicityRange
 unknown-class urn:opensysml:sysml:Pseudostate -              # a state machine pseudostate, standardly a StateUsage or TransitionUsage shape
-unknown-class urn:opensysml:sysml:StateRegion -              # a state's region, standardly a nested StateUsage
 
 # 5. Properties written in the SysML namespace that no metaclass declares. Every
 # one of these is either a relationship the metamodel reifies as an element

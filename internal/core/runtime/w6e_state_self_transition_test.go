@@ -39,11 +39,11 @@ func TestSimpleSelfTransitionExitsAndReEntersItsState(t *testing.T) {
 // exited and re-entered while its sibling region keeps its own active state.
 func TestSimpleSelfTransitionInARegionLeavesSiblingRegionsAlone(t *testing.T) {
 	exec := stateExecutorForSource(t, "sm", `package test {
-		state sm {
+		state sm parallel {
 			attribute log : Integer = 0;
 			attribute other : Integer = 0;
 
-			region left {
+			state left {
 				entry; then lstart;
 				state lstart;
 				state l1 {
@@ -54,7 +54,7 @@ func TestSimpleSelfTransitionInARegionLeavesSiblingRegionsAlone(t *testing.T) {
 				transition first l1 accept again do assign log := log * 10 + 9 then l1;
 			}
 
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
 				state r1 {

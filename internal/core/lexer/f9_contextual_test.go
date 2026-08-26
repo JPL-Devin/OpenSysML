@@ -30,7 +30,7 @@ func TestContextualWordsDifferPerLanguage(t *testing.T) {
 	if !has(kerml, "var") {
 		t.Error("`var` is not offered for KerML; KerML.xtext BasicFeaturePrefix takes it")
 	}
-	for _, w := range []string{"point", "region", "final", "chain", "defer"} {
+	for _, w := range []string{"point", "final", "chain", "defer"} {
 		if !has(sysml, w) || !has(kerml, w) {
 			t.Errorf("%q is read as syntax in both languages but is not offered in both", w)
 		}

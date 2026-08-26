@@ -299,9 +299,9 @@ state Machine {
     entry; then init;
     state init;
     state idle;
-    state running {
-        region left  { entry; then ls; state ls; state working;  succession first ls then working; }
-        region right { entry; then rs; state rs; state watching; succession first rs then watching; }
+    state running parallel {
+        state left  { entry; then ls; state ls; state working;  succession first ls then working; }
+        state right { entry; then rs; state rs; state watching; succession first rs then watching; }
     }
     fork split;
     join sync;
@@ -372,12 +372,12 @@ the pseudostate routes along ends decides how much of the configuration moves,
 per UML's least common ancestor rule:
 
 ```sysml
-state def RegionChoice {
+state def RegionChoice parallel {
     attribute mode : Integer = 2;
 
-    region left  { entry; then lstart; state lstart; state lidle; state lfast; state lslow;
-                   succession first lstart then lidle; transition first lidle then pick; }
-    region right { entry; then rstart; state rstart; state rwatch; succession first rstart then rwatch; }
+    state left  { entry; then lstart; state lstart; state lidle; state lfast; state lslow;
+                  succession first lstart then lidle; transition first lidle then pick; }
+    state right { entry; then rstart; state rstart; state rwatch; succession first rstart then rwatch; }
 
     choice pick;
 

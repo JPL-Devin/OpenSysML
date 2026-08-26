@@ -9,10 +9,10 @@ package Test {
 
 		entry; then start;
 		state start;
-		state running {
+		state running parallel {
 			entry { reentered = reentered + 1; }
 
-			region left {
+			state left {
 				entry; then lstart;
 				state lstart;
 				state lidle;
@@ -20,7 +20,7 @@ package Test {
 				succession first lstart then lidle;
 				transition first lidle then rtarget;
 			}
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
 				state ridle;

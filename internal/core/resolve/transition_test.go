@@ -79,12 +79,12 @@ func TestResolveEndpointsThatNameVertices(t *testing.T) {
 		`,
 		"sibling orthogonal region": `
 			state def M {
-				state running {
-					region left {
+				state running parallel {
+					state left {
 						entry; then lidle;
 						state lidle;
 					}
-					region right {
+					state right {
 						entry; then ridle;
 						state ridle;
 					}

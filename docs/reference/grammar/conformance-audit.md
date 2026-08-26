@@ -38,7 +38,7 @@ contextually where our own notation needs it — the treatment `point`, `on` and
 | `history` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `initial` | absent | absent | absent | unreserve; **an ordinary name only** — neither the action node nor the state marker spelled `initial` is accepted, write `first <name>` and `entry; then <state>;` |
 | `junction` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
-| `region` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
+| `region` | absent | absent | absent | unreserve; **an ordinary name only** — the orthogonal-region member spelled `region <name> { … }` is no longer accepted, mark the owning state's body `parallel` |
 | `shallow` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 
 `done` is the acceptance test that unreserving worked: the bundled normative
@@ -98,16 +98,16 @@ SysML v2?"; the default mode's acceptance of these constructs is intended and
 unchanged.
 
 The removed OpenSysML-only spellings `then <source> <target>;`, member-leading
-`<source> then <target>;`, and `done <name>;` are no longer accepted. Use
-`succession first <source> then <target>;` and `done;` instead. The state-machine
-spellings `initial <state>;` and `transition [<name>] <src> to <tgt>;` are no
-longer accepted either: write `entry; then <state>;` and
-`transition [<name>] first <src> … then <tgt>;`.
+`<source> then <target>;`, `done <name>;`, the orthogonal-region member
+`region <name> { … }`, the state marker `initial <state>;` and
+`transition [<name>] <src> to <tgt>;` are no longer accepted. Use
+`succession first <source> then <target>;`, `done;`, a `parallel` state body with
+one state substate per region, `entry; then <state>;` and
+`transition [<name>] first <src> … then <tgt>;` instead.
 
 | Construct | Why it is not standard |
 |-----------|------------------------|
 | `final <name>;` in a state body | `StateBodyItem` (`SysML.xtext:1755-1770`) has no such member; no `final` literal anywhere |
-| `region <name> { … }` | no `region` literal; the standard orthogonality marker is `parallel` (`:1745`) |
 | `choice <name>;`, `junction <name>;` | no literal; no pseudostate production of any kind |
 | `history <name>;`, `shallow history <name>;`, `deep history <name>;` | same |
 | `entry point <name>;`, `exit point <name>;` | `entry`/`exit` are literals only as state subaction kinds (`:1777`, `:1793`); no `point` literal exists |

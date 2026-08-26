@@ -12,21 +12,21 @@ package Test {
 
 		entry; then start;
 		state start;
-		state running {
+		state running parallel {
 			deep history resume;
 
-			region left {
+			state left {
 				entry; then ls;
 				state ls;
 				state lidle;
 
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
-				state wrapper {
-					region inner {
+				state wrapper parallel {
+					state inner {
 						entry; then istart;
 						state istart;
 						state deepState {

@@ -6,12 +6,12 @@ package Test {
 
 		entry; then start;
 		state start;
-		state Working {
-			region left {
+		state Working parallel {
+			state left {
 				entry; then lstart;
 				state lstart;
-				state deep {
-					region inner {
+				state deep parallel {
+					state inner {
 						entry; then dstart;
 						state dstart;
 						state d1;
@@ -25,7 +25,7 @@ package Test {
 				succession first lstart then deep;
 			}
 
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
 				state r1;

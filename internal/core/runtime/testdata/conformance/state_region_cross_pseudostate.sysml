@@ -7,8 +7,8 @@ package Test {
 
 		entry; then start;
 		state start;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				entry; then lstart;
 				state lstart;
 				state lidle;
@@ -16,7 +16,7 @@ package Test {
 				succession first lstart then lidle;
 				transition first lidle if crossed == 0 then cross;
 			}
-			region right {
+			state right {
 				entry; then rstart;
 				state rstart;
 				state ridle;
