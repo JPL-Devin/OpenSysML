@@ -23,9 +23,9 @@ func TestBlockDeclaringAnActionNodeIsLoweredToAFlow(t *testing.T) {
 					assign total := total - 1;
 				}
 			}
-			done end;
-			then start accumulate;
-			then accumulate end;
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
 		}
 	`)
 
@@ -100,9 +100,9 @@ func TestBlockFlowNestsTwoLevels(t *testing.T) {
 					}
 				}
 			}
-			done end;
-			then start accumulate;
-			then accumulate end;
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
 		}
 	`)
 
@@ -142,12 +142,12 @@ func TestBlockStatingItsOwnEdgeKeepsItsStatements(t *testing.T) {
 					action bump {
 						assign total := total + 1;
 					}
-					then bump bump;
+					succession first bump then bump;
 				}
 			}
-			done end;
-			then start accumulate;
-			then accumulate end;
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
 		}
 	`)
 
@@ -180,9 +180,9 @@ func TestNestedActionParametersAreLowered(t *testing.T) {
 					}
 				}
 			}
-			done end;
-			then start accumulate;
-			then accumulate end;
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
 		}
 	`)
 

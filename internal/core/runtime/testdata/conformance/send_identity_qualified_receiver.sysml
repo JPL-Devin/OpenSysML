@@ -13,7 +13,7 @@ package SendIdentityQualified {
 			}
 			final heard;
 
-			start then waiting;
+			succession first start then waiting;
 			transition waiting to heard when Ping;
 		}
 	}

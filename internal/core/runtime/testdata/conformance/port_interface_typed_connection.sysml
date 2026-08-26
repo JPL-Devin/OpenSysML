@@ -16,9 +16,9 @@ package InterfaceConnection {
 		first start;
 		action sender { send 13 via src; }
 		action reader accept n : Integer via dst { assign got := n; }
-		done end;
-		then start sender;
-		then sender reader;
-		then reader end;
+		done;
+		succession first start then sender;
+		succession first sender then reader;
+		succession first reader then done;
 	}
 }

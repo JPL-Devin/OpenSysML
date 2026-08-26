@@ -11,7 +11,7 @@ package HistoryAndPoints {
         }
         state away;
 
-        start then first;
+        succession first start then first;
 
         transition first to second when Next;
         transition second to away when Leave;

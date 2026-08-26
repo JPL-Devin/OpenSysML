@@ -262,9 +262,9 @@ func TestRaisedBudgetRunsLongerLoop(t *testing.T) {
 				attribute s = 0.0;
 				first start;
 				action go { while i < 10000 { assign s := s + 1.5; assign i := i + 1; } }
-				done end;
-				then start go;
-				then go end;
+				done;
+				succession first start then go;
+				succession first go then done;
 			}
 		}
 	`
@@ -308,10 +308,10 @@ func TestActionStepBudgetIsConfigurable(t *testing.T) {
 				first start;
 				action a { assign i := i + 1; }
 				action b { assign i := i + 1; }
-				done end;
-				then start a;
-				then a b;
-				then b end;
+				done;
+				succession first start then a;
+				succession first a then b;
+				succession first b then done;
 			}
 		}
 	`
@@ -430,9 +430,9 @@ func TestStepBudgetIsPerRun(t *testing.T) {
 					attribute i = 0;
 					first start;
 					action go { while i < 10000 { assign i := i + 1; } }
-					done end;
-					then start go;
-					then go end;
+					done;
+					succession first start then go;
+					succession first go then done;
 				}
 			}
 		`
@@ -479,18 +479,18 @@ func TestStepBudgetHoldsAcrossExecutorDrivenRun(t *testing.T) {
 				attribute result = 0;
 				first start;
 				perform increment;
-				done end;
-				then start increment;
-				then increment end;
+				done;
+				succession first start then increment;
+				succession first increment then done;
 			}
 			action increment {
 				in base;
 				out result;
 				first begin;
 				action bump { assign result := base + 5; }
-				done finish;
-				then begin bump;
-				then bump finish;
+				done;
+				succession first begin then bump;
+				succession first bump then done;
 			}
 		}
 	`

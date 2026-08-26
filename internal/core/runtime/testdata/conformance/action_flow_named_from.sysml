@@ -18,11 +18,11 @@ package test {
 			assign amplified := torqueIn * 2;
 		}
 
-		done end;
+		done;
 
-		then start generateTorque;
-		then generateTorque amplifyTorque;
-		then amplifyTorque end;
+		succession first start then generateTorque;
+		succession first generateTorque then amplifyTorque;
+		succession first amplifyTorque then done;
 
 		flow generateToAmplify from generateTorque.engineTorque to amplifyTorque.torqueIn;
 	}

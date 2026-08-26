@@ -10,8 +10,13 @@
           (Relationship kind="typing" target=Real
             (*ast.QualifiedName))))
       (InitialNode name="start" successor="")
-      (FinalNode name="end")
-      (SuccessionEdge source="start" target="end")
+      (FinalNode)
+      (Membership visibility="default"
+        (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="start"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="done"
+            (*ast.QualifiedName))))
       (Membership visibility="default"
         (Usage kind="attribute" name="counter" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=Integer

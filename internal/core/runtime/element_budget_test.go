@@ -113,7 +113,7 @@ func TestElementBudgetIsReleasedByEveryStep(t *testing.T) {
 				}
 				final done;
 
-				start then step;
+				succession first start then step;
 
 				transition step to again if (1, 2, 3)->NumericalFunctions::sum() > i;
 				transition step to done if (1, 2, 3)->NumericalFunctions::sum() <= i;

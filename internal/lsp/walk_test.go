@@ -40,7 +40,7 @@ const bodyRefSource = `package P {
 			exit { assign seen := speed; }
 		}
 		state stopped;
-		i then running;
+		succession first i then running;
 		transition running to stopped if speed > 90;
 	}
 }
@@ -100,7 +100,7 @@ func TestRenameLeavesSignalTriggerNames(t *testing.T) {
 		initial i;
 		state a;
 		state b;
-		i then a;
+		succession first i then a;
 		transition a to b when go;
 	}
 }

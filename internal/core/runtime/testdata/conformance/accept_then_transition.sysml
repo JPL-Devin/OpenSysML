@@ -8,7 +8,7 @@ package Test {
         state active;
         final done;
         
-        init then waiting;
-        active then done;
+        succession first init then waiting;
+        succession first active then done;
     }
 }

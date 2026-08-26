@@ -15,7 +15,7 @@ package Test {
 					exit { log = log * 10 + 1; }
 				}
 
-				then lstart lwork;
+				succession first lstart then lwork;
 			}
 
 			region right {
@@ -24,14 +24,14 @@ package Test {
 					exit { log = log * 10 + 2; }
 				}
 
-				then rstart rwork;
+				succession first rstart then rwork;
 			}
 		}
 		state Done {
 			entry { log = log * 10 + 5; }
 		}
 
-		start then Working;
+		succession first start then Working;
 		transition Working to Done when Abort do assign log := log * 10 + 4;
 	}
 }

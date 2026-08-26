@@ -14,12 +14,12 @@ package Test {
 						state d1;
 						state d2;
 
-						then dstart d1;
+						succession first dstart then d1;
 						transition d1 to d2 when Tick do assign log := log * 10 + 1;
 					}
 				}
 
-				then lstart deep;
+				succession first lstart then deep;
 			}
 
 			region right {
@@ -27,11 +27,11 @@ package Test {
 				state r1;
 				state r2;
 
-				then rstart r1;
+				succession first rstart then r1;
 				transition r1 to r2 when Tick do assign log := log * 10 + 2;
 			}
 		}
 
-		start then Working;
+		succession first start then Working;
 	}
 }

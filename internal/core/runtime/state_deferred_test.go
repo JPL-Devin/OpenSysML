@@ -287,19 +287,19 @@ func TestExitedNestedRegionDoesNotReactToTheSameEvent(t *testing.T) {
 				region a {
 					initial astart;
 					state a1;
-					then astart a1;
+					succession first astart then a1;
 					transition a1 to out accept Ping;
 				}
 				region b {
 					initial bstart;
 					state b1;
 					state b2;
-					then bstart b1;
+					succession first bstart then b1;
 					transition b1 to b2 accept Ping;
 				}
 			}
 			state out;
-			then start co;
+			succession first start then co;
 		}
 	}`)
 

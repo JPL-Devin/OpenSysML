@@ -11,10 +11,10 @@ package test {
             assign counter := counter + 10;
         }
 
-        done end;
+        done;
 
-        then start bumping;
-        then bumping end;
+        succession first start then bumping;
+        succession first bumping then done;
     }
 
     state TestTransitionEffectPerform {
@@ -24,7 +24,7 @@ package test {
         state active;
         final done;
 
-        init then active;
+        succession first init then active;
         transition active to done do perform Bump;
     }
 }

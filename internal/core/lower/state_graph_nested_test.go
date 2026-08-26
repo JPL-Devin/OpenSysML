@@ -62,7 +62,7 @@ func TestToStateGraph_NestedPseudostateOwner(t *testing.T) {
 					state b;
 					choice pick;
 				}
-				start then outer;
+				succession first start then outer;
 			}
 		}
 	`), nil)
@@ -88,7 +88,7 @@ func TestToStateGraph_TopLevelPseudostateHasNoOwner(t *testing.T) {
 				initial start;
 				choice pick;
 				state a;
-				start then pick;
+				succession first start then pick;
 			}
 		}
 	`), nil)
@@ -115,7 +115,7 @@ func TestToStateGraph_EndpointNamingNoVertexLeavesTheEdgeOut(t *testing.T) {
 			state Machine {
 				initial start;
 				state busy;
-				start then busy;
+				succession first start then busy;
 				transition busy to nowhere;
 			}
 		}
@@ -155,16 +155,16 @@ func TestToStateGraph_UnqualifiedEndpointResolvesFromWhereItIsWritten(t *testing
 				state alpha {
 					initial astart;
 					state work;
-					astart then work;
+					succession first astart then work;
 				}
 				state beta {
 					initial bstart;
 					state work;
-					bstart then work;
+					succession first bstart then work;
 					transition work to done;
 				}
 				state done;
-				start then beta;
+				succession first start then beta;
 			}
 		}
 	`
@@ -221,9 +221,9 @@ func TestSuccessionReachesAPseudostate(t *testing.T) {
 				junction route;
 				state done;
 
-				start then busy;
-				busy then route;
-				route then done;
+				succession first start then busy;
+				succession first busy then route;
+				succession first route then done;
 			}
 		}
 	`)
@@ -258,8 +258,8 @@ func TestSuccessionQualifiedTargetNamesTheVertexItQualifies(t *testing.T) {
 					state work;
 				}
 
-				start then alpha;
-				alpha then beta::work;
+				succession first start then alpha;
+				succession first alpha then beta::work;
 			}
 		}
 	`)
@@ -289,20 +289,20 @@ func TestSameNamedPseudostatesInSiblingRegionsAreBothCollected(t *testing.T) {
 						initial lstart;
 						state lidle;
 						junction pick;
-						lstart then lidle;
-						lidle then pick;
-						pick then lidle;
+						succession first lstart then lidle;
+						succession first lidle then pick;
+						succession first pick then lidle;
 					}
 					region right {
 						initial rstart;
 						state ridle;
 						junction pick;
-						rstart then ridle;
-						ridle then pick;
-						pick then ridle;
+						succession first rstart then ridle;
+						succession first ridle then pick;
+						succession first pick then ridle;
 					}
 				}
-				start then running;
+				succession first start then running;
 			}
 		}
 	`)
@@ -381,15 +381,15 @@ func TestScopelessLoweringNamesTheRegionLocalState(t *testing.T) {
 						initial li;
 						state idle;
 						state done;
-						li then idle;
-						idle then done;
+						succession first li then idle;
+						succession first idle then done;
 					}
 					region right {
 						initial ri;
 						state idle;
 						state ready;
-						ri then idle;
-						idle then ready;
+						succession first ri then idle;
+						succession first idle then ready;
 					}
 				}
 			}

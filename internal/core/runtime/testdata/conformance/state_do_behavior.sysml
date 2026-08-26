@@ -11,7 +11,7 @@ package test {
         }
         final done;
         
-        init then processing;
-        processing then done;
+        succession first init then processing;
+        succession first processing then done;
     }
 }

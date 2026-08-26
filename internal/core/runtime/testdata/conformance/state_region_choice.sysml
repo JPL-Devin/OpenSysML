@@ -10,7 +10,7 @@ package Test {
 			state lfast;
 			state lslow;
 
-			then lstart lidle;
+			succession first lstart then lidle;
 			transition lidle to pick;
 		}
 
@@ -18,7 +18,7 @@ package Test {
 			initial rstart;
 			state rwatch;
 
-			then rstart rwatch;
+			succession first rstart then rwatch;
 		}
 
 		choice pick;

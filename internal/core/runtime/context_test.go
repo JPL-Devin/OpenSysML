@@ -58,7 +58,7 @@ func TestContext_ExecuteAction(t *testing.T) {
 			Value: "42",
 		},
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	edge1 := &ast.SuccessionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "start"}}},
@@ -66,7 +66,7 @@ func TestContext_ExecuteAction(t *testing.T) {
 	}
 	edge2 := &ast.SuccessionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
-		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 	}
 
 	actionSym := &symbols.Symbol{
@@ -208,16 +208,14 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 			},
 		},
 	}
-	final := &ast.FinalNode{
-		Name: "final",
-	}
+	final := &ast.FinalNode{}
 	edge1 := &ast.ControlFlowEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "initial"}}},
 		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
 	}
 	edge2 := &ast.ControlFlowEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
-		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "final"}}},
+		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 	}
 
 	actionSym := &symbols.Symbol{

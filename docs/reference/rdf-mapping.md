@@ -131,7 +131,7 @@ The `sysx:` properties:
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
 | `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
-| `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then part b;`, or a `then` beside an unnamed member). The end is the element itself rather than a name, since there is none to write. |
+| `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member). The end is the element itself rather than a name, since there is none to write. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
 | `sysx:isKindImplicit` | The declaration wrote no kind keyword (`in x : Real;`), which takes its kind from its owner. Without it the canonical keyword would come back written out, declaring what the author did not. A kind named in a comment in the head (`in /* attribute */ x : Real;`) is trivia, not a keyword the declaration wrote. |
@@ -229,7 +229,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 | written | metaclass | carries |
 |---|---|---|
 | `first x;`, `initial x;` | `sysx:InitialNode` | `sysml:sourceFeature` (the member the body starts at — a reference, not a name it declares), `sysml:targetFeature`, `sysx:guard`, `sysx:declaredKeyword` |
-| `done;`, `final;` | `sysx:FinalNode` | `sysml:declaredName`, `sysx:declaredKeyword` |
+| `done;`, `final;` | `sysx:FinalNode` | `sysx:declaredKeyword` |
 | `action a;`, `action a { x + 1 }` | `sysx:ActionExecutionNode` | `sysml:references` or `sysx:expression` |
 | `perform a;` | `sysml:PerformActionUsage` | `sysx:expression` (the action performed) |
 | `assign x := 1;` | `sysml:AssignmentActionUsage` | `sysx:target`, `sysml:value`, `sysx:assignmentOperator` when it is not `:=` |
@@ -237,7 +237,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 | `terminate;`, `terminate x;` | `sysml:TerminateActionUsage` | `sysx:expression` |
 | `accept sig : Signal;`, `accept when c;` | the usage's own metaclass | `sysml:isAccept`, and `sysx:declaredKeyword "accept"` where the optional `action` was not written |
 | `fork`, `join`, `merge`, `decision` | `sysml:ForkNode`, `JoinNode`, `MergeNode`, `DecisionNode` | `sysml:declaredName` |
-| `then a b;`, `if g then b;`, `else b;` | `sysml:SuccessionAsUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:guard`, `sysx:isElse`, `sysx:declaredKeyword` |
+| `succession first a then b;`, `if g then b;`, `else b;` | `sysml:SuccessionAsUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:guard`, `sysx:isElse`, `sysx:declaredKeyword` |
 | `while c { … }`, `loop { … } until c;` | `sysml:WhileLoopActionUsage` | `sysx:whileCondition`, `sysx:untilCondition` |
 | `for x in c { … }` | `sysml:ForLoopActionUsage` | `sysx:loopVariable`, `sysx:collection` |
 | `if c { … } else { … }` | `sysml:IfActionUsage` + `sysx:IfBranch` per branch | `sysx:condition`, `sysx:branchKind` |
@@ -266,9 +266,10 @@ What is still refused, with the node named:
   which would silently reattach edges, so it is reported instead. Nine of the
   eighteen remaining refusals under `examples/` are this shape.
 - **A succession end whose name is not a basic name.** The two-end form the
-  graph is written back as (`then a b;`) is read by the parser only when both
-  ends are basic names, so `then 'enter vehicle' 'drive vehicle';` would not
-  parse; the edge is reported rather than written.
+  graph is written back as (`succession first a then b;`) is read by the parser
+  only when both ends are basic names, so `succession first 'enter vehicle'
+  then 'drive vehicle';` would not parse; the edge is reported rather than
+  written.
 - **Prefix metadata** (`#Safety part p;`, `@M { … }`) and an **operator
   expression member**, both unchanged from before.
 
@@ -364,10 +365,11 @@ graph, write the notation back from the mapping alone, and convert it again —
 the second graph must equal the first, which is what proves the second hop loses
 nothing. `TestBindingEndsAreStatedAsStructure` covers the ends themselves.
 
-**A `then` succession carries its two ends.** Every `then` is one node stating
-the members it sequences, whether it was written as its own member (`then a b;`)
-or attached to one (`then action b : B;`, which the parser desugars to the same
-edge), so the order a model declares survives the hop:
+**A succession carries its two ends.** Every succession is one node stating
+the members it sequences, whether it was written as its own member
+(`succession first a then b;`) or attached to one (`then action b : B;`, which
+the parser desugars to the same edge), so the order a model declares survives
+the hop:
 
 ```turtle
 elmt:P__Move___402
@@ -394,9 +396,9 @@ reported rather than written back somewhere else
 Every body that can carry a succession — definition, usage, action, state (a
 region included), calculation and requirement — reads these forms back as the
 same node, so a second conversion yields the same graph
-(`export_test.go:TestSuccessionRoundTripsInEveryBody`). The two-name form
-(`then a b;`) reads only basic names, so a succession naming an end that needs
-quotes is reported rather than written as notation the parser rejects.
+(`export_test.go:TestSuccessionRoundTripsInEveryBody`). The explicit two-ended
+form reads only basic names, so a succession naming an end that needs quotes is
+reported rather than written as notation the parser rejects.
 
 **A reference end is written back in a spelling the parser reads back
 differently.** `end [*] ref cause : Situation;` is carried faithfully — the

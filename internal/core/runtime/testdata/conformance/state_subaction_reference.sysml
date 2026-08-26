@@ -13,10 +13,10 @@ package test {
             assign counter := counter + 10;
         }
 
-        done end;
+        done;
 
-        then start bumping;
-        then bumping end;
+        succession first start then bumping;
+        succession first bumping then done;
     }
 
     state TestSubactionReference {
@@ -32,7 +32,7 @@ package test {
 
         final done;
 
-        init then active;
-        active then done;
+        succession first init then active;
+        succession first active then done;
     }
 }

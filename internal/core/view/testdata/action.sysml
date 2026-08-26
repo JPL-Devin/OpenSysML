@@ -21,25 +21,25 @@ package Flows {
 			in item reading : Fuel;
 			first begin;
 			action record;
-			then begin record;
+			succession first begin then record;
 		}
 
 		fork split;
 		join sync;
-		done finish;
+		done;
 		action park;
 
-		then start split;
-		then split provide;
-		then split monitor;
-		then provide sync;
-		then monitor sync;
+		succession first start then split;
+		succession first split then provide;
+		succession first split then monitor;
+		succession first provide then sync;
+		succession first monitor then sync;
 
 		decide check;
-		then sync check;
-		if speed > 0 then finish;
+		succession first sync then check;
+		if speed > 0 then done;
 		else park;
-		then park finish;
+		succession first park then done;
 
 		flow provide.torque to monitor.reading;
 	}

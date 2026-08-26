@@ -29,10 +29,10 @@ package test {
 				initial rstart;
 				state Watching;
 
-				then rstart Watching;
+				succession first rstart then Watching;
 			}
 		}
 
-		start then Working;
+		succession first start then Working;
 	}
 }

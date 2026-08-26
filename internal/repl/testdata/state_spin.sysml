@@ -16,8 +16,8 @@ package Debug {
 			}
 		}
 
-		init then a;
-		a then b;
-		b then a;
+		succession first init then a;
+		succession first a then b;
+		succession first b then a;
 	}
 }

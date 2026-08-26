@@ -13,9 +13,9 @@ package test {
 			}
 		}
 
-		done end;
+		done;
 
-		then start spin;
-		then spin end;
+		succession first start then spin;
+		succession first spin then done;
 	}
 }

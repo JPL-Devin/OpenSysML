@@ -11,7 +11,7 @@ step 1: token 1@compute
             eval feature i -> 1
             eval literal 2 -> 2
           eval operator * -> 2
-step 2: token 1@end
+step 2: token 1@done
 step 3: no active tokens
     stmt assign total
         eval feature total -> 0
@@ -25,7 +25,7 @@ step 1: token 1@compute
             eval feature i -> 2
             eval literal 2 -> 2
           eval operator * -> 4
-step 2: token 1@end
+step 2: token 1@done
 step 3: no active tokens
     stmt assign total
         eval feature total -> 2
@@ -39,11 +39,11 @@ step 1: token 1@compute
             eval feature i -> 3
             eval literal 2 -> 2
           eval operator * -> 6
-step 2: token 1@end
+step 2: token 1@done
 step 3: no active tokens
     stmt assign total
         eval feature total -> 6
         eval feature doubled -> 6
       eval operator + -> 12
-step 2: token 1@end
+step 2: token 1@done
 step 3: no active tokens

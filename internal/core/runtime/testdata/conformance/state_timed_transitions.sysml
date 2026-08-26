@@ -19,6 +19,6 @@ package test {
         state later;
         final done;
 
-        init then waiting;
+        succession first init then waiting;
     }
 }

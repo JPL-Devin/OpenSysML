@@ -354,7 +354,7 @@ func (d *decoder) head(el *element) (string, error) {
 		return "return " + value, nil
 	}
 	// A succession carrying its ends as references is the one the parser builds
-	// for a `then`, written back as the edge form: `then <source> <target>;`
+	// for a succession, written back as `succession first <source> then <target>;`.
 	// sequences the two members it names wherever they are declared, so the
 	// order survives the round trip. A `succession` declaration whose head was
 	// kept verbatim never reaches here — print() writes its source text.

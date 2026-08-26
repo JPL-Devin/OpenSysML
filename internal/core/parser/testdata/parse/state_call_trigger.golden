@@ -10,11 +10,12 @@
                 (CallEvent operation="brake" parameters=[]))))
           (SubstateMember name="stopping")
           (SubstateMember name="cruising")
-          (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-            (ConnectorEnd target="<nil>"
-              (*ast.QualifiedName))
-            (ConnectorEnd target="<nil>"
-              (*ast.QualifiedName)))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="start"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="idle"
+                (*ast.QualifiedName))))
           (TransitionMember source="idle" target="cruising"
             (CallEvent operation="setSpeed" parameters=[value])
             (OperatorExpr operator=">"

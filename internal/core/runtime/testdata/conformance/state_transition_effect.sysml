@@ -7,7 +7,7 @@ package test {
         state active;
         final done;
         
-        init then active;
+        succession first init then active;
         transition active to done do {
             counter = counter + 1;
         };

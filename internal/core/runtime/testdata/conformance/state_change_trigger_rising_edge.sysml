@@ -9,7 +9,7 @@ package test {
 		initial start;
 		state waiting;
 
-		start then waiting;
+		succession first start then waiting;
 		transition waiting to waiting accept when ready do assign log := log * 10 + 1;
 	}
 }

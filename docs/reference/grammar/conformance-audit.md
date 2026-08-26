@@ -101,7 +101,7 @@ unchanged.
 | `initial <name>;` in a state body | `StateBodyItem` (`SysML.xtext:1755-1770`) has no such member; the standard way to mark the first state is `entry; then <state>;` (`EntryTransitionMember`, `:1796-1801`) |
 | `final <name>;` in a state body | same; no `final` literal anywhere |
 | `initial <name> [then <target>];` action node | spelling variant of `first` (`SysML.xtext:1385`), which has the literal |
-| `final [<name>];` action node | spelling variant of the `done` reference above |
+| `final;` action node | spelling variant of the `done` reference above |
 | `decision <name>;` | spelling variant of `decide` (`SysML.xtext:1672`) |
 | `region <name> { … }` | no `region` literal; the standard orthogonality marker is `parallel` (`:1745`) |
 | `choice <name>;`, `junction <name>;` | no literal; no pseudostate production of any kind |

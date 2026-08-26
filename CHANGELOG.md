@@ -6,6 +6,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Succession shorthand spellings removed
+
+**Breaking change.** OpenSysML no longer accepts named action final nodes (`done <name>;`),
+two-name succession shorthand (`then <source> <target>;`), or state-body member-leading
+successions (`<source> then <target>;`). Write `done;` for an action final node,
+`succession first <source> then <target>;` for an explicit succession, and use the same
+standard succession form in state bodies.
+
 ### The Python client uses a private service of its own
 
 **Behavior change.** A `Connection` that names no address no longer attaches to whatever

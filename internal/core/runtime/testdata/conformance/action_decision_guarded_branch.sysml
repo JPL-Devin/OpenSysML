@@ -18,11 +18,11 @@ package test {
 			assign alerted := 2;
 		}
 
-		done end;
+		done;
 
-		then start check;
-		then sendBatteryLow end;
-		then idle end;
+		succession first start then check;
+		succession first sendBatteryLow then done;
+		succession first idle then done;
 
 		decide check;
 		if battery < 20 then sendBatteryLow;

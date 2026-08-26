@@ -53,7 +53,7 @@ sysml> state TrafficLight {
   ...>     state yellow { accept after 5 then red; }
   ...>     state red { accept after 30 then off; }
   ...>     final off;
-  ...>     start then green;
+  ...>     succession first start then green;
   ...> }
 2:5: warning: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
     initial start;
@@ -61,9 +61,6 @@ sysml> state TrafficLight {
 6:5: warning: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
     final off;
     ^~~~~
-7:5: warning: `<source> then <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-    start then green;
-    ^~~~~~
 ✓ state TrafficLight
 
 sysml> %state TrafficLight
@@ -253,54 +250,6 @@ When the named backing file is loaded, the first command below prints:
 examples/action-executor-demo.sysml:9:23: warning: `bind <feature> = <expression>;` is an OpenSysML extension with no SysML v2 production: a binding relates two features, so bind the expression's result feature instead
         bind result = x * 2.0;
                       ^~~~~~~
-examples/action-executor-demo.sysml:18:9: warning: `done <name>;` is an OpenSysML extension with no SysML v2 production: `done` is a library feature a succession names, not a keyword that declares a node
-        done finish;
-        ^~~~
-examples/action-executor-demo.sysml:20:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then start compute;
-        ^~~~
-examples/action-executor-demo.sysml:21:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then compute finish;
-        ^~~~
-examples/action-executor-demo.sysml:37:9: warning: `done <name>;` is an OpenSysML extension with no SysML v2 production: `done` is a library feature a succession names, not a keyword that declares a node
-        done finish;
-        ^~~~
-examples/action-executor-demo.sysml:39:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then start split;
-        ^~~~
-examples/action-executor-demo.sysml:40:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then split left;
-        ^~~~
-examples/action-executor-demo.sysml:41:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then split middle;
-        ^~~~
-examples/action-executor-demo.sysml:42:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then split right;
-        ^~~~
-examples/action-executor-demo.sysml:43:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then left sync;
-        ^~~~
-examples/action-executor-demo.sysml:44:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then middle sync;
-        ^~~~
-examples/action-executor-demo.sysml:45:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then right sync;
-        ^~~~
-examples/action-executor-demo.sysml:46:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then sync finish;
-        ^~~~
-examples/action-executor-demo.sysml:57:9: warning: `done <name>;` is an OpenSysML extension with no SysML v2 production: `done` is a library feature a succession names, not a keyword that declares a node
-        done finish;
-        ^~~~
-examples/action-executor-demo.sysml:59:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then start check;
-        ^~~~
-examples/action-executor-demo.sysml:60:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then pathA finish;
-        ^~~~
-examples/action-executor-demo.sysml:61:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then pathB finish;
-        ^~~~
 ```
 
 The command-specific result then follows:
@@ -317,8 +266,7 @@ $ sysml -action ActionExecutorDemo::sequential examples/action-executor-demo.sys
 
 ### Fork and join: parallel paths
 
-This action uses OpenSysML fork and join extensions with no SysML v2 production.
-See the [conformance audit](../reference/grammar/conformance-audit.md).
+This action uses fork and join control nodes.
 
 ```sysml
 action forkJoin {
@@ -332,16 +280,16 @@ action forkJoin {
     action middle { assign task2 := 20; }
     action right { assign task3 := 30; }
     join sync;
-    done finish;
+    done;
 
-    then start split;
-    then split left;
-    then split middle;
-    then split right;
-    then left sync;
-    then middle sync;
-    then right sync;
-    then sync finish;
+    succession first start then split;
+    succession first split then left;
+    succession first split then middle;
+    succession first split then right;
+    succession first left then sync;
+    succession first middle then sync;
+    succession first right then sync;
+    succession first sync then done;
 }
 ```
 
@@ -368,9 +316,7 @@ A branch that never arrives is a deadlock, not a failure: the run is reported as
 
 ### Decision and else: conditional branching
 
-This action uses OpenSysML decision and guarded succession extensions with no
-SysML v2 production. See the
-[conformance audit](../reference/grammar/conformance-audit.md).
+This action uses a decision with guarded successions.
 
 ```sysml
 action conditional {
@@ -380,11 +326,11 @@ action conditional {
     first start;
     action pathA { assign taken := 1; }
     action pathB { assign taken := 2; }
-    done finish;
+    done;
 
-    then start check;
-    then pathA finish;
-    then pathB finish;
+    succession first start then check;
+    succession first pathA then done;
+    succession first pathB then done;
 
     decide check;
     if x > 10 then pathA;

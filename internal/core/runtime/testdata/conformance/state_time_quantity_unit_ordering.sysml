@@ -33,6 +33,6 @@ package test {
 			}
 		}
 
-		start then Working;
+		succession first start then Working;
 	}
 }

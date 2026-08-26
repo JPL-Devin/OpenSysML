@@ -96,7 +96,6 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 
 	case *ast.FinalNode:
 		head(rdf.OpenSysMLTerm(mFinalNode))
-		e.name(subject, n.Name)
 		e.writtenKeyword(subject, n, "done", "final")
 		return true, nil
 
@@ -577,7 +576,7 @@ func behaviorNameAndMembers(node ast.Node) (string, []ast.Node, bool) {
 		// Its name references the starting member, so it declares none.
 		return "", nil, true
 	case *ast.FinalNode:
-		return n.Name, nil, true
+		return "", nil, true
 	case *ast.ForkNode:
 		return n.Name, nil, true
 	case *ast.JoinNode:
@@ -645,7 +644,7 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 
 	case mFinalNode:
 		words := []string{d.keywordOr(el, "done")}
-		return strings.Join(append(words, d.identWords(el)...), " "), true, nil
+		return strings.Join(words, " "), true, nil
 
 	case mFork, mJoin, mMerge, mDecision:
 		words := []string{d.keywordOr(el, controlNodeKeyword[el.metaclass])}
@@ -745,9 +744,7 @@ var controlNodeKeyword = map[string]string{
 	mDecision: "decision",
 }
 
-// successionHead writes a succession back as the notation it was written in:
-// the edge form naming both ends, the one-name form whose source is the member
-// before it, a guarded branch of a decision, or that decision's `else` branch.
+// successionHead writes a succession back using standard end notation.
 func (d *decoder) successionHead(el *element) (string, error) {
 	source, err := d.referenceText(el, rdf.SysML+pSourceFeature)
 	if err != nil {
@@ -764,6 +761,7 @@ func (d *decoder) successionHead(el *element) (string, error) {
 			Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
 		}
 	}
+	_, positionalSource := d.endMember(el, xSourceMember)
 	switch keyword := d.keywordOr(el, "then"); {
 	case keyword == "else" || d.boolOf(el, rdf.OpenSysML+xIsElse):
 		return "else " + target, nil
@@ -773,18 +771,20 @@ func (d *decoder) successionHead(el *element) (string, error) {
 		}
 		return "if " + guard + " then " + target, nil
 	}
-	words := []string{"then"}
-	if form, _ := d.stringOf(el, rdf.OpenSysML+xEndForm); form == formThen {
+	if form, _ := d.stringOf(el, rdf.OpenSysML+xEndForm); form == formThen || positionalSource {
 		// The source end is the member written before, which this form leaves
 		// unwritten.
-		source = ""
+		return "then " + target, nil
 	}
-	if source != "" {
-		words = append(words, source)
+	if source == "" {
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the succession <%s>", el.iri),
+			Note: "it does not name a source end and is not a positional `then` succession",
+		}
 	}
-	words = append(words, target)
+	words := []string{"succession", "first", source, "then", target}
 	if hasGuard {
-		words = append(words, "if", guard)
+		words = []string{"succession", "first", source, "if", guard, "then", target}
 	}
 	return strings.Join(words, " "), nil
 }

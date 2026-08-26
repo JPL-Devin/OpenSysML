@@ -16,7 +16,7 @@ func TestTriggerClassification_SignalTrigger(t *testing.T) {
 				state waiting;
 				final done;
 				
-				start then waiting;
+				succession first start then waiting;
 				transition waiting to done when powerOn;
 			}
 		}
@@ -117,7 +117,7 @@ func TestTriggerClassification_ChangeEvent(t *testing.T) {
 				state waiting;
 				final done;
 				
-				start then waiting;
+				succession first start then waiting;
 				transition waiting to done when x > 5;
 			}
 		}
@@ -192,7 +192,7 @@ func TestTriggerClassification_NilCompletion(t *testing.T) {
 				state waiting;
 				final done;
 				
-				start then waiting;
+				succession first start then waiting;
 				transition waiting to done;
 			}
 		}
@@ -263,7 +263,7 @@ func TestTriggerClassification_CallTrigger(t *testing.T) {
 				state waiting;
 				final done;
 
-				start then waiting;
+				succession first start then waiting;
 				transition waiting to done accept setSpeed(value);
 			}
 		}

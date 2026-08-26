@@ -13,7 +13,7 @@ package Test {
 				initial lstart;
 				state lidle;
 
-				then lstart lidle;
+				succession first lstart then lidle;
 				transition lidle to rtarget if crossed == 0;
 			}
 			region right {
@@ -21,7 +21,7 @@ package Test {
 				state ridle;
 				state rtarget { entry { crossed = 1; } }
 
-				then rstart ridle;
+				succession first rstart then ridle;
 			}
 			region third {
 				initial tstart;
@@ -30,10 +30,10 @@ package Test {
 					exit { thirdExits = thirdExits + 1; }
 				}
 
-				then tstart tidle;
+				succession first tstart then tidle;
 			}
 		}
 
-		start then running;
+		succession first start then running;
 	}
 }

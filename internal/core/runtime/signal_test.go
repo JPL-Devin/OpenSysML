@@ -33,11 +33,11 @@ func testSendReachesOnlyItsAddressee(t *testing.T) {
 			action sender { send 7 to wanted; }
 			action other accept n : Integer;
 			action reader { assign got := n; }
-			done end;
-			then start sender;
-			then sender other;
-			then other reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then other;
+			succession first other then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err == nil {
@@ -58,10 +58,10 @@ func testAcceptOfUnsentTypeReports(t *testing.T) {
 			first start;
 			action sender { send 7 to reader; }
 			action reader accept text : String;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err == nil {
@@ -84,15 +84,15 @@ func TestActionMessageReachesStateMachine(t *testing.T) {
 		action pipeline {
 			first start;
 			action sender { send Ping to Driver; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 		state Driver {
 			initial init;
 			state waiting;
 			final done;
-			init then waiting;
+			succession first init then waiting;
 			transition waiting to done when Ping;
 		}
 	}`))
@@ -125,11 +125,11 @@ func TestUnacceptedMessageStaysPending(t *testing.T) {
 			}
 			action reader accept n : Integer;
 			action recorder { assign got := n; }
-			done end;
-			then start sender;
-			then sender reader;
-			then reader recorder;
-			then recorder end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
 		}
 	}`))
 	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
@@ -160,7 +160,7 @@ func TestSendOfNamedTypeReachesStateMachine(t *testing.T) {
 			initial start;
 			state waiting { entry { send Ping to Driver; } }
 			final done;
-			start then waiting;
+			succession first start then waiting;
 			transition waiting to done when Ping;
 		}
 	}`)
@@ -180,7 +180,7 @@ func TestStateMachineLeavesForeignSignalPending(t *testing.T) {
 			initial start;
 			state waiting { entry { send Pong to Driver; } }
 			final done;
-			start then waiting;
+			succession first start then waiting;
 			transition waiting to done when Ping;
 		}
 	}`))
@@ -210,11 +210,11 @@ func TestSendViaPortReachesConnectedAccept(t *testing.T) {
 			action sender { send 42 via outPort; }
 			action reader accept msg : Integer via inPort;
 			action recorder { assign got := msg; }
-			done end;
-			then start sender;
-			then sender reader;
-			then reader recorder;
-			then recorder end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
 		}
 	}`)
 	if err != nil {
@@ -240,10 +240,10 @@ func TestSendViaPortToReceiverWithLibraries(t *testing.T) {
 			action receiver accept value : Integer via receiverPort {
 				assign got := value;
 			}
-			done end;
-			then start sender;
-			then sender receiver;
-			then receiver end;
+			done;
+			succession first start then sender;
+			succession first sender then receiver;
+			succession first receiver then done;
 		}
 	}`))
 	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
@@ -272,17 +272,17 @@ func TestSendViaPortToNestedReceiver(t *testing.T) {
 				if true {
 					send 1 via senderPort to receiver;
 				}
-				done groupEnd;
-				then groupStart if;
-				then if groupEnd;
+				done;
+				succession first groupStart then if;
+				succession first if then groupEnd;
 			}
 			action receiver accept value : Integer via receiverPort {
 				assign got := value;
 			}
-			done end;
-			then start group;
-			then group receiver;
-			then receiver end;
+			done;
+			succession first start then group;
+			succession first group then receiver;
+			succession first receiver then done;
 		}
 	}`))
 	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
@@ -308,9 +308,9 @@ func TestSendViaPortToUnknownReceiverWithLibraries(t *testing.T) {
 			action sender {
 				send 42 via senderPort to recevier;
 			}
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`))
 	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
@@ -334,10 +334,10 @@ func TestPortRoutedMessageBypassesPortlessAccept(t *testing.T) {
 			first start;
 			action sender { send 42 via outPort; }
 			action reader accept msg : Integer;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if !errors.Is(err, ErrAcceptDeadlock) {
@@ -354,10 +354,10 @@ func TestAddressedMessageBypassesPortAccept(t *testing.T) {
 			first start;
 			action sender { send 42 to reader; }
 			action reader accept msg : Integer via inPort;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if !errors.Is(err, ErrAcceptDeadlock) {
@@ -381,11 +381,11 @@ func TestSendViaPortRoutesInEitherDirection(t *testing.T) {
 			action sender { send 7 via left; }
 			action reader accept msg : Integer via right;
 			action recorder { assign got := msg; }
-			done end;
-			then start sender;
-			then sender reader;
-			then reader recorder;
-			then recorder end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
 		}
 	}`)
 	if err != nil {
@@ -405,15 +405,15 @@ func TestPortRoutedMessageDoesNotReachStateMachine(t *testing.T) {
 			connect outPort to inPort;
 			first start;
 			action sender { send Ping via outPort; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 		state Driver {
 			initial init;
 			state waiting;
 			final done;
-			init then waiting;
+			succession first init then waiting;
 			transition waiting to done when Ping;
 		}
 	}`))
@@ -488,7 +488,7 @@ func TestRejectedCallLeavesNoArgumentsBehind(t *testing.T) {
 			initial init;
 			state waiting;
 			state moving;
-			init then waiting;
+			succession first init then waiting;
 			transition waiting to moving accept setSpeed(value) if value > 0;
 		}
 	}`)
@@ -512,10 +512,10 @@ func TestAcceptParksTokenUntilMessageArrives(t *testing.T) {
 			first start;
 			action reader accept n : Integer;
 			action recorder { assign got := n; }
-			done end;
-			then start reader;
-			then reader recorder;
-			then recorder end;
+			done;
+			succession first start then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
 		}
 	}`))
 	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
@@ -575,10 +575,10 @@ func TestParkedAcceptTakesOnlyItsOwnMessage(t *testing.T) {
 			first start;
 			action reader accept n : Integer;
 			action recorder { assign got := n; }
-			done end;
-			then start reader;
-			then reader recorder;
-			then recorder end;
+			done;
+			succession first start then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
 		}
 	}`))
 	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
@@ -729,10 +729,10 @@ func TestAddressedSendStaysWithinTheSendingObject(t *testing.T) {
 				first start;
 				action sender { send Ping() to reader; }
 				action reader accept ping : Ping;
-				done end;
-				then start sender;
-				then sender reader;
-				then reader end;
+				done;
+				succession first start then sender;
+				succession first sender then reader;
+				succession first reader then done;
 			}
 		}
 		part alpha : Node;
@@ -761,7 +761,7 @@ func TestAddressedSendResolvesPortOfNamedObject(t *testing.T) {
 		port def PingPort { in item ping : Ping; }
 		part def Node {
 			port inPort : PingPort;
-			action listen { first start; done end; then start end; }
+			action listen { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 		part beta : Node;
@@ -794,7 +794,7 @@ func TestAddressedSendDescendsToNestedPort(t *testing.T) {
 		part def Leaf { port inPort : PingPort; }
 		part def Node {
 			part inner : Leaf;
-			action listen { first start; done end; then start end; }
+			action listen { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 	}`))
@@ -825,7 +825,7 @@ func TestAddressedSendToUnreachablePortIsTyped(t *testing.T) {
 		item def Ping;
 		part def Node {
 			attribute count : Integer = 0;
-			action listen { first start; done end; then start end; }
+			action listen { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 	}`))
@@ -848,15 +848,15 @@ func TestAddressedSendToQualifiedNameReachesReceiver(t *testing.T) {
 		action pipeline {
 			first start;
 			action sender { send Ping to P::Driver; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 		state Driver {
 			initial init;
 			state waiting;
 			final done;
-			init then waiting;
+			succession first init then waiting;
 			transition waiting to done when Ping;
 		}
 	}`))
@@ -882,7 +882,7 @@ func TestAddressedSendToQualifiedNameSkipsSameNamedFeature(t *testing.T) {
 		}
 		part def Node {
 			action reader accept n : Integer;
-			action listen { first start; done end; then start end; }
+			action listen { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 	}`))
@@ -907,7 +907,7 @@ func TestAddressedSendToQualifiedNameFromNoObjectIsDelivered(t *testing.T) {
 		package Other {
 			action reader accept n : Integer;
 		}
-		action listen { first start; done end; then start end; }
+		action listen { first start; done; succession first start then done; }
 	}`))
 	send := lower.Send{Target: "Other::reader", Scope: declScope(oneSymbol(t, idx, "test::listen"))}
 	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, nil); err != nil {
@@ -926,7 +926,7 @@ func TestAddressedSendToAnObjectNeedsThatObject(t *testing.T) {
 		part def Leaf { attribute count : Integer = 0; }
 		part def Node {
 			part leaf : Leaf;
-			action talk { first start; done end; then start end; }
+			action talk { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 	}`))
@@ -952,7 +952,7 @@ func TestAddressedSendToReceiverOfAnotherObjectCarriesItsIdentity(t *testing.T) 
 		part def Node { action reader accept n : Integer; }
 		part def Talker {
 			action reader accept n : Integer;
-			action talk { first start; done end; then start end; }
+			action talk { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 		part beta : Talker;
@@ -982,9 +982,9 @@ func TestAddressedSendPrefersTheNearerDeclaration(t *testing.T) {
 			action listen {
 				first start;
 				action reader accept n : Integer;
-				then start reader;
-				then reader done;
-				done done;
+				succession first start then reader;
+				succession first reader then done;
+				done;
 			}
 		}
 		part alpha : Node;
@@ -1009,7 +1009,7 @@ func TestAddressedSendToQualifiedPortOfAnotherTypeIsTyped(t *testing.T) {
 		part def Other { port inPort : PingPort; }
 		part def Node {
 			port inPort : PingPort;
-			action listen { first start; done end; then start end; }
+			action listen { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 	}`))
@@ -1031,7 +1031,7 @@ func TestAddressedSendThroughNamespaceQualifiedPathReachesObject(t *testing.T) {
 		port def PingPort { in item ping : Ping; }
 		part def Node {
 			port inPort : PingPort;
-			action listen { first start; done end; then start end; }
+			action listen { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 		part beta : Node;
@@ -1059,7 +1059,7 @@ func TestAddressedSendReportsWhyTheObjectCouldNotBeBuilt(t *testing.T) {
 		port def PingPort { in item ping : Ping; }
 		part def Node {
 			port inPort : PingPort;
-			action listen { first start; done end; then start end; }
+			action listen { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 	}`))
@@ -1087,7 +1087,7 @@ func TestAddressedSendThroughMultiplePartIsTyped(t *testing.T) {
 		part def Leaf { port inPort : PingPort; }
 		part def Node {
 			part nodes : Leaf[3];
-			action listen { first start; done end; then start end; }
+			action listen { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 	}`))
@@ -1113,19 +1113,19 @@ func TestAddressedSendReachesPerformedAction(t *testing.T) {
 		action listener {
 			first start;
 			action reader accept n : Integer;
-			done fin;
-			then start reader;
-			then reader fin;
+			done;
+			succession first start then reader;
+			succession first reader then done;
 		}
 		part def Node {
 			action main {
 				first start;
 				action sender { send 7 to reader; }
 				perform listener;
-				done fin;
-				then start sender;
-				then sender listener;
-				then listener fin;
+				done;
+				succession first start then sender;
+				succession first sender then listener;
+				succession first listener then done;
 			}
 		}
 		part solo : Node;
@@ -1146,26 +1146,26 @@ func TestPerformedBehaviorRunsAsItsPerformer(t *testing.T) {
 		action inner {
 			first start;
 			action reader accept n : Integer;
-			done fin;
-			then start reader;
-			then reader fin;
+			done;
+			succession first start then reader;
+			succession first reader then done;
 		}
 		action outer {
 			first start;
 			perform inner;
-			done fin;
-			then start inner;
-			then inner fin;
+			done;
+			succession first start then inner;
+			succession first inner then done;
 		}
 		part def Node {
 			action main {
 				first start;
 				action sender { send 7 to solo; }
 				perform outer;
-				done fin;
-				then start sender;
-				then sender outer;
-				then outer fin;
+				done;
+				succession first start then sender;
+				succession first sender then outer;
+				succession first outer then done;
 			}
 		}
 		part solo : Node;
@@ -1181,19 +1181,19 @@ func TestPerformedBehaviorRunsAsItsPerformer(t *testing.T) {
 		action inner {
 			first start;
 			action reader accept n : Integer;
-			done fin;
-			then start reader;
-			then reader fin;
+			done;
+			succession first start then reader;
+			succession first reader then done;
 		}
 		part def Node {
 			action main {
 				first start;
 				action sender { send 7 to solo; }
 				perform inner;
-				done fin;
-				then start sender;
-				then sender inner;
-				then inner fin;
+				done;
+				succession first start then sender;
+				succession first sender then inner;
+				succession first inner then done;
 			}
 		}
 		part solo : Node;
@@ -1214,7 +1214,7 @@ func TestAddressedSendToQualifiedElementOfATwinObject(t *testing.T) {
 		part def Node {
 			port inPort : PingPort;
 			action reader accept n : Integer;
-			action listen { first start; done end; then start end; }
+			action listen { first start; done; succession first start then done; }
 		}
 		part alpha : Node;
 		part beta : Node;

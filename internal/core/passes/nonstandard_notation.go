@@ -124,7 +124,6 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.sysmlDeclaration(n, n.Keyword)
 			w.keywordAsName(n.Ident)
 			w.binding(n)
-			w.successionUsage(n)
 			w.requirementConstraint(n)
 			w.walkDeclaration(n.Members, n)
 		case *ast.Import:
@@ -163,8 +162,6 @@ func (w *notationWalker) walk(members []ast.Node) {
 					"the standard spelling is a keyword-less trailing condition")
 			}
 			w.walk(n.Body)
-		case *ast.SuccessionEdge:
-			w.successionEdge(n)
 		case *ast.StateNode:
 			w.stateNode(n)
 		case *ast.StateRegion:
@@ -180,13 +177,9 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.initialNode(n)
 			w.walkActionBody(n.Members)
 		case *ast.FinalNode:
-			switch {
-			case n.Keyword == "final":
+			if n.Keyword == "final" {
 				w.extension(keywordSpan(n, n.Keyword), "`final` as an action node",
 					"the standard spelling of the node is `done`, the library feature")
-			case n.Name != "":
-				w.extension(keywordSpan(n, n.Keyword), "`done <name>;`",
-					"`done` is a library feature a succession names, not a keyword that declares a node")
 			}
 		case *ast.DecisionNode:
 			if n.Keyword == "decision" {
@@ -318,40 +311,6 @@ func (w *notationWalker) initialNode(n *ast.InitialNode) {
 		w.extension(keywordSpan(n, n.Keyword), "a one-ended `first <node>;` outside an action body",
 			"only an action body admits it; elsewhere a succession names both ends, `first <source> then <target>`")
 	}
-}
-
-// successionEdge reports `then <source> <target>;`: a succession states two ends
-// only as `first … then …` (SuccessionAsUsage, SysML.xtext:1033). An end bound by
-// position is spanned outside the edge, which keeps the one-ended form silent.
-func (w *notationWalker) successionEdge(n *ast.SuccessionEdge) {
-	if !w.writtenEnd(n, n.Source) || !w.writtenEnd(n, n.Target) {
-		return
-	}
-	w.extension(keywordSpan(n, "then"), "`then <source> <target>;`",
-		"a succession names both ends as `first <source> then <target>`")
-}
-
-// successionUsage reports the state-body shorthand whose source begins the
-// usage; a standard anonymous succession begins with `first`.
-func (w *notationWalker) successionUsage(n *ast.Usage) {
-	if n.Kind != ast.UsageSuccession || n.Keyword != "" || len(n.ConnectorEnds) != 2 {
-		return
-	}
-	first := n.ConnectorEnds[0]
-	if first == nil || first.Reference == nil || first.Reference.Span().Offset != n.Span().Offset {
-		return
-	}
-	w.extension(first.Reference.Span(), "`<source> then <target>;`",
-		"a succession names both ends as `first <source> then <target>`")
-}
-
-// writtenEnd reports whether end was written inside the edge that carries it.
-func (w *notationWalker) writtenEnd(edge ast.Node, end *ast.QualifiedName) bool {
-	if end == nil || len(end.Parts) == 0 {
-		return false
-	}
-	sp, within := end.Span(), edge.Span()
-	return sp.Offset >= within.Offset && sp.Offset < within.End()
 }
 
 // binding reports a binding whose right side is an expression: `bind` relates two

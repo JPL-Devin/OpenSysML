@@ -5,5 +5,5 @@ eval operator < -> true
 step 2: token 1@sendBatteryLow
 stmt assign alerted
   eval literal 1 -> 1
-step 3: token 1@end
+step 3: token 1@done
 step 4: no active tokens

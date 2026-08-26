@@ -19,11 +19,11 @@ package Test {
 							exit { log = log * 10 + 3; }
 						}
 
-						then gstart g1;
+						succession first gstart then g1;
 					}
 				}
 
-				then lstart Grouping;
+				succession first lstart then Grouping;
 			}
 			region right {
 				initial rstart;
@@ -31,12 +31,12 @@ package Test {
 					exit { log = log * 10 + 4; }
 				}
 
-				then rstart Watching;
+				succession first rstart then Watching;
 			}
 		}
 		state Done;
 
-		start then Outer;
+		succession first start then Outer;
 		transition Outer to Done when stop do assign log := log * 10 + 9;
 	}
 }

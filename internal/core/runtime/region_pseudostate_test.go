@@ -61,13 +61,13 @@ func TestRegionLocalChoiceMovesOnlyItsRegion(t *testing.T) {
 			state lstart;
 			state lnext;
 			state lother;
-			then ls lstart;
+			succession first ls then lstart;
 			transition lstart to pick;
 		}
 		region right {
 			initial rs;
 			state rstart { entry { rightEntries = rightEntries + 1; } }
-			then rs rstart;
+			succession first rs then rstart;
 		}
 		choice pick;
 
@@ -94,13 +94,13 @@ func TestRegionLocalChoiceTakesElseBranch(t *testing.T) {
 			state lstart;
 			state lguarded;
 			state lelse;
-			then ls lstart;
+			succession first ls then lstart;
 			transition lstart to pick;
 		}
 		region right {
 			initial rs;
 			state rstart;
-			then rs rstart;
+			succession first rs then rstart;
 		}
 		choice pick;
 
@@ -121,13 +121,13 @@ func TestRegionLocalJunctionChainIsFollowed(t *testing.T) {
 			initial ls;
 			state a;
 			state b;
-			then ls a;
+			succession first ls then a;
 			transition a to merge;
 		}
 		region right {
 			initial rs;
 			state c;
-			then rs c;
+			succession first rs then c;
 		}
 		junction merge;
 		junction relay;
@@ -152,13 +152,13 @@ func TestRegionPseudostateLeavingEveryRegion(t *testing.T) {
 		region left {
 			initial ls;
 			state lstart { exit { leftExits = leftExits + 1; } }
-			then ls lstart;
+			succession first ls then lstart;
 			transition lstart to pick;
 		}
 		region right {
 			initial rs;
 			state rstart { exit { rightExits = rightExits + 1; } }
-			then rs rstart;
+			succession first rs then rstart;
 		}
 		choice pick;
 		state outside;
@@ -193,19 +193,19 @@ func TestRegionPseudostateIntoSiblingRegionExitsSourceOnly(t *testing.T) {
 			region left {
 				initial ls;
 				state lstart;
-				then ls lstart;
+				succession first ls then lstart;
 				transition lstart to cross if x == 1;
 			}
 			region right {
 				initial rs;
 				state rstart;
 				state rtarget { entry { x = 2; } }
-				then rs rstart;
+				succession first rs then rstart;
 			}
 		}
 		choice cross;
 
-		init then running;
+		succession first init then running;
 		transition cross to rtarget if x == 1;
 	}
 }`)
@@ -282,18 +282,18 @@ func TestRegionPseudostateExitOrderIsDeterministic(t *testing.T) {
 		region left {
 			initial ls;
 			state lstart;
-			then ls lstart;
+			succession first ls then lstart;
 			transition lstart to pick;
 		}
 		region middle {
 			initial ms;
 			state mstart;
-			then ms mstart;
+			succession first ms then mstart;
 		}
 		region right {
 			initial rs;
 			state rstart;
-			then rs rstart;
+			succession first rs then rstart;
 		}
 		choice pick;
 		state outside;

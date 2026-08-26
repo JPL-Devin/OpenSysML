@@ -14,7 +14,7 @@ package Debug {
 		}
 		final done;
 
-		init then busy;
-		busy then done;
+		succession first init then busy;
+		succession first busy then done;
 	}
 }

@@ -237,27 +237,40 @@ expr:ActionNodes__Drive___4017.expression
     sysx:sourceText "brake" ;
     sysml:referent elmt:ActionNodes__Drive__brake .
 
-elmt:ActionNodes__Drive__finish
+elmt:ActionNodes__Drive___4018
     a sysx:FinalNode ;
-    sysml:qualifiedName "ActionNodes::Drive::finish" ;
+    sysml:qualifiedName "ActionNodes::Drive::@18" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
-    sysx:memberIndex "18"^^xsd:integer ;
-    sysml:declaredName "finish" .
+    sysx:memberIndex "18"^^xsd:integer .
 
 elmt:ActionNodes__Drive___4019
     a sysml:SuccessionAsUsage ;
     sysml:qualifiedName "ActionNodes::Drive::@19" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "19"^^xsd:integer ;
-    sysml:sourceFeature "start" ;
-    sysml:targetFeature elmt:ActionNodes__Drive__brake .
+    sysx:sourceText "succession first start then brake;" ;
+    sysx:relatedFeature expr:ActionNodes__Drive___4019.end0, expr:ActionNodes__Drive___4019.end1 ;
+    sysx:endForm "firstThen" ;
+    sysx:endVerb "first" .
+
+expr:ActionNodes__Drive___4019.end0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "start" ;
+    sysml:referent "start" ;
+    sysx:endIndex "0"^^xsd:integer .
+
+expr:ActionNodes__Drive___4019.end1
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "brake" ;
+    sysml:referent elmt:ActionNodes__Drive__brake ;
+    sysx:endIndex "1"^^xsd:integer .
 
 elmt:ActionNodes__Drive___4020
     a sysml:SuccessionAsUsage ;
     sysml:qualifiedName "ActionNodes::Drive::@20" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "20"^^xsd:integer ;
-    sysx:sourceText "succession first brake then finish;" ;
+    sysx:sourceText "succession first brake then done;" ;
     sysx:relatedFeature expr:ActionNodes__Drive___4020.end0, expr:ActionNodes__Drive___4020.end1 ;
     sysx:endForm "firstThen" ;
     sysx:endVerb "first" .
@@ -270,6 +283,6 @@ expr:ActionNodes__Drive___4020.end0
 
 expr:ActionNodes__Drive___4020.end1
     a sysml:FeatureReferenceExpression ;
-    sysx:sourceText "finish" ;
-    sysml:referent elmt:ActionNodes__Drive__finish ;
+    sysx:sourceText "done" ;
+    sysml:referent "done" ;
     sysx:endIndex "1"^^xsd:integer .

@@ -7,7 +7,7 @@ package CallTriggerRegionTest {
             state Dimmed;
             state Lit;
 
-            then start Dimmed;
+            succession first start then Dimmed;
             transition Dimmed to Lit accept wake();
         }
 
@@ -16,7 +16,7 @@ package CallTriggerRegionTest {
             state Muted;
             state Chiming;
 
-            then start Muted;
+            succession first start then Muted;
             transition Muted to Chiming accept wake();
             transition Chiming to Muted accept mute();
         }

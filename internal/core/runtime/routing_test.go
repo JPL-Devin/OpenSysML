@@ -35,10 +35,10 @@ func TestSendReachesTheConjugatedEndOfAConnection(t *testing.T) {
 			first start;
 			action sender { send 11 via src; }
 			action reader accept n : Integer via dst { assign got := n; }
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err != nil {
@@ -58,9 +58,9 @@ func TestSendIntoAnOutboundOnlyEndIsATypedError(t *testing.T) {
 			connect src to dst;
 			first start;
 			action sender { send 11 via dst; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	if !errors.Is(err, ErrUnroutableSend) {
@@ -79,9 +79,9 @@ func TestSendThroughAnUnjoinedPortIsATypedError(t *testing.T) {
 			port lonely;
 			first start;
 			action sender { send 42 via lonely; }
-			done end;
-			then start sender;
-			then sender end;
+			done;
+			succession first start then sender;
+			succession first sender then done;
 		}
 	}`)
 	if !errors.Is(err, ErrUnroutableSend) {
@@ -103,10 +103,10 @@ func TestSendReachesANestedPortByItsPath(t *testing.T) {
 			first start;
 			action sender { send 7 via p.q; }
 			action reader accept n : Integer via sink { assign got := n; }
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err != nil {
@@ -131,10 +131,10 @@ func TestSendReachesThePortsOfThePerformingPart(t *testing.T) {
 				first start;
 				action sender { send 3 via src; }
 				action reader accept n : Integer via dst { assign got := n; }
-				done end;
-				then start sender;
-				then sender reader;
-				then reader end;
+				done;
+				succession first start then sender;
+				succession first sender then reader;
+				succession first reader then done;
 			}
 		}
 	}`, "P::node", "P::node::ship")
@@ -159,10 +159,10 @@ func TestRoutedSendKeepsPerformingObjectIdentity(t *testing.T) {
 				first start;
 				action sender { send 3 via src to reader; }
 				action reader accept n : Integer via dst { assign got := n; }
-				done end;
-				then start sender;
-				then sender reader;
-				then reader end;
+				done;
+				succession first start then sender;
+				succession first sender then reader;
+				succession first reader then done;
 			}
 		}
 	}`, "P::node", "P::node::ship")
@@ -185,10 +185,10 @@ func TestSendReachesEnclosingPartPortsWithoutAnInstance(t *testing.T) {
 				first start;
 				action sender { send 4 via src; }
 				action reader accept n : Integer via dst { assign got := n; }
-				done end;
-				then start sender;
-				then sender reader;
-				then reader end;
+				done;
+				succession first start then sender;
+				succession first sender then reader;
+				succession first reader then done;
 			}
 		}
 	}`))
@@ -206,12 +206,12 @@ func TestSendFromAStateMachineReachesEnclosingPartPorts(t *testing.T) {
 	bodies := map[string]string{
 		"state entry": `
 			state waiting { entry { send Ping() via src; } }
-			start then waiting;
+			succession first start then waiting;
 			transition first waiting accept Ping via dst do assign got := 1 then done;`,
 		"transition effect": `
 			state waiting;
 			state sent;
-			start then waiting;
+			succession first start then waiting;
 			transition go first waiting do send Ping() via src then sent;
 			transition first sent accept Ping via dst do assign got := 1 then done;`,
 	}
@@ -253,10 +253,10 @@ func TestSendCrossesFromAPartPortToABehaviorPort(t *testing.T) {
 				first start;
 				action sender { send 5 via src; }
 				action reader accept n : Integer via local { assign got := n; }
-				done end;
-				then start sender;
-				then sender reader;
-				then reader end;
+				done;
+				succession first start then sender;
+				succession first sender then reader;
+				succession first reader then done;
 			}
 		}
 	}`, "P::node", "P::node::ship")
@@ -283,10 +283,10 @@ func TestSendRoutesOverAnInterfaceTypedConnection(t *testing.T) {
 			first start;
 			action sender { send 13 via src; }
 			action reader accept n : Integer via dst { assign got := n; }
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	}`)
 	if err != nil {

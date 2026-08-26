@@ -9,7 +9,7 @@ package SignalTest {
         state pathB;
         final done;
 
-        start then waiting;
+        succession first start then waiting;
 
         transition waiting to pathA when sigA;
         transition waiting to pathB when sigB;

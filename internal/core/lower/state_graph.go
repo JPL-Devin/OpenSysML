@@ -849,7 +849,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 						sourceVertex := graph.endpointVertex(scope, sourceQName)
 						targetVertex := graph.endpointVertex(scope, targetQName)
 
-						// `begin then off;` out of a named entry action names the
+						// `succession first begin then off;` out of a named entry action names the
 						// state the machine starts in, not an edge (SysML 7.19.3).
 						if sourceVertex == nil &&
 							graph.startsAt(memberList, containingState, scope, sourceQName, targetQName) {
@@ -897,7 +897,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 
 			// `entry; then off;` — a succession out of the body's own entry
 			// subaction names the state it starts in (SysML 7.19.3), the same as
-			// `initial start; start then off;`.
+			// `initial start; succession first start then off;`.
 			if sourceVertex == nil && isEntrySubaction(n.SourceMember) {
 				if target, ok := targetVertex.(*ast.StateNode); ok {
 					graph.designateInitial(target)
@@ -905,7 +905,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 				}
 			}
 
-			// `start then off;` out of a named entry action says the same.
+			// `succession first start then off;` out of a named entry action says the same.
 			if sourceVertex == nil && graph.startsAt(memberList, containingState, scope, n.Source, n.Target) {
 				continue
 			}

@@ -17,11 +17,11 @@ package Test {
 					exit { log = log * 10 + 4; }
 				}
 
-				then lstart l1;
+				succession first lstart then l1;
 			}
 		}
 
-		start then Working;
+		succession first start then Working;
 		transition Working to Working when restart do assign log := log * 10 + 9;
 	}
 }

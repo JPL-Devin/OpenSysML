@@ -190,7 +190,7 @@ package M {
             accept after 10 then running;
         }
         state running;
-        off then warming;
+        succession first off then warming;
     }
 }
 ```
@@ -202,7 +202,7 @@ monitor.sysml:3:9: warning: `initial <state>;` is an OpenSysML extension with no
         initial off;
         ^~~~~~~
 monitor.sysml:8:9: warning: `<source> then <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        off then warming;
+        succession first off then warming;
         ^~~~
 ✓ monitor.sysml: no errors
 exit=0
@@ -212,7 +212,7 @@ monitor.sysml:3:9: error: `initial <state>;` is an OpenSysML extension with no S
         initial off;
         ^~~~~~~
 monitor.sysml:8:9: error: `<source> then <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        off then warming;
+        succession first off then warming;
         ^~~~
 sysml: monitor.sysml did not analyse cleanly; no check was made
 exit=2

@@ -85,11 +85,12 @@ func (p *Parser) peekIsName(n int) bool {
 }
 
 // atActionNodeWord returns the unreserved word at the cursor when it heads an
-// action node — `done;`, `final f;`, `initial n then m;`, `decision d;` — rather
+// action node — `done;`, `final f;`, `first n then m;`, `decision d;` — rather
 // than naming a feature.
 func (p *Parser) atActionNodeWord() (string, bool) { return p.actionNodeWordAt(0) }
 
-// actionNodeWordAt is atActionNodeWord n tokens ahead of the cursor.
+// actionNodeWordAt recognizes action-node words, including a named final
+// spelling so parseFinalNode can report its diagnostic instead of cascading.
 func (p *Parser) actionNodeWordAt(n int) (string, bool) {
 	if p.peekN(n).Kind != lexer.Identifier {
 		return "", false
@@ -110,7 +111,7 @@ func (p *Parser) actionNodeWordAt(n int) (string, bool) {
 	case lexer.Semicolon:
 		return w, true
 	case lexer.Keyword:
-		// `initial n then m;` and its guarded form continue the edge the node
+		// `first n then m;` and its guarded form continue the edge the node
 		// starts (SysML.xtext `first` … `then`).
 		if next.KeywordID == "then" || next.KeywordID == "if" {
 			return w, true

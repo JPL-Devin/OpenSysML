@@ -393,7 +393,7 @@ func ActionNodeName(node ast.Node) string {
 	case *ast.InitialNode:
 		return n.Name
 	case *ast.FinalNode:
-		return n.Name
+		return "done"
 	case *ast.ForkNode:
 		return n.Name
 	case *ast.JoinNode:

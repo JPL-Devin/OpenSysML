@@ -441,6 +441,23 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				}
 				graph.Guards[sourceNode][targetNode] = n.Guard
 			}
+		case *ast.TransitionMember:
+			sourceNode := findNodeByName(graph.Nodes, n.Source)
+			targetNode := findNodeByName(graph.Nodes, n.Target)
+			if sourceNode == nil {
+				return nil, fmt.Errorf("succession references undefined source node %s", edgeEndName(n.Source))
+			}
+			if targetNode == nil {
+				return nil, fmt.Errorf("succession references undefined target node %s", edgeEndName(n.Target))
+			}
+			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
+			graph.recordSuccession(sourceNode, targetNode, n)
+			if n.Guard != nil {
+				if graph.Guards[sourceNode] == nil {
+					graph.Guards[sourceNode] = make(map[ast.Node]ast.Node)
+				}
+				graph.Guards[sourceNode][targetNode] = n.Guard
+			}
 		case *ast.ObjectFlowEdge:
 			sourceNode, sourcePin := parsePinReference(graph.Nodes, n.Source)
 			targetNode, targetPin := parsePinReference(graph.Nodes, n.Target)
@@ -459,6 +476,19 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				Decl:      n,
 			})
 		case *ast.Usage:
+			if source, target, ok := successionEnds(n); ok {
+				sourceNode := findNodeByName(graph.Nodes, source)
+				targetNode := findNodeByName(graph.Nodes, target)
+				if sourceNode == nil {
+					return nil, fmt.Errorf("succession references undefined source node %s", edgeEndName(source))
+				}
+				if targetNode == nil {
+					return nil, fmt.Errorf("succession references undefined target node %s", edgeEndName(target))
+				}
+				graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
+				graph.recordSuccession(sourceNode, targetNode, n)
+				continue
+			}
 			if n.Kind != ast.UsageFlow || n.FlowEnds == nil {
 				continue
 			}
@@ -867,7 +897,9 @@ func getNodeName(node ast.Node) string {
 	case *ast.InitialNode:
 		return n.Name
 	case *ast.FinalNode:
-		return n.Name
+		// The node declares no name of its own: a succession reaches it by the
+		// name of the library feature it is, `done`.
+		return "done"
 	case *ast.ForkNode:
 		return n.Name
 	case *ast.JoinNode:

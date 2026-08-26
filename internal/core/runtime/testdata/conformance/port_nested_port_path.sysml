@@ -10,9 +10,9 @@ package NestedPort {
 		first start;
 		action sender { send 7 via p.q; }
 		action reader accept n : Integer via sink { assign got := n; }
-		done end;
-		then start sender;
-		then sender reader;
-		then reader end;
+		done;
+		succession first start then sender;
+		succession first sender then reader;
+		succession first reader then done;
 	}
 }

@@ -11,8 +11,8 @@ package MemberThenOrderTest {
 		state third;
 		final done;
 
-		start then second;
-		fourth then third;
-		third then done;
+		succession first start then second;
+		succession first fourth then third;
+		succession first third then done;
 	}
 }

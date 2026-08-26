@@ -179,10 +179,10 @@ func TestDimensionUnknownSilent(t *testing.T) {
 				first start;
 				action compute { assign speed := 10.0 [SI::m] / 2.0 [SI::s]; }
 				action check { assign quick := speed >= 18.0 [SI::km/SI::h]; }
-				done end;
-				then start compute;
-				then compute check;
-				then check end;
+				done;
+				succession first start then compute;
+				succession first compute then check;
+				succession first check then done;
 			}
 		}`,
 	} {

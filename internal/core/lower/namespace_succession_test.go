@@ -21,8 +21,8 @@ func TestNamespaceSuccessionHasNoTokenFlowOrNeighborGraphAttachment(t *testing.T
 			first a::x then b::y;
 			action neighbor {
 				first start;
-				done finish;
-				then start finish;
+				done;
+				succession first start then done;
 			}
 		}
 	`
@@ -45,7 +45,7 @@ func TestNamespaceSuccessionHasNoTokenFlowOrNeighborGraphAttachment(t *testing.T
 			case *ast.Namespace:
 				walk(n.Members)
 			case *ast.Usage:
-				if n.Kind == ast.UsageSuccession {
+				if n.Kind == ast.UsageSuccession && succession == nil {
 					succession = n
 				}
 				name, _ := ast.EffectiveName(n)

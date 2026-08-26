@@ -21,7 +21,7 @@ package Test {
 			entry { log = log * 10 + 9; }
 		}
 
-		start then Step1;
+		succession first start then Step1;
 		transition Working to Done when Abort;
 	}
 }

@@ -6,20 +6,20 @@ package UnbracedActionBodyBoundary {
 		attribute total = 0.0;
 		first start;
 		action bump assign total := total + 1.62;
-		done end;
-		then start bump;
-		then bump end;
+		done;
+		succession first start then bump;
+		succession first bump then done;
 	}
 
 	// Same boundary when the succession edges directly follow the unbraced body:
-	// `then start bump;` names members of `edgesFirst`, so it is not a continuation.
+	// The explicit succession names members of `edgesFirst`, so it is not a continuation.
 	action edgesFirst {
 		attribute total = 0.0;
 		first start;
 		action bump assign total := total + 1.62;
-		then start bump;
-		then bump end;
-		done end;
+		succession first start then bump;
+		succession first bump then done;
+		done;
 	}
 
 	// `then` chained continuations stay inside the unbraced body.

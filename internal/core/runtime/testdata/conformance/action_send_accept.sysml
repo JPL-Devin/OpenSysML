@@ -21,11 +21,11 @@ package test {
 			assign number := n;
 		}
 
-		done end;
+		done;
 
-		then start sender;
-		then sender counter;
-		then counter recorder;
-		then recorder end;
+		succession first start then sender;
+		succession first sender then counter;
+		succession first counter then recorder;
+		succession first recorder then done;
 	}
 }

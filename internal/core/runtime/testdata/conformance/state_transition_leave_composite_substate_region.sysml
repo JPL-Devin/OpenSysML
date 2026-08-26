@@ -15,7 +15,7 @@ package Test {
 				initial ls;
 				state lidle { exit { lidleExits = lidleExits + 1; } }
 
-				then ls lidle;
+				succession first ls then lidle;
 			}
 			region right {
 				initial rs;
@@ -29,17 +29,17 @@ package Test {
 							initial is;
 							state ideep { exit { deepExits = deepExits + 1; } }
 
-							then is ideep;
+							succession first is then ideep;
 							transition ideep to outside if midExits == 0;
 						}
 					}
 				}
 
-				then rs mid;
+				succession first rs then mid;
 			}
 		}
 		state outside;
 
-		start then running;
+		succession first start then running;
 	}
 }

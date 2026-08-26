@@ -10,7 +10,7 @@ package JunctionTest {
         state normalPriority;
         final done;
         
-        init then start;
+        succession first init then start;
         transition start to routeDecision;
         transition routeDecision to highPriority if priority > 5;
         transition routeDecision to normalPriority;  // else branch

@@ -25,9 +25,9 @@ package test {
 			}
 		}
 
-		done end;
+		done;
 
-		then start iterate;
-		then iterate end;
+		succession first start then iterate;
+		succession first iterate then done;
 	}
 }

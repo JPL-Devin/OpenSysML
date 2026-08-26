@@ -34,9 +34,9 @@ const behaviorModel = `package Mission {
         action accumulate {
             assign total := total + 5;
         }
-        done end;
-        then start accumulate;
-        then accumulate end;
+        done;
+        succession first start then accumulate;
+        succession first accumulate then done;
     }
 
     state Cycle {
@@ -48,7 +48,7 @@ const behaviorModel = `package Mission {
             accept after 5 then done;
         }
         final done;
-        init then waiting;
+        succession first init then waiting;
     }
 }
 `

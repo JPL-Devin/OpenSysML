@@ -12,7 +12,7 @@ package Test {
 				state l1;
 				state l2;
 
-				then lstart l1;
+				succession first lstart then l1;
 				transition l1 to l2 when Tick do assign log := log * 10 + 1;
 			}
 
@@ -24,15 +24,15 @@ package Test {
 						state d1;
 						state d2;
 
-						then dstart d1;
+						succession first dstart then d1;
 						transition d1 to d2 when Tick do assign log := log * 10 + 2;
 					}
 				}
 
-				then rstart deep;
+				succession first rstart then deep;
 			}
 		}
 
-		start then Working;
+		succession first start then Working;
 	}
 }

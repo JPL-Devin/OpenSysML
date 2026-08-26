@@ -24,11 +24,11 @@ const guardModel = `
 				assign log := log + t.d;
 			}
 			decision check;
-			done fin;
-			then start bump;
-			then bump check;
-			then check bump if t.d < 6.0;
-			then check fin if t.d >= 6.0;
+			done;
+			succession first start then bump;
+			succession first bump then check;
+			succession first check if t.d < 6.0 then bump;
+			succession first check if t.d >= 6.0 then done;
 		}
 	}
 `
@@ -105,9 +105,9 @@ func TestPartChainReadBelongsToTheReadingActivation(t *testing.T) {
 						assign acc := acc + lander.mass.d;
 					}
 				}
-				done end;
-				then start go;
-				then go end;
+				done;
+				succession first start then go;
+				succession first go then done;
 			}
 		}
 	`

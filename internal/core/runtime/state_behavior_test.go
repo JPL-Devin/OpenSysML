@@ -36,8 +36,8 @@ func TestStateBodyBehaviorsAreLowered(t *testing.T) {
         }
         final done;
 
-        init then active;
-        active then done;
+        succession first init then active;
+        succession first active then done;
     }
 }`, "Machine")
 
@@ -61,10 +61,10 @@ func TestStateEntryPerformsAction(t *testing.T) {
         action bumping {
             assign counter := counter + 10;
         }
-        done end;
+        done;
 
-        then start bumping;
-        then bumping end;
+        succession first start then bumping;
+        succession first bumping then done;
     }
 
     state Machine {
@@ -76,8 +76,8 @@ func TestStateEntryPerformsAction(t *testing.T) {
         }
         final done;
 
-        init then active;
-        active then done;
+        succession first init then active;
+        succession first active then done;
     }
 }`, "Machine")
 
@@ -99,10 +99,10 @@ func TestStateDoExitAndTransitionEffectPerformAction(t *testing.T) {
         action bumping {
             assign counter := counter + 10;
         }
-        done end;
+        done;
 
-        then start bumping;
-        then bumping end;
+        succession first start then bumping;
+        succession first bumping then done;
     }
 
     state Machine {
@@ -115,7 +115,7 @@ func TestStateDoExitAndTransitionEffectPerformAction(t *testing.T) {
         }
         final done;
 
-        init then active;
+        succession first init then active;
         transition active to done do { perform action bumpAgain : Bump; }
     }
 }`, "Machine")
@@ -140,10 +140,10 @@ func TestStateSubactionByReferencePerformsAction(t *testing.T) {
         action bumping {
             assign counter := counter + 10;
         }
-        done end;
+        done;
 
-        then start bumping;
-        then bumping end;
+        succession first start then bumping;
+        succession first bumping then done;
     }
 
     state Machine {
@@ -156,8 +156,8 @@ func TestStateSubactionByReferencePerformsAction(t *testing.T) {
         }
         final done;
 
-        init then active;
-        active then done;
+        succession first init then active;
+        succession first active then done;
     }
 }`, "Machine")
 
@@ -179,8 +179,8 @@ func TestStateEntryPerformsUnresolvedAction(t *testing.T) {
         }
         final done;
 
-        init then active;
-        active then done;
+        succession first init then active;
+        succession first active then done;
     }
 }`, "Machine")
 

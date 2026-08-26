@@ -14,7 +14,7 @@ package Test {
         state away;
         final done;
 
-        start then inner;
+        succession first start then inner;
 
         transition inner to innerTwo when Next;
         transition innerTwo to away when Leave;

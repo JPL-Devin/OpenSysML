@@ -144,10 +144,10 @@ package PhaseC {
         action greenLight;
         action yellowLight;
         action redLight;
-        then start greenLight;
-        then greenLight yellowLight;
-        then yellowLight redLight;
-        then redLight greenLight;
+        succession first start then greenLight;
+        succession first greenLight then yellowLight;
+        succession first yellowLight then redLight;
+        succession first redLight then greenLight;
     }
     
     action def ParallelProcessing {
@@ -158,11 +158,11 @@ package PhaseC {
         action processTask3;
         join synchronize;
         action aggregateResults;
-        then start splitWork;
-        then splitWork processTask1;
-        then splitWork processTask2;
-        then splitWork processTask3;
-        then synchronize aggregateResults;
+        succession first start then splitWork;
+        succession first splitWork then processTask1;
+        succession first splitWork then processTask2;
+        succession first splitWork then processTask3;
+        succession first synchronize then aggregateResults;
     }
     
     // ==========================================

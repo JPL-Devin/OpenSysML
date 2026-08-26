@@ -6,5 +6,5 @@ stmt assign amplified
     eval feature torqueIn -> 21
     eval literal 2 -> 2
   eval operator * -> 42
-step 3: token 1@end
+step 3: token 1@done
 step 4: no active tokens

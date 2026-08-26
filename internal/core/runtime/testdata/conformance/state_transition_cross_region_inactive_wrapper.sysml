@@ -14,7 +14,7 @@ package Test {
 				initial ls;
 				state lidle;
 
-				then ls lidle;
+				succession first ls then lidle;
 				transition lidle to rtarget if crossed == 0;
 			}
 			region right {
@@ -31,16 +31,16 @@ package Test {
 							exit { rtargetExits = rtargetExits + 1; }
 						}
 
-						then is istart;
+						succession first is then istart;
 					}
 				}
 
-				then rs ridle;
+				succession first rs then ridle;
 			}
 		}
 		state done;
 
-		start then running;
+		succession first start then running;
 		transition rtarget to done if crossed == 1;
 	}
 }

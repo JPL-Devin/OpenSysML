@@ -17,8 +17,8 @@ package Test {
             }
             state ldone;
 
-            then lstart lwork;
-            then lwork ldone;
+            succession first lstart then lwork;
+            succession first lwork then ldone;
         }
 
         region right {
@@ -32,8 +32,8 @@ package Test {
             }
             state rdone;
 
-            then rstart rwork;
-            then rwork rdone;
+            succession first rstart then rwork;
+            succession first rwork then rdone;
         }
     }
 }

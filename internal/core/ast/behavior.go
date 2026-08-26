@@ -25,7 +25,6 @@ type InitialNode struct {
 // FinalNode is the termination point for action execution.
 type FinalNode struct {
 	NodeBase
-	Name string
 	// Keyword is the word the node was written with, `done` or `final`.
 	Keyword string
 }

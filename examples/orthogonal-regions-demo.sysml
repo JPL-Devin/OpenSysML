@@ -13,7 +13,7 @@ package OrthogonalRegionsDemo {
             state yellow;
             state green;
             
-            then start red;
+            succession first start then red;
             transition red to yellow;
             transition yellow to green;
             transition green to red;
@@ -25,7 +25,7 @@ package OrthogonalRegionsDemo {
             state dontWalk;
             state walk;
             
-            then start dontWalk;
+            succession first start then dontWalk;
             transition dontWalk to walk;
             transition walk to dontWalk;
         }

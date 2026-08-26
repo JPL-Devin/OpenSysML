@@ -12,6 +12,6 @@ package test {
         }
         final done;
 
-        off then done;
+        succession first off then done;
     }
 }

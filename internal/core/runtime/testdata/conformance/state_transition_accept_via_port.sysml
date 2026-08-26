@@ -22,7 +22,7 @@ package StateAcceptViaPort {
         state transmitting;
         final done;
 
-        start then waitingGSPing;
+        succession first start then waitingGSPing;
 
         // The trigger is written on its own line, naming the port the accepted
         // occurrence must arrive at, and the transition carries a name of its own.

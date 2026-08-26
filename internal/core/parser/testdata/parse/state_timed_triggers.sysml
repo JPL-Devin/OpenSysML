@@ -9,5 +9,5 @@ state TimedTriggers {
     }
     final done;
 
-    start then waiting;
+    succession first start then waiting;
 }

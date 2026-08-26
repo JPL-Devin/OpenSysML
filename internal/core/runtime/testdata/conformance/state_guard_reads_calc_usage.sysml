@@ -23,7 +23,7 @@ package test {
 		}
 		final done;
 
-		start then step;
+		succession first start then step;
 
 		transition step to again if t.d < 4.0;
 		transition step to done if t.d >= 4.0;

@@ -23,7 +23,7 @@ var extensionInventory = []string{
 	"state def S { state a { defer e; } }",
 	"state def S { state a; state b; transition a to b; }",
 	"action def A { initial a; }",
-	"action def A { final b; }",
+	"action def A { final; }",
 	"action def A { decision d; }",
 	"calc c { in a : Real; return 42; }",
 	"constraint validRange { in x : Real; assert x >= 0; }",
@@ -118,9 +118,6 @@ func TestExtensionFindingsFollowTheMode(t *testing.T) {
 		name, file, src, code string
 	}{
 		{"binding", "a.sysml", "part def P { attribute a; attribute b; bind a = b * 2; }", CodeNonstandardNotation},
-		{"final_node", "a.sysml", "action def A { done end; }", CodeNonstandardNotation},
-		{"succession_edge", "a.sysml", "action def A { action a; action b; then a b; }", CodeNonstandardNotation},
-		{"source_then_target", "a.sysml", "state def S { state a; state b; a then b; }", CodeNonstandardNotation},
 		{"one_ended_first", "a.sysml", "part def P { part a; first a; }", CodeNonstandardNotation},
 		{"requirement_constraint", "a.sysml", "analysis def An { attribute size; require constraint { size >= 1 } }", CodeNonstandardNotation},
 	} {

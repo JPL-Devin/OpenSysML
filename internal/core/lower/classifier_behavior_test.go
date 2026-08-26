@@ -48,7 +48,7 @@ func TestClassifierBehaviorAnnotatedBodyIsABody(t *testing.T) {
 					doc /* the operating modes */
 					initial start;
 					state idle;
-					start then idle;
+					succession first start then idle;
 				}
 			}
 		}
