@@ -39,6 +39,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_junction_without_an_outgoing_transition", testStateJunctionWithoutAnOutgoingTransition)
 	t.Run("state_event_after_completion", testStateEventAfterCompletion)
 	t.Run("state_completion_rests_in_done", testStateCompletionRestsInDone)
+	t.Run("state_nested_region_completion_keeps_siblings_running", testStateNestedRegionCompletionKeepsSiblingsRunning)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
@@ -1837,6 +1838,47 @@ func testStateCompletionRestsInDone(t *testing.T) {
 		t.Fatalf("expected StateCompleted, got %s", exec.State())
 	}
 	assertCurrentState(t, exec, ast.DoneFeature)
+}
+
+// testStateNestedRegionCompletionKeepsSiblingsRunning: a region of a composite
+// state reaching `done` leaves its sibling region running, and events it keeps
+// answering are still delivered rather than dropped by an early completion.
+func testStateNestedRegionCompletionKeepsSiblingsRunning(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			entry; then busy;
+			state busy parallel {
+				state left {
+					entry; then lstart;
+					state lstart;
+					transition first lstart accept stop then done;
+				}
+				state right {
+					entry; then rstart;
+					state rstart;
+					state rbusy;
+					transition first rstart accept go then rbusy;
+				}
+			}
+		}
+	}`)
+	exec.SendSignal("stop", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() == StateCompleted {
+		t.Fatalf("the machine completed with the sibling region still running")
+	}
+	exec.SendSignal("go", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run after the first region completed: %v", err)
+	}
+	if exec.State() == StateCompleted {
+		t.Errorf("the machine completed while the sibling region rests outside `done`")
+	}
+	if got := finalStateName(t, exec); got != "done+rbusy" {
+		t.Errorf("expected the regions in done+rbusy, got %q", got)
+	}
 }
 
 func testStateJunctionWithoutAnOutgoingTransition(t *testing.T) {

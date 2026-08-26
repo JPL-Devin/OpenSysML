@@ -477,11 +477,8 @@ func (e *StateExecutor) enterOutside(trans *lower.Transition, source, lca, targe
 	if err := e.scheduleFromEntered(enter); err != nil {
 		return err
 	}
-	if e.graph.Completes(target) {
-		if err := e.exitMachine(); err != nil {
-			return fmt.Errorf("exit state machine: %w", err)
-		}
-		e.state = StateCompleted
+	if err := e.completeIfDone(target); err != nil {
+		return fmt.Errorf("complete state machine: %w", err)
 	}
 	e.recordTransitionTrace(trans, source, target)
 	return nil

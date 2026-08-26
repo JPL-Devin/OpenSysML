@@ -44,7 +44,9 @@ sysml> %continue
 
 A machine completes when a transition reaches `done`, the end shot the standard
 library gives every state: entering it runs the exit actions and the machine
-reports itself completed.
+reports itself completed. Inside orthogonal regions each region has its own
+`done`, and the machine completes only once every concurrent region has reached
+it.
 
 ```sysml
 sysml> state TrafficLight {

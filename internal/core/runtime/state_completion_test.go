@@ -90,6 +90,45 @@ func TestOrthogonalMachineCompletesOnlyWhenEveryRegionDoes(t *testing.T) {
 	}
 }
 
+// The regions of a composite state complete the same way the machine's own do:
+// one region reaching `done` leaves the machine running, and the machine
+// completes once every region of that state has reached it.
+func TestNestedOrthogonalRegionsCompleteOnlyWhenEveryRegionDoes(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			entry; then busy;
+			state busy parallel {
+				state left {
+					entry; then lstart;
+					state lstart;
+					transition first lstart accept first then done;
+				}
+				state right {
+					entry; then rstart;
+					state rstart;
+					transition first rstart accept second then done;
+				}
+			}
+		}
+	}`)
+
+	exec.SendSignal("first", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() == StateCompleted {
+		t.Fatalf("the machine completed with one nested region still running")
+	}
+
+	exec.SendSignal("second", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Errorf("expected StateCompleted once both nested regions reached `done`, got %s", exec.State())
+	}
+}
+
 // Completion is reached through a pseudostate as through any other path: the
 // junction routes into `done` and the machine completes.
 func TestCompletionReachedThroughAPseudostate(t *testing.T) {

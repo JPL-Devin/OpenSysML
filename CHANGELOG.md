@@ -99,7 +99,8 @@ state monitor {
 
 Entering completion runs the exit actions of the states it leaves and reports the machine
 completed, exactly as entering a marked state did; an orthogonal machine completes only once every
-top-level region has reached `done`, and a region completes on its own the same way. Completion is
+concurrent region has reached `done` — the machine's own regions and those of a composite state
+alike, so a region completing leaves its siblings running. Completion is
 now computed while lowering and carried in the state graph the runtime executes, so it is a property
 of the machine rather than of its syntax.
 
