@@ -373,15 +373,15 @@ impl Runner {
     }
 
     fn method(&self, name: &str) -> Result<prost_reflect::MethodDescriptor, String> {
-        let service = self
-            .pool
+        self.pool
             .get_service_by_name(SERVICE_NAME)
-            .ok_or_else(|| format!("schema has no service {SERVICE_NAME}"))?;
-        let method = service
-            .methods()
-            .find(|method| method.name() == name)
-            .ok_or_else(|| format!("{SERVICE_NAME} has no RPC {name:?}"));
-        method
+            .ok_or_else(|| format!("schema has no service {SERVICE_NAME}"))
+            .and_then(|service| {
+                service
+                    .methods()
+                    .find(|method| method.name() == name)
+                    .ok_or_else(|| format!("{SERVICE_NAME} has no RPC {name:?}"))
+            })
     }
 
     fn call(&self, method: &str, request: &DynamicMessage, model: Option<&Model>) -> Answer {
