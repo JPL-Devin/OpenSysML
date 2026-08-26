@@ -6,33 +6,20 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// connectorEndReference returns the feature a connector end attaches to.
+func connectorEndReference(end *ast.ConnectorEnd) ast.Node {
+	if end == nil {
+		return nil
+	}
+	return end.AttachedTarget()
+}
+
 // Endpoints resolves the vertex a transition endpoint names, implemented by the
 // name-resolution tier (*resolve.Resolver) so lowering matches no names itself.
 type Endpoints interface {
 	// Endpoint returns the declaration qn names, written in scope, and whether it
 	// names a vertex at all.
 	Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (decl ast.Node, ok bool)
-}
-
-// successionEnds returns the names a succession usage states its two ends with
-// (`succession first a then b;`), and whether the usage is one at all.
-func successionEnds(n *ast.Usage) (source, target *ast.QualifiedName, ok bool) {
-	if n.Kind != ast.UsageSuccession || len(n.ConnectorEnds) != 2 {
-		return nil, nil, false
-	}
-	end := func(e *ast.ConnectorEnd) *ast.QualifiedName {
-		if e == nil {
-			return nil
-		}
-		named := e.Target
-		if named == nil {
-			named = e.Reference
-		}
-		qn, _ := named.(*ast.QualifiedName)
-		return qn
-	}
-	source, target = end(n.ConnectorEnds[0]), end(n.ConnectorEnds[1])
-	return source, target, source != nil && target != nil
 }
 
 // machineEndpoints resolves the endpoints of one machine through a resolver over

@@ -476,14 +476,30 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				Decl:      n,
 			})
 		case *ast.Usage:
-			if source, target, ok := successionEnds(n); ok {
-				sourceNode := findNodeByName(graph.Nodes, source)
-				targetNode := findNodeByName(graph.Nodes, target)
+			if n.Kind == ast.UsageSuccession {
+				if len(n.ConnectorEnds) != 2 {
+					return nil, fmt.Errorf("action succession must have exactly two connector ends, got %d", len(n.ConnectorEnds))
+				}
+				if n.Multiplicity != nil {
+					return nil, fmt.Errorf("action succession has unsupported multiplicity")
+				}
+				if n.HasBody || len(n.Members) != 0 {
+					return nil, fmt.Errorf("action succession has unsupported body")
+				}
+				for i, end := range n.ConnectorEnds {
+					if end.Multiplicity != nil {
+						return nil, fmt.Errorf("action succession end %d has unsupported multiplicity", i+1)
+					}
+				}
+				sourceRef := connectorEndReference(n.ConnectorEnds[0])
+				targetRef := connectorEndReference(n.ConnectorEnds[1])
+				sourceNode := resolveSuccessionUsageEnd(graph, sourceRef, true)
+				targetNode := resolveSuccessionUsageEnd(graph, targetRef, false)
 				if sourceNode == nil {
-					return nil, fmt.Errorf("succession references undefined source node %s", edgeEndName(source))
+					return nil, fmt.Errorf("action succession references undefined source node %s", successionEndText(sourceRef))
 				}
 				if targetNode == nil {
-					return nil, fmt.Errorf("succession references undefined target node %s", edgeEndName(target))
+					return nil, fmt.Errorf("action succession references undefined target node %s", successionEndText(targetRef))
 				}
 				graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
 				graph.recordSuccession(sourceNode, targetNode, n)
@@ -838,6 +854,57 @@ func resolveEnd(nodes []ast.Node, qname *ast.QualifiedName, member ast.Node) ast
 		return nil
 	}
 	return findNodeByName(nodes, qname)
+}
+
+// resolveSuccessionUsageEnd resolves an action succession end or its implied start/done node.
+func resolveSuccessionUsageEnd(graph *ActionGraph, ref ast.Node, source bool) ast.Node {
+	node := findNodeByReference(graph.Nodes, ref)
+	if node != nil {
+		return node
+	}
+
+	name := ast.SimpleName(ref)
+	if source && name == "start" && graph.Initial == nil {
+		initial := &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "start", Keyword: "first"}
+		graph.Initial = initial
+		graph.Nodes = append(graph.Nodes, initial)
+		return initial
+	}
+	if !source && name == "done" {
+		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Keyword: "done"}
+		graph.Finals = append(graph.Finals, final)
+		graph.Nodes = append(graph.Nodes, final)
+		return final
+	}
+	return nil
+}
+
+// findNodeByReference resolves a plain name or a chain to its graph-node root.
+// A chain attaches to the node whose body contains that feature.
+func findNodeByReference(nodes []ast.Node, ref ast.Node) ast.Node {
+	if qname := ast.AsQualifiedName(ref); qname != nil {
+		return findNodeByName(nodes, qname)
+	}
+	chain, ok := ref.(*ast.FeatureChainExpr)
+	if !ok {
+		return nil
+	}
+	for {
+		operand := chain.Operand
+		if nested, ok := operand.(*ast.FeatureChainExpr); ok {
+			chain = nested
+			continue
+		}
+		return findNodeByName(nodes, ast.AsQualifiedName(operand))
+	}
+}
+
+// successionEndText formats an endpoint for an action-succession diagnostic.
+func successionEndText(ref ast.Node) string {
+	if text := FeaturePath(ref); text != "" {
+		return strconv.Quote(text)
+	}
+	return "an unnamed node"
 }
 
 // sequencedMembers collects the members of a body that an edge binds to one of

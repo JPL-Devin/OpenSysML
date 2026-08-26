@@ -22,6 +22,7 @@ import (
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
 	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
+	t.Run("explicit_succession_missing_endpoint", testExplicitSuccessionMissingEndpoint)
 	t.Run("merge_without_a_successor", testMergeWithoutASuccessor)
 	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
 	t.Run("first_node_with_a_second_succession", testFirstNodeWithASecondSuccession)
@@ -38,6 +39,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
+	t.Run("parallel_state_body_unsupported_member", testParallelStateBodyUnsupportedMember)
+	t.Run("parallel_state_region_without_initial", testParallelStateRegionWithoutInitial)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("calc_calls_an_unimported_extension_function", testCalcCallsAnUnimportedExtensionFunction)
@@ -3112,6 +3115,27 @@ func testForkWithoutASuccessor(t *testing.T) {
 	}
 }
 
+func testExplicitSuccessionMissingEndpoint(t *testing.T) {
+	src := `
+		package test {
+			action broken {
+				action compute;
+				succession first missing then compute;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "broken", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action broken not found")
+	}
+
+	_, err := ctx.CreateActionExecutor(sym)
+	if err == nil || !strings.Contains(err.Error(), "action succession references undefined source node") {
+		t.Fatalf("error = %v, want an explicit succession source diagnostic", err)
+	}
+}
+
 func testMergeWithoutASuccessor(t *testing.T) {
 	src := `
 		package test {
@@ -3415,6 +3439,62 @@ func testStateDanglingTransition(t *testing.T) {
 	}
 
 	t.Log("ProcessNextEvent succeeded (dangling transition not exercised)")
+}
+
+func testParallelStateBodyUnsupportedMember(t *testing.T) {
+	src := `
+		package test {
+			state Machine parallel {
+				state left;
+				transition left to left;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("parallel state not found")
+	}
+	_, err := ctx.CreateStateExecutor(sym)
+	if err == nil {
+		t.Fatal("parallel state with a direct transition succeeded")
+	}
+	if !strings.Contains(err.Error(), "parallel state body contains unsupported member") {
+		t.Fatalf("error = %v, want unsupported parallel-body member", err)
+	}
+}
+
+func testParallelStateRegionWithoutInitial(t *testing.T) {
+	src := `
+		package test {
+			state Machine parallel {
+				state left;
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("parallel state not found")
+	}
+	_, err := ctx.CreateStateExecutor(sym)
+	if err == nil {
+		t.Fatal("parallel state with no region initial succeeded")
+	}
+	if !strings.Contains(err.Error(), "region left has no initial state") {
+		t.Fatalf("error = %v, want missing region initial", err)
+	}
+	if !strings.Contains(err.Error(), "entry; then <state>;") {
+		t.Fatalf("error = %v, want initial-state notation guidance", err)
+	}
 }
 
 // testSourcelessAcceptAtTopLevel: sourceless accept...then at top level should error
