@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 env:
   # The OMG training corpus is not vendored. Requiring it here turns "corpus
   # absent" into a test failure instead of a skip, so the gate cannot pass green
@@ -21,8 +25,8 @@ env:
   OPENSYSML_REQUIRE_SMT: "1"
 
 jobs:
-  build-and-test:
-    name: Build and test
+  race-tests:
+    name: Race tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -98,6 +102,83 @@ jobs:
             fi
           done
 
+      # Per-package timeout: under -race, passes and model run within 1% of go's 10m
+      # default. Matches `make test`.
+      - name: Run tests
+        run: go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.txt
+
+  static-and-integrity:
+    name: Static and integrity checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Install z3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y z3
+          z3 --version
+
+      - name: Install cvc5
+        run: |
+          curl -fsSL -o /tmp/cvc5.zip \
+            https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+          echo "dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cvc5.zip" | sha256sum --check --strict
+          unzip -p /tmp/cvc5.zip '*/bin/cvc5' > /tmp/cvc5-bin
+          sudo install -m 0755 /tmp/cvc5-bin /usr/local/bin/cvc5
+          cvc5 --version | head -1
+
+      - name: Cache the OMG training corpus
+        uses: actions/cache@v4
+        with:
+          path: examples/sysml-v2-training
+          key: training-corpus-${{ hashFiles('scripts/download-training-examples.sh', 'scripts/pilot-pin.sh') }}
+
+      - name: Download the OMG training corpus
+        run: ./scripts/download-training-examples.sh
+
+      - name: Verify the corpus is present
+        run: |
+          count=$(find examples/sysml-v2-training -name '*.sysml' | wc -l)
+          echo "training corpus: $count .sysml files"
+          if [ "$count" -eq 0 ]; then
+            echo "error: the training corpus is empty; the corpus gate would not run" >&2
+            exit 1
+          fi
+
+      - name: Cache the OMG pilot corpora
+        uses: actions/cache@v4
+        with:
+          path: examples/pilot-corpora
+          key: pilot-corpora-${{ hashFiles('scripts/download-pilot-corpora.sh', 'scripts/pilot-pin.sh') }}
+
+      - name: Download the OMG pilot corpora
+        run: ./scripts/download-pilot-corpora.sh
+
+      - name: Verify the pilot corpora are present
+        run: |
+          for root in sysml-examples sysml-validation kerml-examples; do
+            count=$(find "examples/pilot-corpora/$root" -type f \( -name '*.sysml' -o -name '*.kerml' \) | wc -l)
+            echo "pilot corpus $root: $count model files"
+            if [ "$count" -eq 0 ]; then
+              echo "error: pilot corpus $root is empty; the corpora gate would not run" >&2
+              exit 1
+            fi
+          done
+
       - name: Check gofmt
         run: |
           unformatted=$(gofmt -l .)
@@ -112,11 +193,6 @@ jobs:
 
       - name: Run static analysis (staticcheck + gosec)
         run: make lint
-
-      # Per-package timeout: under -race, passes and model run within 1% of go's 10m
-      # default. Matches `make test`.
-      - name: Run tests
-        run: go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
 
       # Re-run the corpus gate on its own so its verdict is legible in the log
       # and a skip is impossible to miss. TestCorpusGates is the shared
@@ -216,6 +292,20 @@ jobs:
             }
           done
 
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
       - name: Build binaries
         run: |
           make build \
@@ -235,10 +325,29 @@ jobs:
           name: binaries
           path: bin/
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage.txt
+  build-and-test:
+    name: Build and test
+    if: always()
+    needs:
+      - build
+      - race-tests
+      - static-and-integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs passed
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          RACE_TESTS_RESULT: ${{ needs.race-tests.result }}
+          STATIC_AND_INTEGRITY_RESULT: ${{ needs.static-and-integrity.result }}
+        run: |
+          if [ "$BUILD_RESULT" != success ] ||
+             [ "$RACE_TESTS_RESULT" != success ] ||
+             [ "$STATIC_AND_INTEGRITY_RESULT" != success ]; then
+            echo "build=$BUILD_RESULT"
+            echo "race-tests=$RACE_TESTS_RESULT"
+            echo "static-and-integrity=$STATIC_AND_INTEGRITY_RESULT"
+            exit 1
+          fi
 
   vscode-extension:
     name: VS Code extension
@@ -287,7 +396,7 @@ jobs:
 
   python-test:
     name: Python client tests
-    needs: build-and-test
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
