@@ -237,6 +237,9 @@ cascades through the rest of the file. The movement is entirely one file,
 | pilot diagnostics | 123 | **103** |
 | severity-only | 9 | **8** |
 
+The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
+those counts as the later rounds leave them.
+
 The one diagnostic of ours that left is its severity-only partner: the line it warned on is the
 `bind` that the rewrite removed, so neither tool has anything to report there. At this round the
 combined figures were 324 fully agreeing / 27 only ours / 68 → 67 our diagnostics — agreement, fully
