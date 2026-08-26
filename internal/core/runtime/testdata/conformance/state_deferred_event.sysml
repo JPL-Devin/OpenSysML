@@ -9,7 +9,6 @@ package Test {
             defer Ping;
         }
         state ready;
-        final done;
 
         succession first start then busy;
 

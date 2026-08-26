@@ -24,6 +24,10 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 	sym, ok := r.lookupEndpoint(scope, qn)
 	res := resolution{sym: sym, ok: ok}
 	switch {
+	case completionEndpoint(scope, qn, sym):
+		// `then done;` names the end shot every state inherits, which completes the
+		// machine: no vertex of its own, so lowering supplies one.
+		res = resolution{}
 	case !ok:
 		last := qn.Parts[len(qn.Parts)-1]
 		r.report(Diagnostic{
@@ -111,6 +115,15 @@ func (r *Resolver) lookupEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) (
 		return sym, true
 	}
 	return sym, ok
+}
+
+// completionEndpoint reports whether an endpoint names the end shot every state
+// inherits — the unqualified `done` — rather than a vertex the machine declares.
+func completionEndpoint(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
+	if qn == nil || len(qn.Parts) != 1 || qn.Parts[0].Text != ast.DoneFeature {
+		return false
+	}
+	return stateMachineEndpoint(scope) && !declaredWithin(machineScope(scope), sym)
 }
 
 // declaredWithin reports whether sym is declared in scope or one of the scopes

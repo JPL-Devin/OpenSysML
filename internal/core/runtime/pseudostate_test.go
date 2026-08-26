@@ -35,7 +35,6 @@ const forkJoinMachine = `package test {
         }
         fork split;
         join sync;
-        final done;
 
         succession first init then idle;
         transition first idle then split;
@@ -91,7 +90,6 @@ func TestForkBranchesMustBeInDistinctRegions(t *testing.T) {
             }
         }
         fork split;
-        final done;
 
         succession first init then idle;
         transition first idle then split;
@@ -130,7 +128,6 @@ func TestJoinWaitsForEveryBranch(t *testing.T) {
         }
         fork split;
         join sync;
-        final done;
 
         succession first init then idle;
         transition first idle then split;
@@ -165,7 +162,7 @@ func TestEntryAndExitPointPseudostates(t *testing.T) {
 	init := &ast.StateNode{Name: "init"}
 	inner := &ast.StateNode{Name: "inner"}
 	outer := &ast.StateNode{Name: "outer", Substates: []ast.Node{inner}}
-	done := &ast.StateNode{Name: "done", IsFinal: true}
+	done := &ast.StateNode{Name: "done"}
 	entryPoint := &ast.PseudostateNode{Kind: ast.PseudostateEntry, Name: "in"}
 	exitPoint := &ast.PseudostateNode{Kind: ast.PseudostateExit, Name: "out"}
 

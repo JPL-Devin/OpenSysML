@@ -10,7 +10,6 @@ import (
 // extensionInventory is every construct the audit classifies as OpenSysML
 // notation: the pass must report each one in either mode.
 var extensionInventory = []string{
-	"state def S { final b; }",
 	"state def S { choice c; }",
 	"state def S { junction j; }",
 	"state def S { history h; }",

@@ -10,7 +10,6 @@ package test {
                 result = result + 10;
             }
         }
-        final done;
         
         succession first init then processing;
         succession first processing then done;

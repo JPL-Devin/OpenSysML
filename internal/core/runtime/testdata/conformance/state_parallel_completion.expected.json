@@ -4,6 +4,6 @@
         {"signal": "First", "args": null},
         {"signal": "Second", "args": null}
     ],
-    "finalState": "ldone+rdone",
-    "stateVisits": ["lstart", "rstart", "ldone", "rdone"]
+    "finalState": "done+done",
+    "stateVisits": ["lstart", "rstart", "done", "done"]
 }

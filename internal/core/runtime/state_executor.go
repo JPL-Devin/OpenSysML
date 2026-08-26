@@ -1046,7 +1046,7 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 		return fmt.Errorf("schedule events: %w", err)
 	}
 
-	if err := e.completeIfFinalState(targetState); err != nil {
+	if err := e.completeIfDone(targetState); err != nil {
 		return fmt.Errorf("complete state machine: %w", err)
 	}
 
@@ -1059,10 +1059,10 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 	return nil
 }
 
-// completeIfFinalState completes a machine when a final target is reached. An
-// orthogonal machine completes only after every top-level region is final.
-func (e *StateExecutor) completeIfFinalState(target *ast.StateNode) error {
-	if target == nil || !target.IsFinal {
+// completeIfDone completes a machine when a completion vertex is reached.
+// An orthogonal machine completes only after every top-level region completed.
+func (e *StateExecutor) completeIfDone(target *ast.StateNode) error {
+	if !e.graph.Completes(target) {
 		return nil
 	}
 	if len(e.graph.TopRegions) > 0 && !e.parallelMachineComplete() {
@@ -1075,15 +1075,15 @@ func (e *StateExecutor) completeIfFinalState(target *ast.StateNode) error {
 	return nil
 }
 
-// parallelMachineComplete reports whether every top-level region reached a
-// final state, which is the completion condition for an orthogonal machine.
+// parallelMachineComplete reports whether every top-level region completed,
+// which is the completion condition for an orthogonal machine.
 func (e *StateExecutor) parallelMachineComplete() bool {
 	if len(e.graph.TopRegions) == 0 {
 		return false
 	}
 	for _, region := range e.graph.TopRegions {
 		state, active := e.activeConfig.regionStates[region]
-		if !active || !state.IsFinal {
+		if !active || !e.graph.Completes(state) {
 			return false
 		}
 	}

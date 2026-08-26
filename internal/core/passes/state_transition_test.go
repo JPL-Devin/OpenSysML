@@ -312,7 +312,6 @@ func TestTransitionToFinalStateIsLegal(t *testing.T) {
 		entry; then i;
 		state i;
 		state busy;
-		final done;
 		succession first i then busy;
 		transition first busy then done;
 	}

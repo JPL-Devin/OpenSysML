@@ -41,7 +41,6 @@ package 'My Pkg' {
 		state waiting {
 			accept after 10 then done;
 		}
-		final done;
 
 		succession first init then waiting;
 	}

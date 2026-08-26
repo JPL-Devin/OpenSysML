@@ -20,11 +20,10 @@ package NestedParallelRegionOwner {
                 state b1;
             }
         }
-        state done;
-        final finished;
+        state waited;
 
         succession first start then outer;
-        transition first outer when Leave then done;
-        transition first done when Ping then finished;
+        transition first outer when Leave then waited;
+        transition first waited when Ping then done;
     }
 }

@@ -8,7 +8,6 @@ package SignalTest {
         state waiting;
         state pathA;
         state pathB;
-        final done;
 
         succession first start then waiting;
 

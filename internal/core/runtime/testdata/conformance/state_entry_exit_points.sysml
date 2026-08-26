@@ -10,7 +10,6 @@ package Test {
         }
         entry point into;
         exit point outOf;
-        final done;
 
         transition first start then into;
         transition first into then inner;

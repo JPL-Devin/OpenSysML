@@ -37,6 +37,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_transition_endpoint_never_resolved", testStateTransitionEndpointNeverResolved)
 	t.Run("state_transition_endpoint_naming_a_first_marker", testStateTransitionEndpointNamingAFirstMarker)
 	t.Run("state_junction_without_an_outgoing_transition", testStateJunctionWithoutAnOutgoingTransition)
+	t.Run("state_event_after_completion", testStateEventAfterCompletion)
+	t.Run("state_completion_rests_in_done", testStateCompletionRestsInDone)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
@@ -1461,7 +1463,6 @@ func testStateSubactionReferenceOfMissingAction(t *testing.T) {
 			state active {
 				entry noSuchAction;
 			}
-			final done;
 
 			succession first init then active;
 			succession first active then done;
@@ -1495,7 +1496,6 @@ func testStateSubactionReferenceFeatureChain(t *testing.T) {
 			state active {
 				exit controller.coolDown;
 			}
-			final done;
 
 			succession first init then active;
 			succession first active then done;
@@ -1604,7 +1604,6 @@ func testStateTransitionEndpointMisspelled(t *testing.T) {
 			entry; then init;
 			state init;
 			state busy;
-			final done;
 			succession first init then busy;
 			transition first busy then donee;
 		}
@@ -1666,7 +1665,6 @@ func testStateTransitionEndpointNeverResolved(t *testing.T) {
 			entry; then init;
 			state init;
 			state busy;
-			final done;
 			succession first init then busy;
 			transition first busy then donee;
 		}
@@ -1793,6 +1791,54 @@ func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
 // testStateJunctionWithoutAnOutgoingTransition: a junction no transition leaves
 // routes a transition reaching it nowhere, which the state transition check
 // reports; reaching it at run time errors rather than panicking or hanging.
+// testStateEventAfterCompletion: a signal sent to a machine that already reached
+// `done` is discarded, leaving it completed rather than restarting or panicking.
+func testStateEventAfterCompletion(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			entry; then init;
+			state init;
+			transition first init accept stop then done;
+		}
+	}`)
+	exec.SendSignal("stop", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Fatalf("expected StateCompleted, got %s", exec.State())
+	}
+	exec.SendSignal("stop", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run after completion: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Errorf("the machine left completion on a late signal, state %s", exec.State())
+	}
+}
+
+// testStateCompletionRestsInDone: a completed machine names `done` as the state
+// it came to rest in, so a caller reading the configuration sees a state, not nil.
+func testStateCompletionRestsInDone(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			entry; then init;
+			state init;
+			state busy;
+			succession first init then busy;
+			transition first busy accept stop then done;
+		}
+	}`)
+	exec.SendSignal("stop", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Fatalf("expected StateCompleted, got %s", exec.State())
+	}
+	assertCurrentState(t, exec, ast.DoneFeature)
+}
+
 func testStateJunctionWithoutAnOutgoingTransition(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
@@ -1911,7 +1957,6 @@ func testStateTransitionEffectReadsAnUnknownFeature(t *testing.T) {
 			entry; then init;
 			state init;
 			state active;
-			final done;
 			succession first init then active;
 			transition first active do assign counter := missingName + 1 then done;
 		}
@@ -2047,7 +2092,6 @@ func testQualifiedAssignmentTargetInAStateEffect(t *testing.T) {
 			entry; then init;
 			state init;
 			state active;
-			final done;
 			succession first init then active;
 			transition first active do assign other::c := 1 then done;
 		}
@@ -2872,7 +2916,6 @@ func testNonNumericTimeTrigger(t *testing.T) {
 			state waiting {
 				accept at "noon" then done;
 			}
-			final done;
 			succession first init then waiting;
 		}
 	}`)
@@ -2964,7 +3007,6 @@ func testForkBranchesShareRegion(t *testing.T) {
 				}
 			}
 			fork split;
-			final done;
 
 			succession first init then ready;
 			transition first ready then split;
@@ -2989,7 +3031,6 @@ func testJoinWithOneIncomingBranch(t *testing.T) {
 			state init;
 			state ready;
 			join sync;
-			final done;
 
 			succession first init then ready;
 			transition first ready then sync;

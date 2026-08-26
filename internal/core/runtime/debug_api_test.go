@@ -32,7 +32,6 @@ const debugStateSrc = `package test {
 		state working {
 			accept after 5 then done;
 		}
-		final done;
 
 		succession first init then waiting;
 	}
@@ -264,7 +263,6 @@ func TestRunDoRoundRunsDoWorkOnly(t *testing.T) {
 				do { count = count + 1; }
 				accept after 100 then done;
 			}
-			final done;
 			succession first init then working;
 		}
 	}`)

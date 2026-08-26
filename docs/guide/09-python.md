@@ -111,8 +111,8 @@ except opensysml.ModelError as exc:
 ```
 
 `strict_conformance=True`, on the same three calls, asks a different question:
-whether the source is conforming SysML v2. OpenSysML's own notation — the `final`
-state marker, `defer`, the pseudostates — is then reported as an error rather
+whether the source is conforming SysML v2. OpenSysML's own notation — `defer`,
+the pseudostates — is then reported as an error rather
 than a warning
 ([3. Strict conformance](03-command-line.md#strict-conformance)). The two are
 independent: `strict` decides whether errors raise, `strict_conformance` decides

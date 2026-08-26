@@ -42,9 +42,9 @@ sysml> %continue
 
 **State machine execution:**
 
-The following state machine uses an OpenSysML extension with no SysML v2 production
-(the state-body `final`). See the
-[conformance audit](../reference/grammar/conformance-audit.md).
+A machine completes when a transition reaches `done`, the end shot the standard
+library gives every state: entering it runs the exit actions and the machine
+reports itself completed.
 
 ```sysml
 sysml> state TrafficLight {
@@ -52,13 +52,9 @@ sysml> state TrafficLight {
   ...>     state start;
   ...>     state green { accept after 25 then yellow; }
   ...>     state yellow { accept after 5 then red; }
-  ...>     state red { accept after 30 then off; }
-  ...>     final off;
+  ...>     state red { accept after 30 then done; }
   ...>     succession first start then green;
   ...> }
-7:5: warning: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
-    final off;
-    ^~~~~
 ✓ state TrafficLight
 
 sysml> %state TrafficLight
@@ -89,11 +85,11 @@ sysml> %advance 5
 
 sysml> %advance 30
 ✓ Advanced to 60.00 (1 event(s) processed)
-  Current state: off
+  Current state: done
   Last event at: 60.00
   Remaining events: 0
 
-✓ State machine completed (final state reached)
+✓ State machine completed (a transition reached `done`)
 ```
 
 **Action debugging commands:**

@@ -49,7 +49,7 @@ func TestStateExecutor_Initialize(t *testing.T) {
 
 	// Build state machine: initialState → finalState
 	initialState := &ast.StateNode{Name: "initial"}
-	finalState := &ast.StateNode{Name: "final", IsFinal: true}
+	finalState := &ast.StateNode{Name: "final"}
 
 	stateMachine := &symbols.Symbol{
 		Name: "SimpleStateMachine",
@@ -217,8 +217,7 @@ func TestStateExecutor_TimeEvent(t *testing.T) {
 		Name: "stateA",
 	}
 	stateB := &ast.StateNode{
-		Name:    "stateB",
-		IsFinal: true,
+		Name: "stateB",
 	}
 
 	// Transition with TimeEvent trigger (after 10 time units)
@@ -294,7 +293,7 @@ func TestStateExecutor_AbsoluteTimeEvent(t *testing.T) {
 	// stateA --[after 10]-> stateB --[at 15]-> stateC
 	stateA := &ast.StateNode{Name: "stateA"}
 	stateB := &ast.StateNode{Name: "stateB"}
-	stateC := &ast.StateNode{Name: "stateC", IsFinal: true}
+	stateC := &ast.StateNode{Name: "stateC"}
 
 	relative := &ast.TransitionEdge{
 		Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "stateA"}}},
@@ -347,8 +346,7 @@ func TestStateExecutor_ChangeEvent(t *testing.T) {
 		Name: "stateA",
 	}
 	stateB := &ast.StateNode{
-		Name:    "stateB",
-		IsFinal: true,
+		Name: "stateB",
 	}
 
 	// Transition with ChangeEvent trigger
@@ -417,8 +415,7 @@ func TestStateExecutor_GuardCondition(t *testing.T) {
 		Name: "stateA",
 	}
 	stateB := &ast.StateNode{
-		Name:    "stateB",
-		IsFinal: true,
+		Name: "stateB",
 	}
 
 	// Transition with TimeEvent and guard
@@ -497,10 +494,9 @@ func TestStateExecutor_GuardCondition(t *testing.T) {
 func TestStateExecutor_Integration_SimpleTransitions(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 
-	// State machine: idle → working → done
+	// State machine: idle → working → done, where `done` completes the machine
 	idle := &ast.StateNode{Name: "idle"}
 	working := &ast.StateNode{Name: "working"}
-	done := &ast.StateNode{Name: "done", IsFinal: true}
 
 	trans1 := &ast.TransitionEdge{
 		Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "idle"}}},
@@ -519,7 +515,7 @@ func TestStateExecutor_Integration_SimpleTransitions(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "WorkflowMachine"},
-			Members: []ast.Node{entryStart("idle"), idle, working, done, trans1, trans2},
+			Members: []ast.Node{entryStart("idle"), idle, working, trans1, trans2},
 		},
 	}
 
@@ -557,8 +553,8 @@ func TestStateExecutor_Integration_SimpleTransitions(t *testing.T) {
 		t.Fatalf("process event 2: %v", err)
 	}
 
-	if exec.getCurrentState() != done {
-		t.Errorf("expected done, got %v", exec.getCurrentState())
+	if !exec.graph.Completes(exec.getCurrentState()) {
+		t.Errorf("expected the completion vertex, got %v", exec.getCurrentState())
 	}
 	if exec.currentTime != 15.0 {
 		t.Errorf("expected time 15.0, got %f", exec.currentTime)
@@ -573,7 +569,7 @@ func TestStateExecutor_Integration_TransitionEffects(t *testing.T) {
 
 	// State machine with transition effect: stateA --[after 1 / counter++]-> stateB
 	stateA := &ast.StateNode{Name: "stateA"}
-	stateB := &ast.StateNode{Name: "stateB", IsFinal: true}
+	stateB := &ast.StateNode{Name: "stateB"}
 
 	// Transition with effect that increments counter
 	transition := &ast.TransitionEdge{
@@ -978,9 +974,8 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 		Substates: []ast.Node{entryStart("ready"), ready, processing},
 	}
 
-	done := &ast.StateNode{
-		Name:    "done",
-		IsFinal: true,
+	finish := &ast.StateNode{
+		Name: "finish",
 		Entry: []ast.Node{
 			&ast.ActionExecutionNode{
 				Name:       "doneEntry",
@@ -1003,8 +998,13 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 
 	trans3 := &ast.TransitionEdge{
 		Source:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "execute"}}},
-		Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
+		Target:  &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "finish"}}},
 		Trigger: &ast.TimeEvent{Duration: &ast.LiteralInteger{Value: "1"}},
+	}
+
+	completes := &ast.SuccessionEdge{
+		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "finish"}}},
+		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 	}
 
 	stateMachine := &symbols.Symbol{
@@ -1013,7 +1013,7 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "HierarchicalWorkflowSM"},
-			Members: []ast.Node{entryStart("workflow"), workflow, done, trans1, trans2, trans3},
+			Members: []ast.Node{entryStart("workflow"), workflow, finish, trans1, trans2, trans3, completes},
 		},
 	}
 
@@ -1079,14 +1079,22 @@ func TestStateExecutor_Integration_HierarchicalWorkflow(t *testing.T) {
 		t.Errorf("expected stateStack length 3, got %d", len(exec.stateStack))
 	}
 
-	// Transition 3: execute → done (exits processing parent)
+	// Transition 3: execute → finish (exits processing parent), then completion
 	err = exec.processNextEvent()
 	if err != nil {
 		t.Fatalf("transition 3: %v", err)
 	}
 
-	if exec.getCurrentState() != done {
-		t.Errorf("expected done, got %s", exec.getCurrentState().Name)
+	if exec.getCurrentState() != finish {
+		t.Errorf("expected finish, got %s", exec.getCurrentState().Name)
+	}
+
+	// The completion transition out of `finish` is the next step.
+	if err := exec.processNextEvent(); err != nil {
+		t.Fatalf("completion step: %v", err)
+	}
+	if !exec.graph.Completes(exec.getCurrentState()) {
+		t.Errorf("expected the completion vertex, got %s", exec.getCurrentState().Name)
 	}
 
 	// Should have exited processing
@@ -1119,7 +1127,7 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 	red := &ast.StateNode{Name: "red"}
 	green := &ast.StateNode{Name: "green"}
 	yellow := &ast.StateNode{Name: "yellow"}
-	off := &ast.StateNode{Name: "off", IsFinal: true}
+	off := &ast.StateNode{Name: "off"}
 
 	// Entry actions for tracking
 	red.Entry = []ast.Node{
@@ -1169,6 +1177,10 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 			Duration: &ast.LiteralInteger{Value: "5"}, // 5 seconds
 		},
 	}
+	completes := &ast.SuccessionEdge{
+		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "off"}}},
+		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
+	}
 
 	// State machine
 	stateMachine := &symbols.Symbol{
@@ -1177,7 +1189,7 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "TrafficLight"},
-			Members: []ast.Node{entryStart("red"), red, green, yellow, off, trans1, trans2, trans3},
+			Members: []ast.Node{entryStart("red"), red, green, yellow, off, trans1, trans2, trans3, completes},
 		},
 	}
 
@@ -1241,6 +1253,14 @@ func TestStateExecutor_Integration_TrafficLight(t *testing.T) {
 
 	if exec.getCurrentState() != off {
 		t.Errorf("expected off, got %s", exec.getCurrentState().Name)
+	}
+
+	// The completion transition out of `off` is the next step.
+	if err := exec.processNextEvent(); err != nil {
+		t.Fatalf("completion step: %v", err)
+	}
+	if !exec.graph.Completes(exec.getCurrentState()) {
+		t.Errorf("expected the completion vertex, got %s", exec.getCurrentState().Name)
 	}
 
 	if exec.currentTime != 60.0 {

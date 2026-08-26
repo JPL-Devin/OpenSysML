@@ -12,7 +12,6 @@
                 (*ast.QualifiedName)
                 (CallEvent operation="setSpeed" parameters=[value]))))
           (SubstateMember name="ready")
-          (*ast.StateNode)
           (Membership visibility="default"
             (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (ConnectorEnd target="start"

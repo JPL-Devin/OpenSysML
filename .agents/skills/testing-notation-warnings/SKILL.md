@@ -207,7 +207,7 @@ snippet and read the diagnostics. Asking for `%validate` prints
 Driving the REPL non-interactively (`%%` is needed because `printf` eats a single `%`):
 
 ```bash
-printf 'state def S { state a; final b; }\nconstraint k { in x; x >= 0 }\n%%strict on\n%%quit\n' | bin/sysml
+printf 'state def S { state a { defer Ping; } }\nconstraint k { in x; x >= 0 }\n%%strict on\n%%quit\n' | bin/sysml
 ```
 
 ## The notation pass runs even when the file has resolution errors
@@ -259,12 +259,12 @@ warned line numbers. For the `return` / `assert` family the shapes that matter:
   computed results), a keyword-less trailing expression `{ in x : Real; x * 2.0 }`, a keyword-less
   trailing condition `{ in x : Real; x >= 0 }`, `assert constraint c1 : C;`,
   `assert satisfy R by q;`, `assume #goal constraint m;`
-- warned: the state marker `final b;`
+- warned: a state's `defer Ping;`
 - rejected outright (no longer a warning): `return a * 2.0;`, `return 42;`, `assert x >= 0;`,
   `assert not x < 0;`, `assume x >= 0;`, `require x > 0;` — a computed `return` expression and a
-  keyworded inline condition are parse errors. So are the removed state-machine aliases
-  `initial a;` and `transition a to b;`; write `entry; then a;` and
-  `transition first a then b;`
+  keyworded inline condition are parse errors. So are the removed state-machine notations
+  `initial a;`, `final b;` and `transition a to b;`; write `entry; then a;`,
+  `transition first a then done;` and `transition first a then b;`
 
 ## Refereeing the boundary against the pinned pilot
 

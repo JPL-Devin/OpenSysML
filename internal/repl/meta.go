@@ -2475,7 +2475,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	}
 
 	if exec.State() == runtime.StateCompleted {
-		out = append(out, "", "✓ State machine completed (final state reached)")
+		out = append(out, "", "✓ State machine completed (a transition reached `done`)")
 	}
 
 	return out, nil

@@ -228,7 +228,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
    - APIs: `Step()`, `RunToCompletion()`, `Tokens()`, `SetBreakpoint()`, `SetTrace()`
 
 2. **StateExecutor** — Event-driven state machine execution
-   - Initial/final state keywords (initial/final)
+   - Initial state (`entry; then <state>;`) and completion where a transition reaches `done`
    - Entry/exit/do behaviors (`do` runs while its state is active, one action per round, interleaved with the do behaviors of the states active alongside it)
    - TimeEvent scheduling with priority queue
    - ChangeEvent condition polling
@@ -247,7 +247,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
    - `EvaluateConstraint(symbol)` — Evaluate constraint, return satisfaction boolean (assert/assume)
    - `EvaluateRequirement(symbol)` — Evaluate requirement, return satisfaction boolean (require/subject/actor/assume/nested)
    - `ExecuteAction(symbol)` — Run action to completion, return results
-   - `ExecuteState(symbol)` — Run state machine until final/suspended
+   - `ExecuteState(symbol)` — Run state machine until completed/suspended
    - `CreateActionExecutor(symbol)` — Create executor for debugging
    - `CreateStateExecutor(symbol)` — Create executor for debugging
 
@@ -671,11 +671,11 @@ Every behavioral feature must have:
 - **Scope agreement:** 230 of 230 declared scope assertions match exactly (same source).
 - **Permissiveness gaps:** of 120 invalid models we wrote ourselves, the reference rejects 2 that we accept by default, and 118 both reject; 2 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](../project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
 - **Declared errata:** the registry declares 2 defect(s) in the published reference material — 1 with a specification-derived correction, 1 documented without one, since no intended reading can be inferred ([OMG issues](../project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 325 of 353 files agreeing, 26 diagnostics ours alone and 82 the reference's alone, 0 declared rows we are silent on, and 0 of 120 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
-- **Self-assessed surface:** 125 of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four refereed figures above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.
+- **Self-assessed surface:** 126 of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four refereed figures above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
 
-**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 734 tracked rules stays in [spec compliance](../project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
+**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 735 tracked rules stays in [spec compliance](../project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
 <!-- doc-counts:end refereed-figures -->
 
 Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.

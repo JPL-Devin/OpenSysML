@@ -207,14 +207,17 @@ func (n *IfActionNode) Branches() []*IfBranchNode {
 	return branches
 }
 
+// DoneFeature is the name of the end shot every state inherits from the standard
+// library (`Systems Library/States.sysml`), which a transition enters to complete.
+const DoneFeature = "done"
+
 // StateNode represents a state in a state machine (simple, composite, or orthogonal).
 type StateNode struct {
 	NodeBase
-	Name    string
-	IsFinal bool   // final state marker
-	Entry   []Node // entry behaviors (action sequence)
-	Do      []Node // do action (ongoing action)
-	Exit    []Node // exit behaviors (action sequence)
+	Name  string
+	Entry []Node // entry behaviors (action sequence)
+	Do    []Node // do action (ongoing action)
+	Exit  []Node // exit behaviors (action sequence)
 	// Defer names the events the state defers while it is active: an event no
 	// transition of the active configuration handles is retained instead of
 	// dropped, and delivered again once no active state defers it.

@@ -369,3 +369,52 @@ func TestVertexInScopeNamesTheInnermostVertexAndNothingOutside(t *testing.T) {
 		t.Error("a vertex of another machine answered a scope-only lookup")
 	}
 }
+
+// `then done;` names the end shot every state inherits, so it is no vertex of
+// the machine and reports nothing.
+func TestResolveEndpointDoneIsTheInheritedEndShot(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `
+		state def M {
+			entry; then idle;
+			state idle;
+			transition first idle then done;
+		}
+	`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics for the completion endpoint, got %v", r.Diagnostics)
+	}
+}
+
+// A machine declaring a state of its own named done names that state instead.
+func TestResolveEndpointDeclaredDoneStateWins(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `
+		state def M {
+			entry; then idle;
+			state idle;
+			state done;
+			transition first idle then done;
+		}
+	`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected the declared state to resolve, got %v", r.Diagnostics)
+	}
+}
+
+// A non-vertex member named done shadows the end shot, and is reported as the
+// non-vertex endpoint it is rather than silently completing the machine.
+func TestResolveEndpointDoneShadowedByANonVertexIsReported(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `
+		state def M {
+			attribute done;
+			entry; then idle;
+			state idle;
+			transition first idle then done;
+		}
+	`)
+	if len(r.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic for the shadowed endpoint, got %v", r.Diagnostics)
+	}
+	if r.Diagnostics[0].Code != CodeNotAVertex {
+		t.Errorf("expected the %s code, got %q", CodeNotAVertex, r.Diagnostics[0].Code)
+	}
+}

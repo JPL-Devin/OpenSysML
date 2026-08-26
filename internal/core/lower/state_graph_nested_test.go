@@ -117,14 +117,12 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 				state left {
 					entry; then lstart;
 					state lstart;
-					final ldone;
-					succession first lstart then ldone;
+					succession first lstart then done;
 				}
 				state right {
 					entry; then rstart;
 					state rstart;
-					final rdone;
-					succession first rstart then rdone;
+					succession first rstart then done;
 				}
 			}
 		}
@@ -135,14 +133,12 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 				state left {
 					entry; then lstart;
 					state lstart;
-					final ldone;
-					succession first lstart then ldone;
+					succession first lstart then done;
 				}
 				state right {
 					entry; then rstart;
 					state rstart;
-					final rdone;
-					succession first rstart then rdone;
+					succession first rstart then done;
 				}
 			}
 		}
@@ -188,12 +184,12 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 			}
 		}
 		for state, owner := range parallelGraph.RegionOf {
-			if owner == region && state.IsFinal {
+			if owner == region && parallelGraph.Completes(state) {
 				gotFinal = append(gotFinal, state.Name)
 			}
 		}
 		for state, owner := range regionGraph.RegionOf {
-			if owner == want && state.IsFinal {
+			if owner == want && regionGraph.Completes(state) {
 				wantFinal = append(wantFinal, state.Name)
 			}
 		}

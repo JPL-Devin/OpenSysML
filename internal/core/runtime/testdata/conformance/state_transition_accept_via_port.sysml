@@ -21,7 +21,6 @@ package StateAcceptViaPort {
             entry send Ping() via outPort;
         }
         state transmitting;
-        final done;
 
         succession first start then waitingGSPing;
 
