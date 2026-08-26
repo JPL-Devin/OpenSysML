@@ -346,6 +346,7 @@ jobs:
       - docs
       - python-test
       - race-tests
+      - rust-test
       - static-and-integrity
       - vscode-extension
     runs-on: ubuntu-latest
@@ -357,6 +358,7 @@ jobs:
           DOCS_RESULT: ${{ needs.docs.result }}
           PYTHON_TEST_RESULT: ${{ needs.python-test.result }}
           RACE_TESTS_RESULT: ${{ needs.race-tests.result }}
+          RUST_TEST_RESULT: ${{ needs.rust-test.result }}
           STATIC_AND_INTEGRITY_RESULT: ${{ needs.static-and-integrity.result }}
           VSCODE_EXTENSION_RESULT: ${{ needs.vscode-extension.result }}
         run: |
@@ -364,12 +366,14 @@ jobs:
              [ "$DOCS_RESULT" != success ] ||
              [ "$PYTHON_TEST_RESULT" != success ] ||
              [ "$RACE_TESTS_RESULT" != success ] ||
+             [ "$RUST_TEST_RESULT" != success ] ||
              [ "$STATIC_AND_INTEGRITY_RESULT" != success ] ||
              [ "$VSCODE_EXTENSION_RESULT" != success ]; then
             echo "build=$BUILD_RESULT"
             echo "docs=$DOCS_RESULT"
             echo "python-test=$PYTHON_TEST_RESULT"
             echo "race-tests=$RACE_TESTS_RESULT"
+            echo "rust-test=$RUST_TEST_RESULT"
             echo "static-and-integrity=$STATIC_AND_INTEGRITY_RESULT"
             echo "vscode-extension=$VSCODE_EXTENSION_RESULT"
             exit 1
@@ -490,7 +494,7 @@ jobs:
 
   rust-test:
     name: Rust client tests
-    needs: build-and-test
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
