@@ -8,17 +8,17 @@ package Test {
 		attribute reentered : Integer = 0;
 
 		initial start;
-		state running {
+		state running parallel {
 			entry { reentered = reentered + 1; }
 
-			region left {
+			state left {
 				initial lstart;
 				state lidle;
 
 				succession first lstart then lidle;
 				transition lidle to rtarget;
 			}
-			region right {
+			state right {
 				initial rstart;
 				state ridle;
 				state rtarget { entry { crossed = crossed + 1; } }

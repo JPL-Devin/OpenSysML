@@ -9,21 +9,21 @@ package Test {
 		attribute ridleExits : Integer = 0;
 
 		initial start;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial ls;
 				state lidle;
 
 				succession first ls then lidle;
 				transition lidle to rtarget if crossed == 0;
 			}
-			region right {
+			state right {
 				initial rs;
 				state ridle { exit { ridleExits = ridleExits + 1; } }
-				state wrapper {
+				state wrapper parallel {
 					entry { wrapperEntries = wrapperEntries + 1; }
 
-					region inner {
+					state inner {
 						initial is;
 						state istart;
 						state rtarget {

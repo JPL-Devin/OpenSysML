@@ -298,15 +298,15 @@ func TestChangeTriggerConsumesTheRiseForALosingTransition(t *testing.T) {
 		state sm {
 			attribute ready : Boolean = false;
 			initial start;
-			state Working {
-				region left {
+			state Working parallel {
+				state left {
 					initial lstart;
 					state l1;
 					state l2;
 					transition lstart to l1;
 					transition l1 to l2 accept when ready;
 				}
-				region right {
+				state right {
 					initial rstart;
 					state r1;
 					transition rstart to r1;
@@ -352,17 +352,17 @@ func TestChangeTriggerArmsAWatchReenteredDuringThePoll(t *testing.T) {
 		state sm {
 			attribute ready : Boolean = false;
 			initial start;
-			state Working {
-				region left {
+			state Working parallel {
+				state left {
 					initial lstart;
 					state l1;
 					state l2;
 					transition lstart to l1;
 				}
-				region right {
+				state right {
 					initial rstart;
-					state C {
-						region inner {
+					state C parallel {
+						state inner {
 							initial cstart;
 							state c2;
 							transition cstart to c2;
@@ -471,15 +471,15 @@ func TestChangeTriggerKeepsAnEdgeBlockedDuringThePoll(t *testing.T) {
 			attribute allowed : Boolean = true;
 			attribute laps : Integer = 0;
 			initial start;
-			state Working {
-				region first {
+			state Working parallel {
+				state alpha {
 					initial f0;
 					state fWait;
 					state fDone;
 					transition f0 to fWait;
 					transition fWait to fDone accept when ready do assign allowed := false;
 				}
-				region second {
+				state beta {
 					initial s0;
 					state sWait;
 					state sDone { entry { laps = 1; } }

@@ -99,7 +99,6 @@ func TestStateExtensionsAreReported(t *testing.T) {
 		{"state def S { history h; }", "history"},
 		{"state def S { shallow history h; }", "history"},
 		{"state def S { deep history h; }", "history"},
-		{"state def S { region r { state a; } }", "`region <name> { … }`"},
 		{"state def S { entry point p; }", "point"},
 		{"state def S { exit point p; }", "point"},
 		{"state def S { state a { defer e; } }", "`defer <event>;`"},

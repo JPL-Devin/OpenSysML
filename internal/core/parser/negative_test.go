@@ -93,6 +93,9 @@ func TestNegative(t *testing.T) {
 		// A guarded succession needs a guard expression and a target after it.
 		{"guarded_succession_no_guard", "action def A { action a; action b; succession S first a if then b; }"},
 		{"guarded_succession_no_target", "action def A { action a; succession S first a if x == 0 then ; }"},
+		// Orthogonality is spelled `parallel` before a state body, so a bodied
+		// `region` member is not a state body item.
+		{"region_member", "state def S { region r { state a; } }"},
 		{"state_fork_no_name", "state s { fork ; }"},
 		{"state_join_no_semicolon", "state s { join sync state t; }"},
 		{"call_trigger_unclosed_params", "state s { accept op(a then t; }"},

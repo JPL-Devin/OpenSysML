@@ -12,7 +12,6 @@
   },
   "strictOnlyAgreements": [
     "extensions/x01-initial-state-marker.sysml",
-    "extensions/x04-orthogonal-region.sysml",
     "extensions/x05-defer-member.sysml",
     "extensions/x06-history-member.sysml",
     "extensions/x07-transition-to.sysml"
@@ -82,9 +81,10 @@
       "rule": "'region' is an OpenSysML invention; the pinned grammar spells concurrency 'state ... parallel' (SysML.xtext StateDefBody).",
       "mode": "strict",
       "bucket": "both-reject",
-      "oursErrors": 2,
+      "oursErrors": 4,
       "pilotErrors": 4,
-      "defaultBucket": "pilot-only-rejects"
+      "defaultBucket": "both-reject",
+      "defaultErrors": 4
     },
     {
       "path": "extensions/x05-defer-member.sysml",
@@ -275,7 +275,7 @@
       "rule": "RequirementConstraintMember requires a constraint usage after the require keyword (SysML.xtext:2057 RequirementConstraintMember).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 1,
+      "oursErrors": 2,
       "pilotErrors": 2
     },
     {
@@ -725,7 +725,7 @@
       "rule": "A return member requires a feature after the return keyword (KerML.xtext:943 ReturnFeatureMember).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 1,
+      "oursErrors": 2,
       "pilotErrors": 7
     },
     {

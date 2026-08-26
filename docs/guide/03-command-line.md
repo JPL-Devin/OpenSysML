@@ -173,7 +173,7 @@ whole, so a reference from one file to a declaration in another resolves.
 ## Strict conformance
 
 OpenSysML accepts a few notations of its own that no SysML v2 production admits —
-the `initial`/`final` state markers, `region`, `defer`, the `choice`, `junction`,
+the `initial`/`final` state markers, `defer`, the `choice`, `junction`,
 `history` and `entry`/`exit point` pseudostates, `done <name>;`, and
 `transition <source> to <target>`. They are reported as
 warnings, so a model using them still analyses cleanly. `-strict` asks the other

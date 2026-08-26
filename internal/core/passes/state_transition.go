@@ -19,8 +19,8 @@ const CodeEndpointNotOfMachine = "endpoint-not-of-machine"
 // which a transition reaching it terminates nowhere at (UML 2.5.1 §15.7.18).
 const CodeNoOutgoingTransition = "no-outgoing-transition"
 
-// CodeParallelStateTransition marks a succession or transition owned by a
-// parallel state, whose substates are concurrent (SysML v2 §7.16).
+// CodeParallelStateTransition marks a succession or transition ordering the
+// direct substates of a parallel state, which are concurrent (SysML v2 §7.16).
 const CodeParallelStateTransition = "parallel-state-transition"
 
 // msgParallelStateTransition is the pilot's wording of the same rule.
@@ -59,6 +59,9 @@ func (StateTransitionPass) Run(ctx *Context, name string, root *ast.RootNamespac
 type transitionChecker struct {
 	resolver *resolve.Resolver
 	diags    []Diagnostic
+	// ordered are the members already reported for ordering the regions of a
+	// parallel state, whose endpoints name regions rather than vertices.
+	ordered map[ast.Node]bool
 }
 
 // machine holds what checking one state machine needs: the vertices it owns,
@@ -125,13 +128,23 @@ func (c *transitionChecker) checkMachine(decl ast.Node, scope *symbols.Scope) {
 	}
 }
 
-// checkParallelStates reports the successions and transitions a parallel state
-// owns, orthogonality being each state's own (SysML v2 §7.16, isParallel).
+// checkParallelStates reports the successions and transitions that order the
+// direct substates of a parallel state, each of which is one of its concurrent
+// regions (SysML v2 §7.16, isParallel). A parallel state may still own the
+// pseudostates its regions branch through and the edges between them.
 func (c *transitionChecker) checkParallelStates(members []ast.Node, parallel bool) {
+	var regions map[string]bool
+	if parallel {
+		regions = directSubstateNames(members)
+	}
 	for _, member := range members {
 		decl := unwrapMembership(member)
-		if parallel && parallelStateOrdering(decl) {
+		if parallel && parallelStateOrdering(decl) && ordersRegion(decl, regions) {
 			c.report(decl.Span(), CodeParallelStateTransition, msgParallelStateTransition)
+			if c.ordered == nil {
+				c.ordered = map[ast.Node]bool{}
+			}
+			c.ordered[decl] = true
 		}
 		switch n := decl.(type) {
 		case *ast.Definition:
@@ -144,13 +157,65 @@ func (c *transitionChecker) checkParallelStates(members []ast.Node, parallel boo
 			}
 		case *ast.StateNode:
 			c.checkParallelStates(n.Substates, false)
-			for _, region := range n.Regions {
-				c.checkParallelStates(region.States, false)
-			}
-		case *ast.StateRegion:
-			c.checkParallelStates(n.States, false)
 		}
 	}
+}
+
+// directSubstateNames are the names of the states a body declares directly,
+// which in a parallel body are the names of its regions.
+func directSubstateNames(members []ast.Node) map[string]bool {
+	names := map[string]bool{}
+	for _, member := range members {
+		switch n := unwrapMembership(member).(type) {
+		case *ast.StateNode:
+			names[n.Name] = true
+		case *ast.SubstateMember:
+			names[n.Name] = true
+		case *ast.Usage:
+			if n.Kind == ast.UsageState {
+				if name, _ := ast.EffectiveName(n); name != "" {
+					names[name] = true
+				}
+			}
+		}
+	}
+	return names
+}
+
+// ordersRegion reports whether an ordering member names one of the regions
+// itself, rather than a pseudostate or a state inside one of them.
+func ordersRegion(decl ast.Node, regions map[string]bool) bool {
+	for _, qn := range orderingEndpoints(decl) {
+		if qn == nil || len(qn.Parts) != 1 {
+			continue
+		}
+		if regions[qn.Parts[0].Text] {
+			return true
+		}
+	}
+	return false
+}
+
+// orderingEndpoints are the endpoints a succession or transition names, in any
+// of the notations one is written in.
+func orderingEndpoints(decl ast.Node) []*ast.QualifiedName {
+	switch n := decl.(type) {
+	case *ast.SuccessionEdge:
+		return []*ast.QualifiedName{n.Source, n.Target}
+	case *ast.TransitionMember:
+		return []*ast.QualifiedName{n.Source, n.Target}
+	case *ast.TransitionEdge:
+		return []*ast.QualifiedName{n.Source, n.Target}
+	case *ast.InitialNode:
+		return []*ast.QualifiedName{n.Successor}
+	case *ast.Usage:
+		ends := make([]*ast.QualifiedName, 0, 2)
+		for _, end := range n.ConnectorEnds {
+			ends = append(ends, connectorEndName(end))
+		}
+		return ends
+	}
+	return nil
 }
 
 // checkAccepterSource reports a transition whose accepter names a source that is
@@ -217,6 +282,9 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 	}
 	for _, member := range members {
 		decl := unwrapMembership(member)
+		if c.ordered[decl] {
+			continue
+		}
 		switch n := decl.(type) {
 		case *ast.TransitionMember:
 			// A sourceless `accept … then` takes the state it is written in as its

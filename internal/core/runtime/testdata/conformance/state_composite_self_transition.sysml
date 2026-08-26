@@ -6,11 +6,11 @@ package Test {
 		attribute log : Integer = 0;
 
 		initial start;
-		state Working {
+		state Working parallel {
 			entry { log = log * 10 + 1; }
 			exit { log = log * 10 + 2; }
 
-			region left {
+			state left {
 				initial lstart;
 				state l1 {
 					entry { log = log * 10 + 3; }

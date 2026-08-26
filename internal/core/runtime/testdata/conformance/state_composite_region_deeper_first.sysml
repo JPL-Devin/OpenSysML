@@ -5,11 +5,11 @@ package Test {
 		attribute log : Integer = 0;
 
 		initial start;
-		state Working {
-			region left {
+		state Working parallel {
+			state left {
 				initial lstart;
-				state deep {
-					region inner {
+				state deep parallel {
+					state inner {
 						initial dstart;
 						state d1;
 						state d2;
@@ -22,7 +22,7 @@ package Test {
 				succession first lstart then deep;
 			}
 
-			region right {
+			state right {
 				initial rstart;
 				state r1;
 				state r2;

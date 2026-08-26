@@ -10,22 +10,22 @@ package Test {
 		attribute lidleExits : Integer = 0;
 
 		initial start;
-		state running {
-			region left {
+		state running parallel {
+			state left {
 				initial ls;
 				state lidle { exit { lidleExits = lidleExits + 1; } }
 
 				succession first ls then lidle;
 			}
-			region right {
+			state right {
 				initial rs;
 				state wrapper {
 					exit { wrapperExits = wrapperExits + 1; }
 
-					state mid {
+					state mid parallel {
 						exit { midExits = midExits + 1; }
 
-						region inner {
+						state inner {
 							initial is;
 							state ideep { exit { deepExits = deepExits + 1; } }
 
