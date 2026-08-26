@@ -1,6 +1,6 @@
 // The `;` that terminates a transition also terminates the statement written as
-// its effect (SysML.xtext EffectBehaviorUsage carries no `;` of its own), in the
-// standard `first … then` spelling and in the compact `to` one alike.
+// its effect (SysML.xtext EffectBehaviorUsage carries no `;` of its own), for
+// every statement an effect may be written as.
 package TransitionEffects {
 	action def Bump;
 	attribute def Alert;
@@ -11,8 +11,6 @@ package TransitionEffects {
 		state idle;
 		state alerting;
 
-		transition first idle do perform Bump then alerting;
-		transition first alerting do assign c := c + 1 then idle;
 		transition first idle do perform Bump then alerting;
 		transition first alerting do assign c := c + 1 then idle;
 		transition first idle do { assign c := c + 1; } then alerting;
