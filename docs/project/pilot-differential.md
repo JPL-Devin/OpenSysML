@@ -435,13 +435,15 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
 our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
 shorthands went first (only ours 84 → **34**, our diagnostics 141 → **50**); removing
-`initial <state>;` and `transition <source> to <target>;` takes it to **27** and **68**. The
+`initial <state>;` and `transition <source> to <target>;` took it to **27** and 68. The
 demos are now written in the standard spellings, so the warning that fired on 57 of their lines
-has nothing left to report there. `examples`: only pilot rises 39 → **56** and severity-only
-falls 25 → **9** for the same reason and without either tool changing what it detects: the
+has nothing left to report there. `examples`: only pilot rose 39 → 56 and severity-only
+fell 25 → 9 for the same reason and without either tool changing what it detects: the
 pilot errors on those lines either way, and the rows it errors on are no longer paired with a
-warning of ours. Agreement (**32**), fully agreeing files (**324**) and every OMG root are
-unmoved.
+warning of ours. The [feature-initialization round](#feature-initialization-round) then took our
+diagnostics to **67**, severity-only to **8** and `examples`: only pilot to **35**, which is what
+the `Now` column above and the Results table state. Agreement (**32**), fully agreeing files
+(**324**) and every OMG root are unmoved by either round.
 
 This control is measured independently from the wave-12F head: its Xpect result is **1287 agree,
 248 wording-only, 36 disagree**, and its rejection result is **116 both reject / 4 only pilot
