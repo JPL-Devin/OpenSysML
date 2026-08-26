@@ -555,7 +555,9 @@ than something the branch introduced, and report it either way — the user aski
 
 **Always build a merge-base contrast binary**; "the alias is gone" is only observable as a
 difference. `git worktree add /tmp/wt-old $(git merge-base origin/main HEAD)` then
-`go build -o /tmp/old-sysml ./cmd/sysml` (~2 min cold). Then assert the *unchanged* neighbours are
+`go build -C /tmp/wt-old -o /tmp/old-sysml ./cmd/sysml` — build **in the worktree**, since a plain
+`go build ./cmd/sysml` from the repo root compiles the branch again and every comparison then reports
+IDENTICAL (~2 min cold). Then assert the *unchanged* neighbours are
 byte-identical rather than merely present:
 
 ```bash
