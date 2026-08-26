@@ -3,7 +3,8 @@ package test {
     state TestDo {
         attribute result : Integer = 0;
         
-        initial init;
+        entry; then init;
+        state init;
         state processing {
             do {
                 result = result + 10;

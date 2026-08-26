@@ -4,7 +4,8 @@ package test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state Working {
 			exit { log = log * 10 + 2; }
 

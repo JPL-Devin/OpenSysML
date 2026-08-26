@@ -8,7 +8,9 @@
           (LiteralInteger value="2")))
       (Membership visibility="default"
         (Usage kind="state" name="left" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (*ast.StateNode)
+          (EntryMember)
+          (SuccessionEdge source="@entry" target="lstart")
+          (SubstateMember name="lstart")
           (SubstateMember name="lidle")
           (SubstateMember name="lfast")
           (SubstateMember name="lslow")
@@ -21,7 +23,9 @@
           (TransitionMember source="lidle" target="pick")))
       (Membership visibility="default"
         (Usage kind="state" name="right" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-          (*ast.StateNode)
+          (EntryMember)
+          (SuccessionEdge source="@entry" target="rstart")
+          (SubstateMember name="rstart")
           (SubstateMember name="rwatch")
           (Membership visibility="default"
             (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false

@@ -21,7 +21,8 @@ package 'My Pkg' {
     succession first start then done;
   }
   state 'spin up' {
-    initial init;
+    entry; then init;
+    state init;
     final done;
     succession first init then done;
   }

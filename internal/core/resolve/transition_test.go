@@ -52,7 +52,7 @@ func TestResolveEndpointsThatNameVertices(t *testing.T) {
 				entry; then idle;
 				state idle;
 				state busy;
-				transition idle to busy;
+				transition first idle then busy;
 			}
 		`,
 		"nested state": `
@@ -63,7 +63,7 @@ func TestResolveEndpointsThatNameVertices(t *testing.T) {
 					state inner;
 				}
 				state done;
-				transition outer::inner to done;
+				transition first outer::inner then done;
 			}
 		`,
 		"unqualified nested state": `
@@ -74,7 +74,7 @@ func TestResolveEndpointsThatNameVertices(t *testing.T) {
 					state inner;
 				}
 				state done;
-				transition inner to done;
+				transition first inner then done;
 			}
 		`,
 		"sibling orthogonal region": `
@@ -89,7 +89,7 @@ func TestResolveEndpointsThatNameVertices(t *testing.T) {
 						state ridle;
 					}
 				}
-				transition running::left::lidle to running::right::ridle;
+				transition first running::left::lidle then running::right::ridle;
 			}
 		`,
 		"entry and exit point": `
@@ -103,8 +103,8 @@ func TestResolveEndpointsThatNameVertices(t *testing.T) {
 					state working;
 				}
 				state done;
-				transition idle to comp::into;
-				transition comp::outOf to done;
+				transition first idle then comp::into;
+				transition first comp::outOf then done;
 			}
 		`,
 		"sourceless accept then": `
@@ -136,7 +136,7 @@ func TestResolveEndpointMisspelledIsReportedWithASuggestion(t *testing.T) {
 			entry; then idle;
 			state idle;
 			state busy;
-			transition idle to busyy;
+			transition first idle then busyy;
 		}
 	`)
 	if len(r.Diagnostics) != 1 {
@@ -161,7 +161,7 @@ func TestResolveEndpointMisspelledQualifiedFixKeepsTheQualifier(t *testing.T) {
 	entry; then alpha;
 	state alpha { entry; then work; state work; }
 	state beta { entry; then work; state work; }
-	transition beta::workk to alpha;
+	transition first beta::workk then alpha;
 }`
 	r := resolveDoc(t, "d.sysml", src)
 	if len(r.Diagnostics) != 1 {
@@ -188,7 +188,7 @@ func TestResolveEndpointNotAVertexIsReported(t *testing.T) {
 			attribute count;
 			entry; then idle;
 			state idle;
-			transition idle to count;
+			transition first idle then count;
 		}
 	`)
 	if len(r.Diagnostics) != 1 {
@@ -282,7 +282,7 @@ func TestEndpointLookupForLoweringReportsNothing(t *testing.T) {
 			entry; then idle;
 			state idle;
 			state busy;
-			transition idle to busy;
+			transition first idle then busy;
 		}
 	`)
 	if len(r.Diagnostics) != 0 {
@@ -306,7 +306,7 @@ func TestEndpointLookupForLoweringDoesNotReportTwice(t *testing.T) {
 			entry; then idle;
 			state idle;
 			state busy;
-			transition idle to nowhere;
+			transition first idle then nowhere;
 		}
 	`
 	p := parser.New(source.New("d.sysml", []byte(src)))
@@ -344,7 +344,7 @@ func TestVertexInScopeNamesTheInnermostVertexAndNothingOutside(t *testing.T) {
 			state beta {
 				entry; then work;
 				state work;
-				transition work to done;
+				transition first work then done;
 			}
 			state done;
 		}

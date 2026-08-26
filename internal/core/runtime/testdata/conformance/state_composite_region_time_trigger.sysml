@@ -5,10 +5,12 @@ package test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state Working parallel {
 			state left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state Grouping {
 					exit { log = log * 10 + 2; }
 
@@ -22,11 +24,12 @@ package test {
 					entry { log = log * 10 + 3; }
 				}
 
-				transition lstart to Step1;
+				transition first lstart then Step1;
 			}
 
 			state right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state Watching;
 
 				succession first rstart then Watching;

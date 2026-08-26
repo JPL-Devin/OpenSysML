@@ -9,16 +9,19 @@ package Test {
 		attribute deepExits : Integer = 0;
 		attribute lidleExits : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state running parallel {
 			state left {
-				initial ls;
+				entry; then ls;
+				state ls;
 				state lidle { exit { lidleExits = lidleExits + 1; } }
 
 				succession first ls then lidle;
 			}
 			state right {
-				initial rs;
+				entry; then rs;
+				state rs;
 				state wrapper {
 					exit { wrapperExits = wrapperExits + 1; }
 
@@ -26,11 +29,12 @@ package Test {
 						exit { midExits = midExits + 1; }
 
 						state inner {
-							initial is;
+							entry; then is;
+							state is;
 							state ideep { exit { deepExits = deepExits + 1; } }
 
 							succession first is then ideep;
-							transition ideep to outside if midExits == 0;
+							transition first ideep if midExits == 0 then outside;
 						}
 					}
 				}

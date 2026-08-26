@@ -3,22 +3,24 @@ package CallTriggerRegionTest {
     // have a matching call trigger each fire one transition, run-to-completion.
     state def Dashboard parallel {
         state display {
-            initial start;
+            entry; then start;
+            state start;
             state Dimmed;
             state Lit;
 
             succession first start then Dimmed;
-            transition Dimmed to Lit accept wake();
+            transition first Dimmed accept wake() then Lit;
         }
 
         state audio {
-            initial start;
+            entry; then start;
+            state start;
             state Muted;
             state Chiming;
 
             succession first start then Muted;
-            transition Muted to Chiming accept wake();
-            transition Chiming to Muted accept mute();
+            transition first Muted accept wake() then Chiming;
+            transition first Chiming accept mute() then Muted;
         }
     }
 }

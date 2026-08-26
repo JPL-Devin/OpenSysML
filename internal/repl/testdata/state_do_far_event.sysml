@@ -4,7 +4,8 @@ package Debug {
 	state Slow {
 		attribute count = 0;
 
-		initial init;
+		entry; then init;
+		state init;
 		state working {
 			do {
 				count = count + 1;

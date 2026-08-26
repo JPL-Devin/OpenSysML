@@ -1,13 +1,17 @@
 (RootNamespace
   (Membership visibility="default"
     (Usage kind="state" name="ParallelSplit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-      (*ast.StateNode)
+      (EntryMember)
+      (SuccessionEdge source="@entry" target="start")
+      (SubstateMember name="start")
       (SubstateMember name="ready")
       (Membership visibility="default"
         (Usage kind="state" name="working" ref=false direction="none" composite=false derived=false ordered=false nonunique=false parallel=true
           (Membership visibility="default"
             (Usage kind="state" name="left" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (*ast.StateNode)
+              (EntryMember)
+              (SuccessionEdge source="@entry" target="leftStart")
+              (SubstateMember name="leftStart")
               (SubstateMember name="building")
               (Membership visibility="default"
                 (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
@@ -17,7 +21,9 @@
                     (*ast.QualifiedName))))))
           (Membership visibility="default"
             (Usage kind="state" name="right" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
-              (*ast.StateNode)
+              (EntryMember)
+              (SuccessionEdge source="@entry" target="rightStart")
+              (SubstateMember name="rightStart")
               (SubstateMember name="checking")
               (Membership visibility="default"
                 (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false

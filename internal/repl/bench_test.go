@@ -50,14 +50,15 @@ func syntheticModel(parts int) string {
         out y : Real = x * 2.0;
     }
     state SM%[1]d {
-        initial start;
+        entry; then start;
+        state start;
         state idle;
         state running;
         final done;
 
         succession first start then idle;
-        transition idle to running;
-        transition running to done;
+        transition first idle then running;
+        transition first running then done;
     }
     part inst%[1]d : Comp%[1]d {
         attribute :>> mass = %[1]d.0;

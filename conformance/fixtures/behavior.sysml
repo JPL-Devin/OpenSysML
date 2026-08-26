@@ -14,7 +14,8 @@ package Test {
 		attribute result : Integer = 0;
 	}
 	state Machine {
-		initial init;
+		entry; then init;
+		state init;
 		state Running;
 		final done;
 

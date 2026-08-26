@@ -5,17 +5,19 @@ package Test {
 		attribute mode : Integer = 2;
 
 		state left {
-			initial lstart;
+			entry; then lstart;
+			state lstart;
 			state lidle;
 			state lfast;
 			state lslow;
 
 			succession first lstart then lidle;
-			transition lidle to pick;
+			transition first lidle then pick;
 		}
 
 		state right {
-			initial rstart;
+			entry; then rstart;
+			state rstart;
 			state rwatch;
 
 			succession first rstart then rwatch;
@@ -23,7 +25,7 @@ package Test {
 
 		choice pick;
 
-		transition pick to lfast if mode == 2;
-		transition pick to lslow;
+		transition first pick if mode == 2 then lfast;
+		transition first pick then lslow;
 	}
 }

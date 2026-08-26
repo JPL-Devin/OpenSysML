@@ -4,13 +4,13 @@ package ParallelCompletion {
             entry; then lstart;
             state lstart;
             final ldone;
-            transition lstart to ldone when First;
+            transition first lstart when First then ldone;
         }
         state right {
             entry; then rstart;
             state rstart;
             final rdone;
-            transition rstart to rdone when Second;
+            transition first rstart when Second then rdone;
         }
     }
 }

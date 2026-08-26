@@ -225,7 +225,8 @@ func TestSendFromAStateMachineReachesEnclosingPartPorts(t *testing.T) {
 					connect src to dst;
 					state radio {
 						attribute got : Integer = 0;
-						initial start;
+						entry; then start;
+						state start;
 						final done;`+body+`
 					}
 				}

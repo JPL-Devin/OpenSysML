@@ -42,23 +42,21 @@ sysml> %continue
 
 **State machine execution:**
 
-The following state machine uses OpenSysML extensions with no SysML v2 production
-(`initial` and state-body `final`). See the
+The following state machine uses an OpenSysML extension with no SysML v2 production
+(the state-body `final`). See the
 [conformance audit](../reference/grammar/conformance-audit.md).
 
 ```sysml
 sysml> state TrafficLight {
-  ...>     initial start;
+  ...>     entry; then start;
+  ...>     state start;
   ...>     state green { accept after 25 then yellow; }
   ...>     state yellow { accept after 5 then red; }
   ...>     state red { accept after 30 then off; }
   ...>     final off;
   ...>     succession first start then green;
   ...> }
-2:5: warning: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
-    initial start;
-    ^~~~~~~
-6:5: warning: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
+7:5: warning: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
     final off;
     ^~~~~
 ✓ state TrafficLight

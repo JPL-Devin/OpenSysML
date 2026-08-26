@@ -6,7 +6,8 @@ package SendIdentityQualified {
 
 	part def Node {
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 
 			state waiting {
 				entry send Ping to SendIdentityQualified::Node::Machine;
@@ -14,7 +15,7 @@ package SendIdentityQualified {
 			final heard;
 
 			succession first start then waiting;
-			transition waiting to heard when Ping;
+			transition first waiting when Ping then heard;
 		}
 	}
 

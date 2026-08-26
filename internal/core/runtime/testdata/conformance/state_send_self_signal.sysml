@@ -6,7 +6,8 @@ package test {
 	item def Ping;
 
 	state Driver {
-		initial start;
+		entry; then start;
+		state start;
 
 		state waiting {
 			entry { send Ping to Driver; }
@@ -16,6 +17,6 @@ package test {
 
 		succession first start then waiting;
 
-		transition waiting to done when Ping;
+		transition first waiting when Ping then done;
 	}
 }

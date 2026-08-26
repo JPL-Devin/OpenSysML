@@ -2,7 +2,8 @@
 // scheduled at distinct times to drain.
 package Debug {
 	state Cycle {
-		initial init;
+		entry; then init;
+		state init;
 		state waiting {
 			accept after 10 then working;
 		}

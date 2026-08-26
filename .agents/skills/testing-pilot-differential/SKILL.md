@@ -21,9 +21,9 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
 - The pin `cmd/pilot-diff` reports comes from `build/pilot-sysml-validator/pilot-pin.txt`
   (written by the new script), not from the DeciSym `pom.xml`.
 - `-validator /nonexistent` now says `run ./scripts/download-pilot-sysml-validator.sh`.
-- Measured after the member-leading-succession diagnostic landed, with a fresh library cache: `353 file(s), 324 fully agreeing; 32 agreed,
-  84 only ours, 65 only the pilot's`, JSON totals `openSysMLDiagnostics 141 / pilotDiagnostics
-  122 / severityMismatch 25`; ~70 s wall, byte-identical across runs *and* after a from-scratch
+- Measured after removing the state initial marker and the `to` transition spelling, with a fresh library cache: `353 file(s), 324 fully agreeing; 32 agreed,
+  27 only ours, 82 only the pilot's`, JSON totals `openSysMLDiagnostics 68 / pilotDiagnostics
+  123 / severityMismatch 9`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
 - **`cmd/pilot-diff` has no `-jobs` flag.** Its full flag set is
@@ -134,11 +134,13 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 (via two pinned plain-Java bridges over the pilot's own validators) over four corpus roots and writes
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
-but only while the baseline is current. Check that first. As of the rebaseline after the
-member-leading-succession diagnostic it **is**
-current: a live run gives `353 file(s), 324 fully agreeing; 32 agreed, 84 only ours, 65 only the
+but only while the baseline is current. Check that first. As of the rebaseline after removing the
+`initial <state>;` and `transition <source> to <target>;` alias notation it **is**
+current: a live run gives `353 file(s), 324 fully agreeing; 32 agreed, 27 only ours, 82 only the
 pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
-"Results" table matches. When it is stale (it was at `ac4ac4fb`, and again while the F60–F69 fix
+"Results" table matches. That rebaseline covers two rounds, because the succession-shorthand
+removal before it landed without refreshing the baseline; a control run of its merge commit gives
+`32 agreed, 54 only ours, 79 only the pilot's`. When it is stale (it was at `ac4ac4fb`, and again while the F60–F69 fix
 PRs were in flight), a non-empty `jq -S` baseline diff is *not* by itself evidence of a
 regression — see "Isolating one change's effect" below.
 

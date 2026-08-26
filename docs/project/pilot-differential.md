@@ -201,21 +201,22 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 15 | 8 | 36 | 53 | 32 | 1 | 3 | 20 |
-| `examples` | 22 | 15 | 88 | 63 | 0 | 24 | 64 | 39 |
+| `examples` | 22 | 15 | 15 | 64 | 0 | 8 | 7 | 56 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **353** | **324** | **141** | **122** | **32** | **25** | **84** | **65** |
+| **Total** | **353** | **324** | **68** | **123** | **32** | **9** | **27** | **82** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **8** and
 `pilot-validation` 1 → **0**, with `kerml-examples` unmoved at 3. Our diagnostics on those roots
 therefore fall 20 → **11**. The
-`examples` root carries 64, and all 64 of its rows are one check firing on them: the
-non-standard-notation warning (26 `then <source> <target>;`, 24 `transition <source> to <target>;`, 6
-`require` outside a requirement body, 7 across `done`/`initial`/`region`/`junction`, and 1
-member-leading `<source> then <target>;`). **Those are
+`examples` root carries 7, and all 7 of its rows are one check firing on them: the
+non-standard-notation warning (6 `require` outside a requirement body, 1 `junction`).
+It carried 64 before the two removals of alias notation: the succession shorthands retired 30 of
+them, and removing `initial <state>;` and `transition <src> to <tgt>;` retired 27 more, since the
+demos are now written in the standard spellings the warning does not fire on. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **11**. `severity-only` (25) holds pairs of the same shape:
+reference corpora is **11**. `severity-only` (9) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
 
@@ -361,11 +362,11 @@ Two things did move here, and one is a first:
   is correct and expected here.
 
 Per category, the only-ours totals are: `pilot-examples` 5 `unmapped`, 1 `kind-mismatch`, 2
-`units`; `kerml-examples` 3 `unmapped`; `examples` 64 syntax; `testdata` 2
+`units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 11 `kind-mismatch`, 4 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 15 `unmapped`, 12 syntax, 6 `kind-mismatch`, 5 `unresolved-reference`, 1
-`multiplicity` — all of them `.sysml`, none `.kerml`, which is the F96 fixture round below;
+`examples` 12 syntax, 16 `kind-mismatch`, 14 `unmapped`, 14 `unresolved-reference` — all of them
+`.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
 **`pilot-examples` is the row to read carefully: its total falls 68 → 63 and its mix barely
@@ -402,21 +403,24 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **324 / 84 / 141** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **324 / 27 / 68** |
 | `pilot-examples`: only ours | **43** | **8** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **39** |
+| `examples`: only pilot | **40** | **56** |
 | `examples`: fully agreeing | **15** | **15** |
 | `unmapped`, our side | **20** | **18** |
 
-The `Now` column's one movement since Step 2's resolver round is #526's member-leading
-succession-shorthand warning, and it lands entirely on `examples/pseudostates-demo.sysml`'s two
-`start then …;` members: line 33 adds one only-ours row (only ours 83 → **84**, our diagnostics
-139 → **141**) and line 16, where the pilot errors, moves from only-pilot to severity-only
-(only pilot 66 → **65**, severity-only 24 → **25**). Agreement (**32**), fully agreeing files
-(**324**) and every OMG root are unmoved: both warnings are true positives about our own demo's
-notation, not movement against the reference's corpora.
+The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
+our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
+shorthands went first (only ours 84 → **34**, our diagnostics 141 → **50**); removing
+`initial <state>;` and `transition <source> to <target>;` takes it to **27** and **68**. The
+demos are now written in the standard spellings, so the warning that fired on 57 of their lines
+has nothing left to report there. `examples`: only pilot rises 39 → **56** and severity-only
+falls 25 → **9** for the same reason and without either tool changing what it detects: the
+pilot errors on those lines either way, and the rows it errors on are no longer paired with a
+warning of ours. Agreement (**32**), fully agreeing files (**324**) and every OMG root are
+unmoved.
 
 This control is measured independently from the wave-12F head: its Xpect result is **1287 agree,
 248 wording-only, 36 disagree**, and its rejection result is **116 both reject / 4 only pilot

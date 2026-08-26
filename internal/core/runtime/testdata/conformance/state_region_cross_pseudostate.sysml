@@ -5,17 +5,20 @@ package Test {
 	state def RegionCrossPseudostate {
 		attribute crossed : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state running parallel {
 			state left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state lidle;
 
 				succession first lstart then lidle;
-				transition lidle to cross if crossed == 0;
+				transition first lidle if crossed == 0 then cross;
 			}
 			state right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state ridle;
 				state rtarget { entry { crossed = 1; } }
 
@@ -26,6 +29,6 @@ package Test {
 
 		succession first start then running;
 
-		transition cross to rtarget if crossed == 0;
+		transition first cross if crossed == 0 then rtarget;
 	}
 }

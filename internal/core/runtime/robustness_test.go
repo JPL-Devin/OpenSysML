@@ -1456,7 +1456,8 @@ func testDerivedFeatureValueOverMissingFeature(t *testing.T) {
 func testStateSubactionReferenceOfMissingAction(t *testing.T) {
 	ctx, machine := loadState(t, `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state active {
 				entry noSuchAction;
 			}
@@ -1489,7 +1490,8 @@ func testStateSubactionReferenceFeatureChain(t *testing.T) {
 				action coolDown : CoolDown;
 			}
 
-			initial init;
+			entry; then init;
+			state init;
 			state active {
 				exit controller.coolDown;
 			}
@@ -1570,7 +1572,8 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			&ast.StateNode{
 				Name:  "busy",
 				Defer: []ast.Node{&ast.TimeEvent{Duration: &ast.LiteralInteger{Value: "1"}}},
@@ -1598,11 +1601,12 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 func testStateTransitionEndpointMisspelled(t *testing.T) {
 	src := `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
 			final done;
 			succession first init then busy;
-			transition busy to donee;
+			transition first busy then donee;
 		}
 	}`
 	file := parseAndBuild(t, src)
@@ -1659,11 +1663,12 @@ func testStateTransitionEndpointMisspelled(t *testing.T) {
 func testStateTransitionEndpointNeverResolved(t *testing.T) {
 	src := `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
 			final done;
 			succession first init then busy;
-			transition busy to donee;
+			transition first busy then donee;
 		}
 	}`
 	file := parseAndBuild(t, src)
@@ -1706,15 +1711,17 @@ func testStateTransitionEndpointNeverResolved(t *testing.T) {
 func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 	src := `package test {
 		state Other {
-			initial start;
+			entry; then start;
+			state start;
 			state running;
 			succession first start then running;
 		}
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
 			succession first init then busy;
-			transition busy to Other::running;
+			transition first busy then Other::running;
 		}
 	}`
 	file := parseAndBuild(t, src)
@@ -1752,12 +1759,13 @@ func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
 	src := `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
 			state other;
 			first marker then other;
 			succession first init then busy;
-			transition busy to marker;
+			transition first busy then marker;
 		}
 	}`
 	file := parseAndBuild(t, src)
@@ -1788,11 +1796,12 @@ func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
 func testStateJunctionWithoutAnOutgoingTransition(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state busy;
 			junction stuck;
 			succession first init then busy;
-			transition busy to stuck;
+			transition first busy then stuck;
 		}
 	}`)
 	if err := exec.initialize(); err != nil {
@@ -1826,7 +1835,8 @@ func testStateTransitionWithoutATarget(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			&ast.StateNode{Name: "busy"},
 			dangling,
 		},
@@ -1851,20 +1861,23 @@ func testStateTransitionWithoutATarget(t *testing.T) {
 func testStateCrossRegionTransitionsPingPong(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state running parallel {
 				state left {
-					initial ls;
+					entry; then ls;
+					state ls;
 					state lidle;
 					succession first ls then lidle;
-					transition lidle to rtarget;
+					transition first lidle then rtarget;
 				}
 				state right {
-					initial rs;
+					entry; then rs;
+					state rs;
 					state ridle;
 					state rtarget;
 					succession first rs then ridle;
-					transition rtarget to lidle;
+					transition first rtarget then lidle;
 				}
 			}
 			succession first init then running;
@@ -1895,11 +1908,12 @@ func testStateTransitionEffectReadsAnUnknownFeature(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			attribute counter : Integer = 0;
-			initial init;
+			entry; then init;
+			state init;
 			state active;
 			final done;
 			succession first init then active;
-			transition active to done do assign counter := missingName + 1;
+			transition first active do assign counter := missingName + 1 then done;
 		}
 	}`)
 	err := exec.RunToCompletion()
@@ -1926,7 +1940,8 @@ func testNonTerminatingDoBehavior(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			spin,
 			transitionMember("init", "spin"),
 			transitionMember("spin", "spin"),
@@ -1950,7 +1965,8 @@ func testNonTerminatingDoBehavior(t *testing.T) {
 func testEmptyAnonymousActionBody(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 			state quiet {
 				entry action { }
 				do action { }
@@ -1976,7 +1992,8 @@ func testNonTerminatingAnonymousDoBody(t *testing.T) {
 	err := stateRunErrorForSource(t, "Machine", `package test {
 		state Machine {
 			attribute c : Integer = 0;
-			initial start;
+			entry; then start;
+			state start;
 			state spin {
 				do action {
 					while true {
@@ -2002,7 +2019,8 @@ func testBehaviorPerformingAnActionAndStatingABody(t *testing.T) {
 		action def Bump;
 		state Machine {
 			attribute c : Integer = 0;
-			initial start;
+			entry; then start;
+			state start;
 			state working {
 				entry action mixed : Bump { assign c := c + 1; }
 			}
@@ -2026,11 +2044,12 @@ func testQualifiedAssignmentTargetInAStateEffect(t *testing.T) {
 		package other { attribute c : Integer = 0; }
 		state Machine {
 			attribute c : Integer = 0;
-			initial init;
+			entry; then init;
+			state init;
 			state active;
 			final done;
 			succession first init then active;
-			transition active to done do assign other::c := 1;
+			transition first active do assign other::c := 1 then done;
 		}
 	}`)
 	if err == nil {
@@ -2096,11 +2115,12 @@ func stateExecutorForSource(t *testing.T, name, src string) *StateExecutor {
 func testCallOfUnhandledOperation(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting;
 			state moving;
 			succession first init then waiting;
-			transition waiting to moving accept go();
+			transition first waiting accept go() then moving;
 		}
 	}`)
 	exec.InvokeOperation("halt", nil)
@@ -2120,19 +2140,20 @@ func testCallOfUnhandledOperation(t *testing.T) {
 func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state outer {
 				state middle {
 					state inner;
 					state other;
-					transition inner to other accept step;
+					transition first inner accept step then other;
 				}
 				state recovered;
-				transition middle to recovered accept abort;
+				transition first middle accept abort then recovered;
 			}
 			state stopped;
 			succession first init then inner;
-			transition outer to stopped accept shutdown;
+			transition first outer accept shutdown then stopped;
 		}
 	}`)
 	exec.SendSignal("unknown", nil)
@@ -2151,12 +2172,13 @@ func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
 func testCompositeSelfTransitionWithNoSubstateToReEnter(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state Working {
 				state Step1;
 			}
 			succession first init then Working::Step1;
-			transition Working to Working accept restart;
+			transition first Working accept restart then Working;
 		}
 	}`)
 	exec.SendSignal("restart", nil)
@@ -2175,21 +2197,24 @@ func testCompositeSelfTransitionWithNoSubstateToReEnter(t *testing.T) {
 func testStaleCompositeTimerInARegion(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state working parallel {
 				state left {
-					initial lstart;
+					entry; then lstart;
+					state lstart;
 					state grouping {
 						state step1;
 						accept after 5 then late;
 					}
 					state moved;
 					state late;
-					transition lstart to step1;
-					transition grouping to moved accept skip;
+					transition first lstart then step1;
+					transition first grouping accept skip then moved;
 				}
 				state right {
-					initial rstart;
+					entry; then rstart;
+					state rstart;
 					state watching;
 					succession first rstart then watching;
 				}
@@ -2216,32 +2241,36 @@ func testStaleCompositeTimerInARegion(t *testing.T) {
 func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state outer parallel {
 				state left {
-					initial lstart;
+					entry; then lstart;
+					state lstart;
 					state grouping parallel {
 						state inner {
-							initial gstart;
+							entry; then gstart;
+							state gstart;
 							state g1;
 							state g2;
-							transition gstart to g1;
-							transition g1 to g2 accept advance;
+							transition first gstart then g1;
+							transition first g1 accept advance then g2;
 						}
 					}
-					transition lstart to grouping;
+					transition first lstart then grouping;
 				}
 				state right {
-					initial rstart;
+					entry; then rstart;
+					state rstart;
 					state watching;
-					transition rstart to watching;
+					transition first rstart then watching;
 				}
 				deep history resume;
 			}
 			state away;
 			succession first init then outer;
-			transition outer to away accept leave;
-			transition away to resume accept back;
+			transition first outer accept leave then away;
+			transition first away accept back then resume;
 		}
 	}`)
 	for _, signal := range []string{"advance", "leave", "back"} {
@@ -2264,11 +2293,12 @@ func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
 func testCallArgumentOfWrongType(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting;
 			state moving;
 			succession first init then waiting;
-			transition waiting to moving accept setSpeed(value) if value > 0;
+			transition first waiting accept setSpeed(value) if value > 0 then moving;
 		}
 	}`)
 	exec.InvokeOperation("setSpeed", map[string]Value{
@@ -2291,7 +2321,8 @@ func testHistoryOutsideCompositeState(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			&ast.StateNode{Name: "away"},
 			&ast.PseudostateNode{Kind: ast.PseudostateShallowHistory, Name: "H"},
 			transitionMember("init", "away"),
@@ -2325,7 +2356,8 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 		Kind:  ast.UsageState,
 		Ident: ast.Identification{Name: "Machine"},
 		Members: []ast.Node{
-			&ast.StateNode{Name: "init", IsInitial: true},
+			entryStart("init"),
+			&ast.StateNode{Name: "init"},
 			outer,
 			&ast.StateNode{Name: "away"},
 			transitionMember("init", "away"),
@@ -2835,7 +2867,8 @@ func testAcceptStatementDeadlockInALoop(t *testing.T) {
 func testNonNumericTimeTrigger(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting {
 				accept at "noon" then done;
 			}
@@ -2858,7 +2891,8 @@ func testTimeTriggerOfANonTimeDimension(t *testing.T) {
 		package test {
 			private import SI::*;
 			state Machine {
-				initial init;
+				entry; then init;
+				state init;
 				state waiting {
 					accept after 5 [kg] then done;
 				}
@@ -2885,7 +2919,8 @@ func testChangeConditionThatNeverHolds(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			attribute ready : Boolean = false;
-			initial init;
+			entry; then init;
+			state init;
 			state waiting {
 				accept when ready then done;
 			}
@@ -2910,17 +2945,20 @@ func testChangeConditionThatNeverHolds(t *testing.T) {
 func testForkBranchesShareRegion(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state ready;
 			state working parallel {
 				state left {
-					initial ls;
+					entry; then ls;
+					state ls;
 					state a;
 					state b;
 					succession first ls then a;
 				}
 				state right {
-					initial rs;
+					entry; then rs;
+					state rs;
 					state c;
 					succession first rs then c;
 				}
@@ -2929,9 +2967,9 @@ func testForkBranchesShareRegion(t *testing.T) {
 			final done;
 
 			succession first init then ready;
-			transition ready to split;
-			transition split to a;
-			transition split to b;
+			transition first ready then split;
+			transition first split then a;
+			transition first split then b;
 		}
 	}`)
 	if err == nil {
@@ -2947,14 +2985,15 @@ func testForkBranchesShareRegion(t *testing.T) {
 func testJoinWithOneIncomingBranch(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state ready;
 			join sync;
 			final done;
 
 			succession first init then ready;
-			transition ready to sync;
-			transition sync to done;
+			transition first ready then sync;
+			transition first sync then done;
 		}
 	}`)
 	if err == nil {
@@ -2975,20 +3014,22 @@ func testRegionPseudostateWithoutSatisfiedGuard(t *testing.T) {
 			attribute x : Integer = 9;
 
 			state left {
-				initial ls;
+				entry; then ls;
+				state ls;
 				state a;
 				state b;
 				succession first ls then a;
-				transition a to merge;
+				transition first a then merge;
 			}
 			state right {
-				initial rs;
+				entry; then rs;
+				state rs;
 				state c;
 				succession first rs then c;
 			}
 			junction merge;
 
-			transition merge to b if x == 1;
+			transition first merge if x == 1 then b;
 		}
 	}`)
 	if err == nil {
@@ -3006,21 +3047,23 @@ func testRegionPseudostateCycle(t *testing.T) {
 	_, _, err := executeStateSource(t, "Machine", `package test {
 		state Machine parallel {
 			state left {
-				initial ls;
+				entry; then ls;
+				state ls;
 				state a;
 				succession first ls then a;
-				transition a to first;
+				transition first a then first;
 			}
 			state right {
-				initial rs;
+				entry; then rs;
+				state rs;
 				state c;
 				succession first rs then c;
 			}
 			junction first;
 			junction second;
 
-			transition first to second;
-			transition second to first;
+			transition first first then second;
+			transition first second then first;
 		}
 	}`)
 	if err == nil {
@@ -3406,7 +3449,8 @@ func testStateDanglingTransition(t *testing.T) {
 	src := `
 		package test {
 			state Machine {
-				initial init;
+				entry; then init;
+				state init;
 				succession first init then nowhere; // 'nowhere' state doesn't exist
 			}
 		}
@@ -3506,7 +3550,8 @@ func testSourcelessAcceptAtTopLevel(t *testing.T) {
 	src := `
 		package test {
 			state Machine {
-				initial init;
+				entry; then init;
+				state init;
 				state waiting;
 				state active;
 				succession first init then waiting;
@@ -4994,7 +5039,8 @@ func testStateBodyUnresolvedUnit(t *testing.T) {
 			public import ScalarValues::*;
 			state monitor {
 				attribute speed : Real = 1.5 [knot];
-				initial start;
+				entry; then start;
+				state start;
 				state running;
 				succession first start then running;
 			}

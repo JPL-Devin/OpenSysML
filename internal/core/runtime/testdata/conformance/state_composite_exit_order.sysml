@@ -5,7 +5,8 @@ package Test {
 	state Machine {
 		attribute log : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state Outer {
 			exit { log = log * 10 + 3; }
 			state Middle {
@@ -20,6 +21,6 @@ package Test {
 		}
 
 		succession first start then Inner;
-		transition Outer to Done when Abort do assign log := log * 10 + 4;
+		transition first Outer when Abort do assign log := log * 10 + 4 then Done;
 	}
 }

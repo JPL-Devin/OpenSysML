@@ -89,11 +89,12 @@ func TestActionMessageReachesStateMachine(t *testing.T) {
 			succession first sender then done;
 		}
 		state Driver {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting;
 			final done;
 			succession first init then waiting;
-			transition waiting to done when Ping;
+			transition first waiting when Ping then done;
 		}
 	}`))
 	root := idx.DocumentRoot("<test>")
@@ -157,11 +158,12 @@ func TestSendOfNamedTypeReachesStateMachine(t *testing.T) {
 	_, visits, err := executeStateSource(t, "Driver", `package P {
 		item def Ping;
 		state Driver {
-			initial start;
+			entry; then start;
+			state start;
 			state waiting { entry { send Ping to Driver; } }
 			final done;
 			succession first start then waiting;
-			transition waiting to done when Ping;
+			transition first waiting when Ping then done;
 		}
 	}`)
 	if err != nil {
@@ -177,11 +179,12 @@ func TestStateMachineLeavesForeignSignalPending(t *testing.T) {
 		item def Ping;
 		item def Pong;
 		state Driver {
-			initial start;
+			entry; then start;
+			state start;
 			state waiting { entry { send Pong to Driver; } }
 			final done;
 			succession first start then waiting;
-			transition waiting to done when Ping;
+			transition first waiting when Ping then done;
 		}
 	}`))
 	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Driver", ast.DefState)
@@ -410,11 +413,12 @@ func TestPortRoutedMessageDoesNotReachStateMachine(t *testing.T) {
 			succession first sender then done;
 		}
 		state Driver {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting;
 			final done;
 			succession first init then waiting;
-			transition waiting to done when Ping;
+			transition first waiting when Ping then done;
 		}
 	}`))
 	root := idx.DocumentRoot("<test>")
@@ -485,11 +489,12 @@ func TestCallEventMatchesOperationName(t *testing.T) {
 func TestRejectedCallLeavesNoArgumentsBehind(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting;
 			state moving;
 			succession first init then waiting;
-			transition waiting to moving accept setSpeed(value) if value > 0;
+			transition first waiting accept setSpeed(value) if value > 0 then moving;
 		}
 	}`)
 	exec.InvokeOperation("setSpeed", map[string]Value{
@@ -853,11 +858,12 @@ func TestAddressedSendToQualifiedNameReachesReceiver(t *testing.T) {
 			succession first sender then done;
 		}
 		state Driver {
-			initial init;
+			entry; then init;
+			state init;
 			state waiting;
 			final done;
 			succession first init then waiting;
-			transition waiting to done when Ping;
+			transition first waiting when Ping then done;
 		}
 	}`))
 	root := idx.DocumentRoot("<test>")

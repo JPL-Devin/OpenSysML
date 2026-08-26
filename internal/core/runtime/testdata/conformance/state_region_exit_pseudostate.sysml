@@ -10,15 +10,17 @@ package Test {
 
 		state working parallel {
 			state left {
-				initial lstart;
+				entry; then lstart;
+				state lstart;
 				state lwork { exit { exits = exits + 1; } }
 
 				succession first lstart then lwork;
-				transition lwork to leave;
+				transition first lwork then leave;
 			}
 
 			state right {
-				initial rstart;
+				entry; then rstart;
+				state rstart;
 				state rwork { exit { exits = exits + 10; } }
 
 				succession first rstart then rwork;
@@ -28,6 +30,6 @@ package Test {
 		choice leave;
 		state stopped;
 
-		transition leave to stopped if exits == 0;
+		transition first leave if exits == 0 then stopped;
 	}
 }
