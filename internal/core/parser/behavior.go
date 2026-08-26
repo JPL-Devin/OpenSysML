@@ -472,16 +472,8 @@ func (p *Parser) parseActionMember() ast.Node {
 
 	// The words of our own node notation are names the lexer does not reserve,
 	// so they are matched by the shape around them (see notation.go).
-	if w, ok := p.atActionNodeWord(); ok {
-		tok := p.advance()
-		switch w {
-		case "initial":
-			return p.parseInitialNode(tok)
-		case "done", "final":
-			return p.parseFinalNode(tok)
-		case "decision":
-			return p.parseDecisionNode(tok)
-		}
+	if _, ok := p.atActionNodeWord(); ok {
+		return p.parseFinalNode(p.advance())
 	}
 
 	// A `first` end reached through a feature chain is a SuccessionAsUsage
@@ -619,7 +611,6 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 		Name:      name,
 		Successor: successor,
 		Guard:     guard,
-		Keyword:   p.wordText(tok),
 		Members:   members,
 		HasBody:   hasBody,
 	}
@@ -639,10 +630,7 @@ func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 
 	p.expect(lexer.Semicolon, "expected ';' after final node")
 
-	node := &ast.FinalNode{
-		Name:    name,
-		Keyword: p.wordText(tok),
-	}
+	node := &ast.FinalNode{Name: name}
 	node.NodeSpan = p.spanFrom(start)
 	return node
 }
@@ -700,7 +688,6 @@ func (p *Parser) parseDecisionNode(tok lexer.Token) ast.Node {
 	node := &ast.DecisionNode{
 		Name:     name,
 		NameSpan: nameSpan,
-		Keyword:  p.wordText(tok),
 		Members:  members,
 		HasBody:  hasBody,
 	}
@@ -859,7 +846,7 @@ func (p *Parser) atNamespaceSuccession() bool {
 // startsActionBodyItem reports whether the token n ahead, the first inside a
 // braced action body, begins an action body item (SysML.xtext ActionBodyItem)
 // rather than an expression. Only words that cannot begin an expression qualify,
-// so `done` and `decision` count only in the node shape (see notation.go).
+// so `done` counts only in the node shape (see notation.go).
 func (p *Parser) startsActionBodyItem(n int) bool {
 	if p.peekN(n).Kind == lexer.Identifier {
 		_, ok := p.actionNodeWordAt(n)

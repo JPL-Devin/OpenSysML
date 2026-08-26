@@ -30,13 +30,13 @@ contextually where our own notation needs it — the treatment `point`, `on` and
 | Word | `KerML.xtext` | `SysML.xtext` | `KerMLExpressions.xtext` | Verdict |
 |------|---------------|---------------|--------------------------|---------|
 | `choice` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
-| `decision` | absent | absent | absent | unreserve; spelling variant of standard `decide` (warning) |
+| `decision` | absent | absent | absent | unreserve; **an ordinary name only** — the action node spelled `decision` is no longer accepted, write `decide` |
 | `deep` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `defer` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `done` | absent | absent | absent | unreserve; **silent** — see "`done` is a library name, not notation" |
-| `final` | absent | absent | absent | unreserve; spelling variant of `done`/state notation (warning) |
+| `final` | absent | absent | absent | unreserve; state notation (warning); the action node spelled `final` is no longer accepted, write `done` |
 | `history` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
-| `initial` | absent | absent | absent | unreserve; spelling variant of standard `first` (warning) |
+| `initial` | absent | absent | absent | unreserve; state notation (warning); the action node spelled `initial` is no longer accepted, write `first` |
 | `junction` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `region` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
 | `shallow` | absent | absent | absent | unreserve; notation is an OpenSysML extension (warning) |
@@ -56,8 +56,8 @@ Case Usage Example.sysml:35`) and `snapshot junked = done;`
 references to `Actions::Action::done`, a feature of the standard library, not a
 keyword. Our parser still reads `done;` and `then done;` as the final node it
 always built, and the construct stays **silent**: warning on it would warn on
-OMG-authored files, which the classification forbids. `final` is our own
-spelling of the same node and is warned.
+OMG-authored files, which the classification forbids. `final` was our own
+spelling of the same node and is no longer accepted as one.
 
 ## Verdict per construct
 
@@ -100,9 +100,6 @@ unchanged.
 |-----------|------------------------|
 | `initial <name>;` in a state body | `StateBodyItem` (`SysML.xtext:1755-1770`) has no such member; the standard way to mark the first state is `entry; then <state>;` (`EntryTransitionMember`, `:1796-1801`) |
 | `final <name>;` in a state body | same; no `final` literal anywhere |
-| `initial <name> [then <target>];` action node | spelling variant of `first` (`SysML.xtext:1385`), which has the literal |
-| `final [<name>];` action node | spelling variant of the `done` reference above |
-| `decision <name>;` | spelling variant of `decide` (`SysML.xtext:1672`) |
 | `region <name> { … }` | no `region` literal; the standard orthogonality marker is `parallel` (`:1745`) |
 | `choice <name>;`, `junction <name>;` | no literal; no pseudostate production of any kind |
 | `history <name>;`, `shallow history <name>;`, `deep history <name>;` | same |
@@ -161,9 +158,12 @@ disagree with them:
 - **`done` silent, `final` warned.** No grammar has either literal. `done` is
   classified standard because the OMG corpora write it (as a library-feature
   reference) and a warning there would be a false positive; `final` appears in
-  no OMG file.
-- **`first`/`initial`, `decide`/`decision`.** Where we accept two spellings of
-  one node, the one with the literal is silent and ours is warned.
+  no OMG file. `final` is warned as a **state** marker only: the action node it
+  once spelled is no longer accepted at all.
+- **An alias of a standard node is removed, not warned.** The action nodes
+  spelled `initial`, `final` and `decision` were pure aliases of `first`, `done`
+  and `decide`, so they are gone rather than diagnosed; each word stays an
+  ordinary name.
 - **State-body `fork`/`join` silent.** They are action node literals, and
   `StateBodyItem` admits a `BehaviorUsageMember`, so we read them as standard in
   a state body even though the pilot's state examples do not use them there.
