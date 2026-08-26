@@ -269,7 +269,8 @@ class TestRuntimeIntegration:
         src = '''
         package Test {
             state Machine {
-                initial init;
+                entry; then init;
+                state init;
                 state Running;
                 final done;
 
@@ -305,7 +306,8 @@ class TestRuntimeIntegration:
                 succession first inner then done;
             }
             state Machine {
-                initial init;
+                entry; then init;
+                state init;
                 state Running;
                 final done;
 
