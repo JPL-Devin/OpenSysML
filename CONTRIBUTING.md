@@ -49,8 +49,8 @@ make build-grpc
 make install
 
 # Protobuf schema (api/proto/sysml.proto), all codegen driven by buf
-make proto           # regenerate the Go and Python stubs
-make proto-go        # Go stubs only
+make proto           # regenerate the Go, Java and Python stubs
+make proto-buf       # Go and Java stubs only
 make python-proto    # Python stubs only (needs grpcio-tools; PYTHON=... picks the interpreter)
 make proto-lint      # lint the schema, as CI does
 make proto-breaking  # reject wire-breaking changes against main, as CI does

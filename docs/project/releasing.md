@@ -563,3 +563,102 @@ source on every run.
 
 This is expected to happen exactly once. Nothing further should be published
 under the old name; a client fix goes to `opensysml`.
+
+## Releasing the Java client to Maven Central
+
+**Nothing has been published, and nothing in CI publishes it.** The Java client
+in `clients/java/` builds a complete, signable artifact today, and the steps
+below are what a maintainer does once the accounts exist. Until then
+`mvn -f clients/java/pom.xml install` is the way to consume it, and the version
+is `0.1.0-SNAPSHOT`, which Central refuses by design.
+
+### What a maintainer must obtain first
+
+None of these can be provisioned from a checkout:
+
+1. **A verified namespace.** Register `io.github.open-mbee` at
+   [central.sonatype.com](https://central.sonatype.com/) → *Namespaces* → *Add
+   Namespace*. An `io.github.<org>` namespace is verified by proving control of
+   the GitHub organization: the portal names a temporary repository the
+   organization must create. The alternative, a DNS-verified `org.openmbee`,
+   needs a TXT record on `openmbee.org` — pick one and use it for every future
+   Java artifact, because the `groupId` is in every consumer's build file.
+2. **A published GPG key.** Central requires a detached signature per artifact,
+   verified against a public keyserver:
+
+   ```bash
+   gpg --quick-generate-key 'Open-MBEE Release Signing <release@openmbee.org>' rsa4096 sign 2y
+   gpg --keyserver keys.openpgp.org --send-keys <KEY_ID>
+   ```
+
+   The private key and its passphrase belong in a **restricted CircleCI
+   context**, as `GPG_PRIVATE_KEY` (ASCII-armoured, `gpg --export-secret-keys
+   --armor`) and `GPG_PASSPHRASE`, restricted to a security group the way the
+   `PyPI` context is (see [what the job needs](#what-the-job-needs)). A key with
+   an expiry needs rotating before it expires; signatures already published stay
+   verifiable.
+3. **Portal tokens.** Central portal → *View Account* → *Generate User Token*
+   gives a username/password pair for a `<server>` with `<id>central`. In CI they
+   are `CENTRAL_TOKEN_USERNAME`/`CENTRAL_TOKEN_PASSWORD` in the same context,
+   written into `~/.m2/settings.xml` by the job.
+
+### The version, and the tag
+
+`clients/java/pom.xml` declares the version once, and both modules inherit it
+from the parent. A release drops `-SNAPSHOT`, lands, and is tagged
+`opensysml-java-v<version>` — its own tag, for the reason the Python client has
+one: the client does not ship the service, so its version says nothing about
+which core release it runs against, and a Maven Central version can never be
+replaced, so it must not hang off a `v*` core tag that `ghr -replace` re-runs.
+
+### What the build already produces
+
+`mvn -f clients/java/pom.xml install` attaches everything Central validates:
+
+- `opensysml-client-<version>.jar`, `-sources.jar` and `-javadoc.jar` (the
+  `maven-source-plugin` and `maven-javadoc-plugin` executions are in the default
+  build, not the release profile, so a missing one fails long before a release);
+- POM metadata Central requires: `name`, `description`, `url`, `licenses`,
+  `developers`, `scm`;
+- `opensysml-conformance`, which sets `maven.deploy.skip` — it is a test harness,
+  not a published artifact.
+
+The `release` profile adds what only a release needs: `maven-gpg-plugin` signing
+at `verify`, and `central-publishing-maven-plugin` with **`autoPublish=false`**,
+so `mvn deploy` uploads a deployment that then sits in the portal until a human
+releases it. That is the equivalent of the staging repository the old OSSRH
+workflow had, and it is deliberate: the publication is the irreversible step.
+
+### The procedure
+
+```bash
+# 1. Drop -SNAPSHOT in clients/java/pom.xml, land it, then from that commit:
+make build                                            # the service the tests start
+mvn -f clients/java/pom.xml clean verify              # tests, javadoc, sources
+mvn -f clients/java/pom.xml -Prelease verify          # + signatures, no upload
+gpg --verify clients/java/opensysml-client/target/*.jar.asc   # check one by hand
+
+# 2. Upload a deployment (still not published):
+mvn -f clients/java/pom.xml -Prelease deploy -pl opensysml-client
+
+# 3. central.sonatype.com → Deployments → review the validation report →
+#    "Publish". Availability on Maven Central follows within ~30 minutes,
+#    search indexing later.
+
+# 4. Tag what was published, and bump to the next -SNAPSHOT.
+git tag opensysml-java-v0.1.0 && git push origin opensysml-java-v0.1.0
+```
+
+A deployment that fails validation can be dropped from the portal and re-uploaded
+under the same version; one that has been **published** cannot be replaced or
+deleted, so a mistake needs a new version.
+
+### A CI job, when there is something to publish
+
+There is no `publish-maven` job yet, and adding one before the namespace exists
+would be a job that can only fail. When it is added it should mirror
+`publish-pypi`: triggered by `/^opensysml-java-v.*/` only, running on a restricted
+context, refusing to run when a variable it needs is absent rather than letting
+Central answer with a 401, checking the tag names the declared version, and
+stopping at an unpublished deployment. `test-java` already runs the client's
+tests and the conformance suite on every commit.
