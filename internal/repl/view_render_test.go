@@ -222,8 +222,14 @@ func TestPseudoViewErrorsUseTheSessionLookupAndListAlternatives(t *testing.T) {
 func TestTargetlessPseudoViewSpansLoadedDocuments(t *testing.T) {
 	s := NewSession()
 	res := s.SubmitFiles([]SourceFile{
-		{Name: "second.kerml", Text: "package Second { class Two; }"},
-		{Name: "first.sysml", Text: "package First { part def One; }"},
+		{Name: "second.kerml", Text: `package Second {
+    class TwoA;
+    class TwoB;
+}`},
+		{Name: "first.sysml", Text: `package First {
+    part def OneA;
+    part def OneB;
+}`},
 	})
 	for _, d := range res.Diagnostics {
 		if d.Severity == passes.SeverityError {
@@ -235,13 +241,16 @@ func TestTargetlessPseudoViewSpansLoadedDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := rendering.Text()
-	first := strings.Index(text, "First::One")
-	second := strings.Index(text, "Second::Two")
-	if first < 0 || second < 0 {
-		t.Fatalf("rendering does not span both documents:\n%s", text)
-	}
-	if second > first {
-		t.Errorf("document order was not preserved:\n%s", text)
+	at := -1
+	for _, want := range []string{"Second::TwoA", "Second::TwoB", "First::OneA", "First::OneB"} {
+		next := strings.Index(text, want)
+		if next < 0 {
+			t.Fatalf("rendering does not span both documents; missing %s:\n%s", want, text)
+		}
+		if next <= at {
+			t.Errorf("document order was not preserved at %s:\n%s", want, text)
+		}
+		at = next
 	}
 }
 

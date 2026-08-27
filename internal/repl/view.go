@@ -203,6 +203,8 @@ func (s *Session) symbolsInLoadOrder(in func(*symbols.Scope) []*symbols.Symbol) 
 	for _, doc := range s.sessionDocs() {
 		out = append(out, in(idx.DocumentRoot(doc.Name))...)
 	}
+	// The language documents are masked copies of one joined buffer, so their
+	// spans share coordinates and sorting restores submission order.
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].DeclSpan.Offset < out[j].DeclSpan.Offset
 	})
