@@ -6,5 +6,5 @@
 sequenceDiagram
   participant n0 as part caller
   participant n1 as part callee
-  n0->>n1: of Ping
   n0->>n0: echo
+  n0->>n1: of Ping

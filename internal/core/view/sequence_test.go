@@ -25,8 +25,10 @@ func TestSequenceRenderingDrawsLifelinesAndMessages(t *testing.T) {
 			t.Errorf("lifeline %s carries no origin", node.Name)
 		}
 	}
-	if got := messageLabels(rendering); !slices.Equal(got, []string{"publish_message", "subscribe_message", "deliver_message"}) {
-		t.Errorf("messages = %v, want one per message usage", got)
+	// The successions between the events state that the subscription precedes the
+	// publication, against the order the messages are declared in.
+	if got := messageLabels(rendering); !slices.Equal(got, []string{"subscribe_message", "publish_message", "deliver_message"}) {
+		t.Errorf("messages = %v, want one per message usage in the stated order", got)
 	}
 	for _, edge := range rendering.Edges {
 		if edge.Kind != EdgeFlow {
@@ -38,16 +40,17 @@ func TestSequenceRenderingDrawsLifelinesAndMessages(t *testing.T) {
 	}
 }
 
-// The short name of the standard view definition states the same kind, and an
+// The short name of the standard view definition states the same kind; an
 // anonymous message is labeled with the payload it carries rather than left
-// blank.
+// blank; and an action the interaction performs is behavior rather than a
+// participant, so it is no lifeline and its own flows are reported.
 func TestSequenceRenderingFromTheShortViewName(t *testing.T) {
 	rendering := render(t, "sequence-vehicle.sysml", "VehicleSequenceViews::startVehicleView")
 	if rendering.Kind != KindSequence {
 		t.Fatalf("kind = %q, want %q", rendering.Kind, KindSequence)
 	}
-	if got := lifelineNames(rendering); !slices.Equal(got, []string{"startVehicle", "driver", "vehicle"}) {
-		t.Errorf("lifelines = %v, want the action performed and the parts performing it", got)
+	if got := lifelineNames(rendering); !slices.Equal(got, []string{"driver", "vehicle"}) {
+		t.Errorf("lifelines = %v, want the parts only: the action performed is not a participant", got)
 	}
 	labels := messageLabels(rendering)
 	for _, want := range []string{"of ignitionCmd : IgnitionCmd", "of es : EngineStatus"} {
@@ -55,20 +58,16 @@ func TestSequenceRenderingFromTheShortViewName(t *testing.T) {
 			t.Errorf("messages = %v, want an anonymous message labeled %q", labels, want)
 		}
 	}
-	// A flow between the actions of one lifeline is a self-message, drawn.
-	var self int
+	// The flows written inside the performed action are its action flow; they are
+	// reported rather than drawn on a lifeline of their own.
 	for _, edge := range rendering.Edges {
 		if edge.From == edge.To {
-			self++
+			t.Errorf("message %q is drawn as a self-message; the action's own flows are not messages", edge.Label)
 		}
 	}
-	if self == 0 {
-		t.Errorf("no self-message among %v; the flows within startVehicle run on one lifeline", rendering.Edges)
-	}
-	// The succession between events no message reaches states no order, and is
-	// ordinary structure rather than a failure.
-	if len(rendering.Notices) != 0 {
-		t.Errorf("notices = %v, want none", rendering.Notices)
+	if len(rendering.Notices) != 1 ||
+		!strings.Contains(rendering.Notices[0], "the flows in action startVehicle are its action flow") {
+		t.Errorf("notices = %v, want the performed action's flows reported", rendering.Notices)
 	}
 }
 
@@ -79,16 +78,16 @@ func TestSequenceRenderingReportsWhatItCannotShow(t *testing.T) {
 	if got := lifelineNames(rendering); !slices.Equal(got, []string{"caller", "callee"}) {
 		t.Errorf("lifelines = %v, want the parts only", got)
 	}
-	if got := messageLabels(rendering); !slices.Equal(got, []string{"of Ping", "echo"}) {
-		t.Errorf("messages = %v, want the port-to-port flow and the self-message", got)
+	if got := messageLabels(rendering); !slices.Equal(got, []string{"echo", "of Ping"}) {
+		t.Errorf("messages = %v, want the self-message and the port-to-port flow", got)
 	}
-	if rendering.Edges[0].From != rendering.Roots[0].ID || rendering.Edges[0].To != rendering.Roots[1].ID {
-		t.Errorf("the flow between the ports is drawn %s => %s, want caller => callee",
-			rendering.Edges[0].From, rendering.Edges[0].To)
+	ping, echo := edgeLabeled(t, rendering, "of Ping"), edgeLabeled(t, rendering, "echo")
+	if ping.From != rendering.Roots[0].ID || ping.To != rendering.Roots[1].ID {
+		t.Errorf("the flow between the ports is drawn %s => %s, want caller => callee", ping.From, ping.To)
 	}
-	if rendering.Edges[1].From != rendering.Edges[1].To {
+	if echo.From != echo.To {
 		t.Errorf("the message between two events of caller is drawn %s => %s, want a self-message",
-			rendering.Edges[1].From, rendering.Edges[1].To)
+			echo.From, echo.To)
 	}
 	wants := []string{
 		"attribute def Kit::Level has no place in a sequence rendering",
@@ -191,6 +190,19 @@ func lifelineNames(rendering *Rendering) []string {
 		out = append(out, node.Name)
 	}
 	return out
+}
+
+// edgeLabeled is the one message carrying a label, so a check names the message
+// it is about rather than an index into the order.
+func edgeLabeled(t *testing.T, rendering *Rendering, label string) Edge {
+	t.Helper()
+	for _, edge := range rendering.Edges {
+		if edge.Label == label {
+			return edge
+		}
+	}
+	t.Fatalf("no message labeled %q among %v", label, messageLabels(rendering))
+	return Edge{}
 }
 
 // messageLabels are the labels of a rendering's messages, in order.

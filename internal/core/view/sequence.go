@@ -49,6 +49,7 @@ func (r *Renderer) renderSequence(exposed []*symbols.Symbol, out *Rendering) {
 				declKind(elem), r.notationName(elem)))
 		}
 	}
+	out.Notices = append(out.Notices, stated.notices...)
 	for _, connector := range stated.connectors {
 		out.Notices = append(out.Notices, fmt.Sprintf(
 			"%s states no direction; a sequence rendering shows directed messages only",
@@ -59,12 +60,13 @@ func (r *Renderer) renderSequence(exposed []*symbols.Symbol, out *Rendering) {
 
 // lifelinesOf are the lifelines an exposed element contributes: the occurrences
 // an interaction declares in its body, else the element itself when it declares
-// none. The container is not a lifeline of its own interaction.
+// none. The container is not a lifeline of its own interaction, and neither is
+// behavior it performs, which a sequence rendering shows as messages instead.
 func lifelinesOf(elem *symbols.Symbol) []*symbols.Symbol {
 	if occurrenceContainer(elem) {
 		var participants []*symbols.Symbol
 		for _, member := range containedMembers(elem) {
-			if lifelineLike(member) {
+			if lifelineLike(member) && !behaviorLike(member) {
 				participants = append(participants, member)
 			}
 		}
@@ -98,6 +100,7 @@ type interactions struct {
 	flows      []*symbols.Symbol
 	connectors []*symbols.Symbol
 	orders     []order
+	notices    []string
 	seen       map[*symbols.Symbol]bool
 }
 
@@ -142,10 +145,31 @@ func (r *Renderer) collectInteractions(sym *symbols.Symbol, into *interactions, 
 			r.addSuccessionUsage(member, into)
 		case r.model.IsConnectorUsage(member):
 			into.addConnector(member)
+		case behaviorLike(member):
+			if !r.statesFlow(member, depth+1) {
+				continue
+			}
+			into.notices = append(into.notices, fmt.Sprintf(
+				"the flows in %s are its action flow, not interaction messages; they are not shown",
+				r.noticeSubject(member)))
 		default:
 			r.collectInteractions(member, into, visited, depth+1)
 		}
 	}
+}
+
+// statesFlow reports whether an element or anything nested in it states a flow,
+// which is what there is to report rather than draw as a message.
+func (r *Renderer) statesFlow(sym *symbols.Symbol, depth int) bool {
+	if sym == nil || depth >= maxTreeDepth {
+		return false
+	}
+	for _, member := range containedMembers(sym) {
+		if isFlowUsage(member) || r.statesFlow(member, depth+1) {
+			return true
+		}
+	}
+	return false
 }
 
 // addSuccessionUsage records the order a `succession first a then b;` states,
@@ -293,9 +317,17 @@ func (r *Renderer) subject(sym *symbols.Symbol, kind string) string {
 		return kind + " " + notationName(name)
 	}
 	if owner := ownerOf(sym); owner != nil {
-		return fmt.Sprintf("a %s in %s", kind, r.notationName(owner))
+		return fmt.Sprintf("%s %s in %s", article(kind), kind, r.notationName(owner))
 	}
-	return "a " + kind
+	return article(kind) + " " + kind
+}
+
+// article is the indefinite article a kind reads with.
+func article(kind string) string {
+	if kind != "" && strings.ContainsRune("aeiou", rune(kind[0])) {
+		return "an"
+	}
+	return "a"
 }
 
 // messageKind is the keyword a message was written with — `message` or `flow`.
@@ -405,7 +437,14 @@ func (r *Renderer) orderMessages(messages []message, orders []order, out *Render
 		for place, i := range sorted {
 			rank[occurrences[i]] = place
 		}
-		sort.SliceStable(messages, func(i, j int) bool { return rank[messages[i].from] < rank[messages[j].from] })
+		// A row states order at both ends, so the receiving occurrence ranks first;
+		// each message's own from → to edge carries the sending order into it.
+		sort.SliceStable(messages, func(i, j int) bool {
+			if rank[messages[i].to] != rank[messages[j].to] {
+				return rank[messages[i].to] < rank[messages[j].to]
+			}
+			return rank[messages[i].from] < rank[messages[j].from]
+		})
 	} else {
 		out.Notices = append(out.Notices, fmt.Sprintf(
 			"successions form a cycle (%s); the messages are shown in declaration order",
@@ -517,6 +556,17 @@ func occurrenceContainer(sym *symbols.Symbol) bool {
 	}
 	if usage, ok := sym.Decl.(*ast.Usage); ok {
 		return usage.Kind == ast.UsageInteraction
+	}
+	return false
+}
+
+// behaviorLike reports whether an element is behavior an interaction performs
+// rather than a participant in it, whose flows are its own action flow.
+func behaviorLike(sym *symbols.Symbol) bool {
+	switch sym.Kind {
+	case symbols.SymbolActionDef, symbols.SymbolActionUsage,
+		symbols.SymbolStateDef, symbols.SymbolStateUsage:
+		return true
 	}
 	return false
 }

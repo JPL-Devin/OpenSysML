@@ -5,6 +5,6 @@ part server
 part consumer
 
 messages:
-  producer => server: publish_message
   consumer => server: subscribe_message
+  producer => server: publish_message
   server => consumer: deliver_message
