@@ -264,6 +264,15 @@ On a forked PR the context is withheld, so `SONAR_TOKEN` is empty; the job
 halts successfully rather than failing every outside contribution. When the
 token is present, a failing scan fails the job.
 
+The job checks out with `method: full`, and that is load-bearing: CircleCI's
+default checkout is a *blobless* partial clone, and Sonar blames every file with
+JGit, which cannot fetch a blob on demand — against a blobless clone the scan
+dies with `MissingObjectException: Missing blob ...` in the SCM publisher. A
+step after the checkout fails the job if the clone is partial or missing an
+object reachable from `HEAD`, so a blame that would silently date every issue to
+the import is reported as the configuration error it is. Other jobs read only
+the current tree and keep the faster default.
+
 The job runs on a `large` container with `SONAR_SCANNER_OPTS: -Xmx4g`, which is
 not tuning for its own sake: Sonar's Go sensor parses one directory at a time
 and holds that directory's parser output in memory, so a large package
