@@ -264,6 +264,15 @@ On a forked PR the context is withheld, so `SONAR_TOKEN` is empty; the job
 halts successfully rather than failing every outside contribution. When the
 token is present, a failing scan fails the job.
 
+The job runs on a `large` container with `SONAR_SCANNER_OPTS: -Xmx4g`, which is
+not tuning for its own sake: Sonar's Go sensor parses one directory at a time
+and holds that directory's parser output in memory, so a large package
+(`internal/core/runtime`) exhausted the scanner's default heap with
+`java.lang.OutOfMemoryError`. If a new package makes it fail there again, raise
+that heap rather than splitting the package. Note also that the launcher in the
+pinned scanner CLI passes `$SONAR_SCANNER_OPTS` and not
+`SONAR_SCANNER_JAVA_OPTS`, so the newer variable name has no effect here.
+
 One-time maintainer step (already done for `Open-MBEE_OpenSysML`, but true of
 any future project): SonarCloud does not create a project from a CI-run scan
 (the scanner sends branch parameters, and Cloud cannot provision from those —
