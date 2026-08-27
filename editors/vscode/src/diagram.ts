@@ -454,6 +454,10 @@ function html(
       <summary></summary>
       <ul id="notice-list"></ul>
     </details>
+    <details id="undrawable" hidden>
+      <summary></summary>
+      <ul id="undrawable-list"></ul>
+    </details>
     <script nonce="${nonce}" src="${script}"></script>
   </body>
 </html>`;

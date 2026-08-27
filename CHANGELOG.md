@@ -21,6 +21,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **The `opensysml/views` response now reports supported pseudo-view specs**, so clients can offer
   newly supported rendering kinds without maintaining a second list.
 
+### Changed
+
+- **Why a listed view is not drawable is now written under the diagram** rather than only in the
+  picker entry's tooltip, so a `geometry` or `textual` view says what it is that cannot be drawn
+  without the reason having to be hovered for.
+
 ### Fixed
 
 - **Clicking a sequence participant now reveals its declaration, and the cursor highlights it**

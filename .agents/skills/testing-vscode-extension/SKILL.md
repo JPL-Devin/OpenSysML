@@ -394,9 +394,9 @@ degradation case.
   to a 5-entry historical list, which makes a **server build from before the change the perfect
   negative control** for "is the picker really server-driven?".
 - An **unsupported** view (`geometry`) is rendered as a *disabled* `<option>` with text suffix
-  `(not drawable)`; its `reason` is only the option's `title` (tooltip), so the reason string is not
-  visibly assertable from a screenshot — assert the greyed `(not drawable)` text and prove the reason
-  over JSON-RPC instead. A geometry-view fixture is `internal/core/view/testdata/errors.sysml`
+  `(not drawable)`, and its `reason` is also written under the diagram in a `1 view not drawable`
+  collapsible (`#undrawable`) — expand it to assert the reason text on screen, rather than hovering
+  the option's `title`. A geometry-view fixture is `internal/core/view/testdata/errors.sysml`
   (`ErrorViews::geometryView`); `examples/views-demo.sysml` no longer declares any unsupported view
   (all 7 of its views are `supported:true` when opened from a scratch folder).
 - The `#state` pseudo-view on `examples/state-machine-demo.sysml` renders
