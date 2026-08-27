@@ -36,8 +36,8 @@ type ServerInfo struct {
 }
 
 // Has reports whether the implementation names the capability. Negotiate on
-// capabilities, not on versions: the service does not refuse a call it lacks
-// the capability for, so require the name before relying on the behaviour.
+// capabilities, not on versions; preflight gives a clearer error than waiting
+// for a capability-gated request to be refused.
 func (si *ServerInfo) Has(capability string) bool {
 	return si != nil && slices.Contains(si.Capabilities, capability)
 }

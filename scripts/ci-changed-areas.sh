@@ -22,9 +22,10 @@ docs_pattern='^(docs/|mkdocs\.yml$|README\.md$|CHANGELOG\.md$|CONTRIBUTING\.md$|
 node_pattern='^clients/node/'
 python_pattern='^python/'
 java_pattern='^clients/java/'
+rust_pattern='^rust/'
 vscode_pattern='^editors/vscode/'
 
-known_pattern="$service_pattern|$docs_pattern|$node_pattern|$python_pattern|$java_pattern|$vscode_pattern|^\.agents/|^\.gitignore$|^LICENSE|^packaging/"
+known_pattern="$service_pattern|$docs_pattern|$node_pattern|$python_pattern|$java_pattern|$rust_pattern|$vscode_pattern|^\.agents/|^\.gitignore$|^LICENSE|^packaging/"
 
 matches() { grep -Eq "$1" <<<"$changed"; }
 
@@ -43,4 +44,5 @@ emit docs "$( { [ "$service" = true ] || matches "$docs_pattern"; } && echo true
 emit node "$( { [ "$service" = true ] || matches "$node_pattern"; } && echo true || echo false)"
 emit python "$( { [ "$service" = true ] || matches "$python_pattern"; } && echo true || echo false)"
 emit java "$( { [ "$service" = true ] || matches "$java_pattern"; } && echo true || echo false)"
+emit rust "$( { [ "$service" = true ] || matches "$rust_pattern"; } && echo true || echo false)"
 emit vscode "$( { [ "$service" = true ] || matches "$vscode_pattern"; } && echo true || echo false)"

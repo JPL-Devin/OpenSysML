@@ -47,18 +47,19 @@ case_ changelog-only docs CHANGELOG.md
 case_ java-only java clients/java/opensysml-client/pom.xml
 case_ node-only node clients/node/package.json
 case_ python-only python python/opensysml/connection.py
+case_ rust-only rust rust/opensysml/src/connection.rs
 case_ vscode-only vscode editors/vscode/package.json
 # The grammar generator and its committed output are held together by a Go test.
-case_ vscode-grammar docs,go,java,node,python,vscode editors/vscode/tools/gengrammar/grammar.go
-case_ vscode-syntaxes docs,go,java,node,python,vscode editors/vscode/syntaxes/sysml.tmLanguage.json
+case_ vscode-grammar docs,go,java,node,python,rust,vscode editors/vscode/tools/gengrammar/grammar.go
+case_ vscode-syntaxes docs,go,java,node,python,rust,vscode editors/vscode/syntaxes/sysml.tmLanguage.json
 # Any markdown counts as documentation: the site links out to repository files.
 case_ two-client-readmes docs,java,node clients/java/README.md clients/node/README.md
 case_ two-clients java,node clients/java/pom.xml clients/node/tsconfig.json
-case_ go-source docs,go,java,node,python,vscode internal/core/parser/parser.go
-case_ proto docs,go,java,node,python,vscode api/proto/sysml.proto
-case_ conformance docs,go,java,node,python,vscode conformance/scenarios/01-server-info.json
-case_ workflow docs,go,java,node,python,vscode .github/workflows/pr.yml
-case_ unclaimed docs,go,java,node,python,vscode some-new-top-level/thing.txt
+case_ go-source docs,go,java,node,python,rust,vscode internal/core/parser/parser.go
+case_ proto docs,go,java,node,python,rust,vscode api/proto/sysml.proto
+case_ conformance docs,go,java,node,python,rust,vscode conformance/scenarios/01-server-info.json
+case_ workflow docs,go,java,node,python,rust,vscode .github/workflows/pr.yml
+case_ unclaimed docs,go,java,node,python,rust,vscode some-new-top-level/thing.txt
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures case(s) failed" >&2

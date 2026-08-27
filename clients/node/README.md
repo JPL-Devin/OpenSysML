@@ -176,12 +176,11 @@ if (connection.info.has(CAPABILITY_EVALUATE_SUBJECT)) {
 }
 ```
 
-The client checks the advertised list **before** making such a call, because the
-service does not answer `UNIMPLEMENTED` for a capability it lacks — it would
-answer the call and ignore the field, so trusting the call to fail would silently
-read the declared default instead of that object's value. A missing capability is
-a `MissingCapabilityError` naming the service, its version and the way to get one
-that has it.
+The client checks the advertised list **before** making such a call so it can
+raise a `MissingCapabilityError` naming the service, its version and the way to
+get one that has it. A direct capability-gated request to a service without the
+capability is refused with `UNIMPLEMENTED`; response-population capabilities
+instead omit the fields they name.
 
 ## The service binary
 

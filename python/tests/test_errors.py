@@ -125,6 +125,19 @@ class TestStatusTranslation:
         # The debug string gRPC produces stays reachable through the cause.
         assert excinfo.value.__cause__.code() == grpc.StatusCode.UNAVAILABLE
 
+    def test_a_call_can_specialize_an_unimplemented_status(self):
+        original = FakeRpcError(
+            grpc.StatusCode.UNIMPLEMENTED, "capability 'query' is unavailable"
+        )
+        specialized = InvalidRequestError("query is unavailable")
+        with pytest.raises(InvalidRequestError) as excinfo:
+            with translate_rpc_errors(
+                unimplemented=lambda details: specialized
+            ):
+                raise original
+        assert excinfo.value is specialized
+        assert excinfo.value.__cause__ is original
+
     def test_the_block_passes_other_exceptions_through(self):
         with pytest.raises(ZeroDivisionError):
             with translate_rpc_errors():

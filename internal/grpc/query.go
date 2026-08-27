@@ -74,6 +74,14 @@ func QueryPropertyNames() []string {
 
 // Query evaluates a SysML v2 API & Services Query against a parsed model.
 func (s *Service) Query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error) {
+	if err := s.requireCapability(CapabilityQuery); err != nil {
+		return nil, err
+	}
+	if req.OslcQuery != "" {
+		if err := s.requireCapability(CapabilityOSLCQuery); err != nil {
+			return nil, err
+		}
+	}
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
