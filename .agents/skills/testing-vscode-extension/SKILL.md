@@ -399,6 +399,14 @@ degradation case.
   the option's `title`. A geometry-view fixture is `internal/core/view/testdata/errors.sysml`
   (`ErrorViews::geometryView`); `examples/views-demo.sysml` no longer declares any unsupported view
   (all 7 of its views are `supported:true` when opened from a scratch folder).
+- To exercise the **pluralised** summary (`N views not drawable`) no committed fixture has two
+  unsupported views, so author one: a `view x : GeometryView { expose P::Widget; }` plus a
+  `view y { expose P::Widget; render asTextualNotation; }` gives one `geometry` and one `textual`,
+  and add a third drawable `: GeneralView` view so the panel has something to draw beside the list.
+  Note the section is filled from `fillPicker`, so it survives selecting a drawable view — assert
+  both the no-view-selected and the rendered states.
+  The `textual` reason ends in a backticked shell command; `textContent` shows the backticks
+  literally on screen, so do not read them as markdown rendering failure.
 - The `#state` pseudo-view on `examples/state-machine-demo.sysml` renders
   `the rendering is empty: nothing the view exposes is shown by a state rendering` — this is
   **pre-existing** (identical on a main-built server, the file's root element is a `part def`). Use the

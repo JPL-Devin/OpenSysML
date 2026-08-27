@@ -104,7 +104,9 @@ function showUndrawable(views: PickerEntry[]): void {
     listed.length === 1 ? "1 view not drawable" : `${listed.length} views not drawable`;
   for (const entry of listed) {
     const item = document.createElement("li");
-    item.textContent = entry.reason ? `${entry.label} — ${entry.reason}` : entry.label;
+    // The reason names the view itself, so it stands alone; the label is what is
+    // left to say when the server gave no reason.
+    item.textContent = entry.reason ?? entry.label;
     undrawableList.append(item);
   }
 }
