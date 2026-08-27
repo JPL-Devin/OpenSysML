@@ -6,9 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestCapabilityAvailabilityDrivesAdvertisementAndRefusal(t *testing.T) {
@@ -37,7 +36,7 @@ func TestCapabilityAvailabilityDrivesAdvertisementAndRefusal(t *testing.T) {
 				t.Fatalf("unavailable service advertises %q", capability)
 			}
 			err = unavailable.requireCapability(capability)
-			if status.Code(err) != codes.Unimplemented || !strings.Contains(status.Convert(err).Message(), capability) {
+			if connect.CodeOf(err) != connect.CodeUnimplemented || !strings.Contains(err.Error(), capability) {
 				t.Errorf("refusal = %v, want UNIMPLEMENTED naming %q", err, capability)
 			}
 		})
@@ -117,11 +116,11 @@ func TestCapabilityGatedRequestsAreRefused(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			err := test.call(mustNewServiceWithout(t, test.capability))
-			if status.Code(err) != codes.Unimplemented {
-				t.Fatalf("status = %s, want UNIMPLEMENTED: %v", status.Code(err), err)
+			if connect.CodeOf(err) != connect.CodeUnimplemented {
+				t.Fatalf("status = %s, want UNIMPLEMENTED: %v", connect.CodeOf(err), err)
 			}
-			if !strings.Contains(status.Convert(err).Message(), test.capability) {
-				t.Errorf("message = %q, want capability %q", status.Convert(err).Message(), test.capability)
+			if !strings.Contains(err.Error(), test.capability) {
+				t.Errorf("message = %q, want capability %q", err.Error(), test.capability)
 			}
 		})
 	}
@@ -153,8 +152,8 @@ func TestUnsetCapabilityGatedFieldsKeepWorking(t *testing.T) {
 
 	srv = mustNewServiceWithout(t, CapabilityOSLCQuery)
 	_, err = srv.Query(ctx, &pb.QueryRequest{ModelHash: "missing", Query: &pb.Query{}})
-	if status.Code(err) != codes.NotFound {
-		t.Errorf("structured Query status = %s, want NOT_FOUND: %v", status.Code(err), err)
+	if connect.CodeOf(err) != connect.CodeNotFound {
+		t.Errorf("structured Query status = %s, want NOT_FOUND: %v", connect.CodeOf(err), err)
 	}
 
 	srv = mustNewServiceWithout(t, CapabilityAuthoring)
@@ -164,8 +163,8 @@ func TestUnsetCapabilityGatedFieldsKeepWorking(t *testing.T) {
 			Rename: &pb.RenameEdit{Target: "P", NewName: "Q"},
 		}}},
 	})
-	if status.Code(err) != codes.NotFound {
-		t.Errorf("non-authoring edit status = %s, want NOT_FOUND: %v", status.Code(err), err)
+	if connect.CodeOf(err) != connect.CodeNotFound {
+		t.Errorf("non-authoring edit status = %s, want NOT_FOUND: %v", connect.CodeOf(err), err)
 	}
 }
 

@@ -2,12 +2,13 @@ package opensysml
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/debug"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	sysmlgrpc "github.com/Open-MBEE/OpenSysML/internal/grpc"
-	"google.golang.org/grpc/status"
 )
 
 // defaultCacheSize matches the sysml-grpc default, so the two implementations
@@ -102,14 +103,18 @@ func (p *inprocess) close() error {
 	return nil
 }
 
-// statusToError is the documented status mapping: the gRPC status a handler
-// refuses with becomes a StatusError carrying the same code.
+// statusToError is the documented status mapping: the status a handler refuses
+// with becomes a StatusError carrying the same code. Connect error codes number
+// the same as the canonical gRPC status codes.
 func statusToError(err error) error {
 	if err == nil {
 		return nil
 	}
-	st := status.Convert(err)
-	return &StatusError{Code: Code(st.Code()), Message: st.Message()}
+	var ce *connect.Error
+	if errors.As(err, &ce) {
+		return &StatusError{Code: Code(ce.Code()), Message: ce.Message()}
+	}
+	return &StatusError{Code: CodeUnknown, Message: err.Error()}
 }
 
 // recoverToError keeps a panic from crossing the public boundary: it becomes

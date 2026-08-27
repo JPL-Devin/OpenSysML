@@ -21,10 +21,8 @@ import (
 	"strings"
 	"sync"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -70,8 +68,8 @@ type response struct {
 	Error   *responseError  `json:"error,omitempty"`
 }
 
-// responseError reports a failed call. Code is the gRPC status code the service
-// returned, so a client reads the same code it reads over gRPC.
+// responseError reports a failed call. Code is the canonical status code the
+// service returned, so a client reads the same code it reads over gRPC.
 type responseError struct {
 	Code    uint32 `json:"code"`
 	Message string `json:"message"`
@@ -84,9 +82,13 @@ type frame struct {
 	contentType string
 }
 
+// handler runs one RPC of SysMLService: it decodes the request with dec and
+// answers with the response message.
+type handler func(ctx context.Context, dec func(any) error) (any, error)
+
 // Server answers calls read from one reader on one writer.
 type Server struct {
-	methods map[string]grpc.MethodDesc
+	methods map[string]handler
 	impl    pb.SysMLServiceServer
 
 	// writing serializes frames, since answers are written by the goroutine
@@ -99,9 +101,12 @@ type Server struct {
 // the generated service descriptor, so every RPC of SysMLService is served and
 // none can be forgotten when one is added.
 func NewServer(impl pb.SysMLServiceServer) *Server {
-	methods := make(map[string]grpc.MethodDesc, len(pb.SysMLService_ServiceDesc.Methods))
+	methods := make(map[string]handler, len(pb.SysMLService_ServiceDesc.Methods))
 	for _, m := range pb.SysMLService_ServiceDesc.Methods {
-		methods[m.MethodName] = m
+		call := m.Handler
+		methods[m.MethodName] = func(ctx context.Context, dec func(any) error) (any, error) {
+			return call(impl, ctx, dec, nil)
+		}
 	}
 	return &Server{methods: methods, impl: impl}
 }
@@ -144,7 +149,7 @@ func (s *Server) handleJSON(ctx context.Context, f frame) {
 	if err := json.Unmarshal(f.body, &req); err != nil {
 		s.writeJSON(response{
 			JSONRPC: jsonrpcVersion,
-			Error:   &responseError{Code: uint32(codes.InvalidArgument), Message: err.Error()},
+			Error:   &responseError{Code: uint32(connect.CodeInvalidArgument), Message: err.Error()},
 		})
 		return
 	}
@@ -153,7 +158,7 @@ func (s *Server) handleJSON(ctx context.Context, f frame) {
 			JSONRPC: jsonrpcVersion,
 			ID:      req.ID,
 			Error: &responseError{
-				Code:    uint32(codes.InvalidArgument),
+				Code:    uint32(connect.CodeInvalidArgument),
 				Message: fmt.Sprintf("jsonrpc %q is not %q", req.JSONRPC, jsonrpcVersion),
 			},
 		})
@@ -165,16 +170,16 @@ func (s *Server) handleJSON(ctx context.Context, f frame) {
 			return nil
 		}
 		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(req.Params, msg); err != nil {
-			return status.Error(codes.InvalidArgument, err.Error())
+			return connect.NewError(connect.CodeInvalidArgument, err)
 		}
 		return nil
 	})
 	if err != nil {
-		st, _ := status.FromError(err)
+		code, message := errorParts(err)
 		s.writeJSON(response{
 			JSONRPC: jsonrpcVersion,
 			ID:      req.ID,
-			Error:   &responseError{Code: uint32(st.Code()), Message: st.Message()},
+			Error:   &responseError{Code: code, Message: message},
 		})
 		return
 	}
@@ -184,7 +189,7 @@ func (s *Server) handleJSON(ctx context.Context, f frame) {
 		s.writeJSON(response{
 			JSONRPC: jsonrpcVersion,
 			ID:      req.ID,
-			Error:   &responseError{Code: uint32(codes.Internal), Message: err.Error()},
+			Error:   &responseError{Code: uint32(connect.CodeInternal), Message: err.Error()},
 		})
 		return
 	}
@@ -197,16 +202,16 @@ func (s *Server) handleProtobuf(ctx context.Context, f frame) {
 	id := f.header.Get(HeaderID)
 	res, err := s.call(ctx, f.header.Get(HeaderMethod), func(msg proto.Message) error {
 		if err := proto.Unmarshal(f.body, msg); err != nil {
-			return status.Error(codes.InvalidArgument, err.Error())
+			return connect.NewError(connect.CodeInvalidArgument, err)
 		}
 		return nil
 	})
 	if err != nil {
-		st, _ := status.FromError(err)
+		code, message := errorParts(err)
 		s.write(nil, ContentTypeProtobuf, textproto.MIMEHeader{
 			HeaderID:      {id},
-			HeaderCode:    {strconv.Itoa(int(st.Code()))},
-			HeaderMessage: {st.Message()},
+			HeaderCode:    {strconv.Itoa(int(code))},
+			HeaderMessage: {message},
 		})
 		return
 	}
@@ -215,7 +220,7 @@ func (s *Server) handleProtobuf(ctx context.Context, f frame) {
 	if err != nil {
 		s.write(nil, ContentTypeProtobuf, textproto.MIMEHeader{
 			HeaderID:      {id},
-			HeaderCode:    {strconv.Itoa(int(codes.Internal))},
+			HeaderCode:    {strconv.Itoa(int(connect.CodeInternal))},
 			HeaderMessage: {err.Error()},
 		})
 		return
@@ -236,24 +241,37 @@ func (s *Server) call(
 ) (proto.Message, error) {
 	method, ok := s.methods[name]
 	if !ok {
-		return nil, status.Errorf(codes.Unimplemented, "SysMLService has no method %q", name)
+		return nil, connect.NewError(connect.CodeUnimplemented,
+			fmt.Errorf("SysMLService has no method %q", name))
 	}
 
-	res, err := method.Handler(s.impl, ctx, func(into any) error {
+	res, err := method(ctx, func(into any) error {
 		msg, ok := into.(proto.Message)
 		if !ok {
-			return status.Errorf(codes.Internal, "request of %s is not a protobuf message", name)
+			return connect.NewError(connect.CodeInternal,
+				fmt.Errorf("request of %s is not a protobuf message", name))
 		}
 		return decode(msg)
-	}, nil)
+	})
 	if err != nil {
 		return nil, err
 	}
 	msg, ok := res.(proto.Message)
 	if !ok {
-		return nil, status.Errorf(codes.Internal, "response of %s is not a protobuf message", name)
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("response of %s is not a protobuf message", name))
 	}
 	return msg, nil
+}
+
+// errorParts reads the canonical status code and message a failed call is
+// answered with; the codes number the same as gRPC's.
+func errorParts(err error) (uint32, string) {
+	var ce *connect.Error
+	if errors.As(err, &ce) {
+		return uint32(ce.Code()), ce.Message()
+	}
+	return uint32(connect.CodeUnknown), err.Error()
 }
 
 // writeJSON frames one JSON-RPC answer.

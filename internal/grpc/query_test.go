@@ -6,11 +6,10 @@ import (
 	"slices"
 	"testing"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // queryModel is the model the query tests run against: parts and attributes at
@@ -251,8 +250,8 @@ func TestQueryUnknownPropertyFailsRatherThanMatchingNothing(t *testing.T) {
 		Where: primitive("documentation", opEqual, false, "x"),
 	})
 	assertQueryError(t, err, QueryErrUnknownProperty)
-	if got := status.Code(err); got != codes.InvalidArgument {
-		t.Errorf("status code = %s, want %s", got, codes.InvalidArgument)
+	if got := connect.CodeOf(err); got != connect.CodeInvalidArgument {
+		t.Errorf("status code = %s, want %s", got, connect.CodeInvalidArgument)
 	}
 }
 
@@ -465,8 +464,8 @@ func TestQueryUnknownModelFails(t *testing.T) {
 		ModelHash: "nosuchmodel",
 		Query:     &pb.Query{},
 	})
-	if got := status.Code(err); got != codes.NotFound {
-		t.Fatalf("status code = %s, want %s (err: %v)", got, codes.NotFound, err)
+	if got := connect.CodeOf(err); got != connect.CodeNotFound {
+		t.Fatalf("status code = %s, want %s (err: %v)", got, connect.CodeNotFound, err)
 	}
 }
 
@@ -617,7 +616,7 @@ func assertQueryError(t *testing.T, err error, want QueryErrorKind) {
 	if qerr.Kind != want {
 		t.Errorf("error kind = %v, want %v (message: %s)", qerr.Kind, want, qerr.Message)
 	}
-	if got := status.Code(err); got != codes.InvalidArgument {
-		t.Errorf("status code = %s, want %s", got, codes.InvalidArgument)
+	if got := connect.CodeOf(err); got != connect.CodeInvalidArgument {
+		t.Errorf("status code = %s, want %s", got, connect.CodeInvalidArgument)
 	}
 }

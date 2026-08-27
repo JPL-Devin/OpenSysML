@@ -6,10 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // verifyModelSource states a constraint, a requirement and satisfaction
@@ -263,8 +262,8 @@ func TestVerifyUncachedModelIsNotFound(t *testing.T) {
 		},
 	} {
 		err := call()
-		if status.Code(err) != codes.NotFound {
-			t.Errorf("%s on an uncached model: code = %v, want NotFound", name, status.Code(err))
+		if connect.CodeOf(err) != connect.CodeNotFound {
+			t.Errorf("%s on an uncached model: code = %v, want NotFound", name, connect.CodeOf(err))
 		}
 	}
 }

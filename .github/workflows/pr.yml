@@ -253,6 +253,9 @@ jobs:
       - name: Run static analysis (staticcheck + gosec)
         run: make lint
 
+      - name: Check grpc-go stays out of production code
+        run: ./scripts/check-grpc-imports.sh
+
       # Re-run the corpus gate on its own so its verdict is legible in the log
       # and a skip is impossible to miss. TestCorpusGates is the shared
       # cache-independence case over all four OMG roots, which skips with them.

@@ -6,11 +6,11 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/api/proto/protoconnect"
-	"google.golang.org/grpc/status"
 )
 
 // ConnectAdapter serves the same Service through the Connect handler
@@ -26,8 +26,8 @@ func NewConnectAdapter(svc *Service) *ConnectAdapter {
 	return &ConnectAdapter{svc: svc}
 }
 
-// connectCall runs one unary handler, translating the status codes the Service
-// returns so a Connect or gRPC client reads the same code it reads today.
+// connectCall runs one unary handler. The Service refuses calls with
+// *connect.Error already, so the error needs no translation here.
 func connectCall[Req, Res any](
 	ctx context.Context,
 	req *connect.Request[Req],
@@ -35,20 +35,20 @@ func connectCall[Req, Res any](
 ) (*connect.Response[Res], error) {
 	res, err := handler(ctx, req.Msg)
 	if err != nil {
-		return nil, connectError(err)
+		return nil, err
 	}
 	return connect.NewResponse(res), nil
 }
 
-// connectError carries a gRPC status out as a Connect error of the same code.
-// The two code sets share their numbering, so the code survives the translation
-// and a client cannot tell which server answered it.
-func connectError(err error) error {
-	st, ok := status.FromError(err)
-	if !ok {
-		return err
-	}
-	return connect.NewError(connect.Code(st.Code()), errors.New(st.Message()))
+// statusError is a refused call: a *connect.Error whose code numbers the same
+// as the canonical gRPC status every transport answers with.
+func statusError(code connect.Code, message string) *connect.Error {
+	return connect.NewError(code, errors.New(message))
+}
+
+// statusErrorf is statusError with formatting.
+func statusErrorf(code connect.Code, format string, args ...any) *connect.Error {
+	return connect.NewError(code, fmt.Errorf(format, args...))
 }
 
 // GetServerInfo reports what this build of the service can do.

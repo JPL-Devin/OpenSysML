@@ -30,6 +30,12 @@ unchanged.
 Connect, no gRPC-Web, no `curl`, health on `-health-port` only. It is an escape hatch, not the
 recommended path. `-transport stdio` is a prototype, described below.
 
+`grpc-go` itself is confined to that escape hatch, to tests, to the conformance runner's real
+`grpc-go` client, and to committed generated code: the service logic, the public Go API and the
+stdio prototype construct errors with `connect-go`, whose codes number the same as the canonical
+gRPC status codes, so every transport answers the same code and message.
+`scripts/check-grpc-imports.sh` fails CI when production code imports `grpc-go` again.
+
 ## Choose protobuf, not JSON
 
 **Protobuf is the body encoding for every client we ship or document. JSON is the debugging

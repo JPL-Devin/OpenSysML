@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/edit"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // ApplyEdits edits the source a model was parsed from and returns the edited
@@ -26,11 +25,11 @@ func (s *Service) ApplyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*p
 		}
 	}
 	if req.ModelHash == "" {
-		return nil, status.Error(codes.InvalidArgument, "model_hash is required")
+		return nil, statusError(connect.CodeInvalidArgument, "model_hash is required")
 	}
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound,
+		return nil, statusErrorf(connect.CodeNotFound,
 			"model %s is no longer cached: parse it again before editing it", req.ModelHash)
 	}
 
@@ -93,7 +92,7 @@ func editOperations(pbOps []*pb.EditOperation) ([]edit.Operation, error) {
 			del := op.Delete
 			ops = append(ops, edit.Delete(del.GetTarget(), del.GetCascade()))
 		default:
-			return nil, status.Errorf(codes.InvalidArgument,
+			return nil, statusErrorf(connect.CodeInvalidArgument,
 				"operation %d must be set_value, rename, add_member or delete", i)
 		}
 	}
@@ -105,7 +104,7 @@ func editOperations(pbOps []*pb.EditOperation) ([]edit.Operation, error) {
 func editRefusal(err error, sf *source.SourceFile) (*pb.ApplyEditsResponse, error) {
 	var refusal *edit.Error
 	if !errors.As(err, &refusal) {
-		return nil, status.Errorf(codes.Internal, "apply edits: %v", err)
+		return nil, statusErrorf(connect.CodeInternal, "apply edits: %v", err)
 	}
 	resp := &pb.ApplyEditsResponse{
 		Error:             refusal.Message,
