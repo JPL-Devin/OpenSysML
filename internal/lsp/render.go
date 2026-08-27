@@ -25,9 +25,9 @@ const (
 )
 
 // renderParams asks for one rendering. View names a view the document declares,
-// or a pseudo-view (`#tree`, `#state:<fqn>`, `#action:<fqn>`,
-// `#interconnection:<fqn>`); empty renders the document's own view. Form is the
-// artifact written, defaulting to the machine form of the rendering's kind.
+// or a supported pseudo-view (`#<kind>` or `#<kind>:<fqn>`); empty renders the
+// document's own view. Form is the artifact written, defaulting to the machine
+// form of the rendering's kind.
 type renderParams struct {
 	TextDocument protocol.TextDocumentIdentifier `json:"textDocument"`
 	View         string                          `json:"view,omitempty"`
@@ -93,7 +93,8 @@ type viewsParams struct {
 // viewsResult lists a document's views, unsupported ones included so a client
 // can say why they cannot be drawn.
 type viewsResult struct {
-	Views []viewInfo `json:"views"`
+	Views       []viewInfo `json:"views"`
+	PseudoViews []string   `json:"pseudoViews"`
 }
 
 // viewInfo is one view a document declares.
@@ -141,7 +142,7 @@ func (s *Server) renderHandler(inner jsonrpc2.Handler) jsonrpc2.Handler {
 // rendering kind each states and why an unsupported one cannot be drawn.
 func (s *Server) Views(params *viewsParams) *viewsResult {
 	name := uriToName(params.TextDocument.URI)
-	out := &viewsResult{Views: []viewInfo{}}
+	out := &viewsResult{Views: []viewInfo{}, PseudoViews: view.PseudoViewSpecs()}
 	for _, info := range s.ws.Views(name) {
 		out.Views = append(out.Views, viewInfo{
 			Name:      info.Name,

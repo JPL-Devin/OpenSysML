@@ -4,6 +4,7 @@
 import mermaid from "mermaid";
 
 import type { FromWebview, PickerEntry, RenderResult, ToWebview } from "../protocol";
+import { nodeElement } from "./nodes";
 
 interface WebviewApi {
   postMessage(message: FromWebview): void;
@@ -192,25 +193,6 @@ function highlight(id: string | undefined): void {
   }
   const element = diagram.querySelector(`[data-opensysml-id="${cssEscape(id)}"]`);
   element?.classList.add("opensysml-selected");
-}
-
-// nodeElement finds the element Mermaid drew a node as. Mermaid decorates the id
-// it was given — `flowchart-n1-3`, `state-n1-2`, or the bare id for a cluster —
-// so the decoration is stripped rather than guessed at.
-function nodeElement(svg: SVGElement, id: string): (SVGElement & { dataset: DOMStringMap }) | undefined {
-  for (const candidate of svg.querySelectorAll<SVGElement>("g.node, g.cluster, g.statediagram-state")) {
-    if (bareID(candidate.id) === id) {
-      return candidate as SVGElement & { dataset: DOMStringMap };
-    }
-  }
-  return undefined;
-}
-
-// bareID is the id a Mermaid element was drawn for, without the diagram prefix
-// and the ordinal suffix Mermaid adds.
-function bareID(raw: string): string {
-  const marked = /(?:^|-)(?:flowchart|state|statediagram(?:-state)?)-(.+)$/.exec(raw);
-  return (marked ? marked[1] : raw).replace(/-\d+$/, "");
 }
 
 // cssEscape quotes an id for an attribute selector, since CSS.escape is not in

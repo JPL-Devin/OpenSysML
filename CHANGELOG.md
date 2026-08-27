@@ -18,6 +18,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   attaching to something the view does not expose — is reported rather than dropped. A `geometry`
   view remains recognized but not drawn.
 
+### Fixed
+
+- **The VS Code diagram panel now activates and highlights sequence participants**
+  using Mermaid's participant data attributes, and derives its pseudo-view picker
+  entries from the language server so newly supported rendering kinds appear.
+
 ## 0.3.1 — 2026-08-27
 
 A performance patch. Loading a model costs less of everything and answers the same: on a

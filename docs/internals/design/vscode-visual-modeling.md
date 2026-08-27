@@ -72,15 +72,19 @@ opensysml/render  (request)
 
 opensysml/views  (request)
   params: { textDocument: { uri } }
-  result: { views: [ { name, kind, supported, reason? } ] }
+  result: {
+    views: [ { name, kind, supported, reason? } ],
+    pseudoViews: string[]
+  }
 
 opensysml/renderChanged  (notification, server → client)
   params: { textDocument: { uri }, version: number }
 ```
 
-`opensysml/views` is what fills the panel's view picker, and it reports an
-unsupported kind (`geometry`, `textual`) with the reason rather than
-omitting it, so the panel can say why a view cannot be drawn.
+`opensysml/views` is what fills the panel's view picker. It reports an
+unsupported kind (`geometry`, `textual`) with the reason rather than omitting
+it, and lists the supported `#<kind>` pseudo-view specs so the client does not
+duplicate that vocabulary.
 
 `origin` on a node is `{ uri, range }`. `view.Node` carries no source location
 today; tier 1 adds one, as a `source.Span` plus the document it belongs to, set
@@ -115,12 +119,12 @@ server and a new extension degrade to today's behavior instead of erroring.
 
 A document with no `view` declaration is the common case for a model being written,
 and a panel that can only draw declared views would be empty most of the time. So
-`opensysml/render` accepts, in place of a view name, a `#tree` / `#state:<fqn>` /
-`#action:<fqn>` / `#interconnection:<fqn>` pseudo-view: the server renders the
-element as if a view exposing it had been declared, through the same renderer, and
-reports `stated: "no view declared; rendering <element> directly"`. Nothing
-synthetic is added to the model or the index — the exposed set is passed to the
-renderer directly.
+`opensysml/render` accepts, in place of a view name, a `#<kind>` or
+`#<kind>:<fqn>` pseudo-view listed by `opensysml/views`: the server renders the
+element as if a view exposing it had been declared, through the same renderer,
+and reports `stated: "no view declared; rendering <element> directly"`.
+Nothing synthetic is added to the model or the index — the exposed set is
+passed to the renderer directly.
 
 ### The extension side
 
