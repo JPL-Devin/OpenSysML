@@ -39,9 +39,9 @@
 //
 // # Capabilities
 //
-// Negotiate on ServerInfo.Capabilities, not on versions. The service does not
-// refuse a call whose capability it lacks — it answers without the behaviour —
-// so require the capability name (ServerInfo.Has) before relying on it.
+// Negotiate on ServerInfo.Capabilities, not on versions. Capability-gated
+// requests are refused when unavailable, while response-population capabilities
+// omit the fields they name. ServerInfo.Has provides the client-side preflight.
 //
 // # Stability
 //

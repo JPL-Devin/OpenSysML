@@ -15,6 +15,9 @@ import (
 // it read rather than only inspect it. Argument faults fail the call; a model
 // the converter refuses is reported in the response's error and diagnostics.
 func (s *Service) Convert(ctx context.Context, req *pb.ConvertRequest) (*pb.ConvertResponse, error) {
+	if err := s.requireCapability(CapabilityConvert); err != nil {
+		return nil, err
+	}
 	name, data, err := s.convertSource(req)
 	if err != nil {
 		return nil, err

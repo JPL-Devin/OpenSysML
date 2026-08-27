@@ -49,11 +49,12 @@ class FakeService(sysml_pb2_grpc.SysMLServiceServicer):
     """A sysml-grpc whose Convert records the request and answers as told."""
 
     def __init__(self, capabilities=(CAPABILITY_CONVERT,), error="", diagnostics=0,
-                 experimental_notice=""):
+                 experimental_notice="", refuse=False):
         self._capabilities = list(capabilities)
         self._error = error
         self._diagnostics = diagnostics
         self._experimental_notice = experimental_notice
+        self._refuse = refuse
         self.requests = []
 
     def GetServerInfo(self, request, context):
@@ -71,6 +72,11 @@ class FakeService(sysml_pb2_grpc.SysMLServiceServicer):
 
     def Convert(self, request, context):
         self.requests.append(request)
+        if self._refuse:
+            context.abort(
+                grpc.StatusCode.UNIMPLEMENTED,
+                "capability 'convert' is unavailable",
+            )
         diagnostics = [
             sysml_pb2.Diagnostic(
                 severity="error",
@@ -176,6 +182,17 @@ def test_convert_requires_the_capability(fake_service):
             conn.convert("ttl", content=MODEL, from_format="sysml")
     assert excinfo.value.capability == CAPABILITY_CONVERT
     assert service.requests == [], "the request was sent to a service that cannot serve it"
+
+def test_service_side_capability_refusal_is_a_missing_capability_error(fake_service):
+    """A refusal stays typed even when a stale handshake claimed support."""
+    port, service = fake_service(refuse=True)
+    with Connection(port=port, auto_start=False) as conn:
+        with pytest.raises(MissingCapabilityError) as excinfo:
+            conn.convert("ttl", content=MODEL, from_format="sysml")
+    assert excinfo.value.capability == CAPABILITY_CONVERT
+    assert isinstance(excinfo.value.__cause__, grpc.RpcError)
+    assert excinfo.value.__cause__.code() == grpc.StatusCode.UNIMPLEMENTED
+    assert len(service.requests) == 1
 
 
 def test_convert_sends_the_source_and_formats(fake_service):

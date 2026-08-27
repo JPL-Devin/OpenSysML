@@ -127,11 +127,34 @@ a capability does not turn a gate green. A scenario may instead state what a ser
 capability must answer, in `expect_without_capability`; that is where the suite pins that an
 unsupported request is refused with `UNIMPLEMENTED` rather than silently ignored.
 
-`sysml-grpc` reports every capability the scenarios ask for, so its own runs never take those
-branches: they are the contract for an implementation that does not, and the runner reaches them
-only against such a service. This service also does not refuse a capability-gated request with
-`UNIMPLEMENTED` — the capability list is the whole of its negotiation — so removing a capability
-from it fails the scenarios that need one rather than satisfying their fallback.
+What a request asks for is fixed per capability:
+
+| Capability | Request-side contract when unavailable |
+| --- | --- |
+| `convert` | Refuse `Convert`. |
+| `verification` | Refuse `VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction` and `EvaluateCalc`. |
+| `query` | Refuse `Query`. |
+| `oslc_query` | Refuse `Query` only when `oslc_query` is set; structured queries still use `query`. |
+| `apply_edits` | Refuse `ApplyEdits`. |
+| `authoring` | Refuse `ApplyEdits` only when an operation is `add_member` or `delete`. |
+| `inline_language` | Refuse `ParseFile` only when inline content names a language. |
+| `strict_conformance` | Refuse `ParseFile` only when `strict_conformance` is true. |
+| `evaluate_subject` | Refuse `Evaluate` only when `subject_symbol_id` is set. |
+| `type_facts` | Response-population capability: omit type facts; no request asks for them. |
+| `symbol_attributes` | Response-population capability: omit symbol attributes; no request asks for them. |
+| `feature_values` | Response-population capability: omit instance feature values; no request asks for them. |
+| `enum_values` | Response-population capability: encode enum values as unsupported nulls; no request asks for them. |
+| `unset_value` | Response-population capability: encode unset values as unsupported nulls; no request asks for them. |
+
+The default service reports and supports every capability above. `make conformance` also starts a
+second service with `strict_conformance` and `oslc_query` withheld, verifies that its advertisement
+is exactly the default list minus those names, and requires both fallback expectations to execute
+under gRPC, Connect and Connect-JSON. The exact default `GetServerInfo` scenario is replaced in that
+configuration by this stronger set comparison.
+
+Withholding is test-only. `cmd/conformance` passes
+`OPENSYSML_TEST_WITHHOLD_CAPABILITIES` to the child process it starts; normal startup strips no
+capability, and the variable is not a supported service configuration interface.
 
 ## Non-vacuity
 

@@ -21,6 +21,7 @@ from opensysml.capabilities import (
     CAPABILITY_FEATURE_VALUES,
     CAPABILITY_QUERY,
     CAPABILITY_VERIFICATION,
+    MissingCapabilityError,
     ServerInfo,
     mismatch_reason,
     require,
@@ -622,7 +623,13 @@ class Connection:
         self._require_strict_conformance(strict_conformance)
         request = sysml_pb2.ParseFileRequest(
             file_path=file_path, strict_conformance=strict_conformance)
-        with translate_rpc_errors(not_found=ModelFileNotFoundError):
+        capabilities = (
+            (CAPABILITY_STRICT_CONFORMANCE,) if strict_conformance else ()
+        )
+        with translate_rpc_errors(
+            not_found=ModelFileNotFoundError,
+            unimplemented=self._capability_refusal(capabilities),
+        ):
             response = self._stub.ParseFile(request)
         model = Model(response, self, source_path=file_path)
         if strict:
@@ -669,7 +676,14 @@ class Connection:
         self._require_strict_conformance(strict_conformance)
         request = sysml_pb2.ParseFileRequest(
             content=content, language=language or "", strict_conformance=strict_conformance)
-        with translate_rpc_errors():
+        capabilities = []
+        if language is not None:
+            capabilities.append(CAPABILITY_INLINE_LANGUAGE)
+        if strict_conformance:
+            capabilities.append(CAPABILITY_STRICT_CONFORMANCE)
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal(capabilities)
+        ):
             response = self._stub.ParseFile(request)
         model = Model(response, self)
         if strict:
@@ -753,7 +767,10 @@ class Connection:
         not_found = (
             ModelFileNotFoundError if file_path is not None else ModelNotFoundError
         )
-        with translate_rpc_errors(not_found=not_found):
+        with translate_rpc_errors(
+            not_found=not_found,
+            unimplemented=self._capability_refusal((CAPABILITY_CONVERT,)),
+        ):
             response = self._stub.Convert(request)
         # Judged from the response, so an inferred format counts and a service
         # too old to mark the conversion is still read as experimental.
@@ -807,6 +824,7 @@ class Connection:
         info = self.server_info()
         require(info, CAPABILITY_APPLY_EDITS, upgrade_remedy(CAPABILITY_APPLY_EDITS))
         request = sysml_pb2.ApplyEditsRequest(model_hash=model_hash)
+        requests_authoring = False
         for operation_data in operations:
             operation = request.operations.add()
             kind = operation_data[0]
@@ -825,6 +843,7 @@ class Connection:
                     )
                 _, owner, member_kind, name, type_name, multiplicity, value, specializes = operation_data
                 require(info, CAPABILITY_AUTHORING, upgrade_remedy(CAPABILITY_AUTHORING))
+                requests_authoring = True
                 add = operation.add_member
                 add.owner, add.kind, add.name = owner, member_kind, name
                 add.type, add.multiplicity, add.value = type_name, multiplicity, value
@@ -836,13 +855,19 @@ class Connection:
                     )
                 _, target, cascade = operation_data
                 require(info, CAPABILITY_AUTHORING, upgrade_remedy(CAPABILITY_AUTHORING))
+                requests_authoring = True
                 operation.delete.target, operation.delete.cascade = target, cascade
             else:
                 raise ValueError(
                     f"unknown edit operation {kind!r}: expected set_value, rename, add_member or delete"
                 )
 
-        with translate_rpc_errors():
+        requested_capabilities = [CAPABILITY_APPLY_EDITS]
+        if requests_authoring:
+            requested_capabilities.append(CAPABILITY_AUTHORING)
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal(requested_capabilities)
+        ):
             response = self._stub.ApplyEdits(request)
         if response.error:
             raise error_for_failure(
@@ -884,7 +909,9 @@ class Connection:
             model_hash=model_hash,
             query=build_query(payload, scope=scope, select=select, where=where),
         )
-        with translate_rpc_errors():
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal((CAPABILITY_QUERY,))
+        ):
             response = self._stub.Query(request)
         return elements_of(response)
 
@@ -952,7 +979,12 @@ class Connection:
             subject_symbol_id=subject_symbol_id or "",
         )
         
-        with translate_rpc_errors():
+        capabilities = (
+            (CAPABILITY_EVALUATE_SUBJECT,) if subject_symbol_id else ()
+        )
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal(capabilities)
+        ):
             response = self._stub.Evaluate(req)
         
         if response.error:
@@ -1094,7 +1126,9 @@ class Connection:
             symbol_id=symbol_id,
             subject_symbol_id=subject_symbol_id or "",
         )
-        with translate_rpc_errors():
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal((CAPABILITY_VERIFICATION,))
+        ):
             response = self._stub.VerifyConstraint(request)
         return self._verdict_of(response)
 
@@ -1123,7 +1157,9 @@ class Connection:
             symbol_id=symbol_id,
             subject_symbol_id=subject_symbol_id or "",
         )
-        with translate_rpc_errors():
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal((CAPABILITY_VERIFICATION,))
+        ):
             response = self._stub.VerifyRequirement(request)
         return self._verdict_of(response)
 
@@ -1156,7 +1192,9 @@ class Connection:
             model_hash=model_hash,
             symbol_id=symbol_id or "",
         )
-        with translate_rpc_errors():
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal((CAPABILITY_VERIFICATION,))
+        ):
             response = self._stub.VerifySatisfaction(request)
 
         diagnostics = [Diagnostic(d) for d in response.diagnostics]
@@ -1200,7 +1238,9 @@ class Connection:
             symbol_id=symbol_id,
             arguments=[self._python_to_value(arg) for arg in (arguments or [])],
         )
-        with translate_rpc_errors():
+        with translate_rpc_errors(
+            unimplemented=self._capability_refusal((CAPABILITY_VERIFICATION,))
+        ):
             response = self._stub.EvaluateCalc(request)
 
         diagnostics = [Diagnostic(d) for d in response.diagnostics]
@@ -1227,6 +1267,25 @@ class Connection:
             CAPABILITY_VERIFICATION,
             upgrade_remedy(CAPABILITY_VERIFICATION),
         )
+
+    def _capability_refusal(self, capabilities):
+        """Translate a capability-gated UNIMPLEMENTED into the preflight error."""
+        capabilities = tuple(capabilities)
+        if not capabilities:
+            return None
+
+        def refused(details):
+            capability = next(
+                (name for name in capabilities if name in details),
+                capabilities[0],
+            )
+            return MissingCapabilityError(
+                capability,
+                self.server_info(),
+                upgrade_remedy(capability),
+            )
+
+        return refused
 
     def _verdict_of(self, response):
         """Wrap a single-verdict verification response, raising its failure."""
