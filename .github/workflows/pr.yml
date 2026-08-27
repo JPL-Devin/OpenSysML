@@ -645,7 +645,8 @@ jobs:
   # both Connect encodings, on the client's Java 17 baseline.
   java-test:
     name: Java client tests
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.java == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
