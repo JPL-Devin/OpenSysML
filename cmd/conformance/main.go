@@ -32,7 +32,7 @@ const (
 	transportGRPC    = "grpc"
 )
 
-var knownProtocols = map[string]struct{}{"grpc": {}, "connect": {}, "connect-json": {}}
+var knownProtocols = map[string]struct{}{"grpc": {}, "connect": {}, "connect-json": {}, "pkg": {}, "pkg-connect": {}}
 
 func main() {
 	var (
@@ -146,8 +146,8 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 func validateProtocols(protocols []string, transport string) error {
 	if transport == transportGRPC {
 		for _, protocol := range protocols {
-			if protocol != "grpc" {
-				return fmt.Errorf("protocol %q requires -transport connect; grpc transport only supports grpc", protocol)
+			if protocol != "grpc" && protocol != "pkg" {
+				return fmt.Errorf("protocol %q requires -transport connect; grpc transport only supports grpc and pkg", protocol)
 			}
 		}
 	}
@@ -163,7 +163,7 @@ func parseProtocols(value string) ([]string, error) {
 			continue
 		}
 		if _, ok := knownProtocols[item]; !ok {
-			return nil, fmt.Errorf("unknown protocol %q; want grpc, connect or connect-json", item)
+			return nil, fmt.Errorf("unknown protocol %q; want grpc, connect, connect-json, pkg or pkg-connect", item)
 		}
 		if _, ok := seen[item]; ok {
 			return nil, fmt.Errorf("protocol %q is listed more than once", item)

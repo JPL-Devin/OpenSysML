@@ -263,6 +263,7 @@ github.com/Open-MBEE/OpenSysML
 ├── internal/grpc/          # gRPC service implementation
 ├── internal/repl/          # REPL loop implementation
 ├── python/                 # Python client bindings (opensysml)
+├── clients/node/           # Node/TypeScript client (@opensysml/client)
 ├── docs/                   # Design specs, architecture docs
 └── testdata/               # Test fixtures (.sysml, .kerml)
 ```
@@ -294,6 +295,8 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 - The Python client is released on its own tag (`opensysml-v*`), which uploads `opensysml` to
   PyPI — its version is not coupled to the core's, since it resolves a `sysml-grpc` binary
   at runtime from whichever release the caller names
+- The Node client is released the same way on `client-node-v*`, which publishes
+  `@opensysml/client` and the five per-platform packages that carry the service binary
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
 `sysml-lsp-<os>-<arch>.tar.gz`), `opensysml-<os>-<arch>.tar.gz` bundles containing both
@@ -355,6 +358,25 @@ print(instance.slots["mass"])
 - Full runtime API access (eval, instantiate, execute actions/states)
 
 See [python/INSTALL.md](python/INSTALL.md) for detailed installation and usage instructions.
+
+## Node/TypeScript Client
+
+**@opensysml/client** is the same access over the Connect protocol, for Node and
+the browser. It has no native addon: an install is a normal registry fetch, and
+the service binary comes from a per-platform optional dependency.
+
+```ts
+import { loads } from "@opensysml/client";
+
+await using model = await loads("part def Wheel { attribute radius : ScalarValues::Real = 0.3; }");
+const radius = await model.eval("0.3 * 2");
+```
+
+v1 covers loading, evaluation, symbol lookup and instantiation, and negotiates on
+the capabilities the service advertises. It is not published yet — see
+[clients/node/README.md](clients/node/README.md) for the API, the two lifecycle
+modes (a private child of the calling process, or a service someone else runs),
+what the browser entry point can and cannot do, and what v1 leaves out.
 
 ## Documentation
 

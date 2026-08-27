@@ -429,6 +429,88 @@ jobs:
       - name: Build documentation site
         run: make docs
 
+  node-test:
+    name: Node client tests
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: bin
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: clients/node/package-lock.json
+
+      # The tests and the conformance runner start private children of this
+      # binary; without it they would build one from the checkout, needing Go.
+      - name: Install the sysml-grpc binary
+        run: |
+          chmod +x bin/sysml-grpc
+          echo "OPENSYSML_BINARY=$(pwd)/bin/sysml-grpc" >> "$GITHUB_ENV"
+
+      - name: Install the client's dependencies
+        working-directory: clients/node
+        run: npm ci
+
+      - name: Build, typecheck and lint
+        working-directory: clients/node
+        run: |
+          npm run build
+          npm run typecheck
+          npm run lint
+
+      - name: Run the tests
+        working-directory: clients/node
+        run: npm test
+
+      # --allow-skips because v1 covers 5 of the 15 RPCs; the skipped count is
+      # reported and the artifact records which scenarios they were.
+      - name: Run the conformance suite through the client
+        working-directory: clients/node
+        run: |
+          npm run conformance -- --binary "$OPENSYSML_BINARY" --allow-skips \
+            --report node-conformance.json
+
+      # A runner that passes against a deliberately broken client tests nothing.
+      - name: Check the conformance runner catches a broken client
+        working-directory: clients/node
+        run: |
+          for mutation in hide-capability drop-diagnostics blank-symbol-kind shift-integer drop-feature-values; do
+            if npm run conformance -- --binary "$OPENSYSML_BINARY" --allow-skips \
+                 --protocols connect --mutate "$mutation" > /dev/null 2>&1; then
+              echo "error: the suite passed with the $mutation mutation applied" >&2
+              exit 1
+            fi
+            echo "ok: $mutation is caught"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node-conformance
+          path: clients/node/node-conformance.json
+
+      # Pinned by digest, as cvc5 is above, so a substituted asset is not run.
+      - name: Install buf
+        run: |
+          curl -fsSL -o /tmp/buf \
+            https://github.com/bufbuild/buf/releases/download/v1.57.2/buf-Linux-x86_64
+          echo "644e6fa4a62afc2b0d425d3ac9538d2f512947c0f2e82fc95c41a5eab6729414  /tmp/buf" | sha256sum --check --strict
+          sudo install -m 0755 /tmp/buf /usr/local/bin/buf
+          buf --version
+
+      # Committed stubs must be what buf generates, or the checked-in client and
+      # the schema can drift apart silently.
+      - name: Verify the committed TypeScript stubs are current
+        run: |
+          make proto-ts BUF=buf
+          git diff --exit-code clients/node/src/generated
+
   python-test:
     name: Python client tests
     needs: build
@@ -568,3 +650,31 @@ jobs:
         with:
           name: conformance-report-rust
           path: bin/conformance-report-rust.json
+
+  conformance-pkg:
+    name: Conformance through pkg/opensysml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      # The runner builds and starts sysml-grpc itself; the pkg protocol runs
+      # in-process and pkg-connect dials that service, so this gate proves the
+      # public Go API answers as the wire does. Scenarios outside its v1
+      # surface are counted skips, not hidden.
+      - name: Conformance suite through pkg/opensysml
+        run: make conformance-pkg
+
+      # if: always() — the report matters most when the gate failed and halted the job.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-pkg-report
+          path: bin/conformance-pkg-report.json

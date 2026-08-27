@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Open-MBEE/OpenSysML/pkg/opensysml"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -246,6 +247,18 @@ func (s *service) client(protocol string) (client, error) {
 		return &connectClient{httpClient: http.DefaultClient, baseURL: "http://" + s.target}, nil
 	case "connect-json":
 		return &connectClient{httpClient: http.DefaultClient, baseURL: "http://" + s.target, json: true}, nil
+	case "pkg":
+		api, err := opensysml.New()
+		if err != nil {
+			return nil, err
+		}
+		return newPkgClient(protocol, api), nil
+	case "pkg-connect":
+		api, err := opensysml.Dial(s.target)
+		if err != nil {
+			return nil, err
+		}
+		return newPkgClient(protocol, api), nil
 	default:
 		return nil, fmt.Errorf("unknown protocol %q", protocol)
 	}

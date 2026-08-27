@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -155,6 +156,14 @@ func (r *runner) run(ctx context.Context, scenario *Scenario) *Result {
 	call, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	response, callErr := r.client.call(call, scenario.method(), request)
+
+	var uncovered *uncoveredError
+	if errors.As(callErr, &uncovered) {
+		result.Outcome = "skip"
+		result.Status = "-"
+		result.Reason = uncovered.reason
+		return result
+	}
 
 	wantStatus := expect.Status
 	if wantStatus == "" {

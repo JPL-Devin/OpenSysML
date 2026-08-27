@@ -447,6 +447,87 @@ A PyPI version cannot be replaced. Yank it
 without breaking a pin that already names it), bump `VERSION`, and tag again.
 Deleting a release frees nothing: the version number stays used.
 
+## Releasing @opensysml/client to npm
+
+The Node client in `clients/node/` is published to npm as `@opensysml/client` by
+the `release-node` workflow, which runs on a tag matching `/^client-node-v.*/` —
+for example `client-node-v0.1.0`. Nothing is published from a laptop, and a `v*`
+core release tag publishes no package. **Nothing has been published yet**: the
+first release needs the `@opensysml` scope to exist on npm, an automation token
+for it, and the `npm` context below.
+
+### Six packages, one tag
+
+`@opensysml/client` carries no binary. The service binary comes from one of five
+per-platform packages it names in `optionalDependencies`, which npm installs by
+matching their `os`/`cpu` metadata:
+
+| package | os | cpu |
+| --- | --- | --- |
+| `@opensysml/sysml-grpc-linux-x64` | linux | x64 |
+| `@opensysml/sysml-grpc-linux-arm64` | linux | arm64 |
+| `@opensysml/sysml-grpc-darwin-x64` | darwin | x64 |
+| `@opensysml/sysml-grpc-darwin-arm64` | darwin | arm64 |
+| `@opensysml/sysml-grpc-win32-x64` | win32 | x64 |
+
+All six share the version in `clients/node/package.json`, because the
+`optionalDependencies` name that exact version. The platform packages are
+published first, so `@opensysml/client` is never on the registry naming a
+version of them that is not. Where no package matches — a platform with no
+release build — the client falls back to `$OPENSYSML_BINARY`, a binary in
+`~/.opensysml/bin/`, `sysml-grpc` on `$PATH`, or an explicit external service;
+it never downloads anything. See `clients/node/README.md`.
+
+`build-node-binaries` cross-compiles the five binaries from the tagged revision
+and writes a `.sha256` sidecar beside each; `npm run platform-packages` refuses
+to package a binary whose bytes disagree with its sidecar, or that has none. The
+bytes therefore never leave the pipeline that publishes them, which is the job
+the Python client's pinned digests do for a download. npm's `--provenance` is not
+used: the CLI mints attestations only on GitHub Actions and GitLab CI/CD.
+
+### Why its own tag
+
+The same reason as the Python client: the package resolves a service binary at
+run time rather than being lockstep with a core release, so a client-only fix
+should not wait for a core release, and a core release should not force an
+immutable npm version. An npm version can be deprecated or (within 72 hours,
+and only under conditions) unpublished, but never replaced — keeping that off
+the re-runnable `v*` path is deliberate.
+
+### What the job needs
+
+1. The `@opensysml` **scope** on npm, with the publishing account a member of it.
+2. An **automation** access token for that account (npm → *Access Tokens* →
+   *Generate new token* → *Automation*, which bypasses 2FA for CI as a granular
+   token restricted to the `@opensysml` scope).
+3. A CircleCI **restricted context** named `npm` (Organization Settings →
+   Contexts) holding it as `NPM_TOKEN`, restricted to a security group so only
+   that group can run a job that reads it. A context reference is matched
+   exactly, so the name is lower-case in both places.
+
+### Releasing
+
+```bash
+# 1. Bump "version" in clients/node/package.json, land it.
+# 2. Tag the version it declares.
+git tag client-node-v0.1.0
+git push origin client-node-v0.1.0
+```
+
+The job fails before publishing anything if the tag and
+`clients/node/package.json` disagree, if any of the six versions is already on
+the registry, if the Go suite or the client's own gate (`node-test`: build,
+typecheck, lint, tests, conformance, and the mutation check that proves the
+conformance runner is not vacuous) fails, or if a binary's digest does not match
+its sidecar.
+
+### If a publish goes wrong
+
+An npm version cannot be replaced. `npm deprecate '@opensysml/client@0.1.0' '...'`
+marks it, `npm unpublish` is possible only within 72 hours and only if nothing
+depends on it, and either way the version number stays used: bump
+`clients/node/package.json` and tag again.
+
 ## The final `pysysml` release
 
 The client was published as [`pysysml`](https://pypi.org/project/pysysml/) up to
