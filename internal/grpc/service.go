@@ -47,8 +47,7 @@ const CapabilityOSLCQuery = "oslc_query"
 const CapabilityEnumValues = "enum_values"
 
 // CapabilityEvaluateSubject names the capability of evaluating an expression
-// against an instantiated subject, rather than ignoring the subject and
-// answering with the declared default.
+// against an instantiated subject.
 const CapabilityEvaluateSubject = "evaluate_subject"
 
 // CapabilitySymbolAttributes names the capability of populating
@@ -87,6 +86,39 @@ var capabilities = []string{
 	CapabilityAuthoring, CapabilityInlineLanguage, CapabilityStrictConformance,
 }
 
+type capabilityAvailability struct {
+	available map[string]struct{}
+}
+
+func newCapabilityAvailability(withheld []string) (capabilityAvailability, error) {
+	available := make(map[string]struct{}, len(capabilities))
+	for _, capability := range capabilities {
+		available[capability] = struct{}{}
+	}
+	for _, capability := range withheld {
+		if _, ok := available[capability]; !ok {
+			return capabilityAvailability{}, fmt.Errorf("unknown capability %q", capability)
+		}
+		delete(available, capability)
+	}
+	return capabilityAvailability{available: available}, nil
+}
+
+func (a capabilityAvailability) has(capability string) bool {
+	_, ok := a.available[capability]
+	return ok
+}
+
+func (a capabilityAvailability) names() []string {
+	names := make([]string, 0, len(a.available))
+	for _, capability := range capabilities {
+		if a.has(capability) {
+			names = append(names, capability)
+		}
+	}
+	return names
+}
+
 // Capabilities returns the capability names this build of the service reports.
 func Capabilities() []string {
 	return append([]string(nil), capabilities...)
@@ -107,6 +139,8 @@ type Service struct {
 	budgets runtime.Budgets
 	// version is the build version GetServerInfo reports, informational only.
 	version string
+	// capabilities decides both what this service reports and what it supplies.
+	capabilities capabilityAvailability
 }
 
 // NewService creates a gRPC service with specified cache size, reporting
@@ -116,7 +150,21 @@ type Service struct {
 // standard library: call Prewarm to have that happen in the background, ahead of
 // the requests that need it.
 func NewService(cacheSize int, version string) (*Service, error) {
+	return newService(cacheSize, version, nil)
+}
+
+// NewServiceWithUnavailableCapabilitiesForTesting creates a service that
+// deliberately lacks named capabilities for conformance testing.
+func NewServiceWithUnavailableCapabilitiesForTesting(cacheSize int, version string, unavailable []string) (*Service, error) {
+	return newService(cacheSize, version, unavailable)
+}
+
+func newService(cacheSize int, version string, unavailable []string) (*Service, error) {
 	cache, err := NewCache(cacheSize)
+	if err != nil {
+		return nil, err
+	}
+	availability, err := newCapabilityAvailability(unavailable)
 	if err != nil {
 		return nil, err
 	}
@@ -129,11 +177,12 @@ func NewService(cacheSize int, version string) (*Service, error) {
 		return nil, err
 	}
 	return &Service{
-		cache:      cache,
-		libIndexes: newLibraryBase(buildLibraryIndex),
-		prewarm:    prewarm > 0,
-		budgets:    budgets,
-		version:    version,
+		cache:        cache,
+		libIndexes:   newLibraryBase(buildLibraryIndex),
+		prewarm:      prewarm > 0,
+		budgets:      budgets,
+		version:      version,
+		capabilities: availability,
 	}, nil
 }
 
@@ -160,8 +209,15 @@ func (s *Service) Close() {
 func (s *Service) GetServerInfo(ctx context.Context, req *pb.ServerInfoRequest) (*pb.ServerInfoResponse, error) {
 	return &pb.ServerInfoResponse{
 		Version:      s.version,
-		Capabilities: Capabilities(),
+		Capabilities: s.capabilities.names(),
 	}, nil
+}
+
+func (s *Service) requireCapability(capability string) error {
+	if s.capabilities.has(capability) {
+		return nil
+	}
+	return status.Errorf(codes.Unimplemented, "capability %q is unavailable", capability)
 }
 
 // newRuntime returns a runtime context under the service's budgets.
@@ -176,6 +232,17 @@ func (s *Service) newRuntime(semModel *semantics.Model, resolver *resolve.Resolv
 
 // ParseFile parses a SysML file and caches the result
 func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.ParseFileResponse, error) {
+	if req.StrictConformance {
+		if err := s.requireCapability(CapabilityStrictConformance); err != nil {
+			return nil, err
+		}
+	}
+	if _, inline := req.Source.(*pb.ParseFileRequest_Content); inline && req.Language != "" {
+		if err := s.requireCapability(CapabilityInlineLanguage); err != nil {
+			return nil, err
+		}
+	}
+
 	// Extract source content and file path
 	var content string
 	var filePath string
@@ -280,7 +347,7 @@ func (s *Service) GetSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.
 
 	// Convert first match to proto
 	return &pb.SymbolResponse{
-		Symbol: SymbolToProtoIn(syms[0], cached.SymbolContext()),
+		Symbol: s.symbolToProto(syms[0], cached.SymbolContext()),
 	}, nil
 }
 
@@ -310,6 +377,12 @@ func (s *Service) GetDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest
 
 // Evaluate evaluates a SysML expression in the context of a parsed model
 func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.EvaluateResponse, error) {
+	if req.SubjectSymbolId != "" {
+		if err := s.requireCapability(CapabilityEvaluateSubject); err != nil {
+			return nil, err
+		}
+	}
+
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
@@ -390,7 +463,7 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	}
 
 	return &pb.EvaluateResponse{
-		Result: ValueToProtoIn(runtimeCtx, result, cached.Index),
+		Result: s.valueToProto(runtimeCtx, result, cached.Index),
 	}, nil
 }
 
@@ -440,7 +513,7 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 		}, nil
 	}
 
-	root, all := InstanceGraphToProto(runtimeCtx, inst, cached.Index)
+	root, all := s.instanceGraphToProto(runtimeCtx, inst, cached.Index)
 	return &pb.InstantiateResponse{
 		Instance:  root,
 		Instances: all,
@@ -496,7 +569,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	// Convert outputs to protobuf
 	pbOutputs := make(map[string]*pb.Value)
 	for name, val := range outputs {
-		pbOutputs[name] = ValueToProtoIn(runtimeCtx, val, cached.Index)
+		pbOutputs[name] = s.valueToProto(runtimeCtx, val, cached.Index)
 	}
 
 	return &pb.ExecuteActionResponse{
@@ -538,7 +611,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	// Convert final context to protobuf
 	pbContext := make(map[string]*pb.Value)
 	for name, val := range finalContext {
-		pbContext[name] = ValueToProtoIn(runtimeCtx, val, cached.Index)
+		pbContext[name] = s.valueToProto(runtimeCtx, val, cached.Index)
 	}
 
 	return &pb.ExecuteStateResponse{
@@ -576,7 +649,7 @@ func (s *Service) buildParseResponse(modelHash string, model *CachedModel) *pb.P
 				}
 			}
 		} else {
-			rootSymbol = SymbolToProtoIn(rootSyms[0], model.SymbolContext())
+			rootSymbol = s.symbolToProto(rootSyms[0], model.SymbolContext())
 		}
 	}
 

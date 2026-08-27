@@ -210,7 +210,8 @@
         }
       },
       "expect_without_capability": {
-        "status": "UNIMPLEMENTED"
+        "status": "UNIMPLEMENTED",
+        "status_message_contains": "oslc_query"
       }
     },
     {

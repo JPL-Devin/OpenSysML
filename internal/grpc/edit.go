@@ -17,6 +17,14 @@ import (
 // and layout intact. Argument faults fail the call; an edit the engine refuses
 // is reported in the response's error, failure kind and diagnostics.
 func (s *Service) ApplyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*pb.ApplyEditsResponse, error) {
+	if err := s.requireCapability(CapabilityApplyEdits); err != nil {
+		return nil, err
+	}
+	if requestsAuthoring(req.Operations) {
+		if err := s.requireCapability(CapabilityAuthoring); err != nil {
+			return nil, err
+		}
+	}
 	if req.ModelHash == "" {
 		return nil, status.Error(codes.InvalidArgument, "model_hash is required")
 	}
@@ -50,6 +58,16 @@ func (s *Service) ApplyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*p
 		Content: string(result.Content),
 		Applied: appliedToProto(result.Applied),
 	}, nil
+}
+
+func requestsAuthoring(operations []*pb.EditOperation) bool {
+	for _, operation := range operations {
+		switch operation.GetOperation().(type) {
+		case *pb.EditOperation_AddMember, *pb.EditOperation_Delete:
+			return true
+		}
+	}
+	return false
 }
 
 // editOperations reads the operations a request carries, rejecting a request

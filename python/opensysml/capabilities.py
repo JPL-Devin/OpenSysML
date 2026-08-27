@@ -24,20 +24,17 @@ from opensysml.errors import OpenSysMLError
 CAPABILITY_TYPE_FACTS = "type_facts"
 
 #: The ``Convert`` RPC, which writes a model back out as SysML notation or RDF
-#: Turtle. Without it a conversion request fails as an unimplemented method,
-#: which is indistinguishable from a broken channel.
+#: Turtle. Without it the service refuses conversion with ``UNIMPLEMENTED``.
 CAPABILITY_CONVERT = "convert"
 
 #: The verification RPCs — ``VerifyConstraint``, ``VerifyRequirement``,
 #: ``VerifySatisfaction`` and ``EvaluateCalc`` — which answer the questions the
 #: REPL's ``%constraint``, ``%requirement``, ``%satisfy`` and ``%calc`` answer.
-#: Without it those calls fail as unimplemented methods, which is
-#: indistinguishable from a broken channel.
+#: Without it the service refuses those calls with ``UNIMPLEMENTED``.
 CAPABILITY_VERIFICATION = "verification"
 
 #: The ``Query`` RPC, which evaluates a SysML v2 API & Services ``Query`` over a
-#: loaded model. Without it a query fails as an unimplemented method, which is
-#: indistinguishable from a broken channel.
+#: loaded model. Without it the service refuses queries with ``UNIMPLEMENTED``.
 CAPABILITY_QUERY = "query"
 
 #: An enumeration literal as ``Value.enum_literal``. Without it a literal is
@@ -46,8 +43,7 @@ CAPABILITY_QUERY = "query"
 CAPABILITY_ENUM_VALUES = "enum_values"
 
 #: Evaluating an expression against an instantiated subject. Without it the
-#: subject is ignored and the answer is the declared default, which is
-#: indistinguishable from the object's own value.
+#: service refuses a request that names a subject with ``UNIMPLEMENTED``.
 CAPABILITY_EVALUATE_SUBJECT = "evaluate_subject"
 
 #: Populated ``SymbolInfo.attributes``. Without it the attribute set is empty,
@@ -66,8 +62,8 @@ CAPABILITY_UNSET_VALUE = "unset_value"
 CAPABILITY_FEATURE_VALUES = "feature_values"
 
 #: The ``ApplyEdits`` RPC, which edits a loaded model's own source and hands back
-#: the edited notation. Without it an edit fails as an unimplemented method,
-#: which is indistinguishable from a broken channel.
+#: the edited notation. Without it the service refuses edits with
+#: ``UNIMPLEMENTED``.
 CAPABILITY_APPLY_EDITS = "apply_edits"
 #: Source-preserving add-member and delete authoring operations.
 CAPABILITY_AUTHORING = "authoring"
@@ -75,7 +71,7 @@ CAPABILITY_AUTHORING = "authoring"
 CAPABILITY_INLINE_LANGUAGE = "inline_language"
 #: ``ParseFileRequest.strict_conformance``, which asks whether the source is
 #: conforming SysML v2 rather than accepting the OpenSysML notation extensions.
-#: Without it the field is ignored, so the answer would silently be the default one.
+#: Without it the service refuses a request that sets the field.
 CAPABILITY_STRICT_CONFORMANCE = "strict_conformance"
 
 

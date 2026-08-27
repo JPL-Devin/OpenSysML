@@ -65,9 +65,10 @@ later answers.
 ## Capabilities
 
 Negotiate on names, not versions: `ServerInfo.Capabilities` lists what the
-answering implementation supports, and `ServerInfo.Has` checks one. The service
-does **not** refuse a call whose capability it lacks — it answers without the
-behaviour — so check the list before relying on one (the `Capability*`
+answering implementation supports, and `ServerInfo.Has` checks one. A request
+that asks for an unavailable capability is refused with `CodeUnimplemented`;
+capabilities that describe response population instead omit the fields they
+name. Check the list first for an operation-specific error (the `Capability*`
 constants name the known ones).
 
 ## Stability

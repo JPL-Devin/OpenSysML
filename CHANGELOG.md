@@ -4,6 +4,15 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+- `sysml-grpc` now refuses requests for unavailable capabilities with
+  `UNIMPLEMENTED`, naming the capability. Capabilities that only describe
+  response population omit those fields instead. The conformance gate runs both
+  the default service and a test-only withheld-capability configuration, and the
+  Python client translates service-side refusals into `MissingCapabilityError`
+  while preserving the original gRPC error as its cause.
+
 ## 0.3.0 — 2026-08-26
 
 Release 0.3.0 spends itself on a single question: what does this implementation accept that the

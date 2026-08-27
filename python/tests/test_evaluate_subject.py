@@ -56,7 +56,7 @@ def fake_service():
 
 
 def test_a_subject_requires_the_capability(fake_service):
-    """A service that would ignore the subject is named, not asked."""
+    """A service without subject evaluation is named, not asked."""
     port, service = fake_service(capabilities=())
     with Connection(port=port, auto_start=False) as conn:
         with pytest.raises(MissingCapabilityError) as excinfo:

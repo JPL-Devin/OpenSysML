@@ -196,6 +196,10 @@ func startService(ctx context.Context, binary, logPath string, cacheSize int) (*
 }
 
 func startServiceWithTransport(ctx context.Context, binary, logPath string, cacheSize int, transport string) (*service, error) {
+	return startServiceWithCapabilities(ctx, binary, logPath, cacheSize, transport, nil)
+}
+
+func startServiceWithCapabilities(ctx context.Context, binary, logPath string, cacheSize int, transport string, unavailable []string) (*service, error) {
 	port, healthPort, err := freePorts()
 	if err != nil {
 		return nil, err
@@ -214,6 +218,11 @@ func startServiceWithTransport(ctx context.Context, binary, logPath string, cach
 	)
 	process.Stdout = log
 	process.Stderr = log
+	process.Env = withoutEnvironment(os.Environ(), testWithholdCapabilitiesEnv)
+	if len(unavailable) > 0 {
+		process.Env = append(process.Env,
+			testWithholdCapabilitiesEnv+"="+strings.Join(unavailable, ","))
+	}
 	if err := process.Start(); err != nil {
 		_ = log.Close()
 		return nil, fmt.Errorf("starting %s: %w", binary, err)
@@ -237,6 +246,17 @@ func startServiceWithTransport(ctx context.Context, binary, logPath string, cach
 		return nil, err
 	}
 	return svc, nil
+}
+
+func withoutEnvironment(environment []string, name string) []string {
+	prefix := name + "="
+	filtered := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		if !strings.HasPrefix(entry, prefix) {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
 }
 
 func (s *service) client(protocol string) (client, error) {
