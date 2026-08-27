@@ -16,6 +16,13 @@ executors:
       - image: cimg/python:3.11
     resource_class: medium
 
+  # JDK 17, the client's compile target, with Maven 3.9 preinstalled. Testing on
+  # the baseline is the point: a 21-only construct must fail here.
+  java-executor:
+    docker:
+      - image: cimg/openjdk:17.0
+    resource_class: medium
+
   # Node 22 is the active LTS; the client supports >=20.11 for `await using`.
   node-executor:
     docker:
@@ -103,10 +110,11 @@ jobs:
       # Committed stubs must be what buf generates, or the checked-in code and
       # the schema can drift apart silently.
       - run:
-          name: Verify the committed Go stubs are current
+          name: Verify the committed Go and Java stubs are current
           command: |
-            make proto-go
-            git diff --exit-code api/proto
+            make proto-buf
+            git diff --exit-code api/proto \
+              clients/java/opensysml-client/src/main/java/io/opensysml/proto
       
       # The corpus is not vendored and the gate skips while it is absent, so a
       # release tag could be cut over a corpus regression without it.
@@ -434,6 +442,67 @@ jobs:
           name: Verify Python client import
           command: |
             python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"
+
+  # The Java client: unit tests, the conformance suite over both Connect
+  # encodings, and the committed stubs checked against what buf generates.
+  java-test:
+    executor: java-executor
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: .
+
+      - run:
+          name: Make the service binary executable
+          command: |
+            chmod +x bin/sysml-grpc
+            bin/sysml-grpc -version || true
+
+      - restore_cache:
+          keys:
+            - maven-v1-{{ checksum "clients/java/pom.xml" }}-{{ checksum "clients/java/opensysml-client/pom.xml" }}-{{ checksum "clients/java/opensysml-conformance/pom.xml" }}
+            - maven-v1-
+
+      - run:
+          name: Resolve dependencies
+          command: mvn -B -f clients/java/pom.xml -DskipTests dependency:go-offline
+
+      - save_cache:
+          key: maven-v1-{{ checksum "clients/java/pom.xml" }}-{{ checksum "clients/java/opensysml-client/pom.xml" }}-{{ checksum "clients/java/opensysml-conformance/pom.xml" }}
+          paths:
+            - ~/.m2/repository
+
+      # opensysml.requireService turns "no binary, so skip" into a failure: the
+      # workspace carries one, so its absence is the bug, not a pass. `install`
+      # rather than `test`, so the sources and javadoc jars a release needs are
+      # built on every commit rather than first at release time.
+      - run:
+          name: Test and install the client
+          command: |
+            mvn -B -f clients/java/pom.xml install -Dopensysml.requireService=true
+
+      - run:
+          name: Run the conformance suite through the client
+          command: |
+            mvn -B -q -f clients/java/pom.xml -pl opensysml-conformance \
+              dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt
+            java -cp "clients/java/opensysml-conformance/target/classes:$(cat /tmp/cp.txt)" \
+              io.opensysml.conformance.Main \
+              -binary bin/sysml-grpc -protocols connect,connect-json -allow-skips \
+              -report bin/conformance-report-java.json
+
+      - store_test_results:
+          path: clients/java/opensysml-client/target/surefire-reports
+
+      - store_artifacts:
+          path: bin/conformance-report-java.json
+
+      - store_artifacts:
+          path: clients/java/opensysml-client/target
+
+      # The committed Java stubs are checked in build-and-test, which has the Go
+      # toolchain the one buf template needs.
 
   # The npm client's gate. The service binary comes from the workspace because
   # this executor has no Go toolchain to build one with, and both the tests and
@@ -1116,6 +1185,14 @@ workflows:
             tags:
               ignore: /.*/
       - python-test:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              ignore: /.*/
+      - java-test:
           requires:
             - build-and-test
           filters:
