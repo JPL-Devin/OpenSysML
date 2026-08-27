@@ -105,7 +105,7 @@ version: ## Show version information
 	@echo "Build time: $(BUILD_TIME)"
 	@echo "Go version: $(GO_VERSION)"
 
-proto: proto-go python-proto ## Regenerate all protobuf stubs
+proto: proto-go python-proto proto-ts ## Regenerate all protobuf stubs
 
 proto-go: ## Regenerate Go protobuf stubs
 	@echo "Regenerating Go protobuf stubs..."
@@ -118,9 +118,12 @@ python-proto: ## Regenerate Python protobuf stubs
 	$(BUF) generate --template buf.gen.python.yaml
 	@echo "✓ Regenerated Python stubs"
 
-# The upcoming clients: generated on demand into gen/, never committed.
-proto-ts: ## Generate TypeScript stubs into gen/ts (for the planned npm client)
+proto-ts: ## Regenerate the TypeScript stubs the npm client in clients/node ships
+	@echo "Regenerating TypeScript protobuf stubs..."
 	$(BUF) generate --template buf.gen.ts.yaml
+	@echo "✓ Regenerated TypeScript stubs"
+
+# The upcoming clients: generated on demand into gen/, never committed.
 
 proto-java: ## Generate Java stubs into gen/java (for the planned Java client)
 	$(BUF) generate --template buf.gen.java.yaml

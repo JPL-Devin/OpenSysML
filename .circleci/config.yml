@@ -16,6 +16,12 @@ executors:
       - image: cimg/python:3.11
     resource_class: medium
 
+  # Node 22 is the active LTS; the client supports >=20.11 for `await using`.
+  node-executor:
+    docker:
+      - image: cimg/node:22.12
+    resource_class: medium
+
 jobs:
   build-and-test:
     executor: go-executor
@@ -429,6 +435,97 @@ jobs:
           command: |
             python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"
 
+  # The npm client's gate. The service binary comes from the workspace because
+  # this executor has no Go toolchain to build one with, and both the tests and
+  # the conformance run start private children from it.
+  node-test:
+    executor: node-executor
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: .
+
+      - run:
+          name: Install the client's dependencies
+          command: |
+            cd clients/node
+            npm ci
+
+      - run:
+          name: Build the package
+          command: |
+            cd clients/node
+            npm run build
+
+      - run:
+          name: Typecheck
+          command: |
+            cd clients/node
+            npm run typecheck
+
+      - run:
+          name: Lint
+          command: |
+            cd clients/node
+            npm run lint
+
+      - run:
+          name: Run the tests
+          command: |
+            chmod +x bin/sysml-grpc
+            export OPENSYSML_BINARY="$(pwd)/bin/sysml-grpc"
+            cd clients/node
+            npm test
+
+      # --allow-skips because v1 covers 5 of the 15 RPCs; the skipped count is
+      # reported and the artifact records which scenarios they were.
+      - run:
+          name: Run the conformance suite through the client
+          command: |
+            export OPENSYSML_BINARY="$(pwd)/bin/sysml-grpc"
+            cd clients/node
+            npm run conformance -- --binary "$OPENSYSML_BINARY" --allow-skips \
+              --report /tmp/node-conformance.json
+
+      # A runner that passes against a deliberately broken client tests nothing.
+      - run:
+          name: Check the conformance runner catches a broken client
+          command: |
+            export OPENSYSML_BINARY="$(pwd)/bin/sysml-grpc"
+            cd clients/node
+            for mutation in hide-capability drop-diagnostics blank-symbol-kind shift-integer drop-feature-values; do
+              if npm run conformance -- --binary "$OPENSYSML_BINARY" --allow-skips \
+                   --protocols connect --mutate "$mutation" > /dev/null 2>&1; then
+                echo "Error: the suite passed with the $mutation mutation applied"
+                exit 1
+              fi
+              echo "ok: $mutation is caught"
+            done
+
+      - store_artifacts:
+          path: /tmp/node-conformance.json
+          destination: node-conformance.json
+
+      # This executor has no Go toolchain, so buf comes from the official release
+      # rather than `go run`, pinned by digest so a substituted asset is not run.
+      - run:
+          name: Install buf
+          command: |
+            curl -fsSL -o /tmp/buf \
+              https://github.com/bufbuild/buf/releases/download/v1.57.2/buf-Linux-x86_64
+            echo "644e6fa4a62afc2b0d425d3ac9538d2f512947c0f2e82fc95c41a5eab6729414  /tmp/buf" | sha256sum --check --strict
+            sudo install -m 0755 /tmp/buf /usr/local/bin/buf
+            buf --version
+
+      # Committed stubs must be what buf generates, or the checked-in client and
+      # the schema can drift apart silently.
+      - run:
+          name: Verify the committed TypeScript stubs are current
+          command: |
+            make proto-ts BUF=buf
+            git diff --exit-code clients/node/src/generated
+
   # Publishes opensysml to PyPI on a `opensysml-v<version>` tag. PyPI has no
   # trusted-publishing (OIDC) support for CircleCI — the supported providers are
   # GitHub Actions, Google Cloud, ActiveState and GitLab CI/CD, and
@@ -838,6 +935,125 @@ jobs:
           paths:
             - dist
 
+  # The five sysml-grpc binaries the per-platform npm packages carry, built from
+  # the tagged revision in this pipeline so the published bytes never travel.
+  build-node-binaries:
+    executor: go-executor
+    steps:
+      - checkout
+      - go/load-cache
+      - go/mod-download
+
+      - run:
+          name: Cross-compile sysml-grpc and write its checksum sidecars
+          command: |
+            VERSION=${CIRCLE_TAG}
+            COMMIT=${CIRCLE_SHA1}
+            BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+            GO_VERSION=$(go version | awk '{print $3}')
+            mkdir -p dist/grpc
+            build() {
+              GOOS=$1 GOARCH=$2 make build-grpc VERSION="$VERSION" COMMIT="$COMMIT" \
+                BUILD_TIME="$BUILD_TIME" GO_VERSION="$GO_VERSION"
+              mv bin/sysml-grpc "dist/grpc/sysml-grpc-$1-$2$3"
+            }
+            build linux amd64 ""
+            build linux arm64 ""
+            build darwin amd64 ""
+            build darwin arm64 ""
+            build windows amd64 ".exe"
+            cd dist/grpc
+            for asset in sysml-grpc-*; do sha256sum "$asset" > "$asset.sha256"; done
+            cat ./*.sha256
+
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/grpc
+
+  # Publishes @opensysml/client and its five per-platform packages on a
+  # `client-node-v<version>` tag. npm has no trusted publishing for CircleCI, so
+  # this authenticates with an automation token from the restricted `npm`
+  # context. Everything that can fail runs before the first publish: the
+  # tag/version check, the client's own gate, the digest check on every binary,
+  # and a refusal when the version is already published. The platform
+  # packages go first, because @opensysml/client's optionalDependencies name them
+  # at this exact version.
+  publish-npm:
+    executor: node-executor
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: .
+
+      - run:
+          name: Check the tag matches the package version
+          command: |
+            version=$(node -p "require('./clients/node/package.json').version")
+            expected="client-node-v${version}"
+            if [ "${CIRCLE_TAG}" != "$expected" ]; then
+              echo "Error: tag ${CIRCLE_TAG} does not match clients/node/package.json"
+              echo "version ${version}; the tag for it is ${expected}. Nothing was published."
+              exit 1
+            fi
+
+      - run:
+          name: Refuse a version already on the registry
+          command: |
+            version=$(node -p "require('./clients/node/package.json').version")
+            for name in @opensysml/client @opensysml/sysml-grpc-linux-x64 \
+                        @opensysml/sysml-grpc-linux-arm64 @opensysml/sysml-grpc-darwin-x64 \
+                        @opensysml/sysml-grpc-darwin-arm64 @opensysml/sysml-grpc-win32-x64; do
+              if npm view "${name}@${version}" version > /dev/null 2>&1; then
+                echo "Error: ${name}@${version} is already published; a version cannot be"
+                echo "replaced. Bump clients/node/package.json and tag again."
+                exit 1
+              fi
+            done
+
+      - run:
+          name: Build and test the package
+          command: |
+            chmod +x dist/grpc/sysml-grpc-linux-amd64
+            export OPENSYSML_BINARY="$(pwd)/dist/grpc/sysml-grpc-linux-amd64"
+            cd clients/node
+            npm ci
+            npm run build
+            npm run typecheck
+            npm run lint
+            npm test
+
+      - run:
+          name: Build the per-platform packages
+          command: |
+            cd clients/node
+            npm run platform-packages -- --binaries ../../dist/grpc
+
+      - run:
+          name: Authenticate to npm
+          command: |
+            if [ -z "${NPM_TOKEN}" ]; then
+              echo "Error: NPM_TOKEN is not set; the 'npm' context supplies it."
+              exit 1
+            fi
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+
+      # No --provenance: the npm CLI only mints attestations on GitHub Actions and
+      # GitLab CI/CD, and it fails rather than publish unattested when asked here.
+      - run:
+          name: Publish the per-platform packages
+          command: |
+            for directory in clients/node/packages/sysml-grpc-*; do
+              npm publish "$directory" --access public
+            done
+
+      - run:
+          name: Publish @opensysml/client
+          command: |
+            cd clients/node
+            npm publish --access public
+
   publish-github-release:
     docker:
       - image: cibuilds/github:0.13
@@ -900,6 +1116,14 @@ workflows:
             tags:
               ignore: /.*/
       - python-test:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              ignore: /.*/
+      - node-test:
           requires:
             - build-and-test
           filters:
@@ -988,6 +1212,54 @@ workflows:
               ignore: /.*/
             tags:
               only: /^opensysml-v.*/
+
+  # Publish the npm client on its own tag, for the same reason the Python client
+  # has one: the package resolves a service binary at run time, so a client fix
+  # should not need a core release and a core release should not need an npm
+  # publish. The binaries the platform packages carry are built here rather than
+  # downloaded from a release.
+  release-node:
+    jobs:
+      - build-and-test:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^client-node-v.*/
+
+      - node-test:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^client-node-v.*/
+
+      - build-node-binaries:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^client-node-v.*/
+
+      - publish-npm:
+          # The organization context is named 'npm'; a context reference is
+          # matched exactly, so the case here has to match it. A publish cannot
+          # be taken back, so it runs last and only on a revision proven green.
+          context:
+            - npm
+          requires:
+            - build-and-test
+            - node-test
+            - build-node-binaries
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^client-node-v.*/
 
   # Publishes the final release of the pre-rename PyPI name on a `pysysml-v*`
   # tag. It is its own workflow because the artifact shares no code with the
