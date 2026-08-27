@@ -48,6 +48,9 @@ case_ java-only java clients/java/opensysml-client/pom.xml
 case_ node-only node clients/node/package.json
 case_ python-only python python/opensysml/connection.py
 case_ vscode-only vscode editors/vscode/package.json
+# The grammar generator and its committed output are held together by a Go test.
+case_ vscode-grammar docs,go,java,node,python,vscode editors/vscode/tools/gengrammar/grammar.go
+case_ vscode-syntaxes docs,go,java,node,python,vscode editors/vscode/syntaxes/sysml.tmLanguage.json
 # Any markdown counts as documentation: the site links out to repository files.
 case_ two-client-readmes docs,java,node clients/java/README.md clients/node/README.md
 case_ two-clients java,node clients/java/pom.xml clients/node/tsconfig.json
