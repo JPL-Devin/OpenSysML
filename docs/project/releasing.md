@@ -282,6 +282,40 @@ that heap rather than splitting the package. Note also that the launcher in the
 pinned scanner CLI passes `$SONAR_SCANNER_OPTS` and not
 `SONAR_SCANNER_JAVA_OPTS`, so the newer variable name has no effect here.
 
+### What counts as new code
+
+The quality gate is mostly conditions on *new* code — coverage, the security and
+reliability ratings, duplication — so which lines are new decides whether it is
+red, and the gate says nothing useful if that set is wrong. The project uses
+SonarCloud's default period, **previous version**, whose baseline is the last
+analysis carrying a version other than the current one. An analysis that names
+no version carries the placeholder `not provided`: every analysis then looks
+like the same version, no earlier one differs, and the period silently falls
+back to the first analysis ever run. That happened here — the analysis of
+2026-08-27 counted 105,050 of 110,609 lines as new, so "coverage on new code"
+was whole-project coverage measured against a 70% threshold that project-wide
+coverage is not held to, and the gate was red for it.
+
+The `scan` job therefore derives the version from the nearest release tag that
+is an ancestor of `HEAD` (`git describe --tags --abbrev=0 --match 'v[0-9]*'`,
+without the `v`) and passes it as `-Dsonar.projectVersion` in
+`SONAR_SCANNER_OPTS`. New code is then what has been committed since that
+release was first analyzed, and cutting a release moves the baseline forward on
+its own: the first analysis after a `v*` tag reports a version the previous
+analyses did not, which is exactly the boundary the period wants. The job fetches
+tags explicitly, because CircleCI's checkout fetches only the ref being built.
+
+Two failure modes are worth recognizing, since neither fails the job. If no `v*`
+tag is an ancestor of `HEAD` the step says so and leaves the version unset,
+which is the fallback above. And if the version stops reaching the server, the
+period collapses again: check it with
+
+```bash
+curl -s "https://sonarcloud.io/api/project_analyses/search?project=Open-MBEE_OpenSysML&ps=1"
+```
+
+whose `projectVersion` must be the release number, not `not provided`.
+
 One-time maintainer step (already done for `Open-MBEE_OpenSysML`, but true of
 any future project): SonarCloud does not create a project from a CI-run scan
 (the scanner sends branch parameters, and Cloud cannot provision from those —
