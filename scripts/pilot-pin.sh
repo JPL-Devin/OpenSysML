@@ -4,9 +4,9 @@
 # corpora, and the reference validator the differential harness compares against.
 #
 # Kept in one file so the release under comparison cannot drift between them.
-PILOT_TAG="${PILOT_TAG:-2026-05}"
+PILOT_TAG="${PILOT_TAG:-2026-07}"
 PILOT_REPO="${PILOT_REPO:-https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation.git}"
-PILOT_ARTIFACT_VERSION="${PILOT_ARTIFACT_VERSION:-0.60.1}"
+PILOT_ARTIFACT_VERSION="${PILOT_ARTIFACT_VERSION:-0.61.0}"
 
 # pilot_fetch_subtrees copies model roots out of the pinned pilot repository in one
 # sparse clone. Each argument is "<path in the pilot repository>:<destination>";

@@ -71,6 +71,6 @@ for index in "${!wanted_paths[@]}"; do
 	echo "Downloaded $count .xt file(s) from $source_path to $target"
 done
 
-echo "Total $total .xt file(s) (the pin declares 303 KerML + 125 SysML = 428)."
+echo "Total $total .xt file(s) (the pin declares 303 KerML + 126 SysML = 429)."
 echo "Compare our behaviour against their declared expectations with:"
 echo "  go run ./cmd/pilot-xpect"

@@ -1,0 +1,31 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ReferenceMultiplicity" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="concern" name="c4" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="R"
+          (AssumeMember name="c1"
+            (Multiplicity range=true
+              (LiteralInteger value="0")
+              (LiteralInfinity)))
+          (RequireMember name="c2"
+            (Multiplicity range=true
+              (LiteralInteger value="0")
+              (LiteralInfinity)))
+          (RequireMember name="c3"
+            (Multiplicity range=true
+              (LiteralInteger value="0")
+              (LiteralInfinity)))
+          (Usage kind="frame" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="references" target=c4
+              (*ast.QualifiedName))
+            (Multiplicity range=true
+              (LiteralInteger value="0")
+              (LiteralInfinity))))))))

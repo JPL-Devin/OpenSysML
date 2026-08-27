@@ -30,7 +30,7 @@ form-level unseen diagnostics.
 
 ```bash
 rm -rf build/pilot-grammars build/grammar-coverage
-./scripts/download-pilot-grammars.sh          # 3 .xtext + PILOT_TAG (2026-05) under build/pilot-grammars
+./scripts/download-pilot-grammars.sh          # 3 .xtext + PILOT_TAG (2026-07) under build/pilot-grammars
 go run ./cmd/grammar-coverage -baseline /tmp/nb.json     # ~15 s
 cmp /tmp/nb.json docs/project/grammar-coverage-baseline.json    # must be silent
 ```
@@ -97,7 +97,7 @@ the file it drops into the REPL and blocks, so the next typed command is swallow
 There is no flag for extra scanned roots (`cmd/grammar-coverage` takes only `-repo`, `-grammars`,
 `-out`, `-baseline`), so claims of the form "corpus X closes the unseen-form gap" need a temporary
 `corpusRoot` appended to `evidenceRoots` in `cmd/grammar-coverage/corpus.go`, then reverted. Example
-at `PILOT_TAG=2026-05`: adding `cmd/pilot-reject/testdata/negative` contributes 119 files / 842
+at `PILOT_TAG=2026-07`: adding `cmd/pilot-reject/testdata/negative` contributes 119 files / 842
 lines and takes unseen forms 5 → 0 with `indistinguishable` unchanged at 244. Such a configuration
 is not reproduced by CI, so report it as a local measurement, not a baseline movement.
 

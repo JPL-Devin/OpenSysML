@@ -21,8 +21,8 @@ SysML diagnostic classes. A reader who only wants the verdicts can ignore all of
 
 ## Pinned reference
 
-The same pin as the differential: OMG SysML v2 Pilot Implementation `2026-05`
-(`jupyter-sysml-kernel 0.60.1`, see `scripts/pilot-pin.sh`). Two validators referee:
+The same pin as the differential: OMG SysML v2 Pilot Implementation `2026-07`
+(`jupyter-sysml-kernel 0.61.0`, see `scripts/pilot-pin.sh`). Two validators referee:
 
 - `build/pilot-sysml-validator/validate-sysml-batch` for `.sysml` cases
   (`./scripts/download-pilot-sysml-validator.sh`)

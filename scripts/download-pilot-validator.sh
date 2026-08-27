@@ -11,7 +11,7 @@ set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pilot-pin.sh"
 
 VALIDATOR_REPO="${VALIDATOR_REPO:-https://github.com/DeciSym/sysmlv2-validator.git}"
-VALIDATOR_COMMIT="${VALIDATOR_COMMIT:-0d706e5ba1e9c56730cb8600ee43602906e12058}"
+VALIDATOR_COMMIT="${VALIDATOR_COMMIT:-63abbd9fbc7851dc437d01b2dc07836b919770b8}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 target="$repo_root/build/pilot-validator"

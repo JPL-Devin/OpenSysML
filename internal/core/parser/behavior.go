@@ -2154,6 +2154,7 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 		node := &ast.AssumeMember{
 			Reference:     cr.ref,
 			Relationships: cr.relationships,
+			Multiplicity:  cr.multiplicity,
 			HasBody:       cr.hasBody,
 			Body:          cr.body,
 		}
@@ -2199,6 +2200,7 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 		node := &ast.RequireMember{
 			Reference:     cr.ref,
 			Relationships: cr.relationships,
+			Multiplicity:  cr.multiplicity,
 			HasBody:       cr.hasBody,
 			Body:          cr.body,
 		}
@@ -2282,12 +2284,13 @@ func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
 type constraintReference struct {
 	ref           *ast.QualifiedName
 	relationships []*ast.Relationship
+	multiplicity  *ast.Multiplicity
 	body          []ast.Node
 	hasBody       bool
 }
 
 // tryParseConstraintReference parses `OwnedReferenceSubsetting
-// FeatureSpecialization* CalculationBody` (SysML.xtext
+// FeatureSpecializationPart? CalculationBody` (SysML.xtext
 // RequirementConstraintUsage), consuming nothing when the member is not it.
 func (p *Parser) tryParseConstraintReference() (constraintReference, bool) {
 	if !p.atName() {
@@ -2300,15 +2303,22 @@ func (p *Parser) tryParseConstraintReference() (constraintReference, bool) {
 		return constraintReference{}, false
 	}
 	rels := p.parseRelationships(true)
+	// The specialization part carries a multiplicity of its own, which may be
+	// followed by further specializations: `require c [0..*] :> d;`.
+	var mult *ast.Multiplicity
+	if p.at(lexer.LBracket) {
+		mult = p.parseMultiplicity()
+		rels = append(rels, p.parseRelationships(true)...)
+	}
 	if p.at(lexer.LBrace) {
 		p.advance() // consume '{'
-		return constraintReference{ref: ref, relationships: rels, body: p.parseRequirementBody(), hasBody: true}, true
+		return constraintReference{ref: ref, relationships: rels, multiplicity: mult, body: p.parseRequirementBody(), hasBody: true}, true
 	}
 	// A body-less bare name stays a condition expression; only a qualified name or
 	// a specialization part can be the reference form.
-	if p.at(lexer.Semicolon) && (len(ref.Parts) > 1 || len(rels) > 0) {
+	if p.at(lexer.Semicolon) && (len(ref.Parts) > 1 || len(rels) > 0 || mult != nil) {
 		p.advance() // consume ';'
-		return constraintReference{ref: ref, relationships: rels}, true
+		return constraintReference{ref: ref, relationships: rels, multiplicity: mult}, true
 	}
 	p.restore(cp)
 	return constraintReference{}, false
