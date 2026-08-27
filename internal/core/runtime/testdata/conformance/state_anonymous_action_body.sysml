@@ -6,9 +6,10 @@ package Test {
     state def Bodies {
         attribute log : Integer = 0;
 
-        initial start;
+        entry; then start;
+        state start;
 
-        state working {
+        state working parallel {
             entry action {
                 attribute k : Integer = 3;
                 while k > 0 {
@@ -19,21 +20,22 @@ package Test {
             do action { assign log := log * 10 + 8; }
             exit action { assign log := log * 10 + 9; }
 
-            region inside {
-                initial nstart;
+            state inside {
+                entry; then nstart;
+                state nstart;
                 state nested {
                     entry action { assign log := log * 10 + 7; }
                     do action { }
                     exit action { }
                 }
 
-                then nstart nested;
+                succession first nstart then nested;
             }
         }
 
         state done;
 
-        then start working;
-        then working done;
+        succession first start then working;
+        succession first working then done;
     }
 }

@@ -1,0 +1,13 @@
+{
+  "type": "state",
+  "events": [
+    {
+      "signal": "Stop"
+    }
+  ],
+  "finalState": "resting",
+  "stateVisits": [
+    "start",
+    "resting"
+  ]
+}

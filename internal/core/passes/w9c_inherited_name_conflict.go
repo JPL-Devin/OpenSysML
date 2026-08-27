@@ -12,12 +12,14 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// Pilot KerMLValidator (2026-05) checkTypeDistinguishability: a type inheriting
-// one member name from two supertypes, neither redefining the other's feature.
+// Pilot KerMLValidator (2026-05) checkNamespace, INVALID_NAMESPACE_DISTINGUISHABILITY_MSG_2:
+// an owned or inherited member name a type also inherits from elsewhere.
 const msgW9CDuplicateInherited = "Duplicate of inherited member name"
 
-// W9CInheritedNameConflictPass warns when two library definitions a declaration
-// conforms to each supply a feature of one name: `action a : ABlock` inherits
+// W9CInheritedNameConflictPass warns when a declaration reuses a member name a
+// library definition it conforms to already supplies — `state start;` inside a
+// state, against StatePerformances::StateAction::start — and when two such
+// definitions each supply a feature of one name: `action a : ABlock` inherits
 // `self`, `start` and `done` from both Actions::Action and Parts::Part. The
 // resolver's own rule covers only the document's own supertypes.
 type W9CInheritedNameConflictPass struct{}
@@ -77,7 +79,7 @@ func (c *w9cConflictChecker) check(sym *symbols.Symbol) {
 		return
 	}
 	bases := c.libraryBases(sym)
-	if len(bases) < 2 {
+	if len(bases) == 0 {
 		return
 	}
 	byName := map[string][]w9cCandidate{}
@@ -85,6 +87,10 @@ func (c *w9cConflictChecker) check(sym *symbols.Symbol) {
 		for name, cand := range c.baseMembers(base) {
 			byName[name] = append(byName[name], cand)
 		}
+	}
+	c.checkOwnedNames(sym, byName)
+	if len(bases) < 2 {
+		return
 	}
 	names := make([]string, 0, len(byName))
 	for name := range byName {
@@ -101,6 +107,68 @@ func (c *w9cConflictChecker) check(sym *symbols.Symbol) {
 			}
 		}
 	}
+}
+
+// checkOwnedNames reports each member sym declares whose name a library base
+// already contributes (KerML 8.4.3.2): the two are indistinguishable unless the
+// declaration redefines or subsets the inherited feature.
+func (c *w9cConflictChecker) checkOwnedNames(sym *symbols.Symbol, byName map[string][]w9cCandidate) {
+	if sym.Scope == nil || resolve.ParameterizedByName(sym) {
+		return
+	}
+	owned, aliases := resolve.DistinguishableMembers(sym.Scope)
+	for _, mem := range append(owned, aliases...) {
+		cands := byName[mem.Name]
+		if len(cands) == 0 || resolve.ImplicitlyRedefined(mem) ||
+			c.hasUnresolvedRedefinition(mem) {
+			continue
+		}
+		if from := c.conflictingBases(c.notSpecializedBy(mem, cands)); len(from) > 0 {
+			c.report(nameSpanOf(mem), mem.Name, from)
+		}
+	}
+}
+
+// notSpecializedBy drops the inherited features mem redefines or subsets, which
+// it is then free to reuse the name of.
+func (c *w9cConflictChecker) notSpecializedBy(
+	mem *symbols.Symbol,
+	cands []w9cCandidate,
+) []w9cCandidate {
+	out := make([]w9cCandidate, 0, len(cands))
+	for _, cand := range cands {
+		if cand.member == mem || c.specializes(mem, cand.member) {
+			continue
+		}
+		out = append(out, cand)
+	}
+	return out
+}
+
+// hasUnresolvedRedefinition reports whether sym declares a redefinition whose
+// target we could not resolve: the reused name is then no evidence of a
+// duplicate, since the unresolved target may be the feature it redefines.
+func (c *w9cConflictChecker) hasUnresolvedRedefinition(sym *symbols.Symbol) bool {
+	if c.resolver == nil {
+		return false
+	}
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
+			continue
+		}
+		if _, ok := c.resolver.ResolveTarget(sym.OwnerScope, rel.Target); !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// nameSpanOf is where a member's name was written, or its declaration.
+func nameSpanOf(sym *symbols.Symbol) source.Span {
+	if sym.NameSpan != (source.Span{}) {
+		return sym.NameSpan
+	}
+	return sym.DeclSpan
 }
 
 // chainSpans are the spans of the feature chains sym references. A chain is an

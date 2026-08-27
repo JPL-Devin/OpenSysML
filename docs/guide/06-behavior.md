@@ -10,10 +10,8 @@ connections.
 sysml> action SimpleWorkflow {
   ...>     attribute result = 0;
   ...>     first start;
-  ...>     action compute { assign result := 42; }
-  ...>     done end;
-  ...>     then start compute;
-  ...>     then compute end;
+  ...>     then action compute { assign result := 42; }
+  ...>     then done;
   ...> }
 ✓ action SimpleWorkflow
 
@@ -32,6 +30,7 @@ sysml> %step
 sysml> %tokens
 Active tokens (1):
   Token 1 @ compute
+  Values:
     result = 0
 
 sysml> %continue
@@ -42,14 +41,21 @@ sysml> %continue
 ```
 
 **State machine execution:**
+
+A machine completes when a transition reaches `done`, the end shot the standard
+library gives every state: entering it runs the exit actions and the machine
+reports itself completed. Inside orthogonal regions each region has its own
+`done`, and the machine completes only once every concurrent region has reached
+it.
+
 ```sysml
 sysml> state TrafficLight {
-  ...>     initial start;
+  ...>     entry; then start;
+  ...>     state start;
   ...>     state green { accept after 25 then yellow; }
   ...>     state yellow { accept after 5 then red; }
-  ...>     state red { accept after 30 then off; }
-  ...>     final off;
-  ...>     start then green;
+  ...>     state red { accept after 30 then done; }
+  ...>     succession first start then green;
   ...> }
 ✓ state TrafficLight
 
@@ -81,11 +87,11 @@ sysml> %advance 5
 
 sysml> %advance 30
 ✓ Advanced to 60.00 (1 event(s) processed)
-  Current state: off
+  Current state: done
   Last event at: 60.00
   Remaining events: 0
 
-✓ State machine completed (final state reached)
+✓ State machine completed (a transition reached `done`)
 ```
 
 **Action debugging commands:**
@@ -103,7 +109,9 @@ sysml> %advance 30
 - `%advance <time>` — Advance simulation time by `<time>` units, processing every event due
 - `%stop` — Stop debugging
 
-**See [examples/action-executor-demo.sysml](../../examples/action-executor-demo.sysml) and [examples/state-machine-demo.sysml](../../examples/state-machine-demo.sysml) for complete workflows.**
+**See [examples/action-executor-demo.sysml](../../examples/action-executor-demo.sysml),
+[examples/orthogonal-regions-demo.sysml](../../examples/orthogonal-regions-demo.sysml), and
+[examples/pseudostates-demo.sysml](../../examples/pseudostates-demo.sysml) for complete workflows.**
 
 ## An object runs the behaviors its type exhibits
 
@@ -123,7 +131,7 @@ sysml> part def Monitor {
   ...>         }
   ...>         state awake { entry action mark { assign count := count + 10; } }
   ...>     }
-  ...>     action bumpBy { in n; first apply; action apply { assign count := count + n; } }
+  ...>     action bumpBy { in n; action apply { assign count := count + n; } first apply; then done; }
   ...> }
 ✓ part def Monitor
 
@@ -148,6 +156,12 @@ sysml> %features Monitor
 Instance: Monitor (ID: 1)
 Features:
   count = 11
+  modes = Instance(ID: 2)
+    idle = <unknown>
+    awake = <unknown>
+  bumpBy = Instance(ID: 3)
+    n = <unknown>
+    apply = <unknown>
 ```
 
 `%instantiate` started the machine and `%state Monitor` bound the debugger to *that object's*
@@ -189,6 +203,12 @@ sysml> %features Monitor
 Instance: Monitor (ID: 1)
 Features:
   count = 15
+  modes = Instance(ID: 2)
+    idle = <unknown>
+    awake = <unknown>
+  bumpBy = Instance(ID: 3)
+    n = <unknown>
+    apply = <unknown>
 ```
 
 Each argument is written `<parameter>=<expression>`; an unbound parameter, an argument naming no
@@ -204,23 +224,23 @@ prints.
 
 ### Sequential: start → action → done
 
+The sequential flow below uses standard implicit succession notation:
+
 ```sysml
 action sequential {
     attribute result : Integer = 0;
 
     first start;
-    action compute { assign result := 42 * 2; }
-    done finish;
-
-    then start compute;
-    then compute finish;
+    then action compute { assign result := 42 * 2; }
+    then done;
 }
 ```
 
 One token spawns at `start`, moves to `compute`, which runs its body, and is consumed at
-`finish`:
+`done`:
 
 ```
+$ sysml -action ActionExecutorDemo::sequential examples/action-executor-demo.sysml
 ✓ Action completed
   Final state: Completed
   Results:
@@ -230,6 +250,8 @@ One token spawns at `start`, moves to `compute`, which runs its body, and is con
 ---
 
 ### Fork and join: parallel paths
+
+`fork` and `join` are action node literals, so this action is standard notation.
 
 ```sysml
 action forkJoin {
@@ -243,16 +265,16 @@ action forkJoin {
     action middle { assign task2 := 20; }
     action right { assign task3 := 30; }
     join sync;
-    done finish;
+    done;
 
-    then start split;
-    then split left;
-    then split middle;
-    then split right;
-    then left sync;
-    then middle sync;
-    then right sync;
-    then sync finish;
+    succession first start then split;
+    succession first split then left;
+    succession first split then middle;
+    succession first split then right;
+    succession first left then sync;
+    succession first middle then sync;
+    succession first right then sync;
+    succession first sync then done;
 }
 ```
 
@@ -261,7 +283,8 @@ token on *every* incoming succession before one continues. A fork duplicates con
 values: all three branches are steps of the one performance, so every assignment is visible
 when it completes.
 
-```
+```bash
+$ sysml -action ActionExecutorDemo::forkJoin examples/action-executor-demo.sysml
 ✓ Action completed
   Final state: Completed
   Results:
@@ -276,6 +299,9 @@ A branch that never arrives is a deadlock, not a failure: the run is reported as
 
 ### Decision and else: conditional branching
 
+`decide` with a guarded branch and an `else` branch is standard notation; the
+OpenSysML spelling `decision` is the one that warns.
+
 ```sysml
 action conditional {
     attribute x : Integer = 15;
@@ -284,11 +310,11 @@ action conditional {
     first start;
     action pathA { assign taken := 1; }
     action pathB { assign taken := 2; }
-    done finish;
+    done;
 
-    then start check;
-    then pathA finish;
-    then pathB finish;
+    succession first start then check;
+    succession first pathA then done;
+    succession first pathB then done;
 
     decide check;
     if x > 10 then pathA;
@@ -299,7 +325,8 @@ action conditional {
 `decide` evaluates its guards in the order written, with the action's features in scope, and
 takes the first that holds; `else` is taken when none does. With `x = 15`:
 
-```
+```bash
+$ sysml -action ActionExecutorDemo::conditional examples/action-executor-demo.sysml
 ✓ Action completed
   Final state: Completed
   Results:
@@ -307,11 +334,10 @@ takes the first that holds; `else` is taken when none does. With `x = 15`:
     x = 15
 ```
 
-Set `x` to `5` and `taken` is `2`. The state-machine counterparts — fork/join pseudostates,
-choice and junction, history — are in
-[examples/state-machine-demo.sysml](../../examples/state-machine-demo.sysml) and
-[examples/combined-behavioral-demo.sysml](../../examples/combined-behavioral-demo.sysml), and
-every case the executors are held to is under
+Set `x` to `5` and `taken` is `2`. The state-machine counterparts — orthogonal regions,
+choice and junction — are in
+[examples/orthogonal-regions-demo.sysml](../../examples/orthogonal-regions-demo.sysml) and
+[examples/pseudostates-demo.sysml](../../examples/pseudostates-demo.sysml), and every case the executors are held to is under
 `internal/core/runtime/testdata/conformance/`.
 
 A run that stops short — a deadlock, or a budget reached — is reported as a check that was never

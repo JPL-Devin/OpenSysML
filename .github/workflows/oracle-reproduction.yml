@@ -1,0 +1,94 @@
+name: Oracle reproduction
+
+# The three oracle baselines under docs/project/ are only as true as their last
+# recorded run, and re-running them needs Java, the pinned pilot jar and three
+# downloaded corpora — which is why neither pr.yml nor CircleCI's build-and-test
+# does it. This workflow does, on a schedule and on demand, so a baseline that
+# has stopped describing reality surfaces within a day instead of at the next
+# audit. It is deliberately not a required check: it downloads from upstream and
+# takes minutes, so a network failure here must not block a pull request.
+#
+# It lives in GitHub Actions rather than .circleci/config.yml because a
+# CircleCI schedule is configured outside the repository (project settings or
+# the API), so a fork of this repository would inherit the file without the
+# trigger; `schedule` plus `workflow_dispatch` here need nothing but the file.
+# pages.yml is guarded by `github.repository == 'Open-MBEE/OpenSysML'` and so
+# never runs in a fork — this workflow carries no such guard on purpose, since a
+# fork's baselines go stale the same way.
+on:
+  schedule:
+    # 04:17 UTC daily, off the hour to avoid the scheduler's busiest minute.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    name: Reproduce the committed oracle baselines
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+
+      # The pinned pilot implementation is a Java artifact and the two bridges
+      # are plain-Java programs compiled against it.
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Report the pin and the toolchain
+        run: |
+          cat scripts/pilot-pin.sh
+          java -version
+          go version
+
+      - name: Download the pinned pilot validators
+        run: |
+          ./scripts/download-pilot-validator.sh
+          ./scripts/download-pilot-sysml-validator.sh
+          ./scripts/download-pilot-kerml-validator.sh
+
+      - name: Download the OMG corpora the oracles compare
+        run: |
+          ./scripts/download-training-examples.sh
+          ./scripts/download-pilot-corpora.sh
+          ./scripts/download-pilot-xpect.sh
+
+      # Each oracle's -check re-runs the comparison and diffs the fresh report
+      # against its committed baseline, ignoring only the recording date. The
+      # failure names whether the provenance moved (the pinned reference or an
+      # input changed underneath the baseline: investigate the provisioning) or
+      # only the counts did (an implementation movement: adjudicate, then
+      # re-record with -update). Each step runs even if an earlier one failed,
+      # so one run reports all three verdicts.
+      - name: Reference differential reproduces its baseline
+        run: go run ./cmd/pilot-diff -check
+
+      - name: Xpect oracle reproduces its baseline
+        if: ${{ !cancelled() }}
+        run: go run ./cmd/pilot-xpect -check
+
+      - name: Rejection oracle reproduces its baseline
+        if: ${{ !cancelled() }}
+        run: go run ./cmd/pilot-reject -check
+
+      # The reports themselves, so a failing run can be read without
+      # reproducing the environment.
+      - name: Upload the fresh reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-reports
+          path: |
+            build/pilot-diff/
+            build/pilot-xpect/
+            build/pilot-reject/
+          if-no-files-found: warn

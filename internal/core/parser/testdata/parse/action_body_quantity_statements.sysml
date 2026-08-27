@@ -21,9 +21,9 @@ package descent {
 			}
 		}
 
-		done end;
+		done;
 
-		then start integrate;
-		then integrate end;
+		succession first start then integrate;
+		succession first integrate then done;
 	}
 }

@@ -15,9 +15,19 @@
           (Membership visibility="default"
             (Usage kind="action" name="flow" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (*ast.AssignmentActionNode)))
-          (FinalNode name="end")
-          (SuccessionEdge source="start" target="flow")
-          (SuccessionEdge source="flow" target="end")))
+          (FinalNode)
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="start"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="flow"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="flow"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="done"
+                (*ast.QualifiedName))))))
       (Membership visibility="default"
         (Usage kind="item" name="Shape" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
       (Membership visibility="default"

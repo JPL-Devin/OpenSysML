@@ -101,7 +101,7 @@ func TestRequirementViolationIsAVerdictNotAnError(t *testing.T) {
 // a violated assertion, and reads as one rather than as a model that failed.
 func TestConstraintEvaluationErrorIsNotAViolation(t *testing.T) {
 	s := NewSession()
-	s.Submit(`package Bad { constraint broken { assert nonexistent > 0; } }`)
+	s.Submit(`package Bad { constraint broken { nonexistent > 0 } }`)
 	got := run(t, s, "%constraint Bad::broken")
 	wants(t, got, "? Constraint Bad::broken could not be evaluated", "Error:")
 	rejects(t, got, "Assertion evaluated to false", "Constraint Bad::broken failed", "✗")
@@ -532,7 +532,7 @@ func TestEndedActionSessionExplainsItselfToEveryCommand(t *testing.T) {
 func TestEndedStateSessionExplainsItselfToEveryCommand(t *testing.T) {
 	s := loadFixture(t, "testdata/state_debug.sysml")
 	run(t, s, "%state Cycle")
-	s.Submit("package Debug {\n\tstate Cycle {\n\t\tinitial init;\n\t\tfinal done;\n\t\tinit then done;\n\t}\n}")
+	s.Submit("package Debug {\n\tstate Cycle {\n\t\tentry; then init;\n\t\tstate init;\n\tsuccession first tinit then done;\n\t}\n}")
 
 	const why = `the state machine session for "Cycle" ended when Debug::Cycle was redeclared at submission 2`
 	wants(t, run(t, s, "%current"), why)

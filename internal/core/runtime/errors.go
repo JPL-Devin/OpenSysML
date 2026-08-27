@@ -399,20 +399,3 @@ func calcFrame(calc string, err error) error {
 	}
 	return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: map[string]bool{calc: true}}
 }
-
-// EvalError wraps an evaluation error with source context.
-type EvalError struct {
-	Msg string
-	Err error
-}
-
-func (e *EvalError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", e.Msg, e.Err)
-	}
-	return e.Msg
-}
-
-func (e *EvalError) Unwrap() error {
-	return e.Err
-}

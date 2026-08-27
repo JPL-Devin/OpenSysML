@@ -54,6 +54,9 @@ type StateExecutor struct {
 	// entered. Concurrently active states interleave one action per round, so this
 	// order — not map iteration order — decides the interleaving.
 	doActions []*doAction
+	// machineExited prevents a parallel machine's root exit behavior from
+	// running more than once if completion is reported by multiple regions.
+	machineExited bool
 
 	// runStarted marks this executor's run as begun, so the step budget is reset
 	// once however many calls the run is driven over.
@@ -1043,9 +1046,8 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 		return fmt.Errorf("schedule events: %w", err)
 	}
 
-	// Check if final state
-	if targetState.IsFinal {
-		e.state = StateCompleted
+	if err := e.completeIfDone(targetState); err != nil {
+		return fmt.Errorf("complete state machine: %w", err)
 	}
 
 	// Record trace
@@ -1055,6 +1057,71 @@ func (e *StateExecutor) transitionToInto(trans *lower.Transition, targetState *a
 	}
 
 	return nil
+}
+
+// completeIfDone completes a machine when a completion vertex is reached, which
+// an orthogonal region reaching one does only once its siblings completed too.
+func (e *StateExecutor) completeIfDone(target *ast.StateNode) error {
+	if !e.graph.Completes(target) || !e.machineComplete(target) {
+		return nil
+	}
+	if err := e.exitMachine(); err != nil {
+		return err
+	}
+	e.state = StateCompleted
+	return nil
+}
+
+// machineComplete reports whether every region concurrent with the one that
+// reached a completion vertex completed, outward to the machine's own regions.
+func (e *StateExecutor) machineComplete(target *ast.StateNode) bool {
+	region := e.graph.RegionOf[target]
+	for {
+		var owner *ast.StateNode
+		siblings := e.graph.TopRegions
+		if region != nil {
+			if regionOwner := e.graph.RegionOwner[region]; regionOwner != nil {
+				owner = regionOwner
+				siblings = e.graph.CompositeStates[regionOwner]
+			}
+		}
+		for _, sibling := range siblings {
+			if !e.regionComplete(sibling) {
+				return false
+			}
+		}
+		if owner == nil {
+			return true
+		}
+		region = e.enclosingRegion(owner)
+	}
+}
+
+// regionComplete reports whether region reached its completion vertex.
+func (e *StateExecutor) regionComplete(region *ast.StateRegion) bool {
+	active, ok := e.activeConfig.regionStates[region]
+	return ok && e.stateComplete(active)
+}
+
+// stateComplete reports whether state is a completion vertex, or a composite
+// state whose every orthogonal region completed.
+func (e *StateExecutor) stateComplete(state *ast.StateNode) bool {
+	if state == nil {
+		return false
+	}
+	if e.graph.Completes(state) {
+		return true
+	}
+	regions := e.graph.CompositeStates[state]
+	if len(regions) == 0 {
+		return false
+	}
+	for _, region := range regions {
+		if !e.regionComplete(region) {
+			return false
+		}
+	}
+	return true
 }
 
 // isSynchronizationTarget reports whether a transition target is a pseudostate
@@ -1400,19 +1467,18 @@ func (e *StateExecutor) exitToward(stop *ast.StateNode) error {
 }
 
 // activeCompositeOwner returns the deepest composite state whose orthogonal
-// regions hold the active configuration, or nil when no region is active. It
-// walks graph.States rather than the region map so the answer does not depend on
-// map iteration order.
+// regions hold the active configuration, or nil when no region is active.
 func (e *StateExecutor) activeCompositeOwner() *ast.StateNode {
 	var deepest *ast.StateNode
 	depth := -1
-	for _, state := range e.graph.States {
-		for _, region := range e.graph.CompositeStates[state] {
-			if _, active := e.activeConfig.regionStates[region]; !active {
-				continue
-			}
-			if d := len(e.getParentChain(state)); d > depth {
-				deepest, depth = state, d
+	for _, state := range e.graph.CompositeStateOrder {
+		regions := e.graph.CompositeStates[state]
+		for _, region := range regions {
+			if _, active := e.activeConfig.regionStates[region]; active {
+				if d := len(e.getParentChain(state)); d > depth {
+					deepest, depth = state, d
+				}
+				break
 			}
 		}
 	}
@@ -1823,6 +1889,12 @@ func (e *StateExecutor) initialize() error {
 		return fmt.Errorf("no initial state found in state machine %s", e.stateMachine.Name)
 	}
 
+	if e.graph.Machine != nil {
+		if err := e.enterMachine(); err != nil {
+			return fmt.Errorf("enter state machine: %w", err)
+		}
+	}
+
 	e.state = StateRunning
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
 	e.activeConfig.simpleState = nil
@@ -1838,6 +1910,34 @@ func (e *StateExecutor) initialize() error {
 		return fmt.Errorf("schedule events: %w", err)
 	}
 
+	return nil
+}
+
+// enterMachine runs the behaviors owned by a graph-only parallel-state root.
+func (e *StateExecutor) enterMachine() error {
+	behaviors := e.behaviorsOf(e.graph.Machine)
+	for _, behavior := range behaviors.Entry {
+		if err := e.executeBehavior(behavior); err != nil {
+			return fmt.Errorf("entry action: %w", err)
+		}
+	}
+	e.startDoAction(e.graph.Machine)
+	return nil
+}
+
+// exitMachine runs the exit behaviors owned by a graph-only parallel-state
+// root when the machine reaches a final state.
+func (e *StateExecutor) exitMachine() error {
+	if e.graph.Machine == nil || e.machineExited {
+		return nil
+	}
+	e.machineExited = true
+	e.stopDoAction(e.graph.Machine)
+	for _, behavior := range e.behaviorsOf(e.graph.Machine).Exit {
+		if err := e.executeBehavior(behavior); err != nil {
+			return fmt.Errorf("exit action: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -1891,12 +1991,14 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 		}
 	}
 
-	// Track state visit
-	e.stateVisits = append(e.stateVisits, state.Name)
+	if !e.graph.HiddenStates[state] {
+		// Track state visit
+		e.stateVisits = append(e.stateVisits, state.Name)
 
-	// Record trace
-	if e.trace() != nil {
-		e.trace().RecordStateEntry(state.Name, len(e.behaviorsOf(state).Entry) > 0)
+		// Record trace
+		if e.trace() != nil {
+			e.trace().RecordStateEntry(state.Name, len(e.behaviorsOf(state).Entry) > 0)
+		}
 	}
 
 	// Execute entry actions
@@ -2031,7 +2133,7 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 	e.stopDoAction(state)
 
 	// Record trace
-	if e.trace() != nil {
+	if !e.graph.HiddenStates[state] && e.trace() != nil {
 		e.trace().RecordStateExit(state.Name, len(e.behaviorsOf(state).Exit) > 0)
 	}
 

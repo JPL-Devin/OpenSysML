@@ -7,16 +7,21 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Open-MBEE/OpenSysML/internal/baseline"
 )
 
 // Report is the machine-readable result. It holds the compared tuples and their
 // counts, but no message text, so two runs diff cleanly.
 type Report struct {
-	Validator string        `json:"validator"`
-	Pilot     string        `json:"pilotRelease"`
-	Totals    Totals        `json:"totals"`
-	Roots     []RootReport  `json:"roots"`
-	Unmapped  []UnmappedRow `json:"unmapped"`
+	Validator string `json:"validator"`
+	Pilot     string `json:"pilotRelease"`
+	// Provenance identifies the inputs this run measured, so a committed
+	// baseline can be checked against the repository without the validators.
+	Provenance baseline.Record `json:"provenance"`
+	Totals     Totals          `json:"totals"`
+	Roots      []RootReport    `json:"roots"`
+	Unmapped   []UnmappedRow   `json:"unmapped"`
 	// Syside is the optional third implementation's column, additive in every
 	// respect: absent, the report is byte-identical to a two-way run.
 	Syside *SysideInfo `json:"syside,omitempty"`
@@ -295,9 +300,9 @@ func countUnmapped(unmapped map[UnmappedRow]int, examples []string) {
 	}
 }
 
-func writeReports(dir string, report *Report) error {
+func writeReports(dir string, report *Report) ([]byte, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
+		return nil, err
 	}
 
 	// The JSON drops the message examples so a later run diffs cleanly.
@@ -319,23 +324,24 @@ func writeReports(dir string, report *Report) error {
 	}
 	encoded, err := json.MarshalIndent(machine, "", "  ")
 	if err != nil {
-		return err
+		return nil, err
 	}
+	encoded = append(encoded, '\n')
 	jsonPath := filepath.Join(dir, "pilot-diff.json")
-	if err := os.WriteFile(jsonPath, append(encoded, '\n'), 0o600); err != nil {
-		return err
+	if err := os.WriteFile(jsonPath, encoded, 0o600); err != nil {
+		return nil, err
 	}
 
 	textPath := filepath.Join(dir, "pilot-diff.txt")
 	if err := os.WriteFile(textPath, []byte(renderText(report)), 0o600); err != nil {
-		return err
+		return nil, err
 	}
 
 	fmt.Fprintf(os.Stderr, "wrote %s and %s\n", textPath, jsonPath)
 	fmt.Fprintf(os.Stderr, "%d file(s), %d fully agreeing; %d agreed diagnostic(s), %d only ours, %d only the pilot's\n",
 		report.Totals.Files, report.Totals.FilesAgreeing, report.Totals.Agreement,
 		report.Totals.OpenSysMLOnly, report.Totals.PilotOnly)
-	return nil
+	return encoded, nil
 }
 
 func stripExamples(entries []Entry) []Entry {

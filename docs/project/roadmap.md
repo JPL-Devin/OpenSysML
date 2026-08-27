@@ -1,19 +1,20 @@
 # OpenSysML — Roadmap
 
-Baseline: `main` @ `d82fae84`, verified locally on 2026-08-24 with Go 1.25.0.
+Baseline: `main` @ `22f47533`, verified locally on 2026-08-26 with Go 1.25.0.
 Read `AGENTS.md` first; it governs everything below.
 
-0.2.0 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
-`sysml-grpc` archives. `main` now carries everything cut under 0.2.1 in `CHANGELOG.md`, which is
-awaiting its tag. Everything in "Release follow-through" is maintainer- or account-gated; everything
-after it is ordinary engineering work.
+0.2.1 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
+`sysml-grpc` archives, and the Python client is on PyPI as `opensysml` 0.3.1. `main` carries what
+`CHANGELOG.md` lists as unreleased. Everything in "Release follow-through" is maintainer- or
+account-gated; everything after it is ordinary engineering work.
 
 Track status as of this baseline: **Tracks A, B, C and P are closed**, and their entries are
 removed from this file rather than kept as a list of done work — `CHANGELOG.md` is the record of
-what landed. Track P's remaining item, publishing to PyPI, is R2 and account-gated. **T1** — the
-deprecated "slot" spellings on the wire, in the REPL and in the Python client — is closed too:
-they are removed before 0.1.0, with proto field 3 and the name `slots` reserved. **Track D**
-(RDF) is the only engineering track still open.
+what landed. Track P's last item, publishing the Python client to PyPI, is closed with the
+`opensysml-v0.3.0` and `opensysml-v0.3.1` tags. **T1** — the deprecated "slot" spellings on the
+wire, in the REPL and in the Python client — is closed too: they are removed before 0.1.0, with
+proto field 3 and the name `slots` reserved. **Track D** (RDF) is the only engineering track
+still open.
 
 ## Where the repository stands
 
@@ -24,34 +25,34 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 |---|---|
 | OMG training corpus | **100/100 clean** — no file reports a semantic error |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative OpenSysML extension |
-| Execution conformance cases | 360 |
+| Execution conformance cases | 374 |
 | gRPC conformance fixtures | 15 |
-| Golden execution traces | 112 |
-| Runtime robustness cases | 212 |
+| Golden execution traces | 114 |
+| Runtime robustness cases | 253 |
 | gRPC robustness cases | 8 |
 | Golden AST fixtures | 145 |
 | Negative parser subtests | 255 |
 
 Statement coverage, measured with `go test -cover ./...` at the baseline commit. It counts only
 each package's own tests, which understates a package consumed by others: `internal/core/ast`
-is at 90.6% and `internal/core/semantics` at 85.4% measured with `-coverpkg` over the whole
+is at 90.3% and `internal/core/semantics` at 85.2% measured with `-coverpkg` over the whole
 suite, and `cmd/sysml-grpc` is gated by a process lifecycle test whose child process
 contributes no profile at all.
 
 | Package | Coverage | Package | Coverage |
 |---|---|---|---|
-| `internal/core/quickfix` | 100.0% | `internal/core/export` | 82.8% |
-| `internal/core/format` | 97.2% | `internal/core/symbols` | 74.8% |
+| `internal/core/quickfix` | 100.0% | `internal/core/export` | 82.7% |
+| `internal/core/format` | 97.2% | `internal/core/symbols` | 75.6% |
 | `internal/core/suggest` | 93.2% | `cmd/sysml-lsp` | 71.7% |
-| `internal/grpc` | 90.3% | `internal/core/source` | 68.8% |
-| `internal/repl` | 88.5% | `internal/core/lower` | 68.1% |
-| `internal/core/passes` | 88.1% | `internal/core/semantics` | 58.8% |
-| `internal/core/lexer` | 87.7% | `cmd/sysml` | 32.7% |
-| `internal/core/rdf` | 87.1% | `internal/core/ast` | 19.0% |
-| `internal/lsp` | 85.3% | `cmd/sysml-grpc` | 18.3% |
-| `internal/core/runtime` | 85.3% | | |
+| `internal/grpc` | 88.5% | `internal/core/lower` | 71.0% |
+| `internal/repl` | 88.5% | `internal/core/source` | 70.6% |
+| `internal/core/passes` | 88.2% | `internal/core/semantics` | 67.3% |
+| `internal/core/lexer` | 87.7% | `cmd/sysml-grpc` | 34.9% |
+| `internal/core/rdf` | 87.1% | `cmd/sysml` | 32.7% |
+| `internal/lsp` | 85.3% | `internal/core/ast` | 19.0% |
+| `internal/core/runtime` | 85.2% | | |
 | `internal/core/resolve` | 84.0% | | |
-| `internal/core/parser` | 83.8% | | |
+| `internal/core/parser` | 83.9% | | |
 | `internal/core/model` | 83.4% | | |
 | `internal/core/libs` | 82.9% | | |
 
@@ -59,73 +60,29 @@ The corpus gate needs the corpus (`./scripts/download-training-examples.sh`) and
 re-baseline `internal/core/model/testdata/training_examples_expected.txt`: adjudicate each
 drifted file and record the verdict in `docs/project/training-examples.md`.
 
-The gap found in the 0.0.8 pre-release audit — only the GitHub Actions PR workflow downloaded the
-corpus and set `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, so `.circleci/config.yml`, the pipeline that
-*builds release tags*, skipped the gate silently and a tag could be cut over a corpus
-regression — is closed: `build-and-test` downloads the corpus (cached on the download script) and
-runs the suite with that variable set, and it runs on `v*` tags as well as on branches.
+A tag cannot be cut over a corpus regression: `.circleci/config.yml`'s `build-and-test`
+downloads the corpus (cached on the download script) and runs the suite with
+`OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, on `v*` tags as well as on branches.
 
 ---
 
 # Release follow-through
 
-## R1 — tag 0.2.1 (maintainer, blocking everything else in this section)
-
-`v0.2.0` is tagged and released on `Open-MBEE/OpenSysML` with its full archive set, so what
-remains is the same procedure for the release `CHANGELOG.md` now carries as 0.2.1, dated but
-untagged. Releases live on `Open-MBEE/OpenSysML`; development happens on
-`JPL-Devin/OpenSysML`, which has no tags at all. So the tag is preceded by promoting `main`
-upstream, as 0.0.4 was through Open-MBEE PR #47:
-
-```bash
-# on Open-MBEE/OpenSysML, after main carries the release commit
-git tag -a v0.2.1 -m "v0.2.1"
-git push origin v0.2.1
-```
-
-The publish job needs `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project.
-Without one the tag builds artifacts and then fails at publish, having created no release —
-the `v0.2.0` release was published with every archive, so the path is proven. Full procedure
-and post-tag verification: `docs/project/releasing.md`.
-
-## R2 — publish `opensysml` to PyPI (account-gated remainder)
-
-The job exists: `publish-pypi` in the `release-python` workflow, filtered to `opensysml-v*`,
-building a wheel and an sdist, checking them with `twine check --strict`, installing the wheel
-into a clean virtualenv and only then uploading. The version is declared once, in
-`python/opensysml/_version.py`, and a tag that disagrees with it fails before upload. The
-package keeps its own version line on purpose: it resolves a `sysml-grpc` binary at runtime
-from whichever release the caller names, so its version and the core's are not lockstep.
-See `docs/project/releasing.md`.
-
-One decision precedes the upload, found in the 0.0.8 pre-release audit: `python/opensysml/_version.py`
-declares `0.3.1` and nothing is published to PyPI yet, so the first upload has to be
-`opensysml-v0.3.1` (the tag-versus-source check refuses anything else) and every Python-side change
-since the client's version line was cut — `evaluate`/`ExecutionError`, pinned checksums,
-subject-aware `eval`, generated typed classes, `loads`, authoring edits, the strict-conformance
-keyword and the signed-manifest verification that lets it install a core release published after
-it — all land in that one release rather than incrementally.
-
-What remains is account-gated and cannot be done from a session: create the PyPI project's
-first release with an account-scoped token, then replace it with a project-scoped one; create
-the restricted CircleCI context `PyPI` holding `PYPI_API_TOKEN` (and optionally
-`TEST_PYPI_API_TOKEN` for pre-release tags).
-
-The default download repository is settled: `python/opensysml/binary.py` defaults to
-`Open-MBEE/OpenSysML`, which is where releases live, and `OPENSYSML_GITHUB_REPO` is the
-override. `sysml-grpc` assets ship from 0.0.5 onward, so `opensysml` can fetch a binary from a
-released tag; `pip install opensysml` still waits on the PyPI project above.
+Tagging a core release and publishing the Python client are both proven paths now: `v0.2.1` is
+released on `Open-MBEE/OpenSysML` with its full archive set, and `opensysml-v0.3.1` uploaded the
+client to PyPI, so `pip install opensysml` resolves. The procedure and its post-tag verification
+are in `docs/project/releasing.md`.
 
 ## R3 — Homebrew tap
 
 `packaging/homebrew/` holds a template with `__TAG__`/`__SHA256_*__` placeholders and
 `scripts/render-homebrew-formula.sh` renders it from a tag's `SHA256SUMS.txt`. The tap
-`Open-MBEE/homebrew-tap` exists and carries the 0.2.0 formula: `brew install
+`Open-MBEE/homebrew-tap` exists and carries the 0.2.1 formula: `brew install
 Open-MBEE/tap/opensysml` has been verified end to end on Linux (install, `brew test`,
-`brew audit --strict --online`). The bump is automated (the old C3): the tap updates itself
-from its own scheduled workflow, rendering the formula from this repository's script and
-template at the latest release tag — the 0.1.2 and 0.2.0 bumps are both that workflow's
-commits, and nothing here pushes to the tap. One thing remains:
+`brew audit --strict --online`). The bump is automated: the tap updates itself from its own
+scheduled workflow, rendering the formula from this repository's script and template at the
+latest release tag — the 0.1.2, 0.2.0 and 0.2.1 bumps are all that workflow's commits, and
+nothing here pushes to the tap. One thing remains:
 
 - **Install it on a real Mac.** The darwin archives have never been executed on macOS; their
   checksums match the release manifest and nothing more.
@@ -153,74 +110,18 @@ fixed — the client appends `--stdio`, which `sysml-lsp` rejected with exit 2, 
 `--stdio` is accepted now and the server also honours `shutdown`/`exit` instead of leaking a
 process. What remains is packaging and publishing: `vsce package` in the release workflow, a
 `.vsix` on the release, and (for the marketplace) a publisher account and a PAT in CI — the same
-class of account gate as R2/R4.
-
-## L2 — tier gating is per document, and the reference's is per element (done)
-
-**Landed.** `passes.ElementScoped` generalizes the earlier `SelfGated` marker: a pass that names its
-subject in code runs despite a lower-tier failure and gates itself per element through
-`Context.DownstreamOfFailure`; a pass whose subject is the file stays document-scoped. Differential
-agreement 25 → 32 and only-pilot 73 → 66 with only-ours unmoved at 119; the Xpect and rejection
-oracles do not move. The four rows this item was expected to close are **not** behind the gate —
-removing the gate entirely leaves the Xpect oracle byte-identical — each is an unimplemented rule
-owned elsewhere. See [element-scoped tier gating](wave12a-element-gating.md) for the measurements and the row table.
-
-### The motivation, as it stood before that change
-
-`Registry.Run` (`internal/core/passes/registry.go`) skipped every pass at a strictly higher level
-once any pass emitted a blocking error, for the **whole document**. The reference is EMF/Xtext,
-where a linking failure on one element does not stop validating the others — which is why it
-reports an unresolved reference *and* `Must have a concrete type` in one file where we reported
-only the first. The divergence was a policy of ours, not a position the specification takes.
-
-This was raised earlier as an adjudication question, with two ways out; both were refused.
-Moving a rule down a tier buys one row by suppressing filter diagnostics elsewhere (measured at the
-time), and making name-resolution errors non-blocking wholesale uncaps cascade noise across every
-corpus. The answer taken instead was to narrow the gate: a higher-tier pass skips the elements
-whose own resolution failed, not the file.
-
-`Diagnostic.Blocking()` was the precedent for how a non-gating error is already expressed — a
-`Notation` error concerns the writing rather than the meaning, so it gates nothing. The change
-generalized that from a per-diagnostic flag to a per-element question, giving `Context` a way for
-a pass to ask whether the element it is about to check is downstream of a resolution failure.
-
-Cascade noise is the reason the coarse gate existed, so the measure of success was the oracles
-moving *without* a rise in only-ours rows — met, and the control with the gate removed entirely
-(only-ours 119 → 166) is why the marker stayed opt-in.
+class of account gate as R4.
 
 ## L3 — a library contributes names but no bodies (largely done)
 
-A standard library was **index-only**: `libs.Loader.LoadAll` reduced every file it parsed to the
-same record a cache hit restores, so a library type contributed its name, kind, specializations,
-alias target, unit and annotation facts — and no members, declared values or condition bodies —
-whether the cache was cold or warm. That contract was adopted deliberately, as the fix for a
-cache that was not a cache: a hit produced a *poorer* state than a miss, so `solve` evaluated
-library-inherited invariants and gRPC reported dozens of inherited library attributes only until
-the cache warmed, and the conformance oracles gave two answers for one tree.
-
-**The record format landed** ([#515](https://github.com/JPL-Devin/OpenSysML/pull/515)), as
-designed in [lossless library records](wave12c-lossless-library-records.md): every library file
-is parsed and indexed on every load path, so a library contributes its declarations whether or
-not the cache held anything for it, and a record carries only the derived facts whose derivation
-dominates a cold load (`libs.Loader`). A library keeps its bodies on both paths, and library
-feature multiplicity persists — `TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` now
-asserts the declared `0..1` on both paths rather than the assumed `1..1`. The element-API policy
-the design decided landed too ([#518](https://github.com/JPL-Devin/OpenSysML/pull/518)): gRPC
-reports an element's own and non-library-inherited attributes and counts the
+Every library file is parsed and indexed on every load path, so a library contributes its
+declarations — members, declared values, condition bodies, feature multiplicity — whether or not
+the cache held anything for it, and the library is built once, frozen, and read through a
+per-model overlay (`libs.Loader`, `libs.SharedBase`, `symbols.NewOverlay`) rather than copied per
+model. gRPC reports an element's own and non-library-inherited attributes and counts the
 standard-library-inherited ones it withholds in a `SymbolInfo` field rather than omitting them
-silently.
-
-**Slice A landed** ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)) ahead of the record
-format, because measuring L3's cost exposed a larger defect it would have multiplied: every model
-was handed a library index of its own, so a full gRPC model cache held ~100 copies of the same
-library — heap 1595 MiB, 15.95 MiB each. The library is now built once, frozen, and read through a
-per-model overlay (`libs.SharedBase`, `symbols.NewOverlay`), which measures 17.2 MiB for the base
-plus 1.5 MiB for 100 models. That reprices the record format rather than delivering it: keeping the
-parsed trees is now a once-per-process ~17 MiB, not per model.
-
-**Row L3-9 is closed too:** `ApplyEdits` took a library index per edit *operation* and now takes one
-per request — a 5-operation request went from 6 indexes and 12.03 MiB in 37.6 ms to 1 and 3.04 MiB in
-8.7 ms, applying the same edits with the same diagnostics and the same qualified lookups.
+silently. The shared base measures 17.2 MiB once per process plus 1.5 MiB per model, where each
+model used to carry a ~16 MiB index of its own.
 
 **Still open:** `Model.Eval` declines to fold a library value expression that invokes a Kernel
 Function Library function over a feature (`isSolid = isEmpty(voids)`,
@@ -240,6 +141,20 @@ The RDF direction ships **experimental** as of 0.1.0, because of D1–D3 and D7 
 vocabulary may change without a compatibility path, and no triplestore interop has
 been demonstrated. Every surface says so (`export.ExperimentalNotice`), and
 promoting it to stable is D3, not a documentation change.
+
+Measured on the built binary at this baseline, **260 of the 334 models under `examples/`
+convert**, including their behavior: the initial and final node, `perform`, `send`, `accept`,
+`terminate`, `assign`, the fork/join/merge/decision control nodes, `while`/`loop`/`for`,
+`if`/`else`, and a state machine's states, substates, regions, `entry`/`do`/`exit`, `defer`,
+pseudostates and transitions each round-trip `notation → RDF → notation` byte-identically
+(`internal/core/export/behavior.go`, `behavior_test.go`, and the tables in
+`docs/reference/rdf-mapping.md` § Behavior). A model the mapping cannot write back is refused
+rather than converted lossily, and the 74 refusals sort into: 35 declarations that name no
+element of their own (the notation cannot be rebuilt from a graph keyed by name), 18 prefix
+metadata, 10 expression forms carried as source text (operator, feature-chain, feature-reference,
+invocation and constructor expressions — **D1**), 7 successions whose end is not a basic name
+(**D2**), and 4 duplicate declarations, where two members of one namespace share a name the
+graph would merge.
 
 ## The target, stated precisely
 
@@ -271,8 +186,9 @@ literals fall in the datatypes it maps (`xsd:boolean`, `xsd:integer`,
 
 ## D3 — make a converted graph readable through Flexo, and prove it
 
-D3 is no longer "run the harness": the harness would fail today, and the reasons are
-known. Five sub-items, in the order to take them.
+D3 is not "run the harness": the harness is landed and the graph fails it today, for reasons
+that are known. Of its five sub-items only collection-valued properties (**D3.4**) remain —
+identity (D3.1), element ids (D3.2), ownership (D3.3) and the harness itself (D3.5) are done.
 
 ### D3.1 — element identity: qualified names cannot address an element
 
@@ -284,47 +200,63 @@ known. Five sub-items, in the order to take them.
 unsupported, never named from its IRI (`internal/core/rdf/ids.go`,
 `internal/core/export/rdf_in.go`, `docs/reference/rdf-mapping.md` § Element IRIs).
 
-The reader derives an element's `@id` as `urnSuffix`, defined as
-`substringAfterLast(':')`. So `elmt:Demo::Vehicle` reads back as `Vehicle`, and
-`A::Widget` and `B::Widget` collapse onto one id. Every by-id path also runs
-`requireValidId`, whose regex is `[a-zA-Z0-9_-]+`, so an id containing `::` cannot be
-requested at all. Qualified-name IRIs are therefore unusable as Flexo element identity.
+That encoding is what the reader requires: it derives an element's `@id` as `substringAfterLast(':')`
+and runs `requireValidId` (`[a-zA-Z0-9_-]+`) on every by-id path, so a qualified-name IRI both
+collapses `A::Widget` and `B::Widget` onto one id and cannot be requested at all.
 
-The fix is an id that satisfies that regex while keeping conversion deterministic. **A UUID
-is not required**: Flexo types every id as a plain `String` (`Identified.atId`, and no
-`format: uuid` anywhere in its `openapi/openapi.yaml`); `generateId()` returns a random UUID
-only as the default when a request omits an id. So the id can stay readable — encode the
-qualified name reversibly into `[a-zA-Z0-9_-]`, with `::` becoming a separator that a name
-cannot itself produce (escape `_` before substituting, or `A_B::C` and `A::B_C` collide) and a
-hex escape for the characters a name may legally carry but an id may not — non-ASCII names and
-quoted names with spaces or punctuation. Readable ids also keep the graph diffable, which a
-UUID scheme gives up. The cost, and the reason to decide it deliberately: the OMG API's own
-implementations do treat element ids as UUIDs, so a readable id may be rejected by a client
-other than Flexo — that is inference from convention, not something read out of Flexo's
-sources, and it is worth checking against whichever client is meant to consume the graph
-before the encoding is fixed.
-
-Either way the qualified name lives in `sysml:qualifiedName` (already emitted), and the decoder
-must stop recovering identity from the IRI (`rdf.QualifiedNameOf`) and read it from that
-property instead — that decoupling, not the choice of encoding, is the substance of D3.1. This
-is the item that changes every fixture under `internal/core/export/testdata/convert`, so it
-goes first.
+One cost of the readable encoding stays open to check: the OMG API's own implementations do
+treat element ids as UUIDs, so a readable id may be rejected by a client other than Flexo —
+that is inference from convention rather than something read out of Flexo's sources, and it is
+worth checking against whichever client is meant to consume the graph.
 
 ### D3.2 — `sysml:elementId` is required and is not emitted
 
-Paged listing selects on `?e sysml:elementId ?id` (`listElementsConstructQuery`) and
-`QueryApi` rewrites an `@id` constraint to `sysml:elementId`, so without that triple our
-elements are invisible to paged listing and unreachable by query, even when a direct
-construct on the IRI would find them. Emit it on every element, carrying the D3.1 id.
+**Done.** Every element carries `sysml:elementId`, holding exactly the id its own IRI
+ends in, so the triple and the reader's `urnSuffix`-derived `@id` cannot disagree
+(`internal/core/export/rdf_out.go` `head`, `ownership_graph_test.go`). Paged listing
+selects on `?e sysml:elementId ?id` (`listElementsConstructQuery`) and `QueryApi`
+rewrites an `@id` constraint to it, so without the triple an element was invisible to
+both even though a direct construct on the IRI found it.
+
+An **expression node carries one too**. Its id was `<owner id>.<position>`, which
+`requireValidId` rejects, so a direct read of a node was refused with 400 before the store
+was touched — measured against a live service. The position is now joined with `_p` and
+encoded, keeping the id inside `[a-zA-Z0-9_-]+` and disjoint from element and membership
+ids (`internal/core/rdf/ids.go` `ExpressionNodeID`, `ids_test.go`), and the node states that
+id in `sysml:elementId`. A node is still not a model element — no `qualifiedName`, no
+ownership, reachable only from the position that holds it — so writing expressions as
+elements owned through memberships remains D1.
 
 ### D3.3 — ownership: every element reads as a root
 
-The roots endpoint filters on `sysml:owner` and `sysml:owningRelatedElement` being
-unbound or `rdf:nil`. We emit only `sysml:owningNamespace`, so *every* element passes
-that filter and the model has no tree. Emit the API's ownership properties as element
-references, and decide explicitly whether to materialize `OwningMembership` elements:
-the API's payloads reach members through memberships, and a consumer walking
-`ownedMember`/`ownedRelationship` finds nothing in our compact projection.
+**Done.** Ownership is materialized as the abstract syntax states it, so the roots
+endpoint — which filters on `sysml:owner` and `sysml:owningRelatedElement` being unbound
+or `rdf:nil` — sees one root per document instead of every element
+(`internal/core/export/rdf_out.go` `owningMembership`/`relationshipOwnership`,
+`internal/core/rdf/ids.go` `OwningMembershipID`, `docs/reference/rdf-mapping.md`
+§ Ownership):
+
+- every member states `sysml:owner` as an element reference, plus
+  `sysml:owningMembership`/`sysml:owningRelationship`, or `sysml:owningRelatedElement`
+  where a relationship owns it;
+- a namespace member is owned through a minted `OwningMembership`, a type's feature
+  through a `FeatureMembership` (both concrete in KerML), each with its own IRI,
+  `sysml:elementId`, `memberElement`/`ownedMemberElement`/`ownedRelatedElement`,
+  `owningRelatedElement` and `membershipOwningNamespace`, and the owner's
+  `ownedMember`/`ownedMembership`/`ownedRelationship` — and `ownedFeature`/
+  `ownedFeatureMembership` for a feature — so a client walking the payloads from a root
+  reaches every member;
+- a relationship a namespace declares (an import, a dependency, a state's entry
+  membership) is owned directly rather than through a minted membership, which is also
+  what keeps namespace collection properties off a relationship's domain;
+- membership ids are `rdf.OwningMembershipID`: the member's id plus `_om`, deterministic,
+  reversible, and unable to collide with an element id;
+- visibility moves to the membership, which is where the metamodel declares it;
+- the decoder traverses memberships, still takes identity from `sysml:qualifiedName`, and
+  still accepts the compact `sysml:owningNamespace`-only shape; a membership missing an
+  end is a typed error naming `sysml:memberElement`.
+
+Not demonstrated: a graph loaded into a live Flexo instance and read back. That is D3.5.
 
 ### D3.4 — collection-valued properties need the JSON annotation
 
@@ -334,7 +266,7 @@ Anything multi-valued we emit as bare repeated triples is silently dropped on re
 the encoder must write both forms for collections, and the decoder must accept the
 annotation form when reading a foreign graph.
 
-### D3.5 — the harness, once D3.1–D3.4 are in
+### D3.5 — the harness, once D3.4 is in
 
 Layer 1's `src/test/resources/docker-compose.yml` brings up Fuseki, MinIO and the store
 service; `deploy/` generates `cluster.trig` for cluster init; the service needs
@@ -346,6 +278,33 @@ that service's own commit path stores for the same model. That comparison — ou
 vs. theirs for one model — is the actual compliance statement, and it is what promotes
 the RDF path off experimental. Keep it out of `go test ./...`: an opt-in build tag or
 environment gate, like the corpus gate.
+
+**Landed, ahead of D3.1–D3.4 rather than after them**, as `internal/interop/flexo` and the
+`FLEXO_INTEROP` gate `TestFlexoInterop`, documented in `.agents/skills/flexo-interop`. It
+measures the gap instead of asserting the fix, so D3.1–D3.4 show up as movement in
+`internal/interop/flexo/testdata/interop_expected.txt`. Two corrections to the setup described
+above, from doing it: the published `openmbee/*` images are enough (no source build, no MinIO,
+no regenerated `cluster.trig` — use `flexo-mms-sysmlv2/docker-compose/docker-compose.yml`,
+which brings up the SysML v2 API as well), and the `sysmlv2` org that `POST /projects` needs is
+not seeded by cluster init, so the harness creates it.
+
+What the first run measures: 29 of 29 elements listed and 86 of 142 properties delivered on the
+graph-load side, against 33 of 33 and 158 of 158 for the same model posted through the service's
+own commit path. The 56 lost properties are the `sysx:` namespace plus multi-valued standard
+properties (**D1**/**D2**/**D3.4**); no element carries `sysml:elementId` (**D3.2**) and none
+carries `sysml:owner`, so all 29 read as roots (**D3.3**); the eight `expr:` node ids carry a
+`.` and are refused by a direct read, which is **D3.1**'s identity question reaching the
+expression nodes too. Two deployed behaviors differ from what the sources suggest: the element
+listing ignores `pageSize`/`pageAfter` and returns every subject of the branch graph, so it also
+never applies its own `sysml:elementId` filter — elements missing `elementId` are visible today
+only for that reason — and project delete is a soft annotation that leaves the Layer 1 branch
+behind.
+
+That run measured the output as it stood before **D3.2**/**D3.3** landed: every element now
+carries `sysml:elementId` and its ownership, and no `expr:` node id holds a `.` any more. The
+recorded expectation has not been re-measured against the current output, so the movement those
+two make is still unmeasured; a stack has to be brought up and
+`go test ./internal/interop/flexo -run TestFlexoInterop -update-flexo` re-run for it.
 
 ## D1 — expressions are carried as source text, not as triples
 
@@ -422,8 +381,8 @@ structural decisions (`internal/core/export/convert.go`), so the profile is most
 layer: property name → defining metaclass. Generate that table from `SysML.owl` and vendor it
 rather than hand-writing 400 entries, so it can be regenerated when the ontology version moves.
 
-Two things the flag does not buy. Full instance-level conformance still needs the membership and
-relationship elements (D3.3) and real triples where we currently write `sysx:sourceText` (D1, D2):
+Two things the flag does not buy. Full instance-level conformance still needs real triples where
+we currently write `sysx:sourceText` (D1, D2):
 `sysx:` has no place in that ontology at all, so an ontology-profile graph is conformant only as
 far as those items have landed, and the profile should say so where it is documented. What it does
 buy immediately is a **validation gate we do not have**: the TBox declares domain and range for
@@ -453,8 +412,8 @@ must be concrete" check that would have caught D7's abstract `sysml:Import` is n
 this table and is not implemented — D7's abstract-metaclass audit stays manual.
 
 The gate is `TestGoldenGraphsMatchOntology` (`internal/core/export/ontology_gate_test.go`), reading
-the golden graphs from `testdata/convert` dynamically. Against the 24 of them it finds **135 triples
-in 49 distinct metaclass/property violations**: 41 triples (11 keys) whose property is declared on a
+the golden graphs from `testdata/convert` dynamically. Against the 24 of them it finds **133 triples
+in 48 distinct metaclass/property violations**: 39 triples (10 keys) whose property is declared on a
 metaclass that is not the subject's or an ancestor of it, 40 (14) typed by a class the ontology does
 not declare, 34 (17) naming a property no metaclass declares, and 20 (7) giving an object property a
 literal (D7). No datatype property gets an IRI, and no subject carrying SysML properties lacks an
@@ -462,8 +421,9 @@ literal (D7). No datatype property gets an IRI, and no subject carrying SysML pr
 `testdata/ontology-known-violations.txt` and the gate fails on anything new, so the encoder was left
 alone. The inventory is also the profile's own work list, since it sorts the gap into four causes:
 properties the metamodel declares on a relationship or membership element that we collapse into the
-element (`value` → `FeatureValue`, the multiplicity bounds → `MultiplicityRange`, `visibility` →
-`Membership`, `isNegated` → `Invariant`, a transition's ends → `Connector`) — D3.3; names as
+element (`value` → `FeatureValue`, the multiplicity bounds → `MultiplicityRange`, `isNegated` →
+`Invariant`, a transition's ends → `Connector`) — the same collapse D3.3 undid for ownership and
+visibility; names as
 literals — D7 and D2; 12 metaclasses of our own `sysx:` namespace plus two names the 202407
 rendering does not have at all (`FlowUsage`, which it calls `FlowConnectionUsage`, and
 `TerminateActionUsage`); and 17 properties we write into the SysML namespace that no metaclass
@@ -473,82 +433,26 @@ declares, each either a relationship the metamodel reifies as an element (`speci
 regardless of this item.
 
 Scope: the profile plumbing is the remainder, and is about one session's work now that the table and
-the gate exist; conformance beyond that is gated on D3.3, D2 and D1 rather than on this item.
+the gate exist; conformance beyond that is gated on D2 and D1 rather than on this item.
 
-## D5 — the parser drops the `variant` and `include` keyword prefixes
+# Suggested sequencing
 
-**Done.** The parser records both prefixes — `variant` as `ast.Usage.IsVariant`, and
-`include U;` as the use case's `includes` relationship — the encoder carries them
-(`sysml:isVariant`, `sysml:includes`) and the decoder writes the prefixes back
-(`internal/core/export/rdf_out.go`, `rdf_in.go`), so `variant part a : A;` and `include U;`
-round-trip through RDF byte-identically and the exception the RDF mapping used to document is
-gone. The synonym keywords — `datatype`, `feature`, `function`, `snapshot`, `timeslice`,
-`message`, `allocate` and the rest — are carried as `sysx:declaredKeyword` and round-trip the
-same way (`export_test.go:TestKindKeywordSynonymsSurviveRDF`).
+Tracks A, B, C, P and T1 are closed and their entries are removed. Within Track D, **D5** (the
+`variant` and `include` keyword prefixes) and **D6** (behavioral nodes without a metaclass) are
+closed as well. What is left is:
 
-## D6 — a behavioral node has no metaclass, so a model stating steps cannot convert
-
-**Done.** The behavioral nodes now have metaclasses and the properties their notation is
-rebuilt from (`internal/core/export/behavior.go`): the initial and final node, `perform`, `send`, `accept`,
-`terminate`, `assign`, the fork/join/merge/decision control nodes, `while`/`loop`/`for`,
-`if`/`else`, and the state machine's states, substates, regions, `entry`/`do`/`exit`, `defer`,
-pseudostates and transitions. Each is covered by a `notation → RDF → notation` round trip that
-asserts the body comes back byte-identically (`export/behavior_test.go`), and the mapping is
-tabulated in `docs/reference/rdf-mapping.md` § Behavior.
-
-Measured on the built binary the same way at this baseline, 260 of the 334 models under
-`examples/` convert (the directory has grown since the 102-of-120 measured when this landed).
-The 18 refusals at that measurement were: nine successions that do not name both of their ends (a
-`then` attached to a member states an order whose source end the notation leaves implicit, and
-reconstructing it means inferring which node an edge belongs to from member position — silent
-reattachment, so it is reported instead), three prefix-metadata models, three duplicate
-declarations (two names genuinely declared twice in one namespace, which the graph would merge),
-two operator-expression members, and one anonymous `snapshot`. One further model converts but is
-not byte-stable in its notation across a second hop: the graph records the `ref` of
-`end [*] ref cause : Situation;` faithfully and writes it back as `end ref attribute cause`,
-which the parser reads with no reference flag — a parser gap, noted rather than worked around.
-
-RDF stays **experimental**: D1 (expressions as source text), D2 (end-binding heads), D3 (no
-triplestore round trip) and D7 (reference-valued properties and an abstract metaclass) are
-untouched by this, and D3 remains the gate on calling the path
-stable.
-
-# How to run the next batch
-
-Lessons that survived the last two batches, unchanged because they keep applying:
-
-1. **Partition children by disjoint file sets, not by task independence.** Seven children once
-   all edited `training_examples_expected.txt`, so every PR conflicted with every other and the
-   corpus figure churned while sessions re-measured against a moving baseline. A PR that moves
-   the corpus regenerates and commits that file *in the same PR*, and corpus-moving PRs run one
-   at a time.
-2. **Give every child an explicit file list and a stop rule** — "if you find a bug outside this
-   list, write it up under 'Found, not fixed' and carry on". Cap review iteration at four
-   rounds, then report the remainder.
-3. **Children escalate spec disagreements; they do not settle them.** Relaxing a checker or
-   re-pointing a test on a child's own reading of the spec should be a decision, not a commit.
-4. **Devin cannot merge `main` here.** State the required merge order explicitly whenever PRs
-   are stacked, and never plan work that assumes self-merging.
-
-## Suggested sequencing
-
-Tracks A, B, C, P and T1 are closed and their entries are removed; what is left is:
-
-1. **R1** (tag), then **R2**/**R5** as the account access appears. R1 gates the rest of
-   the release section, and R2 is what makes the Python surface reachable by a user; R3's tap
-   follows a tag on its own, leaving only the real-Mac install to verify.
-2. **Track D** is independent of the rest and can run whenever. Take **D3** first, in its own
-   order: **D3.1** (identity) reshapes every fixture and everything else builds on it, then
-   **D3.2**/**D3.3**/**D3.4**, then the **D3.5** harness, which is the first thing that can
-   actually confirm or refute the interop claim. **D7** next, since it is mechanical once
-   identity is stable, then **D2** — a succession end that refers to an unnamed member belongs
-   with it, both wanting real end triples rather than names or text — and **D1** last, as the
-   largest piece of design. **D5** is done — both prefixes are recorded and round-trip.
-   **D8** (the OWL-ontology output profile) is optional and additive: its domain/range gate is
-   worth having as soon as the profile's term table exists, but the profile only becomes fully
-   conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
-3. **L2** was taken after the conformance rounds whose rows sat behind the gate it narrows, and is
-   closed. **L3**'s record format has landed too, with the shared library index and the
-   element-API policy; what is left of it is `Model.Eval` folding library value expressions and
-   the solver taking library-declared conditions. L1, the annotation-body editor surface, is
-   closed. All of it is independent of the release section and of Track D.
+1. **R3**/**R4**/**R5** as the hardware and account access appears: a real Mac to install the
+   tap's darwin bottle on, an Apple Developer and an OV/EV certificate to sign with, and a
+   marketplace publisher for the extension. None of the three gates the others.
+2. **Track D** is independent of the rest and can run whenever. Take **D3.4** first, the last
+   of D3 — the harness is landed and measures the gap, so it and everything after it show up as
+   movement in `internal/interop/flexo/testdata/interop_expected.txt` rather than as a claim.
+   **D7** next, since it is mechanical now that identity is stable, then **D2** — a succession
+   end that refers to an unnamed member belongs with it, both wanting real end triples rather
+   than names or text — and **D1** last, as the largest piece of design. **D8** (the
+   OWL-ontology output profile) is optional and additive: its domain/range gate is already in
+   the suite, but the profile only becomes fully conformant behind D2 and D1, so it does not
+   belong ahead of them.
+3. **L3** is what remains of the library work: `Model.Eval` folding library value expressions
+   and the solver taking library-declared conditions. It is independent of the release section
+   and of Track D.

@@ -8,23 +8,23 @@ package SendIdentityNested {
 
 		action reader accept n : Integer;
 
-		done fin;
+		done;
 
-		then start reader;
-		then reader fin;
+		succession first start then reader;
+		succession first reader then done;
 	}
 
 	part def Node {
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 
 			state sending {
 				entry send 7 to reader;
 			}
-			final heard;
 
-			start then sending;
-			transition sending to heard do perform Listen;
+			succession first start then sending;
+			transition first sending do perform Listen then done;
 		}
 	}
 

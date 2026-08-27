@@ -21,8 +21,8 @@ func TestNamespaceSuccessionHasNoTokenFlowOrNeighborGraphAttachment(t *testing.T
 			first a::x then b::y;
 			action neighbor {
 				first start;
-				done finish;
-				then start finish;
+				done;
+				succession first start then done;
 			}
 		}
 	`
@@ -45,7 +45,7 @@ func TestNamespaceSuccessionHasNoTokenFlowOrNeighborGraphAttachment(t *testing.T
 			case *ast.Namespace:
 				walk(n.Members)
 			case *ast.Usage:
-				if n.Kind == ast.UsageSuccession {
+				if n.Kind == ast.UsageSuccession && succession == nil {
 					succession = n
 				}
 				name, _ := ast.EffectiveName(n)
@@ -74,10 +74,10 @@ func TestNamespaceSuccessionHasNoTokenFlowOrNeighborGraphAttachment(t *testing.T
 	if len(graph.Nodes) != 2 {
 		t.Fatalf("neighbor graph has %d nodes, want only its start and finish nodes", len(graph.Nodes))
 	}
-	for source, targets := range graph.Successions {
-		for target, decl := range targets {
-			if decl == succession {
-				t.Fatalf("namespace succession was attached to neighbor graph from %T to %T", source, target)
+	for source, edges := range graph.Edges {
+		for _, edge := range edges {
+			if edge.Decl == succession {
+				t.Fatalf("namespace succession was attached to neighbor graph from %T to %T", source, edge.Target)
 			}
 		}
 	}

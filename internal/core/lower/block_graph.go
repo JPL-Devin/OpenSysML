@@ -60,11 +60,13 @@ func isFlowNode(member ast.Node) bool {
 // declaring one keeps its statement form, so it is reported rather than
 // half-executed.
 func outsideBlockFlow(member ast.Node) bool {
-	switch member.(type) {
+	switch m := member.(type) {
 	case *ast.InitialNode, *ast.FinalNode, *ast.SuccessionEdge, *ast.ControlFlowEdge,
-		*ast.ObjectFlowEdge, *ast.ForkNode, *ast.JoinNode, *ast.MergeNode,
+		*ast.ObjectFlowEdge, *ast.TransitionMember, *ast.ForkNode, *ast.JoinNode, *ast.MergeNode,
 		*ast.DecisionNode, *ast.ActionExecutionNode:
 		return true
+	case *ast.Usage:
+		return m.Kind == ast.UsageSuccession
 	default:
 		return false
 	}
@@ -77,8 +79,7 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 	graph := &ActionGraph{
 		Scope:     scope,
 		Nodes:     make([]ast.Node, 0, len(members)),
-		Edges:     make(map[ast.Node][]ast.Node),
-		Guards:    make(map[ast.Node]map[ast.Node]ast.Node),
+		Edges:     make(map[ast.Node][]ActionEdge),
 		DataFlows: make(map[ast.Node][]ObjectFlow),
 		Bodies:    make(map[ast.Node][]Statement),
 		Accepts:   make(map[ast.Node]Accept),
@@ -119,7 +120,7 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 		graph.Initial = graph.Nodes[0]
 	}
 	for i := 0; i+1 < len(graph.Nodes); i++ {
-		graph.Edges[graph.Nodes[i]] = []ast.Node{graph.Nodes[i+1]}
+		graph.Edges[graph.Nodes[i]] = []ActionEdge{{Target: graph.Nodes[i+1]}}
 	}
 	return graph
 }

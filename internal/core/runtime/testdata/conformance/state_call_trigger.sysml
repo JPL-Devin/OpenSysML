@@ -3,18 +3,18 @@ package CallTriggerTest {
     // declaring a parameter takes only a call carrying that argument, and binds
     // it so the guard can read it.
     state Controller {
-        initial start;
+        entry; then start;
+        state start;
         state idle;
         state braking;
         state cruising;
-        final done;
 
-        start then idle;
+        succession first start then idle;
 
-        transition idle to cruising accept setSpeed(value) if value > 0;
-        transition idle to braking accept brake();
+        transition first idle accept setSpeed(value) if value > 0 then cruising;
+        transition first idle accept brake() then braking;
 
-        transition cruising to done;
-        transition braking to done;
+        transition first cruising then done;
+        transition first braking then done;
     }
 }

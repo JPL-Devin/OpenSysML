@@ -23,10 +23,10 @@ func TestActionBodyLowering(t *testing.T) {
 				send "note" to logger;
 			}
 			action reader accept payload : Warning;
-			done end;
-			then start sender;
-			then sender reader;
-			then reader end;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
 		}
 	`)
 
@@ -94,9 +94,9 @@ func TestActionBodyLoopAndConditionalLowering(t *testing.T) {
 					assign total := total + s;
 				}
 			}
-			done end;
-			then start driver;
-			then driver end;
+			done;
+			succession first start then driver;
+			succession first driver then done;
 		}
 	`)
 
@@ -187,9 +187,9 @@ func TestActionBodyUnexecutableMemberIsLowered(t *testing.T) {
 					part inner;
 				}
 			}
-			done end;
-			then start driver;
-			then driver end;
+			done;
+			succession first start then driver;
+			succession first driver then done;
 		}
 	`)
 
@@ -222,9 +222,9 @@ func TestAcceptInALoopBodyIsLoweredAsUnsupported(t *testing.T) {
 					accept n : Integer;
 				}
 			}
-			done end;
-			then start driver;
-			then driver end;
+			done;
+			succession first start then driver;
+			succession first driver then done;
 		}
 	`)
 
@@ -267,9 +267,9 @@ func TestActionBodyParameterLowersToItsBlock(t *testing.T) {
 					assign total := total + s;
 				}
 			}
-			done end;
-			then start driver;
-			then driver end;
+			done;
+			succession first start then driver;
+			succession first driver then done;
 		}
 	`)
 

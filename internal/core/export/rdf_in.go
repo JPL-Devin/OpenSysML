@@ -11,6 +11,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/format"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 )
 
 // annotationMetaclasses are the elements whose notation is a comment body,
@@ -57,8 +58,10 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		return nil, err
 	}
 	d := &decoder{
-		graph: graph,
-		byIRI: map[string]*element{},
+		graph:            graph,
+		byIRI:            map[string]*element{},
+		memberships:      map[string]membership{},
+		owningMembership: map[string]membership{},
 	}
 	roots, err := d.build()
 	if err != nil {
@@ -103,9 +106,23 @@ func legacyNamespaceError(iri string) error {
 	}
 }
 
+// membership is one materialized membership of the graph: the namespace it
+// belongs to and the member it owns. A membership is not written back as a
+// declaration — the notation states it by nesting the member in its owner — so
+// it is read as the ownership edge it stands for rather than as an element.
+type membership struct {
+	iri    string
+	owner  string
+	member string
+}
+
 type decoder struct {
 	graph *rdf.Graph
 	byIRI map[string]*element
+	// memberships is keyed by membership IRI, and owningMembership by the IRI of
+	// the member each one owns.
+	memberships      map[string]membership
+	owningMembership map[string]membership
 }
 
 // build reads every subject into an element and links it to its owner,
@@ -128,6 +145,15 @@ func (d *decoder) build() ([]*element, error) {
 				Note: "it has no rdf:type, so there is no way to tell what to write",
 			}
 		}
+		if ontology.IsAncestorOrSelf(metaclass, mOwningMembership) && !d.graph.HasProperty(subject, rdf.SysML+pQualifiedName) {
+			// A membership with no qualified name states ownership rather than a
+			// declaration of its own; one with a name, such as a state's entry
+			// membership, is written as the member it is.
+			if err := d.readMembership(subject); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		el := &element{
 			iri:         subject.Value,
 			metaclass:   metaclass,
@@ -138,17 +164,13 @@ func (d *decoder) build() ([]*element, error) {
 		order = append(order, el)
 	}
 	for _, el := range order {
-		owner, ok := d.graph.Object(rdf.IRI(el.iri), rdf.SysML+pOwningNamespace)
-		if !ok {
+		parent, err := d.ownerOf(el)
+		if err != nil {
+			return nil, err
+		}
+		if parent == nil {
 			roots = append(roots, el)
 			continue
-		}
-		parent, known := d.byIRI[owner.Value]
-		if !known {
-			return nil, &UnsupportedError{
-				What: fmt.Sprintf("the element <%s>", el.iri),
-				Note: fmt.Sprintf("its owning namespace <%s> is not in the graph", owner.Value),
-			}
 		}
 		el.scope = parent.qname
 		parent.children = append(parent.children, el)
@@ -169,11 +191,77 @@ func (d *decoder) build() ([]*element, error) {
 	return roots, nil
 }
 
+// readMembership records the ownership edge an OwningMembership stands for. Both
+// ends are stated twice in the abstract syntax — once under the membership's own
+// name for the property and once under the Relationship's — and either spelling
+// is accepted, since a graph from another tool may carry only one.
+func (d *decoder) readMembership(subject rdf.Term) error {
+	owner, hasOwner := d.firstObject(subject, pMembershipOwningNamespace, pOwningRelatedElement)
+	member, hasMember := d.firstObject(subject, pMemberElement, pOwnedMemberElement, pOwnedMemberFeature, pOwnedRelatedElement)
+	if !hasOwner || !hasMember {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the membership <%s>", subject.Value),
+			Note: "a membership states the namespace it belongs to in sysml:membershipOwningNamespace and the element it owns in sysml:memberElement, and this one states one of them or neither",
+		}
+	}
+	m := membership{iri: subject.Value, owner: owner.Value, member: member.Value}
+	d.memberships[m.iri] = m
+	d.owningMembership[m.member] = m
+	return nil
+}
+
+// firstObject returns the object of the first of properties the subject states.
+func (d *decoder) firstObject(subject rdf.Term, properties ...string) (rdf.Term, bool) {
+	for _, property := range properties {
+		if object, ok := d.graph.Object(subject, rdf.SysML+property); ok {
+			return object, true
+		}
+	}
+	return rdf.Term{}, false
+}
+
+// ownerOf returns the element that owns el, or nil when it is a root. Ownership
+// is read through the element's OwningMembership, which is where the abstract
+// syntax puts it; a graph carrying only the compact sysml:owningNamespace shape
+// this tool wrote before memberships were materialized is still read.
+func (d *decoder) ownerOf(el *element) (*element, error) {
+	ownerIRI := ""
+	switch relationship, ok := d.firstObject(rdf.IRI(el.iri), pOwningMembership, pOwningRelationship); {
+	case ok:
+		// The owning relationship is either a membership standing between the
+		// element and its owner, or the owner itself when a relationship owns
+		// the element directly, as a state owns its entry action.
+		if m, known := d.memberships[relationship.Value]; known {
+			ownerIRI = m.owner
+		} else {
+			ownerIRI = relationship.Value
+		}
+	default:
+		// A relationship a namespace declares — an import, a dependency, a
+		// membership — states the element that owns it rather than a membership.
+		owner, hasOwner := d.firstObject(rdf.IRI(el.iri), pOwningRelatedElement, pOwningNamespace, pOwner)
+		if !hasOwner {
+			return nil, nil
+		}
+		ownerIRI = owner.Value
+	}
+	parent, known := d.byIRI[ownerIRI]
+	if !known {
+		return nil, &UnsupportedError{
+			What: fmt.Sprintf("the element <%s>", el.iri),
+			Note: fmt.Sprintf("its owning namespace <%s> is not in the graph", ownerIRI),
+		}
+	}
+	return parent, nil
+}
+
 // referenceProperties are the predicates whose IRI objects reference elements,
 // which must be graph subjects carrying sysml:qualifiedName.
 var referenceProperties = func() map[string]bool {
 	set := map[string]bool{
 		rdf.SysML + pOwningNamespace:  true,
+		rdf.SysML + pOwner:            true,
+		rdf.SysML + pOwnedMember:      true,
 		rdf.SysML + pSourceFeature:    true,
 		rdf.SysML + pTargetFeature:    true,
 		rdf.SysML + pClient:           true,
@@ -296,9 +384,18 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	if err != nil {
 		return err
 	}
+	// `parallel` marks a state's substates orthogonal, and only a body may
+	// follow it, so a parallel state with none has no notation.
+	parallel := d.boolOf(el, rdf.SysML+"isParallel")
 	if len(children) == 0 && !d.boolOf(el, rdf.OpenSysML+xHasBody) {
+		if parallel {
+			return d.missing(el, "sysx:"+xHasBody, "a parallel state states its regions in a body")
+		}
 		b.WriteString(";\n")
 		return nil
+	}
+	if parallel {
+		b.WriteString(" parallel")
 	}
 	b.WriteString(" {\n")
 	for _, child := range children {
@@ -346,15 +443,9 @@ func (d *decoder) head(el *element) (string, error) {
 		return d.conditionHead(el, "assume")
 	case mRequire:
 		return d.conditionHead(el, "require")
-	case mResult:
-		value, ok := d.stringOf(el, rdf.SysML+pValue)
-		if !ok {
-			return "", d.missing(el, "sysml:"+pValue, "a result member is the expression it returns")
-		}
-		return "return " + value, nil
 	}
 	// A succession carrying its ends as references is the one the parser builds
-	// for a `then`, written back as the edge form: `then <source> <target>;`
+	// for a succession, written back as `succession first <source> then <target>;`.
 	// sequences the two members it names wherever they are declared, so the
 	// order survives the round trip. A `succession` declaration whose head was
 	// kept verbatim never reaches here — print() writes its source text.
@@ -979,9 +1070,17 @@ func (d *decoder) prefixWords(el *element) []string {
 	return words
 }
 
+// visibility reads the visibility a member was declared with, which the abstract
+// syntax states on the membership rather than on the member — except on an
+// import, which has a visibility of its own.
 func (d *decoder) visibility(el *element) string {
 	keyword, ok := d.stringOf(el, rdf.SysML+pVisibility)
 	if !ok {
+		if m, owned := d.owningMembership[el.iri]; owned {
+			keyword, ok = d.graph.Lexical(rdf.IRI(m.iri), rdf.SysML+pVisibility)
+		}
+	}
+	if !ok || keyword == "" {
 		return ""
 	}
 	return visibilityKeyword(visibilityOf(keyword))

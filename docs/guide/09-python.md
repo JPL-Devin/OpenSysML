@@ -10,7 +10,7 @@ The full API surface, the generated typed classes and the measured latency are
 ## Installation
 
 ```bash
-pip install opensysml             # from PyPI, once the first release is published
+pip install opensysml             # from PyPI
 pip install -e python/          # or from a checkout, at the repository root
 ```
 
@@ -56,8 +56,10 @@ binary, so it catches corruption but not a republished release. A release this
 cached binary rather than trusting the served checksum; `export
 OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1` for any repository, which a
 fork's releases do not need) accepts same-origin trust explicitly for the repository
-it names, with a warning. `OPENSYSML_STATE_DIR` moves the state directory
-(`~/.opensysml`) holding the binary cache and the service records.
+it names, with a warning. The binary is cached in `~/.opensysml/bin`; a service the
+client starts is a private child of the interpreter and keeps no state on disk, so
+`OPENSYSML_STATE_DIR`, which moved the service records only, no longer does
+anything.
 
 The published releases up to v0.0.4 carry the `sysml`/`sysml-lsp` archives only;
 `sysml-grpc` binaries are published from the next release onward, so until then
@@ -109,9 +111,9 @@ except opensysml.ModelError as exc:
 ```
 
 `strict_conformance=True`, on the same three calls, asks a different question:
-whether the source is conforming SysML v2. OpenSysML's own notation — the
-`initial`/`final` markers, `region`, `defer`, the pseudostates, `transition <src>
-to <tgt>` — is then reported as an error rather than a warning
+whether the source is conforming SysML v2. OpenSysML's own notation — `defer`,
+the pseudostates — is then reported as an error rather
+than a warning
 ([3. Strict conformance](03-command-line.md#strict-conformance)). The two are
 independent: `strict` decides whether errors raise, `strict_conformance` decides
 what counts as one.

@@ -128,7 +128,8 @@ func (s *service) scan(r io.Reader) {
 	for lines.Scan() {
 		line := lines.Text()
 		s.logs.add(line)
-		if announced || !strings.Contains(line, "gRPC server listening") {
+		if announced || (!strings.Contains(line, "gRPC server listening") &&
+			!strings.Contains(line, "Connect server listening")) {
 			continue
 		}
 		if addr, ok := listeningAddr(line); ok {
@@ -333,6 +334,88 @@ func TestHealthEndpointReportsTheBuild(t *testing.T) {
 	s.terminate()
 	if status := s.waitStatus(45 * time.Second); status != 0 {
 		t.Errorf("exit status = %d, want 0\nlogs: %s", status, s.logs.String())
+	}
+}
+
+func TestDefaultTransportServesConnectAndHealthOnMainPort(t *testing.T) {
+	s := startService(t, "-port", "0", "-health-port", "0")
+	addr := s.address(30 * time.Second)
+
+	body := getHealth(t, addr)
+	for _, want := range []string{`"status":"ok"`, `"service":"sysml-grpc"`, `"version":"dev"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/health body is missing %s:\n%s", want, body)
+		}
+	}
+
+	client := dial(t, addr)
+	if _, err := client.GetServerInfo(callContext(t), &pb.ServerInfoRequest{}); err != nil {
+		t.Fatalf("GetServerInfo over the main port: %v\nlogs: %s", err, s.logs.String())
+	}
+
+	s.terminate()
+	if status := s.waitStatus(45 * time.Second); status != 0 {
+		t.Errorf("exit status = %d, want 0\nlogs: %s", status, s.logs.String())
+	}
+}
+
+func TestSecondaryHealthPortLogsDeprecation(t *testing.T) {
+	healthPort := freePort(t)
+	s := startService(t, "-port", "0", "-health-port", healthPort)
+	mainAddr := s.address(30 * time.Second)
+
+	getHealth(t, mainAddr)
+	getHealth(t, net.JoinHostPort("127.0.0.1", healthPort))
+	if logs := s.logs.String(); !strings.Contains(logs, "the separate health listener is deprecated") {
+		t.Errorf("deprecation warning missing from logs:\n%s", logs)
+	}
+
+	s.terminate()
+	if status := s.waitStatus(45 * time.Second); status != 0 {
+		t.Errorf("exit status = %d, want 0\nlogs: %s", status, s.logs.String())
+	}
+}
+
+func TestHealthPortZeroServesHealthOnMainPortOnly(t *testing.T) {
+	s := startService(t, "-port", "0", "-health-port", "0")
+	addr := s.address(30 * time.Second)
+
+	getHealth(t, addr)
+	logs := s.logs.String()
+	if strings.Contains(logs, "Health check server listening") {
+		t.Errorf("health listener unexpectedly started:\n%s", logs)
+	}
+	if strings.Contains(logs, "the separate health listener is deprecated") {
+		t.Errorf("health listener deprecation warning unexpectedly logged:\n%s", logs)
+	}
+
+	s.terminate()
+	if status := s.waitStatus(45 * time.Second); status != 0 {
+		t.Errorf("exit status = %d, want 0\nlogs: %s", status, s.logs.String())
+	}
+}
+
+func getHealth(t *testing.T, addr string) string {
+	t.Helper()
+	url := "http://" + addr + "/health"
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		res, err := http.Get(url) // #nosec G107 -- the test built this URL
+		if err == nil {
+			raw, readErr := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			if readErr != nil {
+				t.Fatalf("reading /health: %v", readErr)
+			}
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("/health status = %d, want 200: %s", res.StatusCode, raw)
+			}
+			return string(raw)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("/health never answered at %s: %v", addr, err)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 

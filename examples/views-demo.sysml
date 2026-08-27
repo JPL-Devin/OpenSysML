@@ -87,25 +87,25 @@ package Lander {
             in item propellant : Fuel;
             first ignite;
             action throttle;
-            then ignite throttle;
+            succession first ignite then throttle;
         }
 
         fork split;
         join sync;
         action touchdown;
-        done finish;
+        done;
 
-        then start split;
-        then split deployParachute;
-        then split burn;
-        then deployParachute sync;
-        then burn sync;
+        succession first start then split;
+        succession first split then deployParachute;
+        succession first split then burn;
+        succession first deployParachute then sync;
+        succession first burn then sync;
 
         decide check;
-        then sync check;
+        succession first sync then check;
         if altitude > 0.0 then touchdown;
-        else finish;
-        then touchdown finish;
+        else done;
+        succession first touchdown then done;
     }
 
     // Two landers a concern's condition is checked against: one within the mass

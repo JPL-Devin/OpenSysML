@@ -12,7 +12,9 @@
               (Relationship kind="typing" target=Integer
                 (*ast.QualifiedName))
               (LiteralInteger value="2")))
-          (*ast.ResultMember)))
+          (OperatorExpr operator="*"
+            (FeatureReference name="x")
+            (FeatureReference name="factor"))))
       (Membership visibility="default"
         (Usage kind="calc" name="combine" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
@@ -23,14 +25,20 @@
             (Usage kind="attribute" name="b" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Integer
                 (*ast.QualifiedName))))
-          (*ast.ResultMember)))
+          (OperatorExpr operator="+"
+            (InvocationExpr type="double"
+              (FeatureReference name="a"))
+            (InvocationExpr type="double"
+              (FeatureReference name="b")))))
       (Membership visibility="default"
         (Usage kind="calc" name="double" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
             (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Integer
                 (*ast.QualifiedName))))
-          (*ast.ResultMember)))
+          (OperatorExpr operator="*"
+            (FeatureReference name="x")
+            (LiteralInteger value="2"))))
       (Membership visibility="default"
         (Usage kind="calc" name="scaled" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=Scale

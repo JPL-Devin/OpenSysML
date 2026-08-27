@@ -1,0 +1,34 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Indexed Bindings" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Shape"
+          (Membership visibility="default"
+            (Usage kind="part" name="base" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="part" name="edges" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Multiplicity range=true
+                    (LiteralInteger value="0")
+                    (LiteralInfinity))))))
+          (Membership visibility="default"
+            (Usage kind="part" name="be" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Multiplicity range=true
+                (LiteralInteger value="0")
+                (LiteralInfinity))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="bind"
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="edges"
+                  (FeatureReference name="base")))
+              (Multiplicity range=true
+                (LiteralInteger value="0")
+                (LiteralInfinity))
+              (FeatureReference name="be")))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="edges"
+                  (FeatureReference name="base")))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (FeatureReference name="be"))))))))

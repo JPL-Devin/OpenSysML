@@ -11,9 +11,9 @@ package test {
 		action flow {
 			assign item := 2;
 		}
-		done end;
-		then start flow;
-		then flow end;
+		done;
+		succession first start then flow;
+		succession first flow then done;
 	}
 
 	// A keyword before a kind keyword qualifies it instead: the declaration's

@@ -387,13 +387,12 @@ package Q {
 
     calc echo {
         in q;
-        // Parenthesized: a bare name after `return` declares the return feature.
-        return (q);
+        q
     }
 
     calc overHalfATonne {
         in q;
-        return q > 500.0 [SI::kg];
+        q > 500.0 [SI::kg]
     }
 
     action addHalfATonne {
@@ -402,9 +401,9 @@ package Q {
         action inner {
             assign m := m + 500.0 [SI::kg];
         }
-        done end;
-        then start inner;
-        then inner end;
+        done;
+        succession first start then inner;
+        succession first inner then done;
     }
 }
 """

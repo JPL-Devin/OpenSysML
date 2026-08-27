@@ -98,17 +98,12 @@ func SatisfactionWith(ctx *runtime.Context, assertion *runtime.SatisfyAssertion,
 	return TranslateWith(ctx, subject, ctx.ConditionsOf(assertion.Symbol, assertion.Symbol.OwnerScope), pins)
 }
 
-// Translate builds a query from conditions the runtime collected. One refusal
-// fails the whole translation, since a query missing a conjunct would answer
-// about conditions it does not hold.
-func Translate(ctx *runtime.Context, subject Subject, conds []runtime.Condition) (*Query, error) {
-	return TranslateWith(ctx, subject, conds, nil)
-}
-
 // TranslateWith builds a query whose pinned features are asserted equal to the
 // values given, leaving the rest free. A value that cannot be fixed refuses, as
 // an untranslatable condition does; a value no condition reads is reported in
-// Query.Unread rather than dropped.
+// Query.Unread rather than dropped. One refusal fails the whole translation,
+// since a query missing a conjunct would answer about conditions it does not
+// hold.
 func TranslateWith(ctx *runtime.Context, subject Subject, conds []runtime.Condition, pins []Pin) (*Query, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("solve: no runtime context")

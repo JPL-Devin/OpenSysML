@@ -1,0 +1,169 @@
+{
+  "scenarios": [
+    {
+      "id": "apply_edits/a_set_value_rewrites_only_that_span",
+      "description": "The answer carries the whole edited source plus what each operation replaced.",
+      "rpc": "ApplyEdits",
+      "requires_capabilities": [
+        "apply_edits"
+      ],
+      "model": {
+        "fixture": "editable.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "operations": [
+          {
+            "set_value": {
+              "target": "Demo::SC::unitMass",
+              "value": "1050.0[SI::kg]"
+            }
+          }
+        ]
+      },
+      "expect": {
+        "contains_all": {
+          "content": [
+            "1050.0[SI::kg]",
+            "measured on the bench"
+          ]
+        },
+        "absent": [
+          "error"
+        ],
+        "counts": {
+          "applied": 1
+        },
+        "response": {
+          "applied": [
+            {
+              "target": "Demo::SC::unitMass",
+              "new_text": "1050.0[SI::kg]",
+              "old_text": "1000.0[SI::kg]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "apply_edits/a_rename_of_an_unreferenced_element_is_applied",
+      "rpc": "ApplyEdits",
+      "requires_capabilities": [
+        "apply_edits"
+      ],
+      "model": {
+        "fixture": "editable.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "operations": [
+          {
+            "rename": {
+              "target": "Demo::SC::margin",
+              "new_name": "reserve"
+            }
+          }
+        ]
+      },
+      "expect": {
+        "contains_all": {
+          "content": [
+            "attribute reserve"
+          ]
+        },
+        "absent": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "apply_edits/an_unknown_target_is_refused_by_kind",
+      "description": "A client acts on failure, not on the message text, so the kind is part of the contract.",
+      "rpc": "ApplyEdits",
+      "requires_capabilities": [
+        "apply_edits"
+      ],
+      "model": {
+        "fixture": "editable.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "operations": [
+          {
+            "set_value": {
+              "target": "Demo::SC::nope",
+              "value": "1.0"
+            }
+          }
+        ]
+      },
+      "expect": {
+        "response": {
+          "failure": "EDIT_FAILURE_UNKNOWN_TARGET"
+        },
+        "non_empty": [
+          "error"
+        ],
+        "absent": [
+          "content"
+        ]
+      }
+    },
+    {
+      "id": "apply_edits/an_unparsable_new_value_is_refused_by_kind",
+      "rpc": "ApplyEdits",
+      "requires_capabilities": [
+        "apply_edits"
+      ],
+      "model": {
+        "fixture": "editable.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "operations": [
+          {
+            "set_value": {
+              "target": "Demo::SC::unitMass",
+              "value": "1050.0[["
+            }
+          }
+        ]
+      },
+      "expect": {
+        "response": {
+          "failure": "EDIT_FAILURE_INVALID_VALUE"
+        },
+        "non_empty": [
+          "error"
+        ],
+        "absent": [
+          "content"
+        ]
+      }
+    },
+    {
+      "id": "apply_edits/no_operations_is_refused_rather_than_echoing_the_source",
+      "rpc": "ApplyEdits",
+      "requires_capabilities": [
+        "apply_edits"
+      ],
+      "model": {
+        "fixture": "editable.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}"
+      },
+      "expect": {
+        "response": {
+          "failure": "EDIT_FAILURE_NO_OPERATIONS"
+        },
+        "non_empty": [
+          "error"
+        ],
+        "absent": [
+          "content"
+        ]
+      }
+    }
+  ]
+}

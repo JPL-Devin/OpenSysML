@@ -2,11 +2,12 @@
 // re-entering it times the whole interval again: the sibling region's clock,
 // which the exit does not touch, reaches c1 first.
 package Test {
-	state Machine {
+	state Machine parallel {
 		attribute log : Integer = 0;
 
-		region work {
-			initial wstart;
+		state work {
+			entry; then wstart;
+			state wstart;
 			state waiting {
 				accept after 10 then late;
 			}
@@ -17,11 +18,12 @@ package Test {
 				entry { log = log * 10 + 1; }
 			}
 
-			transition wstart to waiting;
-			transition waiting to away accept pause;
+			transition first wstart then waiting;
+			transition first waiting accept pause then away;
 		}
-		region clock {
-			initial cstart;
+		state clock {
+			entry; then cstart;
+			state cstart;
 			state c0 {
 				accept after 12 then c1;
 			}
@@ -29,7 +31,7 @@ package Test {
 				entry { log = log * 10 + 2; }
 			}
 
-			transition cstart to c0;
+			transition first cstart then c0;
 		}
 	}
 }

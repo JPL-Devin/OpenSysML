@@ -19,7 +19,7 @@ func TestPositionalEdgeEndNamesTheNotation(t *testing.T) {
 	}{
 		{
 			name: "a declaration that is no action node",
-			src:  `action test { first start; then part { } done end; }`,
+			src:  `action test { first start; then part { } done; }`,
 			want: `anonymous part usage`,
 		},
 	}
@@ -53,7 +53,7 @@ func TestSequencedPerformIsANode(t *testing.T) {
 			action x;
 			then perform doIt;
 			then done;
-			then start x;
+			succession first start then x;
 		}
 	`)
 
@@ -67,10 +67,10 @@ func TestSequencedPerformIsANode(t *testing.T) {
 		t.Fatalf("the performed action is no node of the graph: %v", graph.Nodes)
 	}
 	x := nodeNamed(t, graph, "x")
-	if got := graph.Edges[x]; len(got) != 1 || got[0] != perform {
+	if got := graph.Edges[x]; len(got) != 1 || got[0].Target != perform {
 		t.Fatalf("x has successors %v, want the performed action", got)
 	}
-	if len(graph.Edges[perform]) != 1 || graph.Edges[perform][0] != graph.Finals[0] {
+	if len(graph.Edges[perform]) != 1 || graph.Edges[perform][0].Target != graph.Finals[0] {
 		t.Fatalf("performed action has successors %v, want the final node", graph.Edges[perform])
 	}
 }

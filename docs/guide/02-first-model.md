@@ -20,7 +20,7 @@ Library types such as `Real` are not in scope automatically — import them, exa
 `.sysml` file would:
 
 ```sysml
-sysml> import ScalarValues::*;
+sysml> private import ScalarValues::*;
 ✓ import ScalarValues::*
 
 sysml> part def Wheel {

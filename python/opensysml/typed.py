@@ -14,7 +14,7 @@ from typing import Callable, ClassVar, List, Optional, Set, TypeVar
 from opensysml.enumeration import EnumLiteral
 from opensysml.errors import InstanceTypeError, TypeMismatchError
 from opensysml.instance import Instance
-from opensysml.values import Quantity
+from opensysml.values import UNSET, Quantity
 
 # Re-exported so a generated module annotates a quantity property as `_t.Quantity`
 # and needs no import of its own.
@@ -209,12 +209,17 @@ def feature_value(obj: TypedObject, feature_name: str, decode: Callable[[str, ob
 def optional_feature_value(
     obj: TypedObject, feature_name: str, decode: Callable[[str, object], T]
 ) -> Optional[T]:
-    """Return the decoded value of a ``0..1`` feature, or None when it holds no value."""
+    """Return the decoded value of a ``0..1`` feature, or None when it holds no value.
+
+    A feature the model leaves valueless reads as :data:`~opensysml.UNSET` at Tier 1,
+    which is no value of the declared type and so is None here, as an absent or
+    null one is.
+    """
     instance = obj.instance
     if feature_name not in instance:
         return None
     value = instance[feature_name]
-    if value is None:
+    if value is None or value is UNSET:
         return None
     if isinstance(value, list):
         if not value:
@@ -228,12 +233,16 @@ def optional_feature_value(
 def list_feature_value(
     obj: TypedObject, feature_name: str, decode: Callable[[str, object], T]
 ) -> List[T]:
-    """Return the decoded values of a multi-valued feature; an absent or null one is empty."""
+    """Return the decoded values of a multi-valued feature; one holding no value is empty.
+
+    An absent, null or :data:`~opensysml.UNSET` feature holds no element, so it reads
+    as the empty list rather than as a value of the declared type.
+    """
     instance = obj.instance
     if feature_name not in instance:
         return []
     value = instance[feature_name]
-    if value is None:
+    if value is None or value is UNSET:
         return []
     if not isinstance(value, list):
         return [decode(feature_name, value)]

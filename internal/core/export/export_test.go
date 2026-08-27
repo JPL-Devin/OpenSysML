@@ -213,17 +213,17 @@ func TestKindKeywordSynonymsSurviveRDF(t *testing.T) {
 }
 
 // A condition member states a condition rather than declaring a feature, so
-// each form it is written in has to come back as written: the keyword it states
-// the condition with, its negation, and the nesting of a braced condition.
+// each form it is written in has to come back as written: the constraint it
+// asserts, its negation, a bare condition, and a nested condition body.
 func TestConditionMembersSurviveRDF(t *testing.T) {
 	for _, member := range []string{
-		"assert mass > 0;",
-		"assume mass != 0;",
-		"assert not mass > 1000;",
+		"assert Light;",
+		"assert not Light;",
 		"mass < 1000;",
+		"assume constraint {\n            mass != 0;\n        }",
 		"assert constraint inner {\n            mass < 1000;\n        }",
 	} {
-		src := "package P {\n\tattribute mass;\n\tconstraint c {\n\t\t" + member + "\n\t}\n}"
+		src := "package P {\n\tattribute mass;\n\tconstraint def Light;\n\tconstraint c {\n\t\t" + member + "\n\t}\n}"
 		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 		if err != nil {
 			t.Fatalf("%s: to turtle: %v", member, err)
@@ -239,11 +239,10 @@ func TestConditionMembersSurviveRDF(t *testing.T) {
 }
 
 // A requirement's assumptions and required conditions are members of the same
-// kind, written as a condition, as the constraint they state, or as a body.
+// kind, written as the constraint they state or as a nested condition body.
 func TestRequirementConditionsSurviveRDF(t *testing.T) {
 	for _, member := range []string{
-		"assume mass > 0;",
-		"require mass < 100;",
+		"assume constraint {\n            mass > 0;\n        }",
 		"require Light;",
 		"require constraint {\n            mass < 100;\n        }",
 	} {
@@ -716,16 +715,16 @@ func TestVerbatimHeadsRoundTrip(t *testing.T) {
 	}
 }
 
-// withoutTriples writes the graph again without the named extension property,
-// the shape a graph from another tool has: the head is then rebuilt from the
-// mapping rather than read back from the text it was written as.
+// withoutTriples writes the graph again without the named property, given with
+// its prefix: the head is then rebuilt from the mapping rather than read back
+// from the text it was written as, the shape a graph from another tool has.
 func withoutTriples(t *testing.T, turtle []byte, property string) []byte {
 	t.Helper()
 	var blocks []string
 	for _, block := range strings.Split(string(turtle), "\n\n") {
 		var kept []string
 		for _, line := range strings.Split(block, "\n") {
-			if strings.HasPrefix(strings.TrimSpace(line), "sysx:"+property+" ") {
+			if strings.HasPrefix(strings.TrimSpace(line), property+" ") {
 				continue
 			}
 			kept = append(kept, line)
@@ -768,7 +767,7 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
 			}
-			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sourceText"), export.FormatTurtle, export.FormatSysML)
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
 			if err != nil {
 				t.Fatalf("back to notation: %v", err)
 			}
@@ -801,7 +800,7 @@ func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
 			}
-			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sourceText"), export.FormatTurtle, export.FormatSysML)
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
 			if err != nil {
 				t.Fatalf("back to notation: %v", err)
 			}
@@ -846,7 +845,7 @@ func TestUnnamedSuccessionEndComesBackFromTheGraph(t *testing.T) {
 		t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
 	}
 	// The form and the member it names carry the succession without the text.
-	fromGraph, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sourceText"), export.FormatTurtle, export.FormatSysML)
+	fromGraph, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("back to notation from the mapping alone: %v", err)
 	}
@@ -863,7 +862,7 @@ func TestEndsWithoutTheirFormAreReported(t *testing.T) {
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
 	}
-	stripped := withoutTriples(t, withoutTriples(t, turtle, "sourceText"), "endForm")
+	stripped := withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:endForm")
 	_, err = export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
 	if err == nil {
 		t.Fatal("a head whose form the graph does not state should be reported")
@@ -1070,9 +1069,19 @@ func TestFixtureElementIDsRoundTrip(t *testing.T) {
 			if strings.HasPrefix(subject.Value, rdf.Expression) {
 				// An expression node is named for the element and slot it
 				// belongs to, not by a qualified name of its own.
-				id, _, ok := strings.Cut(strings.TrimPrefix(subject.Value, rdf.Expression), ".")
-				if owner, decoded := rdf.DecodeElementID(id); !ok || !decoded || owner == "" {
+				id := strings.TrimPrefix(subject.Value, rdf.Expression)
+				owner, positions, ok := rdf.DecodeExpressionNodeID(id)
+				if !ok || owner == "" || len(positions) == 0 {
 					t.Errorf("%s: expression %s is not named for an element", path, subject.Value)
+				}
+				continue
+			}
+			if member, isMembership := rdf.DecodeOwningMembershipID(strings.TrimPrefix(subject.Value, rdf.Element)); isMembership {
+				// A membership is named for the member it owns, which is the
+				// only element it can belong to, and has no name of its own.
+				owned, ok := graph.Object(subject, rdf.SysML+"memberElement")
+				if !ok || owned.Value != rdf.Element+rdf.EncodeElementID(member) {
+					t.Errorf("%s: membership %s does not own %q", path, subject.Value, member)
 				}
 				continue
 			}

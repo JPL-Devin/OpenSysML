@@ -6,10 +6,11 @@ package test {
 		attribute log : Integer = 0;
 		attribute ready : Boolean = true;
 
-		initial start;
+		entry; then start;
+		state start;
 		state waiting;
 
-		start then waiting;
-		transition waiting to waiting accept when ready do assign log := log * 10 + 1;
+		succession first start then waiting;
+		transition first waiting accept when ready do assign log := log * 10 + 1 then waiting;
 	}
 }

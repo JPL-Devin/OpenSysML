@@ -17,13 +17,13 @@ package 'My Pkg' {
   }
   action 'run it' {
     first start;
-    done end;
-    then start end;
+    done;
+    succession first start then done;
   }
   state 'spin up' {
-    initial init;
-    final done;
-    init then done;
+    entry; then init;
+    state init;
+    succession first init then done;
   }
 }
 `

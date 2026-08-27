@@ -4,15 +4,15 @@ package Test {
     // (KerML 7.3.4.5), so a sourceless accept inside it and a transition naming
     // it must both still find it.
     state Machine : Base {
-        initial init;
+        entry; then init;
+        state init;
         state redefines waiting {
             accept go then active;
         }
         state active;
-        final done;
 
-        init then waiting;
-        active then done;
+        succession first init then waiting;
+        succession first active then done;
     }
 
     state def Base {

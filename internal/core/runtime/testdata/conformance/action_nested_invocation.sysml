@@ -9,9 +9,9 @@ package test {
             assign result := result + 5;
         }
         
-        done end;
+        done;
         
-        then start inner;
-        then inner end;
+        succession first start then inner;
+        succession first inner then done;
     }
 }

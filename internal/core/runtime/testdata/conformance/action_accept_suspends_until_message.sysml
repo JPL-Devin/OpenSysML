@@ -27,15 +27,15 @@ package test {
 			assign received := n;
 		}
 
-		done end;
+		done;
 
-		then start split;
-		then split reader;
-		then split gate;
-		then reader sync;
-		then gate sender;
-		then sender sync;
-		then sync recorder;
-		then recorder end;
+		succession first start then split;
+		succession first split then reader;
+		succession first split then gate;
+		succession first reader then sync;
+		succession first gate then sender;
+		succession first sender then sync;
+		succession first sync then recorder;
+		succession first recorder then done;
 	}
 }

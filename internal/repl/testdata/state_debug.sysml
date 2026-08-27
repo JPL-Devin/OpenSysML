@@ -2,15 +2,15 @@
 // scheduled at distinct times to drain.
 package Debug {
 	state Cycle {
-		initial init;
+		entry; then init;
+		state init;
 		state waiting {
 			accept after 10 then working;
 		}
 		state working {
 			accept after 5 then done;
 		}
-		final done;
 
-		init then waiting;
+		succession first init then waiting;
 	}
 }

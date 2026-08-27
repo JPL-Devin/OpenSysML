@@ -4,7 +4,8 @@ package Debug {
 	state Slow {
 		attribute count = 0;
 
-		initial init;
+		entry; then init;
+		state init;
 		state working {
 			do {
 				count = count + 1;
@@ -12,8 +13,7 @@ package Debug {
 			}
 			accept after 100 then done;
 		}
-		final done;
 
-		init then working;
+		succession first init then working;
 	}
 }

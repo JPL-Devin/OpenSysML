@@ -5,22 +5,22 @@ package Test {
     state HistoryRevisit {
         attribute departures : Integer = 0;
 
-        initial start;
+        entry; then start;
+        state start;
         state outer {
             state first;
             state second;
             history resume;
         }
         state away;
-        final done;
 
-        transition start to first;
-        transition first to second;
-        transition second to away if departures == 0 do {
+        transition first start then first;
+        transition first first then second;
+        transition first second if departures == 0 do {
             departures = departures + 1;
-        };
-        transition second to done if departures > 0;
-        transition away to resume;
-        transition resume to first;
+        } then away;
+        transition first second if departures > 0 then done;
+        transition first away then resume;
+        transition first resume then first;
     }
 }

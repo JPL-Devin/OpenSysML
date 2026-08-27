@@ -8,7 +8,7 @@ action def Flows::Drive
     action record
   fork split
   join sync
-  final finish
+  final done
   action park
   decision check
 
@@ -21,6 +21,6 @@ flow:
   split -> provide
   split -> monitor
   sync -> check
-  park -> finish
-  check -> finish: [speed > 0]
+  park -> done
+  check -> done: [speed > 0]
   check -> park

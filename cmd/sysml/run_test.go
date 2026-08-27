@@ -25,7 +25,7 @@ const behaviorModel = `package Mission {
     calc def Fall {
         in t;
         in g;
-        return g * t * t;
+        g * t * t
     }
 
     action tally {
@@ -34,21 +34,21 @@ const behaviorModel = `package Mission {
         action accumulate {
             assign total := total + 5;
         }
-        done end;
-        then start accumulate;
-        then accumulate end;
+        done;
+        succession first start then accumulate;
+        succession first accumulate then done;
     }
 
     state Cycle {
-        initial init;
+        entry; then init;
+        state init;
         state waiting {
             accept after 10 then working;
         }
         state working {
             accept after 5 then done;
         }
-        final done;
-        init then waiting;
+        succession first init then waiting;
     }
 }
 `
@@ -280,7 +280,7 @@ func TestJSONReport(t *testing.T) {
 // warningModel analyses cleanly but states an expose where the spec constrains
 // one, which analysis reports as a warning rather than an error.
 const warningModel = `package Rover {
-    constraint MassBudget { assert 180.0 <= 200.0; }
+    constraint MassBudget { 180.0 <= 200.0 }
     part p;
     view def V { expose Rover::**; }
 }

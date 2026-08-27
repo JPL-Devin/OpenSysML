@@ -16,7 +16,7 @@ import (
 func TestCalcInvocation_SimpleCalc(t *testing.T) {
 	// Use existing testdata/simple_calc.sysml
 	// It contains:
-	//   calc add { in x: Integer; in y: Integer; return x + y; }
+	//   calc add { in x: Integer; in y: Integer; x + y }
 	//   part def Result { attribute sum: Integer = add(3, 5); }
 
 	path := filepath.Join("testdata", "simple_calc.sysml")

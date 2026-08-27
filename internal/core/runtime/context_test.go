@@ -58,7 +58,7 @@ func TestContext_ExecuteAction(t *testing.T) {
 			Value: "42",
 		},
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	edge1 := &ast.SuccessionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "start"}}},
@@ -66,7 +66,7 @@ func TestContext_ExecuteAction(t *testing.T) {
 	}
 	edge2 := &ast.SuccessionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
-		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 	}
 
 	actionSym := &symbols.Symbol{
@@ -129,12 +129,10 @@ func TestContext_ExecuteState(t *testing.T) {
 
 	// Create simple state machine: idle →[after 5]→ done (final)
 	idle := &ast.StateNode{
-		Name:      "idle",
-		IsInitial: true,
+		Name: "idle",
 	}
 	done := &ast.StateNode{
-		Name:    "done",
-		IsFinal: true,
+		Name: "done",
 	}
 
 	trans := &ast.TransitionEdge{
@@ -151,7 +149,7 @@ func TestContext_ExecuteState(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "TestStateMachine"},
-			Members: []ast.Node{idle, done, trans},
+			Members: []ast.Node{entryStart("idle"), idle, done, trans},
 		},
 	}
 
@@ -208,16 +206,14 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 			},
 		},
 	}
-	final := &ast.FinalNode{
-		Name: "final",
-	}
+	final := &ast.FinalNode{}
 	edge1 := &ast.ControlFlowEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "initial"}}},
 		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
 	}
 	edge2 := &ast.ControlFlowEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
-		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "final"}}},
+		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 	}
 
 	actionSym := &symbols.Symbol{
@@ -251,8 +247,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 	// Create state machine with entry action
 	// State 'processing' executes the action on entry
 	processing := &ast.StateNode{
-		Name:      "processing",
-		IsInitial: true,
+		Name: "processing",
 		Entry: []ast.Node{
 			&ast.ActionExecutionNode{
 				Name: "entryAction",
@@ -267,8 +262,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 		},
 	}
 	done := &ast.StateNode{
-		Name:    "done",
-		IsFinal: true,
+		Name: "done",
 	}
 	trans := &ast.TransitionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "processing"}}},
@@ -284,7 +278,7 @@ func TestContext_Integration_ActionWithinState(t *testing.T) {
 		Decl: &ast.Usage{
 			Kind:    ast.UsageState,
 			Ident:   ast.Identification{Name: "ProcessingStateMachine"},
-			Members: []ast.Node{processing, done, trans},
+			Members: []ast.Node{entryStart("processing"), processing, done, trans},
 		},
 	}
 

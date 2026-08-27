@@ -10,15 +10,15 @@
 # abstract in the metamodel (sysml:Import) is not among these findings.
 
 # 1. Properties the metamodel declares on a relationship or membership element
-# that this tool collapses into the element itself (D3.3). The property name is
-# right; the subject should have been the intervening element.
+# that this tool collapses into the element itself. Ownership and visibility no
+# longer collapse (D3.3 materializes the membership); the rest still do. The
+# property name is right; the subject should have been the intervening element.
 domain-mismatch AttributeUsage value             # FeatureValue_value: the feature value is written on the usage instead of a FeatureValue membership
 domain-mismatch ReferenceUsage value             # FeatureValue_value: same collapse on a kindless usage's value
 domain-mismatch AssignmentActionUsage value      # FeatureValue_value: same collapse on an assignment's target value
 domain-mismatch PartUsage lowerBound             # MultiplicityRange_lowerBound: the multiplicity is written on the usage instead of a MultiplicityRange
 domain-mismatch PartUsage upperBound             # MultiplicityRange_upperBound: the multiplicity is written on the usage instead of a MultiplicityRange
 domain-mismatch SubjectMembership upperBound     # MultiplicityRange_upperBound: same collapse on a subject membership
-domain-mismatch PartDefinition visibility        # Membership_visibility / Import_visibility: visibility is written on the element, not on its membership
 domain-mismatch ConstraintUsage isNegated        # Invariant_isNegated: a negated constraint is not materialized as an Invariant
 domain-mismatch TransitionUsage sourceFeature    # Connector_sourceFeature: a transition's ends are written on the transition, not on a Connector
 domain-mismatch TransitionUsage targetFeature    # Connector_targetFeature: a transition's ends are written on the transition, not on a Connector
@@ -30,7 +30,6 @@ domain-mismatch Import importedNamespace         # NamespaceImport_importedNames
 literal-for-object-property AttributeUsage type                                  # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property ReferenceUsage type                                  # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property PartUsage type                                       # Feature_type: the type is written as its name, not as an element IRI
-literal-for-object-property SuccessionAsUsage sourceFeature                      # Connector_sourceFeature: a succession end is written as a name (D2)
 literal-for-object-property urn:opensysml:sysml:InitialNode sourceFeature        # Connector_sourceFeature: a succession end is written as a name (D2)
 literal-for-object-property FeatureReferenceExpression referent                   # FeatureReferenceExpression_referent: a name resolving outside the graph is written as a name, as every reference this tool cannot link is (D7)
 literal-for-object-property FeatureChainExpression targetFeature                  # FeatureChainExpression_targetFeature: a chained feature is written as a name, since the member reached through the chain is not an element of this graph (D7)
@@ -55,7 +54,6 @@ unknown-class urn:opensysml:sysml:FinalNode -                # an action's final
 unknown-class urn:opensysml:sysml:IfBranch -                 # an if/else branch, standardly an IfActionUsage's then/else parameter
 unknown-class urn:opensysml:sysml:MultiplicityDeclaration -  # a named multiplicity, standardly a MultiplicityRange
 unknown-class urn:opensysml:sysml:Pseudostate -              # a state machine pseudostate, standardly a StateUsage or TransitionUsage shape
-unknown-class urn:opensysml:sysml:StateRegion -              # a state's region, standardly a nested StateUsage
 
 # 5. Properties written in the SysML namespace that no metaclass declares. Every
 # one of these is either a relationship the metamodel reifies as an element

@@ -12,12 +12,12 @@ func TestTriggerClassification_SignalTrigger(t *testing.T) {
 	src := `
 		package test {
 			state M {
-				initial start;
+				entry; then start;
+				state start;
 				state waiting;
-				final done;
 				
-				start then waiting;
-				transition waiting to done when powerOn;
+				succession first start then waiting;
+				transition first waiting when powerOn then done;
 			}
 		}
 	`
@@ -113,12 +113,12 @@ func TestTriggerClassification_ChangeEvent(t *testing.T) {
 	src := `
 		package test {
 			state M {
-				initial start;
+				entry; then start;
+				state start;
 				state waiting;
-				final done;
 				
-				start then waiting;
-				transition waiting to done when x > 5;
+				succession first start then waiting;
+				transition first waiting when x > 5 then done;
 			}
 		}
 	`
@@ -188,12 +188,12 @@ func TestTriggerClassification_NilCompletion(t *testing.T) {
 	src := `
 		package test {
 			state M {
-				initial start;
+				entry; then start;
+				state start;
 				state waiting;
-				final done;
 				
-				start then waiting;
-				transition waiting to done;
+				succession first start then waiting;
+				transition first waiting then done;
 			}
 		}
 	`
@@ -259,12 +259,12 @@ func TestTriggerClassification_CallTrigger(t *testing.T) {
 	src := `
 		package test {
 			state M {
-				initial start;
+				entry; then start;
+				state start;
 				state waiting;
-				final done;
 
-				start then waiting;
-				transition waiting to done accept setSpeed(value);
+				succession first start then waiting;
+				transition first waiting accept setSpeed(value) then done;
 			}
 		}
 	`

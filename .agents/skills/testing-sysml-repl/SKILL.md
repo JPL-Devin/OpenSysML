@@ -597,10 +597,10 @@ because the obvious ones cannot:
   completes happily with the package's number (e.g. `result = 100.00` instead of `4.00`), which no
   error-message check would ever catch. The three-layer action shape (package `h`, action `h`,
   block-local `h` → `seenAction = 2.00`, `seenBlock = 3.00`) is the equivalent for action bodies.
-- Substates are **not** entered by nesting `initial`/`then` inside a plain `state`; that shape runs
+- Substates are **not** entered by nesting a succession inside a plain `state`; that shape runs
   the outer entry and completes without ever entering the inner state (`innerRan = 0.00` on every
   revision, pre-existing). Use the `region` form from `state_fork_join_pseudostate.sysml`, with a
-  transition naming the substate (`transition init to inner;`), or the machine never descends.
+  transition naming the substate (`transition first init then inner;`), or the machine never descends.
 - Quantity values are the cheapest scope probe for imports, since a missing `SI::*` shows up as
   `not a quantity expression: not a measurement unit: unresolved unit s` rather than a wrong number.
   Pair each such model with a bare-`Real` rewrite and assert the same magnitudes, which catches a
@@ -1346,19 +1346,22 @@ mkdir -p ~/.opensysml/bin && cp bin/sysml-grpc ~/.opensysml/bin/   # where the c
 pip install -e python/
 ```
 
-Do **not** start the service by hand. `Connection._ensure_service`
-(`python/opensysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
-auto-start is both the realistic user path and the only way it writes its pidfile. Attaching to a
-service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
-fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bug.
+Do **not** start the service by hand for model-semantics work. `Connection._ensure_service`
+(`python/opensysml/connection.py`) spawns a **private child** of the interpreter on `-port 0` and
+learns the address from the child's stdout, which is the realistic user path. There is no pidfile,
+no lockfile and no adoption of a service the client did not start: a service you started yourself is
+reached only by naming it (`connect(host, port)`, `OPENSYSML_SERVICE=host:port`, or
+`auto_start=False`).
 
 ### Driving the service on an ephemeral port (process-lifecycle work, PR #249)
 
 When the thing under test is the **process** (flags, exit status, graceful shutdown, leaks) rather
 than the model semantics, a hand-started service on `-port 0` is the right harness and
-`opensysml.connect(host, port, auto_start=False)` attaches to it without touching the pidfile
-machinery. Pass `-health-port` too: it defaults to 8081 and collides with an already-running
-service. **Never pipe a command whose exit code you are asserting** — `… | tail` reports `tail`'s
+`opensysml.connect(host, port, auto_start=False)` attaches to it without the client taking any
+ownership of it. Pass `-health-port` too: it defaults to 8081 and collides with an already-running
+service. `-report-address` prints the dialable address as one line on stdout, which is easier to
+read than the log, and `-exit-with-parent` makes the service exit at end of file on its stdin.
+**Never pipe a command whose exit code you are asserting** — `… | tail` reports `tail`'s
 status, which has produced a false pass on this very exit-code matrix; run it bare and echo `$?`.
 And prove "never listened" with `ss -ltn`, since an exit code alone does not. Two more traps cost
 real time:
@@ -1396,7 +1399,7 @@ client. `$HOME/pv` is created by the blueprint, so prefer reusing it.
 Since PR #181 `Connection` interrogates whatever is *already* listening (`GetServerInfo`) and
 compares it against the release asked for (`connect(version=...)` or `$OPENSYSML_GRPC_VERSION`) plus
 `require_capabilities=[...]`; a mismatch raises `opensysml.StaleServiceError`. To test that surface
-you **do** need a hand-started service — that is precisely the "foreign process" case:
+you **do** need a hand-started service, named explicitly:
 
 ```bash
 ./bin/sysml-grpc -port 50099 &                   # a port other than 50051 keeps the auto-start
@@ -1404,10 +1407,9 @@ you **do** need a hand-started service — that is precisely the "foreign proces
 OPENSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleServiceError
 ```
 
-- Ownership is decided in `_started_by_this_client`: `~/.opensysml/sysml-grpc.pid` must name the
-  process **and** its cmdline must end `['-port', str(port)]`. A hand-started service has no
-  pidfile, so it must be reported and left running — assert `psutil.pid_exists(pid)` *and* that a
-  subsequent connect still serves (`model.instantiate(...)`), not just that an exception was raised.
+- Ownership needs no record: the client holds the `Popen` of the child it started and signals only
+  that. A named service is never stopped — assert `psutil.pid_exists(pid)` *and* that a subsequent
+  connect still serves (`model.instantiate(...)`), not just that an exception was raised.
 - A locally built binary reports the **commit** as its version (`version e695687`), not a `vX.Y.Z`
   tag, so any `OPENSYSML_GRPC_VERSION=v0.0.x` is a mismatch — handy, and it also means asking for a
   tag while a dev build runs will *always* raise.
@@ -1419,19 +1421,12 @@ OPENSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> Stale
   client was built is checked at the first call of *any* kind, so assert it through `conn.load(...)`
   and not only through `conn.server_info()`.
 - `opensysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
-- Lifecycle state is per-port: `~/.opensysml/sysml-grpc-<port>.pid` (a JSON ownership record whose
-  `refs` is the in-process holder count) and `~/.opensysml/sysml-grpc-<port>.lock`. There is no
-  `sysml-grpc.refcount` file. Reset a clean auto-start state with
-  `pkill -x sysml-grpc; rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock`
-  (`-x`, never `-f`, which matches your own shell — see the pkill trap below).
-  Refcount behaviour worth asserting both within one process (two `connect()`s) and across two
-  processes: 1 → 2 → 1, service still serving the remaining holder, and the pidfile removed
-  only when the last one closes.
-- The known-failing pair with a service on :50051
-  (`test_integration.py::…::test_load_nonexistent_file_real_server`,
-  `test_lifecycle.py::…::test_service_shuts_down_when_last_process_exits`) reproduces on `main`;
-  run `pytest tests/ -q` from `python/` both with and without a listener so you can tell a new
-  failure from those two.
+- Lifecycle state lives only in the process: `opensysml.connection._private_services` maps a
+  required release to the one child serving it. `~/.opensysml` holds the binary cache and nothing
+  else, so there is no file to reset — `pkill -x sysml-grpc` is enough (`-x`, never `-f`, which
+  matches your own shell — see the pkill trap below). Refcount behaviour worth asserting within one
+  process (two `connect()`s): 1 → 2 → 1, the service still serving the remaining holder and stopped
+  only when the last one closes. Across two processes there is nothing to share: each starts its own.
 
 Client API shapes that are easy to get wrong:
 
@@ -1497,16 +1492,13 @@ installed in `~/opensysml-venv` by default — `~/opensysml-venv/bin/pip install
 unrelated venv and cannot import `opensysml`).
 
 A test that skips with no service and fails with one is never actually green — treat it as a
-reportable defect, not a known gap. Two lifecycle traps caused exactly that: a
-`Connection(auto_start=False)` used to release a refcount it never took (fixed), and any test
-that shells out to a opensysml subprocess lets that subprocess's exit decrement the shared
-refcount, so such tests must isolate `HOME` for the child.
+reportable defect, not a known gap.
 
 Liveness check: after `test_lifecycle` runs, `pgrep -af sysml-grpc` still lists a `<defunct>`
-zombie, so it lies. Use `ss -ltn | grep 50051` to decide whether a service is really listening.
+zombie, so it lies. Use `ss -ltn` to decide whether a service is really listening.
 `pkill -9 -f sysml-grpc` matches your own shell's command line — use `pkill -9 -x sysml-grpc`.
-A full-suite run stops even a service another process owns, leaving a stale
-`~/.opensysml/sysml-grpc-<port>.pid`; clear it before the next liveness test.
+A full-suite run leaves an operator-started service alone; the private children it starts are gone
+with the interpreter that started them.
 To hold a service alive for a whole test run, keep a client process open, e.g.
 `(setsid python -c "import opensysml,time; opensysml.connect(); time.sleep(300)" &)` — a plain
 backgrounded `python -c` from a non-tty shell may exit before it prints, so verify the port.
@@ -2083,6 +2075,57 @@ Three cheap, high-signal sweeps:
 Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
 (`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
 
+### Calc-body member dispatch (trailing result expressions vs declarations)
+
+A calculation body's *last member* may be a bare expression that is the calc's result
+(`calc def Add { in x; in y; x + y }`). The parser decides per member whether it is looking at a
+declaration or at that result expression, and every change to that predicate has broken a
+neighbouring shape at least once. Test all four families on the same build, because they are
+independent code paths and passing one says nothing about the others:
+
+1. **Prefix operators** at the start of a trailing expression: `-x`, `+x`, `~x`, `not flag`.
+2. **Parenthesis-less arrow invocations followed by a binary operator**: `xs->size - 1`,
+   `xs->size + 1`, `-xs->size`, `xs->reduce '*'`, `xs->collect Twice`, `xs->includes(3)`. These
+   share the argument-start predicate with the prefix family, so broadening one has silently
+   broken the other (`expected an expression` on `xs->size - 1`).
+3. **Word (keyword) binary operators**, which lex as keywords and so can be mistaken for a
+   declaration head: `a and b`, `x or y`, `x xor y`, `x implies y`, `x as Real`,
+   `x istype Real`, `x hastype Real`, `x meta …`. The failure signature is
+   `error: expected a body member` with the caret on the keyword.
+4. **Genuine declarations that must still win**: `x : Real;` inside the same body, `return r;`,
+   `return r : Real = a;` — plus the quoted-keyword name form `in 'and'; 'and'`, which must stay
+   a valid declaration *and* reference.
+
+Adversarial cases that must diagnose and never panic: `a and;`, `a as;`, `a and b and`,
+`a implies`, an unquoted `in and;` (expect `"and" is a reserved keyword, not a name … write
+'and' to use it as a name`). Wrap each in `timeout 20` and assert on the *exit code plus the
+first diagnostic line*, not just "it printed something".
+
+Validation is not enough for these — evaluate them too, since only execution proves the trailing
+expression became the result: `./bin/sysml -calc 'p::andc(true,false)' -calc 'p::orc(true,false)'
+… file.sysml` accepts repeated `-calc` flags and prints one `= value` per invocation. Two
+operators parse and validate but are **not evaluable** on any revision (verify against a parent
+binary before reporting them as a regression): `~` → `unsupported operator: '~': bitwise
+complement is declared by no function library the runtime applies`, and `as` →
+`unsupported operator: 'as': a cast needs the runtime type of a value, which values do not carry
+yet`.
+
+Fixture hygiene for these files: use `public import ScalarValues::*;` (a bare
+`import ScalarValues::*;` is itself a diagnostic), and import `SequenceFunctions` /
+`ControlFunctions` / `NumericalFunctions` for arrow and operator-name shapes. Trailing
+expressions *are* name-resolved as of PR #581, so a body that validated clean on an older binary
+can now report `unresolved reference: <name>` — that is the intended tightening, not a bug. The
+committed conformance fixtures `internal/core/runtime/testdata/conformance/calc_simple_add.sysml`
+and `calc_unary_operators.sysml` lack the ScalarValues import and therefore exit 2 on
+`unresolved reference: Integer/Boolean` **on the parent binary too**; judge such a run by the
+absence of parse/`return`-related diagnostics, not by the exit code.
+
+REPL trap when testing refusals: after **any** submission fails to parse, the poisoned line
+stays in the session buffer, so a later `%eval <symbol>` reports `error: parse failed: <first
+error>` for the rest of the session (reproducible on old binaries — pre-existing). `%eval 1 + 1`
+and fresh `calc` declarations still work, so this is not a crash; restart `bin/sysml` between
+error cases instead of assuming the buffer recovers.
+
 ### Naming changes that reach lowering and the runtime
 
 When a parser change alters which declarations carry a name (e.g. `ast.EffectiveName` deriving the
@@ -2514,13 +2557,13 @@ actually descend into:
   pre-fix commit the entry form can already work while the **transition effect** fails with
   `error: event processing failed: transition effect: send reaches no receiving port: port "src" is
   joined to no port that can receive it` — so the transition-effect case is the discriminating one.
-- **Nesting: `initial`/`then` inside a composite state does not descend** in this build — a
-  `state outer { initial s0; state a { entry … } s0 then a; }` machine stays in `outer` and the inner
-  entry never runs (reproducible with no part/ports involved, so it is a pre-existing state-machine
-  limitation, not routing). Use the **entry-succession form instead**, which does descend and shows a
-  `State stack (active configuration): 0. outer / 1. a` in `%current`:
+- **Nesting: a succession between substates does not descend on its own** in this build — a
+  `state outer { state a { entry … } … }` machine whose inner state is only a succession target stays
+  in `outer` and the inner entry never runs (reproducible with no part/ports involved, so it is a
+  pre-existing state-machine limitation, not routing). Use the **entry-succession form instead**,
+  which does descend and shows a `State stack (active configuration): 0. outer / 1. a` in `%current`:
   `state machine { entry; then outer; state outer { entry; then a; state a { entry send … via src; } … } }`
-  A `region main { initial start; … }` wrapper also works with plain `initial`.
+  A `region main { entry; then start; … }` wrapper works the same way.
 - **Add a negative for over-reach:** a machine at package level with an unconnected port, and a
   second part with its own `connect ox to oy`. The send must still fail with the typed error — if the
   scope walk goes too far it could pick up the unrelated part's connectors.
@@ -2552,7 +2595,7 @@ actually descend into:
   executing `perform` effect use a fixture whose action has `first`/`then` nodes, e.g.
   `conformance/state_transition_effect_perform.sysml` (counter 1 → 11).
 - For transition-terminator/`;` work specifically, the discriminating inputs are:
-  `transition a to b do assign x := x + 1;` (compact), `transition first a do … then b;`,
+  `transition first a do assign x := x + 1 then b;`, `transition first a do … then b;`,
   `do { … ; };` (braced), `do perform A;`, plus the negatives `;;`
   (`error: expected a body member`), no `;` (both `expected ';' after assignment` *and*
   `expected ';' after transition`), braced with no trailing `;`
@@ -2574,7 +2617,7 @@ Discovered while testing inline `entry action { … }` bodies and calc `out` ass
 - **`transition first a accept when true then z;` never fires.** A `when` trigger is a change
   trigger evaluated on an event, and a machine with no events sits in `a` forever — so a fixture
   written that way silently tests *only* the entry behavior and never the exit behavior. To exercise
-  exit behaviors and ordering, use **completion transitions**: `initial start; … then start work;
+  exit behaviors and ordering, use **completion transitions**: `entry; then start; … then start work;
   then work done;` (the `state_anonymous_action_body.sysml` conformance fixture is the model to copy).
 - **An inline body is one action per do round.** After a do body has run to its end the state has
   no more pending work, so further `%advance` calls do not re-run it; a counter incremented by a
@@ -2588,7 +2631,7 @@ Discovered while testing inline `entry action { … }` bodies and calc `out` ass
   - an action a `perform` targets needs `first`/`then` nodes, else
     `initialize action: no initial node found`.
   - `then work done do assign x := 1;` does not parse (`expected ';' after succession edge`);
-    use the `transition work to done do assign x := 1;` form for an effect.
+    use the `transition first work do assign x := 1 then done;` form for an effect.
 - **`perform <Action>;` inside an inline body** works as of PR #135 (before it, it failed with
   `state behavior <anonymous>: action usage "Work" in a body is not executable` while the same
   `perform` in the statement-form body `entry { … perform Work; }` executed). It is a good
@@ -2682,7 +2725,7 @@ object whose type conforms to the type declaring the condition, else declared de
   `"status": "unresolved"`, `"exit": 2` and the same `?` line.
 - CLI checks refuse to run at all on a model that does not analyse cleanly
   (`… did not analyse cleanly; no check was made`, exit 2), so an unevaluable-verdict fixture must
-  itself be error-free — put the `assert nonexistent > 0` style constraint in a *separate* file
+  itself be error-free — put the `nonexistent > 0` style constraint in a *separate* file
   from the unbound-subject requirement, or the CLI never reaches the verdict.
 - PR #180 made `%eval` pick the same subject as the checks (`Session.subjectFor`): with `P::hot`
   instantiated, `%eval P::Sensor::reading` answers `= 140.00 (on P::hot ID: 1)`; with `P::hot` and
@@ -3160,28 +3203,23 @@ for all three, the contrast binary from the parent commit is what makes this evi
 ## opensysml service ownership and the require-service gate (PR #204)
 
 Ownership is the claim worth testing by hand, because pytest can pass while the invariant is
-broken. Three probes, each with a state dir of its own so nothing collides:
+broken. Three probes:
 
 ```bash
 PY=~/opensysml-venv/bin/python          # ls -d /home/ubuntu/*venv* if it is missing
 cp bin/sysml-grpc ~/.opensysml/bin/     # what CI does; otherwise ensure_binary downloads
-PORT=$($PY -c 'import socket;s=socket.socket();s.bind(("localhost",0));print(s.getsockname()[1])')
 ```
 
-- **Foreign service:** start `bin/sysml-grpc -port $PORT` from the shell, then in one
-  `OPENSYSML_STATE_DIR=/tmp/stateN` python process `Connection(port=P, auto_start=False)`,
-  `opensysml.connect(port=P)` (the adopt path) and a connection left open at exit. Expect the
-  shell's pid to still be alive and the state dir to hold **only** `sysml-grpc-<port>.lock` — a
-  `sysml-grpc-<port>.pid` for a service opensysml did not spawn is the bug.
-- **Own service:** `opensysml.connect(port=<free>)` writes
-  `{"pid","create_time","port","owner_pid","owner_create_time"}`; assert `create_time` equals
-  `psutil.Process(pid).create_time()` and `owner_pid == os.getpid()`. Two connections must keep it
-  alive when the first closes, and the last close (or plain interpreter exit, via `atexit`) must
-  stop it and delete the `.pid`.
-- **Pid spoof:** `bash -c 'exec -a "sysml-grpc -port P (decoy)" sleep 600'` plus a hand-written
-  pidfile naming that pid with a `create_time` off by a few hundred seconds. The decoy must survive
-  and the record must be replaced/removed. The old cmdline-substring scheme killed it, so this is
-  the one probe that distinguishes the schemes.
+- **A service you started:** run `bin/sysml-grpc -port 0 -report-address` from the shell and reach
+  it by name (`Connection(host, port)`, `OPENSYSML_SERVICE=host:port`, `auto_start=False`),
+  including a connection left open at exit. The shell's pid must still be alive afterwards, and
+  `~/.opensysml` must hold nothing but the binary cache.
+- **A private child:** `opensysml.connect()` starts one on a kernel-assigned port; assert the port
+  is neither 50051 nor 0 and that a second `connect()` reuses the same pid. Two connections must
+  keep it alive when the first closes, and the last close must stop it.
+- **No orphans:** `kill -9` the interpreter holding a private child and assert the child is gone
+  within a second or two, then repeat with `os._exit(1)` and with a `fork()`ed child exiting. The
+  mechanism is the pipe on the child's stdin, so `pgrep -x sysml-grpc` is the whole probe.
 - Use `conn.load(path)` (not `load_model`) for a real RPC that proves the connection talked to the
   service rather than failing early.
 
@@ -3191,7 +3229,7 @@ with no service; **423 passed / 3 skipped** with a service on 50051 and
 3 remaining skips being mypy-not-installed and a manual-binary-cache case, never a service skip.
 With `OPENSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit 2,
 "none answers on localhost:50051"), never skip. A whole run must leave an operator-started service
-on 50051 with the same pid.
+on 50051 with the same pid, and must leave no `sysml-grpc` of its own behind.
 
 ## Orthogonal regions and cross-region transitions (`internal/core/runtime/state_region_transition.go`)
 
@@ -3242,7 +3280,7 @@ Shapes worth covering, in increasing order of subtlety — each has broken indep
    LCA (regressions for the `leaveRegion` / `getLCA` paths);
 8. **a region whose owning state is a plain substate** — the single highest-value shape, because it
    broke the dispatch walk and the exit walk independently, in consecutive commits. Write it as
-   `region right { initial rs; state wrapper { state mid { region inner { … state ideep … } } }
+   `region right { entry; then rs; state rs; state wrapper { state mid { region inner { … state ideep … } } }
    then rs mid; }`: `mid` is declared directly in `wrapper`'s body, so it is **not** in
    `graph.RegionOf`, and `then rs mid;` is what makes the inner region active. Any outward walk
    written as `RegionOf[RegionOwner[…]]` returns nil here and silently takes a wrong branch, and any
@@ -3279,7 +3317,7 @@ visible (`lidle | wrapper | deepState`) as part of every such pass.
 directly in a state body (`state outer { state first; state second; }`) did not start in a history
 model — the machine stalled at `outer` and no transition fired — so a model written that way looks
 like a runtime failure when it is really an authoring shape the engine does not drive. Declare
-`state outer { region only { initial os; state first; … then os first; } }` instead. Note the
+`state outer { region only { entry; then os; state os; state first; … then os first; } }` instead. Note the
 exception exercised deliberately by shape 8 above: a substate *owning* a region
 (`state mid { region inner { … } }`) does run, provided the enclosing region's initial transition
 names it (`then rs mid;`).
@@ -3446,16 +3484,16 @@ new = error + `did not analyse cleanly` exit 2 on identical input.
 
 Fixture shapes that actually discriminate (all one-liners; `state def` and `state` usage both work):
 
-- Illegal, target of another machine: two `state def`s in one package, `transition busy to
+- Illegal, target of another machine: two `state def`s in one package, `transition first busy then
   Other::running;` → reported at the endpoint's column.
-- Illegal, marker as target: `first begin then off;` plus `transition on to begin;` → the message
-  says **"start marker"**, which is how you tell `VertexKind` is being consulted.
-- Illegal, dangling routing pseudostate: `junction route;` + `transition busy to route;` and no
+- Illegal, marker as target: `first begin then off;` plus `transition first on then begin;` → the
+  message says **"start marker"**, which is how you tell `VertexKind` is being consulted.
+- Illegal, dangling routing pseudostate: `junction route;` + `transition first busy then route;` and no
   transition out → reported at the `junction` declaration, not at the transition.
 
 False-positive traps to always include as *legal* rows, since each exercises a different branch:
 
-- A transition into a **sibling orthogonal region** (`transition lidle to rtarget;` across
+- A transition into a **sibling orthogonal region** (`transition first lidle then rtarget;` across
   `region left` / `region right`) — legal per UML §14.2.3.9.
   `internal/core/runtime/testdata/conformance/state_transition_sibling_region.sysml` is the shipped
   one; run it with `%state TransitionSiblingRegion` + `%advance 1` → `Current state: lidle | rtarget`
@@ -3524,7 +3562,7 @@ Two traps when writing these fixtures:
 - A succession carries **no guard**, so a cross-region succession re-enters the composite state, the
   source region restarts, and the edge re-fires forever: the run ends on `Stopped at the event budget
   (1000000 events; raise SYSML_MAX_EVENTS to allow more)`. That is a clean bounded stop, not a hang —
-  the state/attribute evidence is still valid. Use the guarded `transition a to b if flag == 0;` form
+  the state/attribute evidence is still valid. Use the guarded `transition first a if flag == 0 then b;` form
   when you want the run to settle instead.
 - Running a shipped conformance model straight from the CLI can report `unresolved reference: Integer`
   because the conformance harness supplies imports the file omits; add `import ScalarValues::*;` in
@@ -3554,8 +3592,9 @@ Driving and reading:
 - Put fixtures under `$HOME` (e.g. `~/fixtures/pr<N>/`), never `/tmp` — `/tmp` is wiped between
   sessions and you will lose an afternoon of fixtures. `%load` needs an **absolute** path.
 - A nested state reference must be **qualified**: `start then Working::Step1`, not `then Step1`.
-- A nested `initial` only takes effect inside an explicit `region { … }`. `state Outer { initial o;
-  state Mid { … } transition o to Mid; }` enters **Outer only** — `ActiveStates()`/`%current` show
+- A nested entry succession only takes effect inside an explicit `region { … }`. `state Outer {
+  entry; then o; state o; state Mid { … } transition first o then Mid; }` enters **Outer only** —
+  `ActiveStates()`/`%current` show
   no substate at all, and any test built on that shape silently probes the wrong thing. Wrap both
   levels in regions and assert the pre-condition configuration before the interesting step.
 - `ActiveStates()` for a region-wrapped chain lists the *innermost* composites and leaves
@@ -3584,7 +3623,7 @@ Timers (`accept after N` + `%advance`) are the cheapest scheduling probe:
   time-triggered transition ignores its own *signal* transitions, and signal transitions on leaves
   inside top-level regions never fire. So drive timer fixtures purely with `accept after`, and
   verify any such oddity against a contrast binary before reporting it.
-- `deep history resume;` works in REPL fixtures (`transition away to resume`) and doubles as an
+- `deep history resume;` works in REPL fixtures (`transition first away then resume`) and doubles as an
   exit-chain probe, since the return path re-runs the entry digits.
 - Once composite self-transitions re-enter their regions, a fixture whose signal poster sits
   *inside* the self-transitioning composite becomes an infinite event loop; post from a sibling
@@ -4897,3 +4936,240 @@ Measure with `python3 /home/ubuntu/perf/timeit.py <cmd>` (wall + peak RSS; GNU `
 Baseline observed for the line-index memoization: m4000 8.06s→0.55s, m8000 31.7s→1.07s,
 m16000 124.3s→2.18s, clean models unchanged (~0.43s / ~1.4s). Clean-model load being slower than
 some older baseline is a **separate known regression**, not a perf-PR failure.
+
+## Testing generated typed views (Tier 2) over a live service
+
+The typed helpers in `python/opensysml/typed.py` are only reachable through *generated* modules, so
+assert on generated code, never on hand-built protobuf messages:
+
+```bash
+/home/ubuntu/pv/bin/python -m opensysml.generate /abs/model.sysml -o /abs/out_types.py
+grep -nE "_t\.(optional_|list_)?feature_value" /abs/out_types.py
+```
+
+`_accessor()` in `generate.py` picks the helper purely from multiplicity: collection →
+`_t.list_feature_value`, `0..1` → `_t.optional_feature_value`, otherwise `_t.feature_value`. So the
+model's multiplicity is the only lever for which helper a property compiles to. Generation needs the
+service to report `type_facts`; check with
+`opensysml.connect(auto_start=False).server_info().capabilities`.
+
+**Tier 1 read shapes for valueless features** (observed via `instance[name]`, and matching the
+REPL's `%features`) — know these before designing a no-value test, or an assertion can be vacuous:
+
+| declaration | Tier 1 value |
+|---|---|
+| `attribute x : Real;` (required) | `UNSET` (`<unset>`) |
+| `attribute x : Real [0..1];` | `UNSET` |
+| `attribute x : Real [0..1] = null;` | `None` |
+| `attribute x : Real [0..*];` / `[0..3]` | `[]` (**never** bare `UNSET`) |
+| `attribute x : Real [1..*];` | `[<unset>]` — a list *containing* `UNSET` |
+| `attribute x : Real [2..5];` | `[<unset>, <unset>]` |
+| `part p : Def [0..*];` (valueless) | `[]` |
+
+Consequences worth writing into any report:
+
+- A `value is UNSET` guard inside `list_feature_value` is **unreachable from real models** — valueless
+  collections already arrive as `[]`. Test a collection change against the pre-fix code to check
+  whether the assertion actually discriminates.
+- Lower-bounded collections (`[1..*]`, `[2..5]`) still raise
+  `TypeMismatchError: expected float, got <unset>` because the `UNSET` sits in the list *elements*,
+  which the per-item decoder sees. If a change claims "collections holding no value read empty",
+  probe these two shapes explicitly.
+
+**Cheap non-vacuity control without touching the checkout** (no worktree, no reinstall): copy the
+package next to your scratch script, swap in the parent revision's file, and re-run the same script
+with `PYTHONPATH`:
+
+```bash
+cp -r python/opensysml /home/ubuntu/scratch/prefix/
+git show <fix-sha>^:python/opensysml/typed.py > /home/ubuntu/scratch/prefix/opensysml/typed.py
+PYTHONPATH=/home/ubuntu/scratch/prefix /home/ubuntu/pv/bin/python run.py   # must fail where the fix bites
+```
+
+Client API traps for these harnesses: `Connection` has **no** `evaluate()` — the expression escape
+hatch is `Model.eval("1 + 1")` (or `connection.eval`). And an `Instance` is not iterable over feature
+*names*: `{k: inst[k] for k in inst}` dies with `TypeError: bad argument type for built-in
+operation`; list the names yourself.
+
+A cyclic derived attribute is the negative control that a no-value change did not swallow real
+evaluation errors:
+
+```sysml
+part def Loop { attribute a : Real = b + 1.0; attribute b : Real = a + 1.0; }
+```
+
+reading `a` must still raise `FeatureValueError: … cyclic feature value dependency: Loop.a`, and the
+service must still answer `model.eval("1 + 1")` afterwards.
+
+## `sysml-grpc -transport {grpc|connect|stdio}` (transport prototypes, PR #563 class)
+
+`cmd/sysml-grpc` can serve three transports. Test each against the *same* build so a
+difference is the transport and not the service.
+
+```bash
+export PATH=/usr/local/go/bin:$HOME/go/bin:$PATH   # grpcurl lives in ~/go/bin
+make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/sysml-grpc   # never test a stale copy
+pkill -x sysml-grpc                                # -x, never -f
+```
+
+The Python client needs a protobuf the ambient interpreter does not have. The blueprint
+provisions `~/pv`, but it can be stale — check before trusting it, and reinstall if needed:
+
+```bash
+~/pv/bin/python -c "import opensysml, grpc, google.protobuf as p; print(p.__version__)" \
+  || ~/pv/bin/pip install -e python/
+```
+
+Client API names that are easy to guess wrong: `Connection(port=…, auto_start=False)`,
+then `server_info()`, `load_from_content(content)` → a `Model` whose hash is `m.hash`
+(not `model_hash`), `eval(expr, model_hash)`, `query(model_hash, …)`. There is no
+`get_server_info`/`parse_file`.
+
+### Connect transport
+
+`-transport connect -port P` puts gRPC, gRPC-Web, the Connect protocol, reflection and
+`/health` on port P. Note the separate `-health-port` server **still binds** in this mode, so
+`/health` answers on both ports; "the 8081 port stops being necessary" is a statement about
+future work, not something the flag already does.
+
+Probes worth running, in this order:
+
+```bash
+grpcurl -plaintext localhost:P list                       # reflection
+grpcurl -plaintext localhost:P list sysml.SysMLService | wc -l   # RPC count (15 today)
+curl -s --http1.1 -i -X POST http://localhost:P/sysml.SysMLService/ParseFile \
+  -H "Content-Type: application/json" -d '{"content":"package Demo { part def Rover { attribute mass = 12.5; } }"}'
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  http://localhost:P/sysml.SysMLService/GetServerInfo -H "Content-Type: application/grpc-web-text"
+```
+
+Expectations that are easy to misread as bugs:
+- An `int64` over Connect-**JSON** is a JSON **string** (`{"result":{"intValue":"7"}}`); over
+  Connect-**protobuf** it is a number. Both are correct.
+- A failed call over Connect-JSON is an HTTP status plus `{"code":"not_found","message":…}`,
+  not gRPC trailers.
+- `application/grpc-web-text` answers **415**: connect-go (checked at v1.20) ships
+  `application/grpc-web`, `+json` and `+proto` but no base64 text variant. Confirm with
+  `grep -rn "grpc-web-text" ~/go/pkg/mod/connectrpc.com/connect@vX.Y.Z/`.
+- gRPC-Web binary needs the 5-byte length prefix (`struct.pack(">BI", 0, len(msg)) + msg`) and
+  answers a message frame plus a trailer frame carrying `grpc-status: 0`.
+
+`ParseFile` of `package Demo { part def Rover { attribute mass = 12.5; } }` hashes to
+`6245ef4849a9019f3cbc64b03a54880f61d0fc3178f9be9d204d026f8007e78d` on every transport — a
+cheap cross-transport identity check.
+
+### stdio transport
+
+`-transport stdio` serves one client over pipes with LSP framing. Drive it from Python with
+three pipes and a stderr drainer (an undrained stderr can deadlock the child), and parse
+stdout **strictly** — read the headers, then exactly `Content-Length` bytes. That strictness is
+what proves the "stdout carries frames only" claim: run with `-log-level debug`, issue N calls,
+close stdin, and assert the remaining stdout is empty.
+
+Two encodings:
+- `Content-Type: application/json` with a JSON-RPC 2.0 envelope (`jsonrpc`/`id`/`method`/`params`).
+- `Content-Type: application/proto` plus `Sysml-Method` and `Sysml-Id`; the body is the bare
+  protobuf request. Replies carry `Sysml-Id`, `Sysml-Status-Code` and, on failure,
+  `Sysml-Status-Message` with an empty body.
+
+Status codes are the gRPC ones: unknown `modelHash` → 5 (`NotFound`), unknown method → 12,
+decode failures → 3. Compare any surprise against the same call over gRPC before calling it a
+bug — e.g. `Query` with no `query` field is `InvalidArgument "query is unset"` on *both*
+transports, and unknown JSON fields are silently discarded (`DiscardUnknown`), so
+`{"bogusField":1}` surfaces as the *next* validation error, not as an unknown-field error.
+
+Distinguish two classes of bad input, because they behave differently by design:
+- **Body-level** (non-JSON body, `jsonrpc:"1.0"`, unknown method, wrong-typed field) — answered
+  with an error frame; the session continues, and a following valid call must still succeed.
+- **Framing-level** (missing/unparseable/negative `Content-Length`, a header line with no
+  colon, a truncated body) — fatal: the process logs `stdio session ended in a protocol error`
+  to stderr and exits **1**. That is not a crash; check for `panic` in stderr to tell them apart.
+
+An oversized `Content-Length` is rejected before any allocation (`… exceeds the
+134217728-byte limit`), so watch for a *fast* exit rather than for RSS growth — the process is
+usually gone before `/proc/<pid>/status` can be read.
+
+Concurrency is the headline claim: pipeline a large `Query` (use the 73 KB
+`examples/pilot-corpora/sysml-examples/Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml`)
+followed by a cheap `Evaluate` and `GetServerInfo` **without reading in between**; the small
+answers arrive first, so ids are mandatory. Closing stdin ends a healthy session with exit 0.
+
+### The benchmark harness
+
+`~/pv/bin/python python/scripts/bench_transports.py --iterations 30 --spawns 3 --json out.json`
+runs in a couple of minutes and reproduces the published *shape*: large-model `Query` costs
+~6-7 ms in protobuf on all transports and ~40-47 ms in JSON (≈6-7×, serialization CPU, not
+bytes), cold start is ~4 ms for stdio vs ~6-8 ms over TCP, and every small-payload cell has an
+sd of the same order as its p50 — quote those as noise, never as a per-call transport win. The
+reported payload sizes (467,971 proto / 513,339 JSON for the large `Query`) are stable enough
+to diff against a document's table verbatim.
+
+## Driving state-machine completion (`then done;`) and its surfaces
+
+There is **no `%send`/signal-injection meta-command**. A machine whose transitions are triggered by
+`accept <SignalName>` will sit `quiesced` forever in the REPL — the signal lists in
+`internal/core/runtime/testdata/conformance/*.expected.json` are the *conformance harness*, not the
+REPL. To drive a machine interactively, write fixtures with **timed triggers**
+(`state a { accept after 5 then done; }`) and step them with `%advance <t>`; each region can be given
+a different delay so a partial configuration is observable. `sysml <model> -state <name>` only
+*starts* the executor and prints the initial configuration — it does not run to completion, so use
+the REPL for completion claims.
+
+Completion (a transition whose endpoint is the unqualified `done`) shows up as, in order,
+`Current state: done`, a blank line, and ``✓ State machine completed (a transition reached `done`)``;
+`%current` then reports `Execution state: Completed`. Useful shapes when testing it:
+
+- **Exit action of the completing state:** give the source state `exit assign log := "...";` and read
+  `State data:` in `%current` after completion — that proves entering `done` ran the exit behaviors.
+- **Orthogonal machines** must stay `Running` while the configuration is e.g. `done | rstart`, and
+  only report completion at `done | done`.
+- **A machine declaring its own `state done;`** resolves the endpoint to that state: it is entered as
+  an ordinary state (`Running`) and can transition onward. This is the key "not silently completed" case.
+- **A qualified endpoint (`Other::done`) or `done` as a transition *source*** is a typed error at
+  executor creation (`lower state machine: transition endpoint … names a state that is not a vertex of
+  this state machine`, or `no initial state found`) — never a panic and never a completion.
+- **Nested orthogonal regions are the discriminating shape.** A `done` reached inside a region owned by
+  a *composite* state (so `graph.TopRegions` does not describe it) must **not** complete the machine
+  while a sibling region is still active; `completeIfDone`/`machineComplete` walk outward through each
+  enclosing region set (`RegionOwner`/`CompositeStates`) and require every concurrent region to have
+  completed. An implementation that only checks `graph.TopRegions` completes early and still prints the
+  same completion line, so always drive the fixture with *staggered* `accept after N` delays and assert
+  `Execution state: Running` at the first completion:
+
+  ```sysml
+  state def M { entry; then outer;
+      state outer parallel {
+          state r1 { entry; then x; state x { accept after 5 then done; } }
+          state r2 { entry; then y; state y { accept after 7 then done; } } } }
+  ```
+  `%advance 5` → `done | y` + `Running`, no completion line; `%advance 2` → `done | done` + `Completed`.
+  Add a *two-level* variant (a `parallel` state inside a region of another `parallel` state) whose inner
+  region finishes **after** an outer sibling region, so the walk is exercised in both directions and
+  order-independently. Contrast against a binary from the commit before the fix — the buggy behaviour is
+  a completion line at the *first* region's timestamp with the sibling still in its own state.
+- `then done;` in an **action** body is unrelated: it is the action final node, checked with
+  `sysml <model> -action <name>` (expect `Action completed` and the result values).
+
+### Seeing a state view (`completes` detail)
+
+The `(initial)` / `(completes)` state details only appear in a **state rendering**. A view is only a
+state rendering if it specializes the standard view definition by its qualified name:
+
+```sysml
+view MView : StandardViewDefinitions::StateTransitionView { expose M; }
+```
+
+`view def StateTransitionView;` declared locally, or `render asTreeDiagram;`, both fall back to the
+tree rendering, which prints only `state a` and hides the detail. `render Views::asTreeDiagram;` is
+the correct spelling for a rendering reference (bare `asTreeDiagram` is unresolved).
+
+### Removed state-body notation
+
+`state def S { state s; final s; }` is a **parse** error, reported identically at every surface:
+CLI `-validate` → `4:9: error: expected a body member` with a caret under `final` and exit 2; the REPL
+prints the same located error for `%load` and for a typed-in declaration; `bin/sysml-lsp` publishes
+severity **1**, code `syntax`, on the `final` token's range. `final` itself is unreserved, so
+`attribute final : ScalarValues::Boolean;`, `state final;` and `transition first final … ` still parse
+(they only trigger the ordinary duplicate-name warning when both are declared). A cheap non-vacuity
+check for a removed diagnostic is `strings bin/sysml | grep -c '<removed message fragment>'` compared
+against the contrast binary.

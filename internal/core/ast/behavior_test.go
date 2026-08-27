@@ -11,7 +11,7 @@ func TestActionNodeConstruction(t *testing.T) {
 
 	nodes := []Node{
 		&InitialNode{NodeBase: NodeBase{NodeSpan: span}, Name: "start"},
-		&FinalNode{NodeBase: NodeBase{NodeSpan: span}, Name: "end"},
+		&FinalNode{NodeBase: NodeBase{NodeSpan: span}},
 		&ForkNode{NodeBase: NodeBase{NodeSpan: span}, Name: "split"},
 		&JoinNode{NodeBase: NodeBase{NodeSpan: span}, Name: "sync"},
 		&MergeNode{NodeBase: NodeBase{NodeSpan: span}, Name: "merge"},
@@ -30,19 +30,15 @@ func TestStateNodeConstruction(t *testing.T) {
 	span := source.Span{Offset: 0, Len: 20}
 
 	state := &StateNode{
-		NodeBase:  NodeBase{NodeSpan: span},
-		Name:      "Active",
-		IsInitial: true,
-		Entry:     []Node{},
-		Do:        []Node{},
-		Exit:      []Node{},
+		NodeBase: NodeBase{NodeSpan: span},
+		Name:     "Active",
+		Entry:    []Node{},
+		Do:       []Node{},
+		Exit:     []Node{},
 	}
 
 	if state.Name != "Active" {
 		t.Errorf("expected name 'Active', got %q", state.Name)
-	}
-	if !state.IsInitial {
-		t.Error("expected IsInitial=true")
 	}
 	if state.Span().Len != 20 {
 		t.Error("span mismatch")
@@ -99,8 +95,6 @@ func TestStateNode_AllFields(t *testing.T) {
 	state := &StateNode{
 		NodeBase:  NodeBase{NodeSpan: span},
 		Name:      "CompositeFinal",
-		IsInitial: false,
-		IsFinal:   true,
 		Entry:     []Node{},
 		Do:        []Node{},
 		Exit:      []Node{},
@@ -110,9 +104,6 @@ func TestStateNode_AllFields(t *testing.T) {
 
 	if state.Name != "CompositeFinal" {
 		t.Errorf("expected name 'CompositeFinal', got %q", state.Name)
-	}
-	if !state.IsFinal {
-		t.Error("expected IsFinal=true")
 	}
 	if len(state.Substates) != 1 {
 		t.Errorf("expected 1 substate, got %d", len(state.Substates))

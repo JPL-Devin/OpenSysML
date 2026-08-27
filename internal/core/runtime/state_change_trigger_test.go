@@ -13,12 +13,13 @@ func TestChangeTriggerRunsWithoutAnExternalPoll(t *testing.T) {
 		state Machine {
 			attribute ready : Boolean = true;
 			attribute log : Integer = 0;
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				accept when ready then done;
 			}
 			state done { entry { log = 1; } }
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err != nil {
@@ -39,7 +40,8 @@ func TestChangeTriggerFiresOnRiseFromDoBehavior(t *testing.T) {
 	_, visits, err := executeStateSource(t, "Machine", `package test {
 		state Machine {
 			attribute count : Integer = 0;
-			initial start;
+			entry; then start;
+			state start;
 			state counting {
 				do action tick {
 					assign count := count + 1;
@@ -48,7 +50,7 @@ func TestChangeTriggerFiresOnRiseFromDoBehavior(t *testing.T) {
 				accept when count >= 2 then done;
 			}
 			state done;
-			start then counting;
+			succession first start then counting;
 		}
 	}`)
 	if err != nil {
@@ -65,12 +67,13 @@ func TestChangeTriggerFalseConditionIsReported(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			attribute ready : Boolean = false;
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				accept when ready then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -103,12 +106,13 @@ func TestChangeTriggerFalseConditionIsReported(t *testing.T) {
 func TestQuiescedMachineReportsNoChangeCondition(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				accept sig then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 		attribute def sig;
 	}`)
@@ -128,10 +132,11 @@ func TestChangeTriggerDoesNotRefireUnchangedCondition(t *testing.T) {
 		state Machine {
 			attribute ready : Boolean = true;
 			attribute laps : Integer = 0;
-			initial start;
+			entry; then start;
+			state start;
 			state waiting;
-			start then waiting;
-			transition waiting to waiting accept when ready do assign laps := laps + 1;
+			succession first start then waiting;
+			transition first waiting accept when ready do assign laps := laps + 1 then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -168,11 +173,12 @@ func TestChangeTriggerGuardBlocks(t *testing.T) {
 		state Machine {
 			attribute ready : Boolean = true;
 			attribute allowed : Boolean = false;
-			initial start;
+			entry; then start;
+			state start;
 			state waiting;
 			state done;
-			start then waiting;
-			transition waiting to done accept when ready if allowed;
+			succession first start then waiting;
+			transition first waiting accept when ready if allowed then done;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -200,13 +206,14 @@ func TestChangeTriggerPollingKeepsEventBudget(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			attribute ready : Boolean = false;
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				do action tick { assign ready := ready; }
 				accept when ready then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	exec.ctx.maxStateEvents = 1
@@ -227,14 +234,16 @@ func TestChangeTriggerOnACompositeSelfTransitionFiresOnce(t *testing.T) {
 		state Machine {
 			attribute ready : Boolean = true;
 			attribute laps : Integer = 0;
-			initial start;
+			entry; then start;
+			state start;
 			state Working {
-				initial w0;
+				entry; then w0;
+				state w0;
 				state inner;
-				transition w0 to inner;
+				transition first w0 then inner;
 			}
-			start then Working;
-			transition Working to Working accept when ready do assign laps := laps + 1;
+			succession first start then Working;
+			transition first Working accept when ready do assign laps := laps + 1 then Working;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -265,14 +274,15 @@ func TestChangeTriggerRearmsOnStateExit(t *testing.T) {
 		attribute def Back;
 		state Machine {
 			attribute ready : Boolean = true;
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				accept when ready then working;
 			}
 			state working {
 				accept Back then waiting;
 			}
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -297,24 +307,27 @@ func TestChangeTriggerConsumesTheRiseForALosingTransition(t *testing.T) {
 	source := `package test {
 		state sm {
 			attribute ready : Boolean = false;
-			initial start;
-			state Working {
-				region left {
-					initial lstart;
+			entry; then start;
+			state start;
+			state Working parallel {
+				state left {
+					entry; then lstart;
+					state lstart;
 					state l1;
 					state l2;
-					transition lstart to l1;
-					transition l1 to l2 accept when ready;
+					transition first lstart then l1;
+					transition first l1 accept when ready then l2;
 				}
-				region right {
-					initial rstart;
+				state right {
+					entry; then rstart;
+					state rstart;
 					state r1;
-					transition rstart to r1;
+					transition first rstart then r1;
 				}
 				accept when ready then Done;
 			}
 			state Done;
-			start then Working;
+			succession first start then Working;
 		}
 	}`
 	exec := stateExecutorForSource(t, "sm", source)
@@ -351,33 +364,37 @@ func TestChangeTriggerArmsAWatchReenteredDuringThePoll(t *testing.T) {
 	exec := stateExecutorForSource(t, "sm", `package test {
 		state sm {
 			attribute ready : Boolean = false;
-			initial start;
-			state Working {
-				region left {
-					initial lstart;
+			entry; then start;
+			state start;
+			state Working parallel {
+				state left {
+					entry; then lstart;
+					state lstart;
 					state l1;
 					state l2;
-					transition lstart to l1;
+					transition first lstart then l1;
 				}
-				region right {
-					initial rstart;
-					state C {
-						region inner {
-							initial cstart;
+				state right {
+					entry; then rstart;
+					state rstart;
+					state C parallel {
+						state inner {
+							entry; then cstart;
+							state cstart;
 							state c2;
-							transition cstart to c2;
+							transition first cstart then c2;
 						}
 					}
 					state r2;
-					transition rstart to C;
-					transition C to r2 accept when ready;
+					transition first rstart then C;
+					transition first C accept when ready then r2;
 				}
 			}
 			fork split;
-			transition l1 to split accept when ready;
-			transition split to l2;
-			transition split to C;
-			start then Working;
+			transition first l1 accept when ready then split;
+			transition first split then l2;
+			transition first split then C;
+			succession first start then Working;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -411,12 +428,13 @@ func TestSuspendReasonMakesNoClaimBeforeTheMachineIsStepped(t *testing.T) {
 	exec := stateExecutorForSource(t, "Machine", `package test {
 		state Machine {
 			attribute ready : Boolean = true;
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				accept when ready then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if reason := exec.SuspendReason(); reason != "" {
@@ -435,13 +453,14 @@ func TestSuspendReasonMakesNoClaimOnceASignalIsQueued(t *testing.T) {
 		attribute def Go;
 		state Machine {
 			attribute ready : Boolean = false;
-			initial start;
+			entry; then start;
+			state start;
 			state waiting {
 				accept when ready then done;
 				accept Go then done;
 			}
 			state done;
-			start then waiting;
+			succession first start then waiting;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -470,24 +489,27 @@ func TestChangeTriggerKeepsAnEdgeBlockedDuringThePoll(t *testing.T) {
 			attribute ready : Boolean = false;
 			attribute allowed : Boolean = true;
 			attribute laps : Integer = 0;
-			initial start;
-			state Working {
-				region first {
-					initial f0;
+			entry; then start;
+			state start;
+			state Working parallel {
+				state alpha {
+					entry; then f0;
+					state f0;
 					state fWait;
 					state fDone;
-					transition f0 to fWait;
-					transition fWait to fDone accept when ready do assign allowed := false;
+					transition first f0 then fWait;
+					transition first fWait accept when ready do assign allowed := false then fDone;
 				}
-				region second {
-					initial s0;
+				state beta {
+					entry; then s0;
+					state s0;
 					state sWait;
 					state sDone { entry { laps = 1; } }
-					transition s0 to sWait;
-					transition sWait to sDone accept when ready if allowed;
+					transition first s0 then sWait;
+					transition first sWait accept when ready if allowed then sDone;
 				}
 			}
-			start then Working;
+			succession first start then Working;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {
@@ -529,7 +551,8 @@ func TestChangeTriggerRecallsDeferredEvents(t *testing.T) {
 		attribute def Ping;
 		state Machine {
 			attribute ready : Boolean = false;
-			initial start;
+			entry; then start;
+			state start;
 			state busy {
 				defer Ping;
 				accept when ready then waiting;
@@ -538,7 +561,7 @@ func TestChangeTriggerRecallsDeferredEvents(t *testing.T) {
 				accept Ping then done;
 			}
 			state done;
-			start then busy;
+			succession first start then busy;
 		}
 	}`)
 	if err := exec.RunToCompletion(); err != nil {

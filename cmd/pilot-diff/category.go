@@ -86,9 +86,9 @@ func categorizePilot(message string) Category {
 	case strings.Contains(lower, "multiplicity"), strings.Contains(lower, "at most"),
 		strings.Contains(lower, "at least"), strings.Contains(lower, "cardinality"):
 		return CategoryMultiplicity
-	// `must invoke` constrains the metaclass of the instantiated type; the other
-	// three P6 messages stay unmapped (docs/project/pilot-differential.md).
-	case strings.Contains(lower, "must be typed by"),
+	// `must be` mirrors the clause categorizeOpenSysML applies to our own text:
+	// a message both implementations word alike must not land in two categories.
+	case strings.Contains(lower, "must be"),
 		strings.Contains(lower, "must invoke"),
 		strings.Contains(lower, "must reference"),
 		strings.Contains(lower, "must subset"),

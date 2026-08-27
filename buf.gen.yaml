@@ -1,0 +1,13 @@
+version: v2
+# Go server/client stubs. Plugin versions match the committed stub headers and are
+# fetched by `go run`, so no protoc or PATH plugins are needed. Run via `make proto`.
+plugins:
+  - local: ["go", "run", "google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11"]
+    out: api/proto
+    opt: paths=source_relative
+  - local: ["go", "run", "google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0"]
+    out: api/proto
+    opt: paths=source_relative
+  - local: ["go", "run", "connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0"]
+    out: api/proto
+    opt: paths=source_relative

@@ -45,10 +45,10 @@ func TestActionExecutor_GraphExtraction(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 
 	initial := &ast.InitialNode{Name: "start"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 	edge := &ast.SuccessionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "start"}}},
-		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 	}
 
 	action := &symbols.Symbol{
@@ -71,7 +71,7 @@ func TestActionExecutor_GraphExtraction(t *testing.T) {
 	}
 
 	successors, ok := exec.graph.Edges[initial]
-	if !ok || len(successors) != 1 || successors[0] != final {
+	if !ok || len(successors) != 1 || successors[0].Target != final {
 		t.Error("expected edge from initial to final")
 	}
 }
@@ -81,7 +81,7 @@ func TestActionExecutor_InitialNode(t *testing.T) {
 
 	// Create action: initial → final
 	initial := &ast.InitialNode{Name: "start"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	action := &symbols.Symbol{
 		Name: "SimpleAction",
@@ -94,7 +94,7 @@ func TestActionExecutor_InitialNode(t *testing.T) {
 				final,
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "start"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -129,7 +129,7 @@ func TestActionExecutor_FinalNode(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(nil), nil, 1000)
 
 	initial := &ast.InitialNode{Name: "start"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	action := &symbols.Symbol{
 		Name: "SimpleAction",
@@ -142,7 +142,7 @@ func TestActionExecutor_FinalNode(t *testing.T) {
 				final,
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "start"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -193,7 +193,7 @@ func TestActionExecutor_ActionExecutionNode(t *testing.T) {
 		Name:       "compute",
 		Expression: &ast.LiteralInteger{Value: "42"},
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	// Build action: initial → compute → final
 	actionSym := &symbols.Symbol{
@@ -212,7 +212,7 @@ func TestActionExecutor_ActionExecutionNode(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -487,7 +487,7 @@ func TestActionExecutor_JoinNode(t *testing.T) {
 		Expression: &ast.LiteralInteger{Value: "3"},
 	}
 	join := &ast.JoinNode{Name: "merge"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	// Build graph: initial → fork → [task1, task2, task3] → join → final
 	actionSym := &symbols.Symbol{
@@ -509,7 +509,7 @@ func TestActionExecutor_JoinNode(t *testing.T) {
 				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "task2"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "merge"}}}},
 				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "task3"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "merge"}}}},
 				// join → final
-				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "merge"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}}},
+				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "merge"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}}},
 			},
 		},
 	}
@@ -590,7 +590,7 @@ func TestActionExecutor_JoinNode_PartialArrival(t *testing.T) {
 		Expression: &ast.LiteralInteger{Value: "3"},
 	}
 	join := &ast.JoinNode{Name: "merge"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	// Build: fork → [task1, task2, task3] → join → final
 	actionSym := &symbols.Symbol{
@@ -608,7 +608,7 @@ func TestActionExecutor_JoinNode_PartialArrival(t *testing.T) {
 				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "task1"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "merge"}}}},
 				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "task2"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "merge"}}}},
 				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "task3"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "merge"}}}},
-				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "merge"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}}},
+				&ast.SuccessionEdge{Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "merge"}}}, Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}}},
 			},
 		},
 	}
@@ -687,7 +687,7 @@ func TestActionExecutor_MergeNode(t *testing.T) {
 	initial := &ast.InitialNode{Name: "start"}
 	fork := &ast.ForkNode{Name: "split"}
 	merge := &ast.MergeNode{Name: "join"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	action := &symbols.Symbol{
 		Name: "MergeAction",
@@ -712,7 +712,7 @@ func TestActionExecutor_MergeNode(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "join"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -795,7 +795,7 @@ func TestActionExecutor_MergeNode_ControlOnly(t *testing.T) {
 		Expression: &ast.LiteralInteger{Value: "2"},
 	}
 	merge := &ast.MergeNode{Name: "join"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	action := &symbols.Symbol{
 		Name: "DataDiscardAction",
@@ -827,7 +827,7 @@ func TestActionExecutor_MergeNode_ControlOnly(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "join"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -909,7 +909,7 @@ func TestActionExecutor_MergeNode_SingleParent(t *testing.T) {
 	// initial → merge → final (degenerate case, merge pass-through)
 	initial := &ast.InitialNode{Name: "start"}
 	merge := &ast.MergeNode{Name: "join"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	action := &symbols.Symbol{
 		Name: "SingleParentMerge",
@@ -925,7 +925,7 @@ func TestActionExecutor_MergeNode_SingleParent(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "join"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -963,7 +963,7 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 		Name:       "pathB",
 		Expression: &ast.LiteralString{Value: "B"},
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	// Guards: x > 10 and x <= 10
 	guardA := &ast.OperatorExpr{
@@ -1009,11 +1009,11 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 				// paths → final
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "pathA"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "pathB"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -1167,7 +1167,7 @@ func TestActionExecutor_DecisionNode_ElseBranch(t *testing.T) {
 		Name:       "pathElse",
 		Expression: &ast.LiteralString{Value: "Else"},
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	// Guard: x > 10
 	guardA := &ast.OperatorExpr{
@@ -1204,11 +1204,11 @@ func TestActionExecutor_DecisionNode_ElseBranch(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "pathA"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "pathElse"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -1353,7 +1353,7 @@ func TestActionExecutor_ObjectFlow(t *testing.T) {
 		Name:       "action2",
 		Expression: &ast.LiteralString{Value: "received"}, // Placeholder expression
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	action := &symbols.Symbol{
 		Name: "ObjectFlowAction",
@@ -1377,7 +1377,7 @@ func TestActionExecutor_ObjectFlow(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "action2"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -1445,7 +1445,7 @@ func TestActionExecutor_Step(t *testing.T) {
 		Name:       "compute",
 		Expression: &ast.LiteralInteger{Value: "100"},
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	actionSym := &symbols.Symbol{
 		Name: "StepTestAction",
@@ -1461,7 +1461,7 @@ func TestActionExecutor_Step(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "compute"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -1520,7 +1520,7 @@ func TestActionExecutor_RunToCompletion(t *testing.T) {
 		Expression: &ast.LiteralInteger{Value: "20"},
 	}
 	join := &ast.JoinNode{Name: "sync"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	actionSym := &symbols.Symbol{
 		Name: "RunToCompletionAction",
@@ -1552,7 +1552,7 @@ func TestActionExecutor_RunToCompletion(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "sync"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -1598,7 +1598,7 @@ func TestActionExecutor_Deadlock_JoinStarvation(t *testing.T) {
 		Expression: &ast.LiteralInteger{Value: "2"},
 	}
 	join := &ast.JoinNode{Name: "sync"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	actionSym := &symbols.Symbol{
 		Name: "DeadlockAction",
@@ -1633,7 +1633,7 @@ func TestActionExecutor_Deadlock_JoinStarvation(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "sync"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -1702,7 +1702,7 @@ func TestActionExecutor_Integration_Sequential(t *testing.T) {
 		Name:       "step3",
 		Expression: &ast.LiteralInteger{Value: "30"},
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	action := &symbols.Symbol{
 		Name: "SequentialAction",
@@ -1726,7 +1726,7 @@ func TestActionExecutor_Integration_Sequential(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "step3"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -1775,7 +1775,7 @@ func TestActionExecutor_Integration_ForkJoin(t *testing.T) {
 		Expression: &ast.LiteralInteger{Value: "3"},
 	}
 	join := &ast.JoinNode{Name: "sync"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	action := &symbols.Symbol{
 		Name: "ForkJoinAction",
@@ -1815,7 +1815,7 @@ func TestActionExecutor_Integration_ForkJoin(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "sync"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -1856,7 +1856,7 @@ func TestActionExecutor_Integration_DecisionMerge(t *testing.T) {
 		Expression: &ast.LiteralString{Value: "false_path"},
 	}
 	merge := &ast.MergeNode{Name: "converge"}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	// Guard: x > 5
 	guardExpr := &ast.OperatorExpr{
@@ -1899,7 +1899,7 @@ func TestActionExecutor_Integration_DecisionMerge(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "converge"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -1966,7 +1966,7 @@ func TestActionExecutor_Integration_ObjectFlow(t *testing.T) {
 		Name:       "consumer",
 		Expression: &ast.LiteralString{Value: "processed"}, // Could read input in real scenario
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	action := &symbols.Symbol{
 		Name: "ObjectFlowAction",
@@ -1990,7 +1990,7 @@ func TestActionExecutor_Integration_ObjectFlow(t *testing.T) {
 				},
 				&ast.SuccessionEdge{
 					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "consumer"}}},
-					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 				},
 			},
 		},
@@ -2024,7 +2024,7 @@ func TestActionExecutor_Integration_ErrorCases(t *testing.T) {
 				Kind:  ast.UsageAction,
 				Ident: ast.Identification{Name: "NoInitialAction"},
 				Members: []ast.Node{
-					&ast.FinalNode{Name: "end"},
+					&ast.FinalNode{},
 				},
 			},
 		}
@@ -2166,7 +2166,7 @@ func TestActionExecutor_Integration_ParallelProcessing(t *testing.T) {
 			},
 		},
 	}
-	final := &ast.FinalNode{Name: "end"}
+	final := &ast.FinalNode{}
 
 	// Control flow edges
 	edge1 := &ast.SuccessionEdge{
@@ -2203,7 +2203,7 @@ func TestActionExecutor_Integration_ParallelProcessing(t *testing.T) {
 	}
 	edge5 := &ast.SuccessionEdge{
 		Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "aggregate"}}},
-		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "end"}}},
+		Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "done"}}},
 	}
 
 	// Object flows - each processor writes to named output

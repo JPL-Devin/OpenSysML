@@ -72,19 +72,6 @@ func QueryPropertyNames() []string {
 	return corequery.PropertyNames()
 }
 
-// MetamodelTypeNameOf returns the metamodel type name an element reports as
-// `@type`, refining the kinds one symbol kind spans several metaclasses for.
-func MetamodelTypeNameOf(sym *symbols.Symbol) string {
-	return corequery.MetamodelTypeNameOf(sym)
-}
-
-// MetamodelTypeName returns the metamodel type name a symbol kind reports as
-// `@type`, or "" for a kind that has none, which is only an unclassified
-// declaration. An element with no type name never matches a `@type` comparison.
-func MetamodelTypeName(kind symbols.SymbolKind) string {
-	return corequery.MetamodelTypeName(kind)
-}
-
 // Query evaluates a SysML v2 API & Services Query against a parsed model.
 func (s *Service) Query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error) {
 	cached, ok := s.cache.Get(req.ModelHash)

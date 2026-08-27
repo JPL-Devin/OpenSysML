@@ -9,15 +9,15 @@ package 'My Pkg' {
 	calc 'add up' {
 		in x;
 		in y;
-		return x + y;
+		x + y
 	}
 
 	constraint 'light enough' {
-		assert 5.0 < 10.0;
+		5.0 < 10.0
 	}
 
 	requirement 'Safe Mass' {
-		require 1200.0 < 2000.0;
+		require constraint { 1200.0 < 2000.0 }
 	}
 
 	action 'run it' {
@@ -29,20 +29,20 @@ package 'My Pkg' {
 			assign total := total + 5;
 		}
 
-		done end;
+		done;
 
-		then start accumulate;
-		then accumulate end;
+		succession first start then accumulate;
+		succession first accumulate then done;
 	}
 
 	state 'spin up' {
-		initial init;
+		entry; then init;
+		state init;
 		state waiting {
 			accept after 10 then done;
 		}
-		final done;
 
-		init then waiting;
+		succession first init then waiting;
 	}
 }
 

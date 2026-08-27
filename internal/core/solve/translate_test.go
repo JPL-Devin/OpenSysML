@@ -293,7 +293,7 @@ func TestNegatedElementWithOnlyAssumptions(t *testing.T) {
 			private import ScalarValues::Integer;
 			part def Rig {
 				attribute level : Integer;
-				assert not constraint cn { assume level > 1 }
+				assert not constraint cn { assume constraint { level > 1 } }
 			}
 		}
 	`)

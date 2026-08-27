@@ -7,24 +7,27 @@ package Test {
 	state def TransitionSiblingRegion {
 		attribute crossed : Integer = 0;
 
-		initial start;
-		state running {
-			region left {
-				initial lstart;
+		entry; then start;
+		state start;
+		state running parallel {
+			state left {
+				entry; then lstart;
+				state lstart;
 				state lidle;
 
-				then lstart lidle;
-				transition lidle to rtarget if crossed == 0;
+				succession first lstart then lidle;
+				transition first lidle if crossed == 0 then rtarget;
 			}
-			region right {
-				initial rstart;
+			state right {
+				entry; then rstart;
+				state rstart;
 				state ridle;
 				state rtarget { entry { crossed = 1; } }
 
-				then rstart ridle;
+				succession first rstart then ridle;
 			}
 		}
 
-		start then running;
+		succession first start then running;
 	}
 }

@@ -2,6 +2,7 @@
 
 import pytest
 
+import opensysml
 from opensysml import typed as _t
 from opensysml.errors import InstanceTypeError, FeatureValueError, TypeMismatchError
 from opensysml.instance import Instance
@@ -120,10 +121,22 @@ def test_optional_feature_value_returns_none_when_absent():
     assert isinstance(with_spare.spare, Engine)
 
 
+def test_optional_feature_value_returns_none_when_unset():
+    """An unset 0..1 slot reads as None."""
+    v = Vehicle.from_instance(vehicle_instance(spare=scalar_feature("spare", unset=True)))
+    assert v.spare is None
+
+
 def test_list_feature_value_decodes_every_element():
     """A multi-valued slot decodes each element."""
     v = Vehicle.from_instance(vehicle_instance())
     assert v.ratios == [1.5, 2.0]
+
+
+def test_list_feature_value_is_empty_when_unset():
+    """An unset collection slot reads as an empty list."""
+    v = Vehicle.from_instance(vehicle_instance(ratios=scalar_feature("ratios", unset=True)))
+    assert v.ratios == []
 
 
 def test_list_feature_value_is_empty_when_absent_or_null():
@@ -133,6 +146,19 @@ def test_list_feature_value_is_empty_when_absent_or_null():
 
     null = vehicle_instance(ratios=scalar_feature("ratios", null=""))
     assert Vehicle.from_instance(null).ratios == []
+
+
+def test_tier_one_preserves_unset_feature_value():
+    """Tier 1 still exposes an unset feature as UNSET."""
+    instance = vehicle_instance(spare=scalar_feature("spare", unset=True))
+    assert instance["spare"] is opensysml.values.UNSET
+
+
+def test_required_feature_value_still_rejects_unset():
+    """An unset required slot still raises TypeMismatchError."""
+    v = Vehicle.from_instance(vehicle_instance(mass=scalar_feature("mass", unset=True)))
+    with pytest.raises(TypeMismatchError):
+        v.mass
 
 
 def test_typed_objects_compare_by_instance_identity():

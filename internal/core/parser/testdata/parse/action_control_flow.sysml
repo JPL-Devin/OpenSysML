@@ -4,8 +4,8 @@ action def WorkflowAction {
 	
 	// Control flow nodes
 	first start;
-	done end;
-	then start end;
+	done;
+	succession first start then done;
 	
 	// General member (tests Phase B2 fallback)
 	attribute counter : Integer;

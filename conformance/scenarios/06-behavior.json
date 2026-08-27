@@ -1,0 +1,111 @@
+{
+  "scenarios": [
+    {
+      "id": "execute_action/an_action_runs_and_reports_its_attributes",
+      "description": "The action seeds result at 0 and adds five, so an unbound run answers five.",
+      "rpc": "ExecuteAction",
+      "model": {
+        "fixture": "behavior.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "action_symbol_id": "Test::addFive"
+      },
+      "expect": {
+        "response": {
+          "outputs": {
+            "result": {
+              "int_value": 5
+            }
+          }
+        },
+        "absent": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "execute_action/supplied_inputs_reach_the_action",
+      "description": "Binding result to ten answers fifteen: inputs are not discarded server-side.",
+      "rpc": "ExecuteAction",
+      "model": {
+        "fixture": "behavior.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "action_symbol_id": "Test::addFive",
+        "inputs": {
+          "result": {
+            "int_value": 10
+          }
+        }
+      },
+      "expect": {
+        "response": {
+          "outputs": {
+            "result": {
+              "int_value": 15
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "execute_action/an_action_with_no_initial_node_is_reported",
+      "description": "The failure surfaces when the action is initialized, as an error on the response.",
+      "rpc": "ExecuteAction",
+      "model": {
+        "fixture": "behavior.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "action_symbol_id": "Test::noStart"
+      },
+      "expect": {
+        "non_empty": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "execute_state/a_machine_reports_the_states_it_visited",
+      "description": "The trace is the states really visited, in order, not a placeholder.",
+      "rpc": "ExecuteState",
+      "model": {
+        "fixture": "behavior.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "state_machine_symbol_id": "Test::Machine"
+      },
+      "expect": {
+        "response": {
+          "states_visited": [
+            "init",
+            "Running",
+            "done"
+          ]
+        },
+        "absent": [
+          "error"
+        ]
+      }
+    },
+    {
+      "id": "execute_state/an_unknown_symbol_is_reported_in_band",
+      "rpc": "ExecuteState",
+      "model": {
+        "fixture": "behavior.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "state_machine_symbol_id": "Test::NoMachine"
+      },
+      "expect": {
+        "non_empty": [
+          "error"
+        ]
+      }
+    }
+  ]
+}

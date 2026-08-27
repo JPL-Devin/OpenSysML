@@ -1,0 +1,119 @@
+{
+  "scenarios": [
+    {
+      "id": "parse/inline_content_is_parsed_and_cached_under_a_hash",
+      "description": "Inline notation parses, names its root and comes back with the hash every later call uses.",
+      "rpc": "ParseFile",
+      "request": {
+        "content": "${fixture:vehicle.sysml}"
+      },
+      "expect": {
+        "non_empty": [
+          "model_hash"
+        ],
+        "counts": {
+          "diagnostics": 0
+        },
+        "response": {
+          "root": {
+            "kind": "RootNamespace"
+          }
+        }
+      }
+    },
+    {
+      "id": "parse/a_syntax_error_is_a_diagnostic_not_a_status",
+      "description": "Malformed notation answers OK with diagnostics: the parser never fails the call.",
+      "rpc": "ParseFile",
+      "request": {
+        "content": "${fixture:syntax_error.sysml}"
+      },
+      "expect": {
+        "min_counts": {
+          "diagnostics": 1
+        },
+        "non_empty": [
+          "model_hash"
+        ],
+        "response": {
+          "diagnostics": [
+            {
+              "severity": "error"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parse/an_absent_file_is_not_found",
+      "description": "A path the service cannot read is a NOT_FOUND status, which is how a client tells it from a parse failure.",
+      "rpc": "ParseFile",
+      "request": {
+        "file_path": "/nonexistent/path/to/file.sysml"
+      },
+      "expect": {
+        "status": "NOT_FOUND"
+      }
+    },
+    {
+      "id": "parse/naming_no_source_is_invalid",
+      "description": "Neither file_path nor content set is a request the service refuses.",
+      "rpc": "ParseFile",
+      "request": {},
+      "expect": {
+        "status": "INVALID_ARGUMENT"
+      }
+    },
+    {
+      "id": "parse/strict_conformance_is_asked_for_by_field",
+      "description": "The strict question is answerable, and a conforming model answers it clean. A service that does not report the capability must refuse the field rather than ignore it.",
+      "rpc": "ParseFile",
+      "requires_capabilities": [
+        "strict_conformance"
+      ],
+      "request": {
+        "content": "${fixture:vehicle.sysml}",
+        "strict_conformance": true
+      },
+      "expect": {
+        "non_empty": [
+          "model_hash"
+        ],
+        "counts": {
+          "diagnostics": 0
+        }
+      },
+      "expect_without_capability": {
+        "status": "UNIMPLEMENTED",
+        "status_message_contains": "strict_conformance"
+      }
+    },
+    {
+      "id": "diagnostics/a_parsed_model_answers_for_its_diagnostics",
+      "description": "The diagnostics of a cached model are readable without reparsing it.",
+      "rpc": "GetDiagnostics",
+      "model": {
+        "fixture": "vehicle.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}"
+      },
+      "expect": {
+        "counts": {
+          "diagnostics": 0
+        }
+      }
+    },
+    {
+      "id": "diagnostics/an_unknown_model_is_not_found",
+      "description": "A hash the service never issued, or has evicted, is NOT_FOUND rather than an empty answer.",
+      "rpc": "GetDiagnostics",
+      "request": {
+        "model_hash": "no-such-model"
+      },
+      "expect": {
+        "status": "NOT_FOUND"
+      }
+    }
+  ]
+}

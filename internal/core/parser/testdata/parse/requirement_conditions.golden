@@ -10,13 +10,15 @@
             (Relationship kind="typing" target=Real
               (*ast.QualifiedName)))
           (AssumeMember
-            (OperatorExpr operator=">"
-              (FeatureReference name="mass")
-              (LiteralReal value="0.0")))
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator=">"
+                (FeatureReference name="mass")
+                (LiteralReal value="0.0"))))
           (RequireMember
-            (OperatorExpr operator="<="
-              (FeatureReference name="mass")
-              (FeatureReference name="limit")))
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator="<="
+                (FeatureReference name="mass")
+                (FeatureReference name="limit"))))
           (RequireMember
             (ConstraintMember assert=true negated=false
               (OperatorExpr operator="<="
@@ -55,9 +57,10 @@
       (Membership visibility="default"
         (Definition kind="viewpoint" abstract=false variation=false name="Sizing"
           (RequireMember
-            (OperatorExpr operator="<"
-              (LiteralInteger value="1")
-              (LiteralInteger value="2")))))
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator="<"
+                (LiteralInteger value="1")
+                (LiteralInteger value="2"))))))
       (Membership visibility="default"
         (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="subsets" target=massOfVehicle
@@ -65,6 +68,7 @@
           (Relationship kind="by" target=vehicle01
             (*ast.QualifiedName))
           (RequireMember
-            (OperatorExpr operator="<"
-              (LiteralInteger value="1")
-              (LiteralInteger value="2"))))))))
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator="<"
+                (LiteralInteger value="1")
+                (LiteralInteger value="2")))))))))

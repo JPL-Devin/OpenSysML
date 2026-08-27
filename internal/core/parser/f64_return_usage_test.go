@@ -79,31 +79,27 @@ func TestF64ReturnUsage(t *testing.T) {
 	})
 }
 
-// A `return` of an expression stays an expression: only a specialization makes
-// the member a declaration.
-func TestF64ReturnExpressionUnchanged(t *testing.T) {
+// A `return` states a declaration, so an expression after it is refused while
+// the trailing expression that states the computed result is read.
+func TestF64ReturnExpressionRefused(t *testing.T) {
 	src := `package B {
 		calc def C { in n : ScalarValues::Integer; return n + 1; }
-		calc def D { in n : ScalarValues::Integer; return n * 2; }
+		calc def D { in n : ScalarValues::Integer; n * 2 }
 	}`
 	sf := source.New("f64.sysml", []byte(src))
 	p := New(sf)
 	root := p.ParseFile()
-	if len(p.Diagnostics) > 0 {
-		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	if len(p.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %v, want one for `return n + 1;`", p.Diagnostics)
 	}
 	pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
 	c := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
-	if _, ok := c.Members[1].(*ast.ResultMember); !ok {
-		t.Errorf("returned expression = %T, want *ast.ResultMember", c.Members[1])
+	if _, ok := c.Members[1].(*ast.ErrorNode); !ok {
+		t.Errorf("returned expression = %T, want *ast.ErrorNode", c.Members[1])
 	}
 	d := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
-	rm, ok := d.Members[1].(*ast.ResultMember)
-	if !ok {
-		t.Fatalf("returned expression = %T, want *ast.ResultMember", d.Members[1])
-	}
-	if _, ok := rm.Expression.(*ast.OperatorExpr); !ok {
-		t.Errorf("returned value = %T, want *ast.OperatorExpr", rm.Expression)
+	if _, ok := d.Members[1].(*ast.OperatorExpr); !ok {
+		t.Errorf("trailing expression = %T, want *ast.OperatorExpr", d.Members[1])
 	}
 }
 

@@ -6,7 +6,8 @@ package test {
 		attribute log : Integer = 0;
 		attribute ready : Boolean = false;
 
-		initial start;
+		entry; then start;
+		state start;
 		state waiting {
 			do action arm { assign ready := true; }
 			accept when ready then done;
@@ -15,6 +16,6 @@ package test {
 			entry { log = log * 10 + 1; }
 		}
 
-		start then waiting;
+		succession first start then waiting;
 	}
 }

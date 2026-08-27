@@ -21,10 +21,10 @@ state def VehicleLifecycle {
 		state Cruising;
 		state Braking;
 		
-		transition Accelerating to Cruising when stable;
+		transition first Accelerating when stable then Cruising;
 	}
 	
-	transition Off to Idle when powerOn;
-	transition Idle to Active when start;
-	transition Active to Off when shutdown;
+	transition first Off when powerOn then Idle;
+	transition first Idle when start then Active;
+	transition first Active when shutdown then Off;
 }

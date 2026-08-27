@@ -24,7 +24,7 @@ func TestW6DNonScalarConditionInEveryBooleanContext(t *testing.T) {
 			"constraint expression must be Boolean, found Engine"},
 		{"assume", `requirement r { assume constraint { e } }`,
 			"constraint expression must be Boolean, found Engine"},
-		{"guard", `state def S { state a; state b; transition a to b if e; }`,
+		{"guard", `state def S { state a; state b; transition first a if e then b; }`,
 			"transition guard must be Boolean, found Engine"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

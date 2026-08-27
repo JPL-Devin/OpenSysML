@@ -13,10 +13,10 @@ import (
 // condition and must not be taken for a declaration.
 func TestParameterisedConstraintKeywordConditions(t *testing.T) {
 	for _, code := range []string{
-		`part def P { constraint c { in x : Real; assert true; } }`,
-		`part def P { constraint c { in x : Real; assert not false; } }`,
-		`part def P { constraint c { in x : Real; assert if x > 0 ? true else false; } }`,
-		`part def P { constraint c { in x : Real; assume null != x; } }`,
+		`part def P { constraint c { in x : Real; true } }`,
+		`part def P { constraint c { in x : Real; not false } }`,
+		`part def P { constraint c { in x : Real; if x > 0 ? true else false } }`,
+		`part def P { constraint c { in x : Real; null != x } }`,
 	} {
 		t.Run(code, func(t *testing.T) {
 			p := New(source.New("test.sysml", []byte(code)))
@@ -33,7 +33,7 @@ func TestParameterisedConstraintKeywordConditions(t *testing.T) {
 
 // The same condition parses in a body without parameters, which parseConstraintBody reads.
 func TestConstraintKeywordConditionsWithoutParameters(t *testing.T) {
-	const code = `part def P { constraint c { assert true; } }`
+	const code = `part def P { constraint c { true } }`
 
 	p := New(source.New("test.sysml", []byte(code)))
 	file := p.ParseFile()
