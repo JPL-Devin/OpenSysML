@@ -42,11 +42,21 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      # Pinned by digest, so a substituted asset is not run. The release binary rather
+      # than `go run` keeps buf's own module tree out of the checksum-database path.
+      - name: Install buf
+        run: |
+          curl -fsSL -o /tmp/buf \
+            https://github.com/bufbuild/buf/releases/download/v1.57.2/buf-Linux-x86_64
+          echo "644e6fa4a62afc2b0d425d3ac9538d2f512947c0f2e82fc95c41a5eab6729414  /tmp/buf" | sha256sum --check --strict
+          sudo install -m 0755 /tmp/buf /usr/local/bin/buf
+          buf --version
+
       # One buf template generates both the Go stubs and the Java client's message
       # classes, so without this check the committed stubs can drift from the schema.
       - name: Verify the committed Go and Java stubs are current
         run: |
-          make proto-buf
+          make proto-buf BUF=buf
           git diff --exit-code api/proto \
             clients/java/opensysml-client/src/main/java/io/opensysml/proto
 
@@ -582,8 +592,9 @@ jobs:
   # both Connect encodings, on the client's Java 17 baseline.
   java-test:
     name: Java client tests
-    needs: build-and-test
+    needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
