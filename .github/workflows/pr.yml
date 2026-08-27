@@ -364,6 +364,7 @@ jobs:
       - docs
       - python-test
       - race-tests
+      - rust-test
       - static-and-integrity
       - vscode-extension
     runs-on: ubuntu-latest
@@ -375,6 +376,7 @@ jobs:
           DOCS_RESULT: ${{ needs.docs.result }}
           PYTHON_TEST_RESULT: ${{ needs.python-test.result }}
           RACE_TESTS_RESULT: ${{ needs.race-tests.result }}
+          RUST_TEST_RESULT: ${{ needs.rust-test.result }}
           STATIC_AND_INTEGRITY_RESULT: ${{ needs.static-and-integrity.result }}
           VSCODE_EXTENSION_RESULT: ${{ needs.vscode-extension.result }}
         run: |
@@ -382,12 +384,14 @@ jobs:
              [ "$DOCS_RESULT" != success ] ||
              [ "$PYTHON_TEST_RESULT" != success ] ||
              [ "$RACE_TESTS_RESULT" != success ] ||
+             [ "$RUST_TEST_RESULT" != success ] ||
              [ "$STATIC_AND_INTEGRITY_RESULT" != success ] ||
              [ "$VSCODE_EXTENSION_RESULT" != success ]; then
             echo "build=$BUILD_RESULT"
             echo "docs=$DOCS_RESULT"
             echo "python-test=$PYTHON_TEST_RESULT"
             echo "race-tests=$RACE_TESTS_RESULT"
+            echo "rust-test=$RUST_TEST_RESULT"
             echo "static-and-integrity=$STATIC_AND_INTEGRITY_RESULT"
             echo "vscode-extension=$VSCODE_EXTENSION_RESULT"
             exit 1
@@ -587,6 +591,83 @@ jobs:
 
       - name: Verify Python client import
         run: python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"
+
+  rust-test:
+    name: Rust client tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reuse the service built by the Go job rather than installing Go again
+      # in this Rust-focused gate.
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: bin
+
+      # The artifact is a zip, which does not carry the executable bit.
+      - name: Install the sysml-grpc binary
+        run: chmod +x bin/sysml-grpc
+
+      - name: Install Rust 1.83
+        run: |
+          rustup toolchain install 1.83.0 --profile minimal
+          rustup default 1.83.0
+          rustup component add rustfmt clippy --toolchain 1.83.0
+          rustc --version
+          cargo --version
+
+      - name: Check Rust formatting
+        working-directory: rust
+        run: cargo fmt --all -- --check
+
+      - name: Run Rust clippy
+        working-directory: rust
+        run: cargo clippy --all-targets -- -D warnings
+
+      # A missing service must fail rather than silently skipping integration
+      # tests, because the downloaded binary is required by this job.
+      - name: Run Rust tests
+        working-directory: rust
+        env:
+          OPENSYSML_GRPC_BINARY: ${{ github.workspace }}/bin/sysml-grpc
+          OPENSYSML_REQUIRE_SERVICE: 1
+        run: cargo test --workspace
+
+      # Invoke the runner directly so this job does not rebuild the service
+      # through make conformance-rust, which would require Go here.
+      - name: Run Rust conformance
+        env:
+          OPENSYSML_GRPC_BINARY: ${{ github.workspace }}/bin/sysml-grpc
+        run: |
+          cargo run --manifest-path rust/Cargo.toml -p opensysml-conformance -- \
+            -binary "$GITHUB_WORKSPACE/bin/sysml-grpc" \
+            -report bin/conformance-report-rust.json
+
+      - name: Package Rust client
+        working-directory: rust
+        run: cargo package -p opensysml
+
+      # The digest pins the generator binary so a substituted release cannot
+      # change the committed Rust artifacts.
+      - name: Install buf
+        run: |
+          curl -fsSL -o /tmp/buf \
+            https://github.com/bufbuild/buf/releases/download/v1.57.2/buf-Linux-x86_64
+          echo "644e6fa4a62afc2b0d425d3ac9538d2f512947c0f2e82fc95c41a5eab6729414  /tmp/buf" | sha256sum --check --strict
+          chmod +x /tmp/buf
+          /tmp/buf --version
+
+      - name: Verify Rust generated artifacts
+        run: |
+          make BUF=/tmp/buf proto-rust
+          git diff --exit-code rust/opensysml/src/proto rust/conformance/sysml.descriptor.binpb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report-rust
+          path: bin/conformance-report-rust.json
 
   # Mirrors the CircleCI java-test job: unit tests plus the conformance suite over
   # both Connect encodings, on the client's Java 17 baseline.

@@ -36,6 +36,7 @@ coverage.txt
 
 # Generated stubs for the upcoming clients (make proto-ts / proto-rust)
 /gen/
+/rust/target/
 
 # Maven build output for the Java client
 /clients/java/**/target/

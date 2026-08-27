@@ -16,6 +16,11 @@ executors:
       - image: cimg/python:3.11
     resource_class: medium
 
+  rust-executor:
+    docker:
+      - image: cimg/rust:1.83
+    resource_class: medium
+
   # JDK 17, the client's compile target, with Maven 3.9 preinstalled. Testing on
   # the baseline is the point: a 21-only construct must fail here.
   java-executor:
@@ -437,11 +442,77 @@ jobs:
             pip install "grpcio-tools==1.83.0"
             make python-proto BUF=buf
             git diff --exit-code python/opensysml/proto
-      
+
       - run:
           name: Verify Python client import
           command: |
             python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"
+
+  rust-test:
+    executor: rust-executor
+    steps:
+      - checkout
+
+      - run:
+          name: Verify Rust 1.83
+          command: |
+            rustc --version
+            cargo --version
+
+      - go/install:
+          version: "1.25.0"
+
+      - run:
+          name: Verify Go version
+          command: |
+            go version
+
+      - run:
+          name: Build sysml-grpc
+          command: make build
+
+      - run:
+          name: Check Rust formatting
+          command: cd rust && cargo fmt --all -- --check
+
+      - run:
+          name: Run Rust clippy
+          command: cd rust && cargo clippy --all-targets -- -D warnings
+
+      - run:
+          name: Run Rust tests
+          command: |
+            cd rust
+            OPENSYSML_GRPC_BINARY="$PWD/../bin/sysml-grpc" \
+            OPENSYSML_REQUIRE_SERVICE=1 \
+              cargo test --workspace
+
+      - run:
+          name: Run Rust conformance
+          command: make conformance-rust
+
+      - run:
+          name: Package Rust client
+          command: cd rust && cargo package -p opensysml
+
+      - run:
+          name: Install Buf
+          command: |
+            curl -fsSL -o /tmp/buf \
+              https://github.com/bufbuild/buf/releases/download/v1.57.2/buf-Linux-x86_64
+            echo "644e6fa4a62afc2b0d425d3ac9538d2f512947c0f2e82fc95c41a5eab6729414  /tmp/buf" | sha256sum --check --strict
+            chmod +x /tmp/buf
+            /tmp/buf --version
+
+      - run:
+          name: Verify Rust generated artifacts
+          command: |
+            make BUF=/tmp/buf proto-rust
+            git diff --exit-code rust/opensysml/src/proto rust/conformance/sysml.descriptor.binpb
+
+      - store_artifacts:
+          path: bin/conformance-report-rust.json
+          destination: conformance-report-rust.json
 
   # The Java client: unit tests, the conformance suite over both Connect
   # encodings, and the committed stubs checked against what buf generates.
@@ -1185,6 +1256,14 @@ workflows:
             tags:
               ignore: /.*/
       - python-test:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              ignore: /.*/
+      - rust-test:
           requires:
             - build-and-test
           filters:
