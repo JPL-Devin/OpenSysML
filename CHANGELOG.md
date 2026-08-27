@@ -6,6 +6,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Changed
+
+- **The pinned OMG pilot implementation is now release `2026-07` (`jupyter-sysml-kernel` 0.61.0)**,
+  with the reference validators, the vendored standard library, the pinned corpora, grammars and
+  Xpect suites, and every oracle baseline re-recorded at that pin. Two notations the new grammar
+  admits now parse: a metadata usage that declares its own name or none at all
+  (`@ m : Security;`, `@ : Security;`, `@ m typed by Security;`) and a constraint reference
+  carrying a multiplicity (`assume c [0..*];`). The errata overlay drops the redefinition
+  correction the published corpus now makes itself.
+
 ### Added
 
 - **A view specializing `StandardViewDefinitions::SequenceView` (or `sv`) renders as a sequence

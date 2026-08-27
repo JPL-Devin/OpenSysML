@@ -1,11 +1,11 @@
 {
-  "pilotTag": "2026-05",
+  "pilotTag": "2026-07",
   "roots": [
     {
       "name": "stdlib",
       "dir": "internal/core/libs/stdlib",
       "files": 95,
-      "lines": 28736
+      "lines": 28739
     },
     {
       "name": "training",
@@ -16,8 +16,8 @@
     {
       "name": "pilot-sysml-examples",
       "dir": "examples/pilot-corpora/sysml-examples",
-      "files": 98,
-      "lines": 8563
+      "files": 99,
+      "lines": 8603
     },
     {
       "name": "pilot-sysml-validation",
@@ -29,25 +29,25 @@
       "name": "pilot-kerml-examples",
       "dir": "examples/pilot-corpora/kerml-examples",
       "files": 58,
-      "lines": 2848
+      "lines": 2851
     },
     {
       "name": "testdata",
       "dir": "testdata",
-      "files": 15,
-      "lines": 260
+      "files": 17,
+      "lines": 292
     },
     {
       "name": "parser-fixtures",
       "dir": "internal/core/parser/testdata/parse",
-      "files": 145,
-      "lines": 3080
+      "files": 146,
+      "lines": 3092
     },
     {
       "name": "examples",
       "dir": "examples",
       "files": 22,
-      "lines": 2125
+      "lines": 2123
     }
   ],
   "totals": {
@@ -55,7 +55,7 @@
     "evidence": 483,
     "noEvidence": 0,
     "indistinguishable": 244,
-    "forms": 807,
+    "forms": 809,
     "unseenForms": 5
   },
   "grammars": [
@@ -66,7 +66,7 @@
         "evidence": 117,
         "noEvidence": 0,
         "indistinguishable": 59,
-        "forms": 273,
+        "forms": 274,
         "unseenForms": 4
       },
       "productions": [
@@ -74,7 +74,7 @@
           "grammar": "KerML.xtext",
           "name": "Namespace",
           "kind": "rule",
-          "line": 119,
+          "line": 118,
           "returns": "SysML::Namespace",
           "bucket": "evidence",
           "requiredLiterals": [
@@ -109,7 +109,7 @@
           "grammar": "KerML.xtext",
           "name": "Conjugation",
           "kind": "rule",
-          "line": 408,
+          "line": 407,
           "returns": "SysML::Conjugation",
           "bucket": "evidence",
           "literals": [
@@ -181,7 +181,7 @@
           "grammar": "KerML.xtext",
           "name": "Disjoining",
           "kind": "rule",
-          "line": 426,
+          "line": 425,
           "returns": "SysML::Disjoining",
           "bucket": "evidence",
           "literals": [
@@ -238,7 +238,7 @@
           "grammar": "KerML.xtext",
           "name": "Redefinition",
           "kind": "rule",
-          "line": 712,
+          "line": 711,
           "returns": "SysML::Redefinition",
           "bucket": "evidence",
           "literals": [
@@ -323,7 +323,7 @@
           "grammar": "KerMLExpressions.xtext",
           "name": "MultiplicativeOperator",
           "kind": "rule",
-          "line": 267,
+          "line": 266,
           "bucket": "evidence",
           "literals": [
             "%",
@@ -376,7 +376,7 @@
         "evidence": 327,
         "noEvidence": 0,
         "indistinguishable": 116,
-        "forms": 463,
+        "forms": 464,
         "unseenForms": 0
       },
       "productions": null

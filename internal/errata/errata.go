@@ -106,15 +106,6 @@ func Registry() []Entry {
 		AsPublished: "\t    \treturn : TemperatureValue = 1/(2 * Cp) * V^2 + T_static;",
 		Citation:    "SysML v2 §9.8.9.1",
 		Derivation:  "V is a VolumeValue and Cp dimensionless, so the first operand has dimension L^6 while T_static has Θ; no reading of the published text shares a dimension, so the defect is documented without a correction.",
-	}, {
-		ID:          "F111",
-		Heading:     "`fuelConsumption : FuelEconomyAnalysis_1` redefines an action typed by `FuelConsumption`",
-		Path:        "examples/pilot-corpora/sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml",
-		Line:        86,
-		AsPublished: "\t\t\tindividual action :>> fuelConsumption : FuelEconomyAnalysis_1 {",
-		Corrected:   "\t\t\tindividual action :>> fuelConsumption : FuelConsumption_1 {",
-		Citation:    "KerML 7.4.9, 8.3.4.2",
-		Derivation:  "a redefinition is a subsetting, so the redefining feature's type must conform to the redefined one's, and an analysis definition is not a FuelConsumption; the file declares `individual action def FuelConsumption_1 :> FuelConsumption` and uses it nowhere else, which is the conforming type the line names by mistake.",
 	}}
 }
 

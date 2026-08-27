@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Reference:** [SysML v2 Pilot Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation), release `2026-05` (`jupyter-sysml-kernel` 0.60.1) — the same release the training corpus is pinned to
+**Reference:** [SysML v2 Pilot Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation), release `2026-07` (`jupyter-sysml-kernel` 0.61.0) — the same release the training corpus is pinned to
 **Bridges:** two pinned plain-Java programs over the pilot's own validators — `scripts/pilot-sysml-validator/ValidateSysML.java` and `scripts/pilot-kerml-validator/ValidateKerML.java` — built against the shaded jar the [DeciSym/sysmlv2-validator](https://github.com/DeciSym/sysmlv2-validator) build (commit `0d706e5ba1e9c56730cb8600ee43602906e12058`) provisions
 **Provision:** `./scripts/download-pilot-sysml-validator.sh` and `./scripts/download-pilot-kerml-validator.sh` (each needs Java 21+, and calls `download-pilot-validator.sh` for the pinned jar when it is absent; they write `build/pilot-sysml-validator/` and `build/pilot-kerml-validator/`)
 **Run:** `go run ./cmd/pilot-diff` (writes `build/pilot-diff/pilot-diff.txt` and `build/pilot-diff/pilot-diff.json`)
@@ -198,23 +198,25 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-05`, 355 files)
+## Results (pilot `2026-07`, 356 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `examples/pilot-corpora/sysml-examples` | 98 | 94 | 7 | 0 | 0 | 0 | 7 | 0 |
+| `examples/pilot-corpora/sysml-examples` | 99 | 96 | 6 | 0 | 0 | 0 | 6 | 0 |
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
 | `examples` | 22 | 16 | 18 | 42 | 3 | 7 | 8 | 32 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **355** | **328** | **72** | **103** | **37** | **8** | **27** | **58** |
+| **Total** | **356** | **330** | **71** | **103** | **37** | **8** | **26** | **58** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
-`pilot-validation` 1 → **0**, with `kerml-examples` unmoved at 3. Our diagnostics on those roots
-therefore fall 20 → **10**. The
+`pilot-validation` 1 → **0**, with `kerml-examples` unmoved at 3; the `2026-07` corpus then
+retired one more of `pilot-examples` by publishing the conforming type its
+[non-conforming redefinition](omg-issues.md) named, leaving **6**. Our diagnostics on those roots
+therefore fall 20 → **9**. The
 `examples` root carries 8: seven are one check firing on them, the non-standard-notation warning
 (6 `require` outside a requirement body, 1 `junction`), and the eighth is the
 library-inherited-name warning on `pseudostates-demo.sysml`:28 described in
@@ -224,7 +226,7 @@ them, and removing `initial <state>;` and `transition <src> to <tgt>;` retired 2
 demos are now written in the standard spellings the warning does not fire on. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **10**. `severity-only` (8) holds pairs of the same shape:
+reference corpora is **9**. `severity-only` (8) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
 
@@ -396,7 +398,7 @@ Two things did move here, and one is a first:
   them until F93 is fixed in `semantics/`. A ratchet reading of "only-ours went up on `testdata`"
   is correct and expected here.
 
-Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 1 `kind-mismatch`, 2
+Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax, 1 `unmapped`; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
@@ -438,8 +440,8 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **328 / 27 / 72** |
-| `pilot-examples`: only ours | **43** | **7** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **330 / 26 / 71** |
+| `pilot-examples`: only ours | **43** | **6** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
 | `examples`: only pilot | **40** | **32** |
@@ -2069,7 +2071,7 @@ about parsing and static checking on these corpora, not about behavioral conform
 ## Re-running and diffing
 
 ```sh
-./scripts/download-training-examples.sh   # the OMG training corpus (pinned 2026-05)
+./scripts/download-training-examples.sh   # the OMG training corpus (pinned 2026-07)
 ./scripts/download-pilot-corpora.sh       # the other OMG corpora, same pin
 ./scripts/download-pilot-validator.sh     # the pilot validator (pinned wrapper + release)
 ./scripts/download-pilot-kerml-validator.sh  # the KerML oracle, same pin

@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Reference:** the OMG pilot implementation's own Xpect test suites, [`org.omg.kerml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-05/org.omg.kerml.xpect.tests) and [`org.omg.sysml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-05/org.omg.sysml.xpect.tests), at release `2026-05` — the same pin as the corpora and the reference validators (`scripts/pilot-pin.sh`)
+**Reference:** the OMG pilot implementation's own Xpect test suites, [`org.omg.kerml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-07/org.omg.kerml.xpect.tests) and [`org.omg.sysml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-07/org.omg.sysml.xpect.tests), at release `2026-07` — the same pin as the corpora and the reference validators (`scripts/pilot-pin.sh`)
 **Provision:** `./scripts/download-pilot-xpect.sh` (writes `build/pilot-xpect-corpus/{kerml,sysml}`, gitignored, not vendored — under `build/` rather than `examples/` because the `.kerml`/`.sysml` models the suites ship are inputs to this harness, and everything that walks `examples/` would otherwise adopt them)
 **Run:** `go run ./cmd/pilot-xpect` (writes `build/pilot-xpect/pilot-xpect.txt` and `build/pilot-xpect/pilot-xpect.json`)
 **Baseline:** the last committed run is [pilot-xpect-baseline.json](pilot-xpect-baseline.json), which carries every non-agreeing row, so a later run can be diffed against it; `-update` re-records it and `-check` fails unless a fresh run reproduces it
@@ -129,11 +129,11 @@ Two further honest limits of the mapping:
 
 ## Corpus and census reconciliation
 
-`./scripts/download-pilot-xpect.sh` fetches **303 KerML + 125 SysML = 428** `.xt` files, exactly the
+`./scripts/download-pilot-xpect.sh` fetches **303 KerML + 126 SysML = 429** `.xt` files, exactly the
 expected count. **0 files are unparsed** and **0 declared resources are missing**, so no assertion is
 silently dropped.
 
-The reader recovers **1261 assertions**, declaring **1323 individual expectations** (a single
+The reader recovers **1263 assertions**, declaring **1325 individual expectations** (a single
 `errors`/`warnings` note may list several diagnostics; each is one adjudicated row). Reconciled
 against the published per-kind census:
 
@@ -177,15 +177,15 @@ Every difference from the published numbers is accounted for, and none of it is 
 ## Totals
 
 ```
-428 .xt file(s), 0 unparsed, 0 missing declared resource(s)
-1261 assertion(s) declaring 1323 expectation(s)
-agree 1295 (of which wording-only 248) | disagree 28 | unlocated 0 | not adjudicated 0
+429 .xt file(s), 0 unparsed, 0 missing declared resource(s)
+1263 assertion(s) declaring 1325 expectation(s)
+agree 1297 (of which wording-only 248) | disagree 28 | unlocated 0 | not adjudicated 0
 ```
 
 | Kind | Expectations | Agree | of which wording-only | Disagree | Not adjudicated | `same-location` | `same-line` | `severity-differs` | `elsewhere` | nothing |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `errors` | 510 | 491 | 248 | 19 | 0 | 10 | 7 | 0 | 2 | 0 |
-| `noErrors` | 275 | 267 | — | 8 | 0 | — | — | — | — | — |
+| `errors` | 511 | 492 | 248 | 19 | 0 | 10 | 7 | 0 | 2 | 0 |
+| `noErrors` | 276 | 268 | — | 8 | 0 | — | — | — | — | — |
 | `linkedName` | 194 | 194 | — | 0 | 0 | — | — | — | — | — |
 | `warnings` | 113 | 112 | — | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
 | `scope` | 230 | 230 | — | 0 | 0 | — | — | — | — | — |
@@ -195,12 +195,12 @@ Per suite:
 
 | Suite | Files | Expectations | Agree | Disagree | Not adjudicated |
 |---|---:|---:|---:|---:|---:|
-| `kerml` | 303 | 966 | 948 | 18 | 0 |
-| `sysml` | 125 | 357 | 347 | 10 | 0 |
+| `kerml` | 303 | 967 | 949 | 18 | 0 |
+| `sysml` | 126 | 358 | 348 | 10 | 0 |
 
-**Read the `errors` row carefully: 248 of its 491 agreements are wording-only, so more than half of
+**Read the `errors` row carefully: 248 of its 492 agreements are wording-only, so more than half of
 that column is us stating the pilot's rule in our own words rather than a rule written against its
-text.** The 243 word-for-word rows are the ones where a rule was implemented against the declared
+text.** The 244 word-for-word rows are the ones where a rule was implemented against the declared
 message. `warnings` shows the same effect from the other side: its 112 agreements are the
 duplicate-member-name, visibility and wave-9C library rules written against the pilot's declared
 wording, so they match by construction rather than by luck. `noErrors` and `linkedName` are
@@ -220,9 +220,9 @@ run` column is that run's own measurement:
 | Kind | First run | Now | What moved |
 |---|---|---|---|
 | `linkedName` | 151 / 194 | **194 / 194** | alias-introduced names resolve to the aliased element, and the `~ B::f` conjugation form parses |
-| `noErrors` | 231 / 275 | **267 / 275** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 2 others no longer draw an error, wave 9D's protected/shadowed path reconciliation cleared 11 more, wave 11C closed the 6 protected-import rows wave 10E had made unsatisfiable by modelling `noErrors` as Xpect's residue rather than as file-wide silence, wave 12D's parser work cleared `ParsingTests_Indexing` and `SemanticMetadata_valid`, and wave 12F closed two more rows |
+| `noErrors` | 231 / 275 | **268 / 276** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 2 others no longer draw an error, wave 9D's protected/shadowed path reconciliation cleared 11 more, wave 11C closed the 6 protected-import rows wave 10E had made unsatisfiable by modelling `noErrors` as Xpect's residue rather than as file-wide silence, wave 12D's parser work cleared `ParsingTests_Indexing` and `SemanticMetadata_valid`, and wave 12F closed two more rows |
 | `warnings` | 0 / 113 | **112 / 113** | the duplicate-member-name warnings, the wave-8 rules written against the declared wording, wave 9C's library rules, wave 10's warnings residue, wave 11A/11F's usage-typing rules, and Step 3's binary-interface end typing |
-| `errors` | 0 / 510 | **491 / 510** | 243 rows are ours word-for-word; the other 248 are wording-only, admitted centrally in wave 10 after the rule and element were checked, not by adopting the pilot's phrasing |
+| `errors` | 0 / 510 | **492 / 511** | 244 rows are ours word-for-word; the other 248 are wording-only, admitted centrally in wave 10 after the rule and element were checked, not by adopting the pilot's phrasing |
 | `scope` | 73 / 230 | **230 / 230** | wave 9A resolves implicit and inherited members through the library (`library-names` 125 → 27), wave 9D reconciles the protected and shadowed paths, wave 10A bounds re-entry to one per name, wave 11C fixes the quoted anchor and stops a recursive import's descent carrying implicit generals, and wave 12E bounds derived `self`/`that` paths and anchors a scope assertion on the reference its text names |
 
 **These tables and the baseline are a fresh-cache run after the transition-guard and KerML
@@ -362,7 +362,7 @@ only external, per-reference verdict on our name resolution that exists at the p
 also the narrowest: it says which element a written reference reaches, never which names *were*
 visible. That second question is the 230 `scope` assertions below.
 
-## noErrors — 267 of 275 agree
+## noErrors — 268 of 276 agree
 
 8 disagreements: we report an error where the pilot's implementers declared the file clean. Grouped
 by our first diagnostic:
@@ -483,7 +483,7 @@ redefinition removed was silent too.
 
 ---
 
-## errors — 491 of 510, of which 248 wording-only
+## errors — 492 of 511, of which 248 wording-only
 
 Agreement here is 243 rows word-for-word plus 248 wording-only: the same rule about the same element
 at the same offset and severity, in our phrasing. Almost all of the wording-only rows are one family,
@@ -562,9 +562,9 @@ individually with the declared message and ours in
 
 The 9 rows in these two tolerance classes are attributed below. The Xpect row is the line containing
 the assertion; its declared diagnostic generally anchors in the following model line. The citations
-are to the published KerML 1.0 and SysML v2.0 specifications that govern the pinned 2026-05
+are to the published KerML 1.0 and SysML v2.0 specifications that govern the pinned 2026-07
 implementation. There is no published KerML 1.1 specification to cite; where parser behavior matters,
-the pinned `2026-05` grammar was checked as well. No category below is inferred from diagnostic
+the pinned `2026-07` grammar was checked as well. No category below is inferred from diagnostic
 wording alone.
 
 | Xpect row | Declared | OpenSysML | Specification reading | Category | Owner |
