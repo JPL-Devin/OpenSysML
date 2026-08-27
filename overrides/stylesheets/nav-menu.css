@@ -21,6 +21,8 @@
   right: 0;
   z-index: 4;
   min-width: 10rem;
+  /* A narrow screen has less room than the panel's minimum would take. */
+  max-width: calc(100vw - 1rem);
   padding: 0.3rem 0;
   background: var(--md-default-bg-color);
   border-radius: 0.2rem;
@@ -45,11 +47,4 @@
   margin: 0.3rem 0;
   border: 0;
   background: var(--md-default-fg-color--lightest);
-}
-
-/* The panel would otherwise reach past the viewport on a narrow screen. */
-@media screen and (max-width: 29.9375em) {
-  .osml-menu__list {
-    right: -2rem;
-  }
 }
