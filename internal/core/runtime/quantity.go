@@ -54,13 +54,22 @@ func (q *Quantity) baseMagnitude() float64 {
 	return semantics.ConvertMagnitude(toReal(q.Num), q.Unit.Term.Scale, semantics.UnitScale(1))
 }
 
+// exponentText renders the exponent a unit is raised to. A whole exponent reads
+// as an integer, since `(m)**3` names the unit and not the value that produced it.
+func exponentText(v semantics.Value) string {
+	if v.Kind == semantics.ValReal {
+		return fmt.Sprintf("%g", v.Real)
+	}
+	return constText(v)
+}
+
 // constText renders a numeric constant without a unit.
 func constText(v semantics.Value) string {
 	switch v.Kind {
 	case semantics.ValInt:
 		return fmt.Sprintf("%d", v.Int)
 	case semantics.ValReal:
-		return fmt.Sprintf("%g", v.Real)
+		return FormatReal(v.Real)
 	case semantics.ValBool:
 		return fmt.Sprintf("%v", v.Bool)
 	case semantics.ValInfinity:
@@ -200,7 +209,7 @@ func powQuantity(base *Quantity, exponent semantics.Value) (Value, error) {
 		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal,
 			Real: semantics.ConvertMagnitude(toReal(num), term.Scale, semantics.UnitScale(1))}}, nil
 	}
-	unit := Unit{Text: fmt.Sprintf("(%s)%s%s", base.Unit, ast.OpPow, constText(exponent)), Term: term}
+	unit := Unit{Text: fmt.Sprintf("(%s)%s%s", base.Unit, ast.OpPow, exponentText(exponent)), Term: term}
 	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: num, Unit: unit}}, nil
 }
 

@@ -106,7 +106,7 @@ type Event struct {
 }
 
 func (e Event) String() string {
-	return fmt.Sprintf("Event{ID:%d, Type:%s, Time:%.2f}", e.ID, e.Type, e.Timestamp)
+	return fmt.Sprintf("Event{ID:%d, Type:%s, Time:%s}", e.ID, e.Type, FormatReal(e.Timestamp))
 }
 
 // EventQueue is a priority queue of events sorted by timestamp (min-heap).

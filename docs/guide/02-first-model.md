@@ -63,16 +63,16 @@ sysml> %instantiate Vehicle
 sysml> %features Vehicle
 Instance: Vehicle (ID: 1)
 Features:
-  mass = 1500.00
+  mass = 1500.0
   wheels = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4), Instance(ID: 5)]
-    diameter = 16.00
-    width = 7.50
-    diameter = 16.00
-    width = 7.50
-    diameter = 16.00
-    width = 7.50
-    diameter = 16.00
-    width = 7.50
+    diameter = 16.0
+    width = 7.5
+    diameter = 16.0
+    width = 7.5
+    diameter = 16.0
+    width = 7.5
+    diameter = 16.0
+    width = 7.5
 
 sysml> %instances
 Instances:
@@ -90,7 +90,7 @@ sysml> attribute totalDiameter = wheelCount * 16.0;
 
 sysml> %eval totalDiameter
 ✓ totalDiameter
-  = 64.00
+  = 64.0
 ```
 
 ---
@@ -141,12 +141,12 @@ sysml> %features MyModel::System
 Instance: MyModel::System (ID: 1)
 Features:
   sensors = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]
-    reading = 0.00
-    threshold = 100.00
-    reading = 0.00
-    threshold = 100.00
-    reading = 0.00
-    threshold = 100.00
+    reading = 0.0
+    threshold = 100.0
+    reading = 0.0
+    threshold = 100.0
+    reading = 0.0
+    threshold = 100.0
 ```
 
 A composite feature lists the features of each of its objects under it, in order.

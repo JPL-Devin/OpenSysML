@@ -14,9 +14,9 @@ func TestInstantiatedModelEvaluatesDerivedFeatureValues(t *testing.T) {
 
 	got := run(t, s, "%features Derived::Vehicle")
 	wants(t, got,
-		"mass = 1500.00",    // declared constant
-		"doubled = 3000.00", // derived from a sibling feature
-		"total = 1770.00",   // derived through a nested part: 1500 + 300*0.9
+		"mass = 1500.0",    // declared constant
+		"doubled = 3000.0", // derived from a sibling feature
+		"total = 1770.0",   // derived through a nested part: 1500 + 300*0.9
 	)
 	rejects(t, got, "<unknown>")
 }
@@ -29,7 +29,7 @@ func TestEvalReadsDerivedFeatureValueOfInstance(t *testing.T) {
 
 	wants(t, run(t, s, "%eval Derived::Vehicle::doubled"),
 		"✓ Derived::Vehicle::doubled (on Derived::Vehicle ID: 1)",
-		"= 3000.00",
+		"= 3000.0",
 	)
 }
 
@@ -38,7 +38,7 @@ func TestEvalReadsDerivedFeatureValueOfInstance(t *testing.T) {
 func TestEvalWithoutInstanceUsesDeclaredDefault(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")
 	got := run(t, s, "%eval Derived::Vehicle::mass")
-	wants(t, got, "= 1500.00")
+	wants(t, got, "= 1500.0")
 	rejects(t, got, "(on ")
 }
 
@@ -228,8 +228,8 @@ func TestInstanceSurvivesUnrelatedDeclaration(t *testing.T) {
 	wants(t, listing, "Demo::Vehicle (ID: 1)")
 	rejects(t, listing, "dropped")
 
-	wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 1500.00")
-	wants(t, run(t, s, "%eval Demo::Vehicle::mass"), "1500.00")
+	wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 1500.0")
+	wants(t, run(t, s, "%eval Demo::Vehicle::mass"), "1500.0")
 	// The carried objects hold their identities in the new context — the vehicle
 	// and the engine part inside it — so the next object built does not reuse one.
 	wants(t, run(t, s, "%instantiate Demo::Engine"), "ID: 3")
@@ -312,13 +312,13 @@ func TestInstanceRederivesAValueWhenAnExpressionItReadsChanges(t *testing.T) {
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
 	s.Submit("part def A { attribute m = double(3.0); }")
 	wants(t, run(t, s, "%instantiate A"), "ID: 1")
-	wants(t, run(t, s, "%features A"), "m = 6.00")
+	wants(t, run(t, s, "%features A"), "m = 6.0")
 
 	res := s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
 	if hasNotice(res, "instance was dropped") {
 		t.Fatalf("notices = %v, want the object kept", res.Notices)
 	}
-	wants(t, run(t, s, "%features A"), "m = 9.00")
+	wants(t, run(t, s, "%features A"), "m = 9.0")
 }
 
 // A connector holds the features it connects rather than values of its own, so
@@ -333,11 +333,11 @@ func TestConnectorEndsAreReadAgainAfterADependencyChanges(t *testing.T) {
 		part def Sys { part a : A; part b : B; connection c1 connect a.x to b.y; }
 	}`)
 	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
-	wants(t, run(t, s, "%features Demo::Sys"), "x = 6.00", "c1 = Instance(ID: 4)", "source = 6.00")
+	wants(t, run(t, s, "%features Demo::Sys"), "x = 6.0", "c1 = Instance(ID: 4)", "source = 6.0")
 
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
 	// The end reads the new value, under the identity the connector kept.
-	wants(t, run(t, s, "%features Demo::Sys"), "x = 9.00", "c1 = Instance(ID: 4)", "source = 9.00")
+	wants(t, run(t, s, "%features Demo::Sys"), "x = 9.0", "c1 = Instance(ID: 4)", "source = 9.0")
 
 	// Nothing else took that identity.
 	wants(t, run(t, s, "%instantiate Demo::A"), "ID: 5")
@@ -350,10 +350,10 @@ func TestCollectionIsCollectedAgainAfterADependencyChanges(t *testing.T) {
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
 	s.Submit("part def A { attribute pool : ScalarValues::Real[*]; attribute one :> pool = double(3.0); }")
 	wants(t, run(t, s, "%instantiate A"), "ID: 1")
-	wants(t, run(t, s, "%features A"), "pool = [6.00]", "one = 6.00")
+	wants(t, run(t, s, "%features A"), "pool = [6.0]", "one = 6.0")
 
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
-	wants(t, run(t, s, "%features A"), "pool = [9.00]", "one = 9.00")
+	wants(t, run(t, s, "%features A"), "pool = [9.0]", "one = 9.0")
 
 	// A collection of objects is kept, so its members keep their identities.
 	s.Submit("package D { part def B; part def C { part xs : B[3]; } }")
@@ -413,19 +413,19 @@ func TestInstanceRederivesAValueThroughAChainOfReads(t *testing.T) {
 	s.Submit("calc def outer { in y; return : ScalarValues::Real = inner(y) + 1.0; }")
 	s.Submit("part def A { attribute m = outer(3.0); }")
 	wants(t, run(t, s, "%instantiate A"), "ID: 1")
-	wants(t, run(t, s, "%features A"), "m = 7.00")
+	wants(t, run(t, s, "%features A"), "m = 7.0")
 
 	s.Submit("calc def inner { in x; return : ScalarValues::Real = x * 3.0; }")
-	wants(t, run(t, s, "%features A"), "m = 10.00")
+	wants(t, run(t, s, "%features A"), "m = 10.0")
 
 	s.Submit("attribute g = 5.0;")
 	s.Submit("attribute h = g * 2.0;")
 	s.Submit("part def B { attribute m = h + 1.0; }")
 	wants(t, run(t, s, "%instantiate B"), "ID:")
-	wants(t, run(t, s, "%features B"), "m = 11.00")
+	wants(t, run(t, s, "%features B"), "m = 11.0")
 
 	s.Submit("attribute g = 7.0;")
-	wants(t, run(t, s, "%features B"), "m = 15.00")
+	wants(t, run(t, s, "%features B"), "m = 15.0")
 }
 
 // A submission that invalidates some of what the session holds says so even
@@ -547,9 +547,9 @@ func TestNestedPartMemberBindsToTheNestedInstance(t *testing.T) {
 	run(t, s, "%instantiate Nested::Car")
 
 	got := run(t, s, "%eval Nested::Car::engine::mass")
-	wants(t, got, "= 5.00")
+	wants(t, got, "= 5.0")
 	rejects(t, got, "on Nested::Car ID")
-	wants(t, run(t, s, "%eval Nested::Car::mass"), "on Nested::Car ID", "= 1500.00")
+	wants(t, run(t, s, "%eval Nested::Car::mass"), "on Nested::Car ID", "= 1500.0")
 	wants(t, run(t, s, "%constraint Nested::Car::engine::light"),
 		"passed", "on Nested::Car::engine")
 }
@@ -560,9 +560,9 @@ func TestCollectionFeatureValuesShowTheirContents(t *testing.T) {
 	run(t, s, "%instantiate Coll::Rig")
 
 	got := run(t, s, "%features Coll::Rig")
-	wants(t, got, "doubles = [200.00]", "wheels = [Instance(ID: 2), Instance(ID: 3)]")
+	wants(t, got, "doubles = [200.0]", "wheels = [Instance(ID: 2), Instance(ID: 3)]")
 	rejects(t, got, "<unknown>")
-	wants(t, run(t, s, "%eval Coll::Rig::doubles"), "= [200.00]")
+	wants(t, run(t, s, "%eval Coll::Rig::doubles"), "= [200.0]")
 }
 
 // A part held in a feature value is worth nothing to the reader as an opaque ID: %features
@@ -573,7 +573,7 @@ func TestFeatureValuesExpandNestedInstances(t *testing.T) {
 
 	wants(t, run(t, s, "%features Nested::Car"),
 		"  engine = Instance(ID: 2)",
-		"    mass = 5.00",
+		"    mass = 5.0",
 		"    light: <constraint: satisfied>",
 	)
 }
@@ -598,7 +598,7 @@ func TestFeatureValuesStopAtRecursiveContainment(t *testing.T) {
 	run(t, s, "%instantiate Node")
 
 	got := run(t, s, "%features Node")
-	wants(t, got, "v = 1.00", "child : Node (not expanded: contains its own kind)")
+	wants(t, got, "v = 1.0", "child : Node (not expanded: contains its own kind)")
 	if n := strings.Count(got, "\n"); n > 5 {
 		t.Errorf("expected a bounded listing, got %d lines:\n%s", n, got)
 	}

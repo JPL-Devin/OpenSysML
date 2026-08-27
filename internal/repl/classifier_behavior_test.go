@@ -29,7 +29,7 @@ func TestObjectMachineDebuggingCommands(t *testing.T) {
 	wants(t, run(t, s, "%current"), "idle")
 	wants(t, run(t, s, "%events"), "1 events")
 	wants(t, run(t, s, "%step"), "Event dispatched", "Current state: awake")
-	wants(t, run(t, s, "%advance 5"), "time is now 15.00")
+	wants(t, run(t, s, "%advance 5"), "time is now 15.0")
 	wants(t, run(t, s, "%current"), "awake")
 	wants(t, run(t, s, "%features Obj::Monitor"), "count = 11")
 }

@@ -4,6 +4,18 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### Changed
+
+- **A Real prints as the shortest decimal that reads back as the same value**, on every surface
+  that renders one — an evaluation result, a feature value listing, a quantity's magnitude, an
+  execution trace and the simulation clock. Values were rendered to two decimal places, which
+  reported a nonzero magnitude as zero (`0.0001` printed `0.00`) and rounded away precision the
+  evaluation had kept (`1.0 / 3.0` printed `0.33`, `123456789.987654` printed `123456789.99`),
+  and disagreed between surfaces. A whole Real keeps its `.0` so it is not mistaken for an
+  Integer. Arithmetic is unchanged: the stored value was never rounded.
+
 ## 0.3.1 — 2026-08-27
 
 A performance patch. Loading a model costs less of everything and answers the same: on a

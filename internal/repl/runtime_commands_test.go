@@ -103,10 +103,10 @@ func TestREPLPackagedModelWorkflow(t *testing.T) {
 	wants(t, got,
 		"✓ Created instance of Demo::Vehicle",
 		"Instance: Demo::Vehicle",
-		"mass = 1500.00",
+		"mass = 1500.0",
 		"engine = Instance(",
 		"✓ Demo::Vehicle::mass",
-		"= 1500.00",
+		"= 1500.0",
 		"✓ add(2, 3)",
 		"= 5",
 		"✓ Constraint withinMassLimit passed",
@@ -124,8 +124,8 @@ func TestInstantiateFindsPackageMemberBySimpleAndQualifiedName(t *testing.T) {
 
 			// Instances are keyed by the resolved name, so either spelling
 			// reaches the instance the other created.
-			wants(t, run(t, s, "%features Vehicle"), "mass = 1500.00")
-			wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 1500.00")
+			wants(t, run(t, s, "%features Vehicle"), "mass = 1500.0")
+			wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 1500.0")
 		})
 	}
 }
@@ -148,7 +148,7 @@ package B { part def Widget { attribute size = 2.0; } }`)
 
 	// The qualified name disambiguates.
 	wants(t, run(t, s, "%instantiate B::Widget"), "✓ Created instance of B::Widget")
-	wants(t, run(t, s, "%features B::Widget"), "size = 2.00")
+	wants(t, run(t, s, "%features B::Widget"), "size = 2.0")
 }
 
 // Declarations submitted after a lookup must be visible: the symbol index and
@@ -160,8 +160,8 @@ func TestLookupSeesDeclarationsAddedAfterFirstLookup(t *testing.T) {
 
 	s.Submit(`package Demo { part def Trailer { attribute mass = 900.0; } }`)
 	wants(t, run(t, s, "%instantiate Demo::Trailer"), "✓ Created instance of Demo::Trailer")
-	wants(t, run(t, s, "%features Trailer"), "mass = 900.00")
-	wants(t, run(t, s, "%eval Demo::Trailer::mass"), "900.00")
+	wants(t, run(t, s, "%features Trailer"), "mass = 900.0")
+	wants(t, run(t, s, "%eval Demo::Trailer::mass"), "900.0")
 }
 
 // An instance does not outlive the declaration it is of: redeclaring that
@@ -177,7 +177,7 @@ func TestInstancesDoNotOutliveTheirDeclaration(t *testing.T) {
 	wants(t, run(t, s, "%instances"),
 		"no instances created", "1 instance was dropped when the declarations changed at submission 2")
 	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
-	wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 900.00")
+	wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 900.0")
 }
 
 func TestFeatureValuesWithoutInstance(t *testing.T) {
@@ -199,13 +199,13 @@ func TestEvalLiteralFeatureAndCompound(t *testing.T) {
 	wants(t, run(t, s, "%eval 6 * 7"), "= 42")
 	// Feature reference by qualified name, and by simple name through the
 	// scope-tree walk.
-	wants(t, run(t, s, "%eval Demo::Engine::power"), "= 300.00")
-	wants(t, run(t, s, "%eval power"), "= 300.00")
+	wants(t, run(t, s, "%eval Demo::Engine::power"), "= 300.0")
+	wants(t, run(t, s, "%eval power"), "= 300.0")
 
 	// Compound expression over a top-level feature.
 	flat := NewSession()
 	flat.Submit("attribute mass = 3.0;")
-	wants(t, run(t, flat, "%eval mass + 1.0"), "= 4.00")
+	wants(t, run(t, flat, "%eval mass + 1.0"), "= 4.0")
 }
 
 func TestEvalErrors(t *testing.T) {
@@ -308,7 +308,7 @@ func TestFormatValue(t *testing.T) {
 		want string
 	}{
 		{"int", runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 7}}, "7"},
-		{"real", runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1.5}}, "1.50"},
+		{"real", runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1.5}}, "1.5"},
 		{"bool", runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: true}}, "true"},
 		{"infinity", runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInfinity}}, "∞"},
 		{"null", runtime.Value{Kind: runtime.ValNull}, "null"},
@@ -419,19 +419,19 @@ func TestStateDebuggerAdvancesByTime(t *testing.T) {
 
 	wants(t, run(t, s, "%state Cycle"), `✓ Started state machine executor for "Cycle"`, "Current state: init")
 	wants(t, run(t, s, "%events"), "Event queue: 1 events")
-	wants(t, run(t, s, "%current"), "Current state: init", "Time: 0.00")
+	wants(t, run(t, s, "%current"), "Current state: init", "Time: 0.0")
 
 	// The completion transition out of `init` is due now; the transition out of
 	// `waiting` is scheduled at 10, so a shorter advance stops before it.
-	wants(t, run(t, s, "%advance 1"), "Advanced to 1.00 (1 event(s) processed)", "Current state: waiting", "Last event at: 0.00")
+	wants(t, run(t, s, "%advance 1"), "Advanced to 1.0 (1 event(s) processed)", "Current state: waiting", "Last event at: 0.0")
 
 	// Durations accumulate: the second advance reaches 10 even though no event
 	// moved the executor's own clock during the first.
-	wants(t, run(t, s, "%advance 9"), "Advanced to 10.00 (1 event(s) processed)", "Current state: working")
-	wants(t, run(t, s, "%current"), "Time: 10.00")
+	wants(t, run(t, s, "%advance 9"), "Advanced to 10.0 (1 event(s) processed)", "Current state: working")
+	wants(t, run(t, s, "%current"), "Time: 10.0")
 
-	wants(t, run(t, s, "%advance 5"), "Current state: done", "Last event at: 15.00", "State machine completed")
-	wants(t, run(t, s, "%advance 5"), "No pending work - simulation time is now 20.00")
+	wants(t, run(t, s, "%advance 5"), "Current state: done", "Last event at: 15.0", "State machine completed")
+	wants(t, run(t, s, "%advance 5"), "No pending work - simulation time is now 20.0")
 }
 
 // A do behavior is due now, so a small advance must run it even when the only
@@ -443,7 +443,7 @@ func TestAdvanceRunsDoWorkWithFarFutureEvent(t *testing.T) {
 	wants(t, run(t, s, "%advance 1"),
 		"Current state: working",
 		"Do behavior actions run: 2")
-	wants(t, run(t, s, "%current"), "count = 2", "Time: 1.00")
+	wants(t, run(t, s, "%current"), "count = 2", "Time: 1.0")
 }
 
 // Do behavior with an empty event queue is do work, not an event: counting it
@@ -455,7 +455,7 @@ func TestAdvanceCountsDoWorkSeparatelyFromEvents(t *testing.T) {
 	out := run(t, s, "%advance 1")
 	// Two transitions fire (init -> busy, busy -> done) and the three do actions
 	// are reported as do work; counting them as events reported four.
-	wants(t, out, "Advanced to 1.00 (2 event(s) processed)", "Do behavior actions run: 3")
+	wants(t, out, "Advanced to 1.0 (2 event(s) processed)", "Do behavior actions run: 3")
 	wants(t, run(t, s, "%current"), "count = 3")
 }
 
@@ -481,7 +481,7 @@ func TestAdvanceShorterThanNextEventReportsRemainingWork(t *testing.T) {
 	run(t, s, "%advance 1") // leaves the transition out of `waiting` queued at 10
 
 	wants(t, run(t, s, "%advance 1"),
-		"Advanced to 2.00 (0 event(s) processed)",
+		"Advanced to 2.0 (0 event(s) processed)",
 		"Current state: waiting",
 		"Remaining events: 1")
 }
@@ -601,8 +601,8 @@ func quantitySession(t *testing.T) *Session {
 // working in, so the units that namespace imports resolve unqualified.
 func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
 	s := quantitySession(t)
-	wants(t, run(t, s, "%eval 1.0 [m/s]"), "= 1.00 [m/s]")
-	wants(t, run(t, s, "%eval 2.0 [km] + 500.0 [m]"), "= 2.50 [km]")
+	wants(t, run(t, s, "%eval 1.0 [m/s]"), "= 1.0 [m/s]")
+	wants(t, run(t, s, "%eval 2.0 [km] + 500.0 [m]"), "= 2.5 [km]")
 	// The unit itself is a declaration the imports make visible: it resolves,
 	// and reports that it holds no value rather than that it is unknown.
 	wants(t, run(t, s, "%eval m"), "has no value to evaluate")
@@ -613,7 +613,7 @@ func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
 	// The same scope is what a compound expression names its members in.
 	pkg := NewSession()
 	pkg.Submit("package Demo { attribute mass = 3.0; }")
-	wants(t, run(t, pkg, "%eval mass * 2"), "= 6.00")
+	wants(t, run(t, pkg, "%eval mass * 2"), "= 6.0")
 }
 
 // The namespace the session works in is the last one it declared, so declaring
@@ -621,12 +621,12 @@ func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
 func TestPromptScopeIsTheLastNamespaceDeclared(t *testing.T) {
 	s := NewSession()
 	s.Submit("package P1 { public import SI::*; attribute a = 1.0; }")
-	wants(t, run(t, s, "%eval 1.0 [m]"), "= 1.00 [m]")
+	wants(t, run(t, s, "%eval 1.0 [m]"), "= 1.0 [m]")
 
 	s.Submit("package P2 { attribute b = 2.0; }")
-	wants(t, run(t, s, "%eval b * 3"), "= 6.00")
+	wants(t, run(t, s, "%eval b * 3"), "= 6.0")
 	wants(t, run(t, s, "%eval 1.0 [m]"), "unresolved unit m")
-	wants(t, run(t, s, "%eval P1::a + P2::b"), "= 3.00")
+	wants(t, run(t, s, "%eval P1::a + P2::b"), "= 3.0")
 
 	// A name two packages declare is reported, not answered from whichever of
 	// them the prompt scope reaches.
@@ -638,12 +638,12 @@ func TestPromptScopeIsTheLastNamespaceDeclared(t *testing.T) {
 // spaces — a quantity, a parenthesized expression, a nested call — survives.
 func TestCalcParsesExpressionArguments(t *testing.T) {
 	s := quantitySession(t)
-	wants(t, run(t, s, "%calc Fall -15.0 [m/s] 8.5 [s]"), "✓ Fall(-15.0 [m/s], 8.5 [s])", "= -127.50 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] 8.5 [s]"), "✓ Fall(-15.0 [m/s], 8.5 [s])", "= -127.5 [(m/s)*s]")
 	// The same invocation written the way the notation writes one.
-	wants(t, run(t, s, "%calc Fall(-15.0 [m/s], 8.5 [s])"), "= -127.50 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall(-15.0 [m/s], 8.5 [s])"), "= -127.5 [(m/s)*s]")
 	// A parenthesized subexpression, and a call standing as an argument.
-	wants(t, run(t, s, "%calc Fall (-5.0 [m/s] - 10.0 [m/s]) 8.5 [s]"), "= -127.50 [(m/s)*s]")
-	wants(t, run(t, s, "%calc Fall -15.0 [m/s] (4.0 [s] + 4.5 [s])"), "= -127.50 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall (-5.0 [m/s] - 10.0 [m/s]) 8.5 [s]"), "= -127.5 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] (4.0 [s] + 4.5 [s])"), "= -127.5 [(m/s)*s]")
 	// Named arguments are a different production; the limitation is reported.
 	wants(t, run(t, s, "%calc Fall v0=-15.0 [m/s] tb=8.5 [s]"), "named arguments are not supported")
 }
@@ -698,8 +698,12 @@ func TestCalcSeparatesSignedArguments(t *testing.T) {
 // rendered by the same convention as a bare Real.
 func TestFormatValueQuantityUsesRealFormatting(t *testing.T) {
 	s := quantitySession(t)
-	wants(t, run(t, s, "%eval -15.200531548598184 [m/s]"), "= -15.20 [m/s]")
-	wants(t, run(t, s, "%eval 32.99999999999993 [s]"), "= 33.00 [s]")
+	wants(t, run(t, s, "%eval -15.200531548598184 [m/s]"), "= -15.200531548598184 [m/s]")
+	wants(t, run(t, s, "%eval 32.99999999999993 [s]"), "= 32.99999999999993 [s]")
+	// A whole magnitude keeps its ".0", as a bare Real does.
+	wants(t, run(t, s, "%eval 2.0 [m] * 3.0 [m]"), "= 6.0 [m*m]")
+	// A magnitude below what two decimals can show reads as itself, not as zero.
+	wants(t, run(t, s, "%eval 0.0001 [m]"), "= 0.0001 [m]")
 }
 
 // A calc usage computes output features rather than one result, so %calc lists

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -167,5 +168,37 @@ func TestFormatValueCollections(t *testing.T) {
 	if got, want := FormatValue(Value{Kind: ValSet, Set: set}),
 		`Set{instance(3), [1, ["nested"]]}`; got != want {
 		t.Errorf("set formatting = %q, want %q", got, want)
+	}
+}
+
+// A Real reads as the shortest decimal that reads back as the same value: a
+// magnitude two decimals cannot show reads as itself rather than as zero, a
+// value carried at full precision is not rounded away, and a whole value keeps
+// its ".0" so it is not mistaken for an Integer.
+func TestFormatConstRealRoundTrips(t *testing.T) {
+	cases := []struct {
+		real float64
+		want string
+	}{
+		{0.0001, "0.0001"},
+		{1e-7, "1e-07"},
+		{1.0 / 3.0, "0.3333333333333333"},
+		{123456789.987654, "123456789.987654"},
+		{1e21, "1e+21"},
+		{1e20, "100000000000000000000.0"},
+		{2, "2.0"},
+		{0, "0.0"},
+		{-15.200531548598184, "-15.200531548598184"},
+	}
+	for _, tc := range cases {
+		got := FormatConst(semantics.Value{Kind: semantics.ValReal, Real: tc.real})
+		if got != tc.want {
+			t.Errorf("FormatConst(%v) = %q, want %q", tc.real, got, tc.want)
+		}
+		// A rendered Real reads back as the value it was rendered from.
+		var back float64
+		if _, err := fmt.Sscanf(got, "%g", &back); err != nil || back != tc.real {
+			t.Errorf("FormatConst(%v) = %q, which reads back as %v (%v)", tc.real, got, back, err)
+		}
 	}
 }

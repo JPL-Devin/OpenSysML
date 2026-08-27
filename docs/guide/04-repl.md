@@ -13,7 +13,7 @@ sysml> package Demo { part def Wheel { attribute diameter : Real = 16.0; } }
 ✓ package Demo
 sysml> %eval Demo::Wheel::diameter
 ✓ Demo::Wheel::diameter
-  = 16.00
+  = 16.0
 ```
 
 The import is what makes `Real` resolvable, as in [chapter 2](02-first-model.md); a session that
@@ -271,14 +271,14 @@ rather than dropped. Outside the prompt the same rendering is
 ```
 sysml> %eval in Demo::Vehicle : mass * 2
 ✓ mass * 2 (in Demo::Vehicle)
-  = 3000.00
+  = 3000.0
 sysml> %instantiate Demo::Vehicle
 ✓ Created instance of Demo::Vehicle
   ID: 1
   Use %features Demo::Vehicle to inspect
 sysml> %eval in Demo::Vehicle : mass * 2
 ✓ mass * 2 (on Demo::Vehicle ID: 1)
-  = 3000.00
+  = 3000.0
 ```
 
 The pinned name may be an element, whose namespace the expression then reads, or a name an object

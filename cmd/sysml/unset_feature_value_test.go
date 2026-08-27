@@ -31,7 +31,7 @@ func TestUnsetFeatureValueReadsTheSameOnEverySurface(t *testing.T) {
 		if got.status != exitHolds {
 			t.Errorf("exit status = %d, want %d\n%s", got.status, exitHolds, got.output())
 		}
-		for _, want := range []string{"d = <unset>", "ds = [<unset>, <unset>]", "k = 2.00", "engine = Instance(ID: "} {
+		for _, want := range []string{"d = <unset>", "ds = [<unset>, <unset>]", "k = 2.0", "engine = Instance(ID: "} {
 			if !strings.Contains(got.output(), want) {
 				t.Errorf("the feature value listing is missing %q:\n%s", want, got.output())
 			}
@@ -45,7 +45,7 @@ func TestUnsetFeatureValueReadsTheSameOnEverySurface(t *testing.T) {
 
 	t.Run("an evaluation reports it unset", func(t *testing.T) {
 		got := check(t, binary, unsetFeatureValueModel, "-instantiate", "P::Q", "-e", "P::Q::d", "-e", "P::Q::k")
-		wantReport(t, got, exitHolds, "= <unset>", "= 2.00")
+		wantReport(t, got, exitHolds, "= <unset>", "= 2.0")
 	})
 
 	t.Run("the JSON report carries the same spelling", func(t *testing.T) {

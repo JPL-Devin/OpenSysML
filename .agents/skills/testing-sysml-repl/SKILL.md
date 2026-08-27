@@ -173,8 +173,8 @@ explicit argument list — the parentheses are required even when the calc takes
 ./bin/sysml -validate internal/core/runtime/testdata/conformance/<name>.sysml   # cheap clean-model check
 ```
 
-Reals print rounded to two places (`= [5.00, 2.00]` for an expected `[5.0, 2.0]`), so compare
-values, not literal text. A failing evaluation exits 2 with
+Reals print as the shortest decimal that reads back as the same value, a whole one keeping its
+`.0` (`= [5.0, 2.0]`, `= 0.3333333333333333` for `1.0 / 3.0`). A failing evaluation exits 2 with
 `sysml: calc invocation failed: calc test::probe: evaluating the returned expression: <error>`,
 while a *static* rejection exits 2 with `did not analyse cleanly; no check was made` — worth
 distinguishing in a report, since a negative case can be caught at either tier. Beware that a
