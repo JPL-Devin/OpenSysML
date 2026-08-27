@@ -97,13 +97,15 @@ func New(sf *source.SourceFile) *Parser {
 }
 
 // fill ensures buf holds the token n positions ahead of the cursor (pulling
-// from the lexer, skipping and recording trivia). The final EOF token is
-// sticky (re-returned).
+// from the lexer, skipping trivia and recording the notes and comments among
+// it). The final EOF token is sticky (re-returned).
 func (p *Parser) fill(n int) {
 	for len(p.buf) <= p.pos+n {
 		tok := p.lx.Next()
 		for tok.IsTrivia() || tok.Kind == lexer.RegularComment {
-			p.triv = append(p.triv, triviaOf(tok))
+			if tr, ok := triviaOf(tok); ok {
+				p.triv = append(p.triv, tr)
+			}
 			if tok.Unterminated {
 				// Everything after the opener is inside it, so the declarations
 				// that follow are not in the tree at all.
@@ -126,7 +128,10 @@ func (p *Parser) fill(n int) {
 	}
 }
 
-func triviaOf(tok lexer.Token) ast.Trivia {
+// triviaOf converts a note or comment token into the trivia recorded for it.
+// Whitespace is most of a file's trivia and no consumer reads it, so it is not
+// recorded.
+func triviaOf(tok lexer.Token) (ast.Trivia, bool) {
 	var k ast.TriviaKind
 	switch tok.Kind {
 	case lexer.SLNote:
@@ -136,9 +141,9 @@ func triviaOf(tok lexer.Token) ast.Trivia {
 	case lexer.RegularComment:
 		k = ast.TriviaComment
 	default:
-		k = ast.TriviaWhitespace
+		return ast.Trivia{}, false
 	}
-	return ast.Trivia{Kind: k, Span: tok.Span}
+	return ast.Trivia{Kind: k, Span: tok.Span}, true
 }
 
 // peek returns the current non-trivia token without consuming it.
@@ -146,6 +151,9 @@ func (p *Parser) peek() lexer.Token { return p.peekN(0) }
 
 // peekN returns the token n positions ahead (0 = current).
 func (p *Parser) peekN(n int) lexer.Token {
+	if i := p.pos + n; i < len(p.buf) {
+		return p.buf[i]
+	}
 	p.fill(n)
 	if p.pos+n >= len(p.buf) {
 		return p.buf[len(p.buf)-1] // EOF (sticky)
@@ -155,7 +163,9 @@ func (p *Parser) peekN(n int) lexer.Token {
 
 // advance consumes and returns the current token.
 func (p *Parser) advance() lexer.Token {
-	p.fill(0)
+	if p.pos >= len(p.buf) {
+		p.fill(0)
+	}
 	tok := p.buf[p.pos]
 	if tok.Kind != lexer.EOF {
 		p.pos++

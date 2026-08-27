@@ -16,6 +16,27 @@ func TestSpanText(t *testing.T) {
 	}
 }
 
+// Spans come out of one cached copy of the content, so repeated and empty
+// spans, in any order, still read what they cover.
+func TestSpanTextRepeatedAndEmptySpans(t *testing.T) {
+	sf := New("test.sysml", []byte("part def Engine;"))
+	for _, tc := range []struct {
+		sp   Span
+		want string
+	}{
+		{Span{Offset: 9, Len: 6}, "Engine"},
+		{Span{Offset: 0, Len: 4}, "part"},
+		{Span{Offset: 9, Len: 6}, "Engine"},
+		{Span{Offset: 4, Len: 0}, ""},
+		{Span{Offset: 0, Len: 16}, "part def Engine;"},
+		{Span{Offset: 16, Len: 0}, ""},
+	} {
+		if got := sf.Text(tc.sp); got != tc.want {
+			t.Errorf("Text(%v) = %q, want %q", tc.sp, got, tc.want)
+		}
+	}
+}
+
 func TestSpanEnd(t *testing.T) {
 	sp := Span{Offset: 4, Len: 3}
 	if sp.End() != 7 {
