@@ -11,6 +11,7 @@ on:
       - 'docs-requirements.txt'
       - 'scripts/mkdocs_repo_links.py'
       - 'scripts/mkdocs_landing.py'
+      - 'scripts/mkdocs_header_menu.py'
       - 'overrides/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:

@@ -1,6 +1,7 @@
 # The site is the docs/ tree unmodified: every page stays a Markdown file read on
-# GitHub, and MkDocs is only the renderer. The one exception is the landing page,
-# which frames docs/README.md with a hero that only makes sense on a web page.
+# GitHub, and MkDocs is only the renderer. The exceptions are the landing page, which
+# frames docs/README.md with a hero that only makes sense on a web page, and the header
+# menu, which links the sites GitHub's own header cannot.
 site_name: OpenSysML
 site_description: A SysML v2 and KerML implementation in Go — language server, REPL, execution runtime, and Go, Python, Node, Java and Rust clients
 site_url: https://opensysml.org/
@@ -13,8 +14,8 @@ docs_dir: docs
 
 theme:
   name: material
-  # overrides/ holds the landing page template only; every documentation page uses
-  # the theme as shipped.
+  # overrides/ holds the landing page template and the header menu; every documentation
+  # page is otherwise the theme as shipped.
   custom_dir: overrides
   features:
     - navigation.instant
@@ -42,15 +43,20 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
 
+extra_css:
+  - stylesheets/nav-menu.css
+
 plugins:
   - search
 
 # repo_links: links out of docs/ (examples/, Go sources, CONTRIBUTING.md) are correct
 # on GitHub and 404 here, so they are rewritten to the repository at build time.
 # landing: docs/README.md is rendered with the landing page template.
+# header_menu: the header override stays the shipped header plus the menu include.
 hooks:
   - scripts/mkdocs_repo_links.py
   - scripts/mkdocs_landing.py
+  - scripts/mkdocs_header_menu.py
 
 markdown_extensions:
   - admonition
