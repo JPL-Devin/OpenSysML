@@ -1,0 +1,14 @@
+NoticeViews::handshakeView - sequence rendering (view def SequenceView)
+
+part caller
+part callee
+
+messages:
+  caller => caller: echo
+  caller => callee: of Ping
+
+not represented:
+  - attribute def Kit::Level has no place in a sequence rendering; it is not shown
+  - a connection in Talk::Handshake states no direction; a sequence rendering shows directed messages only
+  - message pending states no source and target; no message is drawn
+  - message adrift attaches to monitor.tapped, which is on no lifeline the rendering shows; no message is drawn

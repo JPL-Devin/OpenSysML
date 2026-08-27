@@ -73,6 +73,7 @@ rendering can be asked for as if one had been declared:
 | `#interconnection` | …as an interconnection diagram |
 | `#state` | …as a state diagram |
 | `#action` | …as an action flow |
+| `#sequence` | …as a message sequence |
 | `#table` | …as an element table |
 | `#state:Kit::WidgetStates` | One element the document declares, here as a state diagram |
 
@@ -120,7 +121,7 @@ The result, for `{"view": "KitViews::widgetTree"}` over a document declaring
 | Field | Meaning |
 | --- | --- |
 | `view` | The view rendered, by qualified name; empty for a pseudo-view. |
-| `kind` | `tree`, `interconnection`, `state`, `action` or `table`. |
+| `kind` | `tree`, `interconnection`, `state`, `action`, `sequence` or `table`. |
 | `stated` | How the kind was decided — the rendering the view names, the standard view definition it specializes, or that no view was declared. Empty when the view took the default. |
 | `artifact` | What to draw or show: a Mermaid diagram, the text form, or a Markdown table. |
 | `nodes`, `edges` | What the artifact is made of, so a client can map a click on it back to the source. A node's `parent` is the node containing it, when one does. An edge's `kind` is `connection`, `transition`, `succession` or `flow`. |
@@ -129,9 +130,9 @@ The result, for `{"view": "KitViews::widgetTree"}` over a document declaring
 | `notices` | What the rendering could not represent, as the text form reports it. |
 | `version` | The version of the document the rendering was made from, so a client can tell a rendering of the text it is showing from a stale one. |
 
-A view stating a rendering this implementation does not produce — `sequence`,
-`geometry`, `textual` — fails with the reason, e.g.
-`KitViews::widgetSequence: sequence rendering (view def SequenceView) is not supported`.
+A view stating a rendering this implementation does not produce — `geometry`,
+`textual` — fails with the reason, e.g.
+`KitViews::widgetGeometry: geometry rendering (view def GeometryView) is not supported`.
 
 ## `opensysml/views` (request)
 
@@ -146,19 +147,23 @@ picker.
 {
   "views": [
     { "name": "KitViews::widgetParts", "kind": "interconnection", "supported": true },
+    { "name": "KitViews::widgetSequence", "kind": "sequence", "supported": true },
     {
-      "name": "KitViews::widgetSequence",
-      "kind": "sequence",
+      "name": "KitViews::widgetGeometry",
+      "kind": "geometry",
       "supported": false,
-      "reason": "KitViews::widgetSequence: sequence rendering (view def SequenceView) is not supported"
+      "reason": "KitViews::widgetGeometry: geometry rendering (view def GeometryView) is not supported"
     }
-  ]
+  ],
+  "pseudoViews": ["#action", "#interconnection", "#sequence", "#state", "#table", "#tree"]
 }
 ```
 
 Views come in qualified-name order. An unsupported one stays in the listing,
 with `supported: false` and the reason, so a client can say why it cannot be
-drawn instead of hiding it.
+drawn instead of hiding it. `pseudoViews` lists the supported `#<kind>` specs
+in sorted order; a client can use it to offer pseudo-views without duplicating
+the server's supported-kind list.
 
 ## `opensysml/renderChanged` (notification, server → client)
 

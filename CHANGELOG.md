@@ -6,6 +6,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Added
+
+- **A view specializing `StandardViewDefinitions::SequenceView` (or `sv`) renders as a sequence
+  diagram**, at the prompt (`%render`), from the command line (`sysml -render`) and over the LSP, in
+  the text form and as a Mermaid `sequenceDiagram`. The occurrences an interaction declares in its
+  body are its lifelines, a `message`/`flow` usage is a directed message between the lifelines its
+  ends' events belong to, and the successions between those events order the messages — a cycle
+  among them is reported and declaration order stands. What a sequence diagram cannot show — an
+  exposed element that holds no occurrence, an undirected `connect`, a message stating no ends or
+  attaching to something the view does not expose — is reported rather than dropped. A `geometry`
+  view remains recognized but not drawn.
+
+- **The `opensysml/views` response now reports supported pseudo-view specs**, so clients can offer
+  newly supported rendering kinds without maintaining a second list.
+
 ### Changed
 
 - **A Real prints as the shortest decimal that reads back as the same value**, on every surface
@@ -15,6 +30,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   evaluation had kept (`1.0 / 3.0` printed `0.33`, `123456789.987654` printed `123456789.99`),
   and disagreed between surfaces. A whole Real keeps its `.0` so it is not mistaken for an
   Integer. Arithmetic is unchanged: the stored value was never rounded.
+
+### Fixed
+
+- **Clicking a sequence participant now reveals its declaration, and the cursor highlights it**
+  using Mermaid's participant data attributes.
 
 ## 0.3.1 — 2026-08-27
 

@@ -75,9 +75,9 @@ func TestRenderOfANonViewIsTyped(t *testing.T) {
 // rather than rendering something else.
 func TestRenderOfAnUnsupportedKindNamesIt(t *testing.T) {
 	s := viewSession(t)
-	res := s.Submit(`package Sequenced {
+	res := s.Submit(`package Shaped {
     private import StandardViewDefinitions::*;
-    view messages : SequenceView {
+    view shapes : GeometryView {
         expose Demo::Vehicle;
     }
 }`)
@@ -86,11 +86,11 @@ func TestRenderOfAnUnsupportedKindNamesIt(t *testing.T) {
 			t.Fatalf("the view did not load: %v", res.Diagnostics)
 		}
 	}
-	_, err := s.ViewRendering("Sequenced::messages")
+	_, err := s.ViewRendering("Shaped::shapes")
 	if !errors.Is(err, view.ErrUnsupportedKind) {
 		t.Fatalf("err = %v, want view.ErrUnsupportedKind", err)
 	}
-	for _, want := range []string{"Sequenced::messages", "sequence"} {
+	for _, want := range []string{"Shaped::shapes", "geometry"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %q, want it to name %q", err, want)
 		}

@@ -12,8 +12,9 @@ import (
 // state-diagram grammar the state rendering maps onto directly.
 //
 // A graph-shaped rendering is a `flowchart`; a state rendering is a
-// `stateDiagram-v2`. What the rendering could not represent is written as
-// comments, so no notice is lost in the machine-readable form either.
+// `stateDiagram-v2` and a sequence rendering a `sequenceDiagram`. What the
+// rendering could not represent is written as comments, so no notice is lost in
+// the machine-readable form either.
 func (r *Rendering) Mermaid() string {
 	var b strings.Builder
 	if r.View == "" {
@@ -28,8 +29,12 @@ func (r *Rendering) Mermaid() string {
 	for _, notice := range r.Notices {
 		fmt.Fprintf(&b, "%%%% not represented: %s\n", notice)
 	}
-	if r.Kind == KindState {
+	switch r.Kind {
+	case KindState:
 		r.writeStateDiagram(&b)
+		return b.String()
+	case KindSequence:
+		r.writeSequenceDiagram(&b)
 		return b.String()
 	}
 	r.writeFlowchart(&b)
@@ -108,6 +113,31 @@ func (r *Rendering) writeStateDiagram(b *strings.Builder) {
 	}
 }
 
+// writeSequenceDiagram writes a sequence rendering as a Mermaid sequence
+// diagram: one participant per lifeline, declared before the messages, then the
+// messages in the order the rendering settled on.
+func (r *Rendering) writeSequenceDiagram(b *strings.Builder) {
+	b.WriteString("sequenceDiagram\n")
+	if r.Empty() {
+		// A sequence diagram carries no free text, so the reason is a
+		// participant of its own.
+		fmt.Fprintf(b, "  participant empty as %s\n", mermaidText(r.emptyReason()))
+		return
+	}
+	for _, node := range r.Roots {
+		fmt.Fprintf(b, "  participant %s as %s\n", node.ID, mermaidText(mermaidLabel(node)))
+	}
+	for _, edge := range r.Edges {
+		// The colon is part of the message syntax; only the text after it is left
+		// off when the message carries none.
+		if edge.Label == "" {
+			fmt.Fprintf(b, "  %s->>%s:\n", edge.From, edge.To)
+			continue
+		}
+		fmt.Fprintf(b, "  %s->>%s: %s\n", edge.From, edge.To, mermaidText(edge.Label))
+	}
+}
+
 // writeStateNode writes one state, its substates, and the start marker of an
 // initial one.
 func writeStateNode(b *strings.Builder, node *Node, depth int) {
@@ -161,8 +191,10 @@ func mermaidArrow(kind EdgeKind) string {
 	return "-->"
 }
 
-// mermaidText escapes what a quoted Mermaid label may not carry literally.
+// mermaidText escapes what a Mermaid label may not carry literally. A semicolon
+// ends a statement, which an unquoted label — a sequence participant or a
+// message — would be cut short by.
 func mermaidText(text string) string {
-	replacer := strings.NewReplacer("#", "#35;", "\"", "#quot;", "\n", " ", "<", "#lt;", ">", "#gt;")
+	replacer := strings.NewReplacer("#", "#35;", "\"", "#quot;", "\n", " ", "<", "#lt;", ">", "#gt;", ";", "#59;")
 	return replacer.Replace(text)
 }

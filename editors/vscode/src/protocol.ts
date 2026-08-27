@@ -83,6 +83,7 @@ export interface ViewInfo {
 
 export interface ViewsResult {
   views: ViewInfo[];
+  pseudoViews?: string[];
 }
 
 export interface RenderChangedParams {
