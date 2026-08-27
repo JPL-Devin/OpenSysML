@@ -69,7 +69,7 @@ func runRenderAll(files []string) error {
 	if len(views) == 0 {
 		return errors.New("the model declares no views; nothing was rendered")
 	}
-	if err := os.MkdirAll(renderAllDir, 0o755); err != nil {
+	if err := os.MkdirAll(renderAllDir, 0o750); err != nil {
 		return fmt.Errorf("create rendering directory %s: %w", renderAllDir, err)
 	}
 
