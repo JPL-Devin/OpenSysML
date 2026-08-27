@@ -202,6 +202,13 @@ We use [Semantic Versioning](https://semver.org/):
 corpus before the suite and runs the corpus gate as its own step, so that gate is required
 rather than skipped.
 
+Its first job, `Changed areas`, runs `scripts/ci-changed-areas.sh` over the pull request's
+files and the rest of the jobs are gated on what it reports: a change confined to one client
+runs that client's job alone, while a change to the Go sources, the proto, `conformance/` or
+the workflows runs everything. A path no area claims turns every area on, so a new directory
+is over-tested rather than untested — teach the script about it, and add a case to
+`scripts/ci-changed-areas-test.sh`, which the same job runs.
+
 ### CircleCI
 
 All commits and tags trigger CI:

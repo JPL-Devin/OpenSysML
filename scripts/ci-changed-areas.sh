@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Decides which CI areas a pull request has to exercise, from the files it touches.
+#
+# Usage: scripts/ci-changed-areas.sh <base-ref-or-sha> [head-ref-or-sha]
+#
+# Prints one `area=true|false` line per area, in the shape a GitHub Actions job
+# output file takes. A file no area claims turns every area on, so a path this
+# script has not been taught about is never silently untested.
+set -euo pipefail
+
+base=${1:?usage: ci-changed-areas.sh <base> [head]}
+head=${2:-HEAD}
+
+changed=$(git diff --name-only "$(git merge-base "$base" "$head")" "$head")
+
+# The service and the schema the clients speak to, plus the shared conformance
+# scenarios: a change here can change every client's answers, so all of them run.
+service_pattern='^(api/proto/|cmd/|internal/|pkg/|conformance/|testdata/|scripts/|examples/|Makefile$|go\.mod$|go\.sum$|buf\.|\.github/workflows/|\.circleci/)'
+docs_pattern='^(docs/|mkdocs\.yml$|README\.md$|CHANGELOG\.md$|CONTRIBUTING\.md$|AGENTS\.md$|.*\.md$)'
+node_pattern='^clients/node/'
+python_pattern='^python/'
+java_pattern='^clients/java/'
+vscode_pattern='^editors/vscode/'
+
+known_pattern="$service_pattern|$docs_pattern|$node_pattern|$python_pattern|$java_pattern|$vscode_pattern|^\.agents/|^\.gitignore$|^LICENSE|^packaging/"
+
+matches() { grep -Eq "$1" <<<"$changed"; }
+
+if [ -z "$changed" ] || grep -Ev "$known_pattern" <<<"$changed" | grep -q .; then
+  unclaimed=$(grep -Ev "$known_pattern" <<<"$changed" || true)
+  [ -n "$unclaimed" ] && echo "unclaimed paths, so every area runs:" >&2 && echo "$unclaimed" >&2
+  service=true
+else
+  matches "$service_pattern" && service=true || service=false
+fi
+
+emit() { echo "$1=$2"; }
+
+emit go "$service"
+emit docs "$( { [ "$service" = true ] || matches "$docs_pattern"; } && echo true || echo false)"
+emit node "$( { [ "$service" = true ] || matches "$node_pattern"; } && echo true || echo false)"
+emit python "$( { [ "$service" = true ] || matches "$python_pattern"; } && echo true || echo false)"
+emit java "$( { [ "$service" = true ] || matches "$java_pattern"; } && echo true || echo false)"
+emit vscode "$( { [ "$service" = true ] || matches "$vscode_pattern"; } && echo true || echo false)"
