@@ -4,7 +4,7 @@ Python client for OpenSysML: parse, inspect and execute SysML v2 models over the
 `sysml-grpc` service.
 
 ```bash
-pip install opensysml             # from PyPI, once the first release is published
+pip install opensysml             # from PyPI
 pip install -e python/          # or from a checkout, at the repository root
 ```
 

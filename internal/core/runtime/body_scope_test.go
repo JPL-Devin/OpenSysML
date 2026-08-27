@@ -25,9 +25,9 @@ func TestBodyScopeImportSpellings(t *testing.T) {
 					action step {
 						assign t := t + pkgStep;
 					}
-					done end;
-					then start step;
-					then step end;
+					done;
+					succession first start then step;
+					succession first step then done;
 				}
 			}
 		`

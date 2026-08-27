@@ -4,8 +4,8 @@
   "performers": [
     {
       "object": "SendIdentityNested::solo",
-      "finalState": "heard",
-      "stateVisits": ["start", "sending", "heard"]
+      "finalState": "done",
+      "stateVisits": ["start", "sending", "done"]
     }
   ]
 }

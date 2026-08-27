@@ -12,8 +12,8 @@ import (
 // never list them — reserving them would stop models naming features with them
 // — so editor surfaces that want them highlighted or offered read them here.
 var contextualWords = []string{
-	"chain", "choice", "deep", "defer", "done", "final", "history",
-	"initial", "junction", "point", "region", "shallow",
+	"chain", "choice", "deep", "defer", "done", "history",
+	"junction", "point", "shallow",
 }
 
 // contextualKerMLWords are contextual in `.kerml` only: `var` is a literal of

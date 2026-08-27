@@ -1,0 +1,16 @@
+exit: lstart (exit action)
+stmt action body
+  stmt assign log
+      eval feature log -> ""
+      eval literal "l;" -> "l;"
+    eval operator + -> "l;"
+enter: done
+transition: lstart -> done (event: accept First)
+exit: rstart (exit action)
+stmt action body
+  stmt assign log
+      eval feature log -> "l;"
+      eval literal "r;" -> "r;"
+    eval operator + -> "l;r;"
+enter: done
+transition: rstart -> done (event: accept Second)

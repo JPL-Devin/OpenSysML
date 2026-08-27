@@ -597,10 +597,10 @@ because the obvious ones cannot:
   completes happily with the package's number (e.g. `result = 100.00` instead of `4.00`), which no
   error-message check would ever catch. The three-layer action shape (package `h`, action `h`,
   block-local `h` → `seenAction = 2.00`, `seenBlock = 3.00`) is the equivalent for action bodies.
-- Substates are **not** entered by nesting `initial`/`then` inside a plain `state`; that shape runs
+- Substates are **not** entered by nesting a succession inside a plain `state`; that shape runs
   the outer entry and completes without ever entering the inner state (`innerRan = 0.00` on every
   revision, pre-existing). Use the `region` form from `state_fork_join_pseudostate.sysml`, with a
-  transition naming the substate (`transition init to inner;`), or the machine never descends.
+  transition naming the substate (`transition first init then inner;`), or the machine never descends.
 - Quantity values are the cheapest scope probe for imports, since a missing `SI::*` shows up as
   `not a quantity expression: not a measurement unit: unresolved unit s` rather than a wrong number.
   Pair each such model with a bare-`Real` rewrite and assert the same magnitudes, which catches a
@@ -2075,6 +2075,57 @@ Three cheap, high-signal sweeps:
 Go may not be at the blueprint's `/usr/local/go/bin` on every box; check `~/sdk/go/bin` too
 (`PATH=$HOME/sdk/go/bin:$HOME/go/bin:$PATH`) before concluding the toolchain is missing.
 
+### Calc-body member dispatch (trailing result expressions vs declarations)
+
+A calculation body's *last member* may be a bare expression that is the calc's result
+(`calc def Add { in x; in y; x + y }`). The parser decides per member whether it is looking at a
+declaration or at that result expression, and every change to that predicate has broken a
+neighbouring shape at least once. Test all four families on the same build, because they are
+independent code paths and passing one says nothing about the others:
+
+1. **Prefix operators** at the start of a trailing expression: `-x`, `+x`, `~x`, `not flag`.
+2. **Parenthesis-less arrow invocations followed by a binary operator**: `xs->size - 1`,
+   `xs->size + 1`, `-xs->size`, `xs->reduce '*'`, `xs->collect Twice`, `xs->includes(3)`. These
+   share the argument-start predicate with the prefix family, so broadening one has silently
+   broken the other (`expected an expression` on `xs->size - 1`).
+3. **Word (keyword) binary operators**, which lex as keywords and so can be mistaken for a
+   declaration head: `a and b`, `x or y`, `x xor y`, `x implies y`, `x as Real`,
+   `x istype Real`, `x hastype Real`, `x meta …`. The failure signature is
+   `error: expected a body member` with the caret on the keyword.
+4. **Genuine declarations that must still win**: `x : Real;` inside the same body, `return r;`,
+   `return r : Real = a;` — plus the quoted-keyword name form `in 'and'; 'and'`, which must stay
+   a valid declaration *and* reference.
+
+Adversarial cases that must diagnose and never panic: `a and;`, `a as;`, `a and b and`,
+`a implies`, an unquoted `in and;` (expect `"and" is a reserved keyword, not a name … write
+'and' to use it as a name`). Wrap each in `timeout 20` and assert on the *exit code plus the
+first diagnostic line*, not just "it printed something".
+
+Validation is not enough for these — evaluate them too, since only execution proves the trailing
+expression became the result: `./bin/sysml -calc 'p::andc(true,false)' -calc 'p::orc(true,false)'
+… file.sysml` accepts repeated `-calc` flags and prints one `= value` per invocation. Two
+operators parse and validate but are **not evaluable** on any revision (verify against a parent
+binary before reporting them as a regression): `~` → `unsupported operator: '~': bitwise
+complement is declared by no function library the runtime applies`, and `as` →
+`unsupported operator: 'as': a cast needs the runtime type of a value, which values do not carry
+yet`.
+
+Fixture hygiene for these files: use `public import ScalarValues::*;` (a bare
+`import ScalarValues::*;` is itself a diagnostic), and import `SequenceFunctions` /
+`ControlFunctions` / `NumericalFunctions` for arrow and operator-name shapes. Trailing
+expressions *are* name-resolved as of PR #581, so a body that validated clean on an older binary
+can now report `unresolved reference: <name>` — that is the intended tightening, not a bug. The
+committed conformance fixtures `internal/core/runtime/testdata/conformance/calc_simple_add.sysml`
+and `calc_unary_operators.sysml` lack the ScalarValues import and therefore exit 2 on
+`unresolved reference: Integer/Boolean` **on the parent binary too**; judge such a run by the
+absence of parse/`return`-related diagnostics, not by the exit code.
+
+REPL trap when testing refusals: after **any** submission fails to parse, the poisoned line
+stays in the session buffer, so a later `%eval <symbol>` reports `error: parse failed: <first
+error>` for the rest of the session (reproducible on old binaries — pre-existing). `%eval 1 + 1`
+and fresh `calc` declarations still work, so this is not a crash; restart `bin/sysml` between
+error cases instead of assuming the buffer recovers.
+
 ### Naming changes that reach lowering and the runtime
 
 When a parser change alters which declarations carry a name (e.g. `ast.EffectiveName` deriving the
@@ -2506,13 +2557,13 @@ actually descend into:
   pre-fix commit the entry form can already work while the **transition effect** fails with
   `error: event processing failed: transition effect: send reaches no receiving port: port "src" is
   joined to no port that can receive it` — so the transition-effect case is the discriminating one.
-- **Nesting: `initial`/`then` inside a composite state does not descend** in this build — a
-  `state outer { initial s0; state a { entry … } s0 then a; }` machine stays in `outer` and the inner
-  entry never runs (reproducible with no part/ports involved, so it is a pre-existing state-machine
-  limitation, not routing). Use the **entry-succession form instead**, which does descend and shows a
-  `State stack (active configuration): 0. outer / 1. a` in `%current`:
+- **Nesting: a succession between substates does not descend on its own** in this build — a
+  `state outer { state a { entry … } … }` machine whose inner state is only a succession target stays
+  in `outer` and the inner entry never runs (reproducible with no part/ports involved, so it is a
+  pre-existing state-machine limitation, not routing). Use the **entry-succession form instead**,
+  which does descend and shows a `State stack (active configuration): 0. outer / 1. a` in `%current`:
   `state machine { entry; then outer; state outer { entry; then a; state a { entry send … via src; } … } }`
-  A `region main { initial start; … }` wrapper also works with plain `initial`.
+  A `region main { entry; then start; … }` wrapper works the same way.
 - **Add a negative for over-reach:** a machine at package level with an unconnected port, and a
   second part with its own `connect ox to oy`. The send must still fail with the typed error — if the
   scope walk goes too far it could pick up the unrelated part's connectors.
@@ -2544,7 +2595,7 @@ actually descend into:
   executing `perform` effect use a fixture whose action has `first`/`then` nodes, e.g.
   `conformance/state_transition_effect_perform.sysml` (counter 1 → 11).
 - For transition-terminator/`;` work specifically, the discriminating inputs are:
-  `transition a to b do assign x := x + 1;` (compact), `transition first a do … then b;`,
+  `transition first a do assign x := x + 1 then b;`, `transition first a do … then b;`,
   `do { … ; };` (braced), `do perform A;`, plus the negatives `;;`
   (`error: expected a body member`), no `;` (both `expected ';' after assignment` *and*
   `expected ';' after transition`), braced with no trailing `;`
@@ -2566,7 +2617,7 @@ Discovered while testing inline `entry action { … }` bodies and calc `out` ass
 - **`transition first a accept when true then z;` never fires.** A `when` trigger is a change
   trigger evaluated on an event, and a machine with no events sits in `a` forever — so a fixture
   written that way silently tests *only* the entry behavior and never the exit behavior. To exercise
-  exit behaviors and ordering, use **completion transitions**: `initial start; … then start work;
+  exit behaviors and ordering, use **completion transitions**: `entry; then start; … then start work;
   then work done;` (the `state_anonymous_action_body.sysml` conformance fixture is the model to copy).
 - **An inline body is one action per do round.** After a do body has run to its end the state has
   no more pending work, so further `%advance` calls do not re-run it; a counter incremented by a
@@ -2580,7 +2631,7 @@ Discovered while testing inline `entry action { … }` bodies and calc `out` ass
   - an action a `perform` targets needs `first`/`then` nodes, else
     `initialize action: no initial node found`.
   - `then work done do assign x := 1;` does not parse (`expected ';' after succession edge`);
-    use the `transition work to done do assign x := 1;` form for an effect.
+    use the `transition first work do assign x := 1 then done;` form for an effect.
 - **`perform <Action>;` inside an inline body** works as of PR #135 (before it, it failed with
   `state behavior <anonymous>: action usage "Work" in a body is not executable` while the same
   `perform` in the statement-form body `entry { … perform Work; }` executed). It is a good
@@ -3229,7 +3280,7 @@ Shapes worth covering, in increasing order of subtlety — each has broken indep
    LCA (regressions for the `leaveRegion` / `getLCA` paths);
 8. **a region whose owning state is a plain substate** — the single highest-value shape, because it
    broke the dispatch walk and the exit walk independently, in consecutive commits. Write it as
-   `region right { initial rs; state wrapper { state mid { region inner { … state ideep … } } }
+   `region right { entry; then rs; state rs; state wrapper { state mid { region inner { … state ideep … } } }
    then rs mid; }`: `mid` is declared directly in `wrapper`'s body, so it is **not** in
    `graph.RegionOf`, and `then rs mid;` is what makes the inner region active. Any outward walk
    written as `RegionOf[RegionOwner[…]]` returns nil here and silently takes a wrong branch, and any
@@ -3266,7 +3317,7 @@ visible (`lidle | wrapper | deepState`) as part of every such pass.
 directly in a state body (`state outer { state first; state second; }`) did not start in a history
 model — the machine stalled at `outer` and no transition fired — so a model written that way looks
 like a runtime failure when it is really an authoring shape the engine does not drive. Declare
-`state outer { region only { initial os; state first; … then os first; } }` instead. Note the
+`state outer { region only { entry; then os; state os; state first; … then os first; } }` instead. Note the
 exception exercised deliberately by shape 8 above: a substate *owning* a region
 (`state mid { region inner { … } }`) does run, provided the enclosing region's initial transition
 names it (`then rs mid;`).
@@ -3433,16 +3484,16 @@ new = error + `did not analyse cleanly` exit 2 on identical input.
 
 Fixture shapes that actually discriminate (all one-liners; `state def` and `state` usage both work):
 
-- Illegal, target of another machine: two `state def`s in one package, `transition busy to
+- Illegal, target of another machine: two `state def`s in one package, `transition first busy then
   Other::running;` → reported at the endpoint's column.
-- Illegal, marker as target: `first begin then off;` plus `transition on to begin;` → the message
-  says **"start marker"**, which is how you tell `VertexKind` is being consulted.
-- Illegal, dangling routing pseudostate: `junction route;` + `transition busy to route;` and no
+- Illegal, marker as target: `first begin then off;` plus `transition first on then begin;` → the
+  message says **"start marker"**, which is how you tell `VertexKind` is being consulted.
+- Illegal, dangling routing pseudostate: `junction route;` + `transition first busy then route;` and no
   transition out → reported at the `junction` declaration, not at the transition.
 
 False-positive traps to always include as *legal* rows, since each exercises a different branch:
 
-- A transition into a **sibling orthogonal region** (`transition lidle to rtarget;` across
+- A transition into a **sibling orthogonal region** (`transition first lidle then rtarget;` across
   `region left` / `region right`) — legal per UML §14.2.3.9.
   `internal/core/runtime/testdata/conformance/state_transition_sibling_region.sysml` is the shipped
   one; run it with `%state TransitionSiblingRegion` + `%advance 1` → `Current state: lidle | rtarget`
@@ -3511,7 +3562,7 @@ Two traps when writing these fixtures:
 - A succession carries **no guard**, so a cross-region succession re-enters the composite state, the
   source region restarts, and the edge re-fires forever: the run ends on `Stopped at the event budget
   (1000000 events; raise SYSML_MAX_EVENTS to allow more)`. That is a clean bounded stop, not a hang —
-  the state/attribute evidence is still valid. Use the guarded `transition a to b if flag == 0;` form
+  the state/attribute evidence is still valid. Use the guarded `transition first a if flag == 0 then b;` form
   when you want the run to settle instead.
 - Running a shipped conformance model straight from the CLI can report `unresolved reference: Integer`
   because the conformance harness supplies imports the file omits; add `import ScalarValues::*;` in
@@ -3541,8 +3592,9 @@ Driving and reading:
 - Put fixtures under `$HOME` (e.g. `~/fixtures/pr<N>/`), never `/tmp` — `/tmp` is wiped between
   sessions and you will lose an afternoon of fixtures. `%load` needs an **absolute** path.
 - A nested state reference must be **qualified**: `start then Working::Step1`, not `then Step1`.
-- A nested `initial` only takes effect inside an explicit `region { … }`. `state Outer { initial o;
-  state Mid { … } transition o to Mid; }` enters **Outer only** — `ActiveStates()`/`%current` show
+- A nested entry succession only takes effect inside an explicit `region { … }`. `state Outer {
+  entry; then o; state o; state Mid { … } transition first o then Mid; }` enters **Outer only** —
+  `ActiveStates()`/`%current` show
   no substate at all, and any test built on that shape silently probes the wrong thing. Wrap both
   levels in regions and assert the pre-condition configuration before the interesting step.
 - `ActiveStates()` for a region-wrapped chain lists the *innermost* composites and leaves
@@ -3571,7 +3623,7 @@ Timers (`accept after N` + `%advance`) are the cheapest scheduling probe:
   time-triggered transition ignores its own *signal* transitions, and signal transitions on leaves
   inside top-level regions never fire. So drive timer fixtures purely with `accept after`, and
   verify any such oddity against a contrast binary before reporting it.
-- `deep history resume;` works in REPL fixtures (`transition away to resume`) and doubles as an
+- `deep history resume;` works in REPL fixtures (`transition first away then resume`) and doubles as an
   exit-chain probe, since the return path re-runs the entry digits.
 - Once composite self-transitions re-enter their regions, a fixture whose signal poster sits
   *inside* the self-transitioning composite becomes an infinite event loop; post from a sibling
@@ -5051,3 +5103,73 @@ bytes), cold start is ~4 ms for stdio vs ~6-8 ms over TCP, and every small-paylo
 sd of the same order as its p50 — quote those as noise, never as a per-call transport win. The
 reported payload sizes (467,971 proto / 513,339 JSON for the large `Query`) are stable enough
 to diff against a document's table verbatim.
+
+## Driving state-machine completion (`then done;`) and its surfaces
+
+There is **no `%send`/signal-injection meta-command**. A machine whose transitions are triggered by
+`accept <SignalName>` will sit `quiesced` forever in the REPL — the signal lists in
+`internal/core/runtime/testdata/conformance/*.expected.json` are the *conformance harness*, not the
+REPL. To drive a machine interactively, write fixtures with **timed triggers**
+(`state a { accept after 5 then done; }`) and step them with `%advance <t>`; each region can be given
+a different delay so a partial configuration is observable. `sysml <model> -state <name>` only
+*starts* the executor and prints the initial configuration — it does not run to completion, so use
+the REPL for completion claims.
+
+Completion (a transition whose endpoint is the unqualified `done`) shows up as, in order,
+`Current state: done`, a blank line, and ``✓ State machine completed (a transition reached `done`)``;
+`%current` then reports `Execution state: Completed`. Useful shapes when testing it:
+
+- **Exit action of the completing state:** give the source state `exit assign log := "...";` and read
+  `State data:` in `%current` after completion — that proves entering `done` ran the exit behaviors.
+- **Orthogonal machines** must stay `Running` while the configuration is e.g. `done | rstart`, and
+  only report completion at `done | done`.
+- **A machine declaring its own `state done;`** resolves the endpoint to that state: it is entered as
+  an ordinary state (`Running`) and can transition onward. This is the key "not silently completed" case.
+- **A qualified endpoint (`Other::done`) or `done` as a transition *source*** is a typed error at
+  executor creation (`lower state machine: transition endpoint … names a state that is not a vertex of
+  this state machine`, or `no initial state found`) — never a panic and never a completion.
+- **Nested orthogonal regions are the discriminating shape.** A `done` reached inside a region owned by
+  a *composite* state (so `graph.TopRegions` does not describe it) must **not** complete the machine
+  while a sibling region is still active; `completeIfDone`/`machineComplete` walk outward through each
+  enclosing region set (`RegionOwner`/`CompositeStates`) and require every concurrent region to have
+  completed. An implementation that only checks `graph.TopRegions` completes early and still prints the
+  same completion line, so always drive the fixture with *staggered* `accept after N` delays and assert
+  `Execution state: Running` at the first completion:
+
+  ```sysml
+  state def M { entry; then outer;
+      state outer parallel {
+          state r1 { entry; then x; state x { accept after 5 then done; } }
+          state r2 { entry; then y; state y { accept after 7 then done; } } } }
+  ```
+  `%advance 5` → `done | y` + `Running`, no completion line; `%advance 2` → `done | done` + `Completed`.
+  Add a *two-level* variant (a `parallel` state inside a region of another `parallel` state) whose inner
+  region finishes **after** an outer sibling region, so the walk is exercised in both directions and
+  order-independently. Contrast against a binary from the commit before the fix — the buggy behaviour is
+  a completion line at the *first* region's timestamp with the sibling still in its own state.
+- `then done;` in an **action** body is unrelated: it is the action final node, checked with
+  `sysml <model> -action <name>` (expect `Action completed` and the result values).
+
+### Seeing a state view (`completes` detail)
+
+The `(initial)` / `(completes)` state details only appear in a **state rendering**. A view is only a
+state rendering if it specializes the standard view definition by its qualified name:
+
+```sysml
+view MView : StandardViewDefinitions::StateTransitionView { expose M; }
+```
+
+`view def StateTransitionView;` declared locally, or `render asTreeDiagram;`, both fall back to the
+tree rendering, which prints only `state a` and hides the detail. `render Views::asTreeDiagram;` is
+the correct spelling for a rendering reference (bare `asTreeDiagram` is unresolved).
+
+### Removed state-body notation
+
+`state def S { state s; final s; }` is a **parse** error, reported identically at every surface:
+CLI `-validate` → `4:9: error: expected a body member` with a caret under `final` and exit 2; the REPL
+prints the same located error for `%load` and for a typed-in declaration; `bin/sysml-lsp` publishes
+severity **1**, code `syntax`, on the `final` token's range. `final` itself is unreserved, so
+`attribute final : ScalarValues::Boolean;`, `state final;` and `transition first final … ` still parse
+(they only trigger the ordinary duplicate-name warning when both are declared). A cheap non-vacuity
+check for a removed diagnostic is `strings bin/sysml | grep -c '<removed message fragment>'` compared
+against the contrast binary.

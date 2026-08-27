@@ -7,5 +7,5 @@ step 2: token 1@counter
 step 3: token 1@recorder
 stmt assign number
   eval feature n -> 50
-step 4: token 1@end
+step 4: token 1@done
 step 5: no active tokens

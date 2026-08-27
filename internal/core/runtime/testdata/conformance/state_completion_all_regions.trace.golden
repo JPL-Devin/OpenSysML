@@ -1,0 +1,6 @@
+exit: lstart
+enter: done
+transition: lstart -> done (event: accept First)
+exit: rstart
+enter: rbusy
+transition: rstart -> rbusy (event: accept Second)

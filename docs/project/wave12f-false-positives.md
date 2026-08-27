@@ -12,6 +12,10 @@ project; the numbering is chronological and carries no external meaning. `F<n>` 
 follow-up table in [pilot-differential.md](pilot-differential.md), and `K<n>`/`S<n>` its KerML and
 SysML diagnostic classes. A reader who only wants the verdicts can ignore all of them.
 
+**Oracle figures in this record are as measured at the round it documents, not the current baseline.**
+The current baseline is the generated block in [README](../../README.md) and
+[architecture](../internals/architecture.md), regenerated and gated by `make docs-counts`.
+
 Every number below is from a fresh-cache run on this branch, never quoted from a report:
 
 ```

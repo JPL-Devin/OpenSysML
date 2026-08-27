@@ -3,13 +3,13 @@ package test {
     state TestEffects {
         attribute counter : Integer = 0;
         
-        initial init;
+        entry; then init;
+        state init;
         state active;
-        final done;
         
-        init then active;
-        transition active to done do {
+        succession first init then active;
+        transition first active do {
             counter = counter + 1;
-        };
+        } then done;
     }
 }

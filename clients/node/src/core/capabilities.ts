@@ -1,0 +1,98 @@
+// What a connected service can do. A client asks by capability name, never by
+// version: the service does not answer UNIMPLEMENTED for a capability it lacks,
+// so the advertised list is the only reliable answer.
+
+import { OpenSysMLError } from "./errors.js";
+
+/** Static type facts on a symbol: `typeInfo`, `multiplicity`, `specializations`. */
+export const CAPABILITY_TYPE_FACTS = "type_facts";
+/** Populated `SymbolInfo.attributes`. */
+export const CAPABILITY_SYMBOL_ATTRIBUTES = "symbol_attributes";
+/** Evaluating an expression against an instantiated subject. */
+export const CAPABILITY_EVALUATE_SUBJECT = "evaluate_subject";
+/** An object's values as `Instance.feature_values`. */
+export const CAPABILITY_FEATURE_VALUES = "feature_values";
+/** An enumeration literal as `Value.enum_literal`. */
+export const CAPABILITY_ENUM_VALUES = "enum_values";
+/** A valueless feature of a value type as `Value.unset`. */
+export const CAPABILITY_UNSET_VALUE = "unset_value";
+/** `ParseFileRequest.language`, which declares the language of inline content. */
+export const CAPABILITY_INLINE_LANGUAGE = "inline_language";
+/** `ParseFileRequest.strict_conformance`. */
+export const CAPABILITY_STRICT_CONFORMANCE = "strict_conformance";
+/** The `Convert` RPC. Not used by this version; see the README. */
+export const CAPABILITY_CONVERT = "convert";
+/** The verification RPCs. Not used by this version; see the README. */
+export const CAPABILITY_VERIFICATION = "verification";
+/** The `Query` RPC. Not used by this version; see the README. */
+export const CAPABILITY_QUERY = "query";
+/** The `ApplyEdits` RPC. Not used by this version; see the README. */
+export const CAPABILITY_APPLY_EDITS = "apply_edits";
+
+/** Self-description of the service a connection talks to. */
+export class ServerInfo {
+  /** Version the service reports. Informational only; empty when unanswered. */
+  readonly version: string;
+  readonly capabilities: ReadonlySet<string>;
+  /** Whether the service answered the handshake; false means it predates `GetServerInfo`. */
+  readonly answered: boolean;
+  /** Where the service came from: the binary this client started, or the address it dialled. */
+  readonly origin: string;
+
+  constructor(init: {
+    version: string;
+    capabilities: Iterable<string>;
+    answered: boolean;
+    origin: string;
+  }) {
+    this.version = init.version;
+    this.capabilities = new Set(init.capabilities);
+    this.answered = init.answered;
+    this.origin = init.origin;
+  }
+
+  has(capability: string): boolean {
+    return this.capabilities.has(capability);
+  }
+
+  /** One-line description of the service, for an error message. */
+  describe(): string {
+    if (!this.answered) {
+      return `${this.origin} (version unknown: too old to answer GetServerInfo, so it predates every capability)`;
+    }
+    const reported = [...this.capabilities].sort().join(", ") || "none";
+    const version = this.version === "" ? "unknown" : this.version;
+    return `${this.origin} (version ${version}, capabilities: ${reported})`;
+  }
+}
+
+/** The connected service does not report a capability the operation requires. */
+export class MissingCapabilityError extends OpenSysMLError {
+  readonly capability: string;
+  readonly info: ServerInfo;
+
+  constructor(capability: string, info: ServerInfo, remedy: string) {
+    super(
+      `the sysml-grpc service does not support the ${JSON.stringify(capability)} capability, ` +
+        `which this operation requires.\n  service: ${info.describe()}\n  fix:     ${remedy}`,
+    );
+    this.capability = capability;
+    this.info = info;
+  }
+}
+
+/** Throws unless the service reports `capability`. */
+export function requireCapability(info: ServerInfo, capability: string, remedy: string): void {
+  if (!info.has(capability)) {
+    throw new MissingCapabilityError(capability, info, remedy);
+  }
+}
+
+/** Remedy text for a service that lacks `capability`, naming both routes to one that has it. */
+export function upgradeRemedy(capability: string): string {
+  return (
+    `run a sysml-grpc whose GetServerInfo reports ${JSON.stringify(capability)}: install a ` +
+    `newer @opensysml/sysml-grpc-<platform> package, point $OPENSYSML_BINARY at a build that ` +
+    `has it, or start one yourself and connect to its address`
+  );
+}

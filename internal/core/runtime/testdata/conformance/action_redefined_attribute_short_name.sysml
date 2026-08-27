@@ -14,10 +14,10 @@ package test {
 			assign total := total + x;
 		}
 
-		done end;
+		done;
 
-		then start bump;
-		then bump end;
+		succession first start then bump;
+		succession first bump then done;
 	}
 
 	action def Base {

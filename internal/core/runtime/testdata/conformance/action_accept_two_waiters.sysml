@@ -30,17 +30,17 @@ package test {
 			assign message := t;
 		}
 
-		done end;
+		done;
 
-		then start split;
-		then split listenNumber;
-		then split listenText;
-		then split gate;
-		then listenNumber sync;
-		then listenText sync;
-		then gate sender;
-		then sender sync;
-		then sync recorder;
-		then recorder end;
+		succession first start then split;
+		succession first split then listenNumber;
+		succession first split then listenText;
+		succession first split then gate;
+		succession first listenNumber then sync;
+		succession first listenText then sync;
+		succession first gate then sender;
+		succession first sender then sync;
+		succession first sync then recorder;
+		succession first recorder then done;
 	}
 }

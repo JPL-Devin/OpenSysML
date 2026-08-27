@@ -1,16 +1,14 @@
 package RegionCompletion {
-    state def Machine {
-        region left {
-            initial lstart;
+    state def Machine parallel {
+        state left {
+            entry; then lstart;
             state lstart;
-            final ldone;
-            transition lstart to ldone when First;
+            transition first lstart when First then done;
         }
-        region right {
-            initial rstart;
+        state right {
+            entry; then rstart;
             state rstart;
-            final rdone;
-            transition rstart to rdone when Second;
+            transition first rstart when Second then done;
         }
     }
 }

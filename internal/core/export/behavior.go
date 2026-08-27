@@ -23,7 +23,6 @@ const (
 	mFinalNode       = "FinalNode"
 	mActionExecution = "ActionExecutionNode"
 	mIfBranch        = "IfBranch"
-	mStateRegion     = "StateRegion"
 	mPseudostate     = "Pseudostate"
 	mDeferMember     = "DeferMember"
 )
@@ -95,7 +94,6 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 
 	case *ast.FinalNode:
 		head(rdf.OpenSysMLTerm(mFinalNode))
-		e.name(subject, n.Name)
 		return true, nil
 
 	case *ast.ForkNode:
@@ -210,16 +208,9 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		return true, e.encode(n.Body, fqn, subject)
 
 	case *ast.StateNode:
-		// A state of a state machine, including the `initial <name>;` and
-		// `final <name>;` markers, whose keyword says which of the two it is.
+		// A state of a state machine.
 		head(rdf.SysMLTerm(mStateUsage))
 		e.name(subject, n.Name)
-		switch {
-		case n.IsInitial:
-			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("initial"))
-		case n.IsFinal:
-			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("final"))
-		}
 		members := stateBody(n)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(len(members) > 0))
 		return true, e.encode(members, fqn, subject)
@@ -229,12 +220,6 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		e.name(subject, n.Name)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(false))
 		return true, nil
-
-	case *ast.StateRegion:
-		head(rdf.OpenSysMLTerm(mStateRegion))
-		e.name(subject, n.Name)
-		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
-		return true, e.encode(n.States, fqn, subject)
 
 	case *ast.EntryMember:
 		return true, e.encodeSubaction(n, n.Actions, "entry", head, subject, fqn)
@@ -446,21 +431,19 @@ func (e *encoder) pseudostateKeyword(n *ast.PseudostateNode) string {
 }
 
 // transitionSyntax names the spelling a transition was written in: `first`
-// marking the source, `to` naming the target after it, or the `accept` of a
-// transition that states only its trigger.
+// marking the source, `source` stating it without that marker, or the `accept`
+// of a transition that states only its trigger.
 func (e *encoder) transitionSyntax(n *ast.TransitionMember) string {
 	if n.Source == nil {
 		return "accept"
 	}
-	// `first` is a legal state name, so `transition first to second;` names one
-	// rather than marking the source.
 	fields := strings.Fields(e.text(n))
 	for i := 1; i < len(fields) && i <= 2; i++ {
-		if fields[i] == "first" && (i+1 >= len(fields) || fields[i+1] != "to") {
+		if fields[i] == "first" {
 			return "first"
 		}
 	}
-	return "to"
+	return "source"
 }
 
 // bracedBody reports whether a body was written with braces rather than as the
@@ -574,7 +557,7 @@ func behaviorNameAndMembers(node ast.Node) (string, []ast.Node, bool) {
 		// Its name references the starting member, so it declares none.
 		return "", nil, true
 	case *ast.FinalNode:
-		return n.Name, nil, true
+		return "", nil, true
 	case *ast.ForkNode:
 		return n.Name, nil, true
 	case *ast.JoinNode:
@@ -599,8 +582,6 @@ func behaviorNameAndMembers(node ast.Node) (string, []ast.Node, bool) {
 		return n.Name, stateBody(n), true
 	case *ast.SubstateMember:
 		return n.Name, nil, true
-	case *ast.StateRegion:
-		return n.Name, n.States, true
 	case *ast.PseudostateNode:
 		return n.Name, nil, true
 	case *ast.EntryMember:
@@ -641,8 +622,7 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 		return strings.Join(words, " "), true, nil
 
 	case mFinalNode:
-		words := []string{"done"}
-		return strings.Join(append(words, d.identWords(el)...), " "), true, nil
+		return "done", true, nil
 
 	case mFork, mJoin, mMerge, mDecision:
 		words := []string{controlNodeKeyword[el.metaclass]}
@@ -726,10 +706,6 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 		}
 		words := []string{d.keywordOr(el, kind)}
 		return strings.Join(append(words, d.identWords(el)...), " "), true, nil
-
-	case mStateRegion:
-		words := []string{"region"}
-		return strings.Join(append(words, d.identWords(el)...), " "), true, nil
 	}
 	return "", false, nil
 }
@@ -742,9 +718,7 @@ var controlNodeKeyword = map[string]string{
 	mDecision: "decide",
 }
 
-// successionHead writes a succession back as the notation it was written in:
-// the edge form naming both ends, the one-name form whose source is the member
-// before it, a guarded branch of a decision, or that decision's `else` branch.
+// successionHead writes a succession back using standard end notation.
 func (d *decoder) successionHead(el *element) (string, error) {
 	source, err := d.referenceText(el, rdf.SysML+pSourceFeature)
 	if err != nil {
@@ -761,6 +735,7 @@ func (d *decoder) successionHead(el *element) (string, error) {
 			Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
 		}
 	}
+	_, positionalSource := d.endMember(el, xSourceMember)
 	switch keyword := d.keywordOr(el, "then"); {
 	case keyword == "else" || d.boolOf(el, rdf.OpenSysML+xIsElse):
 		return "else " + target, nil
@@ -770,18 +745,20 @@ func (d *decoder) successionHead(el *element) (string, error) {
 		}
 		return "if " + guard + " then " + target, nil
 	}
-	words := []string{"then"}
-	if form, _ := d.stringOf(el, rdf.OpenSysML+xEndForm); form == formThen {
+	if form, _ := d.stringOf(el, rdf.OpenSysML+xEndForm); form == formThen || positionalSource {
 		// The source end is the member written before, which this form leaves
 		// unwritten.
-		source = ""
+		return "then " + target, nil
 	}
-	if source != "" {
-		words = append(words, source)
+	if source == "" {
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the succession <%s>", el.iri),
+			Note: "it does not name a source end and is not a positional `then` succession",
+		}
 	}
-	words = append(words, target)
+	words := []string{"succession", "first", source, "then", target}
 	if hasGuard {
-		words = append(words, "if", guard)
+		words = []string{"succession", "first", source, "if", guard, "then", target}
 	}
 	return strings.Join(words, " "), nil
 }
@@ -1091,11 +1068,10 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 		}
 		words = append(words, "transition")
 		words = append(words, d.identWords(el)...)
-		if syntax == "to" {
-			words = append(words, source, "to", target)
-		} else {
-			words = append(words, "first", source)
+		if syntax == "first" {
+			words = append(words, "first")
 		}
+		words = append(words, source)
 	}
 	if trigger, ok := d.stringOf(el, rdf.OpenSysML+xTrigger); ok {
 		keyword := "accept"
@@ -1121,9 +1097,7 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 		}
 		words = append(words, "do", strings.TrimSuffix(effect, ";"))
 	}
-	if syntax != "to" {
-		words = append(words, "then", target)
-	}
+	words = append(words, "then", target)
 	return strings.Join(words, " "), nil
 }
 

@@ -38,8 +38,28 @@
                 (Usage kind="attribute" name="msg" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
                   (Relationship kind="typing" target=Integer
                     (*ast.QualifiedName))))))
-          (FinalNode name="end")
-          (SuccessionEdge source="start" target="sender")
-          (SuccessionEdge source="sender" target="notifier")
-          (SuccessionEdge source="notifier" target="reader")
-          (SuccessionEdge source="reader" target="end"))))))
+          (FinalNode)
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="start"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="sender"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="sender"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="notifier"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="notifier"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="reader"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="reader"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="done"
+                (*ast.QualifiedName)))))))))

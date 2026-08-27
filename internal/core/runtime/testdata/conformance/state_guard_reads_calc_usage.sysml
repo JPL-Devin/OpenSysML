@@ -14,19 +14,19 @@ package test {
 		attribute i : Integer = 0;
 		calc t : Twice { in k = i; }
 
-		initial start;
+		entry; then start;
+		state start;
 		state step {
 			entry { assign i := i + 1; }
 		}
 		state again {
 			entry { assign i := i + 1; }
 		}
-		final done;
 
-		start then step;
+		succession first start then step;
 
-		transition step to again if t.d < 4.0;
-		transition step to done if t.d >= 4.0;
-		transition again to step;
+		transition first step if t.d < 4.0 then again;
+		transition first step if t.d >= 4.0 then done;
+		transition first again then step;
 	}
 }

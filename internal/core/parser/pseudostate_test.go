@@ -15,8 +15,8 @@ package Test {
 		state Active;
 		choice checkPriority;
 		
-		transition Idle to checkPriority;
-		transition checkPriority to Active if (priority > 5);
+		transition first Idle then checkPriority;
+		transition first checkPriority if (priority > 5) then Active;
 	}
 }
 `))
@@ -82,9 +82,9 @@ package Test {
 		state Critical;
 		junction statusEval;
 		
-		transition statusEval to Nominal if (temp < 50);
-		transition statusEval to Warning if (temp >= 50 and temp < 100);
-		transition statusEval to Critical if (temp >= 100);
+		transition first statusEval if (temp < 50) then Nominal;
+		transition first statusEval if (temp >= 50 and temp < 100) then Warning;
+		transition first statusEval if (temp >= 100) then Critical;
 	}
 }
 `))

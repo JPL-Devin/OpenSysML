@@ -20,7 +20,8 @@ package VariantRouting {
 		}
 
 		state Route {
-			initial start;
+			entry; then start;
+			state start;
 
 			state sending {
 				entry send Ping() via outPort;
@@ -28,7 +29,7 @@ package VariantRouting {
 			state arrived;
 			state diverted;
 
-			start then sending;
+			succession first start then sending;
 
 			transition first sending
 				accept Ping via inPort

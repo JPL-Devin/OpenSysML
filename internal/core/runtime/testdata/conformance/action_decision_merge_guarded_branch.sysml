@@ -15,12 +15,12 @@ package test {
 			assign selected := 2;
 		}
 		merge converge;
-		done end;
+		done;
 
-		then start choose;
-		then low converge;
-		then normal converge;
-		then converge end;
+		succession first start then choose;
+		succession first low then converge;
+		succession first normal then converge;
+		succession first converge then done;
 
 		decide choose;
 		if battery < 20 then low;

@@ -143,5 +143,5 @@ stmt while
       eval feature count -> 6
       eval literal 6 -> 6
     eval operator < -> false
-step 2: token 1@end
+step 2: token 1@done
 step 3: no active tokens

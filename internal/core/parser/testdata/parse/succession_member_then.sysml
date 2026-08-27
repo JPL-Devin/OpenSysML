@@ -2,8 +2,8 @@ package MemberAttachedSuccession {
 	action def Step;
 
 	// A `then` prefixing a member sequences the member before it with the member
-	// after it, so it is desugared into the same succession edge the `then a b;`
-	// form builds. Here the sequencing is the reverse of declaration order.
+	// after it, so it is desugared into the same edge represented by
+	// `succession first a then b;`. Here the sequencing is the reverse of declaration order.
 	action def Behavioural {
 		action c : Step;
 		action b : Step;
@@ -24,6 +24,6 @@ package MemberAttachedSuccession {
 		part a;
 		then part b;
 		part c;
-		then b c;
+		succession first b then c;
 	}
 }

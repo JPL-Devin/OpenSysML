@@ -44,7 +44,6 @@ They are a documented extension, not an OMG notation, and using one draws a
 | `junction <name>;` | static branch/merge | KerML `DecisionPerformance::outgoingHBLink[1]` / `MergePerformance::incomingHBLink[1]` (notation is an OpenSysML invention) |
 | `fork <name>;` | parallel split | UML `fork` pseudostate (a state-body fork has no SysML v2 or KerML counterpart; the action-level one is `Actions::ForkAction`) |
 | `join <name>;` | parallel synchronization | UML `join` pseudostate (a state-body join has no SysML v2 or KerML counterpart; the action-level one is `Actions::JoinAction`) |
-| `region <name> { … }` | orthogonal region | UML `Region` |
 | `history <name>;` | shallow history (UML `H`) | UML `shallowHistory` pseudostate |
 | `shallow history <name>;` | shallow history, spelled out | UML `shallowHistory` pseudostate |
 | `deep history <name>;` | deep history (UML `H*`) | UML `deepHistory` pseudostate |
@@ -64,7 +63,7 @@ Notes:
   literals a state body admits (`SysML.xtext:1684`, `:1678`, `:1761-1763`), so
   they are read as standard and are not warned about.
 - None of `choice`, `decision`, `deep`, `defer`, `done`, `final`, `history`,
-  `initial`, `junction`, `region` or `shallow` is reserved: each is a literal in
+  `initial`, `junction` or `shallow` is reserved: each is a literal in
   none of the pinned grammars, so all are ordinary names, matched contextually
   where the notation above needs them.
 - `point` is **not** a reserved word: it is matched contextually after `entry`

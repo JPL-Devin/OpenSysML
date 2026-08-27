@@ -6,35 +6,37 @@ package PseudostatesDemo {
     // Example 1: Choice (Dynamic Branching)
     // Guards evaluated at runtime when choice is entered
     state ChoiceExample {
-        initial start;
+        entry; then start;
+        state start;
         state idle;
         choice evaluate;
         state pathA;
         state pathB;
         state pathC;
         
-        start then idle;
-        transition idle to evaluate;
-        transition evaluate to pathA;
-        transition evaluate to pathB;
-        transition evaluate to pathC;
+        succession first start then idle;
+        transition first idle then evaluate;
+        transition first evaluate then pathA;
+        transition first evaluate then pathB;
+        transition first evaluate then pathC;
     }
     
     // Example 2: Junction (Static Branching)
     // Guards pre-evaluated before junction is entered
     state JunctionExample {
-        initial start;
+        entry; then start;
+        state start;
         state receiving;
         junction route;
         state highPriority;
         state normalPriority;
         state lowPriority;
         
-        start then receiving;
-        transition receiving to route;
-        transition route to highPriority;
-        transition route to normalPriority;
-        transition route to lowPriority;
+        succession first start then receiving;
+        transition first receiving then route;
+        transition first route then highPriority;
+        transition first route then normalPriority;
+        transition first route then lowPriority;
     }
     
     // Key difference:

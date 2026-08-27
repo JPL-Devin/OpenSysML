@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -35,6 +36,10 @@ func TestNegative(t *testing.T) {
 		{"state_entry_no_keyword", "state s { entry }"},
 		{"action_dangling_fork", "action a { fork }"},
 		{"transition_then_only", "transition first then"},
+		{"named_final_node", "action a { done finish; }"},
+		{"named_final_keyword", "action a { final finish; }"},
+		{"two_ended_then", "action a { action start; action finish; then start finish; }"},
+		{"state_member_then", "state s { state start; state finish; start then finish; }"},
 		{"requirement_empty_require", "requirement r { require }"},
 		{"calc_empty_return", "calc c { return }"},
 		{"calc_while_no_condition", "calc def C { while { i = i + 1; } }"},
@@ -88,6 +93,9 @@ func TestNegative(t *testing.T) {
 		// A guarded succession needs a guard expression and a target after it.
 		{"guarded_succession_no_guard", "action def A { action a; action b; succession S first a if then b; }"},
 		{"guarded_succession_no_target", "action def A { action a; succession S first a if x == 0 then ; }"},
+		// Orthogonality is spelled `parallel` before a state body, so a bodied
+		// `region` member is not a state body item.
+		{"region_member", "state def S { region r { state a; } }"},
 		{"state_fork_no_name", "state s { fork ; }"},
 		{"state_join_no_semicolon", "state s { join sync state t; }"},
 		{"call_trigger_unclosed_params", "state s { accept op(a then t; }"},
@@ -250,7 +258,7 @@ func TestNegative(t *testing.T) {
 		{"decision_else_no_target", "action def A { action m; first m; then decide; else; }"},
 		{"transition_trigger_no_target", "state def S { state a; transition first a accept Ping; }"},
 		{"transition_two_triggers", "state def S { state a; state b; transition first a accept Ping accept Pong then b; }"},
-		{"transition_two_targets", "state def S { state a; state b; transition a to b then b; }"},
+		{"transition_two_targets", "state def S { state a; state b; transition first a then b then b; }"},
 		{"transition_do_without_action", "state def S { state a; state b; transition first a do then b; }"},
 		{"exhibit_state_unclosed_body", "part def P { exhibit state modes { state off; }"},
 		{"namespace_succession_no_target", "package Q { part p; first p then; }"},
@@ -261,10 +269,10 @@ func TestNegative(t *testing.T) {
 		// A transition takes exactly one ';', which its effect statement shares
 		// (SysML.xtext TransitionUsage ends with ActionBody); a second one is not
 		// an empty member.
-		{"transition_effect_perform_two_semicolons", "state def S { state a; state b; transition a to b do perform Bump ;; }"},
-		{"transition_effect_assign_two_semicolons", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 ;; }"},
-		{"transition_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 }"},
-		{"transition_braced_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do { assign x := 1; } }"},
+		{"transition_effect_perform_two_semicolons", "state def S { state a; state b; transition first a do perform Bump then b ;; }"},
+		{"transition_effect_assign_two_semicolons", "state def S { attribute x; state a; state b; transition first a do assign x := 1 then b ;; }"},
+		{"transition_effect_no_semicolon", "state def S { attribute x; state a; state b; transition first a do assign x := 1 then b }"},
+		{"transition_braced_effect_no_semicolon", "state def S { attribute x; state a; state b; transition first a do { assign x := 1; } then b }"},
 		// A binding end names a feature by a qualified name or a chain of them,
 		// so neither qualification nor chaining may end in nothing.
 		{"binding_end_qualification_no_name", "package P { part c; binding bind R:: = c; }"},
@@ -272,6 +280,9 @@ func TestNegative(t *testing.T) {
 		{"binding_end_chain_trailing_dot_qualified", "package P { part c; binding bind R::a. = c; }"},
 		{"binding_end_unterminated", "package P { part a; binding bind R::a }"},
 		{"binding_end_no_target", "package P { part a; binding bind R::a = ; }"},
+		// An expression is not a ConnectorEndMember, so a binding whose right
+		// side is one is rejected (see TestBindingEndFailuresAreDistinguishable).
+		{"binding_end_expression", "package P { part def D { attribute a; attribute b; bind a = b * 2; } }"},
 
 		// A connection, interface or flow usage stating its ends where its name
 		// would go still states both ends and closes the body it opens.
@@ -329,6 +340,147 @@ func TestNegative(t *testing.T) {
 
 			if len(p.Diagnostics) == 0 {
 				t.Errorf("Expected parse errors for malformed input, got none.\nInput: %s", tt.input)
+			}
+		})
+	}
+}
+
+func TestRemovedSuccessionFormsProduceDiagnosticsAndErrorNodes(t *testing.T) {
+	tests := []struct {
+		name          string
+		src           string
+		forbiddenNode string
+	}{
+		{"two_ended_then", "action def A { action a; action b; then a b; }", "SuccessionEdge"},
+		{"state_member_then", "state def S { state a; state b; a then b; }", "SuccessionEdge"},
+		{"named_done", "action def A { done end; }", "FinalNode"},
+		{"guarded_two_ended_then", "action def A { action a; action b; then a b if x > 0; }", "ControlFlowEdge"},
+		{"malformed_named_done", "action def A { done a b; }", "FinalNode"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("parser panicked: %v", r)
+				}
+			}()
+			p := New(source.New(tt.name+".sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) == 0 {
+				t.Fatal("expected a diagnostic")
+			}
+			dump := ast.Dump(root)
+			if !strings.Contains(dump, "ErrorNode") {
+				t.Fatalf("expected an ErrorNode:\n%s", dump)
+			}
+			if strings.Contains(dump, tt.forbiddenNode) {
+				t.Fatalf("unexpected %s for removed spelling:\n%s", tt.forbiddenNode, dump)
+			}
+		})
+	}
+}
+
+// An expression binding end is rejected with its own message, so it stays
+// distinguishable from an end that is missing altogether.
+func TestBindingEndFailuresAreDistinguishable(t *testing.T) {
+	const expressionMessage = "a binding end names a feature, not an expression"
+	tests := []struct {
+		name        string
+		src         string
+		wantMessage bool
+	}{
+		{"expression_end", "package P { part def D { attribute a; attribute b; bind a = b * 2; } }", true},
+		{"expression_end_named_binding", "package P { part def D { attribute a; attribute b; binding bb bind a = b + 1; } }", true},
+		{"expression_end_literal", "package P { part def D { attribute a; bind a = 2; } }", true},
+		{"missing_right_end", "package P { part def D { attribute a; attribute b; binding bb bind a = ; } }", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("parser panicked: %v", r)
+				}
+			}()
+			p := New(source.New(tt.name+".sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) == 0 {
+				t.Fatal("expected a diagnostic")
+			}
+			if !strings.Contains(ast.Dump(root), "ErrorNode") {
+				t.Fatalf("expected an ErrorNode:\n%s", ast.Dump(root))
+			}
+			var found bool
+			for _, d := range p.Diagnostics {
+				if strings.Contains(d.Message, expressionMessage) {
+					found = true
+				}
+			}
+			if found != tt.wantMessage {
+				t.Fatalf("expression-end message present = %v, want %v: %v", found, tt.wantMessage, p.Diagnostics)
+			}
+		})
+	}
+}
+
+// The standard binding forms stay accepted: unqualified, chained, qualified
+// and indexed ends (`bind [0..*] base.edges = [0..*] be;` in the Geometry library).
+func TestStandardBindingFormsRemainValid(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"simple", "part def D { attribute a; attribute b; bind a = b; }"},
+		{"chain", "part def D { part a { attribute x; } attribute b; bind b = a.x; }"},
+		{"named_qualified", "package R { part a; } package P { part c; binding b1 bind R::a = c; }"},
+		{"indexed_ends", "part def D { part base { part edges[0..*]; } part be[0..*]; bind [0..*] base.edges = [0..*] be; }"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New(source.New(tt.name+".sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) != 0 {
+				t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+			}
+			if strings.Contains(ast.Dump(root), "ErrorNode") {
+				t.Fatalf("unexpected ErrorNode:\n%s", ast.Dump(root))
+			}
+		})
+	}
+}
+
+func TestStandardSuccessionFormsRemainValid(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"implicit_target", "action def A { action a; then a; }"},
+		{"implicit_done", "action def A { action a; then done; }"},
+		{"explicit_succession", "action def A { action a; action b; succession first a then b; }"},
+		{"guarded_succession", "action def A { attribute g = true; action a; action b; succession first a if g then b; }"},
+		{"ordinary_done_name", "action def A { attribute done : Boolean; }"},
+		{"ordinary_done_state_name", "state def S { state done; }"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New(source.New(tt.name+".sysml", []byte(tt.src)))
+			root := p.ParseFile()
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(p.Diagnostics) != 0 {
+				t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+			}
+			if strings.Contains(ast.Dump(root), "ErrorNode") {
+				t.Fatalf("unexpected ErrorNode:\n%s", ast.Dump(root))
 			}
 		})
 	}

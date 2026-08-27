@@ -8,5 +8,5 @@ stmt loop until
       eval feature total -> 11
       eval literal 0 -> 0
     eval operator > -> true
-step 2: token 1@end
+step 2: token 1@done
 step 3: no active tokens

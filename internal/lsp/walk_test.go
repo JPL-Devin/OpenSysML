@@ -33,15 +33,16 @@ const bodyRefSource = `package P {
 	}
 	state Machine {
 		attribute seen : Integer = 0;
-		initial i;
+		entry; then i;
+		state i;
 		state running {
 			entry { assign seen := speed; }
 			do { assign seen := speed; }
 			exit { assign seen := speed; }
 		}
 		state stopped;
-		i then running;
-		transition running to stopped if speed > 90;
+		succession first i then running;
+		transition first running if speed > 90 then stopped;
 	}
 }
 `
@@ -97,11 +98,12 @@ func TestRenameLeavesSignalTriggerNames(t *testing.T) {
 	private import ScalarValues::*;
 	attribute go : Integer = 0;
 	state Machine {
-		initial i;
+		entry; then i;
+		state i;
 		state a;
 		state b;
-		i then a;
-		transition a to b when go;
+		succession first i then a;
+		transition first a when go then b;
 	}
 }
 `
@@ -114,7 +116,7 @@ func TestRenameLeavesSignalTriggerNames(t *testing.T) {
 	if !strings.Contains(got[name], "attribute start : Integer = 0;") {
 		t.Errorf("declaration not renamed:\n%s", got[name])
 	}
-	if !strings.Contains(got[name], "when go;") {
+	if !strings.Contains(got[name], "when go then b;") {
 		t.Errorf("signal trigger name was rewritten:\n%s", got[name])
 	}
 }

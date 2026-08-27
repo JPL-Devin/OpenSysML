@@ -149,19 +149,25 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			redefines, others := ast.SplitRedefinitions(end.Relationships)
 			r.resolveRelationships(redefinitionScope, end, redefines)
 			r.resolveRelationships(endScope, end, others)
-			if end.Target != nil && !declaresName {
-				if qn, ok := end.Target.(*ast.QualifiedName); ok {
-					r.ResolveQualified(endScope, qn)
+			endpointKind := d.Kind == ast.UsageSuccession || d.Kind == ast.UsageTransition
+			resolveAsEndpoint := endpointKind && inStateMachine(endScope) && !declaresName
+			resolveEnd := func(target ast.Node) {
+				// A machine succession/transition end names a vertex like a transition endpoint.
+				if qn, ok := target.(*ast.QualifiedName); ok {
+					if resolveAsEndpoint {
+						r.ResolveEndpoint(endScope, qn)
+					} else {
+						r.ResolveQualified(endScope, qn)
+					}
 				} else {
-					r.resolveExpr(endScope, end.Target)
+					r.resolveExpr(endScope, target)
 				}
 			}
+			if end.Target != nil && !declaresName {
+				resolveEnd(end.Target)
+			}
 			if end.Reference != nil {
-				if qn, ok := end.Reference.(*ast.QualifiedName); ok {
-					r.ResolveQualified(endScope, qn)
-				} else {
-					r.resolveExpr(endScope, end.Reference)
-				}
+				resolveEnd(end.Reference)
 			}
 		}
 		if d.FlowEnds != nil {
@@ -199,6 +205,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.ResolveQualified(scope, d.Successor)
 		}
 		r.resolveExpr(scope, d.Guard)
+	case *ast.SuccessionEdge:
+		r.resolveSuccessionEdge(scope, d)
+	case *ast.ControlFlowEdge:
+		r.resolveControlFlowEdge(scope, d)
 	case *ast.FinalNode:
 		// Final nodes have no references
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
@@ -385,12 +395,12 @@ func (r *Resolver) resolveTrigger(scope *symbols.Scope, trigger ast.Node) {
 	}
 }
 
-// parameterizedByName reports whether sym is a case or requirement — including
+// ParameterizedByName reports whether sym is a case or requirement — including
 // a concern or viewpoint, which are requirements — whose subject, actors and
 // stakeholders redefine the inherited ones by name (SysML 7.18.4, 7.19.4). That
 // is not modelled and not distinguishable from an ordinary feature here, so the
 // conflict rule skips such a body entirely.
-func parameterizedByName(sym *symbols.Symbol) bool {
+func ParameterizedByName(sym *symbols.Symbol) bool {
 	switch decl := sym.Decl.(type) {
 	case *ast.Usage:
 		switch decl.Kind {

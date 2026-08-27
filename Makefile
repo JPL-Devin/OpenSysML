@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance test lint clean install help python-test python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg test lint clean install help python-test python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -60,8 +60,14 @@ conformance: ## Run the language-independent conformance suite against sysml-grp
 	go run ./cmd/conformance -report $(BIN_DIR)/conformance-report.json
 	@echo "✓ Conformance suite passed ($(BIN_DIR)/conformance-report.json)"
 
-test: ## Run all tests
-	@echo "Running tests..."
+conformance-pkg: ## Run the conformance suite through the public Go API (pkg/opensysml)
+	@echo "Running the conformance suite through pkg/opensysml..."
+	@mkdir -p $(BIN_DIR)
+	go run ./cmd/conformance -protocols pkg,pkg-connect -allow-skips -report $(BIN_DIR)/conformance-pkg-report.json
+	@echo "✓ Conformance suite passed through pkg/opensysml ($(BIN_DIR)/conformance-pkg-report.json)"
+
+test: ## Run Go tests with race detection and coverage
+	@echo "Running Go race tests..."
 	@# Per-package timeout: under -race, passes and model run within 1% of go's 10m default.
 	go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
 
@@ -74,8 +80,8 @@ lint: ## Run static analysis (staticcheck + gosec), as CI does
 	go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -quiet -exclude-generated ./...
 	@echo "✓ Lint passed"
 
-test-short: ## Run tests without race detector (faster)
-	@echo "Running tests (short)..."
+test-short: ## Run Go tests without race detection
+	@echo "Running Go tests without race detection..."
 	go test -v ./...
 
 clean: ## Remove build artifacts
@@ -99,7 +105,7 @@ version: ## Show version information
 	@echo "Build time: $(BUILD_TIME)"
 	@echo "Go version: $(GO_VERSION)"
 
-proto: proto-buf python-proto ## Regenerate all protobuf stubs
+proto: proto-buf python-proto proto-ts ## Regenerate all protobuf stubs
 
 # One template, so the Go stubs and the Java client's message classes cannot drift apart.
 # The Java plugin is a remote one, so this needs the Buf Schema Registry.
@@ -114,9 +120,12 @@ python-proto: ## Regenerate Python protobuf stubs
 	$(BUF) generate --template buf.gen.python.yaml
 	@echo "✓ Regenerated Python stubs"
 
-# The upcoming clients: generated on demand into gen/, never committed.
-proto-ts: ## Generate TypeScript stubs into gen/ts (for the planned npm client)
+proto-ts: ## Regenerate the TypeScript stubs the npm client in clients/node ships
+	@echo "Regenerating TypeScript protobuf stubs..."
 	$(BUF) generate --template buf.gen.ts.yaml
+	@echo "✓ Regenerated TypeScript stubs"
+
+# The upcoming clients: generated on demand into gen/, never committed.
 
 proto-rust: ## Generate Rust stubs into gen/rust (for the planned Rust client)
 	$(BUF) generate --template buf.gen.rust.yaml
@@ -129,15 +138,15 @@ proto-breaking: ## Check the protobuf schema for wire-breaking changes against m
 	$(BUF) breaking --against '$(BUF_BREAKING_AGAINST)'
 	@echo "✓ No breaking schema changes"
 
-python-install: ## Install Python package in editable mode
+python-install: ## Install the Python client in editable mode
 	@echo "Installing opensysml..."
 	cd $(PYTHON_DIR) && pip install -e .
 	@echo "✓ Installed opensysml"
 
-python-test: ## Run Python tests
-	@echo "Running Python tests..."
+python-test: ## Run Python client tests
+	@echo "Running Python client tests..."
 	cd $(PYTHON_DIR) && pytest tests/ -v
-	@echo "✓ Python tests passed"
+	@echo "✓ Python client tests passed"
 
 vscode-grammar: ## Regenerate the VS Code TextMate grammars from the lexer keywords
 	@echo "Generating TextMate grammars..."
@@ -161,9 +170,10 @@ docs-counts: ## Regenerate and verify all derived documentation counts
 	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts
 	@echo "✓ Documentation counts and refereed figures are current"
 
-docs-check: ## Verify documentation links, and that reader-facing pages cite no internal label
+docs-check: ## Verify documentation links, that reader-facing pages cite no internal label, and that quoted oracle figures name their round
 	$(PYTHON) scripts/check-doc-links.py
 	$(PYTHON) scripts/check-doc-ids.py
+	$(PYTHON) scripts/check-doc-figures.py
 
 docs-install: ## Install the documentation site toolchain
 	$(PYTHON) -m pip install -r docs-requirements.txt

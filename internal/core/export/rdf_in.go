@@ -384,9 +384,18 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	if err != nil {
 		return err
 	}
+	// `parallel` marks a state's substates orthogonal, and only a body may
+	// follow it, so a parallel state with none has no notation.
+	parallel := d.boolOf(el, rdf.SysML+"isParallel")
 	if len(children) == 0 && !d.boolOf(el, rdf.OpenSysML+xHasBody) {
+		if parallel {
+			return d.missing(el, "sysx:"+xHasBody, "a parallel state states its regions in a body")
+		}
 		b.WriteString(";\n")
 		return nil
+	}
+	if parallel {
+		b.WriteString(" parallel")
 	}
 	b.WriteString(" {\n")
 	for _, child := range children {
@@ -436,7 +445,7 @@ func (d *decoder) head(el *element) (string, error) {
 		return d.conditionHead(el, "require")
 	}
 	// A succession carrying its ends as references is the one the parser builds
-	// for a `then`, written back as the edge form: `then <source> <target>;`
+	// for a succession, written back as `succession first <source> then <target>;`.
 	// sequences the two members it names wherever they are declared, so the
 	// order survives the round trip. A `succession` declaration whose head was
 	// kept verbatim never reaches here — print() writes its source text.

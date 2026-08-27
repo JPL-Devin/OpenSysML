@@ -20,11 +20,11 @@ package test {
 			assign seen := msg;
 		}
 
-		done end;
+		done;
 
-		then start sender;
-		then sender receiver;
-		then receiver processor;
-		then processor end;
+		succession first start then sender;
+		succession first sender then receiver;
+		succession first receiver then processor;
+		succession first processor then done;
 	}
 }

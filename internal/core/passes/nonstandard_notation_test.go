@@ -92,14 +92,11 @@ func TestFeaturedByInKerMLIsSilent(t *testing.T) {
 // construct.
 func TestStateExtensionsAreReported(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{"state def S { initial a; }", "`initial <state>;`"},
-		{"state def S { final b; }", "`final <state>;`"},
 		{"state def S { choice c; }", "`choice <name>;`"},
 		{"state def S { junction j; }", "`junction <name>;`"},
 		{"state def S { history h; }", "history"},
 		{"state def S { shallow history h; }", "history"},
 		{"state def S { deep history h; }", "history"},
-		{"state def S { region r { state a; } }", "`region <name> { … }`"},
 		{"state def S { entry point p; }", "point"},
 		{"state def S { exit point p; }", "point"},
 		{"state def S { state a { defer e; } }", "`defer <event>;`"},
@@ -108,12 +105,9 @@ func TestStateExtensionsAreReported(t *testing.T) {
 	}
 }
 
-// `transition <source> to <target>;` is ours; the standard form states its ends
-// with `first` and `then`.
-func TestTransitionToSpellingIsReported(t *testing.T) {
-	wantNotation(t, "a.sysml",
-		"state def S { state a; state b; transition a to b; }",
-		CodeNonstandardNotation, "`transition <source> to <target>;`")
+// A transition stating its ends with `first` and `then` is standard.
+func TestStandardTransitionStaysSilent(t *testing.T) {
+	wantSilent(t, "a.sysml", "state def S { state a; state b; transition first a then b; }")
 }
 
 // A `return` declares a result parameter, which is standard, and a computed
@@ -137,9 +131,8 @@ func TestResultParametersAndTrailingExpressionsStaySilent(t *testing.T) {
 func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 	src := `state def S {
 		state a;
-		state b;
-		initial a;
-		final b;
+		choice c;
+		junction j;
 	}`
 	root, pd, idx := analyzeInputs(t, "a.sysml", src)
 	if len(pd) != 0 {
@@ -152,8 +145,8 @@ func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 	for i, want := range []struct {
 		line, length int
 	}{
-		{4, len("initial")},
-		{5, len("final")},
+		{3, len("choice")},
+		{4, len("junction")},
 	} {
 		if line := strings.Count(src[:got[i].Span.Offset], "\n") + 1; line != want.line {
 			t.Errorf("diagnostic %d is on line %d, want %d", i, line, want.line)
@@ -213,28 +206,14 @@ func TestStandardNotationIsSilent(t *testing.T) {
 	}
 }
 
-// F104: `bind` relates two features, so a binding whose right side is an
-// expression is ours, while a feature-valued one is standard.
-func TestExpressionValuedBindingIsAnExtension(t *testing.T) {
-	wantNotation(t, "a.sysml", "part def P { attribute a; attribute b; bind a = b * 2; }",
-		CodeNonstandardNotation, "`bind <feature> = <expression>;`")
+// `bind` relates two features (SysML.xtext:1020), so the standard
+// feature-valued forms are silent.
+func TestFeatureValuedBindingIsSilent(t *testing.T) {
 	wantSilent(t, "a.sysml", "part def P { attribute a; attribute b; bind a = b; }")
 	wantSilent(t, "a.sysml", "part def P { part a { attribute x; } attribute b; bind b = a.x; }")
 }
 
-// F105: `done` is a library feature a succession names, and a succession states
-// its ends with `first` and `then`.
-func TestNamedFinalNodeAndTwoEndedThenAreExtensions(t *testing.T) {
-	wantNotation(t, "a.sysml", "action def A { done end; }", CodeNonstandardNotation, "`done <name>;`")
-	wantNotation(t, "a.sysml", "action def A { action a; action b; then a b; }",
-		CodeNonstandardNotation, "`then <source> <target>;`")
-	wantNotation(t, "a.sysml", "state def S { state a; state b; a then b; }",
-		CodeNonstandardNotation, "`<source> then <target>;`")
-	wantSilent(t, "a.sysml", "action def A { action a; action b; first a then b; }")
-	wantSilent(t, "a.sysml", "action def A { action a; first a; then done; }")
-}
-
-// F106: an InitialNodeMember is reachable from ActionBodyItem alone, so a
+// An InitialNodeMember is reachable from ActionBodyItem alone, so a
 // one-ended `first` is standard in an action body and ours in a part body.
 func TestOneEndedFirstOutsideAnActionBodyIsAnExtension(t *testing.T) {
 	wantNotation(t, "a.sysml", "part def P { part a; first a; }",

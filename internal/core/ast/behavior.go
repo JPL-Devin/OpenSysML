@@ -22,7 +22,6 @@ type InitialNode struct {
 // FinalNode is the termination point for action execution.
 type FinalNode struct {
 	NodeBase
-	Name string
 }
 
 // ForkNode splits execution into concurrent flows (1 incoming → N outgoing).
@@ -208,15 +207,17 @@ func (n *IfActionNode) Branches() []*IfBranchNode {
 	return branches
 }
 
+// DoneFeature is the name of the end shot every state inherits from the standard
+// library (`Systems Library/States.sysml`), which a transition enters to complete.
+const DoneFeature = "done"
+
 // StateNode represents a state in a state machine (simple, composite, or orthogonal).
 type StateNode struct {
 	NodeBase
-	Name      string
-	IsInitial bool   // initial state marker
-	IsFinal   bool   // final state marker
-	Entry     []Node // entry behaviors (action sequence)
-	Do        []Node // do action (ongoing action)
-	Exit      []Node // exit behaviors (action sequence)
+	Name  string
+	Entry []Node // entry behaviors (action sequence)
+	Do    []Node // do action (ongoing action)
+	Exit  []Node // exit behaviors (action sequence)
 	// Defer names the events the state defers while it is active: an event no
 	// transition of the active configuration handles is retained instead of
 	// dropped, and delivered again once no active state defers it.
@@ -296,6 +297,13 @@ type SuccessionEdge struct {
 	// beside the keyword as written, set once when the body is parsed.
 	SourceMember Node
 	TargetMember Node
+	// SourceImplied and TargetImplied mark an end the notation supplied rather
+	// than the author writing it: the source a one-name `then <target>;` takes
+	// from the member before it, and the ends of the edge a member-attached
+	// `then` desugars to. Such a name is a member's own, not a reference written
+	// in the model.
+	SourceImplied bool
+	TargetImplied bool
 	// Members are the body an action target succession carries
 	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody).
 	Members []Node
@@ -316,6 +324,10 @@ type ControlFlowEdge struct {
 	// without a name (`then decide; if x then a; else b;`) reach it this way.
 	SourceMember Node
 	TargetMember Node
+	// SourceImplied and TargetImplied mark an end the notation supplied rather
+	// than the author writing it, as on SuccessionEdge.
+	SourceImplied bool
+	TargetImplied bool
 }
 
 // ObjectFlowEdge is data flow between action parameters/pins (Tier 5).
@@ -533,9 +545,6 @@ type TransitionMember struct {
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName
-	// ToSpan spans the `to` of the second spelling, and is empty when the
-	// transition was written the standard way.
-	ToSpan source.Span
 	// Members and HasBody carry the body a transition may declare, since both
 	// TransitionUsage and TargetTransitionUsage end in ActionBody
 	// (`then starting { … }`).

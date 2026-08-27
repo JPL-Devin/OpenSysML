@@ -78,5 +78,5 @@ stmt for d
     eval literal 3 -> 3
     eval literal 1 -> 1
   eval operator .. -> ()
-step 2: token 1@end
+step 2: token 1@done
 step 3: no active tokens

@@ -7,13 +7,13 @@ package test {
 		attribute marker : Integer = 0;
 		attribute stepped : Integer = 0;
 
-		initial start;
+		entry; then start;
+		state start;
 		state beta {
 			state work {
 				entry { assign marker := 2; }
 			}
 		}
-		final done;
 
 		transition first start then beta.work {
 			assign stepped := 1;

@@ -14,19 +14,19 @@ func parseActionTest(t *testing.T, input string) []ast.Node {
 	src := source.New("test.sysml", []byte(input))
 	p := New(src)
 
-	// Consume opening brace (parseActionBody expects it consumed)
+	// Consume opening brace (parseActionBodyMixed expects it consumed)
 	_, ok := p.accept(lexer.LBrace)
 	if !ok {
 		t.Fatalf("expected '{', got %v", p.peek().Kind)
 	}
 
-	return p.parseActionBody()
+	return p.parseActionBodyMixed()
 }
 
 func TestParseAction_Simple(t *testing.T) {
 	input := `{
 		first startNode;
-		done endNode;
+		done;
 	}`
 
 	nodes := parseActionTest(t, input)
@@ -46,13 +46,9 @@ func TestParseAction_Simple(t *testing.T) {
 	}
 
 	// Check FinalNode
-	final, ok := nodes[1].(*ast.FinalNode)
+	_, ok = nodes[1].(*ast.FinalNode)
 	if !ok {
 		t.Errorf("node 1: expected *ast.FinalNode, got %T", nodes[1])
-	} else {
-		if final.Name != "endNode" {
-			t.Errorf("FinalNode.Name: expected 'endNode', got '%s'", final.Name)
-		}
 	}
 }
 
@@ -93,9 +89,9 @@ func TestParseAction_Decision(t *testing.T) {
 	input := `{
 		first start;
 		decide check;
-		done success;
-		then start check;
-		then check success if true;
+		done;
+		succession first start then check;
+		succession first check if true then done;
 	}`
 
 	nodes := parseActionTest(t, input)
@@ -125,46 +121,32 @@ func TestParseAction_Decision(t *testing.T) {
 	}
 
 	// Check FinalNode
-	final, ok := nodes[2].(*ast.FinalNode)
+	_, ok = nodes[2].(*ast.FinalNode)
 	if !ok {
 		t.Errorf("node 2: expected *ast.FinalNode, got %T", nodes[2])
+	}
+
+	// Check unguarded succession
+	succession, ok := unwrapMember(t, nodes[3]).(*ast.Usage)
+	if !ok {
+		t.Errorf("node 3: expected *ast.Usage, got %T", unwrapMember(t, nodes[3]))
 	} else {
-		if final.Name != "success" {
-			t.Errorf("FinalNode.Name: expected 'success', got '%s'", final.Name)
+		if succession.Kind != ast.UsageSuccession || len(succession.ConnectorEnds) != 2 {
+			t.Errorf("node 3: expected two-ended succession, got %+v", succession)
 		}
 	}
 
-	// Check SuccessionEdge: then start check
-	succEdge, ok := nodes[3].(*ast.SuccessionEdge)
+	// Check guarded succession
+	cfEdge, ok := unwrapMember(t, nodes[4]).(*ast.TransitionMember)
 	if !ok {
-		t.Errorf("node 3: expected *ast.SuccessionEdge, got %T", nodes[3])
+		t.Errorf("node 4: expected *ast.TransitionMember, got %T", unwrapMember(t, nodes[4]))
 	} else {
-		if succEdge.Source == nil {
-			t.Errorf("SuccessionEdge.Source is nil")
-		} else if len(succEdge.Source.Parts) != 1 || succEdge.Source.Parts[0].Text != "start" {
-			t.Errorf("SuccessionEdge.Source: expected 'start', got '%v'", succEdge.Source.Parts)
-		}
-		if succEdge.Target == nil {
-			t.Errorf("SuccessionEdge.Target is nil")
-		} else if len(succEdge.Target.Parts) != 1 || succEdge.Target.Parts[0].Text != "check" {
-			t.Errorf("SuccessionEdge.Target: expected 'check', got '%v'", succEdge.Target.Parts)
-		}
-	}
-
-	// Check ControlFlowEdge: then check success if true
-	cfEdge, ok := nodes[4].(*ast.ControlFlowEdge)
-	if !ok {
-		t.Errorf("node 4: expected *ast.ControlFlowEdge, got %T", nodes[4])
-	} else {
-		if cfEdge.Source == nil {
-			t.Errorf("ControlFlowEdge.Source is nil")
+		if cfEdge.Source == nil || cfEdge.Target == nil {
+			t.Errorf("guarded succession missing source or target")
 		} else if len(cfEdge.Source.Parts) != 1 || cfEdge.Source.Parts[0].Text != "check" {
-			t.Errorf("ControlFlowEdge.Source: expected 'check', got '%v'", cfEdge.Source.Parts)
-		}
-		if cfEdge.Target == nil {
-			t.Errorf("ControlFlowEdge.Target is nil")
-		} else if len(cfEdge.Target.Parts) != 1 || cfEdge.Target.Parts[0].Text != "success" {
-			t.Errorf("ControlFlowEdge.Target: expected 'success', got '%v'", cfEdge.Target.Parts)
+			t.Errorf("guarded succession source: expected 'check', got '%v'", cfEdge.Source.Parts)
+		} else if len(cfEdge.Target.Parts) != 1 || cfEdge.Target.Parts[0].Text != "done" {
+			t.Errorf("guarded succession target: expected 'done', got '%v'", cfEdge.Target.Parts)
 		}
 		if cfEdge.Guard == nil {
 			t.Errorf("ControlFlowEdge.Guard is nil")
@@ -178,21 +160,17 @@ func TestParseAction_Decision(t *testing.T) {
 
 // Phase C1 Tests
 
-func parseResultMembersTest(t *testing.T, input string) (*Parser, []ast.Node) {
+func parseCalcBodyTest(t *testing.T, input string) (*Parser, []ast.Node) {
 	src := source.New("test.sysml", []byte(input))
 	p := New(src)
 
-	// Consume opening brace
+	// Consume opening brace (parseCalcBody expects it consumed)
 	_, ok := p.accept(lexer.LBrace)
 	if !ok {
 		t.Fatalf("expected '{', got %v", p.peek().Kind)
 	}
 
-	var members []ast.Node
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		members = append(members, p.parseResultMember())
-	}
-	return p, members
+	return p, p.parseCalcBody()
 }
 
 func parseConstraintBodyTest(t *testing.T, input string) []ast.Node {
@@ -215,7 +193,7 @@ func TestParseResultMember_Parameters(t *testing.T) {
 		return r : Real = b * 2;
 	}`
 
-	p, nodes := parseResultMembersTest(t, input)
+	p, nodes := parseCalcBodyTest(t, input)
 
 	if len(nodes) != 2 {
 		t.Fatalf("expected 2 nodes, got %d", len(nodes))
@@ -244,7 +222,7 @@ func TestParseResultMember_Parameters(t *testing.T) {
 func TestParseResultMember_ExpressionRefused(t *testing.T) {
 	for _, src := range []string{"b * 2", "42", "sqrt(b)", "P::a", "a.b"} {
 		t.Run(src, func(t *testing.T) {
-			p, nodes := parseResultMembersTest(t, "{\n\t\treturn "+src+";\n\t\treturn r : Real;\n\t}")
+			p, nodes := parseCalcBodyTest(t, "{\n\t\treturn "+src+";\n\t\treturn r : Real;\n\t}")
 
 			if len(nodes) != 2 {
 				t.Fatalf("expected 2 nodes, got %d", len(nodes))
@@ -654,7 +632,7 @@ func TestParseStateBody_Substate(t *testing.T) {
 
 func TestParseStateBody_Transition(t *testing.T) {
 	input := `{
-		transition Active to Idle when timeout;
+		transition first Active when timeout then Idle;
 	}`
 
 	nodes := parseStateBodyTest(t, input)
@@ -744,7 +722,7 @@ func TestParseStateBody_AcceptTransitionTriggerKinds(t *testing.T) {
 
 func TestParseStateBody_TransitionWithGuardAndEffect(t *testing.T) {
 	input := `{
-		transition Running to Stopped if ready do { action finalize; };
+		transition first Running if ready do { action finalize; } then Stopped;
 	}`
 
 	nodes := parseStateBodyTest(t, input)
@@ -774,7 +752,7 @@ func TestParseStateBody_Complete(t *testing.T) {
 		exit { action cleanup; }
 		state Active;
 		state Idle;
-		transition Active to Idle when timeout;
+		transition first Active when timeout then Idle;
 	}`
 
 	nodes := parseStateBodyTest(t, input)

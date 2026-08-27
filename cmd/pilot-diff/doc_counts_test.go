@@ -94,6 +94,10 @@ func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
 	movement := docRequireTable(t, lines, movementStart.number+1, "Count")
 	docAssertMovementTable(t, movement, report)
 
+	roundStart := docRequireLineContaining(t, lines, "### Feature-initialization round")
+	round := docRequireTable(t, lines, roundStart.number+1, "Count")
+	docAssertMovementTable(t, round, report)
+
 	readmeLines := docReadNumberedFile(t, docCountReadmePath)
 	architectureLines := docReadNumberedFile(t, docCountArchitecturePath)
 	ruleCounts := docReadSpecComplianceCounts(t)
@@ -949,6 +953,12 @@ func docParseMovementInteger(t *testing.T, line int, value, column string) int {
 
 func docMovementValue(report Report, label string) (int, string, bool) {
 	switch label {
+	case "only pilot":
+		return report.Totals.PilotOnly, "totals.pilotOnly", true
+	case "pilot diagnostics":
+		return report.Totals.PilotTotal, "totals.pilotDiagnostics", true
+	case "severity-only":
+		return report.Totals.SeverityMismatch, "totals.severityMismatch", true
 	case "unmapped, our side":
 		total := 0
 		for _, row := range report.Unmapped {

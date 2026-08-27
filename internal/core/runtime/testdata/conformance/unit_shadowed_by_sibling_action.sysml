@@ -9,9 +9,9 @@ package test {
 
 		first start;
 		action hold;
-		done end;
+		done;
 
-		then start hold;
-		then hold end;
+		succession first start then hold;
+		succession first hold then done;
 	}
 }

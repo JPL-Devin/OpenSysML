@@ -1265,9 +1265,13 @@ For Markdown changes:
 ```bash
 python3 scripts/check-doc-links.py
 python3 scripts/check-doc-ids.py
+python3 scripts/check-doc-figures.py
 ```
 
-`make docs-check` runs the repository documentation checks. This guide remains
+`make docs-check` runs the repository documentation checks. The last of them keeps
+an oracle total from being read as current: outside the `doc-counts` generated
+block every figure is a snapshot of the round that wrote it, so a page quoting one
+has to say that it is not the current baseline. This guide remains
 outside `docs/` and must not be added to `mkdocs.yml`.
 
 ### Full validation

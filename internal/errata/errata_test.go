@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -86,10 +87,21 @@ func TestAsPublishedMatchesTheCorpus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load the declared registry: %v", err)
 	}
-	missing, err := overlay.Verify(repoRoot)
-	if err != nil {
-		t.Fatalf("an entry no longer matches the published corpus: %v", err)
+	var missing []string
+	for _, entry := range overlay.Entries() {
+		content, readErr := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(entry.Path))) // #nosec G304 -- the path comes from the declared registry
+		if readErr != nil {
+			if os.IsNotExist(readErr) {
+				missing = append(missing, entry.Path)
+				continue
+			}
+			t.Fatalf("read %s: %v", entry.Path, readErr)
+		}
+		if _, err := Apply(entry, content); err != nil {
+			t.Fatalf("an entry no longer matches the published corpus: %v", err)
+		}
 	}
+	sort.Strings(missing)
 	if len(missing) == 0 {
 		return
 	}
@@ -166,10 +178,8 @@ func TestDocumentedEntrySubstitutesNothing(t *testing.T) {
 	if len(overlay.Corrections()) != 0 || len(overlay.Documented()) != 1 {
 		t.Fatalf("documented entry counted as a correction: %+v", overlay)
 	}
-	content := []byte("a\nb\n")
-	got, rewritten, err := overlay.Rewrite(entry.Path, content)
-	if err != nil || rewritten || string(got) != string(content) {
-		t.Fatalf("documented entry substituted text: %q rewritten=%v err=%v", got, rewritten, err)
+	if under := overlay.Under("examples/pilot-corpora/x"); len(under) != 0 {
+		t.Fatalf("documented entry offered for substitution: %v", under)
 	}
 }
 

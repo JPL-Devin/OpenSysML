@@ -5,5 +5,5 @@ eval operator < -> false
 step 2: token 1@idle
 stmt assign alerted
   eval literal 2 -> 2
-step 3: token 1@end
+step 3: token 1@done
 step 4: no active tokens

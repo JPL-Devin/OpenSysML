@@ -292,77 +292,7 @@ type ObjectFlow struct {
 // itself owns — which every expression the graph carries is evaluated in.
 // Returns error if graph is malformed (e.g., no initial node, dangling edges).
 func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, error) {
-	graph := &ActionGraph{
-		Scope:     scope,
-		Nodes:     make([]ast.Node, 0),
-		Edges:     make(map[ast.Node][]ActionEdge),
-		DataFlows: make(map[ast.Node][]ObjectFlow),
-		Bodies:    make(map[ast.Node][]Statement),
-		Accepts:   make(map[ast.Node]Accept),
-		Finals:    make([]ast.Node, 0),
-	}
-
-	// Extract members from Usage or Definition
-	var members []ast.Node
-	switch n := actionDecl.(type) {
-	case *ast.Usage:
-		members = n.Members
-	case *ast.Definition:
-		members = n.Members
-	default:
-		return nil, fmt.Errorf("action must be Usage or Definition, got %T", actionDecl)
-	}
-
-	// A succession can bind a member with no name of its own by position, which
-	// is what puts an action node member written as a statement (`then send …;`,
-	// `then loop action { … } until c;`) in the token flow.
-	sequenced := sequencedMembers(members)
-
-	// First pass: collect nodes
-	for _, member := range members {
-		actualMember := unwrapMembership(member)
-
-		switch n := actualMember.(type) {
-		case *ast.InitialNode:
-			if graph.Initial != nil {
-				return nil, fmt.Errorf("action has multiple initial nodes")
-			}
-			graph.Initial = n
-			graph.Nodes = append(graph.Nodes, n)
-			lowerNodeBody(graph, n, n.Members, scope)
-		case *ast.FinalNode:
-			graph.Finals = append(graph.Finals, n)
-			graph.Nodes = append(graph.Nodes, n)
-		case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode, *ast.ActionExecutionNode:
-			graph.Nodes = append(graph.Nodes, n)
-			lowerNodeBody(graph, n, ast.NodeBodyMembers(n), scope)
-		case *ast.Usage:
-			// Nested action usage (treat as execution node)
-			if n.Kind == ast.UsageAction {
-				graph.Nodes = append(graph.Nodes, n)
-				lowerBody(graph, n, childScope(scope, n))
-			}
-		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode,
-			*ast.SendStatement, *ast.TerminateStatement:
-			if !sequenced[actualMember] {
-				// A statement is executed as part of an action node's body; written
-				// directly among the action's own members, with no succession
-				// binding it, it has no position in the token flow.
-				return nil, fmt.Errorf("%s written directly in an action body has no position in the token flow: declare it inside an action node", statementKeyword(n))
-			}
-			// An action node member of its own: a node whose body is the one
-			// statement it was written as, run when a token reaches it.
-			graph.Nodes = append(graph.Nodes, n)
-			graph.Bodies[n] = []Statement{lowerStatement(n, scope)}
-		}
-	}
-
-	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
-	graph.Attributes = lowerAttributes(members)
-
-	// `first a then b;` names the node the flow starts at rather than declaring an
-	// initial node of its own, so a itself is the initial node and holds the edge.
-	firstNode, err := resolveFirstNode(graph)
+	graph, members, firstNode, err := collectActionNodes(actionDecl, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -415,6 +345,20 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			}
 			if targetNode == nil {
 				return nil, fmt.Errorf("control flow edge references undefined target %s", edgeEnd(n.Target, n.TargetMember))
+			}
+			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], ActionEdge{
+				Target: targetNode,
+				Guard:  n.Guard,
+				Decl:   n,
+			})
+		case *ast.TransitionMember:
+			sourceNode := resolveActionEndpoint(graph, n.Source, true)
+			targetNode := resolveActionEndpoint(graph, n.Target, false)
+			if sourceNode == nil {
+				return nil, fmt.Errorf("succession references undefined source node %s", edgeEndName(n.Source))
+			}
+			if targetNode == nil {
+				return nil, fmt.Errorf("succession references undefined target node %s", edgeEndName(n.Target))
 			}
 			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], ActionEdge{
 				Target: targetNode,
@@ -835,26 +779,29 @@ func resolveActionEndpoint(graph *ActionGraph, ref ast.Node, source bool) ast.No
 	if node != nil {
 		return node
 	}
+	if node = ensureInheritedActionNode(graph, ref); node != nil {
+		return node
+	}
 
 	name := ast.SimpleName(ref)
-	if source && name == "start" && graph.Initial == nil {
+	if !impliedMarker(name, source, graph.Initial == nil) {
+		return nil
+	}
+	if source {
 		initial := &ast.InitialNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "start"}
 		graph.Initial = initial
 		graph.Nodes = append(graph.Nodes, initial)
 		return initial
 	}
-	if !source && name == "done" {
-		for _, final := range graph.Finals {
-			if getNodeName(final) == "done" {
-				return final
-			}
+	for _, final := range graph.Finals {
+		if getNodeName(final) == "done" {
+			return final
 		}
-		final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}, Name: "done"}
-		graph.Finals = append(graph.Finals, final)
-		graph.Nodes = append(graph.Nodes, final)
-		return final
 	}
-	return nil
+	final := &ast.FinalNode{NodeBase: ast.NodeBase{NodeSpan: ref.Span()}}
+	graph.Finals = append(graph.Finals, final)
+	graph.Nodes = append(graph.Nodes, final)
+	return final
 }
 
 // findNodeByReference resolves a plain name or a chain to its graph-node root.
@@ -942,7 +889,9 @@ func getNodeName(node ast.Node) string {
 	case *ast.InitialNode:
 		return n.Name
 	case *ast.FinalNode:
-		return n.Name
+		// The node declares no name of its own: a succession reaches it by the
+		// name of the library feature it is, `done`.
+		return "done"
 	case *ast.ForkNode:
 		return n.Name
 	case *ast.JoinNode:

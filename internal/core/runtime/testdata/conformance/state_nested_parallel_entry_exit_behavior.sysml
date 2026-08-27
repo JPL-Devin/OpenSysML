@@ -5,7 +5,7 @@ package NestedParallelBehavior {
         attribute entered : Integer = 0;
         attribute exited : Integer = 0;
 
-        initial start;
+        entry; then start;
         state start;
         state outer parallel {
             entry action begin {
@@ -25,7 +25,7 @@ package NestedParallelBehavior {
         }
         state done;
 
-        start then outer;
-        transition outer to done when Finish;
+        succession first start then outer;
+        transition first outer when Finish then done;
     }
 }

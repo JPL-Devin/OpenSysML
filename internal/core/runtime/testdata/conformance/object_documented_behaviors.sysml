@@ -20,7 +20,7 @@ package test {
 			assign reported := true;
 		}
 
-		then start log;
+		succession first start then log;
 	}
 
 	part def Counter {

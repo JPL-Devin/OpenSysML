@@ -89,10 +89,10 @@ const doublerModel = `package test {
         action compute {
             assign doubled := v * 2;
         }
-        done end;
+        done;
 
-        then start compute;
-        then compute end;
+        succession first start then compute;
+        succession first compute then done;
     }
 }`
 
@@ -105,10 +105,10 @@ package caller {
 
         first start;
         action call : test::Doubler;
-        done end;
+        done;
 
-        then start call;
-        then call end;
+        succession first start then call;
+        succession first call then done;
     }
 }`, "Outer")
 
@@ -129,8 +129,8 @@ func TestInvokeActionLeavesNonParametersAlone(t *testing.T) {
         attribute hidden : Integer = 99;
 
         first start;
-        done end;
-        then start end;
+        done;
+        succession first start then done;
     }
 
     action def Outer {
@@ -138,10 +138,10 @@ func TestInvokeActionLeavesNonParametersAlone(t *testing.T) {
 
         first start;
         action call : Callee;
-        done end;
+        done;
 
-        then start call;
-        then call end;
+        succession first start then call;
+        succession first call then done;
     }
 }`, "Outer")
 
@@ -163,10 +163,10 @@ package caller {
 
         first start;
         perform action doubling : test::Doubler;
-        done end;
+        done;
 
-        then start doubling;
-        then doubling end;
+        succession first start then doubling;
+        succession first doubling then done;
     }
 }`, "Outer")
 
@@ -188,10 +188,10 @@ package caller {
 
         first start;
         action call = test::Doubler(10);
-        done end;
+        done;
 
-        then start call;
-        then call end;
+        succession first start then call;
+        succession first call then done;
     }
 }`, "Outer")
 
@@ -213,10 +213,10 @@ package caller {
 
         first start;
         action call = test::Doubler(v = 7);
-        done end;
+        done;
 
-        then start call;
-        then call end;
+        succession first start then call;
+        succession first call then done;
     }
 }`, "Outer")
 
@@ -239,10 +239,10 @@ package caller {
     action def Outer {
         first start;
         `+src+`
-        done end;
+        done;
 
-        then start call;
-        then call end;
+        succession first start then call;
+        succession first call then done;
     }
 }`, "Outer")
 
@@ -257,10 +257,10 @@ func TestInvokeActionUnresolved(t *testing.T) {
     action def Outer {
         first start;
         action call : NoSuchAction;
-        done end;
+        done;
 
-        then start call;
-        then call end;
+        succession first start then call;
+        succession first call then done;
     }
 }`, "Outer")
 
@@ -277,10 +277,10 @@ func TestInvokeActionNotAnAction(t *testing.T) {
     action def Outer {
         first start;
         action call : Wheel;
-        done end;
+        done;
 
-        then start call;
-        then call end;
+        succession first start then call;
+        succession first call then done;
     }
 }`, "Outer")
 
@@ -297,10 +297,10 @@ func TestInvokeActionRecursionIsBounded(t *testing.T) {
     action def Outer {
         first start;
         action call : Outer;
-        done end;
+        done;
 
-        then start call;
-        then call end;
+        succession first start then call;
+        succession first call then done;
     }
 }`, "Outer")
 
@@ -323,10 +323,10 @@ func TestPerformShorthandRunsTheReferencedAction(t *testing.T) {
 		action bump {
 			assign result := base + 5;
 		}
-		done finish;
+		done;
 
-		then begin bump;
-		then bump finish;
+		succession first begin then bump;
+		succession first bump then done;
 	}
 
 	action outer {
@@ -337,10 +337,10 @@ func TestPerformShorthandRunsTheReferencedAction(t *testing.T) {
 
 		perform increment;
 
-		done end;
+		done;
 
-		then start increment;
-		then increment end;
+		succession first start then increment;
+		succession first increment then done;
 	}
 }`, "outer")
 

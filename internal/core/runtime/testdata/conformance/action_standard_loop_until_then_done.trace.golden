@@ -27,5 +27,5 @@ stmt loop until
       eval feature battery -> 100
       eval literal 100 -> 100
     eval operator >= -> true
-step 2: token 1@final
+step 2: token 1@done
 step 3: no active tokens

@@ -11,9 +11,9 @@ package test {
 		}
 		decide check;
 
-		then start check;
-		then check shared;
-		then shared done;
+		succession first start then check;
+		succession first check then shared;
+		succession first shared then done;
 		if c then shared;
 		else shared;
 	}

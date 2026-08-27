@@ -59,13 +59,14 @@ func TestToStateGraph_NestedPseudostateOwner(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state outer {
 					state a;
 					state b;
 					choice pick;
 				}
-				start then outer;
+				succession first start then outer;
 			}
 		}
 	`), nil)
@@ -88,10 +89,11 @@ func TestToStateGraph_TopLevelPseudostateHasNoOwner(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				choice pick;
 				state a;
-				start then pick;
+				succession first start then pick;
 			}
 		}
 	`), nil)
@@ -115,32 +117,28 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 				state left {
 					entry; then lstart;
 					state lstart;
-					final ldone;
-					lstart then ldone;
+					succession first lstart then done;
 				}
 				state right {
 					entry; then rstart;
 					state rstart;
-					final rdone;
-					rstart then rdone;
+					succession first rstart then done;
 				}
 			}
 		}
 	`)
 	explicit := stateDefinitionIn(t, `
 		package test {
-			state def Machine {
-				region left {
-					initial lstart;
+			state def Machine parallel {
+				state left {
+					entry; then lstart;
 					state lstart;
-					final ldone;
-					lstart then ldone;
+					succession first lstart then done;
 				}
-				region right {
-					initial rstart;
+				state right {
+					entry; then rstart;
 					state rstart;
-					final rdone;
-					rstart then rdone;
+					succession first rstart then done;
 				}
 			}
 		}
@@ -186,12 +184,12 @@ func TestToStateGraph_ParallelMatchesExplicitRegions(t *testing.T) {
 			}
 		}
 		for state, owner := range parallelGraph.RegionOf {
-			if owner == region && state.IsFinal {
+			if owner == region && parallelGraph.Completes(state) {
 				gotFinal = append(gotFinal, state.Name)
 			}
 		}
 		for state, owner := range regionGraph.RegionOf {
-			if owner == want && state.IsFinal {
+			if owner == want && regionGraph.Completes(state) {
 				wantFinal = append(wantFinal, state.Name)
 			}
 		}
@@ -322,6 +320,70 @@ func TestToStateGraph_ParallelBodyNonRegionMembers(t *testing.T) {
 	})
 }
 
+// A parallel state owns what its regions branch through: the pseudostate, the
+// edges leaving it, and the deferred events of the state that declares them.
+func TestToStateGraph_ParallelStateOwnsItsPseudostatesAndEdges(t *testing.T) {
+	graph, err := ToStateGraph(stateDefinitionIn(t, `
+		package test {
+			state def Machine {
+				entry; then start;
+				state start;
+				state working parallel {
+					state left {
+						entry; then lidle;
+						state lidle;
+						state lfast;
+						defer done;
+						transition first lidle then pick;
+					}
+					state right {
+						entry; then ridle;
+						state ridle;
+					}
+					choice pick;
+					transition first pick then lfast;
+				}
+				succession first start then working;
+			}
+		}
+	`), nil)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+
+	working := stateNamed(graph, "working")
+	pick := pseudostateNamed(graph, "pick")
+	if working == nil || pick == nil {
+		t.Fatalf("working = %v, pick = %v, want both collected", working, pick)
+	}
+	if owner := graph.PseudostateOwner[pick]; owner != working {
+		t.Fatalf("PseudostateOwner[pick] = %v, want working", owner)
+	}
+	lidle, lfast := stateNamed(graph, "lidle"), stateNamed(graph, "lfast")
+	if !leadsTo(graph, lidle, pick) {
+		t.Fatal("transition lidle -> pick missing")
+	}
+	if !leadsTo(graph, pick, lfast) {
+		t.Fatal("transition pick -> lfast missing")
+	}
+	left := graph.CompositeStates[working][0]
+	if got := graph.RegionOf[lidle]; got != left {
+		t.Fatalf("RegionOf[lidle] = %v, want the left region", got)
+	}
+	var leftOwner *ast.StateNode
+	for state, region := range graph.HiddenRegionOf {
+		if region == left {
+			leftOwner = state
+		}
+	}
+	if leftOwner == nil {
+		t.Fatal("no graph state stands for the left region")
+	}
+	if len(graph.Deferred[leftOwner]) == 0 {
+		t.Fatal("defer declared by a region substate was dropped")
+	}
+}
+
 func TestToStateGraph_ParallelWithoutInitialFailsClearly(t *testing.T) {
 	_, err := ToStateGraph(stateDefinitionIn(t, `
 		package test {
@@ -347,7 +409,7 @@ func TestToStateGraph_NestedParallelRegions(t *testing.T) {
 	graph, err := ToStateGraph(stateDefinitionIn(t, `
 		package test {
 			state def Machine {
-				initial start;
+				entry; then start;
 				state start;
 				state outer parallel {
 					state a {
@@ -360,7 +422,7 @@ func TestToStateGraph_NestedParallelRegions(t *testing.T) {
 						state b1;
 					}
 				}
-				start then outer;
+				succession first start then outer;
 			}
 		}
 	`), nil)
@@ -458,10 +520,11 @@ func TestToStateGraph_EndpointNamingNoVertexLeavesTheEdgeOut(t *testing.T) {
 	machine := stateUsageIn(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state busy;
-				start then busy;
-				transition busy to nowhere;
+				succession first start then busy;
+				transition first busy then nowhere;
 			}
 		}
 	`)
@@ -496,20 +559,23 @@ func TestToStateGraph_UnqualifiedEndpointResolvesFromWhereItIsWritten(t *testing
 	src := `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state alpha {
-					initial astart;
+					entry; then astart;
+					state astart;
 					state work;
-					astart then work;
+					succession first astart then work;
 				}
 				state beta {
-					initial bstart;
+					entry; then bstart;
+					state bstart;
 					state work;
-					bstart then work;
-					transition work to done;
+					succession first bstart then work;
+					transition first work then done;
 				}
 				state done;
-				start then beta;
+				succession first start then beta;
 			}
 		}
 	`
@@ -561,14 +627,15 @@ func TestSuccessionReachesAPseudostate(t *testing.T) {
 	root, machine := parseStateUsage(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state busy;
 				junction route;
 				state done;
 
-				start then busy;
-				busy then route;
-				route then done;
+				succession first start then busy;
+				succession first busy then route;
+				succession first route then done;
 			}
 		}
 	`)
@@ -595,7 +662,8 @@ func TestSuccessionQualifiedTargetNamesTheVertexItQualifies(t *testing.T) {
 	root, machine := parseStateUsage(t, `
 		package test {
 			state Machine {
-				initial start;
+				entry; then start;
+				state start;
 				state alpha {
 					state work;
 				}
@@ -603,8 +671,8 @@ func TestSuccessionQualifiedTargetNamesTheVertexItQualifies(t *testing.T) {
 					state work;
 				}
 
-				start then alpha;
-				alpha then beta::work;
+				succession first start then alpha;
+				succession first alpha then beta::work;
 			}
 		}
 	`)
@@ -628,26 +696,29 @@ func TestSameNamedPseudostatesInSiblingRegionsAreBothCollected(t *testing.T) {
 	root, machine := parseStateUsage(t, `
 		package test {
 			state Machine {
-				initial start;
-				state running {
-					region left {
-						initial lstart;
+				entry; then start;
+				state start;
+				state running parallel {
+					state left {
+						entry; then lstart;
+						state lstart;
 						state lidle;
 						junction pick;
-						lstart then lidle;
-						lidle then pick;
-						pick then lidle;
+						succession first lstart then lidle;
+						succession first lidle then pick;
+						succession first pick then lidle;
 					}
-					region right {
-						initial rstart;
+					state right {
+						entry; then rstart;
+						state rstart;
 						state ridle;
 						junction pick;
-						rstart then ridle;
-						ridle then pick;
-						pick then ridle;
+						succession first rstart then ridle;
+						succession first ridle then pick;
+						succession first pick then ridle;
 					}
 				}
-				start then running;
+				succession first start then running;
 			}
 		}
 	`)
@@ -721,20 +792,22 @@ func TestScopelessLoweringNamesTheRegionLocalState(t *testing.T) {
 	graph, err := ToStateGraph(stateUsageIn(t, `
 		package test {
 			state Machine {
-				state both {
-					region left {
-						initial li;
+				state both parallel {
+					state left {
+						entry; then li;
+						state li;
 						state idle;
 						state done;
-						li then idle;
-						idle then done;
+						succession first li then idle;
+						succession first idle then done;
 					}
-					region right {
-						initial ri;
+					state right {
+						entry; then ri;
+						state ri;
 						state idle;
 						state ready;
-						ri then idle;
-						idle then ready;
+						succession first ri then idle;
+						succession first idle then ready;
 					}
 				}
 			}

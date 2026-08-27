@@ -79,7 +79,7 @@ func TestStateMachineMetaclasses(t *testing.T) {
 	turtle := toTurtle(t, filepath.Join("testdata", "convert", "state_machine.sysml"))
 	for _, want := range []string{
 		"sysml:StateUsage", "sysml:StateSubactionMembership", "sysml:TransitionUsage",
-		"sysx:Pseudostate", "sysx:StateRegion", "sysx:DeferMember",
+		"sysx:Pseudostate", "sysx:DeferMember",
 		"sysx:subactionKind", "sysx:trigger", "sysx:guard",
 		"sysml:sourceFeature", "sysml:targetFeature",
 	} {
@@ -95,7 +95,7 @@ func TestBehavioralStatementsRoundTrip(t *testing.T) {
 	actions := map[string]string{
 		"initial node":        "first start;",
 		"guarded initial":     "first start if speed > 0 then brake;",
-		"final node":          "done finish;",
+		"final node":          "done;",
 		"fork":                "fork split;",
 		"join":                "join sync;",
 		"merge":               "merge gather;",
@@ -111,7 +111,7 @@ func TestBehavioralStatementsRoundTrip(t *testing.T) {
 		"terminate":           "terminate;",
 		"terminate a node":    "terminate brake;",
 		"succession":          "succession first brake then finish;",
-		"edge succession":     "done finish;\n        then brake finish;",
+		"edge succession":     "done;\n        succession first brake then finish;",
 		"while loop":          "while speed > 0 {\n            perform brake;\n        }",
 		"loop":                "loop {\n            perform brake;\n        }",
 		"loop until":          "loop {\n            perform brake;\n        } until speed > 0;",
@@ -135,8 +135,8 @@ func TestBehavioralStatementsRoundTrip(t *testing.T) {
 // allows: a subaction stated with braces, with a single action, or empty.
 func TestStateMembersRoundTrip(t *testing.T) {
 	members := map[string]string{
-		"initial state":        "initial launch;",
-		"final state":          "final stopped;",
+		"entry succession":     "entry;\n        then launch;",
+		"start state":          "state launch;",
 		"substate":             "state waiting;",
 		"empty entry":          "entry;",
 		"entry action":         "entry perform Warm;",
@@ -159,12 +159,10 @@ func TestStateMembersRoundTrip(t *testing.T) {
 		"nested state":         "state working {\n            entry perform Warm;\n        }",
 		"nested transition":    "state working {\n            state a;\n            transition first a then a;\n        }",
 		"nested substates":     "state working {\n            state first_gear;\n            state second_gear;\n        }",
-		"nested regions":       "state working {\n            region left {\n                state stopped;\n            }\n            region right {\n                state moving;\n            }\n        }",
+		"nested regions":       "state working parallel {\n            state left {\n                state stopped;\n            }\n            state right {\n                state moving;\n            }\n        }",
 		"nested full body":     "state working {\n            entry perform Warm;\n            do action spin : Warm;\n            exit perform Warm;\n            defer sig;\n            state deeper;\n        }",
 		"unordered subactions": "state working {\n            do action spin : Warm;\n            entry perform Warm;\n        }",
-		"region":               "region primary {\n            state idle;\n        }",
 		"transition first":     "transition first idle then idle;",
-		"transition to":        "transition idle to idle;",
 		"named transition":     "transition go first idle then idle;",
 		"trigger":              "transition first idle accept sig : Signal then idle;",
 		"guard":                "transition first idle if speed > 0 then idle;",

@@ -9,6 +9,6 @@ package test {
 		action s2 assign y := 9;
 
 		first s1;
-		then s1 s2;
+		succession first s1 then s2;
 	}
 }

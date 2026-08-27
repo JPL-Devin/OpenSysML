@@ -29,20 +29,20 @@ package 'My Pkg' {
 			assign total := total + 5;
 		}
 
-		done end;
+		done;
 
-		then start accumulate;
-		then accumulate end;
+		succession first start then accumulate;
+		succession first accumulate then done;
 	}
 
 	state 'spin up' {
-		initial init;
+		entry; then init;
+		state init;
 		state waiting {
 			accept after 10 then done;
 		}
-		final done;
 
-		init then waiting;
+		succession first init then waiting;
 	}
 }
 

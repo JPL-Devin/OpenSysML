@@ -42,28 +42,21 @@ sysml> %continue
 
 **State machine execution:**
 
-The following state machine uses OpenSysML extensions with no SysML v2 production
-(`initial`, `final`, and named succession notation). See the
-[conformance audit](../reference/grammar/conformance-audit.md).
+A machine completes when a transition reaches `done`, the end shot the standard
+library gives every state: entering it runs the exit actions and the machine
+reports itself completed. Inside orthogonal regions each region has its own
+`done`, and the machine completes only once every concurrent region has reached
+it.
 
 ```sysml
 sysml> state TrafficLight {
-  ...>     initial start;
+  ...>     entry; then start;
+  ...>     state start;
   ...>     state green { accept after 25 then yellow; }
   ...>     state yellow { accept after 5 then red; }
-  ...>     state red { accept after 30 then off; }
-  ...>     final off;
-  ...>     start then green;
+  ...>     state red { accept after 30 then done; }
+  ...>     succession first start then green;
   ...> }
-2:5: warning: `initial <state>;` is an OpenSysML extension with no SysML v2 production: the standard way to mark the state a machine starts in is `entry; then <state>;`
-    initial start;
-    ^~~~~~~
-6:5: warning: `final <state>;` is an OpenSysML extension with no SysML v2 production: a final state is reached by a transition, and is written `state <name>;`
-    final off;
-    ^~~~~
-7:5: warning: `<source> then <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-    start then green;
-    ^~~~~~
 ✓ state TrafficLight
 
 sysml> %state TrafficLight
@@ -94,11 +87,11 @@ sysml> %advance 5
 
 sysml> %advance 30
 ✓ Advanced to 60.00 (1 event(s) processed)
-  Current state: off
+  Current state: done
   Last event at: 60.00
   Remaining events: 0
 
-✓ State machine completed (final state reached)
+✓ State machine completed (a transition reached `done`)
 ```
 
 **Action debugging commands:**
@@ -246,65 +239,6 @@ action sequential {
 One token spawns at `start`, moves to `compute`, which runs its body, and is consumed at
 `done`:
 
-When the named backing file is loaded, the first command below prints:
-
-```
-✓ package ActionExecutorDemo
-examples/action-executor-demo.sysml:9:23: warning: `bind <feature> = <expression>;` is an OpenSysML extension with no SysML v2 production: a binding relates two features, so bind the expression's result feature instead
-        bind result = x * 2.0;
-                      ^~~~~~~
-examples/action-executor-demo.sysml:18:9: warning: `done <name>;` is an OpenSysML extension with no SysML v2 production: `done` is a library feature a succession names, not a keyword that declares a node
-        done finish;
-        ^~~~
-examples/action-executor-demo.sysml:20:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then start compute;
-        ^~~~
-examples/action-executor-demo.sysml:21:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then compute finish;
-        ^~~~
-examples/action-executor-demo.sysml:37:9: warning: `done <name>;` is an OpenSysML extension with no SysML v2 production: `done` is a library feature a succession names, not a keyword that declares a node
-        done finish;
-        ^~~~
-examples/action-executor-demo.sysml:39:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then start split;
-        ^~~~
-examples/action-executor-demo.sysml:40:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then split left;
-        ^~~~
-examples/action-executor-demo.sysml:41:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then split middle;
-        ^~~~
-examples/action-executor-demo.sysml:42:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then split right;
-        ^~~~
-examples/action-executor-demo.sysml:43:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then left sync;
-        ^~~~
-examples/action-executor-demo.sysml:44:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then middle sync;
-        ^~~~
-examples/action-executor-demo.sysml:45:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then right sync;
-        ^~~~
-examples/action-executor-demo.sysml:46:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then sync finish;
-        ^~~~
-examples/action-executor-demo.sysml:57:9: warning: `done <name>;` is an OpenSysML extension with no SysML v2 production: `done` is a library feature a succession names, not a keyword that declares a node
-        done finish;
-        ^~~~
-examples/action-executor-demo.sysml:59:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then start check;
-        ^~~~
-examples/action-executor-demo.sysml:60:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then pathA finish;
-        ^~~~
-examples/action-executor-demo.sysml:61:9: warning: `then <source> <target>;` is an OpenSysML extension with no SysML v2 production: a succession names both ends as `first <source> then <target>`
-        then pathB finish;
-        ^~~~
-```
-
-The command-specific result then follows:
-
 ```
 $ sysml -action ActionExecutorDemo::sequential examples/action-executor-demo.sysml
 ✓ Action completed
@@ -317,8 +251,7 @@ $ sysml -action ActionExecutorDemo::sequential examples/action-executor-demo.sys
 
 ### Fork and join: parallel paths
 
-This action uses OpenSysML fork and join extensions with no SysML v2 production.
-See the [conformance audit](../reference/grammar/conformance-audit.md).
+`fork` and `join` are action node literals, so this action is standard notation.
 
 ```sysml
 action forkJoin {
@@ -332,16 +265,16 @@ action forkJoin {
     action middle { assign task2 := 20; }
     action right { assign task3 := 30; }
     join sync;
-    done finish;
+    done;
 
-    then start split;
-    then split left;
-    then split middle;
-    then split right;
-    then left sync;
-    then middle sync;
-    then right sync;
-    then sync finish;
+    succession first start then split;
+    succession first split then left;
+    succession first split then middle;
+    succession first split then right;
+    succession first left then sync;
+    succession first middle then sync;
+    succession first right then sync;
+    succession first sync then done;
 }
 ```
 
@@ -349,8 +282,6 @@ action forkJoin {
 token on *every* incoming succession before one continues. A fork duplicates control, not
 values: all three branches are steps of the one performance, so every assignment is visible
 when it completes.
-
-The same package-load and extension-warning preamble shown above precedes this result.
 
 ```bash
 $ sysml -action ActionExecutorDemo::forkJoin examples/action-executor-demo.sysml
@@ -368,9 +299,8 @@ A branch that never arrives is a deadlock, not a failure: the run is reported as
 
 ### Decision and else: conditional branching
 
-This action uses OpenSysML decision and guarded succession extensions with no
-SysML v2 production. See the
-[conformance audit](../reference/grammar/conformance-audit.md).
+`decide` with a guarded branch and an `else` branch is standard notation; the
+OpenSysML spelling `decision` is the one that warns.
 
 ```sysml
 action conditional {
@@ -380,11 +310,11 @@ action conditional {
     first start;
     action pathA { assign taken := 1; }
     action pathB { assign taken := 2; }
-    done finish;
+    done;
 
-    then start check;
-    then pathA finish;
-    then pathB finish;
+    succession first start then check;
+    succession first pathA then done;
+    succession first pathB then done;
 
     decide check;
     if x > 10 then pathA;
@@ -394,8 +324,6 @@ action conditional {
 
 `decide` evaluates its guards in the order written, with the action's features in scope, and
 takes the first that holds; `else` is taken when none does. With `x = 15`:
-
-The same package-load and extension-warning preamble shown above precedes this result.
 
 ```bash
 $ sysml -action ActionExecutorDemo::conditional examples/action-executor-demo.sysml

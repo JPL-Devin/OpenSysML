@@ -3,21 +3,21 @@
 // history transition names.
 package Test {
     state ShallowHistory {
-        initial start;
+        entry; then start;
+        state start;
         state outer {
             state first;
             state second;
             history resume;
         }
         state away;
-        final done;
 
-        start then first;
+        succession first start then first;
 
-        transition first to second when Next;
-        transition second to away when Leave;
-        transition away to resume when Back;
-        transition resume to first;
-        transition second to done when Finish;
+        transition first first when Next then second;
+        transition first second when Leave then away;
+        transition first away when Back then resume;
+        transition first resume then first;
+        transition first second when Finish then done;
     }
 }

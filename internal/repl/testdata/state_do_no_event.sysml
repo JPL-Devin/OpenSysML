@@ -4,7 +4,8 @@ package Debug {
 	state Work {
 		attribute count = 0;
 
-		initial init;
+		entry; then init;
+		state init;
 		state busy {
 			do {
 				count = count + 1;
@@ -12,9 +13,8 @@ package Debug {
 				count = count + 1;
 			}
 		}
-		final done;
 
-		init then busy;
-		busy then done;
+		succession first init then busy;
+		succession first busy then done;
 	}
 }

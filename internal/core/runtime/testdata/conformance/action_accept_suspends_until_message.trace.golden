@@ -6,5 +6,5 @@ stmt send
 step 4: token 2@sync, token 3@sync
 stmt assign received
   eval feature n -> 7
-step 5: token 4@end
+step 5: token 4@done
 step 6: no active tokens

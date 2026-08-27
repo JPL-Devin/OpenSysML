@@ -1,10 +1,10 @@
 package test {
 	state Machine {
-		initial init;
+		entry; then init;
+		state init;
 		state Running;
-		final done;
 		
-		init then Running;
-		Running then done;
+		succession first init then Running;
+		succession first Running then done;
 	}
 }

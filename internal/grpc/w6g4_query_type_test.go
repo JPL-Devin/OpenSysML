@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -117,15 +118,15 @@ func TestMetamodelTypeNameCoversEveryKindDeclared(t *testing.T) {
 		if refined[kind] {
 			continue
 		}
-		if MetamodelTypeName(kind) == "" {
+		if corequery.MetamodelTypeName(kind) == "" {
 			t.Errorf("symbol kind %q has no metamodel type name", kind)
 		}
 	}
-	if MetamodelTypeName(symbols.SymbolUnknown) != "" {
+	if corequery.MetamodelTypeName(symbols.SymbolUnknown) != "" {
 		t.Error("an unclassified declaration must have no metamodel type name")
 	}
 	// A KerML type is named from its keyword, so the kind alone names nothing.
-	if MetamodelTypeName(symbols.SymbolKerMLType) != "" {
+	if corequery.MetamodelTypeName(symbols.SymbolKerMLType) != "" {
 		t.Error("a KerML type kind must be named from its declaration, not its kind")
 	}
 }
