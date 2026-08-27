@@ -369,6 +369,51 @@ degradation case.
 - Body names carry semantic token type `enumMember` with modifiers `declaration readonly`
   (Inspect Editor Tokens and Colors).
 
+### Sequence diagrams and the pseudo-view picker
+
+- Ready-made sequence fixtures live in `internal/core/view/testdata/`: `sequence.sysml`
+  (`SequenceViews::pubSubView`, 3 participants `part producer/server/consumer`) and
+  `sequence-vehicle.sysml` (`VehicleSequenceViews::startVehicleView`, 2 participants
+  `part driver (Driver)` / `part vehicle (Vehicle)`). Copy them into a scratch workspace; both
+  auto-select in the panel because they declare exactly one view.
+- Mermaid draws a participant box **twice** (top and bottom). Only the **top** one carries
+  `data-id`/`id`; the bottom box is deliberately inert, so always click the top row of boxes or the
+  test looks broken.
+- `nodeElement` (`editors/vscode/src/webview/nodes.ts`) matches participants via
+  `g[data-et="participant"][data-id]` — flowchart/state nodes still go through `bareID()`. If a
+  future Mermaid bump changes `data-et`, participants go silently inert again; diagnose with
+  Webview Developer Tools (`active-frame` context):
+  `[...document.querySelectorAll('#diagram svg g[data-et=participant]')].map(g=>[g.id,g.dataset.id])`
+  and `document.querySelectorAll('#diagram .opensysml-node').length`.
+  `npm run check-nodes` (`editors/vscode/tools/check-nodes.mjs`) renders the same fixtures under jsdom
+  and is the cheapest pre-GUI check.
+- The picker's pseudo-view entries come from the server's `opensysml/views` → `pseudoViews`
+  (`internal/lsp/render.go`, `view.PseudoViewSpecs()`), labelled by
+  `PSEUDO_VIEW_LABELS` in `editors/vscode/src/diagram.ts` — e.g. `#sequence` →
+  `Message sequence (no view declared)`. A pre-#624 server omits the field and the client falls back
+  to a 5-entry historical list, which makes a **server build from before the change the perfect
+  negative control** for "is the picker really server-driven?".
+- An **unsupported** view (`geometry`) is rendered as a *disabled* `<option>` with text suffix
+  `(not drawable)`; its `reason` is only the option's `title` (tooltip), so the reason string is not
+  visibly assertable from a screenshot — assert the greyed `(not drawable)` text and prove the reason
+  over JSON-RPC instead. A geometry-view fixture is `internal/core/view/testdata/errors.sysml`
+  (`ErrorViews::geometryView`); `examples/views-demo.sysml` no longer declares any unsupported view
+  (all 7 of its views are `supported:true` when opened from a scratch folder).
+- The `#state` pseudo-view on `examples/state-machine-demo.sysml` renders
+  `the rendering is empty: nothing the view exposes is shown by a state rendering` — this is
+  **pre-existing** (identical on a main-built server, the file's root element is a `part def`). Use the
+  declared `LanderViews::descentStates` view in `views-demo.sysml` for state-diagram click-to-source.
+
+### More GUI pitfalls
+
+- **Never `pkill -f "no-sandbox --disable-gpu"` from the exec tool**: the pattern matches the
+  wrapping `bash -c` command line, so the shell kills itself and the relaunch in the same command
+  never runs (symptom: no window, `/tmp/code.log` does not exist). Kill by a pattern that cannot
+  match your own command, or launch into a fresh shell.
+- Opening the panel repeatedly for different files piles up editor groups until each is ~150 px wide.
+  Close spare groups, and if the diagram and its editor end up in one group use Command Palette
+  **"View: Move Editor into Previous/Next Group"** to get them side by side.
+
 ## Recording tips
 
 Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoom`ing the status bar
