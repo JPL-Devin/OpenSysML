@@ -210,10 +210,10 @@ sysml -e "result" file1.sysml file2.sysml
 
 `-render <view>` renders one view of the model and exits. The rendering is the one the view's
 `render` member states, and a containment tree where it states none. A pseudo-view renders without
-a declaration: `#tree` renders the loaded documents, while `#tree:<name>`,
-`#interconnection:<name>`, `#state:<name>`, `#action:<name>` and `#table:<name>` render the
-named element directly. Only kinds this build produces are offered; newly supported kinds become
-pseudo-views automatically.
+a declaration: `#tree` renders the one model file accepted by `-render` (or every document loaded
+in the REPL), while `#tree:<name>`, `#interconnection:<name>`, `#state:<name>`,
+`#action:<name>` and `#table:<name>` render the named element directly. Only kinds this build
+produces are offered; newly supported kinds become pseudo-views automatically.
 
 ```bash
 # The ASCII text form a person reads, written to fit the terminal
@@ -228,7 +228,7 @@ sysml model.sysml -render Views::vehicleView -o view.mmd
 sysml model.sysml -render Views::partsTable -render-form markdown
 sysml model.sysml -render Views::vehicleView -render-form text
 
-# Render a named element, or every loaded document, without declaring a view
+# Render a named element, or one model directly, without declaring a view
 sysml model.sysml -render '#state:Vehicle::controller'
 sysml model.sysml -render '#tree'
 ```
