@@ -130,8 +130,6 @@ proto-ts: ## Regenerate the TypeScript stubs the npm client in clients/node ship
 	$(BUF) generate --template buf.gen.ts.yaml
 	@echo "✓ Regenerated TypeScript stubs"
 
-# The upcoming clients: generated on demand into gen/, never committed.
-
 proto-rust: ## Generate Rust stubs and the descriptor for the Rust clients
 	$(BUF) generate --template buf.gen.rust.yaml
 	$(BUF) build -o rust/conformance/sysml.descriptor.binpb
