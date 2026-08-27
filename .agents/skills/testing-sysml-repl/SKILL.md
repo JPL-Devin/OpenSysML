@@ -5227,3 +5227,33 @@ with `-withhold-capabilities strict_conformance,oslc_query`, and prints per-scen
 Trap when writing a Convert row: `-convert ttl`/`to_format="ttl"` refuses a model containing a calc
 body or constraint member (`cannot convert the operator expr at …`), so use `to_format="kerml"` for
 the "convert works" check and keep RDF out of capability fixtures.
+
+## grpc-go made test-only; transport error-parity probes (PR #612)
+
+Production code no longer imports `google.golang.org/grpc`: service errors are
+`connect.NewError(connect.CodeX, ...)` (`internal/grpc/`), the legacy `-transport grpc`
+server lives in `cmd/sysml-grpc/grpcserver.go` behind an interceptor translating
+`*connect.Error` → grpc statuses, and `scripts/check-grpc-imports.sh` gates imports in CI.
+When testing error-message parity across transports:
+
+- Run two servers at once (`./bin/sysml-grpc -port A -health-port A2` and
+  `... -transport grpc -port B -health-port B2`) and drive **both** with the same raw
+  grpcio stub — connect's gRPC-compat protocol lets one client compare
+  `(e.code().name, e.details())` tuples byte-for-byte.
+- Canonical probes: `Query` with `model_hash="deadbeef"` →
+  `NOT_FOUND` / `model not found: deadbeef`; `Query` with both `query` and `oslc_query`
+  set → `INVALID_ARGUMENT` / `query and oslc_query are mutually exclusive`.
+- `QueryRequest.query` is a `Query` **message**, not a string — build it with
+  `opensysml.query.build_query(None, where={"property": "@type", "operator": "=",
+  "value": "PartDefinition"})`. `oslc_query` is a plain string.
+- To prove the connect-native (non-gRPC) error path, POST JSON to
+  `http://localhost:A/sysml.SysMLService/Query` with `Content-Type: application/json`;
+  in JSON the operator enum is spelled `PRIMITIVE_OPERATOR_EQUAL` and a value list is
+  plain strings (`"value": ["PartDefinition"]`). Expect e.g. HTTP 404 with body
+  `{"code":"not_found","message":"model not found: deadbeef"}`.
+- `Model` exposes `.hash` (not `.model_hash`); query results are `QueryElement`s whose
+  display string is `P::Vehicle (PartDefinition)` — there is no `.name` attribute.
+- stdio framing check: send `Content-Length`/`Content-Type: application/json` CRLF
+  frames; unknown method answers `error.code == 12` with
+  `SysMLService has no method "X"` and the server keeps serving; closing stdin exits 0.
+- The service RPC is `ParseFile` (field `content`), not `ParseModel`.
