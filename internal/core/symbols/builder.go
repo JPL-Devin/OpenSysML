@@ -134,8 +134,16 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
 	case *ast.PrefixMetadata:
-		if len(d.Body) > 0 {
-			buildMetadataBodyScope(scope, d)
+		child := buildMetadataBodyScope(scope, d)
+		// An identification names the usage as a member of its namespace, exactly
+		// as the `metadata` spelling of the same declaration does.
+		if d.Ident.Name != "" || d.Ident.ShortName != "" {
+			if child == nil {
+				child = NewScope(scope, d)
+				scope.AddChild(child)
+			}
+			sym := newSymbol(d.Ident, SymbolMetadataUsage, d, vis, child, scope, trivia)
+			defineIdent(scope, d.Ident, sym)
 		}
 	case *ast.InitialNode:
 		// Register initial node by name so transitions can reference it
@@ -291,14 +299,17 @@ func buildMetadataBodyScopes(scope *Scope, prefixes []*ast.PrefixMetadata) {
 	}
 }
 
-func buildMetadataBodyScope(parent *Scope, prefix *ast.PrefixMetadata) {
+// buildMetadataBodyScope builds the scope of a metadata usage's body and
+// returns it, or nil when the usage has no body.
+func buildMetadataBodyScope(parent *Scope, prefix *ast.PrefixMetadata) *Scope {
 	if parent == nil || prefix == nil || len(prefix.Body) == 0 {
-		return
+		return nil
 	}
 	child := NewScope(parent, prefix)
 	child.markBodyLocal()
 	parent.AddChild(child)
 	buildMembers(child, prefix.Body)
+	return child
 }
 
 // buildControlNode registers a named fork/join/merge/decision node the way a

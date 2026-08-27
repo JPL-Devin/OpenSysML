@@ -284,6 +284,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		b.WriteString(`)`)
 	case *PrefixMetadata:
 		fmt.Fprintf(b, `(PrefixMetadata type=%q`, qnString(v.Type))
+		if name := identName(v.Ident); name != "" {
+			fmt.Fprintf(b, ` name=%q`, name)
+		}
 		if len(v.About) > 0 {
 			fmt.Fprintf(b, ` about=%q`, qnList(v.About))
 		}
@@ -455,9 +458,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		return
 	case *RequireMember:
 		if v.Reference != nil {
-			// Reference form: require Q::r { body }
+			// Reference form: require Q::r [mult] { body }
 			fmt.Fprintf(b, `(RequireMember name=%q`, qnString(v.Reference))
-			writeChildren(b, depth, v.Body)
+			writeChildren(b, depth, referenceChildren(v.Multiplicity, v.Body))
 		} else if v.Expression == nil {
 			// Constraint form: require constraint [decl] (; | { expr })
 			b.WriteString(`(RequireMember`)
@@ -475,7 +478,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 	case *AssumeMember:
 		if v.Reference != nil {
 			fmt.Fprintf(b, `(AssumeMember name=%q`, qnString(v.Reference))
-			writeChildren(b, depth, v.Body)
+			writeChildren(b, depth, referenceChildren(v.Multiplicity, v.Body))
 			return
 		}
 		b.WriteString(`(AssumeMember`)
@@ -710,6 +713,15 @@ func importKindString(k ImportKind) string {
 		return "namespace"
 	}
 	return "membership"
+}
+
+// referenceChildren orders the children of a constraint reference: its
+// specialization multiplicity, then its body.
+func referenceChildren(mult *Multiplicity, body []Node) []Node {
+	if mult == nil {
+		return body
+	}
+	return append([]Node{mult}, body...)
 }
 
 func identName(id Identification) string {

@@ -45,14 +45,14 @@ corresponding check.
 |---|---|---|---|---|
 | `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml:38` | `22/2*25.4 + 110 [mm]` | `[mm]` binds only to `110`, so `+` combines a dimensionless value with a length | KerML 1.0 §8.2.5.8.1–8.2.5.8.2 makes the bracket construction a primary expression; SysML v2.0 §9.8.9.1 requires addition operands to have the same quantity dimension. The evident intended spelling is `(22/2*25.4 + 110) [mm]`. | **not filed** |
 | `Analysis Examples/Turbojet Stage Analysis.sysml:25` | `1/(2 * Cp) * V^2 + T_static`, with `Cp : DimensionOneValue`, `V : VolumeValue`, and `T_static : TemperatureValue` | the declared types make the operands L^6 and Θ | SysML v2.0 §9.8.9.1 requires addition operands to have the same quantity dimension and top-level quantity type. The formula needs dimensionally appropriate parameter declarations or conversion before addition. | **not filed** |
-| `Individuals Examples/AnalysisIndividualExample.sysml:86` | `individual action :>> fuelConsumption : FuelEconomyAnalysis_1` | the redefining action is typed by the enclosing analysis definition, which does not conform to the redefined feature's `FuelConsumption` | KerML 7.4.9 and 8.3.4.2 make a redefinition a subsetting, so the redefining feature's type must conform to the redefined one's. The file declares `individual action def FuelConsumption_1 :> FuelConsumption` and never uses it: that is the intended type. | **not filed** |
+| `Individuals Examples/AnalysisIndividualExample.sysml:86` | `individual action :>> fuelConsumption : FuelEconomyAnalysis_1` | the redefining action is typed by the enclosing analysis definition, which does not conform to the redefined feature's `FuelConsumption` | KerML 7.4.9 and 8.3.4.2 make a redefinition a subsetting, so the redefining feature's type must conform to the redefined one's. The file declares `individual action def FuelConsumption_1 :> FuelConsumption` and never uses it: that is the intended type. | **fixed upstream at `2026-07`** — the corpus now publishes `fuelConsumption : FuelConsumption_1`, the type this row named, so the row is closed and its overlay entry retired |
 
 The first two rows form one adjudicated quantity-commensurability family in
-[the false-positive audit](wave12f-false-positives.md), and the third is the corpus instance of the
-subsetting-conformance divergence adjudicated in [wave11e-decisions.md](wave11e-decisions.md):
-OpenSysML retains all three diagnostics, and nothing has been posted upstream. All three are
-entries of the declared errata overlay — the geometry and individuals rows with a correction, the
-turbojet row without one — quoted verbatim with their derivations in
+[the false-positive audit](wave12f-false-positives.md), and the third was the corpus instance of the
+subsetting-conformance divergence adjudicated in [wave11e-decisions.md](wave11e-decisions.md),
+which the `2026-07` corpus corrects on its own. OpenSysML retains the two open diagnostics, and
+nothing has been posted upstream. Both are entries of the declared errata overlay — the geometry
+row with a correction, the turbojet row without one — quoted verbatim with their derivations in
 [the fourth section](#the-errata-overlay-entries-for-these-models).
 
 ---
@@ -227,8 +227,7 @@ The second section's rows are also entries of the declared errata overlay
 disk are never edited, and a row that carries a correction has that correction
 applied to the *second* figure every oracle reports, never to the headline one.
 The overlay adds no category and reclassifies nothing — the two quantity rows stay the adjudicated
-commensurability family recorded in the false-positive audit, and the individuals row stays the
-subsetting-conformance divergence.
+commensurability family recorded in the false-positive audit.
 
 An entry is accepted only with a specification citation and a written
 derivation, and only while its as-published text still matches the corpus on
@@ -240,7 +239,7 @@ closed by a guess.
 |---|---|---:|---|---|---|
 | dimensionless addend | `sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml` | 38 | SysML v2 §9.8.9.1 | corrected | **not filed** — drafted below, awaiting maintainer authorisation |
 | mismatched dimensions | `sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml` | 25 | SysML v2 §9.8.9.1 | documented without a correction | **not filed** — drafted below, awaiting maintainer authorisation |
-| non-conforming redefinition | `sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml` | 86 | KerML 7.4.9, 8.3.4.2 | corrected | **not filed** — drafted below, awaiting maintainer authorisation |
+| non-conforming redefinition | `sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml` | 86 | KerML 7.4.9, 8.3.4.2 | retired at `2026-07` | **closed** — fixed upstream, never filed by us |
 
 Filing is the user's decision: nothing here has been posted to
 `Systems-Modeling/SysML-v2-Pilot-Implementation` or any other upstream repository.
@@ -298,18 +297,20 @@ So this row is **documented without a correction**. The overlay carries it for
 provenance only; both figures every oracle reports keep the published text, and
 OpenSysML's warning at that line stays in the differential census.
 
-### `fuelConsumption : FuelEconomyAnalysis_1` redefines an action typed by `FuelConsumption` (pilot `2026-05`)
+### `fuelConsumption : FuelEconomyAnalysis_1` redefines an action typed by `FuelConsumption` (pilot `2026-05`, fixed at `2026-07`)
 
-**Not filed.** Drafted here for a maintainer to authorise; nothing has been
-posted upstream.
+**Never filed, and now closed.** The `2026-07` corpus publishes
+`individual action :>> fuelConsumption : FuelConsumption_1` — the reading derived
+below — so the overlay entry was retired and this section is kept as the record
+of the finding.
 
-Published, `Individuals Examples/AnalysisIndividualExample.sysml`:86:
+Published at `2026-05`, `Individuals Examples/AnalysisIndividualExample.sysml`:86:
 
 ```sysml
 individual action :>> fuelConsumption : FuelEconomyAnalysis_1 {
 ```
 
-Corrected by the overlay:
+Corrected by the overlay, and published as such since `2026-07`:
 
 ```sysml
 individual action :>> fuelConsumption : FuelConsumption_1 {

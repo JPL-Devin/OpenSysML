@@ -15,7 +15,7 @@ var census = map[string]struct {
 	"kerml": {
 		Files: 303,
 		Assertions: map[string][3]int{
-			kindErrors:        {295, 17, 326},
+			kindErrors:        {296, 17, 327},
 			kindNoErrors:      {200, 0, 200},
 			kindLinkedName:    {191, 0, 191},
 			kindWarnings:      {18, 0, 18},
@@ -24,10 +24,10 @@ var census = map[string]struct {
 		},
 	},
 	"sysml": {
-		Files: 125,
+		Files: 126,
 		Assertions: map[string][3]int{
 			kindErrors:     {164, 10, 184},
-			kindNoErrors:   {75, 0, 75},
+			kindNoErrors:   {76, 0, 76},
 			kindLinkedName: {3, 0, 3},
 			kindWarnings:   {40, 17, 95},
 		},
@@ -37,8 +37,8 @@ var census = map[string]struct {
 // lineNotes is the published `// XPECT <kind>` census. linkedName is +2: two
 // notes are tab-indented after `//`, which that grep misses and Xpect does not.
 var lineNotes = map[string]int{
-	kindErrors:     459,
-	kindNoErrors:   275,
+	kindErrors:     460,
+	kindNoErrors:   276,
 	kindLinkedName: 192 + 2,
 	kindWarnings:   58,
 	kindScope:      1,

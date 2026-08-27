@@ -150,8 +150,11 @@ type RootNamespace struct {
 // PrefixMetadata records a `# QualifiedName` metadata annotation reference.
 type PrefixMetadata struct {
 	NodeBase
-	Type *QualifiedName
-	Body []Node // optional body with property initializers: @Meta{prop = value;}
+	// Ident names the usage when it declares one before its typing:
+	// `@ m : Meta;`, `@ : Meta;` (SysML.xtext MetadataUsageDeclaration).
+	Ident Identification
+	Type  *QualifiedName
+	Body  []Node // optional body with property initializers: @Meta{prop = value;}
 	// Elements the usage annotates: `@Meta about a, b;` (SysML.xtext:145-147).
 	About []*QualifiedName
 }
