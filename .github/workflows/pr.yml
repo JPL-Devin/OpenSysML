@@ -487,3 +487,31 @@ jobs:
 
       - name: Verify Python client import
         run: python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"
+
+  conformance-pkg:
+    name: Conformance through pkg/opensysml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      # The runner builds and starts sysml-grpc itself; the pkg protocol runs
+      # in-process and pkg-connect dials that service, so this gate proves the
+      # public Go API answers as the wire does. Scenarios outside its v1
+      # surface are counted skips, not hidden.
+      - name: Conformance suite through pkg/opensysml
+        run: make conformance-pkg
+
+      # if: always() — the report matters most when the gate failed and halted the job.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-pkg-report
+          path: bin/conformance-pkg-report.json

@@ -257,6 +257,17 @@ jobs:
           destination: conformance-report.json
           when: always
 
+      # The same suite through the public Go API (pkg/opensysml), in-process and
+      # remote; scenarios outside its v1 surface are counted skips, not hidden.
+      - run:
+          name: Conformance suite through pkg/opensysml
+          command: make conformance-pkg
+
+      - store_artifacts:
+          path: bin/conformance-pkg-report.json
+          destination: conformance-pkg-report.json
+          when: always
+
       - run:
           name: Build binaries
           command: |
