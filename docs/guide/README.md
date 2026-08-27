@@ -13,5 +13,10 @@ Read in order the first time; each chapter assumes the ones before it.
 9. [From Python](09-python.md) — the `opensysml` client over `sysml-grpc`
 10. [Troubleshooting](10-troubleshooting.md) — when a run stops short
 
+Python is the chapter here because it is the oldest and widest client, not the only one: Go,
+Node/TypeScript, Java and Rust reach the same engine, and [client
+libraries](../reference/clients.md) is the map of which to pick and what each covers.
+
 Looking up one thing rather than reading? The [reference](../reference/) has the CLI flags, the
-REPL commands, the environment variables, the service API, the Python API and the RDF mapping.
+REPL commands, the environment variables, the service API, the client libraries, the Python API and
+the RDF mapping.

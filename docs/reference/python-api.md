@@ -236,6 +236,15 @@ than joining one. A service that only lacks a required *capability* is reported 
 `MissingCapabilityError`: capabilities come with a release, so the class you
 catch does not depend on who started the service.
 
+The client checks the advertised list before it makes a capability-gated call, so
+that error usually arrives without a round trip. When a call does reach a service
+that lacks the capability, the service refuses it with `UNIMPLEMENTED` naming the
+capability, and the client raises the same `MissingCapabilityError` with the gRPC
+error kept as its `__cause__` — so the class you catch does not depend on which
+side noticed either. A capability that only describes how a response is
+populated is not a refusal: the answer omits the fields it names, as documented
+per call.
+
 ## Development
 
 ```bash

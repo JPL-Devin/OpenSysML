@@ -205,10 +205,14 @@ needs no binary at all.
 `Connection.open` calls `GetServerInfo` once and keeps what it reported.
 `connection.capabilities().require(Capabilities.EVALUATE_SUBJECT)` throws
 `CapabilityException` when a capability is absent. Negotiation is on the
-advertised **names**, never on the version string: the service does not answer
-`UNIMPLEMENTED` for a capability it lacks, so a call that relied on failure would
-silently get an answer computed without the field it sent — which is why
-`Model.evalWithSubject` checks before it calls.
+advertised **names**, never on the version string. The service does refuse a
+request that needs a capability it lacks — `UNIMPLEMENTED`, naming the
+capability, which arrives here as a `ServiceException` — but a capability that
+only describes how a response is populated omits its fields instead, so a call
+that relied on failure alone would silently read an answer computed without
+them. That is why `Model.evalWithSubject` checks before it calls: a
+`CapabilityException` names the missing capability and the service that lacks
+it, before a round trip.
 
 ## What v1 does not do
 

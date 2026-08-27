@@ -17,7 +17,7 @@ The current Git dependency form is:
 
 ```toml
 [dependencies]
-opensysml = { git = "https://github.com/JPL-Devin/OpenSysML.git", branch = "main" }
+opensysml = { git = "https://github.com/Open-MBEE/OpenSysML.git", branch = "main" }
 ```
 
 The minimum supported Rust version is **Rust 1.83**.
@@ -80,9 +80,14 @@ child version.
 
 ## Capability negotiation
 
-The service's advertised capability list is the complete negotiation surface.
-It does not answer `UNIMPLEMENTED` merely because a capability is absent.
-The client checks request-side requirements for:
+The service's advertised capability list is the negotiation surface, and the
+client checks it before it calls rather than relying on the refusal: a request
+that needs a capability the service does not have is refused with
+`UNIMPLEMENTED` naming that capability, and checking first turns that into a
+local error naming what to install instead of a transport round trip.
+Capabilities that only describe how a response is populated omit the fields they
+name rather than refusing the call. The client checks request-side requirements
+for:
 
 * `strict_conformance` when strict parsing is requested;
 * `inline_language` for inline KerML content; and
