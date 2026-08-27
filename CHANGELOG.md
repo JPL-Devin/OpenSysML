@@ -4,6 +4,20 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### Added
+
+- **A view specializing `StandardViewDefinitions::SequenceView` (or `sv`) renders as a sequence
+  diagram**, at the prompt (`%render`), from the command line (`sysml -render`) and over the LSP, in
+  the text form and as a Mermaid `sequenceDiagram`. The occurrences an interaction declares in its
+  body are its lifelines, a `message`/`flow` usage is a directed message between the lifelines its
+  ends' events belong to, and the successions between those events order the messages — a cycle
+  among them is reported and declaration order stands. What a sequence diagram cannot show — an
+  exposed element that holds no occurrence, an undirected `connect`, a message stating no ends or
+  attaching to something the view does not expose — is reported rather than dropped. A `geometry`
+  view remains recognized but not drawn.
+
 ## 0.3.1 — 2026-08-27
 
 A performance patch. Loading a model costs less of everything and answers the same: on a

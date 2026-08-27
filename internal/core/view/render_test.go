@@ -86,6 +86,12 @@ func TestGoldenRenderings(t *testing.T) {
 		{"filters", "filters.sysml", "FilteredViews::safetyView", KindTree},
 		{"table", "table.sysml", "TableViews::partsTable", KindTable},
 		{"grid-table", "table.sysml", "TableViews::fleetTable", KindTable},
+		{"sequence", "sequence.sysml", "SequenceViews::pubSubView", KindSequence},
+		{"sequence-vehicle", "sequence-vehicle.sysml", "VehicleSequenceViews::startVehicleView", KindSequence},
+		{"sequence-notices", "sequence-notices.sysml", "NoticeViews::handshakeView", KindSequence},
+		{"sequence-order", "sequence-order.sysml", "OrderingViews::relayView", KindSequence},
+		{"sequence-cycle", "sequence-order.sysml", "OrderingViews::deadlockView", KindSequence},
+		{"sequence-empty", "errors.sysml", "ErrorViews::emptySequenceView", KindSequence},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -284,7 +290,7 @@ func TestUnsupportedRenderingKinds(t *testing.T) {
 		kind Kind
 		says string
 	}{
-		{"ErrorViews::sequenceView", KindSequence, "view def SequenceView"},
+		{"ErrorViews::geometryView", KindGeometry, "view def GeometryView"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.view, func(t *testing.T) {
