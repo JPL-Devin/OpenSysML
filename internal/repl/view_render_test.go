@@ -137,6 +137,138 @@ func TestRenderOfAnUnknownNameReports(t *testing.T) {
 	}
 }
 
+func TestPseudoViewsRenderThroughTheSession(t *testing.T) {
+	s := NewSession()
+	res := s.Submit(`package Direct {
+    port def Port;
+    part def Network {
+        port left : Port;
+        port right : Port;
+        connection link connect left to right;
+    }
+    state def Machine {
+        entry; then idle;
+        state idle;
+    }
+    action def Flow {
+        first start;
+        action finish;
+        succession first start then finish;
+    }
+}`)
+	for _, d := range res.Diagnostics {
+		if d.Severity == passes.SeverityError {
+			t.Fatalf("model did not load: %v", res.Diagnostics)
+		}
+	}
+	cases := []struct {
+		spec string
+		kind view.Kind
+		form view.Form
+		want string
+	}{
+		{"#tree", view.KindTree, view.FormText, "part def Direct::Network"},
+		{"#state:Direct::Machine", view.KindState, view.FormMermaid, "stateDiagram-v2"},
+		{"#action:Flow", view.KindAction, view.FormMermaid, "flowchart TD"},
+		{"#interconnection:Direct::Network", view.KindInterconnection, view.FormMermaid, "flowchart LR"},
+		{"#table:Direct::Network", view.KindTable, view.FormMarkdown, "| Element | Kind | Type | Declared in |"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.spec, func(t *testing.T) {
+			rendering, err := s.ViewRendering(tc.spec)
+			if err != nil {
+				t.Fatalf("ViewRendering(%q): %v", tc.spec, err)
+			}
+			if rendering.Kind != tc.kind || rendering.View != "" {
+				t.Errorf("rendering = kind %q, view %q", rendering.Kind, rendering.View)
+			}
+			artifact, err := rendering.Write(tc.form)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(artifact, tc.want) {
+				t.Errorf("%s is missing %q:\n%s", tc.spec, tc.want, artifact)
+			}
+			if strings.Contains(strings.SplitN(artifact, "\n", 2)[0], " — ") ||
+				strings.HasPrefix(artifact, " - ") {
+				t.Errorf("%s has an unnamed-view header:\n%s", tc.spec, artifact)
+			}
+		})
+	}
+	if text := run(t, s, "%render #tree"); !strings.HasPrefix(text, "tree rendering") {
+		t.Errorf("%%render did not accept #tree:\n%s", text)
+	}
+}
+
+func TestPseudoViewErrorsUseTheSessionLookupAndListAlternatives(t *testing.T) {
+	s := viewSession(t)
+	_, err := s.ViewRendering("#not-a-rendering")
+	if err == nil {
+		t.Fatal("an unsupported pseudo-view succeeded")
+	}
+	for _, spec := range view.PseudoViewSpecs() {
+		if !strings.Contains(err.Error(), spec) {
+			t.Errorf("error %q does not list %q", err, spec)
+		}
+	}
+
+	_, _, lookupErr := s.lookupSymbol("Demo::Missing")
+	_, err = s.ViewRendering("#state:Demo::Missing")
+	if err == nil || lookupErr == nil || err.Error() != lookupErr.Error() {
+		t.Errorf("pseudo-view error = %v, lookup error = %v", err, lookupErr)
+	}
+}
+
+func TestTargetlessPseudoViewSpansLoadedDocuments(t *testing.T) {
+	s := NewSession()
+	res := s.SubmitFiles([]SourceFile{
+		{Name: "second.kerml", Text: "package Second { class Two; }"},
+		{Name: "first.sysml", Text: "package First { part def One; }"},
+	})
+	for _, d := range res.Diagnostics {
+		if d.Severity == passes.SeverityError {
+			t.Fatalf("model did not load: %v", res.Diagnostics)
+		}
+	}
+	rendering, err := s.ViewRendering("#tree")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := rendering.Text()
+	first := strings.Index(text, "First::One")
+	second := strings.Index(text, "Second::Two")
+	if first < 0 || second < 0 {
+		t.Fatalf("rendering does not span both documents:\n%s", text)
+	}
+	if second > first {
+		t.Errorf("document order was not preserved:\n%s", text)
+	}
+}
+
+func TestViewsListsSessionViewsInDeclarationOrder(t *testing.T) {
+	s := NewSession()
+	res := s.SubmitFiles([]SourceFile{
+		{Name: "first.sysml", Text: "package First { view k; }"},
+		{Name: "second.sysml", Text: `package ViewsA {
+    view z;
+    view a;
+}`},
+	})
+	for _, d := range res.Diagnostics {
+		if d.Severity == passes.SeverityError {
+			t.Fatalf("model did not load: %v", res.Diagnostics)
+		}
+	}
+	views, err := s.Views()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 3 || views[0].Name != "First::k" ||
+		views[1].Name != "ViewsA::z" || views[2].Name != "ViewsA::a" {
+		t.Errorf("views = %+v, want declaration order", views)
+	}
+}
+
 func TestRenderMisuseShowsUsage(t *testing.T) {
 	s := viewSession(t)
 	for _, line := range []string{"%render", "%render Demo::summary dot"} {

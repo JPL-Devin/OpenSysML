@@ -12,11 +12,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
-// PseudoViewPrefix marks a rendering asked for by element rather than by a view
-// the document declares: `#tree`, `#state:<fqn>`, `#action:<fqn>`,
-// `#interconnection:<fqn>`. Nothing is added to the model or the index for one.
-const PseudoViewPrefix = "#"
-
 // ErrNoView is a document that declares no view, which is rendered through a
 // pseudo-view instead.
 var ErrNoView = errors.New("declares no view")
@@ -32,9 +27,8 @@ type ViewInfo struct {
 }
 
 // Views lists the views a document declares, in qualified-name order, each with
-// the rendering kind it states. A view stating a kind that is recognized but not
-// produced — sequence, geometry, textual — is listed as unsupported with the
-// reason, so a client can say why it cannot be drawn.
+// the rendering kind it states. A recognized kind this build does not produce
+// is listed as unsupported with the reason.
 func (w *Workspace) Views(doc string) []ViewInfo {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -63,12 +57,8 @@ func (w *Workspace) Views(doc string) []ViewInfo {
 	return out
 }
 
-// RenderView renders a view of a document. fqn names a view the document
-// declares, by qualified name; a pseudo-view (`#tree`, `#state:<fqn>`,
-// `#action:<fqn>`, `#interconnection:<fqn>`) renders an element as if a view
-// exposing it had been declared; and "" renders the document's own view, which
-// is the ambiguity error when it declares more than one and ErrNoView when it
-// declares none.
+// RenderView renders a view of a document. fqn names a declared view or a
+// pseudo-view (`#<kind>[:<fqn>]`); "" renders the document's own view.
 func (w *Workspace) RenderView(doc, fqn string) (*view.Rendering, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -77,14 +67,14 @@ func (w *Workspace) RenderView(doc, fqn string) (*view.Rendering, error) {
 	if renderer == nil {
 		return nil, fmt.Errorf("%s: no such document", doc)
 	}
-	if strings.HasPrefix(fqn, PseudoViewPrefix) {
+	if strings.HasPrefix(fqn, view.PseudoViewPrefix) {
 		return w.renderPseudoLocked(doc, fqn, renderer)
 	}
 	if fqn == "" {
 		views := w.documentViewsLocked(doc)
 		switch len(views) {
 		case 0:
-			return nil, fmt.Errorf("%s: %w; render #tree, #state:<name>, #action:<name> or #interconnection:<name> instead", doc, ErrNoView)
+			return nil, fmt.Errorf("%s: %w; render %s instead", doc, ErrNoView, strings.Join(view.PseudoViewSpecs(), ", "))
 		case 1:
 			return renderer.Render(views[0])
 		default:
@@ -109,10 +99,9 @@ func (w *Workspace) RenderView(doc, fqn string) (*view.Rendering, error) {
 // renderPseudoLocked renders a pseudo-view: `#<kind>` renders the document's own
 // top-level elements, `#<kind>:<fqn>` the element named.
 func (w *Workspace) renderPseudoLocked(doc, spec string, renderer *view.Renderer) (*view.Rendering, error) {
-	name, target, _ := strings.Cut(strings.TrimPrefix(spec, PseudoViewPrefix), ":")
-	kind, ok := pseudoKinds[name]
+	kind, target, ok := view.ParsePseudoView(spec)
 	if !ok {
-		return nil, fmt.Errorf("%s is no pseudo-view: write %s", spec, strings.Join(pseudoViewSpecs(), ", "))
+		return nil, fmt.Errorf("%s is no pseudo-view: write %s", spec, strings.Join(view.PseudoViewSpecs(), ", "))
 	}
 
 	exposed := []*symbols.Symbol{}
@@ -125,28 +114,9 @@ func (w *Workspace) renderPseudoLocked(doc, spec string, renderer *view.Renderer
 		exposed = append(exposed, sym)
 		stated = fmt.Sprintf("no view declared; rendering %s directly", notationFQN(w.index, sym))
 	} else {
-		exposed = append(exposed, w.topLevelDeclarationsLocked(doc)...)
+		exposed = append(exposed, TopLevelDeclarations(w.index.DocumentRoot(doc))...)
 	}
 	return renderer.RenderExposed(exposed, kind, stated)
-}
-
-// pseudoKinds are the rendering kinds a pseudo-view names.
-var pseudoKinds = map[string]view.Kind{
-	"tree":            view.KindTree,
-	"interconnection": view.KindInterconnection,
-	"state":           view.KindState,
-	"action":          view.KindAction,
-	"table":           view.KindTable,
-}
-
-// pseudoViewSpecs names the pseudo-views, for an error message.
-func pseudoViewSpecs() []string {
-	out := make([]string, 0, len(pseudoKinds))
-	for name := range pseudoKinds {
-		out = append(out, PseudoViewPrefix+name)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // rendererLocked builds a renderer over the workspace index, reading the
@@ -171,32 +141,7 @@ func (w *Workspace) rendererLocked(doc string) *view.Renderer {
 // documentViewsLocked are the views the document declares, outermost first, in
 // declaration order.
 func (w *Workspace) documentViewsLocked(doc string) []*symbols.Symbol {
-	var out []*symbols.Symbol
-	walkScope(w.index.DocumentRoot(doc), func(sym *symbols.Symbol) {
-		if semantics.IsView(sym) {
-			out = append(out, sym)
-		}
-	})
-	return out
-}
-
-// topLevelDeclarationsLocked are the elements a document declares at its root,
-// and the members of the packages there, which is what a pseudo-view naming no
-// element exposes.
-func (w *Workspace) topLevelDeclarationsLocked(doc string) []*symbols.Symbol {
-	root := w.index.DocumentRoot(doc)
-	if root == nil {
-		return nil
-	}
-	var out []*symbols.Symbol
-	for _, sym := range scopeMembers(root) {
-		if sym.Kind == symbols.SymbolPackage {
-			out = append(out, scopeMembers(sym.Scope)...)
-			continue
-		}
-		out = append(out, sym)
-	}
-	return out
+	return DeclaredViews(w.index.DocumentRoot(doc))
 }
 
 // viewNamedLocked is the view fqn names, resolved as the index spells it and as
@@ -227,42 +172,6 @@ func (w *Workspace) declaredInLocked(doc, fqn string) *symbols.Symbol {
 		}
 	})
 	return found
-}
-
-// walkScope visits every symbol declared in scope and in the scopes nested in
-// it, in declaration order.
-func walkScope(scope *symbols.Scope, visit func(*symbols.Symbol)) {
-	if scope == nil {
-		return
-	}
-	for _, sym := range scopeMembers(scope) {
-		visit(sym)
-		walkScope(sym.Scope, visit)
-	}
-}
-
-// scopeMembers are the symbols a scope declares, named and anonymous, in
-// declaration order.
-func scopeMembers(scope *symbols.Scope) []*symbols.Symbol {
-	if scope == nil {
-		return nil
-	}
-	members := scope.AllMembers()
-	out := make([]*symbols.Symbol, 0, len(members))
-	// A declaration carrying a short name is registered under both its names, so
-	// AllMembers lists it twice.
-	seen := make(map[*symbols.Symbol]bool, len(members))
-	for _, sym := range members {
-		// An alias and an import bring in what another namespace declares; the
-		// document declares neither.
-		if sym == nil || seen[sym] || sym.Kind == symbols.SymbolAlias || sym.DocName != scope.DocName() {
-			continue
-		}
-		seen[sym] = true
-		out = append(out, sym)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].DeclSpan.Offset < out[j].DeclSpan.Offset })
-	return out
 }
 
 // viewNames names views for an ambiguity message.

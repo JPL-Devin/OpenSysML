@@ -230,7 +230,7 @@ func TestRenderViewRefusesUnknownNames(t *testing.T) {
 		!strings.Contains(err.Error(), "Kit::Nothing") {
 		t.Errorf("err = %v, want it to name the element that is missing", err)
 	}
-	if _, err := ws.RenderView("kit.sysml", "#sequence"); err == nil ||
+	if _, err := ws.RenderView("kit.sysml", "#not-a-rendering"); err == nil ||
 		!strings.Contains(err.Error(), "#tree") {
 		t.Errorf("err = %v, want it to list the pseudo-views", err)
 	}
