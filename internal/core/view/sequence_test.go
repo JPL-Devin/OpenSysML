@@ -94,7 +94,7 @@ func TestSequenceRenderingReportsWhatItCannotShow(t *testing.T) {
 		"attribute def Kit::Level has no place in a sequence rendering",
 		"a connection in Talk::Handshake states no direction",
 		"message pending states no source and target",
-		"message adrift attaches to monitor.tapped, which the view does not expose",
+		"message adrift attaches to monitor.tapped, which is on no lifeline the rendering shows",
 	}
 	if len(rendering.Notices) != len(wants) {
 		t.Fatalf("notices = %v, want %d", rendering.Notices, len(wants))

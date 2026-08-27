@@ -2,7 +2,7 @@
 %% not represented: attribute def Kit::Level has no place in a sequence rendering; it is not shown
 %% not represented: a connection in Talk::Handshake states no direction; a sequence rendering shows directed messages only
 %% not represented: message pending states no source and target; no message is drawn
-%% not represented: message adrift attaches to monitor.tapped, which the view does not expose; no message is drawn
+%% not represented: message adrift attaches to monitor.tapped, which is on no lifeline the rendering shows; no message is drawn
 sequenceDiagram
   participant n0 as part caller
   participant n1 as part callee

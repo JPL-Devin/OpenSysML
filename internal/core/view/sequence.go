@@ -243,7 +243,7 @@ func (r *Renderer) messages(flows []*symbols.Symbol, lifelines map[*symbols.Symb
 			occurrence, node := r.messageEnd(flow, end, lifelines)
 			if node == nil {
 				out.Notices = append(out.Notices, fmt.Sprintf(
-					"%s attaches to %s, which the view does not expose; no message is drawn",
+					"%s attaches to %s, which is on no lifeline the rendering shows; no message is drawn",
 					r.subject(flow, messageKind(flow)), endText(end)))
 				break
 			}
