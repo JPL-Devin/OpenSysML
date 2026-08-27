@@ -65,7 +65,7 @@ sysml> %instantiate Wheel
 sysml> %features Wheel
 Instance: Wheel (ID: 1)
 Features:
-  diameter = 16.00
+  diameter = 16.0
 ```
 
 **Behavioral execution:**
@@ -125,15 +125,15 @@ sysml> state TrafficLight { entry; then red; state red; state green; transition 
 sysml> %state TrafficLight
 ✓ Started state machine executor for "TrafficLight"
   Current state: red
-  Time: 0.00
+  Time: 0.0
   Events: 1
 
 Use %events to see queue, %current for state, %advance <time> to step
 
 sysml> %advance 30
-✓ Advanced to 30.00 (1 event(s) processed)
+✓ Advanced to 30.0 (1 event(s) processed)
   Current state: green
-  Last event at: 0.00
+  Last event at: 0.0
   Remaining events: 0
 ```
 
