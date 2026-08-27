@@ -69,18 +69,18 @@ action, a state machine or a part usage.
 
 | elements | load wall | allocated | live heap held |
 | -------- | --------- | --------- | -------------- |
-| 0        | 0.23 ms   | 112 KiB   | 32 KiB         |
-| 250      | 19 ms     | 11.7 MiB  | 2.5 MiB        |
-| 1 000    | 69 ms     | 46 MiB    | 9.8 MiB        |
-| 4 000    | 307 ms    | 187 MiB   | 39 MiB         |
+| 0        | 0.16 ms   | 110 KiB   | 32 KiB         |
+| 250      | 16 ms     | 10.3 MiB  | 2.1 MiB        |
+| 1 000    | 62 ms     | 40 MiB    | 8.1 MiB        |
+| 4 000    | 260 ms    | 161 MiB   | 32 MiB         |
 
 The `elements=0` row is what a session costs before it holds a model of its own:
-**32 KiB held and 112 KiB allocated**. The standard library is no longer indexed
+**32 KiB held and 110 KiB allocated**. The standard library is no longer indexed
 eagerly per session, so a process serving many sessions (the LSP, a server) no
 longer pays a multi-megabyte floor for each one.
 
-Above that baseline a model costs roughly **10 KiB held per element**, and
-allocates roughly **48 KiB per element** while loading, most of it short-lived
+Above that baseline a model costs roughly **8 KiB held per element**, and
+allocates roughly **41 KiB per element** while loading, most of it short-lived
 parser and resolution garbage.
 
 Whole-binary scaling on `-validate` over generated models in standard notation,
@@ -88,14 +88,12 @@ which report nothing:
 
 | elements | wall   | peak RSS |
 | -------- | ------ | -------- |
-| 3 000    | 0.33 s | 107 MiB  |
-| 6 000    | 0.55 s | 161 MiB  |
-| 12 000   | 1.03 s | 277 MiB  |
+| 3 000    | 0.30 s | 117 MiB  |
+| 6 000    | 0.49 s | 159 MiB  |
+| 12 000   | 0.92 s | 272 MiB  |
 
-Both time and memory grow linearly with the model. This change cut live heap held
-by 6.9% (8.5% at 4,000 elements) and allocations by about 2%, with output
-byte-identical. Loading was quadratic once — doubling the model roughly
-quadrupled the time — for the reasons below.
+Both time and memory grow linearly with the model. Loading was quadratic once —
+doubling the model roughly quadrupled the time — for the reasons below.
 
 ### What made it quadratic
 
@@ -110,8 +108,9 @@ members, each performed once per member of that namespace:
   redefined member was declared locally or inherited, which the member's own
   `OwnerScope` answers.
 - `resolve.childScope`, `passes.childScopeOf` and `symbols.bodyScopeChild` each
-  walked a scope's children to find the one a declaration owns. Scopes now index
-  their children by declaration node (`Scope.ChildFor`).
+  walked a scope's children to find the one a declaration owns. A scope now
+  answers that itself (`Scope.ChildFor`), scanning few children and indexing them
+  by declaration node above a threshold.
 - `resolve.importsOf` rebuilt a namespace's import list on every unqualified name
   lookup made in it. The tree is immutable after parsing, so the resolver
   memoizes it.
@@ -173,7 +172,36 @@ member cost roughly 80 bytes of map and slice overhead for 24 bytes of data. A
 linear scan is appropriate for the common small scopes; the lazy index prevents
 the large scopes from becoming quadratic.
 
-Diagnostics, resolution results and exit status are byte-identical.
+### What a load repeated for nothing
+
+Four costs were paid per element where the model needs them once. Removing them
+together cut allocation count at 12 000 elements by 40% (7.70M to 4.62M), bytes
+allocated by 32% (744.9 to 503.6 MiB), peak resident size by 23% (353 to
+272 MiB) and wall time by 20% (1.14 s to 0.92 s):
+
+- The parser recorded every run of whitespace as a trivia entry on the node that
+  followed it. Whitespace is most of a file's trivia and no consumer reads it, so
+  only notes and comments are recorded now.
+- `source.SourceFile.Text` copied the bytes a span covers into a new string, once
+  per name, keyword and literal the parser reads. Spans are now taken from one
+  cached copy of the content, so a span costs no allocation of its own.
+- Comparing a symbol's fully-qualified name against a known one built that name
+  first — walking the owner chain and concatenating it — for every candidate
+  supertype of every declaration. `symbols.HasFQN` compares the segments against
+  the chain from the end instead, so a mismatch allocates nothing.
+- `passes.W9CInheritedNameConflictPass` merged every member of every library base
+  a declaration conforms to into one map keyed by name, per declaration, to
+  answer two questions: whether a name the declaration owns is also contributed
+  by a base, and whether two bases contribute one name. The first asks only about
+  the few names the declaration owns, so it now asks each base for those; the
+  second is only possible with two bases, so the map is built only then.
+- A scope indexed its children by declaration node as it built them: a map per
+  scope with children. Member lookup already scans small scopes and indexes
+  lazily above a threshold, and `Scope.ChildFor` now does the same, so the common
+  small scope holds no map.
+
+Diagnostics, resolution results and exit status are byte-identical, over the
+bundled `.sysml` and `.kerml` fixtures as well as the test suite.
 
 ## What running a model costs
 

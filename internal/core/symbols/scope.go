@@ -19,12 +19,16 @@ type Scope struct {
 	memberIndex      atomic.Pointer[map[string][]int32] // lazily built lookup index for larger scopes
 	anonymousMembers []*Symbol                          // anonymous symbols (no name)
 	children         []*Scope
-	childByNode      map[ast.Node]*Scope // declaration node -> the child scope it owns
-	bodyLocal        bool                // declarations live only inside the owning body
-	docName          string              // document this scope tree belongs to (stamped by SetDocName)
+	childIndex       atomic.Pointer[map[ast.Node]*Scope] // lazily built node -> child scope index for larger scopes
+	bodyLocal        bool                                // declarations live only inside the owning body
+	docName          string                              // document this scope tree belongs to (stamped by SetDocName)
 }
 
 const memberIndexThreshold = 12
+
+// childIndexThreshold is the child count above which ChildFor indexes instead
+// of scanning; most scopes stay below it and hold no map at all.
+const childIndexThreshold = 12
 
 // DocName is the document this scope belongs to, or "" when none was stamped.
 func (s *Scope) DocName() string { return s.docName }
@@ -62,23 +66,43 @@ func (s *Scope) Children() []*Scope { return s.children }
 // AddChild appends a child scope.
 func (s *Scope) AddChild(c *Scope) {
 	s.children = append(s.children, c)
-	if node := c.Node(); node != nil {
-		if s.childByNode == nil {
-			s.childByNode = make(map[ast.Node]*Scope)
-		}
-		if _, ok := s.childByNode[node]; !ok {
-			s.childByNode[node] = c
-		}
-	}
+	s.childIndex.Store(nil)
 }
 
 // ChildFor returns the child scope the given declaration owns, or nil. It is the
 // first such child, as two children of one node are one body scoped twice.
 func (s *Scope) ChildFor(node ast.Node) *Scope {
-	if node == nil {
+	if node == nil || len(s.children) == 0 {
 		return nil
 	}
-	return s.childByNode[node]
+	if len(s.children) > childIndexThreshold {
+		return (*s.loadChildIndex())[node]
+	}
+	for _, c := range s.children {
+		if c.node == node {
+			return c
+		}
+	}
+	return nil
+}
+
+// loadChildIndex returns the node -> child scope index, building it on first use
+// after a change.
+func (s *Scope) loadChildIndex() *map[ast.Node]*Scope {
+	if idx := s.childIndex.Load(); idx != nil {
+		return idx
+	}
+	built := make(map[ast.Node]*Scope, len(s.children))
+	for _, c := range s.children {
+		if c.node == nil {
+			continue
+		}
+		if _, ok := built[c.node]; !ok {
+			built[c.node] = c
+		}
+	}
+	s.childIndex.Store(&built)
+	return &built
 }
 
 // Define registers sym under the given name key. Multiple symbols may share a

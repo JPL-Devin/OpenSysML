@@ -73,6 +73,51 @@ func TestScopeChildForFindsTheScopeADeclarationOwns(t *testing.T) {
 	}
 }
 
+// A scope with more children than the scan threshold answers from its index,
+// including after a child is added once that index has been built.
+func TestScopeChildForAboveIndexThreshold(t *testing.T) {
+	root := NewScope(nil, nil)
+	nodes := make([]ast.Node, childIndexThreshold+2)
+	scopes := make([]*Scope, len(nodes))
+	for i := range nodes {
+		nodes[i] = &ast.Package{}
+		scopes[i] = NewScope(root, nodes[i])
+		root.AddChild(scopes[i])
+		root.AddChild(NewScope(root, nil)) // a scope no declaration owns
+	}
+	for i, node := range nodes {
+		if got := root.ChildFor(node); got != scopes[i] {
+			t.Fatalf("ChildFor(child %d) = %v, want that child's scope", i, got)
+		}
+	}
+	if got := root.ChildFor(&ast.Package{}); got != nil {
+		t.Errorf("ChildFor(a declaration with no scope here) = %v, want nil", got)
+	}
+	added := &ast.Package{}
+	addedScope := NewScope(root, added)
+	root.AddChild(addedScope)
+	if got := root.ChildFor(added); got != addedScope {
+		t.Errorf("ChildFor(a child added after indexing) = %v, want that child", got)
+	}
+}
+
+// Two children of one node are one body scoped twice, so the first wins.
+func TestScopeChildForPrefersTheFirstChildOfANode(t *testing.T) {
+	for _, children := range []int{2, childIndexThreshold + 2} {
+		root := NewScope(nil, nil)
+		node := &ast.Package{}
+		first := NewScope(root, node)
+		root.AddChild(first)
+		root.AddChild(NewScope(root, node))
+		for len(root.Children()) < children {
+			root.AddChild(NewScope(root, &ast.Package{}))
+		}
+		if got := root.ChildFor(node); got != first {
+			t.Errorf("ChildFor with %d children = %v, want the first child", children, got)
+		}
+	}
+}
+
 func TestScopeDefineDuplicateKeepsAll(t *testing.T) {
 	root := NewScope(nil, nil)
 	a := &Symbol{Name: "X", Kind: SymbolPackage}

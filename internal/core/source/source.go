@@ -25,6 +25,8 @@ type SourceFile struct {
 	kind    Kind
 	lines   sync.Once
 	index   *LineIndex
+	text    sync.Once
+	whole   string
 }
 
 // New creates a SourceFile from a name and its raw bytes.
@@ -47,9 +49,13 @@ func (sf *SourceFile) Len() int { return len(sf.content) }
 // Bytes returns the raw content (do not mutate).
 func (sf *SourceFile) Bytes() []byte { return sf.content }
 
-// Text returns the substring covered by the span.
+// Text returns the substring covered by the span. Spans are taken from one
+// cached copy of the content, so a span costs no allocation of its own.
 func (sf *SourceFile) Text(sp Span) string {
-	return string(sf.content[sp.Offset:sp.End()])
+	sf.text.Do(func() {
+		sf.whole = string(sf.content)
+	})
+	return sf.whole[sp.Offset:sp.End()]
 }
 
 // Lines returns the cached line index for this file, building it on first use.

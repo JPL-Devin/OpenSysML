@@ -82,15 +82,16 @@ func (c *w9cConflictChecker) check(sym *symbols.Symbol) {
 	if len(bases) == 0 {
 		return
 	}
+	c.checkOwnedNames(sym, bases)
+	if len(bases) < 2 {
+		// One base contributes each name once, so no name is reached twice.
+		return
+	}
 	byName := map[string][]w9cCandidate{}
 	for _, base := range bases {
 		for name, cand := range c.baseMembers(base) {
 			byName[name] = append(byName[name], cand)
 		}
-	}
-	c.checkOwnedNames(sym, byName)
-	if len(bases) < 2 {
-		return
 	}
 	names := make([]string, 0, len(byName))
 	for name := range byName {
@@ -112,21 +113,34 @@ func (c *w9cConflictChecker) check(sym *symbols.Symbol) {
 // checkOwnedNames reports each member sym declares whose name a library base
 // already contributes (KerML 8.4.3.2): the two are indistinguishable unless the
 // declaration redefines or subsets the inherited feature.
-func (c *w9cConflictChecker) checkOwnedNames(sym *symbols.Symbol, byName map[string][]w9cCandidate) {
+func (c *w9cConflictChecker) checkOwnedNames(sym *symbols.Symbol, bases []*symbols.Symbol) {
 	if sym.Scope == nil || resolve.ParameterizedByName(sym) {
 		return
 	}
 	owned, aliases := resolve.DistinguishableMembers(sym.Scope)
-	for _, mem := range append(owned, aliases...) {
-		cands := byName[mem.Name]
-		if len(cands) == 0 || resolve.ImplicitlyRedefined(mem) ||
-			c.hasUnresolvedRedefinition(mem) {
-			continue
-		}
-		if from := c.conflictingBases(c.notSpecializedBy(mem, cands)); len(from) > 0 {
-			c.report(nameSpanOf(mem), mem.Name, from)
+	for _, mems := range [2][]*symbols.Symbol{owned, aliases} {
+		for _, mem := range mems {
+			cands := c.contributionsOf(bases, mem.Name)
+			if len(cands) == 0 || resolve.ImplicitlyRedefined(mem) ||
+				c.hasUnresolvedRedefinition(mem) {
+				continue
+			}
+			if from := c.conflictingBases(c.notSpecializedBy(mem, cands)); len(from) > 0 {
+				c.report(nameSpanOf(mem), mem.Name, from)
+			}
 		}
 	}
+}
+
+// contributionsOf is each base's member of the given name, in base order.
+func (c *w9cConflictChecker) contributionsOf(bases []*symbols.Symbol, name string) []w9cCandidate {
+	var out []w9cCandidate
+	for _, base := range bases {
+		if cand, ok := c.baseMembers(base)[name]; ok {
+			out = append(out, cand)
+		}
+	}
+	return out
 }
 
 // notSpecializedBy drops the inherited features mem redefines or subsets, which
@@ -214,7 +228,7 @@ func (c *w9cConflictChecker) libraryBases(sym *symbols.Symbol) []*symbols.Symbol
 			// classifies it: a definition it is typed by, a subsetting or a
 			// redefinition supplies its type, and a feature it is typed by does
 			// not, so only then is a diamond drawn through Base::DataValue.
-			if symbols.FQNOf(sup) == "Base::DataValue" && !isDefKind(cur.Kind) &&
+			if symbols.HasFQN(sup, "Base::DataValue") && !isDefKind(cur.Kind) &&
 				!c.typedByFeatureOnly(cur) {
 				continue
 			}
