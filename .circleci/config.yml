@@ -359,7 +359,14 @@ jobs:
               circleci-agent step halt
             fi
 
-      - checkout
+      # Sonar blames every file with JGit, which cannot fetch a blob on demand:
+      # against CircleCI's default blobless clone it dies with
+      # `MissingObjectException: Missing blob ...` as soon as it needs a
+      # historical version of a file. This is the one job in the file that reads
+      # history rather than the current tree, so it is the one that pays for a
+      # full clone.
+      - checkout:
+          method: full
 
       - attach_workspace:
           at: .
@@ -371,13 +378,31 @@ jobs:
             ls -l coverage.txt
             head -n 3 coverage.txt
 
-      # SonarCloud needs full history for blame and new-code detection.
+      # SonarCloud needs full history for blame and new-code detection, and a
+      # blame that silently covers 0 files dates every issue to the import. Fail
+      # here, before the scan, if the clone is not one JGit can blame.
       - run:
-          name: Fetch full git history
+          name: Verify the clone is complete
           command: |
             if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
               git fetch --unshallow
             fi
+            # A partial clone records the filter it was made with, and reports
+            # the objects it left behind as missing; either one means JGit will
+            # fail on the first historical blob it needs.
+            if grep -q "partialclonefilter" .git/config; then
+              echo "The clone is partial:"
+              grep -n "partialclonefilter\|promisor" .git/config
+              echo "JGit cannot fetch blobs on demand, so blame would fail; the"
+              echo "checkout above must use method: full."
+              exit 1
+            fi
+            missing=$(git rev-list --objects --missing=print --no-object-names HEAD | grep -c "^?" || true)
+            if [ "$missing" != "0" ]; then
+              echo "$missing object(s) reachable from HEAD are absent locally."
+              exit 1
+            fi
+            echo "Full clone: $(git rev-list --count HEAD) commits, no filter, no missing objects."
 
       - sonarcloud/scan
 
