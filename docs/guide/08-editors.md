@@ -60,8 +60,9 @@ typed.
 - **What it draws.** The view the document declares, picked from the dropdown
   when it declares several, or — the usual case for a model being written — the
   document itself, as a tree, an interconnection diagram, a state diagram, an
-  action flow or a table. A view whose rendering is not supported (`sequence`,
-  `geometry`, `textual`) stays in the picker, saying why it cannot be drawn.
+  action flow, a sequence diagram or a table. A view whose rendering is not
+  supported (`geometry`, `textual`) stays in the picker, saying why it cannot be
+  drawn.
 - **Click a node** to jump to the declaration it was built from; move the cursor
   in the editor and the node containing it is highlighted. A node with no
   locatable declaration — a standard library symbol — is not clickable.

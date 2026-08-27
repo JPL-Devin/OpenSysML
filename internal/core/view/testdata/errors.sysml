@@ -11,9 +11,14 @@ package ErrorViews {
 		private import Kit::*;
 	}
 
-	// A sequence view: the notation is understood, the rendering is not produced.
-	view sequenceView : SequenceView {
+	// A geometry view: the notation is understood, the rendering is not produced.
+	view geometryView : GeometryView {
 		expose Kit::Widget;
+	}
+
+	// A sequence view exposing nothing: an empty sequence diagram.
+	view emptySequenceView : SequenceView {
+		private import Kit::*;
 	}
 
 	// A state view exposing nothing: an empty state diagram.

@@ -209,10 +209,12 @@ sysml -e "result" file1.sysml file2.sysml
 ## Rendering a view
 
 `-render <view>` renders one view of the model and exits. The rendering is the one the view's
-`render` member states, and a containment tree where it states none. A pseudo-view renders without
-a declaration: `#tree` renders the one model file accepted by `-render` (or every document loaded
-in the REPL), while `#tree:<name>`, `#interconnection:<name>`, `#state:<name>`,
-`#action:<name>` and `#table:<name>` render the named element directly. Only kinds this build
+`render` member states, and a containment tree where it states none; the kinds this build produces
+are a tree, an interconnection diagram, a state machine, an action flow, a sequence diagram and a
+table. A geometry view is recognized but not drawn. A pseudo-view renders without a declaration:
+`#tree` renders the one model file accepted by `-render` (or every document loaded in the REPL),
+while `#tree:<name>`, `#interconnection:<name>`, `#state:<name>`, `#action:<name>`,
+`#sequence:<name>` and `#table:<name>` render the named element directly. Only kinds this build
 produces are offered; newly supported kinds become pseudo-views automatically.
 
 ```bash
@@ -265,9 +267,9 @@ analysis error stops the run with status 2. `-render-all` cannot be combined wit
 The rendering is **tool-defined output**: SysML v2 §10.2 specifies the notation a view is written
 in, not how a tool draws it. Mermaid is the machine-readable form of the graph-shaped kinds because
 it renders as-is in Markdown, documentation sites and editors without a separate rendering tool, and
-has a dedicated state diagram grammar; a table is written as a Markdown table, which Mermaid has no
-grammar for, so `-render-form mermaid` of a table names Markdown rather than drawing a diagram of
-rows.
+has dedicated state diagram and sequence diagram grammars; a table is written as a Markdown table,
+which Mermaid has no grammar for, so `-render-form mermaid` of a table names Markdown rather than
+drawing a diagram of rows.
 
 ## Output Format
 

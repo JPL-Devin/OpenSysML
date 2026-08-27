@@ -1,0 +1,9 @@
+%% VehicleSequenceViews::startVehicleView — sequence rendering (view def SequenceView)
+sequenceDiagram
+  participant n0 as action startVehicle
+  participant n1 as part driver (Driver)
+  participant n2 as part vehicle (Vehicle)
+  n0->>n0: of IgnitionCmd
+  n0->>n0: of EngineStatus
+  n1->>n2: of ignitionCmd : IgnitionCmd
+  n2->>n1: of es : EngineStatus

@@ -25,9 +25,9 @@ import (
 )
 
 // Kind is a rendering a view can state. The kinds this package produces are
-// tree, interconnection, state, action and table; the rest are recognized so
-// that a view stating one is told it is unsupported rather than rendered as
-// something else. A rendering the standard library does not declare is carried
+// tree, interconnection, state, action, table and sequence; the rest are
+// recognized so that a view stating one is told it is unsupported rather than
+// rendered as something else. A rendering the standard library does not declare is carried
 // as the name the model gives it, so an error about it names what the view
 // asked for.
 type Kind string
@@ -48,7 +48,9 @@ const (
 	// KindTable renders the exposed elements as rows of a table, which is
 	// Views::asElementTable and StandardViewDefinitions::GridView.
 	KindTable Kind = "table"
-	// KindSequence is StandardViewDefinitions::SequenceView.
+	// KindSequence renders exposed occurrences as lifelines and the flows
+	// between them as ordered messages, which is
+	// StandardViewDefinitions::SequenceView.
 	KindSequence Kind = "sequence"
 	// KindGeometry is StandardViewDefinitions::GeometryView.
 	KindGeometry Kind = "geometry"
@@ -57,7 +59,7 @@ const (
 // Supported reports whether this package produces a rendering of the kind.
 func (k Kind) Supported() bool {
 	switch k {
-	case KindTree, KindInterconnection, KindState, KindAction, KindTable:
+	case KindTree, KindInterconnection, KindState, KindAction, KindTable, KindSequence:
 		return true
 	}
 	return false
@@ -253,6 +255,8 @@ func (r *Renderer) Render(view *symbols.Symbol) (*Rendering, error) {
 		r.renderActions(exposed, out)
 	case KindTable:
 		r.renderTable(view, exposed, out)
+	case KindSequence:
+		r.renderSequence(exposed, out)
 	default:
 		// Unreachable: KindOf refuses an unsupported kind.
 		return nil, &UnsupportedKindError{Kind: kind, View: r.notationName(view), Stated: stated}
@@ -278,6 +282,8 @@ func (r *Renderer) RenderExposed(exposed []*symbols.Symbol, kind Kind, stated st
 		r.renderActions(exposed, out)
 	case KindTable:
 		r.renderTable(nil, exposed, out)
+	case KindSequence:
+		r.renderSequence(exposed, out)
 	default:
 		return nil, &UnsupportedKindError{Kind: kind, Stated: stated, Remedy: remedyFor(kind)}
 	}

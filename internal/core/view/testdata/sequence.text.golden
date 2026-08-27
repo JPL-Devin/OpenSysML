@@ -1,0 +1,10 @@
+SequenceViews::pubSubView - sequence rendering (view def SequenceView)
+
+part producer
+part server
+part consumer
+
+messages:
+  producer => server: publish_message
+  consumer => server: subscribe_message
+  server => consumer: deliver_message

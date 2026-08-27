@@ -79,7 +79,7 @@ opensysml/renderChanged  (notification, server → client)
 ```
 
 `opensysml/views` is what fills the panel's view picker, and it reports an
-unsupported kind (`sequence`, `geometry`, `textual`) with the reason rather than
+unsupported kind (`geometry`, `textual`) with the reason rather than
 omitting it, so the panel can say why a view cannot be drawn.
 
 `origin` on a node is `{ uri, range }`. `view.Node` carries no source location
@@ -298,8 +298,8 @@ and VS Code handles dirty state, undo and save.
 
 ## Known limitations, stated rather than hidden
 
-- The `sequence` and `geometry` view kinds are not rendered by `internal/core/view`
-  and no tier here adds them; the panel reports them as unsupported.
+- The `geometry` view kind is not rendered by `internal/core/view` and no tier here
+  adds it; the panel reports it as unsupported.
 - Multi-document models render per document. A view exposing elements from another
   open file draws them, but the panel is anchored to one document's URI, and a
   cross-document layout sidecar is out of scope.

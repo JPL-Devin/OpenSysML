@@ -1,0 +1,8 @@
+OrderingViews::relayView - sequence rendering (view def SequenceView)
+
+part left
+part right
+
+messages:
+  left => right: early
+  left => right: late

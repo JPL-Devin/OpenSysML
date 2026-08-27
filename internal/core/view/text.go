@@ -242,6 +242,8 @@ func edgeSectionName(kind Kind) string {
 		return "transitions"
 	case KindAction:
 		return "flow"
+	case KindSequence:
+		return "messages"
 	}
 	return "connections"
 }
