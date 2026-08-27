@@ -16,8 +16,7 @@ print(model.eval("1 + 2 * 3"))                     # 7
 
 print(model.eval("mass", subject="Demo::sedan"))   # 1200.0 — that object, not the default
                                                    # requires the service's evaluate_subject
-                                                   # capability, rather than trusting a
-                                                   # service that would ignore the subject
+                                                   # capability; the client checks it first
 
 vehicle = model["Vehicle"]                         # by short name or FQN
 vehicle.attributes()                               # own and inherited, with resolved facts

@@ -396,9 +396,9 @@ class ServiceTimeoutError(ServiceError, builtins.TimeoutError):
 class UnsupportedOperationError(ServiceError):
     """Raised when the connected service does not implement the call at all.
 
-    A service that reports its capabilities fails such a call with
-    :class:`~opensysml.capabilities.MissingCapabilityError` before it is made; this
-    is the fallback for one too old to be asked.
+    Capability-aware client operations surface a service-side capability
+    refusal as :class:`~opensysml.capabilities.MissingCapabilityError`; this is
+    the fallback for an unclassified method or an older service.
     """
 
 
@@ -432,13 +432,15 @@ def _not_found_error(details, default):
     return default
 
 
-def from_rpc_error(exc, not_found=ModelNotFoundError):
+def from_rpc_error(exc, not_found=ModelNotFoundError, unimplemented=None):
     """Translate a ``grpc.RpcError`` into the :class:`OpenSysMLError` for it.
 
     Args:
         exc (grpc.RpcError): The failure as gRPC reported it.
         not_found (type): Class for a NOT_FOUND whose details name neither a
             file nor a model — the call site knows which it asked about.
+        unimplemented (callable): Optional function accepting the service
+            details and returning a more specific error for this operation.
 
     Returns:
         ServiceError: The translated error. Raise it ``from exc`` so the status
@@ -453,6 +455,8 @@ def from_rpc_error(exc, not_found=ModelNotFoundError):
         code = None
         details = ""
 
+    if code == grpc.StatusCode.UNIMPLEMENTED and unimplemented is not None:
+        return unimplemented(details)
     if code == grpc.StatusCode.NOT_FOUND:
         cls = _not_found_error(details, not_found)
     else:
@@ -470,7 +474,7 @@ def from_rpc_error(exc, not_found=ModelNotFoundError):
 
 
 @contextmanager
-def translate_rpc_errors(not_found=ModelNotFoundError):
+def translate_rpc_errors(not_found=ModelNotFoundError, unimplemented=None):
     """Re-raise any ``grpc.RpcError`` raised in the block as a OpenSysMLError.
 
     Wraps a stub call at the client boundary, so gRPC's status codes stop at the
@@ -479,11 +483,15 @@ def translate_rpc_errors(not_found=ModelNotFoundError):
     Args:
         not_found (type): Class for a NOT_FOUND the details do not identify;
             pass :class:`ModelFileNotFoundError` where the call named a path.
+        unimplemented (callable): Optional function accepting the service
+            details and returning a more specific error for this operation.
     """
     try:
         yield
     except grpc.RpcError as exc:
-        raise from_rpc_error(exc, not_found=not_found) from exc
+        raise from_rpc_error(
+            exc, not_found=not_found, unimplemented=unimplemented
+        ) from exc
 
 
 #: Names kept for callers of older versions, and what they are now.

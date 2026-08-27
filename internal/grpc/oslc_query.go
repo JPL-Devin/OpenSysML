@@ -1,10 +1,9 @@
 package grpc
 
 import (
+	"connectrpc.com/connect"
 	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type coreQueryModel struct {
@@ -28,15 +27,11 @@ func (m *coreQueryModel) Type(sym *symbols.Symbol) string {
 	return corequery.MetamodelTypeNameOf(sym)
 }
 
+// queryStatus reports a refused query as INVALID_ARGUMENT, wrapping the fault
+// so a caller can still read its kind.
 func queryStatus(err error) error {
 	if err == nil {
 		return nil
 	}
-	if qe, ok := err.(*QueryError); ok {
-		return qe.GRPCStatus().Err()
-	}
-	if qe, ok := err.(*corequery.Error); ok {
-		return status.Error(codes.InvalidArgument, qe.Message)
-	}
-	return status.Error(codes.InvalidArgument, err.Error())
+	return connect.NewError(connect.CodeInvalidArgument, err)
 }

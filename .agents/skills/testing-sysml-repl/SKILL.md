@@ -5173,3 +5173,87 @@ severity **1**, code `syntax`, on the `final` token's range. `final` itself is u
 (they only trigger the ordinary duplicate-name warning when both are declared). A cheap non-vacuity
 check for a removed diagnostic is `strings bin/sysml | grep -c '<removed message fragment>'` compared
 against the contrast binary.
+
+## Capability availability and the test-only withholding switch
+
+`sysml-grpc` reports 14 capability names from `internal/grpc/service.go` (`capabilities`), and
+`OPENSYSML_TEST_WITHHOLD_CAPABILITIES=<comma list>` makes a hand-started service behave as a build
+that lacks them. The switch is validated at startup: an unknown name aborts with
+`level=ERROR msg="Invalid service configuration" error="unknown capability \"…\""` and exit 1 (grep
+for `unknown capability` without the quotes — the log escapes them), while empty/whitespace/`,,`
+values withhold nothing. That startup refusal is the cheapest proof the switch is not a no-op.
+
+The three classes behave differently and each needs its own service:
+
+- **Unconditional request gates** (`convert`, `verification`, `query`, `apply_edits`) — the RPC
+  fails `UNIMPLEMENTED: capability "<name>" is unavailable`.
+- **Conditional request gates**, only when a field is set: `strict_conformance`
+  (`ParseFile.strict_conformance`), `inline_language` (inline `content` + non-empty `language`),
+  `oslc_query` (`QueryRequest.oslc_query`), `authoring` (an `add_member`/`delete` edit),
+  `evaluate_subject` (`EvaluateRequest.subject_symbol_id`). The unset-field form of each must still
+  succeed — that pair is the assertion worth writing, since a gate applied unconditionally passes a
+  naive "is it refused?" test.
+- **Response-only** (`type_facts`, `symbol_attributes`, `feature_values`, `enum_values`,
+  `unset_value`) — no RPC is refused; fields are dropped or downgraded in
+  `internal/grpc/capability_response.go`. Only assert these against a **default service snapshot of
+  the same model**, otherwise "absent" proves nothing.
+
+Fixture shapes that actually exercise the value filters: an `enum def` plus
+`attribute color : Color = Color::red;` and a valueless `attribute pending : Real;` inside a part
+def, then `Instantiate` the part — `feature_values["color"]` is an `enum_literal` and
+`["pending"]` is `unset` by default, and become `null: "unsupported: enumeration literal"` /
+`"unsupported: unset value"` when withheld. Note that **`SymbolInfo.attributes` carries no value for
+an enum default** (const folding does not produce one), so a symbol-attribute assertion there is
+vacuous; use `Instantiate` or `Evaluate` (`Evaluate` of `Color::red` also flows through
+`valueToProto`) instead.
+
+Driving it: start services with `-port 0 -health-port 0 -report-address` and read the address off
+stdout, so several differently-configured services coexist. Raw `sysml_pb2_grpc.SysMLServiceStub`
+calls are required to see a refusal at all — the Python client preflights against the cached
+`ServerInfo` and raises `MissingCapabilityError` with `__cause__ is None` before any RPC. To observe
+the **service-side** translation, simulate a stale handshake: overwrite
+`conn._server_info` with a `ServerInfo` that still claims the capability, then call `conn.query(...)`
+— the refusal becomes `MissingCapabilityError` with the `grpc.RpcError` kept as `__cause__`. An
+UNIMPLEMENTED unrelated to capabilities is reachable without touching product code by calling a
+method that does not exist on the live channel inside `translate_rpc_errors()`; under the default
+`connect` transport its details read `Received http2 header with status: 404`, and it must stay
+`UnsupportedOperationError`. `conn.query(where=…)` takes a constraint object
+(`{"property": "@type", "operator": "=", "value": "PartUsage"}`), not `{"@type": "PartUsage"}`.
+
+`make conformance` is the committed gate for this area: it runs the suite twice, the second time
+with `-withhold-capabilities strict_conformance,oslc_query`, and prints per-scenario
+`the service does not report oslc_query, so the without-capability expectation applies`.
+
+Trap when writing a Convert row: `-convert ttl`/`to_format="ttl"` refuses a model containing a calc
+body or constraint member (`cannot convert the operator expr at …`), so use `to_format="kerml"` for
+the "convert works" check and keep RDF out of capability fixtures.
+
+## grpc-go made test-only; transport error-parity probes (PR #612)
+
+Production code no longer imports `google.golang.org/grpc`: service errors are
+`connect.NewError(connect.CodeX, ...)` (`internal/grpc/`), the legacy `-transport grpc`
+server lives in `cmd/sysml-grpc/grpcserver.go` behind an interceptor translating
+`*connect.Error` → grpc statuses, and `scripts/check-grpc-imports.sh` gates imports in CI.
+When testing error-message parity across transports:
+
+- Run two servers at once (`./bin/sysml-grpc -port A -health-port A2` and
+  `... -transport grpc -port B -health-port B2`) and drive **both** with the same raw
+  grpcio stub — connect's gRPC-compat protocol lets one client compare
+  `(e.code().name, e.details())` tuples byte-for-byte.
+- Canonical probes: `Query` with `model_hash="deadbeef"` →
+  `NOT_FOUND` / `model not found: deadbeef`; `Query` with both `query` and `oslc_query`
+  set → `INVALID_ARGUMENT` / `query and oslc_query are mutually exclusive`.
+- `QueryRequest.query` is a `Query` **message**, not a string — build it with
+  `opensysml.query.build_query(None, where={"property": "@type", "operator": "=",
+  "value": "PartDefinition"})`. `oslc_query` is a plain string.
+- To prove the connect-native (non-gRPC) error path, POST JSON to
+  `http://localhost:A/sysml.SysMLService/Query` with `Content-Type: application/json`;
+  in JSON the operator enum is spelled `PRIMITIVE_OPERATOR_EQUAL` and a value list is
+  plain strings (`"value": ["PartDefinition"]`). Expect e.g. HTTP 404 with body
+  `{"code":"not_found","message":"model not found: deadbeef"}`.
+- `Model` exposes `.hash` (not `.model_hash`); query results are `QueryElement`s whose
+  display string is `P::Vehicle (PartDefinition)` — there is no `.name` attribute.
+- stdio framing check: send `Content-Length`/`Content-Type: application/json` CRLF
+  frames; unknown method answers `error.code == 12` with
+  `SysMLService has no method "X"` and the server keeps serving; closing stdin exits 0.
+- The service RPC is `ParseFile` (field `content`), not `ParseModel`.

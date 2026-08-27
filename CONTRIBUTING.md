@@ -49,8 +49,8 @@ make build-grpc
 make install
 
 # Protobuf schema (api/proto/sysml.proto), all codegen driven by buf
-make proto           # regenerate the Go and Python stubs
-make proto-go        # Go stubs only
+make proto           # regenerate the Go, Java and Python stubs
+make proto-buf       # Go and Java stubs only
 make python-proto    # Python stubs only (needs grpcio-tools; PYTHON=... picks the interpreter)
 make proto-lint      # lint the schema, as CI does
 make proto-breaking  # reject wire-breaking changes against main, as CI does
@@ -201,6 +201,13 @@ We use [Semantic Versioning](https://semver.org/):
 `make lint`, the race-enabled test suite, and the binaries. It downloads the OMG training
 corpus before the suite and runs the corpus gate as its own step, so that gate is required
 rather than skipped.
+
+Its first job, `Changed areas`, runs `scripts/ci-changed-areas.sh` over the pull request's
+files and the rest of the jobs are gated on what it reports: a change confined to one client
+runs that client's job alone, while a change to the Go sources, the proto, `conformance/` or
+the workflows runs everything. A path no area claims turns every area on, so a new directory
+is over-tested rather than untested — teach the script about it, and add a case to
+`scripts/ci-changed-areas-test.sh`, which the same job runs.
 
 ### CircleCI
 

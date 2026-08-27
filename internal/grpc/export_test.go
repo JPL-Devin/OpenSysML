@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const convertModelSource = `package Demo {
@@ -222,7 +221,7 @@ func TestConvertUncachedModelHashIsNotFound(t *testing.T) {
 		Source:   &pb.ConvertRequest_ModelHash{ModelHash: "nosuchmodel"},
 		ToFormat: "sysml",
 	})
-	if status.Code(err) != codes.NotFound {
+	if connect.CodeOf(err) != connect.CodeNotFound {
 		t.Errorf("err = %v, want NotFound", err)
 	}
 }
@@ -236,7 +235,7 @@ func TestConvertInlineContentNeedsFromFormat(t *testing.T) {
 		Source:   &pb.ConvertRequest_Content{Content: convertModelSource},
 		ToFormat: "ttl",
 	})
-	if status.Code(err) != codes.InvalidArgument {
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("err = %v, want InvalidArgument", err)
 	}
 }
@@ -260,7 +259,7 @@ func TestConvertRejectsBadArguments(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if _, err := srv.Convert(context.Background(), req); err == nil {
 				t.Fatal("Convert accepted a request it cannot serve")
-			} else if code := status.Code(err); code != codes.InvalidArgument && code != codes.NotFound {
+			} else if code := connect.CodeOf(err); code != connect.CodeInvalidArgument && code != connect.CodeNotFound {
 				t.Errorf("code = %v, want InvalidArgument or NotFound", code)
 			}
 		})

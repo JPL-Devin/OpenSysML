@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance test lint clean install help python-test python-install proto proto-go python-proto proto-ts proto-java proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test lint clean install help python-test python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -57,8 +57,19 @@ build-grpc: ## Build sysml-grpc binary
 conformance: ## Run the language-independent conformance suite against sysml-grpc
 	@echo "Running the conformance suite..."
 	@mkdir -p $(BIN_DIR)
-	go run ./cmd/conformance -report $(BIN_DIR)/conformance-report.json
+	go run ./cmd/conformance -withhold-capabilities strict_conformance,oslc_query -report $(BIN_DIR)/conformance-report.json
 	@echo "✓ Conformance suite passed ($(BIN_DIR)/conformance-report.json)"
+
+conformance-rust: ## Run the conformance suite with the blocking Rust client
+	$(MAKE) build
+	@mkdir -p $(BIN_DIR)
+	OPENSYSML_GRPC_BINARY="$(CURDIR)/$(BIN_DIR)/sysml-grpc" cargo run --manifest-path rust/Cargo.toml -p opensysml-conformance -- -binary "$(CURDIR)/$(BIN_DIR)/sysml-grpc" -report "$(CURDIR)/$(BIN_DIR)/conformance-report-rust.json"
+
+conformance-pkg: ## Run the conformance suite through the public Go API (pkg/opensysml)
+	@echo "Running the conformance suite through pkg/opensysml..."
+	@mkdir -p $(BIN_DIR)
+	go run ./cmd/conformance -protocols pkg,pkg-connect -allow-skips -report $(BIN_DIR)/conformance-pkg-report.json
+	@echo "✓ Conformance suite passed through pkg/opensysml ($(BIN_DIR)/conformance-pkg-report.json)"
 
 test: ## Run Go tests with race detection and coverage
 	@echo "Running Go race tests..."
@@ -99,12 +110,14 @@ version: ## Show version information
 	@echo "Build time: $(BUILD_TIME)"
 	@echo "Go version: $(GO_VERSION)"
 
-proto: proto-go python-proto ## Regenerate all protobuf stubs
+proto: proto-buf python-proto proto-ts proto-rust ## Regenerate all protobuf stubs
 
-proto-go: ## Regenerate Go protobuf stubs
-	@echo "Regenerating Go protobuf stubs..."
+# One template, so the Go stubs and the Java client's message classes cannot drift apart.
+# The Java plugin is a remote one, so this needs the Buf Schema Registry.
+proto-buf: ## Regenerate the Go and Java protobuf stubs
+	@echo "Regenerating Go and Java protobuf stubs..."
 	$(BUF) generate
-	@echo "✓ Regenerated Go stubs"
+	@echo "✓ Regenerated Go and Java stubs"
 
 python-proto: ## Regenerate Python protobuf stubs
 	@echo "Regenerating Python protobuf stubs..."
@@ -112,15 +125,14 @@ python-proto: ## Regenerate Python protobuf stubs
 	$(BUF) generate --template buf.gen.python.yaml
 	@echo "✓ Regenerated Python stubs"
 
-# The upcoming clients: generated on demand into gen/, never committed.
-proto-ts: ## Generate TypeScript stubs into gen/ts (for the planned npm client)
+proto-ts: ## Regenerate the TypeScript stubs the npm client in clients/node ships
+	@echo "Regenerating TypeScript protobuf stubs..."
 	$(BUF) generate --template buf.gen.ts.yaml
+	@echo "✓ Regenerated TypeScript stubs"
 
-proto-java: ## Generate Java stubs into gen/java (for the planned Java client)
-	$(BUF) generate --template buf.gen.java.yaml
-
-proto-rust: ## Generate Rust stubs into gen/rust (for the planned Rust client)
+proto-rust: ## Generate Rust stubs and the descriptor for the Rust clients
 	$(BUF) generate --template buf.gen.rust.yaml
+	$(BUF) build -o rust/conformance/sysml.descriptor.binpb
 
 proto-lint: ## Lint the protobuf schema
 	$(BUF) lint

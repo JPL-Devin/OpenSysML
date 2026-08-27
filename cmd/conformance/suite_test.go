@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -57,11 +58,23 @@ func TestEveryRPCIsCovered(t *testing.T) {
 // failures the response reports in band, not only happy paths.
 func TestTheSuiteCoversBothKindsOfFailure(t *testing.T) {
 	statuses := map[string]int{}
+	withoutCapability := map[string]int{}
 	inBand := 0
 	for _, scenario := range loadSuite(t) {
 		expects := []*Expect{&scenario.Expect}
 		if scenario.ExpectWithoutCapability != nil {
 			expects = append(expects, scenario.ExpectWithoutCapability)
+			expect := scenario.ExpectWithoutCapability
+			if expect.Status != "UNIMPLEMENTED" {
+				t.Errorf("%s: without-capability status = %q, want UNIMPLEMENTED",
+					scenario.ID, expect.Status)
+			}
+			if !slices.Contains(scenario.RequiresCapabilities, expect.StatusMessageContains) {
+				t.Errorf("%s: without-capability message %q does not name a required capability",
+					scenario.ID, expect.StatusMessageContains)
+			} else {
+				withoutCapability[expect.StatusMessageContains]++
+			}
 		}
 		for _, expect := range expects {
 			if expect.Status != "" {
@@ -86,6 +99,11 @@ func TestTheSuiteCoversBothKindsOfFailure(t *testing.T) {
 	}
 	if inBand == 0 {
 		t.Error("no scenario expects a failure reported in the response's error field")
+	}
+	for _, capability := range []string{"strict_conformance", "oslc_query"} {
+		if withoutCapability[capability] == 0 {
+			t.Errorf("no scenario exercises the without-capability path for %q", capability)
+		}
 	}
 }
 

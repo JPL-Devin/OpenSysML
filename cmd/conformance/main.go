@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -27,12 +28,13 @@ import (
 
 const (
 	// serviceName is the service every scenario addresses.
-	serviceName      = "sysml.SysMLService"
-	transportConnect = "connect"
-	transportGRPC    = "grpc"
+	serviceName                 = "sysml.SysMLService"
+	transportConnect            = "connect"
+	transportGRPC               = "grpc"
+	testWithholdCapabilitiesEnv = "OPENSYSML_TEST_WITHHOLD_CAPABILITIES"
 )
 
-var knownProtocols = map[string]struct{}{"grpc": {}, "connect": {}, "connect-json": {}}
+var knownProtocols = map[string]struct{}{"grpc": {}, "connect": {}, "connect-json": {}, "pkg": {}, "pkg-connect": {}}
 
 func main() {
 	var (
@@ -45,16 +47,17 @@ func main() {
 		allowSkip = flag.Bool("allow-skips", false, "treat a scenario skipped for a missing capability as a pass")
 		protocols = flag.String("protocols", "grpc,connect,connect-json", "Comma-separated protocols to test")
 		transport = flag.String("transport", "connect", "server transport (connect or grpc)")
+		withhold  = flag.String("withhold-capabilities", "", "also test the service with these comma-separated capabilities unavailable")
 	)
 	flag.Parse()
 
-	if err := runSuite(*dir, *binary, *repoRoot, *report, *run, *verbose, *allowSkip, *protocols, *transport); err != nil {
+	if err := runSuite(*dir, *binary, *repoRoot, *report, *run, *verbose, *allowSkip, *protocols, *transport, *withhold); err != nil {
 		fmt.Fprintf(os.Stderr, "conformance: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool, protocolList, transport string) error {
+func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool, protocolList, transport, withhold string) error {
 	protocols, err := parseProtocols(protocolList)
 	if err != nil {
 		return err
@@ -64,6 +67,13 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 	}
 	if err := validateProtocols(protocols, transport); err != nil {
 		return err
+	}
+	unavailable, err := parseCapabilities(withhold)
+	if err != nil {
+		return err
+	}
+	if len(unavailable) > 0 && slices.Contains(protocols, "pkg") {
+		return errors.New("-withhold-capabilities cannot test the in-process pkg protocol")
 	}
 	var filter *regexp.Regexp
 	if run != "" {
@@ -95,41 +105,72 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 		}
 		binary = built
 	}
-	svc, err := startServiceWithTransport(ctx, binary, filepath.Join(workDir, "service.log"), len(scenarios)+16, transport)
-	if err != nil {
-		return err
+	configurations := []configuration{{name: "default"}}
+	if len(unavailable) > 0 {
+		configurations = append(configurations, configuration{
+			name:        "without-" + strings.Join(unavailable, "-"),
+			unavailable: unavailable,
+		})
 	}
-	defer svc.stop()
 
-	reportData := &Report{Service: svc.binary}
-	for _, protocol := range protocols {
-		c, err := svc.client(protocol)
+	reportData := &Report{Service: binary}
+	defaultCapabilities := map[string][]string{}
+	for _, config := range configurations {
+		fmt.Fprintf(os.Stdout, "\nConfiguration %s\n", config.name)
+		configReport := &ConfigurationSummary{
+			Name:                    config.name,
+			UnavailableCapabilities: config.unavailable,
+		}
+		err := func() error {
+			logName := strings.ReplaceAll(config.name, string(os.PathSeparator), "-") + ".log"
+			svc, err := startServiceWithCapabilities(ctx, binary, filepath.Join(workDir, logName),
+				len(scenarios)+16, transport, config.unavailable)
+			if err != nil {
+				return err
+			}
+			defer svc.stop()
+
+			for _, protocol := range protocols {
+				c, err := svc.client(protocol)
+				if err != nil {
+					return err
+				}
+				runner := &runner{
+					service: svc, client: c,
+					fixtures: filepath.Join(dir, "fixtures"),
+					models:   map[Model]string{}, verbose: verbose,
+					omitHandshakeScenarios: len(config.unavailable) > 0,
+					out:                    os.Stdout, scenarioLog: os.Stdout,
+				}
+				if err := runner.readCapabilities(ctx); err != nil {
+					c.close()
+					return err
+				}
+				if len(config.unavailable) == 0 {
+					defaultCapabilities[protocol] = append([]string(nil), runner.capabilities...)
+				} else if err := validateWithheldCapabilities(
+					defaultCapabilities[protocol], runner.capabilities, config.unavailable); err != nil {
+					c.close()
+					return fmt.Errorf("%s: %w", protocol, err)
+				}
+				summary := runner.runAll(ctx, scenarios, filter)
+				c.close()
+				configReport.Protocols = append(configReport.Protocols, summary)
+				configReport.add(summary)
+				if len(config.unavailable) == 0 && summary.Skipped > 0 && !allowSkip {
+					configReport.unacceptedSkip = true
+				}
+				if err := validateFallbackExecution(summary, config.unavailable, allowSkip); err != nil {
+					return fmt.Errorf("%s: %w", protocol, err)
+				}
+			}
+			return nil
+		}()
 		if err != nil {
 			return err
 		}
-		runner := &runner{
-			service: svc, client: c,
-			fixtures: filepath.Join(dir, "fixtures"),
-			models:   map[Model]string{}, verbose: verbose,
-			out: os.Stdout, scenarioLog: os.Stdout,
-		}
-		if err := runner.readCapabilities(ctx); err != nil {
-			return err
-		}
-		summary := runner.runAll(ctx, scenarios, filter)
-		c.close()
-		reportData.Protocols = append(reportData.Protocols, summary)
-		reportData.Total += summary.Total
-		reportData.Passed += summary.Passed
-		reportData.Failed += summary.Failed
-		reportData.Skipped += summary.Skipped
-		reportData.Errored += summary.Errored
-		if summary.Failed > 0 || summary.Errored > 0 {
-			reportData.failure = true
-		}
-		if summary.Skipped > 0 {
-			reportData.hasSkip = true
-		}
+		reportData.Configurations = append(reportData.Configurations, configReport)
+		reportData.add(configReport)
 	}
 	if err := writeReport(report, reportData); err != nil {
 		return err
@@ -137,8 +178,79 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 	if reportData.failure {
 		return fmt.Errorf("%d of %d scenarios failed", reportData.Failed+reportData.Errored, reportData.Total)
 	}
-	if reportData.hasSkip && !allowSkip {
+	if reportData.unacceptedSkip {
 		return fmt.Errorf("%d scenarios were skipped for missing capabilities; pass -allow-skips to accept that", reportData.Skipped)
+	}
+	return nil
+}
+
+type configuration struct {
+	name        string
+	unavailable []string
+}
+
+func parseCapabilities(value string) ([]string, error) {
+	var capabilities []string
+	seen := map[string]struct{}{}
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			return nil, fmt.Errorf("capability %q is listed more than once", item)
+		}
+		seen[item] = struct{}{}
+		capabilities = append(capabilities, item)
+	}
+	return capabilities, nil
+}
+
+func validateWithheldCapabilities(defaultCapabilities, actual, unavailable []string) error {
+	for _, capability := range unavailable {
+		if !slices.Contains(defaultCapabilities, capability) {
+			return fmt.Errorf("the default service does not advertise %q", capability)
+		}
+	}
+	want := make([]string, 0, len(defaultCapabilities))
+	for _, capability := range defaultCapabilities {
+		if !slices.Contains(unavailable, capability) {
+			want = append(want, capability)
+		}
+	}
+	if !slices.Equal(actual, want) {
+		return fmt.Errorf("capabilities = %v, want the default set without %v: %v",
+			actual, unavailable, want)
+	}
+	return nil
+}
+
+func validateFallbackExecution(summary *Summary, unavailable []string, allowSkip bool) error {
+	if len(unavailable) == 0 {
+		return nil
+	}
+	executed := map[string]bool{}
+	for _, result := range summary.Results {
+		if result.WithoutCapability {
+			for _, capability := range result.MissingCapabilities {
+				executed[capability] = true
+			}
+		}
+		if result.Outcome == "skip" && !allowSkip {
+			if len(result.MissingCapabilities) == 0 {
+				return fmt.Errorf("%s skipped for a reason other than an unavailable capability", result.ID)
+			}
+			for _, capability := range result.MissingCapabilities {
+				if !slices.Contains(unavailable, capability) {
+					return fmt.Errorf("%s skipped for unexpected missing capability %q", result.ID, capability)
+				}
+			}
+		}
+	}
+	for _, capability := range unavailable {
+		if !executed[capability] {
+			return fmt.Errorf("no without-capability expectation executed for %q", capability)
+		}
 	}
 	return nil
 }
@@ -146,8 +258,8 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 func validateProtocols(protocols []string, transport string) error {
 	if transport == transportGRPC {
 		for _, protocol := range protocols {
-			if protocol != "grpc" {
-				return fmt.Errorf("protocol %q requires -transport connect; grpc transport only supports grpc", protocol)
+			if protocol != "grpc" && protocol != "pkg" {
+				return fmt.Errorf("protocol %q requires -transport connect; grpc transport only supports grpc and pkg", protocol)
 			}
 		}
 	}
@@ -163,7 +275,7 @@ func parseProtocols(value string) ([]string, error) {
 			continue
 		}
 		if _, ok := knownProtocols[item]; !ok {
-			return nil, fmt.Errorf("unknown protocol %q; want grpc, connect or connect-json", item)
+			return nil, fmt.Errorf("unknown protocol %q; want grpc, connect, connect-json, pkg or pkg-connect", item)
 		}
 		if _, ok := seen[item]; ok {
 			return nil, fmt.Errorf("protocol %q is listed more than once", item)
@@ -177,17 +289,54 @@ func parseProtocols(value string) ([]string, error) {
 	return protocols, nil
 }
 
-// Report contains aggregate and per-protocol conformance results.
+// Report contains aggregate and per-configuration conformance results.
 type Report struct {
-	Service   string     `json:"service"`
-	Total     int        `json:"total"`
-	Passed    int        `json:"passed"`
-	Failed    int        `json:"failed"`
-	Skipped   int        `json:"skipped"`
-	Errored   int        `json:"errored"`
-	Protocols []*Summary `json:"protocols"`
-	failure   bool
-	hasSkip   bool
+	Service           string                  `json:"service"`
+	Total             int                     `json:"total"`
+	Passed            int                     `json:"passed"`
+	Failed            int                     `json:"failed"`
+	Skipped           int                     `json:"skipped"`
+	Errored           int                     `json:"errored"`
+	WithoutCapability int                     `json:"without_capability"`
+	Configurations    []*ConfigurationSummary `json:"configurations"`
+	failure           bool
+	unacceptedSkip    bool
+}
+
+// ConfigurationSummary contains the results for one capability configuration.
+type ConfigurationSummary struct {
+	Name                    string     `json:"name"`
+	UnavailableCapabilities []string   `json:"unavailable_capabilities,omitempty"`
+	Total                   int        `json:"total"`
+	Passed                  int        `json:"passed"`
+	Failed                  int        `json:"failed"`
+	Skipped                 int        `json:"skipped"`
+	Errored                 int        `json:"errored"`
+	WithoutCapability       int        `json:"without_capability"`
+	Protocols               []*Summary `json:"protocols"`
+	failure                 bool
+	unacceptedSkip          bool
+}
+
+func (summary *ConfigurationSummary) add(protocol *Summary) {
+	summary.Total += protocol.Total
+	summary.Passed += protocol.Passed
+	summary.Failed += protocol.Failed
+	summary.Skipped += protocol.Skipped
+	summary.Errored += protocol.Errored
+	summary.WithoutCapability += protocol.WithoutCapability
+	summary.failure = summary.failure || protocol.Failed > 0 || protocol.Errored > 0
+}
+
+func (report *Report) add(configuration *ConfigurationSummary) {
+	report.Total += configuration.Total
+	report.Passed += configuration.Passed
+	report.Failed += configuration.Failed
+	report.Skipped += configuration.Skipped
+	report.Errored += configuration.Errored
+	report.WithoutCapability += configuration.WithoutCapability
+	report.failure = report.failure || configuration.failure
+	report.unacceptedSkip = report.unacceptedSkip || configuration.unacceptedSkip
 }
 
 // writeReport writes the summary as JSON, to a file or to stdout.

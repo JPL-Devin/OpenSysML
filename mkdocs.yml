@@ -2,7 +2,7 @@
 # GitHub, and MkDocs is only the renderer. The one exception is the landing page,
 # which frames docs/README.md with a hero that only makes sense on a web page.
 site_name: OpenSysML
-site_description: A SysML v2 and KerML implementation in Go — language server, REPL, execution runtime, Python client
+site_description: A SysML v2 and KerML implementation in Go — language server, REPL, execution runtime, and Go, Python, Node, Java and Rust clients
 site_url: https://opensysml.org/
 repo_url: https://github.com/Open-MBEE/OpenSysML
 repo_name: Open-MBEE/OpenSysML
@@ -131,7 +131,8 @@ nav:
       - OSLC Query text: reference/oslc-query.md
       - Environment variables: reference/environment.md
       - Language server: reference/lsp.md
-      - Go API: reference/api.md
+      - Client libraries: reference/clients.md
+      - Go packages: reference/api.md
       - Python API: reference/python-api.md
       - Service transports: reference/service-transports.md
       - RDF mapping: reference/rdf-mapping.md

@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Verdict kinds, as reported in Verdict.kind.
@@ -43,6 +42,7 @@ func failureReason(err error) pb.FailureReason {
 // verifyContext is everything a verification RPC needs from a cached model: the
 // runtime it evaluates in and the index its names resolve against.
 type verifyContext struct {
+	service *Service
 	cached  *CachedModel
 	runtime *runtime.Context
 	sem     *semantics.Model
@@ -53,11 +53,11 @@ type verifyContext struct {
 func (s *Service) newVerifyContext(modelHash string) (*verifyContext, error) {
 	cached, ok := s.cache.Get(modelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "model not found: %s", modelHash)
+		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", modelHash)
 	}
 	resolver := resolve.New(cached.Index)
 	semModel := semantics.NewModel(resolver)
-	return &verifyContext{cached: cached, runtime: s.newRuntime(semModel, resolver), sem: semModel}, nil
+	return &verifyContext{service: s, cached: cached, runtime: s.newRuntime(semModel, resolver), sem: semModel}, nil
 }
 
 // lookup resolves an FQN to the symbol it names.
@@ -138,13 +138,16 @@ func (v *verifyContext) instanceGraph(inst *runtime.Instance) []*pb.Instance {
 	if inst == nil {
 		return nil
 	}
-	_, all := InstanceGraphToProto(v.runtime, inst, v.cached.Index)
+	_, all := v.service.instanceGraphToProto(v.runtime, inst, v.cached.Index)
 	return all
 }
 
 // VerifyConstraint evaluates a constraint definition or usage, as the REPL's
 // %constraint does.
 func (s *Service) VerifyConstraint(ctx context.Context, req *pb.VerifyConstraintRequest) (*pb.VerifyConstraintResponse, error) {
+	if err := s.requireCapability(CapabilityVerification); err != nil {
+		return nil, err
+	}
 	v, err := s.newVerifyContext(req.ModelHash)
 	if err != nil {
 		return nil, err
@@ -169,6 +172,9 @@ func (s *Service) VerifyConstraint(ctx context.Context, req *pb.VerifyConstraint
 // VerifyRequirement evaluates a requirement definition or usage, as the REPL's
 // %requirement does.
 func (s *Service) VerifyRequirement(ctx context.Context, req *pb.VerifyRequirementRequest) (*pb.VerifyRequirementResponse, error) {
+	if err := s.requireCapability(CapabilityVerification); err != nil {
+		return nil, err
+	}
 	v, err := s.newVerifyContext(req.ModelHash)
 	if err != nil {
 		return nil, err
@@ -194,6 +200,9 @@ func (s *Service) VerifyRequirement(ctx context.Context, req *pb.VerifyRequireme
 // REPL's %satisfy does: every one, or, given a symbol, the ones that element
 // states — or that element itself when it is a named satisfy assertion.
 func (s *Service) VerifySatisfaction(ctx context.Context, req *pb.VerifySatisfactionRequest) (*pb.VerifySatisfactionResponse, error) {
+	if err := s.requireCapability(CapabilityVerification); err != nil {
+		return nil, err
+	}
 	v, err := s.newVerifyContext(req.ModelHash)
 	if err != nil {
 		return nil, err
@@ -277,6 +286,9 @@ func subjectOf(result runtime.CheckResult, fallback *runtime.Instance) *runtime.
 // output feature it computes (SysML 7.17); anything else is invoked with the
 // arguments given, bound positionally.
 func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest) (*pb.EvaluateCalcResponse, error) {
+	if err := s.requireCapability(CapabilityVerification); err != nil {
+		return nil, err
+	}
 	v, err := s.newVerifyContext(req.ModelHash)
 	if err != nil {
 		return nil, err
@@ -320,7 +332,7 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 			FailureReason: failureReason(err),
 		}, nil
 	}
-	return &pb.EvaluateCalcResponse{Result: ValueToProtoIn(v.runtime, result, v.cached.Index)}, nil
+	return &pb.EvaluateCalcResponse{Result: v.service.valueToProto(v.runtime, result, v.cached.Index)}, nil
 }
 
 // calcUsageOutputs evaluates a calc usage from its own member values. It reports
@@ -342,7 +354,7 @@ func (v *verifyContext) calcUsageOutputs(sym *symbols.Symbol) ([]*pb.CalcOutput,
 	for _, out := range outputs {
 		pbOutputs = append(pbOutputs, &pb.CalcOutput{
 			Name:  out.Name,
-			Value: ValueToProtoIn(v.runtime, out.Value, v.cached.Index),
+			Value: v.service.valueToProto(v.runtime, out.Value, v.cached.Index),
 		})
 	}
 	return pbOutputs, true, nil

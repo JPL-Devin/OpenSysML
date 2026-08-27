@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,21 +32,24 @@ type Result struct {
 	Reason   string   `json:"reason,omitempty"`
 	Failures []string `json:"failures,omitempty"`
 	// The status the call answered, as a code name.
-	Status     string  `json:"status"`
-	DurationMS float64 `json:"duration_ms"`
+	Status              string   `json:"status"`
+	WithoutCapability   bool     `json:"without_capability,omitempty"`
+	MissingCapabilities []string `json:"missing_capabilities,omitempty"`
+	DurationMS          float64  `json:"duration_ms"`
 }
 
 // Summary is the machine-readable report of a run.
 type Summary struct {
-	Protocol     string    `json:"protocol"`
-	Service      string    `json:"service"`
-	Capabilities []string  `json:"capabilities"`
-	Total        int       `json:"total"`
-	Passed       int       `json:"passed"`
-	Failed       int       `json:"failed"`
-	Skipped      int       `json:"skipped"`
-	Errored      int       `json:"errored"`
-	Results      []*Result `json:"results"`
+	Protocol          string    `json:"protocol"`
+	Service           string    `json:"service"`
+	Capabilities      []string  `json:"capabilities"`
+	Total             int       `json:"total"`
+	Passed            int       `json:"passed"`
+	Failed            int       `json:"failed"`
+	Skipped           int       `json:"skipped"`
+	Errored           int       `json:"errored"`
+	WithoutCapability int       `json:"without_capability"`
+	Results           []*Result `json:"results"`
 }
 
 // runner executes scenarios against one service.
@@ -56,8 +60,10 @@ type runner struct {
 	capabilities []string
 	models       map[Model]string // fixture → the hash the service gave its parse
 	verbose      bool
-	out          io.Writer
-	scenarioLog  io.Writer
+	// Withheld runs validate GetServerInfo against the default capability set directly.
+	omitHandshakeScenarios bool
+	out                    io.Writer
+	scenarioLog            io.Writer
 }
 
 // readCapabilities asks the service what it supports, which is what gates the
@@ -85,6 +91,9 @@ func (r *runner) runAll(ctx context.Context, scenarios []*Scenario, filter *rege
 		if filter != nil && !filter.MatchString(scenario.ID) {
 			continue
 		}
+		if r.omitHandshakeScenarios && scenario.method() == "GetServerInfo" {
+			continue
+		}
 		result := r.run(ctx, scenario)
 		summary.Results = append(summary.Results, result)
 		summary.Total++
@@ -97,6 +106,9 @@ func (r *runner) runAll(ctx context.Context, scenarios []*Scenario, filter *rege
 			summary.Skipped++
 		default:
 			summary.Errored++
+		}
+		if result.WithoutCapability {
+			summary.WithoutCapability++
 		}
 		r.report(result)
 	}
@@ -127,6 +139,7 @@ func (r *runner) run(ctx context.Context, scenario *Scenario) *Result {
 
 	expect := &scenario.Expect
 	if missing := r.missingCapabilities(scenario); len(missing) > 0 {
+		result.MissingCapabilities = missing
 		if scenario.ExpectWithoutCapability == nil {
 			result.Outcome = "skip"
 			result.Status = "-"
@@ -134,6 +147,7 @@ func (r *runner) run(ctx context.Context, scenario *Scenario) *Result {
 			return result
 		}
 		expect = scenario.ExpectWithoutCapability
+		result.WithoutCapability = true
 		result.Reason = fmt.Sprintf("the service does not report %s, so the without-capability expectation applies",
 			strings.Join(missing, ", "))
 	}
@@ -155,6 +169,14 @@ func (r *runner) run(ctx context.Context, scenario *Scenario) *Result {
 	call, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	response, callErr := r.client.call(call, scenario.method(), request)
+
+	var uncovered *uncoveredError
+	if errors.As(callErr, &uncovered) {
+		result.Outcome = "skip"
+		result.Status = "-"
+		result.Reason = uncovered.reason
+		return result
+	}
 
 	wantStatus := expect.Status
 	if wantStatus == "" {

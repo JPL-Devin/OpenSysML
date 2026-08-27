@@ -29,6 +29,16 @@ func mustNewService(t *testing.T, cacheSize int) *Service {
 	return srv
 }
 
+func mustNewServiceWithout(t *testing.T, unavailable ...string) *Service {
+	t.Helper()
+	srv, err := NewServiceWithUnavailableCapabilitiesForTesting(10, "test", unavailable)
+	if err != nil {
+		t.Fatalf("NewServiceWithUnavailableCapabilitiesForTesting: %v", err)
+	}
+	t.Cleanup(srv.Close)
+	return srv
+}
+
 func TestCachePutGet(t *testing.T) {
 	cache := mustNewCache(t, 2) // Max size 2
 

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Open-MBEE/OpenSysML/pkg/opensysml"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -195,6 +196,10 @@ func startService(ctx context.Context, binary, logPath string, cacheSize int) (*
 }
 
 func startServiceWithTransport(ctx context.Context, binary, logPath string, cacheSize int, transport string) (*service, error) {
+	return startServiceWithCapabilities(ctx, binary, logPath, cacheSize, transport, nil)
+}
+
+func startServiceWithCapabilities(ctx context.Context, binary, logPath string, cacheSize int, transport string, unavailable []string) (*service, error) {
 	port, healthPort, err := freePorts()
 	if err != nil {
 		return nil, err
@@ -213,6 +218,11 @@ func startServiceWithTransport(ctx context.Context, binary, logPath string, cach
 	)
 	process.Stdout = log
 	process.Stderr = log
+	process.Env = withoutEnvironment(os.Environ(), testWithholdCapabilitiesEnv)
+	if len(unavailable) > 0 {
+		process.Env = append(process.Env,
+			testWithholdCapabilitiesEnv+"="+strings.Join(unavailable, ","))
+	}
 	if err := process.Start(); err != nil {
 		_ = log.Close()
 		return nil, fmt.Errorf("starting %s: %w", binary, err)
@@ -238,6 +248,17 @@ func startServiceWithTransport(ctx context.Context, binary, logPath string, cach
 	return svc, nil
 }
 
+func withoutEnvironment(environment []string, name string) []string {
+	prefix := name + "="
+	filtered := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		if !strings.HasPrefix(entry, prefix) {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
+}
+
 func (s *service) client(protocol string) (client, error) {
 	switch protocol {
 	case "grpc":
@@ -246,6 +267,18 @@ func (s *service) client(protocol string) (client, error) {
 		return &connectClient{httpClient: http.DefaultClient, baseURL: "http://" + s.target}, nil
 	case "connect-json":
 		return &connectClient{httpClient: http.DefaultClient, baseURL: "http://" + s.target, json: true}, nil
+	case "pkg":
+		api, err := opensysml.New()
+		if err != nil {
+			return nil, err
+		}
+		return newPkgClient(protocol, api), nil
+	case "pkg-connect":
+		api, err := opensysml.Dial(s.target)
+		if err != nil {
+			return nil, err
+		}
+		return newPkgClient(protocol, api), nil
 	default:
 		return nil, fmt.Errorf("unknown protocol %q", protocol)
 	}
