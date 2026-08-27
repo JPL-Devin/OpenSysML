@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-rust test lint clean install help python-test python-install proto proto-go python-proto proto-ts proto-java proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test lint clean install help python-test python-install proto proto-go python-proto proto-ts proto-java proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -65,6 +65,12 @@ conformance-rust: ## Run the conformance suite with the blocking Rust client
 	@mkdir -p $(BIN_DIR)
 	OPENSYSML_GRPC_BINARY="$(CURDIR)/$(BIN_DIR)/sysml-grpc" cargo run --manifest-path rust/Cargo.toml -p opensysml-conformance -- -binary "$(CURDIR)/$(BIN_DIR)/sysml-grpc" -report "$(CURDIR)/$(BIN_DIR)/conformance-report-rust.json"
 
+conformance-pkg: ## Run the conformance suite through the public Go API (pkg/opensysml)
+	@echo "Running the conformance suite through pkg/opensysml..."
+	@mkdir -p $(BIN_DIR)
+	go run ./cmd/conformance -protocols pkg,pkg-connect -allow-skips -report $(BIN_DIR)/conformance-pkg-report.json
+	@echo "✓ Conformance suite passed through pkg/opensysml ($(BIN_DIR)/conformance-pkg-report.json)"
+
 test: ## Run Go tests with race detection and coverage
 	@echo "Running Go race tests..."
 	@# Per-package timeout: under -race, passes and model run within 1% of go's 10m default.
@@ -104,7 +110,7 @@ version: ## Show version information
 	@echo "Build time: $(BUILD_TIME)"
 	@echo "Go version: $(GO_VERSION)"
 
-proto: proto-go python-proto proto-rust ## Regenerate all protobuf stubs
+proto: proto-go python-proto proto-ts proto-rust ## Regenerate all protobuf stubs
 
 proto-go: ## Regenerate Go protobuf stubs
 	@echo "Regenerating Go protobuf stubs..."
@@ -117,9 +123,12 @@ python-proto: ## Regenerate Python protobuf stubs
 	$(BUF) generate --template buf.gen.python.yaml
 	@echo "✓ Regenerated Python stubs"
 
-# The upcoming clients: generated on demand into gen/, never committed.
-proto-ts: ## Generate TypeScript stubs into gen/ts (for the planned npm client)
+proto-ts: ## Regenerate the TypeScript stubs the npm client in clients/node ships
+	@echo "Regenerating TypeScript protobuf stubs..."
 	$(BUF) generate --template buf.gen.ts.yaml
+	@echo "✓ Regenerated TypeScript stubs"
+
+# The upcoming clients: generated on demand into gen/, never committed.
 
 proto-java: ## Generate Java stubs into gen/java (for the planned Java client)
 	$(BUF) generate --template buf.gen.java.yaml
