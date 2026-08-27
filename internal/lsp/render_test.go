@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -324,6 +325,12 @@ func TestRenderAndViewsReportAnUnsupportedKind(t *testing.T) {
 	var listing viewsResult
 	if err := json.Unmarshal(raw, &listing); err != nil {
 		t.Fatalf("decode views result: %v", err)
+	}
+	if !slices.Equal(listing.PseudoViews, view.PseudoViewSpecs()) {
+		t.Errorf("pseudoViews = %v, want %v", listing.PseudoViews, view.PseudoViewSpecs())
+	}
+	if !slices.Contains(listing.PseudoViews, "#sequence") {
+		t.Errorf("pseudoViews = %v, want it to contain #sequence", listing.PseudoViews)
 	}
 	if len(listing.Views) != 7 {
 		t.Fatalf("listed %d views, want 7: %+v", len(listing.Views), listing.Views)

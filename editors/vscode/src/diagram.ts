@@ -21,15 +21,29 @@ const SUPPORTED_KEY = "opensysml.renderSupported";
 /** The type a restored panel is revived under. */
 const PANEL_TYPE = "opensysml.diagram";
 
-// The pseudo-views the panel always offers: a document being written usually
-// declares no view, and the server renders an element as if one had been.
-const PSEUDO_VIEWS: PickerEntry[] = [
-  { value: "#tree", label: "Model tree (no view declared)", supported: true },
-  { value: "#interconnection", label: "Interconnections (no view declared)", supported: true },
-  { value: "#state", label: "State machines (no view declared)", supported: true },
-  { value: "#action", label: "Action flows (no view declared)", supported: true },
-  { value: "#table", label: "Element table (no view declared)", supported: true },
-];
+const PSEUDO_VIEW_LABELS: Record<string, string> = {
+  tree: "Model tree",
+  interconnection: "Interconnections",
+  state: "State machines",
+  action: "Action flows",
+  table: "Element table",
+  sequence: "Message sequence",
+};
+
+// This is the historical set for servers that predate the pseudoViews field; do not grow it.
+const HISTORICAL_PSEUDO_VIEWS = ["#tree", "#interconnection", "#state", "#action", "#table"];
+
+// Pseudo-views are always offered because a document being written usually declares no view.
+function pseudoViewEntries(specs: string[] | undefined): PickerEntry[] {
+  return (specs ?? HISTORICAL_PSEUDO_VIEWS).map((value) => {
+    const kind = value.startsWith("#") ? value.slice(1) : value;
+    return {
+      value,
+      label: `${PSEUDO_VIEW_LABELS[kind] ?? kind} (no view declared)`,
+      supported: true,
+    };
+  });
+}
 
 /**
  * DiagramPanels owns the diagram webviews: one per document, drawn from the
@@ -231,9 +245,10 @@ class DiagramPanel {
 
   private async render(client: LanguageClient): Promise<void> {
     const textDocument = { uri: this.docURI.toString() };
+    let listing: ViewsResult | undefined;
     let views: PickerEntry[] = [];
     try {
-      const listing = await client.sendRequest<ViewsResult>(VIEWS_METHOD, { textDocument });
+      listing = await client.sendRequest<ViewsResult>(VIEWS_METHOD, { textDocument });
       views = (listing?.views ?? []).map((info) => ({
         value: info.name,
         label: `${info.name} — ${info.kind}`,
@@ -251,7 +266,11 @@ class DiagramPanel {
     if (this.selected === "" && !views.some((entry) => entry.supported)) {
       this.selected = "#tree";
     }
-    this.post({ type: "views", views: [...views, ...PSEUDO_VIEWS], selected: this.selected });
+    this.post({
+      type: "views",
+      views: [...views, ...pseudoViewEntries(listing?.pseudoViews)],
+      selected: this.selected,
+    });
     try {
       // No form is asked for: the server writes the machine form of the kind it
       // rendered, which is Mermaid for a diagram and Markdown for a table.

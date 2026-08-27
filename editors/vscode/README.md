@@ -75,6 +75,7 @@ go test ./editors/...  # fails if the committed grammars are stale
 ```bash
 npm run watch       # rebuild dist/extension.js and dist/webview.js on change
 npm run typecheck   # tsc --noEmit, extension and webview
+npm run check-nodes # render Mermaid fixtures and verify source-node matching
 ```
 
 `esbuild.mjs` builds two bundles: the extension for Node, and the diagram

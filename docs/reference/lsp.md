@@ -73,6 +73,7 @@ rendering can be asked for as if one had been declared:
 | `#interconnection` | …as an interconnection diagram |
 | `#state` | …as a state diagram |
 | `#action` | …as an action flow |
+| `#sequence` | …as a message sequence |
 | `#table` | …as an element table |
 | `#state:Kit::WidgetStates` | One element the document declares, here as a state diagram |
 
@@ -153,13 +154,16 @@ picker.
       "supported": false,
       "reason": "KitViews::widgetGeometry: geometry rendering (view def GeometryView) is not supported"
     }
-  ]
+  ],
+  "pseudoViews": ["#action", "#interconnection", "#sequence", "#state", "#table", "#tree"]
 }
 ```
 
 Views come in qualified-name order. An unsupported one stays in the listing,
 with `supported: false` and the reason, so a client can say why it cannot be
-drawn instead of hiding it.
+drawn instead of hiding it. `pseudoViews` lists the supported `#<kind>` specs
+in sorted order; a client can use it to offer pseudo-views without duplicating
+the server's supported-kind list.
 
 ## `opensysml/renderChanged` (notification, server → client)
 
