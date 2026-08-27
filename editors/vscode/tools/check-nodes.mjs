@@ -1,9 +1,12 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { build } from "esbuild";
 import { JSDOM } from "jsdom";
 
-const outputDir = resolve(process.env.NODE_CHECK_OUTPUT ?? "node-check-output");
+const outputDir = process.env.NODE_CHECK_OUTPUT
+  ? resolve(process.env.NODE_CHECK_OUTPUT)
+  : await mkdtemp(resolve(tmpdir(), "opensysml-node-check-"));
 const nodesPath = resolve(new URL("../src/webview/nodes.ts", import.meta.url).pathname);
 const compiled = await build({
   bundle: true,
@@ -100,6 +103,9 @@ for (const diagram of diagrams) {
     console.log(
       `${diagram.id}: ${id} -> <${element.tagName.toLowerCase()} id="${element.id}" data-id="${element.dataset.id ?? ""}" class="${element.getAttribute("class") ?? ""}">`,
     );
+  }
+  if (nodeElement(svgElement, "no-such-node")) {
+    throw new Error(`${diagram.id}: nodeElement matched a nonexistent node`);
   }
   console.log(`${diagram.id}: ${output}`);
 }

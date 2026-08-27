@@ -33,6 +33,7 @@ const PSEUDO_VIEW_LABELS: Record<string, string> = {
 // This is the historical set for servers that predate the pseudoViews field; do not grow it.
 const HISTORICAL_PSEUDO_VIEWS = ["#tree", "#interconnection", "#state", "#action", "#table"];
 
+// Pseudo-views are always offered because a document being written usually declares no view.
 function pseudoViewEntries(specs: string[] | undefined): PickerEntry[] {
   return (specs ?? HISTORICAL_PSEUDO_VIEWS).map((value) => {
     const kind = value.startsWith("#") ? value.slice(1) : value;

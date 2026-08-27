@@ -1,5 +1,6 @@
-// Mermaid's bottom participant box has neither id nor data-id, so it remains inert.
+/** Finds the SVG element Mermaid drew a rendering node as. */
 export function nodeElement(svg: SVGElement, id: string): SVGElement | undefined {
+  // Mermaid's bottom participant box has neither id nor data-id, so it remains inert.
   for (const candidate of svg.querySelectorAll<SVGElement>(
     'g[data-et="participant"][data-id], g.node, g.cluster, g.statediagram-state',
   )) {

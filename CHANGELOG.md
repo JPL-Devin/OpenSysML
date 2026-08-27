@@ -18,11 +18,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   attaching to something the view does not expose — is reported rather than dropped. A `geometry`
   view remains recognized but not drawn.
 
+- **The `opensysml/views` response now reports supported pseudo-view specs**, so clients can offer
+  newly supported rendering kinds without maintaining a second list.
+
 ### Fixed
 
-- **The VS Code diagram panel now activates and highlights sequence participants**
-  using Mermaid's participant data attributes, and derives its pseudo-view picker
-  entries from the language server so newly supported rendering kinds appear.
+- **Clicking a sequence participant now reveals its declaration, and the cursor highlights it**
+  using Mermaid's participant data attributes.
 
 ## 0.3.1 — 2026-08-27
 
