@@ -4,6 +4,39 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.3.1 — 2026-08-27
+
+A performance patch. Loading a model costs less of everything and answers the same: on a
+12,000-element synthetic model, 4.62M allocations rather than 7.70M, 503.6 MiB allocated rather
+than 744.9 MiB, 272 MiB peak resident rather than 353 MiB, and 0.92s rather than 1.14s. Nothing
+about the language, the diagnostics or any API changed — the 895 bundled SysML and KerML files
+report byte-identical diagnostics and exit status, and the 749 of them a conversion accepts produce
+byte-identical `-convert sysml` and `-convert ttl` output, before and after.
+
+### Performance
+
+- **Whitespace is no longer recorded as trivia.** A node's leading trivia holds the comments and
+  notes a consumer reads (doc-comment hover, the REPL's declaration printing) and nothing else,
+  which is what dominated allocation on a large parse.
+- **A span's text is served from one cached whole-file string** instead of copying the bytes per
+  span, so the repeated reads name resolution and validation make cost nothing after the first.
+- **A fully qualified name is compared without being built.** Checking whether a symbol *is*
+  `Base::DataValue` walks the scope chain against the string rather than constructing the name to
+  throw away; constructing one, where a caller genuinely needs the string, sizes its buffer once.
+- **The inherited-name conflict pass reads the memoized base-member maps directly** rather than
+  merging them per declaration, and merges only where a declaration has more than one base.
+- **A scope's children are indexed lazily**, by map only where a scope is large enough for the map
+  to pay for itself, and by scan below that.
+
+### Project
+
+- The release-gate counts on `README.md`, [the roadmap](docs/project/roadmap.md),
+  [spec compliance](docs/project/spec-compliance.md) and
+  [training examples](docs/project/training-examples.md) are recounted together against a real
+  `go test -race -count=1 -v ./...` run: 8,361 tests and subtests, 380 execution conformance cases,
+  118 golden traces, 256 runtime robustness cases, 146 golden ASTs and 261 negative parser subtests.
+  The skip list is stated by what each skip wants, since five tests it named as skipping now pass.
+
 ## 0.3.0 — 2026-08-26
 
 Release 0.3.0 spends itself on a single question: what does this implementation accept that the

@@ -1,6 +1,6 @@
 # OpenSysML — Roadmap
 
-Baseline: `main` @ `22f47533`, verified locally on 2026-08-26 with Go 1.25.0.
+Baseline: `main` @ `1127a93b`, verified locally on 2026-08-27 with Go 1.25.0.
 Read `AGENTS.md` first; it governs everything below.
 
 0.3.0 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
@@ -25,13 +25,13 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 |---|---|
 | OMG training corpus | **100/100 clean** — no file reports a semantic error |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative OpenSysML extension |
-| Execution conformance cases | 374 |
+| Execution conformance cases | 380 |
 | gRPC conformance fixtures | 15 |
-| Golden execution traces | 114 |
-| Runtime robustness cases | 253 |
+| Golden execution traces | 118 |
+| Runtime robustness cases | 256 |
 | gRPC robustness cases | 8 |
-| Golden AST fixtures | 145 |
-| Negative parser subtests | 255 |
+| Golden AST fixtures | 146 |
+| Negative parser subtests | 261 |
 
 Statement coverage, measured with `go test -cover ./...` at the baseline commit. It counts only
 each package's own tests, which understates a package consumed by others: `internal/core/ast`
