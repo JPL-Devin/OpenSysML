@@ -6,10 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestOSLCQueryText(t *testing.T) {
@@ -48,7 +47,7 @@ func TestOSLCQueryMutuallyExclusive(t *testing.T) {
 		Query:     &pb.Query{},
 		OslcQuery: `sysml:type=PartUsage`,
 	})
-	if status.Code(err) != codes.InvalidArgument {
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("error = %v, want INVALID_ARGUMENT", err)
 	}
 }

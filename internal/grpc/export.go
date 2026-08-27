@@ -5,10 +5,9 @@ import (
 	"errors"
 	"os"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Convert writes a model in another representation, so a client can save a model
@@ -27,11 +26,11 @@ func (s *Service) Convert(ctx context.Context, req *pb.ConvertRequest) (*pb.Conv
 		return nil, err
 	}
 	if req.ToFormat == "" {
-		return nil, status.Error(codes.InvalidArgument, "to_format is required: expected sysml, kerml, ttl, turtle or rdf")
+		return nil, statusError(connect.CodeInvalidArgument, "to_format is required: expected sysml, kerml, ttl, turtle or rdf")
 	}
 	to, err := export.ParseFormat(req.ToFormat)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, statusError(connect.CodeInvalidArgument, err.Error())
 	}
 
 	resp := &pb.ConvertResponse{FromFormat: from.String(), ToFormat: to.String()}
@@ -75,7 +74,7 @@ func (s *Service) convertSource(req *pb.ConvertRequest) (string, []byte, error) 
 	case *pb.ConvertRequest_ModelHash:
 		cached, ok := s.cache.Get(src.ModelHash)
 		if !ok {
-			return "", nil, status.Errorf(codes.NotFound,
+			return "", nil, statusErrorf(connect.CodeNotFound,
 				"model %s is no longer cached: parse it again, or convert its file_path or content",
 				src.ModelHash)
 		}
@@ -85,11 +84,11 @@ func (s *Service) convertSource(req *pb.ConvertRequest) (string, []byte, error) 
 		// and the service runs with the caller's own privileges.
 		data, err := os.ReadFile(src.FilePath)
 		if err != nil {
-			return "", nil, status.Errorf(codes.NotFound, "file not found: %v", err)
+			return "", nil, statusErrorf(connect.CodeNotFound, "file not found: %v", err)
 		}
 		return src.FilePath, data, nil
 	default:
-		return "", nil, status.Error(codes.InvalidArgument, "source must be model_hash, file_path or content")
+		return "", nil, statusError(connect.CodeInvalidArgument, "source must be model_hash, file_path or content")
 	}
 }
 
@@ -99,7 +98,7 @@ func convertFrom(req *pb.ConvertRequest, name string) (export.Format, error) {
 	if req.FromFormat != "" {
 		from, err := export.ParseFormat(req.FromFormat)
 		if err != nil {
-			return 0, status.Error(codes.InvalidArgument, err.Error())
+			return 0, statusError(connect.CodeInvalidArgument, err.Error())
 		}
 		return from, nil
 	}
@@ -109,11 +108,11 @@ func convertFrom(req *pb.ConvertRequest, name string) (export.Format, error) {
 		return export.FormatSysML, nil
 	}
 	if req.GetFilePath() == "" {
-		return 0, status.Error(codes.InvalidArgument, "from_format is required for inline content: expected sysml, kerml, ttl, turtle or rdf")
+		return 0, statusError(connect.CodeInvalidArgument, "from_format is required for inline content: expected sysml, kerml, ttl, turtle or rdf")
 	}
 	from, err := export.FormatOfPath(name)
 	if err != nil {
-		return 0, status.Error(codes.InvalidArgument, export.Advise(err, "pass from_format, or "+export.ExtensionAdvice).Error())
+		return 0, statusError(connect.CodeInvalidArgument, export.Advise(err, "pass from_format, or "+export.ExtensionAdvice).Error())
 	}
 	return from, nil
 }

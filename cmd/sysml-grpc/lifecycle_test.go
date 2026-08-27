@@ -545,3 +545,33 @@ func TestShutdownWithAnOpenConnection(t *testing.T) {
 		t.Errorf("a call after shutdown hung until the deadline: %v", err)
 	}
 }
+
+// -transport grpc serves grpc-go alone: calls succeed, a refused call carries
+// the same canonical code and message every transport answers, and a signal
+// still ends the process cleanly.
+func TestGRPCTransportServesGRPCClients(t *testing.T) {
+	s := startService(t, "-transport", "grpc", "-port", "0", "-health-port", "0")
+	client := dial(t, s.address(30*time.Second))
+	ctx := callContext(t)
+
+	if _, err := client.GetServerInfo(ctx, &pb.ServerInfoRequest{}); err != nil {
+		t.Fatalf("GetServerInfo: %v\nlogs: %s", err, s.logs.String())
+	}
+
+	_, err := client.Query(ctx, &pb.QueryRequest{ModelHash: "no-such-model"})
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("Query against an unknown model = %v, want a gRPC status", err)
+	}
+	if st.Code() != codes.NotFound {
+		t.Errorf("Query code = %s, want NotFound", st.Code())
+	}
+	if want := "model not found: no-such-model"; st.Message() != want {
+		t.Errorf("Query message = %q, want %q", st.Message(), want)
+	}
+
+	s.terminate()
+	if status := s.waitStatus(45 * time.Second); status != 0 {
+		t.Errorf("exit status = %d, want 0\nlogs: %s", status, s.logs.String())
+	}
+}

@@ -5,9 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // editModelSource carries comments and blank lines an edit must leave alone.
@@ -221,7 +220,7 @@ func TestApplyEditsUncachedModelIsNotFound(t *testing.T) {
 		ModelHash:  "nosuchmodel",
 		Operations: []*pb.EditOperation{setValueOp("Demo::SC::unitMass", "1")},
 	})
-	if status.Code(err) != codes.NotFound {
+	if connect.CodeOf(err) != connect.CodeNotFound {
 		t.Errorf("err = %v, want NotFound", err)
 	}
 }
@@ -233,7 +232,7 @@ func TestApplyEditsRequiresModelHash(t *testing.T) {
 	_, err := srv.ApplyEdits(context.Background(), &pb.ApplyEditsRequest{
 		Operations: []*pb.EditOperation{setValueOp("Demo::SC::unitMass", "1")},
 	})
-	if status.Code(err) != codes.InvalidArgument {
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("err = %v, want InvalidArgument", err)
 	}
 }

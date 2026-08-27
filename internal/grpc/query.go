@@ -8,11 +8,10 @@ import (
 	"strconv"
 	"strings"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Query property names, as the SysML v2 API & Services standard's clients write
@@ -57,11 +56,6 @@ type QueryError struct {
 
 func (e *QueryError) Error() string { return e.Message }
 
-// GRPCStatus maps the error onto the status the RPC fails with.
-func (e *QueryError) GRPCStatus() *status.Status {
-	return status.New(codes.InvalidArgument, e.Message)
-}
-
 func queryErrorf(kind QueryErrorKind, format string, args ...any) *QueryError {
 	return &QueryError{Kind: kind, Message: fmt.Sprintf(format, args...)}
 }
@@ -84,13 +78,13 @@ func (s *Service) Query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryRes
 	}
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
 	}
 	if req.Query != nil && req.OslcQuery != "" {
-		return nil, status.Error(codes.InvalidArgument, "query and oslc_query are mutually exclusive")
+		return nil, statusError(connect.CodeInvalidArgument, "query and oslc_query are mutually exclusive")
 	}
 	if req.Query == nil && req.OslcQuery == "" {
-		return nil, queryErrorf(QueryErrMalformedConstraint, "query is unset")
+		return nil, queryStatus(queryErrorf(QueryErrMalformedConstraint, "query is unset"))
 	}
 
 	sc := cached.SymbolContext()
@@ -117,15 +111,15 @@ func (s *Service) Query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryRes
 	// The query is judged before any element is: whether it is one the service
 	// can evaluate cannot depend on how many elements it happens to consider.
 	if err := validateConstraint(req.Query.Where); err != nil {
-		return nil, err
+		return nil, queryStatus(err)
 	}
 	projection, err := projectedProperties(req.Query.Select)
 	if err != nil {
-		return nil, err
+		return nil, queryStatus(err)
 	}
 	candidates, err := eval.candidates(cached, req.Query.Scope)
 	if err != nil {
-		return nil, err
+		return nil, queryStatus(err)
 	}
 
 	elements := make([]*pb.QueryResultElement, 0, len(candidates))

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
@@ -17,8 +18,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // CapabilityTypeFacts names the capability of populating SymbolInfo.type_info,
@@ -217,7 +216,7 @@ func (s *Service) requireCapability(capability string) error {
 	if s.capabilities.has(capability) {
 		return nil
 	}
-	return status.Errorf(codes.Unimplemented, "capability %q is unavailable", capability)
+	return statusErrorf(connect.CodeUnimplemented, "capability %q is unavailable", capability)
 }
 
 // newRuntime returns a runtime context under the service's budgets.
@@ -258,7 +257,7 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 		case "kerml":
 			kind = source.KindKerML
 		default:
-			return nil, status.Errorf(codes.InvalidArgument,
+			return nil, statusErrorf(connect.CodeInvalidArgument,
 				"language must be sysml or kerml, got %q", req.Language)
 		}
 	case *pb.ParseFileRequest_FilePath:
@@ -269,11 +268,11 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 		// own privileges.
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			return nil, status.Errorf(codes.NotFound, "file not found: %v", err)
+			return nil, statusErrorf(connect.CodeNotFound, "file not found: %v", err)
 		}
 		content = string(data)
 	default:
-		return nil, status.Error(codes.InvalidArgument, "source must be file_path or content")
+		return nil, statusError(connect.CodeInvalidArgument, "source must be file_path or content")
 	}
 
 	// Keyed by what was read, not by the hash the request carried: a hash
@@ -334,7 +333,7 @@ func (s *Service) GetSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
 	}
 
 	// Lookup symbol by FQN
@@ -356,7 +355,7 @@ func (s *Service) GetDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
 	}
 
 	// Convert parser diagnostics to proto
@@ -386,7 +385,7 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
 	}
 
 	// Parse expression
@@ -488,7 +487,7 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
 	}
 
 	// Lookup symbol
@@ -525,7 +524,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
 	}
 
 	// Lookup action symbol
@@ -582,7 +581,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
 	}
 
 	// Lookup state machine symbol

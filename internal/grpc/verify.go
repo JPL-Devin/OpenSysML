@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 
+	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Verdict kinds, as reported in Verdict.kind.
@@ -54,7 +53,7 @@ type verifyContext struct {
 func (s *Service) newVerifyContext(modelHash string) (*verifyContext, error) {
 	cached, ok := s.cache.Get(modelHash)
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "model not found: %s", modelHash)
+		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", modelHash)
 	}
 	resolver := resolve.New(cached.Index)
 	semModel := semantics.NewModel(resolver)
