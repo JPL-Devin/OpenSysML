@@ -5257,3 +5257,29 @@ When testing error-message parity across transports:
   frames; unknown method answers `error.code == 12` with
   `SysMLService has no method "X"` and the server keeps serving; closing stdin exits 0.
 - The service RPC is `ParseFile` (field `content`), not `ParseModel`.
+
+## Old-vs-new differential runs (behaviour-neutral perf PRs)
+
+For any PR claiming behaviour neutrality, build a contrast binary without touching the
+checkout: `git worktree add /tmp/oldmain origin/main && (cd /tmp/oldmain && go build -o
+/tmp/old-sysml ./cmd/sysml)`, then diff outputs of `./bin/sysml` vs `/tmp/old-sysml`.
+
+Pitfalls that produce *false* differences (each one cost real time):
+
+- `-convert` diagnostics echo the `-o` path, so give both binaries the **same output
+  basename** in different directories (`$W/A/o.ttl`, `$W/B/o.ttl`) and `sed -i
+  "s#$W/[AB]/#OUT/#g"` the stderr before comparing.
+- When a conversion is *refused* (exit 2, e.g. RDF write-back refusal) **no output file is
+  written**. `cmp -s A B` then fails on two missing files and every refused file looks
+  different. Compare hashes with an explicit absent sentinel:
+  `ha=$(md5sum < A 2>/dev/null || echo ABSENT)`.
+- Run per-format sweeps in isolated working dirs; concurrent sweeps sharing `/tmp` files
+  clobber each other.
+- `%features` needs `%instantiate <Def>` first, otherwise you only diff an error message.
+
+`-memstats` is the cheap way to show a perf PR actually helps:
+`./bin/sysml -validate -memstats <big model>` prints wall time, MiB allocated, allocation
+count — compare against the old binary on the same file.
+
+Useful corpora for a sweep: `examples`, `testdata`, `internal/repl/testdata`,
+`internal/core/runtime/testdata/conformance` (~750–900 files, a few minutes per pass).
