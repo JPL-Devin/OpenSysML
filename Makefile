@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg test lint clean install help python-test python-install proto proto-go python-proto proto-ts proto-java proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg test lint clean install help python-test python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -105,12 +105,14 @@ version: ## Show version information
 	@echo "Build time: $(BUILD_TIME)"
 	@echo "Go version: $(GO_VERSION)"
 
-proto: proto-go python-proto proto-ts ## Regenerate all protobuf stubs
+proto: proto-buf python-proto proto-ts ## Regenerate all protobuf stubs
 
-proto-go: ## Regenerate Go protobuf stubs
-	@echo "Regenerating Go protobuf stubs..."
+# One template, so the Go stubs and the Java client's message classes cannot drift apart.
+# The Java plugin is a remote one, so this needs the Buf Schema Registry.
+proto-buf: ## Regenerate the Go and Java protobuf stubs
+	@echo "Regenerating Go and Java protobuf stubs..."
 	$(BUF) generate
-	@echo "✓ Regenerated Go stubs"
+	@echo "✓ Regenerated Go and Java stubs"
 
 python-proto: ## Regenerate Python protobuf stubs
 	@echo "Regenerating Python protobuf stubs..."
@@ -124,9 +126,6 @@ proto-ts: ## Regenerate the TypeScript stubs the npm client in clients/node ship
 	@echo "✓ Regenerated TypeScript stubs"
 
 # The upcoming clients: generated on demand into gen/, never committed.
-
-proto-java: ## Generate Java stubs into gen/java (for the planned Java client)
-	$(BUF) generate --template buf.gen.java.yaml
 
 proto-rust: ## Generate Rust stubs into gen/rust (for the planned Rust client)
 	$(BUF) generate --template buf.gen.rust.yaml
