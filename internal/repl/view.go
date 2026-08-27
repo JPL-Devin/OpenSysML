@@ -3,8 +3,10 @@ package repl
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -121,6 +123,9 @@ func (s *Session) ViewRendering(name string) (*view.Rendering, error) {
 
 // viewRendering renders a view with the session already held.
 func (s *Session) viewRendering(name string) (*view.Rendering, error) {
+	if strings.HasPrefix(name, view.PseudoViewPrefix) {
+		return s.renderPseudoView(name)
+	}
 	sym, fqn, err := s.lookupSymbol(name)
 	if err != nil {
 		return nil, err
@@ -137,6 +142,73 @@ func (s *Session) viewRendering(name string) (*view.Rendering, error) {
 		return nil, err
 	}
 	return rendering, nil
+}
+
+func (s *Session) renderPseudoView(spec string) (*view.Rendering, error) {
+	kind, target, ok := view.ParsePseudoView(spec)
+	if !ok {
+		return nil, fmt.Errorf("%s is no pseudo-view: write %s", spec, strings.Join(view.PseudoViewSpecs(), ", "))
+	}
+	renderer, err := s.viewRenderer()
+	if err != nil {
+		return nil, err
+	}
+	var exposed []*symbols.Symbol
+	stated := "no view declared; rendering the loaded documents directly"
+	if target != "" {
+		sym, fqn, err := s.lookupSymbol(target)
+		if err != nil {
+			return nil, err
+		}
+		exposed = append(exposed, sym)
+		stated = fmt.Sprintf("no view declared; rendering %s directly", notationName(fqn))
+	} else {
+		exposed = s.symbolsInLoadOrder(model.TopLevelDeclarations)
+	}
+	return renderer.RenderExposed(exposed, kind, stated)
+}
+
+// Views lists every view the session declares, in document then declaration
+// order.
+func (s *Session) Views() ([]model.ViewInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	renderer, err := s.viewRenderer()
+	if err != nil {
+		return nil, err
+	}
+	var out []model.ViewInfo
+	for _, sym := range s.symbolsInLoadOrder(model.DeclaredViews) {
+		info := model.ViewInfo{Name: s.viewElementFQN(sym), Supported: true}
+		kind, _, err := renderer.KindOf(sym)
+		switch {
+		case err == nil:
+			info.Kind = kind
+		default:
+			info.Supported = false
+			info.Reason = err.Error()
+			var unsupported *view.UnsupportedKindError
+			if errors.As(err, &unsupported) {
+				info.Kind = unsupported.Kind
+			}
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+func (s *Session) symbolsInLoadOrder(in func(*symbols.Scope) []*symbols.Symbol) []*symbols.Symbol {
+	idx := s.browseIndex()
+	var out []*symbols.Symbol
+	for _, doc := range s.sessionDocs() {
+		out = append(out, in(idx.DocumentRoot(doc.Name))...)
+	}
+	// The language documents are masked copies of one joined buffer, so their
+	// spans share coordinates and sorting restores submission order.
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].DeclSpan.Offset < out[j].DeclSpan.Offset
+	})
+	return out
 }
 
 // viewRenderer returns a renderer over the session's symbols, in a semantic

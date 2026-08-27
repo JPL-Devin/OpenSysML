@@ -17,7 +17,11 @@ func (r *Rendering) Text() string { return r.TextWidth(WidthUnbounded) }
 // each column as wide as its widest cell.
 func (r *Rendering) TextWidth(width int) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s - %s rendering", r.View, r.Kind)
+	if r.View == "" {
+		fmt.Fprintf(&b, "%s rendering", r.Kind)
+	} else {
+		fmt.Fprintf(&b, "%s - %s rendering", r.View, r.Kind)
+	}
 	if r.Stated != "" {
 		fmt.Fprintf(&b, " (%s)", r.Stated)
 	} else {
