@@ -4,15 +4,6 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
-## Unreleased
-
-- `sysml-grpc` now refuses requests for unavailable capabilities with
-  `UNIMPLEMENTED`, naming the capability. Capabilities that only describe
-  response population omit those fields instead. The conformance gate runs both
-  the default service and a test-only withheld-capability configuration, and the
-  Python client translates service-side refusals into `MissingCapabilityError`
-  while preserving the original gRPC error as its cause.
-
 ## 0.3.0 — 2026-08-26
 
 Release 0.3.0 spends itself on a single question: what does this implementation accept that the
@@ -32,6 +23,12 @@ does, so a SysML v2 API service can address a graph this tool produced; `sysml-g
 Connect protocol by default, on the same port as gRPC and gRPC-Web; the Python client starts a private
 service of its own instead of adopting whichever one is listening; and what a real Flexo MMS stack
 does with our Turtle is now a recorded per-property measurement rather than a claim.
+
+The service also stops being reachable from one language only. Four client surfaces ship with this
+release — a public Go API that answers in process, and Node/TypeScript, Java and Rust clients that
+speak the Connect protocol — and each of the four runs the same language-independent conformance
+scenarios through its own public API rather than through generated stubs, so "it speaks to
+`sysml-grpc`" is a measured claim in every one of them. None of the four is published yet.
 
 Against the pinned OMG pilot (`2026-05`, jupyter-sysml-kernel 0.60.1), 328 of 355 files agree
 diagnostic-by-diagnostic, there is no declared `errors` row in the reference's own suites we are
@@ -126,6 +123,56 @@ Nothing is published. The build produces a signable, locally-installable artifac
 sources and javadoc jars, and [releasing.md](docs/project/releasing.md) says what a
 maintainer must obtain — a verified namespace, a GPG key, Central portal tokens — before a
 first upload.
+
+### A public Go API, in process by default
+
+`pkg/opensysml` is the Go surface of this engine: parse, symbol lookup, evaluation and
+instantiation from Go code, with the parser, semantic engine and runtime the importing binary
+already links. It is not a wrapper around a port.
+
+- **`New` answers in process**, calling the same service implementation the wire transports serve,
+  so the semantics are the service's: the same content-addressed parse cache and model hashes, the
+  same capability list, the same in-band failures and the same runtime budgets. No child process is
+  ever spawned — a Go process wanting the engine in process has no use for one. `Dial` is for a
+  service someone else runs, addressed explicitly, over Connect with protobuf bodies.
+- **Two failure modes, and the difference is part of the API**: a refused call is a `*StatusError`
+  carrying the canonical gRPC status code (`errors.Is(err, opensysml.CodeNotFound)`), an answer that
+  reports a failure is a `*FailureError`, and an engine panic arrives as `CodeInternal` rather than
+  unwinding into the caller. Syntax errors are neither: parsing broken source succeeds and the
+  diagnostics are on the model, in the shape the LSP and the wire report.
+- **Everything returned is a copy the caller owns.** In process there is no serialization boundary
+  to enforce that, so it is a documented promise with tests behind it: no returned value aliases
+  engine state.
+- The conformance suite gained `pkg` and `pkg-connect` protocols, so the covered scenarios run
+  through this API both in process and against a started service.
+
+### A Rust client, blocking by default
+
+`rust/opensysml` is a blocking Rust client for the service, with no asynchronous runtime anywhere in
+its default dependency tree: all fifteen RPCs are unary and the usual consumer talks to a local
+child that answers in milliseconds, so a private `tokio::Runtime` inside a library would tax every
+consumer for nothing. A test calls the client from inside `Runtime::block_on` to pin that it is safe
+to use from an async program anyway. Rust 1.83 is the minimum supported version.
+
+- **The lifecycle is the one the other clients use**: `Connection::private()` starts one child per
+  process and shares its parse cache, `Connection::external` and `$OPENSYSML_SERVICE` are explicit
+  opt-in and are never stopped by the client, `Drop` cleans up deterministically, and the child's
+  stdin pipe is the guarantee that survives `SIGKILL` and `process::exit` — pinned by a test.
+- **No binary is downloaded**: the service is resolved from `$OPENSYSML_GRPC_BINARY`,
+  `~/.opensysml/bin` or `PATH`, and the client does not pretend to pin a child version.
+- **The conformance runner reads answers through the typed API**, not the stubs, and skips only the
+  RPCs the v1 surface does not cover plus the one request that surface cannot express; any other
+  skip names its missing capability and fails the run. Publishing to crates.io is a maintainer
+  action and CI never does it.
+
+### A request for an unavailable capability is refused
+
+`sysml-grpc` answers a request that asks for a capability it does not have with `UNIMPLEMENTED`,
+naming the capability, instead of quietly doing something else; capabilities that only describe how
+a response is populated omit those fields as before. The conformance gate runs the default service
+and a test-only configuration with capabilities withheld, so both halves of the contract are
+exercised, and the Python client turns a service-side refusal into `MissingCapabilityError` while
+keeping the original error as its cause.
 
 ### RDF output states element ids and ownership
 
@@ -465,13 +512,25 @@ literals rather than floats, and the tolerance applies to `Real` alone.
 - **buf is the single source of protobuf codegen**, replacing ad-hoc `protoc` invocations: Go stubs
   through pinned plugins, Python stubs (including `.pyi` and the package-relative gRPC import)
   through a local plugin bridging to `grpcio-tools`, plus `buf lint` and `buf breaking` against `main`
-  in the Makefile and in CI. Templates for TypeScript, Java and Rust clients are defined and generate
-  into an untracked directory.
+  in the Makefile and in CI. TypeScript and Java stubs are generated the same way for the clients
+  that now use them, with a Rust template defined beside them.
 - **A language-independent gRPC conformance suite**: scenarios live as protobuf-JSON data under
   `conformance/`, and `cmd/conformance` builds and starts the service itself, so a client in any
   language can prove it speaks to `sysml-grpc` without re-deriving the Python suite. Every scenario
   runs once per protocol, so the second transport surface cannot rot.
+- **`google.golang.org/grpc` is test-only for production code.** Service errors are connect-native
+  with identical codes and messages, the `-transport grpc` server is isolated in one file, stdio
+  dispatch no longer carries incidental grpc-go types, and a CI gate keeps grpc-go out of the
+  production packages while the tests and the conformance runner keep using it. A consumer importing
+  the public Go API no longer links a gRPC server to get a parser.
+- **An oracle figure quoted outside the generated block must name the round it measured**, since only
+  the `doc-counts` block states the current totals: `scripts/check-doc-figures.py` fails on an
+  undated one across the differential, Xpect, rejection and execution oracles and runs in CI beside
+  the document id and link checks. Pull-request checks are parallelized under standardized names,
+  aggregated into one required status, and each client's job runs only when the pull request touches
+  it.
 - A core developer guide; the transport evaluation and the Connect surface documented on the site;
+  a page per client, and the release procedure for each written down before anything is published;
   internal engineering records excluded from what is published; and the guide's transcripts and
   examples rewritten in standard notation against the real binary.
 

@@ -36,6 +36,32 @@ stdio prototype construct errors with `connect-go`, whose codes number the same 
 gRPC status codes, so every transport answers the same code and message.
 `scripts/check-grpc-imports.sh` fails CI when production code imports `grpc-go` again.
 
+The clients this repository ships are on [client libraries](clients.md): the Python client
+speaks gRPC, the Node, Java and Rust clients speak Connect with protobuf bodies, and the public
+Go API answers in process without a transport at all.
+
+## Capabilities, and what an absent one does
+
+`GetServerInfo` reports a version string and a list of capability **names**. Negotiate on the
+names: a version string tells a client what release answered, not what that release can do for
+the call it is about to make.
+
+An absent capability behaves in one of two ways, and which one is part of each capability's
+definition rather than a client's guess:
+
+| The capability describes | A request that needs it | What a client should do |
+|---|---|---|
+| what the service can be *asked*: `strict_conformance`, `inline_language`, `evaluate_subject`, `verification`, `convert`, `apply_edits`, `authoring`, `query`, `oslc_query` | is **refused** with `UNIMPLEMENTED`, naming the capability | check the advertised list first, and report the missing capability locally rather than spending a round trip |
+| how a response is *populated*: `type_facts`, `symbol_attributes`, `feature_values`, `enum_values`, `unset_value` | is answered with those fields **omitted** | check before reading the fields; an omitted field is not an error |
+
+So a client cannot treat "the call succeeded" as "the field was computed", and cannot treat
+"no refusal" as "the capability is there". Every client this repository ships checks the list
+before making a capability-gated call, and maps the service's refusal onto the same error it
+raises itself — `MissingCapabilityError` in Python, `CapabilityException` in Java,
+`CodeUnimplemented` in Go. The conformance suite runs against the default service and against
+a test-only configuration with capabilities withheld, so both columns of that table are
+exercised rather than described.
+
 ## Choose protobuf, not JSON
 
 **Protobuf is the body encoding for every client we ship or document. JSON is the debugging

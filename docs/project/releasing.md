@@ -14,6 +14,13 @@ release the caller names, not from a release matching its own version.
 A third tag, `pysysml-v*`, publishes the one-off final release of the client's
 pre-rename PyPI name — see [The final `pysysml` release](#the-final-pysysml-release).
 
+The other clients are released on tags of their own, and none of them has been
+published yet: [the Node client](#releasing-opensysmlclient-to-npm) on
+`client-node-v*`, [the Java client](#releasing-the-java-client-to-maven-central)
+on `opensysml-java-v*`, and [the Rust client](#releasing-the-rust-client-to-cratesio)
+on `opensysml-rust-v*`. The public Go API in `pkg/opensysml` has no release of its
+own: it is part of this module, so the core's `v*` tag is what a Go program pins.
+
 ## Before tagging
 
 Run the full gate on the commit you intend to tag:
@@ -660,5 +667,45 @@ would be a job that can only fail. When it is added it should mirror
 `publish-pypi`: triggered by `/^opensysml-java-v.*/` only, running on a restricted
 context, refusing to run when a variable it needs is absent rather than letting
 Central answer with a 401, checking the tag names the declared version, and
-stopping at an unpublished deployment. `test-java` already runs the client's
+stopping at an unpublished deployment. `java-test` already runs the client's
 tests and the conformance suite on every commit.
+
+## Releasing the Rust client to crates.io
+
+Nothing has been published, and the first publish is a decision rather than a
+step: `opensysml` is a common enough name that its availability on crates.io must
+be checked before the crate is promised anywhere, and a name taken means renaming
+the crate rather than the client. `rust/README.md` documents the path and Git
+dependency forms that work today.
+
+What the crate is ready for, and what it is not:
+
+- `cargo package -p opensysml` must succeed cleanly before any publish — it is
+  what proves the manifest carries the metadata crates.io requires and that the
+  packaged file list builds on its own, outside this workspace.
+- The manifest declares `license`, `description`, `repository`, `homepage`,
+  `documentation`, `keywords`, `categories` and `rust-version = "1.83"`, so a
+  published crate documents its own minimum supported Rust version.
+- `opensysml-conformance` is a workspace member and a runner, not a library, and
+  is **not** published: it reads `conformance/scenarios` from this repository.
+- The client resolves a `sysml-grpc` binary and never downloads one, so a
+  published crate carries no binary asset and needs no checksum manifest of its
+  own. If a downloader is ever added, it inherits the Python client's pinned
+  digests and signed-manifest verification first — see `rust/README.md`.
+
+The procedure, once the name is settled:
+
+```bash
+# 1. Bump "version" in rust/opensysml/Cargo.toml, land it, then from that commit:
+cargo package -p opensysml --manifest-path rust/Cargo.toml   # must be clean
+cargo publish -p opensysml --manifest-path rust/Cargo.toml   # maintainer, with a crates.io token
+
+# 2. Tag what was published.
+git tag opensysml-rust-v0.1.0 && git push origin opensysml-rust-v0.1.0
+```
+
+**`cargo publish` is a maintainer action and CI never runs it.** A crates.io
+version cannot be replaced or deleted, only yanked (`cargo yank --version 0.1.0`,
+which stops new resolutions and leaves existing lockfiles working), so a mistake
+needs a new version. `rust-test` already runs the client's tests, lints and the
+conformance suite on every commit that touches it.
