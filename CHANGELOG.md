@@ -507,6 +507,18 @@ literals rather than floats, and the tolerance applies to `Real` alone.
 - **Conformance harness**: two distinct ports are reserved, and a service that exits early is
   reported instead of waited on.
 
+### Python client (`opensysml` 0.3.2)
+
+- **The client changes in this release reach PyPI as 0.3.2**, once `opensysml-v0.3.2` is tagged:
+  the private service of its own, `MissingCapabilityError` for a service-side refusal, and the
+  three client fixes listed under Fixed. Installing the v0.3.0 core does not wait on it — the
+  published 0.3.1 takes an unpinned release's digest from the signed `SHA256SUMS.txt` it verifies
+  with sigstore — so this is the client's own changes reaching users, not a prerequisite for the
+  core release.
+- The `v0.3.0` digests are pinned after the core release's assets publish, before
+  `opensysml-v0.3.2` is tagged, so that release is verified against a committed digest rather
+  than against the manifest path alone.
+
 ### Project
 
 - **buf is the single source of protobuf codegen**, replacing ad-hoc `protoc` invocations: Go stubs

@@ -3,7 +3,7 @@
 Baseline: `main` @ `22f47533`, verified locally on 2026-08-26 with Go 1.25.0.
 Read `AGENTS.md` first; it governs everything below.
 
-0.2.1 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
+0.3.0 is the newest release from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
 `sysml-grpc` archives, and the Python client is on PyPI as `opensysml` 0.3.1. `main` carries what
 `CHANGELOG.md` lists as unreleased. Everything in "Release follow-through" is maintainer- or
 account-gated; everything after it is ordinary engineering work.
@@ -68,9 +68,10 @@ downloads the corpus (cached on the download script) and runs the suite with
 
 # Release follow-through
 
-Tagging a core release and publishing the Python client are both proven paths now: `v0.2.1` is
+Tagging a core release and publishing the Python client are both proven paths now: `v0.3.0` is
 released on `Open-MBEE/OpenSysML` with its full archive set, and `opensysml-v0.3.1` uploaded the
-client to PyPI, so `pip install opensysml` resolves. The procedure and its post-tag verification
+client to PyPI, so `pip install opensysml` resolves. The client declares 0.3.2, whose PyPI upload
+waits on the `opensysml-v0.3.2` tag. The procedure and its post-tag verification
 are in `docs/project/releasing.md`.
 
 ## R3 — Homebrew tap
