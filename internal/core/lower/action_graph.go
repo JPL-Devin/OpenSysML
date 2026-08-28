@@ -39,6 +39,11 @@ type ActionGraph struct {
 	// Accepts: node → the message that node waits for
 	Accepts map[ast.Node]Accept
 
+	// Subflows: node → the flow the node's own members state, present only for a
+	// node that states one. Its subactions are subperformances of the node, so it
+	// completes only when that flow does (action_subflow.go).
+	Subflows map[ast.Node]*Subflow
+
 	// InitialNode (required)
 	Initial ast.Node
 
@@ -530,19 +535,9 @@ func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 		switch m := unwrapMembership(member).(type) {
 		case *ast.SendStatement, *ast.AssignmentActionNode, *ast.WhileLoopActionNode, *ast.IfActionNode:
 			graph.Bodies[node] = append(graph.Bodies[node], lowerStatement(m, scope))
-		case *ast.Usage:
-			if !m.IsAccept {
-				continue
-			}
-			graph.Accepts[node] = Accept{
-				ParamName:    m.Ident.Name,
-				SignalType:   typingTarget(m),
-				ViaPort:      acceptPort(node),
-				SubsetsEvent: subsettingTarget(m),
-				Trigger:      m.Value,
-			}
 		}
 	}
+	lowerAccept(graph, node)
 }
 
 // lowerNodeBody records the statements the body of an action node declares, so

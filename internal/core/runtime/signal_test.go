@@ -268,13 +268,14 @@ func TestSendViaPortToNestedReceiver(t *testing.T) {
 			connect senderPort to receiverPort;
 			first start;
 			action group {
-				first groupStart;
-				if true {
-					send 1 via senderPort to receiver;
+				first emit;
+				action emit {
+					if true {
+						send 1 via senderPort to receiver;
+					}
 				}
 				done;
-				succession first groupStart then if;
-				succession first if then done;
+				succession first emit then done;
 			}
 			action receiver accept value : Integer via receiverPort {
 				assign got := value;

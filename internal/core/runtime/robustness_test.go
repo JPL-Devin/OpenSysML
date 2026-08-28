@@ -21,6 +21,10 @@ import (
 
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
+	t.Run("nested_flow_without_an_initial_node", testNestedFlowWithoutAnInitialNode)
+	t.Run("nested_flow_with_a_dangling_succession", testNestedFlowWithADanglingSuccession)
+	t.Run("nested_flow_that_cannot_progress", testNestedFlowThatCannotProgress)
+	t.Run("nested_flow_that_never_ends", testNestedFlowThatNeverEnds)
 	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
 	t.Run("explicit_succession_missing_endpoint", testExplicitSuccessionMissingEndpoint)
 	t.Run("control_flow_missing_endpoint", testControlFlowMissingEndpoint)
@@ -7196,4 +7200,136 @@ func instantiateInSource(t *testing.T, src, fqn string) (*Context, *Instance, er
 	idx, _, ctx := buildRuntime(t, "<test>", file)
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, fqn))
 	return ctx, inst, err
+}
+
+// testNestedFlowWithoutAnInitialNode: a node stating a flow that names no node
+// to start at is reported at initialize(), not run as a leaf.
+func testNestedFlowWithoutAnInitialNode(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first leg;
+				action leg {
+					action a;
+					action b;
+					succession first a then b;
+				}
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+
+	// The constructor is permissive; the flow's failure surfaces at initialize().
+	exec, err := newActionExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newActionExecutor: %v", err)
+	}
+	err = exec.initialize()
+	if !errors.Is(err, ErrInvalidActionFlow) {
+		t.Fatalf("error = %v, want ErrInvalidActionFlow", err)
+	}
+	if !strings.Contains(err.Error(), "leg") {
+		t.Errorf("error = %v, want it to name the node whose flow cannot be built", err)
+	}
+}
+
+// testNestedFlowWithADanglingSuccession: a succession inside a node's own flow
+// naming nothing is that node's error, reported rather than dropped.
+func testNestedFlowWithADanglingSuccession(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first leg;
+				action leg {
+					first a;
+					action a;
+					succession first a then missing;
+				}
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+
+	exec, err := newActionExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newActionExecutor: %v", err)
+	}
+	if err := exec.initialize(); !errors.Is(err, ErrInvalidActionFlow) {
+		t.Fatalf("error = %v, want ErrInvalidActionFlow", err)
+	}
+}
+
+// testNestedFlowThatCannotProgress: a join inside a node's own flow that can
+// never be reached by both its tokens deadlocks the run, reported rather than hung.
+func testNestedFlowThatCannotProgress(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first leg;
+				action leg {
+					first s;
+					action s;
+					action stranded;
+					join sync;
+					done;
+					succession first s then sync;
+					succession first stranded then sync;
+					succession first sync then done;
+				}
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	if err := exec.RunToCompletion(); !errors.Is(err, ErrActionDeadlock) {
+		t.Fatalf("error = %v, want ErrActionDeadlock", err)
+	}
+}
+
+// testNestedFlowThatNeverEnds: a cycle inside a node's own flow spends the
+// action's step budget rather than running forever.
+func testNestedFlowThatNeverEnds(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first leg;
+				action leg {
+					first a;
+					action a;
+					action b;
+					succession first a then b;
+					succession first b then a;
+				}
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	if err := exec.RunToCompletion(); !errors.Is(err, ErrActionStepLimitExceeded) {
+		t.Fatalf("error = %v, want ErrActionStepLimitExceeded", err)
+	}
 }

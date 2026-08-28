@@ -18,6 +18,10 @@ type Token struct {
 	// found no message it could consume, so the action is suspended there
 	// until one arrives. It is nil for every token that is free to advance.
 	Wait *AcceptWait
+
+	// frame is the activation of a nested action node's own flow this token is
+	// running in, nil for a token in the action's own flow (action_subflow.go).
+	frame *actionFrame
 }
 
 // AcceptWait describes the message a parked token is waiting for. It is the

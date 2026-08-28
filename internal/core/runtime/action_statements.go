@@ -14,6 +14,8 @@ import (
 type actionStmtHost struct {
 	exec *ActionExecutor
 	node ast.Node // the action node whose body is running, for diagnostics
+	// graph is the flow the node belongs to, the action's own or a nested one.
+	graph *lower.ActionGraph
 	// engine runs the body, and holds the values a `perform` in it reads and
 	// writes: the action's own, and those of every block entered around it.
 	engine *stmtEngine
@@ -21,24 +23,24 @@ type actionStmtHost struct {
 
 // executeBody runs the lowered statements of the given action node against the
 // action's feature space.
-func (e *ActionExecutor) executeBody(node ast.Node) error {
-	host := &actionStmtHost{exec: e, node: node}
+func (e *ActionExecutor) executeBody(graph *lower.ActionGraph, node ast.Node) error {
+	host := &actionStmtHost{exec: e, node: node, graph: graph}
 	engine := newStmtEngine(e.ctx, host, e.data)
 	host.engine = engine
 	// The body's activation ends with this execution of it, so a run stepping the
 	// node many times does not hold what every execution computed.
 	defer engine.finish()
-	_, err := engine.run(e.graph.Bodies[node])
+	_, err := engine.run(graph.Bodies[node])
 	return err
 }
 
 // runNodeBody runs the statements a control or initial node's body declares,
 // which the token passing through the node performs.
-func (e *ActionExecutor) runNodeBody(node ast.Node) error {
-	if len(e.graph.Bodies[node]) == 0 {
+func (e *ActionExecutor) runNodeBody(graph *lower.ActionGraph, node ast.Node) error {
+	if len(graph.Bodies[node]) == 0 {
 		return nil
 	}
-	return e.executeBody(node)
+	return e.executeBody(graph, node)
 }
 
 func (h *actionStmtHost) describe() string {
@@ -50,7 +52,7 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	if err != nil {
 		return err
 	}
-	return h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
+	return h.exec.ctx.post(h.exec.connectionsOf(h.graph), msg, s, h.exec.self)
 }
 
 // assignOuter writes a name the body's blocks do not declare to the feature of

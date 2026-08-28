@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"order": {"type": "String", "value": "cba"}
+	}
+}

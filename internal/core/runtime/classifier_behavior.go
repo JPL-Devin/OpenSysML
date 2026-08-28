@@ -554,6 +554,27 @@ func (ctx *Context) classifierBehaviorArguments(inst *Instance, decl classifierB
 	return args, nil
 }
 
+// actionBodySymbol resolves the element holding the body an action symbol
+// performs: itself when it states one, otherwise the action it names — the
+// definition typing it, or the feature it refers to. The symbol itself is
+// returned when nothing it names states a body, so the missing flow is reported
+// against the declaration that was asked for.
+func (ctx *Context) actionBodySymbol(action *symbols.Symbol) *symbols.Symbol {
+	sym := action
+	for depth := 0; depth < maxBehaviorBindingDepth; depth++ {
+		if statesBehaviorBody(sym) {
+			return sym
+		}
+		next := ctx.namedBehavior(sym)
+		if next == nil || next == sym ||
+			(next.Kind != symbols.SymbolActionUsage && next.Kind != symbols.SymbolActionDef) {
+			return action
+		}
+		sym = next
+	}
+	return action
+}
+
 // statesBehaviorBody reports whether a symbol's declaration states a behavior
 // body of its own rather than naming an element that holds one.
 func statesBehaviorBody(sym *symbols.Symbol) bool {
