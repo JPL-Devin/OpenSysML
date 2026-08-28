@@ -204,6 +204,13 @@ branches, one of them still inside the sampling flow:
 Active tokens (2):
   Token 2 @ sync
   Token 3 @ drill
+  Values:
+    chargeAvailable = 1200.0
+    coreFrames = 0
+    downlinked = 0
+    imageFrames = 12
+    imagingCost = 40.0
+    samplingCost = 0.0
 ```
 
 ### Driving the machine of an object
