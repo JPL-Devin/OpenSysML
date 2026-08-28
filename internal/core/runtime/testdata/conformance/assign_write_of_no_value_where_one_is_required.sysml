@@ -4,7 +4,7 @@ package test {
 	// A lower bound of one admits no empty write: emptiness is judged by the
 	// target's multiplicity rather than waved through.
 	part def Source {
-		attribute raw = ();
+		attribute raw[0..1] = ();
 	}
 
 	part def Rig {

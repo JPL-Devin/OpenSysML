@@ -123,7 +123,7 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value Value, declared *s
 		// A quantity carries its unit, not the quantity value type measured in
 		// it, so only a scalar target states something it must answer to.
 		if prim := ctx.model.PrimTypeOf(declared); prim != semantics.PrimUnknown {
-			return semantics.PrimConforms(semantics.PrimReal, prim), nil
+			return semantics.PrimConforms(semantics.PrimRational, prim), nil
 		}
 		return true, nil
 	}
@@ -153,7 +153,9 @@ func valuePrimType(value Value) semantics.PrimType {
 			}
 			return semantics.PrimInteger
 		case semantics.ValReal:
-			return semantics.PrimReal
+			// A decimal denotes an exact ratio, as the type tier reads a
+			// decimal literal, so it conforms to Rational as well as Real.
+			return semantics.PrimRational
 		case semantics.ValBool:
 			return semantics.PrimBoolean
 		}

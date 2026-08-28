@@ -4,7 +4,7 @@ package test {
 	// The collection written satisfies the target's multiplicity: three values
 	// do not fit a feature declared to hold two, however they were computed.
 	part def Source {
-		attribute raw = (1, 2, 3);
+		attribute raw[3] = (1, 2, 3);
 	}
 
 	part def Rig {
