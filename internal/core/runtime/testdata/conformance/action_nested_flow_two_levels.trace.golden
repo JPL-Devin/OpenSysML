@@ -1,0 +1,22 @@
+enter action node: leg
+step 1: token 1@inner
+enter action node: inner
+step 2: token 1@deepest
+stmt assign order
+    eval feature order -> ""
+    eval literal "c" -> "c"
+  eval operator + -> "c"
+step 3: token 1@innerDone
+stmt assign order
+    eval feature order -> "c"
+    eval literal "b" -> "b"
+  eval operator + -> "cb"
+leave action node: inner
+step 4: token 1@legDone
+stmt assign order
+    eval feature order -> "cb"
+    eval literal "a" -> "a"
+  eval operator + -> "cba"
+leave action node: leg
+step 5: token 1@done
+step 6: no active tokens

@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"outputs": {
+		"battery": {"type": "Integer", "value": 5},
+		"picked": {"type": "Integer", "value": 1}
+	}
+}

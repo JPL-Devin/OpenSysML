@@ -113,6 +113,24 @@ func (tr *TraceRecorder) RecordStateExit(state string, hasExitAction bool) {
 	}
 }
 
+// RecordActionNodeEnter records a token entering the flow an action node owns,
+// whose steps are that node's subperformances.
+func (tr *TraceRecorder) RecordActionNodeEnter(node string) {
+	if !tr.enabled {
+		return
+	}
+	tr.entries = append(tr.entries, fmt.Sprintf("enter action node: %s", node))
+}
+
+// RecordActionNodeExit records the flow an action node owns having completed,
+// which is when the node itself completes.
+func (tr *TraceRecorder) RecordActionNodeExit(node string) {
+	if !tr.enabled {
+		return
+	}
+	tr.entries = append(tr.entries, fmt.Sprintf("leave action node: %s", node))
+}
+
 // RecordCalcEnter records entering a calc invocation and opens a nesting level.
 func (tr *TraceRecorder) RecordCalcEnter(name string) {
 	tr.record(fmt.Sprintf("enter calc %s", name))
