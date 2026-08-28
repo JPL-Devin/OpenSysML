@@ -174,6 +174,93 @@ func TestExhibitedMachineWritesItsOwnOccurrence(t *testing.T) {
 	}
 }
 
+// An action-declared feature is written on the action performance occurrence,
+// while a like-named feature of the performer remains distinct. The results the
+// run reports mirror the occurrence, which is authoritative.
+func TestPerformedActionWritesItsOwnOccurrence(t *testing.T) {
+	src := `
+		action def Bump {
+			attribute count: Integer = 0;
+			out attribute doubled: Integer;
+			action step {
+				assign count := count + 1;
+				assign doubled := count * 2;
+			}
+			first step;
+		}
+		part def Counter {
+			attribute count: Integer = 10;
+			perform action work : Bump;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Counter"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	behavior, ok := inst.Behavior("work")
+	if !ok {
+		t.Fatal("object runs no work behavior")
+	}
+	occurrence := instanceAtPath(t, ctx, inst, "work")
+	if behavior.Action.occurrence != occurrence {
+		t.Fatal("action does not target the occurrence held by work")
+	}
+
+	performerCount, err := inst.GetFeatureValue(ctx, "count")
+	if err != nil {
+		t.Fatalf("performer count: %v", err)
+	}
+	if got := performerCount.HeldValue().Const.Int; got != 10 {
+		t.Errorf("performer count = %d, want 10", got)
+	}
+	for name, want := range map[string]int64{"count": 1, "doubled": 2} {
+		fv, err := occurrence.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("occurrence %s: %v", name, err)
+		}
+		if got := fv.HeldValue().Const.Int; got != want {
+			t.Errorf("occurrence %s = %d, want %d", name, got, want)
+		}
+		if got := behavior.Action.Results()[name].Const.Int; got != want {
+			t.Errorf("reported result %s = %d, want %d", name, got, want)
+		}
+	}
+}
+
+// A performed action with no occurrence keeps its features in executor-local
+// data, which is what a directly executed action has.
+func TestDirectlyExecutedActionKeepsItsFeaturesLocal(t *testing.T) {
+	src := `
+		action def Bump {
+			attribute count: Integer = 0;
+			action step { assign count := count + 1; }
+			first step;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	exec, err := newActionExecutor(ctx, resolveSymbol(t, root, "Bump"), nil)
+	if err != nil {
+		t.Fatalf("newActionExecutor: %v", err)
+	}
+	if exec.occurrence != nil {
+		t.Error("a directly executed action materialized a performance occurrence")
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("RunToCompletion: %v", err)
+	}
+	if got := exec.Results()["count"].Const.Int; got != 1 {
+		t.Errorf("count = %d, want 1", got)
+	}
+}
+
 // A machine's state data has the collection shape its occurrence gives a
 // many-valued attribute written with one element.
 func TestExhibitedMachineNormalizesItsManyValuedAttribute(t *testing.T) {

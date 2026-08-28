@@ -373,7 +373,7 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 
 	switch decl.behavior.Kind {
 	case lower.ExhibitedState:
-		occurrence, err := ctx.exhibitedStateOccurrence(inst, decl, sym)
+		occurrence, err := ctx.performanceOccurrence(inst, decl, sym, ErrStatePerformanceOccurrence)
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +389,11 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 		}
 		behavior.State = exec
 	case lower.PerformedAction:
-		exec, err := newActionExecutor(ctx, sym, inst)
+		occurrence, err := ctx.performanceOccurrence(inst, decl, sym, ErrActionPerformanceOccurrence)
+		if err != nil {
+			return nil, err
+		}
+		exec, err := newActionExecutorForOccurrence(ctx, sym, inst, occurrence)
 		if err != nil {
 			return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
 		}
@@ -410,11 +414,15 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 	return behavior, nil
 }
 
-// exhibitedStateOccurrence returns the object held by the exhibit declaration.
-func (ctx *Context) exhibitedStateOccurrence(
+// performanceOccurrence returns the performance occurrence the binding
+// declaration holds: the object the exhibited or performed usage's feature
+// names, materialized when the feature holds none yet. sentinel types the
+// failures, telling an exhibited machine's from a performed action's.
+func (ctx *Context) performanceOccurrence(
 	inst *Instance,
 	decl classifierBehaviorDecl,
-	stateMachine *symbols.Symbol,
+	behavior *symbols.Symbol,
+	sentinel error,
 ) (*Instance, error) {
 	name := decl.behavior.Name
 	fv, ok := inst.FeatureValues[name]
@@ -428,19 +436,19 @@ func (ctx *Context) exhibitedStateOccurrence(
 		}
 	}
 	if !ok {
-		return nil, fmt.Errorf("%w: object #%d has no feature for exhibited state %s",
-			ErrStatePerformanceOccurrence, inst.ID, decl.behavior.Name)
+		return nil, fmt.Errorf("%w: object #%d has no feature for %s %s",
+			sentinel, inst.ID, decl.behavior.Kind, decl.behavior.Name)
 	}
 	fv, err := inst.GetFeatureValue(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
-			ErrStatePerformanceOccurrence, name, inst.ID, err)
+			sentinel, name, inst.ID, err)
 	}
 	if fv.HeldValue().Kind == ValInvalid {
-		occurrence, err := ctx.materializeOwnedBy(stateMachine, 0, inst, name)
+		occurrence, err := ctx.materializeOwnedBy(behavior, 0, inst, name)
 		if err != nil {
 			return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
-				ErrStatePerformanceOccurrence, name, inst.ID, err)
+				sentinel, name, inst.ID, err)
 		}
 		fv.Value = Value{Kind: ValInstance, Instance: occurrence.ID}
 		fv.Materialized = true
@@ -449,12 +457,12 @@ func (ctx *Context) exhibitedStateOccurrence(
 	id, ok := fv.HeldValue().Object()
 	if !ok {
 		return nil, fmt.Errorf("%w: %s of object #%d holds %s, not an occurrence",
-			ErrStatePerformanceOccurrence, name, inst.ID, fv.HeldValue().Kind)
+			sentinel, name, inst.ID, fv.HeldValue().Kind)
 	}
 	occurrence, ok := ctx.Instance(id)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s of object #%d names unknown object #%d",
-			ErrStatePerformanceOccurrence, name, inst.ID, id)
+			sentinel, name, inst.ID, id)
 	}
 	return occurrence, nil
 }

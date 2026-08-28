@@ -22,7 +22,10 @@ type ActionExecutor struct {
 	action *symbols.Symbol
 	// self is the object performing the action: its connections route what the
 	// action sends, and its selections decide which variant's connection does.
-	self        *Instance
+	self *Instance
+	// occurrence is the action performance materialized for a performed usage. It
+	// holds what the action's own features hold, and data mirrors it.
+	occurrence  *Instance
 	graph       *lower.ActionGraph // Execution IR
 	tokens      []Token
 	state       ExecutionState
@@ -59,6 +62,18 @@ func (e *ActionExecutor) SetInputs(inputs map[string]Value) {
 // newActionExecutor creates an action executor. self is the object performing
 // the action, nil for an action no object performs.
 func newActionExecutor(ctx *Context, action *symbols.Symbol, self *Instance) (*ActionExecutor, error) {
+	return newActionExecutorForOccurrence(ctx, action, self, nil)
+}
+
+// newActionExecutorForOccurrence creates an executor whose action's own features
+// are held by the given performance occurrence, nil for an action performed
+// through no usage of an object.
+func newActionExecutorForOccurrence(
+	ctx *Context,
+	action *symbols.Symbol,
+	self *Instance,
+	occurrence *Instance,
+) (*ActionExecutor, error) {
 	if action.Kind != symbols.SymbolActionUsage && action.Kind != symbols.SymbolActionDef {
 		return nil, fmt.Errorf("symbol %s is not an action", action.Name)
 	}
@@ -74,6 +89,7 @@ func newActionExecutor(ctx *Context, action *symbols.Symbol, self *Instance) (*A
 		ctx:         ctx,
 		action:      action,
 		self:        self,
+		occurrence:  occurrence,
 		graph:       graph,
 		tokens:      make([]Token, 0),
 		state:       StateReady,
@@ -453,12 +469,31 @@ func (e *ActionExecutor) NodeNames() []string {
 	return names
 }
 
-// initializeAttributes populates the feature space with the attribute defaults
-// lowering recorded, evaluated in the scope the action's body was declared in.
+// initializeAttributes populates the feature space from the performance
+// occurrence, whose slots are materialized already so a usage-level default or
+// redefinition wins, and from the defaults lowering recorded when the action is
+// performed through no occurrence.
 func (e *ActionExecutor) initializeAttributes() error {
+	if e.occurrence != nil {
+		for _, attr := range e.graph.Attributes {
+			fv, err := e.occurrence.GetFeatureValue(e.ctx, attr.Name)
+			if err != nil {
+				return fmt.Errorf("%w: read %s of object #%d: %w",
+					ErrActionPerformanceOccurrence, attr.Name, e.occurrence.ID, err)
+			}
+			if value := fv.HeldValue(); value.Kind != ValInvalid {
+				e.data[attr.Name] = value
+			}
+		}
+		return nil
+	}
+
 	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
+		if attr.Value == nil {
+			continue
+		}
 		value, err := ec.Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
@@ -466,6 +501,53 @@ func (e *ActionExecutor) initializeAttributes() error {
 		e.data[attr.Name] = value
 	}
 
+	return nil
+}
+
+// declaresAttribute reports whether the action declares an attribute of this
+// name, which its performance holds rather than the object performing it.
+func (e *ActionExecutor) declaresAttribute(name string) bool {
+	for _, attr := range e.graph.Attributes {
+		if attr.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// setFeature writes into the action's feature space, through the performance
+// occurrence for a feature the action declares: the occurrence is authoritative
+// for those, and data mirrors what it holds after the write.
+func (e *ActionExecutor) setFeature(name string, value Value) error {
+	if e.occurrence != nil && e.declaresAttribute(name) {
+		if err := e.occurrence.SetFeatureValue(e.ctx, name, value); err != nil {
+			return fmt.Errorf("%w: write %s of object #%d: %w",
+				ErrActionPerformanceOccurrence, name, e.occurrence.ID, err)
+		}
+		fv, err := e.occurrence.GetFeatureValue(e.ctx, name)
+		if err != nil {
+			return fmt.Errorf("%w: read %s of object #%d after write: %w",
+				ErrActionPerformanceOccurrence, name, e.occurrence.ID, err)
+		}
+		value = fv.HeldValue()
+	}
+	e.data[name] = value
+	return nil
+}
+
+// setFeatures writes several values into the feature space, in name order so a
+// failure among them is the same one however they were collected.
+func (e *ActionExecutor) setFeatures(values map[string]Value) error {
+	names := make([]string, 0, len(values))
+	for name := range values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := e.setFeature(name, values[name]); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -507,8 +589,8 @@ func (e *ActionExecutor) initialize() error {
 	}
 
 	// Apply input parameter bindings, overriding any defaults with the same name.
-	for name, value := range e.inputs {
-		e.data[name] = value
+	if err := e.setFeatures(e.inputs); err != nil {
+		return err
 	}
 
 	// Spawn initial token
@@ -909,7 +991,9 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 				outputPin = flows[0].SourcePin
 			}
 		}
-		e.data[outputPin] = result
+		if err := e.setFeature(outputPin, result); err != nil {
+			return err
+		}
 	} else if node.ActionRef != nil {
 		outputs, err := invokeAction(
 			e.ctx, e.action.Scope, actionInvocation{target: node.ActionRef}, e.data, e.self,
@@ -917,8 +1001,8 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		if err != nil {
 			return err
 		}
-		for name, value := range outputs {
-			e.data[name] = value
+		if err := e.setFeatures(outputs); err != nil {
+			return err
 		}
 	}
 
@@ -1006,7 +1090,9 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 				return fmt.Errorf("%w: accept %s: %s carries no single value to bind",
 					ErrNoValue, accept.ParamName, orAnonymousSignal(msg.SignalType))
 			}
-			e.data[accept.ParamName] = value
+			if err := e.setFeature(accept.ParamName, value); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1017,8 +1103,8 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		if err != nil {
 			return err
 		}
-		for name, value := range outputs {
-			e.data[name] = value
+		if err := e.setFeatures(outputs); err != nil {
+			return err
 		}
 	}
 
@@ -1143,7 +1229,9 @@ func (e *ActionExecutor) applyDataFlows(sourceNode ast.Node) error {
 				flowDescription(flow), nodeDescription(sourceNode), orAnyPin(flow.SourcePin),
 			)
 		}
-		e.data[flow.TargetPin] = sourceData
+		if err := e.setFeature(flow.TargetPin, sourceData); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1192,7 +1280,8 @@ func (e *ActionExecutor) State() ExecutionState {
 }
 
 // Results returns the values the action's features currently hold: one space
-// every token shares, so every branch's effects are reported.
+// every token shares, so every branch's effects are reported. For a performed
+// usage these mirror the performance occurrence, which every write goes through.
 func (e *ActionExecutor) Results() map[string]Value {
 	results := make(map[string]Value, len(e.data))
 	for name, value := range e.data {

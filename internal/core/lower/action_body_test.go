@@ -365,3 +365,26 @@ func nodeNamed(t *testing.T, graph *ActionGraph, name string) ast.Node {
 	t.Fatalf("node %s not found in graph", name)
 	return nil
 }
+
+// A valueless action attribute, including an output parameter, still reaches the
+// graph as a feature the action owns.
+func TestActionAttributeLowering_KeepsValuelessAttributes(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			attribute scratch : Integer = 0;
+			out attribute n : Integer;
+			first start;
+			action start;
+		}
+	`)
+
+	if len(graph.Attributes) != 2 {
+		t.Fatalf("attributes = %#v, want scratch and n", graph.Attributes)
+	}
+	if got := graph.Attributes[0]; got.Name != "scratch" || got.Value == nil {
+		t.Errorf("attribute 0 = %#v, want valued scratch", got)
+	}
+	if got := graph.Attributes[1]; got.Name != "n" || got.Value != nil {
+		t.Errorf("attribute 1 = %#v, want valueless n", got)
+	}
+}

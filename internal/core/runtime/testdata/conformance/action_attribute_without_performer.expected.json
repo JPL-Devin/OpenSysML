@@ -1,0 +1,7 @@
+{
+  "type": "action",
+  "evaluate": "test::Bump",
+  "outputs": {
+    "count": {"type": "Integer", "value": 1}
+  }
+}

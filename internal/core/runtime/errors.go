@@ -144,6 +144,10 @@ var (
 	// read or write the occurrence of its state usage.
 	ErrStatePerformanceOccurrence = errors.New("state performance occurrence unavailable")
 
+	// ErrActionPerformanceOccurrence is returned when a performed action cannot
+	// read or write the occurrence of its action usage.
+	ErrActionPerformanceOccurrence = errors.New("action performance occurrence unavailable")
+
 	// ErrDoStepLimitExceeded is returned when a state do behavior exceeds its
 	// action-step budget.
 	ErrDoStepLimitExceeded = errors.New("state do-step limit exceeded")
