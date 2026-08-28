@@ -158,11 +158,17 @@ class TestPrivateService:
         errors = []
 
         def churn():
+            # Checked rather than asserted: an AssertionError raised here would be
+            # caught below as if it were a connection failure.
             try:
                 for _ in range(20):
                     with opensysml.connect() as conn:
-                        assert conn._private is service
-                        assert conn.server_info() is not None
+                        if conn._private is not service:
+                            errors.append(AssertionError("a thread got a second service"))
+                            return
+                        if conn.server_info() is None:
+                            errors.append(AssertionError("the service reported no info"))
+                            return
             except Exception as failure:  # reported rather than lost in the thread
                 errors.append(failure)
 

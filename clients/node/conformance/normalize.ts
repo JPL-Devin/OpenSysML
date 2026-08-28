@@ -5,6 +5,8 @@ import { ScalarType, type DescField, type DescMessage, type Message } from "@buf
 import { isAbsolute } from "node:path";
 import { reflect, type ReflectMessage } from "@bufbuild/protobuf/reflect";
 
+import { byCodeUnit } from "./order.js";
+
 export const MODEL_HASH_PLACEHOLDER = "${model_hash}";
 export const VERSION_PLACEHOLDER = "${version}";
 export const PATH_PLACEHOLDER = "${path}";
@@ -64,7 +66,7 @@ export class Normalizer {
       case "map": {
         const map = reflected.get(field);
         const entries: Normalized = {};
-        const keys = [...map.keys()].map((key) => String(key)).sort();
+        const keys = [...map.keys()].map((key) => String(key)).sort(byCodeUnit);
         for (const key of keys) {
           entries[key] = this.element(field, map.get(key));
         }

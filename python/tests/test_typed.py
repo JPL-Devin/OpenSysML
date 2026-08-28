@@ -164,7 +164,9 @@ def test_required_feature_value_still_rejects_unset():
 def test_typed_objects_compare_by_instance_identity():
     """Two views of the same instance are equal; different classes are not."""
     inst = vehicle_instance()
-    assert Vehicle.from_instance(inst) == Vehicle.from_instance(inst)
+    view = Vehicle.from_instance(inst)
+    same = Vehicle.from_instance(inst)
+    assert view == same
     # An Engine view over a Vehicle is what from_instance now rejects, so the
     # different-class case is built through the deliberate escape hatch.
     assert Vehicle.from_instance(inst) != Engine.unchecked(inst)

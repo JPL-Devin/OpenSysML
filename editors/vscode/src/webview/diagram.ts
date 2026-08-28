@@ -52,6 +52,11 @@ picker.addEventListener("change", () => {
 });
 
 window.addEventListener("message", (event: MessageEvent<ToWebview>) => {
+  // The extension posts into this frame, so its messages carry the frame's own
+  // origin; anything from elsewhere is not the extension and is dropped.
+  if (event.origin !== window.origin) {
+    return;
+  }
   const message = event.data;
   switch (message.type) {
     case "views":

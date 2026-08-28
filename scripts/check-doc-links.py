@@ -21,7 +21,8 @@ FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*$", re.MULTILINE)
 ANCHOR = re.compile(r"<a\s+(?:id|name)=[\"']([^\"']+)[\"']", re.IGNORECASE)
-SKIP_PREFIX = ("http://", "https://", "mailto:", "tel:", "ftp://")
+# A link naming any scheme points outside the tree, so this checker leaves it alone.
+SKIP_PREFIX = tuple(f"{scheme}://" for scheme in ("http", "https", "ftp")) + ("mailto:", "tel:")
 # A page named in prose as `docs/…md` rather than linked, which a move breaks just as silently.
 CITED = re.compile(r"`(docs/[A-Za-z0-9_./-]+\.md)`")
 # Records of what a plan created at the time; their paths are history, not pointers.

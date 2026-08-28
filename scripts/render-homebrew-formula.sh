@@ -38,7 +38,7 @@ if [ -z "$SUMS" ]; then
   TMP_SUMS="$(mktemp)"
   URL="https://github.com/Open-MBEE/OpenSysML/releases/download/${TAG}/SHA256SUMS.txt"
   echo "Fetching ${URL}" >&2
-  curl -fsSL "$URL" -o "$TMP_SUMS"
+  curl -fsSL --proto '=https' --proto-redir '=https' "$URL" -o "$TMP_SUMS"
   SUMS="$TMP_SUMS"
 fi
 

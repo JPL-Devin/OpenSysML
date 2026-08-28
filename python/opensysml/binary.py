@@ -555,8 +555,8 @@ def download_binary(version='latest', github_repo=None):
                 f"A running service holding that file is the usual cause."
             )
         
-        # Make executable
-        os.chmod(binary_path, 0o755)
+        # Make executable. The cache is this user's, so no one else needs it.
+        os.chmod(binary_path, 0o700)
         
         # Record the release, so a later run can tell what the cache holds.
         write_metadata(version, expected_checksum, github_repo)

@@ -279,8 +279,9 @@ public final class Connection implements AutoCloseable {
   }
 
   private static Optional<String> externalAddress(ConnectionOptions options) {
-    if (options.host().isPresent()) {
-      return Optional.of(options.host().get() + ":" + options.port());
+    Optional<String> host = options.host();
+    if (host.isPresent()) {
+      return Optional.of(host.get() + ":" + options.port());
     }
     String named = System.getenv(ConnectionOptions.SERVICE_ENV);
     if (named == null || named.isBlank()) {
