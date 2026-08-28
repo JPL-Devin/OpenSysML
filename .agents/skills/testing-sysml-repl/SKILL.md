@@ -26,13 +26,15 @@ and run the same input through both on camera. A worktree keeps the branch check
 
 ```bash
 git worktree add /tmp/old<sha> <sha>            # e.g. the commit before the fix
-(cd /tmp/old<sha> && go build -o /tmp/old-sysml ./cmd/sysml)
+(cd /tmp/old<sha> && make build-sysml && cp bin/sysml /tmp/old-sysml)
 git worktree remove /tmp/old<sha>               # when finished
 ```
 
 Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evidence available —
 it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
-line/column numbers, where a screenshot of the new behavior alone proves nothing.
+line/column numbers, where a screenshot of the new behavior alone proves nothing. Building through
+the Makefile preserves the version ldflags before the binary is copied out of the worktree; plain
+`go build` would make `--version` report `dev` / `unknown`.
 
 ## Library-cache cold/warm testing (`XDG_CACHE_HOME`)
 
@@ -155,12 +157,20 @@ parser's file-kind gates are testable through the binary:
 2. **Interactive in a GUI terminal (for the recording).** Because the app under test *is* a CLI,
    the recording should show a real terminal session. See the recording setup below.
 
+Run shell commands such as `clear` only before launching the REPL. At the `sysml>` prompt they are
+parsed as model source; rebuilding the model can restart a running exhibited machine and invalidate
+the rest of a walkthrough. Loading a second model into the same session also restarts machines and
+shifts instance IDs, so use a fresh REPL session for each model or contrast run.
+
 **At the `sysml>` prompt an expression must go through `%eval`.** Bare text — even a fully
 qualified `test::r.cost.v` — is submitted as *model source*, so it answers
 `1:1: error: expected a namespace member` and leaves an unresolved buffer error that taints the
 next submission with `note: deeper checks may not have run here…` (the same trap as typing
 `clear`). On camera this looks like the feature is broken. Type `%eval test::r.cost.v`; if you have
 already tainted the session, `%quit`/Ctrl-D and restart rather than continuing.
+
+In Konsole, `xdotool key ctrl+shift+plus` may type a literal `+`; use
+`xdotool key ctrl+shift+equal` to enlarge the font before recording.
 
 ### Driving a `type: "calc"` conformance fixture from the CLI
 
