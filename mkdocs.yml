@@ -46,6 +46,7 @@ theme:
 
 extra_css:
   - stylesheets/nav-menu.css
+  - stylesheets/footer.css
 
 plugins:
   - search

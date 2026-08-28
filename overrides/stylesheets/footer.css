@@ -1,0 +1,4 @@
+/* The copyright line is all one colour, so its links need the underline to read as links. */
+.md-copyright__highlight a {
+  text-decoration: underline;
+}
