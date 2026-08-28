@@ -231,9 +231,6 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	if err != nil {
 		return nil, err
 	}
-	for _, owner := range owners {
-		graph.materializing[owner] = true
-	}
 	body := append(append([]inheritedMember{}, inherited...), ownMembers(members, scope)...)
 
 	graph.Connections = lowerConnections(members, OwnerBehavior, scope)

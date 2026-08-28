@@ -22,7 +22,6 @@ func VertexDecls(stateMachineDecl ast.Node, scope *symbols.Scope) (map[ast.Node]
 	}
 	parallel := stateMachineIsParallel(stateMachineDecl)
 	for _, owner := range owners {
-		graph.materializing[owner] = true
 		parallel = parallel || stateMachineIsParallel(owner)
 	}
 	body := append(append([]inheritedMember{}, inherited...), ownMembers(members, scope)...)

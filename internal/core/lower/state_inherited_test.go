@@ -301,3 +301,33 @@ func stateDefinition(t *testing.T, root *ast.RootNamespace, name string) *ast.De
 	}
 	return decl
 }
+
+// A machine specializing a state definition may also use that definition for a
+// substate: the reuse is not recursion.
+func TestToStateGraphMachineSupertypeReusedBySubstate(t *testing.T) {
+	graph := stateGraphOf(t, `
+		package test {
+			state def Inner {
+				entry; then i1;
+				state i1;
+			}
+			state def Machine :> Inner {
+				state sibling : Inner;
+			}
+		}
+	`, "Machine")
+
+	sibling := stateNamed(graph, "sibling")
+	if sibling == nil {
+		t.Fatal("the substate typed by the machine's own supertype was not collected")
+	}
+	var leaves int
+	for _, state := range graph.States {
+		if state.Name == "i1" {
+			leaves++
+		}
+	}
+	if leaves != 2 {
+		t.Fatalf("i1 vertices = %d, want one inherited by the machine and one under sibling", leaves)
+	}
+}
