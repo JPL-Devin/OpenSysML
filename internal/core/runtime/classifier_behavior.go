@@ -422,7 +422,7 @@ func (ctx *Context) exhibitedStateOccurrence(
 		ok = false
 		for candidate, value := range inst.FeatureValues {
 			if value.Feature != nil && value.Feature.Symbol == decl.member {
-				name, fv, ok = candidate, value, true
+				name, ok = candidate, true
 				break
 			}
 		}
