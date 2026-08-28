@@ -4,7 +4,7 @@
   "provenance": {
     "pilotTag": "2026-07",
     "pilotArtifact": "0.61.0",
-    "errataRegistry": "sha256:9e4470b0e2d84904d1644045898ae9a038efe1cfb1ad9ed476124bba747c1ba1",
+    "errataRegistry": "sha256:2e5a631caa524d6e04675e0c8ff6cb310e020adb4d614e65c3e3d0f0016dea50",
     "tools": [
       {
         "name": "pilot-sysml-validator",
@@ -74,12 +74,12 @@
   },
   "totals": {
     "files": 357,
-    "filesFullyAgreeing": 330,
+    "filesFullyAgreeing": 329,
     "agreement": 37,
     "severityMismatch": 8,
-    "openSysMLOnly": 26,
+    "openSysMLOnly": 27,
     "pilotOnly": 75,
-    "openSysMLDiagnostics": 71,
+    "openSysMLDiagnostics": 72,
     "pilotDiagnostics": 120
   },
   "roots": [
@@ -103,15 +103,29 @@
       "dir": "examples/pilot-corpora/sysml-examples",
       "totals": {
         "files": 99,
-        "filesFullyAgreeing": 96,
+        "filesFullyAgreeing": 95,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 6,
+        "openSysMLOnly": 7,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 6,
+        "openSysMLDiagnostics": 7,
         "pilotDiagnostics": 0
       },
       "files": [
+        {
+          "path": "Analysis Examples/Dynamics.sysml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [
+            {
+              "line": 13,
+              "severity": "error",
+              "category": "kind-mismatch",
+              "count": 1
+            }
+          ],
+          "pilotOnly": []
+        },
         {
           "path": "Analysis Examples/Turbojet Stage Analysis.sysml",
           "agreement": [],
@@ -175,12 +189,12 @@
       ],
       "errataTotals": {
         "files": 99,
-        "filesFullyAgreeing": 97,
+        "filesFullyAgreeing": 96,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 5,
+        "openSysMLOnly": 6,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 5,
+        "openSysMLDiagnostics": 6,
         "pilotDiagnostics": 0
       }
     },
@@ -1393,9 +1407,9 @@
     }
   ],
   "errata": {
-    "registryEntries": 2,
+    "registryEntries": 3,
     "corrections": 1,
-    "documentedWithoutCorrection": 1,
+    "documentedWithoutCorrection": 2,
     "correctionsApplied": 1,
     "entries": [
       {
@@ -1413,16 +1427,24 @@
         "citation": "SysML v2 §9.8.9.1",
         "corrected": false,
         "derivation": "V is a VolumeValue and Cp dimensionless, so the first operand has dimension L^6 while T_static has Θ; no reading of the published text shares a dimension, so the defect is documented without a correction."
+      },
+      {
+        "id": "F84",
+        "path": "examples/pilot-corpora/sysml-examples/Analysis Examples/Dynamics.sysml",
+        "line": 13,
+        "citation": "KerML 7.4.9",
+        "corrected": false,
+        "derivation": "tp is a PowerValue (L^2·M·T^-3) and dt a TimeValue (T), so the expression the return feature takes its value from has dimension L^4·M^2·T^-5 while AccelerationValue is measured in L·T^-2; no repair follows from the parameters the calculation declares, so the defect is documented without a correction."
       }
     ],
     "totals": {
       "files": 357,
-      "filesFullyAgreeing": 331,
+      "filesFullyAgreeing": 330,
       "agreement": 37,
       "severityMismatch": 8,
-      "openSysMLOnly": 25,
+      "openSysMLOnly": 26,
       "pilotOnly": 75,
-      "openSysMLDiagnostics": 70,
+      "openSysMLDiagnostics": 71,
       "pilotDiagnostics": 120
     },
     "findings": [

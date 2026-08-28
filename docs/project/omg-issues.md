@@ -45,14 +45,17 @@ corresponding check.
 |---|---|---|---|---|
 | `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml:38` | `22/2*25.4 + 110 [mm]` | `[mm]` binds only to `110`, so `+` combines a dimensionless value with a length | KerML 1.0 §8.2.5.8.1–8.2.5.8.2 makes the bracket construction a primary expression; SysML v2.0 §9.8.9.1 requires addition operands to have the same quantity dimension. The evident intended spelling is `(22/2*25.4 + 110) [mm]`. | **not filed** |
 | `Analysis Examples/Turbojet Stage Analysis.sysml:25` | `1/(2 * Cp) * V^2 + T_static`, with `Cp : DimensionOneValue`, `V : VolumeValue`, and `T_static : TemperatureValue` | the declared types make the operands L^6 and Θ | SysML v2.0 §9.8.9.1 requires addition operands to have the same quantity dimension and top-level quantity type. The formula needs dimensionally appropriate parameter declarations or conversion before addition. | **not filed** |
+| `Analysis Examples/Dynamics.sysml:13` | `return a : AccelerationValue = tp * dt * tp;`, with `tp : PowerValue` and `dt : TimeValue` | a power squared times a duration has dimension L^4·M^2·T^-5, not the L·T^-2 an `AccelerationValue` is measured in | KerML 7.4.9 makes the expression the return feature's value, so it answers to that feature's type, and the ISQ definitions the file imports fix the dimensions: `AccelerationUnit` is L^1·T^-2, `PowerUnit` is L^2·M^1·T^-3, and `TimeValue` aliases `DurationValue` (T^1). No grouping of the published product is an acceleration. | **not filed** |
 | `Individuals Examples/AnalysisIndividualExample.sysml:86` | `individual action :>> fuelConsumption : FuelEconomyAnalysis_1` | the redefining action is typed by the enclosing analysis definition, which does not conform to the redefined feature's `FuelConsumption` | KerML 7.4.9 and 8.3.4.2 make a redefinition a subsetting, so the redefining feature's type must conform to the redefined one's. The file declares `individual action def FuelConsumption_1 :> FuelConsumption` and never uses it: that is the intended type. | **fixed upstream at `2026-07`** — the corpus now publishes `fuelConsumption : FuelConsumption_1`, the type this row named, so the row is closed and its overlay entry retired |
 
 The first two rows form one adjudicated quantity-commensurability family in
-[the false-positive audit](wave12f-false-positives.md), and the third was the corpus instance of the
-subsetting-conformance divergence adjudicated in [wave11e-decisions.md](wave11e-decisions.md),
-which the `2026-07` corpus corrects on its own. OpenSysML retains the two open diagnostics, and
-nothing has been posted upstream. Both are entries of the declared errata overlay — the geometry
-row with a correction, the turbojet row without one — quoted verbatim with their derivations in
+[the false-positive audit](wave12f-false-positives.md); the third is the same physics read through a
+declared type rather than through an addition, so it is an error and not a warning; and the fourth
+was the corpus instance of the subsetting-conformance divergence adjudicated in
+[wave11e-decisions.md](wave11e-decisions.md), which the `2026-07` corpus corrects on its own.
+OpenSysML retains the three open diagnostics, and nothing has been posted upstream. All three are
+entries of the declared errata overlay — the geometry row with a correction, the turbojet and
+dynamics rows without one — quoted verbatim with their derivations in
 [the fourth section](#the-errata-overlay-entries-for-these-models).
 
 ---
@@ -239,6 +242,7 @@ closed by a guess.
 |---|---|---:|---|---|---|
 | dimensionless addend | `sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml` | 38 | SysML v2 §9.8.9.1 | corrected | **not filed** — drafted below, awaiting maintainer authorisation |
 | mismatched dimensions | `sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml` | 25 | SysML v2 §9.8.9.1 | documented without a correction | **not filed** — drafted below, awaiting maintainer authorisation |
+| a return typed by a dimension its value does not have | `sysml-examples/Analysis Examples/Dynamics.sysml` | 13 | KerML 7.4.9 | documented without a correction | **not filed** — drafted below, awaiting maintainer authorisation |
 | non-conforming redefinition | `sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml` | 86 | KerML 7.4.9, 8.3.4.2 | retired at `2026-07` | **closed** — fixed upstream, never filed by us |
 
 Filing is the user's decision: nothing here has been posted to
@@ -296,6 +300,56 @@ unit and a dimension on the example's behalf.
 So this row is **documented without a correction**. The overlay carries it for
 provenance only; both figures every oracle reports keep the published text, and
 OpenSysML's warning at that line stays in the differential census.
+
+### `return a : AccelerationValue = tp * dt * tp` returns L^4·M^2·T^-5 (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Published, `Analysis Examples/Dynamics.sysml`:13, in `calc def Acceleration`
+whose parameters are `in dt : TimeValue; in tm : MassValue; in tp: PowerValue`:
+
+```sysml
+return a : AccelerationValue = tp * dt * tp;
+```
+
+The file imports `ISQ::*`, whose definitions fix every dimension involved:
+`AccelerationValue` declares `:>> mRef: AccelerationUnit[1]` and
+`AccelerationUnit`'s power factors are L^1 and T^-2; `PowerValue` declares
+`:>> mRef: PowerUnit[1]`, whose factors are L^2, M^1 and T^-3; and `TimeValue`
+is `alias TimeValue for DurationValue`, T^1. The published product is therefore
+(L^2·M·T^-3)^2 · T = L^4·M^2·T^-5, while **KerML 7.4.9** makes that expression
+the value of the return feature, which answers to the `AccelerationValue` the
+same line declares. The two dimensions are incommensurable, so the model is
+unsatisfiable as published.
+
+No correction is derivable. Acceleration from power is `tp / (tm * v)`, but this
+calculation declares no speed among its parameters and its unused `tm` cannot
+alone repair the exponents — `tp * dt / tm` is L^2·T^-2, not L·T^-2. Two of the
+three plausible repairs also change the caller's contract, so the entry is
+**documented without a correction** and the published text is what every oracle
+reads.
+
+The pinned pilot performs no dimensional analysis and is silent on the line, so
+this is a diagnostic OpenSysML raises alone
+(`cannot bind a value of dimension L^4·M^2·T^-5 to a feature typed by
+AccelerationValue (dimension L·T^-2)`).
+
+Earlier in the same file, at line 9, `calc def Power` has a second defect of the
+same family that OpenSysML does **not** report:
+
+```sysml
+return tp : PowerValue = whlpwr - Cd * v - Cf * tm * v;
+```
+
+`whlpwr` is a `PowerValue` (L^2·M·T^-3), `Cd` and `Cf` are `Real`, `v` a
+`SpeedValue` (L·T^-1) and `tm` a `MassValue`, so the three subtraction operands
+have dimensions L^2·M·T^-3, L·T^-1 and M·L·T^-1 — which **SysML v2 §9.8.9.1**
+requires to agree. The static dimensional check judges no product, by the
+[documented design](spec-compliance.md), so no warning is raised here and the
+overlay declares no entry for it either: an overlay entry covers one line per
+file, and line 13 is the line an oracle reports. It is recorded here because a
+report about this file should name both.
 
 ### `fuelConsumption : FuelEconomyAnalysis_1` redefines an action typed by `FuelConsumption` (pilot `2026-05`, fixed at `2026-07`)
 
