@@ -1394,6 +1394,20 @@ from an explicit real interpreter (`/home/ubuntu/.pyenv/versions/3.12.8/bin/pyth
 or `/usr/bin/python3.10`) and verify `<venv>/bin/python -c 'import opensysml'` before blaming the
 client. `$HOME/pv` is created by the blueprint, so prefer reusing it.
 
+Do not assume `$HOME/pv` is the one that works: on a session seen in Aug 2026 `~/pv` and
+`~/fprime-venv` both failed `import opensysml` while the *editable* install lived in
+`/home/ubuntu/repos/fprime/fprime-venv/bin/python3` (3.12.8, `grpc` 1.83.0) — which happened to be
+first on the tool shell's `PATH` as plain `python3`. Probe every candidate in one go
+(`for p in /home/ubuntu/pv/bin/python /home/ubuntu/*venv*/bin/python python3; do $p -c 'import
+opensysml,grpc'; done`) and use the absolute path of whichever answers. Critically, **a GUI Konsole
+does not inherit the tool shell's `PATH`**: there `python3` is `/usr/bin/python3` (3.10, no
+`opensysml`), so a demo script that worked in `exec` dies with `ModuleNotFoundError` on camera.
+Always type the absolute interpreter path (or `export PATH=...`) in the recorded terminal.
+
+When checking a documented exit status ("a failing check exits nonzero"), never pipe the binary into
+`tail`/`grep` — `$?` then reports the pager's status and a failing command reads as `exit=0`.
+Redirect to a file and echo `$?` first, then `tail` the file.
+
 ### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
 
 Since PR #181 `Connection` interrogates whatever is *already* listening (`GetServerInfo`) and
