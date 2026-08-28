@@ -255,12 +255,12 @@ combined figures were 324 fully agreeing / 27 only ours / 68 → 67 our diagnost
 agreeing files, only-ours and every OMG root were unmoved by the rewrite, so nothing here is a
 conformance change: it is our own demo written in a spelling the reference accepts. The rewrite itself
 left only-pilot at 61 and pilot diagnostics at 101; the `Now` column tracks the current baseline, so it
-also carries the interface-flow pairing round, the library-inherited-name round and the rover-demo
-round that followed, and the Results table above states every figure as it is now.
+also carries the interface-flow pairing round, the library-inherited-name round and the end-to-end
+demo round that followed, and the Results table above states every figure as it is now.
 
-### Rover demo round
+### End-to-end demo round
 
-`examples/rover-demo/rover.sysml` is one file added to the `examples` root, and the whole of that
+`examples/disposal-robot-demo/robot.sysml` is one file added to the `examples` root, and the whole of that
 round's movement is the reference's column: only pilot 32 → **49** and pilot diagnostics 42 → **59**
 on the root, 58 → **75** and 103 → **120** overall, with our own column unmoved at 8 only-ours and
 18 diagnostics, and the file clean under `-validate`. Its 17 pilot-only rows are all in the demo's
@@ -277,7 +277,7 @@ Nothing in the demo's structure, calculations, action or state machine draws a p
 the rows above measure the reach of the reference's view and trade-study support, not a divergence in
 the notation both implementations share. The behavioral half of the file was written to the spelling
 the reference accepts for exactly that reason: transitions into a substate name it through the state
-around it (`then driving.rolling`) rather than nesting the trigger in the substate.
+around it (`then approach.rolling`) rather than nesting the trigger in the substate.
 
 ### Quantity-dimension round
 

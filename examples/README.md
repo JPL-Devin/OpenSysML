@@ -26,7 +26,7 @@ Each of these is a model and a walkthrough of the commands that exercise it.
 
 | Model | Walkthrough | What it demonstrates |
 | --- | --- | --- |
-| [rover-demo/rover.sysml](rover-demo/rover.sysml) | [rover-demo/README.md](rover-demo/README.md) | one rover, end to end: structure, calculations, an action with a fork/join, a branch and a nested flow, a hierarchical state machine an object exhibits, assignment through a feature chain, the solver commands, the view renderings, and [the same questions from Python](rover-demo/rover_demo.py) |
+| [disposal-robot-demo/robot.sysml](disposal-robot-demo/robot.sysml) | [disposal-robot-demo/README.md](disposal-robot-demo/README.md) | one bomb-disposal robot, end to end: structure, calculations, an action with a fork/join, a branch and a nested flow, a hierarchical state machine an object exhibits, assignment through a feature chain, the solver commands, the view renderings, and [the same questions from Python](disposal-robot-demo/robot_demo.py) |
 | [solver-demo.sysml](solver-demo.sysml) | [SOLVER-DEMO.md](SOLVER-DEMO.md) | `%check`, `%explain`, `%solve`, `%configure` and `%optimize` — what conditions *can* hold, which conflict, what satisfies them, which variants are permitted, what is best (needs z3 or cvc5) |
 | [views-demo.sysml](views-demo.sysml) | [VIEWS-DEMO.md](VIEWS-DEMO.md) | `%view` and `%render` — the five rendering kinds, the text/Mermaid/Markdown forms, viewpoint conformance and filtered exposure |
 | [action-executor-demo.sysml](action-executor-demo.sysml) | [ACTION-EXECUTOR-DEMO.md](ACTION-EXECUTOR-DEMO.md) | executing actions, and stepping one in the REPL |
