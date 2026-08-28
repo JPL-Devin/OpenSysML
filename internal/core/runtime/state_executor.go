@@ -294,16 +294,9 @@ func (e *StateExecutor) assignAttribute(name string, value Value) error {
 	return nil
 }
 
-// evalStep evaluates one expression of a step - a guard, a change condition, a
-// duration, an inline expression - in scope with the machine's data shadowing it,
-// in an activation of its own (see beginStep). What the machine reads is bound to
-// the object exhibiting it, so a guard sees the values its own bodies wrote.
-func (e *StateExecutor) evalStep(node ast.Node, scope *symbols.Scope) (Value, error) {
-	return e.evalStepOf(nil, node, scope)
-}
-
-// evalStepOf evaluates a step of a transition leaving owner, whose attributes
-// the step reads alongside the machine's data.
+// evalStepOf evaluates one expression of a step — a guard, a change condition, a
+// duration — in scope, in an activation of its own (see beginStep), with the
+// machine's data and the attributes of the state the step leaves shadowing it.
 func (e *StateExecutor) evalStepOf(owner ast.Node, node ast.Node, scope *symbols.Scope) (Value, error) {
 	ec := NewEvalContextIn(e.ctx, scope, e.self)
 	ec.Push(e.stateData)
