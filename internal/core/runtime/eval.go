@@ -33,6 +33,10 @@ type EvalContext struct {
 	// the same evaluation. It is nil everywhere else.
 	calcRun *calcRun
 
+	// inBehaviorBody marks a statement of a behavior body, which reaches the
+	// object performing it only through names that resolve to its features.
+	inBehaviorBody bool
+
 	// activation identifies the execution of the body this evaluation belongs to,
 	// so every output read of one calc usage within it comes from one evaluation
 	// of that usage. It is zero outside a body, where nothing can change between
@@ -80,7 +84,7 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 	return &EvalContext{
 		ctx: ec.ctx, scope: scope, self: ec.self, frames: ec.frames, trace: ec.trace,
 		features: ec.features, resolving: ec.resolving, calcRun: ec.calcRun,
-		activation: ec.activation,
+		activation: ec.activation, inBehaviorBody: ec.inBehaviorBody,
 	}
 }
 
@@ -93,7 +97,7 @@ func (ec *EvalContext) nestedEnv(scope *symbols.Scope) *EvalContext {
 	return &EvalContext{
 		ctx: ec.ctx, scope: scope, self: ec.self, frames: frames, trace: ec.trace,
 		features: ec.features, resolving: ec.resolving, calcRun: ec.calcRun,
-		activation: ec.activation,
+		activation: ec.activation, inBehaviorBody: ec.inBehaviorBody,
 	}
 }
 
@@ -250,6 +254,10 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 // names the instance featuring the value being evaluated ([KerML, 8.4.2]).
 const thatName = "that"
 
+// thisName is the context occurrence of what is being evaluated, which for a
+// performance an object owns is that object ([KerML] Occurrences::this).
+const thisName = "this"
+
 // evalName evaluates a name as a reference to what it names, which is what an
 // expression written as a bare name is: `rate`, `A::B::x`.
 func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
@@ -315,7 +323,7 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 		}
 		// Then the bound instance: a feature value holds the value this object actually
 		// carries, which overrides the declared default the scope would yield.
-		if ec.self != nil {
+		if ec.self != nil && ec.selfFeatureInScope(name) {
 			if val, ok, err := ec.selfFeatureValue(name); err != nil {
 				return Value{}, err
 			} else if ok {
@@ -326,6 +334,11 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 		// instance featuring the value being evaluated, which is the bound one.
 		if name == thatName && ec.self != nil {
 			return Value{Kind: ValInstance, Instance: ec.self.ID}, nil
+		}
+		// Then `this`, the context occurrence of what is being evaluated: the
+		// object owning the performance, which is the bound instance.
+		if name == thisName && ec.namesOccurrenceThis(name) {
+			return ec.thisValue()
 		}
 		// Then the scope the expression was written in: a sibling attribute, a
 		// member of an enclosing namespace, or a name an import brought in, found
@@ -496,6 +509,40 @@ func (ec *EvalContext) occurrenceReference(sym *symbols.Symbol) (Value, bool, er
 		return Value{}, true, fmt.Errorf("usage %s: %w", symbolText(sym), err)
 	}
 	return Value{Kind: ValInstance, Instance: inst.ID}, true, nil
+}
+
+// namesOccurrenceThis reports whether the name resolves to the library's
+// context occurrence feature `this` where the expression was written.
+func (ec *EvalContext) namesOccurrenceThis(name string) bool {
+	if ec.scope == nil {
+		return false
+	}
+	sym, ok := ec.ctx.resolver.LookupName(ec.scope, name)
+	return ok && ec.ctx.resolver.IsOccurrenceThis(sym)
+}
+
+// thisValue is the object owning the performance being evaluated. A body no
+// object owns has none: `this` there is the performance itself.
+func (ec *EvalContext) thisValue() (Value, error) {
+	object := ec.ctx.resolver.ThisContext(ec.scope)
+	if object == nil {
+		return Value{}, fmt.Errorf("%w: this names the performance itself, which no object owns",
+			ErrThisNotAnObject)
+	}
+	if ec.self == nil {
+		return Value{}, fmt.Errorf("%w: no object of %s performs this body",
+			ErrThisNotAnObject, symbolText(object))
+	}
+	return Value{Kind: ValInstance, Instance: ec.self.ID}, nil
+}
+
+// selfFeatureInScope reports whether the bound instance's feature of that name
+// may answer here: in a behavior body only when the name resolves to it.
+func (ec *EvalContext) selfFeatureInScope(name string) bool {
+	if !ec.inBehaviorBody {
+		return true
+	}
+	return namesPerformerFeature(ec.ctx, ec.self, ec.scope, name)
 }
 
 // selfFeatureValue reads the named feature value of the bound instance. Reports whether the

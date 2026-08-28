@@ -67,7 +67,7 @@ func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, s l
 		return h.exec.setFeature(name, value)
 	}
 	if !h.exec.declaresParameter(name) {
-		if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, name, value); written || err != nil {
+		if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, s.Scope, name, value); written || err != nil {
 			return err
 		}
 	}

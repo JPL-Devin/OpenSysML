@@ -57,7 +57,7 @@ func (h *stateStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lo
 	if h.exec.declaresAttribute(name) {
 		return h.exec.assignAttribute(name, value)
 	}
-	if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, name, value); written || err != nil {
+	if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, s.Scope, name, value); written || err != nil {
 		return err
 	}
 	return storeBodyValue(h.exec.ctx, h, env, name, value, s)

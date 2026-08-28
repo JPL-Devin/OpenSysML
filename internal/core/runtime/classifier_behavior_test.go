@@ -745,19 +745,17 @@ func TestOperationOutputNamedLikeAFeatureAnswersTheCaller(t *testing.T) {
 func TestPerformedActionAwaitingAMessageIsWokenByASibling(t *testing.T) {
 	src := `
 		package test {
-			action def Await {
-				first start;
-				action heard accept g : Integer;
-				action mark { assign woken := 1; }
-				done;
-				succession first start then heard;
-				succession first heard then mark;
-				succession first mark then done;
-			}
-
 			part def Waiter {
 				attribute woken: Integer = 0;
-				perform action await : Await;
+				perform action await {
+					first start;
+					action heard accept g : Integer;
+					action mark { assign woken := 1; }
+					done;
+					succession first start then heard;
+					succession first heard then mark;
+					succession first mark then done;
+				}
 			}
 
 			part def Sender {

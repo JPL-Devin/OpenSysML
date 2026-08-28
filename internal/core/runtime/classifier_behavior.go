@@ -591,17 +591,59 @@ func statesBehaviorBody(sym *symbols.Symbol) bool {
 // assignPerformerFeature writes a value to the feature of that name of the
 // object performing a behavior, and reports whether the object has one: a body
 // that assigns a feature of its object writes that object, not shared data.
-func assignPerformerFeature(ctx *Context, self *Instance, name string, value Value) (bool, error) {
+// The write is refused when the name does not resolve to that feature where the
+// statement was written.
+func assignPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, name string, value Value) (bool, error) {
 	if self == nil {
 		return false, nil
 	}
 	if _, ok := self.FeatureValues[name]; !ok {
 		return false, nil
 	}
+	if !namesPerformerFeature(ctx, self, scope, name) {
+		return true, fmt.Errorf("write %s of object #%d: %w: %s is a feature of %s, which the body does not name: "+
+			"pass it as a parameter, or write the body in the declaration that holds it",
+			name, self.ID, ErrPerformerFeatureNotInScope, name, symbolText(self.Type))
+	}
 	if err := self.SetFeatureValue(ctx, name, value); err != nil {
 		return true, fmt.Errorf("write %s of object #%d: %w", name, self.ID, err)
 	}
 	return true, nil
+}
+
+// namesPerformerFeature reports whether name, resolved where the statement was
+// written, denotes a feature of the object performing the behavior: the
+// performer is not a namespace the body's names are looked up in.
+func namesPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, name string) bool {
+	if ctx == nil || ctx.resolver == nil || self == nil || scope == nil {
+		return false
+	}
+	sym, ok := ctx.resolver.LookupName(scope, name)
+	if !ok || sym == nil {
+		return false
+	}
+	return ctx.typeHoldsFeature(self.Type, sym)
+}
+
+// typeHoldsFeature reports whether a feature symbol is one the type holds:
+// declared by the type itself or by one of its supertypes.
+func (ctx *Context) typeHoldsFeature(typeSym, feature *symbols.Symbol) bool {
+	if typeSym == nil || feature == nil {
+		return false
+	}
+	owner := ctx.findOwnerType(feature)
+	if owner == nil {
+		return false
+	}
+	if owner == typeSym {
+		return true
+	}
+	for _, super := range ctx.model.AllSupertypes(typeSym) {
+		if super == owner {
+			return true
+		}
+	}
+	return false
 }
 
 // symbolText names a symbol in diagnostics, falling back to its kind when it is

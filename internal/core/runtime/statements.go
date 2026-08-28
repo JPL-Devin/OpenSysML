@@ -169,6 +169,7 @@ func (e *stmtEngine) finish() {
 // innermost last so a block-local name shadows an outer one.
 func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
 	ec := NewEvalContextIn(e.ctx, scope, e.host.performer())
+	ec.inBehaviorBody = true
 	ec.activation = e.activation
 	ec.Push(e.env.data)
 	for _, frame := range e.env.outer {
