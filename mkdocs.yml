@@ -12,7 +12,7 @@ edit_uri: edit/main/docs/
 # only place the theme lets a site put text; stylesheets/footer.css moves it to the right.
 copyright: >-
   Apache-2.0
-  <span class="osml-affiliation">part of <a href="https://openmbee.org">Open-MBEE</a>,
+  <span class="osml-affiliation">part of <a href="https://www.openmbee.org/">Open-MBEE</a>,
   a <a href="https://numfocus.org">NumFOCUS</a> project</span>
 
 docs_dir: docs
