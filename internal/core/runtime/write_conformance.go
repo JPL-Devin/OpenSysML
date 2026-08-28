@@ -53,11 +53,10 @@ func (ctx *Context) writeTargetIn(scope *symbols.Scope, name string) (*writeTarg
 // values of that feature and answer to its type and its multiplicity — the rule
 // binding an initial value (passes.checkBoundValue, Context.checkDefaultCount),
 // applied where a write replaces them.
-func (ctx *Context) checkWrite(scope *symbols.Scope, where string, target *writeTarget, value Value) error {
+func (ctx *Context) checkWrite(scope *symbols.Scope, what string, target *writeTarget, value Value) error {
 	if target == nil {
 		return nil
 	}
-	what := fmt.Sprintf("%s: assignment to %s", where, target.name)
 	count := int64(len(elementsOf(value)))
 	if msg := target.mult.CountViolation(count); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
@@ -75,11 +74,18 @@ func (ctx *Context) checkBodyWrite(host stmtHost, s lower.Assign, value Value) e
 // checkNamedWrite checks a write of a name resolved in scope, for a path that
 // stores the value itself rather than reaching Instance.SetFeatureValue.
 func (ctx *Context) checkNamedWrite(scope *symbols.Scope, where, name string, value Value) error {
+	return ctx.checkBoundName(scope, fmt.Sprintf("%s: assignment to %s", where, name), name, value)
+}
+
+// checkBoundName checks a value bound to the feature name declares in scope,
+// described by what: an assignment, or a binding that gives a value to an
+// output the run time computes.
+func (ctx *Context) checkBoundName(scope *symbols.Scope, what, name string, value Value) error {
 	target, ok := ctx.writeTargetIn(scope, name)
 	if !ok {
 		return nil
 	}
-	return ctx.checkWrite(scope, where, target, value)
+	return ctx.checkWrite(scope, what, target, value)
 }
 
 // storeBodyValue writes a value into the behavior's own data once it conforms

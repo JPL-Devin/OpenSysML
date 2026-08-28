@@ -80,6 +80,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
+	t.Run("calc_output_binding_violates_declared_type", testCalcOutputBindingViolatesDeclaredType)
 	t.Run("operation_constraint_body_cannot_be_evaluated", testOperationConstraintBodyCannotBeEvaluated)
 	t.Run("binding_conflict", testBindingConflict)
 	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
@@ -5925,6 +5926,31 @@ func testCalcOutputValuedAndAssigned(t *testing.T) {
 	err := calcUsageOutputInSource(t, src, "c", "a", 10000)
 	if !errors.Is(err, ErrConflictingOutput) {
 		t.Errorf("expected ErrConflictingOutput, got: %v", err)
+	}
+}
+
+// testCalcOutputBindingViolatesDeclaredType: an output whose declaration binds
+// it a value of another type is rejected where a write of one is, the input it
+// reads being untyped so only the run time can judge it.
+func testCalcOutputBindingViolatesDeclaredType(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			calc def Bound {
+				in n;
+				out a : Integer = n;
+			}
+			calc c : Bound { in n = "seven"; }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	usage := oneSymbol(t, idx, "test::c")
+	_, err := ctx.CalcUsageOutput(usage, "a", idx.DocumentRoot("<test>"), nil)
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "Integer") {
+		t.Errorf("error = %v, want it to name the declared type", err)
 	}
 }
 
