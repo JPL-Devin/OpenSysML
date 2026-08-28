@@ -243,7 +243,7 @@ func declMembers(decl ast.Node) []ast.Node {
 
 // newInstance is the materialization of the content state inherits, recorded so
 // the transition pass lowers the same content in the same context.
-func (g *StateGraph) newInstance(state *ast.StateNode, members []inheritedMember, owners []ast.Node) *stateInstance {
+func (g *StateGraph) newInstance(state *ast.StateNode, members []inheritedMember, owners []ast.Node, replaced map[ast.Node]ast.Node) *stateInstance {
 	inst := &stateInstance{
 		state:        state,
 		owners:       owners,
@@ -257,6 +257,18 @@ func (g *StateGraph) newInstance(state *ast.StateNode, members []inheritedMember
 	for _, owner := range owners {
 		inst.vertexOf[owner] = state
 		inst.stateByDecl[owner] = state
+	}
+	// A substate the usage redeclares keeps the inherited name: what the definition
+	// declared reaches the usage's replacement of it.
+	for dropped, replacement := range replaced {
+		decl := dropped
+		if node, ok := g.declOf[stateNodeOf(dropped)]; ok {
+			decl = node
+		}
+		inst.vertexOf[decl] = replacement
+		if node, ok := replacement.(*ast.StateNode); ok {
+			inst.stateByDecl[decl] = node
+		}
 	}
 	g.instanceOf[state] = inst
 	return inst
@@ -432,13 +444,45 @@ func cloneStateNode(g *StateGraph, node *ast.StateNode, scope *symbols.Scope) *a
 // behavior the usage states replaces the inherited one, since a state has one
 // entry, one do and one exit action (Systems Library `States.sysml`:
 // `entry action entryAction :>> 'entry'`).
-func redeclare(state *ast.StateNode, inherited, own *ast.StateNode) {
+// It returns the inherited substate each own substate replaces, so an inherited
+// transition naming that substate reaches the replacement rather than a dropped
+// vertex.
+func redeclare(state *ast.StateNode, inherited, own *ast.StateNode) map[ast.Node]ast.Node {
 	state.Entry = pickBehaviors(inherited.Entry, own.Entry)
 	state.Do = pickBehaviors(inherited.Do, own.Do)
 	state.Exit = pickBehaviors(inherited.Exit, own.Exit)
 	state.Defer = append(append([]ast.Node{}, inherited.Defer...), own.Defer...)
 	state.Substates = append(keptSubstates(inherited.Substates, own.Substates), own.Substates...)
 	state.Regions = append(keptRegions(inherited.Regions, own.Regions), own.Regions...)
+	return replacedSubstates(inherited.Substates, own.Substates)
+}
+
+// replacedSubstates pairs each inherited substate with the own substate of the
+// same name that replaces it.
+func replacedSubstates(inherited, own []ast.Node) map[ast.Node]ast.Node {
+	if len(own) == 0 || len(inherited) == 0 {
+		return nil
+	}
+	byName := make(map[string]ast.Node, len(own))
+	for _, node := range own {
+		if name := vertexName(node); name != "" {
+			byName[name] = unwrapMembership(node)
+		}
+	}
+	replaced := make(map[ast.Node]ast.Node)
+	for _, node := range inherited {
+		name := vertexName(node)
+		if name == "" {
+			continue
+		}
+		if replacement, ok := byName[name]; ok {
+			replaced[unwrapMembership(node)] = replacement
+		}
+	}
+	if len(replaced) == 0 {
+		return nil
+	}
+	return replaced
 }
 
 // pickBehaviors is the usage's own behaviors when it states any, else the
@@ -489,6 +533,14 @@ func keptRegions(inherited, own []*ast.StateRegion) []*ast.StateRegion {
 		kept = append(kept, region)
 	}
 	return kept
+}
+
+// stateNodeOf is a substate node as a state node, for the declaration side table.
+func stateNodeOf(node ast.Node) *ast.StateNode {
+	if state, ok := node.(*ast.StateNode); ok {
+		return state
+	}
+	return nil
 }
 
 // vertexName is the name a substate node was declared with.

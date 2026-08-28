@@ -19,8 +19,8 @@ package test {
 	}
 
 	state def Machine {
-		entry; then use;
-		state use : Base {
+		entry; then u;
+		state u : Base {
 			attribute count : Integer = 100;
 			state extra;
 		}

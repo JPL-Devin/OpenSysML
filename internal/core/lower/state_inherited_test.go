@@ -331,3 +331,40 @@ func TestToStateGraphMachineSupertypeReusedBySubstate(t *testing.T) {
 		t.Fatalf("i1 vertices = %d, want one inherited by the machine and one under sibling", leaves)
 	}
 }
+
+func TestToStateGraphUsageRedeclaresInheritedSubstate(t *testing.T) {
+	graph := stateGraphOf(t, `
+		package test {
+			state def Base {
+				entry; then working;
+				state working;
+			}
+			state def Machine {
+				entry; then u;
+				state u : Base {
+					state working { state deeper; }
+				}
+			}
+		}
+	`, "Machine")
+
+	var working *ast.StateNode
+	for _, state := range graph.States {
+		if state.Name != "working" {
+			continue
+		}
+		if working != nil {
+			t.Fatal("the redeclared substate was collected twice")
+		}
+		working = state
+	}
+	if working == nil {
+		t.Fatal("no working state was collected")
+	}
+	if stateNamed(graph, "deeper") == nil {
+		t.Fatal("the replacement substate's own body was not collected")
+	}
+	if !graph.IsInitial(working) {
+		t.Fatal("the inherited initial transition did not reach the redeclared substate")
+	}
+}

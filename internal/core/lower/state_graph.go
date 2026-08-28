@@ -537,14 +537,14 @@ func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage, scope *symbols.Scop
 		return nil, err
 	}
 
-	redeclare(state, base.node, own.node)
+	replaced := redeclare(state, base.node, own.node)
 	if attrs := keptAttributes(base.attrs, own.attrs); len(attrs) > 0 {
 		graph.StateAttributes[state] = attrs
 	}
 	graph.bodyOf[state] = append(inherited, ownMembers(usage.Members, bodyScope)...)
 	graph.parallelState[state] = parallel
 	if len(inherited) > 0 {
-		graph.newInstance(state, inherited, owners)
+		graph.newInstance(state, inherited, owners, replaced)
 	}
 	return state, nil
 }
@@ -989,7 +989,7 @@ func (g *StateGraph) machineState(decl ast.Node, inherited []inheritedMember, me
 		g.recordBehaviorScope(member.node, member.scope)
 	}
 	state := parallelMachineState(decl, members)
-	redeclare(state, parallelMachineState(decl, inheritedNodes), state)
+	_ = redeclare(state, parallelMachineState(decl, inheritedNodes), state)
 	g.StateScopes[state] = scope
 	g.Behaviors[state] = g.lowerStateBehaviors(state, scope)
 	return state
