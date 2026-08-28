@@ -268,13 +268,14 @@ func TestSendViaPortToNestedReceiver(t *testing.T) {
 			connect senderPort to receiverPort;
 			first start;
 			action group {
-				first groupStart;
-				if true {
-					send 1 via senderPort to receiver;
+				first emit;
+				action emit {
+					if true {
+						send 1 via senderPort to receiver;
+					}
 				}
 				done;
-				succession first groupStart then if;
-				succession first if then done;
+				succession first emit then done;
 			}
 			action receiver accept value : Integer via receiverPort {
 				assign got := value;
@@ -1306,4 +1307,44 @@ func instanceOfUsage(t *testing.T, ctx *Context, idx *symbols.Index, fqn string)
 		t.Fatalf("instantiate %s: %v", fqn, err)
 	}
 	return inst
+}
+
+// A send deep in the nesting routes through a connector declared by a flow
+// around it, not only by the action's own body or the send's own flow.
+func TestSendRoutesThroughAnEnclosingNestedFlowsConnector(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action group {
+				port senderPort;
+				port receiverPort;
+				connect senderPort to receiverPort;
+				first inner;
+				action inner {
+					first emit;
+					action emit {
+						send 7 via senderPort to receiver;
+					}
+				}
+				action receiver accept value : Integer via receiverPort {
+					assign got := value;
+				}
+				succession first inner then receiver;
+			}
+			done;
+			succession first start then group;
+			succession first group then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute action sending from a nested flow: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 7)
 }

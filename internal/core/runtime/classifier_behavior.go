@@ -373,7 +373,11 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 
 	switch decl.behavior.Kind {
 	case lower.ExhibitedState:
-		exec, err := newStateExecutor(ctx, sym, inst)
+		occurrence, err := ctx.performanceOccurrence(inst, decl, sym, ErrStatePerformanceOccurrence)
+		if err != nil {
+			return nil, err
+		}
+		exec, err := newStateExecutorForOccurrence(ctx, sym, inst, occurrence)
 		if err != nil {
 			return nil, fmt.Errorf("exhibited state machine %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
 		}
@@ -385,7 +389,11 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 		}
 		behavior.State = exec
 	case lower.PerformedAction:
-		exec, err := newActionExecutor(ctx, sym, inst)
+		occurrence, err := ctx.performanceOccurrence(inst, decl, sym, ErrActionPerformanceOccurrence)
+		if err != nil {
+			return nil, err
+		}
+		exec, err := newActionExecutorForOccurrence(ctx, sym, inst, occurrence)
 		if err != nil {
 			return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
 		}
@@ -404,6 +412,59 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedClassifierBehavior, decl.behavior.Kind)
 	}
 	return behavior, nil
+}
+
+// performanceOccurrence returns the performance occurrence the binding
+// declaration holds: the object the exhibited or performed usage's feature
+// names, materialized when the feature holds none yet. sentinel types the
+// failures, telling an exhibited machine's from a performed action's.
+func (ctx *Context) performanceOccurrence(
+	inst *Instance,
+	decl classifierBehaviorDecl,
+	behavior *symbols.Symbol,
+	sentinel error,
+) (*Instance, error) {
+	name := decl.behavior.Name
+	fv, ok := inst.FeatureValues[name]
+	if !ok || fv.Feature == nil || fv.Feature.Symbol != decl.member {
+		ok = false
+		for candidate, value := range inst.FeatureValues {
+			if value.Feature != nil && value.Feature.Symbol == decl.member {
+				name, ok = candidate, true
+				break
+			}
+		}
+	}
+	if !ok {
+		return nil, fmt.Errorf("%w: object #%d has no feature for %s %s",
+			sentinel, inst.ID, decl.behavior.Kind, decl.behavior.Name)
+	}
+	fv, err := inst.GetFeatureValue(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
+			sentinel, name, inst.ID, err)
+	}
+	if fv.HeldValue().Kind == ValInvalid {
+		occurrence, err := ctx.materializeOwnedBy(behavior, 0, inst, name)
+		if err != nil {
+			return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
+				sentinel, name, inst.ID, err)
+		}
+		fv.Value = Value{Kind: ValInstance, Instance: occurrence.ID}
+		fv.Materialized = true
+		return occurrence, nil
+	}
+	id, ok := fv.HeldValue().Object()
+	if !ok {
+		return nil, fmt.Errorf("%w: %s of object #%d holds %s, not an occurrence",
+			sentinel, name, inst.ID, fv.HeldValue().Kind)
+	}
+	occurrence, ok := ctx.Instance(id)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s of object #%d names unknown object #%d",
+			sentinel, name, inst.ID, id)
+	}
+	return occurrence, nil
 }
 
 // run advances the object's behavior until it is quiescent: an action until it
@@ -493,6 +554,27 @@ func (ctx *Context) classifierBehaviorArguments(inst *Instance, decl classifierB
 	return args, nil
 }
 
+// actionBodySymbol resolves the element holding the body an action symbol
+// performs: itself when it states one, otherwise the action it names — the
+// definition typing it, or the feature it refers to. The symbol itself is
+// returned when nothing it names states a body, so the missing flow is reported
+// against the declaration that was asked for.
+func (ctx *Context) actionBodySymbol(action *symbols.Symbol) *symbols.Symbol {
+	sym := action
+	for depth := 0; depth < maxBehaviorBindingDepth; depth++ {
+		if statesBehaviorBody(sym) {
+			return sym
+		}
+		next := ctx.namedBehavior(sym)
+		if next == nil || next == sym ||
+			(next.Kind != symbols.SymbolActionUsage && next.Kind != symbols.SymbolActionDef) {
+			return action
+		}
+		sym = next
+	}
+	return action
+}
+
 // statesBehaviorBody reports whether a symbol's declaration states a behavior
 // body of its own rather than naming an element that holds one.
 func statesBehaviorBody(sym *symbols.Symbol) bool {
@@ -509,17 +591,59 @@ func statesBehaviorBody(sym *symbols.Symbol) bool {
 // assignPerformerFeature writes a value to the feature of that name of the
 // object performing a behavior, and reports whether the object has one: a body
 // that assigns a feature of its object writes that object, not shared data.
-func assignPerformerFeature(ctx *Context, self *Instance, name string, value Value) (bool, error) {
+// The write is refused when the name does not resolve to that feature where the
+// statement was written.
+func assignPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, name string, value Value) (bool, error) {
 	if self == nil {
 		return false, nil
 	}
 	if _, ok := self.FeatureValues[name]; !ok {
 		return false, nil
 	}
+	if !namesPerformerFeature(ctx, self, scope, name) {
+		return true, fmt.Errorf("write %s of object #%d: %w: %s is a feature of %s, which the body does not name: "+
+			"pass it as a parameter, or write the body in the declaration that holds it",
+			name, self.ID, ErrPerformerFeatureNotInScope, name, symbolText(self.Type))
+	}
 	if err := self.SetFeatureValue(ctx, name, value); err != nil {
 		return true, fmt.Errorf("write %s of object #%d: %w", name, self.ID, err)
 	}
 	return true, nil
+}
+
+// namesPerformerFeature reports whether name, resolved where the statement was
+// written, denotes a feature of the object performing the behavior: the
+// performer is not a namespace the body's names are looked up in.
+func namesPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, name string) bool {
+	if ctx == nil || ctx.resolver == nil || self == nil || scope == nil {
+		return false
+	}
+	sym, ok := ctx.resolver.LookupName(scope, name)
+	if !ok || sym == nil {
+		return false
+	}
+	return ctx.typeHoldsFeature(self.Type, sym)
+}
+
+// typeHoldsFeature reports whether a feature symbol is one the type holds:
+// declared by the type itself or by one of its supertypes.
+func (ctx *Context) typeHoldsFeature(typeSym, feature *symbols.Symbol) bool {
+	if typeSym == nil || feature == nil {
+		return false
+	}
+	owner := ctx.findOwnerType(feature)
+	if owner == nil {
+		return false
+	}
+	if owner == typeSym {
+		return true
+	}
+	for _, super := range ctx.model.AllSupertypes(typeSym) {
+		if super == owner {
+			return true
+		}
+	}
+	return false
 }
 
 // symbolText names a symbol in diagnostics, falling back to its kind when it is

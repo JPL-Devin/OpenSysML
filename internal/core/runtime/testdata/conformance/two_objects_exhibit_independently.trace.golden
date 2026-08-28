@@ -1,11 +1,13 @@
 materialize: Counter #1
 start: exhibited state machine counting of #1
+materialize: counting #2
 enter: idle
 run: exhibited state machine counting of #1
-materialize: Counter #2
-start: exhibited state machine counting of #2
+materialize: Counter #3
+start: exhibited state machine counting of #3
+materialize: counting #4
 enter: idle
-run: exhibited state machine counting of #2
+run: exhibited state machine counting of #3
 exit: idle
 enter: ticked (entry action)
 stmt action body

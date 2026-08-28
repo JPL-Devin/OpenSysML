@@ -1,0 +1,40 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Chains" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Leaf"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="depth" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="0")))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Mid"
+          (Membership visibility="default"
+            (Usage kind="part" name="leaf" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Leaf
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="m" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Mid
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="action" name="write" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (*ast.AssignmentActionNode)
+          (*ast.AssignmentActionNode)))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Rig"
+          (Membership visibility="default"
+            (Usage kind="part" name="mid" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Mid
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="state" name="run" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exhibit state"
+              (EntryMember)
+              (SuccessionEdge source="@entry" target="setting")
+              (Membership visibility="default"
+                (Usage kind="state" name="setting" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (EntryMember
+                    (Membership visibility="default"
+                      (Usage kind="action" name="set" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                        (*ast.AssignmentActionNode)))))))))))))

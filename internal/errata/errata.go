@@ -106,6 +106,14 @@ func Registry() []Entry {
 		AsPublished: "\t    \treturn : TemperatureValue = 1/(2 * Cp) * V^2 + T_static;",
 		Citation:    "SysML v2 §9.8.9.1",
 		Derivation:  "V is a VolumeValue and Cp dimensionless, so the first operand has dimension L^6 while T_static has Θ; no reading of the published text shares a dimension, so the defect is documented without a correction.",
+	}, {
+		ID:          "F84",
+		Heading:     "`return a : AccelerationValue = tp * dt * tp` returns L^4·M^2·T^-5",
+		Path:        "examples/pilot-corpora/sysml-examples/Analysis Examples/Dynamics.sysml",
+		Line:        13,
+		AsPublished: "\t\treturn a : AccelerationValue = tp * dt * tp;",
+		Citation:    "KerML 7.4.9",
+		Derivation:  "tp is a PowerValue (L^2·M·T^-3) and dt a TimeValue (T), so the expression the return feature takes its value from has dimension L^4·M^2·T^-5 while AccelerationValue is measured in L·T^-2; no repair follows from the parameters the calculation declares, so the defect is documented without a correction.",
 	}}
 }
 

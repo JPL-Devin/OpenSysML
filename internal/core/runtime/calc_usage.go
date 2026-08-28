@@ -129,12 +129,13 @@ func assignedOutputs(stmts []lower.Statement, outputs []calcOutput) map[string]b
 }
 
 // collectAssignedOutputs walks the statements, and the blocks they carry, for
-// assignments to a declared output.
+// assignments to a declared output. A chained target writes a feature of
+// another object, so it binds no output of the calc however it ends.
 func collectAssignedOutputs(stmts []lower.Statement, declared, assigned map[string]bool) {
 	for _, stmt := range stmts {
 		switch s := stmt.(type) {
 		case lower.Assign:
-			if declared[s.Target] {
+			if s.Chain == nil && declared[s.Target] {
 				assigned[s.Target] = true
 			}
 		case lower.Block:
@@ -592,6 +593,12 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 	value, err := run.bindingEnv(ctx, out.Owner).Eval(out.Value)
 	if err != nil {
 		return Value{}, fmt.Errorf("calc %s: output %s: %w", run.shape.Name, run.outputDescription(out), err)
+	}
+	// A binding gives the output its value as a write does, so it answers to the
+	// output's declared type and multiplicity the same way.
+	what := fmt.Sprintf("calc %s: output %s", run.shape.Name, run.outputDescription(out))
+	if err := ctx.checkBoundName(declScope(out.Owner), what, out.Name, value); err != nil {
+		return Value{}, err
 	}
 	if out.Name != "" {
 		run.outputs[out.Name] = value

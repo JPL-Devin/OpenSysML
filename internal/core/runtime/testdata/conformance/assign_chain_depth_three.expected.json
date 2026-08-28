@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"evaluate": "test::write",
+	"outputs": {
+		"seen": {"type": "Integer", "value": 3}
+	}
+}

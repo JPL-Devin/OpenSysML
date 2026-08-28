@@ -1104,6 +1104,13 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	if featuring := r.featuringOf(scope, operandSym); featuring != nil {
 		operandSym = featuring
 	}
+	// A chain from `this` reads the object the body is owned by, which the
+	// library declares as its context occurrence rather than as its type.
+	if r.IsOccurrenceThis(operandSym) {
+		if object := r.ThisContext(scope); object != nil {
+			operandSym = object
+		}
+	}
 
 	// A chaining feature spelled as a qualified name resolves outward through the
 	// enclosing namespaces when the previous element has no such member (KerML
@@ -1221,7 +1228,7 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		}
 		// If usage has inline members (scope), return it to access those members
 		// Otherwise follow type for inherited members
-		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage && !r.IsBaseThat(sym) {
+		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage && !r.IsBaseThat(sym) && !r.IsOccurrenceThis(sym) {
 			if sym.Scope != nil &&
 				(len(sym.Scope.Members()) > 0 || len(r.importsOf(sym.Scope.Node())) > 0) {
 				// Usage has inline members, return usage symbol

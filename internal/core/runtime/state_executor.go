@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
@@ -26,8 +27,10 @@ type StateExecutor struct {
 	stateMachine *symbols.Symbol
 	// self is the object performing the machine: its connections route what the
 	// machine sends, and its selections decide which variant's connection does.
-	self  *Instance
-	state ExecutionState
+	self *Instance
+	// occurrence is the state performance materialized for an exhibited usage.
+	occurrence *Instance
+	state      ExecutionState
 
 	// Lowered graph (source of truth)
 	graph *lower.StateGraph
@@ -38,8 +41,11 @@ type StateExecutor struct {
 	nextEventID  int64 // Monotonic counter for unique event IDs
 	eventQueue   *EventQueue
 	stateData    map[string]Value // State machine local variables
-	stateVisits  []string         // Ordered list of visited state names
-	stateStack   []*ast.StateNode // Active state configuration (for nested states)
+	// stateAttrs holds the attributes each state owns, one map per state node, so
+	// two usages of one state definition keep separate values.
+	stateAttrs  map[*ast.StateNode]map[string]Value
+	stateVisits []string         // Ordered list of visited state names
+	stateStack  []*ast.StateNode // Active state configuration (for nested states)
 
 	// history records, per composite state, the configuration that state had when
 	// it was last exited. A history pseudostate re-enters that configuration
@@ -104,6 +110,15 @@ type historyRecord struct {
 // newStateExecutor creates a state executor. self is the object performing the
 // machine, nil for a machine no object performs.
 func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance) (*StateExecutor, error) {
+	return newStateExecutorForOccurrence(ctx, stateMachine, self, nil)
+}
+
+func newStateExecutorForOccurrence(
+	ctx *Context,
+	stateMachine *symbols.Symbol,
+	self *Instance,
+	occurrence *Instance,
+) (*StateExecutor, error) {
 	if stateMachine.Kind != symbols.SymbolStateUsage && stateMachine.Kind != symbols.SymbolStateDef {
 		return nil, fmt.Errorf("symbol %s is not a state machine", stateMachine.Name)
 	}
@@ -124,12 +139,14 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance
 		ctx:            ctx,
 		stateMachine:   stateMachine,
 		self:           self,
+		occurrence:     occurrence,
 		state:          StateReady,
 		graph:          graph,
 		currentTime:    0.0,
 		nextEventID:    1,
 		eventQueue:     NewEventQueue(),
 		stateData:      make(map[string]Value),
+		stateAttrs:     make(map[*ast.StateNode]map[string]Value),
 		stateVisits:    make([]string, 0),
 		stateStack:     make([]*ast.StateNode, 0),
 		history:        make(map[*ast.StateNode]*historyRecord),
@@ -145,16 +162,36 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance
 	if err := exec.initializeAttributes(); err != nil {
 		return nil, err
 	}
+	if err := exec.initializeStateAttributes(); err != nil {
+		return nil, err
+	}
 
 	return exec, nil
 }
 
-// initializeAttributes populates stateData with the attribute defaults lowering
-// recorded, evaluated in the scope the machine's body was declared in.
+// initializeAttributes populates stateData from the exhibited occurrence, or
+// from declared defaults when the machine has no occurrence.
 func (e *StateExecutor) initializeAttributes() error {
+	if e.occurrence != nil {
+		for _, attr := range e.graph.Attributes {
+			fv, err := e.occurrence.GetFeatureValue(e.ctx, attr.Name)
+			if err != nil {
+				return fmt.Errorf("%w: read %s of object #%d: %w",
+					ErrStatePerformanceOccurrence, attr.Name, e.occurrence.ID, err)
+			}
+			if value := fv.HeldValue(); value.Kind != ValInvalid {
+				e.stateData[attr.Name] = value
+			}
+		}
+		return nil
+	}
+
 	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
+		if attr.Value == nil {
+			continue
+		}
 		value, err := ec.Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
@@ -165,13 +202,120 @@ func (e *StateExecutor) initializeAttributes() error {
 	return nil
 }
 
-// evalStep evaluates one expression of a step - a guard, a change condition, a
-// duration, an inline expression - in scope with the machine's data shadowing it,
-// in an activation of its own (see beginStep). What the machine reads is bound to
-// the object exhibiting it, so a guard sees the values its own bodies wrote.
-func (e *StateExecutor) evalStep(node ast.Node, scope *symbols.Scope) (Value, error) {
+// initializeStateAttributes gives every state that owns attributes its own
+// values, so two usages of one state definition never share them.
+func (e *StateExecutor) initializeStateAttributes() error {
+	for state, attrs := range e.graph.StateAttributes {
+		if len(attrs) == 0 {
+			continue
+		}
+		data := make(map[string]Value, len(attrs))
+		e.stateAttrs[state] = data
+		for _, attr := range attrs {
+			if attr.Value == nil {
+				continue
+			}
+			scope := attr.Scope
+			if scope == nil {
+				scope = e.graph.Scope
+			}
+			ec := NewEvalContextIn(e.ctx, scope, e.self)
+			end := ec.beginStep()
+			value, err := ec.Eval(attr.Value)
+			end()
+			if err != nil {
+				return fmt.Errorf("eval attribute default %s of state %s: %w", attr.Name, state.Name, err)
+			}
+			data[attr.Name] = value
+		}
+	}
+	return nil
+}
+
+// attrFramesFor are the attribute values a behavior of state reads, outermost
+// state first so an inner state's attribute shadows an enclosing one's.
+func (e *StateExecutor) attrFramesFor(state *ast.StateNode) []map[string]Value {
+	if state == nil || len(e.stateAttrs) == 0 {
+		return nil
+	}
+	var frames []map[string]Value
+	chain := e.getParentChain(state)
+	for i := len(chain) - 1; i >= 0; i-- {
+		if data := e.stateAttrs[chain[i]]; data != nil {
+			frames = append(frames, data)
+		}
+	}
+	return frames
+}
+
+// stateAttributeValues is the value map of the innermost state at or enclosing
+// state that owns an attribute of this name, with the scope that attribute is
+// declared in, so a write to it answers to its declaration.
+func (e *StateExecutor) stateAttributeValues(state *ast.StateNode, name string) (map[string]Value, *symbols.Scope, bool) {
+	if state == nil {
+		return nil, nil, false
+	}
+	for _, ancestor := range e.getParentChain(state) {
+		data, ok := e.stateAttrs[ancestor]
+		if !ok {
+			continue
+		}
+		for _, attr := range e.graph.StateAttributes[ancestor] {
+			if attr.Name != name {
+				continue
+			}
+			scope := attr.Scope
+			if scope == nil {
+				scope = e.graph.Scope
+			}
+			return data, scope, true
+		}
+	}
+	return nil, nil, false
+}
+
+func (e *StateExecutor) declaresAttribute(name string) bool {
+	for _, attr := range e.graph.Attributes {
+		if attr.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *StateExecutor) assignAttribute(name string, value Value) error {
+	if e.occurrence != nil {
+		if err := e.occurrence.SetFeatureValue(e.ctx, name, value); err != nil {
+			return fmt.Errorf("%w: write %s of object #%d: %w",
+				ErrStatePerformanceOccurrence, name, e.occurrence.ID, err)
+		}
+		fv, err := e.occurrence.GetFeatureValue(e.ctx, name)
+		if err != nil {
+			return fmt.Errorf("%w: read %s of object #%d after write: %w",
+				ErrStatePerformanceOccurrence, name, e.occurrence.ID, err)
+		}
+		value = fv.HeldValue()
+	} else if err := e.ctx.checkNamedWrite(e.graph.Scope, "state machine "+symbolText(e.stateMachine), name, value); err != nil {
+		// No occurrence holds this feature, so its declaration is checked here
+		// rather than by the write to that occurrence.
+		return err
+	}
+	e.stateData[name] = value
+	return nil
+}
+
+// evalStepOf evaluates one expression of a step — a guard, a change condition, a
+// duration — in scope, in an activation of its own (see beginStep), with the
+// machine's data and the attributes of the state the step leaves shadowing it.
+func (e *StateExecutor) evalStepOf(owner ast.Node, node ast.Node, scope *symbols.Scope) (Value, error) {
 	ec := NewEvalContextIn(e.ctx, scope, e.self)
+	ec.inBehaviorBody = true
 	ec.Push(e.stateData)
+	if state, ok := owner.(*ast.StateNode); ok {
+		for _, frame := range e.attrFramesFor(state) {
+			ec.Push(frame)
+		}
+	}
 	defer ec.beginStep()()
 	return ec.Eval(node)
 }
@@ -305,7 +449,7 @@ func (e *StateExecutor) scheduleTimeTransitions(state *ast.StateNode) error {
 		} else if timeEvent, ok := trans.Trigger.(*ast.TimeEvent); ok {
 			// Evaluate duration expression in the scope the transition was written
 			// in, the machine's data shadowing it.
-			durationVal, err := e.evalStep(timeEvent.Duration, trans.Scope)
+			durationVal, err := e.evalStepOf(trans.Source, timeEvent.Duration, trans.Scope)
 			if err != nil {
 				return fmt.Errorf("eval time duration: %w", err)
 			}
@@ -1148,7 +1292,7 @@ func (e *StateExecutor) passesGuard(trans *lower.Transition) (bool, error) {
 	if trans == nil || trans.Guard == nil {
 		return true, nil
 	}
-	val, err := e.evalStep(trans.Guard, trans.BodyScope)
+	val, err := e.evalStepOf(trans.Source, trans.Guard, trans.BodyScope)
 	if err != nil {
 		return false, fmt.Errorf("eval guard of %s: %w", transitionDescription(trans), err)
 	}
@@ -2159,6 +2303,12 @@ func (e *StateExecutor) invokeNested(inv actionInvocation) error {
 		return err
 	}
 	for name, value := range outputs {
+		if e.declaresAttribute(name) {
+			if err := e.assignAttribute(name, value); err != nil {
+				return err
+			}
+			continue
+		}
 		e.stateData[name] = value
 	}
 	return nil
@@ -2227,13 +2377,31 @@ func (e *StateExecutor) StateStack() []*ast.StateNode {
 	return stack
 }
 
-// StateData returns a copy of state machine local data.
+// StateData returns a copy of state machine local data, together with the
+// attributes each state owns under that state's path (`nested.hits`), which two
+// usages of one state definition hold separately.
 func (e *StateExecutor) StateData() map[string]Value {
 	data := make(map[string]Value, len(e.stateData))
 	for k, v := range e.stateData {
 		data[k] = v
 	}
+	for state, attrs := range e.stateAttrs {
+		prefix := e.statePath(state) + "."
+		for name, value := range attrs {
+			data[prefix+name] = value
+		}
+	}
 	return data
+}
+
+// statePath is a state's name qualified by the states enclosing it.
+func (e *StateExecutor) statePath(state *ast.StateNode) string {
+	chain := e.getParentChain(state)
+	parts := make([]string, 0, len(chain))
+	for i := len(chain) - 1; i >= 0; i-- {
+		parts = append(parts, chain[i].Name)
+	}
+	return strings.Join(parts, ".")
 }
 
 // trace returns the recorder this executor's context is attached to, so turning

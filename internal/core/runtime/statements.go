@@ -15,7 +15,10 @@ import (
 // data, plus one frame per body-local block entered. A frame is discarded when
 // its block exits, so a name it declares never leaks outward.
 type stmtEnv struct {
-	data   map[string]Value
+	data map[string]Value
+	// outer are value maps the body reads but does not declare into, innermost
+	// last: the attributes the states enclosing the behavior own.
+	outer  []map[string]Value
 	frames []map[string]Value
 }
 
@@ -41,6 +44,16 @@ func (env *stmtEnv) declare(name string, value Value) {
 		return
 	}
 	env.data[name] = value
+}
+
+// holdsLocal reports whether an entered block declares name.
+func (env *stmtEnv) holdsLocal(name string) bool {
+	for i := len(env.frames) - 1; i >= 0; i-- {
+		if _, ok := env.frames[i][name]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // assignLocal writes to the innermost entered block that declares name and
@@ -101,6 +114,11 @@ type stmtHost interface {
 	// assignOuter writes a name no entered block and no body member declares, and
 	// every name declaredOutput claims.
 	assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error
+	// assignData writes a name the behavior's data already holds.
+	assignData(env *stmtEnv, name string, value Value, s lower.Assign) error
+	// assignChain writes the feature a chained target names, on the object the
+	// chain reaches; a host with no world outside its body rejects it.
+	assignChain(ec *EvalContext, s lower.Assign, value Value) error
 	// declaredOutput reports whether name is an output feature of the host, whose
 	// assignment binds that output for this activation rather than writing a value
 	// the body merely holds.
@@ -132,6 +150,14 @@ func newStmtEngine(ctx *Context, host stmtHost, data map[string]Value) *stmtEngi
 	return &stmtEngine{ctx: ctx, host: host, env: &stmtEnv{data: data}, activation: ctx.newActivation()}
 }
 
+// newStmtEngineOver returns an engine whose statements also read outer value
+// maps — the attributes of the states enclosing the behavior — innermost last.
+func newStmtEngineOver(ctx *Context, host stmtHost, data map[string]Value, outer []map[string]Value) *stmtEngine {
+	engine := newStmtEngine(ctx, host, data)
+	engine.env.outer = outer
+	return engine
+}
+
 // finish ends the activation the engine's statements ran in, discarding what the
 // calc usages read in them computed.
 func (e *stmtEngine) finish() {
@@ -143,8 +169,12 @@ func (e *stmtEngine) finish() {
 // innermost last so a block-local name shadows an outer one.
 func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
 	ec := NewEvalContextIn(e.ctx, scope, e.host.performer())
+	ec.inBehaviorBody = true
 	ec.activation = e.activation
 	ec.Push(e.env.data)
+	for _, frame := range e.env.outer {
+		ec.Push(frame)
+	}
 	for _, frame := range e.env.frames {
 		ec.Push(frame)
 	}
@@ -188,13 +218,24 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 		if err != nil {
 			return flowNext, fmt.Errorf("eval assignment RHS: %w", err)
 		}
+		// A chained target writes the object its chain reaches, whatever the body
+		// declares of the name it starts from, so no host binding applies to it.
+		if s.Chain != nil {
+			return flowNext, e.host.assignChain(e.evalIn(s.Scope), s, value)
+		}
 		// An output is bound by the host even when the body's data holds it, so a
 		// second binding is reported; a block-local of the name shadows it.
-		if e.env.assignLocal(s.Target, value) {
+		if e.env.holdsLocal(s.Target) {
+			if err := e.ctx.checkBodyWrite(e.host, s, value); err != nil {
+				return flowNext, err
+			}
+			e.env.assignLocal(s.Target, value)
 			return flowNext, nil
 		}
-		if !e.host.declaredOutput(s.Target) && e.env.assign(s.Target, value) {
-			return flowNext, nil
+		if !e.host.declaredOutput(s.Target) {
+			if _, held := e.env.data[s.Target]; held {
+				return flowNext, e.host.assignData(e.env, s.Target, value, s)
+			}
 		}
 		return flowNext, e.host.assignOuter(e.env, s.Target, value, s)
 	case lower.Declare:
@@ -459,6 +500,9 @@ func stmtLabel(stmt lower.Statement) string {
 	case lower.Send:
 		return "send"
 	case lower.Assign:
+		if s.Chain != nil {
+			return "assign " + s.Chain.Text
+		}
 		return "assign " + s.Target
 	case lower.Declare:
 		return "declare " + s.Name

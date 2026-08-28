@@ -198,25 +198,26 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-07`, 356 files)
+## Results (pilot `2026-07`, 357 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `examples/pilot-corpora/sysml-examples` | 99 | 96 | 6 | 0 | 0 | 0 | 6 | 0 |
+| `examples/pilot-corpora/sysml-examples` | 99 | 95 | 7 | 0 | 0 | 0 | 7 | 0 |
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 22 | 16 | 18 | 42 | 3 | 7 | 8 | 32 |
+| `examples` | 23 | 16 | 18 | 59 | 3 | 7 | 8 | 49 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **356** | **330** | **71** | **103** | **37** | **8** | **26** | **58** |
+| **Total** | **357** | **329** | **72** | **120** | **37** | **8** | **27** | **75** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
 `pilot-validation` 1 → **0**, with `kerml-examples` unmoved at 3; the `2026-07` corpus then
 retired one more of `pilot-examples` by publishing the conforming type its
-[non-conforming redefinition](omg-issues.md) named, leaving **6**. Our diagnostics on those roots
-therefore fall 20 → **9**. The
+[non-conforming redefinition](omg-issues.md) named, leaving 6, and the quantity-dimension error on
+`Analysis Examples/Dynamics.sysml`:13 — a published product bound to a return typed by another
+dimension — takes it to **7**. Our diagnostics on those roots therefore fall 20 → **10**. The
 `examples` root carries 8: seven are one check firing on them, the non-standard-notation warning
 (6 `require` outside a requirement body, 1 `junction`), and the eighth is the
 library-inherited-name warning on `pseudostates-demo.sysml`:28 described in
@@ -226,7 +227,7 @@ them, and removing `initial <state>;` and `transition <src> to <tgt>;` retired 2
 demos are now written in the standard spellings the warning does not fire on. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **9**. `severity-only` (8) holds pairs of the same shape:
+reference corpora is **10**. `severity-only` (8) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
 
@@ -241,8 +242,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **58** |
-| pilot diagnostics | 123 | **103** |
+| only pilot | 82 | **75** |
+| pilot diagnostics | 123 | **120** |
 | severity-only | 9 | **8** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -254,8 +255,44 @@ combined figures were 324 fully agreeing / 27 only ours / 68 → 67 our diagnost
 agreeing files, only-ours and every OMG root were unmoved by the rewrite, so nothing here is a
 conformance change: it is our own demo written in a spelling the reference accepts. The rewrite itself
 left only-pilot at 61 and pilot diagnostics at 101; the `Now` column tracks the current baseline, so it
-also carries the interface-flow pairing round and the library-inherited-name round that followed, and the
-Results table above states every figure as it is now.
+also carries the interface-flow pairing round, the library-inherited-name round and the end-to-end
+demo round that followed, and the Results table above states every figure as it is now.
+
+### End-to-end demo round
+
+`examples/disposal-robot-demo/robot.sysml` is one file added to the `examples` root, and the whole of that
+round's movement is the reference's column: only pilot 32 → **49** and pilot diagnostics 42 → **59**
+on the root, 58 → **75** and 103 → **120** overall, with our own column unmoved at 8 only-ours and
+18 diagnostics, and the file clean under `-validate`. Its 17 pilot-only rows are all in the demo's
+view and analysis packages, and each is a construct the pinned artifact does not have:
+
+| What the demo writes | Rows | What the pilot reports |
+|---|---:|---|
+| `frame concern` in a view usage | 2 syntax | the member is not in its view grammar, and the cascade takes the file's closing brace |
+| `view … : StateTransitionView` / `: ActionFlowView`, `render asElementTable` | 3 `unresolved-reference`, 4 `kind-mismatch` | our standard view definitions and rendering, which its libraries do not publish |
+| `objective … { require constraint … }` with `attribute :>> best` | 6 `unmapped` | one subject per requirement, no rebinding of `best`, one objective per analysis case |
+| a second objective for a lexicographic optimum | 2 `unmapped` | `Only one objective is allowed` |
+
+Nothing in the demo's structure, calculations, action or state machine draws a pilot diagnostic, so
+the rows above measure the reach of the reference's view and trade-study support, not a divergence in
+the notation both implementations share. The behavioral half of the file was written to the spelling
+the reference accepts for exactly that reason: transitions into a substate name it through the state
+around it (`then approach.rolling`) rather than nesting the trigger in the substate.
+
+### Quantity-dimension round
+
+Judging a bound or written quantity by the dimension its target's declared quantity value type fixes
+adds exactly one row to the census, and it is in the reference's own corpus:
+`Analysis Examples/Dynamics.sysml`:13, adjudicated with the other published-model defects
+[below](#the-remaining-only-ours-rows). The movement is that row and nothing else — `pilot-examples`
+only-ours 6 → **7**, overall fully agreeing 330 → **329** and our diagnostics 71 → **72**, with
+agreement, severity-only and every pilot column unmoved:
+
+| Count | Before the dimension check | Now |
+|---|---:|---:|
+| `pilot-examples`: only ours | 6 | **7** |
+| overall: fully agreeing | 330 | **329** |
+| overall: our diagnostics | 71 | **72** |
 
 ### Step 2 resolver round
 
@@ -399,10 +436,10 @@ Two things did move here, and one is a first:
   is correct and expected here.
 
 Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
-`units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax, 1 `unmapped`; `testdata` 2
+`units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax, 1 `unmapped`; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 11 syntax, 8 `kind-mismatch`, 6 `unmapped`, 7 `unresolved-reference` — all of them
+`examples` 13 syntax, 12 `kind-mismatch`, 14 `unmapped`, 10 `unresolved-reference` — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -440,11 +477,11 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **330 / 26 / 71** |
-| `pilot-examples`: only ours | **43** | **6** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **329 / 27 / 72** |
+| `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **32** |
+| `examples`: only pilot | **40** | **49** |
 | `examples`: fully agreeing | **15** | **16** |
 | `unmapped`, our side | **20** | **23** |
 
@@ -2239,20 +2276,21 @@ own `Must have a Boolean result` can agree with the pilot's identical string ins
 
 ## The remaining only-ours rows
 
-The only-ours column is **26** as published and **24** with the declared errata applied, and every
+The only-ours column is **27** as published and **26** with the declared errata applied, and every
 row in it is adjudicated. Three quarters of them are not candidate false positives at all: 7 are our
 own non-standard-notation warnings on our own demo models (`solver-demo.sysml`, 6 `require` outside a
 requirement body, and `pseudostates-demo.sysml`, 1 `junction`), 3 are our own fixtures under
 `testdata/passes/`, and 6+4+3 are the one-sided specialization-cycle family — the committed probes,
 `Simple Tests/PartTest.sysml:49,50,51,53` and `Simple Tests/Circular.kerml:9,10,11` — whose
 adjudication is [above](#specialization-cycles-f4). That leaves the reference's own corpora carrying
-three rows, all three of them defects in the **published model text** rather than in either
+four rows, all four of them defects in the **published model text** rather than in either
 implementation, and each is an entry of the declared errata overlay:
 
 | Row | Reduced reproducer | Clause | Verdict |
 |---|---|---|---|
 | `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml:38`, `operator '+' combines incommensurable quantities` | `attribute radius = 22/2*25.4 + 110 [mm];` against `ISQ`/`SI`, with nothing else in the file | the bracket postfix binds to `PrimaryExpression` (`KerMLExpressions.xtext:308`), below `AdditiveExpression`; **SysML v2 §9.8.9.1** requires the operands of `+` to share a quantity dimension | **the corpus text is wrong.** `[mm]` qualifies `110` alone, so the addition mixes a dimensionless value with a length. Parenthesising the addition clears our warning; the pinned validator is silent on both texts. Retained, with a correction declared in the overlay |
 | `Analysis Examples/Turbojet Stage Analysis.sysml:25`, same message | `attribute t : TemperatureValue; attribute v : VolumeValue; attribute s = 1/(2*c) * v^2 + t;` with `c : DimensionOneValue` | **SysML v2 §9.8.9.1** | **the corpus text is wrong.** `V : VolumeValue` makes `V^2` L^6 against `T_static`'s Θ. No intended reading can be inferred — the physics wants a speed, the model never says so — so the overlay documents it **without** a correction and the row stays in the census |
+| `Analysis Examples/Dynamics.sysml:13`, `cannot bind a value of dimension L^4·M^2·T^-5 to a feature typed by AccelerationValue (dimension L·T^-2)` | `calc def A { in dt : TimeValue; in tp : PowerValue; return a : AccelerationValue = tp * dt * tp; }` against `ISQ` | **KerML 7.4.9**: the expression is the return feature's value, so it answers to that feature's type, whose dimension the imported ISQ definitions fix (`AccelerationUnit` L^1·T^-2 against `PowerUnit` L^2·M^1·T^-3 and `DurationUnit` T^1) | **the corpus text is wrong.** A power squared times a duration is L^4·M^2·T^-5, incommensurable with an acceleration. No intended reading can be inferred — the calculation declares no speed, and its unused `tm` cannot repair the exponents alone — so the overlay documents it **without** a correction and the row stays in the census. The pinned validator performs no dimensional analysis and is silent |
 | `Individuals Examples/AnalysisIndividualExample.sysml:86`, `fuelConsumption (typed by FuelEconomyAnalysis_1) redefines fuelConsumption (typed by FuelConsumption): types do not conform` | an analysis definition holding `action a : A;`, an individual definition of it, and an individual usage whose `:>> a` is typed by that individual *analysis* definition rather than by an individual `A` | **KerML 7.4.9, 8.3.4.2**: a redefinition is a subsetting, so the redefining feature's type must conform to the redefined one's | **the corpus text is wrong**, on the same reading the [Xpect adjudication](pilot-xpect.md) already gives this rule's sibling rows. The file itself declares `individual action def FuelConsumption_1 :> FuelConsumption` and never uses it: that is the conforming type line 86 meant to name. Our error stays — the pilot validates subsetting conformance nowhere — and the overlay declares the substitution |
 
 The fourth row that stood here, `Vehicle Example/VehicleDefinitions.sysml:47`

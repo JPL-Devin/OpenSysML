@@ -1,0 +1,9 @@
+step 1: token 1@set
+stmt assign s.reading
+  eval literal 4.5 -> 4.5
+materialize: s #1
+step 2: token 1@read
+stmt assign seen
+  eval chain reading -> 4.5
+step 3: token 1@done
+step 4: no active tokens

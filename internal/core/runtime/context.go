@@ -37,6 +37,10 @@ type Context struct {
 
 	features map[*symbols.Symbol][]EffectiveFeature
 
+	// writeTargets memoizes the declaration an assignment's target names, per
+	// scope the statement was written in: what a value written must conform to.
+	writeTargets map[writeTargetKey]*writeTarget
+
 	// calcShapes memoizes resolved calc invocation interfaces (parameters,
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape
@@ -745,7 +749,7 @@ func (ctx *Context) ExecuteStatePerformedBy(stateMachine *symbols.Symbol, self *
 	}
 
 	// Return state machine data and the real ordered visit trace
-	return exec.stateData, exec.GetStateVisits(), nil
+	return exec.StateData(), exec.GetStateVisits(), nil
 }
 
 // CreateActionExecutor creates an action executor without starting execution.

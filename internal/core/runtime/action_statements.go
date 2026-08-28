@@ -14,6 +14,8 @@ import (
 type actionStmtHost struct {
 	exec *ActionExecutor
 	node ast.Node // the action node whose body is running, for diagnostics
+	// frame is the activation the node runs in, nil in the action's own flow.
+	frame *actionFrame
 	// engine runs the body, and holds the values a `perform` in it reads and
 	// writes: the action's own, and those of every block entered around it.
 	engine *stmtEngine
@@ -21,24 +23,25 @@ type actionStmtHost struct {
 
 // executeBody runs the lowered statements of the given action node against the
 // action's feature space.
-func (e *ActionExecutor) executeBody(node ast.Node) error {
-	host := &actionStmtHost{exec: e, node: node}
+func (e *ActionExecutor) executeBody(frame *actionFrame, node ast.Node) error {
+	graph := e.graphOf(frame)
+	host := &actionStmtHost{exec: e, node: node, frame: frame}
 	engine := newStmtEngine(e.ctx, host, e.data)
 	host.engine = engine
 	// The body's activation ends with this execution of it, so a run stepping the
 	// node many times does not hold what every execution computed.
 	defer engine.finish()
-	_, err := engine.run(e.graph.Bodies[node])
+	_, err := engine.run(graph.Bodies[node])
 	return err
 }
 
 // runNodeBody runs the statements a control or initial node's body declares,
 // which the token passing through the node performs.
-func (e *ActionExecutor) runNodeBody(node ast.Node) error {
-	if len(e.graph.Bodies[node]) == 0 {
+func (e *ActionExecutor) runNodeBody(frame *actionFrame, node ast.Node) error {
+	if len(e.graphOf(frame).Bodies[node]) == 0 {
 		return nil
 	}
-	return e.executeBody(node)
+	return e.executeBody(frame, node)
 }
 
 func (h *actionStmtHost) describe() string {
@@ -50,22 +53,38 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	if err != nil {
 		return err
 	}
-	return h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
+	return h.exec.ctx.post(h.exec.connectionsOf(h.frame), msg, s, h.exec.self)
 }
 
 // assignOuter writes a name the body's blocks do not declare to the feature of
 // the object performing the action, and to the action's own features — which
 // every one of its tokens shares — when the object has no such feature. A
-// parameter the action declares is its own, so it is never redirected to the
-// object: an output binds for the caller even where the object has that feature.
-func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+// feature the action declares is its own, so it is never redirected to the
+// object: it is written to the performance and binds for the caller even where
+// the object has a feature of that name.
+func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error {
+	if h.exec.declaresAttribute(name) {
+		return h.exec.setFeature(name, value)
+	}
 	if !h.exec.declaresParameter(name) {
-		if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, name, value); written || err != nil {
+		if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, s.Scope, name, value); written || err != nil {
 			return err
 		}
 	}
-	env.data[name] = value
-	return nil
+	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
+}
+
+func (h *actionStmtHost) assignData(env *stmtEnv, name string, value Value, s lower.Assign) error {
+	if h.exec.declaresAttribute(name) {
+		return h.exec.setFeature(name, value)
+	}
+	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
+}
+
+// assignChain writes the feature a chained target names on the object its chain
+// reaches from where the statement was written.
+func (h *actionStmtHost) assignChain(ec *EvalContext, s lower.Assign, value Value) error {
+	return assignThroughChain(ec, h.describe(), s, value)
 }
 
 // performer is the object performing the action this body belongs to.

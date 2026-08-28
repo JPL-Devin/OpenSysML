@@ -9,6 +9,7 @@ import (
 // calcStmtHost runs a calculation body's statements: it owns its locals, its
 // output features and its returned value, and rejects every outside effect.
 type calcStmtHost struct {
+	ctx    *Context
 	shape  *calcShape
 	self   *Instance
 	result Value // the value its `return` yielded
@@ -35,7 +36,7 @@ func (h *calcStmtHost) declaredOutput(name string) bool {
 
 // assignOuter binds an output this calculation declares, and rejects any other
 // undeclared name: writing that would be an effect outside the calculation.
-func (h *calcStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+func (h *calcStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error {
 	if !h.declaredOutput(name) {
 		return fmt.Errorf("%w: %s is not declared by the calculation", ErrCalcExternalAssignment, name)
 	}
@@ -49,8 +50,17 @@ func (h *calcStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ low
 	// Written to the body's own data, so later statements read the output bound —
 	// an assignment may accumulate into it — and the read that follows the
 	// activation answers from what the body left.
-	env.data[name] = value
-	return nil
+	return storeBodyValue(h.ctx, h, env, name, value, s)
+}
+
+func (h *calcStmtHost) assignData(env *stmtEnv, name string, value Value, s lower.Assign) error {
+	return storeBodyValue(h.ctx, h, env, name, value, s)
+}
+
+// assignChain rejects a chained target: writing a feature of another object is
+// an effect outside the calculation, as writing an undeclared name is.
+func (h *calcStmtHost) assignChain(_ *EvalContext, s lower.Assign, _ Value) error {
+	return fmt.Errorf("%w: %s writes a feature of another object", ErrCalcExternalAssignment, s.Chain.Text)
 }
 
 func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {

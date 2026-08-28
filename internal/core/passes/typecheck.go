@@ -35,6 +35,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	}
 	tc.expr.walkMembers = tc.walk
 	tc.walk(rootScope, root.Members)
+	(&assignWalker{expr: tc.expr}).walk(rootScope, root.Members)
 	return append(tc.diags, tc.expr.diags...)
 }
 
@@ -130,7 +131,8 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	case *ast.TransitionMember:
 		tc.checkTrigger(scope, m.Trigger)
 	case *ast.AssignmentActionNode:
-		tc.expr.infer(scope, m.Value)
+		// Both the value and the feature it is written to are checked by the
+		// assignment walk, which reaches every body an `assign` may stand in.
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
 	case *ast.SubjectMember:

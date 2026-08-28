@@ -1,0 +1,24 @@
+/* The affiliation sits at the right of the footer, on the "Made with" line — the offset is
+   the copyright block's own padding, so the two lines share a baseline. */
+.md-copyright {
+  position: relative;
+  flex: 1;
+}
+
+.osml-affiliation {
+  position: absolute;
+  right: 0;
+  bottom: 0.4rem;
+}
+
+/* Below this the two would overlap, and a footer aside is worth less than a legible one. */
+@media screen and (max-width: 29.9375em) {
+  .osml-affiliation {
+    display: none;
+  }
+}
+
+/* The copyright line is all one colour, so its links need the underline to read as links. */
+.md-copyright__highlight a {
+  text-decoration: underline;
+}

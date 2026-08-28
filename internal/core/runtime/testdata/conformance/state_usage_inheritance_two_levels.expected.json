@@ -1,0 +1,9 @@
+{
+  "type": "state",
+  "evaluate": "test::Top",
+  "finalState": "l1",
+  "stateVisits": ["mid", "deep", "l1"],
+  "outputs": {
+    "mid.deep.n": {"type": "Integer", "value": 5}
+  }
+}

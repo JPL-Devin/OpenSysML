@@ -55,20 +55,29 @@ func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
 	if u.Value == nil {
 		return
 	}
-	want := ec.declaredPrimType(scope, u.Relationships)
+	ec.checkBoundValue(scope, scope, u, u.Value)
+}
+
+// checkBoundValue checks a value against the type and multiplicity of the
+// feature it is bound to. The value's names resolve in valueScope and the
+// feature's declaration in declScope, which differ when the value is written by
+// an assignment rather than declared on the feature.
+func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
+	want := ec.declaredPrimType(declScope, u.Relationships)
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
-	for _, value := range valueElements(u.Value) {
-		got := ec.infer(scope, value)
+	for _, element := range valueElements(value) {
+		got := ec.infer(valueScope, element)
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 			continue
 		}
 		if !semantics.PrimConforms(got, want) {
-			ec.errorf(value.Span(), "cannot bind %s value to a feature typed by %s", got, want)
+			ec.errorf(element.Span(), "cannot bind %s value to a feature typed by %s", got, want)
 		}
 	}
-	ec.checkValueConformance(scope, u)
-	ec.checkValueCount(scope, u)
+	ec.checkValueConformance(valueScope, declScope, u, value)
+	ec.checkValueDimension(valueScope, declScope, u, value)
+	ec.checkValueCount(declScope, u, value)
 }
 
 // declaredPrimType returns the scalar type a usage is typed by, or PrimUnknown.

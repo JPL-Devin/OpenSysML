@@ -21,6 +21,10 @@ import (
 
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
+	t.Run("nested_flow_without_an_initial_node", testNestedFlowWithoutAnInitialNode)
+	t.Run("nested_flow_with_a_dangling_succession", testNestedFlowWithADanglingSuccession)
+	t.Run("nested_flow_that_cannot_progress", testNestedFlowThatCannotProgress)
+	t.Run("nested_flow_that_never_ends", testNestedFlowThatNeverEnds)
 	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
 	t.Run("explicit_succession_missing_endpoint", testExplicitSuccessionMissingEndpoint)
 	t.Run("control_flow_missing_endpoint", testControlFlowMissingEndpoint)
@@ -45,6 +49,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
 	t.Run("parallel_state_body_unsupported_member", testParallelStateBodyUnsupportedMember)
 	t.Run("parallel_state_region_without_initial", testParallelStateRegionWithoutInitial)
+	t.Run("state_usage_typed_by_itself", testStateUsageTypedByItself)
+	t.Run("state_usage_mutually_recursive_typing", testStateUsageMutuallyRecursiveTyping)
+	t.Run("state_usage_inherits_unsupported_member", testStateUsageInheritsUnsupportedMember)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("calc_calls_an_unimported_extension_function", testCalcCallsAnUnimportedExtensionFunction)
@@ -62,6 +69,13 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_send_is_rejected", testCalcSendIsRejected)
 	t.Run("calc_terminate_is_rejected", testCalcTerminateIsRejected)
 	t.Run("calc_assignment_outside_the_calc", testCalcAssignmentOutsideTheCalc)
+	t.Run("assign_chain_unknown_final_feature", testAssignChainUnknownFinalFeature)
+	t.Run("assign_chain_step_is_not_an_object", testAssignChainStepIsNotAnObject)
+	t.Run("assign_chain_step_holds_many_objects", testAssignChainStepHoldsManyObjects)
+	t.Run("assign_chain_multiplicity_violation", testAssignChainMultiplicityViolation)
+	t.Run("assign_chain_unset_step", testAssignChainUnsetStep)
+	t.Run("assign_chain_unreachable_base", testAssignChainUnreachableBase)
+	t.Run("assign_chain_rejected_in_calc_body", testAssignChainRejectedInCalcBody)
 	t.Run("calc_non_boolean_condition", testCalcNonBooleanCondition)
 	t.Run("calc_usage_unbound_input", testCalcUsageUnboundInput)
 	t.Run("calc_usage_unknown_output", testCalcUsageUnknownOutput)
@@ -73,6 +87,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
+	t.Run("calc_output_binding_violates_declared_type", testCalcOutputBindingViolatesDeclaredType)
 	t.Run("operation_constraint_body_cannot_be_evaluated", testOperationConstraintBodyCannotBeEvaluated)
 	t.Run("binding_conflict", testBindingConflict)
 	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
@@ -234,10 +249,27 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
 	t.Run("expression_over_a_feature_value_holding_no_value", testExpressionOverAFeatureValueHoldingNoValue)
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
+	t.Run("quantity_write_of_another_dimension", testQuantityWriteOfAnotherDimension)
 	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
+	t.Run("object_exhibited_machine_attribute_write_violates_multiplicity", testObjectExhibitedMachineAttributeWriteViolatesMultiplicity)
+	t.Run("object_performed_action_attribute_write_violates_multiplicity", testObjectPerformedActionAttributeWriteViolatesMultiplicity)
+	t.Run("object_performed_action_occurrence_holds_a_non_object", testObjectPerformedActionOccurrenceHoldsANonObject)
 	t.Run("operation_invoked_with_unbound_parameters", testOperationInvokedWithUnboundParameters)
 	t.Run("second_instantiation_of_one_type", testSecondInstantiationOfOneType)
+	t.Run("write_of_a_wrong_typed_value_leaves_the_feature", testWriteOfAWrongTypedValueLeavesTheFeature)
+	t.Run("write_of_too_many_values_leaves_the_feature", testWriteOfTooManyValuesLeavesTheFeature)
+	t.Run("write_of_no_value_where_one_is_required", testWriteOfNoValueWhereOneIsRequired)
+	t.Run("state_entry_write_of_a_wrong_typed_value", testStateEntryWriteOfAWrongTypedValue)
+	t.Run("performer_feature_write_of_a_wrong_typed_value", testPerformerFeatureWriteOfAWrongTypedValue)
+	t.Run("standalone_action_naming_a_performer_feature", testStandaloneActionNamingAPerformerFeature)
+	t.Run("standalone_action_writing_a_performer_feature", testStandaloneActionWritingAPerformerFeature)
+	t.Run("standalone_action_naming_this_of_an_unowned_performance", testStandaloneActionNamingThisOfAnUnownedPerformance)
+	t.Run("chained_write_of_a_wrong_typed_value", testChainedWriteOfAWrongTypedValue)
+	t.Run("calc_output_write_of_a_wrong_typed_value", testCalcOutputWriteOfAWrongTypedValue)
+	t.Run("action_local_write_of_a_wrong_typed_value", testActionLocalWriteOfAWrongTypedValue)
+	t.Run("action_output_write_of_a_wrong_typed_value", testActionOutputWriteOfAWrongTypedValue)
+	t.Run("performance_occurrence_write_of_a_wrong_typed_value", testPerformanceOccurrenceWriteOfAWrongTypedValue)
 }
 
 func testBindingConflict(t *testing.T) {
@@ -823,6 +855,56 @@ func testSuccessionGuardFailureModes(t *testing.T) {
 				}
 			case <-time.After(5 * time.Second):
 				t.Fatal("executing the guarded action did not terminate")
+			}
+		})
+	}
+}
+
+// testQuantityWriteOfAnotherDimension: a write whose quantity measures in a
+// dimension the target's declared quantity value type does not is refused with
+// a typed error, while a commensurable unit at another scale is written.
+func testQuantityWriteOfAnotherDimension(t *testing.T) {
+	const duration = "ISQ::DurationValue"
+	for _, tc := range []struct {
+		name     string
+		declared string
+		value    string
+		want     error
+	}{
+		{"speed into a duration", duration, "3.0 [SI::m / SI::s]", ErrTypeMismatch},
+		{"length into a duration", duration, "5.0 [SI::m]", ErrTypeMismatch},
+		{"dimensionless into a duration", duration, "5.0 [MeasurementReferences::one]", ErrTypeMismatch},
+		{"another scale of the same dimension", duration, "5.0 [SI::min]", nil},
+		{"a unit the target fixes no dimension against", "Quantities::ScalarQuantityValue", "5.0 [SI::m]", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := fmt.Sprintf(`
+				package test {
+					private import SI::*;
+					action w {
+						attribute t : %s = 0.0 [s];
+						first start;
+						action step { assign t := %s; }
+						done;
+						succession first start then step;
+						succession first step then done;
+					}
+				}
+			`, tc.declared, tc.value)
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "w", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action w not found")
+			}
+			_, err := ctx.ExecuteAction(sym)
+			if tc.want == nil {
+				if err != nil {
+					t.Fatalf("ExecuteAction err = %v, want the write to conform", err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("ExecuteAction err = %v, want %v", err, tc.want)
 			}
 		})
 	}
@@ -3628,6 +3710,96 @@ func testParallelStateRegionWithoutInitial(t *testing.T) {
 	}
 }
 
+// testStateUsageTypedByItself: a definition whose substate is typed by it has no
+// finite materialization and must report that, not recurse.
+func testStateUsageTypedByItself(t *testing.T) {
+	src := `
+		package test {
+			state def A {
+				entry; then b;
+				state b : A;
+			}
+		}
+	`
+	err := stateExecutorError(t, src, "A")
+	if err == nil {
+		t.Fatal("recursively typed state succeeded")
+	}
+	if !errors.Is(err, lower.ErrRecursiveStateTyping) {
+		t.Fatalf("error = %v, want recursive state typing", err)
+	}
+}
+
+// testStateUsageMutuallyRecursiveTyping: two definitions reaching each other
+// through their substates report the cycle rather than materializing forever.
+func testStateUsageMutuallyRecursiveTyping(t *testing.T) {
+	src := `
+		package test {
+			state def A {
+				entry; then b;
+				state b : B;
+			}
+			state def B {
+				entry; then a;
+				state a : A;
+			}
+		}
+	`
+	err := stateExecutorError(t, src, "A")
+	if err == nil {
+		t.Fatal("mutually recursive state typing succeeded")
+	}
+	if !errors.Is(err, lower.ErrRecursiveStateTyping) {
+		t.Fatalf("error = %v, want recursive state typing", err)
+	}
+}
+
+// testStateUsageInheritsUnsupportedMember: content a usage inherits that state
+// lowering cannot represent is reported, never dropped.
+func testStateUsageInheritsUnsupportedMember(t *testing.T) {
+	src := `
+		package test {
+			action def Warm;
+			state def Inner {
+				entry; then i1;
+				state i1;
+				perform Warm;
+			}
+			state def Machine {
+				entry; then nested;
+				state nested : Inner;
+			}
+		}
+	`
+	err := stateExecutorError(t, src, "Machine")
+	if err == nil {
+		t.Fatal("unsupported inherited member succeeded")
+	}
+	if !errors.Is(err, lower.ErrUnsupportedStateContent) {
+		t.Fatalf("error = %v, want unsupported state content", err)
+	}
+	if !strings.Contains(err.Error(), "cannot be inherited by the state nested") {
+		t.Fatalf("error = %v, want the inheriting state named", err)
+	}
+}
+
+// stateExecutorError builds a state executor for a named state definition and
+// returns what creating it reports.
+func stateExecutorError(t *testing.T, src, name string) error {
+	t.Helper()
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), name, ast.DefState)
+	if sym == nil {
+		t.Fatalf("state %s not found", name)
+	}
+	_, err := ctx.CreateStateExecutor(sym)
+	return err
+}
+
 // testSourcelessAcceptAtTopLevel: sourceless accept...then at top level should error
 func testSourcelessAcceptAtTopLevel(t *testing.T) {
 	src := `
@@ -5908,6 +6080,31 @@ func testCalcOutputValuedAndAssigned(t *testing.T) {
 	}
 }
 
+// testCalcOutputBindingViolatesDeclaredType: an output whose declaration binds
+// it a value of another type is rejected where a write of one is, the input it
+// reads being untyped so only the run time can judge it.
+func testCalcOutputBindingViolatesDeclaredType(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			calc def Bound {
+				in n;
+				out a : Integer = n;
+			}
+			calc c : Bound { in n = "seven"; }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	usage := oneSymbol(t, idx, "test::c")
+	_, err := ctx.CalcUsageOutput(usage, "a", idx.DocumentRoot("<test>"), nil)
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "Integer") {
+		t.Errorf("error = %v, want it to name the declared type", err)
+	}
+}
+
 // testCalcOutputAssignedTwice: a body assigning an output more than once leaves
 // it bound to the last assignment that ran, the same as a body local, so an
 // output may be initialized and then accumulated into.
@@ -6883,6 +7080,95 @@ func testObjectExhibitedMachineWithoutAnInitialState(t *testing.T) {
 	}
 }
 
+// testObjectExhibitedMachineAttributeWriteViolatesMultiplicity checks that an
+// occurrence write failure remains typed and terminates normally.
+func testObjectExhibitedMachineAttributeWriteViolatesMultiplicity(t *testing.T) {
+	src := `
+	package test {
+		state def Modes {
+			attribute samples : Integer[2] = (0, 0);
+			entry; then active;
+			state active {
+				entry action record {
+					assign samples := 1;
+				}
+			}
+		}
+		part def Controller {
+			exhibit state modes : Modes;
+		}
+	}`
+	_, _, err := instantiateInSource(t, src, "test::Controller")
+	if !errors.Is(err, ErrStatePerformanceOccurrence) {
+		t.Fatalf("error = %v, want ErrStatePerformanceOccurrence", err)
+	}
+	if !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("error = %v, want ErrMultiplicityViolation", err)
+	}
+}
+
+// testObjectPerformedActionAttributeWriteViolatesMultiplicity checks that a
+// performed action's occurrence write failure remains typed.
+func testObjectPerformedActionAttributeWriteViolatesMultiplicity(t *testing.T) {
+	src := `
+	package test {
+		action def Record {
+			attribute samples : Integer[2] = (0, 0);
+			action step {
+				assign samples := 1;
+			}
+			first step;
+		}
+		part def Logger {
+			perform action recording : Record;
+		}
+	}`
+	_, _, err := instantiateInSource(t, src, "test::Logger")
+	if !errors.Is(err, ErrActionPerformanceOccurrence) {
+		t.Fatalf("error = %v, want ErrActionPerformanceOccurrence", err)
+	}
+	if !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("error = %v, want ErrMultiplicityViolation", err)
+	}
+}
+
+// testObjectPerformedActionOccurrenceHoldsANonObject: a perform usage whose
+// feature holds a value that is not an occurrence is reported, not performed.
+func testObjectPerformedActionOccurrenceHoldsANonObject(t *testing.T) {
+	src := `
+	package test {
+		action def Bump {
+			attribute count : Integer = 0;
+			action step {
+				assign count := count + 1;
+			}
+			first step;
+		}
+		part def Host {
+			perform action work : Bump;
+		}
+	}`
+	idx, _, ctx := buildRuntime(t, "<performed-action-non-object>", parseAndBuild(t, src))
+	inst, err := ctx.materialize(oneSymbol(t, idx, "test::Host"), 0)
+	if err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	fv, ok := inst.FeatureValues["work"]
+	if !ok {
+		t.Fatal("object has no work feature")
+	}
+	fv.Value = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 5}}
+	fv.Materialized = true
+
+	err = ctx.startClassifierBehaviors(inst, 0)
+	if !errors.Is(err, ErrActionPerformanceOccurrence) {
+		t.Fatalf("error = %v, want ErrActionPerformanceOccurrence", err)
+	}
+	if !strings.Contains(err.Error(), "not an occurrence") {
+		t.Errorf("error = %v, want one naming the value the feature holds", err)
+	}
+}
+
 // testOperationInvokedWithUnboundParameters: an operation invoked without a value
 // for a parameter, or with an argument naming none, is reported rather than run
 // against values the invocation never stated.
@@ -7004,4 +7290,474 @@ func instantiateInSource(t *testing.T, src, fqn string) (*Context, *Instance, er
 	idx, _, ctx := buildRuntime(t, "<test>", file)
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, fqn))
 	return ctx, inst, err
+}
+
+// instantiateWithLibraries materializes the named type declared in src over an
+// index carrying the standard library, so a case may name its scalar types.
+func instantiateWithLibraries(t *testing.T, src, fqn string) (*Context, *Instance, error) {
+	t.Helper()
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, fqn))
+	return ctx, inst, err
+}
+
+// testWriteOfAWrongTypedValueLeavesTheFeature: a value the feature's type does
+// not admit is rejected before the write, so the feature keeps what it held.
+func testWriteOfAWrongTypedValueLeavesTheFeature(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Rig {
+			attribute reading : Real = 0.5;
+		}
+	}`
+	ctx, inst, err := instantiateWithLibraries(t, src, "test::Rig")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	err = inst.SetFeatureValue(ctx, "reading", Value{Kind: ValString, Str: "not a number"})
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	for _, want := range []string{"reading", "Real", "not a number"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %v, want it to name %s", err, want)
+		}
+	}
+	fv, err := inst.GetFeatureValue(ctx, "reading")
+	if err != nil {
+		t.Fatalf("read reading after the rejected write: %v", err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Real != 0.5 {
+		t.Errorf("reading = %v, want the 0.5 it held before the rejected write", FormatValue(got))
+	}
+}
+
+// testWriteOfTooManyValuesLeavesTheFeature: a written collection the target's
+// multiplicity does not admit is rejected, and the feature keeps its values.
+func testWriteOfTooManyValuesLeavesTheFeature(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Rig {
+			attribute samples : Integer[2] = (1, 2);
+		}
+	}`
+	ctx, inst, err := instantiateWithLibraries(t, src, "test::Rig")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	tooMany := sequenceOf([]Value{constInt(1), constInt(2), constInt(3)})
+	if err := inst.SetFeatureValue(ctx, "samples", tooMany); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("error = %v, want ErrMultiplicityViolation", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "samples")
+	if err != nil {
+		t.Fatalf("read samples after the rejected write: %v", err)
+	}
+	if got := len(elementsOf(fv.HeldValue())); got != 2 {
+		t.Errorf("samples holds %d value(s), want the 2 it held before the rejected write", got)
+	}
+}
+
+// testWriteOfNoValueWhereOneIsRequired: an empty collection written to a feature
+// whose lower bound is one is a multiplicity violation, not an unset feature.
+func testWriteOfNoValueWhereOneIsRequired(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Rig {
+			attribute reading : Real[1] = 0.5;
+		}
+	}`
+	ctx, inst, err := instantiateWithLibraries(t, src, "test::Rig")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	if err := inst.SetFeatureValue(ctx, "reading", sequenceOf(nil)); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("error = %v, want ErrMultiplicityViolation", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "reading")
+	if err != nil {
+		t.Fatalf("read reading after the rejected write: %v", err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Real != 0.5 {
+		t.Errorf("reading = %v, want the 0.5 it held before the rejected write", FormatValue(got))
+	}
+}
+
+// testStateEntryWriteOfAWrongTypedValue: a write in a state's entry action is
+// judged against the feature it names, however deep in the machine it stands.
+func testStateEntryWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Rig {
+			attribute reading : Real = 0.0;
+			exhibit state run {
+				entry; then go;
+				state go {
+					entry action set {
+						assign reading := "not a number";
+					}
+				}
+			}
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Rig")
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "Real") {
+		t.Errorf("error = %v, want it to name the declared type", err)
+	}
+}
+
+// testPerformerFeatureWriteOfAWrongTypedValue: a write reaching a feature of the
+// object performing the behavior is judged against that feature's declaration.
+func testPerformerFeatureWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Rig {
+			attribute label : String = "a";
+			perform action set {
+				action step {
+					assign label := 7;
+				}
+				first step;
+			}
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Rig")
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "String") {
+		t.Errorf("error = %v, want it to name the declared type", err)
+	}
+}
+
+// A body written on its own resolves in its own namespace, so a name only the
+// performing object declares is unresolved at run time as it is to analysis.
+func testStandaloneActionNamingAPerformerFeature(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Touch {
+			action step {
+				assign touched := touched + 1;
+			}
+			first step;
+		}
+		part def Host {
+			attribute touched : Integer = 0;
+			perform action t : Touch;
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Host")
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("error = %v, want ErrUnresolvedReference", err)
+	}
+	if !strings.Contains(err.Error(), "touched") {
+		t.Errorf("error = %v, want it to name the unresolved feature", err)
+	}
+}
+
+// The write side refuses the same name the read side refuses, rather than
+// reaching into the performing object for a name the body cannot see.
+func testStandaloneActionWritingAPerformerFeature(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Touch {
+			action step {
+				assign touched := 1;
+			}
+			first step;
+		}
+		part def Host {
+			attribute touched : Integer = 0;
+			perform action t : Touch;
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Host")
+	if !errors.Is(err, ErrPerformerFeatureNotInScope) {
+		t.Fatalf("error = %v, want ErrPerformerFeatureNotInScope", err)
+	}
+	if !strings.Contains(err.Error(), "touched") {
+		t.Errorf("error = %v, want it to name the refused feature", err)
+	}
+}
+
+// `this` in a body written on its own names the performance itself, which no
+// object owns, so a feature of the performer is not reachable through it.
+func testStandaloneActionNamingThisOfAnUnownedPerformance(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Touch {
+			action step {
+				assign this.touched := 1;
+			}
+			first step;
+		}
+		part def Host {
+			attribute touched : Integer = 0;
+			perform action t : Touch;
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Host")
+	if !errors.Is(err, ErrThisNotAnObject) {
+		t.Fatalf("error = %v, want ErrThisNotAnObject", err)
+	}
+}
+
+// testChainedWriteOfAWrongTypedValue: a write through a feature chain answers to
+// the declaration of the feature the chain reaches.
+func testChainedWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Cell {
+			attribute mark : Integer = 0;
+		}
+		part def Rig {
+			part cell : Cell;
+			exhibit state run {
+				entry; then marking;
+				state marking {
+					entry action set {
+						assign cell.mark := "seven";
+					}
+				}
+			}
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Rig")
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "mark") {
+		t.Errorf("error = %v, want it to name the feature written", err)
+	}
+}
+
+// testCalcOutputWriteOfAWrongTypedValue: an output a calculation body binds is a
+// feature too, so what it is bound to conforms to its declared type.
+func testCalcOutputWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		calc def Label {
+			out tag : String;
+			tag := 7;
+		}
+	}`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	calc := oneSymbol(t, idx, "test::Label")
+	_, err := ctx.InvokeCalc(calc, nil, idx.DocumentRoot("<test>"))
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+}
+
+// testActionLocalWriteOfAWrongTypedValue: a value a body declares of its own is
+// declared with a type, so a write to it answers to that type.
+func testActionLocalWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Compute {
+			out total : Integer;
+			action step {
+				attribute held : Integer = 0;
+				assign held := "seven";
+				assign total := held;
+			}
+			first step;
+		}
+	}`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	_, err := ctx.ExecuteAction(oneSymbol(t, idx, "test::Compute"))
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+}
+
+// testActionOutputWriteOfAWrongTypedValue: binding an output binds a feature, so
+// the value bound conforms to the type the output was declared with.
+func testActionOutputWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Compute {
+			out total : Integer;
+			action step {
+				assign total := "seven";
+			}
+			first step;
+		}
+	}`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	_, err := ctx.ExecuteAction(oneSymbol(t, idx, "test::Compute"))
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+}
+
+// testPerformanceOccurrenceWriteOfAWrongTypedValue: an attribute of a performed
+// action is a feature of its performance occurrence, and a write to it is judged
+// against that feature's declaration.
+func testPerformanceOccurrenceWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Record {
+			attribute sample : Integer = 0;
+			action step {
+				assign sample := "seven";
+			}
+			first step;
+		}
+		part def Logger {
+			perform action recording : Record;
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Logger")
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+}
+
+// testNestedFlowWithoutAnInitialNode: a node stating a flow that names no node
+// to start at is reported at initialize(), not run as a leaf.
+func testNestedFlowWithoutAnInitialNode(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first leg;
+				action leg {
+					action a;
+					action b;
+					succession first a then b;
+				}
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+
+	// The constructor is permissive; the flow's failure surfaces at initialize().
+	exec, err := newActionExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newActionExecutor: %v", err)
+	}
+	err = exec.initialize()
+	if !errors.Is(err, ErrInvalidActionFlow) {
+		t.Fatalf("error = %v, want ErrInvalidActionFlow", err)
+	}
+	if !strings.Contains(err.Error(), "leg") {
+		t.Errorf("error = %v, want it to name the node whose flow cannot be built", err)
+	}
+}
+
+// testNestedFlowWithADanglingSuccession: a succession inside a node's own flow
+// naming nothing is that node's error, reported rather than dropped.
+func testNestedFlowWithADanglingSuccession(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first leg;
+				action leg {
+					first a;
+					action a;
+					succession first a then missing;
+				}
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+
+	exec, err := newActionExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newActionExecutor: %v", err)
+	}
+	if err := exec.initialize(); !errors.Is(err, ErrInvalidActionFlow) {
+		t.Fatalf("error = %v, want ErrInvalidActionFlow", err)
+	}
+}
+
+// testNestedFlowThatCannotProgress: a join inside a node's own flow that can
+// never be reached by both its tokens deadlocks the run, reported rather than hung.
+func testNestedFlowThatCannotProgress(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first leg;
+				action leg {
+					first s;
+					action s;
+					action stranded;
+					join sync;
+					done;
+					succession first s then sync;
+					succession first stranded then sync;
+					succession first sync then done;
+				}
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	if err := exec.RunToCompletion(); !errors.Is(err, ErrActionDeadlock) {
+		t.Fatalf("error = %v, want ErrActionDeadlock", err)
+	}
+}
+
+// testNestedFlowThatNeverEnds: a cycle inside a node's own flow spends the
+// action's step budget rather than running forever.
+func testNestedFlowThatNeverEnds(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first leg;
+				action leg {
+					first a;
+					action a;
+					action b;
+					succession first a then b;
+					succession first b then a;
+				}
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	if err := exec.RunToCompletion(); !errors.Is(err, ErrActionStepLimitExceeded) {
+		t.Fatalf("error = %v, want ErrActionStepLimitExceeded", err)
+	}
 }

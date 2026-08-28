@@ -1,12 +1,17 @@
 package lower
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
+
+// ErrStatementOutsideFlow reports a statement written among an action's own
+// members that no succession binds, so it holds no position in the token flow.
+var ErrStatementOutsideFlow = errors.New("has no position in the token flow")
 
 // ActionNodes returns the nodes accepted by action lowering and whether the
 // action has an initial node after interpreting `first <node>`.
@@ -76,14 +81,15 @@ func collectActionNodes(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph
 		case *ast.Usage:
 			if n.Kind == ast.UsageAction {
 				graph.Nodes = append(graph.Nodes, n)
-				lowerBody(graph, n, childScope(scope, n))
+				lowerActionNode(graph, n, childScope(scope, n))
 			}
 		case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode,
 			*ast.SendStatement, *ast.TerminateStatement:
 			// A statement written among the action's own members with no succession
 			// binding it has no position in the token flow.
 			if !sequenced[actualMember] {
-				return nil, nil, nil, fmt.Errorf("%s written directly in an action body has no position in the token flow: declare it inside an action node", statementKeyword(n))
+				return nil, nil, nil, fmt.Errorf("%s written directly in an action body %w: declare it inside an action node",
+					statementKeyword(n), ErrStatementOutsideFlow)
 			}
 			graph.Nodes = append(graph.Nodes, n)
 			graph.Bodies[n] = []Statement{lowerStatement(n, scope)}
@@ -152,7 +158,7 @@ func ensureInheritedActionNode(graph *ActionGraph, ref ast.Node) ast.Node {
 	graph.Nodes = append(graph.Nodes, decl)
 	switch n := decl.(type) {
 	case *ast.Usage:
-		lowerBody(graph, n, childScope(declaringScope, n))
+		lowerActionNode(graph, n, childScope(declaringScope, n))
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode, *ast.ActionExecutionNode:
 		lowerNodeBody(graph, n, ast.NodeBodyMembers(n), declaringScope)
 	case *ast.WhileLoopActionNode, *ast.IfActionNode, *ast.AssignmentActionNode,

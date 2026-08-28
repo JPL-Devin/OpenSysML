@@ -26,13 +26,15 @@ and run the same input through both on camera. A worktree keeps the branch check
 
 ```bash
 git worktree add /tmp/old<sha> <sha>            # e.g. the commit before the fix
-(cd /tmp/old<sha> && go build -o /tmp/old-sysml ./cmd/sysml)
+(cd /tmp/old<sha> && make build-sysml && cp bin/sysml /tmp/old-sysml)
 git worktree remove /tmp/old<sha>               # when finished
 ```
 
 Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evidence available —
 it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
-line/column numbers, where a screenshot of the new behavior alone proves nothing.
+line/column numbers, where a screenshot of the new behavior alone proves nothing. Building through
+the Makefile preserves the version ldflags before the binary is copied out of the worktree; plain
+`go build` would make `--version` report `dev` / `unknown`.
 
 ## Library-cache cold/warm testing (`XDG_CACHE_HOME`)
 
@@ -155,12 +157,20 @@ parser's file-kind gates are testable through the binary:
 2. **Interactive in a GUI terminal (for the recording).** Because the app under test *is* a CLI,
    the recording should show a real terminal session. See the recording setup below.
 
+Run shell commands such as `clear` only before launching the REPL. At the `sysml>` prompt they are
+parsed as model source; rebuilding the model can restart a running exhibited machine and invalidate
+the rest of a walkthrough. Loading a second model into the same session also restarts machines and
+shifts instance IDs, so use a fresh REPL session for each model or contrast run.
+
 **At the `sysml>` prompt an expression must go through `%eval`.** Bare text — even a fully
 qualified `test::r.cost.v` — is submitted as *model source*, so it answers
 `1:1: error: expected a namespace member` and leaves an unresolved buffer error that taints the
 next submission with `note: deeper checks may not have run here…` (the same trap as typing
 `clear`). On camera this looks like the feature is broken. Type `%eval test::r.cost.v`; if you have
 already tainted the session, `%quit`/Ctrl-D and restart rather than continuing.
+
+In Konsole, `xdotool key ctrl+shift+plus` may type a literal `+`; use
+`xdotool key ctrl+shift+equal` to enlarge the font before recording.
 
 ### Driving a `type: "calc"` conformance fixture from the CLI
 
@@ -1394,6 +1404,20 @@ from an explicit real interpreter (`/home/ubuntu/.pyenv/versions/3.12.8/bin/pyth
 or `/usr/bin/python3.10`) and verify `<venv>/bin/python -c 'import opensysml'` before blaming the
 client. `$HOME/pv` is created by the blueprint, so prefer reusing it.
 
+Do not assume `$HOME/pv` is the one that works: on a session seen in Aug 2026 `~/pv` and
+`~/fprime-venv` both failed `import opensysml` while the *editable* install lived in
+`/home/ubuntu/repos/fprime/fprime-venv/bin/python3` (3.12.8, `grpc` 1.83.0) — which happened to be
+first on the tool shell's `PATH` as plain `python3`. Probe every candidate in one go
+(`for p in /home/ubuntu/pv/bin/python /home/ubuntu/*venv*/bin/python python3; do $p -c 'import
+opensysml,grpc'; done`) and use the absolute path of whichever answers. Critically, **a GUI Konsole
+does not inherit the tool shell's `PATH`**: there `python3` is `/usr/bin/python3` (3.10, no
+`opensysml`), so a demo script that worked in `exec` dies with `ModuleNotFoundError` on camera.
+Always type the absolute interpreter path (or `export PATH=...`) in the recorded terminal.
+
+When checking a documented exit status ("a failing check exits nonzero"), never pipe the binary into
+`tail`/`grep` — `$?` then reports the pager's status and a failing command reads as `exit=0`.
+Redirect to a file and echo `$?` first, then `tail` the file.
+
 ### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
 
 Since PR #181 `Connection` interrogates whatever is *already* listening (`GetServerInfo`) and
@@ -1427,6 +1451,18 @@ OPENSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> Stale
   matches your own shell — see the pkill trap below). Refcount behaviour worth asserting within one
   process (two `connect()`s): 1 → 2 → 1, the service still serving the remaining holder and stopped
   only when the last one closes. Across two processes there is nothing to share: each starts its own.
+- **A leftover service may be answering 50051 from a path you never built.** A previous session can
+  leave e.g. `/tmp/sysml-grpc` listening, in which case `python -m pytest python/tests/test_runtime_integration.py`
+  reports `N passed` in ~0.05 s against *unknown* code — the integration suite neither skips nor
+  tells you whose binary served it, so a green run proves nothing about your commit. Before trusting
+  any client result, run `pgrep -af sysml-grpc` — `-x` does find `/tmp/sysml-grpc` (it matches the
+  executable's basename, truncated to 15 chars), but only `-af` prints the path that is serving,
+  which is the thing you need to see. Kill the PID you found **by number**, start your own
+  (`nohup ./bin/sysml-grpc >/tmp/grpc.log 2>&1 &`) and confirm the log's `Connect server listening`.
+  When proving a runtime fix, re-point the same test at a service built from the parent revision
+  (`git worktree add /tmp/wt-old HEAD~1 && (cd /tmp/wt-old && make build-grpc)`) and require it to
+  **fail** — that is the only cheap check that the client assertion is load-bearing rather than
+  vacuous.
 
 Client API shapes that are easy to get wrong:
 

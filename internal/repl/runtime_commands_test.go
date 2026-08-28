@@ -339,6 +339,16 @@ func TestActionDebuggerRunsToResult(t *testing.T) {
 	wants(t, run(t, s, "%stop"), `✓ Stopped debugging session for "tally"`)
 }
 
+// A perform usage states no flow of its own: the debugger runs the flow of the
+// action definition typing it, rather than reporting the usage as flowless.
+func TestActionDebuggerRunsAPerformUsage(t *testing.T) {
+	s := loadFixture(t, "testdata/action_perform_usage.sysml")
+
+	run(t, s, "%instantiate Perform::hiker")
+	wants(t, run(t, s, "%action Perform::hiker::walk"), `✓ Started action executor for "Perform::hiker::walk"`, "Tokens: 1")
+	wants(t, run(t, s, "%continue"), "✓ Action completed", "legs = 3")
+}
+
 // An action reports the values it produced the same way however it was driven,
 // so a run stepped to its end reads like one run to completion.
 func TestSteppedActionReportsResultsLikeContinue(t *testing.T) {
@@ -770,4 +780,15 @@ func TestStateDebuggerRoutesForThePerformingObject(t *testing.T) {
 func TestStateDebuggerReportsAnUninstantiatedPerformer(t *testing.T) {
 	s := loadFixture(t, "../core/runtime/testdata/conformance/variant_connection_per_owner.sysml")
 	wants(t, run(t, s, "%state VariantRouting::Router::Route VariantRouting::alpha"), "no instance of")
+}
+
+// A machine whose substates are typed usages: the debugger enters the state the
+// definition declares initial, and each usage keeps its own attribute values.
+func TestStateDebuggerStepsThroughInheritedContent(t *testing.T) {
+	s := loadFixture(t, "testdata/state_typed_usage.sysml")
+
+	wants(t, run(t, s, "%state Machine"), "Current state: i1")
+	wants(t, run(t, s, "%current"), "one.hits = 1", "two.hits = 0")
+	wants(t, run(t, s, "%advance 5"), "Current state: i2")
+	wants(t, run(t, s, "%current"), "one.hits = 1", "two.hits = 0", "Time: 5.0")
 }

@@ -39,6 +39,11 @@ type ActionGraph struct {
 	// Accepts: node → the message that node waits for
 	Accepts map[ast.Node]Accept
 
+	// Subflows: node → the flow the node's own members state, present only for a
+	// node that states one. Its subactions are subperformances of the node, so it
+	// completes only when that flow does (action_subflow.go).
+	Subflows map[ast.Node]*Subflow
+
 	// InitialNode (required)
 	Initial ast.Node
 
@@ -93,15 +98,76 @@ type Send struct {
 func (Send) statement() {}
 
 // Assign is a lowered assignment: `assign <Target> := <Value>`. Target is the
-// simple name assigned to, empty when the target was not a plain name.
+// feature written — the target's last segment — empty when the target names no
+// feature.
 type Assign struct {
 	Target string
-	Value  ast.Node
-	Node   ast.Node       // the statement itself, for diagnostics
-	Scope  *symbols.Scope // the scope the statement was declared in
+	// Chain is the chained target the assignment writes through (`s.reading`),
+	// nil when the target was a plain name the body's host binds.
+	Chain *AssignTarget
+	Value ast.Node
+	Node  ast.Node       // the statement itself, for diagnostics
+	Scope *symbols.Scope // the scope the statement was declared in
 }
 
 func (Assign) statement() {}
+
+// AssignTarget is a chained assignment target: `assign a.b.c := v` walks `b`
+// from `a` and writes `c` on the object it reaches.
+type AssignTarget struct {
+	// Base is the expression the chain starts from, evaluated in the statement's
+	// own scope.
+	Base ast.Node
+	// Steps are the features walked from Base to the object written, in order.
+	Steps []string
+	// Text is the target as written (`a.b.c`), for diagnostics.
+	Text string
+}
+
+// assignTarget reports the chained target an assignment states, flattening a
+// nested chain into one walk. It reports false for a plain or
+// namespace-qualified name, neither of which reaches through an object.
+func assignTarget(node ast.Node) (*AssignTarget, string, bool) {
+	chain, ok := node.(*ast.FeatureChainExpr)
+	if !ok {
+		return nil, "", false
+	}
+	base, segments := flattenChain(chain)
+	text := FeaturePath(node)
+	if base == nil || len(segments) == 0 || text == "" {
+		return nil, "", false
+	}
+	return &AssignTarget{
+		Base:  base,
+		Steps: segments[:len(segments)-1],
+		Text:  text,
+	}, segments[len(segments)-1], true
+}
+
+// flattenChain returns the node a feature chain starts from and every feature
+// segment walked from it: `a.b.c` is one walk from `a`, not a walk through the
+// value of `a.b`. It returns no segments when one of them names nothing.
+func flattenChain(chain *ast.FeatureChainExpr) (ast.Node, []string) {
+	var segments []string
+	for {
+		if chain.Member == nil || len(chain.Member.Parts) == 0 {
+			return nil, nil
+		}
+		names := make([]string, 0, len(chain.Member.Parts))
+		for _, part := range chain.Member.Parts {
+			if part.Text == "" {
+				return nil, nil
+			}
+			names = append(names, part.Text)
+		}
+		segments = append(names, segments...)
+		inner, nested := chain.Operand.(*ast.FeatureChainExpr)
+		if !nested {
+			return chain.Operand, segments
+		}
+		chain = inner
+	}
+}
 
 // Declare is a lowered declaration in a body-local block: `attribute i = 0;`
 // written inside a loop or an `if` branch. The name it declares is a member of
@@ -271,6 +337,9 @@ type Attribute struct {
 	Name  string
 	Value ast.Node
 	Node  ast.Node // the declaration itself, for diagnostics
+	// Scope is the scope the declaration was written in, in which its default
+	// resolves; nil where the owner's own scope resolves it.
+	Scope *symbols.Scope
 }
 
 // ObjectFlow represents a data flow edge between pins.
@@ -466,19 +535,9 @@ func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 		switch m := unwrapMembership(member).(type) {
 		case *ast.SendStatement, *ast.AssignmentActionNode, *ast.WhileLoopActionNode, *ast.IfActionNode:
 			graph.Bodies[node] = append(graph.Bodies[node], lowerStatement(m, scope))
-		case *ast.Usage:
-			if !m.IsAccept {
-				continue
-			}
-			graph.Accepts[node] = Accept{
-				ParamName:    m.Ident.Name,
-				SignalType:   typingTarget(m),
-				ViaPort:      acceptPort(node),
-				SubsetsEvent: subsettingTarget(m),
-				Trigger:      m.Value,
-			}
 		}
 	}
+	lowerAccept(graph, node)
 }
 
 // lowerNodeBody records the statements the body of an action node declares, so
@@ -547,8 +606,13 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 			Scope:        scope,
 		}
 	case *ast.AssignmentActionNode:
-		// A target naming more than one segment reaches outside the body, which no
-		// host binds; truncating it to the last segment would write another feature.
+		// A chained target writes a feature of the object its chain reaches, so the
+		// whole walk is carried rather than truncated to the last segment.
+		if chain, feature, ok := assignTarget(m.Target); ok {
+			return Assign{Target: feature, Chain: chain, Value: m.Value, Node: m, Scope: scope}
+		}
+		// A namespace-qualified target names no object to write on: an assignment
+		// writes a feature of its target occurrence (Actions::AssignmentAction).
 		if qname := ast.AsQualifiedName(m.Target); qname != nil && len(qname.Parts) > 1 {
 			return Unsupported{
 				Description: "assignment to a qualified target",
@@ -637,14 +701,15 @@ func lowerBlock(owner ast.Node, members []ast.Node, scope *symbols.Scope) Block 
 	return block
 }
 
-// lowerAttributes returns the attribute defaults declared among a behavior's
-// members, in order. A redefinition names the attribute it overrides
+// lowerAttributes returns every attribute declared among a behavior's members,
+// in order. An unvalued attribute is still owned by the behavior even though it
+// supplies no initial value. A redefinition names the attribute it overrides
 // (`attribute :>> x = 5;`), so the effective name is the one bound.
 func lowerAttributes(members []ast.Node) []Attribute {
 	var attrs []Attribute
 	for _, member := range members {
 		usage, ok := unwrapMembership(member).(*ast.Usage)
-		if !ok || usage.Kind != ast.UsageAttribute || usage.Value == nil {
+		if !ok || usage.Kind != ast.UsageAttribute {
 			continue
 		}
 		name, _ := ast.EffectiveName(usage)

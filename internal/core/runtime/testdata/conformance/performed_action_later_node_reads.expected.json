@@ -1,0 +1,15 @@
+{
+  "type": "instance",
+  "instantiate": "test::Adder",
+  "slots": {
+    "sum.total": {
+      "type": "Integer",
+      "value": 5
+    },
+    "sum.doubled": {
+      "type": "Integer",
+      "value": 10
+    }
+  },
+  "trace": true
+}

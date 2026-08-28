@@ -498,8 +498,9 @@ func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol
 
 	// Validate outputs
 	if expected.Outputs != nil {
+		data := exec.StateData()
 		for name, expectedVal := range expected.Outputs {
-			actual, ok := exec.stateData[name]
+			actual, ok := data[name]
 			if !ok {
 				t.Errorf("missing output %q", name)
 				continue
@@ -944,7 +945,7 @@ func validateObjectRuns(t *testing.T, ctx *Context, typeSym *symbols.Symbol, fir
 			validateFinalState(t, exec, run.FinalState)
 			validateStateVisits(t, exec, run.StateVisits)
 			for name, want := range run.Values {
-				fv, err := obj.GetFeatureValue(ctx, name)
+				fv, err := featureValueAtPath(t, ctx, obj, name)
 				if err != nil {
 					t.Errorf("feature value %q of object #%d: %v", name, obj.ID, err)
 					continue

@@ -1,0 +1,9 @@
+{
+  "type": "state",
+  "evaluate": "test::Machine",
+  "finalState": "r1+r1",
+  "outputs": {
+    "running.a.ticks": {"type": "Integer", "value": 1},
+    "running.b.ticks": {"type": "Integer", "value": 1}
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "type": "instance",
+  "instantiate": "test::ConfiguredHost",
+  "slots": {
+    "work.count": {"type": "Integer", "value": 6}
+  }
+}

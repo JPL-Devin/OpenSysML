@@ -1,0 +1,9 @@
+{
+  "type": "state",
+  "evaluate": "test::Outer",
+  "finalState": "i1",
+  "stateVisits": ["nested", "i1"],
+  "outputs": {
+    "nested.hits": {"type": "Integer", "value": 1}
+  }
+}

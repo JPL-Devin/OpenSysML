@@ -8,6 +8,28 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// A valueless machine attribute still reaches the graph as machine-owned data.
+func TestToStateGraph_KeepsValuelessAttributes(t *testing.T) {
+	graph, err := ToStateGraph(stateUsageIn(t, `
+		package test {
+			state Machine {
+				attribute count : Integer;
+				entry; then active;
+				state active;
+			}
+		}
+	`), nil)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+	if len(graph.Attributes) != 1 {
+		t.Fatalf("attributes = %d, want 1", len(graph.Attributes))
+	}
+	if got := graph.Attributes[0]; got.Name != "count" || got.Value != nil {
+		t.Errorf("attribute = %#v, want valueless count", got)
+	}
+}
+
 // The textual `defer` notation reaches the graph as the deferral of the state
 // declaring it, normalized the same way a transition trigger is.
 func TestToStateGraph_DeferNotation(t *testing.T) {

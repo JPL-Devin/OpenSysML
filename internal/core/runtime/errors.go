@@ -140,6 +140,14 @@ var (
 	// event budget.
 	ErrStateEventLimitExceeded = errors.New("state event limit exceeded")
 
+	// ErrStatePerformanceOccurrence is returned when an exhibited machine cannot
+	// read or write the occurrence of its state usage.
+	ErrStatePerformanceOccurrence = errors.New("state performance occurrence unavailable")
+
+	// ErrActionPerformanceOccurrence is returned when a performed action cannot
+	// read or write the occurrence of its action usage.
+	ErrActionPerformanceOccurrence = errors.New("action performance occurrence unavailable")
+
 	// ErrDoStepLimitExceeded is returned when a state do behavior exceeds its
 	// action-step budget.
 	ErrDoStepLimitExceeded = errors.New("state do-step limit exceeded")
@@ -289,10 +297,25 @@ var (
 	// that feature value rather than deciding anything about the model.
 	ErrFeatureValueMaterialization = errors.New("feature value could not be materialized")
 
+	// ErrNoSuchFeature is returned when a chained assignment reaches an object
+	// whose type declares no feature of the name the target's last segment
+	// writes: the object has nowhere to hold the value.
+	ErrNoSuchFeature = errors.New("object has no such feature")
+
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.
 	ErrNoSubject = errors.New("no subject to satisfy the requirement")
+
+	// ErrPerformerFeatureNotInScope is returned when a behavior body names a
+	// feature only the object performing it declares: the performing object is
+	// not a namespace the body's names resolve in, so the name has no referent.
+	ErrPerformerFeatureNotInScope = errors.New("name is not in scope of the behavior body")
+
+	// ErrThisNotAnObject is returned when `this` is read where no object owns
+	// what is being evaluated: the context occurrence is the performance itself,
+	// whose features a name written in its body does not reach.
+	ErrThisNotAnObject = errors.New("this names no object here")
 )
 
 type budgetExceededError struct {
