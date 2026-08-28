@@ -174,6 +174,52 @@ func TestExhibitedMachineWritesItsOwnOccurrence(t *testing.T) {
 	}
 }
 
+// A machine's state data has the collection shape its occurrence gives a
+// many-valued attribute written with one element.
+func TestExhibitedMachineNormalizesItsManyValuedAttribute(t *testing.T) {
+	src := `
+		state def Logging {
+			attribute entries: String[*];
+			entry; then running;
+			state running {
+				entry action note { assign entries := "first"; }
+			}
+		}
+		part def Log {
+			exhibit state modes : Logging;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Log"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	behavior, ok := inst.Behavior("modes")
+	if !ok {
+		t.Fatal("object runs no modes behavior")
+	}
+	occurrence := instanceAtPath(t, ctx, inst, "modes")
+	fv, err := occurrence.GetFeatureValue(ctx, "entries")
+	if err != nil {
+		t.Fatalf("occurrence entries: %v", err)
+	}
+	assertSingleStringCollection(t, "occurrence entries", fv.HeldValue(), "first")
+	assertSingleStringCollection(t, "state data entries", behavior.State.stateData["entries"], "first")
+}
+
+func assertSingleStringCollection(t *testing.T, name string, value Value, want string) {
+	t.Helper()
+	if value.Kind != ValSequence && value.Kind != ValSet {
+		t.Fatalf("%s holds %v, want a collection", name, value.Kind)
+	}
+	elements := elementsOf(value)
+	if len(elements) != 1 || elements[0].Str != want {
+		t.Errorf("%s = %v, want one element %q", name, elements, want)
+	}
+}
+
 // invokeFixture owns an operation, a machine, calcs, constraints and an
 // attribute, so one object exercises each classifier behavior path.
 const invokeFixture = `

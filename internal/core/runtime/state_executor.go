@@ -209,6 +209,12 @@ func (e *StateExecutor) assignAttribute(name string, value Value) error {
 			return fmt.Errorf("%w: write %s of object #%d: %w",
 				ErrStatePerformanceOccurrence, name, e.occurrence.ID, err)
 		}
+		fv, err := e.occurrence.GetFeatureValue(e.ctx, name)
+		if err != nil {
+			return fmt.Errorf("%w: read %s of object #%d after write: %w",
+				ErrStatePerformanceOccurrence, name, e.occurrence.ID, err)
+		}
+		value = fv.HeldValue()
 	}
 	e.stateData[name] = value
 	return nil
