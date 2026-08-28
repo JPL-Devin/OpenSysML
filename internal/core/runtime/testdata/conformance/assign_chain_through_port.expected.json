@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "instantiate": "test::Rig",
+  "objects": [
+    {
+      "finalState": "driving",
+      "stateVisits": ["driving"],
+      "slots": {"link.level": {"type": "Real", "value": 1.5}}
+    }
+  ]
+}

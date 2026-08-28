@@ -58,6 +58,12 @@ func (h *calcStmtHost) assignData(env *stmtEnv, name string, value Value, _ lowe
 	return nil
 }
 
+// assignChain rejects a chained target: writing a feature of another object is
+// an effect outside the calculation, as writing an undeclared name is.
+func (h *calcStmtHost) assignChain(_ *EvalContext, s lower.Assign, _ Value) error {
+	return fmt.Errorf("%w: %s writes a feature of another object", ErrCalcExternalAssignment, s.Chain.Text)
+}
+
 func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
 	h.result = value
 	return nil

@@ -1,0 +1,8 @@
+{
+	"type": "action",
+	"evaluate": "test::write",
+	"trace": true,
+	"outputs": {
+		"seen": {"type": "Real", "value": 4.5}
+	}
+}

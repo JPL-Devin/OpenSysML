@@ -103,6 +103,9 @@ type stmtHost interface {
 	assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error
 	// assignData writes a name the behavior's data already holds.
 	assignData(env *stmtEnv, name string, value Value, s lower.Assign) error
+	// assignChain writes the feature a chained target names, on the object the
+	// chain reaches; a host with no world outside its body rejects it.
+	assignChain(ec *EvalContext, s lower.Assign, value Value) error
 	// declaredOutput reports whether name is an output feature of the host, whose
 	// assignment binds that output for this activation rather than writing a value
 	// the body merely holds.
@@ -189,6 +192,11 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 		value, err := e.evalIn(s.Scope).Eval(s.Value)
 		if err != nil {
 			return flowNext, fmt.Errorf("eval assignment RHS: %w", err)
+		}
+		// A chained target writes the object its chain reaches, whatever the body
+		// declares of the name it starts from, so no host binding applies to it.
+		if s.Chain != nil {
+			return flowNext, e.host.assignChain(e.evalIn(s.Scope), s, value)
 		}
 		// An output is bound by the host even when the body's data holds it, so a
 		// second binding is reported; a block-local of the name shadows it.
@@ -463,6 +471,9 @@ func stmtLabel(stmt lower.Statement) string {
 	case lower.Send:
 		return "send"
 	case lower.Assign:
+		if s.Chain != nil {
+			return "assign " + s.Chain.Text
+		}
 		return "assign " + s.Target
 	case lower.Declare:
 		return "declare " + s.Name

@@ -68,6 +68,12 @@ func (h *stateStmtHost) assignData(env *stmtEnv, name string, value Value, _ low
 	return nil
 }
 
+// assignChain writes the feature a chained target names on the object its chain
+// reaches, which is the machine's state data for no chained target.
+func (h *stateStmtHost) assignChain(ec *EvalContext, s lower.Assign, value Value) error {
+	return assignThroughChain(ec, h.describe(), s, value)
+}
+
 // performer is the object exhibiting the machine this behavior belongs to.
 func (h *stateStmtHost) performer() *Instance {
 	return h.exec.self
