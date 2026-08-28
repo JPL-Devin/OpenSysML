@@ -89,7 +89,7 @@ sysml -e "speedLimit < 120" vehicle-model.sysml
 # model.sysml contains: attribute totalCost = partCost + laborCost;
 sysml -e "totalCost" model.sysml
 # Output: ✓ totalCost
-#           = 1500.00
+#           = 1500.0
 ```
 
 ### 4. Batch Processing
@@ -150,7 +150,8 @@ echo "%load model.sysml
 | `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf`. RDF is [experimental](rdf-mapping.md#status-experimental) and every run that converts it says so on stderr (see [the RDF mapping](rdf-mapping.md)) |
 | `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
-| `--render-form <form>` | | Form `--render` writes: `text`, `mermaid` or `markdown` (default: `text` at a terminal, the machine-readable form of the kind rendered into a file or a pipe) |
+| `--render-all <dir>` | | Render every declared view into the directory, one artifact per view |
+| `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
 | `--output <file>` | `-o` | Write the conversion or the rendering to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
@@ -209,7 +210,12 @@ sysml -e "result" file1.sysml file2.sysml
 
 `-render <view>` renders one view of the model and exits. The rendering is the one the view's
 `render` member states, and a containment tree where it states none; the kinds this build produces
-are a tree, an interconnection diagram, a state machine, an action flow and a table.
+are a tree, an interconnection diagram, a state machine, an action flow, a sequence diagram and a
+table. A geometry view is recognized but not drawn. A pseudo-view renders without a declaration:
+`#tree` renders the one model file accepted by `-render` (or every document loaded in the REPL),
+while `#tree:<name>`, `#interconnection:<name>`, `#state:<name>`, `#action:<name>`,
+`#sequence:<name>` and `#table:<name>` render the named element directly. Only kinds this build
+produces are offered; newly supported kinds become pseudo-views automatically.
 
 ```bash
 # The ASCII text form a person reads, written to fit the terminal
@@ -223,6 +229,10 @@ sysml model.sysml -render Views::vehicleView -o view.mmd
 # Either form, whatever the destination
 sysml model.sysml -render Views::partsTable -render-form markdown
 sysml model.sysml -render Views::vehicleView -render-form text
+
+# Render a named element, or one model directly, without declaring a view
+sysml model.sysml -render '#state:Vehicle::controller'
+sysml model.sysml -render '#tree'
 ```
 
 Where `-render-form` names no form, the form follows the destination: the text form at a terminal,
@@ -238,12 +248,28 @@ name that is no view, a rendering kind this build does not produce, a form the k
 in, and a model that did not analyse cleanly each stop the run with status 2. Rendering decides
 nothing about the model, so it is not asked for together with a check flag or with `-convert`.
 
+`-render-all <dir>` writes every declared view of all loaded files, in document and declaration
+order. Each qualified view name becomes a file name with `::` replaced by `.`. With no
+`-render-form`, graph-shaped kinds use Mermaid (`.mmd`) and tables use Markdown (`.md`); a forced
+text form uses `.txt` and unbounded width.
+
+```bash
+sysml types.sysml model.sysml -render-all rendered
+sysml model.sysml -render-all rendered-text -render-form text
+```
+
+The directory is created when necessary. Written paths, load reports, and notices prefixed by
+their view go to stderr; stdout stays empty. An unsupported rendering kind, or a forced form the
+kind cannot write, is reported and skipped without failing the run. No declared views or an
+analysis error stops the run with status 2. `-render-all` cannot be combined with `-render`, `-o`,
+`-convert`, or a check flag.
+
 The rendering is **tool-defined output**: SysML v2 §10.2 specifies the notation a view is written
 in, not how a tool draws it. Mermaid is the machine-readable form of the graph-shaped kinds because
 it renders as-is in Markdown, documentation sites and editors without a separate rendering tool, and
-has a dedicated state diagram grammar; a table is written as a Markdown table, which Mermaid has no
-grammar for, so `-render-form mermaid` of a table names Markdown rather than drawing a diagram of
-rows.
+has dedicated state diagram and sequence diagram grammars; a table is written as a Markdown table,
+which Mermaid has no grammar for, so `-render-form mermaid` of a table names Markdown rather than
+drawing a diagram of rows.
 
 ## Output Format
 

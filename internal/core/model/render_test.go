@@ -58,31 +58,31 @@ func TestViewsListsDeclaredViewsAndKinds(t *testing.T) {
 // A view stating a rendering this implementation does not produce is listed, so
 // a client can say why it cannot be drawn rather than omitting it.
 func TestViewsReportsUnsupportedKindsWithAReason(t *testing.T) {
-	ws := openDoc(t, "seq.sysml", `package Kit {
+	ws := openDoc(t, "geom.sysml", `package Kit {
 	part def Widget;
 }
 
-package SeqViews {
+package GeomViews {
 	private import StandardViewDefinitions::*;
 
-	view sequenceView : SequenceView {
+	view geometryView : GeometryView {
 		expose Kit::Widget;
 	}
 }
 `)
-	views := ws.Views("seq.sysml")
+	views := ws.Views("geom.sysml")
 	if len(views) != 1 {
 		t.Fatalf("listed %d views, want 1: %+v", len(views), views)
 	}
 	info := views[0]
 	if info.Supported {
-		t.Fatal("a sequence rendering is not produced, but the view is listed as supported")
+		t.Fatal("a geometry rendering is not produced, but the view is listed as supported")
 	}
-	if info.Kind != view.KindSequence {
-		t.Errorf("kind = %q, want %q", info.Kind, view.KindSequence)
+	if info.Kind != view.KindGeometry {
+		t.Errorf("kind = %q, want %q", info.Kind, view.KindGeometry)
 	}
-	if !strings.Contains(info.Reason, "sequence rendering") || !strings.Contains(info.Reason, "is not supported") {
-		t.Errorf("reason = %q, want it to say a sequence rendering is not supported", info.Reason)
+	if !strings.Contains(info.Reason, "geometry rendering") || !strings.Contains(info.Reason, "is not supported") {
+		t.Errorf("reason = %q, want it to say a geometry rendering is not supported", info.Reason)
 	}
 }
 
@@ -230,7 +230,7 @@ func TestRenderViewRefusesUnknownNames(t *testing.T) {
 		!strings.Contains(err.Error(), "Kit::Nothing") {
 		t.Errorf("err = %v, want it to name the element that is missing", err)
 	}
-	if _, err := ws.RenderView("kit.sysml", "#sequence"); err == nil ||
+	if _, err := ws.RenderView("kit.sysml", "#not-a-rendering"); err == nil ||
 		!strings.Contains(err.Error(), "#tree") {
 		t.Errorf("err = %v, want it to list the pseudo-views", err)
 	}

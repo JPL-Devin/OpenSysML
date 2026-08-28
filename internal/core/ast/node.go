@@ -16,14 +16,14 @@ type Node interface {
 type TriviaKind int
 
 const (
-	TriviaWhitespace TriviaKind = iota
-	TriviaComment               // REGULAR_COMMENT that is not a comment/doc/rep body
-	TriviaLineNote              // SL_NOTE
-	TriviaBlockNote             // ML_NOTE
+	TriviaComment   TriviaKind = iota // REGULAR_COMMENT that is not a comment/doc/rep body
+	TriviaLineNote                    // SL_NOTE
+	TriviaBlockNote                   // ML_NOTE
 )
 
-// Trivia is a non-semantic token (whitespace/notes/free comments) attached
-// to a node for features like doc-comment hover and future formatting.
+// Trivia is a non-semantic token (notes/free comments) attached to a node for
+// features like doc-comment hover and future formatting. Whitespace carries
+// nothing a consumer reads and is not recorded.
 type Trivia struct {
 	Kind TriviaKind
 	Span source.Span

@@ -2,11 +2,15 @@ package symbols
 
 import (
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
+
+// fqnSeparator joins the segments of a fully-qualified name.
+const fqnSeparator = "::"
 
 // fqnEntry records one symbol registered under a fully-qualified name.
 type fqnEntry struct {
@@ -1298,7 +1302,7 @@ func (idx *Index) LookupQualifiedFrom(fqn, fromFQN string) []*Symbol {
 // member is visible where it is declared.
 func (idx *Index) Declaring(fqn string) *Symbol {
 	for _, sym := range idx.LookupQualifiedFrom(fqn, fqn) {
-		if sym != nil && idx.GetFQN(sym) == fqn {
+		if sym != nil && HasFQN(sym, fqn) {
 			return sym
 		}
 	}
@@ -1523,32 +1527,56 @@ func FQNOf(sym *Symbol) string {
 		return ""
 	}
 
-	// Collect scope chain from symbol up to root
-	var parts []string
+	// Collect the scope chain from the symbol up to the root, leaf first. A
+	// nesting deeper than the array is rare, so it grows on the heap only then.
+	var buf [16]string
+	parts := buf[:0]
 	parts = append(parts, sym.Name)
-
+	size := len(sym.Name)
 	scope := sym.OwnerScope
 	for scope != nil && scope.Owner() != nil {
 		owner := scope.Owner()
 		parts = append(parts, owner.Name)
+		size += len(owner.Name) + len(fqnSeparator)
 		scope = owner.OwnerScope
 	}
 
-	// Reverse parts (collected from leaf to root)
-	for i := 0; i < len(parts)/2; i++ {
-		j := len(parts) - 1 - i
-		parts[i], parts[j] = parts[j], parts[i]
+	if len(parts) == 1 {
+		return parts[0]
 	}
+	var out strings.Builder
+	out.Grow(size)
+	for i := len(parts) - 1; i >= 0; i-- {
+		if i != len(parts)-1 {
+			out.WriteString(fqnSeparator)
+		}
+		out.WriteString(parts[i])
+	}
+	return out.String()
+}
 
-	// Join with "::"
-	if len(parts) == 0 {
-		return ""
+// HasFQN reports whether sym's fully-qualified name is fqn, without building
+// that name: the segments are compared against the owner chain from the end.
+func HasFQN(sym *Symbol, fqn string) bool {
+	if sym == nil {
+		return fqn == ""
 	}
-	result := parts[0]
-	for i := 1; i < len(parts); i++ {
-		result += "::" + parts[i]
+	rest, name, scope := fqn, sym.Name, sym.OwnerScope
+	for {
+		if !strings.HasSuffix(rest, name) {
+			return false
+		}
+		rest = rest[:len(rest)-len(name)]
+		if scope == nil || scope.Owner() == nil {
+			return rest == ""
+		}
+		if !strings.HasSuffix(rest, fqnSeparator) {
+			return false
+		}
+		rest = rest[:len(rest)-len(fqnSeparator)]
+		owner := scope.Owner()
+		name, scope = owner.Name, owner.OwnerScope
 	}
-	return result
 }
 
 // DocumentOfRoot returns the name of the document whose root scope this is, or

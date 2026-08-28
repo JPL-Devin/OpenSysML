@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/view"
+	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
 // runRender renders the view -render names of the model named on the command
@@ -27,18 +29,9 @@ func runRender(files []string) error {
 		return fmt.Errorf("-render renders a view of one model; unexpected extra argument %q", files[1])
 	}
 
-	sess := newSession()
-	// Loaded onto stderr rather than through loadFiles: stdout carries the
-	// artifact alone, so it can be piped into a tool that reads it.
-	report, err := sess.LoadPathsReport(files)
+	sess, err := loadRenderingModel(files)
 	if err != nil {
 		return err
-	}
-	writeLines(os.Stderr, report.Loaded)
-	writeLines(os.Stderr, report.Found)
-	writeLines(os.Stderr, report.Declared)
-	if report.Errors {
-		return fmt.Errorf("%s did not analyse cleanly; nothing was rendered", files[0])
 	}
 
 	rendering, err := sess.ViewRendering(renderView)
@@ -54,6 +47,105 @@ func runRender(files []string) error {
 	}
 	reportRenderNotices(rendering)
 	return writeArtifact(artifact, form)
+}
+
+// runRenderAll renders every declared view into the directory -render-all names.
+func runRenderAll(files []string) error {
+	form := view.Form(renderForm)
+	if renderForm != "" && !slices.Contains(view.Forms(), form) {
+		return fmt.Errorf("unknown rendering form %q; -render-form takes %s", renderForm, formList())
+	}
+	if len(files) == 0 {
+		return errors.New("no model to render; name at least one file before -render-all")
+	}
+	sess, err := loadRenderingModel(files)
+	if err != nil {
+		return err
+	}
+	views, err := sess.Views()
+	if err != nil {
+		return err
+	}
+	if len(views) == 0 {
+		return errors.New("the model declares no views; nothing was rendered")
+	}
+	if err := os.MkdirAll(renderAllDir, 0o750); err != nil {
+		return fmt.Errorf("create rendering directory %s: %w", renderAllDir, err)
+	}
+
+	destinations := map[string]string{}
+	for _, info := range views {
+		if !info.Supported {
+			reportRenderSkip(info.Name, info.Reason)
+			continue
+		}
+		rendering, err := sess.ViewRendering(info.Name)
+		if err != nil {
+			return err
+		}
+		writtenForm := form
+		if writtenForm == "" {
+			writtenForm = rendering.Kind.MachineForm()
+		}
+		reportRenderNoticesFrom(rendering, info.Name)
+		artifact, err := rendering.WriteWidth(writtenForm, view.WidthUnbounded)
+		if err != nil {
+			if errors.Is(err, view.ErrWrongForm) {
+				reportRenderSkip(info.Name, err.Error())
+				continue
+			}
+			return err
+		}
+		filename, err := renderFilename(info.Name, writtenForm)
+		if err != nil {
+			return err
+		}
+		path := filepath.Join(renderAllDir, filename)
+		if previous, exists := destinations[path]; exists {
+			return fmt.Errorf("views %s and %s have the same rendering path %s", previous, info.Name, path)
+		}
+		destinations[path] = info.Name
+		if err := writeArtifactFile(path, artifact, writtenForm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// loadRenderingModel loads and reports a model whose stdout is reserved for
+// rendering artifacts.
+func loadRenderingModel(files []string) (*repl.Session, error) {
+	sess := newSession()
+	report, err := sess.LoadPathsReport(files)
+	if err != nil {
+		return nil, err
+	}
+	writeLines(os.Stderr, report.Loaded)
+	writeLines(os.Stderr, report.Found)
+	writeLines(os.Stderr, report.Declared)
+	if report.Errors {
+		return nil, fmt.Errorf("%s did not analyse cleanly; nothing was rendered", files[0])
+	}
+	return sess, nil
+}
+
+func renderFilename(name string, form view.Form) (string, error) {
+	filename := strings.ReplaceAll(name, "::", ".") + renderExtension(form)
+	if filepath.Base(filename) != filename || filename == "." || filename == ".." {
+		return "", fmt.Errorf("view %s does not form a safe rendering filename", name)
+	}
+	return filename, nil
+}
+
+func renderExtension(form view.Form) string {
+	switch form {
+	case view.FormMermaid:
+		return ".mmd"
+	case view.FormMarkdown:
+		return ".md"
+	default:
+		return ".txt"
+	}
 }
 
 // defaultRenderForm is the form -render writes where -render-form named none:
@@ -108,6 +200,20 @@ func reportRenderNotices(rendering *view.Rendering) {
 	}
 }
 
+func reportRenderNoticesFrom(rendering *view.Rendering, name string) {
+	if rendering.Empty() {
+		fmt.Fprintf(os.Stderr, "%s: note: renders empty\n", name)
+	}
+	for _, notice := range rendering.Notices {
+		fmt.Fprintf(os.Stderr, "%s: note: %s\n", name, notice)
+	}
+}
+
+func reportRenderSkip(name, reason string) {
+	reason = strings.TrimPrefix(reason, name+": ")
+	fmt.Fprintf(os.Stderr, "%s: skipped: %s\n", name, reason)
+}
+
 // writeArtifact writes the rendering to -o, or to stdout when no file was named.
 func writeArtifact(artifact string, form view.Form) error {
 	out := []byte(strings.TrimRight(artifact, "\n") + "\n")
@@ -115,7 +221,12 @@ func writeArtifact(artifact string, form view.Form) error {
 		_, err := os.Stdout.Write(out)
 		return err
 	}
-	replaced, err := export.WriteFile(outputPath, out)
+	return writeArtifactFile(outputPath, artifact, form)
+}
+
+func writeArtifactFile(path, artifact string, form view.Form) error {
+	out := []byte(strings.TrimRight(artifact, "\n") + "\n")
+	replaced, err := export.WriteFile(path, out)
 	if err != nil {
 		return err
 	}
@@ -123,6 +234,6 @@ func writeArtifact(artifact string, form view.Form) error {
 	if replaced {
 		what = ", replaced the existing file"
 	}
-	fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes%s)\n", outputPath, form, len(out), what)
+	fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes%s)\n", path, form, len(out), what)
 	return nil
 }

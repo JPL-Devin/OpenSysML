@@ -237,7 +237,7 @@ func TestEvalOfInheritedFeatureIsAboutTheObject(t *testing.T) {
 		t.Fatalf("EvalExpr: %v", err)
 	}
 	got := strings.Join(out, "\n")
-	for _, want := range []string{"(on P::hot ID: 1)", "= 140.00"} {
+	for _, want := range []string{"(on P::hot ID: 1)", "= 140.0"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("%%eval missing %q, got:\n%s", want, got)
 		}
@@ -274,7 +274,7 @@ func TestEvalWithoutAnObjectUsesDeclaredDefaults(t *testing.T) {
 		t.Fatalf("EvalExpr: %v", err)
 	}
 	got := strings.Join(out, "\n")
-	if !strings.Contains(got, "= 0.00") || strings.Contains(got, "(on ") {
+	if !strings.Contains(got, "= 0.0") || strings.Contains(got, "(on ") {
 		t.Errorf("%%eval without an object reported:\n%s", got)
 	}
 }

@@ -2100,7 +2100,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	return []string{
 		fmt.Sprintf("✓ Started state machine executor for %q", name),
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		fmt.Sprintf("  Time: %.2f", exec.CurrentTime()),
+		"  Time: " + runtime.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 	}, nil
 }
@@ -2137,7 +2137,7 @@ func (s *Session) debugExhibitedMachine(
 	return []string{
 		fmt.Sprintf("✓ Debugging state machine %q exhibited by object #%d of %q", behavior.Name, inst.ID, notationName(fqn)),
 		fmt.Sprintf("  Current state: %s", currentStateName(behavior.State)),
-		fmt.Sprintf("  Time: %.2f", behavior.State.CurrentTime()),
+		"  Time: " + runtime.FormatReal(behavior.State.CurrentTime()),
 		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
 	}, nil
 }
@@ -2162,7 +2162,7 @@ func (s *Session) stepState() ([]string, bool, error) {
 	return []string{
 		"✓ " + step,
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		fmt.Sprintf("  Time: %.2f", exec.CurrentTime()),
+		"  Time: " + runtime.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 	}, false, nil
 }
@@ -2301,8 +2301,8 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 
 	out := []string{
 		fmt.Sprintf("Current state: %s", currentStateName(exec)),
-		fmt.Sprintf("Time: %.2f", s.stateExec.now),
-		fmt.Sprintf("Last event at: %.2f", exec.CurrentTime()),
+		"Time: " + runtime.FormatReal(s.stateExec.now),
+		"Last event at: " + runtime.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("Execution state: %s", exec.State()),
 	}
 
@@ -2445,7 +2445,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	// A machine that took no step and has nowhere to go says why; one whose work
 	// is only due past the deadline still reports the drain and what is left.
 	if processed == 0 && doActions == 0 && !exec.HasPendingWork() {
-		out := []string{fmt.Sprintf("No pending work - simulation time is now %.2f", s.stateExec.now)}
+		out := []string{"No pending work - simulation time is now " + runtime.FormatReal(s.stateExec.now)}
 		if reason := exec.SuspendReason(); reason != "" {
 			out = append(out, fmt.Sprintf("  %s", reason))
 		}
@@ -2453,9 +2453,9 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	}
 
 	out := []string{
-		fmt.Sprintf("✓ Advanced to %.2f (%d event(s) processed)", s.stateExec.now, processed),
+		fmt.Sprintf("✓ Advanced to %s (%d event(s) processed)", runtime.FormatReal(s.stateExec.now), processed),
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		fmt.Sprintf("  Last event at: %.2f", exec.CurrentTime()),
+		"  Last event at: " + runtime.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Remaining events: %d", exec.EventQueue().Len()),
 	}
 

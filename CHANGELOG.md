@@ -4,6 +4,83 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### Changed
+
+- **The pinned OMG pilot implementation is now release `2026-07` (`jupyter-sysml-kernel` 0.61.0)**,
+  with the reference validators, the vendored standard library, the pinned corpora, grammars and
+  Xpect suites, and every oracle baseline re-recorded at that pin. Two notations the new grammar
+  admits now parse: a metadata usage that declares its own name or none at all
+  (`@ m : Security;`, `@ : Security;`, `@ m typed by Security;`) and a constraint reference
+  carrying a multiplicity (`assume c [0..*];`). The errata overlay drops the redefinition
+  correction the published corpus now makes itself.
+
+- **Why a listed view is not drawable is now written under the diagram** rather than only in the
+  picker entry's tooltip, so a `geometry` or `textual` view says what it is that cannot be drawn
+  without the reason having to be hovered for.
+
+- **A Real prints as the shortest decimal that reads back as the same value**, on every surface
+  that renders one — an evaluation result, a feature value listing, a quantity's magnitude, an
+  execution trace and the simulation clock. Values were rendered to two decimal places, which
+  reported a nonzero magnitude as zero (`0.0001` printed `0.00`) and rounded away precision the
+  evaluation had kept (`1.0 / 3.0` printed `0.33`, `123456789.987654` printed `123456789.99`),
+  and disagreed between surfaces. A whole Real keeps its `.0` so it is not mistaken for an
+  Integer. Arithmetic is unchanged: the stored value was never rounded.
+
+### Added
+
+- **A view specializing `StandardViewDefinitions::SequenceView` (or `sv`) renders as a sequence
+  diagram**, at the prompt (`%render`), from the command line (`sysml -render`) and over the LSP, in
+  the text form and as a Mermaid `sequenceDiagram`. The occurrences an interaction declares in its
+  body are its lifelines, a `message`/`flow` usage is a directed message between the lifelines its
+  ends' events belong to, and the successions between those events order the messages — a cycle
+  among them is reported and declaration order stands. What a sequence diagram cannot show — an
+  exposed element that holds no occurrence, an undirected `connect`, a message stating no ends or
+  attaching to something the view does not expose — is reported rather than dropped. A `geometry`
+  view remains recognized but not drawn.
+
+- **The `opensysml/views` response now reports supported pseudo-view specs**, so clients can offer
+  newly supported rendering kinds without maintaining a second list.
+
+### Fixed
+
+- **Clicking a sequence participant now reveals its declaration, and the cursor highlights it**
+  using Mermaid's participant data attributes.
+
+## 0.3.1 — 2026-08-27
+
+A performance patch. Loading a model costs less of everything and answers the same: on a
+12,000-element synthetic model, 4.62M allocations rather than 7.70M, 503.6 MiB allocated rather
+than 744.9 MiB, 272 MiB peak resident rather than 353 MiB, and 0.92s rather than 1.14s. Nothing
+about the language, the diagnostics or any API changed — the 895 bundled SysML and KerML files
+report byte-identical diagnostics and exit status, and the 749 of them a conversion accepts produce
+byte-identical `-convert sysml` and `-convert ttl` output, before and after.
+
+### Performance
+
+- **Whitespace is no longer recorded as trivia.** A node's leading trivia holds the comments and
+  notes a consumer reads (doc-comment hover, the REPL's declaration printing) and nothing else,
+  which is what dominated allocation on a large parse.
+- **A span's text is served from one cached whole-file string** instead of copying the bytes per
+  span, so the repeated reads name resolution and validation make cost nothing after the first.
+- **A fully qualified name is compared without being built.** Checking whether a symbol *is*
+  `Base::DataValue` walks the scope chain against the string rather than constructing the name to
+  throw away; constructing one, where a caller genuinely needs the string, sizes its buffer once.
+- **The inherited-name conflict pass reads the memoized base-member maps directly** rather than
+  merging them per declaration, and merges only where a declaration has more than one base.
+- **A scope's children are indexed lazily**, by map only where a scope is large enough for the map
+  to pay for itself, and by scan below that.
+
+### Project
+
+- The release-gate counts on `README.md`, [the roadmap](docs/project/roadmap.md),
+  [spec compliance](docs/project/spec-compliance.md) and
+  [training examples](docs/project/training-examples.md) are recounted together against a real
+  `go test -race -count=1 -v ./...` run: 8,361 tests and subtests, 380 execution conformance cases,
+  118 golden traces, 256 runtime robustness cases, 146 golden ASTs and 261 negative parser subtests.
+  The skip list is stated by what each skip wants, since five tests it named as skipping now pass.
+
 ## 0.3.0 — 2026-08-26
 
 Release 0.3.0 spends itself on a single question: what does this implementation accept that the

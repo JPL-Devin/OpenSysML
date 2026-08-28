@@ -12,7 +12,11 @@ import (
 // lost.
 func (r *Rendering) Markdown() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "<!-- %s — %s rendering", r.View, r.Kind)
+	if r.View == "" {
+		fmt.Fprintf(&b, "<!-- %s rendering", r.Kind)
+	} else {
+		fmt.Fprintf(&b, "<!-- %s — %s rendering", r.View, r.Kind)
+	}
 	if r.Stated != "" {
 		fmt.Fprintf(&b, " (%s)", r.Stated)
 	}

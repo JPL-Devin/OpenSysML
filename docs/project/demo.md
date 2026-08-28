@@ -111,7 +111,7 @@ $ sysml -e "Rover::rangeKm(600, 12)" rover.sysml
 ## 3. Instantiate the structure and inspect it
 
 The model is *materialized*: multiplicities are expanded into real objects, defaults are propagated,
-and a nested redefinition wins over the definition's default (`capacityWh = 600.00`, not `450.00`).
+and a nested redefinition wins over the definition's default (`capacityWh = 600.0`, not `450.0`).
 
 ```console
 $ sysml rover.sysml
@@ -127,21 +127,21 @@ Instance: Rover::Rover (ID: 1)
 Features:
   wheels = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4), Instance(ID: 5), Instance(ID: 6), Instance(ID: 7)]
     diameter = 0.25
-    mass = 1.20
+    mass = 1.2
     diameter = 0.25
-    mass = 1.20
+    mass = 1.2
     diameter = 0.25
-    mass = 1.20
+    mass = 1.2
     diameter = 0.25
-    mass = 1.20
+    mass = 1.2
     diameter = 0.25
-    mass = 1.20
+    mass = 1.2
     diameter = 0.25
-    mass = 1.20
+    mass = 1.2
   battery = Instance(ID: 8)
-    capacityWh = 600.00
-    charge = 450.00
-  dryMass = 180.00
+    capacityWh = 600.0
+    charge = 450.0
+  dryMass = 180.0
 
 sysml> %instances
 Instances:
@@ -250,11 +250,11 @@ $ sysml units.sysml
 SysML v2 REPL — %help for commands, Ctrl-D to exit
 sysml> %eval clearance
 ✓ clearance
-  = 30.00 [cm]
+  = 30.0 [cm]
 
 sysml> %eval wheelbase - clearance
 ✓ wheelbase - clearance
-  = 0.90 [m]
+  = 0.9 [m]
 
 sysml> %eval wheelbase > clearance
 ✓ wheelbase > clearance
@@ -413,7 +413,7 @@ Same file. `%advance` moves the clock and drains every event that falls due.
 sysml> %state Mission::rover
 ✓ Started state machine executor for "Mission::rover"
   Current state: idle
-  Time: 0.00
+  Time: 0.0
   Events: 1
 
 Use %events to see queue, %current for state, %advance <time> to step
@@ -423,21 +423,21 @@ Event queue: 1 events
 Use %advance <time> to process next event
 
 sysml> %advance 5
-✓ Advanced to 5.00 (1 event(s) processed)
+✓ Advanced to 5.0 (1 event(s) processed)
   Current state: driving
-  Last event at: 5.00
+  Last event at: 5.0
   Remaining events: 1
 
 sysml> %advance 10
-✓ Advanced to 15.00 (1 event(s) processed)
+✓ Advanced to 15.0 (1 event(s) processed)
   Current state: charging
-  Last event at: 15.00
+  Last event at: 15.0
   Remaining events: 1
 
 sysml> %current
 Current state: charging
-Time: 15.00
-Last event at: 15.00
+Time: 15.0
+Last event at: 15.0
 Execution state: Running
 ```
 

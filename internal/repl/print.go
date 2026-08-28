@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -84,7 +83,7 @@ func declarationSpan(sym *symbols.Symbol) source.Span {
 	}
 	start := span.Offset
 	for _, tr := range sym.LeadingTrivia {
-		if tr.Kind == ast.TriviaWhitespace || tr.Span.Offset >= span.Offset {
+		if tr.Span.Offset >= span.Offset {
 			continue
 		}
 		if tr.Span.Offset < start {

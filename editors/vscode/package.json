@@ -107,6 +107,7 @@
   "scripts": {
     "grammar": "go run ./tools/gengrammar -out syntaxes",
     "build": "node esbuild.mjs",
+    "check-nodes": "node tools/check-nodes.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p src/webview/tsconfig.json",
     "package": "npm run typecheck && npm run build -- --production && vsce package --no-dependencies --out opensysml-sysml.vsix"
@@ -120,6 +121,7 @@
     "@types/vscode": "1.86.0",
     "@vscode/vsce": "3.2.2",
     "esbuild": "0.25.0",
+    "jsdom": "26.1.0",
     "type-fest": "4.41.0",
     "typescript": "5.7.3"
   }

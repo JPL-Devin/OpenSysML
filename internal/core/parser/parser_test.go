@@ -1,8 +1,10 @@
 package parser
 
 import (
+	"reflect"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -57,6 +59,22 @@ func TestExpectRecordsDiagnostic(t *testing.T) {
 	}
 	if tok.Kind != lexer.EOF {
 		t.Fatalf("tok = %+v", tok)
+	}
+}
+
+func TestTriviaRecordsNotesAndCommentsOnly(t *testing.T) {
+	p := newParser("  // line note\n //* block note */ /* comment */ part")
+	if tok := p.peek(); tok.Kind != lexer.Keyword || tok.KeywordID != "part" {
+		t.Fatalf("peek = %+v", tok)
+	}
+	kinds := []ast.TriviaKind{}
+	for _, tr := range p.triv {
+		kinds = append(kinds, tr.Kind)
+	}
+	want := []ast.TriviaKind{ast.TriviaLineNote, ast.TriviaBlockNote, ast.TriviaComment}
+
+	if !reflect.DeepEqual(kinds, want) {
+		t.Fatalf("trivia kinds = %v, want %v", kinds, want)
 	}
 }
 

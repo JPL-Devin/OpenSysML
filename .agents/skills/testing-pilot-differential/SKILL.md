@@ -21,8 +21,8 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
 - The pin `cmd/pilot-diff` reports comes from `build/pilot-sysml-validator/pilot-pin.txt`
   (written by the new script), not from the DeciSym `pom.xml`.
 - `-validator /nonexistent` now says `run ./scripts/download-pilot-sysml-validator.sh`.
-- Measured after closing the library-inherited-name gap, with a fresh library cache: `355 file(s), 328 fully agreeing; 37 agreed,
-  27 only ours, 58 only the pilot's`, JSON totals `openSysMLDiagnostics 72 / pilotDiagnostics
+- Measured after closing the library-inherited-name gap, with a fresh library cache: `356 file(s), 330 fully agreeing; 37 agreed,
+  26 only ours, 58 only the pilot's`, JSON totals `openSysMLDiagnostics 71 / pilotDiagnostics
   103 / severityMismatch 8`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
@@ -136,7 +136,7 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
 but only while the baseline is current. Check that first. As of the rebaseline that came with the
 library-inherited-name gap it **is**
-current: a live run gives `355 file(s), 328 fully agreeing; 37 agreed, 27 only ours, 58 only the
+current: a live run gives `356 file(s), 330 fully agreeing; 37 agreed, 26 only ours, 58 only the
 pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
 "Results" table matches. That rebaseline covers two rounds, because the succession-shorthand
 removal before it landed without refreshing the baseline; a control run of its merge commit gives
@@ -164,15 +164,15 @@ regression — see "Isolating one change's effect" below.
 - Provisioning checks for `download-pilot-sysml-validator.sh` that distinguish working from
   broken (all observed at `86514a44`):
   - no args → `SysML validator already compiled at .../classes/ValidateSysML.class` + `Built ...
-    (pilot 2026-05, 0.60.1)`, `.class` mtime unchanged; `--force` → `Compiling ...`, mtime
+    (pilot 2026-07, 0.61.0)`, `.class` mtime unchanged; `--force` → `Compiling ...`, mtime
     advances; `--bogus` → exit 1 `error: unknown option: --bogus (only --force is supported)`.
   - `rm -rf build/pilot-sysml-validator` and re-run → recreated in seconds, and the launcher is
-    **byte-identical** (`sha256 2d6ec96f8469…`) with `pilot-pin.txt` = `sysml.release.tag=2026-05`
-    / `sysml.artifact.version=0.60.1` and no `__PILOT_ARTIFACT_VERSION__` placeholder left.
+    **byte-identical** (`sha256 2d6ec96f8469…`) with `pilot-pin.txt` = `sysml.release.tag=2026-07`
+    / `sysml.artifact.version=0.61.0` and no `__PILOT_ARTIFACT_VERSION__` placeholder left.
   - bad pin: move `build/pilot-validator` aside, then
     `PILOT_TAG=9999-99 ./scripts/download-pilot-sysml-validator.sh` → prints `Pilot validator
     dependencies are missing; provisioning them first ...`, clones, then exits 1 with
-    `error: <commit> builds against sysml.release.tag=2026-05, this repository pins 9999-99`
+    `error: <commit> builds against sysml.release.tag=2026-07, this repository pins 9999-99`
     *before* Maven; `build/pilot-sysml-validator/pilot-pin.txt` is left untouched.
   - missing tools need `--force` (the already-compiled early return is after the tool guards but
     before the compile): a stripped PATH without `javac` → `error: javac 21+ is required to build
@@ -355,7 +355,7 @@ Provisioning script checks that actually distinguish working from broken:
   the launcher's.
 - `--force` → prints `Compiling ...` and the `.class` mtime advances.
 - `grep jupyter-sysml-kernel build/pilot-kerml-validator/validate-kerml` must show the pinned
-  `PILOT_ARTIFACT_VERSION` from `scripts/pilot-pin.sh` (`0.60.1`) and no leftover
+  `PILOT_ARTIFACT_VERSION` from `scripts/pilot-pin.sh` (`0.61.0`) and no leftover
   `__PILOT_ARTIFACT_VERSION__` placeholder.
 - `PILOT_ARTIFACT_VERSION=9.9.9-bogus ./scripts/download-pilot-kerml-validator.sh` → exit 1 with
   `error: pilot shaded jar not found at .../jupyter-sysml-kernel-9.9.9-bogus-all.jar`, and the
@@ -557,7 +557,7 @@ Provisioning script (`scripts/download-pilot-validator.sh`):
   and after, not just by reading the message.
 - Pin check → `mv build/pilot-validator /tmp/pv-backup` then
   `PILOT_TAG=9999-99 ./scripts/download-pilot-validator.sh`: it clones (fast) and then aborts with
-  `error: <commit> builds against sysml.release.tag=2026-05, this repository pins 9999-99`
+  `error: <commit> builds against sysml.release.tag=2026-07, this repository pins 9999-99`
   *before* Maven runs (`build/pilot-validator/target` stays absent). Exit 1.
 - Missing tools → `env PATH=/tmp/nomvn ./scripts/download-pilot-validator.sh` where `/tmp/nomvn`
   holds symlinks to `git`, `java`, `sed`, `bash`, `dirname`, `ls` but **not** `mvn` gives

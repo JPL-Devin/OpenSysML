@@ -109,6 +109,7 @@ var (
 	outputPath    string
 	fromFormat    string
 	renderView    string
+	renderAllDir  string
 	renderForm    string
 	strictMode    bool
 	modelChecks   checks
@@ -207,6 +208,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # ASCII text at a terminal\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form markdown\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -o view.mmd\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-all rendered\n")
 	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
 	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
 	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
@@ -246,7 +248,8 @@ func runCLI() int {
 	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
 	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
 	flag.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
-	flag.StringVar(&renderForm, "render-form", "", "Form -render writes: text, mermaid or markdown (default: text at a terminal, the kind's machine-readable form into a file or a pipe)")
+	flag.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
+	flag.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
@@ -297,9 +300,33 @@ func runCLI() int {
 	// Get positional arguments (files to load)
 	args := flag.Args()
 
-	if renderForm != "" && renderView == "" {
-		fmt.Fprintln(os.Stderr, "sysml: -render-form is the form -render writes; name the view to render with -render")
+	if renderForm != "" && renderView == "" && renderAllDir == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -render-form is the form -render or -render-all writes; name the view to render with -render or a directory with -render-all")
 		return 2
+	}
+
+	if renderAllDir != "" {
+		switch {
+		case renderView != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-all and -render are mutually exclusive")
+			return 2
+		case outputPath != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-all writes into its directory and cannot be combined with -output")
+			return 2
+		case convertFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-all and -convert each write documents out; ask for one per run")
+			return 2
+		case queryText != "" || len(evalExprs) > 0 || fromFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-all cannot be combined with -query, -eval or -from")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-render-all writes views out and decides nothing about the model; check it in its own run")
+		}
+		if err := runRenderAll(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
 	}
 
 	if convertFormat != "" {

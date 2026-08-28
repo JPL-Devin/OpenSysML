@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -67,6 +68,10 @@ package KitViews {
 	}
 
 	view widgetSequence : SequenceView {
+		expose Kit::Widget;
+	}
+
+	view widgetGeometry : GeometryView {
 		expose Kit::Widget;
 	}
 }
@@ -183,6 +188,7 @@ func TestRenderServesEverySupportedKind(t *testing.T) {
 		{"KitViews::widgetStates", view.KindState, view.FormMermaid},
 		{"KitViews::widgetActions", view.KindAction, view.FormMermaid},
 		{"KitViews::widgetTable", view.KindTable, view.FormMarkdown},
+		{"KitViews::widgetSequence", view.KindSequence, view.FormMermaid},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.kind), func(t *testing.T) {
@@ -304,10 +310,10 @@ func TestRenderAndViewsReportAnUnsupportedKind(t *testing.T) {
 	s, docURI := renderServer(t, "kit.sysml", renderModel)
 	_, err := call(t, s, MethodRender, &renderParams{
 		TextDocument: protocol.TextDocumentIdentifier{URI: docURI},
-		View:         "KitViews::widgetSequence",
+		View:         "KitViews::widgetGeometry",
 	})
-	if err == nil || !strings.Contains(err.Error(), "sequence rendering") {
-		t.Fatalf("err = %v, want it to say a sequence rendering is not supported", err)
+	if err == nil || !strings.Contains(err.Error(), "geometry rendering") {
+		t.Fatalf("err = %v, want it to say a geometry rendering is not supported", err)
 	}
 
 	raw, err := call(t, s, MethodViews, &viewsParams{
@@ -320,19 +326,26 @@ func TestRenderAndViewsReportAnUnsupportedKind(t *testing.T) {
 	if err := json.Unmarshal(raw, &listing); err != nil {
 		t.Fatalf("decode views result: %v", err)
 	}
-	if len(listing.Views) != 6 {
-		t.Fatalf("listed %d views, want 6: %+v", len(listing.Views), listing.Views)
+	if !slices.Equal(listing.PseudoViews, view.PseudoViewSpecs()) {
+		t.Errorf("pseudoViews = %v, want %v", listing.PseudoViews, view.PseudoViewSpecs())
+	}
+	if !slices.Contains(listing.PseudoViews, "#sequence") {
+		t.Errorf("pseudoViews = %v, want it to contain #sequence", listing.PseudoViews)
+	}
+	if len(listing.Views) != 7 {
+		t.Fatalf("listed %d views, want 7: %+v", len(listing.Views), listing.Views)
 	}
 	kinds := map[string]viewInfo{}
 	for _, info := range listing.Views {
 		kinds[info.Name] = info
 	}
 	for name, kind := range map[string]view.Kind{
-		"KitViews::widgetTree":    view.KindTree,
-		"KitViews::widgetParts":   view.KindInterconnection,
-		"KitViews::widgetStates":  view.KindState,
-		"KitViews::widgetActions": view.KindAction,
-		"KitViews::widgetTable":   view.KindTable,
+		"KitViews::widgetTree":     view.KindTree,
+		"KitViews::widgetParts":    view.KindInterconnection,
+		"KitViews::widgetStates":   view.KindState,
+		"KitViews::widgetActions":  view.KindAction,
+		"KitViews::widgetTable":    view.KindTable,
+		"KitViews::widgetSequence": view.KindSequence,
 	} {
 		info, ok := kinds[name]
 		if !ok {
@@ -342,12 +355,12 @@ func TestRenderAndViewsReportAnUnsupportedKind(t *testing.T) {
 			t.Errorf("%s: kind = %q supported = %v, want %q supported", name, info.Kind, info.Supported, kind)
 		}
 	}
-	sequence := kinds["KitViews::widgetSequence"]
-	if sequence.Supported {
-		t.Error("the sequence view is listed as supported")
+	geometry := kinds["KitViews::widgetGeometry"]
+	if geometry.Supported {
+		t.Error("the geometry view is listed as supported")
 	}
-	if !strings.Contains(sequence.Reason, "sequence rendering") {
-		t.Errorf("reason = %q, want it to say a sequence rendering is not supported", sequence.Reason)
+	if !strings.Contains(geometry.Reason, "geometry rendering") {
+		t.Errorf("reason = %q, want it to say a geometry rendering is not supported", geometry.Reason)
 	}
 }
 

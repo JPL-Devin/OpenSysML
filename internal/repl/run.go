@@ -300,7 +300,7 @@ func (s *Session) runStateMachine(name string, duration *float64, performer []st
 	exec := s.stateExec.executor
 	values := []NamedValue{
 		{Name: "state", Value: currentStateName(exec)},
-		{Name: "time", Value: fmt.Sprintf("%.2f", s.stateExec.now)},
+		{Name: "time", Value: runtime.FormatReal(s.stateExec.now)},
 	}
 	values = append(values, namedValues(s.stateExec.contextOf(), exec.StateData())...)
 	return s.withTrace(Verdict{Subject: name, Status: VerdictHolds, Lines: lines, Values: values})

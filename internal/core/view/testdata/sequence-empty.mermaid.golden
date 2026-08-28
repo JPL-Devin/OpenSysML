@@ -1,0 +1,3 @@
+%% ErrorViews::emptySequenceView — sequence rendering (view def SequenceView)
+sequenceDiagram
+  participant empty as the view exposes nothing#59; the rendering is empty

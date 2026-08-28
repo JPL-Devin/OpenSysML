@@ -204,12 +204,12 @@ func TestRenderExposedRendersWithoutAView(t *testing.T) {
 // another kind.
 func TestRenderExposedRefusesAnUnsupportedKind(t *testing.T) {
 	r, idx := loadFixture(t, "tree.sysml")
-	_, err := r.RenderExposed([]*symbols.Symbol{lookup(t, idx, "Vehicles::Vehicle")}, KindSequence, "")
+	_, err := r.RenderExposed([]*symbols.Symbol{lookup(t, idx, "Vehicles::Vehicle")}, KindGeometry, "")
 	var unsupported *UnsupportedKindError
 	if !errors.As(err, &unsupported) {
 		t.Fatalf("err = %v, want an *UnsupportedKindError", err)
 	}
-	if unsupported.Kind != KindSequence {
-		t.Errorf("Kind = %q, want %q", unsupported.Kind, KindSequence)
+	if unsupported.Kind != KindGeometry {
+		t.Errorf("Kind = %q, want %q", unsupported.Kind, KindGeometry)
 	}
 }

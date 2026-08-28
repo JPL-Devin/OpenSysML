@@ -404,6 +404,30 @@ jobs:
             fi
             echo "Full clone: $(git rev-list --count HEAD) commits, no filter, no missing objects."
 
+      # An analysis that names no version carries the placeholder "not
+      # provided", and the default "previous version" new-code period then
+      # finds no earlier, different version to compare against and falls back
+      # to the first analysis ever run. That collapse is not visible as a
+      # failure: the scan succeeds and the new-code conditions quietly grade
+      # the whole codebase (on 2026-08-27, 105,050 of 110,609 lines counted as
+      # new). Naming the nearest release tag makes the period what it claims to
+      # be — what has been committed since that release.
+      - run:
+          name: Derive sonar.projectVersion from the nearest release tag
+          command: |
+            # CircleCI fetches the ref being built, not the tag namespace.
+            git fetch --tags --quiet origin || true
+            version=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
+            if [ -z "$version" ]; then
+              echo "No v* tag is an ancestor of HEAD, so the version stays unset"
+              echo "and the new-code period falls back to the first analysis."
+              exit 0
+            fi
+            echo "sonar.projectVersion=${version#v}"
+            # The scanner reads JVM system properties, and this is the variable
+            # its launcher passes to the JVM (see the heap note above).
+            echo "export SONAR_SCANNER_OPTS=\"${SONAR_SCANNER_OPTS} -Dsonar.projectVersion=${version#v}\"" >> "$BASH_ENV"
+
       - sonarcloud/scan
 
       # SonarCloud does not create a project from a CI scan, so the first run

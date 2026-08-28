@@ -40,7 +40,7 @@ Symptom first. Budgets and every environment variable are in
 
 - **GitHub Issues:** Report bugs or request features
 - **Discussions:** Ask questions about SysML v2 usage
-- **Spec Reference:** [OMG SysML v2.1 Beta 1 Specification](https://www.omg.org/spec/SysML/2.0) (2026-05 release)
+- **Spec Reference:** [OMG SysML v2.1 Beta 1 Specification](https://www.omg.org/spec/SysML/2.0) (2026-07 release)
 
 ---
 

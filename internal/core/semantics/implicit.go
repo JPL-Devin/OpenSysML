@@ -286,7 +286,7 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 		if target == nil || visiting[target] {
 			continue
 		}
-		sameBase := m.resolver.Index() != nil && m.resolver.Index().GetFQN(target) == want
+		sameBase := m.resolver.Index() != nil && symbols.HasFQN(target, want)
 		if !sameBase && !visiting[target] {
 			// A declaration conforms to its kind's base whether the edge is
 			// declared or implicit, so reaching one of the same kind suffices —

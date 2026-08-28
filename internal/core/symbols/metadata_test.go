@@ -6,6 +6,34 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
+func TestDeclaredMetadataUsageIsIndexed(t *testing.T) {
+	root := build(t, `metadata def A;
+	item p {
+		@ m1 : A;
+		@ m2 typed by A { }
+		@ : A;
+		@A;
+	}
+`)
+	p, ok := root.LookupLocal("p")
+	if !ok {
+		t.Fatal("item p not found")
+	}
+	for _, name := range []string{"m1", "m2"} {
+		sym, ok := p.Scope.LookupLocal(name)
+		if !ok {
+			t.Fatalf("declared metadata usage %s not indexed", name)
+		}
+		if sym.Kind != SymbolMetadataUsage {
+			t.Fatalf("%s indexed as %v, want a metadata usage", name, sym.Kind)
+		}
+	}
+	// The two usages without an identification name nothing.
+	if names := p.Scope.MemberNames(); len(names) != 2 {
+		t.Fatalf("members %v indexed, want only the two named usages", names)
+	}
+}
+
 func TestMetadataBodyHasPrivateNestedScope(t *testing.T) {
 	root := build(t, `metadata def A { attribute x; }
 	item p {

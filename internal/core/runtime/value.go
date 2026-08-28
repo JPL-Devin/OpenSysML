@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,23 @@ const (
 	ValEnumLiteral // one literal of an enumeration definition, identified by itself
 )
 
+// FormatReal renders a Real as the shortest decimal that reads back as the same
+// float64, so no surface rounds a value away. A whole value keeps a ".0" so it
+// is not mistaken for an Integer.
+func FormatReal(f float64) string {
+	// An ordinary magnitude reads in full rather than in exponent notation, which
+	// 'g' would switch to well before a Real stops being readable as digits.
+	format := byte('f')
+	if abs := math.Abs(f); f != 0 && (abs < 1e-4 || abs >= 1e21) {
+		format = 'g'
+	}
+	text := strconv.FormatFloat(f, format, -1, 64)
+	if !strings.ContainsAny(text, ".eEnN") {
+		text += ".0"
+	}
+	return text
+}
+
 // FormatConst renders a scalar constant using the runtime's user-facing
 // numeric convention.
 func FormatConst(c semantics.Value) string {
@@ -34,7 +52,7 @@ func FormatConst(c semantics.Value) string {
 	case semantics.ValInt:
 		return fmt.Sprintf("%d", c.Int)
 	case semantics.ValReal:
-		return fmt.Sprintf("%.2f", c.Real)
+		return FormatReal(c.Real)
 	case semantics.ValBool:
 		return fmt.Sprintf("%v", c.Bool)
 	case semantics.ValInfinity:

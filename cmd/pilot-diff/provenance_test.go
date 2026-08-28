@@ -23,7 +23,8 @@ func TestCommittedBaselineStatesThisRepositorysProvenance(t *testing.T) {
 // values and the refresh command, or the guard tells a reader nothing.
 func TestProvenanceGuardFailsOnAMovedPin(t *testing.T) {
 	_, current := currentProvenance(t)
-	corrupted := corruptBaseline(t, committedBaseline, `"pilotTag": "2026-05"`, `"pilotTag": "2025-02"`)
+	corrupted := corruptBaseline(t, committedBaseline,
+		`"pilotTag": "`+current.PilotTag+`"`, `"pilotTag": "2025-02"`)
 
 	err := baseline.CheckCommitted(corrupted, refreshCommand, current)
 	if err == nil {

@@ -45,7 +45,11 @@ The registry as it stands:
 |---|---|---|---|
 | F82 | `sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38 | SysML v2 §9.8.9.1 | corrected — `22/2*25.4 + 110 [mm]` → `(22/2*25.4 + 110) [mm]` |
 | F83 | `sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml`:25 | SysML v2 §9.8.9.1 | documented without a correction |
-| F111 | `sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml`:86 | KerML 7.4.9, 8.3.4.2 | corrected — `fuelConsumption : FuelEconomyAnalysis_1` → `fuelConsumption : FuelConsumption_1` |
+
+A third entry (the non-conforming redefinition at
+`sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml`:86) was retired at the
+`2026-07` pin: the corpus now publishes the type the entry corrected to, so the as-published
+verification failed and the entry was removed rather than re-pointed.
 
 ## The invariants, all of them tests
 
@@ -65,8 +69,8 @@ The registry as it stands:
 - **Documented-only entries substitute nothing.** An entry with no `Corrected`
   text is carried for provenance; both figures keep the published line.
 - **Errata are not a reclassification route.** The overlay changes no category in
-  [wave 11E](wave11e-decisions.md) terms and no analyzer behaviour. F82 and F111
-  stay true positives of ours; what the overlay records is that the *examples* are wrong.
+  [wave 11E](wave11e-decisions.md) terms and no analyzer behaviour. F82 stays a
+  true positive of ours; what the overlay records is that the *examples* are wrong.
 
 ## Both figures, and which one is the statement
 
@@ -100,13 +104,10 @@ that line is a finding, not a fix, so each corrected root is re-run through
 ```
 F82 …/VehicleGeometryAndCoordinateFrames.sysml:38 ours 1->0, pilot 0->0:
   our diagnostic is cleared and the pilot is silent on both texts
-F111 …/AnalysisIndividualExample.sysml:86 ours 1->0, pilot 0->0:
-  our diagnostic is cleared and the pilot is silent on both texts
 ```
 
-The pinned pilot performs no dimensional analysis and validates subsetting
-conformance nowhere, so it is silent on both texts of both entries and no pilot
-verdict has changed yet. When one does, the finding carries
+The pinned pilot performs no dimensional analysis, so it is silent on both texts
+of the entry and no pilot verdict has changed yet. When one does, the finding carries
 `pilotVerdictChanged: true` and the report says which way it moved.
 
 ## Adding an entry

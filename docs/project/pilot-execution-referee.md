@@ -10,10 +10,10 @@ The answer is narrow, and deliberately stated as such. The pinned artifact evalu
 machines, and has no notion of a step, a token or a trace. Three of the four behavior areas
 are therefore **out of its reach**, and no amount of harness work changes that.
 
-Pin: tag `2026-05`, artifact `jupyter-sysml-kernel 0.60.1` (`scripts/pilot-pin.sh`). Every
+Pin: tag `2026-07`, artifact `jupyter-sysml-kernel 0.61.0` (`scripts/pilot-pin.sh`). Every
 command below was run against the shaded jar that `scripts/download-pilot-validator.sh`
 unpacks, at
-`build/pilot-validator/target/sysml-download/sysml/jupyter-sysml-kernel-0.60.1-all.jar`.
+`build/pilot-validator/target/sysml-download/sysml/jupyter-sysml-kernel-0.61.0-all.jar`.
 
 ## Capability map
 
@@ -32,7 +32,7 @@ unpacks, at
 The magics in the pinned jar:
 
 ```
-$ unzip -Z1 build/pilot-validator/.../jupyter-sysml-kernel-0.60.1-all.jar \
+$ unzip -Z1 build/pilot-validator/.../jupyter-sysml-kernel-0.61.0-all.jar \
     | grep -i 'jupyter/kernel/magic/[A-Za-z]*\.class'
 org/omg/sysml/jupyter/kernel/magic/Load.class
 org/omg/sysml/jupyter/kernel/magic/Projects.class
@@ -184,9 +184,11 @@ No compliance row's status flag is changed on the strength of this work.
 
 ## Limits of the comparison (read before trusting a bucket)
 
-- **Reals are compared to two decimal places**, because that is OpenSysML's display precision:
-  the pilot reports `LiteralRational 0.3333333333333333` for `1.0 / 3.0` where we print
-  `0.33`. A divergence below 2dp is invisible to this harness.
+- **Reals are compared to two decimal places**, a tolerance of the harness itself (both sides
+  are rounded in `cmd/pilot-exec-diff`, `roundedReal`). A divergence below 2dp is invisible to
+  this harness. It is no longer a display limit — we now print `1.0 / 3.0` as
+  `0.3333333333333333`, the same digits the pilot reports as `LiteralRational`, so the
+  tolerance can be tightened on its own once the buckets it moves are adjudicated.
 - **Integer vs Rational is reported, never normalized away.** `2 ** 40` gives the pilot
   `LiteralRational 1.099511627776E12` and gives us `1099511627776`; the harness buckets that
   `kind-only`, not `agree`.

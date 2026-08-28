@@ -4132,18 +4132,54 @@ func (p *Parser) parseMultiplicityBound() ast.Node {
 	return p.parseBinary(precAdditive)
 }
 
+// atMetadataIdentification reports whether an identification is declared before
+// the metadata typing, which the typing keyword (`:`, `defined by`, `typed by`)
+// marks: `@ m : Meta;` names the usage where `@ Meta;` only types it.
+func (p *Parser) atMetadataIdentification() bool {
+	if p.at(lexer.Lt) {
+		return true
+	}
+	off := 0
+	switch p.peek().Kind {
+	case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+		off = 1
+	}
+	switch t := p.peekN(off); t.Kind {
+	case lexer.Colon:
+		return true
+	case lexer.Keyword:
+		if t.KeywordID != "defined" && t.KeywordID != "typed" {
+			return false
+		}
+		n := p.peekN(off + 1)
+		return n.Kind == lexer.Keyword && n.KeywordID == "by"
+	}
+	return false
+}
+
 // parseMetadataUsage parses one `@` metadata usage (SysML v2 MetadataUsage):
 // `@Type;`, or `@Type { prop = value; }` binding its features. Each is a member
 // of its own rather than a prefix of the declaration after it.
 func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 	p.advance() // '@'
 
+	// A declared identification precedes the typing, and may be absent from it:
+	// `@ m : Meta;`, `@ <sn> : Meta;`, `@ : Meta;`.
+	var ident ast.Identification
+	if p.atMetadataIdentification() {
+		ident = p.parseIdentification()
+		if !p.accept2(lexer.Colon) {
+			p.advance() // 'defined' | 'typed'
+			p.advance() // 'by'
+		}
+	}
+
 	metaType := p.parseQualifiedName()
 	if metaType == nil {
 		p.error(p.peek().Span, "expected metadata type after '@'")
 		return nil
 	}
-	pm := &ast.PrefixMetadata{Type: metaType}
+	pm := &ast.PrefixMetadata{Ident: ident, Type: metaType}
 
 	// `about` names the elements the usage annotates (SysML.xtext:145-147).
 	if p.acceptKeyword("about") {

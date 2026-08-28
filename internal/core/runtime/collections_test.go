@@ -489,8 +489,8 @@ func TestAggregateQuantities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sum of metres: %v", err)
 	}
-	if got.Kind != ValQuantity || got.Quantity.String() != "6 [m]" {
-		t.Errorf("sum of metres = %v (%s), want 6 [m]", got, got.Kind)
+	if got.Kind != ValQuantity || got.Quantity.String() != "6.0 [m]" {
+		t.Errorf("sum of metres = %v (%s), want 6.0 [m]", got, got.Kind)
 	}
 
 	// A commensurable element converts into the first element's unit.

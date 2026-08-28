@@ -1,0 +1,50 @@
+/* The header menu (overrides/partials/menu.html). The button borrows the theme's own
+   .md-header__button sizing; only the panel below it is styled here. */
+
+.osml-menu {
+  position: relative;
+}
+
+/* The disclosure triangle would sit beside the icon. */
+.osml-menu > summary {
+  display: block;
+  list-style: none;
+  cursor: pointer;
+}
+.osml-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.osml-menu__list {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 4;
+  min-width: 10rem;
+  /* A narrow screen has less room than the panel's minimum would take. */
+  max-width: calc(100vw - 1rem);
+  padding: 0.3rem 0;
+  background: var(--md-default-bg-color);
+  border-radius: 0.2rem;
+  box-shadow: var(--md-shadow-z2);
+}
+
+.osml-menu__list a {
+  display: block;
+  padding: 0.5rem 0.9rem;
+  color: var(--md-default-fg-color);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+.osml-menu__list a:focus,
+.osml-menu__list a:hover {
+  background: var(--md-default-fg-color--lightest);
+  color: var(--md-accent-fg-color);
+}
+
+.osml-menu__list hr {
+  height: 1px;
+  margin: 0.3rem 0;
+  border: 0;
+  background: var(--md-default-fg-color--lightest);
+}

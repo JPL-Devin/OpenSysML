@@ -62,33 +62,33 @@ sysml> state TrafficLight {
 sysml> %state TrafficLight
 ✓ Started state machine executor for "TrafficLight"
   Current state: start
-  Time: 0.00
+  Time: 0.0
   Events: 1
 
 Use %events to see queue, %current for state, %advance <time> to step
 
 sysml> %advance 25
-✓ Advanced to 25.00 (2 event(s) processed)
+✓ Advanced to 25.0 (2 event(s) processed)
   Current state: yellow
-  Last event at: 25.00
+  Last event at: 25.0
   Remaining events: 1
 
 sysml> %current
 Current state: yellow
-Time: 25.00
-Last event at: 25.00
+Time: 25.0
+Last event at: 25.0
 Execution state: Running
 
 sysml> %advance 5
-✓ Advanced to 30.00 (1 event(s) processed)
+✓ Advanced to 30.0 (1 event(s) processed)
   Current state: red
-  Last event at: 30.00
+  Last event at: 30.0
   Remaining events: 1
 
 sysml> %advance 30
-✓ Advanced to 60.00 (1 event(s) processed)
+✓ Advanced to 60.0 (1 event(s) processed)
   Current state: done
-  Last event at: 60.00
+  Last event at: 60.0
   Remaining events: 0
 
 ✓ State machine completed (a transition reached `done`)
@@ -143,13 +143,13 @@ sysml> %instantiate Monitor
 sysml> %state Monitor
 ✓ Debugging state machine "modes" exhibited by object #1 of "Monitor"
   Current state: idle
-  Time: 0.00
+  Time: 0.0
   Events: 1
 
 sysml> %step
 ✓ Event dispatched
   Current state: awake
-  Time: 10.00
+  Time: 10.0
   Events: 0
 
 sysml> %features Monitor

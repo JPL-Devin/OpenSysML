@@ -173,8 +173,8 @@ explicit argument list — the parentheses are required even when the calc takes
 ./bin/sysml -validate internal/core/runtime/testdata/conformance/<name>.sysml   # cheap clean-model check
 ```
 
-Reals print rounded to two places (`= [5.00, 2.00]` for an expected `[5.0, 2.0]`), so compare
-values, not literal text. A failing evaluation exits 2 with
+Reals print as the shortest decimal that reads back as the same value, a whole one keeping its
+`.0` (`= [5.0, 2.0]`, `= 0.3333333333333333` for `1.0 / 3.0`). A failing evaluation exits 2 with
 `sysml: calc invocation failed: calc test::probe: evaluating the returned expression: <error>`,
 while a *static* rejection exits 2 with `did not analyse cleanly; no check was made` — worth
 distinguishing in a report, since a negative case can be caught at either tier. Beware that a
@@ -5257,3 +5257,76 @@ When testing error-message parity across transports:
   frames; unknown method answers `error.code == 12` with
   `SysMLService has no method "X"` and the server keeps serving; closing stdin exits 0.
 - The service RPC is `ParseFile` (field `content`), not `ParseModel`.
+
+## Old-vs-new differential runs (behaviour-neutral perf PRs)
+
+For any PR claiming behaviour neutrality, build a contrast binary without touching the
+checkout: `git worktree add /tmp/oldmain origin/main && (cd /tmp/oldmain && go build -o
+/tmp/old-sysml ./cmd/sysml)`, then diff outputs of `./bin/sysml` vs `/tmp/old-sysml`.
+
+Pitfalls that produce *false* differences (each one cost real time):
+
+- `-convert` diagnostics echo the `-o` path, so give both binaries the **same output
+  basename** in different directories (`$W/A/o.ttl`, `$W/B/o.ttl`) and `sed -i
+  "s#$W/[AB]/#OUT/#g"` the stderr before comparing.
+- When a conversion is *refused* (exit 2, e.g. RDF write-back refusal) **no output file is
+  written**. `cmp -s A B` then fails on two missing files and every refused file looks
+  different. Compare hashes with an explicit absent sentinel:
+  `ha=$(md5sum < A 2>/dev/null || echo ABSENT)`.
+- Run per-format sweeps in isolated working dirs; concurrent sweeps sharing `/tmp` files
+  clobber each other.
+- `%features` needs `%instantiate <Def>` first, otherwise you only diff an error message.
+
+`-memstats` is the cheap way to show a perf PR actually helps:
+`./bin/sysml -validate -memstats <big model>` prints wall time, MiB allocated, allocation
+count — compare against the old binary on the same file.
+
+Useful corpora for a sweep: `examples`, `testdata`, `internal/repl/testdata`,
+`internal/core/runtime/testdata/conformance` (~750–900 files, a few minutes per pass).
+
+## Numeric display: which surfaces render a Real, and how to compare them
+
+Real rendering is centralised in `runtime.FormatReal` (`internal/core/runtime/value.go`).
+When a PR touches numeric display, every one of these surfaces must be checked, because
+each has its own call site and they have drifted apart before:
+
+| surface | how to drive it |
+| --- | --- |
+| evaluation result | `%eval <expr>` at the prompt, `sysml -e "<expr>" <file>` non-interactively |
+| feature value listing | `%instantiate <Def>` then `%features <Def>` (nested parts render indented) |
+| quantity magnitude + unit text | `%eval 0.0001 [SI::m]`, `%eval (3.0 [SI::m/SI::s]) ** 2.0` |
+| execution trace | `%trace on`, then `%eval` — `[trace] eval operator …` lines carry their own formatter (`trace.go formatConst`) |
+| simulation clock | `%state <m>` / `%advance <t>` / `%current` / `%step`, and `sysml -state <m> -advance <t> <file>` |
+| action results | `sysml -action <name> <file>` → `Results:` block |
+
+Values that actually distinguish a working formatter from a rounding one: `0.0001`
+(two-decimal formatting shows `0.00`), `1.0/3.0`, `1.0e-7` (exponent form), `2.0` and `0.0`
+(a whole Real must keep `.0` so it is not read as an Integer), `123456789.987654`,
+`2.0**70` (`1.1805916207174113e+21`), and a **fractional `%advance 0.001`** — the clock is
+the surface most likely to be missed. Also assert the negatives: Integers
+(`%eval 42`, `%eval 2**40`) must stay free of a decimal point, and a unit exponent stays
+integral (`(SI::m/SI::s)**2`, never `**2.0`) — that is a deliberately separate helper
+(`quantity.go exponentText`), so a careless unification breaks it.
+
+The cheapest strong evidence is an **A/B against the parent commit**:
+`git worktree add /tmp/base <parent-sha> && (cd /tmp/base && go build -o /tmp/sysml-base ./cmd/sysml)`,
+then run the same piped script through both and diff. Remove the worktree afterwards
+(`git worktree remove /tmp/base --force`) so the repo is left clean.
+
+Doc transcripts are part of the contract: `docs/project/demo.md` opens by claiming every
+block was "pasted verbatim … character for character", and `docs/guide/*.md`,
+`docs/reference/cli.md` embed sample output too. After a display change, sweep for stale
+samples with
+`grep -rEn '(= |Time: |Advanced to |at: )-?[0-9]+\.[0-9]{2}( |$)' docs/`
+and reproduce any hit against the built binary — a PR that respells the guide can easily
+leave `docs/project/demo.md` behind.
+
+Two REPL pitfalls specific to this kind of session:
+
+- **`%clear` drops the imports too.** After `%clear`, a quantity or library-typed `%eval`
+  answers `error: no declarations loaded (literals work, but feature references need
+  declarations)`. Re-`%load` a file that does `private import SI::*;` before continuing.
+- **`%state` cannot reach a state nested in a package.** `%state Pkg::TrafficLight` answers
+  `unresolved reference: Pkg::TrafficLight` (and then `no active state machine session` for
+  every follow-up). Declare the `state` at the top level of the loaded file — that is also
+  how the guide's samples are written.

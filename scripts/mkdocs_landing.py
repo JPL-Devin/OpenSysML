@@ -1,8 +1,9 @@
-"""Render docs/README.md with the landing page template, and check the hero's links.
+"""Render docs/README.md with the landing page template, and check the templates' links.
 
 Selecting the template here rather than in front matter keeps the page plain Markdown
-on GitHub; the template's site-relative links, which MkDocs cannot validate, are
-checked against the built file set so a renamed page fails `--strict` like any link.
+on GitHub; the site-relative links every template in overrides/ holds, which MkDocs
+cannot validate, are checked against the built file set so a renamed page fails
+`--strict` like any link.
 """
 
 import logging
@@ -27,16 +28,21 @@ def _source_candidates(target: str) -> list[str]:
 
 
 def on_files(files, config):
-    custom_dir = config["theme"].custom_dir
-    template = Path(custom_dir or "") / TEMPLATE
-    if not template.is_file():
-        log.warning("the landing page template %s is missing", template)
+    overrides = Path(config["theme"].custom_dir or "")
+    if not (overrides / TEMPLATE).is_file():
+        log.warning("the landing page template %s is missing", overrides / TEMPLATE)
         return files
 
     present = {file.src_uri for file in files}
-    for target in dict.fromkeys(URL_FILTER.findall(template.read_text())):
-        if not any(candidate in present for candidate in _source_candidates(target)):
-            log.warning("%s links to %r, which no page publishes", TEMPLATE, target)
+    for template in sorted(overrides.glob("**/*.html")):
+        targets = dict.fromkeys(URL_FILTER.findall(template.read_text()))
+        for target in targets:
+            if not any(candidate in present for candidate in _source_candidates(target)):
+                log.warning(
+                    "%s links to %r, which no page publishes",
+                    template.relative_to(overrides),
+                    target,
+                )
     return files
 
 

@@ -1,24 +1,24 @@
 {
-  "pilot": "2026-05 (jupyter-sysml-kernel 0.60.1)",
+  "pilot": "2026-07 (jupyter-sysml-kernel 0.61.0)",
   "validator": "build/pilot-sysml-validator/validate-sysml-batch",
   "corpus": "cmd/pilot-reject/testdata/negative",
   "conformance": "auto",
   "provenance": {
-    "pilotTag": "2026-05",
-    "pilotArtifact": "0.60.1",
-    "errataRegistry": "sha256:b7b6274a132fd9417e31bbc4938c904d0724b55bcac6599aebb03773c8aa1b74",
+    "pilotTag": "2026-07",
+    "pilotArtifact": "0.61.0",
+    "errataRegistry": "sha256:9e4470b0e2d84904d1644045898ae9a038efe1cfb1ad9ed476124bba747c1ba1",
     "tools": [
       {
         "name": "pilot-sysml-validator",
         "source": "scripts/pilot-sysml-validator/ValidateSysML.java",
         "sourceDigest": "sha256:8270fc4804a9ba21b82d996e6125fa29aa8c03062ae36fcdce28d2841020dda1",
-        "release": "2026-05 (jupyter-sysml-kernel 0.60.1)"
+        "release": "2026-07 (jupyter-sysml-kernel 0.61.0)"
       },
       {
         "name": "pilot-kerml-validator",
         "source": "scripts/pilot-kerml-validator/ValidateKerML.java",
         "sourceDigest": "sha256:2876971d040f3d8846b00c878887044aeb957a342569d602ad8f79f884d75d96",
-        "release": "2026-05 (jupyter-sysml-kernel 0.60.1)"
+        "release": "2026-07 (jupyter-sysml-kernel 0.61.0)"
       }
     ],
     "inputs": [
@@ -30,7 +30,7 @@
         "digest": "sha256:1807bc173996cee5a9776a987e3bec4409245d16bdbb0d71e6b4d362b60cd81f"
       }
     ],
-    "recorded": "2026-08-26"
+    "recorded": "2026-08-27"
   },
   "totals": {
     "cases": 120,
@@ -1164,8 +1164,8 @@
     }
   ],
   "errata": {
-    "registryEntries": 3,
-    "corrections": 2,
+    "registryEntries": 2,
+    "corrections": 1,
     "documentedWithoutCorrection": 1,
     "correctionsApplied": 0,
     "entries": [
@@ -1184,14 +1184,6 @@
         "citation": "SysML v2 §9.8.9.1",
         "corrected": false,
         "derivation": "V is a VolumeValue and Cp dimensionless, so the first operand has dimension L^6 while T_static has Θ; no reading of the published text shares a dimension, so the defect is documented without a correction."
-      },
-      {
-        "id": "F111",
-        "path": "examples/pilot-corpora/sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml",
-        "line": 86,
-        "citation": "KerML 7.4.9, 8.3.4.2",
-        "corrected": true,
-        "derivation": "a redefinition is a subsetting, so the redefining feature's type must conform to the redefined one's, and an analysis definition is not a FuelConsumption; the file declares `individual action def FuelConsumption_1 :\u003e FuelConsumption` and uses it nowhere else, which is the conforming type the line names by mistake."
       }
     ],
     "totals": {

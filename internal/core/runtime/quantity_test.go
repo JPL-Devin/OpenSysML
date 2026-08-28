@@ -50,12 +50,12 @@ func TestQuantityEvaluation(t *testing.T) {
 		want string // rendered value
 	}{
 		{"1.5 [m/s]", "1.5 [m/s]"},
-		{"1.5 [m/s] + 1.8 [km/h]", "2 [m/s]"},
+		{"1.5 [m/s] + 1.8 [km/h]", "2.0 [m/s]"},
 		{"3.0 [km] + 500.0 [m]", "3.5 [km]"},
-		{"10.0 [m] / 2.0 [s]", "5 [m/s]"},
-		{"2.0 [m] * 3.0 [m]", "6 [m*m]"},
+		{"10.0 [m] / 2.0 [s]", "5.0 [m/s]"},
+		{"2.0 [m] * 3.0 [m]", "6.0 [m*m]"},
 		{"-2.5 [m/s]", "-2.5 [m/s]"},
-		{"3.0 [m] * 2.0", "6 [m]"},
+		{"3.0 [m] * 2.0", "6.0 [m]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.src, func(t *testing.T) {
@@ -138,8 +138,8 @@ func TestQuantityExponentiation(t *testing.T) {
 		wantKind semantics.ValueKind
 	}{
 		{"(2 [m]) ** 3", "8 [(m)**3]", semantics.ValInt},
-		{"(2.0 [m]) ** 3", "8 [(m)**3]", semantics.ValReal},
-		{"(3.0 [m/s]) ** 2.0", "9 [(m/s)**2]", semantics.ValReal},
+		{"(2.0 [m]) ** 3", "8.0 [(m)**3]", semantics.ValReal},
+		{"(3.0 [m/s]) ** 2.0", "9.0 [(m/s)**2]", semantics.ValReal},
 		{"(2.0 [m]) ** -1", "0.5 [(m)**-1]", semantics.ValReal},
 	}
 	for _, tc := range cases {

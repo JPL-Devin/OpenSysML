@@ -65,7 +65,7 @@ sysml> %instantiate Wheel
 sysml> %features Wheel
 Instance: Wheel (ID: 1)
 Features:
-  diameter = 16.00
+  diameter = 16.0
 ```
 
 **Behavioral execution:**
@@ -125,15 +125,15 @@ sysml> state TrafficLight { entry; then red; state red; state green; transition 
 sysml> %state TrafficLight
 ✓ Started state machine executor for "TrafficLight"
   Current state: red
-  Time: 0.00
+  Time: 0.0
   Events: 1
 
 Use %events to see queue, %current for state, %advance <time> to step
 
 sysml> %advance 30
-✓ Advanced to 30.00 (1 event(s) processed)
+✓ Advanced to 30.0 (1 event(s) processed)
   Current state: green
-  Last event at: 0.00
+  Last event at: 0.0
   Remaining events: 0
 ```
 
@@ -179,14 +179,14 @@ Which client to pick, what the four newer ones cover, and what they deliberately
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (145 golden ASTs, 255 negative tests) |
-| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 104 calc/constraint/requirement/satisfy cases passing) |
-| Action execution engine (Tier 5) | ✅ Complete (69 conformance cases passing) |
-| State machine runtime (Tier 5) | ✅ Complete (79 conformance cases: transitions, accept events, sourceless) |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (146 golden ASTs, 261 negative tests) |
+| Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 106 calc/constraint/requirement/satisfy cases passing) |
+| Action execution engine (Tier 5) | ✅ Complete (70 conformance cases passing) |
+| State machine runtime (Tier 5) | ✅ Complete (84 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete — `%constraint`, `%requirement`, `%satisfy` and `%calc` also answer from the command line (`-constraint`, `-requirement`, `-satisfy`, `-calc`) and over gRPC, on one evaluation |
 | Model save to notation (`%save model.sysml`, `sysml -convert sysml`) | ✅ Complete — writes the source through the formatter, so comments and spacing survive |
 | SysML ↔ RDF Turtle conversion (`%save model.ttl`, `sysml -convert ttl`) | 🧪 **Experimental** — packages, definitions, usages, ports, connections, values, documentation, and the nodes an action or state body states (260 of 334 `examples/` models convert; what is not mapped is refused with the construct named), but the vocabulary may change without a compatibility path. Every run says so; see [the RDF mapping's status](docs/reference/rdf-mapping.md#status-experimental) and [worked example](examples/rdf-interop-demo.sysml) |
-| View rendering (`%render <view>`, `sysml -render`) | ✅ Complete for the kinds produced — containment tree, interconnection diagram, state machine, action flow and table, as indented text or in the kind's machine-readable form (Mermaid, Markdown). State and action renderings read the graph the runtime executes; the notation itself is tool-defined ([SysML v2 §10.2](docs/project/spec-compliance.md)) |
+| View rendering (`%render <view>`, `sysml -render`) | ✅ Complete for the kinds produced — containment tree, interconnection diagram, state machine, action flow, sequence diagram and table, as indented text or in the kind's machine-readable form (Mermaid, Markdown). State and action renderings read the graph the runtime executes; the notation itself is tool-defined ([SysML v2 §10.2](docs/project/spec-compliance.md)) |
 | Constraint solving (`%check`, `%explain`, `%solve`, `%configure`, `%optimize`) | 🧪 **Experimental** — an external SMT-LIB 2 solver decides whether conditions *can* be satisfied, explains an `unsat` with a minimal unsat core, synthesises satisfying values, enumerates the variant selections a model permits and optimizes an `analysis def`'s objectives (optimization needs z3, which implements it). The solver is optional and discovered on `PATH` or through `OPENSYSML_SMT`; a build with none reports that rather than a verdict — see [installing a solver](docs/guide/01-install.md#installing-a-solver-optional) |
 | Source-preserving model edits (`ApplyEdits`, `model.edit()`) | ✅ Complete for four operations — set a feature's value, rename a declaration, add a member, and delete a declaration — rewriting the bytes of the model's own source so every untouched byte is identical. A rename rewrites the references to the renamed element too, and a non-cascade deletion of a referenced element is refused rather than approximated |
 | Standard library bundling | ✅ Complete |
@@ -199,13 +199,13 @@ Which client to pick, what the four newer ones cover, and what they deliberately
 | Node/TypeScript client library | ✅ Complete for the same v1 scope, in Node and the browser, over the Connect protocol with protobuf bodies and no native addon; values arrive as discriminated unions ([clients/node/README.md](clients/node/README.md)) |
 
 <!-- doc-counts:begin refereed-figures -->
-**Measured against the pinned reference** (`PILOT_TAG=2026-05`, artifact `0.60.1`). Every number below is generated by `make docs-counts` from the committed baselines and gated; none of them is typed in by hand.
+**Measured against the pinned reference** (`PILOT_TAG=2026-07`, artifact `0.61.0`). Every number below is generated by `make docs-counts` from the committed baselines and gated; none of them is typed in by hand.
 
-- **Corpus agreement:** 328 of 355 files agree diagnostic-by-diagnostic; 27 diagnostics are ours alone and 58 the reference's alone, and the first number must be read by root: our diagnostics against the reference's own corpora fell while our non-standard-notation warnings on our own example models rose ([differential](docs/project/pilot-differential.md), `go run ./cmd/pilot-diff`).
-- **Declared-diagnostic silence:** of the 510 declared `errors` rows in the reference's own Xpect suites, we report nothing for 0. 243 we report word-for-word; 248 wording-only and 7 location-only differences are agreement in substance and are not counted as gaps; 0 more we report as a warning and 2 elsewhere in the file ([Xpect oracle](docs/project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
+- **Corpus agreement:** 330 of 356 files agree diagnostic-by-diagnostic; 26 diagnostics are ours alone and 58 the reference's alone, and the first number must be read by root: our diagnostics against the reference's own corpora fell while our non-standard-notation warnings on our own example models rose ([differential](docs/project/pilot-differential.md), `go run ./cmd/pilot-diff`).
+- **Declared-diagnostic silence:** of the 511 declared `errors` rows in the reference's own Xpect suites, we report nothing for 0. 244 we report word-for-word; 248 wording-only and 7 location-only differences are agreement in substance and are not counted as gaps; 0 more we report as a warning and 2 elsewhere in the file ([Xpect oracle](docs/project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
 - **Scope agreement:** 230 of 230 declared scope assertions match exactly (same source).
 - **Permissiveness gaps:** of 120 invalid models we wrote ourselves, the reference rejects 2 that we accept by default, and 118 both reject; 2 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](docs/project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
-- **Declared errata:** the registry declares 3 defect(s) in the published reference material — 2 with a specification-derived correction, 1 documented without one, since no intended reading can be inferred ([OMG issues](docs/project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 330 of 355 files agreeing, 25 diagnostics ours alone and 58 the reference's alone, 0 declared rows we are silent on, and 0 of 120 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
+- **Declared errata:** the registry declares 2 defect(s) in the published reference material — 1 with a specification-derived correction, 1 documented without one, since no intended reading can be inferred ([OMG issues](docs/project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 331 of 356 files agreeing, 25 diagnostics ours alone and 58 the reference's alone, 0 declared rows we are silent on, and 0 of 120 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
 - **Self-assessed surface:** 127 of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four refereed figures above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
@@ -214,10 +214,10 @@ What these numbers cannot show: the OMG corpora are demonstrations rather than a
 <!-- doc-counts:end refereed-figures -->
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
-**Test coverage:** 8,324 tests and subtests (8,315 pass, 9 skip themselves; 3,940 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 145 golden ASTs, 255 negatives, 374 conformance cases, 114 golden traces, 253 runtime robustness cases, 15 gRPC conformance cases and 8 gRPC robustness cases.
+**Test coverage:** 8,361 tests and subtests (8,347 pass, 14 skip — 6 skip themselves, 8 gate on an absent OMG corpus, a live Flexo stack or an SMT solver; 4,038 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 146 golden ASTs, 261 negatives, 380 conformance cases, 118 golden traces, 256 runtime robustness cases, 15 gRPC conformance cases and 8 gRPC robustness cases.
 **Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement/satisfy functional. Action/state executors handle nested invocation, control flow keywords, loop and conditional statements and the send statement (374/374 conformance cases passing). Coverage is self-assessed against the specification text and the normative library: the pinned OMG pilot implementation evaluates expressions but does not execute actions or state machines headlessly, so no external implementation currently adjudicates these rows. See [spec compliance](docs/project/spec-compliance.md).
-**Reference differential:** 355 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (`2026-05`), 328 in full agreement; every divergence is enumerated and adjudicated in [the differential](docs/project/pilot-differential.md), reproducible with `go run ./cmd/pilot-diff`.
+**Behavioral execution:** Calc/constraint/requirement/satisfy functional. Action/state executors handle nested invocation, control flow keywords, loop and conditional statements and the send statement (380/380 conformance cases passing). Coverage is self-assessed against the specification text and the normative library: the pinned OMG pilot implementation evaluates expressions but does not execute actions or state machines headlessly, so no external implementation currently adjudicates these rows. See [spec compliance](docs/project/spec-compliance.md).
+**Reference differential:** 356 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (`2026-07`), 330 in full agreement; every divergence is enumerated and adjudicated in [the differential](docs/project/pilot-differential.md), reproducible with `go run ./cmd/pilot-diff`.
 **Rejection oracle:** the reverse direction — do we reject what the reference rejects? 120 hand-written invalid models validated by both implementations, 120 rejected by both, 0 the pinned pilot rejects and we accept; every permissiveness gap is enumerated with a reproducer and likely root cause in [the rejection oracle](docs/project/pilot-rejection.md), reproducible with `go run ./cmd/pilot-reject`. We wrote all 120 cases, so the count measures our coverage of the rejection surface, not our conformance — a sample, not a proof.
 **Training examples:** 100/100 files clean, gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [training examples](docs/project/training-examples.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
@@ -284,8 +284,8 @@ github.com/Open-MBEE/OpenSysML
 - **Language:** Go 1.25+ (goroutines for concurrency, single static binary, proven LSP track record)
 - **Parser:** Hand-written recursive descent (zero overhead, full error recovery, sub-ms parses)
 - **Grammar source:** OMG pilot Xtext grammars (`SysML.xtext` + `KerMLExpressions`)
-- **Spec compliance:** [OMG SysML v2.1 Beta 1 / KerML 1.1](https://www.omg.org/spec/SysML/2.0) (2026-05 release)
-- **Standard library:** 94 files from [SysML v2 Pilot Implementation 2026-05](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-05), byte-identical, plus the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension
+- **Spec compliance:** [OMG SysML v2.1 Beta 1 / KerML 1.1](https://www.omg.org/spec/SysML/2.0) (2026-07 release)
+- **Standard library:** 94 files from [SysML v2 Pilot Implementation 2026-07](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-07), byte-identical, plus the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension
 - **CI/CD:** CircleCI for automated builds, tests, and releases
 
 ## Releases
