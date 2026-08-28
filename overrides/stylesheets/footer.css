@@ -1,3 +1,18 @@
+/* The affiliation shares the copyright line with the licence, but sits at the far right. */
+.md-copyright {
+  flex: 1;
+}
+
+.md-copyright__highlight {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.8rem;
+}
+
+.osml-affiliation {
+  margin-left: auto;
+}
+
 /* The copyright line is all one colour, so its links need the underline to read as links. */
 .md-copyright__highlight a {
   text-decoration: underline;

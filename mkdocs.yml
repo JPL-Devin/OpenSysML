@@ -8,8 +8,12 @@ site_url: https://opensysml.org/
 repo_url: https://github.com/Open-MBEE/OpenSysML
 repo_name: Open-MBEE/OpenSysML
 edit_uri: edit/main/docs/
-copyright: Apache-2.0 &middot; part of <a href="https://openmbee.org">Open-MBEE</a>, a
-  <a href="https://numfocus.org">NumFOCUS</a> project
+# The affiliation is a span rather than its own line because the footer's copyright is the
+# only place the theme lets a site put text; stylesheets/footer.css moves it to the right.
+copyright: >-
+  Apache-2.0
+  <span class="osml-affiliation">part of <a href="https://openmbee.org">Open-MBEE</a>,
+  a <a href="https://numfocus.org">NumFOCUS</a> project</span>
 
 docs_dir: docs
 
