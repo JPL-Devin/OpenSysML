@@ -771,3 +771,14 @@ func TestStateDebuggerReportsAnUninstantiatedPerformer(t *testing.T) {
 	s := loadFixture(t, "../core/runtime/testdata/conformance/variant_connection_per_owner.sysml")
 	wants(t, run(t, s, "%state VariantRouting::Router::Route VariantRouting::alpha"), "no instance of")
 }
+
+// A machine whose substates are typed usages: the debugger enters the state the
+// definition declares initial, and each usage keeps its own attribute values.
+func TestStateDebuggerStepsThroughInheritedContent(t *testing.T) {
+	s := loadFixture(t, "testdata/state_typed_usage.sysml")
+
+	wants(t, run(t, s, "%state Machine"), "Current state: i1")
+	wants(t, run(t, s, "%current"), "one.hits = 1", "two.hits = 0")
+	wants(t, run(t, s, "%advance 5"), "Current state: i2")
+	wants(t, run(t, s, "%current"), "one.hits = 1", "two.hits = 0", "Time: 5.0")
+}

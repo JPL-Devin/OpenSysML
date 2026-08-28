@@ -91,6 +91,11 @@ func VertexInScope(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool)
 			break
 		}
 	}
+	// A vertex a state inherits from the definition typing it is a member of that
+	// state, so an endpoint may name it, but no scope of the machine holds it.
+	if sym, ok := inheritedVertexInScope(scope, parts); ok {
+		return sym.Decl, true
+	}
 	return nil, false
 }
 

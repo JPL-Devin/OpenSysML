@@ -1,0 +1,11 @@
+{
+  "type": "state",
+  "evaluate": "test::Machine",
+  "trace": true,
+  "events": [
+    {"signal": "Step", "args": null},
+    {"signal": "Abort", "args": null}
+  ],
+  "finalState": "done",
+  "stateVisits": ["start", "running", "r1", "r1", "r2", "r2", "done"]
+}

@@ -1,0 +1,13 @@
+{
+  "type": "instance",
+  "instantiate": "test::Rover",
+  "objects": [
+    {
+      "finalState": "i1",
+      "stateVisits": ["driving", "nested", "i1"],
+      "slots": {
+        "modes.distance": {"type": "Integer", "value": 21}
+      }
+    }
+  ]
+}

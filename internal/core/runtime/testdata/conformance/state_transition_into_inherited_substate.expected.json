@@ -1,0 +1,8 @@
+{
+  "type": "state",
+  "evaluate": "test::Outer",
+  "finalState": "i2",
+  "outputs": {
+    "nested.seen": {"type": "Integer", "value": 1}
+  }
+}

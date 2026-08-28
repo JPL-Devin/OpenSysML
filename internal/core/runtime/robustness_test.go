@@ -45,6 +45,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
 	t.Run("parallel_state_body_unsupported_member", testParallelStateBodyUnsupportedMember)
 	t.Run("parallel_state_region_without_initial", testParallelStateRegionWithoutInitial)
+	t.Run("state_usage_typed_by_itself", testStateUsageTypedByItself)
+	t.Run("state_usage_mutually_recursive_typing", testStateUsageMutuallyRecursiveTyping)
+	t.Run("state_usage_inherits_unsupported_member", testStateUsageInheritsUnsupportedMember)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("calc_calls_an_unimported_extension_function", testCalcCallsAnUnimportedExtensionFunction)
@@ -3636,6 +3639,96 @@ func testParallelStateRegionWithoutInitial(t *testing.T) {
 	if !strings.Contains(err.Error(), "entry; then <state>;") {
 		t.Fatalf("error = %v, want initial-state notation guidance", err)
 	}
+}
+
+// testStateUsageTypedByItself: a definition whose substate is typed by it has no
+// finite materialization and must report that, not recurse.
+func testStateUsageTypedByItself(t *testing.T) {
+	src := `
+		package test {
+			state def A {
+				entry; then b;
+				state b : A;
+			}
+		}
+	`
+	err := stateExecutorError(t, src, "A")
+	if err == nil {
+		t.Fatal("recursively typed state succeeded")
+	}
+	if !errors.Is(err, lower.ErrRecursiveStateTyping) {
+		t.Fatalf("error = %v, want recursive state typing", err)
+	}
+}
+
+// testStateUsageMutuallyRecursiveTyping: two definitions reaching each other
+// through their substates report the cycle rather than materializing forever.
+func testStateUsageMutuallyRecursiveTyping(t *testing.T) {
+	src := `
+		package test {
+			state def A {
+				entry; then b;
+				state b : B;
+			}
+			state def B {
+				entry; then a;
+				state a : A;
+			}
+		}
+	`
+	err := stateExecutorError(t, src, "A")
+	if err == nil {
+		t.Fatal("mutually recursive state typing succeeded")
+	}
+	if !errors.Is(err, lower.ErrRecursiveStateTyping) {
+		t.Fatalf("error = %v, want recursive state typing", err)
+	}
+}
+
+// testStateUsageInheritsUnsupportedMember: content a usage inherits that state
+// lowering cannot represent is reported, never dropped.
+func testStateUsageInheritsUnsupportedMember(t *testing.T) {
+	src := `
+		package test {
+			action def Warm;
+			state def Inner {
+				entry; then i1;
+				state i1;
+				perform Warm;
+			}
+			state def Machine {
+				entry; then nested;
+				state nested : Inner;
+			}
+		}
+	`
+	err := stateExecutorError(t, src, "Machine")
+	if err == nil {
+		t.Fatal("unsupported inherited member succeeded")
+	}
+	if !errors.Is(err, lower.ErrUnsupportedStateContent) {
+		t.Fatalf("error = %v, want unsupported state content", err)
+	}
+	if !strings.Contains(err.Error(), "cannot be inherited by the state nested") {
+		t.Fatalf("error = %v, want the inheriting state named", err)
+	}
+}
+
+// stateExecutorError builds a state executor for a named state definition and
+// returns what creating it reports.
+func stateExecutorError(t *testing.T, src, name string) error {
+	t.Helper()
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), name, ast.DefState)
+	if sym == nil {
+		t.Fatalf("state %s not found", name)
+	}
+	_, err := ctx.CreateStateExecutor(sym)
+	return err
 }
 
 // testSourcelessAcceptAtTopLevel: sourceless accept...then at top level should error
