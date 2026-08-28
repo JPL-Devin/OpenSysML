@@ -42,7 +42,7 @@ func TestEvalThroughDeclarationHonorsNestedRedefinition(t *testing.T) {
 			t.Errorf("%%eval %s: %v", path, err)
 			continue
 		}
-		if got := strings.Join(lines, "\n"); !strings.Contains(got, "9.00") {
+		if got := strings.Join(lines, "\n"); !strings.Contains(got, "9.0") {
 			t.Errorf("%%eval %s = %v, want the redefined value", path, lines)
 		}
 	}
@@ -66,7 +66,7 @@ func TestEvalThroughDeclarationKeepsItsSubjectAcrossSubmissions(t *testing.T) {
 			continue
 		}
 		got := strings.Join(lines, "\n")
-		if !strings.Contains(got, "9.00") {
+		if !strings.Contains(got, "9.0") {
 			t.Errorf("%%eval %s = %v, want the redefined value", path, lines)
 		}
 		if !strings.Contains(got, "A::o::inner::b") {
@@ -85,7 +85,7 @@ func TestEvalThroughDeclarationWithoutObjectUsesDeclaredValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%%eval A::Spec::c: %v", err)
 	}
-	if got := strings.Join(lines, "\n"); !strings.Contains(got, "1.00") {
+	if got := strings.Join(lines, "\n"); !strings.Contains(got, "1.0") {
 		t.Errorf("%%eval A::Spec::c = %v, want the declared default", lines)
 	}
 }

@@ -190,7 +190,7 @@ func TestRunStateMachine(t *testing.T) {
 	// -advance 0 is a run to the current time, as %advance 0 is: what is due at
 	// the start is dispatched, which the initial transition alone does not do.
 	zero := check(t, binary, behaviorModel, "-state", "Mission::Cycle", "-advance", "0")
-	wantReport(t, zero, 0, "✓ Advanced to 0.00")
+	wantReport(t, zero, 0, "✓ Advanced to 0.0")
 	if zero.stdout == started.stdout {
 		t.Errorf("-advance 0 reported the same run as no -advance at all:\n%s", zero.output())
 	}

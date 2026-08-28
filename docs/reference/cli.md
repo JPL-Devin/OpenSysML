@@ -89,7 +89,7 @@ sysml -e "speedLimit < 120" vehicle-model.sysml
 # model.sysml contains: attribute totalCost = partCost + laborCost;
 sysml -e "totalCost" model.sysml
 # Output: ✓ totalCost
-#           = 1500.00
+#           = 1500.0
 ```
 
 ### 4. Batch Processing

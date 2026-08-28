@@ -37,9 +37,9 @@ func TestFeatureValueListingReportsAValuelessValueTypedFeatureAsUnset(t *testing
 		"d = <unset>",
 		"ds = [<unset>, <unset>]",
 		"empty = <unset>",
-		"k = 2.00",
+		"k = 2.0",
 		"origin = Instance(ID: ",
-		"x = 1.00",
+		"x = 1.0",
 		"engine = Instance(ID: ",
 	)
 	// The object materialization holds for such a feature is not named, and not
@@ -57,7 +57,7 @@ func TestEvaluationReportsAValuelessValueTypedFeatureAsUnset(t *testing.T) {
 	wants(t, run(t, s, "%instantiate P::Q"), "Created instance")
 
 	wants(t, run(t, s, "%eval P::Q::d"), "= <unset>")
-	wants(t, run(t, s, "%eval P::Q::k"), "= 2.00")
+	wants(t, run(t, s, "%eval P::Q::k"), "= 2.0")
 }
 
 // A debugger session outlives a submission that does not rewrite what it runs,

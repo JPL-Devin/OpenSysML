@@ -13,7 +13,7 @@ func TestTracingReportsExecutionPerCommand(t *testing.T) {
 	run(t, s, "%instantiate Derived::Vehicle")
 
 	got := run(t, s, "%features Derived::Vehicle")
-	wants(t, got, "[trace] ", "eval feature mass", "doubled = 3000.00")
+	wants(t, got, "[trace] ", "eval feature mass", "doubled = 3000.0")
 
 	if again := run(t, s, "%instances"); strings.Contains(again, "[trace] ") {
 		t.Errorf("a later command replayed an earlier trace:\n%s", again)

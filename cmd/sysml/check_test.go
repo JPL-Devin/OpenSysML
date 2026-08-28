@@ -155,11 +155,11 @@ func TestEvalAfterInstantiateThroughCLI(t *testing.T) {
 }
 `
 	wantReport(t, check(t, binary, model, "-instantiate", "P::hot", "-e", "P::Sensor::reading"),
-		0, "(on P::hot ID: 1)", "= 140.00")
+		0, "(on P::hot ID: 1)", "= 140.0")
 
 	// With no object the declared default is the answer, claiming no object.
 	answered := check(t, binary, model, "-e", "P::Sensor::reading")
-	wantReport(t, answered, 0, "= 0.00")
+	wantReport(t, answered, 0, "= 0.0")
 	rejectReport(t, answered, "(on ")
 }
 

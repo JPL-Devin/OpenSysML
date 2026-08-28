@@ -16,6 +16,18 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   carrying a multiplicity (`assume c [0..*];`). The errata overlay drops the redefinition
   correction the published corpus now makes itself.
 
+- **Why a listed view is not drawable is now written under the diagram** rather than only in the
+  picker entry's tooltip, so a `geometry` or `textual` view says what it is that cannot be drawn
+  without the reason having to be hovered for.
+
+- **A Real prints as the shortest decimal that reads back as the same value**, on every surface
+  that renders one — an evaluation result, a feature value listing, a quantity's magnitude, an
+  execution trace and the simulation clock. Values were rendered to two decimal places, which
+  reported a nonzero magnitude as zero (`0.0001` printed `0.00`) and rounded away precision the
+  evaluation had kept (`1.0 / 3.0` printed `0.33`, `123456789.987654` printed `123456789.99`),
+  and disagreed between surfaces. A whole Real keeps its `.0` so it is not mistaken for an
+  Integer. Arithmetic is unchanged: the stored value was never rounded.
+
 ### Added
 
 - **A view specializing `StandardViewDefinitions::SequenceView` (or `sv`) renders as a sequence
@@ -30,12 +42,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 - **The `opensysml/views` response now reports supported pseudo-view specs**, so clients can offer
   newly supported rendering kinds without maintaining a second list.
-
-### Changed
-
-- **Why a listed view is not drawable is now written under the diagram** rather than only in the
-  picker entry's tooltip, so a `geometry` or `textual` view says what it is that cannot be drawn
-  without the reason having to be hovered for.
 
 ### Fixed
 

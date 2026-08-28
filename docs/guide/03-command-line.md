@@ -237,7 +237,7 @@ take the behavior's name optionally followed by the object performing it:
 $ sysml -calc "MyModel::Margin(20.0, 100.0)" checks.sysml
 ✓ package MyModel
 ✓ MyModel::Margin(20.0, 100.0)
-  = 80.00
+  = 80.0
 
 $ sysml -action MyModel::calibrate checks.sysml
 ✓ package MyModel
@@ -247,17 +247,17 @@ $ sysml -action MyModel::calibrate checks.sysml
 ✓ Action completed
   Final state: Completed
   Results:
-    offset = 1.50
+    offset = 1.5
 
 $ sysml -state MyModel::Monitor -advance 15 checks.sysml
 ✓ package MyModel
 ✓ Started state machine executor for "MyModel::Monitor"
   Current state: off
-  Time: 0.00
+  Time: 0.0
   Events: 1
-✓ Advanced to 15.00 (2 event(s) processed)
+✓ Advanced to 15.0 (2 event(s) processed)
   Current state: running
-  Last event at: 10.00
+  Last event at: 10.0
   Remaining events: 0
 ```
 
@@ -324,7 +324,7 @@ shell:
 $ sysml -e "RdfInteropDemo::Rover::mass" examples/rdf-interop-demo.sysml
 ✓ package RdfInteropDemo
 ✓ RdfInteropDemo::Rover::mass
-  = 899.00
+  = 899.0
 ```
 
 Two things matter before a pipeline depends on it:

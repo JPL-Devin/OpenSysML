@@ -29,7 +29,7 @@ func TestSlotsIsNoLongerACommand(t *testing.T) {
 
 	got := run(t, s, "%slots Vehicle")
 	wants(t, got, `unknown command "%slots"`)
-	rejects(t, got, "mass = 1500.00")
+	rejects(t, got, "mass = 1500.0")
 	rejects(t, strings.Join(metaCommands(), " "), "%slots")
 }
 

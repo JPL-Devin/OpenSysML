@@ -319,12 +319,7 @@ func formatConst(c semantics.Value) string {
 	case semantics.ValInt:
 		return strconv.FormatInt(c.Int, 10)
 	case semantics.ValReal:
-		// A whole real keeps a ".0" so it is not mistaken for an integer.
-		text := strconv.FormatFloat(c.Real, 'g', -1, 64)
-		if !strings.ContainsAny(text, ".eEnN") {
-			text += ".0"
-		}
-		return text
+		return FormatReal(c.Real)
 	case semantics.ValBool:
 		return strconv.FormatBool(c.Bool)
 	case semantics.ValInfinity:

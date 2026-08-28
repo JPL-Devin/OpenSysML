@@ -49,7 +49,7 @@ func TestLoadedOpenFileDoesNotPoisonTheNextSubmission(t *testing.T) {
 	// package swallowed.
 	if lines, err := s.EvalExpr("Good::n"); err != nil {
 		t.Errorf("%%eval Good::n after the bad load: %v", err)
-	} else if !strings.Contains(strings.Join(lines, "\n"), "2.00") {
+	} else if !strings.Contains(strings.Join(lines, "\n"), "2.0") {
 		t.Errorf("%%eval Good::n = %v, want the declared value", lines)
 	}
 	if out, _, err := s.runMeta("%instantiate Good::B"); err != nil {

@@ -61,7 +61,7 @@ sysml> %features Car
 Instance: Car (ID: 1)
 Features:
   engine = Instance(ID: 2)
-    power = 250.00
+    power = 250.0
 ```
 
 ## Multiplicity
