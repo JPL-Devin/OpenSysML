@@ -207,9 +207,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 23 | 16 | 18 | 59 | 3 | 7 | 8 | 49 |
+| `examples` | 23 | 17 | 15 | 49 | 3 | 4 | 8 | 42 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **357** | **329** | **72** | **120** | **37** | **8** | **27** | **75** |
+| **Total** | **357** | **330** | **69** | **110** | **37** | **5** | **27** | **68** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -227,9 +227,31 @@ them, and removing `initial <state>;` and `transition <src> to <tgt>;` retired 2
 demos are now written in the standard spellings the warning does not fire on. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **10**. `severity-only` (8) holds pairs of the same shape:
+reference corpora is **10**. `severity-only` (5) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
+
+### Package-keyword round
+
+`examples/semantic-layer/demo.sysml` declared three of its packages with KerML's `namespace`
+keyword, which the SysML grammar has no production for: the reference could not parse those
+declarations, and our own non-standard-notation pass warned on each of them. Writing them as
+`package` — the spelling both implementations admit — makes the file fully agreeing and removes
+every row it carried, on both sides:
+
+| Count | Before the keyword change | Now |
+|---|---:|---:|
+| `examples`: only pilot | 49 | **42** |
+| `examples`: severity-only | 7 | **4** |
+| overall: fully agreeing | 329 | **330** |
+| overall: our diagnostics | 72 | **69** |
+| overall: pilot diagnostics | 120 | **110** |
+
+The three severity-only pairs were our `kerml-notation` warning against the reference's parse
+error on lines 35, 39 and 105; the seven pilot-only rows were that parse failure's recovery —
+two `Duplicate of other owned member name` and the five `Must be an accessible feature` rows
+the recovered namespaces produced for references into them. Nothing about either implementation
+changed: the example did.
 
 ### Feature-initialization round
 
@@ -242,9 +264,9 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **75** |
-| pilot diagnostics | 123 | **120** |
-| severity-only | 9 | **8** |
+| only pilot | 82 | **68** |
+| pilot diagnostics | 123 | **110** |
+| severity-only | 9 | **5** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
 those counts as the later rounds leave them.
@@ -255,8 +277,8 @@ combined figures were 324 fully agreeing / 27 only ours / 68 → 67 our diagnost
 agreeing files, only-ours and every OMG root were unmoved by the rewrite, so nothing here is a
 conformance change: it is our own demo written in a spelling the reference accepts. The rewrite itself
 left only-pilot at 61 and pilot diagnostics at 101; the `Now` column tracks the current baseline, so it
-also carries the interface-flow pairing round, the library-inherited-name round and the end-to-end
-demo round that followed, and the Results table above states every figure as it is now.
+also carries the interface-flow pairing round, the library-inherited-name round, the end-to-end
+demo round and the package-keyword round that followed, and the Results table above states every figure as it is now.
 
 ### End-to-end demo round
 
@@ -439,7 +461,7 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax, 1 `unmapped`; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 13 syntax, 12 `kind-mismatch`, 14 `unmapped`, 10 `unresolved-reference` — all of them
+`examples` 13 syntax, 7 `kind-mismatch`, 12 `unmapped`, 10 `unresolved-reference` — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -477,12 +499,12 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **329 / 27 / 72** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **330 / 27 / 69** |
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **49** |
-| `examples`: fully agreeing | **15** | **16** |
+| `examples`: only pilot | **40** | **42** |
+| `examples`: fully agreeing | **15** | **17** |
 | `unmapped`, our side | **20** | **23** |
 
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
@@ -1625,6 +1647,10 @@ reproducer outputs are quoted; "ours" is `bin/sysml <file>` on this branch.
 | 6–7 | `views-demo.sysml:44` | `Cannot identify flow end (use dot notation)` ×2 | **Real gap, and our fixture is the invalid model.** Line 44 is `flow of Fuel from tank to thruster;` inside `part def Descender`; the pilot parses the file cleanly to that point (its only earlier diagnostic there is line 32) so nothing is cascading. Reproducer pair: the same declaration with undotted ends draws `8:3: error: Must have at least two related elements`, `8:21: error: Cannot identify flow end (use dot notation)`, `8:29: error: Cannot identify flow end (use dot notation)`; writing the ends as `from tank.fuelOut to thruster.fuelIn` (against `out item fuelOut : Fuel` / `in item fuelIn : Fuel`) is accepted, exit 0. Ours reports nothing in either case. The companion `Must have at least two related elements` at the same line (booked under P5) has the same root cause, so P5's count for that file follows this verdict rather than P1/P2/P3. Follow-up **F21**. |
 | 8 | `parse/expressions.sysml:4` | `Must be model-level evaluable` | **Downstream of the unresolved references both implementations report** at that line: `filter coll->select(x);` in a fixture that declares none of `coll`, `select`, `x` (agreement rows: ours `unresolved reference: coll/select/x`, pilot `Couldn't resolve reference to Element 'coll'/'select'/'x'`). `InvocationExpression::modelLevelEvaluable` is `function !== null && function.isModelLevelEvaluable && argument->forAll(modelLevelEvaluable)`, so an unresolved operator makes it `false` unconditionally. Reproducer chain: unresolved `filter coll->select(x);` → both P6 messages; a *resolvable* but non-evaluable invocation (`filter Twice(2) > 3;` over a local `calc def Twice`) → `Must be model-level evaluable` **only**; a resolvable evaluable one (`filter 1 + 2 > 0;`) → **silent**. So the message here is a consequence of the unresolved name, not of a construct we accept and it rejects. The rule itself is real and we have a *divergent* counterpart — see **F22**. |
 | 9 | `parse/expressions.sysml:4` | `Must invoke a behavior or a behavioral feature` | **Downstream of the same unresolved references.** The constraint is over `instantiatedType`, which is `null` when the invoked `select` does not resolve; the resolvable-but-unevaluable reproducer above draws no invocation error at all, isolating the cause. The rule is real and unimplemented on our side: with `part def Widget; part w = Widget();` the pilot reports `3:11: error: Must invoke a behavior or a behavioral feature` and nothing else, while we report nothing. Follow-up **F23**. |
+
+Rows 1–5 no longer have corpus instances: `semantic-layer/demo.sysml` now declares those three
+packages with `package`, the spelling the reference parses, so the recovery that produced them is
+gone and the file is fully agreeing. The verdicts stand as the adjudication of why they were there.
 
 The rule behind rows 1–5 is real too, even though no corpus diagnostic is: with
 `part def P { attribute n : Integer = 1; } package Q { filter E::P::n > 0; }` — which parses

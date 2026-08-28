@@ -60,7 +60,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 23,
-        "digest": "sha256:d1aabbc3e25a1b2a0354153a5d857d3f467e9e3844a64cf9d83e17f6d9759e2d"
+        "digest": "sha256:69628660c5c8ecf442e7f971fe83458cf594d771b2f001885e6b579bab3afef2"
       },
       {
         "name": "probes",
@@ -74,13 +74,13 @@
   },
   "totals": {
     "files": 357,
-    "filesFullyAgreeing": 329,
+    "filesFullyAgreeing": 330,
     "agreement": 37,
-    "severityMismatch": 8,
+    "severityMismatch": 5,
     "openSysMLOnly": 27,
-    "pilotOnly": 75,
-    "openSysMLDiagnostics": 72,
-    "pilotDiagnostics": 120
+    "pilotOnly": 68,
+    "openSysMLDiagnostics": 69,
+    "pilotDiagnostics": 110
   },
   "roots": [
     {
@@ -734,13 +734,13 @@
       "dir": "examples",
       "totals": {
         "files": 23,
-        "filesFullyAgreeing": 16,
+        "filesFullyAgreeing": 17,
         "agreement": 3,
-        "severityMismatch": 7,
+        "severityMismatch": 4,
         "openSysMLOnly": 8,
-        "pilotOnly": 49,
-        "openSysMLDiagnostics": 18,
-        "pilotDiagnostics": 59
+        "pilotOnly": 42,
+        "openSysMLDiagnostics": 15,
+        "pilotDiagnostics": 49
       },
       "files": [
         {
@@ -968,78 +968,6 @@
           ]
         },
         {
-          "path": "semantic-layer/demo.sysml",
-          "agreement": [],
-          "severityMismatch": [
-            {
-              "line": 35,
-              "category": "syntax",
-              "openSysMLSeverity": "warning",
-              "pilotSeverity": "error",
-              "count": 1
-            },
-            {
-              "line": 39,
-              "category": "syntax",
-              "openSysMLSeverity": "warning",
-              "pilotSeverity": "error",
-              "count": 1
-            },
-            {
-              "line": 105,
-              "category": "syntax",
-              "openSysMLSeverity": "warning",
-              "pilotSeverity": "error",
-              "count": 1
-            }
-          ],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 35,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 44,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 45,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 46,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 50,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 51,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 105,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            }
-          ]
-        },
-        {
           "path": "solver-demo.sysml",
           "agreement": [],
           "severityMismatch": [
@@ -1261,11 +1189,6 @@
   ],
   "unmapped": [
     {
-      "side": "pilot",
-      "message": "Duplicate of other owned member name",
-      "count": 7
-    },
-    {
       "side": "opensysml",
       "message": "Duplicate of inherited member name 'start' from StateAction",
       "count": 5
@@ -1273,6 +1196,11 @@
     {
       "side": "pilot",
       "message": "Duplicate of inherited member name 'done' from Action",
+      "count": 5
+    },
+    {
+      "side": "pilot",
+      "message": "Duplicate of other owned member name",
       "count": 5
     },
     {
@@ -1439,13 +1367,13 @@
     ],
     "totals": {
       "files": 357,
-      "filesFullyAgreeing": 330,
+      "filesFullyAgreeing": 331,
       "agreement": 37,
-      "severityMismatch": 8,
+      "severityMismatch": 5,
       "openSysMLOnly": 26,
-      "pilotOnly": 75,
-      "openSysMLDiagnostics": 71,
-      "pilotDiagnostics": 120
+      "pilotOnly": 68,
+      "openSysMLDiagnostics": 68,
+      "pilotDiagnostics": 110
     },
     "findings": [
       {
