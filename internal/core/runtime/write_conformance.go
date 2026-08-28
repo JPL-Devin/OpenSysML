@@ -106,42 +106,69 @@ func (ctx *Context) checkWriteType(scope *symbols.Scope, what string, declared *
 		return nil
 	}
 	for _, element := range elementsOf(value) {
-		conforms, err := ctx.valueConforms(scope, element, declared)
+		conforms, refusal, err := ctx.valueConforms(scope, element, declared)
 		if err != nil || conforms {
 			continue
 		}
-		return fmt.Errorf("%s: %w: cannot write %s (%s) to a feature typed by %s",
-			what, ErrTypeMismatch, FormatValue(element), describeValue(element), symbolText(declared))
+		if refusal == "" {
+			refusal = fmt.Sprintf("cannot write %s (%s) to a feature typed by %s",
+				FormatValue(element), describeValue(element), symbolText(declared))
+		}
+		return fmt.Errorf("%s: %w: %s", what, ErrTypeMismatch, refusal)
 	}
 	return nil
 }
 
 // valueConforms reports whether a feature of the declared type may hold the
 // value, by the relation the type tier applies to an initial value: the scalar
-// lattice where the target is a scalar type, specialization otherwise.
-func (ctx *Context) valueConforms(scope *symbols.Scope, value Value, declared *symbols.Symbol) (bool, error) {
+// lattice where the target is a scalar type, specialization otherwise. The
+// second result says why a value was refused where the general message would
+// not say it, and is empty otherwise.
+func (ctx *Context) valueConforms(scope *symbols.Scope, value Value, declared *symbols.Symbol) (bool, string, error) {
 	switch value.Kind {
 	case ValNull, ValInvalid:
 		// Holds no value to type; how many values a feature may hold is the
 		// multiplicity's to decide.
-		return true, nil
+		return true, "", nil
 	case ValQuantity:
-		// A quantity carries its unit, not the quantity value type measured in
-		// it, so only a scalar target states something it must answer to.
-		if prim := ctx.model.PrimTypeOf(declared); prim != semantics.PrimUnknown {
-			return semantics.PrimConforms(semantics.PrimRational, prim), nil
-		}
-		return true, nil
+		return ctx.quantityConforms(value, declared)
 	}
 	prim := ctx.model.PrimTypeOf(declared)
 	if got := valuePrimType(value); prim != semantics.PrimUnknown && got != semantics.PrimUnknown {
-		return semantics.PrimConforms(got, prim), nil
+		return semantics.PrimConforms(got, prim), "", nil
 	}
 	direct, err := ctx.directValueType(scope, value)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
-	return ctx.model.Conforms(direct, declared), nil
+	return ctx.model.Conforms(direct, declared), "", nil
+}
+
+// quantityConforms judges a written quantity: a scalar target by the lattice, a
+// target declaring a quantity value type by the dimension that type's mRef
+// fixes. A target fixing no dimension, and a unit fixing none, are not judged.
+func (ctx *Context) quantityConforms(value Value, declared *symbols.Symbol) (bool, string, error) {
+	if prim := ctx.model.PrimTypeOf(declared); prim != semantics.PrimUnknown {
+		return semantics.PrimConforms(semantics.PrimRational, prim), "", nil
+	}
+	want, ok := ctx.model.DimensionOfType(declared)
+	if !ok || value.Quantity == nil {
+		return true, "", nil
+	}
+	got, ok := ctx.model.DimensionOfUnit(value.Quantity.Unit.Term)
+	if !ok || want.Term.Commensurable(got.Term) {
+		return true, "", nil
+	}
+	return false, fmt.Sprintf("cannot write %s (%s) to a feature typed by %s (%s)",
+		FormatValue(value), dimensionText(got), symbolText(declared), dimensionText(want)), nil
+}
+
+// dimensionText names a dimension as a message about a mismatch reads it.
+func dimensionText(d semantics.Dimension) string {
+	if d.Term.Dimensionless() {
+		return "dimensionless"
+	}
+	return "dimension " + d.String()
 }
 
 // valuePrimType classifies a value against the scalar lattice the type tier

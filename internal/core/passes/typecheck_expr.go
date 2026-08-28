@@ -76,6 +76,7 @@ func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *
 		}
 	}
 	ec.checkValueConformance(valueScope, declScope, u, value)
+	ec.checkValueDimension(valueScope, declScope, u, value)
 	ec.checkValueCount(declScope, u, value)
 }
 
