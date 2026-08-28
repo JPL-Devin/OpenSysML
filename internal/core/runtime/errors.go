@@ -140,6 +140,10 @@ var (
 	// event budget.
 	ErrStateEventLimitExceeded = errors.New("state event limit exceeded")
 
+	// ErrStatePerformanceOccurrence is returned when an exhibited machine cannot
+	// read or write the occurrence of its state usage.
+	ErrStatePerformanceOccurrence = errors.New("state performance occurrence unavailable")
+
 	// ErrDoStepLimitExceeded is returned when a state do behavior exceeds its
 	// action-step budget.
 	ErrDoStepLimitExceeded = errors.New("state do-step limit exceeded")

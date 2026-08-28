@@ -373,7 +373,11 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 
 	switch decl.behavior.Kind {
 	case lower.ExhibitedState:
-		exec, err := newStateExecutor(ctx, sym, inst)
+		occurrence, err := ctx.exhibitedStateOccurrence(inst, decl, sym)
+		if err != nil {
+			return nil, err
+		}
+		exec, err := newStateExecutorForOccurrence(ctx, sym, inst, occurrence)
 		if err != nil {
 			return nil, fmt.Errorf("exhibited state machine %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
 		}
@@ -404,6 +408,55 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedClassifierBehavior, decl.behavior.Kind)
 	}
 	return behavior, nil
+}
+
+// exhibitedStateOccurrence returns the object held by the exhibit declaration.
+func (ctx *Context) exhibitedStateOccurrence(
+	inst *Instance,
+	decl classifierBehaviorDecl,
+	stateMachine *symbols.Symbol,
+) (*Instance, error) {
+	name := decl.behavior.Name
+	fv, ok := inst.FeatureValues[name]
+	if !ok || fv.Feature == nil || fv.Feature.Symbol != decl.member {
+		ok = false
+		for candidate, value := range inst.FeatureValues {
+			if value.Feature != nil && value.Feature.Symbol == decl.member {
+				name, fv, ok = candidate, value, true
+				break
+			}
+		}
+	}
+	if !ok {
+		return nil, fmt.Errorf("%w: object #%d has no feature for exhibited state %s",
+			ErrStatePerformanceOccurrence, inst.ID, decl.behavior.Name)
+	}
+	fv, err := inst.GetFeatureValue(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
+			ErrStatePerformanceOccurrence, name, inst.ID, err)
+	}
+	if fv.HeldValue().Kind == ValInvalid {
+		occurrence, err := ctx.materializeOwnedBy(stateMachine, 0, inst, name)
+		if err != nil {
+			return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
+				ErrStatePerformanceOccurrence, name, inst.ID, err)
+		}
+		fv.Value = Value{Kind: ValInstance, Instance: occurrence.ID}
+		fv.Materialized = true
+		return occurrence, nil
+	}
+	id, ok := fv.HeldValue().Object()
+	if !ok {
+		return nil, fmt.Errorf("%w: %s of object #%d holds %s, not an occurrence",
+			ErrStatePerformanceOccurrence, name, inst.ID, fv.HeldValue().Kind)
+	}
+	occurrence, ok := ctx.Instance(id)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s of object #%d names unknown object #%d",
+			ErrStatePerformanceOccurrence, name, inst.ID, id)
+	}
+	return occurrence, nil
 }
 
 // run advances the object's behavior until it is quiescent: an action until it

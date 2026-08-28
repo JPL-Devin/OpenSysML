@@ -53,6 +53,11 @@ func (h *calcStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ low
 	return nil
 }
 
+func (h *calcStmtHost) assignData(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+	env.data[name] = value
+	return nil
+}
+
 func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
 	h.result = value
 	return nil

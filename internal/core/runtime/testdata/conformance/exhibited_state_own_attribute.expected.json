@@ -1,0 +1,14 @@
+{
+  "type": "instance",
+  "instantiate": "test::Counter",
+  "objects": [
+    {
+      "finalState": "active",
+      "stateVisits": ["active"],
+      "slots": {
+        "count": {"type": "Integer", "value": 10},
+        "modes.count": {"type": "Integer", "value": 1}
+      }
+    }
+  ]
+}

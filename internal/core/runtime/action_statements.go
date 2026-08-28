@@ -68,6 +68,11 @@ func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ l
 	return nil
 }
 
+func (h *actionStmtHost) assignData(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+	env.data[name] = value
+	return nil
+}
+
 // performer is the object performing the action this body belongs to.
 func (h *actionStmtHost) performer() *Instance {
 	return h.exec.self

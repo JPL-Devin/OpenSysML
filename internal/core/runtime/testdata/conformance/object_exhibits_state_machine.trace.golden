@@ -1,5 +1,6 @@
 materialize: Counter #1
 start: exhibited state machine counting of #1
+materialize: counting #2
 enter: idle (entry action)
 stmt action body
   stmt assign count

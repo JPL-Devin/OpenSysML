@@ -63,6 +63,49 @@ func TestClassifierBehaviorAnnotatedBodyIsABody(t *testing.T) {
 	}
 }
 
+// A feature redefinition configures the performance occurrence without
+// replacing the behavior body supplied by the machine's type.
+func TestClassifierBehaviorAttributeRedefinitionIsNotABody(t *testing.T) {
+	behaviors := classifierBehaviorsIn(t, `
+		package test {
+			state def Modes { attribute count = 0; }
+			part def Monitor {
+				exhibit state modes : Modes {
+					attribute redefines count = 5;
+				}
+			}
+		}
+	`)
+
+	if len(behaviors) != 1 {
+		t.Fatalf("expected the type to bind 1 behavior, got %d", len(behaviors))
+	}
+	if behaviors[0].StatesBody {
+		t.Error("an attribute redefinition was read as a replacement behavior body")
+	}
+}
+
+// An attribute declared by an inline exhibited state belongs to that machine's
+// body rather than configuring a separately named definition.
+func TestClassifierBehaviorDeclaredAttributeIsABody(t *testing.T) {
+	behaviors := classifierBehaviorsIn(t, `
+		package test {
+			part def Monitor {
+				exhibit state modes {
+					attribute count = 0;
+				}
+			}
+		}
+	`)
+
+	if len(behaviors) != 1 {
+		t.Fatalf("expected the type to bind 1 behavior, got %d", len(behaviors))
+	}
+	if !behaviors[0].StatesBody {
+		t.Error("a declared attribute was not read as part of the inline behavior body")
+	}
+}
+
 // classifierBehaviorsIn parses src and reports the behaviors the first part
 // definition in it binds to its objects.
 func classifierBehaviorsIn(t *testing.T, src string) []ClassifierBehavior {

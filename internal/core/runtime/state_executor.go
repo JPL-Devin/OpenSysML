@@ -26,8 +26,10 @@ type StateExecutor struct {
 	stateMachine *symbols.Symbol
 	// self is the object performing the machine: its connections route what the
 	// machine sends, and its selections decide which variant's connection does.
-	self  *Instance
-	state ExecutionState
+	self *Instance
+	// occurrence is the state performance materialized for an exhibited usage.
+	occurrence *Instance
+	state      ExecutionState
 
 	// Lowered graph (source of truth)
 	graph *lower.StateGraph
@@ -104,6 +106,15 @@ type historyRecord struct {
 // newStateExecutor creates a state executor. self is the object performing the
 // machine, nil for a machine no object performs.
 func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance) (*StateExecutor, error) {
+	return newStateExecutorForOccurrence(ctx, stateMachine, self, nil)
+}
+
+func newStateExecutorForOccurrence(
+	ctx *Context,
+	stateMachine *symbols.Symbol,
+	self *Instance,
+	occurrence *Instance,
+) (*StateExecutor, error) {
 	if stateMachine.Kind != symbols.SymbolStateUsage && stateMachine.Kind != symbols.SymbolStateDef {
 		return nil, fmt.Errorf("symbol %s is not a state machine", stateMachine.Name)
 	}
@@ -124,6 +135,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance
 		ctx:            ctx,
 		stateMachine:   stateMachine,
 		self:           self,
+		occurrence:     occurrence,
 		state:          StateReady,
 		graph:          graph,
 		currentTime:    0.0,
@@ -149,12 +161,29 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance
 	return exec, nil
 }
 
-// initializeAttributes populates stateData with the attribute defaults lowering
-// recorded, evaluated in the scope the machine's body was declared in.
+// initializeAttributes populates stateData from the exhibited occurrence, or
+// from declared defaults when the machine has no occurrence.
 func (e *StateExecutor) initializeAttributes() error {
+	if e.occurrence != nil {
+		for _, attr := range e.graph.Attributes {
+			fv, err := e.occurrence.GetFeatureValue(e.ctx, attr.Name)
+			if err != nil {
+				return fmt.Errorf("%w: read %s of object #%d: %w",
+					ErrStatePerformanceOccurrence, attr.Name, e.occurrence.ID, err)
+			}
+			if value := fv.HeldValue(); value.Kind != ValInvalid {
+				e.stateData[attr.Name] = value
+			}
+		}
+		return nil
+	}
+
 	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
+		if attr.Value == nil {
+			continue
+		}
 		value, err := ec.Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
@@ -162,6 +191,26 @@ func (e *StateExecutor) initializeAttributes() error {
 		e.stateData[attr.Name] = value
 	}
 
+	return nil
+}
+
+func (e *StateExecutor) declaresAttribute(name string) bool {
+	for _, attr := range e.graph.Attributes {
+		if attr.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *StateExecutor) assignAttribute(name string, value Value) error {
+	if e.occurrence != nil {
+		if err := e.occurrence.SetFeatureValue(e.ctx, name, value); err != nil {
+			return fmt.Errorf("%w: write %s of object #%d: %w",
+				ErrStatePerformanceOccurrence, name, e.occurrence.ID, err)
+		}
+	}
+	e.stateData[name] = value
 	return nil
 }
 
@@ -2159,6 +2208,12 @@ func (e *StateExecutor) invokeNested(inv actionInvocation) error {
 		return err
 	}
 	for name, value := range outputs {
+		if e.declaresAttribute(name) {
+			if err := e.assignAttribute(name, value); err != nil {
+				return err
+			}
+			continue
+		}
 		e.stateData[name] = value
 	}
 	return nil

@@ -236,6 +236,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
 	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
+	t.Run("object_exhibited_machine_attribute_write_violates_multiplicity", testObjectExhibitedMachineAttributeWriteViolatesMultiplicity)
 	t.Run("operation_invoked_with_unbound_parameters", testOperationInvokedWithUnboundParameters)
 	t.Run("second_instantiation_of_one_type", testSecondInstantiationOfOneType)
 }
@@ -6880,6 +6881,33 @@ func testObjectExhibitedMachineWithoutAnInitialState(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "modes") || !strings.Contains(err.Error(), "initial") {
 		t.Errorf("error = %v, want one naming the machine and its missing initial state", err)
+	}
+}
+
+// testObjectExhibitedMachineAttributeWriteViolatesMultiplicity checks that an
+// occurrence write failure remains typed and terminates normally.
+func testObjectExhibitedMachineAttributeWriteViolatesMultiplicity(t *testing.T) {
+	src := `
+	package test {
+		state def Modes {
+			attribute samples : Integer[2] = (0, 0);
+			entry; then active;
+			state active {
+				entry action record {
+					assign samples := 1;
+				}
+			}
+		}
+		part def Controller {
+			exhibit state modes : Modes;
+		}
+	}`
+	_, _, err := instantiateInSource(t, src, "test::Controller")
+	if !errors.Is(err, ErrStatePerformanceOccurrence) {
+		t.Fatalf("error = %v, want ErrStatePerformanceOccurrence", err)
+	}
+	if !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("error = %v, want ErrMultiplicityViolation", err)
 	}
 }
 

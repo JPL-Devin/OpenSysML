@@ -944,7 +944,7 @@ func validateObjectRuns(t *testing.T, ctx *Context, typeSym *symbols.Symbol, fir
 			validateFinalState(t, exec, run.FinalState)
 			validateStateVisits(t, exec, run.StateVisits)
 			for name, want := range run.Values {
-				fv, err := obj.GetFeatureValue(ctx, name)
+				fv, err := featureValueAtPath(t, ctx, obj, name)
 				if err != nil {
 					t.Errorf("feature value %q of object #%d: %v", name, obj.ID, err)
 					continue
