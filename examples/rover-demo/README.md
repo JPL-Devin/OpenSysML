@@ -15,7 +15,7 @@ The four packages:
 | Package | What it holds |
 | --- | --- |
 | `Rover` | the platform: battery, solar array, mobility with six wheels, mast and camera, arm and drill, computer, antenna, the power line and data link between them, and two rovers of it |
-| `RoverBehavior` | three calculations, the `SurfaceOps` action a sol runs, the `Modes` state machine, and a controller that exhibits it |
+| `RoverBehavior` | three calculations, the `SurfaceOps` action a sol runs, the `Modes` state machine, and a controller that exhibits it and logs its passes |
 | `RoverSolver` | the sol energy budget, a sol nobody can plan, three variation points, and three optimization cases |
 | `RoverViews` | one view per rendering kind, a viewpoint the rovers are checked against, and a view reaching only the critical parts |
 
