@@ -21,6 +21,9 @@ type actionFrame struct {
 	// live counts the tokens still running in this activation, which a fork
 	// inside it raises and a join or a retiring token lowers.
 	live int
+	// connections are the connectors a send in this flow may route through:
+	// those of every flow around it, this one's own included.
+	connections []lower.Connection
 }
 
 // graphOf returns the flow a frame runs, the action's own for the root frame.
@@ -51,7 +54,10 @@ func (e *ActionExecutor) enterSubflow(tokenIdx int, sub *lower.Subflow) error {
 		return fmt.Errorf("%w: action node %s owns a flow that cannot be built",
 			ErrInvalidActionFlow, ActionNodeName(node))
 	}
-	token.frame = &actionFrame{node: node, graph: sub.Graph, parent: token.frame, live: 1}
+	token.frame = &actionFrame{
+		node: node, graph: sub.Graph, parent: token.frame, live: 1,
+		connections: joinConnections(e.connectionsOf(token.frame), sub.Graph.Connections),
+	}
 	token.Location = sub.Graph.Initial
 	if tr := e.trace(); tr != nil {
 		tr.RecordActionNodeEnter(ActionNodeName(node))
@@ -113,13 +119,23 @@ func (e *ActionExecutor) subflowNodeNames(graph *lower.ActionGraph) []string {
 	return names
 }
 
-// connectionsOf returns the connectors a send in the given flow may route
-// through: the action's own, plus those the nested flow declares.
-func (e *ActionExecutor) connectionsOf(graph *lower.ActionGraph) []lower.Connection {
-	if graph == e.graph || len(graph.Connections) == 0 {
+// connectionsOf returns the connectors a send running in a frame may route
+// through: the action's own for the root flow, and every enclosing flow's for a
+// nested one, so a send deep in the nesting still reaches a connector declared
+// around it.
+func (e *ActionExecutor) connectionsOf(frame *actionFrame) []lower.Connection {
+	if frame == nil {
 		return e.graph.Connections
 	}
-	joined := make([]lower.Connection, 0, len(e.graph.Connections)+len(graph.Connections))
-	joined = append(joined, e.graph.Connections...)
-	return append(joined, graph.Connections...)
+	return frame.connections
+}
+
+// joinConnections appends the connectors a nested flow declares to those around it.
+func joinConnections(outer, inner []lower.Connection) []lower.Connection {
+	if len(inner) == 0 {
+		return outer
+	}
+	joined := make([]lower.Connection, 0, len(outer)+len(inner))
+	joined = append(joined, outer...)
+	return append(joined, inner...)
 }

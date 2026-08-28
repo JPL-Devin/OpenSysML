@@ -714,7 +714,7 @@ func (e *ActionExecutor) stepInitialNode(tokenIdx int) error {
 	if len(graph.Edges[token.Location]) == 0 {
 		return fmt.Errorf("%w: initial node has no successors", ErrInvalidActionFlow)
 	}
-	if err := e.runNodeBody(graph, token.Location); err != nil {
+	if err := e.runNodeBody(token.frame, token.Location); err != nil {
 		return err
 	}
 
@@ -776,7 +776,7 @@ func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 		return fmt.Errorf("%w: fork node %s has no successors",
 			ErrInvalidActionFlow, node.Name)
 	}
-	if err := e.runNodeBody(graph, node); err != nil {
+	if err := e.runNodeBody(frame, node); err != nil {
 		return err
 	}
 
@@ -839,7 +839,7 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 		return nil
 	}
 
-	if err := e.runNodeBody(graph, node); err != nil {
+	if err := e.runNodeBody(frame, node); err != nil {
 		return err
 	}
 
@@ -934,7 +934,7 @@ func (e *ActionExecutor) stepMergeNode(tokenIdx int) error {
 	// First-wins counts the token that traverses, not the one that arrives: a
 	// token whose succession was pruned leaves the merge open for a later one,
 	// so the body runs with that traversal rather than on every arrival.
-	if err := e.runNodeBody(graph, mergeNode); err != nil {
+	if err := e.runNodeBody(token.frame, mergeNode); err != nil {
 		return err
 	}
 	e.mergeVisited[visit] = true
@@ -957,7 +957,7 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 		return fmt.Errorf("%w: decision node %s has no successors",
 			ErrInvalidActionFlow, decisionNode.Name)
 	}
-	if err := e.runNodeBody(graph, decisionNode); err != nil {
+	if err := e.runNodeBody(token.frame, decisionNode); err != nil {
 		return err
 	}
 
@@ -1153,7 +1153,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	}
 
 	// Execute the node's lowered statements in declaration order.
-	if err := e.executeBody(graph, usage); err != nil {
+	if err := e.executeBody(token.frame, usage); err != nil {
 		return err
 	}
 
@@ -1225,7 +1225,7 @@ func (e *ActionExecutor) stepStatementNode(tokenIdx int) error {
 	node := e.tokens[tokenIdx].Location
 	graph := e.tokenGraph(tokenIdx)
 
-	if err := e.executeBody(graph, node); err != nil {
+	if err := e.executeBody(e.tokens[tokenIdx].frame, node); err != nil {
 		return err
 	}
 
