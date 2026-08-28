@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "instantiate": "test::Rig",
+  "objects": [
+    {
+      "finalState": "tripped",
+      "stateVisits": ["go", "tripped"],
+      "slots": {"s.reading": {"type": "Real", "value": 4.5}}
+    }
+  ]
+}

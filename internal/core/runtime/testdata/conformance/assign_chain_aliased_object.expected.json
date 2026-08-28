@@ -1,0 +1,14 @@
+{
+  "type": "instance",
+  "instantiate": "test::Rig",
+  "objects": [
+    {
+      "finalState": "marking",
+      "stateVisits": ["marking"],
+      "slots": {
+        "cell.mark": {"type": "Integer", "value": 7},
+        "twin.mark": {"type": "Integer", "value": 7}
+      }
+    }
+  ]
+}

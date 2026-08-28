@@ -80,6 +80,12 @@ func (h *actionStmtHost) assignData(env *stmtEnv, name string, value Value, _ lo
 	return nil
 }
 
+// assignChain writes the feature a chained target names on the object its chain
+// reaches from where the statement was written.
+func (h *actionStmtHost) assignChain(ec *EvalContext, s lower.Assign, value Value) error {
+	return assignThroughChain(ec, h.describe(), s, value)
+}
+
 // performer is the object performing the action this body belongs to.
 func (h *actionStmtHost) performer() *Instance {
 	return h.exec.self

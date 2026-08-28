@@ -297,6 +297,11 @@ var (
 	// that feature value rather than deciding anything about the model.
 	ErrFeatureValueMaterialization = errors.New("feature value could not be materialized")
 
+	// ErrNoSuchFeature is returned when a chained assignment reaches an object
+	// whose type declares no feature of the name the target's last segment
+	// writes: the object has nowhere to hold the value.
+	ErrNoSuchFeature = errors.New("object has no such feature")
+
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.
