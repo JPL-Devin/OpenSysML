@@ -5283,3 +5283,50 @@ count — compare against the old binary on the same file.
 
 Useful corpora for a sweep: `examples`, `testdata`, `internal/repl/testdata`,
 `internal/core/runtime/testdata/conformance` (~750–900 files, a few minutes per pass).
+
+## Numeric display: which surfaces render a Real, and how to compare them
+
+Real rendering is centralised in `runtime.FormatReal` (`internal/core/runtime/value.go`).
+When a PR touches numeric display, every one of these surfaces must be checked, because
+each has its own call site and they have drifted apart before:
+
+| surface | how to drive it |
+| --- | --- |
+| evaluation result | `%eval <expr>` at the prompt, `sysml -e "<expr>" <file>` non-interactively |
+| feature value listing | `%instantiate <Def>` then `%features <Def>` (nested parts render indented) |
+| quantity magnitude + unit text | `%eval 0.0001 [SI::m]`, `%eval (3.0 [SI::m/SI::s]) ** 2.0` |
+| execution trace | `%trace on`, then `%eval` — `[trace] eval operator …` lines carry their own formatter (`trace.go formatConst`) |
+| simulation clock | `%state <m>` / `%advance <t>` / `%current` / `%step`, and `sysml -state <m> -advance <t> <file>` |
+| action results | `sysml -action <name> <file>` → `Results:` block |
+
+Values that actually distinguish a working formatter from a rounding one: `0.0001`
+(two-decimal formatting shows `0.00`), `1.0/3.0`, `1.0e-7` (exponent form), `2.0` and `0.0`
+(a whole Real must keep `.0` so it is not read as an Integer), `123456789.987654`,
+`2.0**70` (`1.1805916207174113e+21`), and a **fractional `%advance 0.001`** — the clock is
+the surface most likely to be missed. Also assert the negatives: Integers
+(`%eval 42`, `%eval 2**40`) must stay free of a decimal point, and a unit exponent stays
+integral (`(SI::m/SI::s)**2`, never `**2.0`) — that is a deliberately separate helper
+(`quantity.go exponentText`), so a careless unification breaks it.
+
+The cheapest strong evidence is an **A/B against the parent commit**:
+`git worktree add /tmp/base <parent-sha> && (cd /tmp/base && go build -o /tmp/sysml-base ./cmd/sysml)`,
+then run the same piped script through both and diff. Remove the worktree afterwards
+(`git worktree remove /tmp/base --force`) so the repo is left clean.
+
+Doc transcripts are part of the contract: `docs/project/demo.md` opens by claiming every
+block was "pasted verbatim … character for character", and `docs/guide/*.md`,
+`docs/reference/cli.md` embed sample output too. After a display change, sweep for stale
+samples with
+`grep -rEn '(= |Time: |Advanced to |at: )-?[0-9]+\.[0-9]{2}( |$)' docs/`
+and reproduce any hit against the built binary — a PR that respells the guide can easily
+leave `docs/project/demo.md` behind.
+
+Two REPL pitfalls specific to this kind of session:
+
+- **`%clear` drops the imports too.** After `%clear`, a quantity or library-typed `%eval`
+  answers `error: no declarations loaded (literals work, but feature references need
+  declarations)`. Re-`%load` a file that does `private import SI::*;` before continuing.
+- **`%state` cannot reach a state nested in a package.** `%state Pkg::TrafficLight` answers
+  `unresolved reference: Pkg::TrafficLight` (and then `no active state machine session` for
+  every follow-up). Declare the `state` at the top level of the loaded file — that is also
+  how the guide's samples are written.
