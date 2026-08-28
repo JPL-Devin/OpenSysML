@@ -26,15 +26,15 @@ and run the same input through both on camera. A worktree keeps the branch check
 
 ```bash
 git worktree add /tmp/old<sha> <sha>            # e.g. the commit before the fix
-(cd /tmp/old<sha> && make build-sysml)
+(cd /tmp/old<sha> && make build-sysml && cp bin/sysml /tmp/old-sysml)
 git worktree remove /tmp/old<sha>               # when finished
 ```
 
-Then `/tmp/old<sha>/bin/sysml` vs `./bin/sysml` on identical input is the strongest evidence
-available — it rules out "the test would have passed anyway". Especially valuable for diagnostic
-wording and line/column numbers, where a screenshot of the new behavior alone proves nothing.
-Plain `go build` omits the version ldflags, so `--version` reports `dev` / `unknown`; if a plain
-build is unavoidable, show `git -C /tmp/old<sha> log --oneline -1` on camera as provenance.
+Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evidence available —
+it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
+line/column numbers, where a screenshot of the new behavior alone proves nothing. Building through
+the Makefile preserves the version ldflags before the binary is copied out of the worktree; plain
+`go build` would make `--version` report `dev` / `unknown`.
 
 ## Library-cache cold/warm testing (`XDG_CACHE_HOME`)
 
