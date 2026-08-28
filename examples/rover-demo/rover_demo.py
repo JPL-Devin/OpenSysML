@@ -35,6 +35,7 @@ def main() -> None:
     print("\n== running the sol")
     results = model.execute_action("RoverBehavior::SurfaceOps")
     print(f"frames held   {results['framesHeld']}")
+    print(f"core frames   {results['coreFrames']} (the sampling branch ran through)")
     print(f"downlinked    {results['downlinked']}")
     print(f"charge left   {results['chargeLeft']} Wh")
 

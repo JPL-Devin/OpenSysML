@@ -216,14 +216,20 @@ package RoverBehavior {
             assign imagingCost := 40.0;
         }
 
-        // The other branch is two steps of its own: the drill runs, then the core
-        // is stowed.
-        action drill {
-            assign samplingCost := 120.0;
-        }
+        // The other branch is a node with a flow of its own: the drill runs, then
+        // the core is stowed, and only when both have run does the branch reach
+        // the join.
+        action sample {
+            action drill {
+                assign samplingCost := 120.0;
+            }
 
-        action stow {
-            assign coreFrames := 3;
+            action stow {
+                assign coreFrames := 3;
+            }
+
+            first drill;
+            succession first drill then stow;
         }
 
         join sync;
@@ -244,10 +250,9 @@ package RoverBehavior {
         succession first start then wake;
         succession first wake then split;
         succession first split then image;
-        succession first split then drill;
-        succession first drill then stow;
+        succession first split then sample;
         succession first image then sync;
-        succession first stow then sync;
+        succession first sample then sync;
         succession first sync then tally;
 
         // Downlink only what the day's power budget left room for.
@@ -321,19 +326,31 @@ package RoverBehavior {
         transition first science then done;
     }
 
+    // What each downlink pass added, kept beside the controller rather than in it.
+    part def PassLog {
+        attribute frames : Integer = 0;
+        attribute passes : Integer = 0;
+    }
+
     // An object of this type runs the machine and performs the sol: `%instantiate`
     // starts both, and `%invoke` calls the operation below on that object.
     part def RoverController {
         attribute odometer : Real = 0.0;
         attribute framesHeld : Integer = 0;
 
+        part log : PassLog;
+
         exhibit state modes : Modes;
 
         action recordPass {
             in attribute frames : Integer;
 
+            // The tally is the controller's own; the log it writes through is a
+            // part of it, reached by the chain the assignment names.
             action store {
                 assign framesHeld := framesHeld + frames;
+                assign log.frames := log.frames + frames;
+                assign log.passes := log.passes + 1;
             }
 
             first store;
