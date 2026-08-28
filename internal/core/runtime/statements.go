@@ -15,7 +15,10 @@ import (
 // data, plus one frame per body-local block entered. A frame is discarded when
 // its block exits, so a name it declares never leaks outward.
 type stmtEnv struct {
-	data   map[string]Value
+	data map[string]Value
+	// outer are value maps the body reads but does not declare into, innermost
+	// last: the attributes the states enclosing the behavior own.
+	outer  []map[string]Value
 	frames []map[string]Value
 }
 
@@ -137,6 +140,14 @@ func newStmtEngine(ctx *Context, host stmtHost, data map[string]Value) *stmtEngi
 	return &stmtEngine{ctx: ctx, host: host, env: &stmtEnv{data: data}, activation: ctx.newActivation()}
 }
 
+// newStmtEngineOver returns an engine whose statements also read outer value
+// maps — the attributes of the states enclosing the behavior — innermost last.
+func newStmtEngineOver(ctx *Context, host stmtHost, data map[string]Value, outer []map[string]Value) *stmtEngine {
+	engine := newStmtEngine(ctx, host, data)
+	engine.env.outer = outer
+	return engine
+}
+
 // finish ends the activation the engine's statements ran in, discarding what the
 // calc usages read in them computed.
 func (e *stmtEngine) finish() {
@@ -150,6 +161,9 @@ func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
 	ec := NewEvalContextIn(e.ctx, scope, e.host.performer())
 	ec.activation = e.activation
 	ec.Push(e.env.data)
+	for _, frame := range e.env.outer {
+		ec.Push(frame)
+	}
 	for _, frame := range e.env.frames {
 		ec.Push(frame)
 	}

@@ -1,0 +1,5 @@
+{
+  "type": "state",
+  "evaluate": "test::Machine",
+  "finalState": "l1+r1"
+}

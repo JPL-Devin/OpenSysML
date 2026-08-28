@@ -1,0 +1,9 @@
+{
+  "type": "state",
+  "evaluate": "test::Machine",
+  "finalState": "working",
+  "stateVisits": ["use", "working"],
+  "outputs": {
+    "use.count": {"type": "Integer", "value": 1001}
+  }
+}

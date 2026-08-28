@@ -170,7 +170,7 @@ func (e *StateExecutor) observeChangeConditions(poll *changePoll) error {
 // changeConditionHolds evaluates one change condition in the scope the
 // transition was written in, the machine's data shadowing it.
 func (e *StateExecutor) changeConditionHolds(changeEvent *ast.ChangeEvent, trans *lower.Transition) (bool, error) {
-	condVal, err := e.evalStep(changeEvent.Condition, trans.Scope)
+	condVal, err := e.evalStepOf(trans.Source, changeEvent.Condition, trans.Scope)
 	if err != nil {
 		return false, fmt.Errorf("eval change condition: %w", err)
 	}
