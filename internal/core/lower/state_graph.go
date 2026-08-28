@@ -125,6 +125,46 @@ type StateGraph struct {
 	// is how a `send ... via <port>` in an entry/do/exit/effect action finds the
 	// ports it reaches.
 	Connections []Connection
+
+	// StateAttributes: state → the attributes it owns, its own and those it
+	// inherits from the definition typing it. Each state owns its values, so two
+	// usages of one definition hold two sets of them.
+	StateAttributes map[*ast.StateNode][]Attribute
+
+	// instanceOf: state → the materialization of the content it inherits, which
+	// the transition pass lowers in the same context the vertices were collected in.
+	instanceOf map[*ast.StateNode]*stateInstance
+
+	// cur is the materialization being collected, nil for the machine's own body.
+	cur *stateInstance
+
+	// materializing are the state definitions whose content is being materialized,
+	// which is what makes a definition reaching itself a reportable error rather
+	// than an unbounded expansion.
+	materializing map[ast.Node]bool
+
+	// scopeOf: state → the scope its declaration was written in, recorded where
+	// the content came from a definition's body rather than the usage's.
+	scopeOf map[*ast.StateNode]*symbols.Scope
+
+	// regionScopeOf: region → the scope its declaration was written in, for a
+	// region a usage inherits.
+	regionScopeOf map[*ast.StateRegion]*symbols.Scope
+
+	// behaviorScope: entry, do or exit action → the scope it was declared in,
+	// recorded where a state runs a behavior another body declares.
+	behaviorScope map[ast.Node]*symbols.Scope
+
+	// attributeScope: attribute declaration → the scope its default value
+	// resolves in.
+	attributeScope map[ast.Node]*symbols.Scope
+
+	// bodyOf: state → the members its content came from, inherited then its own.
+	bodyOf map[*ast.StateNode][]inheritedMember
+
+	// parallelState: state → whether its direct substates are orthogonal regions,
+	// which the definition typing it may say as much as its own declaration.
+	parallelState map[*ast.StateNode]bool
 }
 
 // Transition represents a state transition (lowered from TransitionEdge or TransitionMember).
@@ -185,40 +225,42 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 		return nil, err
 	}
 
+	// The machine may itself be a usage typed by a state definition, whose content
+	// is as much part of the machine as the members written in its own body.
+	inherited, owners, err := graph.inheritedContent(stateMachineDecl, outerScope(scope, stateMachineDecl))
+	if err != nil {
+		return nil, err
+	}
+	body := append(append([]inheritedMember{}, inherited...), ownMembers(members, scope)...)
+
 	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
-	graph.Attributes = lowerAttributes(members)
-	if stateMachineIsParallel(stateMachineDecl) {
-		graph.Machine = parallelMachineState(stateMachineDecl, members)
-		graph.StateScopes[graph.Machine] = scope
-		graph.Behaviors[graph.Machine] = &StateBehaviors{
-			Entry: LowerBehaviors(graph.Machine.Entry, scope),
-			Do:    LowerBehaviors(graph.Machine.Do, scope),
-			Exit:  LowerBehaviors(graph.Machine.Exit, scope),
-		}
+	graph.Attributes = keptAttributes(lowerStateAttributes(graph, inherited), lowerStateAttributes(graph, ownMembers(members, scope)))
+	parallelMachine := stateMachineIsParallel(stateMachineDecl)
+	for _, owner := range owners {
+		parallelMachine = parallelMachine || stateMachineIsParallel(owner)
+	}
+	if parallelMachine {
+		graph.Machine = graph.machineState(stateMachineDecl, inherited, members, scope)
 	}
 
-	if err := collectVertices(graph, members, scope, stateMachineIsParallel(stateMachineDecl)); err != nil {
-		return nil, err
+	for _, group := range groupMembers(body) {
+		if err := collectVertices(graph, group.nodes, group.scope, parallelMachine); err != nil {
+			return nil, err
+		}
 	}
 
 	// Second pass: identify composite states with regions AND handle top-level regions
 	// Check for top-level regions (state machine itself has regions as members)
 	hasTopLevelRegions := len(graph.TopRegions) > 0
-	for _, member := range members {
-		actualMember := unwrapMembership(member)
+	for _, member := range body {
+		actualMember := unwrapMembership(member.node)
 		if region, ok := actualMember.(*ast.StateRegion); ok {
 			hasTopLevelRegions = true
 			graph.TopRegions = append(graph.TopRegions, region)
 		}
 	}
 	if graph.Machine == nil && hasTopLevelRegions {
-		graph.Machine = parallelMachineState(stateMachineDecl, members)
-		graph.StateScopes[graph.Machine] = scope
-		graph.Behaviors[graph.Machine] = &StateBehaviors{
-			Entry: LowerBehaviors(graph.Machine.Entry, scope),
-			Do:    LowerBehaviors(graph.Machine.Do, scope),
-			Exit:  LowerBehaviors(graph.Machine.Exit, scope),
-		}
+		graph.Machine = graph.machineState(stateMachineDecl, inherited, members, scope)
 	}
 	// Also handle states that have regions as sub-members
 	for _, state := range graph.States {
@@ -235,8 +277,10 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	}
 
 	// Third pass: collect transitions
-	if err := collectTransitions(graph, members, nil, nil, scope); err != nil {
-		return nil, err
+	for _, group := range groupMembers(body) {
+		if err := collectTransitions(graph, group.nodes, group.owner, nil, group.scope); err != nil {
+			return nil, err
+		}
 	}
 	// Declaration order decides which of several initial states a region starts in.
 	for _, state := range graph.States {
@@ -335,55 +379,174 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	// The executor's initialize() will validate and return the error if missing.
 	// Top-level regions are also valid (no single initial state).
 
+	graph.ownTransitionEffects()
+
 	return graph, nil
 }
 
-// stateNodeFromUsage builds the state node for `state <name> { ... }`, carrying
-// over the entry/do/exit behaviors declared in the body so the executor runs
-// them; without this the body's behaviors are silently dropped. The usage it was
-// built from is recorded, since that is the declaration the scope tree is keyed
-// by.
-func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage) *ast.StateNode {
+// ownTransitionEffects records, on every transition effect, the state its
+// transition leaves, whose attributes the effect reads and writes.
+func (g *StateGraph) ownTransitionEffects() {
+	for source, transitions := range g.Transitions {
+		state, ok := source.(*ast.StateNode)
+		if !ok {
+			continue
+		}
+		for _, trans := range transitions {
+			for i := range trans.Effect {
+				trans.Effect[i].Owner = state
+			}
+		}
+	}
+}
+
+// lowerStateAttributes returns every attribute a machine declares, its own and
+// those it inherits. An unvalued attribute is still owned by the machine even
+// though it supplies no initial value.
+func lowerStateAttributes(graph *StateGraph, members []inheritedMember) []Attribute {
+	var attrs []Attribute
+	for _, member := range members {
+		usage, ok := unwrapMembership(member.node).(*ast.Usage)
+		if !ok || usage.Kind != ast.UsageAttribute {
+			continue
+		}
+		name, _ := ast.EffectiveName(usage)
+		if name == "" {
+			continue
+		}
+		graph.attributeScope[usage] = member.scope
+		attrs = append(attrs, Attribute{Name: name, Value: usage.Value, Node: usage, Scope: member.scope})
+	}
+	return attrs
+}
+
+// memberGroup is the members one body contributes to a state, in declaration
+// order: a name written in them resolves in that body's scope, and a succession
+// out of an entry action names one of them.
+type memberGroup struct {
+	owner ast.Node
+	scope *symbols.Scope
+	nodes []ast.Node
+}
+
+// groupMembers gathers members by the body declaring them, keeping the order
+// they contribute their content in.
+func groupMembers(members []inheritedMember) []memberGroup {
+	var groups []memberGroup
+	for _, member := range members {
+		if len(groups) > 0 {
+			last := &groups[len(groups)-1]
+			if last.owner == member.owner && last.scope == member.scope {
+				last.nodes = append(last.nodes, member.node)
+				continue
+			}
+		}
+		groups = append(groups, memberGroup{owner: member.owner, scope: member.scope, nodes: []ast.Node{member.node}})
+	}
+	return groups
+}
+
+// ownMembers pairs the members written in a body with the scope of that body.
+func ownMembers(members []ast.Node, scope *symbols.Scope) []inheritedMember {
+	owned := make([]inheritedMember, 0, len(members))
+	for _, member := range members {
+		owned = append(owned, inheritedMember{node: member, scope: scope})
+	}
+	return owned
+}
+
+// AttributeScope is the scope an attribute's value resolves in, which is the
+// body declaring it rather than the machine's when the machine inherits it.
+func (g *StateGraph) AttributeScope(attr Attribute) *symbols.Scope {
+	if scope := g.attributeScope[attr.Node]; scope != nil {
+		return scope
+	}
+	return g.Scope
+}
+
+// lowerStateBehaviors lowers a state's entry, do and exit behaviors, each in the
+// scope the body declaring it was written in.
+func (g *StateGraph) lowerStateBehaviors(state *ast.StateNode, scope *symbols.Scope) *StateBehaviors {
+	return &StateBehaviors{
+		Entry: g.lowerBehaviorsFor(state, state.Entry, scope),
+		Do:    g.lowerBehaviorsFor(state, state.Do, scope),
+		Exit:  g.lowerBehaviorsFor(state, state.Exit, scope),
+	}
+}
+
+// lowerBehaviorsFor lowers the behaviors of one state, in the scope each was
+// declared in, and records which state runs them.
+func (g *StateGraph) lowerBehaviorsFor(state *ast.StateNode, actions []ast.Node, scope *symbols.Scope) []StateBehavior {
+	if len(actions) == 0 {
+		return nil
+	}
+	behaviors := make([]StateBehavior, 0, len(actions))
+	for _, action := range actions {
+		actual := unwrapMembership(action)
+		if actual == nil {
+			continue
+		}
+		declared := scope
+		if inherited := g.behaviorScope[actual]; inherited != nil {
+			declared = inherited
+		}
+		behavior := lowerStateBehavior(actual, declared)
+		behavior.Owner = state
+		behaviors = append(behaviors, behavior)
+	}
+	return behaviors
+}
+
+// stateNodeFromUsage builds the state node for `state <name> : Def { … }`: the
+// content the definition typing it declares, then the content its own body
+// declares, which adds to that and redefines it. scope is the scope the usage
+// itself was written in.
+func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage, scope *symbols.Scope) (*ast.StateNode, error) {
 	name, _ := ast.EffectiveName(usage)
 	state := &ast.StateNode{Name: name}
 	state.NodeSpan = usage.NodeSpan
 	graph.declOf[state] = usage
+	bodyScope := childScope(scope, usage)
+	graph.scopeOf[state] = bodyScope
 
-	for _, member := range usage.Members {
-		switch m := unwrapMembership(member).(type) {
-		case *ast.EntryMember:
-			state.Entry = append(state.Entry, m.Actions...)
-		case *ast.DoMember:
-			state.Do = append(state.Do, m.Actions...)
-		case *ast.ExitMember:
-			state.Exit = append(state.Exit, m.Actions...)
-		case *ast.DeferMember:
-			state.Defer = append(state.Defer, m.Triggers...)
-		case *ast.StateRegion:
-			state.Regions = append(state.Regions, m)
-		case *ast.StateNode:
-			if !usage.IsParallel {
-				state.Substates = append(state.Substates, m)
-			}
-		case *ast.PseudostateNode:
-			state.Substates = append(state.Substates, m)
-		case *ast.SubstateMember:
-			if !usage.IsParallel {
-				child := &ast.StateNode{Name: m.Name}
-				child.NodeSpan = m.NodeSpan
-				graph.declOf[child] = m
-				state.Substates = append(state.Substates, child)
-			}
-		case *ast.Usage:
-			// A state declared inside a composite state is one of its substates:
-			// dropping it here would leave the hierarchy out of the graph and every
-			// transition naming a nested state unresolvable.
-			if m.Kind == ast.UsageState && !usage.IsParallel {
-				state.Substates = append(state.Substates, stateNodeFromUsage(graph, m))
-			}
+	inherited, owners, err := graph.inheritedContent(usage, scope)
+	if err != nil {
+		return nil, err
+	}
+	parallel := usage.IsParallel
+	for _, owner := range owners {
+		parallel = parallel || stateMachineIsParallel(owner)
+	}
+
+	base := &stateContent{node: &ast.StateNode{Name: name}}
+	if len(inherited) > 0 {
+		for _, owner := range owners {
+			graph.materializing[owner] = true
+		}
+		err := graph.addMembers(base, inherited, parallel)
+		for _, owner := range owners {
+			graph.materializing[owner] = false
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
-	return state
+
+	own := &stateContent{node: &ast.StateNode{Name: name}}
+	if err := graph.addMembers(own, ownMembers(usage.Members, bodyScope), parallel); err != nil {
+		return nil, err
+	}
+
+	replaced := redeclare(state, base.node, own.node)
+	if attrs := keptAttributes(base.attrs, own.attrs); len(attrs) > 0 {
+		graph.StateAttributes[state] = attrs
+	}
+	graph.bodyOf[state] = append(inherited, ownMembers(usage.Members, bodyScope)...)
+	graph.parallelState[state] = parallel
+	if len(inherited) > 0 {
+		graph.newInstance(state, inherited, owners, replaced)
+	}
+	return state, nil
 }
 
 // newStateGraph is an empty graph of a machine whose body scope is scope and
@@ -394,6 +557,15 @@ func newStateGraph(scope *symbols.Scope, endpoints Endpoints) *StateGraph {
 		vertexOf:            make(map[ast.Node]ast.Node),
 		stateByDecl:         make(map[ast.Node]*ast.StateNode),
 		completing:          make(map[*ast.StateNode]bool),
+		StateAttributes:     make(map[*ast.StateNode][]Attribute),
+		instanceOf:          make(map[*ast.StateNode]*stateInstance),
+		materializing:       make(map[ast.Node]bool),
+		scopeOf:             make(map[*ast.StateNode]*symbols.Scope),
+		regionScopeOf:       make(map[*ast.StateRegion]*symbols.Scope),
+		behaviorScope:       make(map[ast.Node]*symbols.Scope),
+		attributeScope:      make(map[ast.Node]*symbols.Scope),
+		bodyOf:              make(map[*ast.StateNode][]inheritedMember),
+		parallelState:       make(map[*ast.StateNode]bool),
 		completionOf:        make(map[ast.Node]*ast.StateNode),
 		endpoints:           endpoints,
 		StateScopes:         make(map[*ast.StateNode]*symbols.Scope),
@@ -428,7 +600,7 @@ func (g *StateGraph) Completes(state *ast.StateNode) bool {
 // use and placed where a state declared in that body would be, so completion
 // belongs to the same region a declared vertex there would.
 func (g *StateGraph) completion(owner ast.Node, scope *symbols.Scope, span source.Span) *ast.StateNode {
-	if vertex := g.completionOf[owner]; vertex != nil {
+	if vertex := g.findCompletion(owner); vertex != nil {
 		return vertex
 	}
 	vertex := &ast.StateNode{NodeBase: ast.NodeBase{NodeSpan: span}, Name: ast.DoneFeature}
@@ -439,7 +611,7 @@ func (g *StateGraph) completion(owner ast.Node, scope *symbols.Scope, span sourc
 			g.ParentState[vertex] = parent
 		}
 	default:
-		if parent := g.stateByDecl[owner]; parent != nil {
+		if parent := g.findStateDecl(owner); parent != nil {
 			g.ParentState[vertex] = parent
 			if region := g.HiddenRegionOf[parent]; region != nil {
 				g.RegionOf[vertex] = region
@@ -451,7 +623,7 @@ func (g *StateGraph) completion(owner ast.Node, scope *symbols.Scope, span sourc
 	g.StateScopes[vertex] = scope
 	g.Behaviors[vertex] = &StateBehaviors{}
 	g.completing[vertex] = true
-	g.completionOf[owner] = vertex
+	g.putCompletion(owner, vertex)
 	return vertex
 }
 
@@ -459,7 +631,7 @@ func (g *StateGraph) completion(owner ast.Node, scope *symbols.Scope, span sourc
 // a state standing for an orthogonal region completes that region, any other
 // state defers to the region or machine it is nested in.
 func (g *StateGraph) completionOwner(node, outer ast.Node) ast.Node {
-	if state := g.stateByDecl[node]; state != nil && g.HiddenRegionOf[state] != nil {
+	if state := g.findStateDecl(node); state != nil && g.HiddenRegionOf[state] != nil {
 		return node
 	}
 	return outer
@@ -508,7 +680,7 @@ func machineMembers(stateMachineDecl ast.Node) ([]ast.Node, error) {
 // which are the vertices its transitions may name (UML 2.5.1 §14.2.3.9).
 func collectVertices(graph *StateGraph, members []ast.Node, scope *symbols.Scope, parallel bool) error {
 	if parallel {
-		regions, err := graph.parallelRegions(members, nil, scope)
+		regions, err := graph.parallelRegions(ownMembers(members, scope), nil)
 		if err != nil {
 			return err
 		}
@@ -529,7 +701,10 @@ func collectVertices(graph *StateGraph, members []ast.Node, scope *symbols.Scope
 			if n.Kind == ast.UsageState {
 				// The state node records the usage it came from, so its scope is the
 				// one that usage declares: build it before asking for the scope.
-				state := stateNodeFromUsage(graph, n)
+				state, err := stateNodeFromUsage(graph, n, scope)
+				if err != nil {
+					return err
+				}
 				if err := collectStates(graph, state, nil, graph.stateScope(scope, state)); err != nil {
 					return err
 				}
@@ -566,13 +741,16 @@ func collectStates(graph *StateGraph, state *ast.StateNode, parent *ast.StateNod
 	graph.addVertex(state)
 	graph.recordDecl(state)
 	graph.StateScopes[state] = scope
-	graph.Behaviors[state] = &StateBehaviors{
-		Entry: LowerBehaviors(state.Entry, scope),
-		Do:    LowerBehaviors(state.Do, scope),
-		Exit:  LowerBehaviors(state.Exit, scope),
-	}
+	graph.Behaviors[state] = graph.lowerStateBehaviors(state, scope)
 	if parent != nil {
 		graph.ParentState[state] = parent
+	}
+	// The content a state inherits is this usage's own: it is collected inside the
+	// state's materialization, so a second usage of the same definition collects a
+	// second set of vertices rather than sharing these.
+	if inst := graph.instanceOf[state]; inst != nil {
+		graph.push(inst)
+		defer graph.pop()
 	}
 	return collectStateContents(graph, state, scope)
 }
@@ -583,23 +761,23 @@ func collectGraphOnlyState(graph *StateGraph, state *ast.StateNode, parent *ast.
 	graph.HiddenStates[state] = true
 	graph.recordDecl(state)
 	graph.StateScopes[state] = scope
-	graph.Behaviors[state] = &StateBehaviors{
-		Entry: LowerBehaviors(state.Entry, scope),
-		Do:    LowerBehaviors(state.Do, scope),
-		Exit:  LowerBehaviors(state.Exit, scope),
-	}
+	graph.Behaviors[state] = graph.lowerStateBehaviors(state, scope)
 	if parent != nil {
 		graph.ParentState[state] = parent
 	}
 	if err := collectDeferred(graph, state); err != nil {
 		return err
 	}
+	if inst := graph.instanceOf[state]; inst != nil {
+		graph.push(inst)
+		defer graph.pop()
+	}
 	return collectStateContents(graph, state, scope)
 }
 
 func collectStateContents(graph *StateGraph, state *ast.StateNode, scope *symbols.Scope) error {
-	if decl, ok := graph.declOf[state].(*ast.Usage); ok && decl.IsParallel {
-		regions, err := graph.parallelRegions(decl.Members, state, scope)
+	if graph.parallelState[state] {
+		regions, err := graph.parallelRegions(graph.bodyOf[state], state)
 		if err != nil {
 			return err
 		}
@@ -653,6 +831,9 @@ func (g *StateGraph) recordCompositeState(state *ast.StateNode) {
 // the body that declares it. A state lowering synthesized from a usage or a bare
 // substate declaration is keyed in the scope tree by that declaration.
 func (g *StateGraph) stateScope(parent *symbols.Scope, state *ast.StateNode) *symbols.Scope {
+	if scope := g.scopeOf[state]; scope != nil {
+		return scope
+	}
 	decl := ast.Node(state)
 	if origin, ok := g.declOf[state]; ok {
 		decl = origin
@@ -682,7 +863,11 @@ func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast
 			if n.Kind != ast.UsageState {
 				continue
 			}
-			state = stateNodeFromUsage(graph, n)
+			built, err := stateNodeFromUsage(graph, n, scope)
+			if err != nil {
+				return err
+			}
+			state = built
 		case *ast.PseudostateNode:
 			graph.addPseudostate(n)
 			if parent != nil {
@@ -735,13 +920,15 @@ func isParallelRegionMember(member ast.Node) bool {
 
 // parallelOwnedMember reports whether a parallel state may own a member itself
 // rather than contribute it to a region: its behaviors, its deferred events, the
-// pseudostates its regions branch through and the edges between them.
+// pseudostates its regions branch through, the edges between them, and a
+// definition written in its body, which declares a type rather than a region.
 func parallelOwnedMember(member ast.Node) bool {
 	switch n := member.(type) {
 	case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation,
 		*ast.EntryMember, *ast.DoMember, *ast.ExitMember,
 		*ast.PseudostateNode, *ast.DeferMember,
-		*ast.SuccessionEdge, *ast.TransitionEdge, *ast.TransitionMember:
+		*ast.SuccessionEdge, *ast.TransitionEdge, *ast.TransitionMember,
+		*ast.Definition, *ast.Package, *ast.ErrorNode:
 		return true
 	case *ast.Usage:
 		switch n.Kind {
@@ -754,30 +941,33 @@ func parallelOwnedMember(member ast.Node) bool {
 
 // parallelRegions synthesizes the regions represented by direct substates of a
 // parallel body and lowers each substate body into the existing region IR.
-func (g *StateGraph) parallelRegions(members []ast.Node, parent *ast.StateNode, scope *symbols.Scope) ([]*ast.StateRegion, error) {
+func (g *StateGraph) parallelRegions(members []inheritedMember, parent *ast.StateNode) ([]*ast.StateRegion, error) {
 	regions := make([]*ast.StateRegion, 0)
 	for _, member := range members {
-		actual := unwrapMembership(member)
+		actual := unwrapMembership(member.node)
 		// Only state substates become regions; the members a parallel state may own
 		// itself are collected with the rest of its body.
 		if !isParallelRegionMember(actual) {
 			if !parallelOwnedMember(actual) {
-				return nil, fmt.Errorf("parallel state body contains unsupported member %T", actual)
+				return nil, fmt.Errorf("%w: parallel state body contains unsupported member %s; a parallel state's direct substates are its orthogonal regions",
+					ErrUnsupportedStateContent, describeMember(actual))
 			}
 			continue
 		}
 
-		name, body := parallelRegionBody(actual)
+		wrapper, err := parallelRegionState(g, actual, member.scope)
+		if err != nil {
+			return nil, err
+		}
 		region := &ast.StateRegion{
 			NodeBase: ast.NodeBase{NodeSpan: actual.Span()},
-			Name:     name,
-			States:   body,
+			Name:     wrapper.Name,
+			States:   regionBody(g, wrapper, actual),
 		}
 		g.regionDecl[region] = actual
-		wrapper := parallelRegionState(g, actual)
 		g.HiddenRegionOf[wrapper] = region
 		before := len(g.States)
-		if err := collectGraphOnlyState(g, wrapper, parent, childScope(scope, actual)); err != nil {
+		if err := collectGraphOnlyState(g, wrapper, parent, g.stateScope(member.scope, wrapper)); err != nil {
 			return nil, err
 		}
 		for _, state := range g.States[before:] {
@@ -788,6 +978,34 @@ func (g *StateGraph) parallelRegions(members []ast.Node, parent *ast.StateNode, 
 		regions = append(regions, region)
 	}
 	return regions, nil
+}
+
+// machineState is the graph-only root state carrying the machine's own entry,
+// do and exit behaviors: those its body states, or else those it inherits.
+func (g *StateGraph) machineState(decl ast.Node, inherited []inheritedMember, members []ast.Node, scope *symbols.Scope) *ast.StateNode {
+	inheritedNodes := make([]ast.Node, 0, len(inherited))
+	for _, member := range inherited {
+		inheritedNodes = append(inheritedNodes, member.node)
+		g.recordBehaviorScope(member.node, member.scope)
+	}
+	state := parallelMachineState(decl, members)
+	_ = redeclare(state, parallelMachineState(decl, inheritedNodes), state)
+	g.StateScopes[state] = scope
+	g.Behaviors[state] = g.lowerStateBehaviors(state, scope)
+	return state
+}
+
+// recordBehaviorScope records the scope an inherited entry, do or exit member's
+// actions were declared in.
+func (g *StateGraph) recordBehaviorScope(member ast.Node, scope *symbols.Scope) {
+	switch m := unwrapMembership(member).(type) {
+	case *ast.EntryMember:
+		g.behaviorsIn(m.Actions, scope)
+	case *ast.DoMember:
+		g.behaviorsIn(m.Actions, scope)
+	case *ast.ExitMember:
+		g.behaviorsIn(m.Actions, scope)
+	}
 }
 
 // parallelMachineState preserves behaviors owned by the parallel state itself.
@@ -813,23 +1031,38 @@ func parallelMachineState(decl ast.Node, members []ast.Node) *ast.StateNode {
 }
 
 // parallelRegionState creates the graph state for a direct substate that owns
-// a synthesized region, preserving its behaviors and deferred triggers.
-func parallelRegionState(graph *StateGraph, member ast.Node) *ast.StateNode {
+// a synthesized region, preserving its behaviors, its deferred triggers and the
+// content it inherits from the definition typing it.
+func parallelRegionState(graph *StateGraph, member ast.Node, scope *symbols.Scope) (*ast.StateNode, error) {
 	switch n := member.(type) {
 	case *ast.Usage:
-		return stateNodeFromUsage(graph, n)
+		return stateNodeFromUsage(graph, n, scope)
 	case *ast.StateNode:
-		return n
+		return n, nil
 	case *ast.SubstateMember:
 		state := &ast.StateNode{
 			NodeBase: ast.NodeBase{NodeSpan: n.NodeSpan},
 			Name:     n.Name,
 		}
 		graph.declOf[state] = n
-		return state
+		return state, nil
 	default:
-		return &ast.StateNode{}
+		return &ast.StateNode{}, nil
 	}
+}
+
+// regionBody is the body a direct substate contributes to its synthesized
+// region: what it declares itself, and what it inherits.
+func regionBody(graph *StateGraph, wrapper *ast.StateNode, member ast.Node) []ast.Node {
+	if body, ok := graph.bodyOf[wrapper]; ok {
+		nodes := make([]ast.Node, 0, len(body))
+		for _, m := range body {
+			nodes = append(nodes, m.node)
+		}
+		return nodes
+	}
+	_, body := parallelRegionBody(member)
+	return body
 }
 
 // parallelRegionBody returns the name and body a direct substate contributes to
@@ -860,6 +1093,9 @@ func parallelRegionBody(member ast.Node) (string, []ast.Node) {
 // regionScope uses the source substate scope for synthesized regions and the
 // region's own scope for regions written with the extension syntax.
 func (g *StateGraph) regionScope(scope *symbols.Scope, region *ast.StateRegion) *symbols.Scope {
+	if inherited := g.regionScopeOf[region]; inherited != nil {
+		return inherited
+	}
 	if decl := g.regionDecl[region]; decl != nil {
 		return childScope(scope, decl)
 	}
@@ -913,25 +1149,25 @@ func (g *StateGraph) endpointState(scope *symbols.Scope, qn *ast.QualifiedName) 
 // addVertex records the graph node standing for a state, and for the
 // declaration it was built from, which is what an endpoint resolves to.
 func (g *StateGraph) addVertex(state *ast.StateNode) {
-	g.vertexOf[state] = state
+	g.putVertex(state, state)
 	if decl, ok := g.declOf[state]; ok {
-		g.vertexOf[decl] = state
+		g.putVertex(decl, state)
 	}
 }
 
 // recordDecl records which state a body declaration was lowered into, the state
 // itself included, since a hand-built graph declares no separate node.
 func (g *StateGraph) recordDecl(state *ast.StateNode) {
-	g.stateByDecl[state] = state
+	g.putStateDecl(state, state)
 	if decl, ok := g.declOf[state]; ok {
-		g.stateByDecl[decl] = state
+		g.putStateDecl(decl, state)
 	}
 }
 
 // addPseudostate records a pseudostate as a vertex of the graph.
 func (g *StateGraph) addPseudostate(ps *ast.PseudostateNode) {
 	g.Pseudostates = append(g.Pseudostates, ps)
-	g.vertexOf[ps] = ps
+	g.putVertex(ps, ps)
 }
 
 // vertex is the graph node a transition endpoint names: name resolution says
@@ -946,11 +1182,42 @@ func (g *StateGraph) vertex(scope *symbols.Scope, qn *ast.QualifiedName) (ast.No
 	if !ok {
 		return nil, nil
 	}
-	node, ok := g.vertexOf[decl]
+	node, ok := g.vertexFor(scope, qn, decl)
 	if !ok {
 		return nil, fmt.Errorf(NotAVertexFormat, endpointText(qn), VertexKind(decl))
 	}
 	return node, nil
+}
+
+// vertexFor is the graph node an endpoint names. A qualified endpoint reaching
+// into content a state inherits (`nested.i1`) names that state's own copy of the
+// declaration, which is held by its materialization rather than by the machine.
+func (g *StateGraph) vertexFor(scope *symbols.Scope, qn *ast.QualifiedName, decl ast.Node) (ast.Node, bool) {
+	if node, ok := g.findVertex(decl); ok {
+		return node, true
+	}
+	if qn == nil || len(qn.Parts) < 2 {
+		return nil, false
+	}
+	prefix := &ast.QualifiedName{Parts: qn.Parts[:len(qn.Parts)-1]}
+	ownerDecl, ok := g.endpoints.Endpoint(scope, prefix)
+	if !ok {
+		return nil, false
+	}
+	ownerNode, ok := g.vertexFor(scope, prefix, ownerDecl)
+	if !ok {
+		return nil, false
+	}
+	ownerState, ok := ownerNode.(*ast.StateNode)
+	if !ok {
+		return nil, false
+	}
+	inst := g.instanceOf[ownerState]
+	if inst == nil {
+		return nil, false
+	}
+	node, ok := inst.vertexOf[decl]
+	return node, ok
 }
 
 // NotAVertexFormat reports an endpoint naming an element outside the machine's
@@ -1024,7 +1291,7 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		if containingState == nil {
 			return nil, fmt.Errorf("sourceless transition (accept...then) at top level has no containing state")
 		}
-		vertex, ok := graph.vertexOf[containingState]
+		vertex, ok := graph.findVertex(containingState)
 		if !ok {
 			return nil, fmt.Errorf("sourceless transition is declared in a %T that is not a state of the machine", containingState)
 		}
@@ -1179,6 +1446,31 @@ func relationshipTarget(usage *ast.Usage, kinds ...ast.RelationshipKind) *ast.Qu
 	return nil
 }
 
+// collectStateTransitions collects the transitions a state usage carries: those
+// its own body declares and those it inherits, each lowered in the scope of the
+// body that wrote it and against this usage's own vertices.
+func collectStateTransitions(graph *StateGraph, usage *ast.Usage, owner ast.Node) error {
+	state := graph.findStateDecl(usage)
+	if state == nil {
+		return nil
+	}
+	if inst := graph.instanceOf[state]; inst != nil {
+		graph.push(inst)
+		defer graph.pop()
+	}
+	for _, group := range groupMembers(graph.bodyOf[state]) {
+		containing := group.owner
+		if containing == nil {
+			containing = usage
+		}
+		if err := collectTransitions(graph, group.nodes, containing,
+			graph.completionOwner(containing, owner), group.scope); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // collectTransitions recursively processes member lists to collect transitions.
 // Handles top-level members and region members.
 // containingState is the enclosing state for sourceless transitions (nil at top level).
@@ -1231,12 +1523,11 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 						}
 					}
 				}
-			} else if n.Kind == ast.UsageState && len(n.Members) > 0 {
-				// Handle state usages (state X { ... }) - recurse into members
-				// This state usage can contain transitions (accept...then, etc.)
-				// Pass this Usage node as the containing state for sourceless transitions
-				if err := collectTransitions(graph, n.Members, n,
-					graph.completionOwner(n, owner), childScope(scope, n)); err != nil {
+			} else if n.Kind == ast.UsageState {
+				// A state usage carries the transitions its own body declares and
+				// those the definition typing it declares, each lowered in the body
+				// that wrote it and against this usage's own vertices.
+				if err := collectStateTransitions(graph, n, owner); err != nil {
 					return err
 				}
 			}

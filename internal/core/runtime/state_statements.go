@@ -21,7 +21,8 @@ func (e *StateExecutor) executeBehavior(behavior lower.StateBehavior) error {
 	if len(behavior.Body) == 0 {
 		return nil
 	}
-	engine := newStmtEngine(e.ctx, &stateStmtHost{exec: e, behavior: behavior}, e.stateData)
+	host := &stateStmtHost{exec: e, behavior: behavior}
+	engine := newStmtEngineOver(e.ctx, host, e.stateData, e.attrFramesFor(behavior.Owner))
 	// The activation ends with this execution of the body, so a behavior run
 	// again does not read what an earlier execution computed.
 	defer engine.finish()
@@ -50,6 +51,9 @@ func (h *stateStmtHost) send(ec *EvalContext, s lower.Send) error {
 // assignOuter writes a name the machine does not declare to the object
 // exhibiting it, falling back to executor-local data.
 func (h *stateStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error {
+	if written, err := h.assignStateAttribute(name, value); written || err != nil {
+		return err
+	}
 	if h.exec.declaresAttribute(name) {
 		return h.exec.assignAttribute(name, value)
 	}
@@ -60,6 +64,9 @@ func (h *stateStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lo
 }
 
 func (h *stateStmtHost) assignData(env *stmtEnv, name string, value Value, s lower.Assign) error {
+	if written, err := h.assignStateAttribute(name, value); written || err != nil {
+		return err
+	}
 	if h.exec.declaresAttribute(name) {
 		return h.exec.assignAttribute(name, value)
 	}
@@ -70,6 +77,21 @@ func (h *stateStmtHost) assignData(env *stmtEnv, name string, value Value, s low
 // reaches, which is the machine's state data for no chained target.
 func (h *stateStmtHost) assignChain(ec *EvalContext, s lower.Assign, value Value) error {
 	return assignThroughChain(ec, h.describe(), s, value)
+}
+
+// assignStateAttribute writes an attribute owned by the state running this
+// behavior, or by one enclosing it, and reports whether it did. The value
+// answers to the attribute's declaration as every other write does.
+func (h *stateStmtHost) assignStateAttribute(name string, value Value) (bool, error) {
+	data, scope, ok := h.exec.stateAttributeValues(h.behavior.Owner, name)
+	if !ok {
+		return false, nil
+	}
+	if err := h.exec.ctx.checkNamedWrite(scope, h.describe(), name, value); err != nil {
+		return true, err
+	}
+	data[name] = value
+	return true, nil
 }
 
 // performer is the object exhibiting the machine this behavior belongs to.

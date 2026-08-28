@@ -498,8 +498,9 @@ func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol
 
 	// Validate outputs
 	if expected.Outputs != nil {
+		data := exec.StateData()
 		for name, expectedVal := range expected.Outputs {
-			actual, ok := exec.stateData[name]
+			actual, ok := data[name]
 			if !ok {
 				t.Errorf("missing output %q", name)
 				continue

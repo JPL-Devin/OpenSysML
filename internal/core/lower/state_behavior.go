@@ -22,6 +22,9 @@ type StateBehavior struct {
 	// Scope is the scope the behavior was declared in, which its own statements
 	// and the action name it performs resolve in.
 	Scope *symbols.Scope
+	// Owner is the state whose attributes the behavior reads and writes: the
+	// state it belongs to, or the source of the transition it is an effect of.
+	Owner *ast.StateNode
 }
 
 // StateBehaviors are the lowered entry, do and exit behaviors of one state, each

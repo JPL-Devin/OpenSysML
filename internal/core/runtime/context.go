@@ -749,7 +749,7 @@ func (ctx *Context) ExecuteStatePerformedBy(stateMachine *symbols.Symbol, self *
 	}
 
 	// Return state machine data and the real ordered visit trace
-	return exec.stateData, exec.GetStateVisits(), nil
+	return exec.StateData(), exec.GetStateVisits(), nil
 }
 
 // CreateActionExecutor creates an action executor without starting execution.

@@ -332,6 +332,9 @@ type Attribute struct {
 	Name  string
 	Value ast.Node
 	Node  ast.Node // the declaration itself, for diagnostics
+	// Scope is the scope the declaration was written in, in which its default
+	// resolves; nil where the owner's own scope resolves it.
+	Scope *symbols.Scope
 }
 
 // ObjectFlow represents a data flow edge between pins.
