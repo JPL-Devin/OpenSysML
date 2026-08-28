@@ -129,12 +129,13 @@ func assignedOutputs(stmts []lower.Statement, outputs []calcOutput) map[string]b
 }
 
 // collectAssignedOutputs walks the statements, and the blocks they carry, for
-// assignments to a declared output.
+// assignments to a declared output. A chained target writes a feature of
+// another object, so it binds no output of the calc however it ends.
 func collectAssignedOutputs(stmts []lower.Statement, declared, assigned map[string]bool) {
 	for _, stmt := range stmts {
 		switch s := stmt.(type) {
 		case lower.Assign:
-			if declared[s.Target] {
+			if s.Chain == nil && declared[s.Target] {
 				assigned[s.Target] = true
 			}
 		case lower.Block:
