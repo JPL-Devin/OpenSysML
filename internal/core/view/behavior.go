@@ -1,6 +1,7 @@
 package view
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -279,6 +280,11 @@ func (r *Renderer) actionNode(decl ast.Node, kind, name string, scope *symbols.S
 	ids *nodeIDs, out *Rendering, lowered map[ast.Node]bool, depth int) (*Node, bool) {
 	graph, err := lower.ToActionGraph(decl, scope)
 	if err != nil {
+		// A node performing statements holds no flow of its own to render, which is
+		// no shortcoming of the rendering; only an exposed action is reported.
+		if depth > 0 && errors.Is(err, lower.ErrStatementOutsideFlow) {
+			return nil, false
+		}
 		out.Notices = append(out.Notices, fmt.Sprintf("%s %s does not lower to an action graph: %v", kind, name, err))
 		return nil, false
 	}

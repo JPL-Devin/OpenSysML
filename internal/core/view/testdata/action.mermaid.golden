@@ -7,20 +7,23 @@ flowchart TD
       n5["initial begin"]
       n6["action record"]
     end
-    n7["fork split"]
-    n8["join sync"]
-    n9["final done"]
-    n10["action park"]
-    n11["decision check"]
+    n7["action tally"]
+    n8["fork split"]
+    n9["join sync"]
+    n10["final done"]
+    n11["action park"]
+    n12["decision check"]
   end
   n5 --> n6
-  n1 --> n7
-  n2 --> n8
+  n1 --> n8
+  n2 --> n9
   n2 -.->|"torque to reading"| n3
-  n3 --> n8
-  n7 --> n2
-  n7 --> n3
-  n8 --> n11
-  n10 --> n9
-  n11 -->|"[speed #gt; 0]"| n9
+  n3 --> n9
+  n7 --> n9
+  n8 --> n2
+  n8 --> n3
+  n8 --> n7
+  n9 --> n12
   n11 --> n10
+  n12 -->|"[speed #gt; 0]"| n10
+  n12 --> n11

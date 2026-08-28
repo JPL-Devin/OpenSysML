@@ -6,6 +6,7 @@ action def Flows::Drive
   action monitor (own flow)
     initial begin
     action record
+  action tally
   fork split
   join sync
   final done
@@ -18,8 +19,10 @@ flow:
   provide -> sync
   provide => monitor: torque to reading
   monitor -> sync
+  tally -> sync
   split -> provide
   split -> monitor
+  split -> tally
   sync -> check
   park -> done
   check -> done: [speed > 0]
