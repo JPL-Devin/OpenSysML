@@ -56,9 +56,13 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 // assignOuter writes a name the body's blocks do not declare to the feature of
 // the object performing the action, and to the action's own features — which
 // every one of its tokens shares — when the object has no such feature. A
-// parameter the action declares is its own, so it is never redirected to the
-// object: an output binds for the caller even where the object has that feature.
+// feature the action declares is its own, so it is never redirected to the
+// object: it is written to the performance and binds for the caller even where
+// the object has a feature of that name.
 func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+	if h.exec.declaresAttribute(name) {
+		return h.exec.setFeature(name, value)
+	}
 	if !h.exec.declaresParameter(name) {
 		if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, name, value); written || err != nil {
 			return err
@@ -69,6 +73,9 @@ func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ l
 }
 
 func (h *actionStmtHost) assignData(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+	if h.exec.declaresAttribute(name) {
+		return h.exec.setFeature(name, value)
+	}
 	env.data[name] = value
 	return nil
 }

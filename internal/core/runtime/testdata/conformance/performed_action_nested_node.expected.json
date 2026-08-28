@@ -1,0 +1,7 @@
+{
+  "type": "instance",
+  "instantiate": "test::Rover",
+  "slots": {
+    "trip.distance": {"type": "Integer", "value": 21}
+  }
+}

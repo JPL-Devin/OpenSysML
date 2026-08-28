@@ -237,6 +237,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
 	t.Run("object_exhibited_machine_attribute_write_violates_multiplicity", testObjectExhibitedMachineAttributeWriteViolatesMultiplicity)
+	t.Run("object_performed_action_attribute_write_violates_multiplicity", testObjectPerformedActionAttributeWriteViolatesMultiplicity)
+	t.Run("object_performed_action_occurrence_holds_a_non_object", testObjectPerformedActionOccurrenceHoldsANonObject)
 	t.Run("operation_invoked_with_unbound_parameters", testOperationInvokedWithUnboundParameters)
 	t.Run("second_instantiation_of_one_type", testSecondInstantiationOfOneType)
 }
@@ -6908,6 +6910,68 @@ func testObjectExhibitedMachineAttributeWriteViolatesMultiplicity(t *testing.T) 
 	}
 	if !errors.Is(err, ErrMultiplicityViolation) {
 		t.Fatalf("error = %v, want ErrMultiplicityViolation", err)
+	}
+}
+
+// testObjectPerformedActionAttributeWriteViolatesMultiplicity checks that a
+// performed action's occurrence write failure remains typed.
+func testObjectPerformedActionAttributeWriteViolatesMultiplicity(t *testing.T) {
+	src := `
+	package test {
+		action def Record {
+			attribute samples : Integer[2] = (0, 0);
+			action step {
+				assign samples := 1;
+			}
+			first step;
+		}
+		part def Logger {
+			perform action recording : Record;
+		}
+	}`
+	_, _, err := instantiateInSource(t, src, "test::Logger")
+	if !errors.Is(err, ErrActionPerformanceOccurrence) {
+		t.Fatalf("error = %v, want ErrActionPerformanceOccurrence", err)
+	}
+	if !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("error = %v, want ErrMultiplicityViolation", err)
+	}
+}
+
+// testObjectPerformedActionOccurrenceHoldsANonObject: a perform usage whose
+// feature holds a value that is not an occurrence is reported, not performed.
+func testObjectPerformedActionOccurrenceHoldsANonObject(t *testing.T) {
+	src := `
+	package test {
+		action def Bump {
+			attribute count : Integer = 0;
+			action step {
+				assign count := count + 1;
+			}
+			first step;
+		}
+		part def Host {
+			perform action work : Bump;
+		}
+	}`
+	idx, _, ctx := buildRuntime(t, "<performed-action-non-object>", parseAndBuild(t, src))
+	inst, err := ctx.materialize(oneSymbol(t, idx, "test::Host"), 0)
+	if err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	fv, ok := inst.FeatureValues["work"]
+	if !ok {
+		t.Fatal("object has no work feature")
+	}
+	fv.Value = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 5}}
+	fv.Materialized = true
+
+	err = ctx.startClassifierBehaviors(inst, 0)
+	if !errors.Is(err, ErrActionPerformanceOccurrence) {
+		t.Fatalf("error = %v, want ErrActionPerformanceOccurrence", err)
+	}
+	if !strings.Contains(err.Error(), "not an occurrence") {
+		t.Errorf("error = %v, want one naming the value the feature holds", err)
 	}
 }
 

@@ -637,14 +637,15 @@ func lowerBlock(owner ast.Node, members []ast.Node, scope *symbols.Scope) Block 
 	return block
 }
 
-// lowerAttributes returns the attribute defaults declared among a behavior's
-// members, in order. A redefinition names the attribute it overrides
+// lowerAttributes returns every attribute declared among a behavior's members,
+// in order. An unvalued attribute is still owned by the behavior even though it
+// supplies no initial value. A redefinition names the attribute it overrides
 // (`attribute :>> x = 5;`), so the effective name is the one bound.
 func lowerAttributes(members []ast.Node) []Attribute {
 	var attrs []Attribute
 	for _, member := range members {
 		usage, ok := unwrapMembership(member).(*ast.Usage)
-		if !ok || usage.Kind != ast.UsageAttribute || usage.Value == nil {
+		if !ok || usage.Kind != ast.UsageAttribute {
 			continue
 		}
 		name, _ := ast.EffectiveName(usage)

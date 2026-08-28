@@ -1,0 +1,7 @@
+{
+  "type": "instance",
+  "instantiate": "test::Probe",
+  "slots": {
+    "reading.n": {"type": "Integer", "value": 42}
+  }
+}
