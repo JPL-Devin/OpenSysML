@@ -1,0 +1,18 @@
+step 1: token 1@split
+step 2: token 2@left, token 3@right
+enter action node: right
+enter action node: left
+step 3: token 2@leftStep, token 3@rightStep
+stmt assign rightValue
+  eval literal 2 -> 2
+leave action node: right
+stmt assign leftValue
+  eval literal 1 -> 1
+leave action node: left
+step 4: token 2@sync, token 3@sync
+stmt assign leftValue
+    eval feature leftValue -> 1
+    eval feature rightValue -> 2
+  eval operator + -> 3
+step 5: token 4@done
+step 6: no active tokens

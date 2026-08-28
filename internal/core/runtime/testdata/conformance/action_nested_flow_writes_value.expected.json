@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"outputs": {
+		"legs": {"type": "Integer", "value": 3},
+		"total": {"type": "Integer", "value": 4}
+	}
+}

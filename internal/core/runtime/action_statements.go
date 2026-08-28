@@ -14,6 +14,8 @@ import (
 type actionStmtHost struct {
 	exec *ActionExecutor
 	node ast.Node // the action node whose body is running, for diagnostics
+	// frame is the activation the node runs in, nil in the action's own flow.
+	frame *actionFrame
 	// engine runs the body, and holds the values a `perform` in it reads and
 	// writes: the action's own, and those of every block entered around it.
 	engine *stmtEngine
@@ -21,24 +23,25 @@ type actionStmtHost struct {
 
 // executeBody runs the lowered statements of the given action node against the
 // action's feature space.
-func (e *ActionExecutor) executeBody(node ast.Node) error {
-	host := &actionStmtHost{exec: e, node: node}
+func (e *ActionExecutor) executeBody(frame *actionFrame, node ast.Node) error {
+	graph := e.graphOf(frame)
+	host := &actionStmtHost{exec: e, node: node, frame: frame}
 	engine := newStmtEngine(e.ctx, host, e.data)
 	host.engine = engine
 	// The body's activation ends with this execution of it, so a run stepping the
 	// node many times does not hold what every execution computed.
 	defer engine.finish()
-	_, err := engine.run(e.graph.Bodies[node])
+	_, err := engine.run(graph.Bodies[node])
 	return err
 }
 
 // runNodeBody runs the statements a control or initial node's body declares,
 // which the token passing through the node performs.
-func (e *ActionExecutor) runNodeBody(node ast.Node) error {
-	if len(e.graph.Bodies[node]) == 0 {
+func (e *ActionExecutor) runNodeBody(frame *actionFrame, node ast.Node) error {
+	if len(e.graphOf(frame).Bodies[node]) == 0 {
 		return nil
 	}
-	return e.executeBody(node)
+	return e.executeBody(frame, node)
 }
 
 func (h *actionStmtHost) describe() string {
@@ -50,7 +53,7 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	if err != nil {
 		return err
 	}
-	return h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
+	return h.exec.ctx.post(h.exec.connectionsOf(h.frame), msg, s, h.exec.self)
 }
 
 // assignOuter writes a name the body's blocks do not declare to the feature of
