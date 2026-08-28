@@ -43,6 +43,16 @@ func (env *stmtEnv) declare(name string, value Value) {
 	env.data[name] = value
 }
 
+// holdsLocal reports whether an entered block declares name.
+func (env *stmtEnv) holdsLocal(name string) bool {
+	for i := len(env.frames) - 1; i >= 0; i-- {
+		if _, ok := env.frames[i][name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // assignLocal writes to the innermost entered block that declares name and
 // reports whether one did: a block-local declaration shadows a name of the
 // behavior's own, including one of its output features.
@@ -200,7 +210,11 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 		}
 		// An output is bound by the host even when the body's data holds it, so a
 		// second binding is reported; a block-local of the name shadows it.
-		if e.env.assignLocal(s.Target, value) {
+		if e.env.holdsLocal(s.Target) {
+			if err := e.ctx.checkBodyWrite(e.host, s, value); err != nil {
+				return flowNext, err
+			}
+			e.env.assignLocal(s.Target, value)
 			return flowNext, nil
 		}
 		if !e.host.declaredOutput(s.Target) {

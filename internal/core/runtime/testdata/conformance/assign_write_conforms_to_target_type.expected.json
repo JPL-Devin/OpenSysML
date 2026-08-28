@@ -1,0 +1,17 @@
+{
+  "type": "instance",
+  "instantiate": "test::Fleet",
+  "objects": [
+    {
+      "finalState": "assigning",
+      "stateVisits": ["assigning"],
+      "slots": {
+        "lead": {"type": "Instance"},
+        "reading": {"type": "Integer", "value": 4}
+      },
+      "identical": [
+        ["lead", "scout"]
+      ]
+    }
+  ]
+}

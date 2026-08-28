@@ -49,23 +49,21 @@ func (h *stateStmtHost) send(ec *EvalContext, s lower.Send) error {
 
 // assignOuter writes a name the machine does not declare to the object
 // exhibiting it, falling back to executor-local data.
-func (h *stateStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+func (h *stateStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error {
 	if h.exec.declaresAttribute(name) {
 		return h.exec.assignAttribute(name, value)
 	}
 	if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, name, value); written || err != nil {
 		return err
 	}
-	env.data[name] = value
-	return nil
+	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
 }
 
-func (h *stateStmtHost) assignData(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+func (h *stateStmtHost) assignData(env *stmtEnv, name string, value Value, s lower.Assign) error {
 	if h.exec.declaresAttribute(name) {
 		return h.exec.assignAttribute(name, value)
 	}
-	env.data[name] = value
-	return nil
+	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
 }
 
 // assignChain writes the feature a chained target names on the object its chain

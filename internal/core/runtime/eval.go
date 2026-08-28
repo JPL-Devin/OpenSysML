@@ -824,7 +824,7 @@ func (ec *EvalContext) valueHasType(value Value, target *symbols.Symbol, exact b
 		}
 		return true, nil
 	}
-	direct, err := ec.directValueType(value)
+	direct, err := ec.ctx.directValueType(ec.scope, value)
 	if err != nil {
 		return false, err
 	}
@@ -860,7 +860,10 @@ func (ec *EvalContext) evalTypeSubject(node ast.Node) (Value, error) {
 	return ec.Eval(node)
 }
 
-func (ec *EvalContext) directValueType(value Value) (*symbols.Symbol, error) {
+// directValueType names the type a value is of, resolved in the scope reading
+// it: the scalar type of a constant, the type of the object an instance value
+// denotes, the enumeration a literal belongs to.
+func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols.Symbol, error) {
 	var name string
 	switch value.Kind {
 	case ValConst:
@@ -877,11 +880,11 @@ func (ec *EvalContext) directValueType(value Value) (*symbols.Symbol, error) {
 	case ValString:
 		name = "String"
 	case ValInstance:
-		inst, ok := ec.ctx.instances[value.Instance]
+		inst, ok := ctx.instances[value.Instance]
 		if !ok || inst == nil || inst.Type == nil {
 			return nil, fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, value.Instance)
 		}
-		if typ := ec.ctx.extractType(inst.Type); typ != nil {
+		if typ := ctx.extractType(inst.Type); typ != nil {
 			return typ, nil
 		}
 		return inst.Type, nil
@@ -904,11 +907,11 @@ func (ec *EvalContext) directValueType(value Value) (*symbols.Symbol, error) {
 		if value.Quantity == nil {
 			return nil, fmt.Errorf("%w: quantity", ErrUndeterminedValueType)
 		}
-		return ec.directValueType(Value{Kind: ValConst, Const: value.Quantity.Num})
+		return ctx.directValueType(scope, Value{Kind: ValConst, Const: value.Quantity.Num})
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
-	typeSym := ec.ctx.resolveType(ec.scope, name)
+	typeSym := ctx.resolveType(scope, name)
 	if typeSym == nil {
 		return nil, fmt.Errorf("%w: direct type %q", ErrUndeterminedValueType, name)
 	}
