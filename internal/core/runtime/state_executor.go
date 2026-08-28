@@ -249,10 +249,11 @@ func (e *StateExecutor) attrFramesFor(state *ast.StateNode) []map[string]Value {
 }
 
 // stateAttributeValues is the value map of the innermost state at or enclosing
-// state that owns an attribute of this name.
-func (e *StateExecutor) stateAttributeValues(state *ast.StateNode, name string) (map[string]Value, bool) {
+// state that owns an attribute of this name, with the scope that attribute is
+// declared in, so a write to it answers to its declaration.
+func (e *StateExecutor) stateAttributeValues(state *ast.StateNode, name string) (map[string]Value, *symbols.Scope, bool) {
 	if state == nil {
-		return nil, false
+		return nil, nil, false
 	}
 	for _, ancestor := range e.getParentChain(state) {
 		data, ok := e.stateAttrs[ancestor]
@@ -260,12 +261,17 @@ func (e *StateExecutor) stateAttributeValues(state *ast.StateNode, name string) 
 			continue
 		}
 		for _, attr := range e.graph.StateAttributes[ancestor] {
-			if attr.Name == name {
-				return data, true
+			if attr.Name != name {
+				continue
 			}
+			scope := attr.Scope
+			if scope == nil {
+				scope = e.graph.Scope
+			}
+			return data, scope, true
 		}
 	}
-	return nil, false
+	return nil, nil, false
 }
 
 func (e *StateExecutor) declaresAttribute(name string) bool {
@@ -289,6 +295,10 @@ func (e *StateExecutor) assignAttribute(name string, value Value) error {
 				ErrStatePerformanceOccurrence, name, e.occurrence.ID, err)
 		}
 		value = fv.HeldValue()
+	} else if err := e.ctx.checkNamedWrite(e.graph.Scope, "state machine "+symbolText(e.stateMachine), name, value); err != nil {
+		// No occurrence holds this feature, so its declaration is checked here
+		// rather than by the write to that occurrence.
+		return err
 	}
 	e.stateData[name] = value
 	return nil

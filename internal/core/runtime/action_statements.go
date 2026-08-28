@@ -62,7 +62,7 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 // feature the action declares is its own, so it is never redirected to the
 // object: it is written to the performance and binds for the caller even where
 // the object has a feature of that name.
-func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error {
 	if h.exec.declaresAttribute(name) {
 		return h.exec.setFeature(name, value)
 	}
@@ -71,16 +71,14 @@ func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ l
 			return err
 		}
 	}
-	env.data[name] = value
-	return nil
+	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
 }
 
-func (h *actionStmtHost) assignData(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+func (h *actionStmtHost) assignData(env *stmtEnv, name string, value Value, s lower.Assign) error {
 	if h.exec.declaresAttribute(name) {
 		return h.exec.setFeature(name, value)
 	}
-	env.data[name] = value
-	return nil
+	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
 }
 
 // assignChain writes the feature a chained target names on the object its chain

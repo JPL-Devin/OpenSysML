@@ -13,8 +13,8 @@ import (
 // Like the scalar rules, every check is one-sided — it reports only when both
 // the expected and the actual property are known — so a partially typed model
 // never produces a false positive.
-func (ec *exprChecker) checkValueConformance(scope *symbols.Scope, u *ast.Usage) {
-	want := ec.declaredTypeSymbol(scope, u.Relationships)
+func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
+	want := ec.declaredTypeSymbol(declScope, u.Relationships)
 	if want == nil || ec.model.PrimTypeOf(want) != semantics.PrimUnknown {
 		// An untyped feature has nothing to conform to, and a scalar-typed one
 		// is the lattice rules' to report — in lattice terms (Natural vs
@@ -23,8 +23,8 @@ func (ec *exprChecker) checkValueConformance(scope *symbols.Scope, u *ast.Usage)
 	}
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
-	for _, value := range valueElements(u.Value) {
-		if got := ec.valueTypeSymbol(scope, value); got != nil {
+	for _, value := range valueElements(value) {
+		if got := ec.valueTypeSymbol(valueScope, value); got != nil {
 			// A binding equates the two features, so conformance in either
 			// direction suffices; only unrelated types are rejected.
 			if !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
@@ -32,7 +32,7 @@ func (ec *exprChecker) checkValueConformance(scope *symbols.Scope, u *ast.Usage)
 			}
 			continue
 		}
-		if got := ec.invocationResultTypeSymbol(scope, value); got != nil {
+		if got := ec.invocationResultTypeSymbol(valueScope, value); got != nil {
 			if !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
 				ec.errorf(value.Span(), "cannot bind a value of type %s to a feature typed by %s", got.Name, want.Name)
 			}
@@ -65,17 +65,17 @@ func literalPrimType(value ast.Node) semantics.PrimType {
 
 // checkValueCount checks a bound value's element count against the multiplicity
 // governing the feature.
-func (ec *exprChecker) checkValueCount(scope *symbols.Scope, u *ast.Usage) {
-	count, known := exactCount(u.Value)
+func (ec *exprChecker) checkValueCount(declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
+	count, known := exactCount(value)
 	if !known {
 		return
 	}
-	r, ok := ec.effectiveRange(scope, u, 0)
+	r, ok := ec.effectiveRange(declScope, u, 0)
 	if !ok {
 		return
 	}
 	if msg := r.CountViolation(count); msg != "" {
-		ec.errorf(u.Value.Span(), "%s", msg)
+		ec.errorf(value.Span(), "%s", msg)
 	}
 }
 

@@ -87,6 +87,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
+	t.Run("calc_output_binding_violates_declared_type", testCalcOutputBindingViolatesDeclaredType)
 	t.Run("operation_constraint_body_cannot_be_evaluated", testOperationConstraintBodyCannotBeEvaluated)
 	t.Run("binding_conflict", testBindingConflict)
 	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
@@ -255,6 +256,16 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("object_performed_action_occurrence_holds_a_non_object", testObjectPerformedActionOccurrenceHoldsANonObject)
 	t.Run("operation_invoked_with_unbound_parameters", testOperationInvokedWithUnboundParameters)
 	t.Run("second_instantiation_of_one_type", testSecondInstantiationOfOneType)
+	t.Run("write_of_a_wrong_typed_value_leaves_the_feature", testWriteOfAWrongTypedValueLeavesTheFeature)
+	t.Run("write_of_too_many_values_leaves_the_feature", testWriteOfTooManyValuesLeavesTheFeature)
+	t.Run("write_of_no_value_where_one_is_required", testWriteOfNoValueWhereOneIsRequired)
+	t.Run("state_entry_write_of_a_wrong_typed_value", testStateEntryWriteOfAWrongTypedValue)
+	t.Run("performer_feature_write_of_a_wrong_typed_value", testPerformerFeatureWriteOfAWrongTypedValue)
+	t.Run("chained_write_of_a_wrong_typed_value", testChainedWriteOfAWrongTypedValue)
+	t.Run("calc_output_write_of_a_wrong_typed_value", testCalcOutputWriteOfAWrongTypedValue)
+	t.Run("action_local_write_of_a_wrong_typed_value", testActionLocalWriteOfAWrongTypedValue)
+	t.Run("action_output_write_of_a_wrong_typed_value", testActionOutputWriteOfAWrongTypedValue)
+	t.Run("performance_occurrence_write_of_a_wrong_typed_value", testPerformanceOccurrenceWriteOfAWrongTypedValue)
 }
 
 func testBindingConflict(t *testing.T) {
@@ -6015,6 +6026,31 @@ func testCalcOutputValuedAndAssigned(t *testing.T) {
 	}
 }
 
+// testCalcOutputBindingViolatesDeclaredType: an output whose declaration binds
+// it a value of another type is rejected where a write of one is, the input it
+// reads being untyped so only the run time can judge it.
+func testCalcOutputBindingViolatesDeclaredType(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			calc def Bound {
+				in n;
+				out a : Integer = n;
+			}
+			calc c : Bound { in n = "seven"; }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	usage := oneSymbol(t, idx, "test::c")
+	_, err := ctx.CalcUsageOutput(usage, "a", idx.DocumentRoot("<test>"), nil)
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "Integer") {
+		t.Errorf("error = %v, want it to name the declared type", err)
+	}
+}
+
 // testCalcOutputAssignedTwice: a body assigning an output more than once leaves
 // it bound to the last assignment that ran, the same as a body local, so an
 // output may be initialized and then accumulated into.
@@ -7200,6 +7236,270 @@ func instantiateInSource(t *testing.T, src, fqn string) (*Context, *Instance, er
 	idx, _, ctx := buildRuntime(t, "<test>", file)
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, fqn))
 	return ctx, inst, err
+}
+
+// instantiateWithLibraries materializes the named type declared in src over an
+// index carrying the standard library, so a case may name its scalar types.
+func instantiateWithLibraries(t *testing.T, src, fqn string) (*Context, *Instance, error) {
+	t.Helper()
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, fqn))
+	return ctx, inst, err
+}
+
+// testWriteOfAWrongTypedValueLeavesTheFeature: a value the feature's type does
+// not admit is rejected before the write, so the feature keeps what it held.
+func testWriteOfAWrongTypedValueLeavesTheFeature(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Rig {
+			attribute reading : Real = 0.5;
+		}
+	}`
+	ctx, inst, err := instantiateWithLibraries(t, src, "test::Rig")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	err = inst.SetFeatureValue(ctx, "reading", Value{Kind: ValString, Str: "not a number"})
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	for _, want := range []string{"reading", "Real", "not a number"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %v, want it to name %s", err, want)
+		}
+	}
+	fv, err := inst.GetFeatureValue(ctx, "reading")
+	if err != nil {
+		t.Fatalf("read reading after the rejected write: %v", err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Real != 0.5 {
+		t.Errorf("reading = %v, want the 0.5 it held before the rejected write", FormatValue(got))
+	}
+}
+
+// testWriteOfTooManyValuesLeavesTheFeature: a written collection the target's
+// multiplicity does not admit is rejected, and the feature keeps its values.
+func testWriteOfTooManyValuesLeavesTheFeature(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Rig {
+			attribute samples : Integer[2] = (1, 2);
+		}
+	}`
+	ctx, inst, err := instantiateWithLibraries(t, src, "test::Rig")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	tooMany := sequenceOf([]Value{constInt(1), constInt(2), constInt(3)})
+	if err := inst.SetFeatureValue(ctx, "samples", tooMany); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("error = %v, want ErrMultiplicityViolation", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "samples")
+	if err != nil {
+		t.Fatalf("read samples after the rejected write: %v", err)
+	}
+	if got := len(elementsOf(fv.HeldValue())); got != 2 {
+		t.Errorf("samples holds %d value(s), want the 2 it held before the rejected write", got)
+	}
+}
+
+// testWriteOfNoValueWhereOneIsRequired: an empty collection written to a feature
+// whose lower bound is one is a multiplicity violation, not an unset feature.
+func testWriteOfNoValueWhereOneIsRequired(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Rig {
+			attribute reading : Real[1] = 0.5;
+		}
+	}`
+	ctx, inst, err := instantiateWithLibraries(t, src, "test::Rig")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	if err := inst.SetFeatureValue(ctx, "reading", sequenceOf(nil)); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("error = %v, want ErrMultiplicityViolation", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "reading")
+	if err != nil {
+		t.Fatalf("read reading after the rejected write: %v", err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Real != 0.5 {
+		t.Errorf("reading = %v, want the 0.5 it held before the rejected write", FormatValue(got))
+	}
+}
+
+// testStateEntryWriteOfAWrongTypedValue: a write in a state's entry action is
+// judged against the feature it names, however deep in the machine it stands.
+func testStateEntryWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Rig {
+			attribute reading : Real = 0.0;
+			exhibit state run {
+				entry; then go;
+				state go {
+					entry action set {
+						assign reading := "not a number";
+					}
+				}
+			}
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Rig")
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "Real") {
+		t.Errorf("error = %v, want it to name the declared type", err)
+	}
+}
+
+// testPerformerFeatureWriteOfAWrongTypedValue: a write reaching a feature of the
+// object performing the behavior is judged against that feature's declaration.
+func testPerformerFeatureWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Set {
+			action step {
+				assign label := 7;
+			}
+			first step;
+		}
+		part def Rig {
+			attribute label : String = "a";
+			perform action set : Set;
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Rig")
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "String") {
+		t.Errorf("error = %v, want it to name the declared type", err)
+	}
+}
+
+// testChainedWriteOfAWrongTypedValue: a write through a feature chain answers to
+// the declaration of the feature the chain reaches.
+func testChainedWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Cell {
+			attribute mark : Integer = 0;
+		}
+		part def Rig {
+			part cell : Cell;
+			exhibit state run {
+				entry; then marking;
+				state marking {
+					entry action set {
+						assign cell.mark := "seven";
+					}
+				}
+			}
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Rig")
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "mark") {
+		t.Errorf("error = %v, want it to name the feature written", err)
+	}
+}
+
+// testCalcOutputWriteOfAWrongTypedValue: an output a calculation body binds is a
+// feature too, so what it is bound to conforms to its declared type.
+func testCalcOutputWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		calc def Label {
+			out tag : String;
+			tag := 7;
+		}
+	}`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	calc := oneSymbol(t, idx, "test::Label")
+	_, err := ctx.InvokeCalc(calc, nil, idx.DocumentRoot("<test>"))
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+}
+
+// testActionLocalWriteOfAWrongTypedValue: a value a body declares of its own is
+// declared with a type, so a write to it answers to that type.
+func testActionLocalWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Compute {
+			out total : Integer;
+			action step {
+				attribute held : Integer = 0;
+				assign held := "seven";
+				assign total := held;
+			}
+			first step;
+		}
+	}`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	_, err := ctx.ExecuteAction(oneSymbol(t, idx, "test::Compute"))
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+}
+
+// testActionOutputWriteOfAWrongTypedValue: binding an output binds a feature, so
+// the value bound conforms to the type the output was declared with.
+func testActionOutputWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Compute {
+			out total : Integer;
+			action step {
+				assign total := "seven";
+			}
+			first step;
+		}
+	}`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	_, err := ctx.ExecuteAction(oneSymbol(t, idx, "test::Compute"))
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+}
+
+// testPerformanceOccurrenceWriteOfAWrongTypedValue: an attribute of a performed
+// action is a feature of its performance occurrence, and a write to it is judged
+// against that feature's declaration.
+func testPerformanceOccurrenceWriteOfAWrongTypedValue(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Record {
+			attribute sample : Integer = 0;
+			action step {
+				assign sample := "seven";
+			}
+			first step;
+		}
+		part def Logger {
+			perform action recording : Record;
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Logger")
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
 }
 
 // testNestedFlowWithoutAnInitialNode: a node stating a flow that names no node

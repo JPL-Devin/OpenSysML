@@ -37,6 +37,10 @@ type Context struct {
 
 	features map[*symbols.Symbol][]EffectiveFeature
 
+	// writeTargets memoizes the declaration an assignment's target names, per
+	// scope the statement was written in: what a value written must conform to.
+	writeTargets map[writeTargetKey]*writeTarget
+
 	// calcShapes memoizes resolved calc invocation interfaces (parameters,
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape

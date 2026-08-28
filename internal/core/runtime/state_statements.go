@@ -50,9 +50,9 @@ func (h *stateStmtHost) send(ec *EvalContext, s lower.Send) error {
 
 // assignOuter writes a name the machine does not declare to the object
 // exhibiting it, falling back to executor-local data.
-func (h *stateStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lower.Assign) error {
-	if h.assignStateAttribute(name, value) {
-		return nil
+func (h *stateStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error {
+	if written, err := h.assignStateAttribute(name, value); written || err != nil {
+		return err
 	}
 	if h.exec.declaresAttribute(name) {
 		return h.exec.assignAttribute(name, value)
@@ -60,19 +60,17 @@ func (h *stateStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lo
 	if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, name, value); written || err != nil {
 		return err
 	}
-	env.data[name] = value
-	return nil
+	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
 }
 
-func (h *stateStmtHost) assignData(env *stmtEnv, name string, value Value, _ lower.Assign) error {
-	if h.assignStateAttribute(name, value) {
-		return nil
+func (h *stateStmtHost) assignData(env *stmtEnv, name string, value Value, s lower.Assign) error {
+	if written, err := h.assignStateAttribute(name, value); written || err != nil {
+		return err
 	}
 	if h.exec.declaresAttribute(name) {
 		return h.exec.assignAttribute(name, value)
 	}
-	env.data[name] = value
-	return nil
+	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
 }
 
 // assignChain writes the feature a chained target names on the object its chain
@@ -82,14 +80,18 @@ func (h *stateStmtHost) assignChain(ec *EvalContext, s lower.Assign, value Value
 }
 
 // assignStateAttribute writes an attribute owned by the state running this
-// behavior, or by one enclosing it, and reports whether it did.
-func (h *stateStmtHost) assignStateAttribute(name string, value Value) bool {
-	data, ok := h.exec.stateAttributeValues(h.behavior.Owner, name)
+// behavior, or by one enclosing it, and reports whether it did. The value
+// answers to the attribute's declaration as every other write does.
+func (h *stateStmtHost) assignStateAttribute(name string, value Value) (bool, error) {
+	data, scope, ok := h.exec.stateAttributeValues(h.behavior.Owner, name)
 	if !ok {
-		return false
+		return false, nil
+	}
+	if err := h.exec.ctx.checkNamedWrite(scope, h.describe(), name, value); err != nil {
+		return true, err
 	}
 	data[name] = value
-	return true
+	return true, nil
 }
 
 // performer is the object exhibiting the machine this behavior belongs to.

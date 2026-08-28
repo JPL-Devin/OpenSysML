@@ -363,6 +363,12 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	if err := ctx.checkDefaultCount(inst, fv, name, value); err != nil {
 		return err
 	}
+	// Checked before the write, so a value the feature's type does not admit
+	// leaves it holding what it held.
+	if err := ctx.checkWriteType(fv.Feature.DeclScope(),
+		fmt.Sprintf("feature value %s.%s", inst.Type.Name, name), fv.Feature.Type, value); err != nil {
+		return err
+	}
 	if isScalarFeature(fv.Feature) {
 		fv.Value = value
 		fv.Values = Value{}

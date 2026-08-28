@@ -359,7 +359,7 @@ func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, cal
 // returned a value and the activation it ran in. bindings holds the calc's
 // parameters on the way in and its locals on the way out.
 func (ctx *Context) runCalcSteps(shape *calcShape, bindings map[string]Value, self *Instance) (Value, bool, int64, error) {
-	host := &calcStmtHost{shape: shape, self: self}
+	host := &calcStmtHost{ctx: ctx, shape: shape, self: self}
 	engine := newStmtEngine(ctx, host, bindings)
 
 	flow, err := engine.run(shape.Steps)
