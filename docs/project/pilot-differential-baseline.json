@@ -60,7 +60,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 23,
-        "digest": "sha256:4441850c6ff1e6c63bdd2d5b5a79b198c02d86d8550b187548a1f3f5a486d152"
+        "digest": "sha256:126e713ace52587858658a869204977e96f32d8d178bbda0adc070c475606e4e"
       },
       {
         "name": "probes",
@@ -862,91 +862,91 @@
           "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 492,
+              "line": 509,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 506,
+              "line": 523,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 515,
+              "line": 532,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 524,
+              "line": 541,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 534,
+              "line": 551,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 552,
+              "line": 569,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 555,
+              "line": 572,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 556,
+              "line": 573,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 599,
+              "line": 616,
               "severity": "error",
               "category": "syntax",
               "count": 1
             },
             {
-              "line": 604,
+              "line": 621,
               "severity": "error",
               "category": "kind-mismatch",
               "count": 2
             },
             {
-              "line": 604,
+              "line": 621,
               "severity": "error",
               "category": "unresolved-reference",
               "count": 1
             },
             {
-              "line": 608,
+              "line": 625,
               "severity": "error",
               "category": "kind-mismatch",
               "count": 2
             },
             {
-              "line": 608,
+              "line": 625,
               "severity": "error",
               "category": "unresolved-reference",
               "count": 1
             },
             {
-              "line": 614,
+              "line": 631,
               "severity": "error",
               "category": "unresolved-reference",
               "count": 1
             },
             {
-              "line": 622,
+              "line": 639,
               "severity": "error",
               "category": "syntax",
               "count": 1

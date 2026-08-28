@@ -52,7 +52,9 @@ distance between two waypoints, and what driving it costs at the rover's draw.
 ```
 
 **Run the sol.** `SurfaceOps` forks imaging and sampling, joins them, tallies what
-the day cost, and downlinks only what the power budget left room for.
+the day cost, and downlinks only what the power budget left room for. The sampling
+branch is a single node stating a flow of its own — the drill, then the stow — so
+the join waits for that whole flow, not just for the node to be entered.
 
 ```bash
 ./bin/sysml examples/rover-demo/rover.sysml -action RoverBehavior::SurfaceOps
@@ -136,7 +138,7 @@ wrote rendered/RoverViews.interfaces.mmd (mermaid, 547 bytes)
 wrote rendered/RoverViews.overview.mmd (mermaid, 914 bytes)
 wrote rendered/RoverViews.overview.interfaceSubview.mmd (mermaid, 563 bytes)
 wrote rendered/RoverViews.modes.mmd (mermaid, 627 bytes)
-wrote rendered/RoverViews.sol.mmd (mermaid, 615 bytes)
+wrote rendered/RoverViews.sol.mmd (mermaid, 678 bytes)
 wrote rendered/RoverViews.partsTable.md (markdown, 833 bytes)
 wrote rendered/RoverViews.criticalParts.mmd (mermaid, 881 bytes)
 ```
@@ -189,7 +191,20 @@ Active tokens (1):
 ```
 
 `%break <node>` stops at a node — `%break sync` to see the join wait for both
-branches.
+branches, one of them still inside the sampling flow:
+
+```
+%action RoverBehavior::SurfaceOps
+%break sync
+%continue
+%tokens
+```
+
+```
+Active tokens (2):
+  Token 2 @ sync
+  Token 3 @ drill
+```
 
 ### Driving the machine of an object
 
@@ -230,6 +245,7 @@ of the object with `%invoke`:
 %invoke RoverBehavior::controller recordPass frames=15
 %features RoverBehavior::controller
 %eval in RoverBehavior::controller : modes.odometer
+%eval in RoverBehavior::controller : log.frames
 ```
 
 ```
@@ -239,12 +255,15 @@ Instance: RoverBehavior::controller (ID: 1)
 Features:
   odometer = 0.0
   framesHeld = 15
+  log = Instance(ID: 3)
+    frames = 15
+    passes = 1
   modes = Instance(ID: 2)
     odometer = 21.0
     framesCaptured = 12
     faults = 0
     idle = <unknown>
-    driving = Instance(ID: 3)
+    driving = Instance(ID: 4)
       rolling = <unknown>
       holding = <unknown>
     science = <unknown>
@@ -253,11 +272,13 @@ Features:
     rolling_to_holding = <unknown>
     rolling_to_safe = <unknown>
     driving_to_science = <unknown>
-  recordPass = Instance(ID: 4)
+  recordPass = Instance(ID: 5)
     frames = <unset>
     store = <unknown>
 ✓ modes.odometer (on RoverBehavior::controller ID: 1)
   = 21.0
+✓ log.frames (on RoverBehavior::controller ID: 1)
+  = 15
 ```
 
 An entry action writes the attribute of the machine it is declared in, not the
@@ -265,6 +286,20 @@ like-named one of the object exhibiting it. `%current` reports the executor's
 current state data, while `%features` and `%eval` read the same value through
 the materialized `modes` performance occurrence. The controller's distinct
 `odometer` remains `0.0`.
+
+`recordPass` writes two things: the controller's own tally, and — through the
+chain its assignment names — the `log` part beside it.
+
+A write has to fit what it is written to, so the wrong kind of value is a refusal
+rather than a stored surprise — and the refusal comes from analysis, before
+anything runs. Editing `store` to say `assign framesHeld := "fifteen";` and
+reloading reports:
+
+```
+examples/rover-demo/rover.sysml:351:38: error: cannot bind String value to a feature typed by Integer
+                assign framesHeld := "fifteen";
+                                     ^~~~~~~~~
+```
 
 ### Evaluating and solving the sol budget
 
@@ -439,6 +474,7 @@ battery       1200.0 of 1600.0 Wh
 
 == running the sol
 frames held   15
+core frames   3 (the sampling branch ran through)
 downlinked    15
 charge left   1040.0 Wh
 
