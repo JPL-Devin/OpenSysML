@@ -1451,6 +1451,18 @@ OPENSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> Stale
   matches your own shell — see the pkill trap below). Refcount behaviour worth asserting within one
   process (two `connect()`s): 1 → 2 → 1, the service still serving the remaining holder and stopped
   only when the last one closes. Across two processes there is nothing to share: each starts its own.
+- **A leftover service may be answering 50051 from a path you never built.** A previous session can
+  leave e.g. `/tmp/sysml-grpc` listening, in which case `python -m pytest python/tests/test_runtime_integration.py`
+  reports `N passed` in ~0.05 s against *unknown* code — the integration suite neither skips nor
+  tells you whose binary served it, so a green run proves nothing about your commit. Before trusting
+  any client result, run `pgrep -af sysml-grpc` — `-x` does find `/tmp/sysml-grpc` (it matches the
+  executable's basename, truncated to 15 chars), but only `-af` prints the path that is serving,
+  which is the thing you need to see. Kill the PID you found **by number**, start your own
+  (`nohup ./bin/sysml-grpc >/tmp/grpc.log 2>&1 &`) and confirm the log's `Connect server listening`.
+  When proving a runtime fix, re-point the same test at a service built from the parent revision
+  (`git worktree add /tmp/wt-old HEAD~1 && (cd /tmp/wt-old && make build-grpc)`) and require it to
+  **fail** — that is the only cheap check that the client assertion is load-bearing rather than
+  vacuous.
 
 Client API shapes that are easy to get wrong:
 
