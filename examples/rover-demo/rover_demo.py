@@ -41,7 +41,8 @@ def main() -> None:
     print("\n== running the mode machine")
     run = model.execute_state("RoverBehavior::Modes")
     print(f"states        {' -> '.join(run['states_visited'])}")
-    print(f"wrote         {run['final_context']}")
+    written = run["final_context"]
+    print("wrote         " + ", ".join(f"{k}={written[k]}" for k in sorted(written)))
 
     print("\n== checking the sol budget")
     verdicts = model.verify_satisfaction("RoverSolver::plans")

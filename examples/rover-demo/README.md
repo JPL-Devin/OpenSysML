@@ -239,8 +239,12 @@ Features:
   framesHeld = 15
 ```
 
-An entry action writes the attribute of the machine it is declared in, so the
-odometer the machine turned is `modes::odometer`, not the controller's own.
+An entry action writes the attribute of the machine it is declared in, not the
+like-named one of the object exhibiting it, and the value it wrote lives in the
+running machine: `%current` reports `odometer = 21.0` under "State data", while
+`%features RoverBehavior::controller` still reports `odometer = 0.0` for both the
+controller's own attribute and `modes.odometer`. Read the odometer from
+`%current`, and read the Python equivalent from `final_context`.
 
 ### Evaluating and solving the sol budget
 
@@ -420,7 +424,7 @@ charge left   1040.0 Wh
 
 == running the mode machine
 states        idle -> driving -> rolling -> holding -> science -> done
-wrote         {'odometer': 21.0, 'framesCaptured': 12, 'faults': 0}
+wrote         faults=0, framesCaptured=12, odometer=21.0
 
 == checking the sol budget
 ✓ satisfy solIsBudgeted by sol42 holds (on RoverSolver::sol42 ID: 1)
