@@ -110,6 +110,23 @@ func (m *Model) DimensionOfFeature(sym *symbols.Symbol) (Dimension, bool) {
 	return m.dimensionOfFeature(sym)
 }
 
+// DimensionOfType reports the dimension a declared type fixes for the values it
+// types, as DimensionOfFeature does for a feature's own declaration. A write
+// target known only by the type it was declared with is judged through this.
+func (m *Model) DimensionOfType(sym *symbols.Symbol) (Dimension, bool) {
+	if m == nil || sym == nil {
+		return Dimension{}, false
+	}
+	if m.resolver != nil {
+		if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			sym = alias
+		}
+	}
+	// The type itself is a candidate here, where a feature's is only its
+	// supertypes: the type is what the feature would be declared by.
+	return m.dimensionOfQuantityType(m.quantityValueTypeIn(append([]*symbols.Symbol{sym}, m.AllSupertypes(sym)...)))
+}
+
 // DimensionOfUnit reports the dimension a reduced unit measures in, so a value
 // carrying a unit can be checked against the dimension a feature declares.
 func (m *Model) DimensionOfUnit(unit UnitTerm) (Dimension, bool) {
@@ -220,29 +237,41 @@ func (m *Model) dimensionOfFeature(sym *symbols.Symbol) (Dimension, bool) {
 	if sym == nil {
 		return Dimension{}, false
 	}
-	if typ := m.quantityValueTypeOf(sym); typ != nil {
-		mRef, ok := m.LookupMember(typ, memberMRef)
-		if !ok {
-			return Dimension{}, false
-		}
-		term, ok := m.dimensionOf(mRef)
-		if !ok {
-			return Dimension{}, false
-		}
-		return Dimension{Term: term, Unit: leafName(typ.Name)}, true
+	return m.dimensionOfQuantityType(m.quantityValueTypeOf(sym))
+}
+
+// dimensionOfQuantityType reports the dimension a quantity value type fixes: the
+// one its `mRef` member — the measurement reference it admits — measures in.
+func (m *Model) dimensionOfQuantityType(typ *symbols.Symbol) (Dimension, bool) {
+	if typ == nil {
+		return Dimension{}, false
 	}
-	return Dimension{}, false
+	mRef, ok := m.LookupMember(typ, memberMRef)
+	if !ok {
+		return Dimension{}, false
+	}
+	term, ok := m.dimensionOf(mRef)
+	if !ok {
+		return Dimension{}, false
+	}
+	return Dimension{Term: term, Unit: leafName(typ.Name)}, true
 }
 
 // quantityValueTypeOf returns the nearest supertype of sym that is a
-// ScalarQuantityValue definition, or nil. ScalarQuantityValue itself does not
-// count: its measurement reference is any unit, so it fixes no dimension.
+// ScalarQuantityValue definition, or nil.
 func (m *Model) quantityValueTypeOf(sym *symbols.Symbol) *symbols.Symbol {
+	return m.quantityValueTypeIn(m.AllSupertypes(sym))
+}
+
+// quantityValueTypeIn returns the first candidate that is a ScalarQuantityValue
+// definition, or nil. ScalarQuantityValue itself does not count: its measurement
+// reference is any unit, so it fixes no dimension.
+func (m *Model) quantityValueTypeIn(candidates []*symbols.Symbol) *symbols.Symbol {
 	quantity := m.libSymbol(fqnScalarQuantityValue)
 	if quantity == nil {
 		return nil
 	}
-	for _, super := range m.AllSupertypes(sym) {
+	for _, super := range candidates {
 		if m.resolver != nil {
 			// A type named through an alias (ISQ::TemperatureValue) is reached as the
 			// alias, which declares no dimension of its own.

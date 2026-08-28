@@ -249,6 +249,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
 	t.Run("expression_over_a_feature_value_holding_no_value", testExpressionOverAFeatureValueHoldingNoValue)
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
+	t.Run("quantity_write_of_another_dimension", testQuantityWriteOfAnotherDimension)
 	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
 	t.Run("object_exhibited_machine_attribute_write_violates_multiplicity", testObjectExhibitedMachineAttributeWriteViolatesMultiplicity)
@@ -854,6 +855,56 @@ func testSuccessionGuardFailureModes(t *testing.T) {
 				}
 			case <-time.After(5 * time.Second):
 				t.Fatal("executing the guarded action did not terminate")
+			}
+		})
+	}
+}
+
+// testQuantityWriteOfAnotherDimension: a write whose quantity measures in a
+// dimension the target's declared quantity value type does not is refused with
+// a typed error, while a commensurable unit at another scale is written.
+func testQuantityWriteOfAnotherDimension(t *testing.T) {
+	const duration = "ISQ::DurationValue"
+	for _, tc := range []struct {
+		name     string
+		declared string
+		value    string
+		want     error
+	}{
+		{"speed into a duration", duration, "3.0 [SI::m / SI::s]", ErrTypeMismatch},
+		{"length into a duration", duration, "5.0 [SI::m]", ErrTypeMismatch},
+		{"dimensionless into a duration", duration, "5.0 [MeasurementReferences::one]", ErrTypeMismatch},
+		{"another scale of the same dimension", duration, "5.0 [SI::min]", nil},
+		{"a unit the target fixes no dimension against", "Quantities::ScalarQuantityValue", "5.0 [SI::m]", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := fmt.Sprintf(`
+				package test {
+					private import SI::*;
+					action w {
+						attribute t : %s = 0.0 [s];
+						first start;
+						action step { assign t := %s; }
+						done;
+						succession first start then step;
+						succession first step then done;
+					}
+				}
+			`, tc.declared, tc.value)
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "w", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action w not found")
+			}
+			_, err := ctx.ExecuteAction(sym)
+			if tc.want == nil {
+				if err != nil {
+					t.Fatalf("ExecuteAction err = %v, want the write to conform", err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("ExecuteAction err = %v, want %v", err, tc.want)
 			}
 		})
 	}
