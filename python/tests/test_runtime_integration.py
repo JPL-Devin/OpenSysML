@@ -121,6 +121,30 @@ class TestRuntimeIntegration:
         assert vehicle.engine.type_symbol_id == "Demo::Engine"
         assert vehicle.engine.power == 300.0
 
+    def test_exhibited_state_values_read_through_the_occurrence(self):
+        """Machine-owned values are readable through the exhibited state usage."""
+        src = '''
+        package Demo {
+            state def Counting {
+                attribute count : Integer = 0;
+                entry; then active;
+                state active {
+                    entry action increment { assign count := count + 1; }
+                }
+            }
+            part def Counter {
+                attribute count : Integer = 10;
+                exhibit state modes : Counting;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        counter = self.conn.instantiate("Demo::Counter", model.hash)
+
+        assert counter.count == 10
+        assert counter.modes.count == 1
+
     def test_instantiate_cyclic_attribute_reports_error(self):
         """A cyclic derived attribute surfaces as FeatureValueError, never as None."""
         from opensysml.errors import FeatureValueError

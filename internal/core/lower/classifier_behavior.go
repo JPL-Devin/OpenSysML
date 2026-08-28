@@ -121,7 +121,14 @@ func statesBehaviorBodyMember(member ast.Node) bool {
 	case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation:
 		return false
 	case *ast.Usage:
-		return !isBehaviorArgument(member) && member.Kind != ast.UsageMetadata
+		if isBehaviorArgument(member) || member.Kind == ast.UsageMetadata {
+			return false
+		}
+		if member.Kind == ast.UsageAttribute {
+			redefinitions, _ := ast.SplitRedefinitions(member.Relationships)
+			return len(redefinitions) == 0
+		}
+		return true
 	case *ast.Definition:
 		return member.Kind != ast.DefMetadata
 	default:

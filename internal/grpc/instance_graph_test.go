@@ -89,6 +89,40 @@ package Demo {
 	}
 }
 
+// TestInstantiate_ReturnsExhibitedStateValues verifies that an exhibited
+// performance occurrence carries the values its machine writes.
+func TestInstantiate_ReturnsExhibitedStateValues(t *testing.T) {
+	content := `
+package Demo {
+  state def Counting {
+    attribute count : Integer = 0;
+    entry; then active;
+    state active {
+      entry action increment { assign count := count + 1; }
+    }
+  }
+  part def Counter {
+    attribute count : Integer = 10;
+    exhibit state modes : Counting;
+  }
+}
+`
+	resp := instantiate(t, content, "graph-exhibited-state", "Demo::Counter")
+
+	graph := byID(resp)
+	modesID := resp.Instance.FeatureValues["modes"].Value.GetInstanceId()
+	modes, ok := graph[modesID]
+	if !ok {
+		t.Fatalf("modes occurrence %d not present in Instances", modesID)
+	}
+	if got := resp.Instance.FeatureValues["count"].Value.GetIntValue(); got != 10 {
+		t.Errorf("performer count = %d, want 10", got)
+	}
+	if got := modes.FeatureValues["count"].Value.GetIntValue(); got != 1 {
+		t.Errorf("modes count = %d, want 1", got)
+	}
+}
+
 // TestInstantiate_ReturnsDeepNestedInstances verifies the graph is walked
 // recursively, not just one level deep.
 func TestInstantiate_ReturnsDeepNestedInstances(t *testing.T) {

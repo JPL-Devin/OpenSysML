@@ -123,6 +123,103 @@ func TestExhibitedMachineWritesItsObjectsFeatureValues(t *testing.T) {
 	}
 }
 
+// A machine-declared feature is written on the exhibited performance occurrence,
+// while a like-named feature of the performer remains distinct.
+func TestExhibitedMachineWritesItsOwnOccurrence(t *testing.T) {
+	src := `
+		state def Counting {
+			attribute count: Integer = 0;
+			entry; then running;
+			state running {
+				entry action bump { assign count := count + 1; }
+			}
+		}
+		part def Counter {
+			attribute count: Integer = 10;
+			exhibit state modes : Counting;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Counter"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	behavior, ok := inst.Behavior("modes")
+	if !ok {
+		t.Fatal("object runs no modes behavior")
+	}
+	occurrence := instanceAtPath(t, ctx, inst, "modes")
+	if behavior.State.occurrence != occurrence {
+		t.Fatal("machine does not target the occurrence held by modes")
+	}
+
+	performerCount, err := inst.GetFeatureValue(ctx, "count")
+	if err != nil {
+		t.Fatalf("performer count: %v", err)
+	}
+	if got := performerCount.HeldValue().Const.Int; got != 10 {
+		t.Errorf("performer count = %d, want 10", got)
+	}
+	occurrenceCount, err := occurrence.GetFeatureValue(ctx, "count")
+	if err != nil {
+		t.Fatalf("occurrence count: %v", err)
+	}
+	if got := occurrenceCount.HeldValue().Const.Int; got != 1 {
+		t.Errorf("occurrence count = %d, want 1", got)
+	}
+	if got := behavior.State.stateData["count"].Const.Int; got != 1 {
+		t.Errorf("state data count = %d, want 1", got)
+	}
+}
+
+// A machine's state data has the collection shape its occurrence gives a
+// many-valued attribute written with one element.
+func TestExhibitedMachineNormalizesItsManyValuedAttribute(t *testing.T) {
+	src := `
+		state def Logging {
+			attribute entries: String[*];
+			entry; then running;
+			state running {
+				entry action note { assign entries := "first"; }
+			}
+		}
+		part def Log {
+			exhibit state modes : Logging;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Log"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	behavior, ok := inst.Behavior("modes")
+	if !ok {
+		t.Fatal("object runs no modes behavior")
+	}
+	occurrence := instanceAtPath(t, ctx, inst, "modes")
+	fv, err := occurrence.GetFeatureValue(ctx, "entries")
+	if err != nil {
+		t.Fatalf("occurrence entries: %v", err)
+	}
+	assertSingleStringCollection(t, "occurrence entries", fv.HeldValue(), "first")
+	assertSingleStringCollection(t, "state data entries", behavior.State.stateData["entries"], "first")
+}
+
+func assertSingleStringCollection(t *testing.T, name string, value Value, want string) {
+	t.Helper()
+	if value.Kind != ValSequence && value.Kind != ValSet {
+		t.Fatalf("%s holds %v, want a collection", name, value.Kind)
+	}
+	elements := elementsOf(value)
+	if len(elements) != 1 || elements[0].Str != want {
+		t.Errorf("%s = %v, want one element %q", name, elements, want)
+	}
+}
+
 // invokeFixture owns an operation, a machine, calcs, constraints and an
 // attribute, so one object exercises each classifier behavior path.
 const invokeFixture = `
@@ -753,8 +850,8 @@ func TestMutuallyAddressedObjectsAreMaterializedOnce(t *testing.T) {
 	a := instanceAtPath(t, ctx, pair, "a")
 	b := instanceAtPath(t, ctx, pair, "b")
 
-	if got := len(ctx.instances); got != 3 {
-		t.Errorf("%d objects materialized, want the pair and its two parts", got)
+	if got := len(ctx.instances); got != 5 {
+		t.Errorf("%d objects materialized, want the pair, its parts, and their state performances", got)
 	}
 	assertCurrentState(t, machineOf(t, a, "pinging").State, "answered")
 	assertCurrentState(t, machineOf(t, b, "replying").State, "replied")

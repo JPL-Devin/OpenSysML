@@ -229,6 +229,7 @@ of the object with `%invoke`:
 %current
 %invoke RoverBehavior::controller recordPass frames=15
 %features RoverBehavior::controller
+%eval in RoverBehavior::controller : modes.odometer
 ```
 
 ```
@@ -236,15 +237,34 @@ of the object with `%invoke`:
 ✓ Invoked recordPass on object #1 of "RoverBehavior::controller"
 Instance: RoverBehavior::controller (ID: 1)
 Features:
+  odometer = 0.0
   framesHeld = 15
+  modes = Instance(ID: 2)
+    odometer = 21.0
+    framesCaptured = 12
+    faults = 0
+    idle = <unknown>
+    driving = Instance(ID: 3)
+      rolling = <unknown>
+      holding = <unknown>
+    science = <unknown>
+    safing = <unknown>
+    idle_to_rolling = <unknown>
+    rolling_to_holding = <unknown>
+    rolling_to_safe = <unknown>
+    driving_to_science = <unknown>
+  recordPass = Instance(ID: 4)
+    frames = <unset>
+    store = <unknown>
+✓ modes.odometer (on RoverBehavior::controller ID: 1)
+  = 21.0
 ```
 
 An entry action writes the attribute of the machine it is declared in, not the
-like-named one of the object exhibiting it, and the value it wrote lives in the
-running machine: `%current` reports `odometer = 21.0` under "State data", while
-`%features RoverBehavior::controller` still reports `odometer = 0.0` for both the
-controller's own attribute and `modes.odometer`. Read the odometer from
-`%current`, and read the Python equivalent from `final_context`.
+like-named one of the object exhibiting it. `%current` reports the executor's
+current state data, while `%features` and `%eval` read the same value through
+the materialized `modes` performance occurrence. The controller's distinct
+`odometer` remains `0.0`.
 
 ### Evaluating and solving the sol budget
 

@@ -47,12 +47,22 @@ func (h *stateStmtHost) send(ec *EvalContext, s lower.Send) error {
 	return h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
 }
 
-// assignOuter writes a name the body's blocks do not declare to the feature of
-// the object exhibiting the machine, and to the machine's own state data when
-// the object has no such feature.
+// assignOuter writes a name the machine does not declare to the object
+// exhibiting it, falling back to executor-local data.
 func (h *stateStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+	if h.exec.declaresAttribute(name) {
+		return h.exec.assignAttribute(name, value)
+	}
 	if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, name, value); written || err != nil {
 		return err
+	}
+	env.data[name] = value
+	return nil
+}
+
+func (h *stateStmtHost) assignData(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+	if h.exec.declaresAttribute(name) {
+		return h.exec.assignAttribute(name, value)
 	}
 	env.data[name] = value
 	return nil

@@ -101,6 +101,8 @@ type stmtHost interface {
 	// assignOuter writes a name no entered block and no body member declares, and
 	// every name declaredOutput claims.
 	assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error
+	// assignData writes a name the behavior's data already holds.
+	assignData(env *stmtEnv, name string, value Value, s lower.Assign) error
 	// declaredOutput reports whether name is an output feature of the host, whose
 	// assignment binds that output for this activation rather than writing a value
 	// the body merely holds.
@@ -193,8 +195,10 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 		if e.env.assignLocal(s.Target, value) {
 			return flowNext, nil
 		}
-		if !e.host.declaredOutput(s.Target) && e.env.assign(s.Target, value) {
-			return flowNext, nil
+		if !e.host.declaredOutput(s.Target) {
+			if _, held := e.env.data[s.Target]; held {
+				return flowNext, e.host.assignData(e.env, s.Target, value, s)
+			}
 		}
 		return flowNext, e.host.assignOuter(e.env, s.Target, value, s)
 	case lower.Declare:

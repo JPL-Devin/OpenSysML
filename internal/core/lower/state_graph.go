@@ -15,8 +15,7 @@ type StateGraph struct {
 	// expressions written directly among its members resolve their names.
 	Scope *symbols.Scope
 
-	// Attributes are the attribute defaults the machine declares, in declaration
-	// order: the values its state data starts with.
+	// Attributes are the attributes the machine declares, in declaration order.
 	Attributes []Attribute
 
 	// StateScopes: state → the scope that state's body was declared in, which is
@@ -187,7 +186,7 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	}
 
 	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
-	graph.Attributes = lowerAttributes(members)
+	graph.Attributes = lowerStateAttributes(members)
 	if stateMachineIsParallel(stateMachineDecl) {
 		graph.Machine = parallelMachineState(stateMachineDecl, members)
 		graph.StateScopes[graph.Machine] = scope
@@ -337,6 +336,24 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	// Top-level regions are also valid (no single initial state).
 
 	return graph, nil
+}
+
+// lowerStateAttributes returns every attribute a machine declares. An unvalued
+// attribute is still owned by the machine even though it supplies no initial value.
+func lowerStateAttributes(members []ast.Node) []Attribute {
+	var attrs []Attribute
+	for _, member := range members {
+		usage, ok := unwrapMembership(member).(*ast.Usage)
+		if !ok || usage.Kind != ast.UsageAttribute {
+			continue
+		}
+		name, _ := ast.EffectiveName(usage)
+		if name == "" {
+			continue
+		}
+		attrs = append(attrs, Attribute{Name: name, Value: usage.Value, Node: usage})
+	}
+	return attrs
 }
 
 // stateNodeFromUsage builds the state node for `state <name> { ... }`, carrying

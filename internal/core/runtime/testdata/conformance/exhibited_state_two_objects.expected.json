@@ -1,0 +1,23 @@
+{
+  "type": "instance",
+  "instantiate": "test::Counter",
+  "objects": [
+    {
+      "instance": 1,
+      "events": [{"signal": "Tick"}],
+      "finalState": "counted",
+      "stateVisits": ["waiting", "counted"],
+      "slots": {
+        "modes.count": {"type": "Integer", "value": 1}
+      }
+    },
+    {
+      "instance": 2,
+      "finalState": "waiting",
+      "stateVisits": ["waiting"],
+      "slots": {
+        "modes.count": {"type": "Integer", "value": 0}
+      }
+    }
+  ]
+}

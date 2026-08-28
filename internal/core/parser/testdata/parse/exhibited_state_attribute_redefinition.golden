@@ -1,0 +1,29 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="test" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="state" abstract=false variation=false name="Counting"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="count" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="1")))
+          (EntryMember)
+          (SuccessionEdge source="@entry" target="active")
+          (Membership visibility="default"
+            (Usage kind="state" name="active" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (EntryMember
+                (Membership visibility="default"
+                  (Usage kind="action" name="increment" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                    (*ast.AssignmentActionNode))))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="ConfiguredCounter"
+          (Membership visibility="default"
+            (Usage kind="state" name="modes" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exhibit state"
+              (Relationship kind="typing" target=Counting
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=count
+                    (*ast.QualifiedName))
+                  (LiteralInteger value="5"))))))))))
