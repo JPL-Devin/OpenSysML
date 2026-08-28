@@ -24,6 +24,12 @@ package Flows {
 			succession first begin then record;
 		}
 
+		// A node performing an assignment states no flow of its own, so the
+		// rendering shows the node alone.
+		action tally {
+			assign speed := speed + 1;
+		}
+
 		fork split;
 		join sync;
 		done;
@@ -34,6 +40,8 @@ package Flows {
 		succession first split then monitor;
 		succession first provide then sync;
 		succession first monitor then sync;
+		succession first split then tally;
+		succession first tally then sync;
 
 		decide check;
 		succession first sync then check;

@@ -198,7 +198,7 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-07`, 356 files)
+## Results (pilot `2026-07`, 357 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -207,9 +207,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 22 | 16 | 18 | 42 | 3 | 7 | 8 | 32 |
+| `examples` | 23 | 16 | 18 | 59 | 3 | 7 | 8 | 49 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **356** | **330** | **71** | **103** | **37** | **8** | **26** | **58** |
+| **Total** | **357** | **330** | **71** | **120** | **37** | **8** | **26** | **75** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -241,8 +241,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **58** |
-| pilot diagnostics | 123 | **103** |
+| only pilot | 82 | **75** |
+| pilot diagnostics | 123 | **120** |
 | severity-only | 9 | **8** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -254,8 +254,29 @@ combined figures were 324 fully agreeing / 27 only ours / 68 → 67 our diagnost
 agreeing files, only-ours and every OMG root were unmoved by the rewrite, so nothing here is a
 conformance change: it is our own demo written in a spelling the reference accepts. The rewrite itself
 left only-pilot at 61 and pilot diagnostics at 101; the `Now` column tracks the current baseline, so it
-also carries the interface-flow pairing round and the library-inherited-name round that followed, and the
-Results table above states every figure as it is now.
+also carries the interface-flow pairing round, the library-inherited-name round and the rover-demo
+round that followed, and the Results table above states every figure as it is now.
+
+### Rover demo round
+
+`examples/rover-demo/rover.sysml` is one file added to the `examples` root, and the whole of that
+round's movement is the reference's column: only pilot 32 → **49** and pilot diagnostics 42 → **59**
+on the root, 58 → **75** and 103 → **120** overall, with our own column unmoved at 8 only-ours and
+18 diagnostics, and the file clean under `-validate`. Its 17 pilot-only rows are all in the demo's
+view and analysis packages, and each is a construct the pinned artifact does not have:
+
+| What the demo writes | Rows | What the pilot reports |
+|---|---:|---|
+| `frame concern` in a view usage | 2 syntax | the member is not in its view grammar, and the cascade takes the file's closing brace |
+| `view … : StateTransitionView` / `: ActionFlowView`, `render asElementTable` | 3 `unresolved-reference`, 4 `kind-mismatch` | our standard view definitions and rendering, which its libraries do not publish |
+| `objective … { require constraint … }` with `attribute :>> best` | 6 `unmapped` | one subject per requirement, no rebinding of `best`, one objective per analysis case |
+| a second objective for a lexicographic optimum | 2 `unmapped` | `Only one objective is allowed` |
+
+Nothing in the demo's structure, calculations, action or state machine draws a pilot diagnostic, so
+the rows above measure the reach of the reference's view and trade-study support, not a divergence in
+the notation both implementations share. The behavioral half of the file was written to the spelling
+the reference accepts for exactly that reason: transitions into a substate name it through the state
+around it (`then driving.rolling`) rather than nesting the trigger in the substate.
 
 ### Step 2 resolver round
 
@@ -402,7 +423,7 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax, 1 `unmapped`; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 11 syntax, 8 `kind-mismatch`, 6 `unmapped`, 7 `unresolved-reference` — all of them
+`examples` 13 syntax, 12 `kind-mismatch`, 14 `unmapped`, 10 `unresolved-reference` — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -444,7 +465,7 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 | `pilot-examples`: only ours | **43** | **6** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **32** |
+| `examples`: only pilot | **40** | **49** |
 | `examples`: fully agreeing | **15** | **16** |
 | `unmapped`, our side | **20** | **23** |
 

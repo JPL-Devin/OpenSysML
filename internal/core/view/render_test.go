@@ -202,6 +202,18 @@ func TestActionRenderingComesFromTheLoweredGraph(t *testing.T) {
 	}
 }
 
+// A node performing statements rather than a flow of its own is rendered as the
+// node it is, with nothing reported: it is no action the rendering cannot show.
+func TestActionRenderingSaysNothingOfANodePerformingStatements(t *testing.T) {
+	rendering := render(t, "action.sysml", "FlowViews::driveView")
+	if len(rendering.Notices) != 0 {
+		t.Errorf("notices = %v, want none: every node the action declares is shown", rendering.Notices)
+	}
+	if !nodeNames(rendering.Roots)["tally"] {
+		t.Errorf("action rendering has no node %q; nodes: %v", "tally", sortedKeys(nodeNames(rendering.Roots)))
+	}
+}
+
 // The rendering is of the real exposed set: a filtered recursive expose and the
 // exposes inherited from the view definition, and nothing else.
 func TestRenderingUsesFilteredAndInheritedExposure(t *testing.T) {
