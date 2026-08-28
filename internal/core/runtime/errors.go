@@ -306,6 +306,16 @@ var (
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
 	// it can be created.
 	ErrNoSubject = errors.New("no subject to satisfy the requirement")
+
+	// ErrPerformerFeatureNotInScope is returned when a behavior body names a
+	// feature only the object performing it declares: the performing object is
+	// not a namespace the body's names resolve in, so the name has no referent.
+	ErrPerformerFeatureNotInScope = errors.New("name is not in scope of the behavior body")
+
+	// ErrThisNotAnObject is returned when `this` is read where no object owns
+	// what is being evaluated: the context occurrence is the performance itself,
+	// whose features a name written in its body does not reach.
+	ErrThisNotAnObject = errors.New("this names no object here")
 )
 
 type budgetExceededError struct {

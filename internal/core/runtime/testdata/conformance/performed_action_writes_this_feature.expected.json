@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Host",
+  "slots": {
+    "seen": {
+      "type": "Integer",
+      "value": 2
+    }
+  }
+}

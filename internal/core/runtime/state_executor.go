@@ -309,6 +309,7 @@ func (e *StateExecutor) assignAttribute(name string, value Value) error {
 // machine's data and the attributes of the state the step leaves shadowing it.
 func (e *StateExecutor) evalStepOf(owner ast.Node, node ast.Node, scope *symbols.Scope) (Value, error) {
 	ec := NewEvalContextIn(e.ctx, scope, e.self)
+	ec.inBehaviorBody = true
 	ec.Push(e.stateData)
 	if state, ok := owner.(*ast.StateNode); ok {
 		for _, frame := range e.attrFramesFor(state) {

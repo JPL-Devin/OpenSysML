@@ -261,6 +261,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("write_of_no_value_where_one_is_required", testWriteOfNoValueWhereOneIsRequired)
 	t.Run("state_entry_write_of_a_wrong_typed_value", testStateEntryWriteOfAWrongTypedValue)
 	t.Run("performer_feature_write_of_a_wrong_typed_value", testPerformerFeatureWriteOfAWrongTypedValue)
+	t.Run("standalone_action_naming_a_performer_feature", testStandaloneActionNamingAPerformerFeature)
+	t.Run("standalone_action_writing_a_performer_feature", testStandaloneActionWritingAPerformerFeature)
+	t.Run("standalone_action_naming_this_of_an_unowned_performance", testStandaloneActionNamingThisOfAnUnownedPerformance)
 	t.Run("chained_write_of_a_wrong_typed_value", testChainedWriteOfAWrongTypedValue)
 	t.Run("calc_output_write_of_a_wrong_typed_value", testCalcOutputWriteOfAWrongTypedValue)
 	t.Run("action_local_write_of_a_wrong_typed_value", testActionLocalWriteOfAWrongTypedValue)
@@ -7365,15 +7368,14 @@ func testPerformerFeatureWriteOfAWrongTypedValue(t *testing.T) {
 	src := `
 	package test {
 		private import ScalarValues::*;
-		action def Set {
-			action step {
-				assign label := 7;
-			}
-			first step;
-		}
 		part def Rig {
 			attribute label : String = "a";
-			perform action set : Set;
+			perform action set {
+				action step {
+					assign label := 7;
+				}
+				first step;
+			}
 		}
 	}`
 	_, _, err := instantiateWithLibraries(t, src, "test::Rig")
@@ -7382,6 +7384,81 @@ func testPerformerFeatureWriteOfAWrongTypedValue(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "String") {
 		t.Errorf("error = %v, want it to name the declared type", err)
+	}
+}
+
+// A body written on its own resolves in its own namespace, so a name only the
+// performing object declares is unresolved at run time as it is to analysis.
+func testStandaloneActionNamingAPerformerFeature(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Touch {
+			action step {
+				assign touched := touched + 1;
+			}
+			first step;
+		}
+		part def Host {
+			attribute touched : Integer = 0;
+			perform action t : Touch;
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Host")
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("error = %v, want ErrUnresolvedReference", err)
+	}
+	if !strings.Contains(err.Error(), "touched") {
+		t.Errorf("error = %v, want it to name the unresolved feature", err)
+	}
+}
+
+// The write side refuses the same name the read side refuses, rather than
+// reaching into the performing object for a name the body cannot see.
+func testStandaloneActionWritingAPerformerFeature(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Touch {
+			action step {
+				assign touched := 1;
+			}
+			first step;
+		}
+		part def Host {
+			attribute touched : Integer = 0;
+			perform action t : Touch;
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Host")
+	if !errors.Is(err, ErrPerformerFeatureNotInScope) {
+		t.Fatalf("error = %v, want ErrPerformerFeatureNotInScope", err)
+	}
+	if !strings.Contains(err.Error(), "touched") {
+		t.Errorf("error = %v, want it to name the refused feature", err)
+	}
+}
+
+// `this` in a body written on its own names the performance itself, which no
+// object owns, so a feature of the performer is not reachable through it.
+func testStandaloneActionNamingThisOfAnUnownedPerformance(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		action def Touch {
+			action step {
+				assign this.touched := 1;
+			}
+			first step;
+		}
+		part def Host {
+			attribute touched : Integer = 0;
+			perform action t : Touch;
+		}
+	}`
+	_, _, err := instantiateWithLibraries(t, src, "test::Host")
+	if !errors.Is(err, ErrThisNotAnObject) {
+		t.Fatalf("error = %v, want ErrThisNotAnObject", err)
 	}
 }
 
