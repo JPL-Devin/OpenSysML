@@ -8,6 +8,7 @@ Run it from the repository root, with the `opensysml` client installed and a
 """
 
 import pathlib
+import sys
 
 import opensysml
 
@@ -59,4 +60,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Each section prints as it runs, so a piped or logged run reads along
+    # rather than arriving at once when the script ends.
+    sys.stdout.reconfigure(line_buffering=True)
     main()
