@@ -4,9 +4,44 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
-## Unreleased
+## 0.4.0 — 2026-08-28
+
+Release 0.4.0 is about what a model *writes*. An `assign` used to put any value into any feature —
+a `String` into a `Real` attribute, a length into a duration — statically and at run time; a write
+now answers to the target feature's declared type, multiplicity and, where the target is a quantity,
+its dimension, on every path that stores a value. **A model that relied on an unchecked write no
+longer validates**, which is why this is a minor rather than a patch.
+
+The runtime also learned the structure it was flattening away: a typed state usage materializes the
+content of the definition typing it, a nested action node runs the flow it owns, an assignment target
+may be a feature chain, and a performed action's features live on the performance occurrence that
+holds them rather than on whatever like-named feature the performer happened to have. A behavior body
+now resolves a name where the name is written rather than reaching into the performer for it.
+
+Beyond execution, a view specializing `SequenceView` renders as a sequence diagram, a `Real` prints
+as the shortest decimal that reads back as the same value, and the pinned OMG pilot implementation
+moves to release `2026-07` (`jupyter-sysml-kernel` 0.61.0) with every oracle baseline re-recorded
+against it.
 
 ### Changed
+
+- **A write answers to its target feature's declared type and multiplicity.** An `assign` wrote any
+  value into any feature: a `Real` attribute accepted a `String`, statically and at run time. KerML's
+  FeatureWritePerformance "assigns the values of a feature on an occurrence to the given
+  replacementValues", so those values are values of that feature — the rule already applied to an
+  initial value. The type pass now walks every body an `assign` may stand in and checks the written
+  value with the initial-value rule resolved against the target's declaration, and the runtime checks
+  the same before storing, on every write path. A rejected write leaves the feature as it was.
+  - **An output a declaration binds is checked too**, so a body-less `out a : Integer = n` no longer
+    answers with whatever an untyped input carried: the rule holds however an output is given its
+    value.
+  - **A written decimal conforms to `Rational`**, as the type tier already read one. The two tiers
+    disagreed, so a decimal written to a `Rational` feature validated clean and then failed at run
+    time.
+
+- **A bound or written quantity is judged by the dimension its target declares.** A feature declared
+  with a quantity value type refuses a quantity measured in another dimension — statically where the
+  value's dimension is determined, and at run time on every write path.
 
 - **The pinned OMG pilot implementation is now release `2026-07` (`jupyter-sysml-kernel` 0.61.0)**,
   with the reference validators, the vendored standard library, the pinned corpora, grammars and
@@ -30,6 +65,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **A typed state usage inherits the content of the definition typing it.** The definition's
+  substates, initial transition, entry/do/exit behaviors, transitions, deferred events and
+  attributes are materialized per usage rather than shared, including inside a parallel body.
+  Recursive typing, and content lowering cannot represent, are typed errors rather than silence.
+
+- **A nested action node runs the flow it owns.** A nested node's own members are its
+  subperformances: lowering carries them as a subgraph and the executor performs that flow before
+  the node completes. An action usage stating no body of its own resolves to the action definition
+  typing it, so `%action` on a `perform` usage runs.
+
+- **An assignment target may be a feature chain.** Lowering carries the whole walk and the runtime
+  writes the feature on the object the chain reaches, resolved in the statement's own scope.
+
 - **A view specializing `StandardViewDefinitions::SequenceView` (or `sv`) renders as a sequence
   diagram**, at the prompt (`%render`), from the command line (`sysml -render`) and over the LSP, in
   the text form and as a Mermaid `sequenceDiagram`. The occurrences an interaction declares in its
@@ -45,8 +93,56 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **A behavior body resolves a name where the name is written**, rather than reaching into the
+  object performing it for any like-named feature — which name resolution does not admit. A
+  performer feature is read and written only where the name resolves to it, and `this` inside an
+  owned performance denotes the owning object.
+
+- **A performed action's features are written to its performance occurrence.** A performed action's
+  declared attributes and out parameters are features of the action performance the `perform` usage
+  holds, so they are initialized from that occurrence's slots and written through it.
+
+- **A state's attributes reach the occurrence exhibiting it**, so an exhibited state and the
+  occurrence behind it no longer hold divergent data.
+
+- **A send nested in a flow is routed by every flow around it.** A send saw only the action's own
+  connectors and those of the flow it sat in, so a connector declared by an intermediate flow could
+  not route it; each activation now carries the connectors of every enclosing flow.
+
+- **An inherited transition retargets to a redeclared substate**, rather than to the substate the
+  supertype declared.
+
+- **A machine's own supertype is no longer read as recursive typing**, which rejected a state
+  machine that specialized another.
+
+- **A chained assignment binds no output of a calculation**: the chain's last segment was counted as
+  the calculation computing an output of that name.
+
 - **Clicking a sequence participant now reveals its declaration, and the cursor highlights it**
   using Mermaid's participant data attributes.
+
+- **The site's OpenMBEE links point at the host that serves HTTPS.**
+
+### Project
+
+- **The end-to-end example is one model, driven three ways.** A bomb-disposal robot whose structure,
+  calculations, fork/join and nested flows, hierarchical state machine, solver cases and views are
+  the same model throughout, with a walkthrough of the commands that drive it from the CLI, the REPL
+  and the Python client. A nested action node no longer reports the token-flow limitation when a
+  view renders it.
+
+- **The dimensional defect in the pilot's `Dynamics.sysml` is a declared erratum**, so the corrected
+  copy is what the oracles re-run over and the published corpus is still never edited.
+
+- The documentation site states the Open-MBEE and NumFOCUS affiliation in its footer, and the
+  header's wiki link is labelled Community Wiki.
+
+- **The Python client is unchanged in this release**, so no `opensysml` version is published with
+  it: the client published as 0.3.2 installs a v0.4.0 `sysml-grpc` by taking the asset's digest from
+  the release's signed `SHA256SUMS.txt`, which is what an unpinned release's verification is for.
+  Pinning v0.4.0's digests in `python/opensysml/binary.py` and publishing 0.3.3 remains optional,
+  and is worth doing only for callers still on `opensysml` 0.3.0, which predates that path and
+  installs a release it pins no digest for only under `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`.
 
 ## 0.3.1 — 2026-08-27
 
