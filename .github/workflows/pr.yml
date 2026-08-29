@@ -699,17 +699,17 @@ jobs:
           cargo --version
 
       - name: Check Rust formatting
-        working-directory: rust
+        working-directory: clients/rust
         run: cargo fmt --all -- --check
 
       - name: Run Rust clippy
-        working-directory: rust
+        working-directory: clients/rust
         run: cargo clippy --all-targets -- -D warnings
 
       # A missing service must fail rather than silently skipping integration
       # tests, because the downloaded binary is required by this job.
       - name: Run Rust tests
-        working-directory: rust
+        working-directory: clients/rust
         env:
           OPENSYSML_GRPC_BINARY: ${{ github.workspace }}/bin/sysml-grpc
           OPENSYSML_REQUIRE_SERVICE: 1
@@ -721,12 +721,12 @@ jobs:
         env:
           OPENSYSML_GRPC_BINARY: ${{ github.workspace }}/bin/sysml-grpc
         run: |
-          cargo run --manifest-path rust/Cargo.toml -p opensysml-conformance -- \
+          cargo run --manifest-path clients/rust/Cargo.toml -p opensysml-conformance -- \
             -binary "$GITHUB_WORKSPACE/bin/sysml-grpc" \
             -report bin/conformance-report-rust.json
 
       - name: Package Rust client
-        working-directory: rust
+        working-directory: clients/rust
         run: cargo package -p opensysml
 
       # The digest pins the generator binary so a substituted release cannot
@@ -742,7 +742,7 @@ jobs:
       - name: Verify Rust generated artifacts
         run: |
           make BUF=/tmp/buf proto-rust
-          git diff --exit-code rust/opensysml/src/proto rust/conformance/sysml.descriptor.binpb
+          git diff --exit-code clients/rust/opensysml/src/proto clients/rust/conformance/sysml.descriptor.binpb
 
       - uses: actions/upload-artifact@v4
         with:

@@ -10,7 +10,7 @@ deliberately does not. Each client's own README is the detailed reference, linke
 | **Python**, `opensysml` | gRPC, to a private child service or one you name | PyPI, on `opensysml-v*` tags | [Python API](python-api.md) |
 | **Node/TypeScript**, `@opensysml/client` | Connect, to a private child service, one you name, or one a browser page addresses | not yet | [clients/node/README.md](../../clients/node/README.md) |
 | **Java**, `io.github.open-mbee:opensysml-client` | Connect, over the JDK's own HTTP client | not yet | [clients/java/README.md](../../clients/java/README.md) |
-| **Rust**, `opensysml` | Connect, blocking, no async runtime | not yet | [rust/README.md](../../rust/README.md) |
+| **Rust**, `opensysml` | Connect, blocking, no async runtime | not yet | [clients/rust/README.md](../../clients/rust/README.md) |
 
 What each protocol is and what the service serves on one port is
 [service transports](service-transports.md); how a release of each is cut is

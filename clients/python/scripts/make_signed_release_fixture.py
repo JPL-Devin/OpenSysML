@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record the signed-release fixtures python/tests/test_signing.py verifies against.
+"""Record the signed-release fixtures clients/python/tests/test_signing.py verifies against.
 
 The client verifies the sigstore bundle a release publishes for its
 SHA256SUMS.txt, so its tests need bundles — and they must not reach the network,
@@ -13,7 +13,7 @@ client parses are the real ones.
 
 Run it to re-record the fixtures after changing what they must contain:
 
-    python python/scripts/make_signed_release_fixture.py
+    python clients/python/scripts/make_signed_release_fixture.py
 
 The fixtures are committed, so this is not run by the test suite.
 """

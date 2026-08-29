@@ -190,8 +190,8 @@ one.
 
 This is deliberately narrower than the Python client, not weaker. `opensysml`
 downloads, so it must pin a SHA-256 per release asset
-(`python/opensysml/binary.py`) and verify the release's sigstore-signed
-`SHA256SUMS.txt` (`python/opensysml/signing.py`). A Java client that downloaded
+(`clients/python/opensysml/binary.py`) and verify the release's sigstore-signed
+`SHA256SUMS.txt` (`clients/python/opensysml/signing.py`). A Java client that downloaded
 without an equivalent chain would be executing whatever it fetched; Maven Central
 has no per-release binary asset to attest to, and a checksum in a POM would be
 the same same-origin trust the Python client refuses. So provisioning is the

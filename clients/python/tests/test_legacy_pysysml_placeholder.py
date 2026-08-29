@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 PLACEHOLDER_DIR = os.path.join(REPO_ROOT, "packaging", "pypi-pysysml")
 PLACEHOLDER_INIT = os.path.join(PLACEHOLDER_DIR, "pysysml", "__init__.py")
 PLACEHOLDER_PYPROJECT = os.path.join(PLACEHOLDER_DIR, "pyproject.toml")

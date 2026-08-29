@@ -108,7 +108,7 @@ jobs:
           command: make proto-lint
 
       # The mechanical half of the wire contract that
-      # python/tests/test_wire_compat.py pins by hand. The baseline is main, so a
+      # clients/python/tests/test_wire_compat.py pins by hand. The baseline is main, so a
       # shallow fetch of it is enough.
       - run:
           name: Check the protobuf schema for breaking changes
@@ -517,7 +517,7 @@ jobs:
             # (GRPC_GENERATED_VERSION), so a newer release cannot fail this check.
             pip install "grpcio-tools==1.83.0"
             make python-proto BUF=buf
-            git diff --exit-code python/opensysml/proto
+            git diff --exit-code clients/python/opensysml/proto
 
       - run:
           name: Verify Python client import
@@ -549,16 +549,16 @@ jobs:
 
       - run:
           name: Check Rust formatting
-          command: cd rust && cargo fmt --all -- --check
+          command: cd clients/rust && cargo fmt --all -- --check
 
       - run:
           name: Run Rust clippy
-          command: cd rust && cargo clippy --all-targets -- -D warnings
+          command: cd clients/rust && cargo clippy --all-targets -- -D warnings
 
       - run:
           name: Run Rust tests
           command: |
-            cd rust
+            cd clients/rust
             OPENSYSML_GRPC_BINARY="$PWD/../bin/sysml-grpc" \
             OPENSYSML_REQUIRE_SERVICE=1 \
               cargo test --workspace
@@ -569,7 +569,7 @@ jobs:
 
       - run:
           name: Package Rust client
-          command: cd rust && cargo package -p opensysml
+          command: cd clients/rust && cargo package -p opensysml
 
       - run:
           name: Install Buf
@@ -584,7 +584,7 @@ jobs:
           name: Verify Rust generated artifacts
           command: |
             make BUF=/tmp/buf proto-rust
-            git diff --exit-code rust/opensysml/src/proto rust/conformance/sysml.descriptor.binpb
+            git diff --exit-code clients/rust/opensysml/src/proto clients/rust/conformance/sysml.descriptor.binpb
 
       - store_artifacts:
           path: bin/conformance-report-rust.json
@@ -766,7 +766,7 @@ jobs:
             # A pre-release version goes to TestPyPI (the dry run described in
             # docs/project/releasing.md), everything else to PyPI, so only the token for
             # the index actually being used is required.
-            if [ "$(python python/scripts/check_version.py --pre-release)" = "yes" ]; then
+            if [ "$(python clients/python/scripts/check_version.py --pre-release)" = "yes" ]; then
               if [ -z "${TEST_PYPI_API_TOKEN:-}" ]; then
                 echo "Error: TEST_PYPI_API_TOKEN is not set, and ${CIRCLE_TAG} names a"
                 echo "pre-release version, which is published to TestPyPI."
@@ -789,8 +789,8 @@ jobs:
           command: |
             # Fails loudly when the tag names a version other than the one the
             # package would publish, before anything is built.
-            VERSION="$(python python/scripts/check_version.py)"
-            PRE_RELEASE="$(python python/scripts/check_version.py --pre-release)"
+            VERSION="$(python clients/python/scripts/check_version.py)"
+            PRE_RELEASE="$(python clients/python/scripts/check_version.py --pre-release)"
             echo "export OPENSYSML_VERSION=${VERSION}" >> "$BASH_ENV"
             echo "export OPENSYSML_PRE_RELEASE=${PRE_RELEASE}" >> "$BASH_ENV"
             echo "Publishing opensysml ${VERSION} (pre-release: ${PRE_RELEASE})"
@@ -812,7 +812,7 @@ jobs:
               echo "release for the same version is therefore not an operation PyPI"
               echo "supports, unlike publish-github-release, which replaces assets"
               echo "with 'ghr -replace'. Bump the version in"
-              echo "python/opensysml/_version.py and tag opensysml-v<new version>."
+              echo "clients/python/opensysml/_version.py and tag opensysml-v<new version>."
               exit 1
             fi
             echo "${INDEX_HOST} has no opensysml ${OPENSYSML_VERSION} (HTTP ${STATUS}); continuing"
@@ -820,13 +820,13 @@ jobs:
       - run:
           name: Build the wheel and the sdist
           command: |
-            rm -rf python/dist
-            python -m build --outdir python/dist python/
-            ls -l python/dist
+            rm -rf clients/python/dist
+            python -m build --outdir clients/python/dist clients/python/
+            ls -l clients/python/dist
 
       - run:
           name: Check the metadata (twine check --strict)
-          command: python -m twine check --strict python/dist/*
+          command: python -m twine check --strict clients/python/dist/*
 
       - run:
           name: Install the built wheel into a clean virtualenv and import it
@@ -834,7 +834,7 @@ jobs:
             # A broken artifact fails the job rather than PyPI.
             python -m venv /tmp/verify-wheel
             /tmp/verify-wheel/bin/python -m pip install --upgrade pip
-            /tmp/verify-wheel/bin/python -m pip install python/dist/*.whl
+            /tmp/verify-wheel/bin/python -m pip install clients/python/dist/*.whl
             # The backslash is CircleCI's escape for a literal heredoc operator
             # in a 2.1 config; the shell sees a plain heredoc.
             /tmp/verify-wheel/bin/python - \<<'EOF'
@@ -863,10 +863,10 @@ jobs:
             fi
             # No --skip-existing: a version that appeared since the check above
             # must fail the job rather than pass silently.
-            python -m twine upload python/dist/*
+            python -m twine upload clients/python/dist/*
 
       - store_artifacts:
-          path: python/dist
+          path: clients/python/dist
           destination: opensysml-dist
 
   # Publishes packaging/pypi-pysysml on a `pysysml-v<version>` tag: the final

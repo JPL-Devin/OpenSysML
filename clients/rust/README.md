@@ -10,7 +10,7 @@ For now, use a path dependency while developing against a checkout:
 
 ```toml
 [dependencies]
-opensysml = { path = "../OpenSysML/rust/opensysml" }
+opensysml = { path = "../OpenSysML/clients/rust/opensysml" }
 ```
 
 The current Git dependency form is:
@@ -40,7 +40,7 @@ later behind a feature flag without changing the default.
 
 Protobuf request and response bodies are the default transport. JSON remains
 available as the `curl` and debugging affordance. The measured comparison in
-[`docs/internals/design/transport-evaluation.md`](../docs/internals/design/transport-evaluation.md)
+[`docs/internals/design/transport-evaluation.md`](../../docs/internals/design/transport-evaluation.md)
 was 6.5 ms for protobuf versus 42 ms for JSON on a 468 KB response.
 
 ## Service lifecycle
@@ -71,9 +71,9 @@ Version 1 does not download binaries. Resolution is:
 3. `PATH`
 
 If a downloader is added, it must match the Python client's per-release pinned
-SHA-256 checks in [`python/opensysml/binary.py`](../python/opensysml/binary.py)
+SHA-256 checks in [`clients/python/opensysml/binary.py`](../python/opensysml/binary.py)
 and its sigstore-verified manifest in
-[`python/opensysml/signing.py`](../python/opensysml/signing.py). A client must
+[`clients/python/opensysml/signing.py`](../python/opensysml/signing.py). A client must
 never fetch and execute a binary without verifying its integrity. Release
 pinning belongs with that downloader; this v1 client does not pretend to pin a
 child version.
@@ -117,7 +117,7 @@ make conformance-rust
 Or run the binary directly:
 
 ```bash
-cargo run --manifest-path rust/Cargo.toml -p opensysml-conformance -- \
+cargo run --manifest-path clients/rust/Cargo.toml -p opensysml-conformance -- \
   -binary bin/sysml-grpc \
   -scenarios conformance/scenarios \
   -fixtures conformance/fixtures \

@@ -46,8 +46,8 @@ case_ docs-only docs docs/guide/index.md
 case_ changelog-only docs CHANGELOG.md
 case_ java-only java clients/java/opensysml-client/pom.xml
 case_ node-only node clients/node/package.json
-case_ python-only python python/opensysml/connection.py
-case_ rust-only rust rust/opensysml/src/connection.rs
+case_ python-only python clients/python/opensysml/connection.py
+case_ rust-only rust clients/rust/opensysml/src/connection.rs
 case_ vscode-only vscode editors/vscode/package.json
 # The grammar generator and its committed output are held together by a Go test.
 case_ vscode-grammar docs,go,java,node,python,rust,vscode editors/vscode/tools/gengrammar/grammar.go

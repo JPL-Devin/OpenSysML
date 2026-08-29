@@ -97,7 +97,7 @@ def service_binary():
     from opensysml.binary import get_binary_path
 
     repo_build = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
         'bin', 'sysml-grpc',
     )
     for path in (get_binary_path(), repo_build):

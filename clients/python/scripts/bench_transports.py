@@ -11,7 +11,7 @@ times, so it is timed separately, and per-call times are reported as p50/p95/p99
 because the tail is what a deadline misses.
 
 Usage:
-    python python/scripts/bench_transports.py [--iterations N] [--binary PATH]
+    python clients/python/scripts/bench_transports.py [--iterations N] [--binary PATH]
 
 Requires ``make build-grpc``. The transports are evaluation prototypes; see
 docs/internals/design/transport-evaluation.md.
@@ -35,7 +35,7 @@ from google.protobuf import json_format
 from opensysml.proto import sysml_pb2 as pb
 from opensysml.proto import sysml_pb2_grpc as pb_grpc
 
-REPO = pathlib.Path(__file__).resolve().parents[2]
+REPO = pathlib.Path(__file__).resolve().parents[3]
 
 # The small model bench_latency.py builds, kept identical so the two scripts'
 # numbers are comparable.

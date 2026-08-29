@@ -86,7 +86,7 @@ def version_from_tag(tag, version=None):
     if tag_version != declared:
         raise VersionError(
             f"Tag {tag!r} names version {tag_version!r}, but "
-            f"python/opensysml/_version.py declares {declared!r}. "
+            f"clients/python/opensysml/_version.py declares {declared!r}. "
             "Publishing would put a version on PyPI that the package does not "
             "report. Fix one of the two and tag again."
         )

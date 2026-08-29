@@ -20,9 +20,9 @@ changed=$(git diff --name-only "$(git merge-base "$base" "$head")" "$head")
 service_pattern='^(api/proto/|cmd/|internal/|pkg/|conformance/|testdata/|scripts/|examples/|editors/vscode/tools/|editors/vscode/syntaxes/|Makefile$|go\.mod$|go\.sum$|buf\.|\.github/workflows/|\.circleci/)'
 docs_pattern='^(docs/|mkdocs\.yml$|README\.md$|CHANGELOG\.md$|CONTRIBUTING\.md$|AGENTS\.md$|.*\.md$)'
 node_pattern='^clients/node/'
-python_pattern='^python/'
+python_pattern='^clients/python/'
 java_pattern='^clients/java/'
-rust_pattern='^rust/'
+rust_pattern='^clients/rust/'
 vscode_pattern='^editors/vscode/'
 
 known_pattern="$service_pattern|$docs_pattern|$node_pattern|$python_pattern|$java_pattern|$rust_pattern|$vscode_pattern|^\.agents/|^\.gitignore$|^LICENSE|^packaging/"
