@@ -18,6 +18,9 @@ from typing import Dict, Mapping, Sequence
 from opensysml.errors import OpenSysMLError
 from opensysml.proto import sysml_pb2
 
+# The property the standard names an object's type by.
+_TYPE_KEY = "@type"
+
 #: ``@type`` of the standard's query resource.
 TYPE_QUERY = "Query"
 #: ``@type`` of a single-property constraint.
@@ -62,7 +65,7 @@ class QueryElement:
 
     def as_dict(self):
         """The element as the standard's JSON names it: ``@id``, ``@type``, properties."""
-        return {"@id": self.id, "@type": self.type, **self.properties}
+        return {"@id": self.id, _TYPE_KEY: self.type, **self.properties}
 
     def __str__(self):
         return f"{self.id} ({self.type})"
@@ -92,10 +95,10 @@ def build_query(payload=None, scope=None, select=None, where=None):
             )
         if not isinstance(payload, Mapping):
             raise QueryError(f"a query is an object, not {type(payload).__name__}")
-        declared = payload.get("@type", TYPE_QUERY)
+        declared = payload.get(_TYPE_KEY, TYPE_QUERY)
         if declared != TYPE_QUERY:
             raise QueryError(f"expected a {TYPE_QUERY!r} payload, got {declared!r}")
-        unknown = set(payload) - {"@type", "@id", "owningProject", "scope", "select", "where"}
+        unknown = set(payload) - {_TYPE_KEY, "@id", "owningProject", "scope", "select", "where"}
         if unknown:
             raise QueryError(
                 f"a query has no {', '.join(sorted(unknown))}; the standard's query "
@@ -147,7 +150,7 @@ def _constraint(payload):
     """Translate one constraint, dispatching on the ``@type`` the standard names it by."""
     if not isinstance(payload, Mapping):
         raise QueryError(f"a constraint is an object, not {type(payload).__name__}")
-    declared = payload.get("@type")
+    declared = payload.get(_TYPE_KEY)
     if declared is None:
         # The variant a constraint without an explicit @type must be, since the
         # two carry disjoint fields.
@@ -166,7 +169,7 @@ def _constraint(payload):
 
 
 def _primitive(payload):
-    _reject_unknown(payload, {"@type", "@id", "inverse", "property", "operator", "value"},
+    _reject_unknown(payload, {_TYPE_KEY, "@id", "inverse", "property", "operator", "value"},
                     TYPE_PRIMITIVE_CONSTRAINT)
     operator = payload.get("operator")
     if operator not in _PRIMITIVE_OPERATORS:
@@ -186,7 +189,7 @@ def _primitive(payload):
 
 
 def _composite(payload):
-    _reject_unknown(payload, {"@type", "@id", "constraint", "operator"},
+    _reject_unknown(payload, {_TYPE_KEY, "@id", "constraint", "operator"},
                     TYPE_COMPOSITE_CONSTRAINT)
     operator = payload.get("operator")
     if operator not in _COMPOSITE_OPERATORS:

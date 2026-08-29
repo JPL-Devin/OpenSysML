@@ -62,8 +62,9 @@ def test_a_valued_slot_and_an_object_valued_one_are_unaffected():
 
 def test_an_unmaterialized_slot_is_still_an_error():
     """Unset is what a materialized slot holds, not what an absent one is."""
+    absent = sysml_pb2.FeatureValue(feature_name="d")
     with pytest.raises(FeatureValueError):
-        feature_value_to_python("d", sysml_pb2.FeatureValue(feature_name="d"))
+        feature_value_to_python("d", absent)
 
 
 def test_an_instance_exposes_an_unset_feature_as_unset():

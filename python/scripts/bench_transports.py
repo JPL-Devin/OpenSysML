@@ -51,6 +51,13 @@ LARGE_MODEL_PATH = (
     / "SysML v2 Spec Annex A SimpleVehicleModel.sysml"
 )
 
+# The baseline transport, whose run also measures the payload sizes.
+GRPC_TCP = "gRPC over TCP"
+
+# The expression every Evaluate call sends, so the transports are compared on
+# the same work.
+EVALUATE_EXPRESSION = "2 + 2"
+
 # stdio framing, as internal/stdiorpc writes it.
 CONTENT_TYPE_JSON = "application/json"
 CONTENT_TYPE_PROTO = "application/proto"
@@ -106,7 +113,7 @@ class ServerTransport(Transport):
 class GrpcTransport(ServerTransport):
     """Today's baseline: grpc-go over TCP, called by the generated stub."""
 
-    name = "gRPC over TCP"
+    name = GRPC_TCP
 
     def __init__(self, binary):
         super().__init__(binary)
@@ -317,7 +324,7 @@ def operations(transport, model, symbol):
             "ParseFile", pb.ParseFileRequest(content=model), pb.ParseFileResponse)),
         ("Evaluate", lambda: transport.call(
             "Evaluate",
-            pb.EvaluateRequest(expression="2 + 2", model_hash=model_hash),
+            pb.EvaluateRequest(expression=EVALUATE_EXPRESSION, model_hash=model_hash),
             pb.EvaluateResponse)),
         ("Query (whole model)", lambda: transport.call(
             "Query",
@@ -339,9 +346,9 @@ def payload_sizes(transport, model, symbol):
     for label, request, response in (
         ("ParseFile", pb.ParseFileRequest(content=model), parsed),
         ("Evaluate",
-         pb.EvaluateRequest(expression="2 + 2", model_hash=parsed.model_hash),
+         pb.EvaluateRequest(expression=EVALUATE_EXPRESSION, model_hash=parsed.model_hash),
          transport.call("Evaluate",
-                        pb.EvaluateRequest(expression="2 + 2",
+                        pb.EvaluateRequest(expression=EVALUATE_EXPRESSION,
                                            model_hash=parsed.model_hash),
                         pb.EvaluateResponse)),
         ("Query (whole model)",
@@ -398,7 +405,7 @@ def main(argv=None):
         ("large", large_model, first_part_def(large_model)),
     ]
     builders = [
-        ("gRPC over TCP", lambda: GrpcTransport(args.binary)),
+        (GRPC_TCP, lambda: GrpcTransport(args.binary)),
         ("Connect, protobuf body", lambda: ConnectTransport(args.binary, "protobuf")),
         ("Connect, JSON body", lambda: ConnectTransport(args.binary, "json")),
         ("stdio, protobuf body", lambda: StdioTransport(args.binary, "protobuf")),
@@ -421,7 +428,7 @@ def main(argv=None):
                     measured[name] = {"p50": p50, "p95": p95, "p99": p99,
                                       "stdev": stdev}
                 entry["models"][size] = measured
-                if label == "gRPC over TCP":
+                if label == GRPC_TCP:
                     report["payload_bytes"][size] = payload_sizes(
                         transport, model, symbol)
         finally:

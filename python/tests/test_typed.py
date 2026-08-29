@@ -99,8 +99,9 @@ def test_type_mismatch_is_reported():
 def test_missing_required_slot_raises():
     """A required slot the instance never carried is an error, not None."""
     pb = sysml_pb2.Instance(id=3, type_symbol_id="Demo::Vehicle", feature_values={})
+    vehicle = Vehicle.from_instance(Instance(pb))
     with pytest.raises(TypeMismatchError):
-        Vehicle.from_instance(Instance(pb)).mass
+        vehicle.mass
 
 
 def test_integer_widens_to_float_but_bool_does_not():
@@ -216,8 +217,9 @@ def test_the_type_errors_are_reachable_from_the_package():
 
 def test_from_instance_rejects_an_instance_of_another_type():
     """A wrong-type instance fails at from_instance, naming both types."""
+    vehicle = vehicle_instance()
     with pytest.raises(InstanceTypeError) as excinfo:
-        Engine.from_instance(vehicle_instance())
+        Engine.from_instance(vehicle)
     assert excinfo.value.expected == "Demo::Engine"
     assert excinfo.value.actual == "Demo::Vehicle"
     assert "Demo::Engine" in str(excinfo.value)

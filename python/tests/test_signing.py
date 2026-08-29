@@ -261,10 +261,9 @@ class TestVerifyingAManifest:
 
     def test_another_identity_is_rejected(self, signer, manifest):
         """Another organization's pipeline cannot vouch for this project's release."""
+        other = fixture('SHA256SUMS.txt.other-identity.bundle')
         with pytest.raises(ManifestSignatureError, match='does not verify'):
-            verify_manifest(
-                manifest, fixture('SHA256SUMS.txt.other-identity.bundle'), signer
-            )
+            verify_manifest(manifest, other, signer)
 
     def test_a_tampered_manifest_is_rejected(self, signer, manifest, bundle):
         """A digest changed after signing is what the signature exists to catch."""
@@ -277,8 +276,9 @@ class TestVerifyingAManifest:
 
     def test_an_expired_certificate_is_rejected(self, signer, manifest):
         """A certificate that had expired when the log recorded the entry is refused."""
+        expired = fixture('SHA256SUMS.txt.expired.bundle')
         with pytest.raises(ManifestSignatureError, match='does not verify'):
-            verify_manifest(manifest, fixture('SHA256SUMS.txt.expired.bundle'), signer)
+            verify_manifest(manifest, expired, signer)
 
     def test_a_tampered_bundle_is_rejected(self, signer, manifest, bundle):
         """Replacing the signature inside the bundle does not make it verify."""
@@ -287,8 +287,9 @@ class TestVerifyingAManifest:
             'MEQCIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAiAAAAAAAAAAAAAAAAA'
             'AAAAAAAAAAAAAAAAAAAAAAAAAAA=='
         )
+        resigned = json.dumps(inner).encode()
         with pytest.raises(ManifestSignatureError, match='does not verify'):
-            verify_manifest(manifest, json.dumps(inner).encode(), signer)
+            verify_manifest(manifest, resigned, signer)
 
     def test_an_unreadable_bundle_verifies_nothing(self, signer, manifest):
         """A truncated download is not evidence, so it refuses as an unsigned one."""

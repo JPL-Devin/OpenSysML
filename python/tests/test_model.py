@@ -342,9 +342,10 @@ class TestModelEval:
     def test_eval_raises_what_the_connection_raises(self):
         client = Mock()
         client.eval.side_effect = ExecutionError("division by zero")
+        model = self._model(client)
 
         with pytest.raises(ExecutionError):
-            self._model(client).eval("1/0")
+            model.eval("1/0")
 
 class TestModelRuntimeCalls:
     """Instantiating and executing are on the model too, for the same reason."""
@@ -388,9 +389,10 @@ class TestModelRuntimeCalls:
     def test_instantiate_raises_what_the_connection_raises(self):
         client = Mock()
         client.instantiate.side_effect = ExecutionError("not instantiable")
+        model = self._model(client)
 
         with pytest.raises(ExecutionError):
-            self._model(client).instantiate("Demo::Vehicle")
+            model.instantiate("Demo::Vehicle")
 
 
 #: Connection calls whose model-level counterpart is named differently:

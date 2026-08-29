@@ -376,7 +376,8 @@ def test_stale_cache_reason_names_another_release(cache):
     """Test a cache from another release is reported, naming both tags."""
     cache(version='v0.0.5')
     reason = stale_cache_reason('v0.0.7')
-    assert 'v0.0.5' in reason and 'v0.0.7' in reason
+    assert 'v0.0.5' in reason
+    assert 'v0.0.7' in reason
 
 
 def test_stale_cache_reason_for_an_unidentifiable_binary(cache):
@@ -467,8 +468,9 @@ def test_a_tampered_download_is_not_answered_from_the_cache(cache):
     cache(version='v0.0.5')
     with patch('opensysml.binary.download_binary',
                side_effect=ChecksumMismatchError('Checksum mismatch')):
+        refused = pytest.raises(ChecksumMismatchError)
         with pytest.warns(UserWarning, match='Replacing the cached sysml-grpc'):
-            with pytest.raises(ChecksumMismatchError):
+            with refused:
                 ensure_binary(version='v0.0.7')
 
 
