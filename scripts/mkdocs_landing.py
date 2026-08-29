@@ -46,7 +46,7 @@ def on_files(files, config):
     return files
 
 
-def on_page_markdown(markdown: str, page, config, files) -> str:
+def on_page_markdown(markdown: str, page, **_kwargs) -> str:
     if page.file.src_uri == LANDING:
         # The hero wants the full width, and the map below it is its own contents list.
         page.meta["template"] = TEMPLATE

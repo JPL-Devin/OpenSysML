@@ -15,7 +15,7 @@ log = logging.getLogger("mkdocs.hooks.repo_links")
 
 # Inline links and images; docs/ uses no reference-style links.
 LINK = re.compile(r"(!?\[[^\]]*\]\()([^)\s]+)((?:\s+\"[^\"]*\")?\))")
-FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 
@@ -76,7 +76,7 @@ def on_page_markdown(markdown: str, page, config, files) -> str:
     for line in markdown.splitlines(keepends=True):
         marker = FENCE.match(line)
         if marker:
-            run, info = marker.group(1), marker.group(2).strip()
+            run, info = marker.group(1), line[marker.end():].strip()
             if not fence:
                 fence = run
                 out.append(line)

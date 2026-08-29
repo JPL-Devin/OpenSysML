@@ -43,13 +43,13 @@ class _Sigstore:
         from sigstore.models import Bundle, TrustedRoot
         from sigstore.verify import Verifier, policy
 
-        self.SubjectAlternativeName = SubjectAlternativeName
-        self.UniformResourceIdentifier = UniformResourceIdentifier
-        self.Error = Error
-        self.VerificationError = VerificationError
-        self.Bundle = Bundle
-        self.TrustedRoot = TrustedRoot
-        self.Verifier = Verifier
+        self.subject_alternative_name = SubjectAlternativeName
+        self.uniform_resource_identifier = UniformResourceIdentifier
+        self.error = Error
+        self.verification_error = VerificationError
+        self.bundle = Bundle
+        self.trusted_root = TrustedRoot
+        self.verifier = Verifier
         self.policy = policy
 
 
@@ -94,16 +94,16 @@ class _PipelineDefinitionOfProject:
             sigstore.errors.VerificationError: If no subject names one
         """
         san = cert.extensions.get_extension_for_class(
-            self._sigstore.SubjectAlternativeName
+            self._sigstore.subject_alternative_name
         ).value
         subjects = san.get_values_for_type(
-            self._sigstore.UniformResourceIdentifier
+            self._sigstore.uniform_resource_identifier
         )
         for subject in subjects:
             if subject.startswith(self._prefix):
                 if _DEFINITION_ID.match(subject[len(self._prefix):]):
                     return
-        raise self._sigstore.VerificationError(
+        raise self._sigstore.verification_error(
             f"Certificate's SANs name no pipeline definition of "
             f"{self._prefix.rstrip('/')}; actual SANs: {sorted(subjects)}"
         )
@@ -176,9 +176,9 @@ class ReleaseSigner:
             sigstore.verify.Verifier: Verifier to verify with
         """
         if self.trusted_root is None:
-            return sigstore.Verifier.production()
-        return sigstore.Verifier(
-            trusted_root=sigstore.TrustedRoot.from_file(self.trusted_root)
+            return sigstore.verifier.production()
+        return sigstore.verifier(
+            trusted_root=sigstore.trusted_root.from_file(self.trusted_root)
         )
 
 
@@ -252,8 +252,8 @@ def verify_manifest(manifest, bundle, signer):
     sigstore = _load_sigstore()
 
     try:
-        read = sigstore.Bundle.from_json(bundle)
-    except (sigstore.Error, ValueError) as e:
+        read = sigstore.bundle.from_json(bundle)
+    except (sigstore.error, ValueError) as e:
         # A truncated download looks like this too, so it is an absent
         # signature rather than evidence of a tampered one.
         raise UnsignedReleaseError(
@@ -273,7 +273,7 @@ def verify_manifest(manifest, bundle, signer):
 
     try:
         verifier.verify_artifact(manifest, read, signer.policy(sigstore))
-    except (sigstore.Error, ValueError) as e:
+    except (sigstore.error, ValueError) as e:
         raise ManifestSignatureError(
             f"the signature on {MANIFEST_ASSET} does not verify against the release "
             f"pipeline of this repository ({signer.describe()}): {e}. The manifest, "
