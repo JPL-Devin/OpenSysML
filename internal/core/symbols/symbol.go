@@ -3,6 +3,8 @@
 package symbols
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -169,6 +171,61 @@ func (k SymbolKind) String() string {
 		return s
 	}
 	return "unknown"
+}
+
+// Notation names a symbol the way the notation declares it — "part def",
+// "state", "render" — rather than by its internal classification.
+func (s *Symbol) Notation() string {
+	switch decl := s.Decl.(type) {
+	case *ast.Definition:
+		return decl.Kind.String() + " def"
+	case *ast.Usage:
+		return decl.Kind.String()
+	case *ast.SubstateMember:
+		return "state"
+	case *ast.SubjectMember:
+		return "subject"
+	case *ast.TransitionMember:
+		return "transition"
+	case *ast.PseudostateNode:
+		if decl.Keyword != "" {
+			return decl.Keyword
+		}
+	case *ast.DecisionNode:
+		return "decide"
+	case *ast.ForkNode:
+		return "fork"
+	case *ast.JoinNode:
+		return "join"
+	case *ast.MergeNode:
+		return "merge"
+	case *ast.SendStatement:
+		return "send"
+	case *ast.Documentation:
+		return "doc"
+	case *ast.TextualRepresentation:
+		return "rep"
+	}
+	// A declaration the notation has no keyword of its own for — and a cached
+	// library symbol, which carries no declaration at all — is named by its
+	// classification.
+	return spacedWords(s.Kind.String())
+}
+
+// spacedWords turns a camel-cased classification into lower-case words, so
+// "partDef" reads as "part def".
+func spacedWords(name string) string {
+	var b strings.Builder
+	for i, ch := range name {
+		if ch >= 'A' && ch <= 'Z' {
+			if i > 0 {
+				b.WriteByte(' ')
+			}
+			ch += 'a' - 'A'
+		}
+		b.WriteRune(ch)
+	}
+	return b.String()
 }
 
 // UnitFacts is a measurement unit reduced to a scale factor over base units,

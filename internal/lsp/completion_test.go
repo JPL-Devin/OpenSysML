@@ -134,8 +134,8 @@ func TestCompletionCarriesKindDetailAndDocumentation(t *testing.T) {
 	if def.Kind != protocol.CompletionItemKindClass {
 		t.Errorf("'Vehicle' kind = %v, want Class", def.Kind)
 	}
-	if def.Detail != "partDef" {
-		t.Errorf("'Vehicle' detail = %q, want %q", def.Detail, "partDef")
+	if def.Detail != "part def" {
+		t.Errorf("'Vehicle' detail = %q, want %q", def.Detail, "part def")
 	}
 	if doc, _ := def.Documentation.(protocol.MarkupContent); !strings.Contains(doc.Value, "A vehicle under test.") {
 		t.Errorf("'Vehicle' documentation = %#v, want the declaration's comment", def.Documentation)
@@ -148,8 +148,8 @@ func TestCompletionCarriesKindDetailAndDocumentation(t *testing.T) {
 	if usage.Kind != protocol.CompletionItemKindField {
 		t.Errorf("'v' kind = %v, want Field", usage.Kind)
 	}
-	if usage.Detail != "partUsage : Vehicle" {
-		t.Errorf("'v' detail = %q, want %q", usage.Detail, "partUsage : Vehicle")
+	if usage.Detail != "part : Vehicle" {
+		t.Errorf("'v' detail = %q, want %q", usage.Detail, "part : Vehicle")
 	}
 }
 
@@ -160,8 +160,8 @@ func TestCompletionOnDotOffersMembersOfType(t *testing.T) {
 	if !ok {
 		t.Fatalf("completion after 'v.' missing 'wheel'; got %v", labelsOf(items))
 	}
-	if wheel.Detail != "partUsage : Wheel" {
-		t.Errorf("'wheel' detail = %q, want %q", wheel.Detail, "partUsage : Wheel")
+	if wheel.Detail != "part : Wheel" {
+		t.Errorf("'wheel' detail = %q, want %q", wheel.Detail, "part : Wheel")
 	}
 	if drive, ok := items["drive"]; !ok {
 		t.Error("completion after 'v.' missing 'drive'")
@@ -351,7 +351,7 @@ func TestCompletionOffersShortNames(t *testing.T) {
 	if !ok {
 		t.Fatalf("completion missing short name 'veh'; got %v", labelsOf(items))
 	}
-	if short.Kind != protocol.CompletionItemKindClass || short.Detail != "partDef" {
+	if short.Kind != protocol.CompletionItemKindClass || short.Detail != "part def" {
 		t.Errorf("'veh' = kind %v detail %q, want the same as 'Vehicle'", short.Kind, short.Detail)
 	}
 

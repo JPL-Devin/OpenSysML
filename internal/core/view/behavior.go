@@ -22,13 +22,13 @@ func (r *Renderer) renderStates(exposed []*symbols.Symbol, out *Rendering) {
 	for _, elem := range exposed {
 		if elem.Kind != symbols.SymbolStateDef && elem.Kind != symbols.SymbolStateUsage {
 			out.Notices = append(out.Notices, fmt.Sprintf("%s %s is no state machine; a state rendering does not show it",
-				declKind(elem), r.notationName(elem)))
+				elem.Notation(), r.notationName(elem)))
 			continue
 		}
 		graph, err := lower.ToStateGraph(elem.Decl, declScope(elem))
 		if err != nil {
 			out.Notices = append(out.Notices, fmt.Sprintf("%s %s does not lower to a state graph: %v",
-				declKind(elem), r.notationName(elem), err))
+				elem.Notation(), r.notationName(elem), err))
 			continue
 		}
 		out.Roots = append(out.Roots, r.stateMachineNode(elem, graph, ids, out))
@@ -38,7 +38,7 @@ func (r *Renderer) renderStates(exposed []*symbols.Symbol, out *Rendering) {
 // stateMachineNode renders one lowered state machine: its regions and states as
 // nested nodes, its transitions as edges.
 func (r *Renderer) stateMachineNode(machine *symbols.Symbol, graph *lower.StateGraph, ids *nodeIDs, out *Rendering) *Node {
-	root := &Node{ID: ids.take(), Kind: declKind(machine), Name: r.notationName(machine), Detail: declType(machine),
+	root := &Node{ID: ids.take(), Kind: machine.Notation(), Name: r.notationName(machine), Detail: declType(machine),
 		Origin: symbolOrigin(machine)}
 	doc := machine.DocName
 	nodes := map[ast.Node]*Node{}
@@ -263,10 +263,10 @@ func (r *Renderer) renderActions(exposed []*symbols.Symbol, out *Rendering) {
 	for _, elem := range exposed {
 		if elem.Kind != symbols.SymbolActionDef && elem.Kind != symbols.SymbolActionUsage {
 			out.Notices = append(out.Notices, fmt.Sprintf("%s %s is no action; an action rendering does not show it",
-				declKind(elem), r.notationName(elem)))
+				elem.Notation(), r.notationName(elem)))
 			continue
 		}
-		subject := actionSubject{decl: elem.Decl, kind: declKind(elem), name: r.notationName(elem),
+		subject := actionSubject{decl: elem.Decl, kind: elem.Notation(), name: r.notationName(elem),
 			scope: declScope(elem), doc: elem.DocName}
 		node, ok := r.actionNode(subject, ids, out, map[ast.Node]bool{}, 0)
 		if ok {
