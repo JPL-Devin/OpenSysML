@@ -422,6 +422,42 @@ degradation case.
   Close spare groups, and if the diagram and its editor end up in one group use Command Palette
   **"View: Move Editor into Previous/Next Group"** to get them side by side.
 
+### The webview's `message` origin guard (`src/webview/diagram.ts`)
+
+The handler drops events whose `event.origin !== window.origin`. Measured on VS Code desktop 1.134.0
+(Linux, `--no-sandbox --disable-gpu`), every extension message satisfies it: the inner frame's
+`window.origin` is `vscode-webview://<uuid>` (its `location.href` is
+`vscode-webview://<uuid>/index.html?id=…&parentOrigin=vscode-file%3A%2F%2Fvscode-app`) and `views`,
+`render` and `highlight` all arrive with exactly that origin — no `"null"`/srcdoc origin. If a future
+VS Code version changes the webview frame plumbing, the guard would silently swallow everything;
+the symptoms are an **empty View dropdown and an empty status line** in a panel that otherwise loads.
+Measure it, don't guess, in Command Palette → **Developer: Open Webview Developer Tools** with the
+console context set to `active-frame (index.html)`:
+
+```js
+window.__seen=[];
+window.addEventListener('message',e=>window.__seen.push(
+  {eventOrigin:e.origin,windowOrigin:window.origin,type:e.data&&e.data.type,
+   passesGuard:e.origin===window.origin}));
+// then change the View picker in the panel, and:
+console.log(JSON.stringify(window.__seen,null,1))
+```
+
+Pitfalls: the devtools window is a *separate* X window with an empty title — re-running
+"Open Webview Developer Tools" toggles/raises it unpredictably, so bring it back with
+`wmctrl -l` + `wmctrl -ia <id>` instead. The console context and any listener you installed survive
+raising the window, but not a `Developer: Reload Window`.
+
+Cheap message-flow oracles that need no devtools (all three strings are produced only inside the
+guarded handler):
+- the picker filling with 13 entries for `examples/views-demo.sysml` (7 declared + 6 pseudo-views);
+- the status line `<path>: declares 7 views (…); name the one to render` — that text comes from
+  `internal/core/model/render.go`, i.e. a server error relayed as a `{type:"error"}` message;
+- opened from a *scratch* folder that file has **0 Problems** (the ~13 problems in the skill above are
+  the repo-root `package Views` shadowing), so use a deliberate error such as
+  `port broken : NoSuchPort;` (expect `unresolved reference: NoSuchPort`) as the LSP smoke oracle
+  rather than a non-zero problem count.
+
 ## Recording tips
 
 Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoom`ing the status bar
