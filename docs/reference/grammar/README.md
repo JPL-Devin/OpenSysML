@@ -94,7 +94,7 @@ Notes:
 
 Grammar conformance is validated through parsing **OMG's own files**:
 
-1. **Stdlib Conformance Gate** - all 95 bundled library files (94 OMG standard library files and 1 OpenSysML extension) must parse with zero diagnostics
+1. **Stdlib Conformance Gate** - all 96 bundled library files (94 OMG standard library files and 2 OpenSysML extensions) must parse with zero diagnostics
    - See: `internal/core/libs/stdlib_conformance_test.go`
    - These files are the **source of truth** for correct parsing
 

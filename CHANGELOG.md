@@ -65,6 +65,13 @@ against it.
 
 ### Added
 
+- **Native document queries now have a compiled planning layer.** Query definitions specialize the
+  bundled `DocumentQueries::Query` vocabulary, retain typed parameter/result metadata and source
+  provenance, and may invoke other named queries with explicit named bindings. Planning produces an
+  immutable dependency-ordered program and reports malformed definitions, unknown operations, bad
+  bindings, positional query composition, and complete direct or indirect composition cycles as
+  typed validation diagnostics. Execution and document rendering are not part of this release.
+
 - **A typed state usage inherits the content of the definition typing it.** The definition's
   substates, initial transition, entry/do/exit behaviors, transitions, deferred events and
   attributes are materialized per usage rather than shared, including inside a parallel body.
