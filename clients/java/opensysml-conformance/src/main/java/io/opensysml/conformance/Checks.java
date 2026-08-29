@@ -22,6 +22,7 @@ import java.util.TreeSet;
 final class Checks {
 
   private static final String WANT = ", want ";
+  private static final String ENTRIES = " entries";
 
   /**
    * The relative difference two Reals may have and still be the same value. It applies to Reals
@@ -66,18 +67,18 @@ final class Checks {
       int want = entry.getValue().getAsInt();
       OptionalCount got = count(actual, entry.getKey());
       if (!got.countable()) {
-        failures.add(entry.getKey() + ": not a list or map, want " + want + " entries");
+        failures.add(entry.getKey() + ": not a list or map, want " + want + ENTRIES);
       } else if (got.count() != want) {
-        failures.add(entry.getKey() + ": " + got.count() + " entries, want " + want);
+        failures.add(entry.getKey() + ": " + got.count() + ENTRIES + WANT + want);
       }
     }
     for (Map.Entry<String, JsonElement> entry : new TreeMap<>(expect.minCounts()).entrySet()) {
       int want = entry.getValue().getAsInt();
       OptionalCount got = count(actual, entry.getKey());
       if (!got.countable()) {
-        failures.add(entry.getKey() + ": not a list or map, want at least " + want + " entries");
+        failures.add(entry.getKey() + ": not a list or map, want at least " + want + ENTRIES);
       } else if (got.count() < want) {
-        failures.add(entry.getKey() + ": " + got.count() + " entries, want at least " + want);
+        failures.add(entry.getKey() + ": " + got.count() + ENTRIES + ", want at least " + want);
       }
     }
     return List.copyOf(failures);
@@ -205,7 +206,7 @@ final class Checks {
             at(path)
                 + ": "
                 + actual.size()
-                + " entries"
+                + ENTRIES
                 + WANT
                 + expected.size()
                 + " ("

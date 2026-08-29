@@ -2,6 +2,7 @@ package io.opensysml;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -25,9 +26,9 @@ class PublicTypesTest {
     List<Value> elements = new ArrayList<>(List.of(new Value.IntegerValue(1)));
     Value.Sequence sequence = new Value.Sequence(elements);
     elements.add(new Value.IntegerValue(2));
-    assertEquals(1, sequence.elements().size());
-    assertThrows(
-        UnsupportedOperationException.class, () -> sequence.elements().add(new Value.NullValue()));
+    List<Value> copied = sequence.elements();
+    assertEquals(1, copied.size());
+    assertThrows(UnsupportedOperationException.class, () -> copied.add(new Value.NullValue()));
   }
 
   @Test
@@ -36,12 +37,12 @@ class PublicTypesTest {
     assertEquals(
         new Value.EnumerationValue(new EnumLiteral("D::Color::red", "D::Color", "Color::red")),
         new Value.EnumerationValue(new EnumLiteral("D::Color::red", "D::Color", "Color::red")));
-    assertFalse(new Value.IntegerValue(1).equals(new Value.RealValue(1.0)));
+    assertNotEquals(new Value.IntegerValue(1), new Value.RealValue(1.0));
   }
 
   @Test
   void anUnsetValueIsNotTheModelsNull() {
-    assertFalse(new Value.UnsetValue().equals(new Value.NullValue()));
+    assertNotEquals(new Value.UnsetValue(), new Value.NullValue());
   }
 
   @Test
@@ -50,7 +51,7 @@ class PublicTypesTest {
     Quantity real = new Quantity(5.0, Optional.of("kg"), Optional.empty());
     assertTrue(integral.isIntegral());
     assertFalse(real.isIntegral());
-    assertFalse(integral.equals(real));
+    assertNotEquals(integral, real);
   }
 
   @Test
@@ -66,8 +67,9 @@ class PublicTypesTest {
             Optional.empty()));
     Instance instance = new Instance(1, "Demo::Vehicle", featureValues);
     featureValues.clear();
-    assertEquals(1, instance.featureValues().size());
-    assertThrows(UnsupportedOperationException.class, () -> instance.featureValues().clear());
+    Map<String, Instance.FeatureValue> copied = instance.featureValues();
+    assertEquals(1, copied.size());
+    assertThrows(UnsupportedOperationException.class, copied::clear);
   }
 
   @Test
@@ -108,10 +110,10 @@ class PublicTypesTest {
         new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
       ModelException restored = (ModelException) input.readObject();
       assertEquals(original.getMessage(), restored.getMessage());
-      assertEquals(diagnostics, restored.diagnostics());
-      assertThrows(
-          UnsupportedOperationException.class,
-          () -> restored.diagnostics().add(diagnostics.get(0)));
+      List<Diagnostic> restoredDiagnostics = restored.diagnostics();
+      Diagnostic first = diagnostics.get(0);
+      assertEquals(diagnostics, restoredDiagnostics);
+      assertThrows(UnsupportedOperationException.class, () -> restoredDiagnostics.add(first));
     }
   }
 
@@ -164,20 +166,17 @@ class PublicTypesTest {
     CapabilityException refused =
         assertThrows(CapabilityException.class, () -> capabilities.require(Capabilities.CONVERT));
     assertEquals(Capabilities.CONVERT, refused.capability());
-    assertThrows(
-        UnsupportedOperationException.class, () -> capabilities.names().add("invented"));
+    java.util.Set<String> names = capabilities.names();
+    assertThrows(UnsupportedOperationException.class, () -> names.add("invented"));
   }
 
   @Test
   void optionsRejectWhatWouldFailLater() {
+    ConnectionOptions.Builder builder = ConnectionOptions.builder();
+    assertThrows(IllegalArgumentException.class, () -> builder.service("localhost", 0));
+    assertThrows(IllegalArgumentException.class, () -> builder.expectedBinarySha256("not-a-digest"));
     assertThrows(
-        IllegalArgumentException.class, () -> ConnectionOptions.builder().service("localhost", 0));
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> ConnectionOptions.builder().expectedBinarySha256("not-a-digest"));
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> ConnectionOptions.builder().requestTimeout(java.time.Duration.ZERO));
+        IllegalArgumentException.class, () -> builder.requestTimeout(java.time.Duration.ZERO));
     ConnectionOptions options = ConnectionOptions.defaults();
     assertEquals(Encoding.PROTOBUF, options.encoding());
     assertTrue(options.autoStart());
