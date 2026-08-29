@@ -363,13 +363,16 @@ type Definition struct {
 	Kind     DefinitionKind
 	// Keyword is the kind keyword as written, kept for the same reason as
 	// Usage.Keyword.
-	Keyword      string
-	IsAbstract   bool
-	IsVariation  bool
-	IsAll        bool // 'all' multiplicity propagation modifier
-	IsConstant   bool // 'constant' feature modifier
-	IsEvent      bool // 'event' modifier for event-driven occurrences
-	IsIndividual bool // 'individual' modifier: `individual part def` (SysML v2 8.3.9.11)
+	Keyword string
+	// HasDefKeyword records the `def` of a SysML `part def`, which a KerML
+	// classifier declaration of the same kind is written without.
+	HasDefKeyword bool
+	IsAbstract    bool
+	IsVariation   bool
+	IsAll         bool // 'all' multiplicity propagation modifier
+	IsConstant    bool // 'constant' feature modifier
+	IsEvent       bool // 'event' modifier for event-driven occurrences
+	IsIndividual  bool // 'individual' modifier: `individual part def` (SysML v2 8.3.9.11)
 	// IsParallel is the `parallel` before a state body: the state's substates
 	// are orthogonal (SysML v2 StateDefinition::isParallel).
 	IsParallel    bool

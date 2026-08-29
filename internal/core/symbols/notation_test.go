@@ -37,9 +37,11 @@ func TestNotationKeepsTheWrittenKeywords(t *testing.T) {
 
 	// A KerML classifier is written without the `def` a SysML definition takes,
 	// and `datatype`/`feature` are spellings of kinds SysML spells otherwise.
-	kerml := "package K { class C; classifier D; struct S; datatype T; feature f : C; }"
+	kerml := "package K { class C; classifier D; struct S; datatype T; feature f : C; " +
+		"metaclass M; behavior def BD; specialization Spec subtype C :> S; }"
 	for name, want := range map[string]string{
 		"C": "class", "D": "classifier", "S": "struct", "T": "datatype", "f": "feature",
+		"M": "metaclass", "BD": "behavior def", "Spec": "specialization subtype",
 	} {
 		if got := notationOf(t, "k.kerml", kerml, "K", name); got != want {
 			t.Errorf("notation of %s = %q, want %q", name, got, want)

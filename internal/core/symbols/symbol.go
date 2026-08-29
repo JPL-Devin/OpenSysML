@@ -178,12 +178,19 @@ func (k SymbolKind) String() string {
 func (s *Symbol) Notation() string {
 	switch decl := s.Decl.(type) {
 	case *ast.Definition:
+		kw := writtenKeyword(decl.Keyword, decl.Kind.String())
 		// A KerML classifier is written without the `def` a SysML definition takes.
-		if s.Kind == SymbolKerMLType {
-			return writtenKeyword(decl.Keyword, decl.Kind.String())
+		if !decl.HasDefKeyword {
+			return kw
 		}
-		return writtenKeyword(decl.Keyword, decl.Kind.String()) + " def"
+		return kw + " def"
 	case *ast.Usage:
+		kw := writtenKeyword(decl.Keyword, decl.Kind.String())
+		if decl.PrefixKeyword != "" {
+			return decl.PrefixKeyword + " " + kw
+		}
+		return kw
+	case *ast.RelationshipMember:
 		kw := writtenKeyword(decl.Keyword, decl.Kind.String())
 		if decl.PrefixKeyword != "" {
 			return decl.PrefixKeyword + " " + kw
