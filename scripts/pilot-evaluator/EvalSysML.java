@@ -1,4 +1,10 @@
+package io.opensysml.pilot;
+
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -10,6 +16,11 @@ import org.omg.sysml.interactive.SysMLInteractiveResult;
 
 /** Drives the pilot's model-level expression evaluator over evaluation requests. */
 public final class EvalSysML {
+
+    private static final PrintStream STDERR =
+            new PrintStream(new FileOutputStream(FileDescriptor.err), true, StandardCharsets.UTF_8);
+    private static final PrintStream STDOUT =
+            new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8);
 
     private static final String CASE_MARKER = "== case ";
     private static final String END_MARKER = "== end ";
@@ -29,9 +40,9 @@ public final class EvalSysML {
     private void loadModels(List<Path> models) throws IOException {
         for (Path model : models) {
             SysMLInteractiveResult result = instance.process(Files.readString(model));
-            System.out.println(MODEL_MARKER + model.getFileName());
+            STDOUT.println(MODEL_MARKER + model.getFileName());
             emit(result.toString());
-            System.out.println(END_MARKER + model.getFileName());
+            STDOUT.println(END_MARKER + model.getFileName());
         }
     }
 
@@ -43,9 +54,9 @@ public final class EvalSysML {
             } catch (RuntimeException | StackOverflowError e) {
                 output = "EXCEPTION:" + e.getClass().getName() + ": " + e.getMessage();
             }
-            System.out.println(CASE_MARKER + request.id());
+            STDOUT.println(CASE_MARKER + request.id());
             emit(output);
-            System.out.println(END_MARKER + request.id());
+            STDOUT.println(END_MARKER + request.id());
         }
     }
 
@@ -58,7 +69,7 @@ public final class EvalSysML {
             if (line.isEmpty()) {
                 continue;
             }
-            System.out.println(line.startsWith("== ") ? " " + line : line);
+            STDOUT.println(line.startsWith("== ") ? " " + line : line);
         }
     }
 
@@ -88,7 +99,7 @@ public final class EvalSysML {
     }
 
     private static void usage() {
-        System.err.println("usage: eval-sysml --library DIR --cases FILE [--model FILE]...");
+        STDERR.println("usage: eval-sysml --library DIR --cases FILE [--model FILE]...");
     }
 
     private static String message(Throwable e) {
@@ -101,16 +112,18 @@ public final class EvalSysML {
             Path library = null;
             Path cases = null;
             List<Path> models = new ArrayList<>();
-            for (int i = 0; i < args.length; i++) {
-                switch (args[i]) {
-                    case "--library" -> library = value(args, ++i, "--library");
-                    case "--cases" -> cases = value(args, i + 1 < args.length ? ++i : i, "--cases");
-                    case "--model" -> models.add(value(args, i + 1 < args.length ? ++i : i, "--model"));
+            int index = 0;
+            while (index < args.length) {
+                String argument = args[index++];
+                switch (argument) {
+                    case "--library" -> library = value(args, index++, "--library");
+                    case "--cases" -> cases = value(args, index++, "--cases");
+                    case "--model" -> models.add(value(args, index++, "--model"));
                     case "-h", "--help" -> {
                         usage();
                         System.exit(0);
                     }
-                    default -> throw new IllegalArgumentException("unknown argument: " + args[i]);
+                    default -> throw new IllegalArgumentException("unknown argument: " + argument);
                 }
             }
             if (library == null) {
@@ -118,25 +131,25 @@ public final class EvalSysML {
                 library = property == null ? null : Paths.get(property).toAbsolutePath().normalize();
             }
             if (library == null || !Files.isDirectory(library)) {
-                System.err.println("Error: SysML library not found: " + library);
+                STDERR.println("Error: SysML library not found: " + library);
                 usage();
                 System.exit(2);
             }
             if (cases == null || !Files.isRegularFile(cases)) {
-                System.err.println("Error: case file not found: " + cases);
+                STDERR.println("Error: case file not found: " + cases);
                 usage();
                 System.exit(2);
             }
             for (Path model : models) {
                 if (!Files.isRegularFile(model)) {
-                    System.err.println("Error: model not found: " + model);
+                    STDERR.println("Error: model not found: " + model);
                     System.exit(2);
                 }
             }
 
             List<Request> requests = readRequests(cases);
             if (requests.isEmpty()) {
-                System.err.println("Error: no evaluation requests in " + cases);
+                STDERR.println("Error: no evaluation requests in " + cases);
                 System.exit(2);
             }
 
@@ -147,7 +160,7 @@ public final class EvalSysML {
             driver.evaluate(requests);
             System.exit(0);
         } catch (Throwable e) {
-            System.err.println("Error: " + message(e));
+            STDERR.println("Error: " + message(e));
             System.exit(3);
         }
     }

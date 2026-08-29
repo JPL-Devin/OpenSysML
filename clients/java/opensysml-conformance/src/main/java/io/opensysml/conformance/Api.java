@@ -37,9 +37,22 @@ import java.util.TreeSet;
  */
 final class Api {
 
+  private static final String RPC_EVALUATE = "Evaluate";
+  private static final String RPC_GET_DIAGNOSTICS = "GetDiagnostics";
+  private static final String RPC_GET_SERVER_INFO = "GetServerInfo";
+  private static final String RPC_GET_SYMBOL = "GetSymbol";
+  private static final String RPC_INSTANTIATE = "Instantiate";
+  private static final String RPC_PARSE_FILE = "ParseFile";
+
   /** The RPCs the v1 API covers, and so the ones a scenario can be run through it. */
   static final Set<String> COVERED =
-      Set.of("GetServerInfo", "ParseFile", "GetSymbol", "GetDiagnostics", "Evaluate", "Instantiate");
+      Set.of(
+          RPC_GET_SERVER_INFO,
+          RPC_PARSE_FILE,
+          RPC_GET_SYMBOL,
+          RPC_GET_DIAGNOSTICS,
+          RPC_EVALUATE,
+          RPC_INSTANTIATE);
 
   private final Connection connection;
 
@@ -67,12 +80,12 @@ final class Api {
    */
   static Message.Builder request(String method) {
     return switch (method) {
-      case "GetServerInfo" -> ServerInfoRequest.newBuilder();
-      case "ParseFile" -> ParseFileRequest.newBuilder();
-      case "GetSymbol" -> GetSymbolRequest.newBuilder();
-      case "GetDiagnostics" -> DiagnosticsRequest.newBuilder();
-      case "Evaluate" -> EvaluateRequest.newBuilder();
-      case "Instantiate" -> InstantiateRequest.newBuilder();
+      case RPC_GET_SERVER_INFO -> ServerInfoRequest.newBuilder();
+      case RPC_PARSE_FILE -> ParseFileRequest.newBuilder();
+      case RPC_GET_SYMBOL -> GetSymbolRequest.newBuilder();
+      case RPC_GET_DIAGNOSTICS -> DiagnosticsRequest.newBuilder();
+      case RPC_EVALUATE -> EvaluateRequest.newBuilder();
+      case RPC_INSTANTIATE -> InstantiateRequest.newBuilder();
       default -> throw new IllegalArgumentException("no request type for " + method);
     };
   }
@@ -104,12 +117,12 @@ final class Api {
     try {
       return new Answer.Answered(
           switch (method) {
-            case "GetServerInfo" -> serverInfo();
-            case "ParseFile" -> parse((ParseFileRequest) request);
-            case "GetSymbol" -> symbol((GetSymbolRequest) request);
-            case "GetDiagnostics" -> diagnostics((DiagnosticsRequest) request);
-            case "Evaluate" -> evaluate((EvaluateRequest) request);
-            case "Instantiate" -> instantiate((InstantiateRequest) request);
+            case RPC_GET_SERVER_INFO -> serverInfo();
+            case RPC_PARSE_FILE -> parse((ParseFileRequest) request);
+            case RPC_GET_SYMBOL -> symbol((GetSymbolRequest) request);
+            case RPC_GET_DIAGNOSTICS -> diagnostics((DiagnosticsRequest) request);
+            case RPC_EVALUATE -> evaluate((EvaluateRequest) request);
+            case RPC_INSTANTIATE -> instantiate((InstantiateRequest) request);
             default -> throw new IllegalStateException(method);
           });
     } catch (Unsupported e) {

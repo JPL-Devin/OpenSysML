@@ -7,7 +7,9 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -61,12 +63,17 @@ class OrphanSafetyTest {
   }
 
   private static boolean waitForExit(long pid) throws InterruptedException {
-    for (int attempt = 0; attempt < 200; attempt++) {
-      if (ProcessHandle.of(pid).filter(ProcessHandle::isAlive).isEmpty()) {
-        return true;
-      }
-      Thread.sleep(100);
+    ProcessHandle process = ProcessHandle.of(pid).filter(ProcessHandle::isAlive).orElse(null);
+    if (process == null) {
+      return true;
     }
-    return false;
+    try {
+      process.onExit().get(20, TimeUnit.SECONDS);
+      return true;
+    } catch (TimeoutException e) {
+      return !process.isAlive();
+    } catch (ExecutionException e) {
+      throw new AssertionError("waiting for process " + pid, e);
+    }
   }
 }

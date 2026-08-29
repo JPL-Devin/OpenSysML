@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +85,32 @@ class PublicTypesTest {
     assertEquals(Diagnostic.Severity.INFO, Diagnostic.Severity.fromWireName("info"));
     assertEquals(Diagnostic.Severity.UNKNOWN, Diagnostic.Severity.fromWireName("hint"));
     assertEquals(Diagnostic.Severity.UNKNOWN, Diagnostic.Severity.fromWireName(""));
+  }
+
+  @Test
+  void aModelExceptionPreservesDiagnosticsWhenSerialized() throws Exception {
+    List<Diagnostic> diagnostics =
+        List.of(
+            new Diagnostic(
+                Diagnostic.Severity.ERROR,
+                "invalid model",
+                Optional.of(new Diagnostic.Span("model.sysml", 2, 3, 2, 8))),
+            new Diagnostic(Diagnostic.Severity.WARNING, "unlocated", Optional.empty()));
+    ModelException original = new ModelException("rejected", diagnostics);
+
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream output = new ObjectOutputStream(bytes)) {
+      output.writeObject(original);
+    }
+    try (ObjectInputStream input =
+        new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      ModelException restored = (ModelException) input.readObject();
+      assertEquals(original.getMessage(), restored.getMessage());
+      assertEquals(diagnostics, restored.diagnostics());
+      assertThrows(
+          UnsupportedOperationException.class,
+          () -> restored.diagnostics().add(diagnostics.get(0)));
+    }
   }
 
   @Test
