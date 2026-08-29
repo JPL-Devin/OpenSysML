@@ -81,7 +81,7 @@ function containsAll(actual: Normalized, path: string, wants: string[]): string[
     return [`${path}: neither text nor a list, want it to contain ${render(wants)}`];
   }
   return wants
-    .filter((want) => !collected.some((item) => item === want))
+    .filter((want) => !collected.includes(want))
     .map((want) => `${path}: ${render(collected)} does not contain ${quote(want)}`);
 }
 

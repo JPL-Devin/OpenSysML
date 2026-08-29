@@ -226,7 +226,7 @@ function highlight(id: string | undefined): void {
 // cssEscape quotes an id for an attribute selector, since CSS.escape is not in
 // every webview host.
 function cssEscape(value: string): string {
-  return value.replace(/["\\]/g, "\\$&");
+  return value.replace(/["\\]/g, String.raw`\$&`);
 }
 
 // remember keeps what the panel is showing, so a window reload restores it.

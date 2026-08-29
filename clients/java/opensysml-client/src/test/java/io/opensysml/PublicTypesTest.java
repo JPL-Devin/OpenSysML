@@ -5,6 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InvalidObjectException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +87,71 @@ class PublicTypesTest {
     assertEquals(Diagnostic.Severity.INFO, Diagnostic.Severity.fromWireName("info"));
     assertEquals(Diagnostic.Severity.UNKNOWN, Diagnostic.Severity.fromWireName("hint"));
     assertEquals(Diagnostic.Severity.UNKNOWN, Diagnostic.Severity.fromWireName(""));
+  }
+
+  @Test
+  void aModelExceptionPreservesDiagnosticsWhenSerialized() throws Exception {
+    List<Diagnostic> diagnostics =
+        List.of(
+            new Diagnostic(
+                Diagnostic.Severity.ERROR,
+                "invalid model",
+                Optional.of(new Diagnostic.Span("model.sysml", 2, 3, 2, 8))),
+            new Diagnostic(Diagnostic.Severity.WARNING, "unlocated", Optional.empty()));
+    ModelException original = new ModelException("rejected", diagnostics);
+
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream output = new ObjectOutputStream(bytes)) {
+      output.writeObject(original);
+    }
+    try (ObjectInputStream input =
+        new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      ModelException restored = (ModelException) input.readObject();
+      assertEquals(original.getMessage(), restored.getMessage());
+      assertEquals(diagnostics, restored.diagnostics());
+      assertThrows(
+          UnsupportedOperationException.class,
+          () -> restored.diagnostics().add(diagnostics.get(0)));
+    }
+  }
+
+  @Test
+  void aModelExceptionRejectsExcessiveSerializedDiagnostics() throws Exception {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream output = new ExcessiveDiagnosticCountStream(bytes)) {
+      output.writeObject(new ModelException("rejected", List.of()));
+    }
+
+    try (ObjectInputStream input =
+        new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      InvalidObjectException failure =
+          assertThrows(InvalidObjectException.class, input::readObject);
+      assertEquals("too many diagnostics", failure.getMessage());
+    }
+  }
+
+  private static final class ExcessiveDiagnosticCountStream extends ObjectOutputStream {
+    private boolean replaceNextInt;
+
+    ExcessiveDiagnosticCountStream(ByteArrayOutputStream output) throws IOException {
+      super(output);
+    }
+
+    @Override
+    public void defaultWriteObject() throws IOException {
+      super.defaultWriteObject();
+      replaceNextInt = true;
+    }
+
+    @Override
+    public void writeInt(int value) throws IOException {
+      if (replaceNextInt) {
+        super.writeInt(Integer.MAX_VALUE);
+        replaceNextInt = false;
+      } else {
+        super.writeInt(value);
+      }
+    }
   }
 
   @Test

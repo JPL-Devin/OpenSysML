@@ -345,6 +345,9 @@ func (s *Solver) probeTimeout() time.Duration {
 	return ProbeTimeout
 }
 
+// msgItAnswered opens a refusal quoting what the solver replied.
+const msgItAnswered = "it answered "
+
 // runProbe runs one capability check: a backend that rejects the script refuses
 // the capability, one that answers has it, and one that gives up or stops settles
 // neither. Only a backend that could not be run at all is an error.
@@ -378,20 +381,20 @@ func (s *Solver) runProbe(ctx context.Context, p probe) (capabilityResult, error
 			return refused(i, "it rejected the script: "+comment(msg)), nil
 		}
 		if got.Atom == "unsupported" {
-			return refused(i, "it answered "+quoteReply(got)), nil
+			return refused(i, msgItAnswered+quoteReply(got)), nil
 		}
 		if !smtlibResponse(got) {
 			// A reply SMT-LIB does not define says nothing about the feature: the
 			// executable is not answering as a solver, which is a process failure.
 			return capabilityResult{}, s.processError("capability check",
-				"it answered "+quoteReply(got)+" rather than an SMT-LIB response",
+				msgItAnswered+quoteReply(got)+" rather than an SMT-LIB response",
 				sess.stderrText(), nil)
 		}
 		if got.Atom == "unknown" && want != replyDecided {
-			return undetermined(i, "it answered "+quoteReply(got)), nil
+			return undetermined(i, msgItAnswered+quoteReply(got)), nil
 		}
 		if !want.accepts(got) {
-			return refused(i, "it answered "+quoteReply(got)), nil
+			return refused(i, msgItAnswered+quoteReply(got)), nil
 		}
 	}
 	return capabilityResult{state: capSupported}, nil

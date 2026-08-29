@@ -331,7 +331,7 @@ func (r *Resolver) admits(filters []symbols.ElementFilter, cand *symbols.Symbol)
 	if r.inCondition > 0 {
 		return true
 	}
-	judge, ok := r.model.(elementFilterJudge)
+	judge, ok := r.model.(elementFilterChecker)
 	if !ok {
 		return true
 	}

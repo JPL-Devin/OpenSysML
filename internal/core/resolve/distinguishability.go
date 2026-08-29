@@ -54,7 +54,7 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 	}
 	// Nothing is inherited without a supertype, and collecting the inherited
 	// members of every scope is not free.
-	model, ok := r.model.(supertypeLookup)
+	model, ok := r.model.(supertypeProvider)
 	if !ok || len(model.DirectSupertypes(owner)) == 0 {
 		return
 	}
@@ -87,7 +87,7 @@ func (r *Resolver) checkInheritedAmbiguity(
 	owner *symbols.Symbol,
 	inherited map[string][]*symbols.Symbol,
 	declared map[string]bool,
-	model supertypeLookup,
+	model supertypeProvider,
 ) {
 	if r.hasUnresolvedRedefinitions(owner.Scope) {
 		return
@@ -117,7 +117,7 @@ func (r *Resolver) checkInheritedAmbiguity(
 // owner's own supertype declares under that name (KerML 8.4.4.6).
 func (r *Resolver) withoutImplicitlyRedefined(
 	members []*symbols.Symbol,
-	model supertypeLookup,
+	model supertypeProvider,
 ) []*symbols.Symbol {
 	out := make([]*symbols.Symbol, 0, len(members))
 	for _, sym := range members {
@@ -139,7 +139,7 @@ func (r *Resolver) withoutImplicitlyRedefined(
 }
 
 // inheritsFrom reports whether sub reaches sup through its supertypes.
-func (r *Resolver) inheritsFrom(sub, sup *symbols.Symbol, model supertypeLookup) bool {
+func (r *Resolver) inheritsFrom(sub, sup *symbols.Symbol, model supertypeProvider) bool {
 	if sub == nil || sup == nil || sub == sup {
 		return false
 	}
@@ -200,7 +200,7 @@ func (r *Resolver) hasUnresolvedRedefinitions(scope *symbols.Scope) bool {
 // inheritedMembers collects the members owner inherits, keyed by name: what each
 // supertype contributes, less the ones owner's own members redefine. Library
 // supertypes are not walked — see docs/project/spec-compliance.md.
-func (r *Resolver) inheritedMembers(owner *symbols.Symbol, model supertypeLookup) map[string][]*symbols.Symbol {
+func (r *Resolver) inheritedMembers(owner *symbols.Symbol, model supertypeProvider) map[string][]*symbols.Symbol {
 	var candidates []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{owner: true}
 	for _, sup := range model.DirectSupertypes(owner) {
@@ -216,7 +216,7 @@ func (r *Resolver) inheritedMembers(owner *symbols.Symbol, model supertypeLookup
 // inheritableMembers is what a supertype contributes to its subtypes: its own
 // non-private members plus what it inherits itself, redefined ones removed at
 // each level, so a redefinition anywhere up the chain hides its target.
-func (r *Resolver) inheritableMembers(sup *symbols.Symbol, model supertypeLookup, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
+func (r *Resolver) inheritableMembers(sup *symbols.Symbol, model supertypeProvider, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
 	if sup == nil || seen[sup] || r.idx.Library(sup) {
 		return nil
 	}

@@ -129,58 +129,78 @@ func positionalEndKind(member Node) string {
 // depth+1, closing all open parens on the final line.
 func dumpNode(b *strings.Builder, n Node, depth int) {
 	indent(b, depth)
+	switch {
+	case dumpExpression(b, n, depth):
+	case dumpNamespaceMember(b, n, depth):
+	case dumpDeclaration(b, n, depth):
+	case dumpBehavior(b, n, depth):
+	default:
+		fmt.Fprintf(b, `(%T)`, n)
+	}
+}
+
+// dumpExpression dumps a literal or expression node, reporting whether n was one.
+func dumpExpression(b *strings.Builder, n Node, depth int) bool {
 	switch v := n.(type) {
 	case *LiteralInteger:
 		fmt.Fprintf(b, `(LiteralInteger value=%q)`, v.Value)
+		return true
 	case *LiteralReal:
 		fmt.Fprintf(b, `(LiteralReal value=%q)`, v.Value)
+		return true
 	case *LiteralString:
 		fmt.Fprintf(b, `(LiteralString value=%q)`, v.Value)
+		return true
 	case *LiteralBool:
 		fmt.Fprintf(b, `(LiteralBool value=%t)`, v.Value)
+		return true
 	case *LiteralInfinity:
 		b.WriteString(`(LiteralInfinity)`)
+		return true
 	case *NullExpr:
 		b.WriteString(`(NullExpr)`)
+		return true
 	case *FeatureReference:
 		fmt.Fprintf(b, `(FeatureReference name=%q)`, qnString(v.Name))
+		return true
 	case *MetadataAccessExpr:
 		fmt.Fprintf(b, `(MetadataAccessExpr ref=%q)`, qnString(v.Ref))
+		return true
 	case *OperatorExpr:
 		fmt.Fprintf(b, `(OperatorExpr operator=%q`, v.Operator.String())
 		writeChildren(b, depth, operandsWithTypeRef(v))
-		return
+		return true
 	case *FeatureChainExpr:
 		fmt.Fprintf(b, `(FeatureChainExpr member=%q`, qnString(v.Member))
 		writeChildren(b, depth, []Node{v.Operand})
-		return
+		return true
 	case *IndexExpr:
 		b.WriteString(`(IndexExpr`)
 		if v.Bracket {
 			b.WriteString(` bracket=true`)
 		}
 		writeChildren(b, depth, []Node{v.Operand, v.Index})
-		return
+		return true
 	case *CollectExpr:
 		b.WriteString(`(CollectExpr`)
 		writeChildren(b, depth, []Node{v.Operand, v.Body})
-		return
+		return true
 	case *SelectExpr:
 		b.WriteString(`(SelectExpr`)
 		writeChildren(b, depth, []Node{v.Operand, v.Body})
-		return
+		return true
 	case *InvocationExpr:
 		fmt.Fprintf(b, `(InvocationExpr type=%q`, qnString(v.Type))
 		writeChildren(b, depth, invocationChildren(v))
-		return
+		return true
 	case *ConstructorExpr:
 		fmt.Fprintf(b, `(ConstructorExpr type=%q`, qnString(v.Type))
 		writeChildren(b, depth, v.Args)
-		return
+		return true
 	case *SequenceExpr:
 		b.WriteString(`(SequenceExpr`)
 		writeChildren(b, depth, v.Elements)
-		return
+		return true
 	case *BodyExpr:
 		b.WriteString(`(BodyExpr`)
 		if len(v.Params) > 0 {
@@ -215,28 +235,38 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, v.Result)
 		}
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *ErrorNode:
 		fmt.Fprintf(b, `(ErrorNode message=%q)`, v.Message)
+		return true
+	default:
+		return false
+	}
+}
+
+// dumpNamespaceMember dumps a namespace, import or annotation node, reporting
+// whether n was one.
+func dumpNamespaceMember(b *strings.Builder, n Node, depth int) bool {
+	switch v := n.(type) {
 	case *RootNamespace:
 		b.WriteString(`(RootNamespace`)
 		writeChildren(b, depth, v.Members)
-		return
+		return true
 	case *Membership:
 		fmt.Fprintf(b, `(Membership visibility=%q`, visibilityString(v.Visibility))
 		if v.IsTypeFeature {
 			b.WriteString(` typeFeature=true`)
 		}
 		writeChildren(b, depth, []Node{v.Member})
-		return
+		return true
 	case *Package:
 		fmt.Fprintf(b, `(Package name=%q library=%t standard=%t`, identName(v.Ident), v.IsLibrary, v.IsStandard)
 		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Members))
-		return
+		return true
 	case *Namespace:
 		fmt.Fprintf(b, `(Namespace name=%q`, identName(v.Ident))
 		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Members))
-		return
+		return true
 	case *Import:
 		label := "Import"
 		if v.IsExpose {
@@ -249,12 +279,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append([]Node{v.FilterExpr}, kids...)
 		}
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *Alias:
 		fmt.Fprintf(b, `(Alias visibility=%q name=%q for=%q`,
 			visibilityString(v.Visibility), identName(v.Ident), qnString(v.For))
 		writeChildren(b, depth, v.Body)
-		return
+		return true
 	case *MultiplicityDecl:
 		fmt.Fprintf(b, `(MultiplicityDecl name=%q subsets=%q`, identName(v.Ident), qnString(v.Subsets))
 		kids := make([]Node, 0, len(v.Members)+1)
@@ -262,26 +292,29 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, v.Range)
 		}
 		writeChildren(b, depth, append(kids, v.Members...))
-		return
+		return true
 	case *Dependency:
 		fmt.Fprintf(b, `(Dependency clients=%q suppliers=%q`, qnList(v.Clients), qnList(v.Suppliers))
 		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Body))
-		return
+		return true
 	case *RelationshipMember:
 		fmt.Fprintf(b, `(RelationshipMember kind=%q name=%q keyword=%q source=%q target=%q conjugated=%t`,
 			v.Kind.String(), identName(v.Ident), v.Keyword, endString(v.Source), endString(v.Target), v.Conjugated)
 		writeChildren(b, depth, v.Members)
-		return
+		return true
 	case *Comment:
 		fmt.Fprintf(b, `(Comment about=%q locale=%q)`, qnList(v.About), v.Locale)
+		return true
 	case *Documentation:
 		fmt.Fprintf(b, `(Documentation locale=%q)`, v.Locale)
+		return true
 	case *TextualRepresentation:
 		fmt.Fprintf(b, `(TextualRepresentation language=%q`, v.Language)
 		if name := identName(v.Ident); name != "" {
 			fmt.Fprintf(b, ` name=%q`, name)
 		}
 		b.WriteString(`)`)
+		return true
 	case *PrefixMetadata:
 		fmt.Fprintf(b, `(PrefixMetadata type=%q`, qnString(v.Type))
 		if name := identName(v.Ident); name != "" {
@@ -291,10 +324,20 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			fmt.Fprintf(b, ` about=%q`, qnList(v.About))
 		}
 		b.WriteString(`)`)
+		return true
 	case *FilterMember:
 		b.WriteString(`(FilterMember`)
 		writeChildren(b, depth, []Node{v.Condition})
-		return
+		return true
+	default:
+		return false
+	}
+}
+
+// dumpDeclaration dumps a definition, usage or relationship node, reporting
+// whether n was one.
+func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
+	switch v := n.(type) {
 	case *Definition:
 		fmt.Fprintf(b, `(Definition kind=%q abstract=%t variation=%t name=%q`,
 			v.Kind.String(), v.IsAbstract, v.IsVariation, identName(v.Ident))
@@ -307,7 +350,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			b.WriteString(` parallel=true`)
 		}
 		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, v.Multiplicity, nil, v.Members))
-		return
+		return true
 	case *Usage:
 		fmt.Fprintf(b, `(Usage kind=%q name=%q ref=%t direction=%q composite=%t derived=%t ordered=%t nonunique=%t`,
 			v.Kind.String(), identName(v.Ident), v.IsReference, v.Direction.String(),
@@ -350,7 +393,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			b.WriteString(` negated=true`)
 		}
 		writeChildren(b, depth, usageChildren(v))
-		return
+		return true
 	case *FlowEnds:
 		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q declared=%t`,
 			endString(v.From), endString(v.To), endString(v.Payload), v.PayloadDecl != nil)
@@ -359,7 +402,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, v.PayloadMultiplicity)
 		}
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *SendStatement:
 		// The `to`/`via` distinction decides how the message is routed, so a
 		// golden that did not show it would not lock the parse.
@@ -376,7 +419,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		kids = append(kids, v.Members...)
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *CrossFeatureMember:
 		fmt.Fprintf(b, `(CrossFeatureMember name=%q`, identName(v.Ident))
 		var kids []Node
@@ -387,7 +430,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, r)
 		}
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *ConnectorEnd:
 		targetStr := ""
 		if qn, ok := v.Target.(*QualifiedName); ok {
@@ -410,7 +453,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, v.Reference)
 		}
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *Relationship:
 		targetStr := "nil"
 		if v.Target != nil {
@@ -429,7 +472,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, v.Target)
 		}
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *Multiplicity:
 		fmt.Fprintf(b, `(Multiplicity range=%t`, v.IsRange)
 		var kids []Node
@@ -440,7 +483,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, v.Upper)
 		}
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *SubjectMember:
 		fmt.Fprintf(b, `(SubjectMember name=%q type=%q`, v.Name, qnString(v.TypeRef))
 		kids := make([]Node, 0)
@@ -455,7 +498,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		kids = append(kids, v.Body...)
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *RequireMember:
 		if v.Reference != nil {
 			// Reference form: require Q::r [mult] { body }
@@ -474,12 +517,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			b.WriteString(`(RequireMember`)
 			writeChildren(b, depth, []Node{v.Expression})
 		}
-		return
+		return true
 	case *AssumeMember:
 		if v.Reference != nil {
 			fmt.Fprintf(b, `(AssumeMember name=%q`, qnString(v.Reference))
 			writeChildren(b, depth, referenceChildren(v.Multiplicity, v.Body))
-			return
+			return true
 		}
 		b.WriteString(`(AssumeMember`)
 		if v.Expression == nil {
@@ -491,7 +534,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		} else {
 			writeChildren(b, depth, []Node{v.Expression})
 		}
-		return
+		return true
 	case *ConstraintMember:
 		fmt.Fprintf(b, `(ConstraintMember assert=%t negated=%t`, v.IsAssert, v.IsNegated)
 		if v.Keyword != "" {
@@ -506,7 +549,16 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		} else {
 			writeChildren(b, depth, []Node{v.Expression})
 		}
-		return
+		return true
+	default:
+		return false
+	}
+}
+
+// dumpBehavior dumps a behavioral node — a transition, event or control node —
+// reporting whether n was one.
+func dumpBehavior(b *strings.Builder, n Node, depth int) bool {
+	switch v := n.(type) {
 	case *TransitionMember:
 		fmt.Fprintf(b, `(TransitionMember source=%q target=%q`, qnString(v.Source), qnString(v.Target))
 		if v.Name != "" {
@@ -530,16 +582,16 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		kids = append(kids, v.Effect...)
 		kids = append(kids, v.Members...)
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *TimeEvent:
 		// `at` and `after` differ only in this flag, so print it.
 		fmt.Fprintf(b, `(TimeEvent absolute=%t`, v.Absolute)
 		writeChildren(b, depth, []Node{v.Duration})
-		return
+		return true
 	case *ChangeEvent:
 		b.WriteString(`(ChangeEvent`)
 		writeChildren(b, depth, []Node{v.Condition})
-		return
+		return true
 	case *CallEvent:
 		names := make([]string, len(v.Parameters))
 		for i, p := range v.Parameters {
@@ -547,7 +599,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		fmt.Fprintf(b, `(CallEvent operation=%q parameters=[%s])`,
 			qnString(v.Operation), strings.Join(names, " "))
-		return
+		return true
 	case *WhileLoopActionNode:
 		// kind and variable distinguish the three loop forms, which the node
 		// shape alone does not.
@@ -567,7 +619,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		kids = append(kids, v.Body...)
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *IfActionNode:
 		b.WriteString(`(IfActionNode`)
 		kids := []Node{}
@@ -578,32 +630,33 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, branch)
 		}
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *IfBranchNode:
 		fmt.Fprintf(b, `(IfBranchNode kind=%q`, v.Kind.String())
 		writeChildren(b, depth, v.Body)
-		return
+		return true
 	case *PseudostateNode:
 		fmt.Fprintf(b, `(PseudostateNode kind=%q name=%q)`, v.Kind.String(), v.Name)
-		return
+		return true
 	case *DeferMember:
 		b.WriteString(`(DeferMember`)
 		writeChildren(b, depth, v.Triggers)
-		return
+		return true
 	case *EntryMember:
 		b.WriteString(`(EntryMember`)
 		writeChildren(b, depth, v.Actions)
-		return
+		return true
 	case *DoMember:
 		b.WriteString(`(DoMember`)
 		writeChildren(b, depth, v.Actions)
-		return
+		return true
 	case *ExitMember:
 		b.WriteString(`(ExitMember`)
 		writeChildren(b, depth, v.Actions)
-		return
+		return true
 	case *SubstateMember:
 		fmt.Fprintf(b, `(SubstateMember name=%q)`, v.Name)
+		return true
 	case *SuccessionEdge:
 		// The ends are what a `then` says, whether the author wrote the edge
 		// form or the parser desugared a member-attached keyword into it.
@@ -611,9 +664,10 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			successionEnd(v.Source, v.SourceMember), successionEnd(v.Target, v.TargetMember))
 		if len(v.Members) > 0 {
 			writeChildren(b, depth, v.Members)
-			return
+			return true
 		}
 		b.WriteString(`)`)
+		return true
 	case *ControlFlowEdge:
 		// The branches of one decision differ only in their guard and in which
 		// one is the default, so print both alongside the ends.
@@ -621,9 +675,10 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			successionEnd(v.Source, v.SourceMember), successionEnd(v.Target, v.TargetMember), v.IsElse)
 		if v.Guard != nil {
 			writeChildren(b, depth, []Node{v.Guard})
-			return
+			return true
 		}
 		b.WriteString(`)`)
+		return true
 	case *InitialNode:
 		fmt.Fprintf(b, `(InitialNode name=%q successor=%q`, v.Name, qnString(v.Successor))
 		kids := []Node{}
@@ -632,34 +687,36 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		kids = append(kids, v.Members...)
 		writeChildren(b, depth, kids)
-		return
+		return true
 	case *FinalNode:
 		fmt.Fprint(b, `(FinalNode)`)
+		return true
 	case *ForkNode:
 		fmt.Fprintf(b, `(ForkNode name=%q`, v.Name)
 		writeChildren(b, depth, v.Members)
-		return
+		return true
 	case *JoinNode:
 		fmt.Fprintf(b, `(JoinNode name=%q`, v.Name)
 		writeChildren(b, depth, v.Members)
-		return
+		return true
 	case *MergeNode:
 		fmt.Fprintf(b, `(MergeNode name=%q`, v.Name)
 		writeChildren(b, depth, v.Members)
-		return
+		return true
 	case *DecisionNode:
 		fmt.Fprintf(b, `(DecisionNode name=%q`, v.Name)
 		writeChildren(b, depth, v.Members)
-		return
+		return true
 	case *TerminateStatement:
 		b.WriteString(`(TerminateStatement`)
 		if v.Target != nil {
 			writeChildren(b, depth, []Node{v.Target})
-			return
+			return true
 		}
 		b.WriteString(`)`)
+		return true
 	default:
-		fmt.Fprintf(b, `(%T)`, n)
+		return false
 	}
 }
 

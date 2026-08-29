@@ -90,6 +90,11 @@ func NewIndexWithStdlib() *symbols.Index {
 
 // Open registers an authoritative open buffer for name and reindexes.
 func (w *Workspace) Open(name string, content []byte, version int) {
+	w.setOpenBuffer(name, content, version)
+}
+
+// setOpenBuffer records an open buffer and reindexes it.
+func (w *Workspace) setOpenBuffer(name string, content []byte, version int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.open[name] = true
@@ -98,10 +103,7 @@ func (w *Workspace) Open(name string, content []byte, version int) {
 
 // Update replaces the open buffer content for name and reindexes.
 func (w *Workspace) Update(name string, content []byte, version int) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.open[name] = true
-	w.reindexLocked(name, content, version)
+	w.setOpenBuffer(name, content, version)
 }
 
 // SetOnDisk records the bytes a file holds on disk. If the document is not open,

@@ -178,7 +178,7 @@ func TestLibraryBodiesArePresentOnEveryPath(t *testing.T) {
 				}
 			}
 			// A condition body.
-			if got := conditionBodies(space); got == 0 {
+			if conditionBodies(space) == 0 {
 				t.Error("Lib::Space exposes no condition body")
 			}
 			// The declared multiplicity, not the assumed 1..1.

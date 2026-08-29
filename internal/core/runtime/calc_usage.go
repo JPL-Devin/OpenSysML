@@ -611,7 +611,7 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 // an output of the same run whose binding named this one.
 func (run *calcRun) enter(ctx *Context) (func(), error) {
 	if run.onStack {
-		return func() {}, nil
+		return func() { /* counted already; nothing to take off the stack */ }, nil
 	}
 	leave, err := ctx.enterCalc(run.shape.Name)
 	if err != nil {

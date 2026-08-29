@@ -89,7 +89,7 @@ func TestF71PortionWordsNegative(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sf := source.New(tt.file, []byte(tt.input))
 			p := New(sf)
-			if root := p.ParseFile(); root == nil {
+			if p.ParseFile() == nil {
 				t.Fatal("ParseFile returned nil")
 			}
 			if len(p.Diagnostics) == 0 {

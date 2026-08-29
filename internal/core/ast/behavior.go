@@ -362,7 +362,7 @@ type TimeEvent struct {
 	Absolute bool // true for `at`, false for `after`
 }
 
-func (*TimeEvent) triggerEvent() {}
+func (*TimeEvent) triggerEvent() { /* marker: closed TriggerEvent set */ }
 
 // ChangeEvent fires when a condition becomes true.
 type ChangeEvent struct {
@@ -370,7 +370,7 @@ type ChangeEvent struct {
 	Condition Node // boolean expression
 }
 
-func (*ChangeEvent) triggerEvent() {}
+func (*ChangeEvent) triggerEvent() { /* marker: closed TriggerEvent set */ }
 
 // AcceptEvent fires when a signal is received. It is the lowered form of the
 // payload parameter of an accept (SysML.xtext `PayloadParameter`), whose three
@@ -394,7 +394,7 @@ type AcceptEvent struct {
 	Payload *Usage
 }
 
-func (*AcceptEvent) triggerEvent() {}
+func (*AcceptEvent) triggerEvent() { /* marker: closed TriggerEvent set */ }
 
 // CallEvent fires when an operation is invoked. Parameters are the argument
 // names the trigger declares (`accept op(speed)`); an empty list matches a call
@@ -405,7 +405,7 @@ type CallEvent struct {
 	Parameters []NameSegment  // declared argument names, in written order
 }
 
-func (*CallEvent) triggerEvent() {}
+func (*CallEvent) triggerEvent() { /* marker: closed TriggerEvent set */ }
 
 // Phase C1: Calculation and Constraint Body Members
 

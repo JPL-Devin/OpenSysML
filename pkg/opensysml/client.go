@@ -111,7 +111,7 @@ type client struct {
 	caller caller
 }
 
-func (c *client) sealed() {}
+func (c *client) sealed() { /* marker: Client is closed to outside implementations */ }
 
 func (c *client) ServerInfo(ctx context.Context) (*ServerInfo, error) {
 	resp, err := c.caller.serverInfo(ctx)

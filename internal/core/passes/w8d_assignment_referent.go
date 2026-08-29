@@ -18,7 +18,7 @@ type AssignmentReferentPass struct{}
 
 func (AssignmentReferentPass) Level() PassLevel { return LevelConstraint }
 
-func (AssignmentReferentPass) ElementScoped() {}
+func (AssignmentReferentPass) ElementScoped() { /* marker: per-element gating */ }
 
 func (AssignmentReferentPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {

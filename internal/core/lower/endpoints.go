@@ -14,9 +14,10 @@ func connectorEndReference(end *ast.ConnectorEnd) ast.Node {
 	return end.AttachedTarget()
 }
 
-// Endpoints resolves the vertex a transition endpoint names, implemented by the
-// name-resolution tier (*resolve.Resolver) so lowering matches no names itself.
-type Endpoints interface {
+// EndpointResolver resolves the vertex a transition endpoint names, implemented
+// by the name-resolution tier (*resolve.Resolver) so lowering matches no names
+// itself.
+type EndpointResolver interface {
 	// Endpoint returns the declaration qn names, written in scope, and whether it
 	// names a vertex at all.
 	Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (decl ast.Node, ok bool)
@@ -50,7 +51,7 @@ func (s scopeEndpoints) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (a
 // localEndpoints indexes a machine no scope tree holds — a hand-built one in a
 // unit test — and returns its endpoints plus the machine body scope of that
 // index, which lowering descends so a region names its own vertices.
-func localEndpoints(decl ast.Node) (Endpoints, *symbols.Scope) {
+func localEndpoints(decl ast.Node) (EndpointResolver, *symbols.Scope) {
 	root := &ast.RootNamespace{Members: []ast.Node{decl}}
 	idx := symbols.NewIndexFromDoc("<lowered>", root)
 	scope := idx.DocumentRoot("<lowered>")

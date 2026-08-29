@@ -102,6 +102,19 @@ func opensName(sofar string, rest []rune) bool {
 	return false
 }
 
+// Literals the command table, its dispatch and the help headings share.
+const (
+	cmdQuery  = "%query"
+	argName   = "<name>"
+	timeLabel = "  Time: "
+
+	groupLibrary    = "Library discovery:"
+	groupRuntime    = "Runtime commands:"
+	groupBehavioral = "Behavioral commands:"
+	groupAction     = "Action debugging:"
+	groupState      = "State machine debugging:"
+)
+
 // metaCommand is one prompt command. The table below is what the help text,
 // tab completion and the unknown-command suggestion all read.
 type metaCommand struct {
@@ -119,7 +132,7 @@ var metaCommandTable = []metaCommand{
 	{name: "%load", args: "<path>...", desc: "submit the contents of files, directories or globs"},
 	{name: "%print", args: "[name]", desc: "print the session model as SysML notation, or just the named element"},
 	{name: "%save", args: "<file>", desc: "write the session model to a file (.sysml notation, or .ttl RDF — experimental)"},
-	{name: "%query", args: "<oslc-query>", desc: "identify model elements using OSLC Query text"},
+	{name: cmdQuery, args: "<oslc-query>", desc: "identify model elements using OSLC Query text"},
 	{name: "%verbosity", args: "[level]", desc: "show or set output level: quiet, normal or debug"},
 	{name: "%trace", args: "[on|off]", desc: "show or set execution tracing (evaluation, calc, action and state steps)"},
 	{name: "%strict", args: "[on|off]", desc: "show or set strict conformance: report notation no SysML v2 production admits as an error"},
@@ -127,38 +140,38 @@ var metaCommandTable = []metaCommand{
 	{name: "%quit", desc: "exit the REPL"},
 	{name: "%exit", desc: "exit the REPL", alias: true},
 
-	{group: "Library discovery:", name: "%search", args: "<substring>", desc: "list the declared and library symbols whose qualified name contains <substring>"},
-	{group: "Library discovery:", name: "%builtins", desc: "list the library functions this build implements directly"},
-	{group: "Library discovery:", name: "%view", args: "<name>", desc: "show what a view exposes, and the views nested in it"},
-	{group: "Library discovery:", name: "%render", args: "<name> [form]", desc: "render a view as the rendering it states — as text, or as a Mermaid diagram or a Markdown table"},
+	{group: groupLibrary, name: "%search", args: "<substring>", desc: "list the declared and library symbols whose qualified name contains <substring>"},
+	{group: groupLibrary, name: "%builtins", desc: "list the library functions this build implements directly"},
+	{group: groupLibrary, name: "%view", args: argName, desc: "show what a view exposes, and the views nested in it"},
+	{group: groupLibrary, name: "%render", args: "<name> [form]", desc: "render a view as the rendering it states — as text, or as a Mermaid diagram or a Markdown table"},
 
-	{group: "Runtime commands:", name: "%instantiate", args: "<name>", desc: "create an instance of a part def"},
-	{group: "Runtime commands:", name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
-	{group: "Runtime commands:", name: "%features", args: "<name>", desc: "show an object's features and their values"},
-	{group: "Runtime commands:", name: "%instances", desc: "list all instantiated objects"},
-	{group: "Runtime commands:", name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
+	{group: groupRuntime, name: "%instantiate", args: argName, desc: "create an instance of a part def"},
+	{group: groupRuntime, name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
+	{group: groupRuntime, name: "%features", args: argName, desc: "show an object's features and their values"},
+	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
+	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
 
-	{group: "Behavioral commands:", name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
-	{group: "Behavioral commands:", name: "%constraint", args: "<name>", desc: "evaluate a constraint definition"},
-	{group: "Behavioral commands:", name: "%requirement", args: "<name>", desc: "evaluate a requirement definition"},
-	{group: "Behavioral commands:", name: "%satisfy", args: "[name]", desc: "evaluate the satisfaction assertions of the model, or of one element"},
-	{group: "Behavioral commands:", name: "%check", args: "<name>", desc: "ask an SMT solver whether a constraint, requirement or satisfaction can be satisfied (experimental)"},
-	{group: "Behavioral commands:", name: "%explain", args: "<name>", desc: "ask an SMT solver which conditions of an unsatisfiable element conflict (experimental)"},
-	{group: "Behavioral commands:", name: "%solve", args: "<name>", desc: "ask an SMT solver for values satisfying an element, keeping what is already fixed (experimental)"},
-	{group: "Behavioral commands:", name: "%configure", args: "<name> [<variation>=<variant>...] [all [<count>]]", desc: "ask an SMT solver which variants an element's conditions permit (experimental)"},
-	{group: "Behavioral commands:", name: "%optimize", args: "<name>", desc: "ask an SMT solver for the best values an analysis case's objectives admit (experimental)"},
+	{group: groupBehavioral, name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
+	{group: groupBehavioral, name: "%constraint", args: argName, desc: "evaluate a constraint definition"},
+	{group: groupBehavioral, name: "%requirement", args: argName, desc: "evaluate a requirement definition"},
+	{group: groupBehavioral, name: "%satisfy", args: "[name]", desc: "evaluate the satisfaction assertions of the model, or of one element"},
+	{group: groupBehavioral, name: "%check", args: argName, desc: "ask an SMT solver whether a constraint, requirement or satisfaction can be satisfied (experimental)"},
+	{group: groupBehavioral, name: "%explain", args: argName, desc: "ask an SMT solver which conditions of an unsatisfiable element conflict (experimental)"},
+	{group: groupBehavioral, name: "%solve", args: argName, desc: "ask an SMT solver for values satisfying an element, keeping what is already fixed (experimental)"},
+	{group: groupBehavioral, name: "%configure", args: "<name> [<variation>=<variant>...] [all [<count>]]", desc: "ask an SMT solver which variants an element's conditions permit (experimental)"},
+	{group: groupBehavioral, name: "%optimize", args: argName, desc: "ask an SMT solver for the best values an analysis case's objectives admit (experimental)"},
 
-	{group: "Action debugging:", name: "%action", args: "<name> [<object>]", desc: "start action executor debugging session, performed by an object"},
-	{group: "Action debugging:", name: "%step", desc: "advance one token step, or one step of the state machine being debugged"},
-	{group: "Action debugging:", name: "%continue", desc: "run action to completion"},
-	{group: "Action debugging:", name: "%tokens", desc: "show active tokens"},
-	{group: "Action debugging:", name: "%break", args: "<node>", desc: "set breakpoint at node"},
-	{group: "Action debugging:", name: "%stop", desc: "stop current debugging session"},
+	{group: groupAction, name: "%action", args: "<name> [<object>]", desc: "start action executor debugging session, performed by an object"},
+	{group: groupAction, name: "%step", desc: "advance one token step, or one step of the state machine being debugged"},
+	{group: groupAction, name: "%continue", desc: "run action to completion"},
+	{group: groupAction, name: "%tokens", desc: "show active tokens"},
+	{group: groupAction, name: "%break", args: "<node>", desc: "set breakpoint at node"},
+	{group: groupAction, name: "%stop", desc: "stop current debugging session"},
 
-	{group: "State machine debugging:", name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits, or a state machine performed by an object"},
-	{group: "State machine debugging:", name: "%events", desc: "show event queue"},
-	{group: "State machine debugging:", name: "%current", desc: "show current state and configuration"},
-	{group: "State machine debugging:", name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
+	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits, or a state machine performed by an object"},
+	{group: groupState, name: "%events", desc: "show event queue"},
+	{group: groupState, name: "%current", desc: "show current state and configuration"},
+	{group: groupState, name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
 }
 
 // helpText renders the command table, one line per command under its heading.
@@ -211,46 +224,71 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	if len(fields) == 0 {
 		return nil, false, nil
 	}
+	for _, run := range []func([]string, string) (metaResult, bool){
+		s.metaSessionCommand, s.metaModelCommand, s.metaDebugCommand,
+	} {
+		if res, ok := run(fields, line); ok {
+			return res.out, res.quit, res.err
+		}
+	}
+	return []string{unknownCommandLine(fields[0])}, false, nil
+}
+
+// metaResult is a meta command's outcome: lines to print, whether to quit, and
+// an unrecoverable error.
+type metaResult struct {
+	out  []string
+	quit bool
+	err  error
+}
+
+func metaOut(out []string, quit bool, err error) metaResult {
+	return metaResult{out: out, quit: quit, err: err}
+}
+
+// metaSessionCommand runs a session-level command, reporting whether the
+// line named one.
+func (s *Session) metaSessionCommand(fields []string, line string) (metaResult, bool) {
 	switch fields[0] {
 	case "%help":
-		return helpText(), false, nil
+		return metaOut(helpText(), false, nil), true
 	case "%list":
 		decls := s.list()
 		if len(decls) == 0 {
-			return []string{"(empty session)"}, false, nil
+			return metaOut([]string{"(empty session)"}, false, nil), true
 		}
-		return decls, false, nil
+		return metaOut(decls, false, nil), true
 	case "%clear":
-		return append([]string{"session cleared"}, s.clear()...), false, nil
+		return metaOut(append([]string{"session cleared"}, s.clear()...), false, nil), true
 	case "%load":
 		if len(fields) < 2 {
-			return []string{"usage: %load <file|dir|glob>..."}, false, nil
+			return metaOut([]string{"usage: %load <file|dir|glob>..."}, false, nil), true
 		}
 		lines, lerr := s.loadPaths(pathArgs(fields[1:]))
 		if lerr != nil {
-			return nil, false, lerr
+			return metaOut(nil, false, lerr), true
 		}
-		return lines, false, nil
+		return metaOut(lines, false, nil), true
 	case "%print":
 		if len(fields) < 2 {
-			return s.doPrint("")
+			return metaOut(s.doPrint("")), true
 		}
-		return s.doPrint(fields[1])
+		return metaOut(s.doPrint(fields[1])), true
 	case "%save":
 		if len(fields) < 2 {
-			return []string{"usage: %save <file.sysml|file.ttl>"}, false, nil
+			return metaOut([]string{"usage: %save <file.sysml|file.ttl>"}, false, nil), true
 		}
-		return s.doSave(nameText(fields[1]))
+		return metaOut(s.doSave(nameText(fields[1]))), true
 	case "%verbosity":
 		if len(fields) < 2 {
-			return []string{fmt.Sprintf("verbosity: %s", s.verbosity)}, false, nil
+			return metaOut([]string{fmt.Sprintf("verbosity: %s", s.verbosity)}, false, nil), true
 		}
 		v, verr := ParseVerbosity(fields[1])
 		if verr != nil {
-			return []string{"error: " + verr.Error()}, false, nil
+			return metaOut([]string{errPrefix + verr.Error()}, false, nil), true
 		}
 		s.SetVerbosity(v)
-		return []string{fmt.Sprintf("verbosity: %s", v)}, false, nil
+		return metaOut([]string{fmt.Sprintf("verbosity: %s", v)}, false, nil), true
 	case "%trace":
 		if len(fields) >= 2 {
 			switch fields[1] {
@@ -259,152 +297,167 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			case "off":
 				s.SetTracing(false)
 			default:
-				return []string{fmt.Sprintf("error: unknown trace setting %q (want on or off)", fields[1])}, false, nil
+				return metaOut([]string{fmt.Sprintf("error: unknown trace setting %q (want on or off)", fields[1])}, false, nil), true
 			}
 		}
-		return []string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil
+		return metaOut([]string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil), true
 	case "%strict":
-		return s.doStrict(fields[1:]), false, nil
+		return metaOut(s.doStrict(fields[1:]), false, nil), true
 	case "%budget":
-		return s.doBudget(), false, nil
+		return metaOut(s.doBudget(), false, nil), true
 	case "%search":
 		if len(fields) < 2 {
-			return []string{"usage: %search <substring>"}, false, nil
+			return metaOut([]string{"usage: %search <substring>"}, false, nil), true
 		}
-		return s.doSearch(nameText(fields[1]))
+		return metaOut(s.doSearch(nameText(fields[1]))), true
 	case "%builtins":
-		return s.doBuiltins()
+		return metaOut(s.doBuiltins()), true
 	case "%view":
 		if len(fields) < 2 {
-			return []string{"usage: %view <name>"}, false, nil
+			return metaOut([]string{"usage: %view <name>"}, false, nil), true
 		}
-		return s.doView(fields[1])
+		return metaOut(s.doView(fields[1])), true
 	case "%render":
 		if len(fields) < 2 || len(fields) > 3 {
-			return []string{renderUsage}, false, nil
+			return metaOut([]string{renderUsage}, false, nil), true
 		}
 		form := view.FormText
 		if len(fields) == 3 {
 			form = view.Form(fields[2])
 			if !slices.Contains(view.Forms(), form) {
-				return []string{fmt.Sprintf("unknown form %q; %s", fields[2], renderUsage)}, false, nil
+				return metaOut([]string{fmt.Sprintf("unknown form %q; %s", fields[2], renderUsage)}, false, nil), true
 			}
 		}
-		return s.doRender(fields[1], form)
+		return metaOut(s.doRender(fields[1], form)), true
 	case "%quit", "%exit":
-		return []string{"goodbye"}, true, nil
+		return metaOut([]string{"goodbye"}, true, nil), true
+	}
+	return metaResult{}, false
+}
+
+// metaModelCommand runs a model-level command, reporting whether the line
+// named one.
+func (s *Session) metaModelCommand(fields []string, line string) (metaResult, bool) {
+	switch fields[0] {
 	case "%instantiate":
 		if len(fields) < 2 {
-			return []string{"usage: %instantiate <name>"}, false, nil
+			return metaOut([]string{"usage: %instantiate <name>"}, false, nil), true
 		}
-		return s.doInstantiate(fields[1])
+		return metaOut(s.doInstantiate(fields[1])), true
 	case "%eval":
 		if len(fields) < 2 {
-			return []string{evalUsage}, false, nil
+			return metaOut([]string{evalUsage}, false, nil), true
 		}
 		tail := strings.TrimPrefix(strings.TrimSpace(line), "%eval")
-		return s.doEvalLine(strings.TrimSpace(tail))
+		return metaOut(s.doEvalLine(strings.TrimSpace(tail))), true
 	case "%features":
 		if len(fields) < 2 {
-			return []string{"usage: %features <name>"}, false, nil
+			return metaOut([]string{"usage: %features <name>"}, false, nil), true
 		}
-		return s.doFeatures(fields[1])
+		return metaOut(s.doFeatures(fields[1])), true
 	case "%instances":
-		return s.doInstances()
+		return metaOut(s.doInstances()), true
 	case "%calc":
 		if len(fields) < 2 {
-			return []string{"usage: %calc <name> [args...]"}, false, nil
+			return metaOut([]string{"usage: %calc <name> [args...]"}, false, nil), true
 		}
 		name, argText := splitCalcArgs(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%calc")))
-		return s.doCalc(name, argText)
+		return metaOut(s.doCalc(name, argText)), true
 	case "%constraint":
 		if len(fields) < 2 {
-			return []string{"usage: %constraint <name>"}, false, nil
+			return metaOut([]string{"usage: %constraint <name>"}, false, nil), true
 		}
-		return s.doConstraint(fields[1])
+		return metaOut(s.doConstraint(fields[1])), true
 	case "%requirement":
 		if len(fields) < 2 {
-			return []string{"usage: %requirement <name>"}, false, nil
+			return metaOut([]string{"usage: %requirement <name>"}, false, nil), true
 		}
-		return s.doRequirement(fields[1])
+		return metaOut(s.doRequirement(fields[1])), true
 	case "%satisfy":
-		return s.doSatisfy(fields[1:])
+		return metaOut(s.doSatisfy(fields[1:])), true
 	case "%check":
 		if len(fields) < 2 {
-			return []string{"usage: %check <name>"}, false, nil
+			return metaOut([]string{"usage: %check <name>"}, false, nil), true
 		}
-		return s.doCheck(fields[1])
+		return metaOut(s.doCheck(fields[1])), true
 	case "%explain":
 		if len(fields) < 2 {
-			return []string{"usage: %explain <name>"}, false, nil
+			return metaOut([]string{"usage: %explain <name>"}, false, nil), true
 		}
-		return s.doExplain(fields[1])
+		return metaOut(s.doExplain(fields[1])), true
 	case "%solve":
 		if len(fields) < 2 {
-			return []string{"usage: %solve <name>"}, false, nil
+			return metaOut([]string{"usage: %solve <name>"}, false, nil), true
 		}
-		return s.doSolve(fields[1])
+		return metaOut(s.doSolve(fields[1])), true
 	case "%configure":
 		if len(fields) < 2 {
-			return []string{"usage: %configure <name> [<variation>=<variant>...] [all [<count>]]"}, false, nil
+			return metaOut([]string{"usage: %configure <name> [<variation>=<variant>...] [all [<count>]]"}, false, nil), true
 		}
-		return s.doConfigure(fields[1], fields[2:])
+		return metaOut(s.doConfigure(fields[1], fields[2:])), true
 	case "%optimize":
 		if len(fields) < 2 {
-			return []string{"usage: %optimize <name>"}, false, nil
+			return metaOut([]string{"usage: %optimize <name>"}, false, nil), true
 		}
-		return s.doOptimize(fields[1])
-	// Action debugging
+		return metaOut(s.doOptimize(fields[1])), true
+		// Action debugging
+	}
+	return metaResult{}, false
+}
+
+// metaDebugCommand runs an execution-debugging command, reporting whether
+// the line named one.
+func (s *Session) metaDebugCommand(fields []string, line string) (metaResult, bool) {
+	switch fields[0] {
 	case "%action":
 		if len(fields) < 2 {
-			return []string{"usage: %action <name> [<object>]"}, false, nil
+			return metaOut([]string{"usage: %action <name> [<object>]"}, false, nil), true
 		}
-		return s.doAction(fields[1], fields[2:])
+		return metaOut(s.doAction(fields[1], fields[2:])), true
 	case "%step":
-		return s.doStep()
+		return metaOut(s.doStep()), true
 	case "%continue":
-		return s.doContinue()
+		return metaOut(s.doContinue()), true
 	case "%tokens":
-		return s.doTokens()
+		return metaOut(s.doTokens()), true
 	case "%break":
 		if len(fields) < 2 {
-			return []string{"usage: %break <node>"}, false, nil
+			return metaOut([]string{"usage: %break <node>"}, false, nil), true
 		}
-		return s.doBreak(nameText(fields[1]))
+		return metaOut(s.doBreak(nameText(fields[1]))), true
 	case "%stop":
-		return s.doStop()
+		return metaOut(s.doStop()), true
 	// State machine debugging
 	case "%state":
 		if len(fields) < 2 {
-			return []string{"usage: %state <name> [<object>]"}, false, nil
+			return metaOut([]string{"usage: %state <name> [<object>]"}, false, nil), true
 		}
-		return s.doStateMachine(fields[1], fields[2:])
+		return metaOut(s.doStateMachine(fields[1], fields[2:])), true
 	case "%invoke":
 		if len(fields) < 3 {
-			return []string{"usage: %invoke <object> <operation> [<parameter>=<expression> ...]"}, false, nil
+			return metaOut([]string{"usage: %invoke <object> <operation> [<parameter>=<expression> ...]"}, false, nil), true
 		}
-		return s.doInvoke(fields[1], fields[2], fields[3:])
-	case "%query":
+		return metaOut(s.doInvoke(fields[1], fields[2], fields[3:])), true
+	case cmdQuery:
 		if len(fields) < 2 {
-			return []string{"usage: %query <oslc-query>"}, false, nil
+			return metaOut([]string{"usage: %query <oslc-query>"}, false, nil), true
 		}
-		lines, err := s.query(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%query")))
+		lines, err := s.query(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), cmdQuery)))
 		if err != nil {
-			return []string{"error: " + err.Error()}, false, nil
+			return metaOut([]string{errPrefix + err.Error()}, false, nil), true
 		}
-		return lines, false, nil
+		return metaOut(lines, false, nil), true
 	case "%events":
-		return s.doEvents()
+		return metaOut(s.doEvents()), true
 	case "%current":
-		return s.doCurrent()
+		return metaOut(s.doCurrent()), true
 	case "%advance":
 		if len(fields) < 2 {
-			return []string{"usage: %advance <time>"}, false, nil
+			return metaOut([]string{"usage: %advance <time>"}, false, nil), true
 		}
-		return s.doAdvance(fields[1])
-	default:
-		return []string{unknownCommandLine(fields[0])}, false, nil
+		return metaOut(s.doAdvance(fields[1])), true
 	}
+	return metaResult{}, false
 }
 
 // doInstantiate creates an instance of a part def. A runtime that cannot be
@@ -417,7 +470,7 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 
 	lines, err := s.InstantiateNamed(name)
 	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return lines, false, nil
 }
@@ -445,7 +498,7 @@ func (s *Session) doEvalLine(tail string) ([]string, bool, error) {
 	lines, err := s.evalIn(name, expr)
 	if err != nil {
 		s.noteIfMaterializationFailure(err)
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return lines, false, nil
 }
@@ -579,7 +632,7 @@ func (s *Session) doEval(expr string) ([]string, bool, error) {
 	lines, err := s.evalExpr(expr)
 	if err != nil {
 		s.noteIfMaterializationFailure(err)
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return lines, false, nil
 }
@@ -946,7 +999,7 @@ func isSymbolReference(expr string) bool {
 func (s *Session) doFeatures(name string) ([]string, bool, error) {
 	_, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
-		out := []string{"error: " + lerr.Error()}
+		out := []string{errPrefix + lerr.Error()}
 		// The declaration may be gone with the objects materialized from it, which a
 		// bare unresolved reference does not explain.
 		if note := s.lost.lostNote(); note != "" {
@@ -1775,7 +1828,7 @@ func (s *Session) doAction(name string, performer []string) ([]string, bool, err
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
 		}
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	lines = append(lines, "", "Use %step to advance, %tokens to inspect, %continue to run to completion")
 	return lines, false, nil
@@ -2037,7 +2090,7 @@ func (s *Session) doStateMachine(name string, performer []string) ([]string, boo
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
 		}
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	lines = append(lines, "", "Use %events to see queue, %current for state, %advance <time> to step")
 	return lines, false, nil
@@ -2100,7 +2153,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	return []string{
 		fmt.Sprintf("✓ Started state machine executor for %q", name),
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		"  Time: " + runtime.FormatReal(exec.CurrentTime()),
+		timeLabel + runtime.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 	}, nil
 }
@@ -2137,7 +2190,7 @@ func (s *Session) debugExhibitedMachine(
 	return []string{
 		fmt.Sprintf("✓ Debugging state machine %q exhibited by object #%d of %q", behavior.Name, inst.ID, notationName(fqn)),
 		fmt.Sprintf("  Current state: %s", currentStateName(behavior.State)),
-		"  Time: " + runtime.FormatReal(behavior.State.CurrentTime()),
+		timeLabel + runtime.FormatReal(behavior.State.CurrentTime()),
 		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
 	}, nil
 }
@@ -2157,12 +2210,12 @@ func (s *Session) stepState() ([]string, bool, error) {
 
 	step, err := s.stateStep(exec)
 	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return []string{
 		"✓ " + step,
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		"  Time: " + runtime.FormatReal(exec.CurrentTime()),
+		timeLabel + runtime.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 	}, false, nil
 }
@@ -2205,7 +2258,7 @@ func (s *Session) doInvoke(name, operation string, args []string) ([]string, boo
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
 		}
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return lines, false, nil
 }
@@ -2370,11 +2423,11 @@ func (s *Session) doAdvance(timeStr string) ([]string, bool, error) {
 
 	duration, err := parseDuration(timeStr)
 	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	lines, err := s.advanceBy(duration)
 	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return lines, false, nil
 }

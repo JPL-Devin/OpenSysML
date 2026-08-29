@@ -322,8 +322,8 @@ class _PrivateService:
         """
         line = self.process.stdout.readline().decode('utf-8', 'replace').strip()
         self._reported.put(line or None)
-        for _ in self.process.stdout:
-            pass
+        # Discard the rest of stdout until end of file, keeping nothing.
+        deque(self.process.stdout, maxlen=0)
         self._ended.set()
 
     def _read_stderr(self):

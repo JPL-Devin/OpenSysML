@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import io.opensysml.Connection;
 import io.opensysml.ConnectionOptions;
 import io.opensysml.Encoding;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
@@ -25,6 +27,11 @@ import java.util.regex.Pattern;
  * cover are skipped, and the count is in the report.
  */
 public final class Main {
+
+  private static final PrintStream STDERR =
+      new PrintStream(new FileOutputStream(FileDescriptor.err), true, StandardCharsets.UTF_8);
+  private static final PrintStream STDOUT =
+      new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8);
 
   private Main() {}
 
@@ -65,12 +72,12 @@ public final class Main {
     try {
       options = parse(args);
     } catch (IllegalArgumentException e) {
-      System.err.println(e.getMessage());
-      System.err.print(USAGE);
+      STDERR.println(e.getMessage());
+      STDERR.print(USAGE);
       System.exit(2);
       return;
     }
-    System.exit(run(options, System.out));
+    System.exit(run(options, STDOUT));
   }
 
   private static int run(Options options, PrintStream out) {
@@ -149,20 +156,21 @@ public final class Main {
     boolean allowSkips = false;
     boolean verbose = false;
 
-    for (int index = 0; index < args.length; index++) {
-      String flag = args[index];
+    int index = 0;
+    while (index < args.length) {
+      String flag = args[index++];
       switch (flag) {
-        case "-dir" -> directory = Path.of(value(args, ++index, flag));
-        case "-binary" -> binary = Path.of(value(args, ++index, flag));
-        case "-service" -> service = value(args, ++index, flag);
-        case "-report" -> report = Path.of(value(args, ++index, flag));
-        case "-run" -> filter = Pattern.compile(value(args, ++index, flag));
-        case "-protocols" -> protocols = protocols(value(args, ++index, flag));
-        case "-mutate" -> mutation = Mutations.of(value(args, ++index, flag));
+        case "-dir" -> directory = Path.of(value(args, index++, flag));
+        case "-binary" -> binary = Path.of(value(args, index++, flag));
+        case "-service" -> service = value(args, index++, flag);
+        case "-report" -> report = Path.of(value(args, index++, flag));
+        case "-run" -> filter = Pattern.compile(value(args, index++, flag));
+        case "-protocols" -> protocols = protocols(value(args, index++, flag));
+        case "-mutate" -> mutation = Mutations.of(value(args, index++, flag));
         case "-allow-skips" -> allowSkips = true;
         case "-v" -> verbose = true;
         case "-h", "-help", "--help" -> {
-          System.out.print(USAGE);
+          STDOUT.print(USAGE);
           System.exit(0);
         }
         default -> throw new IllegalArgumentException("unknown flag " + flag);

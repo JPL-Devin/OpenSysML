@@ -55,6 +55,11 @@ def on_config(config):
         return config
 
     expected = NOTE + body.replace(ANCHOR, INCLUDE + ANCHOR)
+    expected = expected.replace(
+        'aria-label="{{ config.site_name }}"',
+        'aria-label="{{ config.site_name | e }}"',
+        1,
+    )
     if override.read_text() != expected:
         log.warning(
             "%s is not %s with the menu include inserted; the theme's header changed, "

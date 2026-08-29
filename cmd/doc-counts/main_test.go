@@ -75,7 +75,7 @@ func TestRunRewritesEveryDerivedLineAndIsIdempotent(t *testing.T) {
 		t.Fatalf("second run rewrote %d files, want 0", rewritten)
 	}
 	for path, content := range first {
-		if got := read(t, root, path); got != content {
+		if read(t, root, path) != content {
 			t.Fatalf("%s changed on the second run", path)
 		}
 	}

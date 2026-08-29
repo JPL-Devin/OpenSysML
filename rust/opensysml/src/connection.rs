@@ -3,7 +3,7 @@ use std::env;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -56,7 +56,7 @@ impl Connection {
         let private = {
             let mut registry = private_service()
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+                .unwrap_or_else(PoisonError::into_inner);
             if let Some(existing) = registry.upgrade() {
                 existing
             } else {
@@ -404,9 +404,7 @@ impl PrivateService {
         let tail_reader = Arc::clone(&tail);
         thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                let mut tail = tail_reader
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let mut tail = tail_reader.lock().unwrap_or_else(PoisonError::into_inner);
                 if tail.len() == STDERR_LINES_KEPT {
                     tail.pop_front();
                 }
@@ -461,7 +459,7 @@ impl PrivateService {
     fn pid(&self) -> u32 {
         self.process
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(PoisonError::into_inner)
             .id()
     }
 }
@@ -478,7 +476,7 @@ impl Drop for PrivateService {
 }
 
 fn stderr_tail(tail: &Arc<Mutex<VecDeque<String>>>) -> String {
-    let lines = tail.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let lines = tail.lock().unwrap_or_else(PoisonError::into_inner);
     if lines.is_empty() {
         "stderr was empty".to_owned()
     } else {

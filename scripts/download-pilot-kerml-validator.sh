@@ -89,7 +89,7 @@ for class in \
 done
 
 mkdir -p "$classes"
-output_class="$classes/ValidateKerML.class"
+output_class="$classes/io/opensysml/pilot/ValidateKerML.class"
 if [[ "$force" -eq 1 ]] || [[ ! -f "$output_class" ]] ||
 	[[ "$output_class" -ot "$source" ]] || [[ "$output_class" -ot "$pilot_jar" ]]; then
 	echo "Compiling $source ..."
@@ -144,7 +144,7 @@ if [ "$has_library" -eq 0 ]; then
 	set -- --library "$LIBRARY" "$@"
 fi
 
-exec "$JAVA" -cp "$CLASSES:$JAR" ValidateKerML "$@"
+exec "$JAVA" -cp "$CLASSES:$JAR" io.opensysml.pilot.ValidateKerML "$@"
 EOF
 sed "s|__PILOT_ARTIFACT_VERSION__|${PILOT_ARTIFACT_VERSION}|g" \
 	"$launcher_tmp" >"${launcher_tmp}.out"

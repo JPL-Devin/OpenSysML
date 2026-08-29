@@ -35,7 +35,7 @@ type client interface {
 type grpcClient struct{ conn *grpc.ClientConn }
 
 func (c *grpcClient) protocol() string { return "grpc" }
-func (c *grpcClient) close()           {}
+func (c *grpcClient) close()           { /* the service owns the connection */ }
 func (c *grpcClient) call(ctx context.Context, method string, request protoreflect.Message) (protoreflect.Message, error) {
 	descriptor, err := methodByName(method)
 	if err != nil {
@@ -65,7 +65,7 @@ func (c *connectClient) protocol() string {
 	return "connect"
 }
 
-func (c *connectClient) close() {}
+func (c *connectClient) close() { /* the HTTP client holds nothing to release */ }
 
 func (c *connectClient) call(ctx context.Context, method string, request protoreflect.Message) (protoreflect.Message, error) {
 	descriptor, err := methodByName(method)

@@ -177,7 +177,7 @@ def as_enum_literal(feature_name: str, value: object) -> EnumLiteral:
     raise _mismatch(feature_name, "EnumLiteral", value)
 
 
-def as_object(feature_name: str, value: object) -> object:
+def as_object(_feature_name: str, value: object) -> object:
     """Decode a feature value whose SysML type has no sound Python type."""
     return value
 

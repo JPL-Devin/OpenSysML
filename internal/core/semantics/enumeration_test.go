@@ -44,7 +44,7 @@ func TestLiteralValue(t *testing.T) {
 	if got := LiteralValue(memberNamed(t, m, sym(t, root, "Color"), "red")); got != nil {
 		t.Errorf("LiteralValue(red) = %v, want nil", got)
 	}
-	if got := LiteralValue(memberNamed(t, m, sym(t, root, "GradePoints"), "A")); got == nil {
+	if LiteralValue(memberNamed(t, m, sym(t, root, "GradePoints"), "A")) == nil {
 		t.Error("LiteralValue(A) = nil, want the declared 4.0")
 	}
 }

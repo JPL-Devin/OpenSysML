@@ -225,10 +225,12 @@ class TestPrivateService:
         assert not _private_services
         assert not _service_processes()
 
-    def test_module_level_calls_share_the_one_service(self, private_binary, tmp_path):
+    def test_module_level_calls_share_the_one_service(
+        self, private_binary, tmp_path, monkeypatch
+    ):
         """The convenience API is one connection, so it is one service."""
-        opensysml._default_connection = None
-        opensysml._default_connection_params = None
+        monkeypatch.setattr(opensysml, "_default_connection", None)
+        monkeypatch.setattr(opensysml, "_default_connection_params", None)
         first = tmp_path / "one.sysml"
         first.write_text("package One { part P1; }")
         second = tmp_path / "two.sysml"
@@ -238,9 +240,8 @@ class TestPrivateService:
             assert opensysml.load(str(first)).hash != opensysml.load(str(second)).hash
             assert len(_service_processes()) == 1
         finally:
+            # monkeypatch puts the module back; only the service needs closing.
             opensysml._default_connection.close()
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
 
 
 @pytest.mark.integration

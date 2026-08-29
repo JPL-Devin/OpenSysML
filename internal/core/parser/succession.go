@@ -334,7 +334,7 @@ func (b *bodyBuilder) add(m ast.Node) {
 // bindPositionalSource binds the source of a one-name edge (`then b;`, `if x
 // then b;`, `else b;`) to the member before it when that member declares no name
 // of its own, which the notation leaves the edge to reach by position.
-func bindPositionalSource(m ast.Node, source ast.Node) {
+func bindPositionalSource(m, source ast.Node) {
 	switch edge := m.(type) {
 	case *ast.SuccessionEdge:
 		if unnamedEdgeSource(edge) != nil {

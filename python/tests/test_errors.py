@@ -139,8 +139,9 @@ class TestStatusTranslation:
         assert excinfo.value.__cause__ is original
 
     def test_the_block_passes_other_exceptions_through(self):
+        translating = translate_rpc_errors()
         with pytest.raises(ZeroDivisionError):
-            with translate_rpc_errors():
+            with translating:
                 raise ZeroDivisionError()
 
 

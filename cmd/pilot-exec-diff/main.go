@@ -13,9 +13,13 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
+// bucketKindOnly is the verdict for values that agree once their kinds are
+// reconciled.
+const bucketKindOnly = "kind-only"
+
 var bucketNames = []string{
 	"agree",
-	"kind-only",
+	bucketKindOnly,
 	"order-only",
 	"disagree",
 	"pilot-unevaluated",

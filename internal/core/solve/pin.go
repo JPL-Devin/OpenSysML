@@ -352,6 +352,12 @@ func (t *translator) pinnedVar(p Pin) *Var {
 	return v
 }
 
+// Openings of the refusals that report what a pinned feature holds.
+const (
+	msgValuesAre        = "the feature's values are "
+	msgValuesMeasuredIn = "the feature's values are measured in "
+)
+
 // pinTerm builds the term a fixed value is asserted equal to, and the value as
 // the notation writes it. A value the variable's sort cannot hold refuses.
 func (t *translator) pinTerm(p Pin, v *Var) (*Term, string, error) {
@@ -362,7 +368,7 @@ func (t *translator) pinTerm(p Pin, v *Var) (*Term, string, error) {
 		return term, text, err
 	case runtime.ValString:
 		if v.Sort.Kind != SortString {
-			return nil, text, t.pinRefusal(p, v, text, "the feature's values are "+v.Sort.Name)
+			return nil, text, t.pinRefusal(p, v, text, msgValuesAre+v.Sort.Name)
 		}
 		return StringTerm(p.Value.Str), text, nil
 	case runtime.ValQuantity:
@@ -390,13 +396,13 @@ func (t *translator) pinConst(p Pin, v *Var, text string) (*Term, error) {
 	case c.Kind == semantics.ValInt && v.Sort.Kind == SortReal:
 		if v.Dimension != "" {
 			return nil, t.pinRefusal(p, v, text,
-				"the feature's values are measured in "+v.Dimension+", and a bare number states no unit")
+				msgValuesMeasuredIn+v.Dimension+", and a bare number states no unit")
 		}
 		return RealTerm(new(big.Rat).SetInt64(c.Int)), nil
 	case c.Kind == semantics.ValReal && v.Sort.Kind == SortReal:
 		if v.Dimension != "" {
 			return nil, t.pinRefusal(p, v, text,
-				"the feature's values are measured in "+v.Dimension+", and a bare number states no unit")
+				msgValuesMeasuredIn+v.Dimension+", and a bare number states no unit")
 		}
 		rat, ok := ratOfFloat(c.Real)
 		if !ok {
@@ -406,7 +412,7 @@ func (t *translator) pinConst(p Pin, v *Var, text string) (*Term, error) {
 	case c.Kind == semantics.ValInfinity:
 		return nil, t.pinRefusal(p, v, text, "an infinite magnitude is outside the subset")
 	}
-	return nil, t.pinRefusal(p, v, text, "the feature's values are "+v.Sort.Name)
+	return nil, t.pinRefusal(p, v, text, msgValuesAre+v.Sort.Name)
 }
 
 // pinQuantity fixes a quantity, scaled to the base units the variable's
@@ -414,7 +420,7 @@ func (t *translator) pinConst(p Pin, v *Var, text string) (*Term, error) {
 // a value stated in another unit of the same dimension fixes the same magnitude.
 func (t *translator) pinQuantity(p Pin, v *Var, text string) (*Term, error) {
 	if v.Sort.Kind != SortReal {
-		return nil, t.pinRefusal(p, v, text, "the feature's values are "+v.Sort.Name+" rather than a magnitude")
+		return nil, t.pinRefusal(p, v, text, msgValuesAre+v.Sort.Name+" rather than a magnitude")
 	}
 	quantity := p.Value.Quantity
 	if quantity == nil {
@@ -448,7 +454,7 @@ func (t *translator) commensurable(p Pin, v *Var, unit semantics.UnitTerm, text 
 	if want, ok := t.model.DimensionOfFeature(v.Symbol); ok {
 		if !want.Term.Commensurable(dim.Term) {
 			return t.pinRefusal(p, v, text,
-				"the feature's values are measured in "+dimensionUnits(want)+", not in "+dimensionUnits(dim))
+				msgValuesMeasuredIn+dimensionUnits(want)+", not in "+dimensionUnits(dim))
 		}
 		return nil
 	}
@@ -474,7 +480,7 @@ func (t *translator) pinDatatype(p Pin, v *Var, text string, value *symbols.Symb
 		return nil, t.pinRefusal(p, v, text, "it names no declaration")
 	}
 	if v.Sort.Kind != SortDatatype {
-		return nil, t.pinRefusal(p, v, text, "the feature's values are "+v.Sort.Name)
+		return nil, t.pinRefusal(p, v, text, msgValuesAre+v.Sort.Name)
 	}
 	name := t.fqn(value)
 	for _, candidate := range v.Sort.Values {

@@ -122,7 +122,7 @@ func TestW8BUniquenessConformance(t *testing.T) {
 			classifier C specializes A { feature x2 nonunique redefines x; }
 		}
 	`)
-	if got := len(diags); got != 2 {
+	if len(diags) != 2 {
 		t.Fatalf("expected a violation on each of the two features, got %v", codes(diags))
 	}
 	for _, d := range diags {

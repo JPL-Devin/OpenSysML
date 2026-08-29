@@ -41,6 +41,9 @@ const (
 	DefaultOrg        = "sysmlv2"
 )
 
+// mediaTurtle is the RDF media type both services speak.
+const mediaTurtle = "text/turtle"
+
 // Config addresses one running stack.
 type Config struct {
 	Layer1URL  string // Layer 1 service, which owns orgs, repos, branches and graphs
@@ -161,7 +164,7 @@ func (c *Client) Reachable(ctx context.Context) error {
 	}
 	// The org list, not the org itself: a fresh cluster has no org yet.
 	if _, _, err := c.do(ctx, http.MethodGet, c.cfg.Layer1URL+"/orgs", nil, "",
-		map[string]string{"Accept": "text/turtle"}); err != nil {
+		map[string]string{"Accept": mediaTurtle}); err != nil {
 		return fmt.Errorf("layer1 at %s: %w", c.cfg.Layer1URL, err)
 	}
 	return nil
@@ -175,11 +178,11 @@ func (c *Client) orgURL() string {
 // under. A freshly initialized cluster does not have it, and every project
 // creation fails until it does.
 func (c *Client) EnsureOrg(ctx context.Context) error {
-	if _, _, err := c.do(ctx, http.MethodGet, c.orgURL(), nil, "", map[string]string{"Accept": "text/turtle"}); err == nil {
+	if _, _, err := c.do(ctx, http.MethodGet, c.orgURL(), nil, "", map[string]string{"Accept": mediaTurtle}); err == nil {
 		return nil
 	}
 	body := fmt.Sprintf("<> <http://purl.org/dc/terms/title> %q .\n", c.cfg.Org)
-	_, _, err := c.do(ctx, http.MethodPut, c.orgURL(), []byte(body), "text/turtle", nil)
+	_, _, err := c.do(ctx, http.MethodPut, c.orgURL(), []byte(body), mediaTurtle, nil)
 	return err
 }
 
@@ -238,7 +241,7 @@ func (c *Client) LoadTurtle(ctx context.Context, project, branch string, turtle 
 		target += "?message=" + url.QueryEscape(message)
 	}
 	headers := map[string]string{"If-Match": "*"}
-	_, _, err := c.do(ctx, http.MethodPut, target, turtle, "text/turtle", headers)
+	_, _, err := c.do(ctx, http.MethodPut, target, turtle, mediaTurtle, headers)
 	return err
 }
 

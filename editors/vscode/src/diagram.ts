@@ -121,7 +121,7 @@ export class DiagramPanels implements vscode.Disposable {
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
-    for (const panel of [...this.panels.values()]) {
+    for (const panel of this.panels.values()) {
       panel.dispose();
     }
   }
@@ -467,11 +467,11 @@ function html(
 // quoted view name may hold any of these, and one of them would end the value.
 function attribute(value: string): string {
   return value
-    .replace(/&/g, "&amp;")
-    .replace(/'/g, "&#39;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("'", "&#39;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 // randomNonce is a per-page nonce, so only the script this page shipped runs.

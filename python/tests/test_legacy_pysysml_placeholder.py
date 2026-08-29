@@ -43,7 +43,8 @@ def test_importing_the_placeholder_fails_with_the_rename():
         ("PySysMLError", "OpenSysMLError"),
         ("pysysml-generate", "opensysml-generate"),
     ]:
-        assert old in message and new in message
+        assert old in message
+        assert new in message
 
 
 def test_the_placeholder_pulls_in_nothing():

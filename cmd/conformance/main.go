@@ -51,24 +51,50 @@ func main() {
 	)
 	flag.Parse()
 
-	if err := runSuite(*dir, *binary, *repoRoot, *report, *run, *verbose, *allowSkip, *protocols, *transport, *withhold); err != nil {
+	opts := options{
+		dir:       *dir,
+		binary:    *binary,
+		repoRoot:  *repoRoot,
+		report:    *report,
+		run:       *run,
+		verbose:   *verbose,
+		allowSkip: *allowSkip,
+		protocols: *protocols,
+		transport: *transport,
+		withhold:  *withhold,
+	}
+	if err := runSuite(opts); err != nil {
 		fmt.Fprintf(os.Stderr, "conformance: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool, protocolList, transport, withhold string) error {
-	protocols, err := parseProtocols(protocolList)
+// options is one suite run's command line.
+type options struct {
+	dir       string
+	binary    string
+	repoRoot  string
+	report    string
+	run       string
+	verbose   bool
+	allowSkip bool
+	protocols string
+	transport string
+	withhold  string
+}
+
+func runSuite(opts options) error {
+	protocols, err := parseProtocols(opts.protocols)
 	if err != nil {
 		return err
 	}
-	if transport != transportConnect && transport != transportGRPC {
-		return fmt.Errorf("unknown -transport %q; want connect or grpc", transport)
+	if opts.transport != transportConnect && opts.transport != transportGRPC {
+		return fmt.Errorf("unknown -transport %q; want connect or grpc", opts.transport)
 	}
-	if err := validateProtocols(protocols, transport); err != nil {
+	if err := validateProtocols(protocols, opts.transport); err != nil {
 		return err
 	}
-	unavailable, err := parseCapabilities(withhold)
+	unavailable, err := parseCapabilities(opts.withhold)
 	if err != nil {
 		return err
 	}
@@ -76,15 +102,15 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 		return errors.New("-withhold-capabilities cannot test the in-process pkg protocol")
 	}
 	var filter *regexp.Regexp
-	if run != "" {
-		compiled, err := regexp.Compile(run)
+	if opts.run != "" {
+		compiled, err := regexp.Compile(opts.run)
 		if err != nil {
 			return fmt.Errorf("bad -run pattern: %w", err)
 		}
 		filter = compiled
 	}
 
-	scenarios, err := loadScenarios(filepath.Join(dir, "scenarios"))
+	scenarios, err := loadScenarios(filepath.Join(opts.dir, "scenarios"))
 	if err != nil {
 		return err
 	}
@@ -98,12 +124,12 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 	}
 	defer os.RemoveAll(workDir)
 
-	if binary == "" {
-		built, err := buildService(repoRoot, workDir)
+	if opts.binary == "" {
+		built, err := buildService(opts.repoRoot, workDir)
 		if err != nil {
 			return err
 		}
-		binary = built
+		opts.binary = built
 	}
 	configurations := []configuration{{name: "default"}}
 	if len(unavailable) > 0 {
@@ -113,7 +139,7 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 		})
 	}
 
-	reportData := &Report{Service: binary}
+	reportData := &Report{Service: opts.binary}
 	defaultCapabilities := map[string][]string{}
 	for _, config := range configurations {
 		fmt.Fprintf(os.Stdout, "\nConfiguration %s\n", config.name)
@@ -123,8 +149,8 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 		}
 		err := func() error {
 			logName := strings.ReplaceAll(config.name, string(os.PathSeparator), "-") + ".log"
-			svc, err := startServiceWithCapabilities(ctx, binary, filepath.Join(workDir, logName),
-				len(scenarios)+16, transport, config.unavailable)
+			svc, err := startServiceWithCapabilities(ctx, opts.binary, filepath.Join(workDir, logName),
+				len(scenarios)+16, opts.transport, config.unavailable)
 			if err != nil {
 				return err
 			}
@@ -137,8 +163,8 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 				}
 				runner := &runner{
 					service: svc, client: c,
-					fixtures: filepath.Join(dir, "fixtures"),
-					models:   map[Model]string{}, verbose: verbose,
+					fixtures: filepath.Join(opts.dir, "fixtures"),
+					models:   map[Model]string{}, verbose: opts.verbose,
 					omitHandshakeScenarios: len(config.unavailable) > 0,
 					out:                    os.Stdout, scenarioLog: os.Stdout,
 				}
@@ -157,10 +183,10 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 				c.close()
 				configReport.Protocols = append(configReport.Protocols, summary)
 				configReport.add(summary)
-				if len(config.unavailable) == 0 && summary.Skipped > 0 && !allowSkip {
+				if len(config.unavailable) == 0 && summary.Skipped > 0 && !opts.allowSkip {
 					configReport.unacceptedSkip = true
 				}
-				if err := validateFallbackExecution(summary, config.unavailable, allowSkip); err != nil {
+				if err := validateFallbackExecution(summary, config.unavailable, opts.allowSkip); err != nil {
 					return fmt.Errorf("%s: %w", protocol, err)
 				}
 			}
@@ -172,7 +198,7 @@ func runSuite(dir, binary, repoRoot, report, run string, verbose, allowSkip bool
 		reportData.Configurations = append(reportData.Configurations, configReport)
 		reportData.add(configReport)
 	}
-	if err := writeReport(report, reportData); err != nil {
+	if err := writeReport(opts.report, reportData); err != nil {
 		return err
 	}
 	if reportData.failure {

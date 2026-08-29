@@ -42,7 +42,7 @@ func WriteFile(path string, data []byte) (replaced bool, err error) {
 	if errors.Is(err, os.ErrPermission) {
 		// The file is writable but its directory is not, so the temporary file
 		// cannot be created; the model is what the user wants saved.
-		if direct := writeThrough(path, target, os.O_TRUNC, data); direct == nil {
+		if writeThrough(path, target, os.O_TRUNC, data) == nil {
 			return true, nil
 		}
 	}

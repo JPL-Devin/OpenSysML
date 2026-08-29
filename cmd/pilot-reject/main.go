@@ -53,23 +53,61 @@ func main() {
 	check := flag.Bool("check", false, "fail unless this run reproduces "+committedBaseline)
 	flag.Parse()
 
-	if err := run(*repo, *validator, *kermlValidator, *corpus, *out, *policy, *timeout, *update, *check); err != nil {
+	opts := options{
+		repo:           *repo,
+		validator:      *validator,
+		kermlValidator: *kermlValidator,
+		corpus:         *corpus,
+		out:            *out,
+		policy:         *policy,
+		timeout:        *timeout,
+		update:         *update,
+		check:          *check,
+	}
+	if err := run(opts); err != nil {
 		fmt.Fprintf(os.Stderr, "pilot-reject: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, validator, kermlValidator, corpus, out, policy string, timeout time.Duration, update, check bool) error {
-	policy, err := parsePolicy(policy)
+// options is one run's command line.
+type options struct {
+	repo           string
+	validator      string
+	kermlValidator string
+	corpus         string
+	out            string
+	policy         string
+	timeout        time.Duration
+	update         bool
+	check          bool
+}
+
+// adjudication is the corpus one run buckets, and the tools it buckets it with.
+type adjudication struct {
+	repo           string
+	corpusDir      string
+	policy         string
+	validator      string
+	kermlValidator string
+	files          []string
+	batches        []languageBatch
+	timeout        time.Duration
+}
+
+func run(opts options) error {
+	policy, err := parsePolicy(opts.policy)
 	if err != nil {
 		return err
 	}
+	repo := opts.repo
 	if repo == "" {
 		repo, err = moduleRoot()
 		if err != nil {
 			return err
 		}
 	}
+	validator, kermlValidator := opts.validator, opts.kermlValidator
 	if validator == "" {
 		validator = filepath.Join(repo, "build", "pilot-sysml-validator", "validate-sysml-batch")
 	}
@@ -77,9 +115,10 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 		kermlValidator = filepath.Join(repo, "build", "pilot-kerml-validator", "validate-kerml")
 	}
 	corpusDir := "cmd/pilot-reject/testdata/negative"
-	if corpus != "" {
-		corpusDir = relativeTo(repo, corpus)
+	if opts.corpus != "" {
+		corpusDir = relativeTo(repo, opts.corpus)
 	}
+	out := opts.out
 	if out == "" {
 		out = filepath.Join(repo, "build", "pilot-reject")
 	}
@@ -101,7 +140,17 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 		}
 	}
 
-	cases, err := adjudicate(repo, corpusDir, policy, validator, kermlValidator, files, batches, timeout)
+	adj := adjudication{
+		repo:           repo,
+		corpusDir:      corpusDir,
+		policy:         policy,
+		validator:      validator,
+		kermlValidator: kermlValidator,
+		files:          files,
+		batches:        batches,
+		timeout:        opts.timeout,
+	}
+	cases, err := adjudicate(adj)
 	if err != nil {
 		return err
 	}
@@ -124,7 +173,7 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 		return err
 	}
 	// Only a recorded baseline is dated, so two plain runs stay byte-identical.
-	if update {
+	if opts.update {
 		report.Provenance.Recorded = baseline.Today()
 	}
 	for _, rel := range files {
@@ -132,7 +181,7 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 	}
 	report.summarize()
 
-	if err := runErrata(report, overlay, repo, corpusDir, policy, validator, kermlValidator, out, files, batches, timeout); err != nil {
+	if err := runErrata(report, overlay, adj, out); err != nil {
 		return err
 	}
 	fresh, err := writeReports(out, report)
@@ -140,10 +189,10 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 		return err
 	}
 	committed := filepath.Join(repo, filepath.FromSlash(committedBaseline))
-	if update {
+	if opts.update {
 		return baseline.Write(committed, fresh)
 	}
-	if check {
+	if opts.check {
 		return baseline.Reproduces(committed, fresh)
 	}
 	return nil
@@ -151,15 +200,15 @@ func run(repo, validator, kermlValidator, corpus, out, policy string, timeout ti
 
 // adjudicate buckets every case of a corpus directory: ours in the policy's
 // mode, ours in the default mode, and the pilot's, per language batch.
-func adjudicate(repo, corpusDir, policy, validator, kermlValidator string,
-	files []string, batches []languageBatch, timeout time.Duration) (map[string]*Case, error) {
+func adjudicate(adj adjudication) (map[string]*Case, error) {
+	files := adj.files
 	cases := make(map[string]*Case, len(files))
 	for _, rel := range files {
-		c, err := readCase(repo, corpusDir, rel)
+		c, err := readCase(adj.repo, adj.corpusDir, rel)
 		if err != nil {
 			return nil, err
 		}
-		c.Mode = modeFor(policy, c.Source).String()
+		c.Mode = modeFor(adj.policy, c.Source).String()
 		cases[rel] = c
 	}
 	modes := make(map[string]conformance.Mode, len(cases))
@@ -167,22 +216,22 @@ func adjudicate(repo, corpusDir, policy, validator, kermlValidator string,
 	// strictly reports what the default mode says instead of implying it agreed.
 	defaults := make(map[string]conformance.Mode, len(cases))
 	for rel, c := range cases {
-		modes[rel] = modeFor(policy, c.Source)
+		modes[rel] = modeFor(adj.policy, c.Source)
 		defaults[rel] = conformance.ModeDefault
 	}
 
-	for _, batch := range batches {
+	for _, batch := range adj.batches {
 		fmt.Fprintf(os.Stderr, "negative corpus: %d %s case(s)\n", len(batch.Files), batch.Kind)
-		pilot := pilotFor(batch.Kind, validator, kermlValidator)
-		ours, err := openSysMLErrors(repo, corpusDir, batch.Files, modes)
+		pilot := pilotFor(batch.Kind, adj.validator, adj.kermlValidator)
+		ours, err := openSysMLErrors(adj.repo, adj.corpusDir, batch.Files, modes)
 		if err != nil {
 			return nil, err
 		}
-		oursDefault, err := openSysMLErrors(repo, corpusDir, batch.Files, defaults)
+		oursDefault, err := openSysMLErrors(adj.repo, adj.corpusDir, batch.Files, defaults)
 		if err != nil {
 			return nil, err
 		}
-		theirs, err := pilotErrors(pilot, repo, corpusDir, batch.Files, timeout)
+		theirs, err := pilotErrors(pilot, adj.repo, adj.corpusDir, batch.Files, adj.timeout)
 		if err != nil {
 			return nil, err
 		}

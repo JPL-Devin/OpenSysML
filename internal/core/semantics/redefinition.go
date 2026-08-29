@@ -84,6 +84,37 @@ type behaviorParameters struct {
 	result     parameter
 }
 
+// BehaviorParameter is one effective parameter of a behavior, in invocation order.
+type BehaviorParameter struct {
+	Symbol    *symbols.Symbol
+	Direction ast.FeatureDirection
+	IsResult  bool
+}
+
+// BehaviorParametersOf returns a behavior's inherited and declared parameters.
+func (m *Model) BehaviorParametersOf(sym *symbols.Symbol) []BehaviorParameter {
+	if m == nil || sym == nil {
+		return nil
+	}
+	params := m.parametersOf(sym)
+	out := make([]BehaviorParameter, 0, len(params.positional)+1)
+	for _, param := range params.positional {
+		out = append(out, BehaviorParameter{
+			Symbol:    param.sym,
+			Direction: param.direction,
+			IsResult:  param.isResult,
+		})
+	}
+	if params.result.sym != nil {
+		out = append(out, BehaviorParameter{
+			Symbol:    params.result.sym,
+			Direction: params.result.direction,
+			IsResult:  true,
+		})
+	}
+	return out
+}
+
 // parametersOf returns the effective parameters of the behavior or step sym:
 // its owned parameters, in declaration order, followed by the parameters it
 // inherits and does not redefine (KerML 7.4.7.2: parameters of a single general

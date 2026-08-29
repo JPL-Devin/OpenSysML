@@ -13,7 +13,7 @@ type KerMLSubsettingMetaclassPass struct{}
 
 func (KerMLSubsettingMetaclassPass) Level() PassLevel { return LevelType }
 
-func (KerMLSubsettingMetaclassPass) ElementScoped() {}
+func (KerMLSubsettingMetaclassPass) ElementScoped() { /* marker: per-element gating */ }
 
 func (KerMLSubsettingMetaclassPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil || ctx.Kind != source.KindKerML {

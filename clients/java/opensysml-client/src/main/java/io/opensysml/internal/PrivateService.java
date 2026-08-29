@@ -182,7 +182,7 @@ public final class PrivateService {
                   new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                  record(line);
+                  recordLogLine(line);
                   if (!reported && firstLine != null) {
                     reported = firstLine.offer(line);
                   }
@@ -192,7 +192,7 @@ public final class PrivateService {
               } finally {
                 // End of stream without a line: unblock the caller so it reports the exit.
                 if (!reported && firstLine != null && !firstLine.offer("")) {
-                  record("could not report the end of " + threadName);
+                  recordLogLine("could not report the end of " + threadName);
                 }
               }
             },
@@ -201,7 +201,7 @@ public final class PrivateService {
     thread.start();
   }
 
-  private void record(String line) {
+  private void recordLogLine(String line) {
     synchronized (log) {
       if (log.size() == LOG_LINES) {
         log.removeFirst();

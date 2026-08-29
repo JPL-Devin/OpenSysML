@@ -21,6 +21,8 @@ import java.util.TreeSet;
  */
 final class Checks {
 
+  private static final String WANT = ", want ";
+
   /**
    * The relative difference two Reals may have and still be the same value. It applies to Reals
    * alone: a tolerance on an integral field would let large counts and ids differ and pass.
@@ -51,7 +53,7 @@ final class Checks {
     for (String path : new TreeSet<>(expect.absent())) {
       Optional<Object> value = lookup(actual, path);
       if (value.isPresent() && !isEmpty(value.get())) {
-        failures.add(path + ": set to " + render(value.get()) + ", want it unset");
+        failures.add(path + ": set to " + render(value.get()) + WANT + "it unset");
       }
     }
     for (Map.Entry<String, String> entry : new TreeMap<>(expect.contains()).entrySet()) {
@@ -176,7 +178,7 @@ final class Checks {
   private static List<String> match(String path, JsonElement want, Object got) {
     if (want instanceof JsonObject expected) {
       if (!(got instanceof Map<?, ?> raw)) {
-        return List.of(at(path) + ": " + render(got) + ", want an object");
+        return List.of(at(path) + ": " + render(got) + WANT + "an object");
       }
       Map<String, Object> actual = asStringKeyed(raw);
       List<String> failures = new ArrayList<>();
@@ -185,26 +187,26 @@ final class Checks {
         JsonElement wanted = expected.get(key);
         if (!actual.containsKey(key)) {
           // An unset field and a field left at its default are the same thing on the wire.
-          if (isDefault(wanted)) {
-            continue;
+          if (!isDefault(wanted)) {
+            failures.add(child + ": not set" + WANT + render(wanted));
           }
-          failures.add(child + ": not set, want " + render(wanted));
-          continue;
+        } else {
+          failures.addAll(match(child, wanted, actual.get(key)));
         }
-        failures.addAll(match(child, wanted, actual.get(key)));
       }
       return failures;
     }
     if (want instanceof JsonArray expected) {
       if (!(got instanceof List<?> actual)) {
-        return List.of(at(path) + ": " + render(got) + ", want a list");
+        return List.of(at(path) + ": " + render(got) + WANT + "a list");
       }
       if (actual.size() != expected.size()) {
         return List.of(
             at(path)
                 + ": "
                 + actual.size()
-                + " entries, want "
+                + " entries"
+                + WANT
                 + expected.size()
                 + " ("
                 + render(got)
@@ -221,7 +223,7 @@ final class Checks {
     }
     String wanted = want instanceof JsonNull ? "null" : ((JsonPrimitive) want).getAsString();
     if (!wanted.equals(text(got))) {
-      return List.of(at(path) + ": " + render(got) + ", want " + render(want));
+      return List.of(at(path) + ": " + render(got) + WANT + render(want));
     }
     return List.of();
   }
@@ -237,18 +239,18 @@ final class Checks {
     if (got instanceof Double real) {
       Optional<Double> number = parseDouble(want);
       if (number.isEmpty() || !near(real, number.get())) {
-        return List.of(at(path) + ": " + real + ", want " + want);
+        return List.of(at(path) + ": " + real + WANT + want);
       }
       return List.of();
     }
-    return List.of(at(path) + ": " + render(got) + ", want the number " + want);
+    return List.of(at(path) + ": " + render(got) + WANT + "the number " + want);
   }
 
   /** Compares an integral field by its digits, so nothing is lost to floating point on the way. */
   private static List<String> matchIntegral(String path, String want, String got) {
     Optional<String> digits = integerLiteral(want);
     if (digits.isEmpty() || !digits.get().equals(got)) {
-      return List.of(at(path) + ": " + got + ", want " + want);
+      return List.of(at(path) + ": " + got + WANT + want);
     }
     return List.of();
   }

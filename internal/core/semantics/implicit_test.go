@@ -287,11 +287,11 @@ func TestW7AKerMLFeatureBaseSuppressedWhenDeclared(t *testing.T) {
 	}`)
 	p := sym(t, root, "P").Scope
 	for _, name := range []string{"direct", "indirect"} {
-		if base := m.implicitKerMLFeatureBase(sym(t, p, name)); base != nil {
+		if m.implicitKerMLFeatureBase(sym(t, p, name)) != nil {
 			t.Errorf("%s: declared subsetting did not suppress the implicit feature base", name)
 		}
 	}
-	if base := m.implicitKerMLFeatureBase(sym(t, p, "plain")); base == nil {
+	if m.implicitKerMLFeatureBase(sym(t, p, "plain")) == nil {
 		t.Errorf("plain step lost its implicit feature base")
 	}
 }
