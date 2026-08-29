@@ -21,6 +21,7 @@ import java.util.Optional;
 public class ModelException extends OpenSysMLException {
 
   private static final long serialVersionUID = 1L;
+  private static final int MAX_SERIALIZED_DIAGNOSTICS = 100_000;
 
   private transient List<Diagnostic> diagnostics;
 
@@ -47,6 +48,9 @@ public class ModelException extends OpenSysMLException {
   @Serial
   private void writeObject(ObjectOutputStream stream) throws IOException {
     stream.defaultWriteObject();
+    if (diagnostics.size() > MAX_SERIALIZED_DIAGNOSTICS) {
+      throw new InvalidObjectException("too many diagnostics");
+    }
     stream.writeInt(diagnostics.size());
     for (Diagnostic diagnostic : diagnostics) {
       stream.writeObject(diagnostic.severity());
@@ -69,6 +73,9 @@ public class ModelException extends OpenSysMLException {
     int count = stream.readInt();
     if (count < 0) {
       throw new InvalidObjectException("negative diagnostic count");
+    }
+    if (count > MAX_SERIALIZED_DIAGNOSTICS) {
+      throw new InvalidObjectException("too many diagnostics");
     }
     List<Diagnostic> restored = new ArrayList<>(count);
     for (int index = 0; index < count; index++) {

@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
@@ -110,6 +112,45 @@ class PublicTypesTest {
       assertThrows(
           UnsupportedOperationException.class,
           () -> restored.diagnostics().add(diagnostics.get(0)));
+    }
+  }
+
+  @Test
+  void aModelExceptionRejectsExcessiveSerializedDiagnostics() throws Exception {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream output = new ExcessiveDiagnosticCountStream(bytes)) {
+      output.writeObject(new ModelException("rejected", List.of()));
+    }
+
+    try (ObjectInputStream input =
+        new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      InvalidObjectException failure =
+          assertThrows(InvalidObjectException.class, input::readObject);
+      assertEquals("too many diagnostics", failure.getMessage());
+    }
+  }
+
+  private static final class ExcessiveDiagnosticCountStream extends ObjectOutputStream {
+    private boolean replaceNextInt;
+
+    ExcessiveDiagnosticCountStream(ByteArrayOutputStream output) throws IOException {
+      super(output);
+    }
+
+    @Override
+    public void defaultWriteObject() throws IOException {
+      super.defaultWriteObject();
+      replaceNextInt = true;
+    }
+
+    @Override
+    public void writeInt(int value) throws IOException {
+      if (replaceNextInt) {
+        super.writeInt(Integer.MAX_VALUE);
+        replaceNextInt = false;
+      } else {
+        super.writeInt(value);
+      }
     }
   }
 
