@@ -5366,3 +5366,39 @@ Two REPL pitfalls specific to this kind of session:
   `unresolved reference: Pkg::TrafficLight` (and then `no active state machine session` for
   every follow-up). Declare the `state` at the top level of the loaded file — that is also
   how the guide's samples are written.
+
+## Content-only demo rewrites: separating a regression from a pre-existing limit
+
+When a PR only rewrites `examples/*.sysml` notation (`then done;` for a standalone `done;`,
+`entry`/`do`/`exit <action>`, `accept when <event>`, `assert constraint`, view-usage
+reordering) the binary is unchanged, so any difference must come from the file. Isolate it
+by running the *old* copy of the same file through the *same* binary:
+
+```bash
+# the branch point, not whatever origin/main has moved to since
+git show "$(git merge-base HEAD origin/main)":examples/<file>.sysml > /tmp/old.sysml
+printf '%%state Pkg::Machine\n%%quit\n' | ./bin/sysml /tmp/old.sysml > /tmp/old.out 2>&1
+printf '%%state Pkg::Machine\n%%quit\n' | ./bin/sysml examples/<file>.sysml > /tmp/new.out 2>&1
+diff -u /tmp/old.out /tmp/new.out
+```
+
+Compare the whole run, not its last few lines: a difference earlier in the output (a warning,
+a diagnostic, a different starting state) is exactly the regression you are looking for. An
+empty `diff` means the behavior is pre-existing and not the PR's doing — report it as a
+walkthrough/claim gap rather than a regression.
+
+Known shape worth expecting: `examples/phase-c-behavioral-bodies.sysml` used to validate
+clean while none of its state machines (`PhaseC::Running`, `ConnectionStateMachine`,
+`VehicleOperating`, `AutopilotMode`) could be started — `%state` answered `failed to create
+executor: initialize state machine: no initial state found`, because those states declared
+substates with no transition out of the entry action naming the one to start in. A guard over
+an attribute with no value fails the same startup a step later (`eval guard of transition
+Active -> Paused: unresolved reference: lowBattery`). Both are fixed in that file now, but a
+demo whose walkthrough was written against a machine that never started is a shape to expect:
+check the old copy before calling such a failure a regression.
+
+The committed walkthroughs to diff a demo run against are
+`examples/VIEWS-DEMO.md`, `examples/SOLVER-DEMO.md`,
+`examples/disposal-robot-demo/README.md` and — for `action-executor-demo.sysml`, whose own
+`examples/ACTION-EXECUTOR-DEMO.md` is only a pointer — `docs/guide/06-behavior.md`
+("Token-flow patterns").
