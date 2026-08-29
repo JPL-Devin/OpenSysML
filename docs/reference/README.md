@@ -9,7 +9,7 @@ why. The handbook that puts them in order is [the guide](../guide/).
 - **[Environment variables](environment.md)** — the bounds one run may spend, and paths
 - **[Client libraries](clients.md)** — the five ways to reach the engine from a program, what each
   covers, and which to pick
-- **[Go packages](api.md)** — `pkg/opensysml` and the packages behind it, type by type
+- **[Go packages](api.md)** — `client/opensysml` and the packages behind it, type by type
 - **[Python API](python-api.md)** — `opensysml`, its generated typed classes and latency
 - **[Service transports](service-transports.md)** — what `sysml-grpc` serves on one port, which
   body encoding a client should choose, and the flags for CORS, TLS and health

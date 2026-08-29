@@ -291,10 +291,10 @@ jobs:
           destination: conformance-grpc-transport-report.json
           when: always
 
-      # The same suite through the public Go API (pkg/opensysml), in-process and
+      # The same suite through the public Go API (client/opensysml), in-process and
       # remote; scenarios outside its v1 surface are counted skips, not hidden.
       - run:
-          name: Conformance suite through pkg/opensysml
+          name: Conformance suite through client/opensysml
           command: make conformance-pkg
 
       - store_artifacts:

@@ -6,7 +6,7 @@ deliberately does not. Each client's own README is the detailed reference, linke
 
 | Surface | Reaches the engine by | Published | Full reference |
 |---|---|---|---|
-| **Go**, `pkg/opensysml` | in process; or Connect, to a service someone else runs | with the core (`v*` tags) | [pkg/opensysml/README.md](../../pkg/opensysml/README.md) |
+| **Go**, `client/opensysml` | in process; or Connect, to a service someone else runs | with the core (`v*` tags) | [client/opensysml/README.md](../../client/opensysml/README.md) |
 | **Python**, `opensysml` | gRPC, to a private child service or one you name | PyPI, on `opensysml-v*` tags | [Python API](python-api.md) |
 | **Node/TypeScript**, `@opensysml/client` | Connect, to a private child service, one you name, or one a browser page addresses | not yet | [clients/node/README.md](../../clients/node/README.md) |
 | **Java**, `io.github.open-mbee:opensysml-client` | Connect, over the JDK's own HTTP client | not yet | [clients/java/README.md](../../clients/java/README.md) |
@@ -18,7 +18,7 @@ What each protocol is and what the service serves on one port is
 
 ## Which one
 
-- **In a Go program: `pkg/opensysml`.** It links the parser, the semantic engine and the runtime
+- **In a Go program: `client/opensysml`.** It links the parser, the semantic engine and the runtime
   directly, so there is no port, no child process and no serialization round trip. A Go program
   that starts a service to talk to itself has paid for a child whose only job is to run the code
   it already links.
@@ -59,7 +59,7 @@ kernel assigned from the child's first stdout line. No port is chosen, probed or
 processes starting at once cannot collide, and no service left listening by anyone else is ever
 adopted. The child is shared within its scope, which shares its parse cache: per interpreter in
 Python, per thread in Node, per classloader in Java (`isolatedService(true)` opts out), per
-process in Rust. `pkg/opensysml` starts nothing, because in process there is nothing to start.
+process in Rust. `client/opensysml` starts nothing, because in process there is nothing to start.
 
 Reaching a service you did not start is always explicit — an address argument, or
 `$OPENSYSML_SERVICE` — and closing such a connection disconnects and nothing else.
