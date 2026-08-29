@@ -191,8 +191,11 @@ func (s *Symbol) Notation() string {
 		}
 		return kw
 	case *ast.RelationshipMember:
-		// The prefix of `specialization Spec subtype C :> S` is written ahead of
-		// the name, so only the kind keyword can precede it here.
+		// Only `specialization Spec subtype C :> S` can be named, so the prefix is
+		// the keyword the name follows; without one the kind keyword stands alone.
+		if decl.PrefixKeyword != "" {
+			return decl.PrefixKeyword
+		}
 		return writtenKeyword(decl.Keyword, decl.Kind.String())
 	case *ast.SubstateMember:
 		return "state"
