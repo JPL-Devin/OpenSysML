@@ -6,6 +6,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Changed
+
+- **The public Go API moved to `github.com/Open-MBEE/OpenSysML/client/opensysml`**, from
+  `.../pkg/opensysml` — the top-level `client/` directory Go projects conventionally publish a
+  client library from. Go has no import alias, so this breaks every consumer's import path; update
+  the import, nothing else. The API is unchanged and still ships with the core `v*` tags.
+
 ### Fixed
 
 - **The behavioral-bodies demo's state machines can be run.** Each of its four machines declared

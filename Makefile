@@ -65,11 +65,11 @@ conformance-rust: ## Run the conformance suite with the blocking Rust client
 	@mkdir -p $(BIN_DIR)
 	OPENSYSML_GRPC_BINARY="$(CURDIR)/$(BIN_DIR)/sysml-grpc" cargo run --manifest-path clients/rust/Cargo.toml -p opensysml-conformance -- -binary "$(CURDIR)/$(BIN_DIR)/sysml-grpc" -report "$(CURDIR)/$(BIN_DIR)/conformance-report-rust.json"
 
-conformance-pkg: ## Run the conformance suite through the public Go API (pkg/opensysml)
-	@echo "Running the conformance suite through pkg/opensysml..."
+conformance-pkg: ## Run the conformance suite through the public Go API (client/opensysml)
+	@echo "Running the conformance suite through client/opensysml..."
 	@mkdir -p $(BIN_DIR)
 	go run ./cmd/conformance -protocols pkg,pkg-connect -allow-skips -report $(BIN_DIR)/conformance-pkg-report.json
-	@echo "✓ Conformance suite passed through pkg/opensysml ($(BIN_DIR)/conformance-pkg-report.json)"
+	@echo "✓ Conformance suite passed through client/opensysml ($(BIN_DIR)/conformance-pkg-report.json)"
 
 test: ## Run Go tests with race detection and coverage
 	@echo "Running Go race tests..."

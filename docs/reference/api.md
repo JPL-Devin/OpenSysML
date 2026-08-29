@@ -4,7 +4,7 @@ Complete API reference for OpenSysML packages.
 
 ## The public Go API
 
-`github.com/Open-MBEE/OpenSysML/pkg/opensysml` is what a Go program outside this repository
+`github.com/Open-MBEE/OpenSysML/client/opensysml` is what a Go program outside this repository
 imports: parse, symbol lookup, evaluation and instantiation, answered in process by the engine the
 importing binary already links, or over Connect against a service someone else runs. It is the
 only package covered by a compatibility commitment; everything under `internal/` below is
@@ -19,7 +19,7 @@ mass, err := client.Evaluate(ctx, model, "mass", opensysml.WithSubject("Demo::se
 ```
 
 Its errors, ownership rules, capability negotiation and v1 boundary are in
-[pkg/opensysml/README.md](../../pkg/opensysml/README.md), and the other client languages are on
+[client/opensysml/README.md](../../client/opensysml/README.md), and the other client languages are on
 [client libraries](clients.md).
 
 ## Python authoring

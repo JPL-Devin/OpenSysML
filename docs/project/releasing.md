@@ -18,7 +18,7 @@ The other clients are released on tags of their own, and none of them has been
 published yet: [the Node client](#releasing-opensysmlclient-to-npm) on
 `client-node-v*`, [the Java client](#releasing-the-java-client-to-maven-central)
 on `opensysml-java-v*`, and [the Rust client](#releasing-the-rust-client-to-cratesio)
-on `opensysml-rust-v*`. The public Go API in `pkg/opensysml` has no release of its
+on `opensysml-rust-v*`. The public Go API in `client/opensysml` has no release of its
 own: it is part of this module, so the core's `v*` tag is what a Go program pins.
 
 ## Before tagging
