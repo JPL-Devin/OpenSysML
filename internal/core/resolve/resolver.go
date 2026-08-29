@@ -17,8 +17,8 @@ type MemberLookup interface {
 	LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool)
 }
 
-// supertypeProvider is the part of the semantic model that reports the features a
-// declaration specializes, including the ones it redefines implicitly. A
+// supertypeProvider is the part of the semantic model that reports the features
+// a declaration specializes, including the ones it redefines implicitly. A
 // nameless parameter takes its name from the parameter it redefines, which only
 // the model can match (KerML 7.3.4.5). *semantics.Model implements it.
 type supertypeProvider interface {

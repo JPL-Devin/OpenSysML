@@ -14,8 +14,9 @@ func connectorEndReference(end *ast.ConnectorEnd) ast.Node {
 	return end.AttachedTarget()
 }
 
-// EndpointResolver resolves the vertex a transition endpoint names, implemented by the
-// name-resolution tier (*resolve.Resolver) so lowering matches no names itself.
+// EndpointResolver resolves the vertex a transition endpoint names, implemented
+// by the name-resolution tier (*resolve.Resolver) so lowering matches no names
+// itself.
 type EndpointResolver interface {
 	// Endpoint returns the declaration qn names, written in scope, and whether it
 	// names a vertex at all.

@@ -17,9 +17,9 @@ var ErrRecursiveStateTyping = errors.New("recursive state typing")
 // cannot represent, rather than dropping it.
 var ErrUnsupportedStateContent = errors.New("unsupported state machine content")
 
-// StateTypeResolver resolves the declaration a type name reaches and the scope of that
-// declaration's body. The name-resolution tier implements it; lowering falls
-// back to the scope tree for a machine lowered without it.
+// StateTypeResolver resolves the declaration a type name reaches and the scope
+// of that declaration's body. The name-resolution tier implements it; lowering
+// falls back to the scope tree for a machine lowered without it.
 type StateTypeResolver interface {
 	TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool)
 }

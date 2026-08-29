@@ -10,8 +10,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// SegmentResolver answers what the names of a document refer to. Without one, only
-// lexical and declared names are classified.
+// SegmentResolver answers what the names of a document refer to. Without one,
+// only lexical and declared names are classified.
 type SegmentResolver interface {
 	// SegmentSymbols resolves one reference and returns the symbol each segment
 	// of its qualified name denotes, nil where a segment did not resolve.
