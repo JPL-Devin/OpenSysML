@@ -8,6 +8,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **The demos are written in standard notation wherever one exists.** `then done;` in place of a
+  standalone `done;`, `entry`/`do`/`exit <action>` and named effect actions in state bodies,
+  `accept when <event>` triggers, `assert constraint` for an analysis case's own conditions, and the
+  objective subject the trade-study library redefines. The pseudostate notation, which no SysML v2
+  grammar has a production for, is now written in `examples/pseudostates-demo.sysml` alone and stays
+  supported everywhere. Every demo's output is unchanged; the pilot differential baseline and the
+  figures quoted from it move.
+
 - **The semantic-layer demo declares its packages with `package`.** Its three `namespace`
   declarations are KerML notation — the SysML grammar has no `namespace` production — so the pinned
   pilot could not parse the file and the non-standard-notation pass warned on each. The file now

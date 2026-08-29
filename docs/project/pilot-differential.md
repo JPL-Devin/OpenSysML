@@ -207,9 +207,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 23 | 17 | 15 | 49 | 3 | 4 | 8 | 42 |
+| `examples` | 23 | 19 | 4 | 22 | 2 | 1 | 1 | 19 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **357** | **330** | **69** | **110** | **37** | **5** | **27** | **68** |
+| **Total** | **357** | **332** | **58** | **83** | **36** | **2** | **20** | **45** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -218,18 +218,72 @@ retired one more of `pilot-examples` by publishing the conforming type its
 [non-conforming redefinition](omg-issues.md) named, leaving 6, and the quantity-dimension error on
 `Analysis Examples/Dynamics.sysml`:13 — a published product bound to a return typed by another
 dimension — takes it to **7**. Our diagnostics on those roots therefore fall 20 → **10**. The
-`examples` root carries 8: seven are one check firing on them, the non-standard-notation warning
-(6 `require` outside a requirement body, 1 `junction`), and the eighth is the
-library-inherited-name warning on `pseudostates-demo.sysml`:28 described in
-[Owned names against library-inherited members](#owned-names-against-library-inherited-members).
-It carried 64 before the two removals of alias notation: the succession shorthands retired 30 of
-them, and removing `initial <state>;` and `transition <src> to <tgt>;` retired 27 more, since the
-demos are now written in the standard spellings the warning does not fire on. **Those that remain are
+`examples` root carries 1, the non-standard-notation warning on the `junction` of
+`pseudostates-demo.sysml`, the one demo that keeps the pseudostate notation because no SysML v2
+spelling of it exists. It carried 64 before the demos were rewritten to standard notation: the
+succession shorthands retired 30, removing `initial <state>;` and `transition <src> to <tgt>;`
+retired 27 more, and the standard-notation round below retired the last 7. **Those that remain are
 true positives about our own examples, not candidate false positives about our implementation** — the
 column header is wrong for them, and the honest count of suspect diagnostics of ours against the
-reference corpora is **10**. `severity-only` (5) holds pairs of the same shape:
+reference corpora is **10**. `severity-only` (2) holds pairs of the same shape:
 where the pilot errors on a line we warn on, the pair sits in severity-only rather than either side
 changing what it detects.
+
+### Standard-notation demo round
+
+Our own demos were the largest single source of divergence left on this page: six of them were
+written in notation this project extends the grammar with, so we warned where the reference
+hard-errored and its recovery then cascaded through the rest of the file. This round rewrites each
+demo to the standard spelling wherever the [grammar audit](../reference/grammar/conformance-audit.md)
+records one, keeps the notation that has none in the one demo that exists to show it, and changes
+no parser, validator or runtime code — every demo's `%`-command output is unchanged.
+
+| Count | Before the rewrite | Now |
+|---|---:|---:|
+| overall: fully agreeing | 330 | **332** |
+| overall: our diagnostics | 69 | **58** |
+| overall: pilot diagnostics | 110 | **83** |
+| overall: only ours | 27 | **20** |
+| overall: only pilot | 68 | **45** |
+| overall: severity-only | 5 | **2** |
+| `examples`: fully agreeing | 17 | **19** |
+| `examples`: only pilot | 42 | **19** |
+
+| File | What it now writes | Rows |
+|---|---|---:|
+| `action-executor-demo.sysml` | `then done;` in place of a standalone `done;` declaration | 3 → **0** |
+| `phase-c-behavioral-bodies.sysml` | `entry`/`do`/`exit <action>` and named effect actions; declared Boolean features accepted with `accept when` | 3 → **0** |
+| `views-demo.sysml` | the descent flow as `first`/`fork`/`join`/`decide` with successions; the framing view declared last | 8 → **2** |
+| `solver-demo.sysml` | `assert constraint` for an analysis case's own conditions; each objective redefines the subject it inherits | 15 → **5** |
+| `disposal-robot-demo/robot.sysml` | the same objective subject redefinition; the framing view declared last | 17 → **7** |
+| `pseudostates-demo.sysml` | a state named `ready` rather than one shadowing the library's `start` | 8 → **7** |
+
+`require <constraint>` outside a requirement body and a standalone `done;` are the two the audit
+answers outright: an analysis case's own conditions are ordinary `assert constraint` members, and
+`done` is a member every action inherits, so referring to it is the standard spelling and declaring
+it again is not. The objective subject is the reference's own: `TradeStudies::TradeStudy` writes
+`subject :>> selectedAlternative;` in its objective, and writing it in ours retires the six
+`Only one subject is allowed.` rows without touching what `%optimize` reports.
+
+What remains is adjudicated as extension notation this project supports deliberately:
+
+- **`choice` and `junction`** — no SysML v2 production exists for pseudostates, so the notation stays
+  supported and stays demonstrated. `pseudostates-demo.sysml` is now the only file that writes it, and
+  says so; its 1 only-ours warning, 1 severity-only pair and 5 pilot rows are that file alone.
+- **`attribute :>> best = <expression>` and a second objective** (`solver-demo.sysml`,
+  `robot.sysml`) — the trade-study contract this project reads (`internal/core/solve/doc.go`). The
+  library binds `best`, so the reference reports `Cannot override a binding feature value` for the
+  expression to improve, and it admits one objective per analysis case where we improve several
+  lexicographically: 8 + 2 `unmapped` rows.
+- **`frame concern` in a view usage** (`views-demo.sysml`, `robot.sysml`) — `FramedConcernMember` is
+  a requirement-body member in the pilot grammar, not a view-body one, and the demos frame a concern
+  in the view because that is what `%view` evaluates the exposed elements against. Declaring the
+  framing view last confines the reference's recovery to the file's closing lines, 2 syntax rows
+  each instead of the whole view package.
+
+The `testdata` fixtures the same notation appears in are unchanged: `passes/import_no_visibility.sysml`
+and `parse/namespaces.sysml` exist to exercise the diagnostics they carry, so their rows stay
+adjudicated where they are rather than rewritten away.
 
 ### Package-keyword round
 
@@ -241,11 +295,11 @@ every row it carried, on both sides:
 
 | Count | Before the keyword change | Now |
 |---|---:|---:|
-| `examples`: only pilot | 49 | **42** |
-| `examples`: severity-only | 7 | **4** |
-| overall: fully agreeing | 329 | **330** |
-| overall: our diagnostics | 72 | **69** |
-| overall: pilot diagnostics | 120 | **110** |
+| `examples`: only pilot | 49 | **19** |
+| `examples`: severity-only | 7 | **1** |
+| overall: fully agreeing | 329 | **332** |
+| overall: our diagnostics | 72 | **58** |
+| overall: pilot diagnostics | 120 | **83** |
 
 The three severity-only pairs were our `kerml-notation` warning against the reference's parse
 error on lines 35, 39 and 105; the seven pilot-only rows were that parse failure's recovery —
@@ -264,9 +318,9 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **68** |
-| pilot diagnostics | 123 | **110** |
-| severity-only | 9 | **5** |
+| only pilot | 82 | **45** |
+| pilot diagnostics | 123 | **83** |
+| severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
 those counts as the later rounds leave them.
@@ -458,10 +512,10 @@ Two things did move here, and one is a first:
   is correct and expected here.
 
 Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
-`units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 7 syntax, 1 `unmapped`; `testdata` 2
+`units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 13 syntax, 7 `kind-mismatch`, 12 `unmapped`, 10 `unresolved-reference` — all of them
+`examples` 8 syntax, 10 `unmapped`, 1 `unresolved-reference` — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -499,13 +553,13 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **330 / 27 / 69** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **332 / 20 / 58** |
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **42** |
-| `examples`: fully agreeing | **15** | **17** |
-| `unmapped`, our side | **20** | **23** |
+| `examples`: only pilot | **40** | **19** |
+| `examples`: fully agreeing | **15** | **19** |
+| `unmapped`, our side | **20** | **21** |
 
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
 our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
