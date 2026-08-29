@@ -14,12 +14,29 @@ import sys
 from pathlib import Path
 
 
+def under_tree(argument: str) -> Path:
+    """Resolve a profile path, rejecting anything outside the working tree."""
+    root = Path.cwd().resolve()
+    try:
+        path = Path(root, argument).resolve()
+    except (OSError, RuntimeError) as err:
+        raise ValueError(f"{argument}: {err}") from err
+    if root != path and root not in path.parents:
+        raise ValueError(f"{argument}: outside {root}")
+    return path
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print(f"usage: {Path(sys.argv[0]).name} <profile>", file=sys.stderr)
         return 2
 
-    path = Path(sys.argv[1])
+    try:
+        path = under_tree(sys.argv[1])
+    except ValueError as err:
+        print(err, file=sys.stderr)
+        return 2
+
     mode = None
     counts: dict[str, int] = {}
     order: list[str] = []
