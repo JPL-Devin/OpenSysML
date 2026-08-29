@@ -23,6 +23,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **The Connect server's shutdown no longer runs on an already-cancelled context.** It derived its
+  30-second grace period from `context.Background()`, dropping the request context's values; it now
+  derives it from a cancellation-free copy of the server's own context.
+
+- **The pilot validators normalize EMF object references with a linearly-scanned pattern.** Theirs
+  began with a broad character class, so a message without a reference was rescanned from every
+  position. It anchors on the `@` that starts the identity hash instead, and the qualified name
+  before it is left in place rather than rewritten unchanged.
+
 - **A failing Java, Node or public-Go-API job now fails the PR gate.** GitHub's `Build and test`
   check exists to give path-filtered jobs one stable required name, but its `needs` listed neither
   client test job nor the `client/opensysml` conformance run, so all three reported green through

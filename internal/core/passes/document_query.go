@@ -8,11 +8,15 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// documentQuerySource names this pass in the diagnostics it emits.
+const documentQuerySource = "document-query"
+
 // DocumentQueryPass validates native document-query definitions.
 type DocumentQueryPass struct{}
 
 func (DocumentQueryPass) Level() PassLevel { return LevelConstraint }
 
+// ElementScoped marks the pass: each query definition is gated on its own.
 func (DocumentQueryPass) ElementScoped() {}
 
 func (DocumentQueryPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
@@ -53,15 +57,15 @@ func documentQueryDiagnostic(err error) Diagnostic {
 		return Diagnostic{
 			Severity: SeverityError,
 			Message:  err.Error(),
-			Code:     "document-query",
-			Source:   "document-query",
+			Code:     documentQuerySource,
+			Source:   documentQuerySource,
 		}
 	}
 	return Diagnostic{
 		Severity: SeverityError,
 		Span:     planning.Origin.Span,
 		Message:  planning.Error(),
-		Code:     "document-query-" + string(planning.Kind),
-		Source:   "document-query",
+		Code:     documentQuerySource + "-" + string(planning.Kind),
+		Source:   documentQuerySource,
 	}
 }

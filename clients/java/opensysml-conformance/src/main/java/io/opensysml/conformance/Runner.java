@@ -138,13 +138,14 @@ final class Runner {
     Scenario.Expect expect = scenario.expect();
     List<String> missing = missingCapabilities(scenario);
     if (!missing.isEmpty()) {
-      if (scenario.expectWithoutCapability().isEmpty()) {
+      Optional<Scenario.Expect> withoutCapability = scenario.expectWithoutCapability();
+      if (withoutCapability.isEmpty()) {
         result.outcome = "skip";
         result.status = "-";
         result.reason = "the service does not report " + String.join(", ", missing);
         return;
       }
-      expect = scenario.expectWithoutCapability().get();
+      expect = withoutCapability.get();
       result.reason =
           "the service does not report "
               + String.join(", ", missing)
@@ -152,9 +153,10 @@ final class Runner {
     }
 
     String modelHash = "";
-    if (scenario.model().isPresent()) {
+    Optional<Scenario.Fixture> model = scenario.model();
+    if (model.isPresent()) {
       try {
-        modelHash = modelHash(scenario.model().get());
+        modelHash = modelHash(model.get());
       } catch (OpenSysMLException | IllegalStateException e) {
         errored(result, e.getMessage());
         return;
