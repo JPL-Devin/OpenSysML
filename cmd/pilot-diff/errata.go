@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"time"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/errata"
@@ -85,13 +84,13 @@ type erratumRun struct {
 // zero run when no correction lies inside the root, in which case the caller
 // carries the as-published totals over unchanged.
 func runErrata(root corpusRoot, files []string, overlay *errata.Overlay, ours, theirs map[string][]diagnostic,
-	repo, validator, kermlValidator, out string, timeout time.Duration) (erratumRun, error) {
+	opts options) (erratumRun, error) {
 	applied := coveredBy(overlay.Under(root.Dir), files)
 	if len(applied) == 0 {
 		return erratumRun{}, nil
 	}
-	corrected := filepath.Join(out, "errata-corpora", root.Name)
-	if _, err := overlay.Materialize(repo, root.Dir, corrected); err != nil {
+	corrected := filepath.Join(opts.out, "errata-corpora", root.Name)
+	if _, err := overlay.Materialize(opts.repo, root.Dir, corrected); err != nil {
 		return erratumRun{}, err
 	}
 	defer func() {
@@ -106,15 +105,15 @@ func runErrata(root corpusRoot, files []string, overlay *errata.Overlay, ours, t
 	erratumTheirs := make(map[string][]diagnostic, len(files))
 	for _, batch := range batchByLanguage(files) {
 		fmt.Fprintf(os.Stderr, "%s: %d %s file(s) with the errata applied\n", root.Name, len(batch.Files), batch.Kind)
-		pilot := validator
+		pilot := opts.validator
 		if batch.Kind == source.KindKerML {
-			pilot = kermlValidator
+			pilot = opts.kermlValidator
 		}
 		batchOurs, err := openSysMLDiagnostics(corrected, ".", batch.Files)
 		if err != nil {
 			return erratumRun{}, err
 		}
-		batchTheirs, err := pilotDiagnostics(pilot, corrected, ".", batch.Files, timeout)
+		batchTheirs, err := pilotDiagnostics(pilot, corrected, ".", batch.Files, opts.timeout)
 		if err != nil {
 			return erratumRun{}, err
 		}

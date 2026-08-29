@@ -224,46 +224,71 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 	if len(fields) == 0 {
 		return nil, false, nil
 	}
+	for _, run := range []func([]string, string) (metaResult, bool){
+		s.metaSessionCommand, s.metaModelCommand, s.metaDebugCommand,
+	} {
+		if res, ok := run(fields, line); ok {
+			return res.out, res.quit, res.err
+		}
+	}
+	return []string{unknownCommandLine(fields[0])}, false, nil
+}
+
+// metaResult is a meta command's outcome: lines to print, whether to quit, and
+// an unrecoverable error.
+type metaResult struct {
+	out  []string
+	quit bool
+	err  error
+}
+
+func metaOut(out []string, quit bool, err error) metaResult {
+	return metaResult{out: out, quit: quit, err: err}
+}
+
+// metaSessionCommand runs a session-level command, reporting whether the
+// line named one.
+func (s *Session) metaSessionCommand(fields []string, line string) (metaResult, bool) {
 	switch fields[0] {
 	case "%help":
-		return helpText(), false, nil
+		return metaOut(helpText(), false, nil), true
 	case "%list":
 		decls := s.list()
 		if len(decls) == 0 {
-			return []string{"(empty session)"}, false, nil
+			return metaOut([]string{"(empty session)"}, false, nil), true
 		}
-		return decls, false, nil
+		return metaOut(decls, false, nil), true
 	case "%clear":
-		return append([]string{"session cleared"}, s.clear()...), false, nil
+		return metaOut(append([]string{"session cleared"}, s.clear()...), false, nil), true
 	case "%load":
 		if len(fields) < 2 {
-			return []string{"usage: %load <file|dir|glob>..."}, false, nil
+			return metaOut([]string{"usage: %load <file|dir|glob>..."}, false, nil), true
 		}
 		lines, lerr := s.loadPaths(pathArgs(fields[1:]))
 		if lerr != nil {
-			return nil, false, lerr
+			return metaOut(nil, false, lerr), true
 		}
-		return lines, false, nil
+		return metaOut(lines, false, nil), true
 	case "%print":
 		if len(fields) < 2 {
-			return s.doPrint("")
+			return metaOut(s.doPrint("")), true
 		}
-		return s.doPrint(fields[1])
+		return metaOut(s.doPrint(fields[1])), true
 	case "%save":
 		if len(fields) < 2 {
-			return []string{"usage: %save <file.sysml|file.ttl>"}, false, nil
+			return metaOut([]string{"usage: %save <file.sysml|file.ttl>"}, false, nil), true
 		}
-		return s.doSave(nameText(fields[1]))
+		return metaOut(s.doSave(nameText(fields[1]))), true
 	case "%verbosity":
 		if len(fields) < 2 {
-			return []string{fmt.Sprintf("verbosity: %s", s.verbosity)}, false, nil
+			return metaOut([]string{fmt.Sprintf("verbosity: %s", s.verbosity)}, false, nil), true
 		}
 		v, verr := ParseVerbosity(fields[1])
 		if verr != nil {
-			return []string{errPrefix + verr.Error()}, false, nil
+			return metaOut([]string{errPrefix + verr.Error()}, false, nil), true
 		}
 		s.SetVerbosity(v)
-		return []string{fmt.Sprintf("verbosity: %s", v)}, false, nil
+		return metaOut([]string{fmt.Sprintf("verbosity: %s", v)}, false, nil), true
 	case "%trace":
 		if len(fields) >= 2 {
 			switch fields[1] {
@@ -272,152 +297,167 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			case "off":
 				s.SetTracing(false)
 			default:
-				return []string{fmt.Sprintf("error: unknown trace setting %q (want on or off)", fields[1])}, false, nil
+				return metaOut([]string{fmt.Sprintf("error: unknown trace setting %q (want on or off)", fields[1])}, false, nil), true
 			}
 		}
-		return []string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil
+		return metaOut([]string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil), true
 	case "%strict":
-		return s.doStrict(fields[1:]), false, nil
+		return metaOut(s.doStrict(fields[1:]), false, nil), true
 	case "%budget":
-		return s.doBudget(), false, nil
+		return metaOut(s.doBudget(), false, nil), true
 	case "%search":
 		if len(fields) < 2 {
-			return []string{"usage: %search <substring>"}, false, nil
+			return metaOut([]string{"usage: %search <substring>"}, false, nil), true
 		}
-		return s.doSearch(nameText(fields[1]))
+		return metaOut(s.doSearch(nameText(fields[1]))), true
 	case "%builtins":
-		return s.doBuiltins()
+		return metaOut(s.doBuiltins()), true
 	case "%view":
 		if len(fields) < 2 {
-			return []string{"usage: %view <name>"}, false, nil
+			return metaOut([]string{"usage: %view <name>"}, false, nil), true
 		}
-		return s.doView(fields[1])
+		return metaOut(s.doView(fields[1])), true
 	case "%render":
 		if len(fields) < 2 || len(fields) > 3 {
-			return []string{renderUsage}, false, nil
+			return metaOut([]string{renderUsage}, false, nil), true
 		}
 		form := view.FormText
 		if len(fields) == 3 {
 			form = view.Form(fields[2])
 			if !slices.Contains(view.Forms(), form) {
-				return []string{fmt.Sprintf("unknown form %q; %s", fields[2], renderUsage)}, false, nil
+				return metaOut([]string{fmt.Sprintf("unknown form %q; %s", fields[2], renderUsage)}, false, nil), true
 			}
 		}
-		return s.doRender(fields[1], form)
+		return metaOut(s.doRender(fields[1], form)), true
 	case "%quit", "%exit":
-		return []string{"goodbye"}, true, nil
+		return metaOut([]string{"goodbye"}, true, nil), true
+	}
+	return metaResult{}, false
+}
+
+// metaModelCommand runs a model-level command, reporting whether the line
+// named one.
+func (s *Session) metaModelCommand(fields []string, line string) (metaResult, bool) {
+	switch fields[0] {
 	case "%instantiate":
 		if len(fields) < 2 {
-			return []string{"usage: %instantiate <name>"}, false, nil
+			return metaOut([]string{"usage: %instantiate <name>"}, false, nil), true
 		}
-		return s.doInstantiate(fields[1])
+		return metaOut(s.doInstantiate(fields[1])), true
 	case "%eval":
 		if len(fields) < 2 {
-			return []string{evalUsage}, false, nil
+			return metaOut([]string{evalUsage}, false, nil), true
 		}
 		tail := strings.TrimPrefix(strings.TrimSpace(line), "%eval")
-		return s.doEvalLine(strings.TrimSpace(tail))
+		return metaOut(s.doEvalLine(strings.TrimSpace(tail))), true
 	case "%features":
 		if len(fields) < 2 {
-			return []string{"usage: %features <name>"}, false, nil
+			return metaOut([]string{"usage: %features <name>"}, false, nil), true
 		}
-		return s.doFeatures(fields[1])
+		return metaOut(s.doFeatures(fields[1])), true
 	case "%instances":
-		return s.doInstances()
+		return metaOut(s.doInstances()), true
 	case "%calc":
 		if len(fields) < 2 {
-			return []string{"usage: %calc <name> [args...]"}, false, nil
+			return metaOut([]string{"usage: %calc <name> [args...]"}, false, nil), true
 		}
 		name, argText := splitCalcArgs(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%calc")))
-		return s.doCalc(name, argText)
+		return metaOut(s.doCalc(name, argText)), true
 	case "%constraint":
 		if len(fields) < 2 {
-			return []string{"usage: %constraint <name>"}, false, nil
+			return metaOut([]string{"usage: %constraint <name>"}, false, nil), true
 		}
-		return s.doConstraint(fields[1])
+		return metaOut(s.doConstraint(fields[1])), true
 	case "%requirement":
 		if len(fields) < 2 {
-			return []string{"usage: %requirement <name>"}, false, nil
+			return metaOut([]string{"usage: %requirement <name>"}, false, nil), true
 		}
-		return s.doRequirement(fields[1])
+		return metaOut(s.doRequirement(fields[1])), true
 	case "%satisfy":
-		return s.doSatisfy(fields[1:])
+		return metaOut(s.doSatisfy(fields[1:])), true
 	case "%check":
 		if len(fields) < 2 {
-			return []string{"usage: %check <name>"}, false, nil
+			return metaOut([]string{"usage: %check <name>"}, false, nil), true
 		}
-		return s.doCheck(fields[1])
+		return metaOut(s.doCheck(fields[1])), true
 	case "%explain":
 		if len(fields) < 2 {
-			return []string{"usage: %explain <name>"}, false, nil
+			return metaOut([]string{"usage: %explain <name>"}, false, nil), true
 		}
-		return s.doExplain(fields[1])
+		return metaOut(s.doExplain(fields[1])), true
 	case "%solve":
 		if len(fields) < 2 {
-			return []string{"usage: %solve <name>"}, false, nil
+			return metaOut([]string{"usage: %solve <name>"}, false, nil), true
 		}
-		return s.doSolve(fields[1])
+		return metaOut(s.doSolve(fields[1])), true
 	case "%configure":
 		if len(fields) < 2 {
-			return []string{"usage: %configure <name> [<variation>=<variant>...] [all [<count>]]"}, false, nil
+			return metaOut([]string{"usage: %configure <name> [<variation>=<variant>...] [all [<count>]]"}, false, nil), true
 		}
-		return s.doConfigure(fields[1], fields[2:])
+		return metaOut(s.doConfigure(fields[1], fields[2:])), true
 	case "%optimize":
 		if len(fields) < 2 {
-			return []string{"usage: %optimize <name>"}, false, nil
+			return metaOut([]string{"usage: %optimize <name>"}, false, nil), true
 		}
-		return s.doOptimize(fields[1])
-	// Action debugging
+		return metaOut(s.doOptimize(fields[1])), true
+		// Action debugging
+	}
+	return metaResult{}, false
+}
+
+// metaDebugCommand runs an execution-debugging command, reporting whether
+// the line named one.
+func (s *Session) metaDebugCommand(fields []string, line string) (metaResult, bool) {
+	switch fields[0] {
 	case "%action":
 		if len(fields) < 2 {
-			return []string{"usage: %action <name> [<object>]"}, false, nil
+			return metaOut([]string{"usage: %action <name> [<object>]"}, false, nil), true
 		}
-		return s.doAction(fields[1], fields[2:])
+		return metaOut(s.doAction(fields[1], fields[2:])), true
 	case "%step":
-		return s.doStep()
+		return metaOut(s.doStep()), true
 	case "%continue":
-		return s.doContinue()
+		return metaOut(s.doContinue()), true
 	case "%tokens":
-		return s.doTokens()
+		return metaOut(s.doTokens()), true
 	case "%break":
 		if len(fields) < 2 {
-			return []string{"usage: %break <node>"}, false, nil
+			return metaOut([]string{"usage: %break <node>"}, false, nil), true
 		}
-		return s.doBreak(nameText(fields[1]))
+		return metaOut(s.doBreak(nameText(fields[1]))), true
 	case "%stop":
-		return s.doStop()
+		return metaOut(s.doStop()), true
 	// State machine debugging
 	case "%state":
 		if len(fields) < 2 {
-			return []string{"usage: %state <name> [<object>]"}, false, nil
+			return metaOut([]string{"usage: %state <name> [<object>]"}, false, nil), true
 		}
-		return s.doStateMachine(fields[1], fields[2:])
+		return metaOut(s.doStateMachine(fields[1], fields[2:])), true
 	case "%invoke":
 		if len(fields) < 3 {
-			return []string{"usage: %invoke <object> <operation> [<parameter>=<expression> ...]"}, false, nil
+			return metaOut([]string{"usage: %invoke <object> <operation> [<parameter>=<expression> ...]"}, false, nil), true
 		}
-		return s.doInvoke(fields[1], fields[2], fields[3:])
+		return metaOut(s.doInvoke(fields[1], fields[2], fields[3:])), true
 	case cmdQuery:
 		if len(fields) < 2 {
-			return []string{"usage: %query <oslc-query>"}, false, nil
+			return metaOut([]string{"usage: %query <oslc-query>"}, false, nil), true
 		}
 		lines, err := s.query(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), cmdQuery)))
 		if err != nil {
-			return []string{errPrefix + err.Error()}, false, nil
+			return metaOut([]string{errPrefix + err.Error()}, false, nil), true
 		}
-		return lines, false, nil
+		return metaOut(lines, false, nil), true
 	case "%events":
-		return s.doEvents()
+		return metaOut(s.doEvents()), true
 	case "%current":
-		return s.doCurrent()
+		return metaOut(s.doCurrent()), true
 	case "%advance":
 		if len(fields) < 2 {
-			return []string{"usage: %advance <time>"}, false, nil
+			return metaOut([]string{"usage: %advance <time>"}, false, nil), true
 		}
-		return s.doAdvance(fields[1])
-	default:
-		return []string{unknownCommandLine(fields[0])}, false, nil
+		return metaOut(s.doAdvance(fields[1])), true
 	}
+	return metaResult{}, false
 }
 
 // doInstantiate creates an instance of a part def. A runtime that cannot be

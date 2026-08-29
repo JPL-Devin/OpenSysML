@@ -604,23 +604,45 @@ func docAssertCategoryProse(t *testing.T, lines []docLine, start docLine, report
 		docFailAt(t, start.number, "category paragraph markers are out of order")
 	}
 
-	starts := docParagraphLineStarts(paragraph)
-	prose := map[string]map[string]map[Category]int{}
-	proseLines := map[string]map[string]int{}
-	var consumed []docNumber
-	docParseCategoryPart(t, paragraph, starts, paragraphLines, oursAt+len(onlyOursMarker), pilotAt, "only-ours", report, prose, proseLines, &consumed)
-	docParseCategoryPart(t, paragraph, starts, paragraphLines, pilotAt+len(onlyPilotMarker), len(paragraph), "only-pilot", report, prose, proseLines, &consumed)
+	parse := &docCategoryProse{
+		t:          t,
+		paragraph:  paragraph,
+		starts:     docParagraphLineStarts(paragraph),
+		lines:      paragraphLines,
+		report:     report,
+		prose:      map[string]map[string]map[Category]int{},
+		proseLines: map[string]map[string]int{},
+	}
+	parse.parsePart(oursAt+len(onlyOursMarker), pilotAt, "only-ours")
+	parse.parsePart(pilotAt+len(onlyPilotMarker), len(paragraph), "only-pilot")
 
-	docAssertCategoryMaps(t, report, prose, proseLines)
-	for _, token := range docBareNumberTokens(paragraph, starts, paragraphLines) {
-		if !docNumberWasConsumed(consumed, token) {
+	docAssertCategoryMaps(t, report, parse.prose, parse.proseLines)
+	for _, token := range docBareNumberTokens(paragraph, parse.starts, paragraphLines) {
+		if !docNumberWasConsumed(parse.consumed, token) {
 			docErrorAt(t, token.line, "unaccounted number %q in category paragraph", token.text)
 		}
 	}
 }
 
-func docParseCategoryPart(t *testing.T, paragraph string, starts []int, lines []docLine, from, to int, direction string, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int, consumed *[]docNumber) {
-	t.Helper()
+// docCategoryProse reads the category paragraph into per-direction, per-root
+// category counts, recording the numbers it consumed so a leftover one can be
+// reported.
+type docCategoryProse struct {
+	t          *testing.T
+	paragraph  string
+	starts     []int
+	lines      []docLine
+	report     Report
+	prose      map[string]map[string]map[Category]int
+	proseLines map[string]map[string]int
+	consumed   []docNumber
+}
+
+// parsePart reads the semicolon-separated segments of one direction's half of
+// the paragraph.
+func (p *docCategoryProse) parsePart(from, to int, direction string) {
+	p.t.Helper()
+	paragraph := p.paragraph
 	part := paragraph[from:to]
 	partOffset := from
 	for len(part) > 0 {
@@ -640,7 +662,7 @@ func docParseCategoryPart(t *testing.T, paragraph string, starts []int, lines []
 			part = paragraph[partOffset:to]
 			continue
 		}
-		docParseCategorySegment(t, segment, segmentStart, starts, lines, direction, report, prose, proseLines, consumed)
+		p.parseSegment(segment, segmentStart, direction)
 		if semicolon < 0 {
 			break
 		}
@@ -649,7 +671,10 @@ func docParseCategoryPart(t *testing.T, paragraph string, starts []int, lines []
 	}
 }
 
-func docParseCategorySegment(t *testing.T, segment string, segmentStart int, starts []int, lines []docLine, direction string, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int, consumed *[]docNumber) {
+// parseSegment reads one root's counts within a direction's half.
+func (p *docCategoryProse) parseSegment(segment string, segmentStart int, direction string) {
+	t, starts, lines := p.t, p.starts, p.lines
+	report, prose, proseLines := p.report, p.prose, p.proseLines
 	t.Helper()
 	rootMatch := docRootPattern.FindStringSubmatchIndex(segment)
 	if rootMatch == nil {
@@ -712,7 +737,7 @@ func docParseCategorySegment(t *testing.T, segment string, segmentStart int, sta
 			docErrorAt(t, docLineAt(starts, lines, restStart+match[1]+token.start), "unaccounted number %q in %s %s tail", token.text, direction, root.Name)
 		}
 		prose[direction][rootName][category] += count
-		*consumed = append(*consumed, docNumber{start: numberStart, end: numberEnd, text: rest[match[2]:match[3]], line: docLineAt(starts, lines, numberStart)})
+		p.consumed = append(p.consumed, docNumber{start: numberStart, end: numberEnd, text: rest[match[2]:match[3]], line: docLineAt(starts, lines, numberStart)})
 		parsed++
 		if boundary == nil {
 			break
