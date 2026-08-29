@@ -3,7 +3,6 @@ package view
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -21,7 +20,3 @@ func symbolOrigin(sym *symbols.Symbol) Origin {
 func nodeOrigin(doc string, node ast.Node) Origin {
 	return provenance.Node(doc, node)
 }
-
-// originAt is the origin of a span in a document, the zero Origin when either is
-// unknown.
-func originAt(doc string, span source.Span) Origin { return provenance.At(doc, span) }
