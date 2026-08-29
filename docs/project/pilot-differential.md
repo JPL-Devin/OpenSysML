@@ -253,7 +253,7 @@ no parser, validator or runtime code — every demo's `%`-command output is unch
 |---|---|---:|
 | `action-executor-demo.sysml` | `then done;` in place of a standalone `done;` declaration | 3 → **0** |
 | `phase-c-behavioral-bodies.sysml` | `entry`/`do`/`exit <action>` and named effect actions; declared Boolean features accepted with `accept when` | 3 → **0** |
-| `views-demo.sysml` | the descent flow as `first`/`fork`/`join`/`decide` with successions; the framing view declared last | 8 → **2** |
+| `views-demo.sysml` | the descent flow as `first`/`fork`/`join`/`decide` with successions; `Descender::mass` declared without a default the two landers rebind; the framing view declared last | 8 → **2** |
 | `solver-demo.sysml` | `assert constraint` for an analysis case's own conditions; each objective redefines the subject it inherits | 15 → **5** |
 | `disposal-robot-demo/robot.sysml` | the same objective subject redefinition; the framing view declared last | 17 → **7** |
 | `pseudostates-demo.sysml` | a state named `ready` rather than one shadowing the library's `start` | 8 → **7** |
@@ -263,7 +263,11 @@ answers outright: an analysis case's own conditions are ordinary `assert constra
 `done` is a member every action inherits, so referring to it is the standard spelling and declaring
 it again is not. The objective subject is the reference's own: `TradeStudies::TradeStudy` writes
 `subject :>> selectedAlternative;` in its objective, and writing it in ours retires the six
-`Only one subject is allowed.` rows without touching what `%optimize` reports.
+`Only one subject is allowed.` rows without touching what `%optimize` reports. The lander's
+`Descender::mass` loses its `= 890.0` default for the same reason: both landers declare a mass of
+their own, and a redefinition that rebinds an inherited value is `Cannot override a binding feature
+value` on the reference. A `Descender` declared without a mass now has none, which is what a
+declaration that states no value means.
 
 What remains is adjudicated as extension notation this project supports deliberately:
 
