@@ -17,7 +17,7 @@ func (p *Parser) parseConditional() ast.Node {
 		p.advance() // if
 		cond := p.parseBinary(precNullCoalesce)
 		p.expect(lexer.Question, "expected '?' in conditional")
-		thn := p.parseBinary(precNullCoalesce)
+		thn := p.parseConditional()
 		p.expect2Keyword("else")
 		els := p.parseConditional()
 		e := &ast.OperatorExpr{Operator: ast.OpConditional, Operands: []ast.Node{cond, thn, els}}
