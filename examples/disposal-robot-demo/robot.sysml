@@ -497,6 +497,7 @@ package RobotSolver {
         attribute housekeepingEnergy : Integer;
 
         objective mostToolTime : MaximizeObjective {
+            subject :>> selectedAlternative;
             require constraint {
                 driveEnergy + toolEnergy + housekeepingEnergy <= 1200
             }
@@ -519,6 +520,7 @@ package RobotSolver {
         attribute mass : ISQ::MassValue;
 
         objective lightest : MinimizeObjective {
+            subject :>> selectedAlternative;
             require constraint {
                 mass >= 300 [kg]
             }
@@ -538,6 +540,7 @@ package RobotSolver {
         attribute toolEnergy : Integer;
 
         objective farthest : MaximizeObjective {
+            subject :>> selectedAlternative;
             require constraint {
                 standoff >= 20
             }
@@ -559,6 +562,7 @@ package RobotSolver {
         }
 
         objective mostToolTime : MaximizeObjective {
+            subject :>> selectedAlternative;
             attribute :>> best = toolEnergy;
         }
     }
@@ -591,17 +595,6 @@ package RobotViews {
         render asInterconnectionDiagram;
     }
 
-    // States no rendering, so a tree renders it, with the interconnection view
-    // nested. `%view` checks the robots exposed against the concern framed here.
-    view overview {
-        expose Robot::fielded;
-        expose Robot::heavyMockup;
-        view interfaceSubview :> interfaces;
-
-        satisfy operationsPerspective;
-        frame concern mass : MassBudget;
-    }
-
     // The rendering kind comes from the standard view definition each specializes.
     view modes : StateTransitionView {
         expose RobotBehavior::Modes;
@@ -619,5 +612,16 @@ package RobotViews {
     // A filtered recursive expose, reaching only the parts marked critical.
     view criticalParts {
         expose Robot::**[@Robot::Critical];
+    }
+
+    // States no rendering, so a tree renders it, with the interconnection view
+    // nested. `%view` checks the robots exposed against the concern framed here.
+    view overview {
+        expose Robot::fielded;
+        expose Robot::heavyMockup;
+        view interfaceSubview :> interfaces;
+
+        satisfy operationsPerspective;
+        frame concern mass : MassBudget;
     }
 }
