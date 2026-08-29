@@ -46,6 +46,8 @@ type Server struct {
 	shutdownReceived bool
 	exitReceived     bool
 	folders          []string
+	// hoverMarkdown records that the client advertised Markdown for hover.
+	hoverMarkdown bool
 }
 
 // notifier sends a notification by method name, which a client connection does.
