@@ -5375,21 +5375,27 @@ reordering) the binary is unchanged, so any difference must come from the file. 
 by running the *old* copy of the same file through the *same* binary:
 
 ```bash
-git show origin/main:examples/<file>.sysml > /tmp/old.sysml
-printf '%%state Pkg::Machine\n%%quit\n' | ./bin/sysml /tmp/old.sysml | tail -3
-printf '%%state Pkg::Machine\n%%quit\n' | ./bin/sysml examples/<file>.sysml | tail -3
+# the branch point, not whatever origin/main has moved to since
+git show "$(git merge-base HEAD origin/main)":examples/<file>.sysml > /tmp/old.sysml
+printf '%%state Pkg::Machine\n%%quit\n' | ./bin/sysml /tmp/old.sysml > /tmp/old.out 2>&1
+printf '%%state Pkg::Machine\n%%quit\n' | ./bin/sysml examples/<file>.sysml > /tmp/new.out 2>&1
+diff -u /tmp/old.out /tmp/new.out
 ```
 
-Identical output means the behavior is pre-existing and not the PR's doing — report it as a
+Compare the whole run, not its last few lines: a difference earlier in the output (a warning,
+a diagnostic, a different starting state) is exactly the regression you are looking for. An
+empty `diff` means the behavior is pre-existing and not the PR's doing — report it as a
 walkthrough/claim gap rather than a regression.
 
-Known shape worth expecting: `examples/phase-c-behavioral-bodies.sysml` validates clean but
-none of its state machines (`PhaseC::Running`, `ConnectionStateMachine`, `VehicleOperating`,
-`AutopilotMode`) can be started — `%state` answers `failed to create executor: initialize
-state machine: no initial state found`, because those states declare substates without an
-`entry; then <state>;` initial transition. That is true on `main` too. A task brief that
-asks you to "start and advance `PhaseC::Running`" is asking for something the file has never
-supported; check the old copy before calling it a regression.
+Known shape worth expecting: `examples/phase-c-behavioral-bodies.sysml` used to validate
+clean while none of its state machines (`PhaseC::Running`, `ConnectionStateMachine`,
+`VehicleOperating`, `AutopilotMode`) could be started — `%state` answered `failed to create
+executor: initialize state machine: no initial state found`, because those states declared
+substates with no transition out of the entry action naming the one to start in. A guard over
+an attribute with no value fails the same startup a step later (`eval guard of transition
+Active -> Paused: unresolved reference: lowBattery`). Both are fixed in that file now, but a
+demo whose walkthrough was written against a machine that never started is a shape to expect:
+check the old copy before calling such a failure a regression.
 
 The committed walkthroughs to diff a demo run against are
 `examples/VIEWS-DEMO.md`, `examples/SOLVER-DEMO.md`,
