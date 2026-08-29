@@ -32,11 +32,11 @@ package SemanticLayerDemo {
     attribute negExpr = -(3 + 2);              // -5
     
     // Qualified name lookup - multi-part names
-    namespace MathConstants {
+    package MathConstants {
         attribute pi = 3.14159;
         attribute e = 2.71828;
         
-        namespace Derived {
+        package Derived {
             attribute twoPi = 6.28318;
         }
     }
@@ -102,7 +102,7 @@ package SemanticLayerDemo {
     // Integration Example
     // =========================================================================
     
-    namespace Integration {
+    package Integration {
         part def Sensor {
             attribute reading = 0.0;
             attribute threshold = 100.0;
