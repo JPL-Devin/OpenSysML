@@ -36,7 +36,7 @@ MODEL = """package Demo {
 }
 """
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # A local build, or the copy opensysml installs; CI publishes the binary as an
 # artifact, which does not carry the executable bit into the repo's bin.
 GRPC_BINARIES = (

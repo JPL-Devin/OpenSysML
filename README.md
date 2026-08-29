@@ -153,7 +153,7 @@ sysml> %advance 30
 - **Python Client Library** — gRPC-based Python bindings for programmatic access: parse models, resolve symbols, evaluate expressions, instantiate parts, execute actions/state machines. Includes IPython display hooks for Jupyter notebooks and pandas DataFrame integration. Constraint, requirement, satisfaction and calc verdicts are available as RPCs (`verify_constraint`, `verify_requirement`, `verify_satisfaction`, `calc`).
 - **Node/TypeScript Client Library** — `@opensysml/client` for Node and the browser, over the Connect protocol with protobuf bodies: parse, evaluate, look up symbols and instantiate, with values as discriminated unions. No native addon and nothing downloaded at install time ([clients/node/README.md](clients/node/README.md)).
 - **Java Client Library** — `io.github.open-mbee:opensysml-client` for a JVM host application it does not own, on the JDK's own `java.net.http.HttpClient`, so no gRPC, Netty or `tcnative` reaches the host ([clients/java/README.md](clients/java/README.md)).
-- **Rust Client Library** — A blocking client for the local `sysml-grpc` service, with no asynchronous runtime in its default dependency tree, available from the [Rust crate documentation](rust/README.md).
+- **Rust Client Library** — A blocking client for the local `sysml-grpc` service, with no asynchronous runtime in its default dependency tree, available from the [Rust crate documentation](clients/rust/README.md).
 
 Which client to pick, what the four newer ones cover, and what they deliberately leave to a v2 is [docs/reference/clients.md](docs/reference/clients.md).
 - **Modern Toolchain** — Incremental compilation, bundled standard library, persistent semantic caches. A model is a set of files, named on the command line or opened by the editor.
@@ -195,7 +195,7 @@ Which client to pick, what the four newer ones cover, and what they deliberately
 | gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime, verification, conversion, edit and Query RPCs), served as gRPC, gRPC-Web and the Connect protocol on one port |
 | Public Go API (`pkg/opensysml`) | ✅ Complete for its v1 scope: parse, diagnostics, symbols, evaluation, instantiation and capability negotiation, answered in process or over Connect, with the edit API, conversion, verification, behaviour execution and Query out of scope ([pkg/opensysml/README.md](pkg/opensysml/README.md)) |
 | Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, constraint/requirement/satisfaction/calc verification, conversion, edits, Query, IPython hooks, DataFrame) |
-| Rust client library | 🚧 Blocking v1 client for parse, diagnostics, symbols, evaluation and instantiation; see the [Rust client README](rust/README.md) |
+| Rust client library | 🚧 Blocking v1 client for parse, diagnostics, symbols, evaluation and instantiation; see the [Rust client README](clients/rust/README.md) |
 | Java client library | ✅ Complete for its v1 scope, and honest about the rest: connection lifecycle, parse/symbols/eval/instantiate and capability negotiation, with the edit API, conversion, verification, behaviour execution and Query out of scope. Connect protocol over the JDK's own HTTP client, so no gRPC or Netty reaches a host application ([clients/java/README.md](clients/java/README.md)) |
 | Node/TypeScript client library | ✅ Complete for the same v1 scope, in Node and the browser, over the Connect protocol with protobuf bodies and no native addon; values arrive as discriminated unions ([clients/node/README.md](clients/node/README.md)) |
 
@@ -272,10 +272,10 @@ github.com/Open-MBEE/OpenSysML
 ├── internal/grpc/          # gRPC service implementation
 ├── internal/repl/          # REPL loop implementation
 ├── pkg/opensysml/          # The public Go API (in-process and remote)
-├── python/                 # Python client bindings (opensysml)
 ├── clients/java/           # Java client (io.github.open-mbee:opensysml-client)
 ├── clients/node/           # Node/TypeScript client (@opensysml/client)
-├── rust/                   # Rust client (opensysml) and its conformance runner
+├── clients/python/         # Python client bindings (opensysml)
+├── clients/rust/           # Rust client (opensysml) and its conformance runner
 ├── docs/                   # Design specs, architecture docs
 └── testdata/               # Test fixtures (.sysml, .kerml)
 ```
@@ -313,7 +313,7 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 - The Node client is released the same way on `client-node-v*`, which publishes
   `@opensysml/client` and the five per-platform packages that carry the service binary
 - The Rust client is not published to crates.io yet: use a path or Git dependency, and see
-  [rust/README.md](rust/README.md) and
+  [clients/rust/README.md](clients/rust/README.md) and
   [docs/project/releasing.md](docs/project/releasing.md) for what a first publish needs
 - `pkg/opensysml`, the public Go API, needs no release of its own — it is part of this module,
   so `go get github.com/Open-MBEE/OpenSysML@v0.3.0` is how a Go program pins it
@@ -352,7 +352,7 @@ go build -o bin/sysml-grpc ./cmd/sysml-grpc
 pip install opensysml          # from PyPI
 
 # Or from a checkout, in development mode
-pip install -e python/
+pip install -e clients/python/
 ```
 
 **Quick example:**
@@ -377,7 +377,7 @@ print(instance.slots["mass"])
 - Automatic service lifecycle management
 - Full runtime API access (eval, instantiate, execute actions/states)
 
-See [python/INSTALL.md](python/INSTALL.md) for detailed installation and usage instructions.
+See [clients/python/INSTALL.md](clients/python/INSTALL.md) for detailed installation and usage instructions.
 
 ## Node/TypeScript Client
 

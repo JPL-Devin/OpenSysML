@@ -25,7 +25,7 @@ BUF_BREAKING_AGAINST ?= .git\#ref=origin/main,subdir=api/proto
 
 # Build output directory
 BIN_DIR := bin
-PYTHON_DIR := python
+PYTHON_DIR := clients/python
 VSCODE_DIR := editors/vscode
 PYTHON ?= python3
 # buf.gen.python.yaml starts the interpreter this names.
@@ -63,7 +63,7 @@ conformance: ## Run the language-independent conformance suite against sysml-grp
 conformance-rust: ## Run the conformance suite with the blocking Rust client
 	$(MAKE) build
 	@mkdir -p $(BIN_DIR)
-	OPENSYSML_GRPC_BINARY="$(CURDIR)/$(BIN_DIR)/sysml-grpc" cargo run --manifest-path rust/Cargo.toml -p opensysml-conformance -- -binary "$(CURDIR)/$(BIN_DIR)/sysml-grpc" -report "$(CURDIR)/$(BIN_DIR)/conformance-report-rust.json"
+	OPENSYSML_GRPC_BINARY="$(CURDIR)/$(BIN_DIR)/sysml-grpc" cargo run --manifest-path clients/rust/Cargo.toml -p opensysml-conformance -- -binary "$(CURDIR)/$(BIN_DIR)/sysml-grpc" -report "$(CURDIR)/$(BIN_DIR)/conformance-report-rust.json"
 
 conformance-pkg: ## Run the conformance suite through the public Go API (pkg/opensysml)
 	@echo "Running the conformance suite through pkg/opensysml..."
@@ -132,7 +132,7 @@ proto-ts: ## Regenerate the TypeScript stubs the npm client in clients/node ship
 
 proto-rust: ## Generate Rust stubs and the descriptor for the Rust clients
 	$(BUF) generate --template buf.gen.rust.yaml
-	$(BUF) build -o rust/conformance/sysml.descriptor.binpb
+	$(BUF) build -o clients/rust/conformance/sysml.descriptor.binpb
 
 proto-lint: ## Lint the protobuf schema
 	$(BUF) lint

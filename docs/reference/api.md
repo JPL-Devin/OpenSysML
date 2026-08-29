@@ -604,7 +604,7 @@ can filter a model OpenSysML parsed. The standard's schema is authoritative:
 
 **Implementation:** `internal/grpc/query.go` (`Service.Query`), reported from
 `GetServerInfo` as the `query` capability. Python: `model.query(...)`
-(`python/opensysml/query.py`).
+(`clients/python/opensysml/query.py`).
 
 ### The query model
 

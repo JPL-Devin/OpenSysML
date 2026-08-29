@@ -67,7 +67,7 @@ MODEL = """package Demo {
 }
 """
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 GRPC_BINARIES = (
     os.path.join(REPO_ROOT, "bin", "sysml-grpc"),
     os.path.join(os.path.expanduser("~"), ".opensysml", "bin", "sysml-grpc"),

@@ -5,7 +5,7 @@ The golden file is `tests/golden/vehicle_types.py`, generated from
 service from the repository root:
 
     python -m opensysml.generate internal/repl/testdata/vehicle_package.sysml \
-        -o python/tests/golden/vehicle_types.py
+        -o clients/python/tests/golden/vehicle_types.py
 """
 
 import importlib.util
@@ -30,12 +30,12 @@ from opensysml.typed import TypedObject
 from tests.service_gate import fail_if_service_promised, is_server_available
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = PYTHON_ROOT.parent
+REPO_ROOT = PYTHON_ROOT.parents[1]
 GOLDEN = PYTHON_ROOT / "tests" / "golden" / "vehicle_types.py"
 FIXTURE = REPO_ROOT / "internal" / "repl" / "testdata" / "vehicle_package.sysml"
 REGENERATE = (
     "python -m opensysml.generate internal/repl/testdata/vehicle_package.sysml "
-    "-o python/tests/golden/vehicle_types.py"
+    "-o clients/python/tests/golden/vehicle_types.py"
 )
 
 

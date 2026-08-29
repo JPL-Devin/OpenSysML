@@ -9,7 +9,7 @@ pip install opensysml
 Published from CircleCI on a `opensysml-v*` tag; the first such release creates the
 project on PyPI, so until it is cut this installs nothing and the source install
 below is the only route. See
-[docs/project/releasing.md](../docs/project/releasing.md#releasing-opensysml-to-pypi).
+[docs/project/releasing.md](../../docs/project/releasing.md#releasing-opensysml-to-pypi).
 
 ## From source
 
@@ -17,10 +17,10 @@ From the repository root:
 
 ```bash
 # Install in development mode (editable)
-pip install -e python/
+pip install -e clients/python/
 
 # Or install with dev dependencies
-pip install -e "python/[dev]"
+pip install -e "clients/python/[dev]"
 ```
 
 ## Running tests
@@ -32,16 +32,16 @@ From the repository root:
 
 ```bash
 # Run all tests
-pytest python/tests/
+pytest clients/python/tests/
 
 # Run with verbose output
-pytest -v python/tests/
+pytest -v clients/python/tests/
 
 # Run specific test file
-pytest python/tests/test_connection.py
+pytest clients/python/tests/test_connection.py
 
 # Run integration tests (requires the sysml-grpc binary)
-pytest -m integration python/tests/
+pytest -m integration clients/python/tests/
 ```
 
 A test that connects without naming a service starts a private `sysml-grpc`
@@ -52,7 +52,7 @@ yourself, set `OPENSYSML_SERVICE=host:port`.
 ## Package structure
 
 ```
-python/
+clients/python/
 ├── opensysml/          # Package source
 │   ├── *.py          # Core modules (connection, model, symbol, etc.)
 │   └── proto/        # Generated protobuf stubs

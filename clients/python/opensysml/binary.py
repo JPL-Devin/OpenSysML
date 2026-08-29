@@ -32,8 +32,8 @@ NETWORK_TIMEOUT = 15
 #: SHA-256 digest this release of opensysml expects of each release asset, keyed by
 #: repository, release tag and asset name. A digest pinned here does not come from
 #: the origin serving the download, so a release republished with another binary is
-#: refused rather than trusted. Produced by python/scripts/pin_release_checksums.py;
-#: see "Pinned release digests" in python/README.md for the release procedure.
+#: refused rather than trusted. Produced by clients/python/scripts/pin_release_checksums.py;
+#: see "Pinned release digests" in clients/python/README.md for the release procedure.
 PINNED_SHA256 = {
     'Open-MBEE/OpenSysML': {
         'v0.0.5': {
