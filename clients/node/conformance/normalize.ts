@@ -66,7 +66,7 @@ export class Normalizer {
       case "map": {
         const map = reflected.get(field);
         const entries: Normalized = {};
-        const keys = [...map.keys()].map((key) => String(key)).sort(byCodeUnit);
+        const keys = [...map.keys()].map(String).sort(byCodeUnit);
         for (const key of keys) {
           entries[key] = this.element(field, map.get(key));
         }
@@ -83,7 +83,12 @@ export class Normalizer {
 
   /** Normalizes one list element or map value, whose kind the field declares. */
   private element(field: DescField, value: unknown): unknown {
-    const kind = field.fieldKind === "list" ? field.listKind : field.fieldKind === "map" ? field.mapKind : undefined;
+    let kind: "message" | "enum" | "scalar" | undefined;
+    if (field.fieldKind === "list") {
+      kind = field.listKind;
+    } else if (field.fieldKind === "map") {
+      kind = field.mapKind;
+    }
     switch (kind) {
       case "message":
         return this.message(value as ReflectMessage);

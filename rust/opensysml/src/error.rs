@@ -119,39 +119,6 @@ impl FromStr for Status {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::Status;
-    use std::str::FromStr;
-
-    #[test]
-    fn canonical_names_round_trip() {
-        let statuses = [
-            Status::Ok,
-            Status::Cancelled,
-            Status::Unknown,
-            Status::InvalidArgument,
-            Status::DeadlineExceeded,
-            Status::NotFound,
-            Status::Unimplemented,
-            Status::Unavailable,
-            Status::Unauthenticated,
-            Status::PermissionDenied,
-            Status::AlreadyExists,
-            Status::ResourceExhausted,
-            Status::FailedPrecondition,
-            Status::Aborted,
-            Status::OutOfRange,
-            Status::Internal,
-            Status::DataLoss,
-        ];
-        for status in statuses {
-            assert_eq!(Status::from_str(status.canonical_name()), Ok(status));
-        }
-        assert_eq!(Status::from_canonical_name("not_found"), None);
-    }
-}
-
 /// Errors returned by the blocking OpenSysML client.
 #[derive(Debug, Error)]
 pub enum Error {
@@ -192,4 +159,37 @@ pub enum Error {
     /// Local filesystem or process I/O failed.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Status;
+    use std::str::FromStr;
+
+    #[test]
+    fn canonical_names_round_trip() {
+        let statuses = [
+            Status::Ok,
+            Status::Cancelled,
+            Status::Unknown,
+            Status::InvalidArgument,
+            Status::DeadlineExceeded,
+            Status::NotFound,
+            Status::Unimplemented,
+            Status::Unavailable,
+            Status::Unauthenticated,
+            Status::PermissionDenied,
+            Status::AlreadyExists,
+            Status::ResourceExhausted,
+            Status::FailedPrecondition,
+            Status::Aborted,
+            Status::OutOfRange,
+            Status::Internal,
+            Status::DataLoss,
+        ];
+        for status in statuses {
+            assert_eq!(Status::from_str(status.canonical_name()), Ok(status));
+        }
+        assert_eq!(Status::from_canonical_name("not_found"), None);
+    }
 }

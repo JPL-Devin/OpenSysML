@@ -9,9 +9,9 @@
  */
 "use strict";
 
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 // SysIDE truncates nothing; a chevrotain parse error can carry kilobytes of
 // expected-token dumps, which would swamp the report.
@@ -122,7 +122,7 @@ async function main() {
 
 	const syside = requireSyside(home);
 	const { dir, staged } = stageWorkspace(options.root, options.files);
-	let status = 2;
+	let status;
 	try {
 		const services = syside.languageserver.createSysMLServices(syside.node.SysMLNodeFileSystem, {
 			standardLibraryPath: options.library,
