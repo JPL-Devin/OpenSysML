@@ -1,6 +1,7 @@
 package passes
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
@@ -73,5 +74,47 @@ calc def CycleB :> Query { in subsystem : Element; CycleA(subsystem = subsystem)
 	}
 	if !found {
 		t.Fatalf("missing composition-cycle diagnostic: %v", diagnostics)
+	}
+}
+
+func TestDocumentQueryPassIsElementScoped(t *testing.T) {
+	diagnostics := documentQueryDiagnostics(t, `
+part broken : MissingType;
+calc def BrokenQuery :> Query { MissingOperation() }
+calc def CycleA :> Query { in subsystem : Element; CycleB(subsystem = subsystem) }
+calc def CycleB :> Query { in subsystem : Element; CycleA(subsystem = subsystem) }
+`)
+	var cycle, lowerTier bool
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code == "document-query-composition-cycle" {
+			cycle = true
+		}
+		if diagnostic.Source != "document-query" && diagnostic.Blocking() {
+			lowerTier = true
+		}
+		if diagnostic.Source == "document-query" && strings.Contains(diagnostic.Message, "BrokenQuery") {
+			t.Fatalf("broken query produced cascading planner diagnostic: %v", diagnostics)
+		}
+	}
+	if !lowerTier {
+		t.Fatalf("fixture produced no lower-tier error: %v", diagnostics)
+	}
+	if !cycle {
+		t.Fatalf("unrelated lower-tier error suppressed composition cycle: %v", diagnostics)
+	}
+}
+
+func TestDocumentQueryPassAcceptsInheritedResultExpression(t *testing.T) {
+	diagnostics := documentQueryDiagnostics(t, `
+calc def Base :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Specialized :> Base {
+	in redefines source;
+}
+`)
+	if len(diagnostics) != 0 {
+		t.Fatalf("inherited query result reported diagnostics: %v", diagnostics)
 	}
 }

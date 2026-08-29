@@ -113,13 +113,13 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 			Span:  sym.DeclSpan,
 		}
 	}
-	expressionNode, err := resultExpression(sym)
+	resultExpression, err := c.resultExpression(sym)
 	if err != nil {
 		return err
 	}
 	dependencies := make([]string, 0)
 	seenDependencies := make(map[string]bool)
-	expression, err := c.compileExpression(sym, params, expressionNode, func(name string) {
+	expression, err := c.compileExpression(sym, resultExpression.owner, params, resultExpression.node, func(name string) {
 		if !seenDependencies[name] {
 			seenDependencies[name] = true
 			dependencies = append(dependencies, name)
@@ -172,26 +172,37 @@ func (c *compiler) parameter(sym *symbols.Symbol) Parameter {
 		Multiplicity: c.parameterMultiplicity(sym),
 		Origin:       provenance.Symbol(sym),
 	}
-	if usage, ok := sym.Decl.(*ast.Usage); ok {
-		param.HasDefault = usage.Value != nil
+	for _, candidate := range c.parameterLineage(sym) {
+		if usage, ok := candidate.Decl.(*ast.Usage); ok && usage.Value != nil {
+			param.HasDefault = true
+			break
+		}
 	}
 	return param
 }
 
 func (c *compiler) parameterType(sym *symbols.Symbol) string {
-	for _, relationship := range semantics.RelationshipsOf(sym) {
-		if relationship == nil || relationship.Kind != ast.RelTyping {
-			continue
-		}
-		if target, ok := c.resolver.ResolveTarget(sym.OwnerScope, relationship.Target); ok {
-			return symbols.FQNOf(target)
+	for _, candidate := range c.parameterLineage(sym) {
+		for _, relationship := range semantics.RelationshipsOf(candidate) {
+			if relationship == nil || relationship.Kind != ast.RelTyping {
+				continue
+			}
+			if target, ok := c.resolver.ResolveTarget(candidate.OwnerScope, relationship.Target); ok {
+				return symbols.FQNOf(target)
+			}
 		}
 	}
 	return ""
 }
 
 func (c *compiler) parameterMultiplicity(sym *symbols.Symbol) Multiplicity {
-	rng := c.model.EffectiveMultiplicityOf(sym)
+	rng := semantics.AssumedRange()
+	for _, candidate := range c.parameterLineage(sym) {
+		if stated, ok := c.model.MultiplicityOf(candidate); ok {
+			rng = stated
+			break
+		}
+	}
 	return Multiplicity{
 		Lower:         rng.Lower.Value,
 		Upper:         rng.Upper.Value,
@@ -200,17 +211,108 @@ func (c *compiler) parameterMultiplicity(sym *symbols.Symbol) Multiplicity {
 	}
 }
 
-func resultExpression(sym *symbols.Symbol) (ast.Node, error) {
+func (c *compiler) parameterLineage(sym *symbols.Symbol) []*symbols.Symbol {
+	lineage := []*symbols.Symbol{sym}
+	for _, candidate := range c.model.AllSupertypes(sym) {
+		usage, ok := candidate.Decl.(*ast.Usage)
+		if ok && usage.Direction != ast.DirNone {
+			lineage = append(lineage, candidate)
+		}
+	}
+	return lineage
+}
+
+type effectiveResult struct {
+	node  ast.Node
+	owner *symbols.Symbol
+}
+
+func (c *compiler) resultExpression(sym *symbols.Symbol) (effectiveResult, error) {
+	results, err := c.effectiveResults(sym, make(map[*symbols.Symbol]bool))
+	if err != nil {
+		return effectiveResult{}, err
+	}
+	switch len(results) {
+	case 0:
+		return effectiveResult{}, &Error{
+			Kind:  ErrorMissingResult,
+			Query: symbols.FQNOf(sym),
+			Span:  sym.DeclSpan,
+		}
+	case 1:
+		return results[0], nil
+	default:
+		return effectiveResult{}, &Error{
+			Kind:  ErrorConflictingResult,
+			Query: symbols.FQNOf(sym),
+			Span:  sym.DeclSpan,
+		}
+	}
+}
+
+func (c *compiler) effectiveResults(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) ([]effectiveResult, error) {
+	if sym == nil || visiting[sym] {
+		return nil, nil
+	}
+	if result, stated, err := declaredResult(sym); err != nil {
+		return nil, err
+	} else if stated {
+		return []effectiveResult{result}, nil
+	}
+
+	visiting[sym] = true
+	defer delete(visiting, sym)
+	if sym == queryBase(c.index) {
+		return nil, nil
+	}
+	var results []effectiveResult
+	for _, general := range c.model.DirectSupertypes(sym) {
+		if general == nil || general.Kind != symbols.SymbolCalcDef ||
+			(general != queryBase(c.index) && !IsQueryDefinition(c.index, c.model, general)) {
+			continue
+		}
+		inherited, err := c.effectiveResults(general, visiting)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, inherited...)
+	}
+	return c.mostSpecificResults(results), nil
+}
+
+func (c *compiler) mostSpecificResults(results []effectiveResult) []effectiveResult {
+	var effective []effectiveResult
+	for _, candidate := range results {
+		keep := true
+		for i := 0; i < len(effective); {
+			current := effective[i]
+			switch {
+			case candidate.owner == current.owner || c.model.Conforms(current.owner, candidate.owner):
+				keep = false
+			case c.model.Conforms(candidate.owner, current.owner):
+				effective = append(effective[:i], effective[i+1:]...)
+				continue
+			}
+			i++
+		}
+		if keep {
+			effective = append(effective, candidate)
+		}
+	}
+	return effective
+}
+
+func declaredResult(sym *symbols.Symbol) (effectiveResult, bool, error) {
 	name := symbols.FQNOf(sym)
 	members := declarationMembers(sym)
 	statements := lower.CalcBody(members, sym.Scope)
 	if len(statements) == 1 {
 		if result, ok := statements[0].(lower.Return); ok && result.Value != nil {
-			return result.Value, nil
+			return effectiveResult{node: result.Value, owner: sym}, true, nil
 		}
 	}
 	if len(statements) > 0 {
-		return nil, &Error{Kind: ErrorUnsupportedResult, Query: name, Span: sym.DeclSpan}
+		return effectiveResult{}, false, &Error{Kind: ErrorUnsupportedResult, Query: name, Span: sym.DeclSpan}
 	}
 
 	var expression ast.Node
@@ -220,15 +322,15 @@ func resultExpression(sym *symbols.Symbol) (ast.Node, error) {
 				continue
 			}
 			if expression != nil {
-				return nil, &Error{Kind: ErrorUnsupportedResult, Query: name, Span: binding.Decl.Span()}
+				return effectiveResult{}, false, &Error{Kind: ErrorUnsupportedResult, Query: name, Span: binding.Decl.Span()}
 			}
 			expression = binding.Ends[1-i].Expr
 		}
 	}
 	if expression == nil {
-		return nil, &Error{Kind: ErrorMissingResult, Query: name, Span: sym.DeclSpan}
+		return effectiveResult{}, false, nil
 	}
-	return expression, nil
+	return effectiveResult{node: expression, owner: sym}, true, nil
 }
 
 func declarationMembers(sym *symbols.Symbol) []ast.Node {
@@ -244,19 +346,20 @@ func declarationMembers(sym *symbols.Symbol) []ast.Node {
 
 func (c *compiler) compileExpression(
 	query *symbols.Symbol,
+	owner *symbols.Symbol,
 	params []Parameter,
 	node ast.Node,
 	dependency func(string),
 ) (Expression, error) {
 	switch expression := node.(type) {
 	case *ast.FeatureReference:
-		return c.compileParameterReference(query, expression)
+		return c.compileParameterReference(query, owner, expression)
 	case *ast.InvocationExpr:
-		return c.compileInvocation(query, params, expression, dependency)
+		return c.compileInvocation(query, owner, params, expression, dependency)
 	case *ast.SequenceExpr:
 		args := make([]Argument, 0, len(expression.Elements))
 		for _, element := range expression.Elements {
-			value, err := c.compileExpression(query, params, element, dependency)
+			value, err := c.compileExpression(query, owner, params, element, dependency)
 			if err != nil {
 				return Expression{}, err
 			}
@@ -265,20 +368,20 @@ func (c *compiler) compileExpression(
 		return Expression{
 			operation: OperationSequence,
 			arguments: args,
-			origin:    provenance.Node(query.DocName, node),
+			origin:    provenance.Node(owner.DocName, node),
 		}, nil
 	case *ast.LiteralString:
-		return literalExpression(query, node, LiteralString, expression.Value), nil
+		return literalExpression(owner, node, LiteralString, expression.Value), nil
 	case *ast.LiteralInteger:
-		return literalExpression(query, node, LiteralInteger, expression.Value), nil
+		return literalExpression(owner, node, LiteralInteger, expression.Value), nil
 	case *ast.LiteralReal:
-		return literalExpression(query, node, LiteralReal, expression.Value), nil
+		return literalExpression(owner, node, LiteralReal, expression.Value), nil
 	case *ast.LiteralBool:
-		return literalExpression(query, node, LiteralBoolean, strconv.FormatBool(expression.Value)), nil
+		return literalExpression(owner, node, LiteralBoolean, strconv.FormatBool(expression.Value)), nil
 	case *ast.LiteralInfinity:
-		return literalExpression(query, node, LiteralInfinity, "*"), nil
+		return literalExpression(owner, node, LiteralInfinity, "*"), nil
 	case *ast.NullExpr:
-		return literalExpression(query, node, LiteralNull, "null"), nil
+		return literalExpression(owner, node, LiteralNull, "null"), nil
 	default:
 		return Expression{}, &Error{
 			Kind:  ErrorUnsupportedExpression,
@@ -290,16 +393,17 @@ func (c *compiler) compileExpression(
 
 func (c *compiler) compileParameterReference(
 	query *symbols.Symbol,
+	owner *symbols.Symbol,
 	expression *ast.FeatureReference,
 ) (Expression, error) {
-	target, ok := c.resolver.ResolveQualified(query.Scope, expression.Name)
+	target, ok := c.resolver.ResolveQualified(owner.Scope, expression.Name)
 	if ok {
 		for _, param := range c.model.BehaviorParametersOf(query) {
-			if !param.IsResult && param.Symbol == target {
+			if !param.IsResult && c.parameterIncludes(param.Symbol, target) {
 				return Expression{
 					operation: OperationParameter,
-					target:    target.Name,
-					origin:    provenance.Node(query.DocName, expression),
+					target:    param.Symbol.Name,
+					origin:    provenance.Node(owner.DocName, expression),
 				}, nil
 			}
 		}
@@ -313,8 +417,21 @@ func (c *compiler) compileParameterReference(
 	}
 }
 
+func (c *compiler) parameterIncludes(param, target *symbols.Symbol) bool {
+	if param == target {
+		return true
+	}
+	for _, inherited := range c.model.AllSupertypes(param) {
+		if inherited == target {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *compiler) compileInvocation(
 	query *symbols.Symbol,
+	owner *symbols.Symbol,
 	params []Parameter,
 	expression *ast.InvocationExpr,
 	dependency func(string),
@@ -328,7 +445,7 @@ func (c *compiler) compileInvocation(
 			Span:   expression.Span(),
 		}
 	}
-	target, ok := c.resolver.ResolveQualified(query.Scope, expression.Type)
+	target, ok := c.resolver.ResolveQualified(owner.Scope, expression.Type)
 	if !ok {
 		return Expression{}, &Error{
 			Kind:   ErrorUnknownInvocation,
@@ -339,7 +456,7 @@ func (c *compiler) compileInvocation(
 	}
 	targetName := symbols.FQNOf(target)
 	if operation, ok := builtins[targetName]; ok {
-		args, err := c.compileBuiltinArguments(query, params, expression, operation, dependency)
+		args, err := c.compileBuiltinArguments(query, owner, params, expression, operation, dependency)
 		if err != nil {
 			return Expression{}, err
 		}
@@ -347,7 +464,7 @@ func (c *compiler) compileInvocation(
 			operation: operation.operation,
 			target:    targetName,
 			arguments: args,
-			origin:    provenance.Node(query.DocName, expression),
+			origin:    provenance.Node(owner.DocName, expression),
 		}, nil
 	}
 	if !IsQueryDefinition(c.index, c.model, target) {
@@ -371,7 +488,7 @@ func (c *compiler) compileInvocation(
 	if err != nil {
 		return Expression{}, err
 	}
-	args, err := c.compileNamedArguments(query, params, targetName, targetParams, expression.NamedArgs, dependency)
+	args, err := c.compileNamedArguments(query, owner, params, targetName, targetParams, expression.NamedArgs, dependency)
 	if err != nil {
 		return Expression{}, err
 	}
@@ -386,12 +503,13 @@ func (c *compiler) compileInvocation(
 		operation: OperationInvoke,
 		target:    targetName,
 		arguments: args,
-		origin:    provenance.Node(query.DocName, expression),
+		origin:    provenance.Node(owner.DocName, expression),
 	}, nil
 }
 
 func (c *compiler) compileBuiltinArguments(
 	query *symbols.Symbol,
+	owner *symbols.Symbol,
 	params []Parameter,
 	expression *ast.InvocationExpr,
 	operation builtin,
@@ -408,7 +526,7 @@ func (c *compiler) compileBuiltinArguments(
 		}
 		args := make([]Argument, 0, len(expression.Args))
 		for i, node := range expression.Args {
-			value, err := c.compileExpression(query, params, node, dependency)
+			value, err := c.compileExpression(query, owner, params, node, dependency)
 			if err != nil {
 				return nil, err
 			}
@@ -423,6 +541,7 @@ func (c *compiler) compileBuiltinArguments(
 	}
 	return c.compileNamedArguments(
 		query,
+		owner,
 		params,
 		qualifiedName(expression.Type),
 		spec,
@@ -433,6 +552,7 @@ func (c *compiler) compileBuiltinArguments(
 
 func (c *compiler) compileNamedArguments(
 	query *symbols.Symbol,
+	owner *symbols.Symbol,
 	callerParams []Parameter,
 	target string,
 	targetParams []Parameter,
@@ -482,7 +602,7 @@ func (c *compiler) compileNamedArguments(
 			}
 			continue
 		}
-		value, err := c.compileExpression(query, callerParams, node, dependency)
+		value, err := c.compileExpression(query, owner, callerParams, node, dependency)
 		if err != nil {
 			return nil, err
 		}

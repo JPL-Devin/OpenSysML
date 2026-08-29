@@ -17,6 +17,7 @@ const (
 	ErrorMissingResultParameter ErrorKind = "missing-result-parameter"
 	ErrorInvalidParameter       ErrorKind = "invalid-parameter"
 	ErrorMissingResult          ErrorKind = "missing-result"
+	ErrorConflictingResult      ErrorKind = "conflicting-result"
 	ErrorUnsupportedResult      ErrorKind = "unsupported-result"
 	ErrorUnknownInvocation      ErrorKind = "unknown-invocation"
 	ErrorPositionalQueryArgs    ErrorKind = "positional-query-arguments"
@@ -53,6 +54,8 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("query %s parameter %s must be an input parameter", e.Query, e.Parameter)
 	case ErrorMissingResult:
 		return fmt.Sprintf("query %s has no result expression", e.Query)
+	case ErrorConflictingResult:
+		return fmt.Sprintf("query %s inherits conflicting result expressions", e.Query)
 	case ErrorUnsupportedResult:
 		return fmt.Sprintf("query %s result must be one query expression", e.Query)
 	case ErrorUnknownInvocation:

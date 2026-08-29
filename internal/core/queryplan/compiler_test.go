@@ -150,6 +150,77 @@ calc def Combined :> Query {
 	}
 }
 
+func TestCompileRetainsRedefinedParameterMetadata(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+calc def Base :> Query {
+	in source : Element[0..*] = null;
+	OwnedElements(source = source)
+}
+calc def Positional :> Base {
+	in source;
+	OwnedElements(source = source)
+}
+calc def Restated :> Positional {
+	in redefines source;
+	OwnedElements(source = source)
+}
+calc def Caller :> Query {
+	Restated()
+}
+`)
+	program := fixture.compile(t, "Caller")
+	definitions := program.Definitions()
+	if len(definitions) != 2 {
+		t.Fatalf("compiled definitions = %d, want Restated and Caller", len(definitions))
+	}
+	params := definitions[0].Parameters()
+	if len(params) != 1 {
+		t.Fatalf("Restated parameters = %+v", params)
+	}
+	param := params[0]
+	if param.Type != "KerML::Root::Element" ||
+		param.Multiplicity != (Multiplicity{Lower: 0, UpperInfinite: true, Known: true}) ||
+		!param.HasDefault {
+		t.Fatalf("Restated source metadata = %+v", param)
+	}
+}
+
+func TestCompileInheritsQueryResultExpression(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+calc def Base :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Specialized :> Base {
+	in redefines source;
+}
+`)
+	definition := fixture.compile(t, "Specialized").Definitions()[0]
+	if definition.Expression().Operation() != OperationOwnedElements {
+		t.Fatalf("Specialized operation = %s, want inherited owned-elements", definition.Expression().Operation())
+	}
+	arguments := definition.Expression().Arguments()
+	if len(arguments) != 1 || arguments[0].Value.Operation() != OperationParameter ||
+		arguments[0].Value.Target() != "source" {
+		t.Fatalf("Specialized inherited arguments = %+v", arguments)
+	}
+	if definition.Expression().Origin().Span.Offset >= definition.Origin().Span.Offset {
+		t.Fatalf("expression origin = %+v, want Base body before Specialized declaration", definition.Expression().Origin())
+	}
+}
+
+func TestCompileRejectsConflictingInheritedResults(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+calc def Left :> Query { null }
+calc def Right :> Query { null }
+calc def Ambiguous :> Left, Right {
+	return result : Element[0..*] ordered;
+}
+`)
+	_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, "Ambiguous"))
+	planningError(t, err, ErrorConflictingResult)
+}
+
 func TestCompiledProgramIsImmutableToCallers(t *testing.T) {
 	fixture := loadQueryFixture(t, `
 calc def InterfacesFor :> Query {

@@ -13,6 +13,8 @@ type DocumentQueryPass struct{}
 
 func (DocumentQueryPass) Level() PassLevel { return LevelConstraint }
 
+func (DocumentQueryPass) ElementScoped() {}
+
 func (DocumentQueryPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {
 		return nil
@@ -26,7 +28,14 @@ func (DocumentQueryPass) Run(ctx *Context, name string, root *ast.RootNamespace)
 		if !queryplan.IsQueryDefinition(ctx.Index, ctx.Model(), sym) {
 			return
 		}
+		if ctx.DownstreamOfFailure(sym.Decl) {
+			return
+		}
 		if _, err := queryplan.Compile(ctx.Index, ctx.Model(), ctx.Resolver(), sym); err != nil {
+			var planning *queryplan.Error
+			if errors.As(err, &planning) && ctx.downstreamSpan(planning.Span) {
+				return
+			}
 			diagnostics = append(diagnostics, documentQueryDiagnostic(err))
 		}
 	})
