@@ -170,7 +170,7 @@ package PhaseC {
     // ==========================================
     
     state Running {
-        attribute lowBattery : Boolean;
+        attribute lowBattery : Boolean = false;
         
         entry { action initialize; }
         do { action processData; }
@@ -180,14 +180,16 @@ package PhaseC {
         state Idle;
         state Paused;
         
+        // A transition out of the entry action names the state the machine starts in.
+        transition initialize then Active;
         transition first Active when timeout then Idle;
         transition first Idle when userInput then Active;
         transition first Active if lowBattery then Paused;
     }
     
     state def ConnectionStateMachine {
-        attribute authSuccess : Boolean;
-        attribute authFailure : Boolean;
+        attribute authSuccess : Boolean = false;
+        attribute authFailure : Boolean = false;
         
         entry { 
             action openSocket;
@@ -199,6 +201,7 @@ package PhaseC {
         state Connected;
         state Error;
         
+        transition authenticate then Disconnected;
         transition first Disconnected when connectRequest then Connecting;
         transition first Connecting if authSuccess do {
             action logConnection;
@@ -217,9 +220,9 @@ package PhaseC {
     }
     
     state VehicleOperating {
-        attribute targetSpeedReached : Boolean;
-        attribute speedZero : Boolean;
-        attribute emergencyDetected : Boolean;
+        attribute targetSpeedReached : Boolean = false;
+        attribute speedZero : Boolean = false;
+        attribute emergencyDetected : Boolean = false;
         
         entry { action startEngine; }
         
@@ -228,6 +231,7 @@ package PhaseC {
         state Cruising;
         state Braking;
         
+        transition startEngine then Idling;
         transition first Idling when gasPedalPressed then Accelerating;
         transition first Accelerating if targetSpeedReached then Cruising;
         transition first Cruising when brakePedalPressed then Braking;
@@ -263,9 +267,9 @@ package PhaseC {
     }
     
     state def AutopilotMode {
-        attribute allSystemsReady : Boolean;
-        attribute sensorFailure : Boolean;
-        attribute safeHandoff : Boolean;
+        attribute allSystemsReady : Boolean = false;
+        attribute sensorFailure : Boolean = false;
+        attribute safeHandoff : Boolean = false;
         
         entry { action validateSensors; }
         
@@ -273,6 +277,7 @@ package PhaseC {
         state Engaged;
         state Disengaging;
         
+        transition validateSensors then Monitoring;
         transition first Monitoring if allSystemsReady do {
             action notifyDriver;
             action recordEngagement;

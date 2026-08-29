@@ -316,6 +316,14 @@ agreement, severity-only and every pilot column unmoved:
 | overall: fully agreeing | 330 | **329** |
 | overall: our diagnostics | 71 | **72** |
 
+### Phase C initial-state round
+
+Giving each state machine in `examples/phase-c-behavioral-bodies.sysml` a transition out of its
+entry action moves **no row**: 357 files, 330 fully agreeing, 37 agreed, 27 only ours, 68 only the
+pilot's, before and after. The pilot never reaches those transitions — it stops at the `entry { … }`
+block above them, which is already adjudicated below — so the baseline is re-recorded for the
+`examples` digest alone.
+
 ### Step 2 resolver round
 
 The control is a fresh-cache run of merge base `bbd3b2ec`; the head is an independent

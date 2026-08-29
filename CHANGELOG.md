@@ -8,6 +8,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **The behavioral-bodies demo's state machines can be run.** Each of its four machines declared
+  substates but no transition out of its entry action, so `%state PhaseC::Running` (and the other
+  three) failed with `no initial state found`; the Boolean features their guards read had no value
+  either. Each machine now names the state it starts in and its guard features are initialized, so
+  all four start and step. No diagnostic moves on either side.
+
 - **The semantic-layer demo declares its packages with `package`.** Its three `namespace`
   declarations are KerML notation — the SysML grammar has no `namespace` production — so the pinned
   pilot could not parse the file and the non-standard-notation pass warned on each. The file now
