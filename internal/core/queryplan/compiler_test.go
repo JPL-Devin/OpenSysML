@@ -252,6 +252,7 @@ func TestCompileRejectsDirectAndIndirectCompositionCycles(t *testing.T) {
 		body string
 		root string
 		path []string
+		call string
 	}{
 		{
 			name: "direct",
@@ -262,6 +263,7 @@ calc def DirectCycle :> Query {
 }`,
 			root: "DirectCycle",
 			path: []string{"Fixture::DirectCycle", "Fixture::DirectCycle"},
+			call: "DirectCycle(subsystem = subsystem)",
 		},
 		{
 			name: "indirect",
@@ -272,6 +274,7 @@ calc def CycleC :> Query { in subsystem : Element; CycleA(subsystem = subsystem)
 `,
 			root: "CycleA",
 			path: []string{"Fixture::CycleA", "Fixture::CycleB", "Fixture::CycleC", "Fixture::CycleA"},
+			call: "CycleA(subsystem = subsystem)",
 		},
 	}
 	for _, test := range tests {
@@ -284,6 +287,10 @@ calc def CycleC :> Query { in subsystem : Element; CycleA(subsystem = subsystem)
 			}
 			if !strings.Contains(planning.Error(), strings.Join(test.path, " -> ")) {
 				t.Fatalf("cycle error does not include full path: %v", planning)
+			}
+			span := planning.Origin.Span
+			if got := strings.TrimSpace(fixture.content[span.Offset:span.End()]); got != test.call {
+				t.Fatalf("cycle origin = %q, want %q", got, test.call)
 			}
 		})
 	}
@@ -412,6 +419,14 @@ calc def WrongPositionalBuiltinType :> Query {
 	in source : Element;
 	Descendants(source, "all")
 }
+calc def WrongBuiltinInfinity :> Query {
+	in source : Element;
+	Descendants(source = source, maxDepth = *)
+}
+calc def WrongPositionalBuiltinInfinity :> Query {
+	in source : Element;
+	Descendants(source, *)
+}
 `)
 	base, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, "NeedsStatus"))
 	if err != nil {
@@ -432,6 +447,8 @@ calc def WrongPositionalBuiltinType :> Query {
 		{"WrongBuiltinType", "maxDepth", "ScalarValues::Integer", "ScalarValues::String", `"all"`},
 		{"WrongBuiltinElementType", "source", "KerML::Root::Element", "ScalarValues::String", `"none"`},
 		{"WrongPositionalBuiltinType", "maxDepth", "ScalarValues::Integer", "ScalarValues::String", `"all"`},
+		{"WrongBuiltinInfinity", "maxDepth", "ScalarValues::Integer", "infinity", "*"},
+		{"WrongPositionalBuiltinInfinity", "maxDepth", "ScalarValues::Integer", "infinity", "*"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

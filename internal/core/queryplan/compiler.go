@@ -32,9 +32,10 @@ var builtins = map[string]builtin{
 }
 
 type typedExpression struct {
-	expression   Expression
-	types        []*symbols.Symbol
-	multiplicity Multiplicity
+	expression        Expression
+	types             []*symbols.Symbol
+	multiplicity      Multiplicity
+	nonconformingType string
 }
 
 type compileState uint8
@@ -387,6 +388,7 @@ func (c *compiler) compileExpression(
 		args := make([]Argument, 0, len(expression.Elements))
 		var types []*symbols.Symbol
 		multiplicity := Multiplicity{Known: true}
+		nonconformingType := ""
 		for _, element := range expression.Elements {
 			value, err := c.compileExpression(query, owner, params, element, dependency)
 			if err != nil {
@@ -395,6 +397,9 @@ func (c *compiler) compileExpression(
 			args = append(args, Argument{Value: value.expression})
 			types = append(types, value.types...)
 			multiplicity = sumMultiplicity(multiplicity, value.multiplicity)
+			if nonconformingType == "" {
+				nonconformingType = value.nonconformingType
+			}
 		}
 		return typedExpression{
 			expression: Expression{
@@ -402,8 +407,9 @@ func (c *compiler) compileExpression(
 				arguments: args,
 				origin:    provenance.Node(owner.DocName, node),
 			},
-			types:        types,
-			multiplicity: multiplicity,
+			types:             types,
+			multiplicity:      multiplicity,
+			nonconformingType: nonconformingType,
 		}, nil
 	case *ast.LiteralString:
 		return c.literalExpression(owner, node, LiteralString, expression.Value, "ScalarValues::String"), nil
@@ -420,7 +426,9 @@ func (c *compiler) compileExpression(
 			"ScalarValues::Boolean",
 		), nil
 	case *ast.LiteralInfinity:
-		return c.literalExpression(owner, node, LiteralInfinity, "*", ""), nil
+		result := c.literalExpression(owner, node, LiteralInfinity, "*", "")
+		result.nonconformingType = "infinity"
+		return result, nil
 	case *ast.NullExpr:
 		result := c.literalExpression(owner, node, LiteralNull, "null", "")
 		result.multiplicity = Multiplicity{Known: true}
@@ -564,8 +572,9 @@ func (c *compiler) compileInvocation(
 		return typedExpression{}, err
 	}
 	dependency(targetName)
+	closesCycle := c.state[target] == stateVisiting
 	if err := c.compileDefinition(target); err != nil {
-		if planning, ok := err.(*Error); ok && planning.Kind == ErrorCompositionCycle {
+		if planning, ok := err.(*Error); ok && planning.Kind == ErrorCompositionCycle && closesCycle {
 			planning.Origin = provenance.Node(owner.DocName, expression)
 		}
 		return typedExpression{}, err
@@ -749,15 +758,23 @@ func (c *compiler) validateArgument(
 	value typedExpression,
 	origin provenance.Origin,
 ) error {
-	if want := c.typeSymbol(param.Type); want != nil && !c.argumentTypesConform(value.types, want) {
-		return &Error{
-			Kind:      ErrorArgumentType,
-			Query:     symbols.FQNOf(query),
-			Target:    target,
-			Parameter: param.Name,
-			Expected:  param.Type,
-			Actual:    typeNames(value.types),
-			Origin:    origin,
+	if want := c.typeSymbol(param.Type); want != nil {
+		actual := typeNames(value.types)
+		conforms := c.argumentTypesConform(value.types, want)
+		if value.nonconformingType != "" {
+			actual = value.nonconformingType
+			conforms = false
+		}
+		if !conforms {
+			return &Error{
+				Kind:      ErrorArgumentType,
+				Query:     symbols.FQNOf(query),
+				Target:    target,
+				Parameter: param.Name,
+				Expected:  param.Type,
+				Actual:    actual,
+				Origin:    origin,
+			}
 		}
 	}
 	if !multiplicityConforms(value.multiplicity, param.Multiplicity) {
