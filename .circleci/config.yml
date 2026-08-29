@@ -184,6 +184,17 @@ jobs:
             # Same for the solver installed above: absent means failure, not skip.
             OPENSYSML_REQUIRE_SMT: "1"
 
+      # A second, race-free pass, because the profile the scan reads is written
+      # with -coverpkg, which is too slow to instrument under -race.
+      - run:
+          name: Write the coverage profile the scan reads
+          command: make coverage
+          no_output_timeout: 30m
+          environment:
+            OPENSYSML_REQUIRE_TRAINING_CORPUS: "1"
+            OPENSYSML_REQUIRE_PILOT_CORPORA: "1"
+            OPENSYSML_REQUIRE_SMT: "1"
+
       # The corpora gate alone, so its per-root verdict lines are legible in the
       # log and a skip cannot hide behind a green suite.
       - run:
@@ -371,11 +382,14 @@ jobs:
       - attach_workspace:
           at: .
 
-      # sonar.go.coverage.reportPaths expects the profile at the repo root.
+      # Every coverage report the scan reads is expected at the path named in
+      # sonar-project.properties, relative to the repo root.
       - run:
-          name: Show the coverage profile the scan reads
+          name: Show the coverage reports the scan reads
           command: |
-            ls -l coverage.txt
+            ls -l coverage.txt coverage-python.xml coverage-node.lcov \
+              clients/java/opensysml-client/target/site/jacoco/jacoco.xml \
+              clients/java/opensysml-conformance/target/site/jacoco/jacoco.xml
             head -n 3 coverage.txt
 
       # SonarCloud needs full history for blame and new-code detection, and a
@@ -461,7 +475,7 @@ jobs:
           command: |
             make python-install
             # Pinned and wheel-only, as in .github/workflows/pr.yml.
-            pip install --only-binary :all: pytest==9.0.3 pytest-mock==3.15.1 psutil==7.2.2
+            pip install --only-binary :all: pytest==9.0.3 pytest-mock==3.15.1 psutil==7.2.2 pytest-cov==7.0.0
       
       # The integration tests connect to a service on the standard port with
       # auto_start=False, which is the explicit opt-in to one the client does not
@@ -495,7 +509,14 @@ jobs:
       # service is provided here, so its absence is the bug, not a pass.
       - run:
           name: Run Python client tests
-          command: OPENSYSML_REQUIRE_SERVICE=1 make python-test
+          command: OPENSYSML_REQUIRE_SERVICE=1 make python-coverage
+
+      # The scan job reads this report; without it every Python line counts
+      # as uncovered.
+      - persist_to_workspace:
+          root: .
+          paths:
+            - coverage-python.xml
 
       # This executor has no Go toolchain, so buf comes from the official release
       # rather than `go run`, pinned by digest so a substituted asset is not run.
@@ -629,6 +650,13 @@ jobs:
           command: |
             mvn -B -f clients/java/pom.xml install -Dopensysml.requireService=true
 
+      # JaCoCo writes these during `test`; the scan job reads them.
+      - persist_to_workspace:
+          root: .
+          paths:
+            - clients/java/opensysml-client/target/site/jacoco/jacoco.xml
+            - clients/java/opensysml-conformance/target/site/jacoco/jacoco.xml
+
       - run:
           name: Run the conformance suite through the client
           command: |
@@ -691,8 +719,14 @@ jobs:
           command: |
             chmod +x bin/sysml-grpc
             export OPENSYSML_BINARY="$(pwd)/bin/sysml-grpc"
-            cd clients/node
-            npm test
+            make node-coverage
+
+      # The scan job reads this report; without it every TypeScript line counts
+      # as uncovered.
+      - persist_to_workspace:
+          root: .
+          paths:
+            - coverage-node.lcov
 
       # --allow-skips because v1 covers 5 of the 15 RPCs; the skipped count is
       # reported and the artifact records which scenarios they were.
@@ -1369,6 +1403,11 @@ workflows:
             - SonarCloud
           requires:
             - build-and-test
+            # Each contributes a coverage report; without them the scan sees
+            # only Go coverage and grades every other language at zero.
+            - python-test
+            - java-test
+            - node-test
           filters:
             branches:
               only: /.*/

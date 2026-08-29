@@ -8,6 +8,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Changed
 
+- **Every language's tests now count toward measured coverage.** The scan read only the Go
+  profile, so the Java, Python and TypeScript suites — all of them passing in CI — had every line
+  they cover counted as uncovered. Each client job now writes a report (JaCoCo, `pytest-cov`, `c8`)
+  and the scan waits on those jobs. The Go profile is written with `-coverpkg`, which credits a
+  package for the code it exercises elsewhere: `internal/core/ast/dump.go` measured 21% while the
+  parser's golden tests ran 90% of it. `make python-coverage` and `make node-coverage` write the
+  reports locally.
+
 - **The public Go API moved to `github.com/Open-MBEE/OpenSysML/client/opensysml`**, from
   `.../pkg/opensysml` — the top-level `client/` directory Go projects conventionally publish a
   client library from. Go has no import alias, so this breaks every consumer's import path; update
