@@ -249,10 +249,12 @@ def test_authoring_capability_gates_add_and_delete(fake_service):
     port, service = fake_service(capabilities=(CAPABILITY_APPLY_EDITS,))
     with Connection(port=port, auto_start=False) as conn:
         model = conn.load_from_content(MODEL)
+        add = model.edit().add_part("Demo::SC", "new")
+        delete = model.edit().delete("Demo::sc")
         with pytest.raises(MissingCapabilityError) as add_error:
-            model.edit().add_part("Demo::SC", "new").apply()
+            add.apply()
         with pytest.raises(MissingCapabilityError) as delete_error:
-            model.edit().delete("Demo::sc").apply()
+            delete.apply()
     assert add_error.value.capability == CAPABILITY_AUTHORING
     assert delete_error.value.capability == CAPABILITY_AUTHORING
     assert service.requests == []
@@ -274,8 +276,9 @@ def test_every_authoring_failure_is_typed(fake_service, failure, expected):
         error="refused", failure=failure,
     )
     with Connection(port=port, auto_start=False) as conn:
+        add = conn.load_from_content(MODEL).edit().add_part("Demo::SC", "new")
         with pytest.raises(expected):
-            conn.load_from_content(MODEL).edit().add_part("Demo::SC", "new").apply()
+            add.apply()
 
 
 def test_inline_language_capability_and_loads(monkeypatch, fake_service):
@@ -632,13 +635,13 @@ class TestEditRoundTripAgainstRealService:
     def test_overlapping_edits_are_refused(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:
             model = conn.load_from_content(MODEL)
+            overlapping = (
+                model.edit()
+                .set_value("Demo::SC::unitMass", "1.0[SI::kg]")
+                .set_value("Demo::SC::unitMass", "2.0[SI::kg]")
+            )
             with pytest.raises(OverlappingEditsError):
-                (
-                    model.edit()
-                    .set_value("Demo::SC::unitMass", "1.0[SI::kg]")
-                    .set_value("Demo::SC::unitMass", "2.0[SI::kg]")
-                    .apply()
-                )
+                overlapping.apply()
 
     def test_the_service_reports_the_capability(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:

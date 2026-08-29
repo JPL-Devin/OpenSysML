@@ -97,7 +97,8 @@ def test_a_foreign_service_of_another_release_is_reported_not_killed(
 
     error = excinfo.value
     assert error.address == f"localhost:{port}"
-    assert "v0.0.5" in error.reason and "v0.0.7" in error.reason
+    assert "v0.0.5" in error.reason
+    assert "v0.0.7" in error.reason
     assert f"stop the service listening on localhost:{port} yourself" in error.remedy
     assert error.info.version == "v0.0.5"
     # Still serving: nothing was killed.
@@ -209,7 +210,8 @@ def test_a_service_the_caller_manages_is_checked_too(
     with pytest.raises(StaleServiceError) as excinfo:
         Connection(port=port, auto_start=False, version="v0.0.7")
 
-    assert "v0.0.5" in excinfo.value.reason and "v0.0.7" in excinfo.value.reason
+    assert "v0.0.5" in excinfo.value.reason
+    assert "v0.0.7" in excinfo.value.reason
     with Connection(port=port, auto_start=False) as conn:
         assert conn.server_info().version == "v0.0.5"
 
@@ -238,7 +240,8 @@ def test_the_newest_release_is_looked_up_once_per_connection(
     with pytest.raises(StaleServiceError) as excinfo:
         Connection(port=port, auto_start=False, version="latest")
 
-    assert "v0.0.5" in excinfo.value.reason and "v0.0.7" in excinfo.value.reason
+    assert "v0.0.5" in excinfo.value.reason
+    assert "v0.0.7" in excinfo.value.reason
     assert len(lookups) == 1
 
 
@@ -377,4 +380,5 @@ class TestMismatchReason:
         reason = mismatch_reason(
             self._info(), version="v0.0.7", capabilities=[CAPABILITY_QUERY]
         )
-        assert "v0.0.7" in reason and repr(CAPABILITY_QUERY) in reason
+        assert "v0.0.7" in reason
+        assert repr(CAPABILITY_QUERY) in reason

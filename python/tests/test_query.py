@@ -97,7 +97,8 @@ def fake_service():
 def test_cookbook_payload_translates_verbatim():
     """The standard's JSON becomes the RPC's protobuf, field for field."""
     query = build_query(COOKBOOK_QUERY)
-    assert list(query.scope) == [] and list(query.select) == []
+    assert list(query.scope) == []
+    assert list(query.select) == []
     primitive = query.where.primitive
     assert query.where.WhichOneof("constraint") == "primitive"
     assert primitive.property == "@type"
@@ -199,8 +200,9 @@ def test_query_requires_the_capability(fake_service):
     """A service that cannot query is named, not asked."""
     port, service = fake_service(capabilities=())
     with Connection(port=port, auto_start=False) as conn:
+        model = conn.load_from_content(MODEL)
         with pytest.raises(MissingCapabilityError) as excinfo:
-            conn.load_from_content(MODEL).query(COOKBOOK_QUERY)
+            model.query(COOKBOOK_QUERY)
     assert excinfo.value.capability == CAPABILITY_QUERY
     assert service.requests == [], "the request was sent to a service that cannot serve it"
 
@@ -309,8 +311,9 @@ class TestQueryAgainstRealService:
 
     def test_an_unknown_property_is_an_error_not_an_empty_answer(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:
+            model = conn.load_from_content(MODEL)
             with pytest.raises(InvalidRequestError) as excinfo:
-                conn.load_from_content(MODEL).query(
+                model.query(
                     where={"operator": "=", "property": "colour", "value": "red"},
                 )
         assert "unknown query property" in str(excinfo.value)

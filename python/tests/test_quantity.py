@@ -140,8 +140,9 @@ def test_a_dimensionless_quantity_is_sent_as_dimension_one():
 
 def test_an_unreduced_unit_is_refused_before_it_is_sent():
     """A unit named with no reduction measures nothing the service can relate."""
+    furlongs = Quantity(5.0, Unit(text="Furlongs::furlong"))
     with pytest.raises(UnsupportedValueError, match="no reduction to base units"):
-        Quantity(5.0, Unit(text="Furlongs::furlong")).to_pb()
+        furlongs.to_pb()
 
     assert not Unit(text="Furlongs::furlong").reduced
     assert Unit(text="SI::m", factors=(UnitFactor("SI::metre", 1.0),)).reduced
@@ -160,21 +161,24 @@ def test_a_named_unit_that_reduces_to_dimension_one_is_sent_back():
         )
     )
 
-    assert radians.unit.reduced and radians.unit.dimensionless
+    assert radians.unit.reduced
+    assert radians.unit.dimensionless
     assert not Unit(text="SI::rad").reduced
 
     sent = radians.to_pb()
 
     assert sent.unit == "SI::rad"
-    assert sent.HasField('unit_term') and list(sent.unit_term.factors) == []
+    assert sent.HasField('unit_term')
+    assert list(sent.unit_term.factors) == []
     assert Quantity.from_pb(sent) == radians
 
 
 def test_a_magnitude_that_is_not_a_number_is_refused():
     """Booleans and strings are not magnitudes, however they cast."""
     for magnitude in (True, "5.0", None):
+        quantity = Quantity(magnitude, unit("SI::m"))
         with pytest.raises(UnsupportedValueError, match="neither an Integer nor a Real"):
-            Quantity(magnitude, unit("SI::m")).to_pb()
+            quantity.to_pb()
 
 
 def test_a_quantity_argument_is_encoded_as_a_quantity_value():
@@ -281,7 +285,8 @@ def test_incommensurable_ordering_is_an_error_not_a_comparison():
 
     with pytest.raises(IncommensurableUnitsError) as excinfo:
         mass < length
-    assert "SI::kg" in str(excinfo.value) and "SI::m" in str(excinfo.value)
+    assert "SI::kg" in str(excinfo.value)
+    assert "SI::m" in str(excinfo.value)
 
     for compare in (lambda: mass > length, lambda: mass <= length, lambda: mass >= length):
         with pytest.raises(IncommensurableUnitsError):
@@ -295,9 +300,10 @@ def test_incommensurable_ordering_is_an_error_not_a_comparison():
 
 def test_a_quantity_does_not_order_against_a_bare_number():
     """A bare number carries no unit, so it is not comparable with a quantity."""
+    metres = Quantity(5.0, unit("SI::m"))
     with pytest.raises(TypeError, match="carries no unit"):
-        Quantity(5.0, unit("SI::m")) < 5.0
-    assert Quantity(5.0, unit("SI::m")) != 5.0
+        metres < 5.0
+    assert metres != 5.0
 
 
 def test_addition_answers_in_the_left_unit_and_rejects_incommensurable_units():
@@ -309,11 +315,13 @@ def test_addition_answers_in_the_left_unit_and_rejects_incommensurable_units():
     assert (metres + kilometres).unit.text == "SI::m"
     assert kilometres - metres == Quantity(0.999, unit("SI::km", METRE, scale_num=1000.0))
 
+    seconds = Quantity(1.0, unit("SI::s", SECOND))
+
     # The error names the operation the caller wrote, not the shared helper's.
     with pytest.raises(IncommensurableUnitsError, match="cannot add"):
-        metres + Quantity(1.0, unit("SI::s", SECOND))
+        metres + seconds
     with pytest.raises(IncommensurableUnitsError, match="cannot subtract"):
-        metres - Quantity(1.0, unit("SI::s", SECOND))
+        metres - seconds
 
 
 def test_scaling_keeps_the_unit_and_negation_the_sign():
@@ -325,8 +333,10 @@ def test_scaling_keeps_the_unit_and_negation_the_sign():
     assert speed / 2 == Quantity(0.75, unit("SI::m/SI::s", METRE_PER_SECOND))
     assert -speed == Quantity(-1.5, unit("SI::m/SI::s", METRE_PER_SECOND))
     assert abs(-speed) == speed
+
+    length = Quantity(2.0, unit("SI::m"))
     with pytest.raises(TypeError):
-        speed * Quantity(2.0, unit("SI::m"))
+        speed * length
 
 
 def test_a_unit_renders_as_written_and_reduced():
@@ -446,7 +456,8 @@ class TestQuantityAgainstTheService:
         assert car.plainMass == 2.0
         assert str(car.derivedSpeed) == "5 [SI::m/SI::s]"
         assert str(car.writtenSpeed) == "5.4 [SI::km/SI::h]"
-        assert car.length.magnitude == 3 and isinstance(car.length.magnitude, int)
+        assert car.length.magnitude == 3
+        assert isinstance(car.length.magnitude, int)
 
         # A compound unit compares across its scale rather than by magnitude.
         assert car.writtenSpeed == Quantity(1.5, car.derivedSpeed.unit)
@@ -486,19 +497,22 @@ class TestQuantityAgainstTheService:
         # An integer magnitude sent stays an integer, in its own unit.
         length = Quantity(3, unit("SI::m"))
         back = self.conn.calc("Q::echo", self.model.hash, arguments=[length]).value
-        assert back.magnitude == 3 and isinstance(back.magnitude, int)
+        assert back.magnitude == 3
+        assert isinstance(back.magnitude, int)
         assert back.unit.text == "SI::m"
 
     def test_a_quantity_in_a_ratio_unit_round_trips(self):
         """An angle read off the wire goes back out: dimension one is a reduction."""
         turn = self.conn.instantiate("Q::Car", self.model.hash).turn
 
-        assert turn.unit.text == "SI::rad" and turn.unit.dimensionless
+        assert turn.unit.text == "SI::rad"
+        assert turn.unit.dimensionless
 
         echoed = self.conn.calc("Q::echo", self.model.hash, arguments=[turn]).value
 
         assert echoed == turn
-        assert echoed.magnitude == 1.5 and echoed.unit.text == "SI::rad"
+        assert echoed.magnitude == 1.5
+        assert echoed.unit.text == "SI::rad"
 
     def test_a_sent_quantity_is_commensurable_with_the_models_own_units(self):
         """The reduction sent is what the service compares against, not the magnitude."""

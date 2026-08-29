@@ -169,8 +169,9 @@ def test_a_refused_rdf_conversion_still_warns(fake_service):
     error is raised."""
     port, _ = fake_service(error="cannot convert the initial node")
     with Connection(port=port, auto_start=False) as conn:
+        refused = pytest.raises(ConversionError)
         with pytest.warns(ExperimentalFeatureWarning):
-            with pytest.raises(ConversionError):
+            with refused:
                 conn.convert("ttl", content=MODEL, from_format="sysml")
 
 
@@ -282,8 +283,9 @@ def test_saving_an_unknown_extension_is_refused(fake_service, tmp_path):
     port, _ = fake_service()
     out = tmp_path / "out.json"
     with Connection(port=port, auto_start=False) as conn:
+        model = conn.load_from_content(MODEL)
         with pytest.raises(ValueError, match="cannot tell the format"):
-            conn.load_from_content(MODEL).save(str(out))
+            model.save(str(out))
     assert not out.exists()
 
 

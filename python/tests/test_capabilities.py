@@ -167,4 +167,5 @@ def test_remedy_survives_a_platform_with_no_release_build():
                side_effect=ConnectionError('Unsupported operating system')):
         remedy = upgrade_remedy(CAPABILITY_QUERY)
     assert "cached locally" in remedy
-    assert "OPENSYSML_GRPC_VERSION" in remedy and "make build-grpc" in remedy
+    assert "OPENSYSML_GRPC_VERSION" in remedy
+    assert "make build-grpc" in remedy

@@ -91,11 +91,12 @@ def test_a_literal_is_sent_as_a_literal():
 
 def test_a_service_without_the_capability_still_reports_unsupported():
     """An older service sends a null naming the reason, which stays an error."""
+    unsupported = sysml_pb2.Value(null="unsupported")
     with pytest.raises(UnsupportedValueError):
-        value_to_python(sysml_pb2.Value(null="unsupported"))
+        value_to_python(unsupported)
 
     slot = sysml_pb2.FeatureValue(
-        feature_name="c", value=sysml_pb2.Value(null="unsupported"), materialized=True
+        feature_name="c", value=unsupported, materialized=True
     )
     with pytest.raises(FeatureValueError):
         feature_value_to_python("c", slot)

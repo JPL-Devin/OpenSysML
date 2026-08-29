@@ -212,8 +212,10 @@ class TestGitHubToken:
         with pytest.raises(pin.MissingTokenError) as exc:
             pin.github_token()
         message = str(exc.value)
-        assert "$GITHUB_TOKEN" in message and "$GH_TOKEN" in message
-        assert "public_repo" in message and "releasing.md" in message
+        assert "$GITHUB_TOKEN" in message
+        assert "$GH_TOKEN" in message
+        assert "public_repo" in message
+        assert "releasing.md" in message
         assert isinstance(exc.value, pin.PinError)
 
     def test_a_release_is_not_read_unauthenticated(self, monkeypatch):

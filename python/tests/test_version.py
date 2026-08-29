@@ -199,7 +199,8 @@ def test_check_version_cli_fails_on_a_mismatched_tag():
         capture_output=True, text=True,
     )
     assert out.returncode == 1
-    assert "9.9.9" in out.stderr and VERSION in out.stderr
+    assert "9.9.9" in out.stderr
+    assert VERSION in out.stderr
 
 
 class TestEditableInstall:

@@ -257,7 +257,8 @@ def test_a_private_child_is_given_a_port_rather_than_sent_to_one(private_child):
     calls = private_child(_FakeChild(stdout=b"127.0.0.1:34567\n"))
 
     with Connection() as conn:
-        assert conn.host == "127.0.0.1" and conn.port == 34567
+        assert conn.host == "127.0.0.1"
+        assert conn.port == 34567
 
     args, kwargs = calls[0]
     assert args == [

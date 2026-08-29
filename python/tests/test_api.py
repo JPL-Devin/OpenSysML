@@ -7,9 +7,17 @@ from unittest.mock import patch, MagicMock, Mock
 import opensysml
 
 
+@pytest.fixture
+def no_default_connection(monkeypatch):
+    """No connection is cached when the test starts, nor left behind when it ends."""
+    monkeypatch.setattr(opensysml, "_default_connection", None)
+    monkeypatch.setattr(opensysml, "_default_connection_params", None)
+
+
 class TestModuleLevelAPI:
     """Test module-level convenience functions."""
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_load(self):
         """Test opensysml.load() uses default connection."""
         with patch('opensysml.Connection') as MockConnection:
@@ -17,10 +25,6 @@ class TestModuleLevelAPI:
             mock_model = MagicMock()
             mock_conn.load.return_value = mock_model
             MockConnection.return_value = mock_conn
-            
-            # Clear any cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             
             # Call load
             result = opensysml.load("test.sysml")
@@ -34,6 +38,7 @@ class TestModuleLevelAPI:
             
             assert result == mock_model
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_load_with_custom_host_port(self):
         """Test opensysml.load() with custom host and port."""
         with patch('opensysml.Connection') as MockConnection:
@@ -41,10 +46,6 @@ class TestModuleLevelAPI:
             mock_model = MagicMock()
             mock_conn.load.return_value = mock_model
             MockConnection.return_value = mock_conn
-            
-            # Clear any cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             
             # Call load with custom params
             result = opensysml.load("test.sysml", host="example.com", port=9999)
@@ -56,6 +57,7 @@ class TestModuleLevelAPI:
                 "test.sysml", strict=False, strict_conformance=False)
             assert result == mock_model
 
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_loads_with_custom_host_port(self):
         """Test opensysml.loads() with custom host and port."""
         with patch('opensysml.Connection') as MockConnection:
@@ -63,9 +65,6 @@ class TestModuleLevelAPI:
             mock_model = MagicMock()
             mock_conn.load_from_content.return_value = mock_model
             MockConnection.return_value = mock_conn
-
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
 
             result = opensysml.loads(
                 "package Demo;", host="example.com", port=9999,
@@ -81,6 +80,7 @@ class TestModuleLevelAPI:
             )
             assert result == mock_model
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_load_reuses_default_connection(self):
         """Test opensysml.load() reuses default connection for same host/port."""
         with patch('opensysml.Connection') as MockConnection:
@@ -89,10 +89,6 @@ class TestModuleLevelAPI:
             mock_model2 = MagicMock()
             mock_conn.load.side_effect = [mock_model1, mock_model2]
             MockConnection.return_value = mock_conn
-            
-            # Clear any cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             
             # Call load twice with same host/port
             result1 = opensysml.load("test1.sysml")
@@ -106,6 +102,7 @@ class TestModuleLevelAPI:
             assert result1 == mock_model1
             assert result2 == mock_model2
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_load_recreates_connection_on_param_change(self):
         """Test opensysml.load() creates new connection when host/port changes."""
         with patch('opensysml.Connection') as MockConnection:
@@ -116,10 +113,6 @@ class TestModuleLevelAPI:
             mock_conn1.load.return_value = mock_model1
             mock_conn2.load.return_value = mock_model2
             MockConnection.side_effect = [mock_conn1, mock_conn2]
-            
-            # Clear any cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             
             # Call load with different host/port
             result1 = opensysml.load("test1.sysml", host="h1", port=1111)
@@ -191,15 +184,12 @@ class TestModuleLevelAPI:
             assert result2 == mock_conn2
             assert result1 != result2
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_evaluate_with_file(self):
         """Test module-level evaluate() loads file."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
-            
-            # Clear cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             
             mock_model = Mock()
             mock_model.hash = "model-abc"
@@ -214,13 +204,12 @@ class TestModuleLevelAPI:
                 "6 * 7", "model-abc", context_symbol_id=None, subject_symbol_id=None
             )
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_eval_still_works_and_warns(self):
         """The deprecated name evaluates the same way, warning about itself."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             mock_conn.eval.return_value = 42
 
             with pytest.warns(DeprecationWarning, match="opensysml.evaluate"):
@@ -231,28 +220,24 @@ class TestModuleLevelAPI:
         assert "evaluate" in opensysml.__all__
         assert "eval" not in opensysml.__all__
 
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_evaluate_takes_the_address_positionally(self):
         """subject comes last, so a positional call still binds host and port."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             mock_conn.eval.return_value = 4
 
             opensysml.evaluate("2 + 2", None, "model-abc", None, "localhost", 50123)
 
             assert MockConnection.call_args.args[:2] == ("localhost", 50123)
 
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_instantiate_with_hash(self):
         """Test module-level instantiate() with model_hash."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
-            
-            # Clear cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             
             mock_instance = Mock()
             mock_instance.id = 999
@@ -263,41 +248,32 @@ class TestModuleLevelAPI:
             assert result.id == 999
             mock_conn.instantiate.assert_called_once_with("Part", "hash-xyz")
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_evaluate_missing_both_params(self):
         """Test evaluate() raises ValueError if neither file_path nor model_hash."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
             
-            # Clear cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
-            
             with pytest.raises(ValueError, match="Must provide either"):
                 opensysml.evaluate("2 + 2")
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_evaluate_with_both_params(self):
         """Test evaluate() raises ValueError when both file_path and model_hash provided."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
             
-            # Clear cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
-            
             with pytest.raises(ValueError, match="Provide either file_path or model_hash, not both"):
                 opensysml.evaluate("2 + 2", file_path="test.sysml", model_hash="hash-abc")
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_evaluate_with_context(self):
         """Test evaluate() passes context_symbol_id through to conn.eval()."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
-            
-            # Clear cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             
             mock_model = Mock()
             mock_model.hash = "model-xyz"
@@ -316,14 +292,12 @@ class TestModuleLevelAPI:
                 subject_symbol_id=None,
             )
 
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_eval_with_subject(self):
         """Test eval() passes subject through to conn.eval()."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
-
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
 
             mock_conn.eval.return_value = 1200.0
 
@@ -339,28 +313,22 @@ class TestModuleLevelAPI:
                 subject_symbol_id="Demo::sedan",
             )
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_instantiate_missing_both_params(self):
         """Test instantiate() raises ValueError if neither file_path nor model_hash."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
             
-            # Clear cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
-            
             with pytest.raises(ValueError, match="Must provide either"):
                 opensysml.instantiate("Part")
     
+    @pytest.mark.usefixtures("no_default_connection")
     def test_opensysml_instantiate_with_both_params(self):
         """Test instantiate() raises ValueError when both file_path and model_hash provided."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
-            
-            # Clear cached connection
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             
             with pytest.raises(ValueError, match="Provide either file_path or model_hash, not both"):
                 opensysml.instantiate("Part", file_path="test.sysml", model_hash="hash-abc")
@@ -380,13 +348,12 @@ class TestRenamedNames:
             assert issubclass(caught[0].category, DeprecationWarning)
             assert new.__name__ in str(caught[0].message)
 
+    @pytest.mark.usefixtures("no_default_connection")
     def test_an_old_snippet_still_runs_through_the_alias(self):
         """A script written against `opensysml.eval` keeps working, warning included."""
         with patch('opensysml.Connection') as MockConnection:
             mock_conn = Mock()
             MockConnection.return_value = mock_conn
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
             mock_conn.eval.return_value = 4
 
             with warnings.catch_warnings():
@@ -399,12 +366,14 @@ class TestRenamedNames:
 
     def test_the_old_names_no_longer_shadow_a_builtin_on_star_import(self):
         """Which is the point of the rename: `import *` binds neither name."""
-        assert "eval" not in opensysml.__all__ and "evaluate" in opensysml.__all__
+        assert "eval" not in opensysml.__all__
+        assert "evaluate" in opensysml.__all__
         assert "RuntimeError" not in opensysml.__all__
 
         namespace = {}
         exec("from opensysml import *", namespace)
-        assert "eval" not in namespace and "RuntimeError" not in namespace
+        assert "eval" not in namespace
+        assert "RuntimeError" not in namespace
         assert namespace["evaluate"] is opensysml.evaluate
 
     def test_a_name_the_package_never_had_is_still_an_attribute_error(self):
