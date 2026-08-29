@@ -67,45 +67,75 @@ func main() {
 	check := flag.Bool("check", false, "fail unless this run reproduces "+committedBaseline)
 	flag.Parse()
 
-	if err := run(*repo, *validator, *kermlValidator, *syside, *out, *timeout, *update, *check); err != nil {
+	opts := options{
+		repo:           *repo,
+		validator:      *validator,
+		kermlValidator: *kermlValidator,
+		syside:         *syside,
+		out:            *out,
+		timeout:        *timeout,
+		update:         *update,
+		check:          *check,
+	}
+	if err := run(opts); err != nil {
 		fmt.Fprintf(os.Stderr, "pilot-diff: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, validator, kermlValidator, syside, out string, timeout time.Duration, update, check bool) error {
+// options is one run's command line, with the paths resolved by resolve.
+type options struct {
+	repo           string
+	validator      string
+	kermlValidator string
+	syside         string
+	out            string
+	timeout        time.Duration
+	update         bool
+	check          bool
+}
+
+// resolve fills the paths left empty on the command line and reports the tools
+// that are missing: the pilot validator is required, SysIDE only when named.
+func (o *options) resolve() error {
 	var err error
-	if repo == "" {
-		repo, err = moduleRoot()
-		if err != nil {
+	if o.repo == "" {
+		if o.repo, err = moduleRoot(); err != nil {
 			return err
 		}
 	}
-	if validator == "" {
-		validator = filepath.Join(repo, "build", "pilot-sysml-validator", "validate-sysml-batch")
+	if o.validator == "" {
+		o.validator = filepath.Join(o.repo, "build", "pilot-sysml-validator", "validate-sysml-batch")
 	}
-	if kermlValidator == "" {
-		kermlValidator = filepath.Join(repo, "build", "pilot-kerml-validator", "validate-kerml")
+	if o.kermlValidator == "" {
+		o.kermlValidator = filepath.Join(o.repo, "build", "pilot-kerml-validator", "validate-kerml")
 	}
-	if out == "" {
-		out = filepath.Join(repo, "build", "pilot-diff")
+	if o.out == "" {
+		o.out = filepath.Join(o.repo, "build", "pilot-diff")
 	}
-	if _, err := os.Stat(validator); err != nil {
-		return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-sysml-validator.sh", validator)
+	if _, err := os.Stat(o.validator); err != nil {
+		return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-sysml-validator.sh", o.validator)
 	}
 
 	// Named explicitly: fail loudly. Defaulted: the third column is optional,
 	// and its absence must leave the two-way report byte-identical.
-	requested := syside != ""
+	requested := o.syside != ""
 	if !requested {
-		syside = filepath.Join(repo, "build", "syside", "validate-syside")
+		o.syside = filepath.Join(o.repo, "build", "syside", "validate-syside")
 	}
-	if _, err := os.Stat(syside); err != nil {
+	if _, err := os.Stat(o.syside); err != nil {
 		if requested {
-			return fmt.Errorf("SysIDE launcher not found at %s: run ./scripts/download-syside.sh", syside)
+			return fmt.Errorf("SysIDE launcher not found at %s: run ./scripts/download-syside.sh", o.syside)
 		}
 		fmt.Fprintf(os.Stderr, "comparing against the pilot only; run ./scripts/download-syside.sh for a third column\n")
-		syside = ""
+		o.syside = ""
+	}
+	return nil
+}
+
+func run(opts options) error {
+	if err := opts.resolve(); err != nil {
+		return err
 	}
 
 	// The declared errata overlay: every root is compared a second time with
@@ -117,24 +147,24 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 
 	// Recorded relative to the repository where possible: the JSON is committed
 	// as a baseline, so it must not carry a machine-specific path.
-	report := &Report{Validator: relativeTo(repo, validator), Errata: newErrataReport(overlay)}
-	if report.Pilot, err = pilotVersion(validator); err != nil {
+	report := &Report{Validator: relativeTo(opts.repo, opts.validator), Errata: newErrataReport(overlay)}
+	if report.Pilot, err = pilotVersion(opts.validator); err != nil {
 		return err
 	}
-	if report.Provenance, err = provenance(repo, report.Pilot); err != nil {
+	if report.Provenance, err = provenance(opts.repo, report.Pilot); err != nil {
 		return err
 	}
 	// Only a recorded baseline is dated, so two plain runs stay byte-identical.
-	if update {
+	if opts.update {
 		report.Provenance.Recorded = baseline.Today()
 	}
-	if syside != "" {
-		version, library, err := sysideRelease(syside)
+	if opts.syside != "" {
+		version, library, err := sysideRelease(opts.syside)
 		if err != nil {
 			return err
 		}
 		report.Syside = &SysideInfo{
-			Validator: relativeTo(repo, syside),
+			Validator: relativeTo(opts.repo, opts.syside),
 			Version:   version,
 			Library:   library,
 			Pilot:     report.Pilot,
@@ -143,7 +173,7 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 	}
 
 	for _, root := range defaultRoots {
-		files, err := collectFiles(repo, root)
+		files, err := collectFiles(opts.repo, root)
 		if err != nil {
 			return err
 		}
@@ -157,18 +187,18 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 		for _, batch := range batchByLanguage(files) {
 			fmt.Fprintf(os.Stderr, "%s: %d %s file(s)\n", root.Name, len(batch.Files), batch.Kind)
 
-			pilot := validator
+			pilot := opts.validator
 			if batch.Kind == source.KindKerML {
-				pilot = kermlValidator
+				pilot = opts.kermlValidator
 				if _, err := os.Stat(pilot); err != nil {
 					return fmt.Errorf("KerML pilot validator not found at %s: run ./scripts/download-pilot-kerml-validator.sh", pilot)
 				}
 			}
-			batchOurs, err := openSysMLDiagnostics(repo, root.Dir, batch.Files)
+			batchOurs, err := openSysMLDiagnostics(opts.repo, root.Dir, batch.Files)
 			if err != nil {
 				return err
 			}
-			batchTheirs, err := pilotDiagnostics(pilot, repo, root.Dir, batch.Files, timeout)
+			batchTheirs, err := pilotDiagnostics(pilot, opts.repo, root.Dir, batch.Files, opts.timeout)
 			if err != nil {
 				return err
 			}
@@ -180,16 +210,16 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 			}
 		}
 		rootReport := compareRoot(root.Name, root.Dir, files, ours, theirs)
-		if syside != "" {
+		if opts.syside != "" {
 			fmt.Fprintf(os.Stderr, "%s: %d file(s) through syside\n", root.Name, len(files))
-			third, err := sysideDiagnostics(syside, repo, root.Dir, files, timeout)
+			third, err := sysideDiagnostics(opts.syside, opts.repo, root.Dir, files, opts.timeout)
 			if err != nil {
 				return err
 			}
 			attachSyside(&rootReport, files, ours, theirs, third)
 		}
 
-		erratum, err := runErrata(root, files, overlay, ours, theirs, repo, validator, kermlValidator, out, timeout)
+		erratum, err := runErrata(root, files, overlay, ours, theirs, opts)
 		if err != nil {
 			return err
 		}
@@ -204,17 +234,17 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 	report.summarize()
 	// A mistyped -repo would otherwise look like a clean run.
 	if report.Totals.Files == 0 {
-		return fmt.Errorf("no model files found under %s", repo)
+		return fmt.Errorf("no model files found under %s", opts.repo)
 	}
-	fresh, err := writeReports(out, report)
+	fresh, err := writeReports(opts.out, report)
 	if err != nil {
 		return err
 	}
-	committed := filepath.Join(repo, filepath.FromSlash(committedBaseline))
-	if update {
+	committed := filepath.Join(opts.repo, filepath.FromSlash(committedBaseline))
+	if opts.update {
 		return baseline.Write(committed, fresh)
 	}
-	if check {
+	if opts.check {
 		return baseline.Reproduces(committed, fresh)
 	}
 	return nil

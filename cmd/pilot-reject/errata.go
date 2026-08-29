@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/Open-MBEE/OpenSysML/internal/errata"
 )
@@ -62,18 +61,17 @@ func newErrataReport(overlay *errata.Overlay) *ErrataReport {
 // runErrata fills the report's errata figure. The hand-written negative corpus
 // is ours, so no declared entry lies in it and the two figures coincide; a run
 // pointed at a published corpus with -corpus adjudicates a corrected copy.
-func runErrata(report *Report, overlay *errata.Overlay, repo, corpusDir, policy, validator, kermlValidator, out string,
-	files []string, batches []languageBatch, timeout time.Duration) error {
-	applied := overlay.Under(corpusDir)
+func runErrata(report *Report, overlay *errata.Overlay, adj adjudication, out string) error {
+	applied := overlay.Under(adj.corpusDir)
 	if len(applied) == 0 {
 		report.Errata.Totals = report.Totals
 		report.Errata.Note = fmt.Sprintf(
-			"no declared correction lies under %s, so the errata-applied corpus is byte-identical to the published one and both figures coincide", corpusDir)
+			"no declared correction lies under %s, so the errata-applied corpus is byte-identical to the published one and both figures coincide", adj.corpusDir)
 		return nil
 	}
 
 	corrected := filepath.Join(out, "errata-corpus")
-	if _, err := overlay.Materialize(repo, corpusDir, corrected); err != nil {
+	if _, err := overlay.Materialize(adj.repo, adj.corpusDir, corrected); err != nil {
 		return err
 	}
 	defer func() {
@@ -82,7 +80,9 @@ func runErrata(report *Report, overlay *errata.Overlay, repo, corpusDir, policy,
 		}
 	}()
 
-	cases, err := adjudicate(corrected, ".", policy, validator, kermlValidator, files, batches, timeout)
+	correctedAdj := adj
+	correctedAdj.repo, correctedAdj.corpusDir = corrected, "."
+	cases, err := adjudicate(correctedAdj)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func runErrata(report *Report, overlay *errata.Overlay, repo, corpusDir, policy,
 	for _, c := range report.Cases {
 		published[c.Path] = c.Bucket
 	}
-	for _, rel := range files {
+	for _, rel := range adj.files {
 		report.Errata.Totals.count(cases[rel].Bucket)
 		if was := published[rel]; was != cases[rel].Bucket {
 			report.Errata.VerdictChanges = append(report.Errata.VerdictChanges,

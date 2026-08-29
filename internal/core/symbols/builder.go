@@ -56,6 +56,15 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	if prefixes := prefixMetadataOf(decl); len(prefixes) > 0 {
 		buildMetadataBodyScopes(scope, prefixes)
 	}
+	switch {
+	case buildNamespaceDecl(scope, decl, vis, trivia):
+	case buildBehaviorDecl(scope, decl, vis, trivia):
+	}
+}
+
+// buildNamespaceDecl registers a namespace, definition or usage
+// declaration, reporting whether decl was one.
+func buildNamespaceDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Trivia) bool {
 	switch d := decl.(type) {
 	case *ast.Package:
 		child := NewScope(scope, d)
@@ -63,18 +72,22 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
+		return true
 	case *ast.Namespace:
 		child := NewScope(scope, d)
 		sym := newSymbol(d.Ident, SymbolNamespace, d, vis, child, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
+		return true
 	case *ast.Alias:
 		sym := newSymbol(d.Ident, SymbolAlias, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+		return true
 	case *ast.Dependency:
 		sym := newSymbol(d.Ident, SymbolDependency, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+		return true
 	case *ast.RelationshipMember:
 		// A keyword-first relationship owns its members, and names one only when
 		// the notation gives it an identification.
@@ -83,21 +96,26 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
+		return true
 	case *ast.Comment:
 		sym := newSymbol(d.Ident, SymbolComment, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+		return true
 	case *ast.Documentation:
 		sym := newSymbol(d.Ident, SymbolDocumentation, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+		return true
 	case *ast.TextualRepresentation:
 		sym := newSymbol(d.Ident, SymbolTextualRepresentation, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+		return true
 	case *ast.Definition:
 		child := NewScope(scope, d)
 		sym := newSymbol(d.Ident, definitionSymbolKind(d.Kind), d, vis, child, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
+		return true
 	case *ast.Usage:
 		child := NewScope(scope, d)
 		// Phase 4: Parser treats 'datatype' uniformly as usage. Builder classifies based on context.
@@ -111,6 +129,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		scope.AddChild(child)
 		buildMembers(child, d.Members)
 		buildConnectorEnds(child, d)
+		return true
 	case *ast.SubstateMember:
 		// SubstateMember represents simple state declaration: state <name>;
 		// Create a state usage symbol for it
@@ -119,6 +138,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		sym := newSymbol(id, SymbolStateUsage, d, vis, child, scope, trivia)
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
+		return true
 	case *ast.SubjectMember:
 		// SubjectMember represents requirement subject: subject <name> : <Type>;
 		// Create a part usage symbol (subject is structural usage like part)
@@ -130,9 +150,20 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		if len(d.Body) > 0 {
 			buildMembers(child, d.Body)
 		}
+		return true
+	default:
+		return false
+	}
+}
+
+// buildBehaviorDecl registers a state, transition or action node
+// declaration, reporting whether decl was one.
+func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Trivia) bool {
+	switch d := decl.(type) {
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
+		return true
 	case *ast.PrefixMetadata:
 		child := buildMetadataBodyScope(scope, d)
 		// An identification names the usage as a member of its namespace, exactly
@@ -145,6 +176,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			sym := newSymbol(d.Ident, SymbolMetadataUsage, d, vis, child, scope, trivia)
 			defineIdent(scope, d.Ident, sym)
 		}
+		return true
 	case *ast.InitialNode:
 		// Register initial node by name so transitions can reference it
 		if d.Name != "" {
@@ -156,15 +188,17 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			scope.AddChild(child)
 			buildMembers(child, d.Members)
 		}
+		return true
 	case *ast.SendStatement:
 		// A send's body declares the node's own parameters, and the node is the
 		// action the send was written on (`action a send x via p { in x; }`).
 		buildMembers(scope, d.Members)
+		return true
 	case *ast.StateNode:
 		// Register state node by name (including initial/final pseudostates)
 		// so transitions and successions can reference it
 		if d.Name == "" {
-			return
+			return true
 		}
 		id := ast.Identification{Name: d.Name}
 		child := NewScope(scope, d)
@@ -176,12 +210,13 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		for _, region := range d.Regions {
 			buildDecl(child, region, ast.VisibilityDefault, nil)
 		}
+		return true
 	case *ast.TransitionMember:
 		// A named transition is a feature of the state that declares it (SysML v2
 		// §7.19.2: TransitionUsage specializes ActionUsage), and its effect
 		// behaviors are features of the transition, so `t.effectAction` resolves.
 		if d.Name == "" {
-			return
+			return true
 		}
 		id := ast.Identification{Name: d.Name, NameSpan: d.NameSpan}
 		child := NewScope(scope, d)
@@ -190,6 +225,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		scope.AddChild(child)
 		buildMembers(child, d.Effect)
 		defineTransitionEffect(child, d)
+		return true
 	case *ast.StateRegion:
 		// A region is a namespace of its own: sibling regions routinely reuse
 		// state names (each region declaring its own `initial start`), so their
@@ -202,19 +238,25 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		}
 		scope.AddChild(regionScope)
 		buildMembers(regionScope, d.States)
+		return true
 	case *ast.AssumeMember:
 		buildConstraintBodyScope(scope, d, d.Body)
+		return true
 	case *ast.RequireMember:
 		buildConstraintBodyScope(scope, d, d.Body)
+		return true
 	case *ast.EntryMember:
 		// An entry/do/exit action is a feature of the state declaring it, so a
 		// named one (`entry action entryAction :>> 'entry';`) is a member of the
 		// state's scope rather than of the wrapper the parser puts it in.
 		buildMembers(scope, d.Actions)
+		return true
 	case *ast.DoMember:
 		buildMembers(scope, d.Actions)
+		return true
 	case *ast.ExitMember:
 		buildMembers(scope, d.Actions)
+		return true
 	case *ast.PseudostateNode:
 		// fork/join/choice/junction/entry/exit named in a state body are
 		// transition endpoints, so they must be referenceable.
@@ -225,6 +267,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			defineIdent(scope, id, sym)
 			scope.AddChild(child)
 		}
+		return true
 	case *ast.WhileLoopActionNode:
 		// A loop is an anonymous action namespace: its body's declarations (and a
 		// `for` iteration variable) are members visible to the body and condition.
@@ -244,6 +287,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			})
 		}
 		buildMembers(child, d.Body)
+		return true
 	case *ast.IfActionNode:
 		// Each branch is a namespace of its own: `if c { action a; } else { action a; }`
 		// declares two distinct actions, neither of them a member of the enclosing
@@ -252,21 +296,29 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		for _, branch := range d.Branches() {
 			buildDecl(scope, branch, vis, trivia)
 		}
+		return true
 	case *ast.IfBranchNode:
 		child := NewScope(scope, d)
 		child.markBodyLocal()
 		scope.AddChild(child)
 		buildMembers(child, d.Body)
+		return true
 	case *ast.ForkNode:
 		// A control node is an action usage (Actions::ForkAction et al.), so a
 		// named one is a member a succession may name as source or target.
 		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+		return true
 	case *ast.JoinNode:
 		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+		return true
 	case *ast.MergeNode:
 		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+		return true
 	case *ast.DecisionNode:
 		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+		return true
+	default:
+		return false
 	}
 }
 
@@ -546,95 +598,75 @@ func definitionSymbolKind(k ast.DefinitionKind) SymbolKind {
 	}
 }
 
+// usageSymbolKinds maps each ast.UsageKind to its SymbolKind.
+var usageSymbolKinds = map[ast.UsageKind]SymbolKind{
+	ast.UsagePart:        SymbolPartUsage,
+	ast.UsageAttribute:   SymbolAttributeUsage,
+	ast.UsageItem:        SymbolItemUsage,
+	ast.UsageOccurrence:  SymbolOccurrenceUsage,
+	ast.UsageIndividual:  SymbolIndividualUsage,
+	ast.UsageMetadata:    SymbolMetadataUsage,
+	ast.UsageEnumeration: SymbolEnumerationUsage,
+	ast.UsageView:        SymbolViewUsage,
+	ast.UsageViewpoint:   SymbolViewpointUsage,
+	// A view's `render` member owns a rendering usage (SysML v2 §8.3.26).
+	ast.UsageRendering:     SymbolRenderingUsage,
+	ast.UsageViewRendering: SymbolRenderingUsage,
+	// A framed concern is a concern usage (SysML v2 §8.3.20).
+	ast.UsageConcern:       SymbolConcernUsage,
+	ast.UsageFramedConcern: SymbolConcernUsage,
+	// A KerML `connector` is the connection usage of the kernel layer
+	// (KerML 1.0 §7.4.6), so it is one kind of symbol.
+	ast.UsageConnection: SymbolConnectionUsage,
+	ast.UsageConnector:  SymbolConnectionUsage,
+	// A succession is a SuccessionAsUsage (SysML v2 §8.3.13.7): a connector
+	// usage of its own kind, so it is a redefinition target like any feature.
+	ast.UsageSuccession:  SymbolSuccessionUsage,
+	ast.UsageFlow:        SymbolFlowUsage,
+	ast.UsagePort:        SymbolPortUsage,
+	ast.UsageInterface:   SymbolInterfaceUsage,
+	ast.UsageAllocation:  SymbolAllocationUsage,
+	ast.UsageAction:      SymbolActionUsage,
+	ast.UsageState:       SymbolStateUsage,
+	ast.UsageCalc:        SymbolCalcUsage,
+	ast.UsageConstraint:  SymbolConstraintUsage,
+	ast.UsageRequirement: SymbolRequirementUsage,
+	// A satisfy requirement usage is a requirement usage (SysML v2 §8.3.19).
+	ast.UsageSatisfy:          SymbolSatisfyRequirementUsage,
+	ast.UsageCase:             SymbolCaseUsage,
+	ast.UsageAnalysisCase:     SymbolAnalysisCaseUsage,
+	ast.UsageVerificationCase: SymbolVerificationCaseUsage,
+	ast.UsageUseCase:          SymbolUseCaseUsage,
+	// Subject is a requirement parameter - treat as part usage for structural purposes
+	ast.UsageSubject: SymbolPartUsage,
+	// Objective is a requirement parameter - treat as part usage for structural purposes
+	ast.UsageObjective: SymbolPartUsage,
+	// An actor and a stakeholder are part usages (SysML v2 §8.3.19).
+	ast.UsageActor:       SymbolPartUsage,
+	ast.UsageStakeholder: SymbolPartUsage,
+	// The parser records a KerML type declaration as a usage; it declares a
+	// type, not a feature (KerML 1.0 §8.3).
+	ast.UsageClass:       SymbolKerMLType,
+	ast.UsageStruct:      SymbolKerMLType,
+	ast.UsageAssoc:       SymbolKerMLType,
+	ast.UsageBehavior:    SymbolKerMLType,
+	ast.UsagePredicate:   SymbolKerMLType,
+	ast.UsageInteraction: SymbolKerMLType,
+	// A KerML step is a feature typed by a behavior, which is what a SysML
+	// action usage is (SysML v2 §8.3.14).
+	ast.UsageStep: SymbolActionUsage,
+	// A KerML `expr`/`bool` declares an Expression: a feature typed by a
+	// function (KerML 1.0 §9.2.10), as a SysML calc usage is.
+	ast.UsageExpr: SymbolCalcUsage,
+	ast.UsageBool: SymbolCalcUsage,
+}
+
 // usageSymbolKind maps an ast.UsageKind to its SymbolKind.
 func usageSymbolKind(k ast.UsageKind) SymbolKind {
-	switch k {
-	case ast.UsagePart:
-		return SymbolPartUsage
-	case ast.UsageAttribute:
-		return SymbolAttributeUsage
-	case ast.UsageItem:
-		return SymbolItemUsage
-	case ast.UsageOccurrence:
-		return SymbolOccurrenceUsage
-	case ast.UsageIndividual:
-		return SymbolIndividualUsage
-	case ast.UsageMetadata:
-		return SymbolMetadataUsage
-	case ast.UsageEnumeration:
-		return SymbolEnumerationUsage
-	case ast.UsageView:
-		return SymbolViewUsage
-	case ast.UsageViewpoint:
-		return SymbolViewpointUsage
-	case ast.UsageRendering, ast.UsageViewRendering:
-		// A view's `render` member owns a rendering usage (SysML v2 §8.3.26).
-		return SymbolRenderingUsage
-	case ast.UsageConcern, ast.UsageFramedConcern:
-		// A framed concern is a concern usage (SysML v2 §8.3.20).
-		return SymbolConcernUsage
-	case ast.UsageConnection, ast.UsageConnector:
-		// A KerML `connector` is the connection usage of the kernel layer
-		// (KerML 1.0 §7.4.6), so it is one kind of symbol.
-		return SymbolConnectionUsage
-	case ast.UsageSuccession:
-		// A succession is a SuccessionAsUsage (SysML v2 §8.3.13.7): a connector
-		// usage of its own kind, so it is a redefinition target like any feature.
-		return SymbolSuccessionUsage
-	case ast.UsageFlow:
-		return SymbolFlowUsage
-	case ast.UsagePort:
-		return SymbolPortUsage
-	case ast.UsageInterface:
-		return SymbolInterfaceUsage
-	case ast.UsageAllocation:
-		return SymbolAllocationUsage
-	case ast.UsageAction:
-		return SymbolActionUsage
-	case ast.UsageState:
-		return SymbolStateUsage
-	case ast.UsageCalc:
-		return SymbolCalcUsage
-	case ast.UsageConstraint:
-		return SymbolConstraintUsage
-	case ast.UsageRequirement:
-		return SymbolRequirementUsage
-	case ast.UsageSatisfy:
-		// A satisfy requirement usage is a requirement usage (SysML v2 §8.3.19).
-		return SymbolSatisfyRequirementUsage
-	case ast.UsageCase:
-		return SymbolCaseUsage
-	case ast.UsageAnalysisCase:
-		return SymbolAnalysisCaseUsage
-	case ast.UsageVerificationCase:
-		return SymbolVerificationCaseUsage
-	case ast.UsageUseCase:
-		return SymbolUseCaseUsage
-	case ast.UsageSubject:
-		// Subject is a requirement parameter - treat as part usage for structural purposes
-		return SymbolPartUsage
-	case ast.UsageObjective:
-		// Objective is a requirement parameter - treat as part usage for structural purposes
-		return SymbolPartUsage
-	case ast.UsageActor, ast.UsageStakeholder:
-		// An actor and a stakeholder are part usages (SysML v2 §8.3.19).
-		return SymbolPartUsage
-	case ast.UsageClass, ast.UsageStruct, ast.UsageAssoc, ast.UsageBehavior,
-		ast.UsagePredicate, ast.UsageInteraction:
-		// The parser records a KerML type declaration as a usage; it declares a
-		// type, not a feature (KerML 1.0 §8.3).
-		return SymbolKerMLType
-	case ast.UsageStep:
-		// A KerML step is a feature typed by a behavior, which is what a SysML
-		// action usage is (SysML v2 §8.3.14).
-		return SymbolActionUsage
-	case ast.UsageExpr, ast.UsageBool:
-		// A KerML `expr`/`bool` declares an Expression: a feature typed by a
-		// function (KerML 1.0 §9.2.10), as a SysML calc usage is.
-		return SymbolCalcUsage
-	default:
-		return SymbolUnknown
+	if kind, ok := usageSymbolKinds[k]; ok {
+		return kind
 	}
+	return SymbolUnknown
 }
 
 // classifyUsage determines the correct symbol kind for a usage AST node.

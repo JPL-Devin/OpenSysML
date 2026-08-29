@@ -89,28 +89,47 @@ func (c *refCollector) walkMembers(scope *symbols.Scope, members []ast.Node) {
 }
 
 func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
+	switch {
+	case c.namespaceDecl(scope, decl):
+	case c.typeDecl(scope, decl):
+	case c.behaviorDecl(scope, decl):
+	default:
+		// A bare expression member is the body's result, as in a calc body
+		// whose result is its last expression.
+		c.expr(scope, decl)
+	}
+}
+
+// namespaceDecl collects the references of a namespace-level declaration, reporting whether
+// decl was one.
+func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Package:
 		c.prefixes(scope, d.Prefixes)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
+		return true
 	case *ast.Namespace:
 		c.prefixes(scope, d.Prefixes)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
+		return true
 	case *ast.Import:
 		c.add(scope, d.Imported)
 		c.conditionExpr(scope, d.FilterExpr)
+		return true
 	case *ast.Alias:
 		c.add(scope, d.For)
+		return true
 	case *ast.RelationshipMember:
 		c.target(scope, d.Source)
 		c.target(scope, d.Target)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
+		return true
 	case *ast.Dependency:
 		c.prefixes(scope, d.Prefixes)
 		for _, cl := range d.Clients {
@@ -119,20 +138,34 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		for _, sp := range d.Suppliers {
 			c.add(scope, sp)
 		}
+		return true
 	case *ast.Comment:
 		for _, a := range d.About {
 			c.add(scope, a)
 		}
+		return true
 	case *ast.PrefixMetadata:
 		c.metadataPrefix(scope, d)
+		return true
 	case *ast.FilterMember:
 		c.conditionExpr(scope, d.Condition)
+		return true
+	default:
+		return false
+	}
+}
+
+// typeDecl collects the references of a definition, usage or constraint member, reporting whether
+// decl was one.
+func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
+	switch d := decl.(type) {
 	case *ast.Definition:
 		c.prefixes(scope, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
+		return true
 	case *ast.Usage:
 		c.prefixes(scope, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)
@@ -179,6 +212,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		if child != nil {
 			c.walkMembers(child, d.Members)
 		}
+		return true
 	case *ast.SubjectMember:
 		c.add(scope, d.TypeRef)
 		c.multiplicity(scope, d.Multiplicity)
@@ -187,13 +221,16 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Body)
 		}
+		return true
 	case *ast.InitialNode:
 		// The node's own name is a label, not a reference.
 		c.add(scope, d.Successor)
 		c.expr(scope, d.Guard)
+		return true
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
 		c.walkMembers(scope, d.Body)
+		return true
 	case *ast.AssumeMember:
 		c.prefixes(scope, d.Prefixes)
 		c.expr(scope, d.Expression)
@@ -202,6 +239,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.multiplicity(scope, d.Multiplicity)
 		c.expr(scope, d.Value)
 		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
+		return true
 	case *ast.RequireMember:
 		c.prefixes(scope, d.Prefixes)
 		c.expr(scope, d.Expression)
@@ -210,16 +248,30 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.multiplicity(scope, d.Multiplicity)
 		c.expr(scope, d.Value)
 		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
+		return true
+	default:
+		return false
+	}
+}
+
+// behaviorDecl collects the references of a behavioral member — a state, transition or action node, reporting whether
+// decl was one.
+func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
+	switch d := decl.(type) {
 	case *ast.EntryMember:
 		c.walkMembers(scope, d.Actions)
+		return true
 	case *ast.DoMember:
 		c.walkMembers(scope, d.Actions)
+		return true
 	case *ast.ExitMember:
 		c.walkMembers(scope, d.Actions)
+		return true
 	case *ast.DeferMember:
 		for _, trigger := range d.Triggers {
 			c.trigger(scope, trigger)
 		}
+		return true
 	case *ast.StateNode:
 		body := scope
 		if child := c.childScope(scope, d); child != nil {
@@ -232,31 +284,39 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		for _, region := range d.Regions {
 			c.resolveDecl(body, region)
 		}
+		return true
 	case *ast.StateRegion:
 		states := scope
 		if child := c.childScope(scope, d); child != nil {
 			states = child
 		}
 		c.walkMembers(states, d.States)
+		return true
 	case *ast.TransitionMember:
 		c.add(scope, d.Source)
 		c.add(scope, d.Target)
 		c.trigger(scope, d.Trigger)
 		c.expr(scope, d.Guard)
 		c.walkMembers(scope, d.Effect)
+		return true
 	case *ast.SendStatement:
 		c.expr(scope, d.Message)
 		c.expr(scope, d.Target)
+		return true
 	case *ast.TerminateStatement:
 		c.expr(scope, d.Target)
+		return true
 	case *ast.AssignmentActionNode:
 		c.expr(scope, d.Target)
 		c.expr(scope, d.Value)
+		return true
 	case *ast.ActionExecutionNode:
 		c.add(scope, d.ActionRef)
 		c.expr(scope, d.Expression)
+		return true
 	case *ast.PerformActionNode:
 		c.expr(scope, d.ActionRef)
+		return true
 	case *ast.WhileLoopActionNode:
 		// A loop owns the scope its body declares into (see symbols.buildDecl).
 		body := scope
@@ -267,11 +327,13 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.expr(body, d.Condition)
 		c.expr(body, d.Until)
 		c.walkMembers(body, d.Body)
+		return true
 	case *ast.IfActionNode:
 		c.expr(scope, d.Condition)
 		for _, branch := range d.Branches() {
 			c.resolveDecl(scope, branch)
 		}
+		return true
 	case *ast.IfBranchNode:
 		// A branch owns the scope its body declares into (see symbols.buildDecl).
 		body := scope
@@ -279,10 +341,9 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			body = child
 		}
 		c.walkMembers(body, d.Body)
+		return true
 	default:
-		// A bare expression member is the body's result, as in a calc body
-		// whose result is its last expression.
-		c.expr(scope, decl)
+		return false
 	}
 }
 

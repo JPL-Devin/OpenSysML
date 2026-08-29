@@ -15,7 +15,7 @@ func TestRunWithoutSysideLeavesTheReportUnchanged(t *testing.T) {
 	validator, kermlValidator := writeMixedRoot(t, repo, filepath.Join(repo, "sysml-args.txt"), filepath.Join(repo, "kerml-args.txt"))
 
 	out := filepath.Join(repo, "out")
-	if err := run(repo, validator, kermlValidator, "", out, 0, false, false); err != nil {
+	if err := run(options{repo: repo, validator: validator, kermlValidator: kermlValidator, out: out}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -41,11 +41,11 @@ func TestRunWithSysideOnlyAddsTheThirdColumn(t *testing.T) {
 		"Lib.kerml:9:2: warning: [validateImportExplicitVisibility] An Import must have explicit visibility.")
 
 	twoWay := filepath.Join(repo, "two-way")
-	if err := run(repo, validator, kermlValidator, "", twoWay, 0, false, false); err != nil {
+	if err := run(options{repo: repo, validator: validator, kermlValidator: kermlValidator, out: twoWay}); err != nil {
 		t.Fatal(err)
 	}
 	threeWay := filepath.Join(repo, "three-way")
-	if err := run(repo, validator, kermlValidator, syside, threeWay, 0, false, false); err != nil {
+	if err := run(options{repo: repo, validator: validator, kermlValidator: kermlValidator, syside: syside, out: threeWay}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,7 +96,8 @@ func TestRunReportsTheMissingSysideLauncher(t *testing.T) {
 	repo := t.TempDir()
 	validator, kermlValidator := writeMixedRoot(t, repo, filepath.Join(repo, "sysml-args.txt"), filepath.Join(repo, "kerml-args.txt"))
 
-	err := run(repo, validator, kermlValidator, filepath.Join(repo, "absent", "validate-syside"), filepath.Join(repo, "out"), 0, false, false)
+	err := run(options{repo: repo, validator: validator, kermlValidator: kermlValidator,
+		syside: filepath.Join(repo, "absent", "validate-syside"), out: filepath.Join(repo, "out")})
 	if err == nil || !strings.Contains(err.Error(), "download-syside.sh") {
 		t.Fatalf("run() error = %v", err)
 	}

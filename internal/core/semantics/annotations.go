@@ -529,115 +529,66 @@ func stringOrEmpty(s string) symbols.FilterValue {
 	return symbols.FilterValue{Kind: symbols.FilterValueString, Str: s}
 }
 
+// metaclassNames maps each declaration kind to its reflective SysML metadata
+// type.
+var metaclassNames = map[symbols.SymbolKind]string{
+	symbols.SymbolPackage:               "Package",
+	symbols.SymbolNamespace:             "Namespace",
+	symbols.SymbolPartDef:               "PartDefinition",
+	symbols.SymbolPartUsage:             "PartUsage",
+	symbols.SymbolAttributeDef:          "AttributeDefinition",
+	symbols.SymbolAttributeUsage:        "AttributeUsage",
+	symbols.SymbolItemDef:               "ItemDefinition",
+	symbols.SymbolItemUsage:             "ItemUsage",
+	symbols.SymbolOccurrenceDef:         "OccurrenceDefinition",
+	symbols.SymbolOccurrenceUsage:       "OccurrenceUsage",
+	symbols.SymbolIndividualUsage:       "OccurrenceUsage",
+	symbols.SymbolIndividualDef:         "OccurrenceDefinition",
+	symbols.SymbolMetadataDef:           "MetadataDefinition",
+	symbols.SymbolMetadataUsage:         "MetadataUsage",
+	symbols.SymbolEnumerationDef:        "EnumerationDefinition",
+	symbols.SymbolEnumerationUsage:      "EnumerationUsage",
+	symbols.SymbolViewDef:               "ViewDefinition",
+	symbols.SymbolViewUsage:             "ViewUsage",
+	symbols.SymbolViewpointDef:          "ViewpointDefinition",
+	symbols.SymbolViewpointUsage:        "ViewpointUsage",
+	symbols.SymbolRenderingDef:          "RenderingDefinition",
+	symbols.SymbolRenderingUsage:        "RenderingUsage",
+	symbols.SymbolConcernDef:            "ConcernDefinition",
+	symbols.SymbolConcernUsage:          "ConcernUsage",
+	symbols.SymbolConnectionDef:         "ConnectionDefinition",
+	symbols.SymbolConnectionUsage:       "ConnectionUsage",
+	symbols.SymbolSuccessionUsage:       "SuccessionAsUsage",
+	symbols.SymbolFlowDef:               "FlowDefinition",
+	symbols.SymbolFlowUsage:             "FlowUsage",
+	symbols.SymbolPortDef:               "PortDefinition",
+	symbols.SymbolPortUsage:             "PortUsage",
+	symbols.SymbolInterfaceDef:          "InterfaceDefinition",
+	symbols.SymbolInterfaceUsage:        "InterfaceUsage",
+	symbols.SymbolAllocationDef:         "AllocationDefinition",
+	symbols.SymbolAllocationUsage:       "AllocationUsage",
+	symbols.SymbolActionDef:             "ActionDefinition",
+	symbols.SymbolActionUsage:           "ActionUsage",
+	symbols.SymbolStateDef:              "StateDefinition",
+	symbols.SymbolStateUsage:            "StateUsage",
+	symbols.SymbolCalcDef:               "CalculationDefinition",
+	symbols.SymbolCalcUsage:             "CalculationUsage",
+	symbols.SymbolConstraintDef:         "ConstraintDefinition",
+	symbols.SymbolConstraintUsage:       "ConstraintUsage",
+	symbols.SymbolRequirementDef:        "RequirementDefinition",
+	symbols.SymbolRequirementUsage:      "RequirementUsage",
+	symbols.SymbolCaseDef:               "CaseDefinition",
+	symbols.SymbolCaseUsage:             "CaseUsage",
+	symbols.SymbolAnalysisCaseDef:       "AnalysisCaseDefinition",
+	symbols.SymbolAnalysisCaseUsage:     "AnalysisCaseUsage",
+	symbols.SymbolVerificationCaseDef:   "VerificationCaseDefinition",
+	symbols.SymbolVerificationCaseUsage: "VerificationCaseUsage",
+	symbols.SymbolUseCaseDef:            "UseCaseDefinition",
+	symbols.SymbolUseCaseUsage:          "UseCaseUsage",
+}
+
 // metaclassName is the reflective SysML metadata type classifying a declaration
 // of the given kind, or "" for a kind the abstract syntax has no metaclass for.
 func metaclassName(kind symbols.SymbolKind) string {
-	switch kind {
-	case symbols.SymbolPackage:
-		return "Package"
-	case symbols.SymbolNamespace:
-		return "Namespace"
-	case symbols.SymbolPartDef:
-		return "PartDefinition"
-	case symbols.SymbolPartUsage:
-		return "PartUsage"
-	case symbols.SymbolAttributeDef:
-		return "AttributeDefinition"
-	case symbols.SymbolAttributeUsage:
-		return "AttributeUsage"
-	case symbols.SymbolItemDef:
-		return "ItemDefinition"
-	case symbols.SymbolItemUsage:
-		return "ItemUsage"
-	case symbols.SymbolOccurrenceDef:
-		return "OccurrenceDefinition"
-	case symbols.SymbolOccurrenceUsage, symbols.SymbolIndividualUsage:
-		return "OccurrenceUsage"
-	case symbols.SymbolIndividualDef:
-		return "OccurrenceDefinition"
-	case symbols.SymbolMetadataDef:
-		return "MetadataDefinition"
-	case symbols.SymbolMetadataUsage:
-		return "MetadataUsage"
-	case symbols.SymbolEnumerationDef:
-		return "EnumerationDefinition"
-	case symbols.SymbolEnumerationUsage:
-		return "EnumerationUsage"
-	case symbols.SymbolViewDef:
-		return "ViewDefinition"
-	case symbols.SymbolViewUsage:
-		return "ViewUsage"
-	case symbols.SymbolViewpointDef:
-		return "ViewpointDefinition"
-	case symbols.SymbolViewpointUsage:
-		return "ViewpointUsage"
-	case symbols.SymbolRenderingDef:
-		return "RenderingDefinition"
-	case symbols.SymbolRenderingUsage:
-		return "RenderingUsage"
-	case symbols.SymbolConcernDef:
-		return "ConcernDefinition"
-	case symbols.SymbolConcernUsage:
-		return "ConcernUsage"
-	case symbols.SymbolConnectionDef:
-		return "ConnectionDefinition"
-	case symbols.SymbolConnectionUsage:
-		return "ConnectionUsage"
-	case symbols.SymbolSuccessionUsage:
-		return "SuccessionAsUsage"
-	case symbols.SymbolFlowDef:
-		return "FlowDefinition"
-	case symbols.SymbolFlowUsage:
-		return "FlowUsage"
-	case symbols.SymbolPortDef:
-		return "PortDefinition"
-	case symbols.SymbolPortUsage:
-		return "PortUsage"
-	case symbols.SymbolInterfaceDef:
-		return "InterfaceDefinition"
-	case symbols.SymbolInterfaceUsage:
-		return "InterfaceUsage"
-	case symbols.SymbolAllocationDef:
-		return "AllocationDefinition"
-	case symbols.SymbolAllocationUsage:
-		return "AllocationUsage"
-	case symbols.SymbolActionDef:
-		return "ActionDefinition"
-	case symbols.SymbolActionUsage:
-		return "ActionUsage"
-	case symbols.SymbolStateDef:
-		return "StateDefinition"
-	case symbols.SymbolStateUsage:
-		return "StateUsage"
-	case symbols.SymbolCalcDef:
-		return "CalculationDefinition"
-	case symbols.SymbolCalcUsage:
-		return "CalculationUsage"
-	case symbols.SymbolConstraintDef:
-		return "ConstraintDefinition"
-	case symbols.SymbolConstraintUsage:
-		return "ConstraintUsage"
-	case symbols.SymbolRequirementDef:
-		return "RequirementDefinition"
-	case symbols.SymbolRequirementUsage:
-		return "RequirementUsage"
-	case symbols.SymbolCaseDef:
-		return "CaseDefinition"
-	case symbols.SymbolCaseUsage:
-		return "CaseUsage"
-	case symbols.SymbolAnalysisCaseDef:
-		return "AnalysisCaseDefinition"
-	case symbols.SymbolAnalysisCaseUsage:
-		return "AnalysisCaseUsage"
-	case symbols.SymbolVerificationCaseDef:
-		return "VerificationCaseDefinition"
-	case symbols.SymbolVerificationCaseUsage:
-		return "VerificationCaseUsage"
-	case symbols.SymbolUseCaseDef:
-		return "UseCaseDefinition"
-	case symbols.SymbolUseCaseUsage:
-		return "UseCaseUsage"
-	default:
-		return ""
-	}
+	return metaclassNames[kind]
 }

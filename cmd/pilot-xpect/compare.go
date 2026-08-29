@@ -144,9 +144,13 @@ func compareFile(suiteDir string, f xtFile, libs *libraryCache) fileResult {
 		}
 	}
 
+	subject := adjudicand{
+		ws: ws, main: main, diags: diags, lines: lines,
+		src: src, libraryRoots: libraryRoots, consumed: consumed,
+	}
 	for _, a := range f.Assertions {
 		own := consumedLine(f.Content, lines, a.Region)
-		res.Rows = append(res.Rows, adjudicate(ws, main, a, diags, lines, src, libraryRoots, consumed, own)...)
+		res.Rows = append(res.Rows, subject.adjudicate(a, own)...)
 	}
 	return res
 }
@@ -164,8 +168,22 @@ func consumedLine(content []byte, lines *source.LineIndex, region int) int {
 	return -1
 }
 
+// adjudicand is one file's loaded resources and diagnostics, against which its
+// assertions are adjudicated.
+type adjudicand struct {
+	ws           *model.Workspace
+	main         string
+	diags        []diag
+	lines        *source.LineIndex
+	src          squeezed
+	libraryRoots []string
+	consumed     map[int]bool
+}
+
 // adjudicate turns one assertion into its rows.
-func adjudicate(ws *model.Workspace, main string, a assertion, diags []diag, lines *source.LineIndex, src squeezed, libraryRoots []string, consumed map[int]bool, own int) []row {
+func (s adjudicand) adjudicate(a assertion, own int) []row {
+	ws, main, diags, lines, src := s.ws, s.main, s.diags, s.lines, s.src
+	libraryRoots, consumed := s.libraryRoots, s.consumed
 	switch a.Kind {
 	case kindErrors, kindWarnings:
 		want := "error"

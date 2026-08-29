@@ -55,6 +55,20 @@ func unwrapForResolve(m ast.Node) (ast.Node, ast.Visibility) {
 // resolveDecl resolves references contributed by a single declaration and
 // recurses into declarations that own a child scope.
 func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
+	switch {
+	case r.resolveNamespaceDecl(scope, decl):
+	case r.resolveTypeDecl(scope, decl):
+	case r.resolveBehaviorDecl(scope, decl):
+	default:
+		// A bare expression member is the body's result, as in a calc body
+		// whose result is its last expression.
+		r.resolveExpr(scope, decl)
+	}
+}
+
+// resolveNamespaceDecl resolves a namespace-level declaration, reporting
+// whether decl was one.
+func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Package:
 		r.resolvePrefixes(scope, d.Prefixes)
@@ -62,19 +76,23 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.walkMembers(child, d.Members)
 			r.checkDistinguishability(child)
 		}
+		return true
 	case *ast.Namespace:
 		r.resolvePrefixes(scope, d.Prefixes)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 			r.checkDistinguishability(child)
 		}
+		return true
 	case *ast.Import:
 		r.resolveImportTarget(scope, d)
 		if d.FilterExpr != nil {
 			r.InCondition(func() { r.resolveExpr(scope, d.FilterExpr) })
 		}
+		return true
 	case *ast.Alias:
 		r.ResolveQualified(scope, d.For)
+		return true
 	case *ast.RelationshipMember:
 		// Both ends of a keyword-first relationship name elements, in the scope
 		// the relationship is a member of.
@@ -83,6 +101,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 		}
+		return true
 	case *ast.Dependency:
 		r.resolvePrefixes(scope, d.Prefixes)
 		for _, c := range d.Clients {
@@ -91,16 +110,29 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		for _, s := range d.Suppliers {
 			r.ResolveQualified(scope, s)
 		}
+		return true
 	case *ast.Comment:
 		for _, a := range d.About {
 			r.ResolveQualified(scope, a)
 		}
+		return true
 	case *ast.PrefixMetadata:
 		// A metadata usage written as a member of its own names its type the same
 		// way a prefix does.
 		r.resolveMetadataPrefix(scope, d)
+		return true
 	case *ast.FilterMember:
 		r.InCondition(func() { r.resolveExpr(scope, d.Condition) })
+		return true
+	default:
+		return false
+	}
+}
+
+// resolveTypeDecl resolves a definition, usage or constraint member, reporting
+// whether decl was one.
+func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
+	switch d := decl.(type) {
 	case *ast.Definition:
 		r.resolvePrefixes(scope, d.Prefixes)
 		child := r.childScope(scope, d)
@@ -109,6 +141,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.walkMembers(child, d.Members)
 			r.checkDistinguishability(child)
 		}
+		return true
 	case *ast.Usage:
 		r.resolvePrefixes(scope, d.Prefixes)
 		child := r.childScope(scope, d)
@@ -185,6 +218,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.walkMembers(child, d.Members)
 			r.checkDistinguishability(child)
 		}
+		return true
 	case *ast.SubjectMember:
 		// Resolve subject type reference
 		if d.TypeRef != nil {
@@ -199,23 +233,30 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Body)
 		}
+		return true
 	case *ast.InitialNode:
 		// Only resolve successor, not the name (which is just a label)
 		if d.Successor != nil {
 			r.ResolveQualified(scope, d.Successor)
 		}
 		r.resolveExpr(scope, d.Guard)
+		return true
 	case *ast.SuccessionEdge:
 		r.resolveSuccessionEdge(scope, d)
+		return true
 	case *ast.ControlFlowEdge:
 		r.resolveControlFlowEdge(scope, d)
+		return true
 	case *ast.FinalNode:
 		// Final nodes have no references
+		return true
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		// Control flow nodes have no references to resolve (names are just labels)
+		return true
 	case *ast.ConstraintMember:
 		r.resolveExpr(scope, d.Expression)
 		r.walkMembers(scope, d.Body)
+		return true
 	case *ast.AssumeMember:
 		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
@@ -223,6 +264,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveMultiplicity(scope, d.Multiplicity)
 		r.resolveExpr(scope, d.Value)
 		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		return true
 	case *ast.RequireMember:
 		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
@@ -230,18 +272,32 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveMultiplicity(scope, d.Multiplicity)
 		r.resolveExpr(scope, d.Value)
 		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		return true
+	default:
+		return false
+	}
+}
+
+// resolveBehaviorDecl resolves a behavioral member — a state, transition or
+// action node — reporting whether decl was one.
+func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
+	switch d := decl.(type) {
 	case *ast.EntryMember:
 		r.walkMembers(scope, d.Actions)
+		return true
 	case *ast.DoMember:
 		r.walkMembers(scope, d.Actions)
+		return true
 	case *ast.ExitMember:
 		r.walkMembers(scope, d.Actions)
+		return true
 	case *ast.DeferMember:
 		// A deferred event is a trigger like a transition's, so it resolves the
 		// same way: bare signal names are left to lowering.
 		for _, trigger := range d.Triggers {
 			r.resolveTrigger(scope, trigger)
 		}
+		return true
 	case *ast.StateNode:
 		// The state's own name is a declaration, not a reference. Its body
 		// resolves in the scope the state owns, which holds its substates and
@@ -257,12 +313,14 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		for _, region := range d.Regions {
 			r.resolveDecl(body, region)
 		}
+		return true
 	case *ast.StateRegion:
 		states := scope
 		if child := r.childScope(scope, d); child != nil {
 			states = child
 		}
 		r.walkMembers(states, d.States)
+		return true
 	case *ast.TransitionMember:
 		// Source and target name vertices of the enclosing machine: resolved here,
 		// so a misspelled endpoint reports with the other name diagnostics rather
@@ -275,21 +333,27 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
+		return true
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)
 		r.resolveExpr(scope, d.Target)
+		return true
 	case *ast.TerminateStatement:
 		r.resolveExpr(scope, d.Target)
+		return true
 	case *ast.AssignmentActionNode:
 		r.resolveExpr(scope, d.Target)
 		r.resolveExpr(scope, d.Value)
+		return true
 	case *ast.ActionExecutionNode:
 		if d.ActionRef != nil {
 			r.ResolveQualified(scope, d.ActionRef)
 		}
 		r.resolveExpr(scope, d.Expression)
+		return true
 	case *ast.PerformActionNode:
 		r.resolveExpr(scope, d.ActionRef)
+		return true
 	case *ast.WhileLoopActionNode:
 		// The loop owns its body's declarations, and its condition is checked
 		// against them: `loop { action charging; } until charging.done`. The
@@ -303,6 +367,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(body, d.Condition)
 		r.resolveExpr(body, d.Until)
 		r.walkMembers(body, d.Body)
+		return true
 	case *ast.IfActionNode:
 		// The condition is evaluated before either branch is entered, so it sees
 		// the enclosing scope only; each branch owns its body's declarations.
@@ -310,16 +375,16 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		for _, branch := range d.Branches() {
 			r.resolveDecl(scope, branch)
 		}
+		return true
 	case *ast.IfBranchNode:
 		body := scope
 		if child := r.childScope(scope, d); child != nil {
 			body = child
 		}
 		r.walkMembers(body, d.Body)
+		return true
 	default:
-		// A bare expression member is the body's result, as in a calc body
-		// whose result is its last expression.
-		r.resolveExpr(scope, decl)
+		return false
 	}
 }
 
