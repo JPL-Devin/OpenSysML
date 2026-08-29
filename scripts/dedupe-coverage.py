@@ -17,7 +17,10 @@ from pathlib import Path
 def under_tree(argument: str) -> Path:
     """Resolve a profile path, rejecting anything outside the working tree."""
     root = Path.cwd().resolve()
-    path = Path(root, argument).resolve()
+    try:
+        path = Path(root, argument).resolve()
+    except (OSError, RuntimeError) as err:
+        raise ValueError(f"{argument}: {err}") from err
     if root != path and root not in path.parents:
         raise ValueError(f"{argument}: outside {root}")
     return path
