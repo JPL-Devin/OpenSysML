@@ -17,7 +17,7 @@ set -euo pipefail
 TAG="${1:-}"
 SUMS="${2:-}"
 
-if [ -z "$TAG" ]; then
+if [[ -z "$TAG" ]]; then
   echo "usage: $0 <tag> [SHA256SUMS.txt]" >&2
   exit 2
 fi
@@ -25,7 +25,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE="${SCRIPT_DIR}/../packaging/homebrew/Formula/opensysml.rb"
 
-if [ ! -f "$TEMPLATE" ]; then
+if [[ ! -f "$TEMPLATE" ]]; then
   echo "error: formula source not found at $TEMPLATE" >&2
   exit 1
 fi
@@ -34,7 +34,7 @@ OUT="$(mktemp)"
 cleanup() { rm -f "$OUT" "${TMP_SUMS:-}"; }
 trap cleanup EXIT
 
-if [ -z "$SUMS" ]; then
+if [[ -z "$SUMS" ]]; then
   TMP_SUMS="$(mktemp)"
   URL="https://github.com/Open-MBEE/OpenSysML/releases/download/${TAG}/SHA256SUMS.txt"
   echo "Fetching ${URL}" >&2
@@ -45,7 +45,7 @@ fi
 sum_for() {
   local archive="$1" sum
   sum="$(awk -v a="$archive" '$2 == a { print $1 }' "$SUMS")"
-  if [ -z "$sum" ]; then
+  if [[ -z "$sum" ]]; then
     echo "error: no checksum for $archive in $SUMS" >&2
     exit 1
   fi

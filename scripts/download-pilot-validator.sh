@@ -16,7 +16,7 @@ VALIDATOR_COMMIT="${VALIDATOR_COMMIT:-63abbd9fbc7851dc437d01b2dc07836b919770b8}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 target="$repo_root/build/pilot-validator"
 
-if [ -x "$target/validate-sysml" ] && [ -f "$target/target/sysmlv2-validator-1.0.0-SNAPSHOT.jar" ]; then
+if [[ -x "$target/validate-sysml" ]] && [[ -f "$target/target/sysmlv2-validator-1.0.0-SNAPSHOT.jar" ]]; then
 	echo "Pilot validator already built at $target"
 	echo "Remove that directory to re-provision."
 	exit 0
@@ -30,7 +30,7 @@ for tool in git java mvn; do
 done
 
 java_major="$(java -version 2>&1 | sed -n '1s/.*version "\([0-9][0-9]*\).*/\1/p')"
-if [ -z "$java_major" ] || [ "$java_major" -lt 21 ]; then
+if [[ -z "$java_major" ]] || [[ "$java_major" -lt 21 ]]; then
 	echo "error: the pilot implementation requires Java 21+, found: $(java -version 2>&1 | head -1)" >&2
 	exit 1
 fi
@@ -49,7 +49,7 @@ for pin in "sysml.release.tag:$PILOT_TAG" "sysml.artifact.version:$PILOT_ARTIFAC
 	property="${pin%%:*}"
 	want="${pin#*:}"
 	got="$(sed -n "s|.*<${property}>\(.*\)</${property}>.*|\1|p" "$target/pom.xml" | head -1)"
-	if [ "$got" != "$want" ]; then
+	if [[ "$got" != "$want" ]]; then
 		echo "error: $VALIDATOR_COMMIT builds against $property=$got, this repository pins $want" >&2
 		echo "       re-pin VALIDATOR_COMMIT, or override PILOT_TAG/PILOT_ARTIFACT_VERSION deliberately" >&2
 		exit 1
@@ -63,7 +63,7 @@ echo "Downloading the pilot $PILOT_TAG ($PILOT_ARTIFACT_VERSION) release and bui
 (cd "$target" && mvn -B -q -Psetup-dependency initialize && mvn -B -q package)
 
 library="$target/target/sysml-download/sysml/sysml.library"
-if [ ! -d "$library" ]; then
+if [[ ! -d "$library" ]]; then
 	echo "error: the pilot standard library is missing from $library" >&2
 	exit 1
 fi

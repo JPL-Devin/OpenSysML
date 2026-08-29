@@ -30,7 +30,7 @@ declare -a wanted_names=()
 for grammar in "${GRAMMARS[@]}"; do
 	source_path="${grammar%%:*}"
 	name="${grammar#*:}"
-	if [ -f "$target/$name" ]; then
+	if [[ -f "$target/$name" ]]; then
 		echo "Grammar already present at $target/$name"
 		echo "Remove that file to re-download."
 		continue
@@ -39,7 +39,7 @@ for grammar in "${GRAMMARS[@]}"; do
 	wanted_names+=("$name")
 done
 
-if [ "${#wanted_paths[@]}" -eq 0 ]; then
+if [[ "${#wanted_paths[@]}" -eq 0 ]]; then
 	exit 0
 fi
 
@@ -49,7 +49,7 @@ trap 'rm -rf "$work"' EXIT
 echo "Fetching ${wanted_names[*]} from $PILOT_REPO at $PILOT_TAG ..."
 git -c advice.detachedHead=false clone --quiet --filter=blob:none --sparse --depth 1 \
 	--branch "$PILOT_TAG" "$PILOT_REPO" "$work/pilot" || true
-if [ ! -d "$work/pilot/.git" ]; then
+if [[ ! -d "$work/pilot/.git" ]]; then
 	echo "error: could not clone $PILOT_REPO at $PILOT_TAG, the tag scripts/pilot-pin.sh pins" >&2
 	exit 1
 fi
@@ -59,7 +59,7 @@ mkdir -p "$target"
 for index in "${!wanted_paths[@]}"; do
 	source_path="${wanted_paths[$index]}"
 	name="${wanted_names[$index]}"
-	if [ ! -f "$work/pilot/$source_path" ]; then
+	if [[ ! -f "$work/pilot/$source_path" ]]; then
 		echo "error: $source_path is missing from $PILOT_REPO at $PILOT_TAG" >&2
 		exit 1
 	fi

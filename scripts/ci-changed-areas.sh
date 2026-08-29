@@ -27,22 +27,28 @@ vscode_pattern='^editors/vscode/'
 
 known_pattern="$service_pattern|$docs_pattern|$node_pattern|$python_pattern|$java_pattern|$rust_pattern|$vscode_pattern|^\.agents/|^\.gitignore$|^LICENSE|^packaging/"
 
-matches() { grep -Eq "$1" <<<"$changed"; }
+matches() {
+  local pattern=$1
+  grep -Eq "$pattern" <<<"$changed"
+}
 
-if [ -z "$changed" ] || grep -Ev "$known_pattern" <<<"$changed" | grep -q .; then
+if [[ -z "$changed" ]] || grep -Ev "$known_pattern" <<<"$changed" | grep -q .; then
   unclaimed=$(grep -Ev "$known_pattern" <<<"$changed" || true)
-  [ -n "$unclaimed" ] && echo "unclaimed paths, so every area runs:" >&2 && echo "$unclaimed" >&2
+  [[ -n "$unclaimed" ]] && echo "unclaimed paths, so every area runs:" >&2 && echo "$unclaimed" >&2
   service=true
 else
   matches "$service_pattern" && service=true || service=false
 fi
 
-emit() { echo "$1=$2"; }
+emit() {
+  local area=$1 enabled=$2
+  echo "$area=$enabled"
+}
 
 emit go "$service"
-emit docs "$( { [ "$service" = true ] || matches "$docs_pattern"; } && echo true || echo false)"
-emit node "$( { [ "$service" = true ] || matches "$node_pattern"; } && echo true || echo false)"
-emit python "$( { [ "$service" = true ] || matches "$python_pattern"; } && echo true || echo false)"
-emit java "$( { [ "$service" = true ] || matches "$java_pattern"; } && echo true || echo false)"
-emit rust "$( { [ "$service" = true ] || matches "$rust_pattern"; } && echo true || echo false)"
-emit vscode "$( { [ "$service" = true ] || matches "$vscode_pattern"; } && echo true || echo false)"
+emit docs "$( { [[ "$service" = true ]] || matches "$docs_pattern"; } && echo true || echo false)"
+emit node "$( { [[ "$service" = true ]] || matches "$node_pattern"; } && echo true || echo false)"
+emit python "$( { [[ "$service" = true ]] || matches "$python_pattern"; } && echo true || echo false)"
+emit java "$( { [[ "$service" = true ]] || matches "$java_pattern"; } && echo true || echo false)"
+emit rust "$( { [[ "$service" = true ]] || matches "$rust_pattern"; } && echo true || echo false)"
+emit vscode "$( { [[ "$service" = true ]] || matches "$vscode_pattern"; } && echo true || echo false)"
