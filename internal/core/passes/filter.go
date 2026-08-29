@@ -23,7 +23,7 @@ type ElementFilterPass struct{}
 
 func (ElementFilterPass) Level() PassLevel { return LevelType }
 
-func (ElementFilterPass) ElementScoped() {}
+func (ElementFilterPass) ElementScoped() { /* marker: per-element gating */ }
 
 func (ElementFilterPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {

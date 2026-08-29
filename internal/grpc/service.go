@@ -20,6 +20,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// msgModelNotFound formats the not-found status for an unknown model hash.
+const msgModelNotFound = "model not found: %s"
+
 // CapabilityTypeFacts names the capability of populating SymbolInfo.type_info,
 // .multiplicity and .specializations, which typed code generation requires.
 const CapabilityTypeFacts = "type_facts"
@@ -333,7 +336,7 @@ func (s *Service) GetSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, msgModelNotFound, req.ModelHash)
 	}
 
 	// Lookup symbol by FQN
@@ -355,7 +358,7 @@ func (s *Service) GetDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, msgModelNotFound, req.ModelHash)
 	}
 
 	// Convert parser diagnostics to proto
@@ -385,7 +388,7 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, msgModelNotFound, req.ModelHash)
 	}
 
 	// Parse expression
@@ -487,7 +490,7 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, msgModelNotFound, req.ModelHash)
 	}
 
 	// Lookup symbol
@@ -524,7 +527,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, msgModelNotFound, req.ModelHash)
 	}
 
 	// Lookup action symbol
@@ -581,7 +584,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	// Lookup cached model
 	cached, ok := s.cache.Get(req.ModelHash)
 	if !ok {
-		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", req.ModelHash)
+		return nil, statusErrorf(connect.CodeNotFound, msgModelNotFound, req.ModelHash)
 	}
 
 	// Lookup state machine symbol

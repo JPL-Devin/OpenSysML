@@ -269,13 +269,13 @@ func compareValues(pilot, ours normalized) string {
 				sameOrder = false
 				break
 			}
-			if bucket == "kind-only" {
+			if bucket == bucketKindOnly {
 				kindOnly = true
 			}
 		}
 		if sameOrder {
 			if kindOnly {
-				return "kind-only"
+				return bucketKindOnly
 			}
 			return "agree"
 		}
@@ -304,7 +304,7 @@ func compareValues(pilot, ours normalized) string {
 		pilotRat, pilotOK := exactRat(pilot)
 		oursRat, oursOK := exactRat(ours)
 		if pilotOK && oursOK && pilotRat.Cmp(oursRat) == 0 {
-			return "kind-only"
+			return bucketKindOnly
 		}
 		return "disagree"
 	}

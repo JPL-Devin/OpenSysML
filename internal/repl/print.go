@@ -11,6 +11,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// errPrefix opens the line a command writes when it fails.
+const errPrefix = "error: "
+
 // doPrint prints the session's model as SysML notation, whole when name is
 // empty and one element of it otherwise. It is a read of the session: nothing is
 // materialized, no debugging session is disturbed, and the buffer is unchanged,
@@ -34,7 +37,7 @@ func (s *Session) printSession() ([]string, bool, error) {
 	}
 	out, syntax, err := export.ConvertTolerant(sessionOrigin, []byte(src), export.FormatSysML, export.FormatSysML)
 	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return append(printWarnings(syntax), notationLines(out)...), false, nil
 }
@@ -44,7 +47,7 @@ func (s *Session) printSession() ([]string, bool, error) {
 func (s *Session) printElement(name string) ([]string, bool, error) {
 	sym, fqn, err := s.lookupSymbol(name)
 	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	shown := notationName(fqn)
 	if shown == "" {
@@ -65,7 +68,7 @@ func (s *Session) printElement(name string) ([]string, bool, error) {
 		if errors.Is(err, export.ErrNoNotation) {
 			return []string{fmt.Sprintf("no notation to print for %s: its declaration spans no source", shown)}, false, nil
 		}
-		return []string{"error: " + err.Error()}, false, nil
+		return []string{errPrefix + err.Error()}, false, nil
 	}
 	lines := append(printWarnings(syntax), notationLines(out)...)
 	if len(lines) == 0 {

@@ -95,7 +95,7 @@ type Send struct {
 	Scope        *symbols.Scope // the scope the statement was declared in
 }
 
-func (Send) statement() {}
+func (Send) statement() { /* marker: closed Statement set */ }
 
 // Assign is a lowered assignment: `assign <Target> := <Value>`. Target is the
 // feature written — the target's last segment — empty when the target names no
@@ -110,7 +110,7 @@ type Assign struct {
 	Scope *symbols.Scope // the scope the statement was declared in
 }
 
-func (Assign) statement() {}
+func (Assign) statement() { /* marker: closed Statement set */ }
 
 // AssignTarget is a chained assignment target: `assign a.b.c := v` walks `b`
 // from `a` and writes `c` on the object it reaches.
@@ -180,7 +180,7 @@ type Declare struct {
 	Scope *symbols.Scope // the scope the declaration was written in
 }
 
-func (Declare) statement() {}
+func (Declare) statement() { /* marker: closed Statement set */ }
 
 // DeclareUsage is a calc usage declared in a body-local block: `calc p : Pair {
 // in k = h; }` written inside a loop or an `if` branch. It states no step of the
@@ -193,7 +193,7 @@ type DeclareUsage struct {
 	Scope *symbols.Scope // the scope the usage was declared in
 }
 
-func (DeclareUsage) statement() {}
+func (DeclareUsage) statement() { /* marker: closed Statement set */ }
 
 // Block is a lowered body-local statement list: the body of a loop or of one
 // branch of a conditional. It is a namespace of its own (symbols/builder.go), so
@@ -215,7 +215,7 @@ type Block struct {
 // A block is a statement in its own right: the anonymous action usage a loop or
 // branch body is written as (`loop action { … } until c;`) runs its statements
 // in its own namespace.
-func (Block) statement() {}
+func (Block) statement() { /* marker: closed Statement set */ }
 
 // Loop is a lowered loop statement. Kind says when the condition is tested:
 // before each iteration (`while`), after each iteration (`loop … until`), or
@@ -239,7 +239,7 @@ type Loop struct {
 	Scope *symbols.Scope
 }
 
-func (Loop) statement() {}
+func (Loop) statement() { /* marker: closed Statement set */ }
 
 // If is a lowered conditional. The condition is evaluated in the enclosing
 // body, outside both branches. Else is nil when the conditional declared none.
@@ -251,7 +251,7 @@ type If struct {
 	Scope     *symbols.Scope // the scope the conditional, and so its condition, was declared in
 }
 
-func (If) statement() {}
+func (If) statement() { /* marker: closed Statement set */ }
 
 // Return is a lowered `return`: the value the enclosing behavior computes,
 // possibly from inside a block. Value is nil when it named no expression.
@@ -261,7 +261,7 @@ type Return struct {
 	Scope *symbols.Scope // the scope the returned expression was written in
 }
 
-func (Return) statement() {}
+func (Return) statement() { /* marker: closed Statement set */ }
 
 // EffectKind names a statement that acts on the world outside the body it
 // stands in.
@@ -294,7 +294,7 @@ type Effect struct {
 	Scope *symbols.Scope // the scope the statement was declared in
 }
 
-func (Effect) statement() {}
+func (Effect) statement() { /* marker: closed Statement set */ }
 
 // Unsupported is a body member the lowering layer recognizes but cannot yet
 // turn into an executable statement. It is lowered rather than dropped so that
@@ -306,7 +306,7 @@ type Unsupported struct {
 	Scope       *symbols.Scope // the scope the member was declared in
 }
 
-func (Unsupported) statement() {}
+func (Unsupported) statement() { /* marker: closed Statement set */ }
 
 // Accept is a lowered accept parameter: `action r accept msg : Warning;`.
 // SignalType is the parameter's declared type, empty when it was declared

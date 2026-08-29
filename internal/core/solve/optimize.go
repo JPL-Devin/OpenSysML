@@ -176,6 +176,9 @@ func (s *session) optimize(q *Query) (*Result, error) {
 	return result, nil
 }
 
+// msgAnswered opens a report of what the solver said in place of an answer.
+const msgAnswered = "answered "
+
 // reportedOptima asks for the optima, one entry per objective in the order the
 // script emitted them. It is asked only of a satisfiable query, so the dialogue
 // carries no reply an unsatisfiable one would leave unread.
@@ -193,10 +196,10 @@ func (s *session) reportedOptima(q *Query) ([]sexpr, error) {
 	// SMT-LIB's own answer for a command a backend does not implement.
 	if reply.Atom == "unsupported" {
 		return nil, &NoOptimizationError{Solver: s.solver.Name,
-			Detail: "answered " + quoteReply(reply) + " to (get-objectives)"}
+			Detail: msgAnswered + quoteReply(reply) + " to (get-objectives)"}
 	}
 	if !reply.IsList || len(reply.List) == 0 || reply.List[0].Atom != "objectives" {
-		return nil, s.optimumError("", "answered "+quoteReply(reply)+" rather than its objectives")
+		return nil, s.optimumError("", msgAnswered+quoteReply(reply)+" rather than its objectives")
 	}
 	entries := reply.List[1:]
 	if len(entries) != len(q.Objectives) {
@@ -233,7 +236,7 @@ func (s *session) attained(q *Query) ([]*big.Rat, error) {
 		}
 		if !reply.IsList || len(reply.List) != 1 || !reply.List[0].IsList || len(reply.List[0].List) != 2 {
 			return nil, s.optimumError(objectiveName(obj),
-				"answered "+quoteReply(reply)+" rather than the value its model gives the objective")
+				msgAnswered+quoteReply(reply)+" rather than the value its model gives the objective")
 		}
 		rat, ok := ratOfSexpr(reply.List[0].List[1])
 		if !ok {

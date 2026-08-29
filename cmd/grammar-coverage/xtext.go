@@ -69,11 +69,11 @@ type altExpr struct{ Items []expr }
 // without matching it at all.
 type optExpr struct{ Item expr }
 
-func (litExpr) isExpr() {}
-func (refExpr) isExpr() {}
-func (seqExpr) isExpr() {}
-func (altExpr) isExpr() {}
-func (optExpr) isExpr() {}
+func (litExpr) isExpr() { /* marker: closed expr set */ }
+func (refExpr) isExpr() { /* marker: closed expr set */ }
+func (seqExpr) isExpr() { /* marker: closed expr set */ }
+func (altExpr) isExpr() { /* marker: closed expr set */ }
+func (optExpr) isExpr() { /* marker: closed expr set */ }
 
 func collectLiterals(e expr, out map[string]bool) {
 	switch v := e.(type) {

@@ -59,13 +59,16 @@ func nameSegments(qn *ast.QualifiedName) ([]string, bool) {
 	return out, true
 }
 
+// msgReferencePrefix names the reference a refusal is about.
+const msgReferencePrefix = "reference `"
+
 // resolvePath resolves the names a reference steps through, the same way the
 // evaluator resolves them: the first as an effective feature of the element the
 // conditions are stated by, else in scope, each further one as a member or a
 // variant of what the previous named.
 func (t *translator) resolvePath(node ast.Node, scope *symbols.Scope, segments []string) ([]*symbols.Symbol, error) {
 	if scope == nil {
-		return nil, t.refuse(node, "reference `"+joinPath(segments)+"`", "it is written in no scope")
+		return nil, t.refuse(node, msgReferencePrefix+joinPath(segments)+"`", "it is written in no scope")
 	}
 	resolver := t.ctx.Resolver()
 	sym, ok := t.features[segments[0]]
@@ -77,7 +80,7 @@ func (t *translator) resolvePath(node ast.Node, scope *symbols.Scope, segments [
 		if whole, found := resolver.ResolveQualified(scope, qualifiedName(segments)); found {
 			return []*symbols.Symbol{whole}, nil
 		}
-		return nil, t.refuse(node, "reference `"+joinPath(segments)+"`", "it resolves to nothing")
+		return nil, t.refuse(node, msgReferencePrefix+joinPath(segments)+"`", "it resolves to nothing")
 	}
 	chain := []*symbols.Symbol{sym}
 	for _, segment := range segments[1:] {
@@ -86,7 +89,7 @@ func (t *translator) resolvePath(node ast.Node, scope *symbols.Scope, segments [
 			next, ok = t.model.VariantOf(sym, segment)
 		}
 		if !ok {
-			return nil, t.refuse(node, "reference `"+joinPath(segments)+"`",
+			return nil, t.refuse(node, msgReferencePrefix+joinPath(segments)+"`",
 				"`"+segment+"` names no member of `"+sym.Name+"`")
 		}
 		sym = next

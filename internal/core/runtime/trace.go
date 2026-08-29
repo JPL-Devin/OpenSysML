@@ -347,6 +347,9 @@ func formatConst(c semantics.Value) string {
 	}
 }
 
+// literalLabel prefixes the trace label of a literal expression.
+const literalLabel = "literal "
+
 // TraceLabel names an expression node for a trace: its kind plus the token that
 // identifies it, which is stable across reformatting of the source.
 func TraceLabel(node ast.Node) string {
@@ -354,13 +357,13 @@ func TraceLabel(node ast.Node) string {
 	case nil:
 		return "nil"
 	case *ast.LiteralInteger:
-		return "literal " + n.Value
+		return literalLabel + n.Value
 	case *ast.LiteralReal:
-		return "literal " + n.Value
+		return literalLabel + n.Value
 	case *ast.LiteralBool:
-		return "literal " + strconv.FormatBool(n.Value)
+		return literalLabel + strconv.FormatBool(n.Value)
 	case *ast.LiteralString:
-		return "literal " + n.Value
+		return literalLabel + n.Value
 	case *ast.LiteralInfinity:
 		return "literal *"
 	case *ast.NullExpr:
