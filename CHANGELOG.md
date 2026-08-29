@@ -22,7 +22,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   supported everywhere. Every demo's output is unchanged; the pilot differential baseline and the
   figures quoted from it move.
 
->>>>>>> origin/main
 - **The semantic-layer demo declares its packages with `package`.** Its three `namespace`
   declarations are KerML notation — the SysML grammar has no `namespace` production — so the pinned
   pilot could not parse the file and the non-standard-notation pass warned on each. The file now
