@@ -26,7 +26,7 @@ func (r *Renderer) renderInterconnection(exposed []*symbols.Symbol, out *Renderi
 		default:
 			out.Notices = append(out.Notices, fmt.Sprintf(
 				"%s %s has no place in an interconnection rendering; it is not shown",
-				elem.Notation(), r.notationName(elem)))
+				declKind(elem), r.notationName(elem)))
 		}
 	}
 	seen := map[*symbols.Symbol]bool{}
@@ -48,7 +48,7 @@ func (r *Renderer) featureNode(sym *symbols.Symbol, ids *nodeIDs, nodes map[*sym
 	if !qualified {
 		name = notationName(simpleName(r.fqn(sym)))
 	}
-	node := &Node{ID: ids.take(), Kind: sym.Notation(), Name: name, Detail: declType(sym), Origin: symbolOrigin(sym)}
+	node := &Node{ID: ids.take(), Kind: declKind(sym), Name: name, Detail: declType(sym), Origin: symbolOrigin(sym)}
 	if existing, ok := nodes[sym]; ok {
 		node.Detail = detailWith(node.Detail, "already shown as "+existing.ID)
 		return node
@@ -78,7 +78,7 @@ func (r *Renderer) connectionEdges(connector *symbols.Symbol, nodes map[*symbols
 	ends, kind := r.connectorEnds(connector)
 	if len(ends) < 2 {
 		out.Notices = append(out.Notices, fmt.Sprintf("%s %s joins fewer than two features; no edge is drawn",
-			connector.Notation(), r.notationName(connector)))
+			declKind(connector), r.notationName(connector)))
 		return
 	}
 	resolved := make([]*Node, 0, len(ends))
@@ -86,7 +86,7 @@ func (r *Renderer) connectionEdges(connector *symbols.Symbol, nodes map[*symbols
 		node := r.endNode(connector, end, nodes)
 		if node == nil {
 			out.Notices = append(out.Notices, fmt.Sprintf("%s %s attaches to %s, which the view does not expose; no edge is drawn",
-				connector.Notation(), r.notationName(connector), notationName(end.path)))
+				declKind(connector), r.notationName(connector), notationName(end.path)))
 			return
 		}
 		resolved = append(resolved, node)
@@ -187,7 +187,7 @@ func (r *Renderer) connectorLabel(connector *symbols.Symbol) string {
 	if payload := flowPayload(connector); payload != "" {
 		return "of " + notationName(payload)
 	}
-	return connector.Notation()
+	return declKind(connector)
 }
 
 // flowPayload is what a flow carries, as written, empty for a flow declaring no

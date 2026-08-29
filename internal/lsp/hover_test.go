@@ -166,6 +166,36 @@ func TestHoverStripsDelimitersOfEveryLeadingComment(t *testing.T) {
 	}
 }
 
+func TestHoverQuotesAnUnrestrictedName(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	initMarkdownHover(t, s)
+	name := uri.File("/tmp/hq.sysml").Filename()
+	src := "package P {\n    part def 'my wheel';\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	res := hoverInSrc(t, s, name, src, strings.Index(src, "my wheel"))
+	want := "```sysml\npart def 'my wheel'\n```"
+	if res.Contents.Value != want {
+		t.Errorf("hover value = %q, want %q", res.Contents.Value, want)
+	}
+}
+
+func TestHoverStripsBlockNoteDelimiters(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	initMarkdownHover(t, s)
+	name := uri.File("/tmp/hn.sysml").Filename()
+	src := "package P {\n    //* a note */\n    part def Wheel;\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	res := hoverInSrc(t, s, name, src, strings.Index(src, "Wheel;"))
+	want := "```sysml\npart def Wheel\n```\n\na note"
+	if res.Contents.Value != want {
+		t.Errorf("hover value = %q, want %q", res.Contents.Value, want)
+	}
+}
+
 func TestHoverKeepsDocCommentLineBreaks(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)

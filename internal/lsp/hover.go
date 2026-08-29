@@ -7,6 +7,7 @@ import (
 	"go.lsp.dev/protocol"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -26,7 +27,7 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 
 	signature := sym.Notation()
 	if sym.Name != "" {
-		signature += " " + sym.Name
+		signature += " " + lexer.NameText(sym.Name)
 	}
 	// A metadata body declaration implicitly redefines a feature of the
 	// annotation's metadata definition (KerML 7.4.7); name it and its type.
@@ -87,8 +88,11 @@ func docCommentProse(comments []string) string {
 // decoration.
 func commentBody(comment string) string {
 	comment = strings.TrimSpace(comment)
-	if rest, ok := strings.CutPrefix(comment, "/*"); ok {
-		comment = strings.TrimSuffix(rest, "*/")
+	for _, open := range []string{"//*", "/*"} {
+		if rest, ok := strings.CutPrefix(comment, open); ok {
+			comment = strings.TrimSuffix(rest, "*/")
+			break
+		}
 	}
 	var lines []string
 	for _, line := range strings.Split(comment, "\n") {

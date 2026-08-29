@@ -178,9 +178,17 @@ func (k SymbolKind) String() string {
 func (s *Symbol) Notation() string {
 	switch decl := s.Decl.(type) {
 	case *ast.Definition:
-		return decl.Kind.String() + " def"
+		// A KerML classifier is written without the `def` a SysML definition takes.
+		if s.Kind == SymbolKerMLType {
+			return writtenKeyword(decl.Keyword, decl.Kind.String())
+		}
+		return writtenKeyword(decl.Keyword, decl.Kind.String()) + " def"
 	case *ast.Usage:
-		return decl.Kind.String()
+		kw := writtenKeyword(decl.Keyword, decl.Kind.String())
+		if decl.PrefixKeyword != "" {
+			return decl.PrefixKeyword + " " + kw
+		}
+		return kw
 	case *ast.SubstateMember:
 		return "state"
 	case *ast.SubjectMember:
@@ -210,6 +218,15 @@ func (s *Symbol) Notation() string {
 	// library symbol, which carries no declaration at all — is named by its
 	// classification.
 	return spacedWords(s.Kind.String())
+}
+
+// writtenKeyword prefers the keyword a declaration was written with, since
+// several spellings (`datatype`, `feature`, `attribute`) share one kind.
+func writtenKeyword(written, kind string) string {
+	if written != "" {
+		return written
+	}
+	return kind
 }
 
 // spacedWords turns a camel-cased classification into lower-case words, so

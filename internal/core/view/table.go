@@ -25,7 +25,7 @@ func (r *Renderer) renderTable(view *symbols.Symbol, exposed []*symbols.Symbol, 
 // declared in it. owner is what declares the element, empty for one a view
 // exposes.
 func (r *Renderer) tableRows(sym *symbols.Symbol, owner string, seen map[*symbols.Symbol]bool, depth int, out *Rendering) {
-	out.appendRow([]string{r.notationName(sym), sym.Notation(), declType(sym), owner}, symbolOrigin(sym))
+	out.appendRow([]string{r.notationName(sym), declKind(sym), declType(sym), owner}, symbolOrigin(sym))
 	r.memberRowsOf(sym, r.notationName(sym), seen, depth, out)
 }
 
@@ -33,7 +33,7 @@ func (r *Renderer) tableRows(sym *symbols.Symbol, owner string, seen map[*symbol
 // rather than by qualified name, and what it declares in turn.
 func (r *Renderer) memberRows(sym *symbols.Symbol, owner string, seen map[*symbols.Symbol]bool, depth int, out *Rendering) {
 	name := notationName(simpleName(r.fqn(sym)))
-	out.appendRow([]string{name, sym.Notation(), declType(sym), owner}, symbolOrigin(sym))
+	out.appendRow([]string{name, declKind(sym), declType(sym), owner}, symbolOrigin(sym))
 	r.memberRowsOf(sym, name, seen, depth, out)
 }
 
@@ -62,7 +62,7 @@ func (r *Renderer) nestedViewRows(view *symbols.Symbol, rendered map[*symbols.Sy
 			continue
 		}
 		rendered[sub] = true
-		out.appendRow([]string{r.notationName(sub), sub.Notation(), declType(sub), r.notationName(view)}, symbolOrigin(sub))
+		out.appendRow([]string{r.notationName(sub), declKind(sub), declType(sub), r.notationName(view)}, symbolOrigin(sub))
 		exposed, err := r.model.ExposedElements(sub)
 		if err == nil {
 			for _, elem := range exposed {

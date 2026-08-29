@@ -37,7 +37,7 @@ func (r *Renderer) renderSequence(exposed []*symbols.Symbol, out *Rendering) {
 				if participant != elem {
 					name = notationName(simpleName(r.fqn(participant)))
 				}
-				node := &Node{ID: ids.take(), Kind: participant.Notation(), Name: name,
+				node := &Node{ID: ids.take(), Kind: declKind(participant), Name: name,
 					Detail: declType(participant), Origin: symbolOrigin(participant)}
 				out.Roots = append(out.Roots, node)
 				lifelines[participant] = node
@@ -46,7 +46,7 @@ func (r *Renderer) renderSequence(exposed []*symbols.Symbol, out *Rendering) {
 		default:
 			out.Notices = append(out.Notices, fmt.Sprintf(
 				"%s %s has no place in a sequence rendering; it is not shown",
-				elem.Notation(), r.notationName(elem)))
+				declKind(elem), r.notationName(elem)))
 		}
 	}
 	out.Notices = append(out.Notices, stated.notices...)
@@ -307,7 +307,7 @@ func (r *Renderer) messageEnd(flow *symbols.Symbol, end ast.Node, lifelines map[
 
 // noticeSubject names an element a notice is about, by what it was declared as.
 func (r *Renderer) noticeSubject(sym *symbols.Symbol) string {
-	return r.subject(sym, sym.Notation())
+	return r.subject(sym, declKind(sym))
 }
 
 // subject names an element a notice is about: what it is and its name, else what
@@ -335,7 +335,7 @@ func messageKind(flow *symbols.Symbol) string {
 	if usage, ok := flow.Decl.(*ast.Usage); ok && usage.Keyword != "" {
 		return usage.Keyword
 	}
-	return flow.Notation()
+	return declKind(flow)
 }
 
 // endText is an end of a message as it was written, for a notice — a feature
