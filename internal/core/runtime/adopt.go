@@ -422,7 +422,7 @@ func (a *adoption) plan(obj *Instance) error {
 	if !recorded {
 		return &AdoptError{Type: fqn, Reason: "the shape it was materialized against was not recorded"}
 	}
-	if got := a.ctx.ShapeDigest(typeSym); got != want {
+	if a.ctx.ShapeDigest(typeSym) != want {
 		return &AdoptError{Type: fqn, Reason: "its declaration resolves to a different shape now"}
 	}
 	features := a.ctx.FeaturesOf(typeSym)

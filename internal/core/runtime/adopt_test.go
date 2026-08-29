@@ -59,7 +59,7 @@ func TestAdoptCarriesAnObjectIntoAReanalysis(t *testing.T) {
 	if _, found := ctx.Instance(nested); !found {
 		t.Errorf("the engine object %d it holds was not carried with it", nested)
 	}
-	if want := lookupOne(t, ctx.resolver.Index(), "Demo::Vehicle"); obj.Type != want {
+	if obj.Type != lookupOne(t, ctx.resolver.Index(), "Demo::Vehicle") {
 		t.Error("the object is still of the declaration it was built against")
 	}
 	feat := obj.FeatureValues["mass"].Feature

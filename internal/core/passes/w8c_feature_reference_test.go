@@ -51,10 +51,10 @@ func TestW8CFeatureReferenceAccessibleAndValid(t *testing.T) {
 	feature v1_V : Integer = V;
 }`
 	msgs := w8cLibraryMessagesIn(t, "<t>.kerml", src)
-	if got := w8cCount(msgs, msgSubsettingFeaturingTypes); got != 1 {
+	if w8cCount(msgs, msgSubsettingFeaturingTypes) != 1 {
 		t.Errorf("want one %q, got %v", msgSubsettingFeaturingTypes, msgs)
 	}
-	if got := w8cCount(msgs, msgReferentIsFeature); got != 2 {
+	if w8cCount(msgs, msgReferentIsFeature) != 2 {
 		t.Errorf("want two %q, got %v", msgReferentIsFeature, msgs)
 	}
 }
@@ -83,7 +83,7 @@ func TestW8CFeatureReferenceEnumerationLiteralLegal(t *testing.T) {
 	attribute c : Color = Color::red;
 }`
 	msgs := w8cLibraryMessagesIn(t, "<t>.sysml", src)
-	if got := w8cCount(msgs, msgSubsettingFeaturingTypes); got != 0 {
+	if w8cCount(msgs, msgSubsettingFeaturingTypes) != 0 {
 		t.Errorf("unexpected %q: %v", msgSubsettingFeaturingTypes, msgs)
 	}
 }
@@ -98,10 +98,10 @@ func TestW8CFeatureReferenceLegal(t *testing.T) {
 	feature m2 : Integer = m;
 }`
 	msgs := w8cLibraryMessagesIn(t, "<t>.kerml", src)
-	if got := w8cCount(msgs, msgSubsettingFeaturingTypes); got != 0 {
+	if w8cCount(msgs, msgSubsettingFeaturingTypes) != 0 {
 		t.Errorf("unexpected %q: %v", msgSubsettingFeaturingTypes, msgs)
 	}
-	if got := w8cCount(msgs, msgReferentIsFeature); got != 0 {
+	if w8cCount(msgs, msgReferentIsFeature) != 0 {
 		t.Errorf("unexpected %q: %v", msgReferentIsFeature, msgs)
 	}
 }
@@ -147,7 +147,7 @@ func TestW8CFeatureReferenceBodyInaccessible(t *testing.T) {
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {
 			msgs := w8cLibraryMessagesIn(t, "<t>.sysml", src)
-			if got := w8cCount(msgs, msgSubsettingFeaturingTypes); got != 1 {
+			if w8cCount(msgs, msgSubsettingFeaturingTypes) != 1 {
 				t.Errorf("want one %q, got %v", msgSubsettingFeaturingTypes, msgs)
 			}
 		})
@@ -210,7 +210,7 @@ func TestW8CFeatureReferenceBodyAccessible(t *testing.T) {
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {
 			msgs := w8cLibraryMessagesIn(t, "<t>.sysml", src)
-			if got := w8cCount(msgs, msgSubsettingFeaturingTypes); got != 0 {
+			if w8cCount(msgs, msgSubsettingFeaturingTypes) != 0 {
 				t.Errorf("unexpected %q: %v", msgSubsettingFeaturingTypes, msgs)
 			}
 		})
@@ -225,7 +225,7 @@ func TestW8CFeatureReferenceFilterConditions(t *testing.T) {
 }
 package Q { filter R1::M::a; }`
 		msgs := w8cLibraryMessagesIn(t, "<t>.kerml", src)
-		if got := w8cCount(msgs, msgSubsettingFeaturingTypes); got != 1 {
+		if w8cCount(msgs, msgSubsettingFeaturingTypes) != 1 {
 			t.Fatalf("want one %q, got %v", msgSubsettingFeaturingTypes, msgs)
 		}
 	})

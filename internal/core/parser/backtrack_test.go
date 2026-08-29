@@ -123,7 +123,7 @@ func TestBacktrackingNeverPanics(t *testing.T) {
 		"constraint",
 	} {
 		p := New(source.New("test", []byte(src)))
-		if root := p.ParseFile(); root == nil {
+		if p.ParseFile() == nil {
 			t.Fatalf("nil root for %q", src)
 		}
 	}

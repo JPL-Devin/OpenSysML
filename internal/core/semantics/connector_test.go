@@ -305,7 +305,7 @@ func TestConnectorEndReferenceIsNotASiblingEnd(t *testing.T) {
 	wheel := nested(t, pkg.Scope, "wheelAssy")
 	conn := connector(t, wheel.Scope)
 	got := m.ReferencedFeature(nested(t, conn.Scope, "rim"))
-	if want := nested(t, wheel.Scope, "bead"); got != want {
+	if got != nested(t, wheel.Scope, "bead") {
 		t.Fatalf("ReferencedFeature(rim) = %v (kind %v), want wheelAssy::bead", got, got.Kind)
 	}
 }

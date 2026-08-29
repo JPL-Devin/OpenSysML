@@ -317,7 +317,7 @@ package Demo {
 		if len(resp.Instances) != 1 {
 			t.Errorf("expected only the root instance, got %d", len(resp.Instances))
 		}
-		if id := resp.Instance.FeatureValues["next"].Value.GetInstanceId(); id == 0 {
+		if resp.Instance.FeatureValues["next"].Value.GetInstanceId() == 0 {
 			t.Error("expected the unexpanded child to stay a bare instance id")
 		}
 	case <-time.After(30 * time.Second):

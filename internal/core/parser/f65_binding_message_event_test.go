@@ -157,7 +157,7 @@ func TestF65Negative(t *testing.T) {
 			}()
 			sf := source.New(tt.name+".sysml", []byte(tt.src))
 			p := New(sf)
-			if root := p.ParseFile(); root == nil {
+			if p.ParseFile() == nil {
 				t.Fatal("ParseFile returned nil")
 			}
 			if len(p.Diagnostics) == 0 {
@@ -185,7 +185,7 @@ func TestF65Robustness(t *testing.T) {
 					}
 				}()
 				p := New(source.New("f65_robust.sysml", []byte(prefix)))
-				if root := p.ParseFile(); root == nil {
+				if p.ParseFile() == nil {
 					t.Fatalf("ParseFile returned nil for %q", prefix)
 				}
 			}()

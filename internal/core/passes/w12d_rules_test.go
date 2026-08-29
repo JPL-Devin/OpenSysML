@@ -108,7 +108,7 @@ func TestW12DOnlyOneMultiplicity(t *testing.T) {
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "<t>.kerml", src)
-	if got := w8cCount(msgs, msgOnlyOneMultiplicity); got != 1 {
+	if w8cCount(msgs, msgOnlyOneMultiplicity) != 1 {
 		t.Errorf("want one %q, got %v", msgOnlyOneMultiplicity, msgs)
 	}
 }
@@ -121,7 +121,7 @@ func TestW12DOneMultiplicityIsLegal(t *testing.T) {
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "<t>.kerml", src)
-	if got := w8cCount(msgs, msgOnlyOneMultiplicity); got != 0 {
+	if w8cCount(msgs, msgOnlyOneMultiplicity) != 0 {
 		t.Errorf("want no %q, got %v", msgOnlyOneMultiplicity, msgs)
 	}
 }
@@ -142,7 +142,7 @@ func TestW12DDeclaredCrossFeature(t *testing.T) {
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "<t>.kerml", src)
-	if got := w8cCount(msgs, msgMustBeCrossFeature); got != 1 {
+	if w8cCount(msgs, msgMustBeCrossFeature) != 1 {
 		t.Errorf("want one %q, got %v", msgMustBeCrossFeature, msgs)
 	}
 }
@@ -158,7 +158,7 @@ func TestW12DCrossesAloneIsLegal(t *testing.T) {
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "<t>.kerml", src)
-	if got := w8cCount(msgs, msgMustBeCrossFeature); got != 0 {
+	if w8cCount(msgs, msgMustBeCrossFeature) != 0 {
 		t.Errorf("want no %q, got %v", msgMustBeCrossFeature, msgs)
 	}
 }

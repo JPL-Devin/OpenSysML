@@ -720,7 +720,7 @@ func inheritableMember(sym *symbols.Symbol) bool {
 // inheritanceMasked reports whether sym does not inherit found because one of
 // sym's own features redefines it.
 func (r *Resolver) inheritanceMasked(sym, found *symbols.Symbol) bool {
-	model, ok := r.model.(maskLookup)
+	model, ok := r.model.(maskChecker)
 	return ok && model.InheritanceMasked(sym, found)
 }
 
@@ -728,7 +728,7 @@ func (r *Resolver) inheritanceMasked(sym, found *symbols.Symbol) bool {
 // declName, being written in sym, sees it: its own redefinition still names its
 // target, and so does the inherited namesake it redefines.
 func (r *Resolver) inheritanceMaskedDeclaring(sym, found *symbols.Symbol, declName string) bool {
-	model, ok := r.model.(maskLookup)
+	model, ok := r.model.(maskChecker)
 	return ok && model.InheritanceMaskedDeclaring(sym, found, declName)
 }
 
@@ -813,7 +813,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 	}
 
 	var parents []*symbols.Symbol
-	if model, ok := r.model.(supertypeLookup); ok {
+	if model, ok := r.model.(supertypeProvider); ok {
 		parents = model.DirectSupertypes(scope.Owner())
 	} else {
 		parents = r.findSpecializationTargets(scope, ownerRels)

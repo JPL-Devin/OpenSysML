@@ -480,7 +480,7 @@ func TestEvaluateCalcUsageReportsItsOutputs(t *testing.T) {
 	}
 	want := map[string]int64{"a": 6, "b": 10}
 	for _, out := range resp.Outputs {
-		if got := out.Value.GetIntValue(); got != want[out.Name] {
+		if out.Value.GetIntValue() != want[out.Name] {
 			t.Errorf("output %s = %v, want %d", out.Name, out.Value, want[out.Name])
 		}
 	}

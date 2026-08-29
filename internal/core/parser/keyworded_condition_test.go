@@ -33,7 +33,7 @@ func TestKeywordedConditionIsRejected(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			p := New(source.New("t.sysml", []byte(c.src)))
-			if root := p.ParseFile(); root == nil {
+			if p.ParseFile() == nil {
 				t.Fatal("nil root")
 			}
 			if len(p.Diagnostics) == 0 {

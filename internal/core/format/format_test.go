@@ -111,7 +111,7 @@ func TestUseTabs(t *testing.T) {
 }
 
 func TestUnbalancedBracesDoNotPanic(t *testing.T) {
-	if got := format(t, "package P { part def Car; } }\n"); got == "" {
+	if format(t, "package P { part def Car; } }\n") == "" {
 		t.Fatal("empty output")
 	}
 }

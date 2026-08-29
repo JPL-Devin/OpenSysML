@@ -126,7 +126,7 @@ func newStateExecutorForOccurrence(
 	// Lower to StateGraph, in the scope the machine's body was written in, so
 	// that everything the graph carries is evaluated where it was declared.
 	// Endpoints come from the name-resolution tier, which reported on them already.
-	var endpoints lower.Endpoints
+	var endpoints lower.EndpointResolver
 	if ctx.resolver != nil {
 		endpoints = ctx.resolver
 	}

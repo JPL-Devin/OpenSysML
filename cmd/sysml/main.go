@@ -90,7 +90,7 @@ func writableFile(dir, name string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	if cerr := f.Close(); cerr != nil {
+	if f.Close() != nil {
 		return "", false
 	}
 	return path, true
@@ -483,7 +483,7 @@ func loadFiles(sess *repl.Session, files []string) (int, error) {
 
 // runNonInteractive loads the model and evaluates every expression asked for,
 // reporting the values on stdout and anything that stopped it on stderr.
-func runNonInteractive(files []string, exprs []string) int {
+func runNonInteractive(files, exprs []string) int {
 	sess := newSession()
 	status, err := loadFiles(sess, files)
 	if err != nil {

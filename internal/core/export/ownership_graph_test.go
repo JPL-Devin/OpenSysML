@@ -101,8 +101,8 @@ func TestMembersAreReachedThroughTheirMembership(t *testing.T) {
 			}
 		}
 	}
-	if type_ := graph.Type(rdf.OwningMembershipIRI("Outer::Inner")); type_ != rdf.SysML+"OwningMembership" {
-		t.Errorf("the membership is typed %q, want an OwningMembership", type_)
+	if typ := graph.Type(rdf.OwningMembershipIRI("Outer::Inner")); typ != rdf.SysML+"OwningMembership" {
+		t.Errorf("the membership is typed %q, want an OwningMembership", typ)
 	}
 }
 
@@ -113,8 +113,8 @@ func TestAFeatureIsOwnedThroughAFeatureMembership(t *testing.T) {
 	owner := rdf.ElementIRI("Outer::Inner::Vehicle")
 	feature := rdf.ElementIRI("Outer::Inner::Vehicle::mass")
 	membership := rdf.OwningMembershipIRI("Outer::Inner::Vehicle::mass")
-	if type_ := graph.Type(membership); type_ != rdf.SysML+"FeatureMembership" {
-		t.Errorf("the membership is typed %q, want a FeatureMembership", type_)
+	if typ := graph.Type(membership); typ != rdf.SysML+"FeatureMembership" {
+		t.Errorf("the membership is typed %q, want a FeatureMembership", typ)
 	}
 	for _, want := range []struct {
 		subject  rdf.Term

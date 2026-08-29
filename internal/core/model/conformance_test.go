@@ -50,11 +50,11 @@ func TestSetConformanceModeReanalyses(t *testing.T) {
 		t.Fatalf("default mode errored: %+v", ws.Diagnostics("a.sysml"))
 	}
 	ws.SetConformanceMode(conformance.ModeStrict)
-	if got := conformanceSeverities(ws, "a.sysml")[passes.SeverityError]; got == 0 {
+	if conformanceSeverities(ws, "a.sysml")[passes.SeverityError] == 0 {
 		t.Fatalf("after switching to strict: %+v", ws.Diagnostics("a.sysml"))
 	}
 	ws.SetConformanceMode(conformance.ModeDefault)
-	if got := conformanceSeverities(ws, "a.sysml")[passes.SeverityError]; got != 0 {
+	if conformanceSeverities(ws, "a.sysml")[passes.SeverityError] != 0 {
 		t.Fatalf("after switching back to default: %+v", ws.Diagnostics("a.sysml"))
 	}
 }
