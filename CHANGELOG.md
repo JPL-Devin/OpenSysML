@@ -4,6 +4,27 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### Fixed
+
+- **The semantic-layer demo declares its packages with `package`.** Its three `namespace`
+  declarations are KerML notation — the SysML grammar has no `namespace` production — so the pinned
+  pilot could not parse the file and the non-standard-notation pass warned on each. The file now
+  agrees on both sides, which moves the pilot differential baseline and the figures quoted from it.
+
+- **The header's Community Wiki link points at the wiki's landing page**, rather than at the wiki
+  root, which lands on whatever page GitHub considers first.
+
+### Project
+
+- **The SonarCloud bug and vulnerability backlog is cleared.** A sort compares by an explicit
+  code-unit comparator rather than an implicit collation, the Java client keeps its `Optional` and
+  queue returns, workflow permissions are scoped per job, the CI Python installs are pinned, and the
+  VS Code extension's webview ignores a message from any other origin. `sonar-project.properties`
+  states, with its reason, each rule whose subject in one file is a developer command's documented
+  behavior.
+
 ## 0.4.0 — 2026-08-28
 
 Release 0.4.0 is about what a model *writes*. An `assign` used to put any value into any feature —
