@@ -6,6 +6,16 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// Standard-library names the implicit-base tables state more than once.
+const (
+	partFQN         = "Parts::Part"
+	dataValueFQN    = "Base::DataValue"
+	occurrenceFQN   = "Occurrences::Occurrence"
+	renderingFQN    = "Views::Rendering"
+	concernCheckFQN = "Requirements::ConcernCheck"
+	linksFQN        = "Links::links"
+)
+
 // implicitUsageBases maps a usage kind to the qualified name of the standard
 // library definition that every usage of that kind is implicitly typed by
 // (SysML v2 §7: each usage specializes the base feature of its kind, which is
@@ -13,21 +23,21 @@ import (
 // type or specialization of its own gets this base, so members inherited from
 // it — `done` on a state, `startShot` on an action — resolve through it.
 var implicitUsageBases = map[ast.UsageKind]string{
-	ast.UsagePart:             "Parts::Part",
-	ast.UsageAttribute:        "Base::DataValue",
-	ast.UsageEnumeration:      "Base::DataValue",
+	ast.UsagePart:             partFQN,
+	ast.UsageAttribute:        dataValueFQN,
+	ast.UsageEnumeration:      dataValueFQN,
 	ast.UsageItem:             "Items::Item",
-	ast.UsageOccurrence:       "Occurrences::Occurrence",
+	ast.UsageOccurrence:       occurrenceFQN,
 	ast.UsageIndividual:       "Occurrences::Life",
 	ast.UsageMetadata:         "Metadata::MetadataItem",
 	ast.UsageView:             "Views::View",
 	ast.UsageViewpoint:        "Views::ViewpointCheck",
-	ast.UsageRendering:        "Views::Rendering",
-	ast.UsageViewRendering:    "Views::Rendering",
-	ast.UsageConcern:          "Requirements::ConcernCheck",
-	ast.UsageFramedConcern:    "Requirements::ConcernCheck",
-	ast.UsageActor:            "Parts::Part",
-	ast.UsageStakeholder:      "Parts::Part",
+	ast.UsageRendering:        renderingFQN,
+	ast.UsageViewRendering:    renderingFQN,
+	ast.UsageConcern:          concernCheckFQN,
+	ast.UsageFramedConcern:    concernCheckFQN,
+	ast.UsageActor:            partFQN,
+	ast.UsageStakeholder:      partFQN,
 	ast.UsageConnection:       "Connections::Connection",
 	ast.UsagePort:             "Ports::Port",
 	ast.UsageInterface:        "Interfaces::Interface",
@@ -53,18 +63,18 @@ var implicitUsageBases = map[ast.UsageKind]string{
 // Metaobjects::Metaobject (SysML v2 §7.27.2, [KerML, 9.2.17]), and Parts::Part
 // supplies `start` and `done` inside every `part def`.
 var implicitDefinitionBases = map[ast.DefinitionKind]string{
-	ast.DefPart:        "Parts::Part",
-	ast.DefAttribute:   "Base::DataValue",
-	ast.DefEnumeration: "Base::DataValue",
+	ast.DefPart:        partFQN,
+	ast.DefAttribute:   dataValueFQN,
+	ast.DefEnumeration: dataValueFQN,
 	ast.DefItem:        "Items::Item",
-	ast.DefOccurrence:  "Occurrences::Occurrence",
+	ast.DefOccurrence:  occurrenceFQN,
 	ast.DefIndividual:  "Occurrences::Life",
 	ast.DefMetaclass:   "Metaobjects::Metaobject",
 	ast.DefMetadata:    "Metadata::MetadataItem",
 	ast.DefView:        "Views::View",
 	ast.DefViewpoint:   "Views::ViewpointCheck",
-	ast.DefRendering:   "Views::Rendering",
-	ast.DefConcern:     "Requirements::ConcernCheck",
+	ast.DefRendering:   renderingFQN,
+	ast.DefConcern:     concernCheckFQN,
 	ast.DefConnection:  "Connections::Connection",
 	ast.DefFlow:        "Flows::Flow",
 	ast.DefPort:        "Ports::Port",
@@ -87,7 +97,7 @@ var implicitDefinitionBases = map[ast.DefinitionKind]string{
 
 var implicitKerMLBases = map[string]string{
 	"classifier":  "Base::Anything",
-	"class":       "Occurrences::Occurrence",
+	"class":       occurrenceFQN,
 	"struct":      "Objects::Object",
 	"assoc":       "Links::Link",
 	"association": "Links::Link",
@@ -96,7 +106,7 @@ var implicitKerMLBases = map[string]string{
 	"predicate":   "Performances::BooleanEvaluation",
 	"interaction": "Transfers::Transfer",
 	"metaclass":   "Metaobjects::Metaobject",
-	"datatype":    "Base::DataValue",
+	"datatype":    dataValueFQN,
 	"type":        "Base::Anything",
 }
 
@@ -109,9 +119,9 @@ var implicitKerMLFeatureBases = map[string]string{
 	"class":       "Occurrences::occurrences",
 	"struct":      "Objects::objects",
 	"datatype":    "Base::dataValues",
-	"assoc":       "Links::links",
-	"association": "Links::links",
-	"connector":   "Links::links",
+	"assoc":       linksFQN,
+	"association": linksFQN,
+	"connector":   linksFQN,
 	"binding":     "Links::selfLinks",
 	"bind":        "Links::selfLinks",
 	"succession":  "Occurrences::happensBeforeLinks",

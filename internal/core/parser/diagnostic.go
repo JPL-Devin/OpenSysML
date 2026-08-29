@@ -19,6 +19,20 @@ type Diagnostic struct {
 	Fixes []quickfix.Fix
 }
 
+// Recurring diagnostic messages, spelled once so every site that reports the
+// same syntax error words it the same way.
+const (
+	msgExpectedActionBrace  = "expected '}' after action expression"
+	msgExpectedReturnSemi   = "expected ';' after return parameter"
+	msgExpectedBodyClose    = "expected '}' to close body"
+	msgExpectedBraceOrSemi  = "expected '{' or ';'"
+	msgExpectedBodyMember   = "expected a body member"
+	msgExpectedCloseParen   = "expected ')'"
+	msgExpectedShortName    = "expected short name after '<'"
+	msgExpectedCloseAngle   = "expected '>'"
+	msgExpectedLocaleString = "expected locale string"
+)
+
 // Warning codes.
 const (
 	codeReservedKeywordName = "reserved-keyword-name"

@@ -23,6 +23,9 @@ import (
 // validators and corpora from.
 const PinPath = "scripts/pilot-pin.sh"
 
+// digestPrefix names the hash every digest this package writes was taken with.
+const digestPrefix = "sha256:"
+
 // Origin says who owns an input, which is what decides the action a mismatch
 // calls for: our own material moving is a movement to adjudicate, the pinned
 // reference moving underneath a baseline is a provisioning defect to investigate.
@@ -110,7 +113,7 @@ func DigestFile(path string) (string, error) {
 	if _, err := io.Copy(sum, file); err != nil {
 		return "", err
 	}
-	return "sha256:" + hex.EncodeToString(sum.Sum(nil)), nil
+	return digestPrefix + hex.EncodeToString(sum.Sum(nil)), nil
 }
 
 // DigestFiles is the digest of a named set of files: a hash over each path and
@@ -127,7 +130,7 @@ func DigestFiles(dir string, rel []string) (string, error) {
 		}
 		fmt.Fprintf(sum, "%s\x00%s\n", name, digest)
 	}
-	return "sha256:" + hex.EncodeToString(sum.Sum(nil)), nil
+	return digestPrefix + hex.EncodeToString(sum.Sum(nil)), nil
 }
 
 // DigestStrings is the digest of a list of already-canonical strings, used for
@@ -137,7 +140,7 @@ func DigestStrings(lines []string) string {
 	for _, line := range lines {
 		fmt.Fprintf(sum, "%s\n", line)
 	}
-	return "sha256:" + hex.EncodeToString(sum.Sum(nil))
+	return digestPrefix + hex.EncodeToString(sum.Sum(nil))
 }
 
 // bridges are the reference-validator sources this repository compiles against
@@ -207,6 +210,12 @@ type Mismatch struct {
 	Cause    Cause
 }
 
+// toolField names one field of a recorded tool, as a mismatch reports it.
+func toolField(name, field string) string { return "tools[" + name + "]" + field }
+
+// inputField names one field of a recorded input, as a mismatch reports it.
+func inputField(name, field string) string { return "inputs[" + name + "]" + field }
+
 // Compare reports how a committed record differs from the repository's current
 // one. An input the current record does not state — a corpus absent from this
 // checkout — is not compared: the point of this check is to run without them.
@@ -228,12 +237,12 @@ func Compare(recorded, current Record) []Mismatch {
 	for _, tool := range current.Tools {
 		was, ok := recordedTools[tool.Name]
 		if !ok {
-			out = append(out, Mismatch{Field: "tools[" + tool.Name + "]", Recorded: "not recorded", Current: "present", Cause: CauseOurs})
+			out = append(out, Mismatch{Field: toolField(tool.Name, ""), Recorded: "not recorded", Current: "present", Cause: CauseOurs})
 			continue
 		}
-		add("tools["+tool.Name+"].source", was.Source, tool.Source, CauseOurs)
-		add("tools["+tool.Name+"].sourceDigest", was.SourceDigest, tool.SourceDigest, CauseOurs)
-		add("tools["+tool.Name+"].release", was.Release, tool.Release, CausePin)
+		add(toolField(tool.Name, ".source"), was.Source, tool.Source, CauseOurs)
+		add(toolField(tool.Name, ".sourceDigest"), was.SourceDigest, tool.SourceDigest, CauseOurs)
+		add(toolField(tool.Name, ".release"), was.Release, tool.Release, CausePin)
 	}
 
 	recordedInputs := make(map[string]Input, len(recorded.Inputs))
@@ -247,13 +256,13 @@ func Compare(recorded, current Record) []Mismatch {
 		}
 		was, ok := recordedInputs[input.Name]
 		if !ok {
-			out = append(out, Mismatch{Field: "inputs[" + input.Name + "]", Recorded: "not recorded", Current: input.Dir, Cause: cause})
+			out = append(out, Mismatch{Field: inputField(input.Name, ""), Recorded: "not recorded", Current: input.Dir, Cause: cause})
 			continue
 		}
-		add("inputs["+input.Name+"].dir", was.Dir, input.Dir, cause)
-		add("inputs["+input.Name+"].origin", was.Origin, input.Origin, cause)
-		add("inputs["+input.Name+"].files", fmt.Sprint(was.Files), fmt.Sprint(input.Files), cause)
-		add("inputs["+input.Name+"].digest", was.Digest, input.Digest, cause)
+		add(inputField(input.Name, ".dir"), was.Dir, input.Dir, cause)
+		add(inputField(input.Name, ".origin"), was.Origin, input.Origin, cause)
+		add(inputField(input.Name, ".files"), fmt.Sprint(was.Files), fmt.Sprint(input.Files), cause)
+		add(inputField(input.Name, ".digest"), was.Digest, input.Digest, cause)
 	}
 	return out
 }

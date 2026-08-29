@@ -16,7 +16,7 @@ func (MetadataTypePass) Level() PassLevel { return LevelType }
 
 // Its subject is one annotation, and the reference that subject rests on is the
 // metaclass it names: a failure on another element does not hide it.
-func (MetadataTypePass) ElementScoped() {}
+func (MetadataTypePass) ElementScoped() { /* marker: per-element gating */ }
 
 func (MetadataTypePass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	rootScope := ctx.Index.DocumentRoot(name)

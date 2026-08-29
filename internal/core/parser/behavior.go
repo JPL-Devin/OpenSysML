@@ -197,7 +197,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 
 		// Ensure progress
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
-			p.error(p.peek().Span, "expected a body member")
+			p.error(p.peek().Span, msgExpectedBodyMember)
 			p.advance()
 		}
 	}
@@ -703,11 +703,11 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 		// Inline mode, no name: action { expr };
 		p.advance() // consume '{'
 		expression = p.ParseExpression()
-		_, ok := p.expect(lexer.RBrace, "expected '}' after action expression")
+		_, ok := p.expect(lexer.RBrace, msgExpectedActionBrace)
 		if !ok {
 			return &ast.ErrorNode{
 				NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
-				Message:  "expected '}' after action expression",
+				Message:  msgExpectedActionBrace,
 			}
 		}
 	} else if p.at(lexer.Identifier) {
@@ -724,11 +724,11 @@ func (p *Parser) parseActionExecutionNode(tok lexer.Token) ast.Node {
 			p.advance()
 			p.advance() // consume '{'
 			expression = p.ParseExpression()
-			_, ok := p.expect(lexer.RBrace, "expected '}' after action expression")
+			_, ok := p.expect(lexer.RBrace, msgExpectedActionBrace)
 			if !ok {
 				return &ast.ErrorNode{
 					NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
-					Message:  "expected '}' after action expression",
+					Message:  msgExpectedActionBrace,
 				}
 			}
 		} else if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.ColonColon || nextTok.Kind == lexer.Keyword {
@@ -1678,10 +1678,10 @@ func (p *Parser) parseResultMember() ast.Node {
 			bodyMembers, hasBody := p.parseDefUsageBody()
 			u.Members = bodyMembers
 			if !hasBody {
-				p.expect(lexer.Semicolon, "expected ';' after return parameter")
+				p.expect(lexer.Semicolon, msgExpectedReturnSemi)
 			}
 		} else {
-			p.expect(lexer.Semicolon, "expected ';' after return parameter")
+			p.expect(lexer.Semicolon, msgExpectedReturnSemi)
 		}
 
 		u.NodeSpan = p.spanFrom(start)
@@ -1713,10 +1713,10 @@ func (p *Parser) parseResultMember() ast.Node {
 			bodyMembers, hasBody := p.parseDefUsageBody()
 			u.Members = bodyMembers
 			if !hasBody {
-				p.expect(lexer.Semicolon, "expected ';' after return parameter")
+				p.expect(lexer.Semicolon, msgExpectedReturnSemi)
 			}
 		} else {
-			p.expect(lexer.Semicolon, "expected ';' after return parameter")
+			p.expect(lexer.Semicolon, msgExpectedReturnSemi)
 		}
 		u.NodeSpan = p.spanFrom(start)
 		return u

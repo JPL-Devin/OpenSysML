@@ -192,9 +192,9 @@ func (p *Parser) parseIdentificationStopping(stop ...string) ast.Identification 
 			id.ShortName = seg.Text
 			id.ShortNameSpan = seg.Span
 		} else {
-			p.error(p.peek().Span, "expected short name after '<'")
+			p.error(p.peek().Span, msgExpectedShortName)
 		}
-		p.expect(lexer.Gt, "expected '>'")
+		p.expect(lexer.Gt, msgExpectedCloseAngle)
 	}
 	// Parse name, but exclude keywords that have special syntax meaning in declaration context
 	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first"/"do" for succession, "of" for flow payload)
@@ -243,9 +243,9 @@ func (p *Parser) parseAnnotationIdentification() ast.Identification {
 		id.ShortName = seg.Text
 		id.ShortNameSpan = seg.Span
 	} else {
-		p.error(p.peek().Span, "expected short name after '<'")
+		p.error(p.peek().Span, msgExpectedShortName)
 	}
-	p.expect(lexer.Gt, "expected '>'")
+	p.expect(lexer.Gt, msgExpectedCloseAngle)
 	p.peek() // force any trailing comment into the pending body
 	if p.pendingCommentAfter(ltOff) {
 		return id
@@ -267,9 +267,9 @@ func (p *Parser) parseRepresentationIdentification() ast.Identification {
 			id.ShortName = seg.Text
 			id.ShortNameSpan = seg.Span
 		} else {
-			p.error(p.peek().Span, "expected short name after '<'")
+			p.error(p.peek().Span, msgExpectedShortName)
 		}
-		p.expect(lexer.Gt, "expected '>'")
+		p.expect(lexer.Gt, msgExpectedCloseAngle)
 	}
 	if p.atName() && !p.atKeyword("language") {
 		if seg, ok := p.parseNameSegmentRelaxed(); ok {
@@ -436,7 +436,7 @@ func (p *Parser) parseNamespaceBody() ([]ast.Node, bool) {
 	if p.accept2(lexer.Semicolon) {
 		return nil, false
 	}
-	if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); !ok {
+	if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); !ok {
 		return nil, false
 	}
 	// A package/namespace body has its own notation; it never inherits the
@@ -588,7 +588,7 @@ func (p *Parser) parseComment(start int) ast.Node {
 		c.About = p.parseQualifiedNameList()
 	}
 	if p.acceptKeyword("locale") {
-		if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
+		if tok, ok := p.expect(lexer.String, msgExpectedLocaleString); ok {
 			c.Locale = p.src.Text(tok.Span)
 		}
 	}
@@ -602,7 +602,7 @@ func (p *Parser) parseComment(start int) ast.Node {
 func (p *Parser) parseAnonymousLocaleComment(start int) ast.Node {
 	p.advance() // 'locale'
 	c := &ast.Comment{}
-	if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
+	if tok, ok := p.expect(lexer.String, msgExpectedLocaleString); ok {
 		c.Locale = p.src.Text(tok.Span)
 	}
 	c.BodySpan = p.expectCommentBody(start)
@@ -620,7 +620,7 @@ func (p *Parser) parseDocumentation(start int) ast.Node {
 		d.Ident = p.parseAnnotationIdentification()
 	}
 	if p.acceptKeyword("locale") {
-		if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
+		if tok, ok := p.expect(lexer.String, msgExpectedLocaleString); ok {
 			d.Locale = p.src.Text(tok.Span)
 		}
 	}

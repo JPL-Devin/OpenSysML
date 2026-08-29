@@ -893,7 +893,7 @@ func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Eve
 
 	callEvent, ok := trans.Trigger.(*ast.CallEvent)
 	if !ok || len(callEvent.Parameters) == 0 {
-		return func() {}, nil
+		return func() { /* nothing was bound */ }, nil
 	}
 	unbind := e.restoreData(callEvent.Parameters)
 	call, ok := event.Payload.(Call)
@@ -917,7 +917,7 @@ func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Eve
 // transition's guard and effect to read, and returns the function unbinding it.
 func (e *StateExecutor) bindAcceptPayload(acceptEvent *ast.AcceptEvent, event *Event) (func(), error) {
 	if acceptEvent.Payload == nil || acceptEvent.Payload.Ident.Name == "" {
-		return func() {}, nil
+		return func() { /* nothing was bound */ }, nil
 	}
 	name := ast.NameSegment{Text: acceptEvent.Payload.Ident.Name}
 	unbind := e.restoreData([]ast.NameSegment{name})

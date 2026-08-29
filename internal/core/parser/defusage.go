@@ -325,6 +325,9 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 // is matched contextually like `point` and names a feature everywhere else.
 const varPrefixWord = "var"
 
+// useCaseKind is the declaration kind a use case definition or usage carries.
+const useCaseKind = "use case"
+
 // atVarWord reports whether the cursor is at the word `var`.
 func (p *Parser) atVarWord() bool {
 	t := p.peek()
@@ -940,9 +943,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance() // 'case'
 		if p.atKeyword("def") {
 			p.advance() // 'def'
-			return applyPrefixes(p.parseDefinition(start, ast.DefUseCase, "use case", mods, false, true))
+			return applyPrefixes(p.parseDefinition(start, ast.DefUseCase, useCaseKind, mods, false, true))
 		}
-		return applyPrefixes(p.parseUsage(start, ast.UsageUseCase, "use case", mods, false))
+		return applyPrefixes(p.parseUsage(start, ast.UsageUseCase, useCaseKind, mods, false))
 	}
 
 	t := p.peek()
@@ -1044,7 +1047,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		if kw == "include" && p.atUseCase() {
 			p.advance() // consume 'use'
 			p.advance() // consume 'case'
-			u := p.parseUsage(start, ast.UsageUseCase, "use case", mods, isAll)
+			u := p.parseUsage(start, ast.UsageUseCase, useCaseKind, mods, isAll)
 			if u != nil {
 				// Add includes relationship to first typing target
 				// Actually, include use case <name> : Type means: create use case usage <name> typed by Type, with includes semantics
@@ -1146,7 +1149,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 						members = append(members, m)
 					}
 				}
-				p.expect(lexer.RBrace, "expected '}' to close body")
+				p.expect(lexer.RBrace, msgExpectedBodyClose)
 				u.Members = members
 				u.HasBody = true
 			}
@@ -1202,7 +1205,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			if kindPrefixKeywords[kw] {
 				mods.prefixKeyword = kw
 			}
-			return applyPrefixes(p.parseUsage(start, ast.UsageUseCase, "use case", mods, isAll))
+			return applyPrefixes(p.parseUsage(start, ast.UsageUseCase, useCaseKind, mods, isAll))
 		}
 
 		kindKeyword := kw
@@ -1343,7 +1346,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		// Occurrence defs support temporal ordering of messages/events (interactions)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseActionBodyMixed()
 			hasBody = true
 		}
@@ -1351,7 +1354,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		// Calculation def bodies: mixed (parameters + return statements)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseCalcBody()
 			hasBody = true
 		}
@@ -1359,7 +1362,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		// Constraint def bodies: always use parseConstraintBody (handles assert/assume/bare expressions)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseConstraintBody()
 			hasBody = true
 		}
@@ -1371,7 +1374,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		// (SysML v2 §7.19), so all three carry require/assume/subject/actor.
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseRequirementBody()
 			hasBody = true
 		}
@@ -1392,7 +1395,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		}
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseStateBody()
 			hasBody = true
 		}
@@ -1401,7 +1404,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		// CalculationBodyPart): `vehicle.mass` as the last member.
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseCaseBody()
 			hasBody = true
 		}
@@ -1410,7 +1413,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		// declaration are both optional (SysML.xtext EnumeratedValue): `= 60.0;`.
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseEnumBody()
 			hasBody = true
 		}
@@ -1745,7 +1748,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// carries requirement members.
 		if p.accept2(lexer.Semicolon) {
 			u.HasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			leave := p.pushBodyContext(usageBodyContext(kind))
 			u.Members = p.parseRequirementBody()
 			leave()
@@ -2026,7 +2029,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// Calculation usage bodies: mixed (parameters + return statements)
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseCalcBody()
 			hasBody = true
 		}
@@ -2035,7 +2038,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// Lookahead: if body starts with 'in' or 'return' → calcBody, otherwise → constraint-style expression
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			// Peek at first token in body
 			firstTok := p.peek()
 			if firstTok.Kind == lexer.Keyword && (firstTok.KeywordID == "in" || firstTok.KeywordID == "return") {
@@ -2077,7 +2080,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 			hasBody = true
 		} else {
-			p.expect(lexer.LBrace, "expected '{' or ';'")
+			p.expect(lexer.LBrace, msgExpectedBraceOrSemi)
 		}
 	case ast.UsageRequirement, ast.UsageConcern, ast.UsageViewpoint, ast.UsageFramedConcern, ast.UsageObjective:
 		// Requirement bodies: { subject/assume/require/actor ... }. A concern
@@ -2088,7 +2091,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// too (SysML.xtext ObjectiveRequirementUsage).
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseRequirementBody()
 			hasBody = true
 		}
@@ -2097,7 +2100,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// case bodies may end in a ResultExpressionMember (SysML.xtext CalculationBodyPart).
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseCaseBody()
 			hasBody = true
 		}
@@ -2116,7 +2119,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+		} else if _, ok := p.expect(lexer.LBrace, msgExpectedBraceOrSemi); ok {
 			members = p.parseStateBody()
 			hasBody = true
 		}
@@ -2180,7 +2183,7 @@ func (p *Parser) parseDefUsageBodyMembers() []ast.Node {
 			p.advance()
 		}
 	}
-	p.expect(lexer.RBrace, "expected '}' to close body")
+	p.expect(lexer.RBrace, msgExpectedBodyClose)
 	return body.finish()
 }
 
@@ -2213,7 +2216,7 @@ func (p *Parser) parseCaseBody() []ast.Node {
 			p.advance()
 		}
 	}
-	p.expect(lexer.RBrace, "expected '}' to close body")
+	p.expect(lexer.RBrace, msgExpectedBodyClose)
 	return body.finish()
 }
 
@@ -2291,7 +2294,7 @@ func (p *Parser) parseEnumBody() []ast.Node {
 			p.advance()
 		}
 	}
-	p.expect(lexer.RBrace, "expected '}' to close body")
+	p.expect(lexer.RBrace, msgExpectedBodyClose)
 	return body.finish()
 }
 
@@ -3101,7 +3104,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		p.advance() // consume the prefix keyword
 		inner := p.parseDeclaration(start)
 		if inner == nil {
-			en := p.errorNodeSkip(start, "expected a body member")
+			en := p.errorNodeSkip(start, msgExpectedBodyMember)
 			en.SetLeadingTrivia(trivia)
 			return en
 		}
@@ -3139,7 +3142,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 					d.Ident = id
 				}
 				if inner == nil {
-					en := p.errorNodeSkip(start, "expected a body member")
+					en := p.errorNodeSkip(start, msgExpectedBodyMember)
 					en.SetLeadingTrivia(trivia)
 					return en
 				}
@@ -3168,7 +3171,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 // feature specialization stands in place of one (SysML.xtext
 // SubclassificationPart, TypeRelationshipPart, FeatureRelationshipPart).
 func (p *Parser) noBodyMemberMessage() string {
-	const base = "expected a body member"
+	const base = msgExpectedBodyMember
 	t := p.peek()
 	if t.Kind != lexer.Keyword {
 		return base
