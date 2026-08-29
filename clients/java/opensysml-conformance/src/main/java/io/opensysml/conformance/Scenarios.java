@@ -22,21 +22,28 @@ import java.util.stream.Stream;
 /** Reads the scenario files, in file then declaration order. */
 final class Scenarios {
 
+  private static final String EXPECT = "expect";
+  private static final String EXPECT_WITHOUT_CAPABILITY = "expect_without_capability";
+  private static final String MODEL = "model";
+  private static final String REQUEST = "request";
+  private static final String RESPONSE = "response";
+  private static final String STRICT_CONFORMANCE = "strict_conformance";
+
   private static final Set<String> SCENARIO_MEMBERS =
       Set.of(
           "id",
           "description",
           "rpc",
           "requires_capabilities",
-          "expect_without_capability",
-          "model",
-          "request",
-          "expect");
+          EXPECT_WITHOUT_CAPABILITY,
+          MODEL,
+          REQUEST,
+          EXPECT);
   private static final Set<String> EXPECT_MEMBERS =
       Set.of(
           "status",
           "status_message_contains",
-          "response",
+          RESPONSE,
           "contains",
           "contains_all",
           "non_empty",
@@ -44,7 +51,7 @@ final class Scenarios {
           "counts",
           "min_counts");
   private static final Set<String> MODEL_MEMBERS =
-      Set.of("fixture", "language", "strict_conformance");
+      Set.of("fixture", "language", STRICT_CONFORMANCE);
 
   private Scenarios() {}
 
@@ -106,12 +113,14 @@ final class Scenarios {
         text(object, "description"),
         rpc,
         strings(object.get("requires_capabilities")),
-        object.has("expect_without_capability")
-            ? Optional.of(expect(object.getAsJsonObject("expect_without_capability"), file))
+        object.has(EXPECT_WITHOUT_CAPABILITY)
+            ? Optional.of(expect(object.getAsJsonObject(EXPECT_WITHOUT_CAPABILITY), file))
             : Optional.empty(),
-        object.has("model") ? Optional.of(fixture(object.getAsJsonObject("model"), file)) : Optional.empty(),
-        object.has("request") ? object.getAsJsonObject("request") : new JsonObject(),
-        object.has("expect") ? expect(object.getAsJsonObject("expect"), file) : empty(),
+        object.has(MODEL)
+            ? Optional.of(fixture(object.getAsJsonObject(MODEL), file))
+            : Optional.empty(),
+        object.has(REQUEST) ? object.getAsJsonObject(REQUEST) : new JsonObject(),
+        object.has(EXPECT) ? expect(object.getAsJsonObject(EXPECT), file) : empty(),
         file.toString());
   }
 
@@ -120,7 +129,7 @@ final class Scenarios {
     return new Scenario.Fixture(
         text(model, "fixture"),
         text(model, "language"),
-        model.has("strict_conformance") && model.get("strict_conformance").getAsBoolean());
+        model.has(STRICT_CONFORMANCE) && model.get(STRICT_CONFORMANCE).getAsBoolean());
   }
 
   private static Scenario.Expect expect(JsonObject object, Path file) {
@@ -128,7 +137,7 @@ final class Scenarios {
     return new Scenario.Expect(
         text(object, "status"),
         text(object, "status_message_contains"),
-        object.has("response") ? Optional.of(object.getAsJsonObject("response")) : Optional.empty(),
+        object.has(RESPONSE) ? Optional.of(object.getAsJsonObject(RESPONSE)) : Optional.empty(),
         textMap(object.get("contains")),
         stringsMap(object.get("contains_all")),
         strings(object.get("non_empty")),

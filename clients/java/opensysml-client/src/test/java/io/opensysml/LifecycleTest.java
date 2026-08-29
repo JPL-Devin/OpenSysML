@@ -15,9 +15,11 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -168,13 +170,18 @@ class LifecycleTest {
   }
 
   private static boolean waitForExit(long pid) throws InterruptedException {
-    for (int attempt = 0; attempt < 100; attempt++) {
-      if (ProcessHandle.of(pid).filter(ProcessHandle::isAlive).isEmpty()) {
-        return true;
-      }
-      Thread.sleep(100);
+    ProcessHandle process = ProcessHandle.of(pid).filter(ProcessHandle::isAlive).orElse(null);
+    if (process == null) {
+      return true;
     }
-    return false;
+    try {
+      process.onExit().get(10, TimeUnit.SECONDS);
+      return true;
+    } catch (TimeoutException e) {
+      return !process.isAlive();
+    } catch (ExecutionException e) {
+      throw new AssertionError("waiting for process " + pid, e);
+    }
   }
 
   private static List<String> nonDaemonClientThreads() {
