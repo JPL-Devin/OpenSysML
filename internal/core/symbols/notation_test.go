@@ -41,7 +41,7 @@ func TestNotationKeepsTheWrittenKeywords(t *testing.T) {
 		"metaclass M; behavior def BD; specialization Spec subtype C :> S; }"
 	for name, want := range map[string]string{
 		"C": "class", "D": "classifier", "S": "struct", "T": "datatype", "f": "feature",
-		"M": "metaclass", "BD": "behavior def", "Spec": "specialization subtype",
+		"M": "metaclass", "BD": "behavior def", "Spec": "subtype",
 	} {
 		if got := notationOf(t, "k.kerml", kerml, "K", name); got != want {
 			t.Errorf("notation of %s = %q, want %q", name, got, want)
