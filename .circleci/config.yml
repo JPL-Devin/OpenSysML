@@ -559,7 +559,7 @@ jobs:
           name: Run Rust tests
           command: |
             cd clients/rust
-            OPENSYSML_GRPC_BINARY="$PWD/../bin/sysml-grpc" \
+            OPENSYSML_GRPC_BINARY="$PWD/../../bin/sysml-grpc" \
             OPENSYSML_REQUIRE_SERVICE=1 \
               cargo test --workspace
 
