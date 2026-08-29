@@ -32,15 +32,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // The panel is the client of the server's render methods, and is registered
   // only once a server that serves them has started.
   diagrams = new DiagramPanels(context.extensionUri, output);
-  context.subscriptions.push(diagrams);
-
   context.subscriptions.push(
+    diagrams,
     vscode.commands.registerCommand("opensysml.restartServer", () => restart()),
-  );
-
-  // The server binary is resolved at start, so pointing the setting at a fresh
-  // build takes effect on the next restart rather than on reload.
-  context.subscriptions.push(
+    // The server binary is resolved at start, so pointing the setting at a fresh
+    // build takes effect on the next restart rather than on reload.
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("opensysml.server")) {
         void restart();
