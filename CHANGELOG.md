@@ -23,6 +23,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **The scan analyzes the Java client with types and the Python client against its own version
+  range.** It warned about missing `sonar.java.binaries`/`sonar.java.libraries` and fell back to a
+  syntactic analysis of the Java sources, and assumed every Python 3 version, which drops the rules
+  that depend on one. `java-test` now persists each module's compiled classes and its dependency
+  jars, `sonar-project.properties` names them, and `sonar.python.version` names the `>=3.10`
+  through 3.13 range `clients/python/pyproject.toml` declares.
+
 - **The behavioral-bodies demo's state machines can be run.** Each of its four machines declared
   substates but no transition out of its entry action, so `%state PhaseC::Running` (and the other
   three) failed with `no initial state found`; the Boolean features its guards and triggers read had

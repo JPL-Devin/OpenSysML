@@ -383,14 +383,25 @@ jobs:
           at: .
 
       # Every coverage report the scan reads is expected at the path named in
-      # sonar-project.properties, relative to the repo root.
+      # sonar-project.properties, relative to the repo root. The Java classes and
+      # jars are named there too: absent, the sensor only warns, so check here.
       - run:
-          name: Show the coverage reports the scan reads
+          name: Show the reports and Java binaries the scan reads
           command: |
             ls -l coverage.txt coverage-python.xml coverage-node.lcov \
               clients/java/opensysml-client/target/site/jacoco/jacoco.xml \
               clients/java/opensysml-conformance/target/site/jacoco/jacoco.xml
             head -n 3 coverage.txt
+            for module in opensysml-client opensysml-conformance; do
+              for dir in classes test-classes dependency; do
+                path="clients/java/$module/target/$dir"
+                if [ -z "$(ls -A "$path" 2>/dev/null)" ]; then
+                  echo "$path is empty or missing; java-test must persist it."
+                  exit 1
+                fi
+                echo "$path: $(find "$path" -type f | wc -l) file(s)"
+              done
+            done
 
       # SonarCloud needs full history for blame and new-code detection, and a
       # blame that silently covers 0 files dates every issue to the import. Fail
@@ -650,12 +661,27 @@ jobs:
           command: |
             mvn -B -f clients/java/pom.xml install -Dopensysml.requireService=true
 
-      # JaCoCo writes these during `test`; the scan job reads them.
+      # The scan's Java sensor needs the dependency jars on a path it can read,
+      # and ~/.m2 is this job's cache, not the workspace.
+      - run:
+          name: Collect the dependency jars the scan reads
+          command: |
+            mvn -B -q -f clients/java/pom.xml dependency:copy-dependencies \
+              -DincludeScope=test -DoutputDirectory=target/dependency
+
+      # JaCoCo writes the reports during `test`, `install` writes the classes,
+      # and the step above writes the jars; the scan job reads all of them.
       - persist_to_workspace:
           root: .
           paths:
             - clients/java/opensysml-client/target/site/jacoco/jacoco.xml
             - clients/java/opensysml-conformance/target/site/jacoco/jacoco.xml
+            - clients/java/opensysml-client/target/classes
+            - clients/java/opensysml-conformance/target/classes
+            - clients/java/opensysml-client/target/test-classes
+            - clients/java/opensysml-conformance/target/test-classes
+            - clients/java/opensysml-client/target/dependency
+            - clients/java/opensysml-conformance/target/dependency
 
       - run:
           name: Run the conformance suite through the client

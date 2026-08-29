@@ -270,6 +270,16 @@ The Go profile is written with `-coverpkg=./...` so a package is credited for
 the code it exercises elsewhere; without it `internal/core/ast/dump.go`
 measures 21% though the parser's golden tests run 90% of it.
 
+`java-test` also persists each module's `target/classes`, `target/test-classes`
+and a `target/dependency` directory it fills with `dependency:copy-dependencies`
+(the Maven repository itself is that job's cache, not the workspace). The Java
+sensor resolves types from those, and without them it warns about missing
+`sonar.java.binaries`/`sonar.java.libraries` and degrades to a syntactic
+analysis, so the `scan` job fails if any of the six directories is empty.
+`sonar.python.version` names the range `clients/python/pyproject.toml` declares,
+because unset the Python sensor assumes every Python 3 version and drops the
+rules that depend on one.
+
 On a forked PR the context is withheld, so `SONAR_TOKEN` is empty; the job
 halts successfully rather than failing every outside contribution. When the
 token is present, a failing scan fails the job.
