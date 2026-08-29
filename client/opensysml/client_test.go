@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Open-MBEE/OpenSysML/pkg/opensysml"
+	"github.com/Open-MBEE/OpenSysML/client/opensysml"
 )
 
 const vehicleSource = `package Demo {

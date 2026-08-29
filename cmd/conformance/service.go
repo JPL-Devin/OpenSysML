@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Open-MBEE/OpenSysML/pkg/opensysml"
+	"github.com/Open-MBEE/OpenSysML/client/opensysml"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"

@@ -6,14 +6,14 @@ import (
 	"fmt"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
-	"github.com/Open-MBEE/OpenSysML/pkg/opensysml"
+	"github.com/Open-MBEE/OpenSysML/client/opensysml"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// pkgClient runs scenarios through the public Go API, pkg/opensysml, so the
+// pkgClient runs scenarios through the public Go API, client/opensysml, so the
 // suite holds the API to the wire contract rather than holding raw stubs to
 // it. The "pkg" protocol answers in process; "pkg-connect" dials the started
 // service through opensysml.Dial.

@@ -1,6 +1,6 @@
 # opensysml — the public Go API
 
-`github.com/Open-MBEE/OpenSysML/pkg/opensysml` is the Go surface of OpenSysML:
+`github.com/Open-MBEE/OpenSysML/client/opensysml` is the Go surface of OpenSysML:
 parse SysML v2 models, look up symbols, evaluate expressions and instantiate
 parts, from Go code, with the engine that is already linked into your binary.
 

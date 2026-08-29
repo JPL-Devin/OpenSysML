@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Open-MBEE/OpenSysML/pkg/opensysml"
+	"github.com/Open-MBEE/OpenSysML/client/opensysml"
 )
 
 // Example parses a model, evaluates an expression against an object, and

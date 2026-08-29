@@ -149,7 +149,7 @@ sysml> %advance 30
 - **Interactive REPL** — Exploratory modeling environment: define models incrementally, evaluate expressions on-the-fly, instantiate parts, run calculations, inspect runtime state—like IPython/Jupyter for systems engineering.
 - **Constraint Solving** *(experimental)* — Beyond evaluating what holds of an object: an external SMT solver answers whether a constraint, requirement or satisfaction assertion *can* hold, which conditions conflict when it cannot, what values would satisfy it, which variants a model permits, and what optimizes an `analysis def`'s objectives. The solver is optional and discovered at runtime — [the REPL command reference](docs/reference/repl-commands.md) documents each command and [installing a solver](docs/guide/01-install.md#installing-a-solver-optional) how to get one.
 - **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent/AcceptEvent, sourceless transitions). See [spec compliance](docs/project/spec-compliance.md) for measured behavioral coverage.
-- **Embeddable Go API** — `pkg/opensysml` is the public Go surface: parse, look up symbols, evaluate expressions and instantiate parts from Go code, answered in process by the engine your binary already links — no port, no child process, no serialization round trip — or over the Connect protocol against a service someone else runs. See [pkg/opensysml/README.md](pkg/opensysml/README.md).
+- **Embeddable Go API** — `client/opensysml` is the public Go surface: parse, look up symbols, evaluate expressions and instantiate parts from Go code, answered in process by the engine your binary already links — no port, no child process, no serialization round trip — or over the Connect protocol against a service someone else runs. See [client/opensysml/README.md](client/opensysml/README.md).
 - **Python Client Library** — gRPC-based Python bindings for programmatic access: parse models, resolve symbols, evaluate expressions, instantiate parts, execute actions/state machines. Includes IPython display hooks for Jupyter notebooks and pandas DataFrame integration. Constraint, requirement, satisfaction and calc verdicts are available as RPCs (`verify_constraint`, `verify_requirement`, `verify_satisfaction`, `calc`).
 - **Node/TypeScript Client Library** — `@opensysml/client` for Node and the browser, over the Connect protocol with protobuf bodies: parse, evaluate, look up symbols and instantiate, with values as discriminated unions. No native addon and nothing downloaded at install time ([clients/node/README.md](clients/node/README.md)).
 - **Java Client Library** — `io.github.open-mbee:opensysml-client` for a JVM host application it does not own, on the JDK's own `java.net.http.HttpClient`, so no gRPC, Netty or `tcnative` reaches the host ([clients/java/README.md](clients/java/README.md)).
@@ -193,7 +193,7 @@ Which client to pick, what the four newer ones cover, and what they deliberately
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename, semantic tokens (full + range), code actions (quick fixes) — semantic token deltas and signature help not implemented |
 | gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime, verification, conversion, edit and Query RPCs), served as gRPC, gRPC-Web and the Connect protocol on one port |
-| Public Go API (`pkg/opensysml`) | ✅ Complete for its v1 scope: parse, diagnostics, symbols, evaluation, instantiation and capability negotiation, answered in process or over Connect, with the edit API, conversion, verification, behaviour execution and Query out of scope ([pkg/opensysml/README.md](pkg/opensysml/README.md)) |
+| Public Go API (`client/opensysml`) | ✅ Complete for its v1 scope: parse, diagnostics, symbols, evaluation, instantiation and capability negotiation, answered in process or over Connect, with the edit API, conversion, verification, behaviour execution and Query out of scope ([client/opensysml/README.md](client/opensysml/README.md)) |
 | Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, constraint/requirement/satisfaction/calc verification, conversion, edits, Query, IPython hooks, DataFrame) |
 | Rust client library | 🚧 Blocking v1 client for parse, diagnostics, symbols, evaluation and instantiation; see the [Rust client README](clients/rust/README.md) |
 | Java client library | ✅ Complete for its v1 scope, and honest about the rest: connection lifecycle, parse/symbols/eval/instantiate and capability negotiation, with the edit API, conversion, verification, behaviour execution and Query out of scope. Connect protocol over the JDK's own HTTP client, so no gRPC or Netty reaches a host application ([clients/java/README.md](clients/java/README.md)) |
@@ -271,7 +271,7 @@ github.com/Open-MBEE/OpenSysML
 ├── internal/lsp/           # LSP protocol implementation
 ├── internal/grpc/          # gRPC service implementation
 ├── internal/repl/          # REPL loop implementation
-├── pkg/opensysml/          # The public Go API (in-process and remote)
+├── client/opensysml/       # The public Go API (in-process and remote)
 ├── clients/java/           # Java client (io.github.open-mbee:opensysml-client)
 ├── clients/node/           # Node/TypeScript client (@opensysml/client)
 ├── clients/python/         # Python client bindings (opensysml)
@@ -315,7 +315,7 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 - The Rust client is not published to crates.io yet: use a path or Git dependency, and see
   [clients/rust/README.md](clients/rust/README.md) and
   [docs/project/releasing.md](docs/project/releasing.md) for what a first publish needs
-- `pkg/opensysml`, the public Go API, needs no release of its own — it is part of this module,
+- `client/opensysml`, the public Go API, needs no release of its own — it is part of this module,
   so `go get github.com/Open-MBEE/OpenSysML@v0.3.0` is how a Go program pins it
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
