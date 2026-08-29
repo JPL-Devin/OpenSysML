@@ -9,13 +9,13 @@
       {
         "name": "pilot-sysml-validator",
         "source": "scripts/pilot-sysml-validator/ValidateSysML.java",
-        "sourceDigest": "sha256:8270fc4804a9ba21b82d996e6125fa29aa8c03062ae36fcdce28d2841020dda1",
+        "sourceDigest": "sha256:4c3b28e42973c0019ed71772ba538d84397dfd442931a59079b4952ba950a169",
         "release": "2026-07 (jupyter-sysml-kernel 0.61.0)"
       },
       {
         "name": "pilot-kerml-validator",
         "source": "scripts/pilot-kerml-validator/ValidateKerML.java",
-        "sourceDigest": "sha256:2876971d040f3d8846b00c878887044aeb957a342569d602ad8f79f884d75d96",
+        "sourceDigest": "sha256:b9557efb139d0e78ec13db1cf5f3b2511478e49adc02d1124e5dca5b26dcf970",
         "release": "2026-07 (jupyter-sysml-kernel 0.61.0)"
       }
     ],
@@ -70,7 +70,7 @@
         "digest": "sha256:b0153c55bbfcdacabab911725dc44e0e7f4d3a501a281b1f3f2a13cda19737c6"
       }
     ],
-    "recorded": "2026-08-28"
+    "recorded": "2026-08-29"
   },
   "totals": {
     "files": 357,
