@@ -1,6 +1,7 @@
 package io.opensysml;
 
 import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /** Opens a connection, reports the service's pid, and then waits to be killed. */
@@ -24,6 +25,6 @@ public final class OrphanSafetyChild {
     if (args.length > 1 && args[1].equals("halt")) {
       Runtime.getRuntime().halt(9);
     }
-    TimeUnit.MINUTES.sleep(10);
+    new CountDownLatch(1).await(10, TimeUnit.MINUTES);
   }
 }

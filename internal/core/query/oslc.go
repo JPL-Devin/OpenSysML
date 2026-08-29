@@ -9,6 +9,12 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
+// Query parameters this package names in more than one place.
+const (
+	paramSelect  = "oslc.select"
+	paramOrderBy = "oslc.orderBy"
+)
+
 // DefaultPrefixes are the prefixes available without an oslc.prefix binding.
 var DefaultPrefixes = map[string]string{
 	"sysml": rdf.SysML,
@@ -73,12 +79,12 @@ func ParseParameters(text string) (Query, error) {
 	if properties, present := values["oslc.properties"]; present && len(properties) > 0 && strings.TrimSpace(properties[0]) == "*" {
 		return Query{}, wildcardError("oslc.properties")
 	}
-	selectTerms, err := splitCommaStrict(values.Get("oslc.select"), "oslc.select")
+	selectTerms, err := splitCommaStrict(values.Get(paramSelect), paramSelect)
 	if err != nil {
 		return Query{}, err
 	}
 	q := Query{Select: selectTerms}
-	if order := values.Get("oslc.orderBy"); order != "" {
+	if order := values.Get(paramOrderBy); order != "" {
 		terms, err := parseOrder(order, prefixes)
 		if err != nil {
 			return Query{}, err
@@ -95,7 +101,7 @@ func ParseParameters(text string) (Query, error) {
 	}
 	for _, name := range q.Select {
 		if name == "*" {
-			return Query{}, wildcardError("oslc.select")
+			return Query{}, wildcardError(paramSelect)
 		}
 		if strings.ContainsAny(name, "{}") {
 			return Query{}, scopedError()
@@ -130,7 +136,7 @@ func parsePrefixes(text string, prefixes map[string]string) error {
 
 func parseOrder(text string, prefixes map[string]string) ([]OrderTerm, error) {
 	var out []OrderTerm
-	terms, err := splitCommaStrict(text, "oslc.orderBy")
+	terms, err := splitCommaStrict(text, paramOrderBy)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +153,7 @@ func parseOrder(text string, prefixes map[string]string) ([]OrderTerm, error) {
 			return nil, scopedError()
 		}
 		if raw == "*" {
-			return nil, wildcardError("oslc.orderBy")
+			return nil, wildcardError(paramOrderBy)
 		}
 		name, err := resolveProperty(raw, prefixes)
 		if err != nil {

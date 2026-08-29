@@ -157,7 +157,7 @@ func TestF62F63NoPanicOnTruncatedNodeBodies(t *testing.T) {
 					}
 				}()
 				p := New(source.New("truncated.sysml", []byte(prefix)))
-				if root := p.ParseFile(); root == nil {
+				if p.ParseFile() == nil {
 					t.Fatalf("nil tree for %q", prefix)
 				}
 			}()

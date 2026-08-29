@@ -18,6 +18,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
+// errPrefix names the tool in the messages it writes to stderr.
+const errPrefix = "sysml:"
+
 var (
 	// Version information - set via ldflags during build
 	Version   = "dev"
@@ -90,7 +93,7 @@ func writableFile(dir, name string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	if cerr := f.Close(); cerr != nil {
+	if f.Close() != nil {
 		return "", false
 	}
 	return path, true
@@ -283,7 +286,7 @@ func runCLI() int {
 
 	stopProfiling, err := startProfiling()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "sysml:", err)
+		fmt.Fprintln(os.Stderr, errPrefix, err)
 		return 2
 	}
 	defer stopProfiling()
@@ -372,7 +375,7 @@ func runCLI() int {
 	// version and converting a model evaluate nothing, so they are handled above.
 	budgets, err = runtime.BudgetsFromEnv()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "sysml:", err)
+		fmt.Fprintln(os.Stderr, errPrefix, err)
 		return 2
 	}
 
@@ -396,7 +399,7 @@ func newSession() *repl.Session {
 	sess := repl.NewSession()
 	if err := sess.SetBudgets(budgets); err != nil {
 		// Unreachable: budgets are validated in main before any session exists.
-		fmt.Fprintln(os.Stderr, "sysml:", err)
+		fmt.Fprintln(os.Stderr, errPrefix, err)
 		os.Exit(2)
 	}
 	switch {
@@ -483,7 +486,7 @@ func loadFiles(sess *repl.Session, files []string) (int, error) {
 
 // runNonInteractive loads the model and evaluates every expression asked for,
 // reporting the values on stdout and anything that stopped it on stderr.
-func runNonInteractive(files []string, exprs []string) int {
+func runNonInteractive(files, exprs []string) int {
 	sess := newSession()
 	status, err := loadFiles(sess, files)
 	if err != nil {

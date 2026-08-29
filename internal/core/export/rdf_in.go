@@ -14,6 +14,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 )
 
+// sysmlPrefix qualifies a SysML vocabulary property as a diagnostic names it.
+const sysmlPrefix = "sysml:"
+
 // annotationMetaclasses are the elements whose notation is a comment body,
 // which terminates the declaration by itself.
 var annotationMetaclasses = map[string]bool{
@@ -628,7 +631,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			return "", err
 		}
 		if len(targets) == 0 {
-			return "", d.missing(el, "sysml:"+relationshipProperty[ast.RelSubsets],
+			return "", d.missing(el, sysmlPrefix+relationshipProperty[ast.RelSubsets],
 				"a satisfy head names the requirement it satisfies")
 		}
 		words = append(words, strings.Join(targets, ", "))
@@ -805,7 +808,7 @@ func (d *decoder) importHead(el *element) (string, error) {
 	}
 	imported, ok := d.stringOf(el, rdf.SysML+pImportedNamespace)
 	if !ok {
-		return "", d.missing(el, "sysml:"+pImportedNamespace, "an import names the namespace it imports")
+		return "", d.missing(el, sysmlPrefix+pImportedNamespace, "an import names the namespace it imports")
 	}
 	imported = qualifiedNameText(imported)
 	switch {
@@ -828,14 +831,14 @@ func (d *decoder) aliasHead(el *element) (string, error) {
 	}
 	words = append(words, "alias")
 	words = append(words, d.identWords(el)...)
-	for_, err := d.referenceText(el, rdf.SysML+pAliasFor)
+	forName, err := d.referenceText(el, rdf.SysML+pAliasFor)
 	if err != nil {
 		return "", err
 	}
-	if for_ == "" {
-		return "", d.missing(el, "sysml:"+pAliasFor, "an alias names the element it stands for")
+	if forName == "" {
+		return "", d.missing(el, sysmlPrefix+pAliasFor, "an alias names the element it stands for")
 	}
-	words = append(words, "for", for_)
+	words = append(words, "for", forName)
 	return strings.Join(words, " "), nil
 }
 
@@ -856,10 +859,10 @@ func (d *decoder) dependencyHead(el *element) (string, error) {
 		return "", err
 	}
 	if len(clients) == 0 {
-		return "", d.missing(el, "sysml:"+pClient, "a dependency runs from at least one client")
+		return "", d.missing(el, sysmlPrefix+pClient, "a dependency runs from at least one client")
 	}
 	if len(suppliers) == 0 {
-		return "", d.missing(el, "sysml:"+pSupplier, "a dependency runs to at least one supplier")
+		return "", d.missing(el, sysmlPrefix+pSupplier, "a dependency runs to at least one supplier")
 	}
 	// `from` is what separates the clients from a name: without it, the first
 	// client would be read as the dependency's own name.
@@ -918,7 +921,7 @@ func (d *decoder) relationshipEndName(el *element, property string) (string, err
 		return "", err
 	}
 	if len(names) != 1 {
-		return "", d.missing(el, "sysml:"+property, "a relationship relates exactly one element at each end")
+		return "", d.missing(el, sysmlPrefix+property, "a relationship relates exactly one element at each end")
 	}
 	return names[0], nil
 }
@@ -953,7 +956,7 @@ func (d *decoder) representationHead(el *element) (string, error) {
 	words = append(words, d.identWords(el)...)
 	language, ok := d.stringOf(el, rdf.SysML+pLanguage)
 	if !ok {
-		return "", d.missing(el, "sysml:"+pLanguage, "a textual representation states the language it is written in")
+		return "", d.missing(el, sysmlPrefix+pLanguage, "a textual representation states the language it is written in")
 	}
 	body, _ := d.stringOf(el, rdf.SysML+pBody)
 	words = append(words, "language", strconv.Quote(language))

@@ -11,7 +11,7 @@ The full API surface, the generated typed classes and the measured latency are
 
 ```bash
 pip install opensysml             # from PyPI
-pip install -e python/          # or from a checkout, at the repository root
+pip install -e clients/python/          # or from a checkout, at the repository root
 ```
 
 Dependencies (`grpcio`, `protobuf>=7.35.1`, `filelock`, `psutil`) come with it.

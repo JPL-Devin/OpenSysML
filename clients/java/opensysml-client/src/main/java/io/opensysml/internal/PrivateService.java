@@ -177,23 +177,22 @@ public final class PrivateService {
     Thread thread =
         new Thread(
             () -> {
+              boolean reported = false;
               try (BufferedReader reader =
                   new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                 String line;
-                boolean first = true;
                 while ((line = reader.readLine()) != null) {
-                  record(line);
-                  if (first && firstLine != null) {
-                    firstLine.offer(line);
-                    first = false;
+                  recordLogLine(line);
+                  if (!reported && firstLine != null) {
+                    reported = firstLine.offer(line);
                   }
                 }
               } catch (IOException e) {
                 // The child's exit closes its streams; that is the end of the log, not a failure.
               } finally {
-                if (firstLine != null) {
-                  // End of stream without a line: unblock the caller so it reports the exit.
-                  firstLine.offer("");
+                // End of stream without a line: unblock the caller so it reports the exit.
+                if (!reported && firstLine != null && !firstLine.offer("")) {
+                  recordLogLine("could not report the end of " + threadName);
                 }
               }
             },
@@ -202,7 +201,7 @@ public final class PrivateService {
     thread.start();
   }
 
-  private void record(String line) {
+  private void recordLogLine(String line) {
     synchronized (log) {
       if (log.size() == LOG_LINES) {
         log.removeFirst();

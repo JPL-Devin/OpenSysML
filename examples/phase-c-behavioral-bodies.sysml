@@ -170,26 +170,32 @@ package PhaseC {
     // ==========================================
     
     state Running {
-        attribute lowBattery : Boolean;
+        attribute lowBattery : Boolean = false;
+        attribute timeout : Boolean = false;
+        attribute userInput : Boolean = false;
         
-        entry { action initialize; }
-        do { action processData; }
-        exit { action cleanup; }
+        entry action initialize;
+        do action processData;
+        exit action cleanup;
         
         state Active;
         state Idle;
         state Paused;
         
-        transition first Active when timeout then Idle;
-        transition first Idle when userInput then Active;
+        // A transition out of the entry action names the state the machine starts in.
+        transition initialize then Active;
+        transition first Active accept when timeout then Idle;
+        transition first Idle accept when userInput then Active;
         transition first Active if lowBattery then Paused;
     }
     
     state def ConnectionStateMachine {
-        attribute authSuccess : Boolean;
-        attribute authFailure : Boolean;
+        attribute authSuccess : Boolean = false;
+        attribute authFailure : Boolean = false;
+        attribute connectRequest : Boolean = false;
+        attribute closeRequest : Boolean = false;
         
-        entry { 
+        entry action establishSession {
             action openSocket;
             action authenticate;
         }
@@ -199,47 +205,49 @@ package PhaseC {
         state Connected;
         state Error;
         
-        transition first Disconnected when connectRequest then Connecting;
-        transition first Connecting if authSuccess do {
+        transition establishSession then Disconnected;
+        transition first Disconnected accept when connectRequest then Connecting;
+        transition first Connecting if authSuccess do action announce {
             action logConnection;
             action notifyListeners;
         } then Connected;
-        transition first Connecting if authFailure do {
+        transition first Connecting if authFailure do action reportFailure {
             action logError;
         } then Error;
-        transition first Connected when closeRequest do {
+        transition first Connected accept when closeRequest do action drain {
             action flushBuffers;
         } then Disconnected;
         
-        exit {
-            action closeSocket;
-        }
+        exit action closeSocket;
     }
     
     state VehicleOperating {
-        attribute targetSpeedReached : Boolean;
-        attribute speedZero : Boolean;
-        attribute emergencyDetected : Boolean;
+        attribute targetSpeedReached : Boolean = false;
+        attribute speedZero : Boolean = false;
+        attribute emergencyDetected : Boolean = false;
+        attribute gasPedalPressed : Boolean = false;
+        attribute brakePedalPressed : Boolean = false;
         
-        entry { action startEngine; }
+        entry action startEngine;
         
         state Idling;
         state Accelerating;
         state Cruising;
         state Braking;
         
-        transition first Idling when gasPedalPressed then Accelerating;
+        transition startEngine then Idling;
+        transition first Idling accept when gasPedalPressed then Accelerating;
         transition first Accelerating if targetSpeedReached then Cruising;
-        transition first Cruising when brakePedalPressed then Braking;
-        transition first Braking if speedZero do {
+        transition first Cruising accept when brakePedalPressed then Braking;
+        transition first Braking if speedZero do action handbrake {
             action engageHandbrake;
         } then Idling;
-        transition first Accelerating if emergencyDetected do {
+        transition first Accelerating if emergencyDetected do action emergencyResponse {
             action activateABS;
             action deployAirbags;
         } then Braking;
         
-        exit { action shutdownEngine; }
+        exit action shutdownEngine;
     }
     
     // ==========================================
@@ -263,27 +271,29 @@ package PhaseC {
     }
     
     state def AutopilotMode {
-        attribute allSystemsReady : Boolean;
-        attribute sensorFailure : Boolean;
-        attribute safeHandoff : Boolean;
+        attribute allSystemsReady : Boolean = false;
+        attribute sensorFailure : Boolean = false;
+        attribute safeHandoff : Boolean = false;
+        attribute driverOverride : Boolean = false;
         
-        entry { action validateSensors; }
+        entry action validateSensors;
         
         state Monitoring;
         state Engaged;
         state Disengaging;
         
-        transition first Monitoring if allSystemsReady do {
+        transition validateSensors then Monitoring;
+        transition first Monitoring if allSystemsReady do action engage {
             action notifyDriver;
             action recordEngagement;
         } then Engaged;
-        transition first Engaged when driverOverride then Disengaging;
-        transition first Engaged if sensorFailure do {
+        transition first Engaged accept when driverOverride then Disengaging;
+        transition first Engaged if sensorFailure do action reportFault {
             action alertDriver;
             action logIncident;
         } then Disengaging;
         transition first Disengaging if safeHandoff then Monitoring;
         
-        exit { action generateReport; }
+        exit action generateReport;
     }
 }

@@ -29,6 +29,17 @@ export const CAPABILITY_QUERY = "query";
 /** The `ApplyEdits` RPC. Not used by this version; see the README. */
 export const CAPABILITY_APPLY_EDITS = "apply_edits";
 
+/**
+ * Orders capability names by code unit, the order the service reports them in.
+ * Locale-aware collation ignores the underscores that separate their words.
+ */
+function byCodeUnit(a: string, b: string): number {
+  if (a < b) {
+    return -1;
+  }
+  return a > b ? 1 : 0;
+}
+
 /** Self-description of the service a connection talks to. */
 export class ServerInfo {
   /** Version the service reports. Informational only; empty when unanswered. */
@@ -60,7 +71,7 @@ export class ServerInfo {
     if (!this.answered) {
       return `${this.origin} (version unknown: too old to answer GetServerInfo, so it predates every capability)`;
     }
-    const reported = [...this.capabilities].sort().join(", ") || "none";
+    const reported = [...this.capabilities].sort(byCodeUnit).join(", ") || "none";
     const version = this.version === "" ? "unknown" : this.version;
     return `${this.origin} (version ${version}, capabilities: ${reported})`;
   }

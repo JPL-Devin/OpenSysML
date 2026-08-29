@@ -19,7 +19,7 @@
 /examples/pilot-corpora/
 
 # Python
-/src/  # Legacy Python layout shadow directory (superseded by python/)
+/src/  # Legacy Python layout shadow directory (superseded by clients/python/)
 __pycache__/
 *.py[cod]
 *$py.class
@@ -36,7 +36,7 @@ coverage.txt
 
 # Generated stubs for the upcoming clients (make proto-ts / proto-rust)
 /gen/
-/rust/target/
+/clients/rust/target/
 
 # Maven build output for the Java client
 /clients/java/**/target/

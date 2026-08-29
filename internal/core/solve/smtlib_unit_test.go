@@ -115,10 +115,10 @@ func TestWriteTermOperators(t *testing.T) {
 // widening a real or an integer literal needs no conversion term.
 func TestTermConstructorsFold(t *testing.T) {
 	b := VarTerm(&Var{Name: "b", Sort: Bool})
-	if got := Not(Not(b)); got != b {
+	if Not(Not(b)) != b {
 		t.Error("a double negation does not fold")
 	}
-	if got := And(b); got != b {
+	if And(b) != b {
 		t.Error("a one-term conjunction does not fold")
 	}
 	if got := And(); got.Op != OpBool || !got.Bool {
@@ -128,7 +128,7 @@ func TestTermConstructorsFold(t *testing.T) {
 		t.Error("an empty disjunction is not false")
 	}
 	real := RealTerm(big.NewRat(1, 2))
-	if got := ToReal(real); got != real {
+	if ToReal(real) != real {
 		t.Error("widening a real does not leave it alone")
 	}
 	if got := ToReal(IntTerm(3)); got.Op != OpReal || got.Real.Cmp(big.NewRat(3, 1)) != 0 {

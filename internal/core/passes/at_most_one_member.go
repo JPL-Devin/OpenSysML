@@ -12,6 +12,9 @@ const (
 	msgOnlyOneSubject   = "Only one subject is allowed."
 	msgOnlyOneObjective = "Only one objective is allowed."
 
+	// codeOnlyOneObjective classifies the diagnostic reporting a second objective.
+	codeOnlyOneObjective = "only-one-objective"
+
 	msgSubjectParameterPosition = "Subject must be first parameter."
 
 	// KerML 8.3.3.1.1: Type::multiplicity is single-valued, so a type states at
@@ -67,11 +70,11 @@ func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, member
 		}
 	}
 	if inherited == 0 {
-		cc.reportExtraMembers(local, msgOnlyOneObjective, "only-one-objective")
+		cc.reportExtraMembers(local, msgOnlyOneObjective, codeOnlyOneObjective)
 		return
 	}
 	if len(local) > 0 {
-		cc.reportEachMember(local, msgOnlyOneObjective, "only-one-objective")
+		cc.reportEachMember(local, msgOnlyOneObjective, codeOnlyOneObjective)
 		return
 	}
 	if inherited > 1 {
@@ -79,7 +82,7 @@ func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, member
 			Severity: SeverityError,
 			Span:     sym.Decl.Span(),
 			Message:  msgOnlyOneObjective,
-			Code:     "only-one-objective",
+			Code:     codeOnlyOneObjective,
 			Source:   "constraint",
 		})
 	}

@@ -199,7 +199,7 @@ func TestStepResumesFromBreakpoint(t *testing.T) {
 	if err := exec.Step(); err != nil {
 		t.Fatalf("Step: %v", err)
 	}
-	if got := exec.State(); got == StateSuspended {
+	if exec.State() == StateSuspended {
 		t.Error("Step() left the executor suspended")
 	}
 }

@@ -45,77 +45,48 @@ const (
 	DefBool
 )
 
+// definitionKindNames are the notations of the kinds, indexed by kind.
+var definitionKindNames = [...]string{
+	DefPart:             "part",
+	DefAttribute:        "attribute",
+	DefItem:             "item",
+	DefOccurrence:       "occurrence",
+	DefIndividual:       "individual",
+	DefMetaclass:        "metaclass",
+	DefMetadata:         "metadata",
+	DefEnumeration:      "enum",
+	DefView:             "view",
+	DefViewpoint:        "viewpoint",
+	DefRendering:        "rendering",
+	DefConcern:          "concern",
+	DefConnection:       "connection",
+	DefFlow:             "flow",
+	DefPort:             "port",
+	DefInterface:        "interface",
+	DefAllocation:       "allocation",
+	DefBinding:          "binding",
+	DefAction:           "action",
+	DefState:            "state",
+	DefCalc:             "calc",
+	DefConstraint:       "constraint",
+	DefRequirement:      "requirement",
+	DefCase:             "case",
+	DefAnalysisCase:     "analysis case",
+	DefVerificationCase: "verification case",
+	DefUseCase:          "use case",
+	DefBehavior:         "behavior",
+	DefAssoc:            "assoc",
+	DefStruct:           "struct",
+	DefClass:            "class",
+	DefPredicate:        "predicate",
+	DefBool:             "bool",
+}
+
 func (k DefinitionKind) String() string {
-	switch k {
-	case DefPart:
-		return "part"
-	case DefAttribute:
-		return "attribute"
-	case DefItem:
-		return "item"
-	case DefOccurrence:
-		return "occurrence"
-	case DefIndividual:
-		return "individual"
-	case DefMetaclass:
-		return "metaclass"
-	case DefMetadata:
-		return "metadata"
-	case DefEnumeration:
-		return "enum"
-	case DefView:
-		return "view"
-	case DefViewpoint:
-		return "viewpoint"
-	case DefRendering:
-		return "rendering"
-	case DefConcern:
-		return "concern"
-	case DefConnection:
-		return "connection"
-	case DefFlow:
-		return "flow"
-	case DefPort:
-		return "port"
-	case DefInterface:
-		return "interface"
-	case DefAllocation:
-		return "allocation"
-	case DefBinding:
-		return "binding"
-	case DefAction:
-		return "action"
-	case DefState:
-		return "state"
-	case DefCalc:
-		return "calc"
-	case DefConstraint:
-		return "constraint"
-	case DefRequirement:
-		return "requirement"
-	case DefCase:
-		return "case"
-	case DefAnalysisCase:
-		return "analysis case"
-	case DefVerificationCase:
-		return "verification case"
-	case DefUseCase:
-		return "use case"
-	case DefBehavior:
-		return "behavior"
-	case DefAssoc:
-		return "assoc"
-	case DefStruct:
-		return "struct"
-	case DefClass:
-		return "class"
-	case DefPredicate:
-		return "predicate"
-	case DefBool:
-		return "bool"
-	default:
+	if int(k) < 0 || int(k) >= len(definitionKindNames) {
 		return "unknown"
 	}
+	return definitionKindNames[k]
 }
 
 // PortionKind is the portion an occurrence usage declares of its type
@@ -210,101 +181,60 @@ const (
 	UsageBool
 )
 
+// usageKindNames are the notations of the kinds, indexed by kind.
+var usageKindNames = [...]string{
+	UsagePart:             "part",
+	UsageAttribute:        "attribute",
+	UsageItem:             "item",
+	UsageOccurrence:       "occurrence",
+	UsageIndividual:       "individual",
+	UsageMetadata:         "metadata",
+	UsageEnumeration:      "enum",
+	UsageView:             "view",
+	UsageViewpoint:        "viewpoint",
+	UsageRendering:        "rendering",
+	UsageViewRendering:    "render",
+	UsageConcern:          "concern",
+	UsageFramedConcern:    "frame",
+	UsageConnection:       "connection",
+	UsageConnector:        "connector",
+	UsageSuccession:       "succession",
+	UsageFlow:             "flow",
+	UsagePort:             "port",
+	UsageInterface:        "interface",
+	UsageInteraction:      "interaction",
+	UsageAllocation:       "allocation",
+	UsageBinding:          "binding",
+	UsageAction:           "action",
+	UsageState:            "state",
+	UsageTransition:       "transition",
+	UsageStep:             "step",
+	UsageCalc:             "calc",
+	UsageExpr:             "expr",
+	UsageConstraint:       "constraint",
+	UsageRequirement:      "requirement",
+	UsageSatisfy:          "satisfy",
+	UsageSubject:          "subject",
+	UsageActor:            "actor",
+	UsageStakeholder:      "stakeholder",
+	UsageObjective:        "objective",
+	UsageCase:             "case",
+	UsageAnalysisCase:     "analysis case",
+	UsageVerificationCase: "verification case",
+	UsageUseCase:          "use case",
+	UsageBehavior:         "behavior",
+	UsageAssoc:            "assoc",
+	UsageStruct:           "struct",
+	UsageClass:            "class",
+	UsagePredicate:        "predicate",
+	UsageBool:             "bool",
+}
+
 func (k UsageKind) String() string {
-	switch k {
-	case UsagePart:
-		return "part"
-	case UsageAttribute:
-		return "attribute"
-	case UsageItem:
-		return "item"
-	case UsageOccurrence:
-		return "occurrence"
-	case UsageIndividual:
-		return "individual"
-	case UsageMetadata:
-		return "metadata"
-	case UsageEnumeration:
-		return "enum"
-	case UsageView:
-		return "view"
-	case UsageViewpoint:
-		return "viewpoint"
-	case UsageRendering:
-		return "rendering"
-	case UsageViewRendering:
-		return "render"
-	case UsageConcern:
-		return "concern"
-	case UsageFramedConcern:
-		return "frame"
-	case UsageConnection:
-		return "connection"
-	case UsageConnector:
-		return "connector"
-	case UsageSuccession:
-		return "succession"
-	case UsageFlow:
-		return "flow"
-	case UsagePort:
-		return "port"
-	case UsageInterface:
-		return "interface"
-	case UsageInteraction:
-		return "interaction"
-	case UsageAllocation:
-		return "allocation"
-	case UsageBinding:
-		return "binding"
-	case UsageAction:
-		return "action"
-	case UsageState:
-		return "state"
-	case UsageTransition:
-		return "transition"
-	case UsageStep:
-		return "step"
-	case UsageCalc:
-		return "calc"
-	case UsageExpr:
-		return "expr"
-	case UsageConstraint:
-		return "constraint"
-	case UsageRequirement:
-		return "requirement"
-	case UsageSatisfy:
-		return "satisfy"
-	case UsageSubject:
-		return "subject"
-	case UsageActor:
-		return "actor"
-	case UsageStakeholder:
-		return "stakeholder"
-	case UsageObjective:
-		return "objective"
-	case UsageCase:
-		return "case"
-	case UsageAnalysisCase:
-		return "analysis case"
-	case UsageVerificationCase:
-		return "verification case"
-	case UsageUseCase:
-		return "use case"
-	case UsageBehavior:
-		return "behavior"
-	case UsageAssoc:
-		return "assoc"
-	case UsageStruct:
-		return "struct"
-	case UsageClass:
-		return "class"
-	case UsagePredicate:
-		return "predicate"
-	case UsageBool:
-		return "bool"
-	default:
+	if int(k) < 0 || int(k) >= len(usageKindNames) {
 		return "unknown"
 	}
+	return usageKindNames[k]
 }
 
 // RelationshipKind discriminates a specialization/typing edge at a

@@ -368,14 +368,20 @@ func (s *session) send(text string) error {
 	return nil
 }
 
+// The SMT-LIB commands whose replies this dialogue reads.
+const (
+	cmdCheckSat = "check-sat"
+	cmdGetValue = "get-value"
+)
+
 // verdict reads the answer to `check-sat`.
 func (s *session) verdict() (Status, error) {
-	reply, err := s.read("check-sat")
+	reply, err := s.read(cmdCheckSat)
 	if err != nil {
 		return StatusUnknown, err
 	}
 	if msg, ok := reply.isError(); ok {
-		return StatusUnknown, s.solver.processError("check-sat", "it rejected the script: "+msg, s.stderrText(), nil)
+		return StatusUnknown, s.solver.processError(cmdCheckSat, "it rejected the script: "+msg, s.stderrText(), nil)
 	}
 	switch reply.Atom {
 	case "sat":
@@ -385,7 +391,7 @@ func (s *session) verdict() (Status, error) {
 	case "unknown":
 		return StatusUnknown, nil
 	}
-	return StatusUnknown, s.solver.processError("check-sat",
+	return StatusUnknown, s.solver.processError(cmdCheckSat,
 		"it answered "+quoteReply(reply)+" rather than sat, unsat or unknown", s.stderrText(), nil)
 }
 
@@ -402,12 +408,12 @@ func (s *session) values(vars []*Var) ([]Assignment, error) {
 	if err := s.send("(get-value (" + strings.Join(names, " ") + "))\n"); err != nil {
 		return nil, err
 	}
-	reply, err := s.read("get-value")
+	reply, err := s.read(cmdGetValue)
 	if err != nil {
 		return nil, err
 	}
 	if msg, ok := reply.isError(); ok {
-		return nil, s.solver.processError("get-value", "it would not report a model: "+msg, s.stderrText(), nil)
+		return nil, s.solver.processError(cmdGetValue, "it would not report a model: "+msg, s.stderrText(), nil)
 	}
 	values, err := s.pairs(reply, vars)
 	if err != nil {
@@ -417,7 +423,7 @@ func (s *session) values(vars []*Var) ([]Assignment, error) {
 	for _, v := range vars {
 		value, ok := values[v.Name]
 		if !ok {
-			return nil, s.solver.processError("get-value",
+			return nil, s.solver.processError(cmdGetValue,
 				"its model left out the variable "+v.Name, s.stderrText(), nil)
 		}
 		out = append(out, assign(v, value))
@@ -428,7 +434,7 @@ func (s *session) values(vars []*Var) ([]Assignment, error) {
 // pairs reads the `((var value) …)` reply into a value per variable name.
 func (s *session) pairs(reply sexpr, vars []*Var) (map[string]sexpr, error) {
 	if !reply.IsList {
-		return nil, s.solver.processError("get-value",
+		return nil, s.solver.processError(cmdGetValue,
 			"its model is not a list of assignments: "+quoteReply(reply), s.stderrText(), nil)
 	}
 	declared := make(map[string]bool, len(vars))
@@ -438,12 +444,12 @@ func (s *session) pairs(reply sexpr, vars []*Var) (map[string]sexpr, error) {
 	out := make(map[string]sexpr, len(reply.List))
 	for _, pair := range reply.List {
 		if !pair.IsList || len(pair.List) != 2 || pair.List[0].IsList {
-			return nil, s.solver.processError("get-value",
+			return nil, s.solver.processError(cmdGetValue,
 				"its model holds "+quoteReply(pair)+" rather than a variable and a value", s.stderrText(), nil)
 		}
 		name := smtName(pair.List[0].Atom)
 		if !declared[name] {
-			return nil, s.solver.processError("get-value",
+			return nil, s.solver.processError(cmdGetValue,
 				"its model names "+name+", which the query does not declare", s.stderrText(), nil)
 		}
 		out[name] = pair.List[1]

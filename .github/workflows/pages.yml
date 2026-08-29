@@ -16,11 +16,6 @@ on:
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 # One deployment at a time; cancelling one in flight would leave the site behind.
 concurrency:
   group: pages
@@ -33,6 +28,8 @@ jobs:
     # pages under its own domain.
     if: github.repository == 'Open-MBEE/OpenSysML'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -62,6 +59,10 @@ jobs:
     name: Deploy to Pages
     needs: build
     runs-on: ubuntu-latest
+    # Deploying is the only step that writes; the build job only reads the tree.
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -138,7 +138,7 @@ func instancesDroppedNotice(n int) string {
 	if n == 0 {
 		return ""
 	}
-	return fmt.Sprintf("note: %s dropped because the declarations changed; re-run %%instantiate", countOf(n, "instance was", "instances were"))
+	return fmt.Sprintf("note: %s dropped because the declarations changed; re-run %%instantiate", instanceCount(n))
 }
 
 // instancesResetNotice reports the instances a reset took with it. The document
@@ -148,7 +148,7 @@ func instancesResetNotice(n int) string {
 	if n == 0 {
 		return ""
 	}
-	return fmt.Sprintf("note: %s dropped because the session was reset; re-run %%instantiate", countOf(n, "instance was", "instances were"))
+	return fmt.Sprintf("note: %s dropped because the session was reset; re-run %%instantiate", instanceCount(n))
 }
 
 // behaviorsRestartedNotice reports the behaviors a carry-over started again. An
@@ -197,7 +197,7 @@ func (l instanceLoss) goneNote() string {
 		return ""
 	}
 	return fmt.Sprintf("(no instances created; %s dropped %s — re-run %%instantiate)",
-		countOf(l.count, "instance was", "instances were"), l.why)
+		instanceCount(l.count), l.why)
 }
 
 // partlyGoneNote reports the objects dropped alongside the ones that were kept,
@@ -207,7 +207,7 @@ func (l instanceLoss) partlyGoneNote() string {
 		return ""
 	}
 	return fmt.Sprintf("(%s also dropped %s — re-run %%instantiate)",
-		countOf(l.count, "instance was", "instances were"), l.why)
+		instanceCount(l.count), l.why)
 }
 
 // lostNote explains an object a command asked for that the session no longer
@@ -217,7 +217,12 @@ func (l instanceLoss) lostNote() string {
 		return ""
 	}
 	return fmt.Sprintf("  %s dropped %s — re-run %%instantiate",
-		countOf(l.count, "instance was", "instances were"), l.why)
+		instanceCount(l.count), l.why)
+}
+
+// instanceCount words a number of instances, as every drop notice reports it.
+func instanceCount(n int) string {
+	return countOf(n, "instance was", "instances were")
 }
 
 func countOf(n int, one, many string) string {

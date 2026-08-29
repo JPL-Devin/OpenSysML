@@ -32,6 +32,7 @@ import java.util.regex.Pattern;
 /** Runs scenarios against one service through one encoding of the Connect protocol. */
 final class Runner {
 
+  private static final String DETAIL_FORMAT = "       %s%n";
   private static final Pattern FIXTURE_REFERENCE = Pattern.compile("^\\$\\{fixture:([^}]+)}$");
 
   private final String protocol;
@@ -101,10 +102,10 @@ final class Runner {
         };
     out.printf("%s %-46s %s%n", mark, result.id, result.status);
     if (result.reason != null) {
-      out.printf("       %s%n", result.reason);
+      out.printf(DETAIL_FORMAT, result.reason);
     }
     if (result.failures != null) {
-      result.failures.forEach(failure -> out.printf("       %s%n", failure));
+      result.failures.forEach(failure -> out.printf(DETAIL_FORMAT, failure));
     }
   }
 
@@ -188,7 +189,7 @@ final class Runner {
     }
     Map<String, Object> normalized = new Normalizer(modelHash).normalize(response);
     if (verbose) {
-      out.printf("       %s%n", Checks.render(normalized));
+      out.printf(DETAIL_FORMAT, Checks.render(normalized));
     }
     List<String> failures = Checks.check(expect, normalized);
     if (!failures.isEmpty()) {

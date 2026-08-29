@@ -19,9 +19,10 @@ from pathlib import Path
 
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
-HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*$", re.MULTILINE)
+HEADING = re.compile(r"^#{1,6}\s(.*)$", re.MULTILINE)
 ANCHOR = re.compile(r"<a\s+(?:id|name)=[\"']([^\"']+)[\"']", re.IGNORECASE)
-SKIP_PREFIX = ("http://", "https://", "mailto:", "tel:", "ftp://")
+# A link naming any scheme points outside the tree, so this checker leaves it alone.
+SKIP_PREFIX = tuple(f"{scheme}://" for scheme in ("http", "https", "ftp")) + ("mailto:", "tel:")
 # A page named in prose as `docs/…md` rather than linked, which a move breaks just as silently.
 CITED = re.compile(r"`(docs/[A-Za-z0-9_./-]+\.md)`")
 # Records of what a plan created at the time; their paths are history, not pointers.
@@ -62,7 +63,9 @@ def anchors_of(path: Path) -> set[str]:
     text = prose(path.read_text(encoding="utf-8", errors="replace"))
     found: set[str] = set()
     seen: dict[str, int] = {}
-    for heading in HEADING.findall(text):
+    for line in HEADING.findall(text):
+        # A heading may be closed with trailing #s, which are not part of its text.
+        heading = line.strip().rstrip("#").strip()
         for slug in slugs(heading):
             # GitHub disambiguates a repeated heading with -1, -2, … in document order.
             found.add(slug if slug not in seen else f"{slug}-{seen[slug]}")

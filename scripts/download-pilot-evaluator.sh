@@ -15,22 +15,22 @@ pilot_jar="$validator_target/jupyter-sysml-kernel-${PILOT_ARTIFACT_VERSION}-all.
 library="$validator_target/sysml.library"
 launcher="$target/eval-sysml"
 
-if [ ! -f "$pilot_jar" ]; then
+if [[ ! -f "$pilot_jar" ]]; then
 	echo "error: pilot shaded jar not found at $pilot_jar" >&2
 	exit 1
 fi
-if [ ! -d "$library" ]; then
+if [[ ! -d "$library" ]]; then
 	echo "error: pilot standard library not found at $library" >&2
 	exit 1
 fi
-if [ ! -f "$source" ]; then
+if [[ ! -f "$source" ]]; then
 	echo "error: pilot evaluator source not found at $source" >&2
 	exit 1
 fi
 
 if command -v java >/dev/null 2>&1; then
 	java_bin="$(command -v java)"
-elif [ -x /usr/local/jdk-21/bin/java ]; then
+elif [[ -x /usr/local/jdk-21/bin/java ]]; then
 	java_bin=/usr/local/jdk-21/bin/java
 else
 	echo "error: Java 21+ is required to build the pilot evaluator" >&2
@@ -39,7 +39,7 @@ fi
 
 if command -v javac >/dev/null 2>&1; then
 	javac_bin="$(command -v javac)"
-elif [ -x /usr/local/jdk-21/bin/javac ]; then
+elif [[ -x /usr/local/jdk-21/bin/javac ]]; then
 	javac_bin=/usr/local/jdk-21/bin/javac
 else
 	echo "error: javac 21+ is required to build the pilot evaluator" >&2
@@ -48,7 +48,7 @@ fi
 
 if command -v jar >/dev/null 2>&1; then
 	jar_bin="$(command -v jar)"
-elif [ -x /usr/local/jdk-21/bin/jar ]; then
+elif [[ -x /usr/local/jdk-21/bin/jar ]]; then
 	jar_bin=/usr/local/jdk-21/bin/jar
 else
 	echo "error: jar is required to inspect the pilot evaluator" >&2
@@ -56,7 +56,7 @@ else
 fi
 
 java_major="$("$java_bin" -version 2>&1 | sed -n '1s/.*version "\([0-9][0-9]*\).*/\1/p')"
-if [ -z "$java_major" ] || [ "$java_major" -lt 21 ]; then
+if [[ -z "$java_major" ]] || [[ "$java_major" -lt 21 ]]; then
 	echo "error: the pilot implementation requires Java 21+, found: $("${java_bin}" -version 2>&1 | head -1)" >&2
 	exit 1
 fi
@@ -119,7 +119,7 @@ if [ "$has_library" -eq 0 ]; then
 	set -- --library "$LIBRARY" "$@"
 fi
 
-exec "$JAVA" -cp "$CLASSES:$JAR" EvalSysML "$@"
+exec "$JAVA" -cp "$CLASSES:$JAR" io.opensysml.pilot.EvalSysML "$@"
 EOF
 sed "s|__PILOT_ARTIFACT_VERSION__|${PILOT_ARTIFACT_VERSION}|g" \
 	"$launcher_tmp" >"${launcher_tmp}.out"

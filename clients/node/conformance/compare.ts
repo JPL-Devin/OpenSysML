@@ -2,6 +2,7 @@
 // rules in conformance/README.md.
 
 import { Integer, type Normalized } from "./normalize.js";
+import { byCodeUnit } from "./order.js";
 import { Literal, type Expect } from "./scenarios.js";
 
 /**
@@ -16,7 +17,7 @@ export function check(expect: Expect, actual: Normalized): string[] {
   if (expect.response !== undefined) {
     failures.push(...match("", expect.response, actual));
   }
-  for (const path of [...(expect.non_empty ?? [])].sort()) {
+  for (const path of [...(expect.non_empty ?? [])].sort(byCodeUnit)) {
     const found = lookup(actual, path);
     if (!found.ok) {
       failures.push(`${path}: not set, want a value`);
@@ -24,7 +25,7 @@ export function check(expect: Expect, actual: Normalized): string[] {
       failures.push(`${path}: empty, want a value`);
     }
   }
-  for (const path of [...(expect.absent ?? [])].sort()) {
+  for (const path of [...(expect.absent ?? [])].sort(byCodeUnit)) {
     const found = lookup(actual, path);
     if (found.ok && !isDefault(found.value)) {
       failures.push(`${path}: set to ${render(found.value)}, want it unset`);
@@ -80,7 +81,7 @@ function containsAll(actual: Normalized, path: string, wants: string[]): string[
     return [`${path}: neither text nor a list, want it to contain ${render(wants)}`];
   }
   return wants
-    .filter((want) => !collected.some((item) => item === want))
+    .filter((want) => !collected.includes(want))
     .map((want) => `${path}: ${render(collected)} does not contain ${quote(want)}`);
 }
 
@@ -297,7 +298,7 @@ function join(path: string, segment: string): string {
 }
 
 function sortedKeys(value: Record<string, unknown> | undefined): string[] {
-  return value === undefined ? [] : Object.keys(value).sort();
+  return value === undefined ? [] : Object.keys(value).sort(byCodeUnit);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

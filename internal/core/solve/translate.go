@@ -461,6 +461,9 @@ func ratOfScale(scale semantics.Scale) (*big.Rat, bool) {
 	return num.Quo(num, den), true
 }
 
+// msgOperatorPrefix names the operator a refusal is about.
+const msgOperatorPrefix = "operator `"
+
 // operator translates an operator application, refusing one whose meaning this
 // term language does not carry.
 func (t *translator) operator(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, error) {
@@ -502,7 +505,7 @@ func (t *translator) operator(n *ast.OperatorExpr, scope *symbols.Scope) (*Term,
 	case ast.OpConditional:
 		return t.conditional(n, scope)
 	}
-	return nil, t.refuse(n, "operator `"+n.Operator.String()+"`", operatorReason(n.Operator))
+	return nil, t.refuse(n, msgOperatorPrefix+n.Operator.String()+"`", operatorReason(n.Operator))
 }
 
 // operatorReason says why an operator outside the subset is outside it.
@@ -569,7 +572,7 @@ func (t *translator) equality(n *ast.OperatorExpr, scope *symbols.Scope, op Op) 
 	}
 	left, right = promote(left, right)
 	if !left.Sort.Equal(right.Sort) {
-		return nil, t.refuse(n, "operator `"+n.Operator.String()+"`",
+		return nil, t.refuse(n, msgOperatorPrefix+n.Operator.String()+"`",
 			fmt.Sprintf("its operands yield %s and %s", left.Sort.Name, right.Sort.Name))
 	}
 	if left.Sort.Numeric() {
@@ -661,13 +664,13 @@ func (t *translator) remainder(n *ast.OperatorExpr, scope *symbols.Scope) (*Term
 func (t *translator) divisor(n *ast.OperatorExpr, divisor *Term) error {
 	if divisor.Literal() {
 		if isZero(divisor) {
-			return t.refuse(n, "operator `"+n.Operator.String()+"` by zero",
+			return t.refuse(n, msgOperatorPrefix+n.Operator.String()+"` by zero",
 				"the evaluator reports division by zero")
 		}
 		return nil
 	}
 	if !t.hoistable() {
-		return t.refuse(n, "operator `"+n.Operator.String()+"` by a computed divisor",
+		return t.refuse(n, msgOperatorPrefix+n.Operator.String()+"` by a computed divisor",
 			"asserting the divisor non-zero would deny assignments the evaluator accepts, "+
 				"as this division may go unevaluated")
 	}
@@ -737,14 +740,14 @@ func zeroOf(sort Sort) *Term {
 // unaryNumber translates unary `-` and `+`.
 func (t *translator) unaryNumber(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, error) {
 	if len(n.Operands) != 1 {
-		return nil, t.refuse(n, "operator `"+n.Operator.String()+"`", "it takes one operand")
+		return nil, t.refuse(n, msgOperatorPrefix+n.Operator.String()+"`", "it takes one operand")
 	}
 	arg, err := t.expr(n.Operands[0], scope)
 	if err != nil {
 		return nil, err
 	}
 	if !arg.Sort.Numeric() {
-		return nil, t.refuse(n, "operator `"+n.Operator.String()+"`",
+		return nil, t.refuse(n, msgOperatorPrefix+n.Operator.String()+"`",
 			"its operand yields "+arg.Sort.Name+" rather than a number")
 	}
 	if n.Operator == ast.OpPos {
@@ -795,7 +798,7 @@ func (t *translator) conditional(n *ast.OperatorExpr, scope *symbols.Scope) (*Te
 // operands translates the two operands of a binary operator.
 func (t *translator) operands(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, *Term, error) {
 	if len(n.Operands) != 2 {
-		return nil, nil, t.refuse(n, "operator `"+n.Operator.String()+"`", "it takes two operands")
+		return nil, nil, t.refuse(n, msgOperatorPrefix+n.Operator.String()+"`", "it takes two operands")
 	}
 	left, err := t.expr(n.Operands[0], scope)
 	if err != nil {
@@ -816,7 +819,7 @@ func (t *translator) numericOperands(n *ast.OperatorExpr, scope *symbols.Scope) 
 		return nil, nil, err
 	}
 	if !left.Sort.Numeric() || !right.Sort.Numeric() {
-		return nil, nil, t.refuse(n, "operator `"+n.Operator.String()+"`",
+		return nil, nil, t.refuse(n, msgOperatorPrefix+n.Operator.String()+"`",
 			fmt.Sprintf("its operands yield %s and %s rather than numbers", left.Sort.Name, right.Sort.Name))
 	}
 	left, right = promote(left, right)
@@ -826,7 +829,7 @@ func (t *translator) numericOperands(n *ast.OperatorExpr, scope *symbols.Scope) 
 // operandOfSort translates one operand and requires the sort given.
 func (t *translator) operandOfSort(n *ast.OperatorExpr, scope *symbols.Scope, i int, want Sort) (*Term, error) {
 	if i >= len(n.Operands) {
-		return nil, t.refuse(n, "operator `"+n.Operator.String()+"`", "it is missing an operand")
+		return nil, t.refuse(n, msgOperatorPrefix+n.Operator.String()+"`", "it is missing an operand")
 	}
 	term, err := t.expr(n.Operands[i], scope)
 	if err != nil {
@@ -859,7 +862,7 @@ func (t *translator) sameDimension(n *ast.OperatorExpr, scope *symbols.Scope) er
 	if left.Term.Commensurable(right.Term) {
 		return nil
 	}
-	return t.refuse(n, "operator `"+n.Operator.String()+"`",
+	return t.refuse(n, msgOperatorPrefix+n.Operator.String()+"`",
 		fmt.Sprintf("incommensurable units: %s against %s", dimensionText(left), dimensionText(right)))
 }
 

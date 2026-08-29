@@ -126,7 +126,7 @@ func newStateExecutorForOccurrence(
 	// Lower to StateGraph, in the scope the machine's body was written in, so
 	// that everything the graph carries is evaluated where it was declared.
 	// Endpoints come from the name-resolution tier, which reported on them already.
-	var endpoints lower.Endpoints
+	var endpoints lower.EndpointResolver
 	if ctx.resolver != nil {
 		endpoints = ctx.resolver
 	}
@@ -893,7 +893,7 @@ func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Eve
 
 	callEvent, ok := trans.Trigger.(*ast.CallEvent)
 	if !ok || len(callEvent.Parameters) == 0 {
-		return func() {}, nil
+		return func() { /* nothing was bound */ }, nil
 	}
 	unbind := e.restoreData(callEvent.Parameters)
 	call, ok := event.Payload.(Call)
@@ -917,7 +917,7 @@ func (e *StateExecutor) bindTriggerArguments(trans *lower.Transition, event *Eve
 // transition's guard and effect to read, and returns the function unbinding it.
 func (e *StateExecutor) bindAcceptPayload(acceptEvent *ast.AcceptEvent, event *Event) (func(), error) {
 	if acceptEvent.Payload == nil || acceptEvent.Payload.Ident.Name == "" {
-		return func() {}, nil
+		return func() { /* nothing was bound */ }, nil
 	}
 	name := ast.NameSegment{Text: acceptEvent.Payload.Ident.Name}
 	unbind := e.restoreData([]ast.NameSegment{name})

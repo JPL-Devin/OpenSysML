@@ -43,13 +43,13 @@ case "${1:-}" in
 		;;
 esac
 
-if [ "$force" -eq 0 ] && [ -x "$launcher" ] && [ -f "$pin" ] && [ -d "$library" ]; then
+if [[ "$force" -eq 0 ]] && [[ -x "$launcher" ]] && [[ -f "$pin" ]] && [[ -d "$library" ]]; then
 	echo "SysIDE already built at $target"
 	echo "Remove that directory, or pass --force, to re-provision."
 	exit 0
 fi
 
-if [ ! -f "$source" ]; then
+if [[ ! -f "$source" ]]; then
 	echo "error: SysIDE validator driver not found at $source" >&2
 	exit 1
 fi
@@ -63,7 +63,7 @@ for tool in git node pnpm; do
 done
 
 node_major="$(node --version | sed -n 's/^v\([0-9][0-9]*\).*/\1/p')"
-if [ -z "$node_major" ] || [ "$node_major" -lt 18 ]; then
+if [[ -z "$node_major" ]] || [[ "$node_major" -lt 18 ]]; then
 	echo "error: SysIDE requires Node 18+, found: $(node --version)" >&2
 	exit 1
 fi
@@ -80,19 +80,19 @@ if ! git clone --quiet --depth 1 --branch "$SYSIDE_TAG" "$SYSIDE_REPO" "$work/sy
 fi
 
 version="$(node -p "require('$work/sysml-2ls/package.json').version" 2>/dev/null || true)"
-if [ "$version" != "$SYSIDE_TAG" ]; then
+if [[ "$version" != "$SYSIDE_TAG" ]]; then
 	echo "error: $SYSIDE_REPO at $SYSIDE_TAG reports version ${version:-<none>}, expected $SYSIDE_TAG" >&2
 	echo "       re-pin SYSIDE_TAG deliberately rather than comparing against an unknown release" >&2
 	exit 1
 fi
 
 stdlib_source="$work/sysml-2ls/packages/syside-base/src/stdlib.ts"
-if [ ! -f "$stdlib_source" ]; then
+if [[ ! -f "$stdlib_source" ]]; then
 	echo "error: $stdlib_source is missing: SysIDE $SYSIDE_TAG does not declare its standard library" >&2
 	exit 1
 fi
 declared_spec="$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\([^"]*\)".*/\1/p' "$stdlib_source" | head -1)"
-if [ "$declared_spec" != "$SYSIDE_SPEC" ]; then
+if [[ "$declared_spec" != "$SYSIDE_SPEC" ]]; then
 	echo "error: SysIDE $SYSIDE_TAG targets the $declared_spec standard library, this script pins $SYSIDE_SPEC" >&2
 	echo "       re-pin SYSIDE_SPEC, and re-check what the third column may honestly be compared against" >&2
 	exit 1
@@ -111,7 +111,7 @@ if ! git clone --quiet --filter=blob:none --sparse --depth 1 \
 	exit 1
 fi
 git -C "$work/stdlib" sparse-checkout set sysml.library
-if [ ! -d "$work/stdlib/sysml.library" ]; then
+if [[ ! -d "$work/stdlib/sysml.library" ]]; then
 	echo "error: sysml.library is missing from $SYSIDE_STDLIB_REPO at $SYSIDE_STDLIB_BRANCH" >&2
 	exit 1
 fi
@@ -129,7 +129,7 @@ const absent = files
 	.filter((file) => !fs.existsSync(path.join(process.argv[2], file)));
 process.stdout.write(absent.slice(0, 5).join(", "));
 ' "$stdlib_source" "$work/stdlib/sysml.library")"
-if [ -n "$missing" ]; then
+if [[ -n "$missing" ]]; then
 	echo "error: the $SYSIDE_SPEC library at $SYSIDE_STDLIB_BRANCH is missing files SysIDE expects: $missing" >&2
 	exit 1
 fi
@@ -141,7 +141,7 @@ echo "Installing dependencies and building the SysIDE language server ..."
 (cd "$work/sysml-2ls" && pnpm run prebuild >/dev/null && pnpm exec tsc -b tsconfig.build.json)
 
 built="$work/sysml-2ls/packages/syside-languageserver/lib/index.js"
-if [ ! -f "$built" ]; then
+if [[ ! -f "$built" ]]; then
 	echo "error: the SysIDE language server did not build: $built is missing" >&2
 	exit 1
 fi

@@ -47,7 +47,7 @@ Download `opensysml-windows-amd64.zip` from [releases](https://github.com/Open-M
 
 `sysml-grpc` — the service the Python bindings talk to — is published as a raw
 `sysml-grpc-<os>-<arch>` file with a `.sha256` sidecar rather than in an archive, because
-`opensysml` downloads and verifies it itself (see [python/README.md](../../python/README.md)).
+`opensysml` downloads and verifies it itself (see [clients/python/README.md](../../clients/python/README.md)).
 `make build-grpc` builds it from source.
 
 **Archive layout:** `opensysml-<os>-<arch>.tar.gz` bundles contain both binaries under their

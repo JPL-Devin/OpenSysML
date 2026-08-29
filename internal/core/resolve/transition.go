@@ -61,8 +61,8 @@ func (r *Resolver) EndpointSymbol(scope *symbols.Scope, qn *ast.QualifiedName) (
 }
 
 // Endpoint returns the declaration an endpoint names, which lowering builds its
-// edges from (lower.Endpoints); the lookup itself reports nothing, since this
-// tier reports an endpoint naming no vertex when it resolves the document.
+// edges from (lower.EndpointResolver); the lookup itself reports nothing, since
+// this tier reports an endpoint naming no vertex when it resolves the document.
 func (r *Resolver) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool) {
 	var sym *symbols.Symbol
 	var ok bool

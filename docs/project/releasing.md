@@ -39,8 +39,8 @@ Run the Python client the way CircleCI's `python-test` job does, since a
 
 ```bash
 make build-grpc && mkdir -p ~/.opensysml/bin && cp bin/sysml-grpc ~/.opensysml/bin/
-pip install -e python/ && pip install pytest pytest-mock
-pytest python/tests/ -v
+pip install -e clients/python/ && pip install pytest pytest-mock
+pytest clients/python/tests/ -v
 ```
 
 The OMG training-corpus gate skips while the corpus is absent, so fetch it and
@@ -99,7 +99,7 @@ fails the suite fails the release workflow before anything is published.
   their plain names, which is the layout Homebrew and a PATH install expect;
 - `sysml-grpc-<os>-<arch>`, published raw with a `.sha256` sidecar rather than
   archived, because that is what `opensysml` downloads and verifies
-  (`python/opensysml/binary.py`) when it starts the service for a Python caller;
+  (`clients/python/opensysml/binary.py`) when it starts the service for a Python caller;
 - `SHA256SUMS.txt` over every archive and every `sysml-grpc` binary.
 
 Platforms: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64,
@@ -215,7 +215,7 @@ what CircleCI puts in the certificate. The client currently accepts any pipeline
 definition of that project, because no signature of the real one exists to read
 the identifier off yet — the verify step in `build-release` prints it, so after
 the first signed release set it as `definition=` on the signer in
-`python/opensysml/signing.py` to narrow the pin to the one pipeline.
+`clients/python/opensysml/signing.py` to narrow the pin to the one pipeline.
 
 Anything short of a verified manifest is refused exactly as an unpinned release
 is today: no bundle asset, a bundle that does not verify, another signer, a
@@ -226,7 +226,7 @@ it — same origin as the binary — and remains behind
 
 ### Pinned release digests
 
-`PINNED_SHA256` in `python/opensysml/binary.py` still covers the releases
+`PINNED_SHA256` in `clients/python/opensysml/binary.py` still covers the releases
 published before signing existed, and it stays the override: where a pin exists
 it wins, and a verified manifest that disagrees with a pin is an error rather
 than a downgrade. **Per release there is now nothing to do** — pinning a release
@@ -235,7 +235,7 @@ a release clients on an older `opensysml` should be able to install:
 
 ```bash
 export GITHUB_TOKEN=...   # must be able to read this repository's releases
-python python/scripts/pin_release_checksums.py --version v0.0.8 --write
+python clients/python/scripts/pin_release_checksums.py --version v0.0.8 --write
 ```
 
 The token is required, not an optimization: the script reads the release's assets
@@ -327,7 +327,7 @@ that organization.
 
 ## Releasing opensysml to PyPI
 
-The Python client in `python/` is published to PyPI as
+The Python client in `clients/python/` is published to PyPI as
 [`opensysml`](https://pypi.org/project/opensysml/) by the `release-python` workflow,
 which runs on a tag matching `/^opensysml-v.*/` — for example `opensysml-v0.3.0`.
 The first release under the new name is 0.3.0: the version line carries on from
@@ -340,7 +340,7 @@ package.
 `opensysml` does not ship the service: it downloads a `sysml-grpc` binary at
 runtime for whatever release the caller names (`version=`,
 `$OPENSYSML_GRPC_VERSION`, or `latest`), verifying it against the digest it pins
-for that release (`PINNED_SHA256` in `python/opensysml/binary.py`) or, for a
+for that release (`PINNED_SHA256` in `clients/python/opensysml/binary.py`) or, for a
 release it pins nothing for, against the digest in the release's signed
 `SHA256SUMS.txt` (see [the signed checksum manifest](#the-signed-checksum-manifest)),
 which is why a core release published after a client release needs no new client
@@ -355,9 +355,9 @@ irreversible upload hanging off it.
 
 ### The version, in one place
 
-`python/opensysml/_version.py` is the only declaration:
+`clients/python/opensysml/_version.py` is the only declaration:
 
-- `python/pyproject.toml` has `dynamic = ["version"]` and reads
+- `clients/python/pyproject.toml` has `dynamic = ["version"]` and reads
   `opensysml._version.VERSION` (there is no `setup.py` any more —
   `pyproject.toml` declares the build);
 - `opensysml.__version__` reports that declaration, which ships beside the module
@@ -366,21 +366,21 @@ irreversible upload hanging off it.
   written once, at install time, and a checkout that bumps `VERSION` afterwards
   would otherwise report the version it had when `pip install -e` ran.
 
-`python/tests/test_version.py` fails if a second version literal reappears
-anywhere under `python/`, or if the declaration, the installed metadata and
+`clients/python/tests/test_version.py` fails if a second version literal reappears
+anywhere under `clients/python/`, or if the declaration, the installed metadata and
 `__version__` stop agreeing. Where the install is editable, the tests locate the
 package through the install's own PEP 610 record (`opensysml/_dist.py`) rather than
 the dist-info's directory, which for an editable install is a site-packages path
 holding no `opensysml/` at all.
 
-The tag must name the declared version. `python/scripts/check_version.py` is run
+The tag must name the declared version. `clients/python/scripts/check_version.py` is run
 by the job before anything is built, and fails loudly otherwise:
 
 ```bash
-python python/scripts/check_version.py --tag opensysml-v0.3.0   # prints 0.3.0
+python clients/python/scripts/check_version.py --tag opensysml-v0.3.0   # prints 0.3.0
 ```
 
-So a release is: bump `VERSION` in `python/opensysml/_version.py`, land it, then
+So a release is: bump `VERSION` in `clients/python/opensysml/_version.py`, land it, then
 tag `opensysml-v<that version>`.
 
 ### What the job needs
@@ -455,7 +455,7 @@ release:
 
 ```bash
 # 1. Declare a pre-release version, e.g. VERSION = "0.3.0rc1"
-$EDITOR python/opensysml/_version.py
+$EDITOR clients/python/opensysml/_version.py
 # 2. Land it, then tag it
 git tag -a opensysml-v0.3.0rc1 -m "opensysml 0.3.0rc1" && git push origin opensysml-v0.3.0rc1
 ```
@@ -617,7 +617,7 @@ The job resolves the version from the tag, refuses a version PyPI already has,
 builds the wheel and sdist, and — the check that matters — installs the wheel
 into a clean virtualenv and **fails if importing `pysysml` succeeds**. A
 placeholder that imports cleanly is the alias this release exists not to be.
-`python/tests/test_legacy_pysysml_placeholder.py` asserts the same contract from
+`clients/python/tests/test_legacy_pysysml_placeholder.py` asserts the same contract from
 source on every run.
 
 This is expected to happen exactly once. Nothing further should be published
@@ -727,7 +727,7 @@ tests and the conformance suite on every commit.
 Nothing has been published, and the first publish is a decision rather than a
 step: `opensysml` is a common enough name that its availability on crates.io must
 be checked before the crate is promised anywhere, and a name taken means renaming
-the crate rather than the client. `rust/README.md` documents the path and Git
+the crate rather than the client. `clients/rust/README.md` documents the path and Git
 dependency forms that work today.
 
 What the crate is ready for, and what it is not:
@@ -743,14 +743,14 @@ What the crate is ready for, and what it is not:
 - The client resolves a `sysml-grpc` binary and never downloads one, so a
   published crate carries no binary asset and needs no checksum manifest of its
   own. If a downloader is ever added, it inherits the Python client's pinned
-  digests and signed-manifest verification first — see `rust/README.md`.
+  digests and signed-manifest verification first — see `clients/rust/README.md`.
 
 The procedure, once the name is settled:
 
 ```bash
-# 1. Bump "version" in rust/opensysml/Cargo.toml, land it, then from that commit:
-cargo package -p opensysml --manifest-path rust/Cargo.toml   # must be clean
-cargo publish -p opensysml --manifest-path rust/Cargo.toml   # maintainer, with a crates.io token
+# 1. Bump "version" in clients/rust/opensysml/Cargo.toml, land it, then from that commit:
+cargo package -p opensysml --manifest-path clients/rust/Cargo.toml   # must be clean
+cargo publish -p opensysml --manifest-path clients/rust/Cargo.toml   # maintainer, with a crates.io token
 
 # 2. Tag what was published.
 git tag opensysml-rust-v0.1.0 && git push origin opensysml-rust-v0.1.0

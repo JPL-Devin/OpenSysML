@@ -19,7 +19,7 @@ type ActionEndpointPass struct{}
 func (ActionEndpointPass) Level() PassLevel { return LevelNameResolution }
 
 // ElementScoped lets each endpoint subject gate independently on lower failures.
-func (ActionEndpointPass) ElementScoped() {}
+func (ActionEndpointPass) ElementScoped() { /* marker: per-element gating */ }
 
 // Run checks named endpoints in every action body in the document.
 func (ActionEndpointPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {

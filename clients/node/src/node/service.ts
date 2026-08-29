@@ -144,7 +144,7 @@ export class PrivateService {
 export async function acquirePrivateService(): Promise<PrivateService> {
   for (;;) {
     const existing = shared;
-    if (existing !== undefined && existing.alive) {
+    if (existing?.alive) {
       existing.refs += 1;
       return existing;
     }

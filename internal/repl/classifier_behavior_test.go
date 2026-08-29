@@ -42,7 +42,7 @@ func TestSecondInstantiateIsAnotherObject(t *testing.T) {
 
 	again := run(t, s, "%instantiate Obj::Monitor")
 	wants(t, again, "now denotes this object", "object #"+first+" is no longer named", "behavior of its own")
-	if second := objectIDIn(t, run(t, s, "%features Obj::Monitor")); second == first {
+	if objectIDIn(t, run(t, s, "%features Obj::Monitor")) == first {
 		t.Errorf("second %%instantiate reused object #%s:\n%s", first, again)
 	}
 }

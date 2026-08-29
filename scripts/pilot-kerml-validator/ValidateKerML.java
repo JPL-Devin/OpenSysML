@@ -1,4 +1,10 @@
+package io.opensysml.pilot;
+
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -28,6 +34,9 @@ import com.google.inject.Injector;
  */
 public final class ValidateKerML extends SysMLUtil {
 
+    private static final PrintStream STDERR =
+            new PrintStream(new FileOutputStream(FileDescriptor.err), true, StandardCharsets.UTF_8);
+
     private static final String KERML_EXTENSION = ".kerml";
     private static final String SYSML_EXTENSION = ".sysml";
 
@@ -37,7 +46,7 @@ public final class ValidateKerML extends SysMLUtil {
     private static final String DOMAIN_LIBRARIES_DIRECTORY = "Domain Libraries";
 
     private static final Pattern OBJECT_REFERENCE =
-            Pattern.compile("([\\w.$]+)@[0-9a-f]+\\{file:([^#{}]*)#([^{}]*)\\}");
+            Pattern.compile("([\\w.$]++)@[0-9a-f]++\\{file:([^#{}]*+)#([^{}]*+)\\}");
 
     private final IResourceValidator validator;
     private final Path root;
@@ -102,7 +111,7 @@ public final class ValidateKerML extends SysMLUtil {
     private void report(Path file, int line, int column, Severity severity, String message) {
         String name = display(file);
         String text = message == null ? "" : normalize(message.replaceAll("\\s+", " ").trim());
-        System.err.println(name + ":" + line + ":" + column + ": "
+        STDERR.println(name + ":" + line + ":" + column + ": "
                 + severity.toString().toLowerCase() + ": " + text);
         if (severity == Severity.ERROR) {
             hasErrors = true;
@@ -165,7 +174,7 @@ public final class ValidateKerML extends SysMLUtil {
     }
 
     private static void usage() {
-        System.err.println("usage: validate-kerml --library DIR [--root DIR] [--kernel-only] FILE...");
+        STDERR.println("usage: validate-kerml --library DIR [--root DIR] [--kernel-only] FILE...");
     }
 
     public static void main(String[] args) {
@@ -174,35 +183,27 @@ public final class ValidateKerML extends SysMLUtil {
             Path root = null;
             boolean kernelOnly = false;
             List<String> inputs = new ArrayList<>();
-            for (int i = 0; i < args.length; i++) {
-                switch (args[i]) {
-                    case "--library" -> {
-                        if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
-                            throw new IllegalArgumentException("--library requires a value");
-                        }
-                        library = Paths.get(args[++i]).toAbsolutePath().normalize();
-                    }
-                    case "--root" -> {
-                        if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
-                            throw new IllegalArgumentException("--root requires a value");
-                        }
-                        root = Paths.get(args[++i]).toAbsolutePath().normalize();
-                    }
+            int index = 0;
+            while (index < args.length) {
+                String argument = args[index++];
+                switch (argument) {
+                    case "--library" -> library = value(args, index++, "--library");
+                    case "--root" -> root = value(args, index++, "--root");
                     case "--kernel-only" -> kernelOnly = true;
                     case "-h", "--help" -> {
                         usage();
                         System.exit(0);
                     }
-                    default -> inputs.add(args[i]);
+                    default -> inputs.add(argument);
                 }
             }
 
             if (library == null) {
-                String property = System.getProperty("sysml.library");
+                String property = System.getProperty(LIBRARY_DIRECTORY_NAME);
                 library = property == null ? null : Paths.get(property).toAbsolutePath().normalize();
             }
             if (library == null || !Files.isDirectory(library)) {
-                System.err.println("Error: SysML library not found: " + library);
+                STDERR.println("Error: SysML library not found: " + library);
                 usage();
                 System.exit(2);
             }
@@ -214,16 +215,16 @@ public final class ValidateKerML extends SysMLUtil {
             List<Path> files = collect(inputs);
             for (Path file : files) {
                 if (!file.toString().endsWith(KERML_EXTENSION)) {
-                    System.err.println("Error: File must have .kerml extension: " + file);
+                    STDERR.println("Error: File must have .kerml extension: " + file);
                     System.exit(2);
                 }
                 if (!Files.isRegularFile(file)) {
-                    System.err.println("Error: File not found: " + file);
+                    STDERR.println("Error: File not found: " + file);
                     System.exit(2);
                 }
             }
             if (files.isEmpty()) {
-                System.err.println("Warning: No .kerml files found");
+                STDERR.println("Warning: No .kerml files found");
                 System.exit(0);
             }
 
@@ -241,8 +242,15 @@ public final class ValidateKerML extends SysMLUtil {
             instance.validateInputs();
             System.exit(instance.hasErrors ? 1 : 0);
         } catch (Throwable e) {
-            System.err.println("Error: " + message(e));
+            STDERR.println("Error: " + message(e));
             System.exit(3);
         }
+    }
+
+    private static Path value(String[] args, int index, String option) {
+        if (index >= args.length || args[index].startsWith("--")) {
+            throw new IllegalArgumentException(option + " requires a value");
+        }
+        return Paths.get(args[index]).toAbsolutePath().normalize();
     }
 }

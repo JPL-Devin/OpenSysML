@@ -171,8 +171,8 @@ gate's own helpers are package-private but reusable (`pilotCorporaGate.files(t)`
 
 `actionlint`, `shellcheck`, `python3 scripts/check-doc-links.py`, `gofmt`, `go vet`,
 `go run ./cmd/pilot-diff` (validators pre-downloaded; ~4min, prints e.g.
-the headline the committed baseline holds — `357 file(s), 329 fully agreeing; 37 agreed
-diagnostic(s), 27 only ours, 75 only the pilot's` after the library-inherited-name gap, so read it from
+the headline the committed baseline holds — `357 file(s), 332 fully agreeing; 36 agreed
+diagnostic(s), 20 only ours, 45 only the pilot's` after the standard-notation demo round, so read it from
 `docs/project/pilot-differential-baseline.json` rather than from this line)
 and `make lint` (staticcheck+gosec, ~2min) all work. There is **no** `yamllint` and **no**
 `circleci` CLI, so `.circleci/config.yml` can only be parsed as YAML, not schema-validated — say so

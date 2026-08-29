@@ -10,6 +10,7 @@ import { SysMLService } from "../src/generated/sysml_pb.js";
 import type { Connection } from "../src/core/connection.js";
 import { Model } from "../src/core/model.js";
 import { check, render } from "./compare.js";
+import { byCodeUnit } from "./order.js";
 import { MODEL_HASH_PLACEHOLDER, Normalizer } from "./normalize.js";
 import { Literal, methodOf, type Expect, type Scenario, type ScenarioModel } from "./scenarios.js";
 
@@ -127,7 +128,7 @@ export class Runner {
   /** Reads the capabilities the scenarios gate on. */
   async readCapabilities(): Promise<void> {
     const info = await this.connection.serverInfo();
-    this.capabilities = [...info.capabilities].sort();
+    this.capabilities = [...info.capabilities].sort(byCodeUnit);
   }
 
   /** Runs every scenario whose id matches `filter`, reporting as it goes. */

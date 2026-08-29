@@ -23,6 +23,9 @@ const (
 	ArchitecturePath   = "docs/internals/architecture.md"
 )
 
+// refereedBlockName is the name of the generated block the consumers share.
+const refereedBlockName = "refereed-figures"
+
 // statusMarkers are the row statuses the compliance map uses. '⚠' is matched
 // without its variation selector, as the map writes both spellings.
 var statusMarkers = []string{"✅", "⚠", "❌", "⛔", "🚧"}
@@ -415,8 +418,8 @@ type Block struct {
 // Blocks lists the consumers of the shared refereed-figures block.
 func Blocks() []Block {
 	return []Block{
-		{Path: ReadmePath, Name: "refereed-figures", LinkPrefix: "docs/project/"},
-		{Path: ArchitecturePath, Name: "refereed-figures", LinkPrefix: "../project/"},
+		{Path: ReadmePath, Name: refereedBlockName, LinkPrefix: "docs/project/"},
+		{Path: ArchitecturePath, Name: refereedBlockName, LinkPrefix: "../project/"},
 	}
 }
 
@@ -552,7 +555,7 @@ const refereedBlockTemplateText = "<!-- doc-counts:begin {{.Name}} -->\n" +
 	"**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the {{.RuleCounts.Total}} tracked rules stays in [spec compliance]({{.LinkPrefix}}spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.\n" +
 	"<!-- doc-counts:end {{.Name}} -->"
 
-var refereedBlockTemplate = template.Must(template.New("refereed-figures").Parse(refereedBlockTemplateText))
+var refereedBlockTemplate = template.Must(template.New(refereedBlockName).Parse(refereedBlockTemplateText))
 
 func renderBlock(spec Block, counts RefereedCounts) (string, error) {
 	data := blockTemplateData{RefereedCounts: counts, Name: spec.Name, LinkPrefix: spec.LinkPrefix}

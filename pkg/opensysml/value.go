@@ -81,16 +81,16 @@ type EnumLiteral struct {
 	Name string
 }
 
-func (Int) isValue()         {}
-func (Real) isValue()        {}
-func (Bool) isValue()        {}
-func (String) isValue()      {}
-func (InstanceID) isValue()  {}
-func (Sequence) isValue()    {}
-func (Null) isValue()        {}
-func (Unset) isValue()       {}
-func (Quantity) isValue()    {}
-func (EnumLiteral) isValue() {}
+func (Int) isValue()         { /* marker: closed Value set */ }
+func (Real) isValue()        { /* marker: closed Value set */ }
+func (Bool) isValue()        { /* marker: closed Value set */ }
+func (String) isValue()      { /* marker: closed Value set */ }
+func (InstanceID) isValue()  { /* marker: closed Value set */ }
+func (Sequence) isValue()    { /* marker: closed Value set */ }
+func (Null) isValue()        { /* marker: closed Value set */ }
+func (Unset) isValue()       { /* marker: closed Value set */ }
+func (Quantity) isValue()    { /* marker: closed Value set */ }
+func (EnumLiteral) isValue() { /* marker: closed Value set */ }
 
-func (Int) isNumber()  {}
-func (Real) isNumber() {}
+func (Int) isNumber()  { /* marker: closed Number set */ }
+func (Real) isNumber() { /* marker: closed Number set */ }

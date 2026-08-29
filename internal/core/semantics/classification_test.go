@@ -163,7 +163,7 @@ func TestClassificationOfASubjectFromAnotherIndexGeneration(t *testing.T) {
 	for _, tc := range cases {
 		m, op, root := classificationOf(t, src, tc.cond)
 		stale := sym(t, older, tc.name)
-		if fresh := sym(t, root, tc.name); stale == fresh {
+		if stale == sym(t, root, tc.name) {
 			t.Fatalf("%s: the two generations should hold distinct symbols", tc.name)
 		}
 		got, err := m.EvalClassification(root, op, stale)

@@ -24,6 +24,9 @@ func startProfiling() (func(), error) {
 	started := time.Now()
 	var ends []func()
 
+	// The stop returned when no profile was started.
+	noop := func() { /* nothing was started, so nothing to write */ }
+
 	// The ends run in reverse of the order they were added, so each profile is
 	// written before the one started before it is stopped.
 	stop := func() {
@@ -36,11 +39,11 @@ func startProfiling() (func(), error) {
 		// #nosec G304 -- the profile is written where the command line says.
 		f, err := os.Create(cpuProfilePath)
 		if err != nil {
-			return func() {}, fmt.Errorf("-cpuprofile: %w", err)
+			return noop, fmt.Errorf("-cpuprofile: %w", err)
 		}
 		if err := pprof.StartCPUProfile(f); err != nil {
 			_ = f.Close()
-			return func() {}, fmt.Errorf("-cpuprofile: %w", err)
+			return noop, fmt.Errorf("-cpuprofile: %w", err)
 		}
 		ends = append(ends, func() {
 			pprof.StopCPUProfile()
@@ -55,7 +58,7 @@ func startProfiling() (func(), error) {
 		f, err := os.Create(memProfilePath)
 		if err != nil {
 			stop()
-			return func() {}, fmt.Errorf("-memprofile: %w", err)
+			return noop, fmt.Errorf("-memprofile: %w", err)
 		}
 		ends = append(ends, func() {
 			// The profile is written where the run ends, at which point the model it

@@ -21,9 +21,9 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
 - The pin `cmd/pilot-diff` reports comes from `build/pilot-sysml-validator/pilot-pin.txt`
   (written by the new script), not from the DeciSym `pom.xml`.
 - `-validator /nonexistent` now says `run ./scripts/download-pilot-sysml-validator.sh`.
-- Measured after closing the library-inherited-name gap, with a fresh library cache: `357 file(s), 329 fully agreeing; 37 agreed,
-  27 only ours, 75 only the pilot's`, JSON totals `openSysMLDiagnostics 72 / pilotDiagnostics
-  120 / severityMismatch 8`; ~70 s wall, byte-identical across runs *and* after a from-scratch
+- Measured after the standard-notation demo round, with a fresh library cache: `357 file(s), 332 fully agreeing; 36 agreed,
+  20 only ours, 45 only the pilot's`, JSON totals `openSysMLDiagnostics 58 / pilotDiagnostics
+  83 / severityMismatch 2`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
 - **`cmd/pilot-diff` has no `-jobs` flag.** Its full flag set is
@@ -135,8 +135,8 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
 but only while the baseline is current. Check that first. As of the rebaseline that came with the
-library-inherited-name gap it **is**
-current: a live run gives `357 file(s), 329 fully agreeing; 37 agreed, 27 only ours, 75 only the
+standard-notation demo round it **is**
+current: a live run gives `357 file(s), 332 fully agreeing; 36 agreed, 20 only ours, 45 only the
 pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
 "Results" table matches. That rebaseline covers two rounds, because the succession-shorthand
 removal before it landed without refreshing the baseline; a control run of its merge commit gives

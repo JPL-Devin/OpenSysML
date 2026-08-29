@@ -54,7 +54,7 @@ func TestParseUseCaseMalformedInBody(t *testing.T) {
 		"package p { part def B { use case : } }",
 	} {
 		p := New(source.New("t.sysml", []byte(src)))
-		if root := p.ParseFile(); root == nil {
+		if p.ParseFile() == nil {
 			t.Fatalf("nil tree for %q", src)
 		}
 		if len(p.Diagnostics) == 0 {

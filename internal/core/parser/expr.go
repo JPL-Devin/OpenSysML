@@ -273,7 +273,7 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			p.advance() // #
 			p.expect(lexer.LParen, "expected '(' after '#'")
 			idx := p.parseSequenceExpr()
-			p.expect(lexer.RParen, "expected ')'")
+			p.expect(lexer.RParen, msgExpectedCloseParen)
 			ix := &ast.IndexExpr{Operand: expr, Index: idx}
 			ix.NodeSpan = p.spanFrom(start)
 			expr = ix
@@ -457,7 +457,7 @@ func (p *Parser) parseParenOrSequence(start int) ast.Node {
 			elems = append(elems, p.ParseExpression())
 		}
 	}
-	p.expect(lexer.RParen, "expected ')'")
+	p.expect(lexer.RParen, msgExpectedCloseParen)
 	if len(elems) == 1 {
 		return elems[0]
 	}
@@ -526,7 +526,7 @@ func (p *Parser) parseArgList() ([]ast.Node, []ast.NamedArg) {
 			p.advance()
 		}
 	}
-	p.expect(lexer.RParen, "expected ')'")
+	p.expect(lexer.RParen, msgExpectedCloseParen)
 	return pos, named
 }
 

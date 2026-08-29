@@ -68,7 +68,7 @@ type StateGraph struct {
 	completionOf map[ast.Node]*ast.StateNode
 
 	// endpoints resolves what a transition endpoint names.
-	endpoints Endpoints
+	endpoints EndpointResolver
 
 	// States in the machine (flat list, includes nested)
 	States []*ast.StateNode
@@ -209,7 +209,7 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 
 // ToStateGraphWithEndpoints lowers a state machine, building its transitions
 // from the endpoints the name-resolution tier already resolved.
-func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, endpoints Endpoints) (*StateGraph, error) {
+func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, endpoints EndpointResolver) (*StateGraph, error) {
 	// A machine no scope tree holds is indexed on its own; without the tier's
 	// resolver, one that has a tree names its endpoints from that tree alone.
 	switch {
@@ -551,7 +551,7 @@ func stateNodeFromUsage(graph *StateGraph, usage *ast.Usage, scope *symbols.Scop
 
 // newStateGraph is an empty graph of a machine whose body scope is scope and
 // whose endpoints resolve through endpoints.
-func newStateGraph(scope *symbols.Scope, endpoints Endpoints) *StateGraph {
+func newStateGraph(scope *symbols.Scope, endpoints EndpointResolver) *StateGraph {
 	return &StateGraph{
 		Scope:               scope,
 		vertexOf:            make(map[ast.Node]ast.Node),

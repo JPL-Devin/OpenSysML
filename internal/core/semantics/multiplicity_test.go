@@ -115,7 +115,7 @@ func TestEffectiveMultiplicityAssumesOne(t *testing.T) {
 	if r := m.EffectiveMultiplicityOf(a); r != AssumedRange() {
 		t.Errorf("EffectiveMultiplicityOf(a) = %+v, want %+v", r, AssumedRange())
 	}
-	if msg := m.EffectiveMultiplicityOf(a).CountViolation(2); msg == "" {
+	if m.EffectiveMultiplicityOf(a).CountViolation(2) == "" {
 		t.Error("two values conform to an undeclared multiplicity, want a violation")
 	}
 

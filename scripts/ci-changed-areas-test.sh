@@ -34,7 +34,7 @@ case_() {
   local actual
   actual=$(cd "$work" && bash scripts/ci-changed-areas.sh "$base" HEAD 2>/dev/null |
     grep '=true$' | cut -d= -f1 | sort | paste -sd, -)
-  if [ "$actual" != "$expected" ]; then
+  if [[ "$actual" != "$expected" ]]; then
     echo "FAIL $name: expected [$expected], got [$actual]" >&2
     failures=$((failures + 1))
   else
@@ -46,8 +46,8 @@ case_ docs-only docs docs/guide/index.md
 case_ changelog-only docs CHANGELOG.md
 case_ java-only java clients/java/opensysml-client/pom.xml
 case_ node-only node clients/node/package.json
-case_ python-only python python/opensysml/connection.py
-case_ rust-only rust rust/opensysml/src/connection.rs
+case_ python-only python clients/python/opensysml/connection.py
+case_ rust-only rust clients/rust/opensysml/src/connection.rs
 case_ vscode-only vscode editors/vscode/package.json
 # The grammar generator and its committed output are held together by a Go test.
 case_ vscode-grammar docs,go,java,node,python,rust,vscode editors/vscode/tools/gengrammar/grammar.go
@@ -61,7 +61,7 @@ case_ conformance docs,go,java,node,python,rust,vscode conformance/scenarios/01-
 case_ workflow docs,go,java,node,python,rust,vscode .github/workflows/pr.yml
 case_ unclaimed docs,go,java,node,python,rust,vscode some-new-top-level/thing.txt
 
-if [ "$failures" -ne 0 ]; then
+if [[ "$failures" -ne 0 ]]; then
   echo "$failures case(s) failed" >&2
   exit 1
 fi

@@ -266,7 +266,7 @@ func TestConcurrentOverlaysDoNotSeeEachOther(t *testing.T) {
 				"package Mine"+me+" { public import P::*; part def Own"+me+"; }")
 			over.ExpandWildcardImports()
 
-			if got := len(over.LookupQualified("Mine" + me + "::FromBase")); got != 1 {
+			if len(over.LookupQualified("Mine"+me+"::FromBase")) != 1 {
 				errs <- "model " + me + " does not see the base's name through its own import"
 			}
 			for j := 0; j < models; j++ {
@@ -274,7 +274,7 @@ func TestConcurrentOverlaysDoNotSeeEachOther(t *testing.T) {
 					continue
 				}
 				other := strconv.Itoa(j)
-				if got := len(over.LookupQualified("Mine" + other + "::Own" + other)); got != 0 {
+				if len(over.LookupQualified("Mine"+other+"::Own"+other)) != 0 {
 					errs <- "model " + me + " sees model " + other + "'s document"
 				}
 				if over.DocumentRoot(docNameOf(j)) != nil {

@@ -10,7 +10,7 @@ type TransitionGuardPass struct{}
 
 func (TransitionGuardPass) Level() PassLevel { return LevelType }
 
-func (TransitionGuardPass) ElementScoped() {}
+func (TransitionGuardPass) ElementScoped() { /* marker: per-element gating */ }
 
 func (TransitionGuardPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {

@@ -46,7 +46,7 @@ func TestInstantiate_ValuelessValueTypedFeatureValueIsSentUnset(t *testing.T) {
 		}
 	}
 
-	if got := fvs["k"].GetValue().GetRealValue(); got != 2.0 {
+	if fvs["k"].GetValue().GetRealValue() != 2.0 {
 		kind, value := describeValue(fvs["k"].GetValue())
 		t.Errorf("feature value k: %s %v, want real 2", kind, value)
 	}

@@ -35,7 +35,7 @@ declare -a wanted_targets=()
 for suite in "${SUITES[@]}"; do
 	source_path="${suite%%:*}"
 	target="$parent/${suite#*:}"
-	if [ -d "$target" ]; then
+	if [[ -d "$target" ]]; then
 		echo "Suite already present at $target"
 		echo "Remove that directory to re-download."
 		continue
@@ -44,7 +44,7 @@ for suite in "${SUITES[@]}"; do
 	wanted_targets+=("$target")
 done
 
-if [ "${#wanted_paths[@]}" -eq 0 ]; then
+if [[ "${#wanted_paths[@]}" -eq 0 ]]; then
 	exit 0
 fi
 
@@ -61,7 +61,7 @@ total=0
 for index in "${!wanted_paths[@]}"; do
 	source_path="${wanted_paths[$index]}"
 	target="${wanted_targets[$index]}"
-	if [ ! -d "$work/pilot/$source_path" ]; then
+	if [[ ! -d "$work/pilot/$source_path" ]]; then
 		echo "error: $source_path is missing from $PILOT_REPO at $PILOT_TAG" >&2
 		exit 1
 	fi

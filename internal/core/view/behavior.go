@@ -266,18 +266,31 @@ func (r *Renderer) renderActions(exposed []*symbols.Symbol, out *Rendering) {
 				declKind(elem), r.notationName(elem)))
 			continue
 		}
-		node, ok := r.actionNode(elem.Decl, declKind(elem), r.notationName(elem), declScope(elem), elem.DocName, ids, out, map[ast.Node]bool{}, 0)
+		subject := actionSubject{decl: elem.Decl, kind: declKind(elem), name: r.notationName(elem),
+			scope: declScope(elem), doc: elem.DocName}
+		node, ok := r.actionNode(subject, ids, out, map[ast.Node]bool{}, 0)
 		if ok {
 			out.Roots = append(out.Roots, node)
 		}
 	}
 }
 
+// actionSubject is the action being rendered and the naming context it is
+// rendered in.
+type actionSubject struct {
+	decl  ast.Node
+	kind  string
+	name  string
+	scope *symbols.Scope
+	doc   string
+}
+
 // actionNode renders one lowered action: its nodes as nested nodes, its
 // successions and object flows as edges. A nested action declaring a body of its
 // own is lowered in turn, so the rendering shows the flow within it as well.
-func (r *Renderer) actionNode(decl ast.Node, kind, name string, scope *symbols.Scope, doc string,
-	ids *nodeIDs, out *Rendering, lowered map[ast.Node]bool, depth int) (*Node, bool) {
+func (r *Renderer) actionNode(subject actionSubject, ids *nodeIDs, out *Rendering,
+	lowered map[ast.Node]bool, depth int) (*Node, bool) {
+	decl, kind, name, scope, doc := subject.decl, subject.kind, subject.name, subject.scope, subject.doc
 	graph, err := lower.ToActionGraph(decl, scope)
 	if err != nil {
 		// A node performing statements holds no flow of its own to render, which is
@@ -297,7 +310,9 @@ func (r *Renderer) actionNode(decl ast.Node, kind, name string, scope *symbols.S
 		nodes[node] = child
 		root.Children = append(root.Children, child)
 		if nested, ok := nestedAction(node); ok && depth < maxBehaviorDepth && !lowered[node] {
-			sub, ok := r.actionNode(nested, child.Kind, child.Name, actionScope(scope, nested), doc, ids, out, lowered, depth+1)
+			nestedSubject := actionSubject{decl: nested, kind: child.Kind, name: child.Name,
+				scope: actionScope(scope, nested), doc: doc}
+			sub, ok := r.actionNode(nestedSubject, ids, out, lowered, depth+1)
 			if ok {
 				child.Children, child.Detail = sub.Children, detailWith(child.Detail, "own flow")
 				// The nested flow's own edges belong to the nested nodes, which the

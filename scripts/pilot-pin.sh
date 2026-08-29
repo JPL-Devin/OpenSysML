@@ -17,7 +17,7 @@ pilot_fetch_subtrees() {
 	for entry in "$@"; do
 		source_path="${entry%%:*}"
 		target="${entry#*:}"
-		if [ -d "$target" ]; then
+		if [[ -d "$target" ]]; then
 			echo "Already present at $target"
 			echo "Remove that directory to re-download."
 			continue
@@ -25,7 +25,7 @@ pilot_fetch_subtrees() {
 		paths+=("$source_path")
 		targets+=("$target")
 	done
-	if [ "${#paths[@]}" -eq 0 ]; then
+	if [[ "${#paths[@]}" -eq 0 ]]; then
 		return 0
 	fi
 
@@ -41,7 +41,7 @@ pilot_fetch_subtrees() {
 	for index in "${!paths[@]}"; do
 		source_path="${paths[$index]}"
 		target="${targets[$index]}"
-		if [ ! -d "$work/pilot/$source_path" ]; then
+		if [[ ! -d "$work/pilot/$source_path" ]]; then
 			echo "error: $source_path is missing from $PILOT_REPO at $PILOT_TAG" >&2
 			return 1
 		fi

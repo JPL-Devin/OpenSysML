@@ -17,10 +17,10 @@ var ErrRecursiveStateTyping = errors.New("recursive state typing")
 // cannot represent, rather than dropping it.
 var ErrUnsupportedStateContent = errors.New("unsupported state machine content")
 
-// StateTypes resolves the declaration a type name reaches and the scope of that
-// declaration's body. The name-resolution tier implements it; lowering falls
-// back to the scope tree for a machine lowered without it.
-type StateTypes interface {
+// StateTypeResolver resolves the declaration a type name reaches and the scope
+// of that declaration's body. The name-resolution tier implements it; lowering
+// falls back to the scope tree for a machine lowered without it.
+type StateTypeResolver interface {
 	TypeDecl(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool)
 }
 
@@ -63,7 +63,7 @@ func (g *StateGraph) pop() {
 
 // putVertex records the graph node a declaration lowered into, in the
 // materialization being collected.
-func (g *StateGraph) putVertex(decl ast.Node, node ast.Node) {
+func (g *StateGraph) putVertex(decl, node ast.Node) {
 	if g.cur != nil {
 		g.cur.vertexOf[decl] = node
 		return
@@ -119,7 +119,7 @@ func (g *StateGraph) putCompletion(owner ast.Node, vertex *ast.StateNode) {
 // stateType resolves what a type name reaches: through the name-resolution tier
 // when lowering runs with it, else from the scope tree alone.
 func (g *StateGraph) stateType(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *symbols.Scope, bool) {
-	if types, ok := g.endpoints.(StateTypes); ok {
+	if types, ok := g.endpoints.(StateTypeResolver); ok {
 		if decl, body, found := types.TypeDecl(scope, qn); found {
 			return decl, body, true
 		}

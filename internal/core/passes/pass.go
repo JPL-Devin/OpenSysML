@@ -100,7 +100,13 @@ func (c *Context) DownstreamOfFailure(ref ast.Node) bool {
 	if c == nil || ref == nil {
 		return false
 	}
-	span := ref.Span()
+	return c.downstreamSpan(ref.Span())
+}
+
+func (c *Context) downstreamSpan(span source.Span) bool {
+	if c == nil {
+		return false
+	}
 	for _, f := range c.failures {
 		if f.Offset >= span.Offset && f.End() <= span.End() {
 			return true
