@@ -125,7 +125,7 @@ func (s *Server) symbolDocumentation(sym *symbols.Symbol) string {
 // completionDetail describes an element the way hover does: its kind, plus the
 // type it declares when it declares one.
 func completionDetail(sym *symbols.Symbol) string {
-	detail := sym.Kind.String()
+	detail := sym.Notation()
 	if t := declaredTypeText(sym); t != "" {
 		detail += " : " + t
 	}
