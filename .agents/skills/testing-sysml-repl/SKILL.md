@@ -5366,3 +5366,33 @@ Two REPL pitfalls specific to this kind of session:
   `unresolved reference: Pkg::TrafficLight` (and then `no active state machine session` for
   every follow-up). Declare the `state` at the top level of the loaded file — that is also
   how the guide's samples are written.
+
+## Content-only demo rewrites: separating a regression from a pre-existing limit
+
+When a PR only rewrites `examples/*.sysml` notation (`then done;` for a standalone `done;`,
+`entry`/`do`/`exit <action>`, `accept when <event>`, `assert constraint`, view-usage
+reordering) the binary is unchanged, so any difference must come from the file. Isolate it
+by running the *old* copy of the same file through the *same* binary:
+
+```bash
+git show origin/main:examples/<file>.sysml > /tmp/old.sysml
+printf '%%state Pkg::Machine\n%%quit\n' | ./bin/sysml /tmp/old.sysml | tail -3
+printf '%%state Pkg::Machine\n%%quit\n' | ./bin/sysml examples/<file>.sysml | tail -3
+```
+
+Identical output means the behavior is pre-existing and not the PR's doing — report it as a
+walkthrough/claim gap rather than a regression.
+
+Known shape worth expecting: `examples/phase-c-behavioral-bodies.sysml` validates clean but
+none of its state machines (`PhaseC::Running`, `ConnectionStateMachine`, `VehicleOperating`,
+`AutopilotMode`) can be started — `%state` answers `failed to create executor: initialize
+state machine: no initial state found`, because those states declare substates without an
+`entry; then <state>;` initial transition. That is true on `main` too. A task brief that
+asks you to "start and advance `PhaseC::Running`" is asking for something the file has never
+supported; check the old copy before calling it a regression.
+
+The committed walkthroughs to diff a demo run against are
+`examples/VIEWS-DEMO.md`, `examples/SOLVER-DEMO.md`,
+`examples/disposal-robot-demo/README.md` and — for `action-executor-demo.sysml`, whose own
+`examples/ACTION-EXECUTOR-DEMO.md` is only a pointer — `docs/guide/06-behavior.md`
+("Token-flow patterns").
