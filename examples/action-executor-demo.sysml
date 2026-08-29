@@ -13,7 +13,6 @@ package ActionExecutorDemo {
 
         first start;
         action compute { assign result := 42 * 2; }
-        done;
 
         succession first start then compute;
         succession first compute then done;
@@ -32,7 +31,6 @@ package ActionExecutorDemo {
         action middle { assign task2 := 20; }
         action right { assign task3 := 30; }
         join sync;
-        done;
 
         succession first start then split;
         succession first split then left;
@@ -52,7 +50,6 @@ package ActionExecutorDemo {
         first start;
         action pathA { assign taken := 1; }
         action pathB { assign taken := 2; }
-        done;
 
         succession first start then check;
         succession first pathA then done;

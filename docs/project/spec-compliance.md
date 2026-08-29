@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 755 semantic rules: **666 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 760 semantic rules: **671 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -743,7 +743,7 @@ wrong answer:
 | Set coverage in the conformance corpus | No expression of the language produces a set today — a `ValSet` arises only through the embedding API — so the operations over a set are pinned at the unit level (`TestCollectionOperationsOverSets`, `elementsOf`) rather than by a `.sysml` fixture. A set-valued expression is separate work. |
 | `at`, `first`, `reverse` | Not declared by the Kernel Function Library at all (`head`, `#(1)` and `last` are the declared spellings). Not implemented rather than invented. |
 
-### OpenSysML Extension Library (non-normative)
+### OpenSysML Math Extension Library (non-normative)
 
 The OMG Kernel Function Library declares no exponential, no logarithm and no
 two-argument arctangent: `RealFunctions` has `sqrt`/`floor`/`round`/`abs`/`max`/`min`/`'**'`/`'^'`,
@@ -752,7 +752,8 @@ is all. The vendored OMG files stay byte-identical, so the missing signatures ar
 declared in a clearly non-normative OpenSysML extension instead:
 `internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml`. It
 is bundled by the same `embed.FS` as the vendored tree and enters the same
-gates — `TestStdlibConformance` now reports 95/95 clean. It is OpenSysML code under
+gates — the current bundled-library gate reports 96/96 clean, including this and the
+`DocumentQueries` extension. It is OpenSysML code under
 Apache 2.0, not OMG code under EPL-2.0; `internal/core/libs/stdlib/NOTICE` carves
 the subdirectory out of the OMG notice.
 
@@ -1455,7 +1456,7 @@ per-prefix conformance breakdown and the trace, fixture, negative and robustness
 there, and every other page links here rather than restating them (CONTRIBUTING.md).
 
 **Quality Gates:**
-- Parser: 95/95 stdlib files clean (94 vendored OMG, 1 OpenSysML extension)
+- Parser: 96/96 stdlib files clean (94 vendored OMG, 2 OpenSysML extensions)
 - Execution conformance: every case passing, with `known_failures.txt` empty
 - Training examples: 100/100 clean (no files recorded in `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
@@ -1792,6 +1793,25 @@ These are documented for transparency; none block production use.
 | `shutdown` is answered, and afterwards every request but `exit` is answered `InvalidRequest` (`-32600`); a non-`exit` notification is dropped | `internal/lsp/lifecycle.go` `Server.Shutdown`, `Server.lifecycleHandler` (wraps the handler chain on the read loop, ahead of async dispatch) | `internal/lsp/lifecycle_test.go:TestAfterShutdownOnlyExitIsServed`, `:TestNotificationAfterShutdownIsDropped`, `cmd/sysml-lsp/lifecycle_test.go:TestRequestAfterShutdownIsInvalidRequest` | ✅ Faithful |
 | Keyword completion offers the reserved words **and** the contextual ones — the words the parser reads as syntax positionally that `Keywords()` deliberately omits (`point`, `chain`, `defer`, …, plus `var` in `.kerml`) — per document language, and the VS Code grammars highlight the same set | `internal/core/lexer/contextual.go` `ContextualWords(source.Kind)` (the one source of truth, disjoint from `Keywords()`); `internal/lsp/completion.go` `Server.Completion`; `editors/vscode/tools/gengrammar/grammar.go` `repository`, `checkUnreserved` (`keywords-contextual` rule; generation fails if a word is reserved as well) | `internal/lsp/f9_contextual_completion_test.go:TestCompletionOffersContextualWords`, `:TestCompletionOffersVarInKerMLOnly`, `:TestContextualWordsRemainUsableAsNames`, `internal/core/lexer/f9_contextual_test.go`, `editors/vscode/tools/gengrammar/grammar_test.go:TestContextualWordsAreHighlighted`, `:TestContextualWordsAreLanguageSpecific`, `:TestRenderRejectsAReservedContextualWord` | ✅ Faithful (nothing is reserved by being listed: the lexer is untouched, `attribute point : Real;` still parses, and `on` is offered by neither language, being a literal of no pinned grammar and syntax in no position of ours) |
 | `exit` ends the process: status 0 after a preceding `shutdown`, 1 otherwise | `internal/lsp/lifecycle.go` `Server.Exit`, `Server.ExitCode`; `internal/lsp/server.go` `Server.Run` (returns on the exit signal and closes the connection itself); `cmd/sysml-lsp/main.go` `serve` | `internal/lsp/lifecycle_test.go:TestExitEndsTheSessionWithTheStatusLSPRequires`, `cmd/sysml-lsp/lifecycle_test.go:TestExitAfterShutdownEndsTheProcess`, `:TestExitWithoutShutdownIsNonzero`, `:TestClosedStreamEndsTheProcess` | ✅ Faithful — `Run` returns rather than being killed from a handler, so the process leaves no server behind per editor window |
+
+---
+
+## Native Document-Query Planning (`internal/core/queryplan`) — OpenSysML extension
+
+SysML v2 defines no reusable query-definition language. This extension uses ordinary SysML
+calculation definitions plus the bundled, non-normative `DocumentQueries` library and does not alter
+the grammar.
+
+| Construct | Implementation (file:function) | Tests | Status |
+|---|---|---|---|
+| A calculation definition specializing `DocumentQueries::Query` is recognized as a document query; its effective inherited and declared inputs, result type and multiplicity are retained in an immutable plan | `queryplan/compiler.go` `IsQueryDefinition`, `Compile`, `compiler.signature`; `semantics/redefinition.go` `Model.BehaviorParametersOf`; `queryplan/plan.go` | `queryplan/compiler_test.go:TestCompileQueryCompositionDependencyOrder`, `:TestCompiledProgramIsImmutableToCallers`, `:TestDocumentQueryVocabularyIsBundled` | ✅ Implemented |
+| A result expression is compiled into a closed set of parameter, literal, sequence, ownership/relationship traversal, filtering, ordering and projection operations; unknown or unsupported expressions fail with a typed planning error | `queryplan/compiler.go` `compiler.compileExpression`, `compiler.compileInvocation`, `resultExpression`; `queryplan/errors.go` | `queryplan/compiler_test.go:TestCompileReportsDistinctDefinitionFaults`, `:TestCompileRetainsPositionalBuiltinInvocation` | ✅ Implemented |
+| A named query may invoke another named query only with explicit named bindings; bindings are normalized in parameter order and duplicate, unknown, missing, positional and non-input parameter forms are distinct typed failures | `queryplan/compiler.go` `compiler.compileInvocation`, `compiler.compileNamedArguments`, `compiler.signature` | `queryplan/compiler_test.go:TestCompileRejectsPositionalQueryInvocation`, `:TestCompileValidatesNamedQueryBindings`, `:TestCompileRejectsNonInputQueryParameter` | ✅ Implemented |
+| Dependencies are compiled once in deterministic dependency-first order; direct and indirect cycles are rejected with the complete cycle path | `queryplan/compiler.go` `compiler.compileDefinition`, `compiler.cycleError` | `queryplan/compiler_test.go:TestCompileMemoizesRepeatedDependency`, `:TestCompileRejectsDirectAndIndirectCompositionCycles` | ✅ Implemented |
+| Definition and expression source provenance survives compilation, and planning failures are emitted by the constraint validation tier as source-located `document-query-*` diagnostics | `provenance/origin.go`; `passes/document_query.go` `DocumentQueryPass`, `documentQueryDiagnostic`; `passes/analyze.go` | `queryplan/compiler_test.go:TestCompileQueryCompositionDependencyOrder`, `passes/document_query_test.go` | ✅ Implemented |
+
+**Known limitation:** this layer compiles and validates query definitions only. Query execution,
+typed result rows, document composition and Markdown serialization are not implemented yet.
 
 ---
 

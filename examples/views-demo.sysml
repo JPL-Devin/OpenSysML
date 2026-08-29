@@ -37,7 +37,7 @@ package Lander {
     }
 
     part def Descender {
-        attribute mass : Real = 890.0;
+        attribute mass : Real;
         attribute partCount : Integer = 4;
 
         part tank : Tank;
@@ -85,24 +85,24 @@ package Lander {
         action deployParachute;
         action burn {
             in item propellant : Fuel;
-            first ignite;
+            action ignite;
             action throttle;
+            first ignite;
             succession first ignite then throttle;
         }
 
         fork split;
         join sync;
         action touchdown;
-        done;
 
         succession first start then split;
         succession first split then deployParachute;
         succession first split then burn;
         succession first deployParachute then sync;
         succession first burn then sync;
+        succession first sync then check;
 
         decide check;
-        succession first sync then check;
         if altitude > 0.0 then touchdown;
         else done;
         succession first touchdown then done;
@@ -142,19 +142,6 @@ package LanderViews {
         render asInterconnectionDiagram;
     }
 
-    // States no rendering, so a containment tree renders it, with the
-    // interconnection view nested as a subtree.
-    view overview {
-        expose Lander::descender;
-        expose Lander::heavyDescender;
-        view interfaceSubview :> interfaces;
-
-        // What `%view` checks the exposed landers against: the concern the
-        // viewpoint frames, framed by this view too.
-        satisfy massPerspective;
-        frame concern mass : Lander::MassBudget;
-    }
-
     view partsTable {
         expose Lander::Descender;
         render asElementTable;
@@ -174,5 +161,18 @@ package LanderViews {
     // elements of the model.
     view safetyView {
         expose Lander::**[@Lander::Safety];
+    }
+
+    // States no rendering, so a containment tree renders it, with the
+    // interconnection view nested as a subtree.
+    view overview {
+        expose Lander::descender;
+        expose Lander::heavyDescender;
+        view interfaceSubview :> interfaces;
+
+        // What `%view` checks the exposed landers against: the concern the
+        // viewpoint frames, framed by this view too.
+        satisfy massPerspective;
+        frame concern mass : Lander::MassBudget;
     }
 }

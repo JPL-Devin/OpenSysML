@@ -24,7 +24,7 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 | Gate | Count |
 |---|---|
 | OMG training corpus | **100/100 clean** — no file reports a semantic error |
-| Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative OpenSysML extension |
+| Stdlib parser conformance | 96/96 clean — 94 vendored OMG files and 2 non-normative OpenSysML extensions |
 | Execution conformance cases | 380 |
 | gRPC conformance fixtures | 15 |
 | Golden execution traces | 118 |

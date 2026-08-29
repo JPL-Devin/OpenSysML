@@ -10,9 +10,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// Strict mode must not reject the bundled library. That includes the one file
-// OpenSysML adds itself (OpenSysML Libraries/OpenSysMLMathFunctions.kerml): it
-// extends the library, not the notation, and is written in standard KerML.
+// Strict mode must not reject the bundled library, including OpenSysML's
+// extensions, which use only standard SysML or KerML notation.
 func TestStdlibIsConformingUnderStrictMode(t *testing.T) {
 	src := &embedSource{}
 	paths := src.List()
