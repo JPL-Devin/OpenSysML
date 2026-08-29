@@ -33,3 +33,19 @@ func TestCalcConditionalExpressionWithBodyCondition(t *testing.T) {
 		})
 	}
 }
+
+// Both '?' operands are owned expressions per KerMLExpressions.xtext.
+func TestCalcConditionalExpressionNestedInThenBranch(t *testing.T) {
+	bodies := []string{
+		"if n > 0 ? if n > 9 ? 9 else n else 0",
+		"if n > 0 ? if n > 9 ? 9 else n else if n < -9 ? -9 else n",
+	}
+	for _, body := range bodies {
+		src := "package P { calc def C { in n : Integer; " + body + " } }"
+		p := New(source.New("t.sysml", []byte(src)))
+		p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Fatalf("parse diagnostics for %q: %v", body, p.Diagnostics)
+		}
+	}
+}
