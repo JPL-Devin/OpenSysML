@@ -118,3 +118,59 @@ calc def Specialized :> Base {
 		t.Fatalf("inherited query result reported diagnostics: %v", diagnostics)
 	}
 }
+
+func TestDocumentQueryPassReportsDependencyErrorInDeclaringDocument(t *testing.T) {
+	index := symbols.NewIndex()
+	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
+		t.Fatalf("load standard library: %v", err)
+	}
+	dependencyName := "dependency.sysml"
+	dependencyParser := parser.New(source.New(dependencyName, []byte(`
+package Shared {
+	private import DocumentQueries::*;
+	private import KerML::Root::Element;
+	calc def Leaf :> Query {
+		in source : Element;
+		OwnedElements(source = source)
+	}
+	calc def Broken :> Query {
+		in source : Element;
+		Leaf(source)
+	}
+}`)))
+	dependencyRoot := dependencyParser.ParseFile()
+	callerName := "caller.sysml"
+	callerParser := parser.New(source.New(callerName, []byte(`
+package Caller {
+	private import DocumentQueries::*;
+	private import KerML::Root::Element;
+	private import Shared::*;
+	calc def Entry :> Query {
+		in source : Element;
+		Broken(source = source)
+	}
+}`)))
+	callerRoot := callerParser.ParseFile()
+	index.AddDocument(dependencyName, dependencyRoot)
+	index.AddDocument(callerName, callerRoot)
+	index.ExpandWildcardImports()
+
+	callerDiagnostics := Analyze(callerName, callerRoot, parserDiagnostics(callerParser), index)
+	for _, diagnostic := range callerDiagnostics {
+		if diagnostic.Source == "document-query" {
+			t.Fatalf("caller received dependency diagnostic: %v", callerDiagnostics)
+		}
+	}
+	dependencyDiagnostics := Analyze(
+		dependencyName,
+		dependencyRoot,
+		parserDiagnostics(dependencyParser),
+		index,
+	)
+	for _, diagnostic := range dependencyDiagnostics {
+		if diagnostic.Code == "document-query-positional-query-arguments" {
+			return
+		}
+	}
+	t.Fatalf("dependency received no planner diagnostic: %v", dependencyDiagnostics)
+}

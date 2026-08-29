@@ -2,34 +2,39 @@ package queryplan
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 const queryBaseFQN = "DocumentQueries::Query"
 
 type builtin struct {
-	operation  Operation
-	parameters []string
+	operation Operation
 }
 
 var builtins = map[string]builtin{
-	"DocumentQueries::OwnedElements":   {OperationOwnedElements, []string{"source"}},
-	"DocumentQueries::Descendants":     {OperationDescendants, []string{"source", "maxDepth"}},
-	"DocumentQueries::Ancestors":       {OperationAncestors, []string{"source", "maxDepth"}},
-	"DocumentQueries::RelatedElements": {OperationRelatedElements, []string{"source", "relationshipKind", "direction", "maxDepth"}},
-	"DocumentQueries::WhereType":       {OperationWhereType, []string{"source", "type"}},
-	"DocumentQueries::WhereMetadata":   {OperationWhereMetadata, []string{"source", "metadata"}},
-	"DocumentQueries::WhereName":       {OperationWhereName, []string{"source", "operator", "value"}},
-	"DocumentQueries::WhereFeature":    {OperationWhereFeature, []string{"source", "feature", "operator", "value"}},
-	"DocumentQueries::OrderBy":         {OperationOrderBy, []string{"source", "property", "direction", "missing", "multiple"}},
-	"DocumentQueries::Project":         {OperationProject, []string{"source", "properties"}},
+	"DocumentQueries::OwnedElements":   {OperationOwnedElements},
+	"DocumentQueries::Descendants":     {OperationDescendants},
+	"DocumentQueries::Ancestors":       {OperationAncestors},
+	"DocumentQueries::RelatedElements": {OperationRelatedElements},
+	"DocumentQueries::WhereType":       {OperationWhereType},
+	"DocumentQueries::WhereMetadata":   {OperationWhereMetadata},
+	"DocumentQueries::WhereName":       {OperationWhereName},
+	"DocumentQueries::WhereFeature":    {OperationWhereFeature},
+	"DocumentQueries::OrderBy":         {OperationOrderBy},
+	"DocumentQueries::Project":         {OperationProject},
+}
+
+type typedExpression struct {
+	expression   Expression
+	types        []*symbols.Symbol
+	multiplicity Multiplicity
 }
 
 type compileState uint8
@@ -67,7 +72,7 @@ func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Res
 	}
 	name := symbols.FQNOf(entry)
 	if entry == nil || entry == base || entry.Kind != symbols.SymbolCalcDef || !model.Conforms(entry, base) {
-		return nil, &Error{Kind: ErrorNotQueryDefinition, Query: name, Span: symbolSpan(entry)}
+		return nil, &Error{Kind: ErrorNotQueryDefinition, Query: name, Origin: provenance.Symbol(entry)}
 	}
 	c := &compiler{
 		index:    index,
@@ -108,9 +113,9 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 	}
 	if result.Name == "" {
 		return &Error{
-			Kind:  ErrorMissingResultParameter,
-			Query: symbols.FQNOf(sym),
-			Span:  sym.DeclSpan,
+			Kind:   ErrorMissingResultParameter,
+			Query:  symbols.FQNOf(sym),
+			Origin: provenance.Symbol(sym),
 		}
 	}
 	resultExpression, err := c.resultExpression(sym)
@@ -135,7 +140,7 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 		name:         symbols.FQNOf(sym),
 		parameters:   params,
 		result:       result,
-		expression:   expression,
+		expression:   expression.expression,
 		dependencies: dependencies,
 		origin:       provenance.Symbol(sym),
 	})
@@ -157,7 +162,7 @@ func (c *compiler) signature(sym *symbols.Symbol) ([]Parameter, Parameter, error
 				Kind:      ErrorInvalidParameter,
 				Query:     symbols.FQNOf(sym),
 				Parameter: param.Name,
-				Span:      item.Symbol.DeclSpan,
+				Origin:    provenance.Symbol(item.Symbol),
 			}
 		}
 		params = append(params, param)
@@ -182,17 +187,31 @@ func (c *compiler) parameter(sym *symbols.Symbol) Parameter {
 }
 
 func (c *compiler) parameterType(sym *symbols.Symbol) string {
+	return symbols.FQNOf(c.parameterTypeSymbol(sym))
+}
+
+func (c *compiler) parameterTypeSymbol(sym *symbols.Symbol) *symbols.Symbol {
 	for _, candidate := range c.parameterLineage(sym) {
 		for _, relationship := range semantics.RelationshipsOf(candidate) {
-			if relationship == nil || relationship.Kind != ast.RelTyping {
+			if relationship == nil || relationship.Kind != ast.RelTyping || relationship.Target == nil {
 				continue
 			}
-			if target, ok := c.resolver.ResolveTarget(candidate.OwnerScope, relationship.Target); ok {
-				return symbols.FQNOf(target)
+			target := relationship.Target
+			if reference, ok := target.(*ast.FeatureReference); ok {
+				target = reference.Name
+			}
+			name, ok := target.(*ast.QualifiedName)
+			if !ok {
+				continue
+			}
+			if resolved, ok := c.resolver.ResolveQualified(candidate.OwnerScope, name); ok {
+				if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
+					return canonical
+				}
 			}
 		}
 	}
-	return ""
+	return nil
 }
 
 func (c *compiler) parameterMultiplicity(sym *symbols.Symbol) Multiplicity {
@@ -235,17 +254,17 @@ func (c *compiler) resultExpression(sym *symbols.Symbol) (effectiveResult, error
 	switch len(results) {
 	case 0:
 		return effectiveResult{}, &Error{
-			Kind:  ErrorMissingResult,
-			Query: symbols.FQNOf(sym),
-			Span:  sym.DeclSpan,
+			Kind:   ErrorMissingResult,
+			Query:  symbols.FQNOf(sym),
+			Origin: provenance.Symbol(sym),
 		}
 	case 1:
 		return results[0], nil
 	default:
 		return effectiveResult{}, &Error{
-			Kind:  ErrorConflictingResult,
-			Query: symbols.FQNOf(sym),
-			Span:  sym.DeclSpan,
+			Kind:   ErrorConflictingResult,
+			Query:  symbols.FQNOf(sym),
+			Origin: provenance.Symbol(sym),
 		}
 	}
 }
@@ -312,7 +331,11 @@ func declaredResult(sym *symbols.Symbol) (effectiveResult, bool, error) {
 		}
 	}
 	if len(statements) > 0 {
-		return effectiveResult{}, false, &Error{Kind: ErrorUnsupportedResult, Query: name, Span: sym.DeclSpan}
+		return effectiveResult{}, false, &Error{
+			Kind:   ErrorUnsupportedResult,
+			Query:  name,
+			Origin: provenance.Symbol(sym),
+		}
 	}
 
 	var expression ast.Node
@@ -322,7 +345,11 @@ func declaredResult(sym *symbols.Symbol) (effectiveResult, bool, error) {
 				continue
 			}
 			if expression != nil {
-				return effectiveResult{}, false, &Error{Kind: ErrorUnsupportedResult, Query: name, Span: binding.Decl.Span()}
+				return effectiveResult{}, false, &Error{
+					Kind:   ErrorUnsupportedResult,
+					Query:  name,
+					Origin: provenance.Node(sym.DocName, binding.Decl),
+				}
 			}
 			expression = binding.Ends[1-i].Expr
 		}
@@ -350,7 +377,7 @@ func (c *compiler) compileExpression(
 	params []Parameter,
 	node ast.Node,
 	dependency func(string),
-) (Expression, error) {
+) (typedExpression, error) {
 	switch expression := node.(type) {
 	case *ast.FeatureReference:
 		return c.compileParameterReference(query, owner, expression)
@@ -358,35 +385,51 @@ func (c *compiler) compileExpression(
 		return c.compileInvocation(query, owner, params, expression, dependency)
 	case *ast.SequenceExpr:
 		args := make([]Argument, 0, len(expression.Elements))
+		var types []*symbols.Symbol
+		multiplicity := Multiplicity{Known: true}
 		for _, element := range expression.Elements {
 			value, err := c.compileExpression(query, owner, params, element, dependency)
 			if err != nil {
-				return Expression{}, err
+				return typedExpression{}, err
 			}
-			args = append(args, Argument{Value: value})
+			args = append(args, Argument{Value: value.expression})
+			types = append(types, value.types...)
+			multiplicity = sumMultiplicity(multiplicity, value.multiplicity)
 		}
-		return Expression{
-			operation: OperationSequence,
-			arguments: args,
-			origin:    provenance.Node(owner.DocName, node),
+		return typedExpression{
+			expression: Expression{
+				operation: OperationSequence,
+				arguments: args,
+				origin:    provenance.Node(owner.DocName, node),
+			},
+			types:        types,
+			multiplicity: multiplicity,
 		}, nil
 	case *ast.LiteralString:
-		return literalExpression(owner, node, LiteralString, expression.Value), nil
+		return c.literalExpression(owner, node, LiteralString, expression.Value, "ScalarValues::String"), nil
 	case *ast.LiteralInteger:
-		return literalExpression(owner, node, LiteralInteger, expression.Value), nil
+		return c.literalExpression(owner, node, LiteralInteger, expression.Value, "ScalarValues::Integer"), nil
 	case *ast.LiteralReal:
-		return literalExpression(owner, node, LiteralReal, expression.Value), nil
+		return c.literalExpression(owner, node, LiteralReal, expression.Value, "ScalarValues::Real"), nil
 	case *ast.LiteralBool:
-		return literalExpression(owner, node, LiteralBoolean, strconv.FormatBool(expression.Value)), nil
+		return c.literalExpression(
+			owner,
+			node,
+			LiteralBoolean,
+			strconv.FormatBool(expression.Value),
+			"ScalarValues::Boolean",
+		), nil
 	case *ast.LiteralInfinity:
-		return literalExpression(owner, node, LiteralInfinity, "*"), nil
+		return c.literalExpression(owner, node, LiteralInfinity, "*", ""), nil
 	case *ast.NullExpr:
-		return literalExpression(owner, node, LiteralNull, "null"), nil
+		result := c.literalExpression(owner, node, LiteralNull, "null", "")
+		result.multiplicity = Multiplicity{Known: true}
+		return result, nil
 	default:
-		return Expression{}, &Error{
-			Kind:  ErrorUnsupportedExpression,
-			Query: symbols.FQNOf(query),
-			Span:  node.Span(),
+		return typedExpression{}, &Error{
+			Kind:   ErrorUnsupportedExpression,
+			Query:  symbols.FQNOf(query),
+			Origin: provenance.Node(owner.DocName, node),
 		}
 	}
 }
@@ -395,25 +438,29 @@ func (c *compiler) compileParameterReference(
 	query *symbols.Symbol,
 	owner *symbols.Symbol,
 	expression *ast.FeatureReference,
-) (Expression, error) {
+) (typedExpression, error) {
 	target, ok := c.resolver.ResolveQualified(owner.Scope, expression.Name)
 	if ok {
 		for _, param := range c.model.BehaviorParametersOf(query) {
 			if !param.IsResult && c.parameterIncludes(param.Symbol, target) {
-				return Expression{
-					operation: OperationParameter,
-					target:    param.Symbol.Name,
-					origin:    provenance.Node(owner.DocName, expression),
+				return typedExpression{
+					expression: Expression{
+						operation: OperationParameter,
+						target:    param.Symbol.Name,
+						origin:    provenance.Node(owner.DocName, expression),
+					},
+					types:        symbolSlice(c.parameterTypeSymbol(param.Symbol)),
+					multiplicity: c.parameterMultiplicity(param.Symbol),
 				}, nil
 			}
 		}
 	}
 	name := qualifiedName(expression.Name)
-	return Expression{}, &Error{
+	return typedExpression{}, &Error{
 		Kind:      ErrorUnknownParameter,
 		Query:     symbols.FQNOf(query),
 		Parameter: name,
-		Span:      expression.Span(),
+		Origin:    provenance.Node(owner.DocName, expression),
 	}
 }
 
@@ -435,75 +482,103 @@ func (c *compiler) compileInvocation(
 	params []Parameter,
 	expression *ast.InvocationExpr,
 	dependency func(string),
-) (Expression, error) {
+) (typedExpression, error) {
 	name := qualifiedName(expression.Type)
 	if expression.Operand != nil {
-		return Expression{}, &Error{
+		return typedExpression{}, &Error{
 			Kind:   ErrorUnsupportedExpression,
 			Query:  symbols.FQNOf(query),
 			Target: name,
-			Span:   expression.Span(),
+			Origin: provenance.Node(owner.DocName, expression),
 		}
 	}
 	target, ok := c.resolver.ResolveQualified(owner.Scope, expression.Type)
 	if !ok {
-		return Expression{}, &Error{
+		return typedExpression{}, &Error{
 			Kind:   ErrorUnknownInvocation,
 			Query:  symbols.FQNOf(query),
 			Target: name,
-			Span:   expression.Span(),
+			Origin: provenance.Node(owner.DocName, expression),
 		}
 	}
 	targetName := symbols.FQNOf(target)
 	if operation, ok := builtins[targetName]; ok {
-		args, err := c.compileBuiltinArguments(query, owner, params, expression, operation, dependency)
+		targetParams, targetResult, err := c.signature(target)
 		if err != nil {
-			return Expression{}, err
+			return typedExpression{}, err
 		}
-		return Expression{
-			operation: operation.operation,
-			target:    targetName,
-			arguments: args,
-			origin:    provenance.Node(owner.DocName, expression),
+		args, err := c.compileBuiltinArguments(
+			query,
+			owner,
+			params,
+			expression,
+			targetName,
+			targetParams,
+			dependency,
+		)
+		if err != nil {
+			return typedExpression{}, err
+		}
+		return typedExpression{
+			expression: Expression{
+				operation: operation.operation,
+				target:    targetName,
+				arguments: args,
+				origin:    provenance.Node(owner.DocName, expression),
+			},
+			types:        symbolSlice(c.typeSymbol(targetResult.Type)),
+			multiplicity: targetResult.Multiplicity,
 		}, nil
 	}
 	if !IsQueryDefinition(c.index, c.model, target) {
-		return Expression{}, &Error{
+		return typedExpression{}, &Error{
 			Kind:   ErrorUnknownInvocation,
 			Query:  symbols.FQNOf(query),
 			Target: targetName,
-			Span:   expression.Span(),
+			Origin: provenance.Node(owner.DocName, expression),
 		}
 	}
 	if len(expression.Args) > 0 {
-		return Expression{}, &Error{
+		return typedExpression{}, &Error{
 			Kind:   ErrorPositionalQueryArgs,
 			Query:  symbols.FQNOf(query),
 			Target: targetName,
-			Span:   expression.Span(),
+			Origin: provenance.Node(owner.DocName, expression),
 		}
 	}
 
-	targetParams, _, err := c.signature(target)
+	targetParams, targetResult, err := c.signature(target)
 	if err != nil {
-		return Expression{}, err
+		return typedExpression{}, err
 	}
-	args, err := c.compileNamedArguments(query, owner, params, targetName, targetParams, expression.NamedArgs, dependency)
+	args, err := c.compileNamedArguments(
+		query,
+		owner,
+		params,
+		targetName,
+		targetParams,
+		expression,
+		dependency,
+	)
 	if err != nil {
-		return Expression{}, err
+		return typedExpression{}, err
 	}
 	dependency(targetName)
 	if err := c.compileDefinition(target); err != nil {
 		if planning, ok := err.(*Error); ok && planning.Kind == ErrorCompositionCycle {
-			planning.Span = expression.Span()
+			planning.Origin = provenance.Node(owner.DocName, expression)
 		}
-		return Expression{}, err
+		return typedExpression{}, err
 	}
-	return Expression{
-		operation: OperationInvoke,
-		target:    targetName,
-		arguments: args,
-		origin:    provenance.Node(owner.DocName, expression),
+	return typedExpression{
+		expression: Expression{
+			operation: OperationInvoke,
+			target:    targetName,
+			arguments: args,
+			origin:    provenance.Node(owner.DocName, expression),
+		},
+		types:        symbolSlice(c.typeSymbol(targetResult.Type)),
+		multiplicity: targetResult.Multiplicity,
 	}, nil
 }
 
@@ -512,16 +587,17 @@ func (c *compiler) compileBuiltinArguments(
 	owner *symbols.Symbol,
 	params []Parameter,
 	expression *ast.InvocationExpr,
-	operation builtin,
+	target string,
+	targetParams []Parameter,
 	dependency func(string),
 ) ([]Argument, error) {
 	if len(expression.Args) > 0 {
-		if len(expression.Args) != len(operation.parameters) {
+		if len(expression.Args) != len(targetParams) {
 			return nil, &Error{
 				Kind:   ErrorArgumentCount,
 				Query:  symbols.FQNOf(query),
 				Target: qualifiedName(expression.Type),
-				Span:   expression.Span(),
+				Origin: provenance.Node(owner.DocName, expression),
 			}
 		}
 		args := make([]Argument, 0, len(expression.Args))
@@ -530,22 +606,27 @@ func (c *compiler) compileBuiltinArguments(
 			if err != nil {
 				return nil, err
 			}
-			args = append(args, Argument{Name: operation.parameters[i], Value: value})
+			if err := c.validateArgument(
+				query,
+				target,
+				targetParams[i],
+				value,
+				provenance.Node(owner.DocName, node),
+			); err != nil {
+				return nil, err
+			}
+			args = append(args, Argument{Name: targetParams[i].Name, Value: value.expression})
 		}
 		return args, nil
 	}
 
-	spec := make([]Parameter, 0, len(operation.parameters))
-	for _, name := range operation.parameters {
-		spec = append(spec, Parameter{Name: name, Multiplicity: Multiplicity{Lower: 1, Upper: 1, Known: true}})
-	}
 	return c.compileNamedArguments(
 		query,
 		owner,
 		params,
 		qualifiedName(expression.Type),
-		spec,
-		expression.NamedArgs,
+		targetParams,
+		expression,
 		dependency,
 	)
 }
@@ -556,9 +637,10 @@ func (c *compiler) compileNamedArguments(
 	callerParams []Parameter,
 	target string,
 	targetParams []Parameter,
-	named []ast.NamedArg,
+	expression *ast.InvocationExpr,
 	dependency func(string),
 ) ([]Argument, error) {
+	named := expression.NamedArgs
 	bound := make(map[string]ast.Node, len(named))
 	known := make(map[string]Parameter, len(targetParams))
 	for _, param := range targetParams {
@@ -572,7 +654,7 @@ func (c *compiler) compileNamedArguments(
 				Query:     symbols.FQNOf(query),
 				Target:    target,
 				Parameter: name,
-				Span:      arg.Value.Span(),
+				Origin:    provenance.Node(owner.DocName, arg.Value),
 			}
 		}
 		if _, ok := known[name]; !ok {
@@ -581,7 +663,7 @@ func (c *compiler) compileNamedArguments(
 				Query:     symbols.FQNOf(query),
 				Target:    target,
 				Parameter: name,
-				Span:      arg.Value.Span(),
+				Origin:    provenance.Node(owner.DocName, arg.Value),
 			}
 		}
 		bound[name] = arg.Value
@@ -597,7 +679,7 @@ func (c *compiler) compileNamedArguments(
 					Query:     symbols.FQNOf(query),
 					Target:    target,
 					Parameter: param.Name,
-					Span:      symbolSpan(query),
+					Origin:    provenance.Node(owner.DocName, expression),
 				}
 			}
 			continue
@@ -606,7 +688,16 @@ func (c *compiler) compileNamedArguments(
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, Argument{Name: param.Name, Named: true, Value: value})
+		if err := c.validateArgument(
+			query,
+			target,
+			param,
+			value,
+			provenance.Node(owner.DocName, node),
+		); err != nil {
+			return nil, err
+		}
+		args = append(args, Argument{Name: param.Name, Named: true, Value: value.expression})
 	}
 	return args, nil
 }
@@ -625,20 +716,158 @@ func (c *compiler) cycleError(target *symbols.Symbol) error {
 	}
 	path = append(path, symbols.FQNOf(target))
 	return &Error{
-		Kind:  ErrorCompositionCycle,
-		Query: symbols.FQNOf(target),
-		Path:  path,
-		Span:  target.DeclSpan,
+		Kind:   ErrorCompositionCycle,
+		Query:  symbols.FQNOf(target),
+		Path:   path,
+		Origin: provenance.Symbol(target),
 	}
 }
 
-func literalExpression(query *symbols.Symbol, node ast.Node, kind LiteralKind, value string) Expression {
-	return Expression{
-		operation: OperationLiteral,
-		literal:   kind,
-		value:     value,
-		origin:    provenance.Node(query.DocName, node),
+func (c *compiler) literalExpression(
+	query *symbols.Symbol,
+	node ast.Node,
+	kind LiteralKind,
+	value string,
+	typeName string,
+) typedExpression {
+	return typedExpression{
+		expression: Expression{
+			operation: OperationLiteral,
+			literal:   kind,
+			value:     value,
+			origin:    provenance.Node(query.DocName, node),
+		},
+		types:        symbolSlice(c.typeSymbol(typeName)),
+		multiplicity: Multiplicity{Lower: 1, Upper: 1, Known: true},
 	}
+}
+
+func (c *compiler) validateArgument(
+	query *symbols.Symbol,
+	target string,
+	param Parameter,
+	value typedExpression,
+	origin provenance.Origin,
+) error {
+	if want := c.typeSymbol(param.Type); want != nil && !c.argumentTypesConform(value.types, want) {
+		return &Error{
+			Kind:      ErrorArgumentType,
+			Query:     symbols.FQNOf(query),
+			Target:    target,
+			Parameter: param.Name,
+			Expected:  param.Type,
+			Actual:    typeNames(value.types),
+			Origin:    origin,
+		}
+	}
+	if !multiplicityConforms(value.multiplicity, param.Multiplicity) {
+		return &Error{
+			Kind:      ErrorArgumentMultiplicity,
+			Query:     symbols.FQNOf(query),
+			Target:    target,
+			Parameter: param.Name,
+			Expected:  multiplicityString(param.Multiplicity),
+			Actual:    multiplicityString(value.multiplicity),
+			Origin:    origin,
+		}
+	}
+	return nil
+}
+
+func (c *compiler) argumentTypesConform(actual []*symbols.Symbol, expected *symbols.Symbol) bool {
+	for _, candidate := range actual {
+		if candidate == nil || candidate == expected {
+			continue
+		}
+		got, want := c.model.PrimTypeOf(candidate), c.model.PrimTypeOf(expected)
+		if got != semantics.PrimUnknown || want != semantics.PrimUnknown {
+			if got != semantics.PrimUnknown && want != semantics.PrimUnknown &&
+				semantics.PrimConforms(got, want) {
+				continue
+			}
+			return false
+		}
+		if c.model.Conforms(candidate, expected) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func (c *compiler) typeSymbol(name string) *symbols.Symbol {
+	if name == "" {
+		return nil
+	}
+	matches := symbols.PreferDeclared(c.index.LookupQualified(name))
+	if len(matches) != 1 {
+		return nil
+	}
+	return matches[0]
+}
+
+func symbolSlice(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	return []*symbols.Symbol{sym}
+}
+
+func typeNames(types []*symbols.Symbol) string {
+	if len(types) == 0 {
+		return "unknown"
+	}
+	seen := make(map[string]bool, len(types))
+	names := make([]string, 0, len(types))
+	for _, sym := range types {
+		name := symbols.FQNOf(sym)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return "unknown"
+	}
+	return strings.Join(names, " or ")
+}
+
+func sumMultiplicity(left, right Multiplicity) Multiplicity {
+	if !left.Known || !right.Known {
+		return Multiplicity{}
+	}
+	sum := Multiplicity{
+		Lower: left.Lower + right.Lower,
+		Known: true,
+	}
+	if left.UpperInfinite || right.UpperInfinite {
+		sum.UpperInfinite = true
+		return sum
+	}
+	sum.Upper = left.Upper + right.Upper
+	return sum
+}
+
+func multiplicityConforms(actual, expected Multiplicity) bool {
+	if !actual.Known || !expected.Known || actual.Lower < expected.Lower {
+		return !actual.Known || !expected.Known
+	}
+	if expected.UpperInfinite {
+		return true
+	}
+	return !actual.UpperInfinite && actual.Upper <= expected.Upper
+}
+
+func multiplicityString(multiplicity Multiplicity) string {
+	if !multiplicity.Known {
+		return "unknown"
+	}
+	upper := strconv.FormatInt(multiplicity.Upper, 10)
+	if multiplicity.UpperInfinite {
+		upper = "*"
+	}
+	return "[" + strconv.FormatInt(multiplicity.Lower, 10) + ".." + upper + "]"
 }
 
 func qualifiedName(name *ast.QualifiedName) string {
@@ -653,11 +882,4 @@ func qualifiedName(name *ast.QualifiedName) string {
 		out += part.Text
 	}
 	return out
-}
-
-func symbolSpan(sym *symbols.Symbol) source.Span {
-	if sym == nil {
-		return source.Span{}
-	}
-	return sym.DeclSpan
 }

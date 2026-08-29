@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -164,4 +165,58 @@ func TestPublishDiagnosticsNilClientNoPanic(t *testing.T) {
 	ws.Open("ok.sysml", []byte("package P;"), 1)
 	// s.client is nil; must not panic.
 	s.publishDiagnostics(context.Background(), "ok.sysml")
+}
+
+func TestPublishDiagnosticsKeepsQueryDependencyErrorsInTheirDocument(t *testing.T) {
+	const dependency = `package Shared {
+	private import DocumentQueries::*;
+	private import KerML::Root::Element;
+	calc def Leaf :> Query {
+		in source : Element;
+		OwnedElements(source = source)
+	}
+	calc def Broken :> Query {
+		in source : Element;
+		Leaf(source)
+	}
+}`
+	const caller = `package Caller {
+	private import DocumentQueries::*;
+	private import KerML::Root::Element;
+	private import Shared::*;
+	calc def Entry :> Query {
+		in source : Element;
+		Broken(source = source)
+	}
+}`
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	fc := &fakeClient{}
+	s.client = fc
+	ws.Open("dependency.sysml", []byte(dependency), 1)
+	ws.Open("caller.sysml", []byte(caller), 1)
+
+	s.publishDiagnostics(context.Background(), "caller.sysml")
+	s.publishDiagnostics(context.Background(), "dependency.sysml")
+
+	published := fc.all()
+	if len(published) != 2 {
+		t.Fatalf("published = %d document(s), want caller and dependency", len(published))
+	}
+	for _, diagnostic := range published[0].Diagnostics {
+		if diagnostic.Source == "document-query" {
+			t.Fatalf("caller received dependency diagnostic: %v", published[0].Diagnostics)
+		}
+	}
+	for _, diagnostic := range published[1].Diagnostics {
+		if diagnostic.Code != "document-query-positional-query-arguments" {
+			continue
+		}
+		want := offsetToPosition([]byte(dependency), strings.Index(dependency, "Leaf(source)"))
+		if diagnostic.Range.Start != want {
+			t.Fatalf("dependency diagnostic starts at %v, want %v", diagnostic.Range.Start, want)
+		}
+		return
+	}
+	t.Fatalf("dependency received no planner diagnostic: %v", published[1].Diagnostics)
 }

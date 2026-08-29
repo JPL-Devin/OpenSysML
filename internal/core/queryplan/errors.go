@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 )
 
 // ErrorKind classifies a query-planning failure.
@@ -25,6 +25,8 @@ const (
 	ErrorUnknownArgument        ErrorKind = "unknown-argument"
 	ErrorMissingArgument        ErrorKind = "missing-argument"
 	ErrorArgumentCount          ErrorKind = "argument-count"
+	ErrorArgumentType           ErrorKind = "argument-type"
+	ErrorArgumentMultiplicity   ErrorKind = "argument-multiplicity"
 	ErrorCompositionCycle       ErrorKind = "composition-cycle"
 	ErrorUnknownParameter       ErrorKind = "unknown-parameter"
 	ErrorUnsupportedExpression  ErrorKind = "unsupported-expression"
@@ -37,7 +39,9 @@ type Error struct {
 	Target    string
 	Parameter string
 	Path      []string
-	Span      source.Span
+	Expected  string
+	Actual    string
+	Origin    provenance.Origin
 }
 
 func (e *Error) Error() string {
@@ -70,6 +74,24 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("query %s does not bind required parameter %s of %s", e.Query, e.Parameter, e.Target)
 	case ErrorArgumentCount:
 		return fmt.Sprintf("query %s invokes %s with the wrong number of arguments", e.Query, e.Target)
+	case ErrorArgumentType:
+		return fmt.Sprintf(
+			"query %s binds parameter %s of %s with type %s, expected %s",
+			e.Query,
+			e.Parameter,
+			e.Target,
+			e.Actual,
+			e.Expected,
+		)
+	case ErrorArgumentMultiplicity:
+		return fmt.Sprintf(
+			"query %s binds parameter %s of %s with multiplicity %s, expected %s",
+			e.Query,
+			e.Parameter,
+			e.Target,
+			e.Actual,
+			e.Expected,
+		)
 	case ErrorCompositionCycle:
 		return fmt.Sprintf("document query composition cycle: %s", strings.Join(e.Path, " -> "))
 	case ErrorUnknownParameter:

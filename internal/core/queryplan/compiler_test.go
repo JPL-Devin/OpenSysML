@@ -17,12 +17,14 @@ import (
 const queryImports = `
 private import DocumentQueries::*;
 private import KerML::Root::Element;
+private import ScalarValues::*;
 `
 
 type queryFixture struct {
 	index    *symbols.Index
 	model    *semantics.Model
 	resolver *resolve.Resolver
+	content  string
 }
 
 func loadQueryFixture(t *testing.T, body string) queryFixture {
@@ -32,7 +34,8 @@ func loadQueryFixture(t *testing.T, body string) queryFixture {
 		t.Fatalf("load standard library: %v", err)
 	}
 	name := "queries.sysml"
-	p := parser.New(source.New(name, []byte("package Fixture {"+queryImports+body+"}")))
+	content := "package Fixture {" + queryImports + body + "}"
+	p := parser.New(source.New(name, []byte(content)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {
 		t.Fatalf("parse query fixture: %v", p.Diagnostics)
@@ -41,7 +44,7 @@ func loadQueryFixture(t *testing.T, body string) queryFixture {
 	index.ExpandWildcardImports()
 	resolver := resolve.New(index)
 	model := semantics.NewModel(resolver)
-	return queryFixture{index: index, model: model, resolver: resolver}
+	return queryFixture{index: index, model: model, resolver: resolver, content: content}
 }
 
 func (f queryFixture) symbol(t *testing.T, name string) *symbols.Symbol {
@@ -383,6 +386,114 @@ calc def Duplicate :> Query {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.name))
 			planningError(t, err, test.kind)
+		})
+	}
+}
+
+func TestCompileValidatesNamedQueryBindingTypes(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+calc def NeedsStatus :> Query {
+	in source : Element;
+	in status : String;
+	OwnedElements(source = source)
+}
+calc def WrongUserType :> Query {
+	in source : Element;
+	NeedsStatus(source = source, status = source)
+}
+calc def WrongBuiltinType :> Query {
+	in source : Element;
+	Descendants(source = source, maxDepth = "all")
+}
+calc def WrongBuiltinElementType :> Query {
+	OwnedElements(source = "none")
+}
+calc def WrongPositionalBuiltinType :> Query {
+	in source : Element;
+	Descendants(source, "all")
+}
+`)
+	base, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, "NeedsStatus"))
+	if err != nil {
+		t.Fatalf("compile target query: %v", err)
+	}
+	definitions := base.Definitions()
+	if got := definitions[len(definitions)-1].Parameters()[1].Type; got != "ScalarValues::String" {
+		t.Fatalf("status parameter type = %q", got)
+	}
+	tests := []struct {
+		name      string
+		parameter string
+		expected  string
+		actual    string
+		argument  string
+	}{
+		{"WrongUserType", "status", "ScalarValues::String", "KerML::Root::Element", "source"},
+		{"WrongBuiltinType", "maxDepth", "ScalarValues::Integer", "ScalarValues::String", `"all"`},
+		{"WrongBuiltinElementType", "source", "KerML::Root::Element", "ScalarValues::String", `"none"`},
+		{"WrongPositionalBuiltinType", "maxDepth", "ScalarValues::Integer", "ScalarValues::String", `"all"`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.name))
+			planning := planningError(t, err, ErrorArgumentType)
+			if planning.Parameter != test.parameter ||
+				planning.Expected != test.expected ||
+				planning.Actual != test.actual ||
+				planning.Origin.Doc != "queries.sysml" {
+				t.Fatalf("argument type error = %+v", planning)
+			}
+			span := planning.Origin.Span
+			if got := fixture.content[span.Offset:span.End()]; got != test.argument {
+				t.Fatalf("argument origin = %q, want %q", got, test.argument)
+			}
+		})
+	}
+}
+
+func TestCompileValidatesNamedQueryBindingMultiplicity(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+calc def NeedsOne :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def HasMany :> Query {
+	in sources : Element[0..*];
+	NeedsOne(source = sources)
+}
+calc def NeedsMany :> Query {
+	in sources : Element[2..*];
+	OwnedElements(source = sources)
+}
+calc def HasOne :> Query {
+	in source : Element;
+	NeedsMany(sources = source)
+}
+`)
+	tests := []struct {
+		name      string
+		parameter string
+		expected  string
+		actual    string
+		argument  string
+	}{
+		{"HasMany", "source", "[1..1]", "[0..*]", "sources"},
+		{"HasOne", "sources", "[2..*]", "[1..1]", "source"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.name))
+			planning := planningError(t, err, ErrorArgumentMultiplicity)
+			if planning.Parameter != test.parameter ||
+				planning.Expected != test.expected ||
+				planning.Actual != test.actual ||
+				planning.Origin.Doc != "queries.sysml" {
+				t.Fatalf("argument multiplicity error = %+v", planning)
+			}
+			span := planning.Origin.Span
+			if got := fixture.content[span.Offset:span.End()]; got != test.argument {
+				t.Fatalf("argument origin = %q, want %q", got, test.argument)
+			}
 		})
 	}
 }

@@ -33,8 +33,13 @@ func (DocumentQueryPass) Run(ctx *Context, name string, root *ast.RootNamespace)
 		}
 		if _, err := queryplan.Compile(ctx.Index, ctx.Model(), ctx.Resolver(), sym); err != nil {
 			var planning *queryplan.Error
-			if errors.As(err, &planning) && ctx.downstreamSpan(planning.Span) {
-				return
+			if errors.As(err, &planning) {
+				if planning.Origin.Doc != "" && planning.Origin.Doc != name {
+					return
+				}
+				if ctx.downstreamSpan(planning.Origin.Span) {
+					return
+				}
 			}
 			diagnostics = append(diagnostics, documentQueryDiagnostic(err))
 		}
@@ -54,7 +59,7 @@ func documentQueryDiagnostic(err error) Diagnostic {
 	}
 	return Diagnostic{
 		Severity: SeverityError,
-		Span:     planning.Span,
+		Span:     planning.Origin.Span,
 		Message:  planning.Error(),
 		Code:     "document-query-" + string(planning.Kind),
 		Source:   "document-query",
