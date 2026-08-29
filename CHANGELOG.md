@@ -23,6 +23,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **A failing Java, Node or public-Go-API job now fails the PR gate.** GitHub's `Build and test`
+  check exists to give path-filtered jobs one stable required name, but its `needs` listed neither
+  client test job nor the `client/opensysml` conformance run, so all three reported green through
+  it. It waits on every job now, and `node-test` waits on `build` — the job that uploads the binary
+  it downloads — rather than on the gate itself, which had chained it behind the whole workflow.
+
 - **The scan analyzes the Java client with types and the Python client against its own version
   range.** It warned about missing `sonar.java.binaries`/`sonar.java.libraries` and fell back to a
   syntactic analysis of the Java sources, and assumed every Python 3 version, which drops the rules

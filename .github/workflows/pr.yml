@@ -414,7 +414,10 @@ jobs:
     needs:
       - changes
       - build
+      - conformance-pkg
       - docs
+      - java-test
+      - node-test
       - python-test
       - race-tests
       - rust-test
@@ -429,7 +432,10 @@ jobs:
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
           BUILD_RESULT: ${{ needs.build.result }}
+          CONFORMANCE_PKG_RESULT: ${{ needs.conformance-pkg.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
+          JAVA_TEST_RESULT: ${{ needs.java-test.result }}
+          NODE_TEST_RESULT: ${{ needs.node-test.result }}
           PYTHON_TEST_RESULT: ${{ needs.python-test.result }}
           RACE_TESTS_RESULT: ${{ needs.race-tests.result }}
           RUST_TEST_RESULT: ${{ needs.rust-test.result }}
@@ -439,7 +445,10 @@ jobs:
           ok() { [ "$1" = success ] || [ "$1" = skipped ]; }
           if [ "$CHANGES_RESULT" != success ] ||
              ! ok "$BUILD_RESULT" ||
+             ! ok "$CONFORMANCE_PKG_RESULT" ||
              ! ok "$DOCS_RESULT" ||
+             ! ok "$JAVA_TEST_RESULT" ||
+             ! ok "$NODE_TEST_RESULT" ||
              ! ok "$PYTHON_TEST_RESULT" ||
              ! ok "$RACE_TESTS_RESULT" ||
              ! ok "$RUST_TEST_RESULT" ||
@@ -447,7 +456,10 @@ jobs:
              ! ok "$VSCODE_EXTENSION_RESULT"; then
             echo "changes=$CHANGES_RESULT"
             echo "build=$BUILD_RESULT"
+            echo "conformance-pkg=$CONFORMANCE_PKG_RESULT"
             echo "docs=$DOCS_RESULT"
+            echo "java-test=$JAVA_TEST_RESULT"
+            echo "node-test=$NODE_TEST_RESULT"
             echo "python-test=$PYTHON_TEST_RESULT"
             echo "race-tests=$RACE_TESTS_RESULT"
             echo "rust-test=$RUST_TEST_RESULT"
@@ -516,7 +528,7 @@ jobs:
 
   node-test:
     name: Node client tests
-    needs: [changes, build-and-test]
+    needs: [changes, build]
     if: needs.changes.outputs.node == 'true'
     runs-on: ubuntu-latest
     permissions:
