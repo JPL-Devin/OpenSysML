@@ -153,7 +153,7 @@ source → lexer → parser → AST → symbol index → resolve → passes
 
 ### 6a. Highlighting (`internal/core/highlight`)
 
-- **Semantic tokens:** `Tokens(content, root, scope, Resolution)` — keywords, comments and literals from the lexer; declared names from the symbol table; reference segments from the resolver
+- **Semantic tokens:** `Tokens(content, root, scope, SegmentResolver)` — keywords, comments and literals from the lexer; declared names from the symbol table; reference segments from the resolver
 - **Ordered and disjoint:** the result is sorted by offset with overlaps dropped, semantics winning, so a consumer encodes it directly
 - **Vocabulary:** LSP token types and modifiers (`Classes()`, `Modifiers()` give legend order)
 

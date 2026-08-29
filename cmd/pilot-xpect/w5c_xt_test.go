@@ -191,7 +191,7 @@ func TestW5CSqueezeLocate(t *testing.T) {
 	if !ok {
 		t.Fatal("`un` not located")
 	}
-	if got := content[offset+2]; got != ':' {
+	if content[offset+2] != ':' {
 		t.Errorf("located `un` inside a longer identifier at %d", offset)
 	}
 

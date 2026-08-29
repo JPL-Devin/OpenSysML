@@ -2030,15 +2030,6 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			members = p.parseCalcBody()
 			hasBody = true
 		}
-	case ast.UsageExpr:
-		// An expression's body is members ending in the expression it computes
-		// (KerML.xtext Expression): `expr e1 {v > 3}`.
-		if p.accept2(lexer.Semicolon) {
-			hasBody = false
-		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
-			members = p.parseCaseBody()
-			hasBody = true
-		}
 	case ast.UsageBool:
 		// Bool usage bodies: can be calc-style (with return) OR constraint-style (single expression)
 		// Lookahead: if body starts with 'in' or 'return' → calcBody, otherwise → constraint-style expression
@@ -2101,9 +2092,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			members = p.parseRequirementBody()
 			hasBody = true
 		}
-	case ast.UsageCase, ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase:
-		// Case bodies may end in a ResultExpressionMember (SysML.xtext
-		// CalculationBodyPart): `vehicle.mass` as the last member.
+	case ast.UsageExpr, ast.UsageCase, ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase:
+		// Expression bodies end in the expression they compute (KerML.xtext Expression);
+		// case bodies may end in a ResultExpressionMember (SysML.xtext CalculationBodyPart).
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
@@ -3741,7 +3732,7 @@ func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 func (p *Parser) parseNaryConnectorEnds(u *ast.Usage) {
 	before := len(u.ConnectorEnds)
 	p.parseConnectorEnds(u, "")
-	if n := len(u.ConnectorEnds) - before; n == 1 {
+	if len(u.ConnectorEnds)-before == 1 {
 		p.error(u.ConnectorEnds[before].Span(),
 			"expected at least two connector ends in a parenthesized end list")
 	}

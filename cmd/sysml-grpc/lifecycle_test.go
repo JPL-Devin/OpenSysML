@@ -274,7 +274,7 @@ func TestServiceServesRPCsAndShutsDownCleanly(t *testing.T) {
 		t.Fatalf("Instantiate reported %q", inst.Error)
 	}
 	mass := featureValueOf(t, inst, "mass")
-	if got := mass.GetValue().GetIntValue(); got != 1500 {
+	if mass.GetValue().GetIntValue() != 1500 {
 		t.Errorf("mass = %v, want 1500", mass.GetValue())
 	}
 
@@ -441,7 +441,7 @@ func freePort(t *testing.T) string {
 // nonzero status and a message naming the flag.
 func TestUnknownFlagExitsNonzero(t *testing.T) {
 	s := startService(t, "-listen", "0")
-	if status := s.waitStatus(30 * time.Second); status == 0 {
+	if s.waitStatus(30*time.Second) == 0 {
 		t.Errorf("exit status = 0, want nonzero\nlogs: %s", s.logs.String())
 	}
 	if logs := s.logs.String(); !strings.Contains(logs, "flag provided but not defined: -listen") {

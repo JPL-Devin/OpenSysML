@@ -10,7 +10,7 @@ func TestW8CMetadataAbstractType(t *testing.T) {
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "meta-abstract.kerml", src)
-	if got := w8cCount(msgs, msgMetadataConcreteType); got != 1 {
+	if w8cCount(msgs, msgMetadataConcreteType) != 1 {
 		t.Errorf("want one %q, got %v", msgMetadataConcreteType, msgs)
 	}
 }
@@ -26,7 +26,7 @@ func TestW8CMetadataAbstractTypeIsElementScoped(t *testing.T) {
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "meta-abstract-unresolved.kerml", src)
-	if got := w8cCount(msgs, msgMetadataConcreteType); got != 1 {
+	if w8cCount(msgs, msgMetadataConcreteType) != 1 {
 		t.Errorf("want one %q despite the unresolved feature, got %v", msgMetadataConcreteType, msgs)
 	}
 
@@ -36,7 +36,7 @@ func TestW8CMetadataAbstractTypeIsElementScoped(t *testing.T) {
 	}
 }`
 	msgs = w8cLibraryMessagesIn(t, "meta-unresolved-metaclass.kerml", unresolved)
-	if got := w8cCount(msgs, msgMetadataConcreteType); got != 0 {
+	if w8cCount(msgs, msgMetadataConcreteType) != 0 {
 		t.Errorf("unresolved metaclass must not cascade: %v", msgs)
 	}
 }
@@ -50,7 +50,7 @@ func TestW8CMetadataAbstractLibraryMetaclass(t *testing.T) {
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "meta-abstract-library.sysml", src)
-	if got := w8cCount(msgs, msgMetadataConcreteType); got != 1 {
+	if w8cCount(msgs, msgMetadataConcreteType) != 1 {
 		t.Errorf("want one %q for the abstract library metaclass, got %v", msgMetadataConcreteType, msgs)
 	}
 }
@@ -64,7 +64,7 @@ func TestW8CMetadataConcreteLibraryMetaclass(t *testing.T) {
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "meta-concrete-library.sysml", src)
-	if got := w8cCount(msgs, msgMetadataConcreteType); got != 0 {
+	if w8cCount(msgs, msgMetadataConcreteType) != 0 {
 		t.Errorf("unexpected %q for a concrete library metaclass: %v", msgMetadataConcreteType, msgs)
 	}
 }
@@ -77,7 +77,7 @@ func TestW8CMetadataConcreteTypeLegal(t *testing.T) {
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "meta-concrete.kerml", src)
-	if got := w8cCount(msgs, msgMetadataConcreteType); got != 0 {
+	if w8cCount(msgs, msgMetadataConcreteType) != 0 {
 		t.Errorf("unexpected %q: %v", msgMetadataConcreteType, msgs)
 	}
 }

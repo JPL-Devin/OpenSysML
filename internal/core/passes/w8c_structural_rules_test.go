@@ -86,7 +86,7 @@ func TestW8CTopLevelImportProtectedIsReported(t *testing.T) {
 
 func TestW8CTopLevelImportPrivateIsLegal(t *testing.T) {
 	src := "private import ScalarValues::*;\nexpose ScalarValues::*;\npackage P {\n}"
-	if n := w8cCount(w8cLibraryMessagesIn(t, "import-private.kerml", src), msgTopLevelImportPrivate); n != 0 {
+	if w8cCount(w8cLibraryMessagesIn(t, "import-private.kerml", src), msgTopLevelImportPrivate) != 0 {
 		t.Errorf("unexpected %q", msgTopLevelImportPrivate)
 	}
 }

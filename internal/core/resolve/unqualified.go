@@ -181,7 +181,7 @@ func (r *Resolver) implicitlyNamedMember(scope *symbols.Scope, name string, hide
 	if scope == nil || name == "" || !scope.HasAnonymousMembers() {
 		return nil, false
 	}
-	model, ok := r.model.(supertypeLookup)
+	model, ok := r.model.(supertypeProvider)
 	if !ok {
 		return nil, false
 	}

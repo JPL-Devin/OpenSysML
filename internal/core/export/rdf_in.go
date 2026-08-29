@@ -828,14 +828,14 @@ func (d *decoder) aliasHead(el *element) (string, error) {
 	}
 	words = append(words, "alias")
 	words = append(words, d.identWords(el)...)
-	for_, err := d.referenceText(el, rdf.SysML+pAliasFor)
+	forName, err := d.referenceText(el, rdf.SysML+pAliasFor)
 	if err != nil {
 		return "", err
 	}
-	if for_ == "" {
+	if forName == "" {
 		return "", d.missing(el, "sysml:"+pAliasFor, "an alias names the element it stands for")
 	}
-	words = append(words, "for", for_)
+	words = append(words, "for", forName)
 	return strings.Join(words, " "), nil
 }
 

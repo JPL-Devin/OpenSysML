@@ -99,7 +99,7 @@ func TestForLoopMalformedRecovers(t *testing.T) {
 		t.Run(input, func(t *testing.T) {
 			sf := source.New("for_loop.sysml", []byte(input))
 			p := New(sf)
-			if file := p.ParseFile(); file == nil {
+			if p.ParseFile() == nil {
 				t.Fatal("ParseFile returned no tree")
 			}
 			if len(p.Diagnostics) == 0 {

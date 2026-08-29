@@ -17,28 +17,28 @@ type MemberLookup interface {
 	LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool)
 }
 
-// supertypeLookup is the part of the semantic model that reports the features a
-// declaration specializes, including the ones it redefines implicitly. A
+// supertypeProvider is the part of the semantic model that reports the features
+// a declaration specializes, including the ones it redefines implicitly. A
 // nameless parameter takes its name from the parameter it redefines, which only
 // the model can match (KerML 7.3.4.5). *semantics.Model implements it.
-type supertypeLookup interface {
+type supertypeProvider interface {
 	DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol
 }
 
-// maskLookup is the part of the semantic model that reports redefinition
+// maskChecker is the part of the semantic model that reports redefinition
 // masking: which of a type's inheritable members it does not inherit because
 // one of its features redefines them. *semantics.Model implements it.
-type maskLookup interface {
+type maskChecker interface {
 	InheritanceMasked(sym, candidate *symbols.Symbol) bool
 	InheritanceMaskedDeclaring(sym, candidate *symbols.Symbol, declName string) bool
 }
 
-// elementFilterJudge is the part of the semantic model that decides an element
+// elementFilterChecker is the part of the semantic model that decides an element
 // filter: whether the element an import would surface is selected by the
 // condition restricting it (KerML 8.2.4). A condition classifies a candidate by
 // the metadata annotating it, which only the model knows.
 // *semantics.Model implements it.
-type elementFilterJudge interface {
+type elementFilterChecker interface {
 	SatisfiesElementFilter(f symbols.ElementFilter, cand *symbols.Symbol) bool
 }
 

@@ -82,7 +82,7 @@ func (r *Resolver) specializationChain(from *symbols.Symbol) []*symbols.Symbol {
 	if from == nil {
 		return nil
 	}
-	model, ok := r.model.(supertypeLookup)
+	model, ok := r.model.(supertypeProvider)
 	if !ok {
 		return nil
 	}
@@ -111,7 +111,7 @@ func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*s
 	if owner == nil || r.inheritedImports[owner] {
 		return nil, false
 	}
-	_, ok := r.model.(supertypeLookup)
+	_, ok := r.model.(supertypeProvider)
 	if !ok {
 		return nil, false
 	}

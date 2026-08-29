@@ -10,9 +10,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// Resolution answers what the names of a document refer to. Without one, only
-// lexical and declared names are classified.
-type Resolution interface {
+// SegmentResolver answers what the names of a document refer to. Without one,
+// only lexical and declared names are classified.
+type SegmentResolver interface {
 	// SegmentSymbols resolves one reference and returns the symbol each segment
 	// of its qualified name denotes, nil where a segment did not resolve.
 	SegmentSymbols(ref resolve.Reference) []*symbols.Symbol
@@ -20,7 +20,7 @@ type Resolution interface {
 
 // Tokens classifies a document into semantic tokens ordered by position and free
 // of overlap, from the lexer, the symbol table and the resolver.
-func Tokens(content []byte, root *ast.RootNamespace, scope *symbols.Scope, res Resolution) []Token {
+func Tokens(content []byte, root *ast.RootNamespace, scope *symbols.Scope, res SegmentResolver) []Token {
 	var (
 		semantic []Token
 		lexical  = lexicalTokens(content)
@@ -104,7 +104,7 @@ func declarationTokens(scope *symbols.Scope) []Token {
 
 // referenceTokens classifies each segment of every reference as what it denotes.
 // An unresolved segment yields no token; it carries a diagnostic instead.
-func referenceTokens(root *ast.RootNamespace, scope *symbols.Scope, res Resolution) []Token {
+func referenceTokens(root *ast.RootNamespace, scope *symbols.Scope, res SegmentResolver) []Token {
 	if res == nil {
 		return nil
 	}

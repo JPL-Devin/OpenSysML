@@ -112,7 +112,7 @@ func TestF66AssumeConstraintNegative(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sf := source.New("f66_neg.sysml", []byte(tt.input))
 			p := New(sf)
-			if root := p.ParseFile(); root == nil {
+			if p.ParseFile() == nil {
 				t.Fatal("ParseFile returned nil")
 			}
 			if len(p.Diagnostics) == 0 {
