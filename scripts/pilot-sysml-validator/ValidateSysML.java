@@ -53,7 +53,7 @@ public final class ValidateSysML extends SysMLUtil {
     private static final String DOMAIN_LIBRARIES_DIRECTORY = "Domain Libraries";
 
     private static final Pattern OBJECT_REFERENCE =
-            Pattern.compile("([\\w.$]++)@[0-9a-f]++\\{file:([^#{}]*+)#([^{}]*+)\\}");
+            Pattern.compile("@[0-9a-f]++\\{file:([^#{}]*+)#([^{}]*+)\\}");
 
     private final IResourceValidator validator;
     private final Path root;
@@ -128,9 +128,9 @@ public final class ValidateSysML extends SysMLUtil {
         Matcher matcher = OBJECT_REFERENCE.matcher(message);
         StringBuilder result = new StringBuilder();
         while (matcher.find()) {
-            String path = URI.createURI("file:" + matcher.group(2)).toFileString();
-            String name = path == null ? matcher.group(2) : display(Paths.get(path));
-            String replacement = matcher.group(1) + "{" + name + "#" + matcher.group(3) + "}";
+            String path = URI.createURI("file:" + matcher.group(1)).toFileString();
+            String name = path == null ? matcher.group(1) : display(Paths.get(path));
+            String replacement = "{" + name + "#" + matcher.group(2) + "}";
             matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(result);

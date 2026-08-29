@@ -93,7 +93,9 @@ func serveConnect(ctx context.Context, lis net.Listener, svc *sysmlgrpc.Service,
 	case <-ctx.Done():
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// ctx is already cancelled here, so shutdown runs on a copy that keeps its
+	// values but not its cancellation.
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("connect server shutdown: %w", err)

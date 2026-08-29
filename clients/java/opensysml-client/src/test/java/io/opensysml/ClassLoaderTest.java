@@ -1,5 +1,6 @@
 package io.opensysml;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -54,7 +55,8 @@ class ClassLoaderTest {
 
   private static void assertEquals3DistinctChildren(List<Long> pids) {
     assertFalse(pids.isEmpty());
-    assertTrue(pids.stream().distinct().count() == pids.size(), "the copies shared a child: " + pids);
+    assertEquals(
+        pids.size(), pids.stream().distinct().count(), "the copies shared a child: " + pids);
   }
 
   private static URL[] classpath() throws Exception {
