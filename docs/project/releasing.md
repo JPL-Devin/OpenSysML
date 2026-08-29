@@ -249,16 +249,26 @@ API. Without either variable the script fails immediately with
 ## The SonarCloud scan
 
 Not a release step — the `scan` job runs in the `build-test` workflow on every
-commit, after `build-and-test` — but it is documented here with the other
-CircleCI credential plumbing.
+commit, after `build-and-test`, `python-test`, `java-test` and `node-test` —
+but it is documented here with the other CircleCI credential plumbing.
+
+It waits on the three client jobs because each writes a coverage report the
+scan reads: a language whose report is absent has every one of its lines
+counted as uncovered, which is what dropped new-code coverage to 54.8% on the
+0.4.0 analysis while the suites themselves were passing.
 
 The job references the organization context named exactly `SonarCloud`, which
 supplies `SONAR_TOKEN` (the same context `Open-MBEE/flexo-mms-layer1-service`
 uses, so no new credential is provisioned). It reads
-`sonar-project.properties` at the repository root and the `coverage.txt`
-profile that `build-and-test` writes (`go test -coverprofile=coverage.txt`) and
-persists to the workspace, and it un-shallows the clone because SonarCloud
-needs full history for blame and new-code detection.
+`sonar-project.properties` at the repository root and four coverage reports
+persisted to the workspace — `coverage.txt` from `build-and-test`,
+`coverage-python.xml` from `python-test`, `coverage-node.lcov` from
+`node-test`, and JaCoCo's `jacoco.xml` per Java module — and it un-shallows the
+clone because SonarCloud needs full history for blame and new-code detection.
+
+The Go profile is written with `-coverpkg=./...` so a package is credited for
+the code it exercises elsewhere; without it `internal/core/ast/dump.go`
+measures 21% though the parser's golden tests run 90% of it.
 
 On a forked PR the context is withheld, so `SONAR_TOKEN` is empty; the job
 halts successfully rather than failing every outside contribution. When the

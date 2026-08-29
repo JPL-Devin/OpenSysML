@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test lint clean install help python-test python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -26,6 +26,7 @@ BUF_BREAKING_AGAINST ?= .git\#ref=origin/main,subdir=api/proto
 # Build output directory
 BIN_DIR := bin
 PYTHON_DIR := clients/python
+NODE_DIR := clients/node
 VSCODE_DIR := editors/vscode
 PYTHON ?= python3
 # buf.gen.python.yaml starts the interpreter this names.
@@ -76,6 +77,17 @@ test: ## Run Go tests with race detection and coverage
 	@# Per-package timeout: under -race, passes and model run within 1% of go's 10m default.
 	go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
 
+coverage: ## Write the coverage profile the SonarCloud scan reads
+	@echo "Writing coverage.txt..."
+	@# -coverpkg credits a package for the code it exercises elsewhere: without it
+	@# ast/dump.go measures 21% though the parser's golden tests run 90% of it.
+	@# Instrumenting every package is too slow to combine with -race, which
+	@# make test above runs instead.
+	go test -timeout 30m -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic ./...
+	@# -coverpkg repeats every block once per test binary; see the script's header.
+	python3 scripts/dedupe-coverage.py coverage.txt
+	@go tool cover -func=coverage.txt | tail -n 1
+
 lint: ## Run static analysis (staticcheck + gosec), as CI does
 	@echo "Running staticcheck..."
 	go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...
@@ -92,7 +104,7 @@ test-short: ## Run Go tests without race detection
 clean: ## Remove build artifacts
 	@echo "Cleaning..."
 	rm -rf $(BIN_DIR)
-	rm -f coverage.txt
+	rm -f coverage.txt coverage-python.xml coverage-node.lcov
 	rm -f sysml sysml-lsp sysml-grpc
 	rm -rf $(SITE_DIR)
 	@echo "✓ Cleaned"
@@ -151,6 +163,21 @@ python-test: ## Run Python client tests
 	@echo "Running Python client tests..."
 	cd $(PYTHON_DIR) && pytest tests/ -v
 	@echo "✓ Python client tests passed"
+
+# Run from the repo root so the report records repo-relative paths, which is
+# what the SonarCloud scan resolves against.
+python-coverage: ## Run Python client tests and write coverage-python.xml
+	@echo "Running Python client tests with coverage..."
+	pytest $(PYTHON_DIR)/tests --cov=opensysml --cov-report=xml:coverage-python.xml --cov-report=term
+	@echo "✓ Wrote coverage-python.xml"
+
+# c8 records paths relative to the client directory, so rewrite them to
+# repo-relative before the scan reads the report.
+node-coverage: ## Run Node client tests and write coverage-node.lcov
+	@echo "Running Node client tests with coverage..."
+	cd $(NODE_DIR) && npm run test:coverage
+	sed -e 's|^SF:|SF:$(NODE_DIR)/|' $(NODE_DIR)/coverage/lcov.info > coverage-node.lcov
+	@echo "✓ Wrote coverage-node.lcov"
 
 vscode-grammar: ## Regenerate the VS Code TextMate grammars from the lexer keywords
 	@echo "Generating TextMate grammars..."

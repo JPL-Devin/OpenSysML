@@ -43,6 +43,8 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-mock>=3.10.0",
+    # Writes the coverage.xml the SonarCloud scan reads.
+    "pytest-cov>=5.0.0",
     # The lifecycle tests inspect processes; the client itself signals only its
     # own child, through the Popen object that started it.
     "psutil>=5.9.0",

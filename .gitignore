@@ -32,6 +32,9 @@ dist/
 build/
 .pytest_cache/
 coverage.txt
+coverage-python.xml
+coverage-node.lcov
+/clients/node/coverage/
 .coverage
 
 # Generated stubs for the upcoming clients (make proto-ts / proto-rust)
