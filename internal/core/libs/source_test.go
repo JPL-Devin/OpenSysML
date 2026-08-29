@@ -10,7 +10,7 @@ func TestEmbedSourceListsAndReads(t *testing.T) {
 	src := DefaultSource()
 	names := src.List()
 
-	// Check if stdlib files are present (should have 95 files from pilot)
+	// Check that the bundled standard and OpenSysML library files are present.
 	if len(names) == 0 {
 		t.Fatal("expected embedded stdlib files, got empty list")
 	}
