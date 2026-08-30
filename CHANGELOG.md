@@ -4,9 +4,9 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
-## 0.4.1 — 2026-08-30
+## 0.5.0 — 2026-08-30
 
-Release 0.4.1 is about what the tools *say* about a model. Every surface that names a declaration —
+Release 0.5.0 is about what the tools *say* about a model. Every surface that names a declaration —
 a rendering, the REPL's echo and search, a runtime diagnostic, LSP hover and completion — printed the
 classification the implementation keeps internally rather than the notation the file was written in,
 so a datatype read as an attribute and a KerML classifier grew a `def` it never had. The written form
@@ -15,7 +15,8 @@ Markdown for a client that advertises it, and as plain text for one that does no
 
 One import path moves: the public Go API is now `github.com/Open-MBEE/OpenSysML/client/opensysml`.
 The API itself is unchanged, but Go has no import alias, so **a Go consumer must edit the import
-line** — the one change in this release that a user has to make.
+line** — the one change in this release that a user has to make, and why this is a minor rather
+than a patch.
 
 Behind those, native document queries gain a compiled planning layer (planning only: nothing
 executes or renders yet), the Python and Rust clients move under `clients/` beside the Java and Node
