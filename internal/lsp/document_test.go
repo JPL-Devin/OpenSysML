@@ -232,6 +232,8 @@ const reportModel = `package Reports {
 	private import DocumentQueries::*;
 	private import QueryLib::*;
 
+	alias TableQuery for QueryLib::Everything;
+
 	part def WidgetReport :> Document {
 		attribute redefines title = "Widgets";
 
@@ -248,6 +250,11 @@ const reportModel = `package Reports {
 
 		part none : Table {
 			calc bare : NoInputs {
+			}
+		}
+
+		part q : Table {
+			calc qual : QueryLib::NoInputs {
 			}
 		}
 	}
@@ -315,6 +322,45 @@ func TestCompletionBindingPositionOfParameterlessQueryOffersNothing(t *testing.T
 	labels := completionLabelsIn(t, s, name, reportModel, anchor, len(anchor))
 	if len(labels) != 0 {
 		t.Fatalf("labels = %v, want none: the query declares no parameters", labels)
+	}
+}
+
+func TestCompletionCalcTypingPositionOffersQueryAlias(t *testing.T) {
+	s, name := openReportModel(t)
+	labels := completionLabelsIn(t, s, name, reportModel, "Everything {", 0)
+	if !containsLabel(labels, "TableQuery") {
+		t.Fatalf("labels = %v, want the TableQuery alias spelling", labels)
+	}
+}
+
+func reportHover(t *testing.T, s *Server, name, anchor string, delta int) *protocol.Hover {
+	t.Helper()
+	off := strings.Index(reportModel, anchor)
+	if off < 0 {
+		t.Fatalf("anchor %q not in fixture", anchor)
+	}
+	hov, err := s.Hover(context.Background(), &protocol.HoverParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(reportModel), off+delta),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Hover err = %v", err)
+	}
+	return hov
+}
+
+func TestHoverQualifiedReferenceSegments(t *testing.T) {
+	s, name := openReportModel(t)
+	anchor := "QueryLib::NoInputs {"
+	if hov := reportHover(t, s, name, anchor, 0); hov == nil ||
+		!strings.Contains(hov.Contents.Value, "package QueryLib") {
+		t.Fatalf("qualifier hover = %+v, want package QueryLib", hov)
+	}
+	if hov := reportHover(t, s, name, anchor, len("QueryLib::")); hov == nil ||
+		!strings.Contains(hov.Contents.Value, "calc def NoInputs") {
+		t.Fatalf("member hover = %+v, want calc def NoInputs", hov)
 	}
 }
 

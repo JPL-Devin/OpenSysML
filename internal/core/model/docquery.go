@@ -132,27 +132,33 @@ func (w *Workspace) IsDocumentDefinition(sym *symbols.Symbol) bool {
 	return docplan.IsDocumentDefinition(w.index, sem, sym)
 }
 
+// QueryTypeCandidate pairs a visible spelling with the element it reaches, so
+// an alias completes under the name it is reachable by, not its target's.
+type QueryTypeCandidate struct {
+	Name string
+	Sym  *symbols.Symbol
+}
+
 // QueryTypeCandidates lists what a calc usage's type position may name: the
-// query definitions reachable by a single name from scope — imports and
-// inheritance included — and the namespaces a qualified name may start with.
-func (w *Workspace) QueryTypeCandidates(scope *symbols.Scope) []*symbols.Symbol {
-	var out []*symbols.Symbol
-	seen := map[*symbols.Symbol]bool{}
+// query definitions reachable by a single name from scope — imports, aliases
+// and inheritance included — and the namespaces a qualified name may start with.
+func (w *Workspace) QueryTypeCandidates(scope *symbols.Scope) []QueryTypeCandidate {
+	var out []QueryTypeCandidate
+	seen := map[string]bool{}
 	for _, vn := range w.VisibleNames(scope, VisibleNamesOptions{MaxDepth: 1}) {
+		if seen[vn.Name] {
+			continue
+		}
 		matches := symbols.PreferDeclared(w.LookupQualified(vn.FQN))
-		if len(matches) == 0 {
+		if len(matches) == 0 || matches[0] == nil {
 			continue
 		}
 		sym := matches[0]
-		if sym == nil || seen[sym] {
-			continue
-		}
-		seen[sym] = true
 		switch {
-		case sym.Kind == symbols.SymbolPackage || sym.Kind == symbols.SymbolNamespace:
-			out = append(out, sym)
-		case len(w.QueryDefinitions([]*symbols.Symbol{sym})) > 0:
-			out = append(out, sym)
+		case sym.Kind == symbols.SymbolPackage || sym.Kind == symbols.SymbolNamespace,
+			len(w.QueryDefinitions([]*symbols.Symbol{sym})) > 0:
+			seen[vn.Name] = true
+			out = append(out, QueryTypeCandidate{Name: vn.Name, Sym: sym})
 		}
 	}
 	return out

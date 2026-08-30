@@ -48,8 +48,8 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 		// The type of a calc usage inside a document definition is a query, so
 		// only query definitions (and the packages qualifying one) are offered.
 		if calcTypingPositionAt(doc.Content, offset) && s.insideDocumentDefinition(scope) {
-			for _, sym := range s.ws.QueryTypeCandidates(scope) {
-				c.addSymbol(s, sym)
+			for _, cand := range s.ws.QueryTypeCandidates(scope) {
+				c.addNamedSymbol(s, cand.Name, cand.Sym)
 			}
 			// Library root packages, which a visible-name walk never offers as
 			// top-level names, may still qualify a query.
@@ -140,6 +140,23 @@ func (c *completionItems) addSymbol(s *Server, sym *symbols.Symbol) {
 		item.Label = short
 		c.add(item)
 	}
+}
+
+// addNamedSymbol offers sym under a visible spelling of its own — an alias name
+// rather than the target's declared name.
+func (c *completionItems) addNamedSymbol(s *Server, label string, sym *symbols.Symbol) {
+	if sym == nil || label == "" {
+		return
+	}
+	item := protocol.CompletionItem{
+		Label:  label,
+		Kind:   completionKind(sym.Kind),
+		Detail: completionDetail(sym),
+	}
+	if doc, ok := s.symbolDocumentation(sym); ok {
+		item.Documentation = doc
+	}
+	c.add(item)
 }
 
 func (c *completionItems) list() *protocol.CompletionList {
