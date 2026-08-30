@@ -6,6 +6,7 @@ import http.client
 import json
 import os
 import platform
+import shutil
 import stat
 import threading
 import urllib.request
@@ -673,6 +674,25 @@ def _download_binary_locked(version, github_repo):
         raise ConnectionError(f"Failed to download binary from {binary_url}: {e}")
 
 
+def file_digest(binary_path):
+    """SHA-256 hex digest of a file, read in chunks rather than into memory.
+
+    Args:
+        binary_path (str): Path to the file
+
+    Returns:
+        str: Hex digest
+    """
+    sha256 = hashlib.sha256()
+    with open(binary_path, 'rb') as f:
+        while True:
+            chunk = f.read(8192)
+            if not chunk:
+                break
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
 def verify_checksum(binary_path, expected_sha256):
     """Verify SHA-256 checksum of binary file.
     
@@ -683,17 +703,87 @@ def verify_checksum(binary_path, expected_sha256):
     Returns:
         bool: True if checksum matches, False otherwise
     """
-    sha256 = hashlib.sha256()
-    
-    with open(binary_path, 'rb') as f:
-        while True:
-            chunk = f.read(8192)
-            if not chunk:
-                break
-            sha256.update(chunk)
-    
-    actual = sha256.hexdigest()
-    return actual == expected_sha256
+    return file_digest(binary_path) == expected_sha256
+
+
+def stable_binary_path(digest):
+    """Path the cached binary is linked to under its own digest.
+
+    The Java client names this file the same way, so both start the same file.
+
+    Args:
+        digest (str): SHA-256 hex digest of the cached binary
+
+    Returns:
+        str: Absolute path (e.g. ~/.opensysml/bin/sysml-grpc-0123456789abcdef)
+    """
+    binary_path = get_binary_path()
+    root, extension = (
+        (binary_path[: -len('.exe')], '.exe')
+        if binary_path.endswith('.exe')
+        else (binary_path, '')
+    )
+    return f'{root}-{digest[:16]}{extension}'
+
+
+def stable_binary():
+    """Link the cached binary under its own digest and return that path.
+
+    The cache is one path every client installs over, so a service started from
+    it can be running a release other than the one that was verified. This must
+    be called with the cache lock held, so nothing replaces the cache between
+    hashing it and linking it.
+
+    Returns:
+        str: The digest-named path, or the cache itself when it cannot be linked
+    """
+    binary_path = get_binary_path()
+    try:
+        stable = stable_binary_path(file_digest(binary_path))
+    except OSError as e:
+        warnings.warn(
+            f"Could not hash {binary_path}, so a release installed over it may be "
+            f"started: {e}",
+            stacklevel=3,
+        )
+        return binary_path
+    if os.access(stable, os.X_OK):
+        return stable
+    try:
+        _link(binary_path, stable)
+        os.chmod(stable, 0o700)
+        return stable
+    except OSError as e:
+        warnings.warn(
+            f"Could not link {binary_path} to {stable}, so a release installed over "
+            f"it may be started: {e}",
+            stacklevel=3,
+        )
+        _remove_quietly(stable)
+        return binary_path
+
+
+def _link(source, target):
+    """Hard link source to target where the filesystem has links, else copy it."""
+    temp_path = target + '.tmp'
+    _remove_quietly(temp_path)
+    try:
+        os.link(source, temp_path)
+    except (OSError, AttributeError, NotImplementedError):
+        shutil.copyfile(source, temp_path)
+    try:
+        os.replace(temp_path, target)
+    except OSError:
+        _remove_quietly(temp_path)
+        raise
+
+
+def _remove_quietly(path):
+    """Remove a path, if it is there and removable."""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 def ensure_binary(force_download=False, version=None, github_repo=None):
@@ -705,6 +795,10 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     whole decision is made holding the shared cache lock, so a concurrent
     installer - in another process or in the Java client - cannot install between
     the check and the replacement.
+
+    What is returned for the shared cache is a link to it under its own digest,
+    not the cache path itself: the cache is replaced in place, so starting it
+    after the lock is dropped could start whatever was installed since.
     
     Args:
         force_download (bool): If True, download even if binary exists
@@ -715,7 +809,7 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
                                  pre-installed via `make build` or downloaded manually.
     
     Returns:
-        str: Path to binary
+        str: Path to binary, digest-named when it is the shared cache
     
     Raises:
         ConnectionError: If binary cannot be obtained
@@ -724,7 +818,10 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     if version is None:
         version = os.environ.get('OPENSYSML_GRPC_VERSION') or None
     with cache_lock():
-        return _ensure_binary_locked(force_download, version, github_repo, binary_path)
+        chosen = _ensure_binary_locked(
+            force_download, version, github_repo, binary_path
+        )
+        return stable_binary() if chosen == binary_path else chosen
 
 
 def _ensure_binary_locked(force_download, version, github_repo, binary_path):

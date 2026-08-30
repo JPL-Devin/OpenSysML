@@ -27,6 +27,7 @@ from opensysml.binary import (
     lock_path,
     release_asset_name,
     resolve_latest_version,
+    stable_binary_path,
     stale_cache_reason,
     verify_checksum,
     write_metadata,
@@ -34,6 +35,11 @@ from opensysml.binary import (
 )
 from opensysml.errors import ChecksumMismatchError, UnpinnedReleaseError
 from opensysml.errors import ConnectionError as OpenSysMLConnectionError
+
+
+def linked(content=b'cached binary'):
+    """The digest-named path ensure_binary hands a caller for cached content."""
+    return stable_binary_path(hashlib.sha256(content).hexdigest())
 
 
 @pytest.fixture
@@ -133,13 +139,45 @@ def test_verify_checksum():
         assert verify_checksum('/fake/path', 'wrong_hash') == False
 
 
-def test_ensure_binary_exists():
-    """Test ensure_binary returns path when binary exists."""
-    with patch('os.path.exists', return_value=True):
-        with patch('os.access', return_value=True):
-            path = ensure_binary()
-            expected_path = get_binary_path()
-            assert path == expected_path
+def test_ensure_binary_exists(cache):
+    """Test ensure_binary returns a digest-named link to the binary it found."""
+    binary_path = cache()
+    path = ensure_binary()
+    assert path == linked()
+    assert os.path.samefile(path, binary_path)
+    assert os.access(path, os.X_OK)
+
+
+def test_ensure_binary_returns_a_path_no_later_install_can_replace(cache):
+    """Test what is handed to Popen is not the cache another client installs over."""
+    binary_path = cache(b'the release asked for', version='v0.0.7')
+    path = ensure_binary(version='v0.0.7')
+    assert path != binary_path
+
+    # Another process, or the Java client, installing the next release over the cache.
+    replacement = binary_path + '.next'
+    with open(replacement, 'wb') as f:
+        f.write(b'the release after')
+    os.replace(replacement, binary_path)
+
+    with open(path, 'rb') as f:
+        assert f.read() == b'the release asked for'
+
+
+def test_ensure_binary_reuses_the_link_it_already_made(cache):
+    """Test the digest-named link is made once, not copied per connection."""
+    cache(version='v0.0.7')
+    first = ensure_binary(version='v0.0.7')
+    second = ensure_binary(version='v0.0.7')
+    assert first == second == linked()
+
+
+def test_ensure_binary_falls_back_to_the_cache_when_it_cannot_be_linked(cache):
+    """Test an unlinkable cache still starts, with a warning that it may be replaced."""
+    binary_path = cache(version='v0.0.7')
+    with patch('opensysml.binary._link', side_effect=OSError('read-only')):
+        with pytest.warns(UserWarning, match='may be started'):
+            assert ensure_binary(version='v0.0.7') == binary_path
 
 
 def test_ensure_binary_downloads():
@@ -442,7 +480,7 @@ def test_ensure_binary_reuses_the_release_asked_for(cache):
     """Test no download happens when the cache is already that release."""
     binary_path = cache(version='v0.0.7')
     with patch('opensysml.binary.download_binary') as mock_download:
-        assert ensure_binary(version='v0.0.7') == binary_path
+        assert ensure_binary(version='v0.0.7') == linked()
         mock_download.assert_not_called()
 
 
@@ -458,9 +496,9 @@ def test_ensure_binary_replaces_a_cache_from_another_release(cache):
 
 def test_ensure_binary_keeps_a_cache_when_no_version_is_asked_for(cache):
     """Test a locally built binary is left alone when nothing names a release."""
-    binary_path = cache()
+    cache()
     with patch('opensysml.binary.download_binary') as mock_download:
-        assert ensure_binary() == binary_path
+        assert ensure_binary() == linked()
         mock_download.assert_not_called()
 
 
@@ -497,11 +535,11 @@ def test_a_timed_out_release_query_keeps_a_working_cache(cache):
 
 def test_a_cache_survives_a_replacement_that_cannot_be_downloaded(cache):
     """Test a working binary keeps serving when the release asked for cannot be had."""
-    binary_path = cache(version='v0.0.5')
+    cache(version='v0.0.5')
     with patch('opensysml.binary.download_binary',
                side_effect=OpenSysMLConnectionError('404 Not Found')):
         with pytest.warns(UserWarning, match='Keeping the cached sysml-grpc'):
-            assert ensure_binary(version='v0.0.7') == binary_path
+            assert ensure_binary(version='v0.0.7') == linked()
 
     assert cached_release() == 'v0.0.5'
 
@@ -519,11 +557,11 @@ def test_a_tampered_download_is_not_answered_from_the_cache(cache):
 
 def test_a_dropped_connection_keeps_a_working_cache(cache):
     """Test a reset connection is a transport failure, not a startup failure."""
-    binary_path = cache(version='v0.0.7')
+    cache(version='v0.0.7')
     with patch('urllib.request.urlopen',
                side_effect=http.client.RemoteDisconnected('closed')):
         assert stale_cache_reason('latest') is None
-        assert ensure_binary(version='latest') == binary_path
+        assert ensure_binary(version='latest') == linked()
 
 
 # The pins the table actually ships, kept before the fixture above replaces it.
@@ -646,11 +684,11 @@ class TestPinnedDigests:
 
     def test_an_unpinned_release_keeps_a_working_cache(self, cache):
         """A release newer than this opensysml is a build it cannot get, not a tampered one."""
-        binary_path = cache(version='v0.0.5')
+        cache(version='v0.0.5')
         with patch('opensysml.binary.download_binary',
                    side_effect=UnpinnedReleaseError('pins no SHA-256 digest')):
             with pytest.warns(UserWarning, match='Keeping the cached sysml-grpc'):
-                assert ensure_binary(version='v9.9.9') == binary_path
+                assert ensure_binary(version='v9.9.9') == linked()
 
         assert cached_release() == 'v0.0.5'
 

@@ -134,6 +134,13 @@ over the download, every response is read bounded — 512 MiB for a binary, 8 Mi
 for a checksum, manifest, bundle or release JSON — so an endless body is refused
 rather than filling memory while other clients wait.
 
+What a service is started from is not that shared path but a link to it under its
+own digest, `~/.opensysml/bin/sysml-grpc-<first 16 hex of its SHA-256>`, made
+while the lock is held: the cache is replaced in place, so starting it after the
+lock is dropped could start whatever another client installed in between. The
+Java client names that file the same way, so the two share it, and a cache that
+cannot be hashed or linked is started directly with a warning saying so.
+
 At release time, after the service binaries are published and final:
 
 ```bash
