@@ -94,7 +94,24 @@ func TestAdvanceIsBoundedBySessionBudgets(t *testing.T) {
 		run(t, s, "%state Spin")
 		wants(t, run(t, s, "%advance 1000"),
 			"(7 event(s) processed)",
+			"Stopped at the event budget (7 events; raise "+runtime.MaxStateEventsEnvVar,
+			"Simulation time never advanced past 0.0")
+	})
+
+	// A machine whose loop is timed makes progress each cycle, so the budget
+	// stop must not claim a larger budget cannot help.
+	t.Run("event_budget_time_advancing", func(t *testing.T) {
+		s := loadFixture(t, "testdata/state_tick.sysml")
+		budgets := runtime.DefaultBudgets()
+		budgets.MaxStateEvents = 7
+		if err := s.SetBudgets(budgets); err != nil {
+			t.Fatalf("SetBudgets: %v", err)
+		}
+		run(t, s, "%state Tick")
+		got := run(t, s, "%advance 1000")
+		wants(t, got,
 			"Stopped at the event budget (7 events; raise "+runtime.MaxStateEventsEnvVar)
+		rejects(t, got, "Simulation time never advanced")
 	})
 
 	t.Run("do_budget", func(t *testing.T) {

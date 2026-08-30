@@ -207,9 +207,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 23 | 19 | 4 | 22 | 2 | 1 | 1 | 19 |
+| `examples` | 23 | 19 | 2 | 20 | 0 | 1 | 1 | 19 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **357** | **332** | **58** | **83** | **36** | **2** | **20** | **45** |
+| **Total** | **357** | **332** | **56** | **81** | **34** | **2** | **20** | **45** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -323,7 +323,7 @@ cascades through the rest of the file. The movement is entirely one file,
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
 | only pilot | 82 | **45** |
-| pilot diagnostics | 123 | **83** |
+| pilot diagnostics | 123 | **81** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -565,13 +565,13 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **332 / 20 / 58** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **332 / 20 / 56** |
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
 | `examples`: only pilot | **40** | **19** |
 | `examples`: fully agreeing | **15** | **19** |
-| `unmapped`, our side | **20** | **21** |
+| `unmapped`, our side | **20** | **19** |
 
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
 our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
