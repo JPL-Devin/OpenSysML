@@ -19,6 +19,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +76,17 @@ class BinaryDownloaderTest {
 
   private static ConnectionOptions options() {
     return ConnectionOptions.defaults();
+  }
+
+  /** The temporary files a download left in the cache directory, which must be none. */
+  private List<String> leftBehind() throws IOException {
+    try (var entries = Files.list(cache().getParent())) {
+      return entries
+          .map(path -> path.getFileName().toString())
+          .filter(name -> !name.equals("sysml-grpc") && !name.equals("sysml-grpc.json"))
+          .sorted()
+          .toList();
+    }
   }
 
   /** A recorded signed release, from the one copy of it the Python tests also read. */
@@ -158,8 +173,9 @@ class BinaryDownloaderTest {
 
     assertTrue(refused.getMessage().contains("hashes to"), refused.getMessage());
     assertEquals("cached", Files.readString(cached));
-    assertFalse(
-        Files.exists(cache().resolveSibling("sysml-grpc.tmp")),
+    assertEquals(
+        List.of(),
+        leftBehind(),
         "the unverified download must not be left behind");
   }
 
@@ -397,6 +413,41 @@ class BinaryDownloaderTest {
     assertEquals(
         releases.downloadBaseUrl() + "/" + REPO + "/releases/download/" + VERSION + "/" + ASSET,
         downloader.releaseDownloadUrl(VERSION, ASSET, REPO));
+  }
+
+  @Test
+  void refusesARepositoryTheEnvironmentNamesThatIsNotOne() {
+    environment.put(ConnectionOptions.REPO_ENV, "http://elsewhere.example/evil");
+
+    ServiceStartException refused =
+        assertThrows(
+            ServiceStartException.class,
+            () -> BinaryDownloader.githubRepo(options(), environment::get));
+
+    assertTrue(refused.getMessage().contains(ConnectionOptions.REPO_ENV), refused.getMessage());
+  }
+
+  @Test
+  void installsOnceWhenSeveralThreadsDownloadTheSameRelease() throws Exception {
+    releases.publish(REPO, VERSION, ASSET, BINARY);
+    BinaryDownloader downloader = downloader().pins(pinning(ReleaseServer.sha256(BINARY))).build();
+
+    List<Callable<Path>> downloads = new ArrayList<>();
+    for (int i = 0; i < 8; i++) {
+      downloads.add(() -> downloader.downloadBinary(VERSION, options()));
+    }
+    ExecutorService threads = Executors.newFixedThreadPool(downloads.size());
+    try {
+      for (Future<Path> download : threads.invokeAll(downloads)) {
+        assertEquals(cache(), download.get(), "every concurrent download must install the release");
+      }
+    } finally {
+      threads.shutdownNow();
+    }
+
+    assertArrayEqualsBytes(BINARY, Files.readAllBytes(cache()));
+    assertEquals(List.of(), leftBehind(), "concurrent downloads must not leave temporary files");
+    assertEquals(Optional.of(VERSION), downloader.cachedRelease(REPO));
   }
 
   private void publishSignedManifest(String bundle) throws IOException {

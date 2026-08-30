@@ -2,7 +2,9 @@ package io.opensysml.internal;
 
 import io.opensysml.ConnectionOptions;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -141,9 +143,15 @@ public final class ServiceRegistry {
     }
   }
 
+  /**
+   * Identity is the file, not the name: a download replaces the cached binary in place, and a child
+   * running the release it displaced must not be handed to a connection asking for the new one.
+   */
   private static String key(Path binary) {
     try {
-      return binary.toRealPath().toString();
+      Path real = binary.toRealPath();
+      BasicFileAttributes attributes = Files.readAttributes(real, BasicFileAttributes.class);
+      return real + "@" + attributes.size() + "@" + attributes.lastModifiedTime().toMillis();
     } catch (IOException e) {
       // Unreadable is not a reason to start a second child for the same name.
       return binary.toAbsolutePath().toString();

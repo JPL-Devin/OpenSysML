@@ -104,7 +104,16 @@ public final class BinaryDownloader {
       return named.get();
     }
     String set = environment.apply(ConnectionOptions.REPO_ENV);
-    return set == null || set.isBlank() ? DEFAULT_GITHUB_REPO : set.trim();
+    if (set == null || set.isBlank()) {
+      return DEFAULT_GITHUB_REPO;
+    }
+    String repo = set.trim();
+    // Unvalidated, this is pasted into release URLs, where a path of its own reaches another host.
+    if (!repo.matches("[^/\\s]+/[^/\\s]+")) {
+      throw new ServiceStartException(
+          "$" + ConnectionOptions.REPO_ENV + " is not an owner/repo: " + repo);
+    }
+    return repo;
   }
 
   /**
@@ -474,7 +483,7 @@ public final class BinaryDownloader {
   }
 
   /** Records which release of which repository the cached binary is, and its digest. */
-  private void writeMetadata(String version, String sha256, String githubRepo) {
+  private void writeMetadata(String version, String sha256, String githubRepo) throws IOException {
     String json =
         "{\"version\": "
             + quote(version)
@@ -483,11 +492,14 @@ public final class BinaryDownloader {
             + ", \"repo\": "
             + quote(githubRepo)
             + "}";
+    // Written through a move so a concurrent reader sees one release or the other, never half.
+    Path temporary = temporaryFile(".json");
     try {
-      Files.writeString(metadataPath(), json, StandardCharsets.UTF_8);
+      Files.writeString(temporary, json, StandardCharsets.UTF_8);
+      move(temporary, metadataPath());
     } catch (IOException e) {
-      // The binary is installed; a cache whose release cannot be recorded is only re-downloaded.
-      warn("could not record the release of " + binaryPath + ": " + e);
+      deleteQuietly(temporary);
+      throw e;
     }
   }
 
@@ -502,14 +514,13 @@ public final class BinaryDownloader {
   /** Writes the download to a temporary file, verifies it, and only then replaces the cache. */
   private void install(
       byte[] downloaded, String expected, String asset, String version, String githubRepo) {
-    Path temporary = binaryPath.resolveSibling(binaryPath.getFileName() + ".tmp");
+    Path temporary;
     try {
-      Files.createDirectories(binaryPath.getParent());
+      temporary = temporaryFile(".tmp");
       Files.write(temporary, downloaded);
     } catch (IOException e) {
-      deleteQuietly(temporary);
       throw new ServiceStartException(
-          "downloaded " + version + " but could not write it at " + temporary + ": " + e);
+          "downloaded " + version + " but could not write it beside " + binaryPath + ": " + e);
     }
 
     String actual;
@@ -534,10 +545,10 @@ public final class BinaryDownloader {
 
     // The cache is this user's, so no one else needs the binary; set it before the move so
     // nothing ever sees a world-readable one at the cached path.
-    makeExecutable(temporary);
     try {
+      makeExecutable(temporary);
       move(temporary, binaryPath);
-    } catch (IOException e) {
+    } catch (IOException | RuntimeException e) {
       deleteQuietly(temporary);
       throw new ServiceStartException(
           "downloaded "
@@ -548,7 +559,20 @@ public final class BinaryDownloader {
               + e
               + ". A running service holding that file is the usual cause.");
     }
-    writeMetadata(version, expected.toLowerCase(Locale.ROOT), githubRepo);
+    try {
+      writeMetadata(version, expected.toLowerCase(Locale.ROOT), githubRepo);
+    } catch (IOException e) {
+      // The binary is installed; a cache whose release cannot be recorded is only re-downloaded.
+      warn("could not record the release of " + binaryPath + ": " + e);
+    }
+  }
+
+  /**
+   * A file of this client's own beside the cache, so concurrent downloads cannot take each other's.
+   */
+  private Path temporaryFile(String suffix) throws IOException {
+    Files.createDirectories(binaryPath.getParent());
+    return Files.createTempFile(binaryPath.getParent(), binaryPath.getFileName() + ".", suffix);
   }
 
   private static void move(Path from, Path to) throws IOException {

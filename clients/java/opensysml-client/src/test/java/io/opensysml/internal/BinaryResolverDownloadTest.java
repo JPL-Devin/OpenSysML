@@ -1,7 +1,6 @@
 package io.opensysml.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,6 +11,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -132,6 +132,11 @@ class BinaryResolverDownloadTest {
     assertThrows(
         ChecksumMismatchException.class, () -> BinaryResolver.resolve(options, downloader()));
     assertEquals("installed by hand", Files.readString(cache()));
-    assertFalse(Files.exists(cache().resolveSibling("sysml-grpc.tmp")));
+    try (var entries = Files.list(cache().getParent())) {
+      assertEquals(
+          List.of("sysml-grpc"),
+          entries.map(path -> path.getFileName().toString()).sorted().toList(),
+          "the refused download must leave nothing behind");
+    }
   }
 }

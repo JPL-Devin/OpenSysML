@@ -7,7 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.opensysml.internal.ServiceRegistry;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -23,6 +28,7 @@ import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** Who owns the service, when it stops, and that nothing races or leaks. */
 class LifecycleTest {
@@ -60,6 +66,31 @@ class LifecycleTest {
       second.close();
     }
     assertTrue(waitForExit(pid), "the child outlived its last connection");
+  }
+
+  @Test
+  void replacingTheBinaryDoesNotShareTheServiceRunningWhatItDisplaced(@TempDir Path directory)
+      throws Exception {
+    // A download replaces the cached binary in place, so sharing by path alone would hand a
+    // connection asking for the new release the child running the old one.
+    Path binary = directory.resolve("sysml-grpc");
+    Files.copy(ServiceBinary.required(), binary);
+    binary.toFile().setExecutable(true, true);
+
+    try (Connection first = Connection.open(ConnectionOptions.builder().binaryPath(binary).build())) {
+      Path replacement = directory.resolve("sysml-grpc.new");
+      Files.copy(ServiceBinary.required(), replacement);
+      replacement.toFile().setExecutable(true, true);
+      Files.move(replacement, binary, StandardCopyOption.REPLACE_EXISTING);
+      Files.setLastModifiedTime(binary, FileTime.from(Instant.now().plusSeconds(2)));
+
+      try (Connection second =
+          Connection.open(ConnectionOptions.builder().binaryPath(binary).build())) {
+        assertEquals(2, ServiceRegistry.sharedServiceCount());
+        assertNotEquals(first.address(), second.address());
+      }
+    }
+    assertEquals(0, ServiceRegistry.sharedServiceCount());
   }
 
   @Test
