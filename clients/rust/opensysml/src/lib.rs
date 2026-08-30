@@ -2,6 +2,7 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+mod binary;
 mod connection;
 mod domain;
 mod error;

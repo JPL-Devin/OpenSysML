@@ -64,19 +64,55 @@ behavior.
 
 ## Binary provisioning
 
-Version 1 does not download binaries. Resolution is:
+Resolution is, in order:
 
-1. `$OPENSYSML_GRPC_BINARY`
-2. `~/.opensysml/bin/sysml-grpc`
-3. `PATH`
+1. `$OPENSYSML_GRPC_BINARY`, the explicit path;
+2. `~/.opensysml/bin/sysml-grpc` (`sysml-grpc.exe` on Windows), the cache shared
+   with the Python client;
+3. a download of the release `$OPENSYSML_GRPC_VERSION` asks for, into that cache;
+4. `sysml-grpc` on `$PATH`.
 
-If a downloader is added, it must match the Python client's per-release pinned
-SHA-256 checks in [`clients/python/opensysml/binary.py`](../python/opensysml/binary.py)
-and its sigstore-verified manifest in
-[`clients/python/opensysml/signing.py`](../python/opensysml/signing.py). A client must
-never fetch and execute a binary without verifying its integrity. Release
-pinning belongs with that downloader; this v1 client does not pretend to pin a
-child version.
+A download only happens when `$OPENSYSML_GRPC_VERSION` names a release
+(`latest` resolves through the GitHub releases API), so a caller that never asks
+for one still resolves a locally built binary from `$PATH`. When a release *is*
+asked for, the download precedes `$PATH`, because a binary on `$PATH` is of no
+known version and so does not answer for that release. A cached binary that is
+another release is replaced with a warning, never used silently; a replacement
+that cannot be downloaded leaves the working cache in place, unless the refusal
+was about integrity.
+
+The download goes to a temporary file, is verified, and only then atomically
+replaces the cache with mode `0700` (POSIX). Requests time out after 15 seconds.
+Beside the binary the client writes `sysml-grpc.json` — `version`, `sha256`,
+`repo` — the same shape the Python client reads and writes, and re-checks the
+recorded digest before reusing a cache, so a hand-swapped binary is not read as
+the release it displaced.
+
+| Variable | Effect |
+|---|---|
+| `$OPENSYSML_GRPC_BINARY` | Explicit binary path; nothing is downloaded. |
+| `$OPENSYSML_GRPC_VERSION` | Release tag to install, or `latest`. |
+| `$OPENSYSML_GITHUB_REPO` | Repository to download from; default `Open-MBEE/OpenSysML`. |
+| `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD` | `1`, or an `owner/repo` (comma-separated), to accept an unpinned release on same-origin trust. |
+
+### Trust model, and what this client does not verify
+
+A download is verified against the digest table the crate ships
+([`opensysml/release-digests.json`](opensysml/release-digests.json), a synced copy of
+`clients/release-digests.json` embedded with `include_str!`) — a pin resolved
+from outside the published artifact would not be a pin. A `.sha256` served
+beside the binary that disagrees with a pin is tampering: the download is
+refused, and the cache is untouched.
+
+**Known limitation:** unlike the Python, Node and Java clients, this client does
+**not** verify the release's sigstore-signed `SHA256SUMS.txt` manifest
+([`clients/python/opensysml/signing.py`](../python/opensysml/signing.py) is the
+reference). It verifies pins only, so a release the installed crate version pins
+no digest for cannot be verified here at all and is refused, naming the gap. The
+only way through is `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`, which accepts the
+served `.sha256` with a warning — same origin as the binary, so it detects
+corruption but not a compromised release. In practice, installing a release
+newer than the crate's pins means upgrading the crate.
 
 ## Capability negotiation
 

@@ -29,6 +29,7 @@ COPIES = (
         "clients", "java", "opensysml-client", "src", "main", "resources",
         "release-digests.json",
     ),
+    os.path.join("clients", "rust", "opensysml", "release-digests.json"),
 )
 
 

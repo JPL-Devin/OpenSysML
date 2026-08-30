@@ -147,6 +147,23 @@ pub enum Error {
         /// Locations searched.
         looked_in: Vec<String>,
     },
+    /// No sysml-grpc release asset is published for this platform.
+    #[error("no sysml-grpc release asset is published for {os}/{arch}")]
+    UnsupportedPlatform {
+        /// Operating system, as `std::env::consts::OS` names it.
+        os: String,
+        /// Architecture, as `std::env::consts::ARCH` names it.
+        arch: String,
+    },
+    /// A release binary could not be downloaded or installed.
+    #[error("sysml-grpc download failed: {0}")]
+    BinaryDownload(String),
+    /// A download did not match the digest expected for it.
+    #[error("sysml-grpc checksum mismatch: {0}")]
+    ChecksumMismatch(String),
+    /// This client pins no digest for the release, so it cannot verify it.
+    #[error("unpinned sysml-grpc release: {0}")]
+    UnpinnedRelease(String),
     /// The HTTP transport failed before a response was decoded.
     #[error("transport error: {0}")]
     Transport(String),

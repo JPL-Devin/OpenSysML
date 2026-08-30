@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use prost::Message;
 
+use crate::binary;
 use crate::domain::{
     Capabilities, EvalOptions, Evaluation, Instantiation, Language, Model, ParseOptions,
     ServerInfo, Symbol,
@@ -506,6 +507,10 @@ fn terminate_process(process: &mut Child, grace: Duration) {
     let _ = process.wait();
 }
 
+/// Resolve the service binary: explicit path, shared cache, download, then `$PATH`.
+///
+/// A download only runs when `$OPENSYSML_GRPC_VERSION` names a release, and then it
+/// precedes `$PATH`, whose binary is of no known version.
 fn resolve_binary() -> Result<PathBuf, Error> {
     let mut looked_in = Vec::new();
     if let Ok(path) = env::var("OPENSYSML_GRPC_BINARY") {
@@ -517,31 +522,27 @@ fn resolve_binary() -> Result<PathBuf, Error> {
     } else {
         looked_in.push("$OPENSYSML_GRPC_BINARY".to_owned());
     }
-    #[cfg(windows)]
-    let home = env::var_os("USERPROFILE").unwrap_or_default();
-    #[cfg(not(windows))]
-    let home = env::var_os("HOME").unwrap_or_default();
-    let home_candidate =
-        PathBuf::from(home)
-            .join(".opensysml")
-            .join("bin")
-            .join(if cfg!(windows) {
-                "sysml-grpc.exe"
-            } else {
-                "sysml-grpc"
-            });
-    looked_in.push(home_candidate.display().to_string());
-    if home_candidate.is_file() {
-        return Ok(home_candidate);
+
+    // No downloader on a platform with no release build; the cache still answers.
+    let downloader = binary::Downloader::from_env().ok();
+    let cached = downloader
+        .as_ref()
+        .map(binary::Downloader::binary_path)
+        .unwrap_or_else(|| binary::default_cache_dir().join(binary::binary_file_name()));
+    looked_in.push(cached.display().to_string());
+    match (&downloader, binary::env_release_version()) {
+        (Some(downloader), Some(version)) => return downloader.ensure_binary(Some(&version)),
+        _ => {
+            if cached.is_file() {
+                return Ok(cached);
+            }
+        }
     }
+
     looked_in.push("sysml-grpc on PATH".to_owned());
     if let Some(path) = env::var_os("PATH") {
         for directory in env::split_paths(&path) {
-            let candidate = directory.join(if cfg!(windows) {
-                "sysml-grpc.exe"
-            } else {
-                "sysml-grpc"
-            });
+            let candidate = directory.join(binary::binary_file_name());
             if candidate.is_file() {
                 return Ok(candidate);
             }

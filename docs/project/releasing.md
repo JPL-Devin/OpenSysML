@@ -777,10 +777,14 @@ What the crate is ready for, and what it is not:
   published crate documents its own minimum supported Rust version.
 - `opensysml-conformance` is a workspace member and a runner, not a library, and
   is **not** published: it reads `conformance/scenarios` from this repository.
-- The client resolves a `sysml-grpc` binary and never downloads one, so a
-  published crate carries no binary asset and needs no checksum manifest of its
-  own. If a downloader is ever added, it inherits the Python client's pinned
-  digests and signed-manifest verification first — see `clients/rust/README.md`.
+- The client downloads a `sysml-grpc` release binary when `$OPENSYSML_GRPC_VERSION`
+  asks for one, and verifies it against `clients/rust/opensysml/release-digests.json`,
+  which the crate embeds with `include_str!` and its `include` list ships — so a
+  release whose digests are not in the published crate is refused rather than
+  installed. Unlike the Python client it does not verify the signed
+  `SHA256SUMS.txt` manifest, so publishing a release also means shipping a crate
+  version that pins it if Rust callers are to install it; see
+  `clients/rust/README.md`.
 
 The procedure, once the name is settled:
 
