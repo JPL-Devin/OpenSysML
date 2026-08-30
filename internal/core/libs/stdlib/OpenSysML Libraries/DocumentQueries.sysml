@@ -42,7 +42,7 @@ library package DocumentQueries {
 
 	calc def WhereMetadata {
 		in source : Element[0..*] ordered;
-		in metadata : String[1];
+		in 'metadata' : String[1];
 		return result : Element[0..*] ordered;
 	}
 
@@ -55,7 +55,7 @@ library package DocumentQueries {
 
 	calc def WhereFeature {
 		in source : Element[0..*] ordered;
-		in feature : String[1];
+		in 'feature' : String[1];
 		in operator : String[1];
 		in value : String[1];
 		return result : Element[0..*] ordered;

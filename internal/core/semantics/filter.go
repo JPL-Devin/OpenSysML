@@ -811,6 +811,11 @@ func (m *Model) metaclassConforms(cand *symbols.Symbol, typeFQN string) bool {
 	return simpleName(typeFQN) == simpleSymbolName(meta)
 }
 
+// MetaclassConforms reports whether a candidate's metaclass conforms to a type.
+func (m *Model) MetaclassConforms(cand *symbols.Symbol, typeFQN string) bool {
+	return m.metaclassConforms(cand, typeFQN)
+}
+
 // annotationConforms reports whether an annotation's metadata type conforms to
 // the type a condition names. The types are compared as symbols where both are
 // indexed, and by qualified name otherwise.
