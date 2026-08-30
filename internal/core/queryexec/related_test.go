@@ -159,6 +159,12 @@ func TestExecuteRelatedDeclaredRequirements(t *testing.T) {
 	assertRelated(t, fixture, "archiveVerification::archiveObjective::archiveCheck", "verification", "incoming", 1,
 		[]string{"scienceComputer"})
 
+	// A declared requirement that subsets another is still the edge target.
+	assertRelated(t, fixture, "relayHub", "satisfaction", "outgoing", 1,
+		[]string{"relayControl::relayRequirement"})
+	assertRelated(t, fixture, "relayControl::relayRequirement", "satisfaction", "incoming", 1,
+		[]string{"relayHub"})
+
 	// An anonymous declaration form traverses in both directions too.
 	for _, kind := range []string{"satisfaction", "verification"} {
 		subject := fixture.symbol(t, "mountControlStation")

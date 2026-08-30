@@ -62,6 +62,10 @@ package Observatory {
 	part fieldStation {
 		satisfy requirement by mountControlStation;
 	}
+	part relayHub;
+	part relayControl {
+		satisfy requirement relayRequirement :> massRequirement by relayHub;
+	}
 	verification archiveVerification : MassTest {
 		objective archiveObjective {
 			verify requirement archiveCheck by scienceComputer;

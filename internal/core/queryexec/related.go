@@ -281,13 +281,9 @@ func (e *executor) scanSatisfaction(edges *relationshipEdges, kind string, sym *
 		return
 	}
 	var requirement, subject *symbols.Symbol
-	references := false
 	for _, rel := range usage.Relationships {
 		if rel == nil || rel.Target == nil {
 			continue
-		}
-		if rel.Kind == ast.RelSubsets {
-			references = true
 		}
 		target, ok := e.context.Resolver.ResolveTarget(sym.OwnerScope, rel.Target)
 		if !ok || target == nil {
@@ -295,19 +291,23 @@ func (e *executor) scanSatisfaction(edges *relationshipEdges, kind string, sym *
 		}
 		switch rel.Kind {
 		case ast.RelSubsets:
-			requirement = target
+			// A declaration form's subsettings refine the declared requirement;
+			// only the reference form names the requirement this way.
+			if !usage.DeclaresRequirement {
+				requirement = target
+			}
 		case ast.RelSubject:
 			subject = target
 		}
 	}
-	if !references {
+	if usage.DeclaresRequirement {
 		requirement = sym
 	}
 	if subject == nil && sym.OwnerScope != nil {
 		subject = sym.OwnerScope.Owner()
 		// A verify lives in the objective of a verification case; the case is
 		// the verifier.
-		if subject != nil && isObjectiveUsage(subject.Decl) && subject.OwnerScope != nil {
+		if kind == relationshipVerification && subject != nil && isObjectiveUsage(subject.Decl) && subject.OwnerScope != nil {
 			subject = subject.OwnerScope.Owner()
 		}
 	}
