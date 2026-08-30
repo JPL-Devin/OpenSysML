@@ -2,19 +2,20 @@ package grpc
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/envvar"
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // IndexPrewarmEnvVar names the variable saying whether the service builds the
 // standard library index before the requests that need it. Zero disables
-// prewarming, so the first request builds it.
-const IndexPrewarmEnvVar = "SYSML_GRPC_INDEX_POOL"
+// prewarming, so the first request builds it. The legacy SYSML_GRPC_INDEX_POOL
+// name remains accepted; the OPENSYSML_ name wins when both are set.
+const IndexPrewarmEnvVar = "OPENSYSML_GRPC_INDEX_POOL"
 
 // DefaultIndexPrewarm is the value IndexPrewarmEnvVar takes when unset: any
 // positive value prewarms, since one library index now serves every model.
@@ -71,7 +72,7 @@ func newLibraryBase(build libraryBuilder) *libraryBase {
 // is unset or empty. An unusable value is an error naming the variable, rather
 // than a silently kept default.
 func indexPrewarmFromEnv() (int, error) {
-	raw := strings.TrimSpace(os.Getenv(IndexPrewarmEnvVar))
+	raw := strings.TrimSpace(envvar.Lookup(IndexPrewarmEnvVar))
 	if raw == "" {
 		return DefaultIndexPrewarm, nil
 	}

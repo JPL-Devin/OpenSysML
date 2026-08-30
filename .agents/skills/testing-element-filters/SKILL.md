@@ -95,7 +95,7 @@ Fixture shapes that matter (copy them; the alternatives produce misleading resul
   resolver's top-level fallback (`resolve/qualified.go lookupGlobalTop`). Root filters are **per
   document**, so proving that needs a *second* document — and `%load` does not give you one (it just
   submits text into the single REPL session buffer). Supply the second document as a library file
-  under `SYSML_LIBRARY_PATH` (e.g. `$LIB/Roots/other.sysml` containing its own root
+  under `OPENSYSML_LIBRARY_PATH` (e.g. `$LIB/Roots/other.sysml` containing its own root
   `import Lib::*;`), then assert both directions: the other document's unfiltered root import must
   not defeat the session document's root filter, and the other document's root filter must not
   restrict the session document.
@@ -124,9 +124,9 @@ filter @Meta::Safety + 1; -> warning: this filter condition cannot be evaluated,
 A REPL session document is never cached; only *library* files are. Make the model a library:
 
 ```bash
-cp -r internal/core/libs/stdlib/* /tmp/flib/          # SYSML_LIBRARY_PATH REPLACES the stdlib, so copy it
+cp -r internal/core/libs/stdlib/* /tmp/flib/          # OPENSYSML_LIBRARY_PATH REPLACES the stdlib, so copy it
 mkdir -p /tmp/flib/Filters && cp model.sysml /tmp/flib/Filters/
-export SYSML_LIBRARY_PATH=/tmp/flib XDG_CACHE_HOME=/tmp/fc
+export OPENSYSML_LIBRARY_PATH=/tmp/flib XDG_CACHE_HOME=/tmp/fc
 rm -rf /tmp/fc                                        # run 1 = cache miss (parsed), run 2+ = cache hit (restored)
 printf '%%load /tmp/client.sysml\n%%quit\n' | timeout 180 ./bin/sysml
 ```
@@ -185,7 +185,7 @@ side by side on **one model**, and expect them to be able to disagree:
   made`, exit 2). Since the filter fixture *deliberately* carries an unresolved reference, the
   agreement check has to go through the REPL's `%load` + `%eval`, not `<model> -eval '…'`.
 - **Where the element is declared can change the answer, so run every case twice.** Once with the
-  model `%load`ed, once with the same fixture under `SYSML_LIBRARY_PATH=/tmp/flib` +
+  model `%load`ed, once with the same fixture under `OPENSYSML_LIBRARY_PATH=/tmp/flib` +
   `XDG_CACHE_HOME=/tmp/fc` (stdlib copied in alongside). A green library run is not evidence for the
   load path, and vice versa: the REPL reindexes on each submission, so one element exists as a
   distinct `*symbols.Symbol` per generation, and identity-based comparison of annotation types made

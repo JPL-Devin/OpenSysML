@@ -1687,7 +1687,7 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 // KerML has no clock (docs/project/spec-compliance.md).
 //
 // The run is bounded by the context's event and do action budgets
-// (SYSML_MAX_EVENTS, SYSML_MAX_DO_STEPS), so a cyclic machine reports a typed
+// (OPENSYSML_MAX_EVENTS, OPENSYSML_MAX_DO_STEPS), so a cyclic machine reports a typed
 // error instead of spinning forever. A poll that fires nothing costs no budget;
 // a change transition taken counts as one step, like a dispatched event.
 func (e *StateExecutor) RunToCompletion() error {

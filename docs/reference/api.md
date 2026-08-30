@@ -424,7 +424,7 @@ Registered KerML builtins:
 
 Tier 1-3 (Instances & Expressions):
 ```go
-// Honour the SYSML_MAX_* budgets instead of the defaults with:
+// Honour the OPENSYSML_MAX_* budgets instead of the defaults with:
 //   budgets, err := runtime.BudgetsFromEnv()
 //   err = ctx.SetBudgets(budgets)
 ctx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
