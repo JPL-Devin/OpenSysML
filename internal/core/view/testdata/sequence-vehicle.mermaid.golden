@@ -1,5 +1,5 @@
 %% VehicleSequenceViews::startVehicleView — sequence rendering (view def SequenceView)
-%% not represented: the flows in action startVehicle are its action flow, not interaction messages; they are not shown
+%% not represented: the flows in perform action startVehicle are its action flow, not interaction messages; they are not shown
 sequenceDiagram
   participant n0 as part driver (Driver)
   participant n1 as part vehicle (Vehicle)

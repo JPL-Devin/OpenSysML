@@ -39,6 +39,22 @@ func (s *Server) wantsMarkdownHover() bool {
 	return s.hoverMarkdown
 }
 
+// setCompletionMarkdown records whether the client renders Markdown completion
+// documentation.
+func (s *Server) setCompletionMarkdown(ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.completionMarkdown = ok
+}
+
+// wantsMarkdownCompletion reports whether completion documentation should be
+// rendered as Markdown.
+func (s *Server) wantsMarkdownCompletion() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.completionMarkdown
+}
+
 // initializeFolders returns a session's folders, preferring workspaceFolders and
 // falling back to the deprecated rootUri/rootPath older clients send instead.
 func initializeFolders(params *protocol.InitializeParams) []string {

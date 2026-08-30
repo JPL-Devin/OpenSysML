@@ -95,8 +95,8 @@ func (c *completionItems) addSymbol(s *Server, sym *symbols.Symbol) {
 		Kind:   completionKind(sym.Kind),
 		Detail: completionDetail(sym),
 	}
-	if docText := s.symbolDocumentation(sym); docText != "" {
-		item.Documentation = protocol.MarkupContent{Kind: protocol.PlainText, Value: docText}
+	if doc, ok := s.symbolDocumentation(sym); ok {
+		item.Documentation = doc
 	}
 	c.add(item)
 	if short := sym.ShortName; short != "" && short != item.Label {
@@ -110,22 +110,36 @@ func (c *completionItems) list() *protocol.CompletionList {
 }
 
 // symbolDocumentation returns the comment trivia preceding a symbol's
-// declaration, when the document declaring it is loaded.
-func (s *Server) symbolDocumentation(sym *symbols.Symbol) string {
+// declaration, when the document declaring it is loaded. A client that renders
+// Markdown is sent the comments as prose, as hover does, rather than the source
+// with its delimiters.
+func (s *Server) symbolDocumentation(sym *symbols.Symbol) (protocol.MarkupContent, bool) {
 	if len(sym.LeadingTrivia) == 0 || sym.DocName == "" {
-		return ""
+		return protocol.MarkupContent{}, false
 	}
 	doc := s.ws.Document(sym.DocName)
 	if doc == nil {
-		return ""
+		return protocol.MarkupContent{}, false
 	}
-	return leadingDocText(doc.Content, sym.LeadingTrivia)
+	comments := leadingDocComments(doc.Content, sym.LeadingTrivia)
+	if s.wantsMarkdownCompletion() {
+		prose := docCommentProse(comments)
+		if prose == "" {
+			return protocol.MarkupContent{}, false
+		}
+		return protocol.MarkupContent{Kind: protocol.Markdown, Value: prose}, true
+	}
+	text := strings.Join(comments, "\n")
+	if text == "" {
+		return protocol.MarkupContent{}, false
+	}
+	return protocol.MarkupContent{Kind: protocol.PlainText, Value: text}, true
 }
 
 // completionDetail describes an element the way hover does: its kind, plus the
 // type it declares when it declares one.
 func completionDetail(sym *symbols.Symbol) string {
-	detail := sym.Kind.String()
+	detail := sym.Notation()
 	if t := declaredTypeText(sym); t != "" {
 		detail += " : " + t
 	}

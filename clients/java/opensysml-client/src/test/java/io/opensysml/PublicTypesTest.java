@@ -27,8 +27,9 @@ class PublicTypesTest {
     Value.Sequence sequence = new Value.Sequence(elements);
     elements.add(new Value.IntegerValue(2));
     List<Value> copied = sequence.elements();
+    Value added = new Value.NullValue();
     assertEquals(1, copied.size());
-    assertThrows(UnsupportedOperationException.class, () -> copied.add(new Value.NullValue()));
+    assertThrows(UnsupportedOperationException.class, () -> copied.add(added));
   }
 
   @Test
@@ -37,12 +38,16 @@ class PublicTypesTest {
     assertEquals(
         new Value.EnumerationValue(new EnumLiteral("D::Color::red", "D::Color", "Color::red")),
         new Value.EnumerationValue(new EnumLiteral("D::Color::red", "D::Color", "Color::red")));
-    assertNotEquals(new Value.IntegerValue(1), new Value.RealValue(1.0));
+    Value one = new Value.IntegerValue(1);
+    Value oneAsReal = new Value.RealValue(1.0);
+    assertNotEquals(one, oneAsReal);
   }
 
   @Test
   void anUnsetValueIsNotTheModelsNull() {
-    assertNotEquals(new Value.UnsetValue(), new Value.NullValue());
+    Value unset = new Value.UnsetValue();
+    Value modelsNull = new Value.NullValue();
+    assertNotEquals(unset, modelsNull);
   }
 
   @Test

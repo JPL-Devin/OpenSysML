@@ -81,47 +81,60 @@ def tracked_markdown() -> list[Path]:
     return [Path(line) for line in out.splitlines() if line]
 
 
+def link_failure(md: Path, link: str, root: Path, anchors: dict[Path, set[str]]) -> str | None:
+    """What is wrong with one link, or None if it resolves."""
+    target, _, fragment = link.partition("#")
+    if target:
+        dest = (md.parent / target).resolve()
+        if not dest.is_relative_to(root):
+            return f"{md}: escapes the repository: {link}"
+        if not dest.exists():
+            return f"{md}: no such file: {link}"
+    else:
+        dest = md.resolve()
+    if not fragment:
+        return None
+    if dest.is_dir():
+        dest = dest / "README.md"
+        if not dest.exists():
+            return f"{md}: no README.md for the fragment in {link}"
+    if dest.suffix != ".md":
+        return None
+    if dest not in anchors:
+        anchors[dest] = anchors_of(dest)
+    if fragment.lower() not in anchors[dest]:
+        return f"{md}: no heading '#{fragment}' in {target or md.name}"
+    return None
+
+
+def page_failures(md: Path, root: Path, anchors: dict[Path, set[str]]) -> list[str]:
+    """Everything one page points at that is not there."""
+    text = prose(md.read_text(encoding="utf-8", errors="replace"))
+    failures: list[str] = []
+    for raw in LINK.findall(text):
+        link = raw.strip()
+        if not link or link.startswith(SKIP_PREFIX):
+            continue
+        failure = link_failure(md, link, root, anchors)
+        if failure:
+            failures.append(failure)
+    if md.as_posix().startswith(HISTORICAL):
+        return failures
+    failures.extend(
+        f"{md}: no such file, cited in prose: {cited}"
+        for cited in sorted(set(CITED.findall(text)))
+        if not (root / cited).exists()
+    )
+    return failures
+
+
 def main() -> int:
     root = Path(".").resolve()
     anchors: dict[Path, set[str]] = {}
     failures: list[str] = []
 
     for md in tracked_markdown():
-        text = prose(md.read_text(encoding="utf-8", errors="replace"))
-        for raw in LINK.findall(text):
-            link = raw.strip()
-            if not link or link.startswith(SKIP_PREFIX):
-                continue
-            target, _, fragment = link.partition("#")
-            if target:
-                dest = (md.parent / target).resolve()
-                if not dest.is_relative_to(root):
-                    failures.append(f"{md}: escapes the repository: {link}")
-                    continue
-                if not dest.exists():
-                    failures.append(f"{md}: no such file: {link}")
-                    continue
-            else:
-                dest = md.resolve()
-            if not fragment:
-                continue
-            if dest.is_dir():
-                dest = dest / "README.md"
-                if not dest.exists():
-                    failures.append(f"{md}: no README.md for the fragment in {link}")
-                    continue
-            if dest.suffix != ".md":
-                continue
-            if dest not in anchors:
-                anchors[dest] = anchors_of(dest)
-            if fragment.lower() not in anchors[dest]:
-                failures.append(f"{md}: no heading '#{fragment}' in {target or md.name}")
-
-        if md.as_posix().startswith(HISTORICAL):
-            continue
-        for cited in sorted(set(CITED.findall(text))):
-            if not (root / cited).exists():
-                failures.append(f"{md}: no such file, cited in prose: {cited}")
+        failures.extend(page_failures(md, root, anchors))
 
     for failure in sorted(failures):
         print(failure)

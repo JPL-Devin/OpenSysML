@@ -129,6 +129,105 @@ func TestHoverRendersMarkdownWhenClientSupportsIt(t *testing.T) {
 	}
 }
 
+func TestHoverSignatureUsesNotationKeywords(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	initMarkdownHover(t, s)
+	name := uri.File("/tmp/hk.sysml").Filename()
+	src := "package P {\n    part def Wheel;\n    part w : Wheel;\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	for _, tc := range []struct {
+		at   string
+		want string
+	}{
+		{at: "Wheel;", want: "```sysml\npart def Wheel\n```"},
+		{at: "w :", want: "```sysml\npart w\n```"},
+	} {
+		res := hoverInSrc(t, s, name, src, strings.Index(src, tc.at))
+		if res.Contents.Value != tc.want {
+			t.Errorf("hover on %q = %q, want %q", tc.at, res.Contents.Value, tc.want)
+		}
+	}
+}
+
+func TestHoverStripsDelimitersOfEveryLeadingComment(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	initMarkdownHover(t, s)
+	name := uri.File("/tmp/hc.sysml").Filename()
+	src := "package P {\n    /* first */\n    /* second */\n    part def Wheel;\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	res := hoverInSrc(t, s, name, src, strings.Index(src, "Wheel;"))
+	want := "```sysml\npart def Wheel\n```\n\nfirst\n\nsecond"
+	if res.Contents.Value != want {
+		t.Errorf("hover value = %q, want %q", res.Contents.Value, want)
+	}
+}
+
+func TestHoverQuotesAnUnrestrictedName(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	initMarkdownHover(t, s)
+	name := uri.File("/tmp/hq.sysml").Filename()
+	src := "package P {\n    part def 'my wheel';\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	res := hoverInSrc(t, s, name, src, strings.Index(src, "my wheel"))
+	want := "```sysml\npart def 'my wheel'\n```"
+	if res.Contents.Value != want {
+		t.Errorf("hover value = %q, want %q", res.Contents.Value, want)
+	}
+}
+
+func TestHoverStripsBlockNoteDelimiters(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	initMarkdownHover(t, s)
+	name := uri.File("/tmp/hn.sysml").Filename()
+	src := "package P {\n    //* a note */\n    part def Wheel;\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	res := hoverInSrc(t, s, name, src, strings.Index(src, "Wheel;"))
+	want := "```sysml\npart def Wheel\n```\n\na note"
+	if res.Contents.Value != want {
+		t.Errorf("hover value = %q, want %q", res.Contents.Value, want)
+	}
+}
+
+func TestHoverKeepsDocCommentLineBreaks(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	initMarkdownHover(t, s)
+	name := uri.File("/tmp/hl.sysml").Filename()
+	src := "package P {\n    doc /*\n     * First line.\n     * Second line.\n     */\n    part def Wheel;\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	res := hoverInSrc(t, s, name, src, strings.Index(src, "Wheel;"))
+	want := "```sysml\npart def Wheel\n```\n\nFirst line.  \nSecond line."
+	if res.Contents.Value != want {
+		t.Errorf("hover value = %q, want %q", res.Contents.Value, want)
+	}
+}
+
+// The star a block comment runs down its edge is decoration; the doubled star
+// an author writes is emphasis, and survives.
+func TestHoverKeepsAuthoredMarkdownEmphasis(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	initMarkdownHover(t, s)
+	name := uri.File("/tmp/hm.sysml").Filename()
+	src := "package P {\n    /*\n     * **Warning** load-bearing.\n     */\n    part def Wheel;\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	res := hoverInSrc(t, s, name, src, strings.Index(src, "Wheel;"))
+	want := "```sysml\npart def Wheel\n```\n\n**Warning** load-bearing."
+	if res.Contents.Value != want {
+		t.Errorf("hover value = %q, want %q", res.Contents.Value, want)
+	}
+}
+
 func TestHoverFallsBackToPlainTextWithoutMarkdownCapability(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)

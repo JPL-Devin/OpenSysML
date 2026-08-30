@@ -42,7 +42,8 @@ func TestDefinitionsAndUsagesAreSummarized(t *testing.T) {
 	for _, m := range root.Members {
 		got = append(got, renderMember(m))
 	}
-	want := []string{"part def Wheel", "attribute wheelCount", "calc def area", "action step"}
+	// `step` is a keyword, so the name it declares is echoed quoted.
+	want := []string{"part def Wheel", "attribute wheelCount", "calc def area", "action 'step'"}
 	for i, w := range want {
 		if got[i] != w {
 			t.Errorf("member %d = %q, want %q", i, got[i], w)
@@ -91,5 +92,29 @@ func TestNotationErrorKeepsTheDeclaredSummary(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(declared, "\n"), "package P") {
 		t.Errorf("the submission declared package P but summarized nothing: %q", declared)
+	}
+}
+
+// The echo confirms a declaration the way it was written: the keyword the
+// author used, no `def` a classifier never took, and a quoted unrestricted name.
+func TestSummariesEchoTheWrittenNotation(t *testing.T) {
+	root := parseRoot("metaclass M; datatype T; feature f; behavior def BD; part 'my wheel'; perform action a;")
+	got := []string{}
+	for _, m := range root.Members {
+		got = append(got, renderMember(m))
+	}
+	want := []string{"metaclass M", "datatype T", "feature f", "behavior def BD", "part 'my wheel'", "perform action a"}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("member %d = %q, want %q", i, got[i], w)
+		}
+	}
+}
+
+// A short name is echoed as it must be written too, quotes and all.
+func TestSummariesQuoteUnrestrictedShortNames(t *testing.T) {
+	root := parseRoot("part def <'1'>;")
+	if got := renderMember(root.Members[0]); got != "part def <'1'>" {
+		t.Errorf("member = %q, want %q", got, "part def <'1'>")
 	}
 }

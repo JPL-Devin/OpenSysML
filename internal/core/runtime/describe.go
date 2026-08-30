@@ -59,11 +59,12 @@ func describeOperand(val Value) string {
 // or "a calc usage", so a diagnostic about a symbol of the wrong kind never
 // prints a Go type name.
 func describeDecl(decl ast.Node) string {
-	switch d := decl.(type) {
+	written := ast.Notation(decl)
+	switch decl.(type) {
 	case *ast.Definition:
-		return "a " + d.Kind.String() + " def"
+		return articleFor(written) + " " + written
 	case *ast.Usage:
-		return "a " + d.Kind.String() + " usage"
+		return articleFor(written) + " " + written + " usage"
 	case nil:
 		return "nothing"
 	}

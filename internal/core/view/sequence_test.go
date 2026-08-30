@@ -66,7 +66,7 @@ func TestSequenceRenderingFromTheShortViewName(t *testing.T) {
 		}
 	}
 	if len(rendering.Notices) != 1 ||
-		!strings.Contains(rendering.Notices[0], "the flows in action startVehicle are its action flow") {
+		!strings.Contains(rendering.Notices[0], "the flows in perform action startVehicle are its action flow") {
 		t.Errorf("notices = %v, want the performed action's flows reported", rendering.Notices)
 	}
 }
@@ -91,7 +91,7 @@ func TestSequenceRenderingReportsWhatItCannotShow(t *testing.T) {
 	}
 	wants := []string{
 		"attribute def Kit::Level has no place in a sequence rendering",
-		"a connection in Talk::Handshake states no direction",
+		"a connect in Talk::Handshake states no direction",
 		"message pending states no source and target",
 		"message adrift attaches to monitor.tapped, which is on no lifeline the rendering shows",
 	}

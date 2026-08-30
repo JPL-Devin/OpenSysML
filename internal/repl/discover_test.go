@@ -19,7 +19,7 @@ func TestSearchCommand(t *testing.T) {
 		{
 			name:  "library declaration with its kind",
 			line:  "%search Integer",
-			wants: []string{"ScalarValues::Integer  attributeDef"},
+			wants: []string{"ScalarValues::Integer  datatype"},
 		},
 		{
 			name: "re-export aliases are not listed as declarations",
@@ -38,20 +38,20 @@ func TestSearchCommand(t *testing.T) {
 			name:    "session declarations are searched",
 			declare: "part def Wheel { attribute diameter = 1.0; }",
 			line:    "%search Wheel",
-			wants:   []string{"Wheel  partDef"},
+			wants:   []string{"Wheel  part def"},
 		},
 		{
 			name:    "a chained binding end declares no symbol",
 			declare: "package B { part R { part inner { attribute hhh; } } part ccc; binding bind R.inner.hhh = ccc; }",
 			line:    "%search hhh",
-			wants:   []string{"B::R::inner::hhh  attributeUsage"},
+			wants:   []string{"B::R::inner::hhh  attribute"},
 			rejects: []string{"\nB::hhh", "unknown"},
 		},
 		{
 			name:    "a named control node is listed",
 			declare: "package B { action def F { first start; fork Jump; action S; first start then Jump; first Jump then S; } }",
 			line:    "%search Jump",
-			wants:   []string{"B::F::Jump  actionUsage"},
+			wants:   []string{"B::F::Jump  fork"},
 		},
 		{
 			name:  "no match",

@@ -29,3 +29,26 @@ attribute test = D::Color::red;
 		t.Errorf("describeOperand of an unresolved literal = %q", got)
 	}
 }
+
+// A diagnostic names a declaration as the notation writes it, since several
+// spellings share one kind.
+func TestDescribeDeclNamesTheWrittenDeclaration(t *testing.T) {
+	_, _, root := parseAndBuildModel(t, `
+datatype T;
+part def Wheel;
+part w : Wheel;
+`)
+	want := map[string]string{
+		"T":     "a datatype usage",
+		"Wheel": "a part def",
+		"w":     "a part usage",
+	}
+	for name, description := range want {
+		if got := describeDecl(resolveSymbol(t, root, name).Decl); got != description {
+			t.Errorf("describeDecl(%s) = %q, want %q", name, got, description)
+		}
+	}
+	if got := describeDecl(nil); got != "nothing" {
+		t.Errorf("describeDecl(nil) = %q, want %q", got, "nothing")
+	}
+}

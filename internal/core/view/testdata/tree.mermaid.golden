@@ -5,7 +5,7 @@ flowchart TD
   n0 --- n1
   n2["part wheels (Wheel)"]
   n0 --- n2
-  n3["connection"]
+  n3["connect"]
   n0 --- n3
   n4["view VehicleViews::vehicleView::engineSubview"]
   n5["part def Vehicles::Engine"]
