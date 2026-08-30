@@ -323,7 +323,7 @@ func TestEvaluateWrapsQueryExecutionFailure(t *testing.T) {
 		t.Fatalf("error = %+v", evaluation)
 	}
 	var execution *queryexec.Error
-	if !errors.As(err, &execution) || execution.Kind != queryexec.ErrorUnsupportedOperation {
+	if !errors.As(err, &execution) || execution.Kind != queryexec.ErrorUnknownRelationship {
 		t.Fatalf("inner = %v", evaluation.Err)
 	}
 }
