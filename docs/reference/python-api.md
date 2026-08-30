@@ -274,6 +274,8 @@ make python-proto
 - `conversion.py` — a written model, its formats, extension inference, and the
   `ExperimentalFeatureWarning` an RDF conversion raises
 - `query.py` — the standard's Query payload, translated and its answers
+- `document.py` — native document queries: typed bindings, typed rows, and
+  `model.render_document`'s Markdown
 - `verdict.py` — a verification's answer and what a calculation computed
 - `errors.py` — the exception hierarchy and the gRPC status translation
 - `capabilities.py` — what the connected service reports it supports

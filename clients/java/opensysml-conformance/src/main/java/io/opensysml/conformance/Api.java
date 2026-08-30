@@ -24,7 +24,7 @@ import io.opensysml.proto.ParseFileResponse;
 import io.opensysml.proto.ServerInfoRequest;
 import io.opensysml.proto.ServerInfoResponse;
 import io.opensysml.proto.SymbolResponse;
-import io.opensysml.proto.SysmlProto;
+import io.opensysml.proto.Sysml;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
@@ -98,7 +98,7 @@ final class Api {
    * @return whether {@code sysml.SysMLService} declares it
    */
   static boolean declared(String method) {
-    return SysmlProto.getDescriptor().getServices().stream()
+    return Sysml.getDescriptor().getServices().stream()
         .filter(service -> service.getFullName().equals("sysml.SysMLService"))
         .anyMatch(service -> service.findMethodByName(method) != null);
   }

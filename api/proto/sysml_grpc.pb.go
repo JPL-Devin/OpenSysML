@@ -34,6 +34,8 @@ const (
 	SysMLService_VerifySatisfaction_FullMethodName = "/sysml.SysMLService/VerifySatisfaction"
 	SysMLService_EvaluateCalc_FullMethodName       = "/sysml.SysMLService/EvaluateCalc"
 	SysMLService_Query_FullMethodName              = "/sysml.SysMLService/Query"
+	SysMLService_RunDocumentQuery_FullMethodName   = "/sysml.SysMLService/RunDocumentQuery"
+	SysMLService_RenderDocument_FullMethodName     = "/sysml.SysMLService/RenderDocument"
 )
 
 // SysMLServiceClient is the client API for SysMLService service.
@@ -78,6 +80,13 @@ type SysMLServiceClient interface {
 	// as the standard defines them, so a client that speaks that API can filter a
 	// model here. Reported as the "query" capability.
 	Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (*QueryResponse, error)
+	// Run a named document query with parameter bindings, the answer the REPL's
+	// %run-query gives, as typed rows rather than formatted lines. Reported as
+	// the "document_query" capability.
+	RunDocumentQuery(ctx context.Context, in *RunDocumentQueryRequest, opts ...grpc.CallOption) (*RunDocumentQueryResponse, error)
+	// Render a named document to Markdown, as the CLI's -render-document does.
+	// Reported as the "render_document" capability.
+	RenderDocument(ctx context.Context, in *RenderDocumentRequest, opts ...grpc.CallOption) (*RenderDocumentResponse, error)
 }
 
 type sysMLServiceClient struct {
@@ -223,6 +232,24 @@ func (c *sysMLServiceClient) Query(ctx context.Context, in *QueryRequest, opts .
 	return out, nil
 }
 
+func (c *sysMLServiceClient) RunDocumentQuery(ctx context.Context, in *RunDocumentQueryRequest, opts ...grpc.CallOption) (*RunDocumentQueryResponse, error) {
+	out := new(RunDocumentQueryResponse)
+	err := c.cc.Invoke(ctx, SysMLService_RunDocumentQuery_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sysMLServiceClient) RenderDocument(ctx context.Context, in *RenderDocumentRequest, opts ...grpc.CallOption) (*RenderDocumentResponse, error) {
+	out := new(RenderDocumentResponse)
+	err := c.cc.Invoke(ctx, SysMLService_RenderDocument_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SysMLServiceServer is the server API for SysMLService service.
 // All implementations must embed UnimplementedSysMLServiceServer
 // for forward compatibility
@@ -265,6 +292,13 @@ type SysMLServiceServer interface {
 	// as the standard defines them, so a client that speaks that API can filter a
 	// model here. Reported as the "query" capability.
 	Query(context.Context, *QueryRequest) (*QueryResponse, error)
+	// Run a named document query with parameter bindings, the answer the REPL's
+	// %run-query gives, as typed rows rather than formatted lines. Reported as
+	// the "document_query" capability.
+	RunDocumentQuery(context.Context, *RunDocumentQueryRequest) (*RunDocumentQueryResponse, error)
+	// Render a named document to Markdown, as the CLI's -render-document does.
+	// Reported as the "render_document" capability.
+	RenderDocument(context.Context, *RenderDocumentRequest) (*RenderDocumentResponse, error)
 	mustEmbedUnimplementedSysMLServiceServer()
 }
 
@@ -316,6 +350,12 @@ func (UnimplementedSysMLServiceServer) EvaluateCalc(context.Context, *EvaluateCa
 }
 func (UnimplementedSysMLServiceServer) Query(context.Context, *QueryRequest) (*QueryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Query not implemented")
+}
+func (UnimplementedSysMLServiceServer) RunDocumentQuery(context.Context, *RunDocumentQueryRequest) (*RunDocumentQueryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RunDocumentQuery not implemented")
+}
+func (UnimplementedSysMLServiceServer) RenderDocument(context.Context, *RenderDocumentRequest) (*RenderDocumentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RenderDocument not implemented")
 }
 func (UnimplementedSysMLServiceServer) mustEmbedUnimplementedSysMLServiceServer() {}
 
@@ -600,6 +640,42 @@ func _SysMLService_Query_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SysMLService_RunDocumentQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunDocumentQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).RunDocumentQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_RunDocumentQuery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).RunDocumentQuery(ctx, req.(*RunDocumentQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SysMLService_RenderDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenderDocumentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).RenderDocument(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_RenderDocument_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).RenderDocument(ctx, req.(*RenderDocumentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SysMLService_ServiceDesc is the grpc.ServiceDesc for SysMLService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -666,6 +742,14 @@ var SysMLService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Query",
 			Handler:    _SysMLService_Query_Handler,
+		},
+		{
+			MethodName: "RunDocumentQuery",
+			Handler:    _SysMLService_RunDocumentQuery_Handler,
+		},
+		{
+			MethodName: "RenderDocument",
+			Handler:    _SysMLService_RenderDocument_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

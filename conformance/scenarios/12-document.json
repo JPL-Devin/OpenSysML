@@ -1,0 +1,265 @@
+{
+  "scenarios": [
+    {
+      "id": "document/a_named_query_answers_typed_rows_in_order",
+      "description": "A named document query answers its column schema and typed rows, ordered as the query orders them.",
+      "rpc": "RunDocumentQuery",
+      "requires_capabilities": [
+        "document_query"
+      ],
+      "model": {
+        "fixture": "document.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query_id": "Observatory::SubsystemTable",
+        "bindings": [
+          {
+            "parameter": "root",
+            "values": [
+              {
+                "element_id": "Observatory::telescope"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "counts": {
+          "columns": 2,
+          "rows": 4
+        },
+        "response": {
+          "columns": [
+            {
+              "name": "name"
+            },
+            {
+              "name": "mass"
+            }
+          ],
+          "rows": [
+            {
+              "element": {
+                "element_id": "Observatory::telescope::baffle|shroud *tricky*",
+                "element_type": "PartUsage"
+              },
+              "cells": [
+                {
+                  "values": [
+                    {
+                      "string_value": "baffle|shroud *tricky*"
+                    }
+                  ]
+                },
+                {
+                  "values": [
+                    {
+                      "real_value": 1.5
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "element": {
+                "element_id": "Observatory::telescope::mount",
+                "element_type": "PartUsage"
+              },
+              "cells": [
+                {
+                  "values": [
+                    {
+                      "string_value": "mount"
+                    }
+                  ]
+                },
+                {
+                  "values": [
+                    {
+                      "real_value": 15.0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "element": {
+                "element_id": "Observatory::telescope::optics",
+                "element_type": "PartUsage"
+              },
+              "cells": [
+                {
+                  "values": [
+                    {
+                      "string_value": "optics"
+                    }
+                  ]
+                },
+                {
+                  "values": [
+                    {
+                      "real_value": 8.5
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "element": {
+                "element_id": "Observatory::telescope::segmentControl",
+                "element_type": "PartUsage"
+              },
+              "cells": [
+                {
+                  "values": [
+                    {
+                      "string_value": "segmentControl"
+                    }
+                  ]
+                },
+                {
+                  "values": [
+                    {
+                      "real_value": 20.0
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect_without_capability": {
+        "status": "UNIMPLEMENTED",
+        "status_message_contains": "document_query"
+      }
+    },
+    {
+      "id": "document/an_empty_result_keeps_its_schema",
+      "description": "A query matching nothing answers its columns with no rows, not an error.",
+      "rpc": "RunDocumentQuery",
+      "requires_capabilities": [
+        "document_query"
+      ],
+      "model": {
+        "fixture": "document.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query_id": "Observatory::MissingSubsystems",
+        "bindings": [
+          {
+            "parameter": "root",
+            "values": [
+              {
+                "element_id": "Observatory::telescope"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "counts": {
+          "columns": 2,
+          "rows": 0
+        }
+      }
+    },
+    {
+      "id": "document/an_unknown_query_is_not_found",
+      "description": "A query the model does not declare is a wrong request, not an empty answer.",
+      "rpc": "RunDocumentQuery",
+      "requires_capabilities": [
+        "document_query"
+      ],
+      "model": {
+        "fixture": "document.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query_id": "Observatory::NoSuchQuery"
+      },
+      "expect": {
+        "status": "NOT_FOUND"
+      }
+    },
+    {
+      "id": "document/a_missing_binding_is_invalid",
+      "description": "A query parameter left unbound fails the call before execution.",
+      "rpc": "RunDocumentQuery",
+      "requires_capabilities": [
+        "document_query"
+      ],
+      "model": {
+        "fixture": "document.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "query_id": "Observatory::SubsystemTable"
+      },
+      "expect": {
+        "status": "INVALID_ARGUMENT"
+      }
+    },
+    {
+      "id": "document/a_named_document_renders_markdown",
+      "description": "A named document renders to the same Markdown the CLI renders.",
+      "rpc": "RenderDocument",
+      "requires_capabilities": [
+        "render_document"
+      ],
+      "model": {
+        "fixture": "document.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "document_id": "Observatory::MassReport"
+      },
+      "expect": {
+        "contains": {
+          "markdown": "# Telescope Mass Report"
+        }
+      },
+      "expect_without_capability": {
+        "status": "UNIMPLEMENTED",
+        "status_message_contains": "render_document"
+      }
+    },
+    {
+      "id": "document/an_unknown_document_is_not_found",
+      "rpc": "RenderDocument",
+      "requires_capabilities": [
+        "render_document"
+      ],
+      "model": {
+        "fixture": "document.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "document_id": "Observatory::NoSuchDocument"
+      },
+      "expect": {
+        "status": "NOT_FOUND"
+      }
+    },
+    {
+      "id": "document/a_query_is_not_a_document",
+      "description": "Naming a query where a document is expected is a wrong request.",
+      "rpc": "RenderDocument",
+      "requires_capabilities": [
+        "render_document"
+      ],
+      "model": {
+        "fixture": "document.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "document_id": "Observatory::SubsystemTable"
+      },
+      "expect": {
+        "status": "INVALID_ARGUMENT"
+      }
+    }
+  ]
+}
