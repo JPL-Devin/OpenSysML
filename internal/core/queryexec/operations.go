@@ -566,6 +566,9 @@ func compareValue(actual Value, operator, expected string) (bool, error) {
 		}
 	case ValueInteger:
 		value, _ := actual.Integer()
+		if expected == "*" {
+			return compareOrdinal(-1, operator)
+		}
 		want, err := strconv.ParseInt(strings.ReplaceAll(expected, "_", ""), 10, 64)
 		if err != nil {
 			return false, err
@@ -573,45 +576,60 @@ func compareValue(actual Value, operator, expected string) (bool, error) {
 		return compareNumber(float64(value), operator, float64(want))
 	case ValueReal:
 		value, _ := actual.Real()
+		if expected == "*" {
+			return compareOrdinal(-1, operator)
+		}
 		want, err := strconv.ParseFloat(strings.ReplaceAll(expected, "_", ""), 64)
 		if err != nil {
 			return false, err
 		}
 		return compareNumber(value, operator, want)
 	case ValueInfinity:
-		switch operator {
-		case "=", "==":
-			return expected == "*", nil
-		case "!=", "<>":
-			return expected != "*", nil
-		default:
-			return false, errComparison
+		if expected == "*" {
+			return compareOrdinal(0, operator)
 		}
+		if _, err := strconv.ParseFloat(strings.ReplaceAll(expected, "_", ""), 64); err != nil {
+			return false, err
+		}
+		return compareOrdinal(1, operator)
 	default:
 		return false, errComparison
 	}
 }
 
 func compareNumber(actual float64, operator string, expected float64) (bool, error) {
+	return compareOrdinal(compareFloat(actual, expected), operator)
+}
+
+func compareOrdinal(comparison int, operator string) (bool, error) {
 	switch operator {
 	case "=", "==":
-		return actual == expected, nil
+		return comparison == 0, nil
 	case "!=", "<>":
-		return actual != expected, nil
+		return comparison != 0, nil
 	case "<":
-		return actual < expected, nil
+		return comparison < 0, nil
 	case "<=":
-		return actual <= expected, nil
+		return comparison <= 0, nil
 	case ">":
-		return actual > expected, nil
+		return comparison > 0, nil
 	case ">=":
-		return actual >= expected, nil
+		return comparison >= 0, nil
 	default:
 		return false, errComparison
 	}
 }
 
 func compareOrdered(left, right Value) int {
+	if left.Kind() == ValueInfinity {
+		if right.Kind() == ValueInfinity {
+			return 0
+		}
+		return 1
+	}
+	if right.Kind() == ValueInfinity {
+		return -1
+	}
 	if left.Kind() == ValueInteger && right.Kind() == ValueReal {
 		l, _ := left.Integer()
 		r, _ := right.Real()
@@ -670,8 +688,11 @@ func orderedKindsCompatible(left, right ValueKind) bool {
 	if left == right {
 		return true
 	}
-	return (left == ValueInteger || left == ValueReal) &&
-		(right == ValueInteger || right == ValueReal)
+	return numericKind(left) && numericKind(right)
+}
+
+func numericKind(kind ValueKind) bool {
+	return kind == ValueInteger || kind == ValueReal || kind == ValueInfinity
 }
 
 func (e *executor) resolveClassification(name string) *symbols.Symbol {

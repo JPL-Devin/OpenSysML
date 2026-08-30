@@ -325,6 +325,39 @@ calc def RejectMultiple :> Query {
 	}
 }
 
+func TestExecuteComparesAndOrdersInfiniteUpperBounds(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part single;
+	part many[0..*];
+}
+calc def InfiniteOnly :> Query {
+	in source : Element;
+	OrderBy(
+		source = WhereFeature(
+			source = OwnedElements(source = source),
+			'feature' = "multiplicityUpper",
+			operator = ">",
+			value = "1"
+		),
+		property = "multiplicityUpper",
+		direction = "ascending",
+		missing = "error",
+		multiple = "error"
+	)
+}
+`)
+	result, err := fixture.execute(t, "InfiniteOnly", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute infinite-bound query: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"many"}) {
+		t.Fatalf("infinite-bound result = %v", got)
+	}
+}
+
 func TestExecuteReportsUnknownAndUnevaluableFeatures(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part root {
