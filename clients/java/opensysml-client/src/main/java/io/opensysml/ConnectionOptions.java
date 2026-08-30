@@ -19,11 +19,26 @@ public final class ConnectionOptions {
   /** Names the service binary a private child is started from. */
   public static final String BINARY_ENV = "OPENSYSML_GRPC_BINARY";
 
+  /** Names the release to download when no binary is installed, or {@code latest}. */
+  public static final String VERSION_ENV = "OPENSYSML_GRPC_VERSION";
+
+  /** Names the repository releases are downloaded from, as {@code owner/repo}. */
+  public static final String REPO_ENV = "OPENSYSML_GITHUB_REPO";
+
+  /**
+   * Set to the repository whose unpinned downloads may be accepted ({@code 1} for any), which is
+   * same-origin trust: the checksum then comes from whoever served the binary.
+   */
+  public static final String ALLOW_UNPINNED_ENV = "OPENSYSML_ALLOW_UNPINNED_DOWNLOAD";
+
   private final Optional<String> host;
   private final int port;
   private final boolean autoStart;
   private final Optional<Path> binaryPath;
   private final Optional<String> expectedBinarySha256;
+  private final Optional<String> downloadVersion;
+  private final Optional<String> githubRepo;
+  private final boolean allowUnpinnedDownload;
   private final Encoding encoding;
   private final Duration requestTimeout;
   private final Duration startupTimeout;
@@ -35,6 +50,9 @@ public final class ConnectionOptions {
     this.autoStart = builder.autoStart;
     this.binaryPath = Optional.ofNullable(builder.binaryPath);
     this.expectedBinarySha256 = Optional.ofNullable(builder.expectedBinarySha256);
+    this.downloadVersion = Optional.ofNullable(builder.downloadVersion);
+    this.githubRepo = Optional.ofNullable(builder.githubRepo);
+    this.allowUnpinnedDownload = builder.allowUnpinnedDownload;
     this.encoding = builder.encoding;
     this.requestTimeout = builder.requestTimeout;
     this.startupTimeout = builder.startupTimeout;
@@ -105,6 +123,36 @@ public final class ConnectionOptions {
   }
 
   /**
+   * The release a missing binary is downloaded from, absent when {@code $OPENSYSML_GRPC_VERSION}
+   * decides and nothing is downloaded without it.
+   *
+   * @return a release tag, or {@code latest}
+   */
+  public Optional<String> downloadVersion() {
+    return downloadVersion;
+  }
+
+  /**
+   * The repository releases are downloaded from, absent when {@code $OPENSYSML_GITHUB_REPO} or the
+   * default decides.
+   *
+   * @return owner/repo
+   */
+  public Optional<String> githubRepo() {
+    return githubRepo;
+  }
+
+  /**
+   * Whether a release this client pins no digest for, and whose checksum manifest carries no
+   * signature that verifies, may be installed against the checksum served beside it.
+   *
+   * @return {@code true} when same-origin trust was accepted here
+   */
+  public boolean allowUnpinnedDownload() {
+    return allowUnpinnedDownload;
+  }
+
+  /**
    * The body encoding calls use.
    *
    * @return the encoding
@@ -148,6 +196,9 @@ public final class ConnectionOptions {
     private boolean autoStart = true;
     private Path binaryPath;
     private String expectedBinarySha256;
+    private String downloadVersion;
+    private String githubRepo;
+    private boolean allowUnpinnedDownload;
     private Encoding encoding = Encoding.PROTOBUF;
     private Duration requestTimeout = Duration.ofSeconds(60);
     private Duration startupTimeout = Duration.ofSeconds(30);
@@ -206,6 +257,53 @@ public final class ConnectionOptions {
         throw new IllegalArgumentException("not a SHA-256 hex digest: " + hexDigest);
       }
       this.expectedBinarySha256 = hexDigest;
+      return this;
+    }
+
+    /**
+     * The release to download when no binary is installed, or when the cached one is another
+     * release. Without one, {@code $OPENSYSML_GRPC_VERSION} decides, and nothing is downloaded
+     * without either.
+     *
+     * @param downloadVersion a release tag (e.g. {@code v0.3.0}), or {@code latest}
+     * @return this builder
+     */
+    public Builder downloadVersion(String downloadVersion) {
+      Objects.requireNonNull(downloadVersion, "downloadVersion");
+      if (downloadVersion.isBlank()) {
+        throw new IllegalArgumentException("downloadVersion must name a release or 'latest'");
+      }
+      this.downloadVersion = downloadVersion.trim();
+      return this;
+    }
+
+    /**
+     * The repository releases are downloaded from, for a fork publishing its own builds. Without
+     * one, {@code $OPENSYSML_GITHUB_REPO} decides, then {@code Open-MBEE/OpenSysML}.
+     *
+     * @param githubRepo owner/repo
+     * @return this builder
+     */
+    public Builder githubRepo(String githubRepo) {
+      Objects.requireNonNull(githubRepo, "githubRepo");
+      if (!githubRepo.matches("[^/\\s]+/[^/\\s]+")) {
+        throw new IllegalArgumentException("not an owner/repo: " + githubRepo);
+      }
+      this.githubRepo = githubRepo;
+      return this;
+    }
+
+    /**
+     * Accepts the checksum a release serves beside a binary this client pins no digest for and
+     * whose checksum manifest carries no signature that verifies. That is same-origin trust: it
+     * detects corruption, not a compromised release. {@code $OPENSYSML_ALLOW_UNPINNED_DOWNLOAD}
+     * grants the same thing from the environment.
+     *
+     * @param allowUnpinnedDownload {@code true} to accept it
+     * @return this builder
+     */
+    public Builder allowUnpinnedDownload(boolean allowUnpinnedDownload) {
+      this.allowUnpinnedDownload = allowUnpinnedDownload;
       return this;
     }
 

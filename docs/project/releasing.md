@@ -695,6 +695,18 @@ one: the client does not ship the service, so its version says nothing about
 which core release it runs against, and a Maven Central version can never be
 replaced, so it must not hang off a `v*` core tag that `ghr -replace` re-runs.
 
+Like the Python client, it downloads a `sysml-grpc` binary at runtime for
+whatever release the caller names (`ConnectionOptions.downloadVersion()`,
+`$OPENSYSML_GRPC_VERSION`, or `latest`) and verifies it against the digest its
+own copy of `clients/release-digests.json` — shipped in the jar as
+`release-digests.json` — pins for that release, or, for a release it pins
+nothing for, against the digest in the release's signed `SHA256SUMS.txt` (see
+[the signed checksum manifest](#the-signed-checksum-manifest)). A core release
+published after a client release therefore needs no new client release. The
+`dev.sigstore:sigstore-java` dependency is what verifies that bundle, so a
+consumer that excludes it can install only pinned releases. See
+`clients/java/README.md`.
+
 ### What the build already produces
 
 `mvn -f clients/java/pom.xml install` attaches everything Central validates:

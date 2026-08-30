@@ -53,6 +53,7 @@ call, and `AutoCloseable`'s `close()` here throws nothing.
 | `TransportException`   | HTTP or IO failure; the service was not reached or answered        |
 | `CapabilityException`  | the service does not advertise a capability the call needs         |
 | `ServiceStartException`| no binary, a digest mismatch, or a child that would not start      |
+| `ChecksumMismatchException` | a binary's bytes are not the digest required of them ([the service binary](#the-service-binary)) |
 
 The `ServiceException`/`ModelException` split is the one the conformance suite
 draws too: an expression that will not evaluate is a successful call carrying an
@@ -176,29 +177,91 @@ reference count reaches zero. Value types are immutable and therefore shareable.
 
 ## The service binary
 
-This client never downloads a binary. It resolves one, in order:
+The client resolves an installed binary, in order:
 
 1. `ConnectionOptions.binaryPath(...)`;
 2. `$OPENSYSML_GRPC_BINARY`;
-3. `~/.opensysml/bin/sysml-grpc` — where the Python client's verified download puts it;
+3. `~/.opensysml/bin/sysml-grpc` (`.exe` on Windows) — the cache it shares with the
+   Python client;
 4. `PATH`.
 
 `expectedBinarySha256("<hex>")` verifies the file's digest before it is executed
-and refuses it otherwise. Nothing is trusted implicitly: a `.sha256` sidecar
-beside a binary comes from whoever served the binary, so the client does not read
-one.
+and refuses it otherwise, whichever binary is resolved and whether it was
+downloaded or installed. An external service needs no binary at all.
 
-This is deliberately narrower than the Python client, not weaker. `opensysml`
-downloads, so it must pin a SHA-256 per release asset
-(`clients/python/opensysml/binary.py`) and verify the release's sigstore-signed
-`SHA256SUMS.txt` (`clients/python/opensysml/signing.py`). A Java client that downloaded
-without an equivalent chain would be executing whatever it fetched; Maven Central
-has no per-release binary asset to attest to, and a checksum in a POM would be
-the same same-origin trust the Python client refuses. So provisioning is the
-operator's, by a mechanism that already has integrity — `make build`, the Python
-client's verified download, or a release asset checked against the signed
-manifest — and the client verifies a digest the caller pins. An external service
-needs no binary at all.
+### Downloading a release
+
+Ask for a release and the client downloads it into that shared cache:
+
+```java
+ConnectionOptions.builder().downloadVersion("v0.3.0").build();   // or "latest"
+```
+
+The version is the caller's, else `$OPENSYSML_GRPC_VERSION`, else nothing —
+**no version, no download**: without one the client only resolves what is
+already there, so it never fetches a binary a caller did not ask for. `latest`
+is resolved through the GitHub releases API. The repository is
+`Open-MBEE/OpenSysML`, overridable with `ConnectionOptions.githubRepo(...)` or
+`$OPENSYSML_GITHUB_REPO`. Every request times out after 15 seconds.
+
+The release asset for the running platform (`sysml-grpc-linux-amd64`,
+`-linux-arm64`, `-darwin-amd64`, `-darwin-arm64`, `-windows-amd64.exe`; any
+other pair fails naming itself) is downloaded to a temporary file, verified, and
+only then moved over the cached path, `chmod 0700` where the filesystem keeps
+POSIX modes. A download that fails or does not verify leaves the cached binary
+untouched and removes the temporary file.
+
+The cache is read and written exactly as the Python client does, so the two
+share one binary: `~/.opensysml/bin/sysml-grpc.json` beside it records
+`{"version": ..., "sha256": ..., "repo": ...}`. A cached binary of another
+release, or one from another repository, is replaced with a warning rather than
+silently used, and its digest is re-checked so a binary swapped in by hand is
+not read as the release it displaced. A release that cannot be reached, or that
+nothing vouches for, is no reason to lose a working binary: the installed one is
+kept with a warning that it may be older than the release asked for. A download
+that contradicts a pin or a signature is never answered from the cache — it
+fails.
+
+### What a download is verified against
+
+In order, and each step is a refusal rather than a fallback:
+
+1. **A pinned digest.** `release-digests.json` — this jar's synced copy of
+   `clients/release-digests.json`, loaded from the classpath — pins a SHA-256
+   per (repository, release, asset). Where a pin exists it is what the bytes
+   must hash to, and a served `.sha256` that disagrees with it is a release
+   republished with another binary: the download is refused.
+2. **The signed checksum manifest.** For a release nothing is pinned for, the
+   client downloads `SHA256SUMS.txt` and its sigstore bundle
+   `SHA256SUMS.txt.bundle` and verifies the bundle with
+   `dev.sigstore:sigstore-java` against the manifest's digest, requiring the
+   release pipeline's identity — CircleCI OIDC issuer
+   `https://oidc.circleci.com/org/1169df8b-0b59-400f-82d2-c9d8e98bdb62` and a
+   pipeline definition of project
+   `https://circleci.com/api/v2/projects/eeb0dddd-237f-4f02-9e51-8e24caef589d`.
+   The asset's digest then comes from that verified manifest. A bundle that does
+   not verify, another signer, an expired certificate or a manifest changed
+   after signing is refused — never a quiet fall back to the served checksum.
+3. **Nothing.** With no pin and no signature, the download is refused, naming
+   the version, because the only checksum left is the one served beside the
+   binary, which a compromised release would serve too.
+
+The last step is the one opt-out: `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=1`, or set
+to a comma-separated list naming `owner/repo`, accepts that served `.sha256`
+with a warning. That is **same-origin trust** — it detects a corrupted transfer,
+and nothing at all about a compromised release origin.
+
+Excluding the `dev.sigstore:sigstore-java` dependency does not weaken any of
+this: without it nothing verifies, which is refused exactly as an unsigned
+release is, so only pinned releases install.
+
+### Limitations
+
+- A release published after this client's `release-digests.json` was synced is
+  installed on its signature, so a jar built with `sigstore-java` excluded needs
+  a client whose table pins that release.
+- `latest` is one unauthenticated call to `api.github.com`, so a rate-limited
+  host should name the version instead.
 
 ## Capability negotiation
 
