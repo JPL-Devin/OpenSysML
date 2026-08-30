@@ -41,6 +41,12 @@ const queryModel = `package Observatory {
 		)
 	}
 
+	calc def NamedTelescopeParts :> Query {
+		in root : Element;
+		in pattern : String;
+		WhereName(source = OwnedElements(source = root), operator = "startsWith", value = pattern)
+	}
+
 	calc def ComposedQuery :> Query {
 		in root : Element;
 		HeavySubsystems(root = root)
@@ -60,6 +66,10 @@ func TestRunQueryFlag(t *testing.T) {
 		"Row 1: Observatory::telescope::mount",
 		`name = "mount"`,
 		"mass = 15.0")
+
+	// A binding expression may contain unquoted spaces.
+	wantReport(t, check(t, binary, queryModel, "-run-query", `NamedTelescopeParts root=telescope pattern="m" + "o"`),
+		0, "✓ Query Observatory::NamedTelescopeParts returned 1 row")
 
 	// The flag repeats, and a later failure gates the run.
 	wantReport(t, check(t, binary, queryModel,

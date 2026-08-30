@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -147,6 +148,36 @@ func TestRunQueryBindingExpressions(t *testing.T) {
 		"Row 1: Observatory::telescope::mount")
 	wants(t, run(t, s, "%run-query HeavySubsystems root=noSuchName"),
 		"error:", "binding root")
+}
+
+func TestRunQuerySpacedBindingExpressions(t *testing.T) {
+	s := docQuerySession(t)
+	wants(t, run(t, s, `%run-query NamedSubsystems root=telescope pattern="m" + "o"`),
+		"✓ Query Observatory::NamedSubsystems returned 1 row",
+		"Row 1: Observatory::telescope::mount")
+	wants(t, run(t, s, `%run-query NamedSubsystems root=telescope pattern=("m" + "o")`),
+		"✓ Query Observatory::NamedSubsystems returned 1 row")
+	wants(t, run(t, s, `%run-query NamedSubsystems pattern="m" + "o" root=telescope`),
+		"✓ Query Observatory::NamedSubsystems returned 1 row")
+}
+
+func TestRegroupBindings(t *testing.T) {
+	cases := []struct {
+		tokens []string
+		want   []string
+	}{
+		{[]string{"limit=1", "+", "2"}, []string{"limit=1 + 2"}},
+		{[]string{"a=1", "b=2"}, []string{"a=1", "b=2"}},
+		{[]string{"a=(1", "+", "2)", "b=3"}, []string{"a=(1 + 2)", "b=3"}},
+		{[]string{`s="a b"`, "+", `"c"`}, []string{`s="a b" + "c"`}},
+		{[]string{"a=x", "==", "y"}, []string{"a=x == y"}},
+		{[]string{"telescope"}, []string{"telescope"}},
+	}
+	for _, c := range cases {
+		if got := regroupBindings(c.tokens); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("regroupBindings(%q) = %q, want %q", c.tokens, got, c.want)
+		}
+	}
 }
 
 func TestRunQueryListedInHelpAndCompletion(t *testing.T) {

@@ -85,6 +85,65 @@ func splitQueryArgs(line string) []string {
 	return args
 }
 
+// regroupBindings joins tokens back into `<parameter>=<expression>` bindings,
+// so an expression may contain unquoted spaces. A new binding starts at a
+// `name=` token outside any bracket; other tokens extend the one before.
+func regroupBindings(tokens []string) []string {
+	var out []string
+	depth := 0
+	for _, token := range tokens {
+		if depth <= 0 && (startsBinding(token) || len(out) == 0) {
+			out = append(out, token)
+		} else {
+			out[len(out)-1] += " " + token
+		}
+		depth += bracketDelta(token)
+	}
+	return out
+}
+
+// startsBinding reports whether a token opens a `<parameter>=<expression>`
+// binding: an identifier followed by a single `=`.
+func startsBinding(token string) bool {
+	i := strings.IndexRune(token, '=')
+	if i <= 0 || (i+1 < len(token) && token[i+1] == '=') {
+		return false
+	}
+	for j, r := range token[:i] {
+		alpha := r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		if !alpha && (j == 0 || r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// bracketDelta counts a token's unquoted bracket openings minus closings.
+func bracketDelta(token string) int {
+	delta := 0
+	quote := rune(0)
+	escaped := false
+	for _, r := range token {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\':
+			escaped = true
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			}
+		case r == '"' || r == '\'':
+			quote = r
+		case r == '(' || r == '[' || r == '{':
+			delta++
+		case r == ')' || r == ']' || r == '}':
+			delta--
+		}
+	}
+	return delta
+}
+
 // runDocumentQuery resolves the named query definition, compiles it to a plan,
 // binds the arguments and executes the plan against the session's model.
 func (s *Session) runDocumentQuery(name string, args []string) ([]string, []NamedValue, error) {
@@ -105,7 +164,7 @@ func (s *Session) runDocumentQuery(name string, args []string) ([]string, []Name
 	if err != nil {
 		return nil, nil, err
 	}
-	bindings, err := s.queryBindings(ctx, args)
+	bindings, err := s.queryBindings(ctx, regroupBindings(args))
 	if err != nil {
 		return nil, nil, err
 	}
