@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/envvar"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
@@ -184,6 +185,38 @@ func TestBudgetsFromEnv(t *testing.T) {
 		t.Setenv(MaxActionStepsEnvVar, "many")
 		if _, err := BudgetsFromEnv(); err == nil {
 			t.Fatal("expected an error for a non-numeric value")
+		}
+	})
+
+	t.Run("legacy names", func(t *testing.T) {
+		for _, v := range budgetVars {
+			t.Setenv(v.env, "")
+			t.Setenv(envvar.Legacy(v.env), "")
+		}
+		t.Setenv(envvar.Legacy(MaxStepsEnvVar), "300000")
+		t.Setenv(envvar.Legacy(MaxStateEventsEnvVar), "40000")
+		got, err := BudgetsFromEnv()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.MaxSteps != 300000 || got.MaxStateEvents != 40000 {
+			t.Errorf("got %+v, want MaxSteps 300000 and MaxStateEvents 40000 from the legacy names", got)
+		}
+	})
+
+	t.Run("both set, new name wins", func(t *testing.T) {
+		for _, v := range budgetVars {
+			t.Setenv(v.env, "")
+			t.Setenv(envvar.Legacy(v.env), "")
+		}
+		t.Setenv(MaxStepsEnvVar, "500000")
+		t.Setenv(envvar.Legacy(MaxStepsEnvVar), "111")
+		got, err := BudgetsFromEnv()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.MaxSteps != 500000 {
+			t.Errorf("MaxSteps = %d, want the OPENSYSML_ value 500000 over the legacy 111", got.MaxSteps)
 		}
 	})
 }

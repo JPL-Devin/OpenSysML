@@ -5,18 +5,27 @@ into a reported error instead of a hang.
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `SYSML_LIBRARY_PATH` | unset (use the bundled standard library) | Directory to load the SysML/KerML standard library from instead of the embedded copy |
-| `SYSML_MAX_STEPS` | `10000000` | Evaluation step budget: the number of expression evaluations one run may spend before it is reported as a runaway |
-| `SYSML_MAX_ACTION_STEPS` | `1000000` | Token-flow steps one action run may perform |
-| `SYSML_MAX_EVENTS` | `1000000` | Events one state machine run may dispatch, and the events one `%advance` drains |
-| `SYSML_MAX_DO_STEPS` | `5000000` | Do actions one state machine run may perform, and the ones one `%advance` drains |
-| `SYSML_MAX_ELEMENTS` | `1000000` | Collection elements one evaluation may hold — the bound on the memory a run holds rather than on the work it does |
-| `SYSML_MAX_CALC_DEPTH` | `10000` (ceiling `25000`) | Nested `calc` invocations one run may hold on the stack, which is what a recursion spends |
+| `OPENSYSML_LIBRARY_PATH` | unset (use the bundled standard library) | Directory to load the SysML/KerML standard library from instead of the embedded copy |
+| `OPENSYSML_MAX_STEPS` | `10000000` | Evaluation step budget: the number of expression evaluations one run may spend before it is reported as a runaway |
+| `OPENSYSML_MAX_ACTION_STEPS` | `1000000` | Token-flow steps one action run may perform |
+| `OPENSYSML_MAX_EVENTS` | `1000000` | Events one state machine run may dispatch, and the events one `%advance` drains |
+| `OPENSYSML_MAX_DO_STEPS` | `5000000` | Do actions one state machine run may perform, and the ones one `%advance` drains |
+| `OPENSYSML_MAX_ELEMENTS` | `1000000` | Collection elements one evaluation may hold — the bound on the memory a run holds rather than on the work it does |
+| `OPENSYSML_MAX_CALC_DEPTH` | `10000` (ceiling `25000`) | Nested `calc` invocations one run may hold on the stack, which is what a recursion spends |
 | `OPENSYSML_SMT` | unset (look for `z3`, then `cvc5`, on `PATH`) | Executable `%check`, `%explain`, `%solve`, `%configure` and `%optimize` drive as their SMT solver, speaking SMT-LIB2 on standard input (experimental); `%optimize` needs `z3` in particular, as `(minimize …)`/`(maximize …)` is a z3 extension cvc5 does not implement |
 | `OPENSYSML_SMT_TIMEOUT` | `10s` | How long one solver query may take, as a Go duration (`5s`, `500ms`), after which the verdict is `unknown` |
 | `OPENSYSML_SMT_CORE_BUDGET` | `30s` | How long `%explain` may spend reducing an unsat core to a minimal one, as a Go duration; past it the solver's own core is reported, said not to be necessarily minimal |
 | `OPENSYSML_SMT_MAX_CONFIGURATIONS` | `32` | How many variant selections `%configure … all` may report before saying the enumeration was cut short at the bound |
-| `SYSML_GRPC_INDEX_POOL` | `4` | Whether `sysml-grpc` builds the one shared standard library index ahead of the requests needing it; any positive value prewarms, `0` builds it on the first request instead |
+| `OPENSYSML_GRPC_INDEX_POOL` | `4` | Whether `sysml-grpc` builds the one shared standard library index ahead of the requests needing it; any positive value prewarms, `0` builds it on the first request instead |
+
+Every variable above uses the `OPENSYSML_` prefix. The eight that predate it —
+`OPENSYSML_LIBRARY_PATH`, the six `OPENSYSML_MAX_*` budgets and
+`OPENSYSML_GRPC_INDEX_POOL` — also answer to their legacy `SYSML_`-prefixed
+names (`SYSML_LIBRARY_PATH`, `SYSML_MAX_STEPS`, …), which remain accepted
+indefinitely. When a variable is set under both prefixes and the `OPENSYSML_`
+value is non-empty, the `OPENSYSML_` value wins. Setting only the legacy name
+prints a one-time deprecation warning to standard error naming the
+`OPENSYSML_` form to switch to.
 
 The three `OPENSYSML_SMT*` variables belong to the experimental solving extension
 (`%check`/`%explain`), which needs an external z3 or cvc5 — installing one, per platform, is
@@ -47,7 +56,7 @@ they make grow is a `%trace`, at 34–83 bytes an entry. At the measured ~13.6M
 evaluation steps/s and ~1.9M events/s each default reports a runaway within about
 a second, and a fully traced run at those four ceilings holds ~320 MB.
 
-Collection elements are the exception, and `SYSML_MAX_ELEMENTS` is the budget
+Collection elements are the exception, and `OPENSYSML_MAX_ELEMENTS` is the budget
 that reads as memory: a materialized element is a 104-byte value living as long as
 the collection holding it, and `1..10000000` conjures one per step. Every way of
 materializing a sequence is charged against it — a range, a sequence literal,
@@ -56,20 +65,20 @@ elements held at once at ~104 MB, in the same band as the figures above:
 
 ```
 error: evaluation failed: collection element limit exceeded
-(1000000 elements; raise SYSML_MAX_ELEMENTS to allow more)
+(1000000 elements; raise OPENSYSML_MAX_ELEMENTS to allow more)
 ```
 
 Because it bounds memory and not work, the count is what a statement's evaluation
 holds: a loop building a ten-element collection a million times never approaches
 it, while a single `1..2000000` exceeds it at once.
 
-`SYSML_MAX_CALC_DEPTH` reads as stack rather than as work: a recursive calculation
+`OPENSYSML_MAX_CALC_DEPTH` reads as stack rather than as work: a recursive calculation
 evaluates to its result as long as it terminates within the depth, and one that
 does not terminate is reported instead of exhausting the stack:
 
 ```
 error: calc recursion limit exceeded: calc P::spin nested 10000 deep
-(unbounded recursion?; raise SYSML_MAX_CALC_DEPTH to allow more)
+(unbounded recursion?; raise OPENSYSML_MAX_CALC_DEPTH to allow more)
 ```
 
 A nested invocation costs ~10 KB of stack, so this is the one budget with a
@@ -81,14 +90,14 @@ The evaluation step budget:
 
 ```
 error: execution failed: eval assignment RHS: evaluation step limit exceeded
-(10000000 steps; raise SYSML_MAX_STEPS to allow more)
+(10000000 steps; raise OPENSYSML_MAX_STEPS to allow more)
 ```
 
 A legitimately long run — a numeric integration in an action body, say — needs a
 higher ceiling, so raise it for that run:
 
 ```bash
-SYSML_MAX_STEPS=200000000 sysml descent.sysml
+OPENSYSML_MAX_STEPS=200000000 sysml descent.sysml
 ```
 
 Unset or empty means the default. Anything that is not a positive integer is
@@ -96,29 +105,29 @@ reported at startup (and at gRPC service construction) rather than silently
 ignored:
 
 ```bash
-$ SYSML_MAX_STEPS=lots sysml model.sysml
-sysml: SYSML_MAX_STEPS="lots" is not an integer: set it to a positive number of evaluation steps (default 10000000)
+$ OPENSYSML_MAX_STEPS=lots sysml model.sysml
+sysml: OPENSYSML_MAX_STEPS="lots" is not an integer: set it to a positive number of evaluation steps (default 10000000)
 ```
 
 The other budgets behave identically, and their errors name the variable that
 raises them:
 
 ```
-execution exceeded max steps (1000000 steps; raise SYSML_MAX_ACTION_STEPS to allow more), possible infinite loop
-state machine exceeded max events (1000000 events; raise SYSML_MAX_EVENTS to allow more), possible infinite loop
-state machine exceeded max do action steps (5000000 steps; raise SYSML_MAX_DO_STEPS to allow more), possible non-terminating do behavior
+execution exceeded max steps (1000000 steps; raise OPENSYSML_MAX_ACTION_STEPS to allow more), possible infinite loop
+state machine exceeded max events (1000000 events; raise OPENSYSML_MAX_EVENTS to allow more), possible infinite loop
+state machine exceeded max do action steps (5000000 steps; raise OPENSYSML_MAX_DO_STEPS to allow more), possible non-terminating do behavior
 ```
 
 A long simulation therefore raises the state machine bounds rather than the
 evaluation one:
 
 ```bash
-SYSML_MAX_EVENTS=20000000 SYSML_MAX_DO_STEPS=100000000 sysml descent.sysml
+OPENSYSML_MAX_EVENTS=20000000 OPENSYSML_MAX_DO_STEPS=100000000 sysml descent.sysml
 ```
 
 ## The gRPC service's shared library index
 
-`SYSML_GRPC_INDEX_POOL` is no longer a count: any positive value asks
+`OPENSYSML_GRPC_INDEX_POOL` is no longer a count: any positive value asks
 `sysml-grpc` to build the standard library index before the requests that need
 it, and `0` disables prewarming. The library does not depend on the model and is
 immutable once loaded, so the service builds and freezes **one** index and gives
@@ -133,9 +142,9 @@ builds the shared index itself, so an answer never depends on how far prewarming
 got, and concurrent requests wait for one build rather than starting several.
 
 ```bash
-SYSML_GRPC_INDEX_POOL=0 sysml-grpc   # load the library on the first request instead
+OPENSYSML_GRPC_INDEX_POOL=0 sysml-grpc   # load the library on the first request instead
 ```
 
 Anything but a non-negative integer is reported at service construction rather
-than silently ignored. The variable keeps its name for compatibility with
-deployments that set it.
+than silently ignored. The legacy `SYSML_GRPC_INDEX_POOL` name remains accepted
+for compatibility with deployments that set it.

@@ -1,14 +1,14 @@
 package libs
 
 import (
-	"os"
 	"sync"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/envvar"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // shared holds the frozen library index of each library source a process has
-// loaded, keyed by the directory SYSML_LIBRARY_PATH names ("" for the bundled
+// loaded, keyed by the directory LibraryPathEnvVar names ("" for the bundled
 // library), so a test pointing at its own library does not get another's.
 var shared struct {
 	mu   sync.Mutex
@@ -19,7 +19,7 @@ var shared struct {
 // first use and shared by every model afterwards: the library is the same for
 // every model and immutable once loaded, so one copy serves them all.
 func SharedBase() *symbols.Index {
-	key := os.Getenv("SYSML_LIBRARY_PATH")
+	key := envvar.Lookup(LibraryPathEnvVar)
 
 	shared.mu.Lock()
 	defer shared.mu.Unlock()

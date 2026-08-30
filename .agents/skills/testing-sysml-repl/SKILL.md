@@ -72,7 +72,7 @@ in `cmd/sysml/main.go`: walk every mode and assert the status, since a `return` 
 | `-version`, `-eval '1+2'`, `-validate <clean>`, `<m> -convert sysml -o f`, `<m> -eval '1+1'` | 0 |
 | `-validate <model with errors>` (reported as `did not analyse cleanly; no check was made`) | 2 |
 | `<m> -convert sysml -validate` (refuses: "check it in its own run"; writes no file) | 2 |
-| `-debug -quiet`, `SYSML_MAX_STEPS=abc …`, `-cpuprofile`/`-memprofile` on an unwritable path | 2 |
+| `-debug -quiet`, `OPENSYSML_MAX_STEPS=abc …`, `-cpuprofile`/`-memprofile` on an unwritable path | 2 |
 
 - `-memstats` writes exactly one line to **stderr** (`sysml: 637ms wall, 242.6 MiB allocated in
   … allocations over … collections, … MiB taken from the OS`). Prove the split with
@@ -902,7 +902,7 @@ Things that must fail rather than hang: the REPL builds its runtime context with
 defaults to **10000000** (`runtime.DefaultMaxSteps`, `internal/core/runtime/budget.go`; sessions
 carry the five budgets via `Session.SetBudgets(runtime.Budgets)`), and every loop iteration spends
 several steps, so a runaway loop (or an empty loop body, whose condition can never change) returns
-`error: execution failed: eval … : evaluation step limit exceeded (10000000 steps; raise SYSML_MAX_STEPS to allow more)`
+`error: execution failed: eval … : evaluation step limit exceeded (10000000 steps; raise OPENSYSML_MAX_STEPS to allow more)`
 in under a second (0.7 s measured). Always follow the failure with another meta-command (`%tokens`, `%instances`)
 to prove the session survived — `%tokens` still shows the token parked at the node with its partial value. A
 `for` over a non-collection gives
@@ -998,11 +998,11 @@ about the others:
 
 | Variable | Default | Counts |
 |---|---|---|
-| `SYSML_MAX_STEPS` | 10000000 | expression evaluations |
-| `SYSML_MAX_ACTION_STEPS` | 1000000 | action token-flow steps |
-| `SYSML_MAX_EVENTS` | 1000000 | state machine events, and the events one `%advance` drains |
-| `SYSML_MAX_DO_STEPS` | 5000000 | do actions, ditto for `%advance` |
-| `SYSML_MAX_ELEMENTS` | 1000000 | collection elements one evaluation holds (~104 MB of `Value`s), the memory bound: `(1..2000000)` reports `collection element limit exceeded`, not the step limit, while a loop building a small collection many times is unaffected |
+| `OPENSYSML_MAX_STEPS` | 10000000 | expression evaluations |
+| `OPENSYSML_MAX_ACTION_STEPS` | 1000000 | action token-flow steps |
+| `OPENSYSML_MAX_EVENTS` | 1000000 | state machine events, and the events one `%advance` drains |
+| `OPENSYSML_MAX_DO_STEPS` | 5000000 | do actions, ditto for `%advance` |
+| `OPENSYSML_MAX_ELEMENTS` | 1000000 | collection elements one evaluation holds (~104 MB of `Value`s), the memory bound: `(1..2000000)` reports `collection element limit exceeded`, not the step limit, while a loop building a small collection many times is unaffected |
 
 `%budget` prints the five bounds in force with the variable raising each, so a test can read what a
 session runs on instead of inferring it from the environment.
@@ -1014,7 +1014,7 @@ runaway run, not a sequence of evaluations.
 
 Each overrides the default for both `bin/sysml` and `bin/sysml-grpc`: unset/empty → the default, a
 positive integer (whitespace is trimmed) → that value, anything else → the binary refuses to start
-(`sysml` exits **2** with `sysml: SYSML_MAX_STEPS="…" is not an integer …` /
+(`sysml` exits **2** with `sysml: OPENSYSML_MAX_STEPS="…" is not an integer …` /
 `… must be greater than zero …`; `sysml-grpc` exits **1** and logs the same error under
 `msg="Invalid service configuration"`). Every unusable value is reported at once, not just the first.
 Useful test model — a `while i < N { assign …; assign …; }` body costs roughly 10 evaluation steps
@@ -1022,14 +1022,14 @@ per iteration, so a 100 000-iteration loop completes at the default in 0.13 s an
 stops a 10 000-iteration one:
 
 ```bash
-SYSML_MAX_STEPS=100000 sh -c "printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml"   # step-limit error
+OPENSYSML_MAX_STEPS=100000 sh -c "printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml"   # step-limit error
 printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml                                  # completes at the default
 ```
 
 Note the `sh -c` wrapper: `VAR=x cmd | …` only exports to the first process of the pipeline, so put
 the whole pipeline inside `sh -c` or the REPL will not see the variable. The gRPC side inherits the
 variable through the opensysml auto-start path (the client spawns `~/.opensysml/bin/sysml-grpc` as a
-child), so `SYSML_MAX_STEPS=300000 python script.py` is enough — but `pkill -f sysml-grpc` first,
+child), so `OPENSYSML_MAX_STEPS=300000 python script.py` is enough — but `pkill -f sysml-grpc` first,
 otherwise an already-running service from an earlier value keeps serving.
 
 Tooling trap: running a opensysml script that auto-starts the service from a *non-tty* one-shot shell
@@ -1711,10 +1711,10 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
   service is reproducible with `opensysml.connect(port=50123, auto_start=False)`.
 
-### The shared library index, `SYSML_GRPC_INDEX_POOL` (PR #252; shared base since slice A of L3)
+### The shared library index, `OPENSYSML_GRPC_INDEX_POOL` (PR #252; shared base since slice A of L3)
 
 `internal/grpc/libindex.go` builds **one** frozen standard library index and gives each model an
-overlay over it (any positive `SYSML_GRPC_INDEX_POOL` prewarms that build; `0` restores the
+overlay over it (any positive `OPENSYSML_GRPC_INDEX_POOL` prewarms that build; `0` restores the
 per-cache-miss build). It was a pool of N per-model indexes until slice A, so the drain-and-refill
 behaviour below no longer applies: there is nothing to drain, and a tight sweep of distinct models
 stays fast after the first build. How to observe it end to end, and what generalizes to any
@@ -1725,12 +1725,12 @@ service-side perf change:
   iteration and time `conn.load_from_content(src)` client-side; a library-backed model (imports
   `ScalarValues`/`ISQ`, a derived attribute) is required, otherwise no library index is needed.
 - Numbers observed at 607b0eb8 on a ~85-line model, 12 distinct models: **pool default (4) median
-  4.4 ms**, `SYSML_GRPC_INDEX_POOL=0` **median 112.5 ms**. The 1–2 spikes of ~140–155 ms that a
+  4.4 ms**, `OPENSYSML_GRPC_INDEX_POOL=0` **median 112.5 ms**. The 1–2 spikes of ~140–155 ms that a
   pooled run showed were the drained pool rebuilding; with a shared base only the very first
   request can pay a build, so a spike after the first is now a regression rather than by design.
   Report the median plus any spike rather than the mean.
 - **The env var reaches the service through the opensysml auto-start path** (the client spawns the
-  child, so it inherits the env), so `SYSML_GRPC_INDEX_POOL=0 python sweep.py` is enough — but
+  child, so it inherits the env), so `OPENSYSML_GRPC_INDEX_POOL=0 python sweep.py` is enough — but
   `pkill -x sysml-grpc; rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock`
   first, or you keep measuring the previously spawned service's configuration.
 - **Equivalence is the assertion that catches a wrong index.** Have one script print a sorted JSON
@@ -1739,7 +1739,7 @@ service-side perf change:
   differ. A model writing into the shared base, or seeing another model's document, would show up
   here, not in the timings.
 - Bad values are rejected in `NewService`, so `sysml-grpc` **exits 1 before listening**:
-  `-1` → `library index pool size must not be negative, got -1 (SYSML_GRPC_INDEX_POOL)`,
+  `-1` → `library index pool size must not be negative, got -1 (OPENSYSML_GRPC_INDEX_POOL)`,
   `many`/`1.5`/`"4 4"` → `library index pool size must be an integer, got "many" (…)`. Assert the exit
   code *and* `ss -ltn | grep :<port>` empty — a service that started anyway is the real failure. An
   empty or all-whitespace value is treated as unset and the service starts normally.
@@ -1756,7 +1756,7 @@ service-side perf change:
 - Prewarming must not block startup: the port accepts in ~30 ms with pool=4, and SIGTERM after
   prewarming exits **0** in ~13 ms (`Close()` waits for in-flight builds, so a hang here is the
   regression to watch). Time both with `date +%s.%N` around the launch/`kill -TERM`.
-- Two cheap adversarial shapes worth keeping: `SYSML_GRPC_INDEX_POOL=0` with 8 threads loading
+- Two cheap adversarial shapes worth keeping: `OPENSYSML_GRPC_INDEX_POOL=0` with 8 threads loading
   distinct models at once (all 8 must still answer
   `Perf::Engine`, `1+1 == 2` and the full `execute_action` dict), and `-cache-size 5` with 8 distinct
   models loaded (the 3 oldest hashes raise `ModelNotFoundError`, the 5 newest still evaluate) — an
@@ -1787,7 +1787,7 @@ service-side perf change:
   unresolved …` once the conformance fixtures are in the buffer — it reproduces on the parent binary,
   so do not report it as a regression.
 - Post-first-load timings observed at 5a50e806 over 12 distinct library-backed models:
-  `SYSML_GRPC_INDEX_POOL=4` first 55 ms then median 4.2 ms (max 5.1 ms); `=0` first 77 ms then
+  `OPENSYSML_GRPC_INDEX_POOL=4` first 55 ms then median 4.2 ms (max 5.1 ms); `=0` first 77 ms then
   median 5.0 ms (max 5.6 ms) — i.e. with a shared base even `=0` is fast after the first request,
   and any post-first load above ~60 ms is a regression. Port accepts in ~10–12 ms and SIGTERM
   (including one sent immediately after the port opens, while the prewarm build is still in flight)
@@ -3180,7 +3180,7 @@ Discriminators that separate a working string runtime from a broken one:
 
 Every budget in `internal/core/runtime/budget.go` is reachable from the CLI as an env var and is
 listed by `%budget` in the REPL — that meta-command is the cheapest proof a new bound was wired
-into `internal/repl/meta.go`. `SYSML_MAX_CALC_DEPTH` (default 10000) bounds nested `calc`
+into `internal/repl/meta.go`. `OPENSYSML_MAX_CALC_DEPTH` (default 10000) bounds nested `calc`
 invocations, i.e. recursion depth, and is the only budget with a **ceiling** (25000).
 
 Four distinct surfaces to assert for any budget change, since they fail independently:
@@ -3194,7 +3194,7 @@ Four distinct surfaces to assert for any budget change, since they fail independ
    for `fatal error: stack overflow` — a Go runtime crash rather than a reported error is the
    failure mode the budget exists to prevent. Follow the REPL error with `%eval 1 + 1` → `= 2` to
    show the session survived.
-3. **A low value must refuse input that otherwise evaluates** (`SYSML_MAX_CALC_DEPTH=50` on a
+3. **A low value must refuse input that otherwise evaluates** (`OPENSYSML_MAX_CALC_DEPTH=50` on a
    200-deep recursion). Without this contrast the env var could be ignored entirely and the test
    would still look green.
 4. **Invalid/out-of-range values are refused at startup**, before any model work, naming the
@@ -3202,7 +3202,7 @@ Four distinct surfaces to assert for any budget change, since they fail independ
    Also assert the ceiling value itself (`=25000`) is *accepted* — an off-by-one in the comparison
    is otherwise invisible. Both refusals exit 2 and print no evaluation output.
 
-Budget interactions matter: under `SYSML_MAX_STEPS=100` a runaway recursion must report the *step*
+Budget interactions matter: under `OPENSYSML_MAX_STEPS=100` a runaway recursion must report the *step*
 limit, not the depth limit. Whichever budget is spent first wins, so a change that reorders the
 checks shows up here and nowhere else.
 
@@ -3327,8 +3327,8 @@ Shapes worth covering, in increasing order of subtlety — each has broken indep
    fixtures are `..._cross_region_substate_owner.sysml` and
    `state_transition_leave_composite_substate_region.sysml`;
 9. ping-pong: two cross-region transitions targeting each other must stop with the typed
-   `Stopped at the event budget (N events; raise SYSML_MAX_EVENTS to allow more)`, never hang or
-   panic. Run the REPL as `SYSML_MAX_EVENTS=2000 ./bin/sysml` so the stop takes a second, and
+   `Stopped at the event budget (N events; raise OPENSYSML_MAX_EVENTS to allow more)`, never hang or
+   panic. Run the REPL as `OPENSYSML_MAX_EVENTS=2000 ./bin/sysml` so the stop takes a second, and
    follow it with `%eval 1+1` → `= 2` to show the session survived.
 
 **History interacts with region bookkeeping — always test it, with a control model.** A `deep
@@ -3597,7 +3597,7 @@ Two traps when writing these fixtures:
   on *every* revision. That is not a false positive; write the qualified name.
 - A succession carries **no guard**, so a cross-region succession re-enters the composite state, the
   source region restarts, and the edge re-fires forever: the run ends on `Stopped at the event budget
-  (1000000 events; raise SYSML_MAX_EVENTS to allow more)`. That is a clean bounded stop, not a hang —
+  (1000000 events; raise OPENSYSML_MAX_EVENTS to allow more)`. That is a clean bounded stop, not a hang —
   the state/attribute evidence is still valid. Use the guarded `transition first a if flag == 0 then b;` form
   when you want the run to settle instead.
 - Running a shipped conformance model straight from the CLI can report `unresolved reference: Integer`
@@ -4461,7 +4461,7 @@ built REPL and judge on exact attribute values, never on `Action completed`:
   "parses but unsupported at runtime" (e.g. `send x via p to r`), assert that error text explicitly —
   otherwise you cannot tell "reported as unsupported" from "silently skipped".
 - Adversarial: put a non-terminating `while true { … }` **inside a node body**. Expect
-  `evaluation step limit exceeded (… steps; raise SYSML_MAX_STEPS to allow more)` within a second,
+  `evaluation step limit exceeded (… steps; raise OPENSYSML_MAX_STEPS to allow more)` within a second,
   and assert the session survives by running `%eval 1 + 1` right after in the same REPL.
 
 ### A/B against a binary built from the parent commit
@@ -4641,7 +4641,7 @@ fixture's trigger is one the REPL can produce:
   shape.
 - **Untriggered (completion) self-transitions are the budget test.** They are *not* dispatched when
   `%state` starts the machine — you must `%advance 1`, which then reports
-  `Stopped at the event budget (1000000 events; raise SYSML_MAX_EVENTS to allow more)` in ~2 s and
+  `Stopped at the event budget (1000000 events; raise OPENSYSML_MAX_EVENTS to allow more)` in ~2 s and
   leaves the REPL usable (`%eval 1 + 1` → `= 2`). The object-exhibited path fails earlier and
   louder: `%instantiate <Pkg>::<PartDef>` on a `part def` with `exhibit state …` returns
   `instantiation failed: exhibited state machine <M> of object #1: state machine exceeded max
@@ -4757,8 +4757,8 @@ took a different code path from a calc *usage* read, and only the usage shape ha
 "the body now sees the object" claim should be checked with at least one two-hop case per shape
 (anonymous result and named result), at the CLI, since the unit test passing proved nothing here.
 
-Bounds are worth a sweep in the same session — each of `SYSML_MAX_STEPS`, `SYSML_MAX_ACTION_STEPS`,
-`SYSML_MAX_EVENTS`, `SYSML_MAX_DO_STEPS`, `SYSML_MAX_ELEMENTS`, `SYSML_MAX_CALC_DEPTH` set to a tiny
+Bounds are worth a sweep in the same session — each of `OPENSYSML_MAX_STEPS`, `OPENSYSML_MAX_ACTION_STEPS`,
+`OPENSYSML_MAX_EVENTS`, `OPENSYSML_MAX_DO_STEPS`, `OPENSYSML_MAX_ELEMENTS`, `OPENSYSML_MAX_CALC_DEPTH` set to a tiny
 value must error naming that bound and return *no* result; a truncated-but-returned answer is the
 failure to look for.
 
