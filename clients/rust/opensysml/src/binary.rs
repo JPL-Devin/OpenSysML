@@ -86,12 +86,21 @@ pub(crate) fn binary_file_name() -> &'static str {
 }
 
 /// The shared cache directory, `~/.opensysml/bin`.
-pub(crate) fn default_cache_dir() -> PathBuf {
+///
+/// An unset home is an error rather than the working directory, which would put
+/// the cache wherever the process happens to run.
+pub(crate) fn default_cache_dir() -> Result<PathBuf, Error> {
     #[cfg(windows)]
-    let home = env::var_os("USERPROFILE").unwrap_or_default();
+    let (variable, home) = ("USERPROFILE", env::var_os("USERPROFILE"));
     #[cfg(not(windows))]
-    let home = env::var_os("HOME").unwrap_or_default();
-    PathBuf::from(home).join(".opensysml").join("bin")
+    let (variable, home) = ("HOME", env::var_os("HOME"));
+    let home = home.filter(|home| !home.is_empty()).ok_or_else(|| {
+        Error::BinaryDownload(format!(
+            "${variable} names no home directory, so there is no ~/.opensysml/bin to cache \
+             sysml-grpc in"
+        ))
+    })?;
+    Ok(PathBuf::from(home).join(".opensysml").join("bin"))
 }
 
 /// Repository releases are downloaded from.
@@ -274,7 +283,7 @@ impl Downloader {
             repo,
             release_base_url: DEFAULT_RELEASE_BASE_URL.to_owned(),
             api_base_url: DEFAULT_API_BASE_URL.to_owned(),
-            cache_dir: default_cache_dir(),
+            cache_dir: default_cache_dir()?,
             asset: host_release_asset_name()?,
             allow_unpinned: env::var(ALLOW_UNPINNED_ENV).ok(),
             pins: Cow::Borrowed(shipped_pins()),

@@ -524,19 +524,21 @@ fn resolve_binary() -> Result<PathBuf, Error> {
     }
 
     let downloader = binary::Downloader::from_env();
-    let cached = downloader
-        .as_ref()
-        .map(binary::Downloader::binary_path)
-        .unwrap_or_else(|_| binary::default_cache_dir().join(binary::binary_file_name()));
-    looked_in.push(cached.display().to_string());
+    let cached = binary::default_cache_dir().map(|dir| dir.join(binary::binary_file_name()));
+    looked_in.push(match &cached {
+        Ok(path) => path.display().to_string(),
+        Err(error) => format!("the shared cache ({error})"),
+    });
     match (downloader, binary::env_release_version()) {
         (Ok(downloader), Some(version)) => return downloader.ensure_binary(Some(&version)),
         // A release was asked for and cannot be downloaded here, so no binary of
         // an unknown version answers for it.
         (Err(error), Some(_)) => return Err(error),
         _ => {
-            if cached.is_file() {
-                return Ok(cached);
+            if let Ok(path) = cached {
+                if path.is_file() {
+                    return Ok(path);
+                }
             }
         }
     }
@@ -593,6 +595,32 @@ mod tests {
         // Nothing was asked for, so resolution falls through to the cache and $PATH.
         if let Err(error) = resolve_binary() {
             assert!(matches!(error, Error::BinaryNotFound { .. }), "{error}");
+        }
+        drop(restore);
+    }
+
+    #[test]
+    fn without_a_home_directory_the_cache_is_not_the_working_directory() {
+        let _guard = ENV.lock().unwrap_or_else(PoisonError::into_inner);
+        let restore = Restore::of(&[
+            "OPENSYSML_GRPC_BINARY",
+            "OPENSYSML_GRPC_VERSION",
+            "HOME",
+            "USERPROFILE",
+        ]);
+        env::set_var("OPENSYSML_GRPC_BINARY", "");
+        env::remove_var("OPENSYSML_GRPC_VERSION");
+        env::remove_var("HOME");
+        env::remove_var("USERPROFILE");
+
+        assert!(binary::Downloader::from_env().is_err());
+        if let Err(Error::BinaryNotFound { looked_in }) = resolve_binary() {
+            assert!(
+                !looked_in
+                    .iter()
+                    .any(|place| place.starts_with(".opensysml")),
+                "{looked_in:?}"
+            );
         }
         drop(restore);
     }

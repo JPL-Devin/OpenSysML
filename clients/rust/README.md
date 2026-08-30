@@ -86,7 +86,8 @@ replaces the cache with mode `0700` (POSIX). Requests time out after 15 seconds.
 Beside the binary the client writes `sysml-grpc.json` — `version`, `sha256`,
 `repo` — the same shape the Python client reads and writes, and re-checks the
 recorded digest before reusing a cache, so a hand-swapped binary is not read as
-the release it displaced.
+the release it displaced. Without `$HOME` (`$USERPROFILE` on Windows) there is no
+cache: resolution says so rather than treating the working directory as a home.
 
 | Variable | Effect |
 |---|---|
