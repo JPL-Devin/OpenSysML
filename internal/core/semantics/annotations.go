@@ -369,11 +369,33 @@ func (m *Model) ConstantFeatureValues(sym *symbols.Symbol, feature string) ([]sy
 	if !ok || member == nil {
 		return nil, false
 	}
+	return m.constantFeatureValues(member, make(map[*symbols.Symbol]bool))
+}
+
+func (m *Model) constantFeatureValues(member *symbols.Symbol, seen map[*symbols.Symbol]bool) ([]symbols.FilterValue, bool) {
+	if member == nil || seen[member] {
+		return nil, false
+	}
+	seen[member] = true
+	defer delete(seen, member)
 	usage, ok := member.Decl.(*ast.Usage)
 	if !ok {
 		return []symbols.FilterValue{{}}, true
 	}
 	if usage.Value == nil {
+		var values []symbols.FilterValue
+		found := false
+		for _, redefined := range m.RedefinedFeatures(member) {
+			inherited, ok := m.constantFeatureValues(redefined, seen)
+			if !ok {
+				continue
+			}
+			found = true
+			values = append(values, inherited...)
+		}
+		if found {
+			return values, true
+		}
 		return nil, true
 	}
 	if sequence, ok := usage.Value.(*ast.SequenceExpr); ok {

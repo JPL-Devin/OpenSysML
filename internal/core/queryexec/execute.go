@@ -198,17 +198,33 @@ func (e *executor) valueConforms(value Value, expected string) bool {
 			}
 		}
 		return expected == "Element" || strings.HasSuffix(expected, "::Element")
-	case ValueString:
-		return expected == "String" || strings.HasSuffix(expected, "::String")
-	case ValueInteger:
-		return expected == "Integer" || strings.HasSuffix(expected, "::Integer") ||
-			expected == "Real" || strings.HasSuffix(expected, "::Real")
-	case ValueReal:
-		return expected == "Real" || strings.HasSuffix(expected, "::Real")
-	case ValueBoolean:
-		return expected == "Boolean" || strings.HasSuffix(expected, "::Boolean")
 	default:
+		actual, ok := scalarValueType(value)
+		if !ok {
+			return false
+		}
+		for _, target := range e.context.Index.LookupQualified(expected) {
+			expectedType := e.context.Model.PrimTypeOf(target)
+			if expectedType != semantics.PrimUnknown && semantics.PrimConforms(actual, expectedType) {
+				return true
+			}
+		}
 		return false
+	}
+}
+
+func scalarValueType(value Value) (semantics.PrimType, bool) {
+	switch value.Kind() {
+	case ValueBoolean:
+		return semantics.PrimBoolean, true
+	case ValueString:
+		return semantics.PrimString, true
+	case ValueInteger:
+		return semantics.PrimInteger, true
+	case ValueReal:
+		return semantics.PrimReal, true
+	default:
+		return semantics.PrimUnknown, false
 	}
 }
 
@@ -423,12 +439,16 @@ func cloneCells(input []Cell) []Cell {
 
 func (e *executor) validateResult(result sequence) error {
 	for _, value := range result.values {
-		if value.Kind() != ValueElement {
+		if value.Kind() != ValueElement || !e.valueConforms(value, e.definition.Result().Type) {
+			actual := string(value.Kind())
+			if sym, ok := value.Element(); ok {
+				actual = symbols.FQNOf(sym)
+			}
 			return &Error{
 				Kind:     ErrorResultType,
 				Query:    e.definition.Name(),
 				Expected: e.definition.Result().Type,
-				Actual:   string(value.Kind()),
+				Actual:   actual,
 				Origin:   e.definition.Result().Origin,
 			}
 		}

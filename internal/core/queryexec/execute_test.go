@@ -469,6 +469,201 @@ calc def Relationships :> Query {
 	}
 }
 
+func TestExecuteUsesSemanticScalarBindingConformance(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root;
+calc def WidenedScalars :> Query {
+	in source : Element;
+	in rational : Rational;
+	in complexFromInteger : Complex;
+	in complexFromReal : Complex;
+	in numberFromInteger : Number;
+	in numberFromReal : Number;
+	OwnedElements(source = source)
+}
+calc def RationalInput :> Query {
+	in source : Element;
+	in value : Rational;
+	OwnedElements(source = source)
+}
+calc def NaturalInput :> Query {
+	in source : Element;
+	in value : Natural;
+	OwnedElements(source = source)
+}
+`)
+	_, err := fixture.execute(t, "WidenedScalars", Bindings{
+		"source":             {ElementValue(fixture.symbol(t, "root"))},
+		"rational":           {IntegerValue(1)},
+		"complexFromInteger": {IntegerValue(2)},
+		"complexFromReal":    {RealValue(2.5)},
+		"numberFromInteger":  {IntegerValue(3)},
+		"numberFromReal":     {RealValue(3.5)},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute widened scalar bindings: %v", err)
+	}
+	for _, test := range []struct {
+		query string
+		value Value
+	}{
+		{query: "RationalInput", value: RealValue(1.5)},
+		{query: "NaturalInput", value: IntegerValue(1)},
+	} {
+		_, err = fixture.execute(t, test.query, Bindings{
+			"source": {ElementValue(fixture.symbol(t, "root"))},
+			"value":  {test.value},
+		}, Options{})
+		var executionError *Error
+		if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType {
+			t.Fatalf("%s narrowing error = %v", test.query, err)
+		}
+	}
+}
+
+func TestExecuteEnforcesNarrowedResultTypes(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Target;
+part def Other;
+part validRoot {
+	part target : Target;
+}
+part invalidRoot {
+	part target : Target;
+	part other : Other;
+}
+calc def TargetResults :> Query {
+	in source : Element;
+	return result : Target[0..*] ordered;
+	OwnedElements(source = source)
+}
+`)
+	rows, err := fixture.execute(t, "TargetResults", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "validRoot"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute conforming narrowed result: %v", err)
+	}
+	if got := elementNames(rows); !slices.Equal(got, []string{"target"}) {
+		t.Fatalf("conforming rows = %v", got)
+	}
+	_, err = fixture.execute(t, "TargetResults", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "invalidRoot"))},
+	}, Options{})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorResultType {
+		t.Fatalf("narrowed result error = %v", err)
+	}
+	if executionError.Expected != "Observatory::Target" ||
+		executionError.Actual != "Observatory::invalidRoot::other" {
+		t.Fatalf("narrowed result detail = %+v", executionError)
+	}
+}
+
+func TestExecuteUsesInheritedRedefinedFeatureValues(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Base {
+	attribute values : Integer[1..*] ordered = (10, 20);
+}
+part def Derived :> Base {
+	attribute redefines values;
+}
+part root {
+	part child : Derived;
+}
+calc def Matching :> Query {
+	in source : Element;
+	Project(
+		source = WhereFeature(
+			source = OwnedElements(source = source),
+			'feature' = "values",
+			operator = "=",
+			value = "20"
+		),
+		properties = ("name", "values")
+	)
+}
+`)
+	rows, err := fixture.execute(t, "Matching", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute inherited feature query: %v", err)
+	}
+	if got := elementNames(rows); !slices.Equal(got, []string{"child"}) {
+		t.Fatalf("matching rows = %v", got)
+	}
+	cells := rows.Rows()[0].Cells()
+	if len(cells) != 2 || len(cells[1].Values()) != 2 {
+		t.Fatalf("inherited projected cells = %+v", cells)
+	}
+}
+
+func TestExecutePreservesInterleavedOwnedDeclarationOrder(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Base {
+	part engine;
+	part motor;
+}
+part root : Base {
+	part namedOne;
+	part :>> engine :>> motor;
+	part namedTwo;
+}
+calc def Direct :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Recursive :> Query {
+	in source : Element;
+	Descendants(source = source, maxDepth = 1)
+}
+`)
+	want := []string{"namedOne", "", "namedTwo"}
+	for _, query := range []string{"Direct", "Recursive"} {
+		rows, err := fixture.execute(t, query, Bindings{
+			"source": {ElementValue(fixture.symbol(t, "root"))},
+		}, Options{})
+		if err != nil {
+			t.Fatalf("execute %s: %v", query, err)
+		}
+		if got := elementNames(rows); !slices.Equal(got, want) {
+			t.Fatalf("%s rows = %v, want %v", query, got, want)
+		}
+	}
+}
+
+func TestExecuteComparesLargeIntegersWithoutLosingPrecision(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part lower {
+		attribute score : Integer = 9007199254740992;
+	}
+	part higher {
+		attribute score : Integer = 9007199254740993;
+	}
+}
+calc def ExactScore :> Query {
+	in source : Element;
+	WhereFeature(
+		source = OwnedElements(source = source),
+		'feature' = "score",
+		operator = "=",
+		value = "9007199254740993"
+	)
+}
+`)
+	rows, err := fixture.execute(t, "ExactScore", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute large-integer query: %v", err)
+	}
+	if got := elementNames(rows); !slices.Equal(got, []string{"higher"}) {
+		t.Fatalf("matching rows = %v", got)
+	}
+}
+
 func elementNames(result *RowSet) []string {
 	var names []string
 	for _, row := range result.Rows() {

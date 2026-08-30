@@ -573,7 +573,7 @@ func compareValue(actual Value, operator, expected string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		return compareNumber(float64(value), operator, float64(want))
+		return compareOrdinal(compareInt(value, want), operator)
 	case ValueReal:
 		value, _ := actual.Real()
 		if expected == "*" {
@@ -651,12 +651,7 @@ func compareOrdered(left, right Value) int {
 	case ValueInteger:
 		l, _ := left.Integer()
 		r, _ := right.Integer()
-		if l < r {
-			return -1
-		}
-		if l > r {
-			return 1
-		}
+		return compareInt(l, r)
 	case ValueReal:
 		l, _ := left.Real()
 		r, _ := right.Real()
@@ -670,6 +665,16 @@ func compareOrdered(left, right Value) int {
 		if l && !r {
 			return 1
 		}
+	}
+	return 0
+}
+
+func compareInt(left, right int64) int {
+	if left < right {
+		return -1
+	}
+	if left > right {
+		return 1
 	}
 	return 0
 }
