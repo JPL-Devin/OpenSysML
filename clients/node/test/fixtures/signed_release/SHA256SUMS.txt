@@ -1,0 +1,3 @@
+57d43daa0cb5b14dcc46c57dd97caa85661dcac04b51cb518af00461d5ae473f  opensysml-v9.9.9-linux-amd64.tar.gz
+e225eea32ee248b90215a1a65c2287befcbd8e3a24692dbb5d8b98e6427ecd29  sysml-grpc-linux-amd64
+82006d0ca372cd747a9179f5e186fd4d9cddea9ac27f8fa054cb6a706590403d  sysml-grpc-darwin-arm64

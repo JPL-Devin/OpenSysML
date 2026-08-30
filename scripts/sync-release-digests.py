@@ -24,6 +24,7 @@ SOURCE = os.path.join(REPO_ROOT, "clients", "release-digests.json")
 #: Path, relative to the repository root, of every client's shipped copy.
 COPIES = (
     os.path.join("clients", "python", "opensysml", "release-digests.json"),
+    os.path.join("clients", "node", "release-digests.json"),
 )
 
 

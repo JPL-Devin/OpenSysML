@@ -80,12 +80,13 @@ rather than bytes on the wire. See [service transports](service-transports.md).
 
 ## Providing the service binary
 
-No client downloads a binary except the Python one, which pins a SHA-256 per release asset and
-verifies the release's sigstore-signed manifest before it does. The others resolve one that is
+Only the Python and Node clients download a binary, and both pin a SHA-256 per release asset and
+verify the release's sigstore-signed manifest before they do. The others resolve one that is
 already there, and the resolution order is the same everywhere:
 `$OPENSYSML_GRPC_BINARY` (`$OPENSYSML_BINARY` in Node) first, then `~/.opensysml/bin/sysml-grpc`
-— where the Python client's verified download puts it — then `PATH`. The Node client adds its
-per-platform npm package, whose tarball npm verifies, with no postinstall script and no download.
+— where a verified download puts it — then `PATH`. The Node client adds its
+per-platform npm package, whose tarball npm verifies, with no postinstall script; it is preferred
+over a download, which happens only when no package matches the platform.
 The Java client additionally verifies a digest the caller pins with `expectedBinarySha256`.
 
 An unresolvable binary is an error naming every way to supply one, rather than a fetch.

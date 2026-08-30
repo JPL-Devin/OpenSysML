@@ -22,6 +22,24 @@ export class ClosedConnectionError extends OpenSysMLError {
   }
 }
 
+/** A release binary could not be downloaded, or could not be installed once it was. */
+export class DownloadError extends ServiceError {}
+
+/** A download's digest contradicts the one expected of it, so it is never used. */
+export class ChecksumMismatchError extends DownloadError {}
+
+/** Nothing pins or signs a digest for the release, leaving only its origin's word. */
+export class UnpinnedReleaseError extends ChecksumMismatchError {}
+
+/**
+ * No signature on the checksum manifest could be checked at all: none published,
+ * unreadable, or no verifier installed. Refused exactly as an unpinned release is.
+ */
+export class UnsignedReleaseError extends UnpinnedReleaseError {}
+
+/** A signature was checked and does not verify: another signer, or a changed manifest. */
+export class ManifestSignatureError extends ChecksumMismatchError {}
+
 /** A model file could not be read, or its content did not parse. */
 export class ParseError extends OpenSysMLError {
   /** Diagnostics the service reported, in the order it reported them. */
