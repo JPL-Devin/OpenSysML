@@ -256,10 +256,11 @@ fn process_lock(cache_dir: &Path) -> &'static Mutex<()> {
 
 /// The shared cache, held against other threads, processes and clients.
 struct CacheGuard {
-    /// Released last, after the file lock this process took under it.
-    _threads: MutexGuard<'static, ()>,
-    /// Closing the file releases the lock, so it is held open until then.
+    /// Dropped first, since closing any descriptor for the file drops the POSIX
+    /// lock this whole process holds on it.
     _file: Option<File>,
+    /// Released last, so the next thread opens the lock file after this one closed it.
+    _threads: MutexGuard<'static, ()>,
 }
 
 /// Hold the shared cache until the guard is dropped.
@@ -282,8 +283,8 @@ fn cache_lock(cache_dir: &Path, warn: &dyn Fn(String)) -> CacheGuard {
         }
     };
     CacheGuard {
-        _threads: threads,
         _file: file,
+        _threads: threads,
     }
 }
 
