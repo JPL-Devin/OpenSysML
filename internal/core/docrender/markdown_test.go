@@ -99,11 +99,11 @@ func TestMarkdownGoldenStructure(t *testing.T) {
 		"\n## Subsystem Masses \\| by \\*name\\*\n",
 		"\n### Heavy Subsystems\n",
 		"\n### Missing Subsystems\n",
-		"\n## Subsystem Usages\n",
+		"\n## Declared Types\n",
 		"| name | mass |\n| --- | --- |\n",
 		"| baffle\\|shroud \\*tricky\\* | 1.5 |",
 		"kg \\| not \\#grams, \\*not\\* \\_lbs\\_, \\`raw\\`, \\<b>\\&plain\\</b>",
-		"| element |\n| --- |\n",
+		"| element |\n| --- |\n| Observatory::Assembly \\*frame\\* |",
 		"1. mount\n2. segmentControl",
 	} {
 		if !strings.Contains(got, want) {

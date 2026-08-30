@@ -81,6 +81,29 @@ func TestRenderDocumentFlag(t *testing.T) {
 		2, "does not bind required parameter root")
 }
 
+// TestRenderDocumentCommittedFixture renders the renderer's committed fixture
+// through the binary's full analysis, matching the committed golden Markdown.
+func TestRenderDocumentCommittedFixture(t *testing.T) {
+	binary := buildCLI(t)
+	fixture := filepath.Join("..", "..", "internal", "core", "docrender", "testdata", "telescope_report.sysml")
+	golden, err := os.ReadFile(filepath.Join("..", "..", "internal", "core", "docrender", "testdata", "telescope_report.golden.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "report.md")
+	cmd := exec.Command(binary, fixture, "-render-document", "Observatory::MassReport", "-o", out)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("render: %v\n%s", err, output)
+	}
+	written, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(written) != string(golden) {
+		t.Errorf("rendered fixture differs from the committed golden:\n%s", written)
+	}
+}
+
 // TestRenderDocumentOutputFile checks that -o writes the Markdown artifact to
 // the named file rather than stdout.
 func TestRenderDocumentOutputFile(t *testing.T) {

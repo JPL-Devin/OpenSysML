@@ -7,7 +7,9 @@ package Observatory {
 		attribute mass : Real;
 	}
 
-	part telescope {
+	part def 'Assembly *frame*';
+
+	part telescope : 'Assembly *frame*' {
 		part optics : Subsystem {
 			attribute redefines mass = 8.5;
 		}
@@ -76,12 +78,12 @@ package Observatory {
 		)
 	}
 
-	calc def SubsystemUsages :> Query {
+	calc def DeclaredTypes :> Query {
 		in root : Element;
 		RelatedElements(
 			source = root,
 			relationshipKind = "typing",
-			direction = "incoming",
+			direction = "outgoing",
 			maxDepth = 1
 		)
 	}
@@ -139,23 +141,23 @@ package Observatory {
 			}
 		}
 
-		part usage : Section {
-			attribute redefines title = "Subsystem Usages";
+		part typing : Section {
+			attribute redefines title = "Declared Types";
 
 			part note : Paragraph {
-				attribute redefines text = "Every usage typed by Subsystem, by relationship traversal.";
+				attribute redefines text = "The declared type of the telescope, by relationship traversal.";
 			}
 
-			part usageTable : Table {
-				attribute redefines caption = "Usages of Subsystem";
-				calc rows : SubsystemUsages {
-					in root = Subsystem;
+			part typeTable : Table {
+				attribute redefines caption = "Type of telescope";
+				calc rows : DeclaredTypes {
+					in root = telescope;
 				}
 			}
 
-			part usageItems : List {
-				calc items : SubsystemUsages {
-					in root = Subsystem;
+			part typeItems : List {
+				calc items : DeclaredTypes {
+					in root = telescope;
 				}
 			}
 		}

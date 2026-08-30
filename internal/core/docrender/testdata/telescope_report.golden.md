@@ -25,20 +25,14 @@ mount segmentControl
 | name | mass |
 | --- | --- |
 
-## Subsystem Usages
+## Declared Types
 
-Every usage typed by Subsystem, by relationship traversal.
+The declared type of the telescope, by relationship traversal.
 
-*Usages of Subsystem*
+*Type of telescope*
 
 | element |
 | --- |
-| Observatory::telescope::optics |
-| Observatory::telescope::segmentControl |
-| Observatory::telescope::mount |
-| Observatory::telescope::baffle\|shroud \*tricky\* |
+| Observatory::Assembly \*frame\* |
 
-- optics
-- segmentControl
-- mount
-- baffle\|shroud \*tricky\*
+- Assembly \*frame\*
