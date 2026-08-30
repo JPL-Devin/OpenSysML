@@ -79,7 +79,7 @@ func Loop(r LineReader, out io.Writer, s *Session) error {
 // answers rather than failing as a declaration; anything else joins the buffer.
 func submit(w io.Writer, s *Session, src string) {
 	if expr, ok := bareExpression(src); ok {
-		lines, err := s.EvalExpr(expr)
+		lines, err := s.EvalBare(expr)
 		if err != nil {
 			printLines(w, []string{"error: " + err.Error()})
 			return

@@ -49,6 +49,21 @@ func TestLoopEvaluatesBareExpressions(t *testing.T) {
 	rejects(t, got, "expected a namespace member")
 }
 
+// TestBareExpressionCarriesMaterializationFailureIntoStatus checks a feature
+// value a bare expression could not materialize reaches the session status a
+// piped run exits on, as %eval's does.
+func TestBareExpressionCarriesMaterializationFailureIntoStatus(t *testing.T) {
+	s := submitted(t, unmaterializableModel)
+	wants(t, run(t, s, "%instantiate Demo::R"), "Created instance")
+
+	var out strings.Builder
+	submit(&out, s, "bad")
+	wants(t, out.String(), "error:", "multiplicity violation")
+	if len(s.MaterializationFailures()) == 0 {
+		t.Error("a failed bare evaluation of a feature value did not reach the session status")
+	}
+}
+
 // TestBareExpressionKeepsDebugSession checks evaluating an expression at the
 // prompt leaves an in-progress action debugging session running.
 func TestBareExpressionKeepsDebugSession(t *testing.T) {

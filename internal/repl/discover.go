@@ -220,7 +220,9 @@ func (s *Session) qualifiedMissSuggestions(name string, want []symbols.SymbolKin
 	for _, member := range suggest.Nearest(last, s.memberNames(idx, prefix)) {
 		out = append(out, prefix+"::"+member)
 	}
-	return s.matchingKinds(out, want)
+	// Quoted last, so kind lookups see the raw indexed names and the hint can
+	// be typed back into a command.
+	return notationNames(s.matchingKinds(out, want))
 }
 
 // memberNames lists the simple names the index registers directly under prefix.

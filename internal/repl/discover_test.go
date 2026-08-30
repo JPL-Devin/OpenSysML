@@ -229,7 +229,7 @@ func TestSymbolSuggestion(t *testing.T) {
 // answers to gets: members of its own qualifier, of a kind the command can act
 // on, and nothing when the qualifier itself resolves nowhere.
 func TestQualifiedMissSuggestion(t *testing.T) {
-	const declare = "package Demo { action def Go; action runFast; part def Wheel; }"
+	const declare = "package Demo { action def Go; action runFast; part def Wheel; } package 'My Pkg' { part def Wheel; }"
 	tests := []struct {
 		name    string
 		line    string
@@ -251,6 +251,11 @@ func TestQualifiedMissSuggestion(t *testing.T) {
 			line:    "%action Demo::Whel",
 			wants:   []string{"unresolved reference: Demo::Whel"},
 			rejects: []string{"did you mean"},
+		},
+		{
+			name:  "a hint under a quoted qualifier is spelled typable",
+			line:  "%instantiate 'My Pkg'::Whel",
+			wants: []string{"did you mean 'My Pkg'::Wheel?"},
 		},
 		{
 			name:    "an unresolved qualifier offers nothing",
