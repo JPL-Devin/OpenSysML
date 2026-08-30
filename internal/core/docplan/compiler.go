@@ -43,6 +43,20 @@ func IsDocumentDefinition(index *symbols.Index, model *semantics.Model, sym *sym
 		sym.Kind == symbols.SymbolPartDef && model != nil && model.Conforms(sym, base)
 }
 
+// QueryTarget resolves the query definition a calc usage is typed by, following
+// redefinition lineage; nil when it is not typed by a query definition.
+func QueryTarget(index *symbols.Index, model *semantics.Model, resolver *resolve.Resolver, usage *symbols.Symbol) *symbols.Symbol {
+	if index == nil || model == nil || resolver == nil || usage == nil || usage.Kind != symbols.SymbolCalcUsage {
+		return nil
+	}
+	c := &compiler{index: index, model: model, resolver: resolver}
+	target := c.typingTarget(usage)
+	if target == nil || !queryplan.IsQueryDefinition(index, model, target) {
+		return nil
+	}
+	return target
+}
+
 // Compile compiles a document definition into an immutable document plan.
 func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Resolver, entry *symbols.Symbol) (*Plan, error) {
 	if index == nil || model == nil || resolver == nil {

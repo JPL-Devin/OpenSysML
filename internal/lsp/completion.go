@@ -39,6 +39,40 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 			}
 			return c.list(), nil
 		}
+		// The type of a calc usage inside a document definition is a query, so
+		// only query definitions (and the packages qualifying one) are offered.
+		if calcTypingPositionAt(doc.Content, offset) && s.insideDocumentDefinition(scope) {
+			var candidates []*symbols.Symbol
+			for sc := scope; sc != nil; sc = sc.Parent() {
+				candidates = append(candidates, sc.Members()...)
+			}
+			candidates = append(candidates, s.ws.TopLevelSymbols(name)...)
+			for _, sym := range s.ws.QueryDefinitions(candidates) {
+				c.addSymbol(s, sym)
+			}
+			for _, sym := range candidates {
+				if sym != nil && (sym.Kind == symbols.SymbolPackage || sym.Kind == symbols.SymbolNamespace) {
+					c.addSymbol(s, sym)
+				}
+			}
+			return c.list(), nil
+		}
+		// Inside a query-typed calc usage, a binding names one of the query's
+		// parameters; its value resolves in the enclosing scope chain as usual.
+		if !valuePositionAt(doc.Content, offset) {
+			for sc := scope; sc != nil; sc = sc.Parent() {
+				owner := sc.Owner()
+				if owner == nil {
+					continue
+				}
+				if params := s.ws.QueryUsageParameters(owner); len(params) > 0 {
+					for _, sym := range params {
+						c.addSymbol(s, sym)
+					}
+					return c.list(), nil
+				}
+			}
+		}
 		for ; scope != nil; scope = scope.Parent() {
 			for _, sym := range scope.Members() {
 				c.addSymbol(s, sym)
@@ -303,6 +337,49 @@ func enclosingScope(root *symbols.Scope, offset int) *symbols.Scope {
 		}
 	}
 	return best
+}
+
+// calcTypingPositionAt reports whether offset sits in the type position of a
+// calc usage declaration: after the `:` of `calc <name> :`.
+func calcTypingPositionAt(content []byte, offset int) bool {
+	if offset > len(content) {
+		offset = len(content)
+	}
+	i := identStart(content, offset)
+	i = skipSpacesBefore(content, i)
+	if i < 1 || content[i-1] != ':' || (i < len(content) && content[i] == '>') {
+		return false
+	}
+	if i >= 2 && (content[i-2] == ':' || content[i-2] == '>') {
+		return false // `::` is a qualifier, `>:` ends nothing
+	}
+	i = skipSpacesBefore(content, i-1)
+	start := identStart(content, i)
+	if start == i {
+		return false
+	}
+	i = skipSpacesBefore(content, start)
+	start = identStart(content, i)
+	return string(content[start:i]) == "calc"
+}
+
+// skipSpacesBefore returns the offset before any run of blanks ending at i.
+func skipSpacesBefore(content []byte, i int) int {
+	for i > 0 && (content[i-1] == ' ' || content[i-1] == '\t' || content[i-1] == '\n' || content[i-1] == '\r') {
+		i--
+	}
+	return i
+}
+
+// insideDocumentDefinition reports whether the scope chain sits inside a native
+// document definition.
+func (s *Server) insideDocumentDefinition(scope *symbols.Scope) bool {
+	for sc := scope; sc != nil; sc = sc.Parent() {
+		if owner := sc.Owner(); owner != nil && s.ws.IsDocumentDefinition(owner) {
+			return true
+		}
+	}
+	return false
 }
 
 // valuePositionAt reports whether offset sits after the `=` of the statement

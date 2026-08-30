@@ -1,0 +1,308 @@
+package lsp
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"go.lsp.dev/protocol"
+	"go.lsp.dev/uri"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
+)
+
+// documentModel is a native telescope model with a query library and a document
+// definition, so every document-authoring feature has something to work on.
+const documentModel = `package Observatory {
+	private import DocumentQueries::*;
+	private import KerML::Root::Element;
+	private import ScalarValues::*;
+
+	part def Subsystem {
+		attribute mass : Real;
+	}
+
+	part telescope {
+		part optics : Subsystem {
+			attribute redefines mass = 8.5;
+		}
+	}
+
+	/* Subsystems finds every part usage below the root. */
+	calc def Subsystems :> Query {
+		in root : Element;
+		WhereType(
+			source = Descendants(source = root, maxDepth = 3),
+			type = "PartUsage"
+		)
+	}
+
+	calc def SubsystemTable :> Query {
+		in root : Element;
+		Project(
+			source = Subsystems(root = root),
+			properties = ("name", "mass")
+		)
+	}
+
+	part def MassReport :> Document {
+		attribute redefines title = "Telescope Mass Report";
+
+		part masses : Table {
+			attribute redefines caption = "All subsystems by mass";
+			calc rows : SubsystemTable {
+				in root = telescope;
+			}
+		}
+	}
+}
+`
+
+func openDocumentModel(t *testing.T) (*model.Workspace, *Server, string) {
+	t.Helper()
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/document.sysml").Filename()
+	ws.Open(name, []byte(documentModel), 1)
+	return ws, s, name
+}
+
+func documentPosParams(name string, src, anchor string, t *testing.T) protocol.TextDocumentPositionParams {
+	t.Helper()
+	off := strings.Index(src, anchor)
+	if off < 0 {
+		t.Fatalf("anchor %q not in fixture", anchor)
+	}
+	return protocol.TextDocumentPositionParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+		Position:     offsetToPosition([]byte(src), off),
+	}
+}
+
+func TestDefinitionQueryInvocationToCalcDef(t *testing.T) {
+	_, s, name := openDocumentModel(t)
+	locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+		TextDocumentPositionParams: documentPosParams(name, documentModel, "SubsystemTable {", t),
+	})
+	if err != nil {
+		t.Fatalf("Definition err = %v", err)
+	}
+	if len(locs) != 1 {
+		t.Fatalf("locations = %d, want 1", len(locs))
+	}
+	want := offsetToPosition([]byte(documentModel), strings.Index(documentModel, "calc def SubsystemTable"))
+	if locs[0].Range.Start.Line != want.Line {
+		t.Errorf("decl line = %d, want %d (calc def SubsystemTable)", locs[0].Range.Start.Line, want.Line)
+	}
+}
+
+func TestDefinitionBindingNameToQueryParameter(t *testing.T) {
+	_, s, name := openDocumentModel(t)
+	locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+		TextDocumentPositionParams: documentPosParams(name, documentModel, "root = telescope", t),
+	})
+	if err != nil {
+		t.Fatalf("Definition err = %v", err)
+	}
+	if len(locs) != 1 {
+		t.Fatalf("locations = %d, want 1 (the query's `in root` parameter)", len(locs))
+	}
+	// SubsystemTable's own `in root : Element;`, not Subsystems'.
+	table := strings.Index(documentModel, "calc def SubsystemTable")
+	want := offsetToPosition([]byte(documentModel), table+strings.Index(documentModel[table:], "in root"))
+	if locs[0].Range.Start.Line != want.Line {
+		t.Errorf("param line = %d, want %d (SubsystemTable's in root)", locs[0].Range.Start.Line, want.Line)
+	}
+}
+
+func TestDefinitionBindingValueToModelElement(t *testing.T) {
+	_, s, name := openDocumentModel(t)
+	locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+		TextDocumentPositionParams: documentPosParams(name, documentModel, "telescope;", t),
+	})
+	if err != nil {
+		t.Fatalf("Definition err = %v", err)
+	}
+	if len(locs) != 1 {
+		t.Fatalf("locations = %d, want 1 (part telescope)", len(locs))
+	}
+	want := offsetToPosition([]byte(documentModel), strings.Index(documentModel, "part telescope"))
+	if locs[0].Range.Start.Line != want.Line {
+		t.Errorf("decl line = %d, want %d (part telescope)", locs[0].Range.Start.Line, want.Line)
+	}
+}
+
+func TestHoverQueryInvocationShowsQueryDef(t *testing.T) {
+	_, s, name := openDocumentModel(t)
+	hov, err := s.Hover(context.Background(), &protocol.HoverParams{
+		TextDocumentPositionParams: documentPosParams(name, documentModel, "SubsystemTable {", t),
+	})
+	if err != nil {
+		t.Fatalf("Hover err = %v", err)
+	}
+	if hov == nil || !strings.Contains(hov.Contents.Value, "calc def SubsystemTable") {
+		t.Fatalf("hover = %+v, want the query's calc def signature", hov)
+	}
+}
+
+func TestHoverQueryReferenceShowsDocComment(t *testing.T) {
+	_, s, name := openDocumentModel(t)
+	hov, err := s.Hover(context.Background(), &protocol.HoverParams{
+		TextDocumentPositionParams: documentPosParams(name, documentModel, "Subsystems(root", t),
+	})
+	if err != nil {
+		t.Fatalf("Hover err = %v", err)
+	}
+	if hov == nil || !strings.Contains(hov.Contents.Value, "finds every part usage") {
+		t.Fatalf("hover = %+v, want the referenced query's doc comment", hov)
+	}
+}
+
+func TestHoverDocumentLibraryType(t *testing.T) {
+	_, s, name := openDocumentModel(t)
+	hov, err := s.Hover(context.Background(), &protocol.HoverParams{
+		TextDocumentPositionParams: documentPosParams(name, documentModel, "Document {", t),
+	})
+	if err != nil {
+		t.Fatalf("Hover err = %v", err)
+	}
+	if hov == nil || !strings.Contains(hov.Contents.Value, "part def") ||
+		!strings.Contains(hov.Contents.Value, "Document") {
+		t.Fatalf("hover = %+v, want the library Document part def", hov)
+	}
+}
+
+func completionLabels(t *testing.T, s *Server, name, anchor string) []string {
+	t.Helper()
+	list, err := s.Completion(context.Background(), &protocol.CompletionParams{
+		TextDocumentPositionParams: documentPosParams(name, documentModel, anchor, t),
+	})
+	if err != nil {
+		t.Fatalf("Completion err = %v", err)
+	}
+	labels := make([]string, 0, len(list.Items))
+	for _, item := range list.Items {
+		labels = append(labels, item.Label)
+	}
+	return labels
+}
+
+func TestCompletionCalcTypingPositionOffersQueries(t *testing.T) {
+	_, s, name := openDocumentModel(t)
+	labels := completionLabels(t, s, name, "SubsystemTable {")
+	if !containsLabel(labels, "SubsystemTable") || !containsLabel(labels, "Subsystems") {
+		t.Fatalf("labels = %v, want the workspace query definitions", labels)
+	}
+	if containsLabel(labels, "Subsystem") || containsLabel(labels, "telescope") {
+		t.Fatalf("labels = %v, want no non-query part definitions or usages", labels)
+	}
+	if !containsLabel(labels, "DocumentQueries") {
+		t.Fatalf("labels = %v, want packages so a qualified query stays reachable", labels)
+	}
+}
+
+func TestCompletionBindingPositionOffersQueryParameters(t *testing.T) {
+	_, s, name := openDocumentModel(t)
+	labels := completionLabels(t, s, name, "root = telescope")
+	if len(labels) != 1 || labels[0] != "root" {
+		t.Fatalf("labels = %v, want exactly the query's `in` parameters", labels)
+	}
+}
+
+func containsLabel(labels []string, want string) bool {
+	for _, l := range labels {
+		if l == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestPublishDiagnosticsDocumentPlanLive(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	fc := &fakeClient{}
+	s.client = fc
+	name := "report.sysml"
+	// The document is missing its title, a document-plan diagnostic.
+	broken := strings.Replace(documentModel,
+		"attribute redefines title = \"Telescope Mass Report\";\n", "", 1)
+	ws.Open(name, []byte(broken), 1)
+
+	s.publishDiagnostics(context.Background(), name)
+	published := fc.all()
+	if len(published) != 1 {
+		t.Fatalf("published = %d, want 1", len(published))
+	}
+	var found *protocol.Diagnostic
+	for i, d := range published[0].Diagnostics {
+		if d.Code == "document-plan-missing-title" {
+			found = &published[0].Diagnostics[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("diagnostics = %v, want document-plan-missing-title", published[0].Diagnostics)
+	}
+	if found.Source != "document-plan" || found.Severity != protocol.DiagnosticSeverityError {
+		t.Errorf("diagnostic = %+v, want source document-plan at error severity", found)
+	}
+	want := offsetToPosition([]byte(broken), strings.Index(broken, "part def MassReport"))
+	if found.Range.Start.Line != want.Line {
+		t.Errorf("range starts line %d, want %d (the document definition)", found.Range.Start.Line, want.Line)
+	}
+
+	// Restoring the title clears the diagnostic on the next publish.
+	ws.Update(name, []byte(documentModel), 2)
+	s.publishDiagnostics(context.Background(), name)
+	published = fc.all()
+	last := published[len(published)-1]
+	for _, d := range last.Diagnostics {
+		if d.Source == "document-plan" || d.Source == "document-query" {
+			t.Fatalf("edit left stale diagnostic: %+v", d)
+		}
+	}
+}
+
+func TestDocumentsListsWorkspaceDocuments(t *testing.T) {
+	_, s, name := openDocumentModel(t)
+	res := s.Documents()
+	if len(res.Documents) != 1 {
+		t.Fatalf("documents = %+v, want the one MassReport", res.Documents)
+	}
+	if res.Documents[0].Name != "Observatory::MassReport" {
+		t.Errorf("name = %q, want Observatory::MassReport", res.Documents[0].Name)
+	}
+	if res.Documents[0].URI != string(uri.File(name)) {
+		t.Errorf("uri = %q, want %q", res.Documents[0].URI, uri.File(name))
+	}
+}
+
+func TestRenderDocumentMarkdown(t *testing.T) {
+	_, s, _ := openDocumentModel(t)
+	res, err := s.RenderDocument(&renderDocumentParams{Name: "Observatory::MassReport"})
+	if err != nil {
+		t.Fatalf("RenderDocument err = %v", err)
+	}
+	for _, want := range []string{
+		"# Telescope Mass Report",
+		"*All subsystems by mass*",
+		"| name | mass |",
+		"| optics | 8.5 |",
+	} {
+		if !strings.Contains(res.Markdown, want) {
+			t.Errorf("markdown missing %q:\n%s", want, res.Markdown)
+		}
+	}
+}
+
+func TestRenderDocumentTypedErrors(t *testing.T) {
+	_, s, _ := openDocumentModel(t)
+	if _, err := s.RenderDocument(&renderDocumentParams{Name: "Observatory::Subsystem"}); err == nil ||
+		!strings.Contains(err.Error(), "is not a document") {
+		t.Fatalf("err = %v, want a not-a-document error", err)
+	}
+	if _, err := s.RenderDocument(&renderDocumentParams{Name: "Observatory::Nothing"}); err == nil ||
+		!strings.Contains(err.Error(), "no element named") {
+		t.Fatalf("err = %v, want a no-element error", err)
+	}
+}

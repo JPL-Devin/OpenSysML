@@ -20,6 +20,23 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 	}
 	content := doc.Content
 	offset := positionToOffset(content, params.Position)
+
+	// A cursor on a reference hovers what it names, not the declaration it sits
+	// in: the type a usage declares, the query a document block invokes.
+	if ref := refAtOffset(collectRefs(doc.AST, doc.Scope), offset); ref != nil {
+		if target, ok := s.ws.ResolveReferenceInDoc(name, *ref); ok && target != nil {
+			signature := target.Notation()
+			if target.Name != "" {
+				signature += " " + lexer.NameText(target.Name)
+			}
+			rng := spanToRange(content, ref.QN.Span())
+			return &protocol.Hover{
+				Contents: s.hoverContents(signature, s.symbolDocComments(target)),
+				Range:    &rng,
+			}, nil
+		}
+	}
+
 	sym := symbolAtOffset(doc.Scope, offset)
 	if sym == nil {
 		return nil, nil
@@ -46,6 +63,19 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 		Contents: s.hoverContents(signature, comments),
 		Range:    &rng,
 	}, nil
+}
+
+// symbolDocComments returns the comment trivia preceding a symbol's
+// declaration, when the document declaring it is loaded.
+func (s *Server) symbolDocComments(sym *symbols.Symbol) []string {
+	if len(sym.LeadingTrivia) == 0 || sym.DocName == "" {
+		return nil
+	}
+	doc := s.ws.Document(sym.DocName)
+	if doc == nil {
+		return nil
+	}
+	return leadingDocComments(doc.Content, sym.LeadingTrivia)
 }
 
 // hoverContents renders the hover as Markdown when the client supports it,
