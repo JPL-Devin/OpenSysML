@@ -41,6 +41,14 @@ const CapabilityVerification = "verification"
 // SysML v2 API & Services Query over a parsed model.
 const CapabilityQuery = "query"
 
+// CapabilityDocumentQuery names the capability of the RunDocumentQuery RPC,
+// which runs a named document query and answers with typed rows.
+const CapabilityDocumentQuery = "document_query"
+
+// CapabilityRenderDocument names the capability of the RenderDocument RPC,
+// which renders a named document to Markdown.
+const CapabilityRenderDocument = "render_document"
+
 // CapabilityOSLCQuery names the capability of evaluating OSLC Query text.
 const CapabilityOSLCQuery = "oslc_query"
 
@@ -82,10 +90,10 @@ const CapabilityFeatureValues = "feature_values"
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
-	CapabilityOSLCQuery,
-	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
-	CapabilityUnsetValue, CapabilityFeatureValues, CapabilityApplyEdits,
-	CapabilityAuthoring, CapabilityInlineLanguage, CapabilityStrictConformance,
+	CapabilityOSLCQuery, CapabilityEnumValues, CapabilityEvaluateSubject,
+	CapabilitySymbolAttributes, CapabilityUnsetValue, CapabilityFeatureValues,
+	CapabilityApplyEdits, CapabilityAuthoring, CapabilityInlineLanguage,
+	CapabilityStrictConformance, CapabilityDocumentQuery, CapabilityRenderDocument,
 }
 
 type capabilityAvailability struct {

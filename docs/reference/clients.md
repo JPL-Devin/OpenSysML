@@ -45,7 +45,8 @@ in some:
 - RDF conversion (`Convert`);
 - verification (`VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction`) and `EvaluateCalc`;
 - behaviour execution (`ExecuteAction`, `ExecuteState`);
-- `Query` and OSLC query.
+- `Query` and OSLC query;
+- native document queries and rendering (`RunDocumentQuery`, `RenderDocument`).
 
 Those RPCs exist and are served. Reach them from the Python client, or from the generated stubs
 each client ships beside its ergonomic layer, until a v2 wraps them. Each client's conformance

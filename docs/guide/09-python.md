@@ -611,6 +611,40 @@ under this part" is expressed as a `scope`, while "everything specializing this 
 be expressed at all. It is an interoperability surface rather than OpenSysML's expressive query
 facility; [the API reference](../reference/api.md) states precisely what is supported.
 
+## Native document queries and rendered documents
+
+`model.run_document_query(...)` runs a *document query* — a `calc def` specializing
+`DocumentQueries::Query` — and `model.render_document(...)` renders a *document* — a `part def`
+specializing `DocumentQueries::Document` — the way the REPL's `%run-query` and `%render-document`
+do:
+
+```python
+model = opensysml.load("report.sysml")
+
+result = model.run_document_query("Observatory::SubsystemTable")
+result.columns                       # ("name", "mass")
+for row in result.rows:
+    row.element.id                   # "Observatory::telescope::optics"
+    row.element.type                 # "PartUsage"
+    row.cells                        # (("optics",), (8.5,))
+
+# A parameterized query takes typed bindings; a list binds a multi-valued parameter
+model.run_document_query("Observatory::HeavierThan", bindings={"threshold": 10.0})
+
+markdown = model.render_document("Observatory::SubsystemReport")
+```
+
+A binding value is an element (`opensysml.ElementRef("Demo::optics")`), a `str`, an `int`, a
+`float`, a `bool`, or a list of these; anything else raises `DocumentQueryError` before anything
+is sent. Cell values come back with those Python types, an element as `ElementRef` and an
+unbounded multiplicity as `opensysml.INFINITY`. `render_document` takes no bindings, because a
+document binds its queries' parameters in the model; it returns the Markdown text, identical to
+what `sysml -render-document` writes.
+
+An unknown query or document raises `SymbolNotFoundError`, a wrong binding raises
+`InvalidRequestError` naming the parameter, and both calls are capability-negotiated
+(`document_query` and `render_document`) the same way as everything above.
+
 ---
 
 Next: [10. Troubleshooting](10-troubleshooting.md).
