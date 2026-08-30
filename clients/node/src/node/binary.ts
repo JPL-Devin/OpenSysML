@@ -480,6 +480,11 @@ export async function downloadBinary(options: DownloadOptions = {}): Promise<str
     );
   }
 
+  if (process.platform !== "win32") {
+    // Before it is in place, so the cache is never a file no one may run.
+    // The cache is this user's, so no one else needs it.
+    await chmod(temporaryPath, 0o700);
+  }
   try {
     // rename overwrites the cache being replaced, and is atomic within a directory.
     await rename(temporaryPath, binaryPath);
@@ -490,10 +495,6 @@ export async function downloadBinary(options: DownloadOptions = {}): Promise<str
         `${describe(cause)}. A running service holding that file is the usual cause.`,
       { cause },
     );
-  }
-  if (process.platform !== "win32") {
-    // The cache is this user's, so no one else needs it.
-    await chmod(binaryPath, 0o700);
   }
   await writeMetadata(version, expected, settled);
   return binaryPath;
