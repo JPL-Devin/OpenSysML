@@ -803,10 +803,10 @@ func appendSelected(result *sequence, source sequence, index int) {
 }
 
 func (e *executor) consumeVisit() bool {
-	if e.remaining <= 0 {
+	if e.budget.remaining <= 0 {
 		return false
 	}
-	e.remaining--
+	e.budget.remaining--
 	return true
 }
 

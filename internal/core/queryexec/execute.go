@@ -3,6 +3,7 @@ package queryexec
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -22,10 +23,14 @@ type Context struct {
 
 // Options controls bounded query execution.
 type Options struct {
-	VisitBudget int
+	VisitBudget     int
+	InvocationDepth int
 }
 
-const defaultVisitBudget = 100_000
+const (
+	defaultVisitBudget     = 100_000
+	defaultInvocationDepth = 64
+)
 
 type sequence struct {
 	values  []Value
@@ -33,12 +38,19 @@ type sequence struct {
 	cells   [][]Cell
 }
 
+type visitBudget struct {
+	remaining int
+}
+
 type executor struct {
 	definition queryplan.Definition
 	context    Context
 	reader     *query.PropertyReader
 	bindings   map[string]sequence
-	remaining  int
+	program    map[string]queryplan.Definition
+	budget     *visitBudget
+	depthLeft  int
+	stack      []string
 }
 
 // Execute evaluates a compiled entry query into an immutable ordered row set.
@@ -54,15 +66,27 @@ func Execute(program *queryplan.Program, context Context, bindings Bindings, opt
 	if budget == 0 {
 		budget = defaultVisitBudget
 	}
-	if budget < 0 {
+	depth := options.InvocationDepth
+	if depth == 0 {
+		depth = defaultInvocationDepth
+	}
+	if budget < 0 || depth < 0 {
 		return nil, &Error{Kind: ErrorInvalidContext, Query: definition.Name()}
+	}
+	definitions := program.Definitions()
+	compiled := make(map[string]queryplan.Definition, len(definitions))
+	for _, compiledDefinition := range definitions {
+		compiled[compiledDefinition.Name()] = compiledDefinition
 	}
 	execution := &executor{
 		definition: definition,
 		context:    context,
 		reader:     query.NewPropertyReader(context.Index, context.Resolver, context.Model),
 		bindings:   make(map[string]sequence),
-		remaining:  budget,
+		program:    compiled,
+		budget:     &visitBudget{remaining: budget},
+		depthLeft:  depth,
+		stack:      []string{definition.Name()},
 	}
 	if err := execution.bind(bindings); err != nil {
 		return nil, err
@@ -258,7 +282,9 @@ func (e *executor) evaluate(expression queryplan.Expression) (sequence, error) {
 		return e.evaluateOrderBy(expression)
 	case queryplan.OperationProject:
 		return e.evaluateProject(expression)
-	case queryplan.OperationInvoke, queryplan.OperationRelatedElements:
+	case queryplan.OperationInvoke:
+		return e.evaluateInvoke(expression)
+	case queryplan.OperationRelatedElements:
 		return sequence{}, &Error{
 			Kind:      ErrorUnsupportedOperation,
 			Query:     e.definition.Name(),
@@ -273,6 +299,71 @@ func (e *executor) evaluate(expression queryplan.Expression) (sequence, error) {
 			Origin:    expression.Origin(),
 		}
 	}
+}
+
+func (e *executor) evaluateInvoke(expression queryplan.Expression) (sequence, error) {
+	target := expression.Target()
+	definition, ok := e.program[target]
+	if !ok {
+		return sequence{}, &Error{
+			Kind:      ErrorUnknownInvocation,
+			Query:     e.definition.Name(),
+			Operation: expression.Operation(),
+			Target:    target,
+			Origin:    expression.Origin(),
+		}
+	}
+	if slices.Contains(e.stack, target) {
+		return sequence{}, &Error{
+			Kind:      ErrorInvocationCycle,
+			Query:     e.definition.Name(),
+			Operation: expression.Operation(),
+			Target:    target,
+			Path:      append(append([]string(nil), e.stack...), target),
+			Origin:    expression.Origin(),
+		}
+	}
+	if e.depthLeft <= 0 {
+		return sequence{}, &Error{
+			Kind:      ErrorInvocationDepth,
+			Query:     e.definition.Name(),
+			Operation: expression.Operation(),
+			Target:    target,
+			Origin:    expression.Origin(),
+		}
+	}
+	bindings := make(Bindings, len(expression.Arguments()))
+	for _, argument := range expression.Arguments() {
+		value, err := e.evaluate(argument.Value)
+		if err != nil {
+			return sequence{}, err
+		}
+		if len(value.columns) > 0 {
+			return sequence{}, e.invalidArgument(expression, argument.Name, "projected row set")
+		}
+		bindings[argument.Name] = value.values
+	}
+	callee := &executor{
+		definition: definition,
+		context:    e.context,
+		reader:     e.reader,
+		bindings:   make(map[string]sequence),
+		program:    e.program,
+		budget:     e.budget,
+		depthLeft:  e.depthLeft - 1,
+		stack:      append(append([]string(nil), e.stack...), target),
+	}
+	if err := callee.bind(bindings); err != nil {
+		return sequence{}, err
+	}
+	result, err := callee.evaluate(definition.Expression())
+	if err != nil {
+		return sequence{}, err
+	}
+	if err := callee.validateResult(result); err != nil {
+		return sequence{}, err
+	}
+	return result, nil
 }
 
 func (e *executor) evaluateLiteral(expression queryplan.Expression) (sequence, error) {
