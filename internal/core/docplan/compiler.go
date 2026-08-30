@@ -72,10 +72,11 @@ func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Res
 		return nil, err
 	}
 	return &Plan{
-		name:    name,
-		title:   title,
-		content: content,
-		origin:  provenance.Symbol(entry),
+		compiled: true,
+		name:     name,
+		title:    title,
+		content:  content,
+		origin:   provenance.Symbol(entry),
 	}, nil
 }
 
@@ -94,7 +95,6 @@ func libraryBase(index *symbols.Index, fqn string) *symbols.Symbol {
 // definition or a section usage.
 func (c *compiler) compileMembers(owner *symbols.Symbol) ([]Content, error) {
 	content := make([]Content, 0)
-	local := localMemberSet(owner)
 	for _, member := range c.effectiveMembers(owner) {
 		if member.Kind == symbols.SymbolPartUsage && c.isContent(member) {
 			node, err := c.compileContent(member)
@@ -104,7 +104,7 @@ func (c *compiler) compileMembers(owner *symbols.Symbol) ([]Content, error) {
 			content = append(content, node)
 			continue
 		}
-		if local[member] {
+		if !c.index.Library(member) {
 			if err := c.rejectStructural(owner, member); err != nil {
 				return nil, err
 			}
@@ -361,8 +361,17 @@ func (c *compiler) compileQueryRef(owner *symbols.Symbol) (*QueryRef, error) {
 	}, nil
 }
 
-// typingTarget resolves the declared type of a usage.
+// typingTarget resolves the declared type of a usage, following redefinition
+// lineage when the declaration omits an explicit type.
 func (c *compiler) typingTarget(sym *symbols.Symbol) *symbols.Symbol {
+	return c.typingTargetSeen(sym, make(map[*symbols.Symbol]bool))
+}
+
+func (c *compiler) typingTargetSeen(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) *symbols.Symbol {
+	if sym == nil || seen[sym] {
+		return nil
+	}
+	seen[sym] = true
 	for _, relationship := range semantics.RelationshipsOf(sym) {
 		if relationship == nil || relationship.Kind != ast.RelTyping || relationship.Target == nil {
 			continue
@@ -379,6 +388,11 @@ func (c *compiler) typingTarget(sym *symbols.Symbol) *symbols.Symbol {
 			if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
 				return canonical
 			}
+		}
+	}
+	for _, target := range c.model.RedefinedFeatures(sym) {
+		if resolved := c.typingTargetSeen(target, seen); resolved != nil {
+			return resolved
 		}
 	}
 	return nil
@@ -705,10 +719,27 @@ func (c *compiler) optionalText(member *symbols.Symbol, attribute string) (strin
 		if candidate.Kind != symbols.SymbolAttributeUsage || c.effectiveName(candidate) != attribute {
 			continue
 		}
-		declaration, ok := candidate.Decl.(*ast.Usage)
-		if !ok || declaration.Value == nil {
-			continue // an unvalued declaration, such as the vocabulary base's
+		text, stated, err := c.attributeText(member, candidate, attribute, make(map[*symbols.Symbol]bool))
+		if err != nil || stated {
+			return text, stated, err
 		}
+	}
+	return "", false, nil
+}
+
+// attributeText reads a declaration's string value, following redefinition
+// lineage when the declaration itself is unvalued.
+func (c *compiler) attributeText(
+	member *symbols.Symbol,
+	candidate *symbols.Symbol,
+	attribute string,
+	seen map[*symbols.Symbol]bool,
+) (string, bool, error) {
+	if candidate == nil || seen[candidate] {
+		return "", false, nil
+	}
+	seen[candidate] = true
+	if declaration, ok := candidate.Decl.(*ast.Usage); ok && declaration.Value != nil {
 		literal, ok := declaration.Value.(*ast.LiteralString)
 		if !ok {
 			return "", false, c.invalidAttribute(member, candidate, attribute)
@@ -718,6 +749,12 @@ func (c *compiler) optionalText(member *symbols.Symbol, attribute string) (strin
 			return "", false, c.invalidAttribute(member, candidate, attribute)
 		}
 		return text, true, nil
+	}
+	for _, target := range c.model.RedefinedFeatures(candidate) {
+		text, stated, err := c.attributeText(member, target, attribute, seen)
+		if err != nil || stated {
+			return text, stated, err
+		}
 	}
 	return "", false, nil
 }
@@ -737,16 +774,6 @@ func (c *compiler) contentName(member *symbols.Symbol) string {
 		return fqn
 	}
 	return member.Name
-}
-
-// localMemberSet identifies a scope's own declarations for local-only checks.
-func localMemberSet(sym *symbols.Symbol) map[*symbols.Symbol]bool {
-	members := localMembers(sym)
-	set := make(map[*symbols.Symbol]bool, len(members))
-	for _, member := range members {
-		set[member] = true
-	}
-	return set
 }
 
 // localMembers returns a scope's named and anonymous declarations in source order.

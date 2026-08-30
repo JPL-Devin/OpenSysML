@@ -286,6 +286,10 @@ func TestEvaluateRequiresPlanAndContext(t *testing.T) {
 	if !errors.As(err, &evaluation) || evaluation.Kind != ErrorInvalidPlan {
 		t.Fatalf("error = %v", err)
 	}
+	_, err = Evaluate(&docplan.Plan{}, queryexec.Context{}, queryexec.Options{})
+	if !errors.As(err, &evaluation) || evaluation.Kind != ErrorInvalidPlan {
+		t.Fatalf("error = %v", err)
+	}
 	fixture := loadEvaluationFixtureFile(t, "testdata/telescope_document.sysml")
 	plan := fixture.plan(t, "MassReport")
 	_, err = Evaluate(plan, queryexec.Context{}, queryexec.Options{})

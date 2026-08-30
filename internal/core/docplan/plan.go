@@ -177,11 +177,15 @@ func cloneContent(content []Content) []Content {
 
 // Plan is an immutable compiled document definition.
 type Plan struct {
-	name    string
-	title   string
-	content []Content
-	origin  provenance.Origin
+	compiled bool
+	name     string
+	title    string
+	content  []Content
+	origin   provenance.Origin
 }
+
+// Compiled reports whether the plan was produced by Compile.
+func (p *Plan) Compiled() bool { return p != nil && p.compiled }
 
 // Name returns the fully-qualified name of the document definition.
 func (p *Plan) Name() string { return p.name }

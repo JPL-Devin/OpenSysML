@@ -15,7 +15,7 @@ func Evaluate(
 	context queryexec.Context,
 	options queryexec.Options,
 ) (*Document, error) {
-	if plan == nil {
+	if !plan.Compiled() {
 		return nil, &Error{Kind: ErrorInvalidPlan}
 	}
 	if context.Index == nil || context.Resolver == nil || context.Model == nil {

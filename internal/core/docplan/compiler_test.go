@@ -636,6 +636,68 @@ func TestCompileAnonymousContentAndBindingRedefinition(t *testing.T) {
 	}
 }
 
+func TestCompileFollowsRedefinitionLineage(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part telescope;
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part def TemplateReport :> Document {
+			attribute redefines title = "Template";
+		}
+		part def NameList :> List {
+			calc names : Names {
+				in root = telescope;
+			}
+		}
+		part def DerivedReport :> TemplateReport {
+			attribute redefines title;
+			part items : NameList {
+				calc redefines names {
+					in root = telescope;
+				}
+			}
+		}
+	`)
+	plan := fixture.mustCompile(t, "DerivedReport")
+	if plan.Title() != "Template" {
+		t.Fatalf("title = %q", plan.Title())
+	}
+	list := plan.Content()[0]
+	if list.Query() == nil || list.Query().Entry() != "Observatory::Names" {
+		t.Fatalf("list query = %+v", list.Query())
+	}
+}
+
+func TestCompileReportsInheritedInvalidContent(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part telescope;
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part def BadSection :> Section {
+			attribute redefines title = "Bad";
+			calc stray : Names {
+				in root = telescope;
+			}
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part s : BadSection;
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	var planning *Error
+	if !errors.As(err, &planning) || planning.Kind != ErrorInvalidContent {
+		t.Fatalf("error = %+v", err)
+	}
+	if planning.Content != "Observatory::BadSection::stray" {
+		t.Fatalf("content = %q", planning.Content)
+	}
+}
+
 func TestCompileReportsNonLiteralTitle(t *testing.T) {
 	fixture := loadPlanningFixture(t, `
 		part def Report :> Document {
