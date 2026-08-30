@@ -15,74 +15,16 @@ pub fn compare(expect: &Expect, actual: &Value) -> Vec<String> {
         compare_value(response, actual, "$", &mut failures);
     }
     for path in &expect.non_empty {
-        match lookup(actual, path) {
-            Some(value) if !is_default(value) => {}
-            Some(_) => failures.push(format!("{path} is empty")),
-            None => failures.push(format!("{path} is absent")),
-        }
+        check_non_empty(path, actual, &mut failures);
     }
     for path in &expect.absent {
-        if let Some(value) = lookup(actual, path) {
-            if !is_default(value) {
-                failures.push(format!("{path} is not absent/default: {value}"));
-            }
-        }
+        check_absent(path, actual, &mut failures);
     }
     for (path, needle) in &expect.contains {
-        match lookup(actual, path) {
-            Some(Value::String(value)) if value.contains(needle) => {}
-            Some(value) => failures.push(format!("{path}={value} does not contain {needle:?}")),
-            None => failures.push(format!("{path} is absent")),
-        }
+        check_contains(path, needle, actual, &mut failures);
     }
     for (path, needles) in &expect.contains_all {
-        if path.split('.').any(|segment| segment == "*") {
-            let values = values_at(actual, path);
-            if values.is_empty() {
-                failures.push(format!("{path} is absent or not text/list"));
-            } else {
-                for needle in needles {
-                    if !values
-                        .iter()
-                        .any(|value| value.as_str().is_some_and(|text| text == needle))
-                    {
-                        failures.push(format!("{path} does not contain member {needle:?}"));
-                    }
-                }
-            }
-            continue;
-        }
-        match lookup(actual, path) {
-            Some(Value::String(value)) => {
-                for needle in needles {
-                    if !value.contains(needle) {
-                        failures.push(format!("{path} does not contain {needle:?}"));
-                    }
-                }
-            }
-            Some(Value::Array(values)) => {
-                for needle in needles {
-                    if !values.iter().any(|value| value == needle) {
-                        failures.push(format!("{path} does not contain member {needle:?}"));
-                    }
-                }
-            }
-            Some(_) | None => {
-                let values = values_at(actual, path);
-                if values.is_empty() {
-                    failures.push(format!("{path} is absent or not text/list"));
-                } else {
-                    for needle in needles {
-                        if !values
-                            .iter()
-                            .any(|value| value.as_str().is_some_and(|text| text == needle))
-                        {
-                            failures.push(format!("{path} does not contain member {needle:?}"));
-                        }
-                    }
-                }
-            }
-        }
+        check_contains_all(path, needles, actual, &mut failures);
     }
     for (path, wanted) in &expect.counts {
         check_count(path, *wanted, false, actual, &mut failures);
@@ -91,6 +33,71 @@ pub fn compare(expect: &Expect, actual: &Value) -> Vec<String> {
         check_count(path, *wanted, true, actual, &mut failures);
     }
     failures
+}
+
+fn check_non_empty(path: &str, actual: &Value, failures: &mut Vec<String>) {
+    match lookup(actual, path) {
+        Some(value) if !is_default(value) => {}
+        Some(_) => failures.push(format!("{path} is empty")),
+        None => failures.push(format!("{path} is absent")),
+    }
+}
+
+fn check_absent(path: &str, actual: &Value, failures: &mut Vec<String>) {
+    if let Some(value) = lookup(actual, path) {
+        if !is_default(value) {
+            failures.push(format!("{path} is not absent/default: {value}"));
+        }
+    }
+}
+
+fn check_contains(path: &str, needle: &str, actual: &Value, failures: &mut Vec<String>) {
+    match lookup(actual, path) {
+        Some(Value::String(value)) if value.contains(needle) => {}
+        Some(value) => failures.push(format!("{path}={value} does not contain {needle:?}")),
+        None => failures.push(format!("{path} is absent")),
+    }
+}
+
+fn check_contains_all(path: &str, needles: &[String], actual: &Value, failures: &mut Vec<String>) {
+    if path.split('.').any(|segment| segment == "*") {
+        check_members_at(path, needles, actual, failures);
+        return;
+    }
+    match lookup(actual, path) {
+        Some(Value::String(value)) => {
+            for needle in needles {
+                if !value.contains(needle) {
+                    failures.push(format!("{path} does not contain {needle:?}"));
+                }
+            }
+        }
+        Some(Value::Array(values)) => {
+            for needle in needles {
+                if !values.iter().any(|value| value == needle) {
+                    failures.push(format!("{path} does not contain member {needle:?}"));
+                }
+            }
+        }
+        Some(_) | None => check_members_at(path, needles, actual, failures),
+    }
+}
+
+/// Every needle must be one of the strings the path collects across wildcards.
+fn check_members_at(path: &str, needles: &[String], actual: &Value, failures: &mut Vec<String>) {
+    let values = values_at(actual, path);
+    if values.is_empty() {
+        failures.push(format!("{path} is absent or not text/list"));
+        return;
+    }
+    for needle in needles {
+        if !values
+            .iter()
+            .any(|value| value.as_str().is_some_and(|text| text == needle))
+        {
+            failures.push(format!("{path} does not contain member {needle:?}"));
+        }
+    }
 }
 
 fn check_count(
