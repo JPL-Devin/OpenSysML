@@ -226,8 +226,9 @@ it — same origin as the binary — and remains behind
 
 ### Pinned release digests
 
-`PINNED_SHA256` in `clients/python/opensysml/binary.py` still covers the releases
-published before signing existed, and it stays the override: where a pin exists
+The table in `clients/release-digests.json`, which every client ships a synced
+copy of, still covers the releases published before signing existed, and it
+stays the override: where a pin exists
 it wins, and a verified manifest that disagrees with a pin is an error rather
 than a downgrade. **Per release there is now nothing to do** — pinning a release
 signed by the pipeline is optional. Pinning still works, and is worth doing for
@@ -360,7 +361,7 @@ package.
 `opensysml` does not ship the service: it downloads a `sysml-grpc` binary at
 runtime for whatever release the caller names (`version=`,
 `$OPENSYSML_GRPC_VERSION`, or `latest`), verifying it against the digest it pins
-for that release (`PINNED_SHA256` in `clients/python/opensysml/binary.py`) or, for a
+for that release (its copy of `clients/release-digests.json`) or, for a
 release it pins nothing for, against the digest in the release's signed
 `SHA256SUMS.txt` (see [the signed checksum manifest](#the-signed-checksum-manifest)),
 which is why a core release published after a client release needs no new client
