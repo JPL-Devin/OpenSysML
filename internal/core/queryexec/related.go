@@ -101,7 +101,11 @@ func (e *executor) evaluateRelated(expression queryplan.Expression) (sequence, e
 		if next.depth >= maxDepth {
 			continue
 		}
-		for _, neighbor := range e.relatedNeighbors(kind, direction, next.sym) {
+		neighbors, err := e.relatedNeighbors(expression, kind, direction, next.sym)
+		if err != nil {
+			return sequence{}, err
+		}
+		for _, neighbor := range neighbors {
 			key := symbols.KeyOf(neighbor)
 			if _, duplicate := seen[key]; duplicate {
 				continue
@@ -133,16 +137,19 @@ func supportedRelationship(kind string) bool {
 // sym in the given direction, in declaration order. Outgoing lineage reads
 // sym's own declared relationships; every other combination reads the edge
 // tables built from the workspace's declarations.
-func (e *executor) relatedNeighbors(kind, direction string, sym *symbols.Symbol) []*symbols.Symbol {
+func (e *executor) relatedNeighbors(expression queryplan.Expression, kind, direction string, sym *symbols.Symbol) ([]*symbols.Symbol, error) {
 	if relKind, lineage := lineageKinds[kind]; lineage && direction == directionOutgoing {
-		return e.lineageTargets(sym, relKind)
+		return e.lineageTargets(sym, relKind), nil
 	}
-	edges := e.relationshipEdges(kind)
+	edges, err := e.relationshipEdges(expression, kind)
+	if err != nil {
+		return nil, err
+	}
 	table := edges.outgoing
 	if direction == directionIncoming {
 		table = edges.incoming
 	}
-	return table[symbols.KeyOf(sym)]
+	return table[symbols.KeyOf(sym)], nil
 }
 
 // lineageTargets resolves the targets of sym's declared relationships of the
@@ -162,34 +169,45 @@ func (e *executor) lineageTargets(sym *symbols.Symbol, kind ast.RelationshipKind
 
 // relationshipEdges returns the edge tables for one relationship kind,
 // building them on first use by scanning the workspace's documents in sorted
-// name order and each document's symbols in declaration order.
-func (e *executor) relationshipEdges(kind string) *relationshipEdges {
+// name order and each document's symbols in declaration order. Every
+// declaration examined charges the shared visit budget; a built table is
+// cached, so later traversals of the same kind read it for free.
+func (e *executor) relationshipEdges(expression queryplan.Expression, kind string) (*relationshipEdges, error) {
 	if cached, ok := e.related.entries[kind]; ok {
-		return cached
+		return cached, nil
 	}
 	edges := &relationshipEdges{
 		outgoing: make(map[symbols.ElementKey][]*symbols.Symbol),
 		incoming: make(map[symbols.ElementKey][]*symbols.Symbol),
 	}
 	for _, document := range e.context.Index.WorkspaceDocuments() {
-		e.scanScope(edges, kind, e.context.Index.DocumentRoot(document))
+		if err := e.scanScope(expression, edges, kind, e.context.Index.DocumentRoot(document)); err != nil {
+			return nil, err
+		}
 	}
 	e.related.entries[kind] = edges
-	return edges
+	return edges, nil
 }
 
 // scanScope records the edges of one relationship kind that the declarations
-// in scope and its nested scopes state.
-func (e *executor) scanScope(edges *relationshipEdges, kind string, scope *symbols.Scope) {
+// in scope and its nested scopes state, charging the visit budget per
+// declaration examined.
+func (e *executor) scanScope(expression queryplan.Expression, edges *relationshipEdges, kind string, scope *symbols.Scope) error {
 	if scope == nil {
-		return
+		return nil
 	}
 	for _, member := range scope.AllMembers() {
+		if !e.consumeVisit() {
+			return e.budgetError(expression)
+		}
 		e.scanSymbol(edges, kind, member)
 	}
 	for _, child := range scope.Children() {
-		e.scanScope(edges, kind, child)
+		if err := e.scanScope(expression, edges, kind, child); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // scanSymbol records the edges the given symbol's declaration states: the
@@ -252,7 +270,8 @@ func connectorRelationship(usage ast.UsageKind, kind string) bool {
 
 // scanSatisfaction records the edge a satisfy or verify assertion states: from
 // the subject its `by` clause names — else the element stating the assertion —
-// to the requirement it references.
+// to the requirement it references, or to the assertion itself when it
+// declares its requirement (`satisfy requirement r by v { ... }`).
 func (e *executor) scanSatisfaction(edges *relationshipEdges, kind string, sym *symbols.Symbol) {
 	usage, ok := sym.Decl.(*ast.Usage)
 	if !ok || usage.Kind != ast.UsageSatisfy {
@@ -262,9 +281,13 @@ func (e *executor) scanSatisfaction(edges *relationshipEdges, kind string, sym *
 		return
 	}
 	var requirement, subject *symbols.Symbol
+	references := false
 	for _, rel := range usage.Relationships {
 		if rel == nil || rel.Target == nil {
 			continue
+		}
+		if rel.Kind == ast.RelSubsets {
+			references = true
 		}
 		target, ok := e.context.Resolver.ResolveTarget(sym.OwnerScope, rel.Target)
 		if !ok || target == nil {
@@ -277,13 +300,26 @@ func (e *executor) scanSatisfaction(edges *relationshipEdges, kind string, sym *
 			subject = target
 		}
 	}
+	if !references {
+		requirement = sym
+	}
 	if subject == nil && sym.OwnerScope != nil {
 		subject = sym.OwnerScope.Owner()
+		// A verify lives in the objective of a verification case; the case is
+		// the verifier.
+		if subject != nil && isObjectiveUsage(subject.Decl) && subject.OwnerScope != nil {
+			subject = subject.OwnerScope.Owner()
+		}
 	}
 	if subject == nil || requirement == nil {
 		return
 	}
 	addEdge(edges, subject, requirement)
+}
+
+func isObjectiveUsage(decl ast.Node) bool {
+	usage, ok := decl.(*ast.Usage)
+	return ok && usage.Kind == ast.UsageObjective
 }
 
 // addEdge records one source-to-target edge in both directions.

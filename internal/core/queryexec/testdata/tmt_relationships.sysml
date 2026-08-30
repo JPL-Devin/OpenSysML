@@ -37,6 +37,7 @@ package Observatory {
 	part scienceComputer : Computer;
 	allocation processing allocate telescope.instrumentCluster to scienceComputer;
 
+	requirement def DataRequirement;
 	requirement massRequirement;
 	requirement pointingRequirement;
 
@@ -49,7 +50,27 @@ package Observatory {
 
 	verification def MassTest;
 	verification massVerification : MassTest {
-		verify massRequirement;
+		objective {
+			verify massRequirement;
+		}
+	}
+
+	part mountControlStation : Computer;
+	part dataArchive {
+		satisfy requirement archiveRequirement : DataRequirement by scienceComputer;
+	}
+	part fieldStation {
+		satisfy requirement by mountControlStation;
+	}
+	verification archiveVerification : MassTest {
+		objective archiveObjective {
+			verify requirement archiveCheck by scienceComputer;
+		}
+	}
+	verification fieldVerification : MassTest {
+		objective {
+			verify requirement by mountControlStation;
+		}
 	}
 
 	calc def Related :> Query {

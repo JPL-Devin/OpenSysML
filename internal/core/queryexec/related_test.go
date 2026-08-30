@@ -145,10 +145,58 @@ func TestExecuteRelatedConnectionsAllocationsAndAssertions(t *testing.T) {
 		[]string{"massVerification"})
 }
 
+func TestExecuteRelatedDeclaredRequirements(t *testing.T) {
+	fixture := loadExecutionFixtureFile(t, "testdata/tmt_relationships.sysml")
+
+	// A satisfy or verify assertion that declares its requirement relates the
+	// subject to the declared requirement usage itself.
+	assertRelated(t, fixture, "scienceComputer", "satisfaction", "outgoing", 1,
+		[]string{"dataArchive::archiveRequirement"})
+	assertRelated(t, fixture, "dataArchive::archiveRequirement", "satisfaction", "incoming", 1,
+		[]string{"scienceComputer"})
+	assertRelated(t, fixture, "scienceComputer", "verification", "outgoing", 1,
+		[]string{"archiveVerification::archiveObjective::archiveCheck"})
+	assertRelated(t, fixture, "archiveVerification::archiveObjective::archiveCheck", "verification", "incoming", 1,
+		[]string{"scienceComputer"})
+
+	// An anonymous declaration form traverses in both directions too.
+	for _, kind := range []string{"satisfaction", "verification"} {
+		subject := fixture.symbol(t, "mountControlStation")
+		outgoing, err := fixture.related(t, subject, kind, "outgoing", 1, Options{})
+		if err != nil {
+			t.Fatalf("%s outgoing: %v", kind, err)
+		}
+		if len(outgoing.Rows()) != 1 {
+			t.Fatalf("%s outgoing rows = %v", kind, rowNames(outgoing))
+		}
+		anonymous, _ := outgoing.Rows()[0].Element().Element()
+		incoming, err := fixture.related(t, anonymous, kind, "incoming", 1, Options{})
+		if err != nil {
+			t.Fatalf("%s incoming: %v", kind, err)
+		}
+		names := rowNames(incoming)
+		if len(names) != 1 || names[0] != "Observatory::mountControlStation" {
+			t.Fatalf("%s incoming rows = %v", kind, names)
+		}
+	}
+}
+
 func TestExecuteRelatedConsumesTheVisitBudget(t *testing.T) {
 	fixture := loadExecutionFixtureFile(t, "testdata/tmt_relationships.sysml")
 	_, err := fixture.related(t, fixture.symbol(t, "instruments"), "subsetting", "incoming", 1,
 		Options{VisitBudget: 1})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorVisitBudget {
+		t.Fatalf("visit budget error = %v", err)
+	}
+}
+
+func TestExecuteRelatedChargesTableConstructionToTheVisitBudget(t *testing.T) {
+	fixture := loadExecutionFixtureFile(t, "testdata/tmt_relationships.sysml")
+	// Building the edge table scans the workspace, so a tiny budget fails even
+	// when the source has no matching edges.
+	_, err := fixture.related(t, fixture.symbol(t, "Subsystem"), "connection", "incoming", 1,
+		Options{VisitBudget: 3})
 	var executionError *Error
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorVisitBudget {
 		t.Fatalf("visit budget error = %v", err)
