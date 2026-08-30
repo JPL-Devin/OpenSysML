@@ -49,6 +49,7 @@ class Opensysml < Formula
 
   def install
     bin.install "sysml", "sysml-lsp"
+    man1.install Dir["share/man/man1/*.1"]
   end
 
   test do
@@ -56,6 +57,9 @@ class Opensysml < Formula
     # is that tag without the leading "v", scanned from the URL.
     assert_match version.to_s, shell_output("#{bin}/sysml --version")
     assert_match version.to_s, shell_output("#{bin}/sysml-lsp --version")
+
+    # The manual pages ship in the bundle archive, so `man sysml` works.
+    assert_predicate man1/"sysml.1", :exist?
 
     # Evaluate an expression non-interactively: exercises lexer, parser, and runtime.
     assert_match "= 8", shell_output("#{bin}/sysml -e '5 + 3'")

@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc man man-check install-tree conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -33,6 +33,21 @@ PYTHON ?= python3
 export PYTHON
 SITE_DIR := site
 
+# The commands whose manual pages are generated and shipped, in section 1.
+COMMANDS := sysml sysml-lsp sysml-grpc
+MAN_DIR := man/man1
+MAN_PAGES := $(addprefix $(MAN_DIR)/,$(addsuffix .1,$(COMMANDS)))
+
+# Installation paths, as a distribution's packaging expects to set them.
+DESTDIR ?=
+prefix ?= /usr/local
+exec_prefix ?= $(prefix)
+bindir ?= $(exec_prefix)/bin
+datarootdir ?= $(prefix)/share
+mandir ?= $(datarootdir)/man
+man1dir ?= $(mandir)/man1
+INSTALL ?= install
+
 all: build test python-test ## Build and test everything
 
 build: build-sysml build-lsp build-grpc ## Build all binaries
@@ -54,6 +69,27 @@ build-grpc: ## Build sysml-grpc binary
 	@mkdir -p $(BIN_DIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/sysml-grpc ./cmd/sysml-grpc
 	@echo "✓ Built $(BIN_DIR)/sysml-grpc ($(VERSION))"
+
+man: ## Regenerate the shipped manual pages from each command's description
+	@echo "Writing the manual pages..."
+	@mkdir -p $(MAN_DIR)
+	@for cmd in $(COMMANDS); do \
+		go run ./cmd/$$cmd -man > $(MAN_DIR)/$$cmd.1 || exit 1; \
+	done
+	@echo "✓ Wrote $(MAN_PAGES)"
+
+man-check: ## Verify the shipped pages are current and formatter-clean
+	@echo "Checking the manual pages..."
+	go test -count=1 -run 'TestTheShippedManualPage|TestTheManualPage' ./cmd/sysml ./cmd/sysml-lsp ./cmd/sysml-grpc
+	@# mandoc is the strictest reader; groff is the one always at hand.
+	@if command -v mandoc >/dev/null 2>&1; then \
+		mandoc -T lint -W warning $(MAN_PAGES) || exit 1; \
+	elif command -v groff >/dev/null 2>&1; then \
+		groff -man -Tutf8 -ww -z $(MAN_PAGES) || exit 1; \
+	else \
+		echo "note: neither mandoc nor groff is installed; the pages were not formatted"; \
+	fi
+	@echo "✓ Manual pages are current"
 
 conformance: ## Run the language-independent conformance suite against sysml-grpc
 	@echo "Running the conformance suite..."
@@ -115,6 +151,17 @@ install: build ## Install binaries to $GOPATH/bin
 	go install -ldflags "$(LDFLAGS)" ./cmd/sysml-lsp
 	go install -ldflags "$(LDFLAGS)" ./cmd/sysml-grpc
 	@echo "✓ Installed"
+
+# What a distribution's package build calls: staged under DESTDIR, into the
+# GNU-conventional paths, binaries and manual pages together.
+install-tree: build ## Install binaries and manual pages under DESTDIR/prefix
+	@echo "Installing to $(DESTDIR)$(prefix)..."
+	$(INSTALL) -d $(DESTDIR)$(bindir) $(DESTDIR)$(man1dir)
+	@for cmd in $(COMMANDS); do \
+		$(INSTALL) -m 0755 $(BIN_DIR)/$$cmd $(DESTDIR)$(bindir)/$$cmd || exit 1; \
+		$(INSTALL) -m 0644 $(MAN_DIR)/$$cmd.1 $(DESTDIR)$(man1dir)/$$cmd.1 || exit 1; \
+	done
+	@echo "✓ Installed into $(DESTDIR)$(bindir) and $(DESTDIR)$(man1dir)"
 
 version: ## Show version information
 	@echo "Version:    $(VERSION)"

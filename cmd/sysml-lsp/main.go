@@ -13,6 +13,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/lsp"
+	"github.com/Open-MBEE/OpenSysML/internal/usage"
 )
 
 var (
@@ -55,27 +56,22 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	fs.Usage = func() { printUsage(fs.Output(), fs) }
 
-	// -h/-help are defined here so that help asked for is a result on stdout.
-	// -stdio names the only transport this server has: the standard language
-	// clients pass it, so it is accepted and documented rather than rejected.
-	var showVersion, showHelp, strict bool
-	fs.BoolVar(&strict, "strict", false,
-		"Serve strict conformance from the start: notation no pinned SysML v2 production admits is an error (a client may also set the strictConformance setting)")
-	fs.Bool("stdio", false, "Serve over stdin/stdout (the only transport; accepted for clients that name it)")
-	fs.BoolVar(&showVersion, "version", false, "Show version information")
-	fs.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
-	fs.BoolVar(&showHelp, "help", false, "Show this help and exit")
-	fs.BoolVar(&showHelp, "h", false, "Show this help (shorthand)")
+	opts := registerFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		// Parse has already reported the flag and printed the usage on stderr.
 		return exitUnservable
 	}
 
-	if showHelp {
+	if opts.showHelp {
 		printUsage(stdout, fs)
 		return exitServed
 	}
-	if showVersion {
+	// The page asked for is the result of the run, like the help.
+	if opts.showMan {
+		doc().WriteRoff(stdout, fs, usage.DefaultManMeta())
+		return exitServed
+	}
+	if opts.showVersion {
 		fmt.Fprintf(stdout, "sysml-lsp %s\n", Version)
 		fmt.Fprintf(stdout, "  Commit:     %s\n", Commit)
 		fmt.Fprintf(stdout, "  Build time: %s\n", BuildTime)
@@ -88,21 +84,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitUnservable
 	}
 
-	return serve(stderr, conformance.ModeOf(strict))
+	return serve(stderr, conformance.ModeOf(opts.strict))
 }
 
 // printUsage writes the help to w, which the caller chooses: help asked for is
 // a result, while help over a misuse belongs with the error.
 func printUsage(w io.Writer, fs *flag.FlagSet) {
-	// PrintDefaults writes to the flag set's own stream, restored afterwards.
-	previous := fs.Output()
-	fs.SetOutput(w)
-	defer fs.SetOutput(previous)
-
-	fmt.Fprintf(w, "Usage: sysml-lsp [options]\n\n")
-	fmt.Fprintf(w, "Options:\n")
-	fs.PrintDefaults()
-	fmt.Fprintf(w, "\nWith no options, %s.\n", protocolMessage)
+	doc().WriteText(w, fs)
 }
 
 // serve speaks the protocol over stdin/stdout until the client ends it, and

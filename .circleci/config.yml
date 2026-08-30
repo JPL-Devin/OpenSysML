@@ -83,6 +83,15 @@ jobs:
           name: Check documentation links
           command: python3 scripts/check-doc-links.py
 
+      # The shipped pages are generated from each command's description, so a
+      # flag added without regenerating them would ship a page for a command
+      # that no longer exists.
+      - run:
+          name: Verify the committed manual pages are current
+          command: |
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends mandoc
+            make man-check
+
       # Internal work-item labels (waves, F<n>, P<n>, K<n>/S<n>) have no public
       # referent, so they may not appear in the pages a user reads.
       - run:
@@ -1106,14 +1115,17 @@ jobs:
             
             # Bundle archives: both binaries under their plain names
             # (sysml, sysml-lsp), which is the layout a Homebrew formula or a
-            # PATH install expects. The per-binary archives above are kept
-            # unchanged so existing download links keep working.
+            # PATH install expects, with the manual pages beside them under
+            # share/man/man1 for a formula or a package to install. The
+            # per-binary archives above are kept unchanged so existing download
+            # links keep working.
             for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
               stage="stage/${platform}"
-              mkdir -p "$stage"
+              mkdir -p "$stage/share/man/man1"
               cp "sysml-${platform}" "${stage}/sysml"
               cp "sysml-lsp-${platform}" "${stage}/sysml-lsp"
-              tar czf "opensysml-${platform}.tar.gz" -C "$stage" sysml sysml-lsp
+              cp ../man/man1/*.1 "${stage}/share/man/man1/"
+              tar czf "opensysml-${platform}.tar.gz" -C "$stage" sysml sysml-lsp share
             done
             mkdir -p stage/windows-amd64
             cp sysml-windows-amd64.exe stage/windows-amd64/sysml.exe

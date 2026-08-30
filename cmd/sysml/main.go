@@ -13,9 +13,9 @@ import (
 	"github.com/chzyer/readline"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
-	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
+	"github.com/Open-MBEE/OpenSysML/internal/usage"
 )
 
 // errPrefix names the tool in the messages it writes to stderr.
@@ -103,6 +103,7 @@ func writableFile(dir, name string) (string, bool) {
 var (
 	evalExprs     stringSlice
 	showHelp      bool
+	showMan       bool
 	showVersion   bool
 	debugMode     bool
 	quietMode     bool
@@ -137,97 +138,16 @@ func main() {
 	os.Exit(runCLI())
 }
 
-// wrapped breaks text into lines of at most width characters, so a sentence the
-// help prints rather than restates still reads as a paragraph.
-func wrapped(text string, width int) string {
-	var lines []string
-	line := ""
-	for _, word := range strings.Fields(text) {
-		switch {
-		case line == "":
-			line = word
-		case len(line)+1+len(word) <= width:
-			line += " " + word
-		default:
-			lines = append(lines, line)
-			line = word
-		}
-	}
-	return strings.Join(append(lines, line), "\n")
-}
-
 // printUsage writes the help to w: the caller chooses the stream, since help
 // asked for is a result and help shown over a misuse belongs with the error.
 func printUsage(w io.Writer) {
-	// PrintDefaults writes to the flag set's own stream, restored after so it does
-	// not decide where a later error is reported.
-	previous := flag.CommandLine.Output()
-	flag.CommandLine.SetOutput(w)
-	defer flag.CommandLine.SetOutput(previous)
+	doc().WriteText(w, flag.CommandLine)
+}
 
-	fmt.Fprintf(w, "Usage: sysml [options] [file...]\n\n")
-	fmt.Fprintf(w, "Options:\n")
-	flag.PrintDefaults()
-	fmt.Fprintf(w, "\nExamples:\n")
-	fmt.Fprintf(w, "  sysml                     # Start interactive REPL\n")
-	fmt.Fprintf(w, "  sysml -e \"5 + 3\"          # Evaluate and exit\n")
-	fmt.Fprintf(w, "  sysml -e \"expr\" file.sysml # Load file, evaluate, and exit\n")
-	fmt.Fprintf(w, "  sysml file.sysml          # Load file and start REPL\n")
-	fmt.Fprintf(w, "  sysml -debug file.sysml   # Load file, reporting every diagnostic\n")
-	fmt.Fprintf(w, "  sysml -trace file.sysml   # Load file, reporting each execution step\n")
-	fmt.Fprintf(w, "\nChecking a model:\n")
-	fmt.Fprintf(w, "  sysml -constraint MassBudget model.sysml       # Evaluate one constraint and exit\n")
-	fmt.Fprintf(w, "  sysml -requirement PowerMargin model.sysml     # Evaluate one requirement and exit\n")
-	fmt.Fprintf(w, "  sysml -satisfy model.sysml                     # Evaluate every satisfaction assertion\n")
-	fmt.Fprintf(w, "  sysml -satisfy=Ctx model.sysml                 # ...only the ones Ctx states\n")
-	fmt.Fprintf(w, "  sysml -instantiate p -constraint C model.sysml  # Check C against an object of p\n")
-	fmt.Fprintf(w, "  sysml -validate model.sysml                    # Report diagnostics only\n")
-	fmt.Fprintf(w, "  sysml -validate -strict model.sysml            # ...asking whether it is conforming SysML v2\n")
-	fmt.Fprintf(w, "  sysml -calc \"Fall(3, 4)\" model.sysml           # Invoke a calculation\n")
-	fmt.Fprintf(w, "  sysml -run-query \"Heavy root=scope\" model.sysml # Execute a document query\n")
-	fmt.Fprintf(w, "  sysml -action Drive model.sysml                # Run an action to completion\n")
-	fmt.Fprintf(w, "  sysml -state Mission -advance 10 model.sysml   # Run a state machine for 10 time units\n")
-	fmt.Fprintf(w, "  sysml -satisfy -json model.sysml               # Report the verdicts as JSON\n")
-	fmt.Fprintf(w, "\nEvery run that is not a prompt exits 0 when it did what was asked, 1 when the\n")
-	fmt.Fprintf(w, "model answered false for a check, and 2 when what was asked could not be\n")
-	fmt.Fprintf(w, "carried out at all — an unreadable file, a model that did not analyse cleanly,\n")
-	fmt.Fprintf(w, "an unresolved name, a failed conversion — so a run can gate a build. What was\n")
-	fmt.Fprintf(w, "asked for is reported on stdout and what went wrong on stderr, prefixed\n")
-	fmt.Fprintf(w, "\"sysml: \" unless it locates a finding in the source. Each check flag may be\n")
-	fmt.Fprintf(w, "repeated.\n")
-	fmt.Fprintf(w, "\nConversion:\n")
-	fmt.Fprintf(w, "  sysml model.sysml -convert ttl              # SysML notation to RDF Turtle, on stdout\n")
-	fmt.Fprintf(w, "  sysml model.ttl -convert sysml              # RDF Turtle to SysML notation\n")
-	fmt.Fprintf(w, "  sysml model.sysml -convert ttl -o m.ttl     # Write the conversion to a file\n")
-	fmt.Fprintf(w, "  sysml in.txt -convert ttl -from sysml       # Name the input format explicitly\n")
-	fmt.Fprintf(w, "\nThe input format is taken from the file extension (.sysml, .kerml, .ttl) unless\n")
-	fmt.Fprintf(w, "-from names it. Converting to the format it is already in rewrites the input:\n")
-	fmt.Fprintf(w, "notation is reformatted, Turtle is normalized.\n")
-	// The notice is printed, not restated, so the help cannot drift from what a
-	// conversion reports.
-	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
-	fmt.Fprintf(w, "Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is\n")
-	fmt.Fprintf(w, "stable.\n")
-	fmt.Fprintf(w, "\nRendering a view:\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # ASCII text at a terminal\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form markdown\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -o view.mmd\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render-all rendered\n")
-	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
-	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
-	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
-	fmt.Fprintf(w, "represent — go on stderr.\n")
-	fmt.Fprintf(w, "\nFlags may be written before or after the model they apply to. A file named like\n")
-	fmt.Fprintf(w, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
-	fmt.Fprintf(w, "\nReading from standard input:\n")
-	fmt.Fprintf(w, "  cat model.sysml | sysml -validate -           # A lone - names standard input\n")
-	fmt.Fprintf(w, "  cat model.sysml | sysml - -convert ttl -from sysml\n")
-	fmt.Fprintf(w, "\nWhat was read from standard input is called <stdin> in diagnostics, and a file\n")
-	fmt.Fprintf(w, "really named \"-\" is read by naming it ./- instead.\n")
-	fmt.Fprintf(w, "\nProfiling a run:\n")
-	fmt.Fprintf(w, "  sysml -validate -memstats model.sysml            # Report what the run cost, on stderr\n")
-	fmt.Fprintf(w, "  sysml -validate -memprofile heap.out model.sysml # Write a heap profile for go tool pprof\n")
-	fmt.Fprintf(w, "  sysml -validate -cpuprofile cpu.out model.sysml  # Write a CPU profile for go tool pprof\n")
+// printMan writes the command's manual page, rendered from the same description
+// the help is, so the shipped page cannot document a different command.
+func printMan(w io.Writer) {
+	doc().WriteRoff(w, flag.CommandLine, usage.DefaultManMeta())
 }
 
 // runCLI carries out what the command line asked for and returns the exit
@@ -236,39 +156,7 @@ func runCLI() int {
 	// Usage shown over a misuse goes on the stream the error naming it goes on.
 	flag.Usage = func() { printUsage(flag.CommandLine.Output()) }
 
-	flag.BoolVar(&showHelp, "help", false, "Show this help and exit")
-	flag.BoolVar(&showHelp, "h", false, "Show this help (shorthand)")
-	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")
-	flag.Var(&evalExprs, "e", "Evaluate expression and exit (shorthand)")
-	flag.BoolVar(&showVersion, "version", false, "Show version information")
-	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
-	flag.BoolVar(&debugMode, "debug", false, "Report every diagnostic over the whole session buffer, with the pass that produced it")
-	flag.BoolVar(&quietMode, "quiet", false, "Report errors only, suppressing warnings")
-	flag.BoolVar(&strictMode, "strict", false, "Judge the model as conforming SysML v2: notation no pinned production admits is an error, not a warning")
-	flag.BoolVar(&traceMode, "trace", false, "Report each execution step: expression evaluation, calc invocation, action tokens, state transitions")
-	flag.StringVar(&convertFormat, "convert", "", "Convert the model to this format instead of running it: sysml, kerml, ttl, turtle or rdf (RDF is experimental)")
-	flag.StringVar(&queryText, "query", "", "Evaluate OSLC Query text against the model instead of running the REPL")
-	flag.StringVar(&outputPath, "output", "", "Write conversion output to this file (default: stdout)")
-	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
-	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
-	flag.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
-	flag.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
-	flag.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
-	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
-	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
-	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
-	flag.Var(&modelChecks.requirements, "requirement", "Evaluate this requirement and exit (repeatable)")
-	flag.Var(&modelChecks.satisfy, "satisfy", "Evaluate every satisfaction assertion, or with -satisfy=<name> those the named element states (repeatable)")
-	flag.BoolVar(&modelChecks.validate, "validate", false, "Analyse the model and report its diagnostics, exiting nonzero on an error")
-	flag.Var(&modelChecks.calcs, "calc", "Invoke this calculation and report what it computed, as -calc \"Fall(3, 4)\" (repeatable)")
-	flag.Var(&modelChecks.queries, "run-query", "Execute this document query and report its rows, as -run-query \"HeavySubsystems root=telescope\" (repeatable)")
-	flag.Var(&modelChecks.actions, "action", "Run this action to completion, as -action \"Drive rover1\" to run it on an object (repeatable)")
-	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
-	flag.Var(&modelChecks.advance, "advance", "Simulated time units to run each -state machine for (default: only its initial transition)")
-	flag.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
-	flag.StringVar(&cpuProfilePath, "cpuprofile", "", "Write a CPU profile of the run to this file, for go tool pprof")
-	flag.StringVar(&memProfilePath, "memprofile", "", "Write a heap profile of the run to this file, for go tool pprof")
-	flag.BoolVar(&memStats, "memstats", false, "Report on stderr what the run cost: wall time, memory allocated, memory taken from the OS")
+	registerFlags(flag.CommandLine)
 	if err := flag.CommandLine.Parse(permuteArgs(flag.CommandLine, os.Args[1:])); err != nil {
 		// flag.CommandLine exits on error; unreachable unless that changes.
 		return 2
@@ -278,6 +166,12 @@ func runCLI() int {
 	// it can be piped, and the run did what was asked.
 	if showHelp {
 		printUsage(os.Stdout)
+		return exitHolds
+	}
+
+	// The page asked for is the result of the run, like the help.
+	if showMan {
+		printMan(os.Stdout)
 		return exitHolds
 	}
 

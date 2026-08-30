@@ -155,6 +155,7 @@ echo "%load model.sysml
 | `--output <file>` | `-o` | Write the conversion or the rendering to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
+| `--man` | | Write this command's manual page, in roff, to stdout (see [Installing](../guide/01-install.md)) |
 
 Check flags, each repeatable. `-instantiate` runs first whatever order they are
 written in, so the verdicts after it are about that object:

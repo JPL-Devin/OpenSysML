@@ -24,16 +24,3 @@ func TestPrintUsageStatesTheExperimentalNotice(t *testing.T) {
 		}
 	}
 }
-
-func TestWrappedKeepsWordsWholeWithinTheWidth(t *testing.T) {
-	text := "one two three four five six seven"
-	got := wrapped(text, 10)
-	for _, line := range strings.Split(got, "\n") {
-		if len(line) > 10 {
-			t.Errorf("line %q is wider than 10", line)
-		}
-	}
-	if strings.Join(strings.Fields(got), " ") != text {
-		t.Errorf("wrapping changed the words: %q", got)
-	}
-}
