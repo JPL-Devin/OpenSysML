@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use prost::Message;
 
+use crate::binary;
 use crate::domain::{
     Capabilities, EvalOptions, Evaluation, Instantiation, Language, Model, ParseOptions,
     ServerInfo, Symbol,
@@ -506,6 +507,10 @@ fn terminate_process(process: &mut Child, grace: Duration) {
     let _ = process.wait();
 }
 
+/// Resolve the service binary: explicit path, shared cache, download, then `$PATH`.
+///
+/// A download only runs when `$OPENSYSML_GRPC_VERSION` names a release, and then it
+/// precedes `$PATH`, whose binary is of no known version.
 fn resolve_binary() -> Result<PathBuf, Error> {
     let mut looked_in = Vec::new();
     if let Ok(path) = env::var("OPENSYSML_GRPC_BINARY") {
@@ -517,31 +522,31 @@ fn resolve_binary() -> Result<PathBuf, Error> {
     } else {
         looked_in.push("$OPENSYSML_GRPC_BINARY".to_owned());
     }
-    #[cfg(windows)]
-    let home = env::var_os("USERPROFILE").unwrap_or_default();
-    #[cfg(not(windows))]
-    let home = env::var_os("HOME").unwrap_or_default();
-    let home_candidate =
-        PathBuf::from(home)
-            .join(".opensysml")
-            .join("bin")
-            .join(if cfg!(windows) {
-                "sysml-grpc.exe"
-            } else {
-                "sysml-grpc"
-            });
-    looked_in.push(home_candidate.display().to_string());
-    if home_candidate.is_file() {
-        return Ok(home_candidate);
+
+    let downloader = binary::Downloader::from_env();
+    let cached = binary::default_cache_dir().map(|dir| dir.join(binary::binary_file_name()));
+    looked_in.push(match &cached {
+        Ok(path) => path.display().to_string(),
+        Err(error) => format!("the shared cache ({error})"),
+    });
+    match (downloader, binary::env_release_version()) {
+        (Ok(downloader), Some(version)) => return downloader.ensure_binary(Some(&version)),
+        // A release was asked for and cannot be downloaded here, so no binary of
+        // an unknown version answers for it.
+        (Err(error), Some(_)) => return Err(error),
+        _ => {
+            if let Ok(path) = cached {
+                if path.is_file() {
+                    return Ok(path);
+                }
+            }
+        }
     }
+
     looked_in.push("sysml-grpc on PATH".to_owned());
     if let Some(path) = env::var_os("PATH") {
         for directory in env::split_paths(&path) {
-            let candidate = directory.join(if cfg!(windows) {
-                "sysml-grpc.exe"
-            } else {
-                "sysml-grpc"
-            });
+            let candidate = directory.join(binary::binary_file_name());
             if candidate.is_file() {
                 return Ok(candidate);
             }
@@ -553,6 +558,99 @@ fn resolve_binary() -> Result<PathBuf, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_release_asked_for_is_not_answered_by_a_binary_of_unknown_version() {
+        // Serialized against the other test reading these variables.
+        let _guard = ENV.lock().unwrap_or_else(PoisonError::into_inner);
+        let restore = Restore::of(&[
+            "OPENSYSML_GRPC_BINARY",
+            "OPENSYSML_GITHUB_REPO",
+            "OPENSYSML_GRPC_VERSION",
+        ]);
+        env::set_var("OPENSYSML_GRPC_BINARY", "");
+        env::set_var("OPENSYSML_GITHUB_REPO", "not-an-owner-repo");
+        env::set_var("OPENSYSML_GRPC_VERSION", "v0.1.0");
+
+        let error = resolve_binary().expect_err("the release cannot be downloaded");
+        assert!(
+            matches!(&error, Error::BinaryDownload(message) if message.contains("owner/repo")),
+            "{error}"
+        );
+        drop(restore);
+    }
+
+    #[test]
+    fn without_a_release_asked_for_an_unusable_repository_is_no_obstacle() {
+        let _guard = ENV.lock().unwrap_or_else(PoisonError::into_inner);
+        let restore = Restore::of(&[
+            "OPENSYSML_GRPC_BINARY",
+            "OPENSYSML_GITHUB_REPO",
+            "OPENSYSML_GRPC_VERSION",
+        ]);
+        env::set_var("OPENSYSML_GRPC_BINARY", "");
+        env::set_var("OPENSYSML_GITHUB_REPO", "not-an-owner-repo");
+        env::remove_var("OPENSYSML_GRPC_VERSION");
+
+        // Nothing was asked for, so resolution falls through to the cache and $PATH.
+        if let Err(error) = resolve_binary() {
+            assert!(matches!(error, Error::BinaryNotFound { .. }), "{error}");
+        }
+        drop(restore);
+    }
+
+    #[test]
+    fn without_a_home_directory_the_cache_is_not_the_working_directory() {
+        let _guard = ENV.lock().unwrap_or_else(PoisonError::into_inner);
+        let restore = Restore::of(&[
+            "OPENSYSML_GRPC_BINARY",
+            "OPENSYSML_GRPC_VERSION",
+            "HOME",
+            "USERPROFILE",
+        ]);
+        env::set_var("OPENSYSML_GRPC_BINARY", "");
+        env::remove_var("OPENSYSML_GRPC_VERSION");
+        env::remove_var("HOME");
+        env::remove_var("USERPROFILE");
+
+        assert!(binary::Downloader::from_env().is_err());
+        if let Err(Error::BinaryNotFound { looked_in }) = resolve_binary() {
+            assert!(
+                !looked_in
+                    .iter()
+                    .any(|place| place.starts_with(".opensysml")),
+                "{looked_in:?}"
+            );
+        }
+        drop(restore);
+    }
+
+    static ENV: Mutex<()> = Mutex::new(());
+
+    /// Environment variables put back as they were when dropped.
+    struct Restore(Vec<(&'static str, Option<std::ffi::OsString>)>);
+
+    impl Restore {
+        fn of(names: &[&'static str]) -> Self {
+            Self(
+                names
+                    .iter()
+                    .map(|name| (*name, env::var_os(name)))
+                    .collect(),
+            )
+        }
+    }
+
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            for (name, value) in &self.0 {
+                match value {
+                    Some(value) => env::set_var(name, value),
+                    None => env::remove_var(name),
+                }
+            }
+        }
+    }
 
     #[test]
     fn connect_errors_map_canonical_codes() {
