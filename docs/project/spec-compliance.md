@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 760 semantic rules: **671 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 765 semantic rules: **676 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -1810,8 +1810,22 @@ the grammar.
 | Dependencies are compiled once in deterministic dependency-first order; direct and indirect cycles are rejected with the complete cycle path | `queryplan/compiler.go` `compiler.compileDefinition`, `compiler.cycleError` | `queryplan/compiler_test.go:TestCompileMemoizesRepeatedDependency`, `:TestCompileRejectsDirectAndIndirectCompositionCycles` | ✅ Implemented |
 | Definition and expression source provenance survives compilation, and planning failures are emitted by the constraint validation tier as source-located `document-query-*` diagnostics | `provenance/origin.go`; `passes/document_query.go` `DocumentQueryPass`, `documentQueryDiagnostic`; `passes/analyze.go` | `queryplan/compiler_test.go:TestCompileQueryCompositionDependencyOrder`, `passes/document_query_test.go` | ✅ Implemented |
 
-**Known limitation:** this layer compiles and validates query definitions only. Query execution,
-typed result rows, document composition and Markdown serialization are not implemented yet.
+## Native Document-Query Execution (`internal/core/queryexec`) — OpenSysML extension
+
+The execution layer consumes the immutable plan against the shared symbol index and semantic model.
+It does not mutate the workspace or re-derive a parallel semantic representation.
+
+| Construct | Implementation (file:function) | Tests | Status |
+|---|---|---|---|
+| Entry bindings are checked against effective parameter types and multiplicities; missing, unknown, default-dependent and nonconforming bindings are distinct typed failures | `queryexec/execute.go` `Execute`, `executor.bind`, `executor.valueConforms`; `queryexec/errors.go` | `queryexec/execute_test.go:TestExecuteRejectsInvalidBindingsAndComposition` | ✅ Implemented |
+| Direct ownership, bounded breadth-first descendants and bounded breadth-first ancestors preserve declaration order and deduplicate by semantic element identity | `queryexec/operations.go` `executor.evaluateOwned`, `executor.evaluateDescendants`, `executor.evaluateAncestors`; `symbols/identity.go` `KeyOf` | `queryexec/execute_test.go:TestExecuteDescendantsBreadthFirstAndBounded`, `:TestExecuteAncestorsBreadthFirstAndDeduplicated` | ✅ Implemented |
+| Type, metadata, name and constant-feature filters use shared metamodel, annotation, conformance and feature-value semantics; unknown and unevaluable features are typed failures rather than false predicates | `queryexec/operations.go` `executor.evaluateWhereType`, `executor.evaluateWhereMetadata`, `executor.evaluateWhereName`, `executor.evaluateWhereFeature`; `semantics/annotations.go` `Model.ConstantFeatureValues` | `queryexec/execute_test.go:TestExecuteTraversalFilteringOrderingAndProjection`, `:TestExecuteMetadataAndNameFilters`, `:TestExecuteReportsUnknownAndUnevaluableFeatures` | ✅ Implemented |
+| Projection produces ordered typed cells, and stable ordering applies explicit ascending/descending, missing-value and multiple-value policies without losing row/cell alignment | `queryexec/value.go`; `queryexec/operations.go` `executor.evaluateProject`, `executor.evaluateOrderBy` | `queryexec/execute_test.go:TestExecuteTraversalFilteringOrderingAndProjection`, `:TestExecuteOrderPoliciesAndProjectedCellAlignment` | ✅ Implemented |
+| Traversal consumes an explicit visit budget, and result rows, cells, columns and execution failures retain query or model provenance | `queryexec/execute.go` `Options`; `queryexec/operations.go` `executor.consumeVisit`; `queryexec/value.go`; `queryexec/errors.go` | `queryexec/execute_test.go:TestExecuteDescendantsBreadthFirstAndBounded`, `:TestExecuteTraversalFilteringOrderingAndProjection`, `:TestExecuteReportsUnknownAndUnevaluableFeatures` | ✅ Implemented |
+
+**Known limitations:** named query invocation, default-expression evaluation and named-relationship
+traversal return typed execution failures. Document composition and Markdown serialization are not
+implemented yet.
 
 ---
 

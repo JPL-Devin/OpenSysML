@@ -1,0 +1,81 @@
+package queryexec
+
+import (
+	"fmt"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
+	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
+)
+
+// ErrorKind classifies a document-query execution failure.
+type ErrorKind string
+
+const (
+	ErrorInvalidContext        ErrorKind = "invalid-context"
+	ErrorUnknownBinding        ErrorKind = "unknown-binding"
+	ErrorMissingBinding        ErrorKind = "missing-binding"
+	ErrorBindingType           ErrorKind = "binding-type"
+	ErrorBindingMultiplicity   ErrorKind = "binding-multiplicity"
+	ErrorDefaultUnavailable    ErrorKind = "default-unavailable"
+	ErrorUnsupportedOperation  ErrorKind = "unsupported-operation"
+	ErrorInvalidArgument       ErrorKind = "invalid-argument"
+	ErrorInvalidOperator       ErrorKind = "invalid-operator"
+	ErrorInvalidOrder          ErrorKind = "invalid-order"
+	ErrorUnknownProperty       ErrorKind = "unknown-property"
+	ErrorUnknownClassification ErrorKind = "unknown-classification"
+	ErrorUnevaluableFeature    ErrorKind = "unevaluable-feature"
+	ErrorVisitBudget           ErrorKind = "visit-budget"
+	ErrorResultType            ErrorKind = "result-type"
+	ErrorResultMultiplicity    ErrorKind = "result-multiplicity"
+)
+
+// Error is a typed query-execution failure with plan provenance.
+type Error struct {
+	Kind      ErrorKind
+	Query     string
+	Operation queryplan.Operation
+	Parameter string
+	Property  string
+	Expected  string
+	Actual    string
+	Origin    provenance.Origin
+}
+
+func (e *Error) Error() string {
+	switch e.Kind {
+	case ErrorInvalidContext:
+		return "document query execution requires a program, index, resolver, and semantic model"
+	case ErrorUnknownBinding:
+		return fmt.Sprintf("query %s received unknown binding %s", e.Query, e.Parameter)
+	case ErrorMissingBinding:
+		return fmt.Sprintf("query %s requires binding %s", e.Query, e.Parameter)
+	case ErrorBindingType:
+		return fmt.Sprintf("query %s binding %s has type %s, expected %s", e.Query, e.Parameter, e.Actual, e.Expected)
+	case ErrorBindingMultiplicity:
+		return fmt.Sprintf("query %s binding %s has multiplicity %s, expected %s", e.Query, e.Parameter, e.Actual, e.Expected)
+	case ErrorDefaultUnavailable:
+		return fmt.Sprintf("query %s binding %s relies on a default not retained in the plan", e.Query, e.Parameter)
+	case ErrorUnsupportedOperation:
+		return fmt.Sprintf("query %s operation %s is not executable in this engine version", e.Query, e.Operation)
+	case ErrorInvalidArgument:
+		return fmt.Sprintf("query %s operation %s has invalid argument %s", e.Query, e.Operation, e.Parameter)
+	case ErrorInvalidOperator:
+		return fmt.Sprintf("query %s operation %s does not support %q", e.Query, e.Operation, e.Actual)
+	case ErrorInvalidOrder:
+		return fmt.Sprintf("query %s cannot order incomparable values of property %s", e.Query, e.Property)
+	case ErrorUnknownProperty:
+		return fmt.Sprintf("query %s references unknown property %s", e.Query, e.Property)
+	case ErrorUnknownClassification:
+		return fmt.Sprintf("query %s references unknown classification %s", e.Query, e.Actual)
+	case ErrorUnevaluableFeature:
+		return fmt.Sprintf("query %s cannot evaluate feature %s", e.Query, e.Property)
+	case ErrorVisitBudget:
+		return fmt.Sprintf("query %s exceeded its visit budget", e.Query)
+	case ErrorResultType:
+		return fmt.Sprintf("query %s produced %s, expected %s", e.Query, e.Actual, e.Expected)
+	case ErrorResultMultiplicity:
+		return fmt.Sprintf("query %s produced multiplicity %s, expected %s", e.Query, e.Actual, e.Expected)
+	default:
+		return fmt.Sprintf("query execution failed for %s", e.Query)
+	}
+}

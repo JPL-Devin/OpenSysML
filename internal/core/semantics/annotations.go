@@ -357,6 +357,41 @@ func (m *Model) annotationValue(scope *symbols.Scope, value ast.Node) symbols.Fi
 	return symbols.FilterValue{}
 }
 
+// ConstantFeatureValues returns a feature's ordered constant values.
+func (m *Model) ConstantFeatureValues(sym *symbols.Symbol, feature string) ([]symbols.FilterValue, bool) {
+	if m == nil || sym == nil || feature == "" {
+		return nil, false
+	}
+	if value, ok := m.reflectiveFeatureValue(sym, feature); ok {
+		return []symbols.FilterValue{value}, true
+	}
+	member, ok := m.LookupMember(sym, feature)
+	if !ok || member == nil {
+		return nil, false
+	}
+	usage, ok := member.Decl.(*ast.Usage)
+	if !ok {
+		return []symbols.FilterValue{{}}, true
+	}
+	if usage.Value == nil {
+		return nil, true
+	}
+	if sequence, ok := usage.Value.(*ast.SequenceExpr); ok {
+		values := make([]symbols.FilterValue, 0, len(sequence.Elements))
+		for _, element := range sequence.Elements {
+			if _, empty := element.(*ast.NullExpr); empty {
+				continue
+			}
+			values = append(values, m.annotationValue(member.OwnerScope, element))
+		}
+		return values, true
+	}
+	if _, empty := usage.Value.(*ast.NullExpr); empty {
+		return nil, true
+	}
+	return []symbols.FilterValue{m.annotationValue(member.OwnerScope, usage.Value)}, true
+}
+
 // metaclassOf is the candidate's own metaclass — what `@@T` tests: a KerML
 // declaration by its keyword (its kind cannot tell `struct` from `datatype`),
 // anything else by its symbol kind, so a cached element classifies alike.
