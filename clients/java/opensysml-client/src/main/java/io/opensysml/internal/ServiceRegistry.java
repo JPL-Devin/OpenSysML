@@ -2,10 +2,16 @@ package io.opensysml.internal;
 
 import io.opensysml.ConnectionOptions;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
@@ -141,12 +147,35 @@ public final class ServiceRegistry {
     }
   }
 
+  /**
+   * Identity is the file itself, under whatever name: the cache and the digest-named link a service
+   * is started from are one file, while a download replaces the cache in place under the same name.
+   */
   private static String key(Path binary) {
     try {
-      return binary.toRealPath().toString();
+      Path real = binary.toRealPath();
+      Object fileKey = Files.readAttributes(real, BasicFileAttributes.class).fileKey();
+      // The file key is device and inode, so it separates filesystems too; where there is none
+      // (Windows), the contents, because a replacement can have the size and time it displaced.
+      return fileKey != null ? fileKey.toString() : digest(real);
     } catch (IOException e) {
       // Unreadable is not a reason to start a second child for the same name.
       return binary.toAbsolutePath().toString();
+    }
+  }
+
+  private static String digest(Path binary) throws IOException {
+    try {
+      MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+      try (InputStream bytes = Files.newInputStream(binary)) {
+        byte[] buffer = new byte[65536];
+        for (int read = bytes.read(buffer); read > 0; read = bytes.read(buffer)) {
+          sha256.update(buffer, 0, read);
+        }
+      }
+      return HexFormat.of().formatHex(sha256.digest());
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 is required of every JVM", e);
     }
   }
 }
