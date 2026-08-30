@@ -209,7 +209,10 @@ The release asset for the running platform (`sysml-grpc-linux-amd64`,
 other pair fails naming itself) is downloaded to a temporary file, verified, and
 only then moved over the cached path, `chmod 0700` where the filesystem keeps
 POSIX modes. A download that fails or does not verify leaves the cached binary
-untouched and removes the temporary file.
+untouched and removes the temporary file. Deciding whether the cache is the
+release asked for and replacing it when it is not is done holding
+`~/.opensysml/bin/sysml-grpc.lock`, so concurrent connections — in this JVM, in
+another, or in the Python client — do not install over each other.
 
 The cache is read and written exactly as the Python client does, so the two
 share one binary: `~/.opensysml/bin/sysml-grpc.json` beside it records
@@ -262,6 +265,10 @@ release is, so only pinned releases install.
   a client whose table pins that release.
 - `latest` is one unauthenticated call to `api.github.com`, so a rate-limited
   host should name the version instead.
+- The cache is one path per user, so two applications asking for different
+  releases at the same time each get the release they asked for but replace one
+  another's cached binary; name the binary with `ConnectionOptions.binaryPath()`
+  where that matters.
 
 ## Capability negotiation
 

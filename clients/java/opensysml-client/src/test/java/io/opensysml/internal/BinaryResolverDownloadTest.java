@@ -1,5 +1,6 @@
 package io.opensysml.internal;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -13,6 +14,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,13 +50,17 @@ class BinaryResolverDownloadTest {
   }
 
   private BinaryDownloader downloader() {
+    return downloader(Map.of(VERSION, Map.of(ASSET, digest())));
+  }
+
+  private BinaryDownloader downloader(Map<String, Map<String, String>> pins) {
     return new BinaryDownloader.Builder()
         .downloadBaseUrl(releases.downloadBaseUrl())
         .apiBaseUrl(releases.apiBaseUrl())
         .binaryPath(cache())
         .asset(ASSET)
         .environment(name -> null)
-        .pins(ReleaseDigests.of(Map.of(REPO, Map.of(VERSION, Map.of(ASSET, digest())))))
+        .pins(ReleaseDigests.of(Map.of(REPO, pins)))
         .build();
   }
 
@@ -134,9 +143,51 @@ class BinaryResolverDownloadTest {
     assertEquals("installed by hand", Files.readString(cache()));
     try (var entries = Files.list(cache().getParent())) {
       assertEquals(
-          List.of("sysml-grpc"),
+          List.of("sysml-grpc", "sysml-grpc.lock"),
           entries.map(path -> path.getFileName().toString()).sorted().toList(),
           "the refused download must leave nothing behind");
     }
+  }
+
+  @Test
+  void twoReleasesAskedForAtOnceLeaveTheCacheAsOneOfThem() throws Exception {
+    byte[] older = "#!/bin/sh\nexit 1\n".getBytes(StandardCharsets.UTF_8);
+    String olderVersion = "v9.9.8";
+    releases.publish(REPO, VERSION, ASSET, BINARY);
+    releases.publish(REPO, olderVersion, ASSET, older);
+    BinaryDownloader downloader =
+        downloader(
+            Map.of(
+                VERSION,
+                Map.of(ASSET, digest()),
+                olderVersion,
+                Map.of(ASSET, ReleaseServer.sha256(older))));
+
+    ExecutorService threads = Executors.newFixedThreadPool(2);
+    try {
+      for (Future<Path> resolved :
+          threads.invokeAll(
+              List.of(
+                  resolving(VERSION, downloader),
+                  resolving(olderVersion, downloader),
+                  resolving(VERSION, downloader),
+                  resolving(olderVersion, downloader)))) {
+        assertEquals(cache(), resolved.get());
+      }
+    } finally {
+      threads.shutdownNow();
+    }
+
+    // Whichever release won the cache, its bytes and its recorded release are the same one.
+    String cached = downloader.cachedRelease(REPO).orElseThrow();
+    assertArrayEquals(
+        cached.equals(VERSION) ? BINARY : older,
+        Files.readAllBytes(cache()),
+        "the cache must hold the release its metadata records");
+  }
+
+  private Callable<Path> resolving(String version, BinaryDownloader downloader) {
+    ConnectionOptions options = ConnectionOptions.builder().downloadVersion(version).build();
+    return () -> BinaryResolver.resolve(options, downloader);
   }
 }

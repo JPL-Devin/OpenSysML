@@ -286,7 +286,9 @@ public final class ConnectionOptions {
      */
     public Builder githubRepo(String githubRepo) {
       Objects.requireNonNull(githubRepo, "githubRepo");
-      if (!githubRepo.matches("[^/\\s]+/[^/\\s]+")) {
+      // The two names end up as path segments of a release URL, so nothing that can leave them.
+      if (!githubRepo.matches("[A-Za-z0-9._-]{1,128}/[A-Za-z0-9._-]{1,128}")
+          || githubRepo.matches("\\.+/.*|.*/\\.+")) {
         throw new IllegalArgumentException("not an owner/repo: " + githubRepo);
       }
       this.githubRepo = githubRepo;

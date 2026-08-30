@@ -151,7 +151,12 @@ public final class ServiceRegistry {
     try {
       Path real = binary.toRealPath();
       BasicFileAttributes attributes = Files.readAttributes(real, BasicFileAttributes.class);
-      return real + "@" + attributes.size() + "@" + attributes.lastModifiedTime().toMillis();
+      // fileKey is the inode where the filesystem has one, so a replacement is a different file
+      // however alike its size and timestamp are; elsewhere those are all there is to tell it by.
+      Object identity = attributes.fileKey();
+      return identity != null
+          ? real + "@" + identity
+          : real + "@" + attributes.size() + "@" + attributes.lastModifiedTime().toMillis();
     } catch (IOException e) {
       // Unreadable is not a reason to start a second child for the same name.
       return binary.toAbsolutePath().toString();

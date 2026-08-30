@@ -101,6 +101,13 @@ public final class BinaryResolver {
    */
   private static Path downloaded(
       ConnectionOptions options, BinaryDownloader downloader, String version, Path cache) {
+    // Held over the whole decision: two connections asking for different releases would otherwise
+    // each find the cache stale and install over the other.
+    return downloader.withCacheLock(() -> install(options, downloader, version, cache));
+  }
+
+  private static Path install(
+      ConnectionOptions options, BinaryDownloader downloader, String version, Path cache) {
     String repo = BinaryDownloader.githubRepo(options);
     Path installed = null;
     if (isExecutable(cache)) {

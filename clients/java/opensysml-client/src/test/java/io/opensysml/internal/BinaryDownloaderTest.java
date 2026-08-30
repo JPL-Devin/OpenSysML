@@ -83,7 +83,11 @@ class BinaryDownloaderTest {
     try (var entries = Files.list(cache().getParent())) {
       return entries
           .map(path -> path.getFileName().toString())
-          .filter(name -> !name.equals("sysml-grpc") && !name.equals("sysml-grpc.json"))
+          .filter(
+            name ->
+                !name.equals("sysml-grpc")
+                    && !name.equals("sysml-grpc.json")
+                    && !name.equals("sysml-grpc.lock"))
           .sorted()
           .toList();
     }
@@ -425,6 +429,22 @@ class BinaryDownloaderTest {
             () -> BinaryDownloader.githubRepo(options(), environment::get));
 
     assertTrue(refused.getMessage().contains(ConnectionOptions.REPO_ENV), refused.getMessage());
+  }
+
+  @Test
+  void refusesRepositoriesAndTagsThatWouldLeaveTheReleaseUrl() {
+    BinaryDownloader downloader = downloader().build();
+
+    assertThrows(
+        ServiceStartException.class,
+        () -> downloader.releaseDownloadUrl(VERSION, ASSET, "Open-MBEE/../../evil"));
+    assertThrows(
+        ServiceStartException.class, () -> downloader.releaseDownloadUrl("..", ASSET, REPO));
+    assertThrows(
+        ServiceStartException.class,
+        () -> downloader.releaseDownloadUrl("v1?x=/../y", ASSET, REPO));
+    assertThrows(ServiceStartException.class, () -> downloader.resolveLatestVersion("evil.example/"
+        + "a/b"));
   }
 
   @Test

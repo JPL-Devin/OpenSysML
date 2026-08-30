@@ -12,11 +12,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
@@ -24,9 +27,13 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
@@ -52,6 +59,9 @@ public final class BinaryDownloader {
 
   private static final System.Logger LOG =
       System.getLogger(BinaryDownloader.class.getName());
+
+  /** One lock per cache, because a file lock is held by the whole JVM rather than by a thread. */
+  private static final Map<String, ReentrantLock> CACHE_LOCKS = new ConcurrentHashMap<>();
 
   private final String downloadBaseUrl;
   private final String apiBaseUrl;
@@ -107,13 +117,34 @@ public final class BinaryDownloader {
     if (set == null || set.isBlank()) {
       return DEFAULT_GITHUB_REPO;
     }
-    String repo = set.trim();
-    // Unvalidated, this is pasted into release URLs, where a path of its own reaches another host.
-    if (!repo.matches("[^/\\s]+/[^/\\s]+")) {
-      throw new ServiceStartException(
-          "$" + ConnectionOptions.REPO_ENV + " is not an owner/repo: " + repo);
+    return validRepo(set.trim(), "$" + ConnectionOptions.REPO_ENV);
+  }
+
+  /**
+   * A repository whose two names are path segments, so it cannot walk out of the release URL it is
+   * pasted into.
+   *
+   * @param githubRepo repository (owner/repo)
+   * @param what what to name in the refusal
+   * @return the repository
+   * @throws ServiceStartException if it is not an owner/repo of URL-safe names
+   */
+  public static String validRepo(String githubRepo, String what) {
+    String[] names = githubRepo.split("/", -1);
+    if (names.length != 2) {
+      throw new ServiceStartException(what + " is not an owner/repo: " + githubRepo);
     }
-    return repo;
+    urlSegment(names[0], what);
+    urlSegment(names[1], what);
+    return githubRepo;
+  }
+
+  /** A name that stays one path segment: no delimiters, and no dot segments to climb with. */
+  private static String urlSegment(String name, String what) {
+    if (!name.matches("[A-Za-z0-9._-]{1,128}") || name.matches("\\.+")) {
+      throw new ServiceStartException(what + " is not a URL-safe name: " + name);
+    }
+    return name;
   }
 
   /**
@@ -172,6 +203,53 @@ public final class BinaryDownloader {
   }
 
   /**
+   * Runs work with the shared cache held, against both other threads and other processes.
+   *
+   * <p>Deciding whether the cache is the release asked for and replacing it when it is not is one
+   * operation: two connections asking for different releases at once would otherwise each install
+   * over the other's binary. The Python client shares this cache, so the lock is a file beside it
+   * rather than only a lock in this JVM.
+   *
+   * @param <T> what the work returns
+   * @param work what to do while the cache is held
+   * @return what the work returned
+   */
+  public <T> T withCacheLock(Supplier<T> work) {
+    ReentrantLock lock =
+        CACHE_LOCKS.computeIfAbsent(
+            binaryPath.toAbsolutePath().toString(), path -> new ReentrantLock());
+    lock.lock();
+    try {
+      if (lock.getHoldCount() > 1) {
+        return work.get();
+      }
+      try (FileChannel channel = lockFile()) {
+        if (channel == null) {
+          return work.get();
+        }
+        try (FileLock held = channel.lock()) {
+          return work.get();
+        }
+      } catch (IOException e) {
+        // A cache that cannot be locked across processes is still locked within this one.
+        warn("could not lock " + binaryPath + " against other processes: " + e);
+        return work.get();
+      }
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  private FileChannel lockFile() throws IOException {
+    Path parent = binaryPath.getParent();
+    Files.createDirectories(parent);
+    return FileChannel.open(
+        parent.resolve(binaryPath.getFileName() + ".lock"),
+        StandardOpenOption.CREATE,
+        StandardOpenOption.WRITE);
+  }
+
+  /**
    * Where a downloaded binary is cached.
    *
    * @return the cached binary's path, which need not exist
@@ -210,6 +288,8 @@ public final class BinaryDownloader {
    * @return the download URL
    */
   public String releaseDownloadUrl(String version, String asset, String githubRepo) {
+    validRepo(githubRepo, "the release repository");
+    urlSegment(version, "the release tag");
     return downloadBaseUrl + "/" + githubRepo + "/releases/download/" + version + "/" + asset;
   }
 
@@ -221,6 +301,7 @@ public final class BinaryDownloader {
    * @throws ServiceStartException if the release cannot be queried or carries no tag
    */
   public String resolveLatestVersion(String githubRepo) {
+    validRepo(githubRepo, "the release repository");
     String url = apiBaseUrl + "/repos/" + githubRepo + "/releases/latest";
     String tag;
     try {
@@ -517,8 +598,14 @@ public final class BinaryDownloader {
     Path temporary;
     try {
       temporary = temporaryFile(".tmp");
+    } catch (IOException e) {
+      throw new ServiceStartException(
+          "downloaded " + version + " but could not write it beside " + binaryPath + ": " + e);
+    }
+    try {
       Files.write(temporary, downloaded);
     } catch (IOException e) {
+      deleteQuietly(temporary);
       throw new ServiceStartException(
           "downloaded " + version + " but could not write it beside " + binaryPath + ": " + e);
     }
