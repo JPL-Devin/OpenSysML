@@ -115,6 +115,7 @@ var (
 	renderView    string
 	renderAllDir  string
 	renderForm    string
+	renderDoc     string
 	strictMode    bool
 	modelChecks   checks
 )
@@ -215,8 +216,8 @@ func runCLI() int {
 		case convertFormat != "":
 			fmt.Fprintln(os.Stderr, "sysml: -render-all and -convert each write documents out; ask for one per run")
 			return 2
-		case queryText != "" || len(evalExprs) > 0 || fromFormat != "":
-			fmt.Fprintln(os.Stderr, "sysml: -render-all cannot be combined with -query, -eval or -from")
+		case queryText != "" || len(evalExprs) > 0 || fromFormat != "" || renderDoc != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-all cannot be combined with -query, -eval, -from or -render-document")
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,
@@ -237,8 +238,8 @@ func runCLI() int {
 			return refuse(modelChecks,
 				"-convert writes the model out and decides nothing about it; check it in its own run")
 		}
-		if renderView != "" {
-			fmt.Fprintln(os.Stderr, "sysml: -convert and -render each write a document out; ask for one per run")
+		if renderView != "" || renderDoc != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -convert, -render and -render-document each write a document out; ask for one per run")
 			return 2
 		}
 		if err := runConvert(args); err != nil {
@@ -248,8 +249,8 @@ func runCLI() int {
 	}
 
 	if queryText != "" {
-		if modelChecks.requested() || renderView != "" || len(evalExprs) > 0 || outputPath != "" || fromFormat != "" {
-			fmt.Fprintln(os.Stderr, "sysml: -query cannot be combined with checks, -eval, -render, -output or -from")
+		if modelChecks.requested() || renderView != "" || renderDoc != "" || len(evalExprs) > 0 || outputPath != "" || fromFormat != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -query cannot be combined with checks, -eval, -render, -render-document, -output or -from")
 			return 2
 		}
 		return runQuery(args, queryText)
@@ -260,7 +261,32 @@ func runCLI() int {
 			return refuse(modelChecks,
 				"-render writes a view out and decides nothing about the model; check it in its own run")
 		}
+		if renderDoc != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -render and -render-document each write a document out; ask for one per run")
+			return 2
+		}
 		if err := runRender(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if renderDoc != "" {
+		switch {
+		case modelChecks.checksOnly():
+			return refuse(modelChecks,
+				"-render-document writes a document out and decides nothing about the model; check it in its own run")
+		case modelChecks.jsonOut:
+			fmt.Fprintln(os.Stderr, "sysml: -render-document writes Markdown, not JSON; -json reports checks")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-render-document writes a document out and decides nothing about the model; check it in its own run")
+		case len(evalExprs) > 0 || fromFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-document cannot be combined with -eval or -from")
+			return 2
+		}
+		if err := runRenderDocument(args); err != nil {
 			return fail(err)
 		}
 		return exitHolds

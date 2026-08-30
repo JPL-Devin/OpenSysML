@@ -91,6 +91,10 @@ member states
 .BI \-render\-all " string"
 Render every declared view into this directory
 .TP
+.BI \-render\-document " string"
+Compile this document definition, run its queries and write the rendered
+Markdown
+.TP
 .BI \-render\-form " string"
 Form \-render or \-render\-all writes: text, mermaid or markdown (default:
 destination\-dependent for \-render, each kind's machine form for
@@ -212,6 +216,18 @@ The rendering is the one the view's render member states, and a containment
 tree where it states none. It is tool\-defined output: SysML v2 specifies the
 notation, not how a tool draws it. Notices \(em an empty view, an element the
 rendering cannot represent \(em go on stderr.
+.SH RENDERING A DOCUMENT
+.RS 2
+.nf
+# Markdown on stdout
+sysml model.sysml \-render\-document Reports::MassReport
+sysml model.sysml \-render\-document Reports::MassReport \-o report.md
+.fi
+.RE
+.PP
+A document is a part def specializing DocumentQueries::Document. Its queries
+are bound in the model and run against it, and the result is written as
+CommonMark\-compatible Markdown, the only document form this build writes.
 .SH FLAG ORDER
 Flags may be written before or after the model they apply to. A file named
 like a flag is read as a file after \-\-, which ends the flags: sysml \-trace

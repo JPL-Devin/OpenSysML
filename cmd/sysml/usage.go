@@ -85,6 +85,18 @@ func doc() usage.Doc {
 					"represent — go on stderr.",
 			},
 		}, {
+			Title: "Rendering a document",
+			Examples: []usage.Example{
+				usage.Ex("sysml model.sysml -render-document Reports::MassReport", "Markdown on stdout"),
+				usage.Ex("sysml model.sysml -render-document Reports::MassReport -o report.md", ""),
+			},
+			Paragraphs: []string{
+				"A document is a part def specializing DocumentQueries::Document. Its " +
+					"queries are bound in the model and run against it, and the " +
+					"result is written as CommonMark-compatible Markdown, the only " +
+					"document form this build writes.",
+			},
+		}, {
 			Title: "Flag order",
 			Paragraphs: []string{
 				"Flags may be written before or after the model they apply to. A file " +
@@ -180,6 +192,7 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
 	fs.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
 	fs.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
+	fs.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
 	fs.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
 	fs.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	fs.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
