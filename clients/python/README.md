@@ -113,8 +113,11 @@ each model N times, against a cache hit some 500x cheaper.
 
 ## Pinned release digests
 
-A download is verified against `PINNED_SHA256` in `opensysml/binary.py`, which
-pins the SHA-256 of every asset of a release. The `.sha256` served beside a
+A download is verified against the table in `clients/release-digests.json`, which
+pins the SHA-256 of every asset of a release and is the one table every client
+verifies against; `opensysml` ships its own synced copy of it as
+`opensysml/release-digests.json` and reads it as `binary.PINNED_SHA256`, because a
+pin resolved from outside the published wheel would not be a pin. The `.sha256` served beside a
 binary comes from whoever served the binary, so it detects corruption but not a
 republished release; a pinned digest is independent of that origin. A download
 with no pin fails with a message naming the version, rather than falling back to
@@ -127,12 +130,14 @@ At release time, after the service binaries are published and final:
 ```bash
 export GITHUB_TOKEN=...            # the release API rate-limits unauthenticated calls
 python scripts/pin_release_checksums.py --version v0.0.9 --write
-git commit -am 'chore(python): pin release digests for v0.0.9'
+git commit -am 'chore(clients): pin release digests for v0.0.9'
 ```
 
 The script downloads every `sysml-grpc-*` asset of that release, hashes what it
 downloaded, refuses the release if a `.sha256` sidecar disagrees with the asset
-it describes, and rewrites the table in place. `--check` re-hashes the assets of
+it describes, rewrites the table in place, and syncs it into every client that
+ships a copy (`python3 scripts/sync-release-digests.py`, whose `--check` mode CI
+runs so a copy cannot drift). `--check` re-hashes the assets of
 every pinned release and fails on any disagreement, catching a release
 republished with another binary. A opensysml release therefore pins the service
 releases published before it; asking for a newer one needs a newer opensysml (or

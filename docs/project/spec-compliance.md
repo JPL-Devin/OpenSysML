@@ -1721,7 +1721,8 @@ the `@type` mapping and the comparison choices.
 - an `instance_id` outside an `Instantiate` response (an `Evaluate` result, say)
   is still a bare int64: those responses carry no instance graph to resolve it
 - __init__.py:11-16 - Shadows builtins (RuntimeError, eval)
-- a downloaded binary is verified against the digest `binary.py:PINNED_SHA256` pins for its
+- a downloaded binary is verified against the digest the shipped `release-digests.json`
+  (`binary.py:PINNED_SHA256`) pins for its
   release, independent of the origin that served it; a version with no pin fails rather than
   falling back to the served `.sha256`, unless `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD` names that
   repository (or is `1`) and accepts same-origin trust. A opensysml release pins only service releases published before it, so a

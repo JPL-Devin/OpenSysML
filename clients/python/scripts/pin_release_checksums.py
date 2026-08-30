@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pin the SHA-256 digest of every asset of a release into opensysml.
+"""Pin the SHA-256 digest of every asset of a release into the clients.
 
 The download check is otherwise same-origin: the .sha256 served beside a binary
 comes from whoever served the binary, so a republished release would be trusted.
@@ -10,30 +10,49 @@ its assets are final:
 
     export GITHUB_TOKEN=...   # must be able to read the repository's releases
     python scripts/pin_release_checksums.py --version v0.0.8 --write
-    git commit -am 'chore(python): pin release digests for v0.0.8'
+    git commit -am 'chore(clients): pin release digests for v0.0.8'
 
 Each asset is downloaded and hashed here; the sidecar is only compared against
 that digest, never used as one. `--check` re-hashes the assets of the versions
 already pinned and fails on any disagreement, so a republished release is caught
 without changing the table.
+
+The table lives in clients/release-digests.json, and `--write` syncs it into
+every client that ships a copy (scripts/sync-release-digests.py).
 """
 
 import argparse
-import ast
 import hashlib
+import importlib.util
 import json
 import os
-import re
 import sys
 import urllib.error
 import urllib.request
 
-BINARY_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "opensysml", "binary.py"
+REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
+DIGESTS_FILE = os.path.join(REPO_ROOT, "clients", "release-digests.json")
+SYNC_SCRIPT = os.path.join(REPO_ROOT, "scripts", "sync-release-digests.py")
 DEFAULT_REPO = "Open-MBEE/OpenSysML"
 ASSET_PREFIX = "sysml-grpc-"
 NETWORK_TIMEOUT = 60
+
+
+def _load_sync_script():
+    """Load scripts/sync-release-digests.py, which is tooling, not a module.
+
+    Returns:
+        module: The loaded script
+    """
+    spec = importlib.util.spec_from_file_location("sync_release_digests", SYNC_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+sync_script = _load_sync_script()
 
 
 class PinError(Exception):
@@ -71,30 +90,24 @@ def github_token():
     )
 
 
-def pinned_table(binary_file=None):
-    """The PINNED_SHA256 table as the package currently declares it.
-
-    Read with ast rather than imported, so the script needs neither the
-    package's dependencies nor an installed distribution.
+def pinned_table(digests_file=None):
+    """The digests the clients currently pin.
 
     Args:
-        binary_file (str, optional): Path to opensysml/binary.py
+        digests_file (str, optional): Path to clients/release-digests.json
 
     Returns:
         dict: repo -> version -> asset -> digest
 
     Raises:
-        PinError: If the file declares no PINNED_SHA256 literal
+        PinError: If the table cannot be read
     """
-    binary_file = binary_file or BINARY_FILE
-    with open(binary_file, encoding="utf-8") as f:
-        module = ast.parse(f.read(), filename=binary_file)
-    for node in module.body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "PINNED_SHA256" for t in node.targets
-        ):
-            return ast.literal_eval(node.value)
-    raise PinError(f"{binary_file} declares no PINNED_SHA256 table")
+    digests_file = digests_file or DIGESTS_FILE
+    try:
+        with open(digests_file, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        raise PinError(f"cannot read the pinned digests from {digests_file}: {e}")
 
 
 def release_assets(repo, version):
@@ -197,45 +210,43 @@ def digests_of(repo, version):
 
 
 def render_table(table):
-    """The PINNED_SHA256 literal for a table, sorted so diffs stay readable.
+    """The table as it is stored, sorted so diffs stay readable.
 
     Args:
         table (dict): repo -> version -> asset -> digest
 
     Returns:
-        str: The assignment, ending in a newline
+        str: The JSON document, ending in a newline
     """
-    lines = ["PINNED_SHA256 = {"]
-    for repo in sorted(table):
-        lines.append(f"    {repo!r}: {{")
-        for version in sorted(table[repo]):
-            lines.append(f"        {version!r}: {{")
-            for asset in sorted(table[repo][version]):
-                lines.append(f"            {asset!r}: {table[repo][version][asset]!r},")
-            lines.append("        },")
-        lines.append("    },")
-    lines.append("}")
-    return "\n".join(lines) + "\n"
+    return json.dumps(table, indent=2, sort_keys=True) + "\n"
 
 
-def write_table(table, binary_file=None):
-    """Replace the PINNED_SHA256 literal in the package with a table.
+def write_table(table, digests_file=None):
+    """Store a table, and sync it into every client that ships a copy.
 
     Args:
         table (dict): repo -> version -> asset -> digest
-        binary_file (str, optional): Path to opensysml/binary.py
+        digests_file (str, optional): Path to clients/release-digests.json
 
     Raises:
-        PinError: If the literal cannot be located to replace
+        PinError: If the clients' copies cannot be rewritten
     """
-    binary_file = binary_file or BINARY_FILE
-    with open(binary_file, encoding="utf-8") as f:
-        source = f.read()
-    pattern = re.compile(r"^PINNED_SHA256 = \{.*?^\}\n", re.DOTALL | re.MULTILINE)
-    if not pattern.search(source):
-        raise PinError(f"cannot find the PINNED_SHA256 literal in {binary_file}")
-    with open(binary_file, "w", encoding="utf-8") as f:
-        f.write(pattern.sub(render_table(table), source, count=1))
+    digests_file = digests_file or DIGESTS_FILE
+    with open(digests_file, "w", encoding="utf-8") as f:
+        f.write(render_table(table))
+    sync_clients(digests_file)
+
+
+def sync_clients(digests_file=None):
+    """Rewrite each client's shipped copy of the table.
+
+    A client verifies a download against the copy it publishes, so a table
+    written without this leaves every client pinning what it pinned before.
+
+    Args:
+        digests_file (str, optional): Path to the table to sync from
+    """
+    sync_script.sync(source=digests_file or DIGESTS_FILE)
 
 
 def check(table):
@@ -272,7 +283,7 @@ def main(argv=None):
     parser.add_argument(
         "--write",
         action="store_true",
-        help="rewrite the table in opensysml/binary.py instead of printing it",
+        help="rewrite clients/release-digests.json instead of printing the table",
     )
     parser.add_argument(
         "--check",
@@ -293,7 +304,7 @@ def main(argv=None):
         table.setdefault(args.repo, {})[args.version] = digests_of(args.repo, args.version)
         if args.write:
             write_table(table)
-            print(f"pinned {args.version} of {args.repo} in {BINARY_FILE}")
+            print(f"pinned {args.version} of {args.repo} in {DIGESTS_FILE}")
         else:
             print(render_table(table), end="")
     except PinError as e:
