@@ -56,7 +56,7 @@ the robot's draw.
 them, tallies what the call-out cost, and streams video home only if the power
 budget left room for it. The retrieval branch is a single node stating a flow of
 its own — the gripper closes, then the device is stowed — so the join waits for
-that whole flow, not just for the node to be entered.
+that whole flow, not merely for the node to be entered.
 
 ```bash
 ./bin/sysml examples/disposal-robot-demo/robot.sysml -action RobotBehavior::DisposalRun
@@ -361,7 +361,7 @@ conditions that conflict, minimally:
 ```
 
 `%configure` asks which robots the build constraint permits — one consistent
-selection, a selection you choose, or every one of them:
+selection, a caller-specified selection, or all of them:
 
 ```
 %configure RobotSolver::robotFamily::buildIsConsistent

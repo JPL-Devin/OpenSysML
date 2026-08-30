@@ -125,7 +125,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 
 ### 3. Golden Execution Traces
 
-**Purpose:** Verify *how* execution proceeds (ordering, scheduling), not just final result
+**Purpose:** verify *how* execution proceeds (ordering, scheduling), not only the final result
 
 - **Test:** `TestExecutionTrace` (internal/core/runtime/)
 - **Format:** `.trace.golden` files

@@ -1,7 +1,7 @@
 # 1. Install
 
-Install `sysml`, `sysml-lsp` and `sysml-grpc`, and verify what you installed. Nothing later in
-this guide needs anything else on the machine.
+This chapter covers installing `sysml`, `sysml-lsp` and `sysml-grpc` and verifying the
+installation. No other software is required for the remainder of this guide.
 
 ## From a release build (recommended)
 
@@ -82,14 +82,14 @@ Ways to avoid it, best first:
    go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
    go install github.com/Open-MBEE/OpenSysML/cmd/sysml-lsp@latest
    ```
-4. **Clear the attribute** if you already downloaded the archive in a browser. Verify the
-   checksum first — you are turning off a security check, so make sure you have the file we
-   published:
+4. **Clear the attribute** if the archive was already downloaded in a browser. Verify the
+   checksum first, because clearing the attribute disables a security check and the file must
+   be confirmed as the published one:
    ```bash
    shasum -a 256 opensysml-darwin-arm64.tar.gz   # compare against SHA256SUMS.txt
    xattr -d com.apple.quarantine /usr/local/bin/sysml /usr/local/bin/sysml-lsp
    ```
-   `xattr -d: No such xattr` simply means the file was not quarantined. Use
+   `xattr -d: No such xattr` indicates that the file was not quarantined. Use
    `xattr -c <file>` to clear all attributes, or `xattr -dr com.apple.quarantine <dir>` for a
    directory.
 
@@ -107,7 +107,7 @@ holds of an object (see [reference/repl-commands.md](../reference/repl-commands.
 The solver is a separate program, run as a process and spoken to in SMT-LIB2 — nothing is
 linked in and nothing is bundled in the release archives, which stay single static binaries.
 Either [z3](https://github.com/Z3Prover/z3) (MIT) or [cvc5](https://github.com/cvc5/cvc5)
-works; z3 is the one to install unless you have a reason to prefer cvc5.
+works; install z3 unless there is a specific reason to prefer cvc5.
 
 **macOS and Linux, Homebrew — automatic:** z3 is a dependency of the formula, so the
 recommended install already brings a working `%check`:
@@ -128,10 +128,10 @@ sudo pacman -S z3            # Arch (extra/z3)
 sudo apk add z3              # Alpine (community repository)
 nix-shell -p z3              # nixpkgs, for one shell; or: nix profile install nixpkgs#z3
 ```
-Of these, apt is the one run while writing this; the rest were read off their package indexes
-(Fedora's `z3`, `extra/z3`, Alpine `community/z3`, and nixpkgs' `z3`, all shipping a `z3`
-program), so a distribution that has renamed or dropped the package is the case to expect
-trouble from.
+Only the apt command above was executed during testing; the others were taken from the
+corresponding package indexes (Fedora's `z3`, `extra/z3`, Alpine's `community/z3` and nixpkgs'
+`z3`, each of which ships a `z3` program). A distribution that has since renamed or dropped the
+package is the most likely source of difficulty.
 
 **Windows:** take the official prebuilt archive from
 [z3's releases](https://github.com/Z3Prover/z3/releases) — `z3-<version>-x64-win.zip` (for
@@ -140,8 +140,8 @@ either add the archive's `bin` directory to `PATH`, or point `OPENSYSML_SMT` at 
 ```powershell
 $env:OPENSYSML_SMT = "C:\tools\z3-5.1.0-x64-win\bin\z3.exe"
 ```
-[Scoop](https://scoop.sh) packages the same archive, so `scoop install z3` puts `z3.exe` on
-`PATH` for you.
+[Scoop](https://scoop.sh) packages the same archive, so `scoop install z3` places `z3.exe` on
+`PATH` automatically.
 
 **Any platform with Python — the `pip` fallback:** the `z3-solver` wheels (MIT) are published
 for Linux, macOS and Windows and carry the executable, not just the Python module:
@@ -160,8 +160,9 @@ take a prebuilt archive from [cvc5's releases](https://github.com/cvc5/cvc5/rele
 (`cvc5-Linux-x86_64-static.zip`, `cvc5-macOS-arm64-static.zip`, `cvc5-Win64-x86_64-static.zip`
 and so on), whose `bin/cvc5` is what goes on `PATH`. cvc5 is under a modified BSD licence, but
 its default build links GMP under LGPL-3, and it can be configured against GPL libraries (the
-`*-gpl` archives are those builds). That matters if you **redistribute** cvc5; it does not
-change how you may use OpenSysML, which links neither solver.
+`*-gpl` archives are those builds). Those terms apply to the **redistribution** of cvc5; they
+do not affect the terms under which OpenSysML may be used, because OpenSysML links neither
+solver.
 
 ### Solver compatibility — pointing the driver at another solver
 
@@ -183,10 +184,10 @@ scripts use:
 | Objective optimization | `(maximize …)`/`(minimize …)`, for `%optimize` | yes | **no** — parse error |
 | Objective priority | `:opt.priority`, a z3 extension | yes | **no** — answers `unsupported` |
 
-The two columns are what each solver answered when probed on this machine, not what its
-documentation claims. The last two rows are the only part of the subset cvc5 lacks, and
-`%optimize` is the only command that needs them: on cvc5 it refuses by naming the extension
-the solver lacks, and every other command works on either solver.
+The two columns record what each solver answered when probed on the test machine rather than
+what its documentation states. The last two rows are the only part of the subset that cvc5
+lacks, and `%optimize` is the only command that requires them: on cvc5 it declines and names
+the missing extension. Every other command works on either solver.
 
 Every logic a script sets other than that non-standard `ALL` is a standard SMT-LIB 2.6 one
 ([the logic list](https://smt-lib.org/logics.shtml)): `QF_UF`, `QF_LIA`, `QF_NIA`, `QF_LRA`,
@@ -205,14 +206,14 @@ SMT-LIB 2.6 unsat cores: `:produce-unsat-cores` with `:named` assertions and `(g
 install a solver that supports it or set OPENSYSML_SMT to one
 ```
 
-Which is distinct from the other two ways a solver run ends without a verdict: a solver that
-crashes, exits, or answers unreadably is a solver *process* error naming the stage it failed at,
-and a solver that answers but does not decide is the verdict `unknown` with the reason it gave.
-No verdict is ever invented from any of the three.
+This case is distinct from the other two ways a solver run can end without a verdict. A solver
+that crashes, exits or answers unreadably produces a solver *process* error naming the stage at
+which it failed, and a solver that answers without deciding produces the verdict `unknown`
+together with the reason it reported. In none of these cases is a verdict inferred.
 
-To check a solver of your own end to end, run the portability harness against it — it reports
-each feature as `pass`, `refuse` (the backend lacks it and said so) or `fail` (a script it
-rejected, which is a bug to report):
+To validate another solver end to end, run the portability harness against it. The harness
+reports each feature as `pass`, `refuse` (the backend reported the feature as unsupported) or
+`fail` (the backend rejected a script, which should be reported as a bug):
 
 ```bash
 OPENSYSML_SMT=/path/to/mysolver go test ./internal/core/solve -run TestPortability -v
