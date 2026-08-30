@@ -133,6 +133,18 @@ func (s *Server) renderHandler(inner jsonrpc2.Handler) jsonrpc2.Handler {
 				return reply(ctx, nil, fmt.Errorf("%s: %w", jsonrpc2.ErrParse, err))
 			}
 			return reply(ctx, s.Views(&params), nil)
+		case MethodDocuments:
+			return reply(ctx, s.Documents(), nil)
+		case MethodRenderDocument:
+			var params renderDocumentParams
+			if err := json.Unmarshal(req.Params(), &params); err != nil {
+				return reply(ctx, nil, fmt.Errorf("%s: %w", jsonrpc2.ErrParse, err))
+			}
+			result, err := s.RenderDocument(&params)
+			if err != nil {
+				return reply(ctx, nil, err)
+			}
+			return reply(ctx, result, nil)
 		}
 		return inner(ctx, reply, req)
 	}

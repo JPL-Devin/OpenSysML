@@ -25,7 +25,9 @@
             "unset_value",
             "apply_edits",
             "strict_conformance",
-            "feature_values"
+            "feature_values",
+            "document_query",
+            "render_document"
           ]
         }
       }

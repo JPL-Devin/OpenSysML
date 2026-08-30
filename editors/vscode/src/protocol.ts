@@ -4,9 +4,14 @@
 export const RENDER_METHOD = "opensysml/render";
 export const VIEWS_METHOD = "opensysml/views";
 export const RENDER_CHANGED_METHOD = "opensysml/renderChanged";
+export const DOCUMENTS_METHOD = "opensysml/documents";
+export const RENDER_DOCUMENT_METHOD = "opensysml/renderDocument";
 
 /** The capability the server advertises when it serves the render methods. */
 export const RENDER_CAPABILITY = "openSysmlRender";
+
+/** The capability the server advertises when it serves document rendering. */
+export const RENDER_DOCUMENT_CAPABILITY = "openSysmlRenderDocument";
 
 export interface Position {
   line: number;
@@ -84,6 +89,25 @@ export interface ViewInfo {
 export interface ViewsResult {
   views: ViewInfo[];
   pseudoViews?: string[];
+}
+
+/** One document definition of the workspace, by qualified name. */
+export interface DocumentInfo {
+  name: string;
+  uri: string;
+}
+
+export interface DocumentsResult {
+  documents: DocumentInfo[];
+}
+
+export interface RenderDocumentParams {
+  name: string;
+}
+
+export interface RenderDocumentResult {
+  name: string;
+  markdown: string;
 }
 
 export interface RenderChangedParams {

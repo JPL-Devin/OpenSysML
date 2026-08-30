@@ -759,6 +759,58 @@ not OpenSysML's expressive query story:
 
 ---
 
+## Native document queries and rendering over gRPC
+
+The native document pipeline — document queries (`calc def` specializing
+`DocumentQueries::Query`) and documents (`part def` specializing
+`DocumentQueries::Document`) — is served by two RPCs, so a CI pipeline or an
+external tool can run what `%run-query` and `%render-document` run without a
+REPL or a script:
+
+```proto
+rpc RunDocumentQuery(RunDocumentQueryRequest) returns (RunDocumentQueryResponse);
+rpc RenderDocument(RenderDocumentRequest) returns (RenderDocumentResponse);
+```
+
+**Implementation:** `internal/grpc/docquery.go` (`Service.RunDocumentQuery`,
+`Service.RenderDocument`), reported from `GetServerInfo` as the
+`document_query` and `render_document` capabilities. Python:
+`model.run_document_query(...)` and `model.render_document(...)`
+(`clients/python/opensysml/document.py`).
+
+Both name a loaded model by its hash and a definition by qualified name, and
+compose the engine packages the REPL and CLI compose — `queryplan` →
+`queryexec` for a query, `docplan` → `docir` → `docrender` for a document — so
+the rows and the Markdown are the ones those surfaces produce, in the same
+deterministic order.
+
+`RunDocumentQuery` takes typed parameter bindings — an element by qualified
+name, a string, an integer, a real, a boolean, or a list of these for a
+multi-valued parameter — and answers the projected column names and typed rows:
+each row's element and each cell's values, an element carried as its qualified
+name plus its metamodel type (the `@type` mapping above). `RenderDocument`
+takes no bindings, because a document binds its queries' parameters in the
+model; it answers the rendered CommonMark Markdown, byte-identical to
+`-render-document` on the same model.
+
+Failures keep the engine's message, append the declaring document where the
+failure carries provenance, and map onto status codes by whose fault they are:
+an unknown model or an unknown query/document is `NOT_FOUND`; a symbol of the
+wrong kind, a malformed request, or a wrong binding (unknown, missing,
+mistyped, wrong multiplicity, or naming an element the model does not have) is
+`INVALID_ARGUMENT`; an exhausted visit or invocation budget is
+`RESOURCE_EXHAUSTED`; an operation the engine does not execute — a fault in the
+model's own definitions rather than in the request — is `FAILED_PRECONDITION`;
+and a request the service lacks the capability for is `UNIMPLEMENTED`, naming
+it.
+
+Known limitations: the response carries no provenance for *successful* rows
+(only failures name their source), and the document IR is not exposed in a
+structured form — Markdown is the only document form served, as it is the only
+form the build writes.
+
+---
+
 ## Usage Examples
 
 ### Parse a File

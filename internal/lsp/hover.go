@@ -8,6 +8,8 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -20,6 +22,23 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 	}
 	content := doc.Content
 	offset := positionToOffset(content, params.Position)
+
+	// A cursor on a reference hovers what it names, not the declaration it sits
+	// in: the type a usage declares, the query a document block invokes.
+	if ref := refAtOffset(collectRefs(doc.AST, doc.Scope), offset); ref != nil {
+		if target, span, ok := s.hoveredSegment(name, *ref, offset); ok && target != nil {
+			signature := target.Notation()
+			if target.Name != "" {
+				signature += " " + lexer.NameText(target.Name)
+			}
+			rng := spanToRange(content, span)
+			return &protocol.Hover{
+				Contents: s.hoverContents(signature, s.symbolDocComments(target)),
+				Range:    &rng,
+			}, nil
+		}
+	}
+
 	sym := symbolAtOffset(doc.Scope, offset)
 	if sym == nil {
 		return nil, nil
@@ -46,6 +65,47 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 		Contents: s.hoverContents(signature, comments),
 		Range:    &rng,
 	}, nil
+}
+
+// hoveredSegment resolves the qualified-name segment containing offset, so a
+// qualifier hovers the namespace it names rather than the reference's target.
+func (s *Server) hoveredSegment(doc string, ref resolve.Reference, offset int) (*symbols.Symbol, source.Span, bool) {
+	parts := ref.QN.Parts
+	if len(parts) == 0 {
+		return nil, source.Span{}, false
+	}
+	idx := -1
+	for i, p := range parts {
+		if offset >= p.Span.Offset && offset < p.Span.End() {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return nil, source.Span{}, false
+	}
+	if idx == len(parts)-1 {
+		target, ok := s.ws.ResolveReferenceInDoc(doc, ref)
+		return target, parts[idx].Span, ok
+	}
+	segs := s.ws.ResolveReferenceSegmentsInDoc(doc, ref)
+	if idx >= len(segs) || segs[idx] == nil {
+		return nil, source.Span{}, false
+	}
+	return segs[idx], parts[idx].Span, true
+}
+
+// symbolDocComments returns the comment trivia preceding a symbol's
+// declaration, when the document declaring it is loaded.
+func (s *Server) symbolDocComments(sym *symbols.Symbol) []string {
+	if len(sym.LeadingTrivia) == 0 || sym.DocName == "" {
+		return nil
+	}
+	doc := s.ws.Document(sym.DocName)
+	if doc == nil {
+		return nil
+	}
+	return leadingDocComments(doc.Content, sym.LeadingTrivia)
 }
 
 // hoverContents renders the hover as Markdown when the client supports it,

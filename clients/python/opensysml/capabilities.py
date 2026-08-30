@@ -37,6 +37,14 @@ CAPABILITY_VERIFICATION = "verification"
 #: loaded model. Without it the service refuses queries with ``UNIMPLEMENTED``.
 CAPABILITY_QUERY = "query"
 
+#: The ``RunDocumentQuery`` RPC, which runs a named document query and answers
+#: typed rows. Without it the service refuses with ``UNIMPLEMENTED``.
+CAPABILITY_DOCUMENT_QUERY = "document_query"
+
+#: The ``RenderDocument`` RPC, which renders a named document to Markdown.
+#: Without it the service refuses with ``UNIMPLEMENTED``.
+CAPABILITY_RENDER_DOCUMENT = "render_document"
+
 #: An enumeration literal as ``Value.enum_literal``. Without it a literal is
 #: reported as an unsupported null, which is indistinguishable from a value the
 #: service could not evaluate.

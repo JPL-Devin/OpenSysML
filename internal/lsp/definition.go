@@ -28,6 +28,13 @@ func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionPara
 				return []protocol.Location{s.symbolLocation(name, target)}, nil
 			}
 		}
+		// A document query binding's name is not a reference either; it names a
+		// parameter of the query typing the enclosing calc usage. Jump to it.
+		if sym := symbolAtOffset(doc.Scope, offset); sym != nil {
+			if param, ok := s.ws.QueryBindingParameter(sym); ok {
+				return []protocol.Location{s.symbolLocation(name, param)}, nil
+			}
+		}
 		return nil, nil
 	}
 	sym, ok := s.ws.ResolveReferenceInDoc(name, *ref)

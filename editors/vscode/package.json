@@ -101,6 +101,11 @@
         "command": "opensysml.openDiagram",
         "title": "SysML: Open Diagram",
         "enablement": "opensysml.renderSupported && (editorLangId == sysml || editorLangId == kerml)"
+      },
+      {
+        "command": "opensysml.renderDocument",
+        "title": "SysML: Render Document",
+        "enablement": "opensysml.renderDocumentSupported"
       }
     ]
   },

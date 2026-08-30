@@ -125,3 +125,13 @@ func (a *ConnectAdapter) EvaluateCalc(ctx context.Context, req *connect.Request[
 func (a *ConnectAdapter) Query(ctx context.Context, req *connect.Request[pb.QueryRequest]) (*connect.Response[pb.QueryResponse], error) {
 	return connectCall(ctx, req, a.svc.Query)
 }
+
+// RunDocumentQuery runs a named document query and answers with typed rows.
+func (a *ConnectAdapter) RunDocumentQuery(ctx context.Context, req *connect.Request[pb.RunDocumentQueryRequest]) (*connect.Response[pb.RunDocumentQueryResponse], error) {
+	return connectCall(ctx, req, a.svc.RunDocumentQuery)
+}
+
+// RenderDocument renders a named document to Markdown.
+func (a *ConnectAdapter) RenderDocument(ctx context.Context, req *connect.Request[pb.RenderDocumentRequest]) (*connect.Response[pb.RenderDocumentResponse], error) {
+	return connectCall(ctx, req, a.svc.RenderDocument)
+}

@@ -138,6 +138,22 @@ func (w *Workspace) rendererLocked(doc string) *view.Renderer {
 	return view.NewRenderer(sem, resolver, text)
 }
 
+// sourceTextLocked reads notation from any of the workspace's documents, for
+// the labels a rendering takes verbatim across document boundaries.
+func (w *Workspace) sourceTextLocked() view.SourceText {
+	files := make(map[string]*source.SourceFile, len(w.docs))
+	for name, d := range w.docs {
+		files[name] = source.New(name, d.Content)
+	}
+	return func(name string, span source.Span) string {
+		sf, ok := files[name]
+		if !ok {
+			return ""
+		}
+		return sf.Text(span)
+	}
+}
+
 // documentViewsLocked are the views the document declares, outermost first, in
 // declaration order.
 func (w *Workspace) documentViewsLocked(doc string) []*symbols.Symbol {
