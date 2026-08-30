@@ -95,7 +95,37 @@ func TestAdvanceIsBoundedBySessionBudgets(t *testing.T) {
 		wants(t, run(t, s, "%advance 1000"),
 			"(7 event(s) processed)",
 			"Stopped at the event budget (7 events; raise "+runtime.MaxStateEventsEnvVar,
-			"Simulation time never advanced past 0.0")
+			"All 7 event(s) were processed at simulation time 0.0 without advancing it")
+	})
+
+	// A finite same-time chain longer than the budget gets the one-instant note,
+	// which does not claim the chain is endless.
+	t.Run("event_budget_finite_chain", func(t *testing.T) {
+		s := loadFixture(t, "testdata/state_chain.sysml")
+		budgets := runtime.DefaultBudgets()
+		budgets.MaxStateEvents = 2
+		if err := s.SetBudgets(budgets); err != nil {
+			t.Fatalf("SetBudgets: %v", err)
+		}
+		run(t, s, "%state Chain")
+		wants(t, run(t, s, "%advance 1000"),
+			"Stopped at the event budget (2 events; raise "+runtime.MaxStateEventsEnvVar,
+			"All 2 event(s) were processed at simulation time 0.0 without advancing it")
+	})
+
+	// A chain that completes on the final budgeted event has settled: no
+	// one-instant note, and the completion line still shows.
+	t.Run("event_budget_completed_on_last_event", func(t *testing.T) {
+		s := loadFixture(t, "testdata/state_chain.sysml")
+		budgets := runtime.DefaultBudgets()
+		budgets.MaxStateEvents = 3
+		if err := s.SetBudgets(budgets); err != nil {
+			t.Fatalf("SetBudgets: %v", err)
+		}
+		run(t, s, "%state Chain")
+		got := run(t, s, "%advance 1000")
+		wants(t, got, "State machine completed")
+		rejects(t, got, "without advancing it")
 	})
 
 	// A machine whose loop is timed makes progress each cycle, so the budget
@@ -111,7 +141,7 @@ func TestAdvanceIsBoundedBySessionBudgets(t *testing.T) {
 		got := run(t, s, "%advance 1000")
 		wants(t, got,
 			"Stopped at the event budget (7 events; raise "+runtime.MaxStateEventsEnvVar)
-		rejects(t, got, "Simulation time never advanced")
+		rejects(t, got, "without advancing it")
 	})
 
 	t.Run("do_budget", func(t *testing.T) {
