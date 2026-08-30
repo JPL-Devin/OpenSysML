@@ -74,12 +74,15 @@ func (s *Server) hoveredSegment(doc string, ref resolve.Reference, offset int) (
 	if len(parts) == 0 {
 		return nil, source.Span{}, false
 	}
-	idx := len(parts) - 1
+	idx := -1
 	for i, p := range parts {
 		if offset >= p.Span.Offset && offset < p.Span.End() {
 			idx = i
 			break
 		}
+	}
+	if idx < 0 {
+		return nil, source.Span{}, false
 	}
 	if idx == len(parts)-1 {
 		target, ok := s.ws.ResolveReferenceInDoc(doc, ref)

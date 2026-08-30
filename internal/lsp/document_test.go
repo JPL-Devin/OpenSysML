@@ -362,6 +362,10 @@ func TestHoverQualifiedReferenceSegments(t *testing.T) {
 		!strings.Contains(hov.Contents.Value, "calc def NoInputs") {
 		t.Fatalf("member hover = %+v, want calc def NoInputs", hov)
 	}
+	if hov := reportHover(t, s, name, anchor, len("QueryLib:")); hov != nil &&
+		strings.Contains(hov.Contents.Value, "NoInputs") {
+		t.Fatalf("separator hover = %+v, want not the reference target", hov)
+	}
 }
 
 func TestRenderDocumentAmbiguousName(t *testing.T) {
