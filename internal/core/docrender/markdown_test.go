@@ -141,6 +141,13 @@ func TestMarkdownEscaping(t *testing.T) {
 	if got := inline("two\nlines"); got != "two lines" {
 		t.Errorf("inline newline = %q", got)
 	}
+	// Carriage returns are line endings too: CRLF and lone CR fold like LF.
+	if got := inline("a\r\nb\rc"); got != "a b c" {
+		t.Errorf("inline carriage returns = %q", got)
+	}
+	if got := tableCell("a\r\nb\rc"); got != "a<br>b<br>c" {
+		t.Errorf("tableCell carriage returns = %q", got)
+	}
 	for _, c := range []struct{ in, want string }{
 		{"- bullet", `\- bullet`},
 		{"+ plus", `\+ plus`},
@@ -148,6 +155,12 @@ func TestMarkdownEscaping(t *testing.T) {
 		{"12. ordered", `12\. ordered`},
 		{"3) ordered", `3\) ordered`},
 		{"42 plain", "42 plain"},
+		{"    indented code", "indented code"},
+		{"\tindented code", "indented code"},
+		{"   > quote", `\> quote`},
+		{"  - bullet", `\- bullet`},
+		{" + plus", `\+ plus`},
+		{"   7. ordered", `7\. ordered`},
 	} {
 		if got := blockStart(c.in); got != c.want {
 			t.Errorf("blockStart(%q) = %q, want %q", c.in, got, c.want)

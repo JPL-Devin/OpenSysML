@@ -204,21 +204,28 @@ var inlineEscaper = strings.NewReplacer(
 	"#", `\#`,
 )
 
+// newlineNormalizer folds CRLF and lone CR to LF, so a carriage return cannot
+// end a Markdown line either.
+var newlineNormalizer = strings.NewReplacer("\r\n", "\n", "\r", "\n")
+
 // inline escapes prose for any position in a line, folding newlines to spaces
 // since paragraph structure comes from the document, not from run content.
 func inline(text string) string {
-	return inlineEscaper.Replace(strings.ReplaceAll(text, "\n", " "))
+	return inlineEscaper.Replace(strings.ReplaceAll(newlineNormalizer.Replace(text), "\n", " "))
 }
 
 // tableCell escapes one table cell, folding newlines to <br> so they cannot
 // end the row.
 func tableCell(text string) string {
-	return strings.ReplaceAll(inlineEscaper.Replace(text), "\n", "<br>")
+	return strings.ReplaceAll(inlineEscaper.Replace(newlineNormalizer.Replace(text)), "\n", "<br>")
 }
 
 // blockStart escapes a leading quote, bullet, or ordered-list marker that
-// would open block structure; inline escaping already covered "#".
+// would open block structure; inline escaping already covered "#". Leading
+// spaces and tabs are dropped first: they would open an indented code block
+// or shelter a marker, and CommonMark collapses them in a paragraph anyway.
 func blockStart(text string) string {
+	text = strings.TrimLeft(text, " \t")
 	if text == "" {
 		return text
 	}
