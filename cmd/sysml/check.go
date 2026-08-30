@@ -177,16 +177,18 @@ func runChecks(files []string, exprs []string, c checks) int {
 		rep.failed(fmt.Sprintf("%s did not analyse cleanly; no check was made", namedModels(files)))
 		return rep.finish()
 	}
-	for _, output := range loaded {
-		rep.info(output)
-	}
 	// A clean model's warnings are still findings rather than results, so they
-	// are kept off the stream the verdicts are reported on.
+	// are kept off the stream the verdicts are reported on, and printed before
+	// the load summary they qualify.
 	rep.problem(sess.DiagnosticLines())
 
 	// What analysis found is reported as data whatever was checked, so a caller
 	// parsing the report reads the warnings the printed load output carries.
 	rep.diags(sess.LocatedDiagnostics())
+
+	for _, output := range loaded {
+		rep.info(output)
+	}
 
 	// An object first: a constraint, requirement or expression about a feature of
 	// a part is answered about the object that carries it, and only an existing
