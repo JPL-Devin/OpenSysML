@@ -225,6 +225,65 @@ func TestSymbolSuggestion(t *testing.T) {
 	}
 }
 
+// TestQualifiedMissSuggestion covers the hints a qualified name no declaration
+// answers to gets: members of its own qualifier, of a kind the command can act
+// on, and nothing when the qualifier itself resolves nowhere.
+func TestQualifiedMissSuggestion(t *testing.T) {
+	const declare = "package Demo { action def Go; action runFast; part def Wheel; } package 'My Pkg' { part def Wheel; }"
+	tests := []struct {
+		name    string
+		line    string
+		wants   []string
+		rejects []string
+	}{
+		{
+			name:  "misspelled member of a resolved qualifier",
+			line:  "%instantiate Demo::Whel",
+			wants: []string{"unresolved reference: Demo::Whel", "did you mean Demo::Wheel?"},
+		},
+		{
+			name:  "an action command is offered actions",
+			line:  "%action Demo::runFst",
+			wants: []string{"unresolved reference: Demo::runFst", "did you mean Demo::runFast?"},
+		},
+		{
+			name:    "an action command is not offered a part",
+			line:    "%action Demo::Whel",
+			wants:   []string{"unresolved reference: Demo::Whel"},
+			rejects: []string{"did you mean"},
+		},
+		{
+			name:  "a hint under a quoted qualifier is spelled typable",
+			line:  "%instantiate 'My Pkg'::Whel",
+			wants: []string{"did you mean 'My Pkg'::Wheel?"},
+		},
+		{
+			name:    "an unresolved qualifier offers nothing",
+			line:    "%action Nope::Rescue",
+			wants:   []string{"unresolved reference: Nope::Rescue"},
+			rejects: []string{"did you mean"},
+		},
+		{
+			name:    "nothing close under the qualifier offers nothing",
+			line:    "%instantiate Demo::Zzzzqqqq",
+			wants:   []string{"unresolved reference: Demo::Zzzzqqqq"},
+			rejects: []string{"did you mean"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewSession()
+			if res := s.Submit(declare); len(errorDiagnostics(res.Diagnostics)) > 0 {
+				t.Fatalf("declaration has diagnostics: %v", res.Diagnostics)
+			}
+			got := run(t, s, tt.line)
+			wants(t, got, tt.wants...)
+			rejects(t, got, tt.rejects...)
+		})
+	}
+}
+
 // TestLibraryReachableFromEmptySession checks library symbols answer browsing,
 // lookup and instantiation before the session declares anything.
 func TestLibraryReachableFromEmptySession(t *testing.T) {

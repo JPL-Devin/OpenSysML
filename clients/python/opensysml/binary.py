@@ -1,11 +1,14 @@
 """Binary management for sysml-grpc service."""
 
+import contextlib
 import hashlib
 import http.client
 import json
 import os
 import platform
+import shutil
 import stat
+import threading
 import urllib.request
 import warnings
 from opensysml.errors import (
@@ -28,6 +31,36 @@ DEFAULT_GITHUB_REPO = 'Open-MBEE/OpenSysML'
 # A cached binary is now checked against the releases API before being reused, and
 # that happens while the service-start lock is held, so it must not hang there.
 NETWORK_TIMEOUT = 15
+
+#: A release binary is tens of megabytes, so anything this large is not one.
+MAX_BINARY_BYTES = 512 * 1024 * 1024
+
+#: Checksums, manifests, signature bundles and release JSON are kilobytes.
+MAX_METADATA_BYTES = 8 * 1024 * 1024
+
+
+def read_bounded(response, url, limit):
+    """Read a response, refusing one too large to be what was asked for.
+
+    The cache lock is held over a download, so an endless body would otherwise
+    hold every other client out while filling this process's memory.
+
+    Args:
+        response: An open HTTP response
+        url (str): What is being read, for the refusal
+        limit (int): Most bytes the body may be
+
+    Returns:
+        bytes: The body
+
+    Raises:
+        ConnectionError: If the body is longer than the limit
+    """
+    body = response.read(limit + 1)
+    if len(body) > limit:
+        raise ConnectionError(f"{url} is larger than {limit} bytes")
+    return body
+
 
 #: The pinned digests, shipped beside this module as package data.
 PINNED_DIGESTS_FILE = os.path.join(
@@ -55,6 +88,10 @@ PINNED_SHA256 = _load_pinned_digests()
 #: which is same-origin trust: the checksum then comes from whoever served the
 #: binary.
 ALLOW_UNPINNED_ENV = 'OPENSYSML_ALLOW_UNPINNED_DOWNLOAD'
+
+#: Names a build to start in place of the cache, a download or one on $PATH,
+#: under the name the Node client reads for the same purpose.
+BINARY_ENV = 'OPENSYSML_BINARY'
 
 
 def default_github_repo():
@@ -213,7 +250,7 @@ def signed_manifest_digest(version, asset, github_repo=None):
         url = release_download_url(version, name, repo)
         try:
             with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
-                downloaded[name] = response.read()
+                downloaded[name] = read_bounded(response, url, MAX_METADATA_BYTES)
         except (OSError, http.client.HTTPException) as e:
             raise UnsignedReleaseError(
                 f"{version} of {repo} publishes no readable {name} ({url}: {e}), so "
@@ -241,7 +278,9 @@ def resolve_latest_version(github_repo=None):
     url = f'https://api.github.com/repos/{repo}/releases/latest'
     try:
         with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
-            release = json.loads(response.read().decode('utf-8'))
+            release = json.loads(
+                read_bounded(response, url, MAX_METADATA_BYTES).decode('utf-8')
+            )
     # urlopen leaves read-phase failures unwrapped, so a timeout, a reset
     # connection or a truncated body is not a URLError.
     except (OSError, http.client.HTTPException, ValueError) as e:
@@ -301,17 +340,195 @@ def release_asset_name(goos=None, goarch=None):
     return name + '.exe' if goos == 'windows' else name
 
 
+def service_binary_name(goos=None):
+    """Name the service binary is installed under, on the cache and on $PATH.
+
+    Only the operating system names it, so this answers on a platform no release
+    is published for, where a local build is the only sysml-grpc there is.
+
+    Args:
+        goos (str, optional): GOOS, detected when omitted
+
+    Returns:
+        str: 'sysml-grpc', or 'sysml-grpc.exe' on Windows
+    """
+    if goos is None:
+        goos = platform.system().lower()
+    return 'sysml-grpc.exe' if goos == 'windows' else 'sysml-grpc'
+
+
 def get_binary_path():
     """Get the local path where sysml-grpc binary should be stored.
     
     Returns:
         str: Absolute path to binary (e.g. ~/.opensysml/bin/sysml-grpc)
     """
-    os_name, _ = detect_platform()
-    binary_name = 'sysml-grpc.exe' if os_name == 'windows' else 'sysml-grpc'
-    
     base_dir = os.path.expanduser('~/.opensysml/bin')
-    return os.path.join(base_dir, binary_name)
+    return os.path.join(base_dir, service_binary_name())
+
+
+def is_executable(path):
+    """Whether a path is a file this process may execute.
+
+    Args:
+        path (str): Path to a candidate binary
+
+    Returns:
+        bool: True when it is a regular file with the execute bit for this user
+    """
+    return os.path.isfile(path) and os.access(path, os.X_OK)
+
+
+def named_binary():
+    """The build $OPENSYSML_BINARY names, used as it is and verified against nothing.
+
+    There is no release to pin such a binary to, so it is neither copied into the
+    shared cache nor checked against the pinned digests: naming it is trusting it.
+
+    Returns:
+        str or None: The path named, exactly as named, or None when the
+            variable is unset or empty
+
+    Raises:
+        ConnectionError: If it names something that is not an executable file,
+            since an explicit instruction that cannot be honoured is an error
+            rather than a reason to look elsewhere
+    """
+    named = os.environ.get(BINARY_ENV) or ''
+    if named == '':
+        return None
+    if not is_executable(named):
+        raise ConnectionError(
+            f"${BINARY_ENV} names {named}, which is not an executable file. Point it "
+            f"at a sysml-grpc build, or unset it to resolve one from "
+            f"{get_binary_path()} or $PATH."
+        )
+    return named
+
+
+def binary_on_path():
+    """The first executable sysml-grpc on $PATH, used as it is and unverified.
+
+    A binary an operator installed is of no known release, so it is neither
+    copied into the shared cache nor checked against the pinned digests.
+
+    Returns:
+        str or None: Path to the binary, or None when $PATH holds none
+    """
+    name = service_binary_name()
+    for directory in (os.environ.get('PATH') or '').split(os.pathsep):
+        if not directory:
+            continue
+        candidate = os.path.join(directory, name)
+        if is_executable(candidate):
+            return candidate
+    return None
+
+
+def lock_path():
+    """Path of the advisory lock every client holds while replacing the cache.
+
+    Returns:
+        str: Absolute path to the lock file (e.g. ~/.opensysml/bin/sysml-grpc.lock)
+    """
+    return get_binary_path() + '.lock'
+
+
+#: One lock per process, because a file lock is held by the process, not the thread.
+_CACHE_LOCK = threading.RLock()
+
+#: Nesting of the thread inside _CACHE_LOCK, which only one thread is ever in.
+_CACHE_LOCK_DEPTH = 0
+
+
+@contextlib.contextmanager
+def cache_lock():
+    """Hold the shared cache against other threads, processes and clients.
+
+    The Java client locks the same file over the same span, so the two never pair
+    one release's bytes with another's metadata.
+
+    Yields:
+        None: With the lock held for the body
+    """
+    global _CACHE_LOCK_DEPTH
+    with _CACHE_LOCK:
+        # Closing any descriptor for a file drops this process's fcntl lock on it,
+        # so a nested call must not open one of its own.
+        held = _CACHE_LOCK_DEPTH
+        _CACHE_LOCK_DEPTH = held + 1
+        try:
+            if held:
+                yield
+                return
+            yield from _locked_once()
+        finally:
+            _CACHE_LOCK_DEPTH = held
+
+
+def _reset_cache_lock():
+    """Start a child of fork() unlocked, whoever held the lock in the parent."""
+    global _CACHE_LOCK, _CACHE_LOCK_DEPTH
+    _CACHE_LOCK = threading.RLock()
+    _CACHE_LOCK_DEPTH = 0
+
+
+if hasattr(os, 'register_at_fork'):
+    # A thread holding the lock does not exist in the child, so its lock must not
+    # either, or the child deadlocks the first time it resolves a binary.
+    os.register_at_fork(after_in_child=_reset_cache_lock)
+
+
+def _locked_once():
+    """The lock file, held for one yield."""
+    path = lock_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as e:
+        warnings.warn(f"Could not lock {path} against other processes: {e}", stacklevel=3)
+        yield
+        return
+    try:
+        with _file_locked(fd, path):
+            yield
+    finally:
+        os.close(fd)
+
+
+@contextlib.contextmanager
+def _file_locked(fd, path):
+    """An exclusive lock on an open file, in whatever way the platform has one."""
+    locked = False
+    try:
+        if os.name == 'nt':
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            # lockf is fcntl(F_SETLKW), the same lock a Java FileLock takes.
+            fcntl.lockf(fd, fcntl.LOCK_EX)
+        locked = True
+    except OSError as e:
+        warnings.warn(f"Could not lock {path} against other processes: {e}", stacklevel=4)
+    try:
+        yield
+    finally:
+        if locked:
+            try:
+                if os.name == 'nt':
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    import msvcrt
+
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.lockf(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
 
 
 def metadata_path():
@@ -442,10 +659,16 @@ def download_binary(version='latest', github_repo=None):
             checksum manifest carries no signature that could be verified
         ConnectionError: If the download or its installation fails
     """
+    with cache_lock():
+        return _download_binary_locked(version, github_repo)
+
+
+def _download_binary_locked(version, github_repo):
+    """download_binary, with the shared cache held over binary and metadata."""
     github_repo = github_repo or default_github_repo()
     if version == 'latest':
         version = resolve_latest_version(github_repo)
-    
+
     binary_name = release_asset_name()
 
     # Construct URLs
@@ -460,7 +683,9 @@ def download_binary(version='latest', github_repo=None):
     try:
         # Download checksum file first
         with urllib.request.urlopen(checksum_url, timeout=NETWORK_TIMEOUT) as response:
-            checksum_content = response.read().decode('utf-8')
+            checksum_content = read_bounded(
+                response, checksum_url, MAX_METADATA_BYTES
+            ).decode('utf-8')
         
         # Parse checksum (format: "hexdigest  filename\n")
         served_checksum = checksum_content.split()[0]
@@ -484,7 +709,7 @@ def download_binary(version='latest', github_repo=None):
         
         # Download binary
         with urllib.request.urlopen(binary_url, timeout=NETWORK_TIMEOUT) as response:
-            binary_data = response.read()
+            binary_data = read_bounded(response, binary_url, MAX_BINARY_BYTES)
         
         # Write to temporary file first
         temp_path = binary_path + '.tmp'
@@ -525,6 +750,25 @@ def download_binary(version='latest', github_repo=None):
         raise ConnectionError(f"Failed to download binary from {binary_url}: {e}")
 
 
+def file_digest(binary_path):
+    """SHA-256 hex digest of a file, read in chunks rather than into memory.
+
+    Args:
+        binary_path (str): Path to the file
+
+    Returns:
+        str: Hex digest
+    """
+    sha256 = hashlib.sha256()
+    with open(binary_path, 'rb') as f:
+        while True:
+            chunk = f.read(8192)
+            if not chunk:
+                break
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
 def verify_checksum(binary_path, expected_sha256):
     """Verify SHA-256 checksum of binary file.
     
@@ -535,25 +779,111 @@ def verify_checksum(binary_path, expected_sha256):
     Returns:
         bool: True if checksum matches, False otherwise
     """
-    sha256 = hashlib.sha256()
-    
-    with open(binary_path, 'rb') as f:
-        while True:
-            chunk = f.read(8192)
-            if not chunk:
-                break
-            sha256.update(chunk)
-    
-    actual = sha256.hexdigest()
-    return actual == expected_sha256
+    return file_digest(binary_path) == expected_sha256
+
+
+def stable_binary_path(digest):
+    """Path the cached binary is linked to under its own digest.
+
+    The Java client names this file the same way, so both start the same file.
+
+    Args:
+        digest (str): SHA-256 hex digest of the cached binary
+
+    Returns:
+        str: Absolute path (e.g. ~/.opensysml/bin/sysml-grpc-0123456789abcdef)
+    """
+    binary_path = get_binary_path()
+    root, extension = (
+        (binary_path[: -len('.exe')], '.exe')
+        if binary_path.endswith('.exe')
+        else (binary_path, '')
+    )
+    return f'{root}-{digest[:16]}{extension}'
+
+
+def stable_binary():
+    """Link the cached binary under its own digest and return that path.
+
+    The cache is one path every client installs over, so a service started from
+    it can be running a release other than the one that was verified. This must
+    be called with the cache lock held, so nothing replaces the cache between
+    hashing it and linking it.
+
+    Returns:
+        str: The digest-named path, or the cache itself when it cannot be linked
+    """
+    binary_path = get_binary_path()
+    try:
+        stable = stable_binary_path(file_digest(binary_path))
+    except OSError as e:
+        warnings.warn(
+            f"Could not hash {binary_path}, so a release installed over it may be "
+            f"started: {e}",
+            stacklevel=3,
+        )
+        return binary_path
+    if os.access(stable, os.X_OK):
+        return stable
+    try:
+        _link(binary_path, stable)
+        os.chmod(stable, 0o700)
+        return stable
+    except OSError as e:
+        warnings.warn(
+            f"Could not link {binary_path} to {stable}, so a release installed over "
+            f"it may be started: {e}",
+            stacklevel=3,
+        )
+        _remove_quietly(stable)
+        return binary_path
+
+
+def _link(source, target):
+    """Hard link source to target where the filesystem has links, else copy it."""
+    temp_path = target + '.tmp'
+    _remove_quietly(temp_path)
+    try:
+        os.link(source, temp_path)
+    except (OSError, AttributeError, NotImplementedError):
+        shutil.copyfile(source, temp_path)
+    try:
+        os.replace(temp_path, target)
+    except OSError:
+        _remove_quietly(temp_path)
+        raise
+
+
+def _remove_quietly(path):
+    """Remove a path, if it is there and removable."""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 def ensure_binary(force_download=False, version=None, github_repo=None):
     """Ensure sysml-grpc binary is available, downloading if necessary.
-    
+
+    Resolution is the order every client shares: $OPENSYSML_BINARY, then the
+    shared cache at ~/.opensysml/bin, then a release download when one is asked
+    for, then a sysml-grpc on $PATH.
+
     A cached binary is reused only when it is the release asked for; when no
     version is asked for, whatever is cached stands, locally built included. A
-    replacement that cannot be downloaded leaves the working cache in place.
+    replacement that cannot be downloaded leaves the working cache in place, and
+    a download that was asked for and failed is an error rather than a fall
+    through to $PATH, whose binary is of no known release. The whole cache
+    decision is made holding the shared cache lock, so a concurrent installer -
+    in another process or in the Java client - cannot install between the check
+    and the replacement.
+
+    What is returned for the shared cache is a link to it under its own digest,
+    not the cache path itself: the cache is replaced in place, so starting it
+    after the lock is dropped could start whatever was installed since. A binary
+    from $OPENSYSML_BINARY or $PATH is returned at its own path instead, and is
+    used as it is found: it belongs to no release, so it is neither copied into
+    the cache nor checked against the pinned digests.
     
     Args:
         force_download (bool): If True, download even if binary exists
@@ -561,19 +891,53 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
                                  or 'latest' for the newest release. If None,
                                  $OPENSYSML_GRPC_VERSION is used; without it
                                  auto-download is disabled and the binary must be
-                                 pre-installed via `make build` or downloaded manually.
+                                 pre-installed via `make build`, named by
+                                 $OPENSYSML_BINARY, or found on $PATH.
     
     Returns:
-        str: Path to binary
+        str: Path to binary, digest-named when it is the shared cache
     
     Raises:
         ConnectionError: If binary cannot be obtained
     """
-    from opensysml.errors import ConnectionError
     binary_path = get_binary_path()
     if version is None:
         version = os.environ.get('OPENSYSML_GRPC_VERSION') or None
-    
+
+    # Neither of these touches the cache, so neither takes the lock over it.
+    named = named_binary()
+    if named is not None:
+        return named
+
+    with cache_lock():
+        chosen = _ensure_binary_locked(
+            force_download, version, github_repo, binary_path
+        )
+        if chosen is not None:
+            return stable_binary() if chosen == binary_path else chosen
+
+    on_path = binary_on_path()
+    if on_path is not None:
+        return on_path
+
+    raise ConnectionError(
+        f"Binary not found at {binary_path}, named by ${BINARY_ENV} or on $PATH, and "
+        f"auto-download disabled. Looked at: ${BINARY_ENV}, {binary_path}, $PATH.\n"
+        f"  fix: build it (`make build-grpc`) and set ${BINARY_ENV} to the result, or\n"
+        f"       ask for a release to download by setting $OPENSYSML_GRPC_VERSION "
+        f"(e.g. latest), or passing version= here, or\n"
+        f"       install a sysml-grpc on $PATH, or\n"
+        f"       start a service yourself and pass its address to connect()."
+    )
+
+
+def _ensure_binary_locked(force_download, version, github_repo, binary_path):
+    """The cache or a download of the release asked for, with the shared cache held.
+
+    Returns:
+        str or None: The binary chosen, or None when nothing is cached and no
+            release was asked for, which leaves $PATH to answer
+    """
     # Check if binary already exists and is executable
     cached = None
     if not force_download and os.path.exists(binary_path):
@@ -584,16 +948,19 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
             cached = binary_path
             warnings.warn(
                 f"Replacing the cached sysml-grpc: {stale}. Downloading {version}.",
-                stacklevel=2,
+                stacklevel=3,
             )
     
-    # If no binary and no version specified, cannot auto-download
+    # Nothing cached and no release asked for, so $PATH is next, outside the lock.
     if version is None:
-        raise ConnectionError(
-            f"Binary not found at {binary_path} and auto-download disabled. "
-            f"Build via `make build`, set $OPENSYSML_GRPC_VERSION, or specify "
-            f"version= parameter for download."
-        )
+        # A download asked for with nothing to download is an error, as one that
+        # fails is: neither is answered by a $PATH binary of unknown release.
+        if force_download:
+            raise ConnectionError(
+                "A download was asked for without a release to download. Set "
+                "$OPENSYSML_GRPC_VERSION, or pass version= here."
+            )
+        return None
     
     # Download binary with explicit version
     try:
@@ -606,7 +973,7 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
         warnings.warn(
             f"Keeping the cached sysml-grpc at {cached}: {version} was not downloaded "
             f"({e}). It may be an older release than asked for.",
-            stacklevel=2,
+            stacklevel=3,
         )
         return cached
     except ChecksumMismatchError:
@@ -620,6 +987,6 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
         warnings.warn(
             f"Keeping the cached sysml-grpc at {cached}: {version} could not be "
             f"downloaded ({e}). It may be an older release than asked for.",
-            stacklevel=2,
+            stacklevel=3,
         )
         return cached

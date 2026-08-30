@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/envvar"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -26,14 +27,14 @@ func TestEmbedLoadEndToEnd(t *testing.T) {
 	}
 }
 
-// TestSysmlLibraryPathOverride: SYSML_LIBRARY_PATH points DefaultSource at an
+// TestSysmlLibraryPathOverride: OPENSYSML_LIBRARY_PATH points DefaultSource at an
 // on-disk directory, and the loader indexes that custom library instead.
 func TestSysmlLibraryPathOverride(t *testing.T) {
 	libDir, err := filepath.Abs("testdata/customlib")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SYSML_LIBRARY_PATH", libDir)
+	t.Setenv(LibraryPathEnvVar, libDir)
 	cache := &Cache{dir: t.TempDir()}
 	ld := NewLoader(DefaultSource(), cache)
 	idx := symbols.NewIndex()
@@ -41,12 +42,44 @@ func TestSysmlLibraryPathOverride(t *testing.T) {
 		t.Fatalf("Load custom: %v", err)
 	}
 	if len(idx.LookupQualified("Custom::Widget")) != 1 {
-		t.Fatal("SYSML_LIBRARY_PATH override did not load Custom::Widget")
+		t.Fatal("OPENSYSML_LIBRARY_PATH override did not load Custom::Widget")
 	}
 	// The bundled library must NOT be visible under the override source.
 	if _, err := DefaultSource().Read("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml"); err == nil {
 		t.Fatal("override source unexpectedly served bundled ScalarValues.kerml")
 	}
+}
+
+// TestSysmlLibraryPathLegacyName: the legacy SYSML_LIBRARY_PATH name still
+// points DefaultSource at an on-disk directory, and the OPENSYSML_ name wins
+// when both are set.
+func TestSysmlLibraryPathLegacyName(t *testing.T) {
+	libDir, err := filepath.Abs("testdata/customlib")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("legacy name", func(t *testing.T) {
+		t.Setenv(LibraryPathEnvVar, "")
+		t.Setenv(envvar.Legacy(LibraryPathEnvVar), libDir)
+		cache := &Cache{dir: t.TempDir()}
+		ld := NewLoader(DefaultSource(), cache)
+		idx := symbols.NewIndex()
+		if err := ld.load("Custom.kerml", idx); err != nil {
+			t.Fatalf("Load custom: %v", err)
+		}
+		if len(idx.LookupQualified("Custom::Widget")) != 1 {
+			t.Fatal("SYSML_LIBRARY_PATH fallback did not load Custom::Widget")
+		}
+	})
+
+	t.Run("both set, new name wins", func(t *testing.T) {
+		t.Setenv(LibraryPathEnvVar, libDir)
+		t.Setenv(envvar.Legacy(LibraryPathEnvVar), t.TempDir())
+		if _, err := DefaultSource().Read("Custom.kerml"); err != nil {
+			t.Fatalf("OPENSYSML_LIBRARY_PATH did not win over the legacy name: %v", err)
+		}
+	})
 }
 
 // TestCacheStaleContentReparsedNotServed: a cache entry stored under stale
@@ -58,7 +91,7 @@ func TestCacheStaleContentReparsedNotServed(t *testing.T) {
 	if err := os.WriteFile(libFile, []byte("package Evolving { namespace First; }"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SYSML_LIBRARY_PATH", libDir)
+	t.Setenv(LibraryPathEnvVar, libDir)
 	cache := &Cache{dir: t.TempDir()}
 	ld := NewLoader(DefaultSource(), cache)
 

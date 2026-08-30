@@ -200,7 +200,7 @@ The project is under active development, with the core infrastructure operationa
 | Semantic layer (operators, builtins, validation) | ✅ Complete |
 | Feature chain resolution (member access) | ✅ Complete |
 | Validation passes (typing conformance, redefinition) | ✅ Complete |
-| Native document-query planning | 🚧 Query definitions, typed immutable plans, named composition, cycle checks and diagnostics complete; execution and Markdown rendering are not yet implemented |
+| Native document-query planning | 🚧 Query definitions, typed immutable plans, named composition, cycle checks and diagnostics complete; execution is reachable via `%run-query` and `-run-query`; document composition and Markdown rendering are not yet implemented |
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |

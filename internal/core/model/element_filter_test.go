@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 )
 
 // filterWorkspace is a two-document workspace exercising both element-filter
@@ -560,7 +561,7 @@ package Nested {
 	if err := os.WriteFile(filepath.Join(libDir, "lib.sysml"), []byte(lib), 0o600); err != nil {
 		t.Fatalf("write library: %v", err)
 	}
-	t.Setenv("SYSML_LIBRARY_PATH", libDir)
+	t.Setenv(libs.LibraryPathEnvVar, libDir)
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	client := `package C {
@@ -761,7 +762,7 @@ package Vehicles {
 	if err := os.WriteFile(filepath.Join(libDir, "lib.sysml"), []byte(lib), 0o600); err != nil {
 		t.Fatalf("write library: %v", err)
 	}
-	t.Setenv("SYSML_LIBRARY_PATH", libDir)
+	t.Setenv(libs.LibraryPathEnvVar, libDir)
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	client := `package C {

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/envvar"
 )
 
 //go:embed stdlib
@@ -25,10 +27,15 @@ type Source interface {
 	Read(name string) ([]byte, error)
 }
 
-// DefaultSource returns a dirSource rooted at SYSML_LIBRARY_PATH when that
+// LibraryPathEnvVar names the directory to load the standard library from
+// instead of the embedded copy. The legacy SYSML_LIBRARY_PATH name remains
+// accepted; the OPENSYSML_ name wins when both are set.
+const LibraryPathEnvVar = "OPENSYSML_LIBRARY_PATH"
+
+// DefaultSource returns a dirSource rooted at LibraryPathEnvVar when that
 // environment variable is set and non-empty, otherwise the embedded source.
 func DefaultSource() Source {
-	if dir := os.Getenv("SYSML_LIBRARY_PATH"); dir != "" {
+	if dir := envvar.Lookup(LibraryPathEnvVar); dir != "" {
 		return &dirSource{dir: dir}
 	}
 	return &embedSource{}

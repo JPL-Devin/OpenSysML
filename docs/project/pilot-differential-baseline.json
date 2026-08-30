@@ -60,7 +60,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 23,
-        "digest": "sha256:f89018639870ad8bb35ee2e6246a23efaf18cf1018f388c2d55ba43129031cc5"
+        "digest": "sha256:4e68b963d9ebe6ab946cfe94baad42389f82af03e39aa7853e16d2a74ffccf9b"
       },
       {
         "name": "probes",
@@ -70,17 +70,17 @@
         "digest": "sha256:b0153c55bbfcdacabab911725dc44e0e7f4d3a501a281b1f3f2a13cda19737c6"
       }
     ],
-    "recorded": "2026-08-29"
+    "recorded": "2026-08-30"
   },
   "totals": {
     "files": 357,
     "filesFullyAgreeing": 332,
-    "agreement": 36,
+    "agreement": 34,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
     "pilotOnly": 45,
-    "openSysMLDiagnostics": 58,
-    "pilotDiagnostics": 83
+    "openSysMLDiagnostics": 56,
+    "pilotDiagnostics": 81
   },
   "roots": [
     {
@@ -735,12 +735,12 @@
       "totals": {
         "files": 23,
         "filesFullyAgreeing": 19,
-        "agreement": 2,
+        "agreement": 0,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
         "pilotOnly": 19,
-        "openSysMLDiagnostics": 4,
-        "pilotDiagnostics": 22
+        "openSysMLDiagnostics": 2,
+        "pilotDiagnostics": 20
       },
       "files": [
         {
@@ -792,26 +792,6 @@
               "count": 1
             }
           ]
-        },
-        {
-          "path": "orthogonal-regions-demo.sysml",
-          "agreement": [
-            {
-              "line": 12,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 26,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            }
-          ],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": []
         },
         {
           "path": "pseudostates-demo.sysml",
@@ -1010,16 +990,6 @@
     },
     {
       "side": "opensysml",
-      "message": "Duplicate of inherited member name 'start' from StateAction",
-      "count": 3
-    },
-    {
-      "side": "pilot",
-      "message": "Duplicate of inherited member name 'start' from StateAction",
-      "count": 3
-    },
-    {
-      "side": "opensysml",
       "message": "A participates in a specialization cycle",
       "count": 2
     },
@@ -1070,6 +1040,11 @@
     },
     {
       "side": "opensysml",
+      "message": "Duplicate of inherited member name 'start' from StateAction",
+      "count": 1
+    },
+    {
+      "side": "opensysml",
       "message": "p1 participates in a specialization cycle",
       "count": 1
     },
@@ -1106,6 +1081,11 @@
     {
       "side": "pilot",
       "message": "Duplicate of inherited member name 'done' from Action",
+      "count": 1
+    },
+    {
+      "side": "pilot",
+      "message": "Duplicate of inherited member name 'start' from StateAction",
       "count": 1
     },
     {
@@ -1173,12 +1153,12 @@
     "totals": {
       "files": 357,
       "filesFullyAgreeing": 333,
-      "agreement": 36,
+      "agreement": 34,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
       "pilotOnly": 45,
-      "openSysMLDiagnostics": 57,
-      "pilotDiagnostics": 83
+      "openSysMLDiagnostics": 55,
+      "pilotDiagnostics": 81
     },
     "findings": [
       {

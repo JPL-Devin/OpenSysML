@@ -238,6 +238,19 @@ func (s *Session) EvalExpr(expr string) ([]string, error) {
 	return append(s.drainTrace(), lines...), nil
 }
 
+// EvalBare evaluates a prompt line read as an expression, recording a failed
+// materialization so a piped run's exit status reports it, as %eval does.
+func (s *Session) EvalBare(expr string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	lines, err := s.evalExpr(expr)
+	if err != nil {
+		s.noteIfMaterializationFailure(err)
+		return nil, err
+	}
+	return append(s.drainTrace(), lines...), nil
+}
+
 // RunCalc invokes a calculation and returns what it computed. invocation is
 // what `%calc` takes: a name, optionally followed by its arguments or carrying
 // them as `Fall(3, 4)`.

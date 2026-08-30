@@ -28,6 +28,13 @@ import (
 // The name is taken in the notation, so a segment quoted because it holds a
 // space or is a keyword ('My Pkg'::Car) denotes what the index registers it as.
 func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
+	return s.lookupSymbolOfKinds(name)
+}
+
+// lookupSymbolOfKinds resolves a name as lookupSymbol does. want narrows the
+// suggestions offered when nothing resolves to the kinds the command can act
+// on, and decides nothing about what a resolved name denotes.
+func (s *Session) lookupSymbolOfKinds(name string, want ...symbols.SymbolKind) (*symbols.Symbol, string, error) {
 	// A name the notation reads is resolved by the text it names; anything else is
 	// looked up as typed, so the failure reported is about what was typed.
 	if plain, ok := plainName(name); ok {
@@ -53,7 +60,7 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 				}
 				return sym, fqn, nil
 			}
-			return nil, "", s.notFoundError(name)
+			return nil, "", s.notFoundError(name, want...)
 		case 1:
 			// The index owns its own scope tree; map the hit back onto the
 			// document's tree so every command sees one symbol per declaration.
@@ -87,7 +94,7 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 		if matches := idx.LookupQualified(name); len(matches) == 1 {
 			return matches[0], idx.GetFQN(matches[0]), nil
 		}
-		return nil, "", s.notFoundError(name)
+		return nil, "", s.notFoundError(name, want...)
 	case 1:
 		return matches[0], idx.GetFQN(matches[0]), nil
 	default:

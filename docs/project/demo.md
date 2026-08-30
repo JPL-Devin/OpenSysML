@@ -546,14 +546,14 @@ of freezing the demo.
 ```console
 sysml> %budget
 budgets (each bounds one run, not the session):
-  evaluation steps     10000000   SYSML_MAX_STEPS
-  action steps         1000000    SYSML_MAX_ACTION_STEPS
-  state events         1000000    SYSML_MAX_EVENTS
-  do action steps      5000000    SYSML_MAX_DO_STEPS
-  collection elements  1000000    SYSML_MAX_ELEMENTS
+  evaluation steps     10000000   OPENSYSML_MAX_STEPS
+  action steps         1000000    OPENSYSML_MAX_ACTION_STEPS
+  state events         1000000    OPENSYSML_MAX_EVENTS
+  do action steps      5000000    OPENSYSML_MAX_DO_STEPS
+  collection elements  1000000    OPENSYSML_MAX_ELEMENTS
 
 sysml> %eval 1..2000000
-error: evaluation failed: collection element limit exceeded (1000000 elements; raise SYSML_MAX_ELEMENTS to allow more)
+error: evaluation failed: collection element limit exceeded (1000000 elements; raise OPENSYSML_MAX_ELEMENTS to allow more)
 ```
 
 Each budget bounds **one** run — one `%eval`, one action, one state machine — and names the variable

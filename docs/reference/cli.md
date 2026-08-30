@@ -168,6 +168,7 @@ written in, so the verdicts after it are about that object:
 | `-satisfy=<name>` | Only the assertions the named element states (`-satisfy=false` asks for none) |
 | `-instantiate <name>` | Creates an object first, so the verdicts are about it |
 | `-calc "<name>(<args>)"` | Invokes a calculation and reports what it computed |
+| `-run-query "<name> [<p>=<expr>...]"` | Executes a document query and reports its rows, as `%run-query` does. Each binding is written as `<parameter>=<expression>` |
 | `-action "<name> [object]"` | Runs an action to completion and reports its outputs |
 | `-state "<name> [object]"` | Runs a state machine and reports where it settled |
 | `-advance <time>` | Simulated time units each `-state` machine is run for |
@@ -351,7 +352,7 @@ links here.
 |--------|-------|
 | `0` | What was asked for was done: every file loaded and analysed cleanly, every `-e` expression produced a value, every check held, a conversion was written. Warnings leave the status `0`. |
 | `1` | The model answered false: a constraint, requirement or satisfaction assertion the model decided did not hold. Only a verdict reports this status. |
-| `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an object whose feature values did not materialize, an unresolved name, a check that could not be made, a conversion that could not be written because the RDF graph cannot rebuild a source construct, a misused flag or an invalid `SYSML_MAX_*` value. |
+| `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an object whose feature values did not materialize, an unresolved name, a check that could not be made, a conversion that could not be written because the RDF graph cannot rebuild a source construct, a misused flag or an invalid `OPENSYSML_MAX_*` value. |
 
 ```bash
 $ printf '%s\n' 'constraint MassBudget { 1 > 2 }' > model.sysml
@@ -365,8 +366,8 @@ $ sysml -debug -quiet model.sysml; echo $?
 sysml: -debug and -quiet are mutually exclusive
 2
 
-$ SYSML_MAX_STEPS=abc sysml -e "1+1"; echo $?
-sysml: SYSML_MAX_STEPS="abc" is not an integer: set it to a positive number of evaluation steps (default 10000000)
+$ OPENSYSML_MAX_STEPS=abc sysml -e "1+1"; echo $?
+sysml: OPENSYSML_MAX_STEPS="abc" is not an integer: set it to a positive number of evaluation steps (default 10000000)
 2
 
 $ sysml examples/parser_features_demo_advanced_bodies.kerml -convert ttl; echo $?

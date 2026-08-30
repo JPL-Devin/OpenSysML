@@ -25,6 +25,11 @@ SOURCE = os.path.join(REPO_ROOT, "clients", "release-digests.json")
 COPIES = (
     os.path.join("clients", "python", "opensysml", "release-digests.json"),
     os.path.join("clients", "node", "release-digests.json"),
+    os.path.join(
+        "clients", "java", "opensysml-client", "src", "main", "resources",
+        "release-digests.json",
+    ),
+    os.path.join("clients", "rust", "opensysml", "release-digests.json"),
 )
 
 

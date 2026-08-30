@@ -20,6 +20,7 @@ type checks struct {
 	requirements stringSlice
 	satisfy      satisfyTargets
 	calcs        stringSlice
+	queries      stringSlice
 	actions      stringSlice
 	states       stringSlice
 	advance      advanceTime
@@ -47,7 +48,7 @@ func (a *advanceTime) Set(value string) error {
 func (c *checks) requested() bool {
 	return c.validate || c.jsonOut || c.advance.given || c.satisfy.given || len(c.instantiate) > 0 ||
 		len(c.constraints) > 0 || len(c.requirements) > 0 || len(c.calcs) > 0 ||
-		len(c.actions) > 0 || len(c.states) > 0
+		len(c.queries) > 0 || len(c.actions) > 0 || len(c.states) > 0
 }
 
 // checksOnly reports whether anything was asked about the model itself, as
@@ -55,7 +56,7 @@ func (c *checks) requested() bool {
 func (c *checks) checksOnly() bool {
 	return c.validate || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
 		len(c.requirements) > 0 || len(c.satisfy.targets) > 0 || len(c.calcs) > 0 ||
-		len(c.actions) > 0 || len(c.states) > 0
+		len(c.queries) > 0 || len(c.actions) > 0 || len(c.states) > 0
 }
 
 // satisfyTargets collects -satisfy values. The flag takes an optional value: a
@@ -176,16 +177,18 @@ func runChecks(files []string, exprs []string, c checks) int {
 		rep.failed(fmt.Sprintf("%s did not analyse cleanly; no check was made", namedModels(files)))
 		return rep.finish()
 	}
-	for _, output := range loaded {
-		rep.info(output)
-	}
 	// A clean model's warnings are still findings rather than results, so they
-	// are kept off the stream the verdicts are reported on.
+	// are kept off the stream the verdicts are reported on, and printed before
+	// the load summary they qualify.
 	rep.problem(sess.DiagnosticLines())
 
 	// What analysis found is reported as data whatever was checked, so a caller
 	// parsing the report reads the warnings the printed load output carries.
 	rep.diags(sess.LocatedDiagnostics())
+
+	for _, output := range loaded {
+		rep.info(output)
+	}
 
 	// An object first: a constraint, requirement or expression about a feature of
 	// a part is answered about the object that carries it, and only an existing
@@ -252,6 +255,9 @@ func runChecks(files []string, exprs []string, c checks) int {
 	}
 	for _, invocation := range c.calcs {
 		rep.verdict(sess.RunCalc(invocation))
+	}
+	for _, invocation := range c.queries {
+		rep.verdict(sess.RunDocumentQuery(invocation))
 	}
 	for _, value := range c.actions {
 		name, performer := splitPerformer(value)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/envvar"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -368,6 +369,34 @@ func TestIndexPrewarmFromEnv(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestIndexPrewarmLegacyEnvName: the legacy SYSML_GRPC_INDEX_POOL name still
+// sets the prewarm, and the OPENSYSML_ name wins when both are set.
+func TestIndexPrewarmLegacyEnvName(t *testing.T) {
+	t.Run("legacy name", func(t *testing.T) {
+		t.Setenv(IndexPrewarmEnvVar, "")
+		t.Setenv(envvar.Legacy(IndexPrewarmEnvVar), "7")
+		got, err := indexPrewarmFromEnv()
+		if err != nil {
+			t.Fatalf("indexPrewarmFromEnv: %v", err)
+		}
+		if got != 7 {
+			t.Errorf("size %d, want the legacy value 7", got)
+		}
+	})
+
+	t.Run("both set, new name wins", func(t *testing.T) {
+		t.Setenv(IndexPrewarmEnvVar, "3")
+		t.Setenv(envvar.Legacy(IndexPrewarmEnvVar), "9")
+		got, err := indexPrewarmFromEnv()
+		if err != nil {
+			t.Fatalf("indexPrewarmFromEnv: %v", err)
+		}
+		if got != 3 {
+			t.Errorf("size %d, want the OPENSYSML_ value 3 over the legacy 9", got)
+		}
+	})
 }
 
 // TestLibraryBaseBuildsOnceUnderConcurrentDemand pins that many requests
