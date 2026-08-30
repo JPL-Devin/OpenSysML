@@ -19,6 +19,7 @@ use std::env;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::Duration;
 
@@ -166,6 +167,49 @@ fn unpinned_allowed(raw: Option<&str>, repo: &str) -> bool {
     }
 }
 
+/// Reject a repository that would not name one, before it is put in a URL.
+fn validate_repo(repo: &str) -> Result<(), Error> {
+    let mut segments = repo.split('/');
+    let named = match (segments.next(), segments.next(), segments.next()) {
+        (Some(owner), Some(name), None) => [owner, name],
+        _ => {
+            return Err(Error::BinaryDownload(format!(
+                "${{OPENSYSML_GITHUB_REPO}} is {repo:?}, which is not an owner/repo"
+            )))
+        }
+    };
+    let usable = named.iter().all(|segment| {
+        !segment.is_empty()
+            && *segment != "."
+            && *segment != ".."
+            && segment
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    });
+    if !usable {
+        return Err(Error::BinaryDownload(format!(
+            "${{OPENSYSML_GITHUB_REPO}} is {repo:?}, which is not an owner/repo"
+        )));
+    }
+    Ok(())
+}
+
+/// Reject a release tag that would not name one, before it is put in a URL.
+fn validate_version(version: &str) -> Result<(), Error> {
+    let usable = !version.is_empty()
+        && !version.starts_with('-')
+        && !version.contains("..")
+        && version
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+'));
+    if !usable {
+        return Err(Error::BinaryDownload(format!(
+            "{version:?} is not a release tag"
+        )));
+    }
+    Ok(())
+}
+
 /// The SHA-256 hex digest of a file.
 fn file_digest(path: &Path) -> Result<String, std::io::Error> {
     let mut file = fs::File::open(path)?;
@@ -179,6 +223,30 @@ fn file_digest(path: &Path) -> Result<String, std::io::Error> {
         hasher.update(&buffer[..read]);
     }
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// A download that did not install, and whether it had already replaced the cache.
+struct Failure {
+    error: Error,
+    installed: bool,
+}
+
+impl Failure {
+    /// A failure with the cache still as it was.
+    fn before(error: impl Into<Error>) -> Self {
+        Self {
+            error: error.into(),
+            installed: false,
+        }
+    }
+
+    /// A failure after the cache was replaced, so the old binary is gone.
+    fn after_installing(error: Error) -> Self {
+        Self {
+            error,
+            installed: true,
+        }
+    }
 }
 
 /// Downloads release binaries into the shared cache, verifying them against the shipped pins.
@@ -197,8 +265,10 @@ pub(crate) struct Downloader {
 impl Downloader {
     /// A downloader configured from the environment, for the host platform.
     pub(crate) fn from_env() -> Result<Self, Error> {
+        let repo = default_github_repo();
+        validate_repo(&repo)?;
         Ok(Self {
-            repo: default_github_repo(),
+            repo,
             release_base_url: DEFAULT_RELEASE_BASE_URL.to_owned(),
             api_base_url: DEFAULT_API_BASE_URL.to_owned(),
             cache_dir: default_cache_dir(),
@@ -391,67 +461,105 @@ impl Downloader {
         }
     }
 
+    /// [`Self::install`] without the record of whether the cache was replaced.
+    #[cfg(test)]
+    fn download_binary(&self, version: &str) -> Result<PathBuf, Error> {
+        self.install(version).map_err(|failure| failure.error)
+    }
+
     /// Download a release binary into the cache, verifying it before installing it.
     ///
-    /// A failed or unverified download leaves any existing cached binary intact.
-    pub(crate) fn download_binary(&self, version: &str) -> Result<PathBuf, Error> {
+    /// A download that fails before the cache is replaced leaves it intact.
+    fn install(&self, version: &str) -> Result<PathBuf, Failure> {
         let version = if version == "latest" {
-            self.resolve_latest_version()?
+            self.resolve_latest_version().map_err(Failure::before)?
         } else {
+            validate_version(version).map_err(Failure::before)?;
             version.to_owned()
         };
         let asset = self.asset.clone();
         let binary_path = self.binary_path();
-        fs::create_dir_all(&self.cache_dir)?;
+        fs::create_dir_all(&self.cache_dir).map_err(Failure::before)?;
 
         let sidecar_url = self.download_url(&version, &format!("{asset}.sha256"));
-        let sidecar = self.fetch(&sidecar_url)?;
+        let sidecar = self.fetch(&sidecar_url).map_err(Failure::before)?;
         let served = String::from_utf8_lossy(&sidecar)
             .split_whitespace()
             .next()
             .map(str::to_owned)
             .ok_or_else(|| {
-                Error::BinaryDownload(format!("{sidecar_url} served no checksum for {asset}"))
+                Failure::before(Error::BinaryDownload(format!(
+                    "{sidecar_url} served no checksum for {asset}"
+                )))
             })?;
         // Refusing an unverifiable release here means its binary is never fetched.
-        let expected = self.expected_digest(&version, &asset, &served)?;
+        let expected = self
+            .expected_digest(&version, &asset, &served)
+            .map_err(Failure::before)?;
 
-        let body = self.fetch(&self.download_url(&version, &asset))?;
-        let temp_path = self.cache_dir.join(format!("{}.tmp", binary_file_name()));
-        fs::write(&temp_path, &body)?;
-
-        let actual = file_digest(&temp_path)?;
-        if actual != expected {
+        let body = self
+            .fetch(&self.download_url(&version, &asset))
+            .map_err(Failure::before)?;
+        // A temporary name of this process's own, so concurrent installs do not
+        // write over each other's download.
+        static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+        let temp_path = self.cache_dir.join(format!(
+            "{}.{}.{}.tmp",
+            binary_file_name(),
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed),
+        ));
+        let staged = self.stage(&temp_path, &body, &version, &asset, &expected);
+        if staged.is_err() {
             let _ = fs::remove_file(&temp_path);
-            return Err(Error::ChecksumMismatch(format!(
-                "checksum mismatch for {asset} of {version}: expected {expected}, but the \
-                 download hashes to {actual}. It may be corrupted or tampered with; it was not \
-                 installed."
-            )));
         }
+        staged.map_err(Failure::before)?;
 
+        // Everything that can still fail is done before the cache is replaced, so
+        // a failure here is a failure to install rather than a broken cache.
         if let Err(error) = fs::rename(&temp_path, &binary_path) {
             let _ = fs::remove_file(&temp_path);
-            return Err(Error::BinaryDownload(format!(
+            return Err(Failure::before(Error::BinaryDownload(format!(
                 "downloaded {version} but could not install it at {}: {error}. A running service \
                  holding that file is the usual cause.",
                 binary_path.display(),
-            )));
-        }
-
-        // The cache is this user's, so no one else needs it.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&binary_path, fs::Permissions::from_mode(0o700))?;
+            ))));
         }
 
         self.write_metadata(&CacheMetadata {
             version,
             sha256: expected,
             repo: self.repo.clone(),
-        })?;
+        })
+        .map_err(Failure::after_installing)?;
         Ok(binary_path)
+    }
+
+    /// Write the download to `temp_path` and make it the binary that may replace the cache.
+    fn stage(
+        &self,
+        temp_path: &Path,
+        body: &[u8],
+        version: &str,
+        asset: &str,
+        expected: &str,
+    ) -> Result<(), Error> {
+        fs::write(temp_path, body)?;
+        let actual = file_digest(temp_path)?;
+        if actual != *expected {
+            return Err(Error::ChecksumMismatch(format!(
+                "checksum mismatch for {asset} of {version}: expected {expected}, but the \
+                 download hashes to {actual}. It may be corrupted or tampered with; it was not \
+                 installed."
+            )));
+        }
+        // The cache is this user's, so no one else needs it.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(temp_path, fs::Permissions::from_mode(0o700))?;
+        }
+        Ok(())
     }
 
     /// The cached binary for the release asked for, downloading it when it is not already there.
@@ -482,11 +590,19 @@ impl Downloader {
             )));
         };
 
-        match self.download_binary(version) {
+        match self.install(version) {
             Ok(path) => Ok(path),
-            // A download that may have been tampered with is never answered from the cache.
-            Err(error @ Error::ChecksumMismatch(_)) => Err(error),
-            Err(error) => match cached {
+            // A download that may have been tampered with is never answered from
+            // the cache, and neither is one that already replaced it.
+            Err(Failure {
+                error: error @ Error::ChecksumMismatch(_),
+                ..
+            })
+            | Err(Failure {
+                error,
+                installed: true,
+            }) => Err(error),
+            Err(Failure { error, .. }) => match cached {
                 // A release that cannot be had is no reason to lose a working binary.
                 Some(path) => {
                     self.warn(format!(
@@ -618,6 +734,14 @@ mod tests {
     const ASSET: &str = "sysml-grpc-linux-amd64";
     const REPO: &str = "Open-MBEE/OpenSysML";
 
+    /// Whether any staged download was left behind in the cache directory.
+    fn temporaries_left(cache_dir: &Path) -> bool {
+        fs::read_dir(cache_dir)
+            .expect("read the cache directory")
+            .filter_map(Result::ok)
+            .any(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+    }
+
     fn digest_of(bytes: &[u8]) -> String {
         format!("{:x}", Sha256::digest(bytes))
     }
@@ -682,7 +806,7 @@ mod tests {
         let path = downloader.download_binary("v0.1.0").expect("download");
         assert_eq!(fs::read(&path).expect("read the cache"), body);
         assert_eq!(downloader.cached_release().as_deref(), Some("v0.1.0"));
-        assert!(!downloader.cache_dir.join("sysml-grpc.tmp").exists());
+        assert!(!temporaries_left(&downloader.cache_dir));
         assert!(downloader.warnings().is_empty());
 
         let recorded = downloader.read_metadata().expect("metadata");
@@ -747,7 +871,7 @@ mod tests {
             b"the cached binary"
         );
         assert_eq!(downloader.cached_release().as_deref(), Some("v0.0.5"));
-        assert!(!downloader.cache_dir.join("sysml-grpc.tmp").exists());
+        assert!(!temporaries_left(&downloader.cache_dir));
     }
 
     #[test]
@@ -771,7 +895,7 @@ mod tests {
             fs::read(downloader.binary_path()).expect("read the cache"),
             b"the cached binary"
         );
-        assert!(!downloader.cache_dir.join("sysml-grpc.tmp").exists());
+        assert!(!temporaries_left(&downloader.cache_dir));
     }
 
     #[test]
@@ -1023,6 +1147,72 @@ mod tests {
         assert!(
             matches!(&error, Error::BinaryDownload(message)
                 if message.contains("OPENSYSML_GRPC_VERSION")),
+            "{error}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_cache_replaced_before_the_failure_is_not_reported_as_kept() {
+        // The metadata is written last; a directory in its place fails that write
+        // after the binary is already replaced.
+        let body = b"the release asked for";
+        let digest = digest_of(body);
+        let harness = harness(
+            "post-install",
+            release_routes("v0.0.7", body, &digest),
+            pin_table("v0.0.7", &digest),
+        );
+        let downloader = &harness.downloader;
+        let older = b"the release before";
+        fs::write(downloader.binary_path(), older).expect("place a cache");
+        downloader
+            .write_metadata(&CacheMetadata {
+                version: "v0.0.5".to_owned(),
+                sha256: digest_of(older),
+                repo: REPO.to_owned(),
+            })
+            .expect("record a cache");
+        fs::remove_file(downloader.metadata_path()).expect("clear the record");
+        fs::create_dir(downloader.metadata_path()).expect("block the record");
+
+        let error = downloader
+            .ensure_binary(Some("v0.0.7"))
+            .expect_err("the replaced cache is not answered for");
+        assert!(matches!(error, Error::Io(_)), "{error}");
+        assert_eq!(
+            fs::read(downloader.binary_path()).expect("read the cache"),
+            body
+        );
+    }
+
+    #[test]
+    fn a_repository_or_tag_that_could_reshape_a_url_is_refused() {
+        for repo in [
+            "Open-MBEE",
+            "Open-MBEE/OpenSysML/extra",
+            "Open-MBEE/../secrets",
+            "Open-MBEE/Open SysML",
+            "",
+        ] {
+            assert!(validate_repo(repo).is_err(), "{repo}");
+        }
+        assert!(validate_repo("Open-MBEE/OpenSysML").is_ok());
+        assert!(validate_repo("a_fork.of/Open-SysML").is_ok());
+
+        for version in ["", "../v0.0.5", "v0.0.5/../..", "v0.0.5 v0.0.6", "-v0.0.5"] {
+            assert!(validate_version(version).is_err(), "{version:?}");
+        }
+        assert!(validate_version("v0.0.5").is_ok());
+        assert!(validate_version("v1.0.0-rc.1+build.2").is_ok());
+
+        let harness = harness("traversal", HashMap::new(), PinTable::new());
+        let error = harness
+            .downloader
+            .download_binary("../../other/releases/download/v1")
+            .expect_err("refusal");
+        assert!(
+            matches!(&error, Error::BinaryDownload(message) if message.contains("release tag")),
             "{error}"
         );
     }
