@@ -59,7 +59,7 @@ class Opensysml < Formula
     assert_match version.to_s, shell_output("#{bin}/sysml-lsp --version")
 
     # The manual pages ship in the bundle archive, so `man sysml` works.
-    assert_predicate man1/"sysml.1", :exist?
+    assert_path_exists man1/"sysml.1"
 
     # Evaluate an expression non-interactively: exercises lexer, parser, and runtime.
     assert_match "= 8", shell_output("#{bin}/sysml -e '5 + 3'")

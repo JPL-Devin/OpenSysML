@@ -156,10 +156,10 @@ install: build ## Install binaries to $GOPATH/bin
 # GNU-conventional paths, binaries and manual pages together.
 install-tree: build ## Install binaries and manual pages under DESTDIR/prefix
 	@echo "Installing to $(DESTDIR)$(prefix)..."
-	$(INSTALL) -d $(DESTDIR)$(bindir) $(DESTDIR)$(man1dir)
+	$(INSTALL) -d "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)"
 	@for cmd in $(COMMANDS); do \
-		$(INSTALL) -m 0755 $(BIN_DIR)/$$cmd $(DESTDIR)$(bindir)/$$cmd || exit 1; \
-		$(INSTALL) -m 0644 $(MAN_DIR)/$$cmd.1 $(DESTDIR)$(man1dir)/$$cmd.1 || exit 1; \
+		$(INSTALL) -m 0755 "$(BIN_DIR)/$$cmd" "$(DESTDIR)$(bindir)/$$cmd" || exit 1; \
+		$(INSTALL) -m 0644 "$(MAN_DIR)/$$cmd.1" "$(DESTDIR)$(man1dir)/$$cmd.1" || exit 1; \
 	done
 	@echo "✓ Installed into $(DESTDIR)$(bindir) and $(DESTDIR)$(man1dir)"
 
