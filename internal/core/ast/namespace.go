@@ -29,6 +29,16 @@ type QualifiedName struct {
 	NodeBase
 	Global bool
 	Parts  []NameSegment
+	// part0 backs Parts for the common single-segment name, so parsing one
+	// costs no slice allocation of its own (see SetSingleton).
+	part0 [1]NameSegment
+}
+
+// SetSingleton makes seg the name's only part, backed by the node's own
+// storage. The slice is capped so appending a later segment copies out.
+func (q *QualifiedName) SetSingleton(seg NameSegment) {
+	q.part0[0] = seg
+	q.Parts = q.part0[:1:1]
 }
 
 // AsQualifiedName unwraps the two forms a name reference parses to: a bare

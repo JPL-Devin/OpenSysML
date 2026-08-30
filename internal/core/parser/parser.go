@@ -149,11 +149,17 @@ func triviaOf(tok lexer.Token) (ast.Trivia, bool) {
 // peek returns the current non-trivia token without consuming it.
 func (p *Parser) peek() lexer.Token { return p.peekN(0) }
 
-// peekN returns the token n positions ahead (0 = current).
+// peekN returns the token n positions ahead (0 = current). The buffered fast
+// path is kept small enough to inline into the parser's hot accessors.
 func (p *Parser) peekN(n int) lexer.Token {
 	if i := p.pos + n; i < len(p.buf) {
 		return p.buf[i]
 	}
+	return p.peekSlow(n)
+}
+
+// peekSlow pulls tokens from the lexer until the one n ahead is buffered.
+func (p *Parser) peekSlow(n int) lexer.Token {
 	p.fill(n)
 	if p.pos+n >= len(p.buf) {
 		return p.buf[len(p.buf)-1] // EOF (sticky)

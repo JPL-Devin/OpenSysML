@@ -108,7 +108,8 @@ func (p *Parser) parseQualifiedName() *ast.QualifiedName {
 		return nil
 	}
 
-	parts := []ast.NameSegment{seg}
+	qn := &ast.QualifiedName{Global: global}
+	qn.SetSingleton(seg)
 	for p.at(lexer.ColonColon) {
 		// Do not consume `::` if it introduces `*`/`**` (namespace import wildcard).
 		if nk := p.peekN(1).Kind; nk == lexer.Star || nk == lexer.StarStar {
@@ -120,10 +121,9 @@ func (p *Parser) parseQualifiedName() *ast.QualifiedName {
 			p.error(p.peek().Span, "expected a name after '::'")
 			break
 		}
-		parts = append(parts, next)
+		qn.Parts = append(qn.Parts, next)
 	}
 
-	qn := &ast.QualifiedName{Global: global, Parts: parts}
 	qn.NodeSpan = p.spanFrom(start)
 	qn.SetLeadingTrivia(trivia)
 	return qn
@@ -155,7 +155,8 @@ func (p *Parser) parseQualifiedNameRelaxed() *ast.QualifiedName {
 		return nil
 	}
 
-	parts := []ast.NameSegment{seg}
+	qn := &ast.QualifiedName{Global: global}
+	qn.SetSingleton(seg)
 	for p.at(lexer.ColonColon) {
 		// Do not consume `::` if it introduces `*`/`**` (namespace import wildcard).
 		if nk := p.peekN(1).Kind; nk == lexer.Star || nk == lexer.StarStar {
@@ -167,10 +168,8 @@ func (p *Parser) parseQualifiedNameRelaxed() *ast.QualifiedName {
 			p.error(p.peek().Span, "expected a name after '::'")
 			break
 		}
-		parts = append(parts, next)
+		qn.Parts = append(qn.Parts, next)
 	}
-
-	qn := &ast.QualifiedName{Global: global, Parts: parts}
 	qn.NodeSpan = p.spanFrom(start)
 	qn.SetLeadingTrivia(trivia)
 	return qn

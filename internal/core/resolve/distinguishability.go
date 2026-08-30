@@ -206,6 +206,9 @@ func (r *Resolver) inheritedMembers(owner *symbols.Symbol, model supertypeProvid
 	for _, sup := range model.DirectSupertypes(owner) {
 		candidates = append(candidates, r.inheritableMembers(sup, model, seen)...)
 	}
+	if len(candidates) == 0 {
+		return nil
+	}
 	out := map[string][]*symbols.Symbol{}
 	for _, sym := range r.removeRedefinedFeatures(owner, candidates) {
 		out[sym.Name] = append(out[sym.Name], sym)
@@ -260,15 +263,26 @@ func (r *Resolver) importedMembers(sup *symbols.Symbol) []*symbols.Symbol {
 // and one another inherited member redefines (KerML 7.4.3).
 func (r *Resolver) removeRedefinedFeatures(owner *symbols.Symbol, inherited []*symbols.Symbol) []*symbols.Symbol {
 	byOwner := r.redefinedByMembers(owner.Scope)
-	byInherited := map[*symbols.Symbol]bool{}
+	var byInherited map[*symbols.Symbol]bool
 	kept := make([]*symbols.Symbol, 0, len(inherited))
 	for _, sym := range inherited {
+		if len(r.redefinedFeatures(sym)) == 0 {
+			// Nothing redefined: the closure is sym alone, so no map is built.
+			if redefinerOtherThan(byOwner[sym], sym) {
+				continue
+			}
+			kept = append(kept, sym)
+			continue
+		}
 		redefines := r.redefinedClosure(sym)
 		if redefinedByOther(redefines, byOwner, sym) {
 			continue
 		}
 		for target := range redefines {
 			if target != sym {
+				if byInherited == nil {
+					byInherited = map[*symbols.Symbol]bool{}
+				}
 				byInherited[target] = true
 			}
 		}
@@ -286,7 +300,7 @@ func (r *Resolver) removeRedefinedFeatures(owner *symbols.Symbol, inherited []*s
 // redefinedByMembers maps each feature the members of scope redefine to the
 // members redefining it.
 func (r *Resolver) redefinedByMembers(scope *symbols.Scope) map[*symbols.Symbol][]*symbols.Symbol {
-	out := map[*symbols.Symbol][]*symbols.Symbol{}
+	var out map[*symbols.Symbol][]*symbols.Symbol
 	if scope == nil {
 		return out
 	}
@@ -294,6 +308,9 @@ func (r *Resolver) redefinedByMembers(scope *symbols.Scope) map[*symbols.Symbol]
 	// effective name only the semantic model knows is anonymous here.
 	scope.ForEachMember(func(sym *symbols.Symbol) bool {
 		for _, target := range r.redefinedFeatures(sym) {
+			if out == nil {
+				out = map[*symbols.Symbol][]*symbols.Symbol{}
+			}
 			out[target] = append(out[target], sym)
 		}
 		return true
@@ -327,10 +344,18 @@ func redefinedByOther(
 	sym *symbols.Symbol,
 ) bool {
 	for target := range closure {
-		for _, redefiner := range byOwner[target] {
-			if redefiner != sym {
-				return true
-			}
+		if redefinerOtherThan(byOwner[target], sym) {
+			return true
+		}
+	}
+	return false
+}
+
+// redefinerOtherThan reports whether redefiners holds a member other than sym.
+func redefinerOtherThan(redefiners []*symbols.Symbol, sym *symbols.Symbol) bool {
+	for _, redefiner := range redefiners {
+		if redefiner != sym {
+			return true
 		}
 	}
 	return false
