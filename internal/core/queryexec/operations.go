@@ -222,6 +222,12 @@ func (e *executor) evaluateWhereName(expression queryplan.Expression) (sequence,
 	if err != nil {
 		return sequence{}, err
 	}
+	if compareErr := validateTextComparison(operator, expected); compareErr != nil {
+		if compareErr != errComparison {
+			return sequence{}, e.invalidArgument(expression, "value", expected)
+		}
+		return sequence{}, e.operatorError(expression, operator)
+	}
 	var result sequence
 	for i, value := range source.values {
 		sym, _ := value.Element()
@@ -259,6 +265,12 @@ func (e *executor) evaluateWhereFeature(expression queryplan.Expression) (sequen
 	expected, err := e.stringArgument(expression, "value")
 	if err != nil {
 		return sequence{}, err
+	}
+	if compareErr := validateFeatureComparison(operator, expected); compareErr != nil {
+		if compareErr != errComparison {
+			return sequence{}, e.invalidArgument(expression, "value", expected)
+		}
+		return sequence{}, e.operatorError(expression, operator)
 	}
 	if len(source.values) == 0 {
 		return source, nil
@@ -556,6 +568,33 @@ func compareText(actual, operator, expected string) (bool, error) {
 		return expression.MatchString(actual), nil
 	default:
 		return false, errComparison
+	}
+}
+
+func validateTextComparison(operator, expected string) error {
+	switch operator {
+	case "=", "==", "!=", "<>", "contains", "startsWith", "starts-with", "endsWith", "ends-with":
+		return nil
+	case "matches":
+		_, err := regexp.Compile(expected)
+		return err
+	default:
+		return errComparison
+	}
+}
+
+func validateFeatureComparison(operator, expected string) error {
+	switch operator {
+	case "=", "==", "!=", "<>", "contains", "startsWith", "starts-with", "endsWith", "ends-with":
+		return nil
+	case "matches":
+		_, err := regexp.Compile(expected)
+		return err
+	case "<", "<=", ">", ">=":
+		_, err := parseNumericValue(expected)
+		return err
+	default:
+		return errComparison
 	}
 }
 

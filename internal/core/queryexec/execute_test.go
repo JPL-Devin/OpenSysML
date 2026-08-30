@@ -517,6 +517,80 @@ calc def EmptyOrdering :> Query {
 	}
 }
 
+func TestExecuteValidatesEmptyFilters(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part child;
+}
+calc def InvalidNameOperator :> Query {
+	in source : Element;
+	WhereName(
+		source = WhereName(
+			source = OwnedElements(source = source),
+			operator = "=",
+			value = "absent"
+		),
+		operator = "invalid",
+		value = "child"
+	)
+}
+calc def InvalidNamePattern :> Query {
+	in source : Element;
+	WhereName(
+		source = WhereName(
+			source = OwnedElements(source = source),
+			operator = "=",
+			value = "absent"
+		),
+		operator = "matches",
+		value = "["
+	)
+}
+calc def InvalidFeatureOperator :> Query {
+	in source : Element;
+	WhereFeature(
+		source = WhereName(
+			source = OwnedElements(source = source),
+			operator = "=",
+			value = "absent"
+		),
+		'feature' = "score",
+		operator = "invalid",
+		value = "1"
+	)
+}
+calc def InvalidFeatureOperand :> Query {
+	in source : Element;
+	WhereFeature(
+		source = WhereName(
+			source = OwnedElements(source = source),
+			operator = "=",
+			value = "absent"
+		),
+		'feature' = "score",
+		operator = ">",
+		value = "not-a-number"
+	)
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	for _, tc := range []struct {
+		query string
+		kind  ErrorKind
+	}{
+		{query: "InvalidNameOperator", kind: ErrorInvalidOperator},
+		{query: "InvalidNamePattern", kind: ErrorInvalidArgument},
+		{query: "InvalidFeatureOperator", kind: ErrorInvalidOperator},
+		{query: "InvalidFeatureOperand", kind: ErrorInvalidArgument},
+	} {
+		_, err := fixture.execute(t, tc.query, bindings, Options{})
+		var executionError *Error
+		if !errors.As(err, &executionError) || executionError.Kind != tc.kind {
+			t.Fatalf("%s error = %v, want %s", tc.query, err, tc.kind)
+		}
+	}
+}
+
 func TestExecuteRejectsInvalidBindingsAndComposition(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part root;
@@ -675,6 +749,57 @@ calc def TargetResults :> Query {
 	if executionError.Expected != "Observatory::Target" ||
 		executionError.Actual != "Observatory::invalidRoot::other" {
 		t.Fatalf("narrowed result detail = %+v", executionError)
+	}
+}
+
+func TestExecuteValidatesUserClassifiersNamedElement(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+package Domain {
+	part def Element;
+}
+part conforming : Domain::Element;
+part unrelated;
+part validRoot {
+	part child : Domain::Element;
+}
+part invalidRoot {
+	part child;
+}
+calc def ElementInput :> Query {
+	in source : Domain::Element;
+	in root : Element;
+	OwnedElements(source = root)
+}
+calc def ElementResults :> Query {
+	in source : Element;
+	return result : Domain::Element[0..*] ordered;
+	OwnedElements(source = source)
+}
+`)
+	if _, err := fixture.execute(t, "ElementInput", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "conforming"))},
+		"root":   {ElementValue(fixture.symbol(t, "validRoot"))},
+	}, Options{}); err != nil {
+		t.Fatalf("execute conforming Element binding: %v", err)
+	}
+	_, err := fixture.execute(t, "ElementInput", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "unrelated"))},
+		"root":   {ElementValue(fixture.symbol(t, "validRoot"))},
+	}, Options{})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType {
+		t.Fatalf("unrelated Element binding error = %v", err)
+	}
+	if _, err = fixture.execute(t, "ElementResults", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "validRoot"))},
+	}, Options{}); err != nil {
+		t.Fatalf("execute conforming Element results: %v", err)
+	}
+	_, err = fixture.execute(t, "ElementResults", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "invalidRoot"))},
+	}, Options{})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorResultType {
+		t.Fatalf("unrelated Element result error = %v", err)
 	}
 }
 

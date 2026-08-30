@@ -197,7 +197,7 @@ func (e *executor) valueConforms(value Value, expected string) bool {
 				return true
 			}
 		}
-		return expected == "Element" || strings.HasSuffix(expected, "::Element")
+		return expected == "Element" || expected == "KerML::Root::Element"
 	default:
 		actual, ok := scalarValueType(value)
 		if !ok {
