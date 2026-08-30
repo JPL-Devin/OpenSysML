@@ -7,10 +7,13 @@ import json
 import os
 import platform
 import re
+import subprocess
+import sys
 import pytest
 from unittest.mock import patch, Mock, mock_open
 from opensysml.binary import (
     PINNED_SHA256,
+    cache_lock,
     cached_release,
     default_github_repo,
     detect_platform,
@@ -19,6 +22,7 @@ from opensysml.binary import (
     expected_digest,
     metadata_path,
     pinned_digest,
+    lock_path,
     release_asset_name,
     resolve_latest_version,
     stale_cache_reason,
@@ -617,3 +621,38 @@ class TestPinnedDigests:
                    side_effect=UnpinnedReleaseError('pins no SHA-256 digest')):
             with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
                 ensure_binary(version='v9.9.9')
+
+
+def _lock_is_free(path):
+    """Whether another process can take the cache lock right now."""
+    probe = (
+        'import fcntl, os, sys\n'
+        'fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o600)\n'
+        'try:\n'
+        '    fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n'
+        'except OSError:\n'
+        '    sys.exit(1)\n'
+        'sys.exit(0)\n'
+    )
+    return subprocess.run([sys.executable, '-c', probe, path]).returncode == 0
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='the probe takes a POSIX fcntl lock')
+def test_the_cache_lock_shuts_other_processes_out(cache):
+    """Test the lock is a real one, so the Java client contends for it too."""
+    binary_path = cache()
+    assert lock_path() == binary_path + '.lock'
+
+    with cache_lock():
+        assert not _lock_is_free(lock_path())
+    assert _lock_is_free(lock_path())
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='the probe takes a POSIX fcntl lock')
+def test_a_nested_cache_lock_does_not_release_the_outer_one(cache):
+    """Test closing a nested descriptor does not drop this process's fcntl lock."""
+    cache()
+    with cache_lock():
+        with cache_lock():
+            pass
+        assert not _lock_is_free(lock_path())

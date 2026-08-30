@@ -2,12 +2,16 @@ package io.opensysml.internal;
 
 import io.opensysml.ConnectionOptions;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
@@ -150,16 +154,28 @@ public final class ServiceRegistry {
   private static String key(Path binary) {
     try {
       Path real = binary.toRealPath();
-      BasicFileAttributes attributes = Files.readAttributes(real, BasicFileAttributes.class);
-      // fileKey is the inode where the filesystem has one, so a replacement is a different file
-      // however alike its size and timestamp are; elsewhere those are all there is to tell it by.
-      Object identity = attributes.fileKey();
-      return identity != null
-          ? real + "@" + identity
-          : real + "@" + attributes.size() + "@" + attributes.lastModifiedTime().toMillis();
+      Object inode = Files.readAttributes(real, BasicFileAttributes.class).fileKey();
+      // The inode where the filesystem has one; where it does not (Windows), the contents, because
+      // a replacement can have the size and modification time of what it displaced.
+      return real + "@" + (inode != null ? inode : digest(real));
     } catch (IOException e) {
       // Unreadable is not a reason to start a second child for the same name.
       return binary.toAbsolutePath().toString();
+    }
+  }
+
+  private static String digest(Path binary) throws IOException {
+    try {
+      MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+      try (InputStream bytes = Files.newInputStream(binary)) {
+        byte[] buffer = new byte[65536];
+        for (int read = bytes.read(buffer); read > 0; read = bytes.read(buffer)) {
+          sha256.update(buffer, 0, read);
+        }
+      }
+      return HexFormat.of().formatHex(sha256.digest());
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 is required of every JVM", e);
     }
   }
 }

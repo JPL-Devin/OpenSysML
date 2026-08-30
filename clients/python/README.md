@@ -125,6 +125,12 @@ the served checksum — `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=
 any repository) accepts same-origin trust explicitly for what it names, with a
 warning.
 
+The cache at `~/.opensysml/bin/sysml-grpc` is shared with the other clients, so
+deciding whether it is the release asked for and replacing the binary and its
+metadata is done holding `~/.opensysml/bin/sysml-grpc.lock` (`fcntl.lockf`, the
+same lock a Java `FileLock` takes). Concurrent installers therefore queue rather
+than pair one release's bytes with another's record.
+
 At release time, after the service binaries are published and final:
 
 ```bash

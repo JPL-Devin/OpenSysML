@@ -1,11 +1,13 @@
 """Binary management for sysml-grpc service."""
 
+import contextlib
 import hashlib
 import http.client
 import json
 import os
 import platform
 import stat
+import threading
 import urllib.request
 import warnings
 from opensysml.errors import (
@@ -314,6 +316,99 @@ def get_binary_path():
     return os.path.join(base_dir, binary_name)
 
 
+def lock_path():
+    """Path of the advisory lock every client holds while replacing the cache.
+
+    Returns:
+        str: Absolute path to the lock file (e.g. ~/.opensysml/bin/sysml-grpc.lock)
+    """
+    return get_binary_path() + '.lock'
+
+
+#: One lock per process, because a file lock is held by the process, not the thread.
+_CACHE_LOCK = threading.RLock()
+
+#: Nesting of the thread inside _CACHE_LOCK, which only one thread is ever in.
+_CACHE_LOCK_DEPTH = 0
+
+
+@contextlib.contextmanager
+def cache_lock():
+    """Hold the shared cache against other threads, processes and clients.
+
+    The Java client locks the same file over the same span, so the two never pair
+    one release's bytes with another's metadata.
+
+    Yields:
+        None: With the lock held for the body
+    """
+    global _CACHE_LOCK_DEPTH
+    with _CACHE_LOCK:
+        # Closing any descriptor for a file drops this process's fcntl lock on it,
+        # so a nested call must not open one of its own.
+        held = _CACHE_LOCK_DEPTH
+        _CACHE_LOCK_DEPTH = held + 1
+        try:
+            if held:
+                yield
+                return
+            yield from _locked_once()
+        finally:
+            _CACHE_LOCK_DEPTH = held
+
+
+def _locked_once():
+    """The lock file, held for one yield."""
+    path = lock_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as e:
+        warnings.warn(f"Could not lock {path} against other processes: {e}", stacklevel=3)
+        yield
+        return
+    try:
+        with _file_locked(fd, path):
+            yield
+    finally:
+        os.close(fd)
+
+
+@contextlib.contextmanager
+def _file_locked(fd, path):
+    """An exclusive lock on an open file, in whatever way the platform has one."""
+    locked = False
+    try:
+        if os.name == 'nt':
+            import msvcrt
+
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            # lockf is fcntl(F_SETLKW), the same lock a Java FileLock takes.
+            fcntl.lockf(fd, fcntl.LOCK_EX)
+        locked = True
+    except OSError as e:
+        warnings.warn(f"Could not lock {path} against other processes: {e}", stacklevel=4)
+    try:
+        yield
+    finally:
+        if locked:
+            try:
+                if os.name == 'nt':
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    import msvcrt
+
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.lockf(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+
+
 def metadata_path():
     """Path of the record of which release the cached binary was downloaded from.
 
@@ -442,10 +537,16 @@ def download_binary(version='latest', github_repo=None):
             checksum manifest carries no signature that could be verified
         ConnectionError: If the download or its installation fails
     """
+    with cache_lock():
+        return _download_binary_locked(version, github_repo)
+
+
+def _download_binary_locked(version, github_repo):
+    """download_binary, with the shared cache held over binary and metadata."""
     github_repo = github_repo or default_github_repo()
     if version == 'latest':
         version = resolve_latest_version(github_repo)
-    
+
     binary_name = release_asset_name()
 
     # Construct URLs
@@ -553,7 +654,10 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     
     A cached binary is reused only when it is the release asked for; when no
     version is asked for, whatever is cached stands, locally built included. A
-    replacement that cannot be downloaded leaves the working cache in place.
+    replacement that cannot be downloaded leaves the working cache in place. The
+    whole decision is made holding the shared cache lock, so a concurrent
+    installer - in another process or in the Java client - cannot install between
+    the check and the replacement.
     
     Args:
         force_download (bool): If True, download even if binary exists
@@ -569,11 +673,17 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     Raises:
         ConnectionError: If binary cannot be obtained
     """
-    from opensysml.errors import ConnectionError
     binary_path = get_binary_path()
     if version is None:
         version = os.environ.get('OPENSYSML_GRPC_VERSION') or None
-    
+    with cache_lock():
+        return _ensure_binary_locked(force_download, version, github_repo, binary_path)
+
+
+def _ensure_binary_locked(force_download, version, github_repo, binary_path):
+    """ensure_binary, with the shared cache held."""
+    from opensysml.errors import ConnectionError
+
     # Check if binary already exists and is executable
     cached = None
     if not force_download and os.path.exists(binary_path):
@@ -584,7 +694,7 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
             cached = binary_path
             warnings.warn(
                 f"Replacing the cached sysml-grpc: {stale}. Downloading {version}.",
-                stacklevel=2,
+                stacklevel=3,
             )
     
     # If no binary and no version specified, cannot auto-download
@@ -606,7 +716,7 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
         warnings.warn(
             f"Keeping the cached sysml-grpc at {cached}: {version} was not downloaded "
             f"({e}). It may be an older release than asked for.",
-            stacklevel=2,
+            stacklevel=3,
         )
         return cached
     except ChecksumMismatchError:
@@ -620,6 +730,6 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
         warnings.warn(
             f"Keeping the cached sysml-grpc at {cached}: {version} could not be "
             f"downloaded ({e}). It may be an older release than asked for.",
-            stacklevel=2,
+            stacklevel=3,
         )
         return cached

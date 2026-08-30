@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** A GitHub releases API and download host serving fixtures, so no test reaches the network. */
 final class ReleaseServer implements AutoCloseable {
@@ -20,6 +22,7 @@ final class ReleaseServer implements AutoCloseable {
   private final HttpServer server;
   private final Map<String, byte[]> assets = new HashMap<>();
   private final List<String> requested = new ArrayList<>();
+  private final Set<String> endless = ConcurrentHashMap.newKeySet();
 
   ReleaseServer() throws IOException {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -41,6 +44,12 @@ final class ReleaseServer implements AutoCloseable {
   /** Publishes an asset with no sidecar, or with one that disagrees with it. */
   ReleaseServer put(String githubRepo, String version, String asset, byte[] content) {
     assets.put("/" + githubRepo + "/releases/download/" + version + "/" + asset, content);
+    return this;
+  }
+
+  /** Serves an asset that never ends, as a hostile or broken origin would. */
+  ReleaseServer endless(String githubRepo, String version, String asset) {
+    endless.add("/" + githubRepo + "/releases/download/" + version + "/" + asset);
     return this;
   }
 
@@ -78,6 +87,18 @@ final class ReleaseServer implements AutoCloseable {
     String path = exchange.getRequestURI().getPath();
     synchronized (requested) {
       requested.add(path);
+    }
+    if (endless.contains(path)) {
+      exchange.sendResponseHeaders(200, 0);
+      try (OutputStream body = exchange.getResponseBody()) {
+        byte[] chunk = new byte[64 * 1024];
+        while (true) {
+          body.write(chunk);
+        }
+      } catch (IOException stopped) {
+        // The client gave up on a body it will not read to the end, which is the point.
+      }
+      return;
     }
     byte[] content = assets.get(path);
     if (content == null) {

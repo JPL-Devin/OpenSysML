@@ -69,14 +69,15 @@ class BinaryResolverDownloadTest {
   }
 
   @Test
-  void downloadsTheReleaseAskedForWhenNothingIsInstalled() {
+  void downloadsTheReleaseAskedForWhenNothingIsInstalled() throws IOException {
     releases.publish(REPO, VERSION, ASSET, BINARY);
     ConnectionOptions options = ConnectionOptions.builder().downloadVersion(VERSION).build();
 
     Path resolved = BinaryResolver.resolve(options, downloader());
 
-    assertEquals(cache(), resolved);
     assertTrue(Files.isExecutable(resolved));
+    assertArrayEquals(BINARY, Files.readAllBytes(resolved));
+    assertArrayEquals(BINARY, Files.readAllBytes(cache()));
   }
 
   @Test
@@ -89,7 +90,7 @@ class BinaryResolverDownloadTest {
 
     Path resolved = BinaryResolver.resolve(options, downloader);
 
-    assertEquals(cache(), resolved);
+    assertArrayEquals(BINARY, Files.readAllBytes(resolved));
     assertEquals(fetched, releases.requested().size(), "a cache of that release is not re-fetched");
     assertTrue(Files.exists(downloader.metadataPath()));
   }
@@ -125,7 +126,6 @@ class BinaryResolverDownloadTest {
 
     Path resolved = BinaryResolver.resolve(options, downloader());
 
-    assertEquals(cache(), resolved);
     assertEquals("installed by hand", Files.readString(resolved));
   }
 
@@ -147,6 +147,33 @@ class BinaryResolverDownloadTest {
           entries.map(path -> path.getFileName().toString()).sorted().toList(),
           "the refused download must leave nothing behind");
     }
+  }
+
+  @Test
+  void startsTheReleaseAskedForEvenWhenAnotherIsInstalledOverTheCache() throws IOException {
+    releases.publish(REPO, VERSION, ASSET, BINARY);
+    byte[] older = "#!/bin/sh\nexit 1\n".getBytes(StandardCharsets.UTF_8);
+    String olderVersion = "v9.9.8";
+    releases.publish(REPO, olderVersion, ASSET, older);
+    BinaryDownloader downloader =
+        downloader(
+            Map.of(
+                VERSION,
+                Map.of(ASSET, digest()),
+                olderVersion,
+                Map.of(ASSET, ReleaseServer.sha256(older))));
+
+    Path resolved =
+        BinaryResolver.resolve(
+            ConnectionOptions.builder().downloadVersion(VERSION).build(), downloader);
+    BinaryResolver.resolve(
+        ConnectionOptions.builder().downloadVersion(olderVersion).build(), downloader);
+
+    assertArrayEquals(older, Files.readAllBytes(cache()), "the cache is the release asked for last");
+    assertArrayEquals(
+        BINARY,
+        Files.readAllBytes(resolved),
+        "what the first connection starts is the release it asked for");
   }
 
   @Test
@@ -172,7 +199,7 @@ class BinaryResolverDownloadTest {
                   resolving(olderVersion, downloader),
                   resolving(VERSION, downloader),
                   resolving(olderVersion, downloader)))) {
-        assertEquals(cache(), resolved.get());
+        assertTrue(Files.isExecutable(resolved.get()));
       }
     } finally {
       threads.shutdownNow();
@@ -188,6 +215,13 @@ class BinaryResolverDownloadTest {
 
   private Callable<Path> resolving(String version, BinaryDownloader downloader) {
     ConnectionOptions options = ConnectionOptions.builder().downloadVersion(version).build();
-    return () -> BinaryResolver.resolve(options, downloader);
+    byte[] wanted = version.equals(VERSION) ? BINARY : "#!/bin/sh\nexit 1\n"
+        .getBytes(StandardCharsets.UTF_8);
+    return () -> {
+      Path resolved = BinaryResolver.resolve(options, downloader);
+      assertArrayEquals(
+          wanted, Files.readAllBytes(resolved), "each connection starts the release it asked for");
+      return resolved;
+    };
   }
 }

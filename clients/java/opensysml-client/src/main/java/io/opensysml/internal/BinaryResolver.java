@@ -102,8 +102,13 @@ public final class BinaryResolver {
   private static Path downloaded(
       ConnectionOptions options, BinaryDownloader downloader, String version, Path cache) {
     // Held over the whole decision: two connections asking for different releases would otherwise
-    // each find the cache stale and install over the other.
-    return downloader.withCacheLock(() -> install(options, downloader, version, cache));
+    // each find the cache stale and install over the other. What is started is the binary under
+    // its own digest, so a release installed over the cache afterwards is not the one that runs.
+    return downloader.withCacheLock(
+        () -> {
+          Path chosen = install(options, downloader, version, cache);
+          return chosen.equals(downloader.binaryPath()) ? downloader.stableBinary() : chosen;
+        });
   }
 
   private static Path install(

@@ -14,6 +14,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -56,6 +57,15 @@ public final class BinaryDownloader {
    * while the service-start lock is held, so it must not hang there.
    */
   static final Duration NETWORK_TIMEOUT = Duration.ofSeconds(15);
+
+  /** How long another installer may hold the cache before this one gives up on locking it. */
+  static final Duration LOCK_WAIT = Duration.ofMinutes(2);
+
+  /** A release binary is tens of megabytes; anything of this size is not one. */
+  private static final long MAX_BINARY_BYTES = 512L * 1024 * 1024;
+
+  /** Checksums, manifests, signature bundles and release JSON are kilobytes. */
+  private static final long MAX_METADATA_BYTES = 8L * 1024 * 1024;
 
   private static final System.Logger LOG =
       System.getLogger(BinaryDownloader.class.getName());
@@ -220,13 +230,9 @@ public final class BinaryDownloader {
       if (lock.getHoldCount() > 1) {
         return work.get();
       }
-      try (FileChannel channel = lockFile()) {
-        if (channel == null) {
-          return work.get();
-        }
-        try (FileLock held = channel.lock()) {
-          return work.get();
-        }
+      try (FileChannel channel = lockFile();
+          FileLock held = held(channel)) {
+        return work.get();
       } catch (IOException e) {
         // A cache that cannot be locked across processes is still locked within this one.
         warn("could not lock " + binaryPath + " against other processes: " + e);
@@ -234,6 +240,37 @@ public final class BinaryDownloader {
       }
     } finally {
       lock.unlock();
+    }
+  }
+
+  /**
+   * Another copy of this class in the same JVM — a shaded or isolated classloader — holds the file
+   * lock without sharing {@link #CACHE_LOCKS}, and an overlapping lock is refused rather than
+   * waited on, so it is waited on here.
+   */
+  private FileLock held(FileChannel channel) throws IOException {
+    long giveUpAt = System.nanoTime() + LOCK_WAIT.toNanos();
+    while (true) {
+      try {
+        FileLock lock = channel.tryLock();
+        if (lock != null) {
+          return lock;
+        }
+      } catch (OverlappingFileLockException e) {
+        if (System.nanoTime() > giveUpAt) {
+          throw new IOException("another client in this JVM has held " + binaryPath + " for "
+              + LOCK_WAIT, e);
+        }
+      }
+      if (System.nanoTime() > giveUpAt) {
+        throw new IOException("another process has held " + binaryPath + " for " + LOCK_WAIT);
+      }
+      try {
+        Thread.sleep(25);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IOException("interrupted waiting for " + binaryPath, e);
+      }
     }
   }
 
@@ -253,6 +290,62 @@ public final class BinaryDownloader {
    */
   public Path binaryPath() {
     return binaryPath;
+  }
+
+  /**
+   * A link to the cached binary under its own digest, which no later install can replace.
+   *
+   * <p>The cache is one path that every client installs over, so a service started from it could be
+   * started from another release's bytes; the link keeps the file that was verified.
+   *
+   * @return the content-addressed binary, or the cache itself when it cannot be linked
+   */
+  public Path stableBinary() {
+    String digest;
+    try {
+      digest = sha256(binaryPath);
+    } catch (IOException e) {
+      warn("could not hash " + binaryPath + ", so a release installed over it may be started: " + e);
+      return binaryPath;
+    }
+    String name = binaryPath.getFileName().toString();
+    String extension = name.endsWith(".exe") ? ".exe" : "";
+    Path stable =
+        binaryPath.resolveSibling(
+            name.substring(0, name.length() - extension.length())
+                + "-"
+                + digest.substring(0, 16)
+                + extension);
+    if (Files.isExecutable(stable)) {
+      return stable;
+    }
+    try {
+      link(binaryPath, stable);
+      makeExecutable(stable);
+      return stable;
+    } catch (IOException | RuntimeException e) {
+      warn("could not link " + binaryPath + " to " + stable + ", so a release installed over it may "
+          + "be started: " + e);
+      deleteQuietly(stable);
+      return binaryPath;
+    }
+  }
+
+  /** A hard link where the filesystem has them, and a copy where it does not. */
+  private void link(Path from, Path to) throws IOException {
+    Path temporary = temporaryFile(".link");
+    Files.delete(temporary);
+    try {
+      Files.createLink(temporary, from);
+    } catch (UnsupportedOperationException | IOException e) {
+      Files.copy(from, temporary, StandardCopyOption.REPLACE_EXISTING);
+    }
+    try {
+      move(temporary, to);
+    } catch (IOException e) {
+      deleteQuietly(temporary);
+      throw e;
+    }
   }
 
   /**
@@ -302,7 +395,8 @@ public final class BinaryDownloader {
     String url = apiBaseUrl + "/repos/" + githubRepo + "/releases/latest";
     String tag;
     try {
-      Object release = Json.parse(new String(get(url), StandardCharsets.UTF_8));
+      Object release =
+          Json.parse(new String(get(url, MAX_METADATA_BYTES), StandardCharsets.UTF_8));
       tag = Json.stringMember(release, "tag_name");
     } catch (IOException | InterruptedException | IllegalArgumentException e) {
       if (e instanceof InterruptedException) {
@@ -454,6 +548,11 @@ public final class BinaryDownloader {
    * @throws ServiceStartException if the download or its installation fails
    */
   public Path downloadBinary(String version, ConnectionOptions options) {
+    // Reentrant, so a resolver already holding the cache does not lock it twice.
+    return withCacheLock(() -> download(version, options));
+  }
+
+  private Path download(String version, ConnectionOptions options) {
     String githubRepo = githubRepo(options);
     if ("latest".equals(version)) {
       version = resolveLatestVersion(githubRepo);
@@ -484,7 +583,7 @@ public final class BinaryDownloader {
             unverifiedReason,
             options);
 
-    byte[] downloaded = fetch(binaryUrl, "binary");
+    byte[] downloaded = fetch(binaryUrl, "binary", MAX_BINARY_BYTES);
     install(downloaded, expected, asset, version, githubRepo);
     return binaryPath;
   }
@@ -689,7 +788,8 @@ public final class BinaryDownloader {
   /** The digest the release serves beside the binary, which only the origin vouches for. */
   private String servedDigest(String version, String asset, String githubRepo) {
     String url = releaseDownloadUrl(version, asset + ".sha256", githubRepo);
-    String served = new String(fetch(url, "checksum"), StandardCharsets.UTF_8).trim();
+    String served =
+        new String(fetch(url, "checksum", MAX_METADATA_BYTES), StandardCharsets.UTF_8).trim();
     String[] fields = served.split("\\s+");
     if (fields.length == 0 || !fields[0].toLowerCase(Locale.ROOT).matches("[0-9a-f]{64}")) {
       throw new ServiceStartException(
@@ -703,7 +803,7 @@ public final class BinaryDownloader {
   private byte[] signedAsset(String version, String asset, String githubRepo) {
     String url = releaseDownloadUrl(version, asset, githubRepo);
     try {
-      return get(url);
+      return get(url, MAX_METADATA_BYTES);
     } catch (IOException | InterruptedException | ServiceStartException e) {
       if (e instanceof InterruptedException) {
         Thread.currentThread().interrupt();
@@ -714,9 +814,9 @@ public final class BinaryDownloader {
     }
   }
 
-  private byte[] fetch(String url, String what) {
+  private byte[] fetch(String url, String what, long maxBytes) {
     try {
-      return get(url);
+      return get(url, maxBytes);
     } catch (IOException | InterruptedException e) {
       if (e instanceof InterruptedException) {
         Thread.currentThread().interrupt();
@@ -725,18 +825,26 @@ public final class BinaryDownloader {
     }
   }
 
-  private byte[] get(String url) throws IOException, InterruptedException {
+  /** Reads a response up to a limit, so a hostile or broken origin cannot fill this heap. */
+  private byte[] get(String url, long maxBytes) throws IOException, InterruptedException {
     HttpRequest request =
         HttpRequest.newBuilder(URI.create(url))
             .timeout(NETWORK_TIMEOUT)
             .header("Accept", "*/*")
             .GET()
             .build();
-    HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
-    if (response.statusCode() != 200) {
-      throw new ServiceStartException(url + " answered HTTP " + response.statusCode());
+    HttpResponse<InputStream> response =
+        http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+    try (InputStream body = response.body()) {
+      if (response.statusCode() != 200) {
+        throw new ServiceStartException(url + " answered HTTP " + response.statusCode());
+      }
+      byte[] read = body.readNBytes((int) Math.min(maxBytes + 1, Integer.MAX_VALUE));
+      if (read.length > maxBytes) {
+        throw new ServiceStartException(url + " is larger than " + maxBytes + " bytes");
+      }
+      return read;
     }
-    return response.body();
   }
 
   private void warn(String message) {

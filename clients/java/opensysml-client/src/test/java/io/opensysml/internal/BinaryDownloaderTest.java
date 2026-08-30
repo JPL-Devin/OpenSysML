@@ -12,9 +12,12 @@ import io.opensysml.ServiceStartException;
 import io.opensysml.UnpinnedReleaseException;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -468,6 +473,45 @@ class BinaryDownloaderTest {
     assertArrayEqualsBytes(BINARY, Files.readAllBytes(cache()));
     assertEquals(List.of(), leftBehind(), "concurrent downloads must not leave temporary files");
     assertEquals(Optional.of(VERSION), downloader.cachedRelease(REPO));
+  }
+
+  @Test
+  void refusesADownloadTooLargeToBeARelease() throws Exception {
+    releases.put(REPO, VERSION, ASSET, BINARY).endless(REPO, VERSION, ASSET + ".sha256");
+    BinaryDownloader downloader = downloader().pins(pinning(ReleaseServer.sha256(BINARY))).build();
+
+    ServiceStartException refused =
+        assertThrows(
+            ServiceStartException.class, () -> downloader.downloadBinary(VERSION, options()));
+
+    assertTrue(refused.getMessage().contains("larger than"), refused.getMessage());
+    assertFalse(Files.exists(cache()), "an oversized response must install nothing");
+    assertEquals(List.of(), leftBehind(), "a refused download must leave no temporary file");
+  }
+
+  @Test
+  void waitsForACacheLockAnotherCopyOfThisClientHoldsInThisJvm() throws Exception {
+    releases.publish(REPO, VERSION, ASSET, BINARY);
+    BinaryDownloader downloader = downloader().pins(pinning(ReleaseServer.sha256(BINARY))).build();
+    Files.createDirectories(cache().getParent());
+    Path lock = cache().resolveSibling("sysml-grpc.lock");
+
+    // A shaded or separately loaded copy of this class locks the same file without sharing this
+    // one's monitors, which is refused rather than queued.
+    try (FileChannel channel =
+            FileChannel.open(lock, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        FileLock held = channel.lock()) {
+      ExecutorService threads = Executors.newSingleThreadExecutor();
+      try {
+        Future<Path> download =
+            threads.submit(() -> downloader.downloadBinary(VERSION, options()));
+        assertThrows(TimeoutException.class, () -> download.get(500, TimeUnit.MILLISECONDS));
+        held.release();
+        assertArrayEqualsBytes(BINARY, Files.readAllBytes(download.get(30, TimeUnit.SECONDS)));
+      } finally {
+        threads.shutdownNow();
+      }
+    }
   }
 
   private void publishSignedManifest(String bundle) throws IOException {

@@ -209,10 +209,19 @@ The release asset for the running platform (`sysml-grpc-linux-amd64`,
 other pair fails naming itself) is downloaded to a temporary file, verified, and
 only then moved over the cached path, `chmod 0700` where the filesystem keeps
 POSIX modes. A download that fails or does not verify leaves the cached binary
-untouched and removes the temporary file. Deciding whether the cache is the
-release asked for and replacing it when it is not is done holding
+untouched and removes the temporary file. A response is read to a bound — 512
+MiB for a binary, 8 MiB for a checksum, manifest, bundle or release listing —
+so an origin cannot answer a download with an endless body. Deciding whether the
+cache is the release asked for and replacing it when it is not is done holding
 `~/.opensysml/bin/sysml-grpc.lock`, so concurrent connections — in this JVM, in
-another, or in the Python client — do not install over each other.
+another, or in the Python client, which takes the same lock over the same span —
+do not install over each other.
+
+What a service is started from is not the shared path but a hard link to it
+named for its digest, `~/.opensysml/bin/sysml-grpc-<first 16 hex>`, made while
+the lock is held. A release installed over the cache afterwards is therefore not
+the one a connection already resolved runs; a filesystem without hard links gets
+a copy, and one that gives neither falls back to the shared path with a warning.
 
 The cache is read and written exactly as the Python client does, so the two
 share one binary: `~/.opensysml/bin/sysml-grpc.json` beside it records
@@ -266,9 +275,11 @@ release is, so only pinned releases install.
 - `latest` is one unauthenticated call to `api.github.com`, so a rate-limited
   host should name the version instead.
 - The cache is one path per user, so two applications asking for different
-  releases at the same time each get the release they asked for but replace one
-  another's cached binary; name the binary with `ConnectionOptions.binaryPath()`
-  where that matters.
+  releases replace one another's cached binary — each still runs the release it
+  asked for, from the digest-named link, but the next start re-downloads. Name
+  the binary with `ConnectionOptions.binaryPath()` where that matters.
+- The digest-named links are never collected: a cache that has held many
+  releases keeps a link per release until `~/.opensysml/bin` is cleared.
 
 ## Capability negotiation
 
