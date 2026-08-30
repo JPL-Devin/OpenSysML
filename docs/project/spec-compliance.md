@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 770 semantic rules: **681 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 776 semantic rules: **687 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -1831,8 +1831,30 @@ It does not mutate the workspace or re-derive a parallel semantic representation
 
 **Known limitations:** default-expression evaluation returns a typed execution failure.
 Relationship traversal covers the kinds above only; refinement and derivation links have no
-dedicated semantic representation yet and are unknown kinds. Document composition and Markdown
-serialization are not implemented yet.
+dedicated semantic representation yet and are unknown kinds.
+
+---
+
+## Native Document Planning and IR (`internal/core/docplan`, `internal/core/docir`) — OpenSysML extension
+
+**Standard:** none. This is the document layer of the OpenSysML document-query extension: a document
+authored natively in SysML v2 as a part definition specializing the bundled, non-normative
+`DocumentQueries::Document`, compiled into an immutable document plan, and evaluated into an
+immutable, backend-agnostic document tree by executing its queries through the execution engine
+above. It does not alter SysML v2 language semantics.
+
+| Rule | Implementation (file:function) | Tests | Status |
+|---|---|---|---|
+| A part definition specializing `DocumentQueries::Document` is recognized as a document; its required title, nested sections and content blocks (paragraphs, tables, lists) compile in declaration order into an immutable plan, and nested documents, untitled sections, non-literal attributes and unsupported members are distinct typed failures | `docplan/compiler.go` `IsDocumentDefinition`, `Compile`, `compiler.compileMembers`, `compiler.compileContent`; `docplan/plan.go`; `docplan/errors.go` | `docplan/compiler_test.go:TestCompileTelescopeDocument`, `:TestCompiledPlanIsImmutable`, `:TestCompileReportsMissingSectionTitle`, `:TestCompileReportsNestedDocument`, `:TestCompileReportsInvalidContent` | ✅ Implemented |
+| A paragraph carries static text or one query, a table requires a query and may carry a caption, and a list requires a query and a `bullet`/`number` style; a missing, conflicting or unknown query and an invalid style are distinct typed failures | `docplan/compiler.go` `compiler.compileParagraph`, `compiler.compileTable`, `compiler.compileList`, `compiler.compileQueryRef` | `docplan/compiler_test.go:TestCompileReportsParagraphWithoutContent`, `:TestCompileReportsParagraphWithTextAndQuery`, `:TestCompileReportsTableWithoutQuery`, `:TestCompileReportsUnknownQuery`, `:TestCompileReportsInvalidListStyle` | ✅ Implemented |
+| A content block's query reference is compiled with the query planner, and its `in` bindings are validated against the compiled signature: unknown, duplicate and missing parameters, unavailable defaults, and type or multiplicity mismatches are distinct typed failures at planning time | `docplan/compiler.go` `compiler.compileQueryRef`, `compiler.compileBindings`, `compiler.validateBinding`; `queryplan/compiler.go` `Compile` | `docplan/compiler_test.go:TestCompileReportsUnknownParameter`, `:TestCompileReportsMissingBinding`, `:TestCompileReportsBindingTypeMismatch`, `:TestCompileReportsBindingMultiplicityMismatch`, `:TestCompileWrapsQueryPlanningFailure` | ✅ Implemented |
+| Document, content, query-reference and binding provenance survives planning, and document planning failures are emitted by the constraint validation tier as source-located `document-plan-*` diagnostics | `docplan/plan.go`; `passes/document_plan.go` `DocumentPlanPass`, `documentPlanDiagnostic`; `passes/analyze.go` | `docplan/compiler_test.go:TestCompileTelescopeDocument`, `passes/document_plan_test.go` | ✅ Implemented |
+| Evaluating a plan executes each referenced query through the execution engine with the planned bindings and produces an immutable document tree — sections, paragraphs of text runs, tables of typed rows and cells, lists of items — in declaration and query-result order, with provenance on every node tracing to the model declaration, query row or projected value behind it | `docir/evaluate.go` `Evaluate`, `evaluator.evaluateNode`, `evaluator.executeQuery`, `executionValue`; `docir/ir.go` | `docir/evaluate_test.go:TestEvaluateTelescopeDocument`, `:TestEvaluatedDocumentIsImmutable` | ✅ Implemented |
+| An empty query result evaluates to a valid empty table or list preserving the projected column schema, and query execution failures — an invalid context or plan, an unsupported operation, an exhausted budget — surface as typed document-evaluation failures wrapping the execution error | `docir/evaluate.go` `evaluator.evaluateTable`, `evaluator.evaluateList`, `evaluator.executeQuery`; `docir/errors.go` | `docir/evaluate_test.go:TestEvaluateTelescopeDocument`, `:TestEvaluateRequiresPlanAndContext`, `:TestEvaluateWrapsQueryExecutionFailure`, `:TestEvaluateHonorsExecutionBudget` | ✅ Implemented |
+
+**Known limitations:** Markdown (or any other) rendering of the document tree is not implemented,
+and documents are not exposed through the REPL or CLI. A query-backed paragraph renders each
+projected value as one text run; richer inline formatting is not modeled.
 
 ---
 
