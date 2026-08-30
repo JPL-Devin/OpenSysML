@@ -152,6 +152,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
 
 	{group: groupBehavioral, name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
+	{group: groupBehavioral, name: "%run-query", args: "<name> [<p>=<expr>...]", desc: "execute a document query and print its rows, with each binding written as <parameter>=<expression>"},
 	{group: groupBehavioral, name: "%constraint", args: argName, desc: "evaluate a constraint definition"},
 	{group: groupBehavioral, name: "%requirement", args: argName, desc: "evaluate a requirement definition"},
 	{group: groupBehavioral, name: "%satisfy", args: "[name]", desc: "evaluate the satisfaction assertions of the model, or of one element"},
@@ -363,6 +364,11 @@ func (s *Session) metaModelCommand(fields []string, line string) (metaResult, bo
 		}
 		name, argText := splitCalcArgs(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%calc")))
 		return metaOut(s.doCalc(name, argText)), true
+	case "%run-query":
+		if len(fields) < 2 {
+			return metaOut([]string{runQueryUsage}, false, nil), true
+		}
+		return metaOut(s.doRunQuery(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%run-query")))), true
 	case "%constraint":
 		if len(fields) < 2 {
 			return metaOut([]string{"usage: %constraint <name>"}, false, nil), true

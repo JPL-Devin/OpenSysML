@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 765 semantic rules: **676 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 767 semantic rules: **678 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -1823,6 +1823,8 @@ It does not mutate the workspace or re-derive a parallel semantic representation
 | Type, metadata, name and constant-feature filters use shared metamodel, annotation, conformance and feature-value semantics; unknown and unevaluable features are typed failures rather than false predicates | `queryexec/operations.go` `executor.evaluateWhereType`, `executor.evaluateWhereMetadata`, `executor.evaluateWhereName`, `executor.evaluateWhereFeature`; `semantics/annotations.go` `Model.ConstantFeatureValues` | `queryexec/execute_test.go:TestExecuteTraversalFilteringOrderingAndProjection`, `:TestExecuteMetadataAndNameFilters`, `:TestExecuteReportsUnknownAndUnevaluableFeatures` | ✅ Implemented |
 | Projection produces ordered typed cells, and stable ordering applies explicit ascending/descending, missing-value and multiple-value policies without losing row/cell alignment | `queryexec/value.go`; `queryexec/operations.go` `executor.evaluateProject`, `executor.evaluateOrderBy` | `queryexec/execute_test.go:TestExecuteTraversalFilteringOrderingAndProjection`, `:TestExecuteOrderPoliciesAndProjectedCellAlignment` | ✅ Implemented |
 | Traversal consumes an explicit visit budget, and result rows, cells, columns and execution failures retain query or model provenance | `queryexec/execute.go` `Options`; `queryexec/operations.go` `executor.consumeVisit`; `queryexec/value.go`; `queryexec/errors.go` | `queryexec/execute_test.go:TestExecuteDescendantsBreadthFirstAndBounded`, `:TestExecuteTraversalFilteringOrderingAndProjection`, `:TestExecuteReportsUnknownAndUnevaluableFeatures` | ✅ Implemented |
+| `%run-query <name> [<p>=<expr>...]` compiles the named query, binds its entry parameters from prompt expressions or element names, executes it and prints its ordered rows and projected cells; typed execution failures are reported as errors | `repl/docquery.go` `Session.RunDocumentQuery`, `Session.runDocumentQuery`, `queryValues`, `renderRowSet`; `repl/meta.go` (command table, dispatch) | `repl/docquery_test.go:TestRunQueryProjectsOrderedRows`, `:TestRunQueryBindingExpressions`, `:TestRunQuerySurfacesTypedExecutionFailures`, `:TestRunQueryRejectsNonQueryDefinition` | ✅ Implemented |
+| `-run-query "<name> [<p>=<expr>...]"` runs a document query from a script, repeatably like `-calc`; rows are reported on stdout, as JSON with `-json`, and a query that could not be run leaves the unresolved exit status | `cmd/sysml/main.go` (flag), `cmd/sysml/check.go` `checks`, `runChecks` | `cmd/sysml/run_query_test.go:TestRunQueryFlag`, `:TestRunQueryJSON` | ✅ Implemented |
 
 **Known limitations:** named query invocation, default-expression evaluation and named-relationship
 traversal return typed execution failures. Document composition and Markdown serialization are not

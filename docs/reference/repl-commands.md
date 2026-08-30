@@ -33,6 +33,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or — when an object was materialized under that name — on that object, so a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
 | **Behavioral Execution** | |
 | `%calc <name> [args...]` | Invoke calculation with arguments |
+| `%run-query <name> [<p>=<expr>...]` | Execute a document query — a `calc def` specializing `DocumentQueries::Query` — and print its rows and projected cells. Each entry binding is written as `<parameter>=<expression>`; a name binds the element it denotes, anything else is evaluated as an expression. Named query invocation, default-expression evaluation and named-relationship traversal are reported as errors, since the engine does not execute them yet |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
 | `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type — an action it owns — performed by that object, with each argument written as `<parameter>=<expression>`. What the body writes is that object's feature value; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
