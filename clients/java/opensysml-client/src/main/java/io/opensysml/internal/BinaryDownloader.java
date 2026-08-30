@@ -205,10 +205,7 @@ public final class BinaryDownloader {
   /**
    * Runs work with the shared cache held, against both other threads and other processes.
    *
-   * <p>Deciding whether the cache is the release asked for and replacing it when it is not is one
-   * operation: two connections asking for different releases at once would otherwise each install
-   * over the other's binary. The Python client shares this cache, so the lock is a file beside it
-   * rather than only a lock in this JVM.
+   * <p>The lock is a file beside the cache, because the Python client shares it.
    *
    * @param <T> what the work returns
    * @param work what to do while the cache is held
