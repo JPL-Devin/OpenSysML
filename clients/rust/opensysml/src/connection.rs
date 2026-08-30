@@ -523,15 +523,17 @@ fn resolve_binary() -> Result<PathBuf, Error> {
         looked_in.push("$OPENSYSML_GRPC_BINARY".to_owned());
     }
 
-    // No downloader on a platform with no release build; the cache still answers.
-    let downloader = binary::Downloader::from_env().ok();
+    let downloader = binary::Downloader::from_env();
     let cached = downloader
         .as_ref()
         .map(binary::Downloader::binary_path)
-        .unwrap_or_else(|| binary::default_cache_dir().join(binary::binary_file_name()));
+        .unwrap_or_else(|_| binary::default_cache_dir().join(binary::binary_file_name()));
     looked_in.push(cached.display().to_string());
-    match (&downloader, binary::env_release_version()) {
-        (Some(downloader), Some(version)) => return downloader.ensure_binary(Some(&version)),
+    match (downloader, binary::env_release_version()) {
+        (Ok(downloader), Some(version)) => return downloader.ensure_binary(Some(&version)),
+        // A release was asked for and cannot be downloaded here, so no binary of
+        // an unknown version answers for it.
+        (Err(error), Some(_)) => return Err(error),
         _ => {
             if cached.is_file() {
                 return Ok(cached);
@@ -554,6 +556,73 @@ fn resolve_binary() -> Result<PathBuf, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_release_asked_for_is_not_answered_by_a_binary_of_unknown_version() {
+        // Serialized against the other test reading these variables.
+        let _guard = ENV.lock().unwrap_or_else(PoisonError::into_inner);
+        let restore = Restore::of(&[
+            "OPENSYSML_GRPC_BINARY",
+            "OPENSYSML_GITHUB_REPO",
+            "OPENSYSML_GRPC_VERSION",
+        ]);
+        env::set_var("OPENSYSML_GRPC_BINARY", "");
+        env::set_var("OPENSYSML_GITHUB_REPO", "not-an-owner-repo");
+        env::set_var("OPENSYSML_GRPC_VERSION", "v0.1.0");
+
+        let error = resolve_binary().expect_err("the release cannot be downloaded");
+        assert!(
+            matches!(&error, Error::BinaryDownload(message) if message.contains("owner/repo")),
+            "{error}"
+        );
+        drop(restore);
+    }
+
+    #[test]
+    fn without_a_release_asked_for_an_unusable_repository_is_no_obstacle() {
+        let _guard = ENV.lock().unwrap_or_else(PoisonError::into_inner);
+        let restore = Restore::of(&[
+            "OPENSYSML_GRPC_BINARY",
+            "OPENSYSML_GITHUB_REPO",
+            "OPENSYSML_GRPC_VERSION",
+        ]);
+        env::set_var("OPENSYSML_GRPC_BINARY", "");
+        env::set_var("OPENSYSML_GITHUB_REPO", "not-an-owner-repo");
+        env::remove_var("OPENSYSML_GRPC_VERSION");
+
+        // Nothing was asked for, so resolution falls through to the cache and $PATH.
+        if let Err(error) = resolve_binary() {
+            assert!(matches!(error, Error::BinaryNotFound { .. }), "{error}");
+        }
+        drop(restore);
+    }
+
+    static ENV: Mutex<()> = Mutex::new(());
+
+    /// Environment variables put back as they were when dropped.
+    struct Restore(Vec<(&'static str, Option<std::ffi::OsString>)>);
+
+    impl Restore {
+        fn of(names: &[&'static str]) -> Self {
+            Self(
+                names
+                    .iter()
+                    .map(|name| (*name, env::var_os(name)))
+                    .collect(),
+            )
+        }
+    }
+
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            for (name, value) in &self.0 {
+                match value {
+                    Some(value) => env::set_var(name, value),
+                    None => env::remove_var(name),
+                }
+            }
+        }
+    }
 
     #[test]
     fn connect_errors_map_canonical_codes() {

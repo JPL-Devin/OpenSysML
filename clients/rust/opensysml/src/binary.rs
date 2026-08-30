@@ -47,6 +47,9 @@ const NETWORK_TIMEOUT: Duration = Duration::from_secs(15);
 /// Release binaries are tens of megabytes; this only bounds a runaway response.
 const MAX_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024;
 
+/// Checksums and release metadata are a few kilobytes at most.
+const MAX_METADATA_BYTES: u64 = 1024 * 1024;
+
 /// The pinned digest table this crate ships, embedded so the published crate carries it.
 const PINNED_DIGESTS: &str = include_str!("../release-digests.json");
 
@@ -375,7 +378,7 @@ impl Downloader {
         )
     }
 
-    fn fetch(&self, url: &str) -> Result<Vec<u8>, Error> {
+    fn fetch(&self, url: &str, limit: u64) -> Result<Vec<u8>, Error> {
         let response = self
             .agent
             .get(url)
@@ -384,7 +387,7 @@ impl Downloader {
         response
             .into_body()
             .with_config()
-            .limit(MAX_DOWNLOAD_BYTES)
+            .limit(limit)
             .read_to_vec()
             .map_err(|error| Error::BinaryDownload(format!("{url}: {error}")))
     }
@@ -396,7 +399,7 @@ impl Downloader {
             self.api_base_url.trim_end_matches('/'),
             self.repo,
         );
-        let body = self.fetch(&url)?;
+        let body = self.fetch(&url, MAX_METADATA_BYTES)?;
         #[derive(Deserialize)]
         struct Release {
             tag_name: Option<String>,
@@ -482,7 +485,9 @@ impl Downloader {
         fs::create_dir_all(&self.cache_dir).map_err(Failure::before)?;
 
         let sidecar_url = self.download_url(&version, &format!("{asset}.sha256"));
-        let sidecar = self.fetch(&sidecar_url).map_err(Failure::before)?;
+        let sidecar = self
+            .fetch(&sidecar_url, MAX_METADATA_BYTES)
+            .map_err(Failure::before)?;
         let served = String::from_utf8_lossy(&sidecar)
             .split_whitespace()
             .next()
@@ -498,7 +503,7 @@ impl Downloader {
             .map_err(Failure::before)?;
 
         let body = self
-            .fetch(&self.download_url(&version, &asset))
+            .fetch(&self.download_url(&version, &asset), MAX_DOWNLOAD_BYTES)
             .map_err(Failure::before)?;
         // A temporary name of this process's own, so concurrent installs do not
         // write over each other's download.
@@ -592,10 +597,10 @@ impl Downloader {
 
         match self.install(version) {
             Ok(path) => Ok(path),
-            // A download that may have been tampered with is never answered from
-            // the cache, and neither is one that already replaced it.
+            // A download refused for integrity is never answered from the cache,
+            // and neither is one that already replaced it.
             Err(Failure {
-                error: error @ Error::ChecksumMismatch(_),
+                error: error @ (Error::ChecksumMismatch(_) | Error::UnpinnedRelease(_)),
                 ..
             })
             | Err(Failure {
@@ -1183,6 +1188,35 @@ mod tests {
         assert_eq!(
             fs::read(downloader.binary_path()).expect("read the cache"),
             body
+        );
+    }
+
+    #[test]
+    fn an_unpinned_release_is_refused_even_with_a_cache_to_fall_back_on() {
+        let body = b"the unpinned release";
+        let harness = harness(
+            "unpinned-with-cache",
+            release_routes("v0.3.0", body, &digest_of(body)),
+            PinTable::new(),
+        );
+        let downloader = &harness.downloader;
+        let older = b"the release before";
+        fs::write(downloader.binary_path(), older).expect("place a cache");
+        downloader
+            .write_metadata(&CacheMetadata {
+                version: "v0.0.5".to_owned(),
+                sha256: digest_of(older),
+                repo: REPO.to_owned(),
+            })
+            .expect("record a cache");
+
+        let error = downloader
+            .ensure_binary(Some("v0.3.0"))
+            .expect_err("an unverifiable release is not answered from the cache");
+        assert!(matches!(error, Error::UnpinnedRelease(_)), "{error}");
+        assert_eq!(
+            fs::read(downloader.binary_path()).expect("read the cache"),
+            older
         );
     }
 
