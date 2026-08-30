@@ -6,6 +6,7 @@ import io.opensysml.ServiceStartException;
 import io.opensysml.UnpinnedReleaseException;
 import io.opensysml.UnsignedReleaseException;
 import io.opensysml.internal.SignedManifest.ReleaseSigner;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -32,6 +33,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -70,6 +77,14 @@ public final class BinaryDownloader {
   private static final System.Logger LOG =
       System.getLogger(BinaryDownloader.class.getName());
 
+  /** Watches one download for a stall; a daemon, so it never holds a shutdown up. */
+  private static final ThreadFactory WATCHDOG =
+      runnable -> {
+        Thread thread = new Thread(runnable, "sysml-grpc-download-watchdog");
+        thread.setDaemon(true);
+        return thread;
+      };
+
   /** One lock per cache, because a file lock is held by the whole JVM rather than by a thread. */
   private static final Map<String, ReentrantLock> CACHE_LOCKS = new ConcurrentHashMap<>();
 
@@ -81,6 +96,7 @@ public final class BinaryDownloader {
   private final String asset;
   private final UnaryOperator<String> environment;
   private final Consumer<String> warnings;
+  private final Duration stallTimeout;
   private final HttpClient http;
 
   private BinaryDownloader(Builder builder) {
@@ -92,6 +108,7 @@ public final class BinaryDownloader {
     this.asset = builder.asset;
     this.environment = builder.environment;
     this.warnings = builder.warnings;
+    this.stallTimeout = builder.stallTimeout;
     this.http =
         HttpClient.newBuilder()
             .connectTimeout(NETWORK_TIMEOUT)
@@ -839,11 +856,60 @@ public final class BinaryDownloader {
       if (response.statusCode() != 200) {
         throw new ServiceStartException(url + " answered HTTP " + response.statusCode());
       }
-      byte[] read = body.readNBytes((int) Math.min(maxBytes + 1, Integer.MAX_VALUE));
-      if (read.length > maxBytes) {
-        throw new ServiceStartException(url + " is larger than " + maxBytes + " bytes");
+      return read(body, url, maxBytes);
+    }
+  }
+
+  /**
+   * A body bounded in size and in silence: the request timeout covers the headers, so a release of
+   * any size may be read, but an origin that stops sending is not waited on forever.
+   */
+  private byte[] read(InputStream body, String url, long maxBytes) throws IOException {
+    AtomicLong lastRead = new AtomicLong(System.nanoTime());
+    AtomicBoolean stalled = new AtomicBoolean();
+    ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(WATCHDOG);
+    ByteArrayOutputStream read = new ByteArrayOutputStream();
+    try {
+      long every = Math.max(stallTimeout.toMillis() / 4, 1);
+      watchdog.scheduleWithFixedDelay(
+          () -> {
+            if (System.nanoTime() - lastRead.get() > stallTimeout.toNanos()
+                && stalled.compareAndSet(false, true)) {
+              // Closing the body is what unblocks a read waiting on bytes that are not coming.
+              closeQuietly(body);
+            }
+          },
+          every,
+          every,
+          TimeUnit.MILLISECONDS);
+      byte[] buffer = new byte[65536];
+      for (int n = body.read(buffer); n >= 0; n = body.read(buffer)) {
+        lastRead.set(System.nanoTime());
+        read.write(buffer, 0, n);
+        if (read.size() > maxBytes) {
+          throw new ServiceStartException(url + " is larger than " + maxBytes + " bytes");
+        }
       }
-      return read;
+    } catch (IOException e) {
+      throw stalled.get() ? stall(url, e) : e;
+    } finally {
+      watchdog.shutdownNow();
+    }
+    if (stalled.get()) {
+      throw stall(url, null);
+    }
+    return read.toByteArray();
+  }
+
+  private IOException stall(String url, IOException cause) {
+    return new IOException(url + " stopped sending for " + stallTimeout, cause);
+  }
+
+  private static void closeQuietly(InputStream body) {
+    try {
+      body.close();
+    } catch (IOException e) {
+      // The read this is unblocking reports the failure.
     }
   }
 
@@ -902,6 +968,7 @@ public final class BinaryDownloader {
     private String asset;
     private UnaryOperator<String> environment = System::getenv;
     private Consumer<String> warnings = message -> LOG.log(System.Logger.Level.WARNING, message);
+    private Duration stallTimeout = NETWORK_TIMEOUT;
 
     Builder downloadBaseUrl(String downloadBaseUrl) {
       this.downloadBaseUrl = downloadBaseUrl;
@@ -942,6 +1009,12 @@ public final class BinaryDownloader {
 
     Builder warnings(Consumer<String> warnings) {
       this.warnings = warnings;
+      return this;
+    }
+
+    /** How long a body may send nothing, shortened by a test that serves a stalling one. */
+    Builder stallTimeout(Duration stallTimeout) {
+      this.stallTimeout = stallTimeout;
       return this;
     }
 

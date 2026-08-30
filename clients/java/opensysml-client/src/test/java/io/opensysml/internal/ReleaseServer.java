@@ -8,6 +8,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -19,10 +20,14 @@ import java.util.concurrent.ConcurrentHashMap;
 /** A GitHub releases API and download host serving fixtures, so no test reaches the network. */
 final class ReleaseServer implements AutoCloseable {
 
+  /** How long a stalling asset holds its exchange open, longer than any test waits on it. */
+  static final Duration STALL = Duration.ofSeconds(5);
+
   private final HttpServer server;
   private final Map<String, byte[]> assets = new HashMap<>();
   private final List<String> requested = new ArrayList<>();
   private final Set<String> endless = ConcurrentHashMap.newKeySet();
+  private final Set<String> stalling = ConcurrentHashMap.newKeySet();
 
   ReleaseServer() throws IOException {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -50,6 +55,12 @@ final class ReleaseServer implements AutoCloseable {
   /** Serves an asset that never ends, as a hostile or broken origin would. */
   ReleaseServer endless(String githubRepo, String version, String asset) {
     endless.add("/" + githubRepo + "/releases/download/" + version + "/" + asset);
+    return this;
+  }
+
+  /** Answers an asset with headers and then nothing, as a hung origin does. */
+  ReleaseServer stalling(String githubRepo, String version, String asset) {
+    stalling.add("/" + githubRepo + "/releases/download/" + version + "/" + asset);
     return this;
   }
 
@@ -97,6 +108,16 @@ final class ReleaseServer implements AutoCloseable {
         }
       } catch (IOException stopped) {
         // The client gave up on a body it will not read to the end, which is the point.
+      }
+      return;
+    }
+    if (stalling.contains(path)) {
+      exchange.sendResponseHeaders(200, 0);
+      try (OutputStream body = exchange.getResponseBody()) {
+        body.flush();
+        Thread.sleep(STALL.toMillis());
+      } catch (IOException | InterruptedException stopped) {
+        Thread.currentThread().interrupt();
       }
       return;
     }

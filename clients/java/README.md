@@ -202,7 +202,9 @@ The version is the caller's, else `$OPENSYSML_GRPC_VERSION`, else nothing —
 already there, so it never fetches a binary a caller did not ask for. `latest`
 is resolved through the GitHub releases API. The repository is
 `Open-MBEE/OpenSysML`, overridable with `ConnectionOptions.githubRepo(...)` or
-`$OPENSYSML_GITHUB_REPO`. Every request times out after 15 seconds.
+`$OPENSYSML_GITHUB_REPO`. Every request times out after 15 seconds, and a
+response body that stops arriving for that long is abandoned too, so a release
+of any size may be downloaded but a hung origin never hangs a connection.
 
 The release asset for the running platform (`sysml-grpc-linux-amd64`,
 `-linux-arm64`, `-darwin-amd64`, `-darwin-arm64`, `-windows-amd64.exe`; any

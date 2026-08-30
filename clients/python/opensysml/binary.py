@@ -357,6 +357,19 @@ def cache_lock():
             _CACHE_LOCK_DEPTH = held
 
 
+def _reset_cache_lock():
+    """Start a child of fork() unlocked, whoever held the lock in the parent."""
+    global _CACHE_LOCK, _CACHE_LOCK_DEPTH
+    _CACHE_LOCK = threading.RLock()
+    _CACHE_LOCK_DEPTH = 0
+
+
+if hasattr(os, 'register_at_fork'):
+    # A thread holding the lock does not exist in the child, so its lock must not
+    # either, or the child deadlocks the first time it resolves a binary.
+    os.register_at_fork(after_in_child=_reset_cache_lock)
+
+
 def _locked_once():
     """The lock file, held for one yield."""
     path = lock_path()

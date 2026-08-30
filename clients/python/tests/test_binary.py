@@ -7,8 +7,10 @@ import json
 import os
 import platform
 import re
+import signal
 import subprocess
 import sys
+import threading
 import pytest
 from unittest.mock import patch, Mock, mock_open
 from opensysml.binary import (
@@ -646,6 +648,38 @@ def test_the_cache_lock_shuts_other_processes_out(cache):
     with cache_lock():
         assert not _lock_is_free(lock_path())
     assert _lock_is_free(lock_path())
+
+
+@pytest.mark.skipif(not hasattr(os, 'fork'), reason='fork is POSIX only')
+def test_a_fork_child_can_take_a_cache_lock_a_parent_thread_held(cache):
+    """Test a child never inherits the lock of a thread that does not exist there."""
+    cache()
+    holding = threading.Event()
+    release = threading.Event()
+
+    def hold():
+        with cache_lock():
+            holding.set()
+            release.wait(30)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    try:
+        assert holding.wait(10)
+        pid = os.fork()
+        if pid == 0:
+            taken = 1
+            try:
+                signal.alarm(20)
+                with cache_lock():
+                    taken = 0
+            finally:
+                os._exit(taken)
+    finally:
+        release.set()
+        holder.join(10)
+
+    assert os.waitpid(pid, 0)[1] == 0, 'the child deadlocked on an inherited lock'
 
 
 @pytest.mark.skipif(os.name == 'nt', reason='the probe takes a POSIX fcntl lock')

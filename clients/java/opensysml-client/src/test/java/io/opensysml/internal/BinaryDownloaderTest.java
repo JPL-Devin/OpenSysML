@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -487,6 +488,24 @@ class BinaryDownloaderTest {
     assertTrue(refused.getMessage().contains("larger than"), refused.getMessage());
     assertFalse(Files.exists(cache()), "an oversized response must install nothing");
     assertEquals(List.of(), leftBehind(), "a refused download must leave no temporary file");
+  }
+
+  @Test
+  void givesUpOnAReleaseThatStopsSendingItsBody() throws Exception {
+    releases.publish(REPO, VERSION, ASSET, BINARY).stalling(REPO, VERSION, ASSET);
+    BinaryDownloader downloader =
+        downloader()
+            .pins(pinning(ReleaseServer.sha256(BINARY)))
+            .stallTimeout(Duration.ofMillis(300))
+            .build();
+
+    ServiceStartException refused =
+        assertThrows(
+            ServiceStartException.class, () -> downloader.downloadBinary(VERSION, options()));
+
+    assertTrue(refused.getMessage().contains("stopped sending"), refused.getMessage());
+    assertFalse(Files.exists(cache()), "a stalled download must install nothing");
+    assertEquals(List.of(), leftBehind(), "a stalled download must leave no temporary file");
   }
 
   @Test
