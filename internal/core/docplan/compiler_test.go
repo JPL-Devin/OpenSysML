@@ -530,6 +530,112 @@ func TestCompileReportsInvalidListStyle(t *testing.T) {
 	}
 }
 
+func TestCompileInheritsContentAndAttributes(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part telescope;
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part def TemplateReport :> Document {
+			attribute redefines title = "Template";
+			part intro : Paragraph {
+				attribute redefines text = "Shared overview.";
+			}
+			part items : List {
+				attribute redefines style = "number";
+				calc names : Names {
+					in root = telescope;
+				}
+			}
+		}
+		part def DerivedReport :> TemplateReport {
+			attribute redefines title = "Derived";
+			part extra : Paragraph {
+				attribute redefines text = "Derived-only text.";
+			}
+		}
+	`)
+	plan := fixture.mustCompile(t, "DerivedReport")
+	if plan.Title() != "Derived" {
+		t.Fatalf("title = %q", plan.Title())
+	}
+	content := plan.Content()
+	if len(content) != 3 {
+		t.Fatalf("content = %d nodes, want 3", len(content))
+	}
+	if content[0].Name() != "extra" || content[0].Text() != "Derived-only text." {
+		t.Fatalf("local content = %q %q", content[0].Name(), content[0].Text())
+	}
+	if content[1].Name() != "intro" || content[1].Text() != "Shared overview." {
+		t.Fatalf("inherited paragraph = %q %q", content[1].Name(), content[1].Text())
+	}
+	if content[2].Name() != "items" || content[2].Style() != ListNumber || content[2].Query() == nil {
+		t.Fatalf("inherited list = %+v", content[2])
+	}
+}
+
+func TestCompileInheritsQueryFromContentType(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part telescope;
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part def NameTable :> Table {
+			attribute redefines caption = "Names";
+			calc rows : Names {
+				in root = telescope;
+			}
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part names : NameTable;
+		}
+	`)
+	plan := fixture.mustCompile(t, "Report")
+	table := plan.Content()[0]
+	if table.Kind() != ContentTable || table.Caption() != "Names" {
+		t.Fatalf("table = %s %q", table.Kind(), table.Caption())
+	}
+	if table.Query() == nil || table.Query().Entry() != "Observatory::Names" {
+		t.Fatalf("table query = %+v", table.Query())
+	}
+}
+
+func TestCompileAnonymousContentAndBindingRedefinition(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part telescope;
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part : Paragraph {
+				attribute redefines text = "Anonymous paragraph.";
+			}
+			part items : List {
+				calc names : Names {
+					in :>> root = telescope;
+				}
+			}
+		}
+	`)
+	plan := fixture.mustCompile(t, "Report")
+	content := plan.Content()
+	if len(content) != 2 {
+		t.Fatalf("content = %d nodes, want 2", len(content))
+	}
+	if content[0].Kind() != ContentParagraph || content[0].Text() != "Anonymous paragraph." {
+		t.Fatalf("anonymous paragraph = %s %q", content[0].Kind(), content[0].Text())
+	}
+	bindings := content[1].Query().Bindings()
+	if len(bindings) != 1 || bindings[0].Parameter() != "root" {
+		t.Fatalf("bindings = %+v", bindings)
+	}
+}
+
 func TestCompileReportsNonLiteralTitle(t *testing.T) {
 	fixture := loadPlanningFixture(t, `
 		part def Report :> Document {

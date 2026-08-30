@@ -1,6 +1,7 @@
 package docplan
 
 import (
+	"sort"
 	"strconv"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -93,26 +94,30 @@ func libraryBase(index *symbols.Index, fqn string) *symbols.Symbol {
 // definition or a section usage.
 func (c *compiler) compileMembers(owner *symbols.Symbol) ([]Content, error) {
 	content := make([]Content, 0)
-	for _, member := range scopeMembers(owner) {
-		if member.Kind != symbols.SymbolPartUsage {
+	local := localMemberSet(owner)
+	for _, member := range c.effectiveMembers(owner) {
+		if member.Kind == symbols.SymbolPartUsage && c.isContent(member) {
+			node, err := c.compileContent(member)
+			if err != nil {
+				return nil, err
+			}
+			content = append(content, node)
+			continue
+		}
+		if local[member] {
 			if err := c.rejectStructural(owner, member); err != nil {
 				return nil, err
 			}
-			continue
 		}
-		node, err := c.compileContent(member)
-		if err != nil {
-			return nil, err
-		}
-		content = append(content, node)
 	}
 	return content, nil
 }
 
-// rejectStructural rejects members that cannot appear in a structural scope,
-// letting attributes, annotations, and other non-content members through.
+// rejectStructural rejects declarations that cannot appear in a structural
+// scope, letting attributes, annotations, and other non-content members
+// through.
 func (c *compiler) rejectStructural(owner *symbols.Symbol, member *symbols.Symbol) error {
-	if member.Kind == symbols.SymbolCalcUsage {
+	if member.Kind == symbols.SymbolCalcUsage || member.Kind == symbols.SymbolPartUsage {
 		return &Error{
 			Kind:     ErrorInvalidContent,
 			Document: c.document,
@@ -121,6 +126,15 @@ func (c *compiler) rejectStructural(owner *symbols.Symbol, member *symbols.Symbo
 		}
 	}
 	return nil
+}
+
+// isContent reports whether a part usage conforms to a document content kind.
+func (c *compiler) isContent(member *symbols.Symbol) bool {
+	return c.model.Conforms(member, c.bases.document) ||
+		c.model.Conforms(member, c.bases.section) ||
+		c.model.Conforms(member, c.bases.paragraph) ||
+		c.model.Conforms(member, c.bases.table) ||
+		c.model.Conforms(member, c.bases.list)
 }
 
 func (c *compiler) compileContent(member *symbols.Symbol) (Content, error) {
@@ -161,7 +175,7 @@ func (c *compiler) compileSection(member *symbols.Symbol) (Content, error) {
 	}
 	return Content{
 		kind:     ContentSection,
-		name:     member.Name,
+		name:     c.effectiveName(member),
 		title:    title,
 		children: children,
 		origin:   provenance.Symbol(member),
@@ -198,7 +212,7 @@ func (c *compiler) compileParagraph(member *symbols.Symbol) (Content, error) {
 	}
 	return Content{
 		kind:   ContentParagraph,
-		name:   member.Name,
+		name:   c.effectiveName(member),
 		text:   text,
 		query:  query,
 		origin: provenance.Symbol(member),
@@ -219,7 +233,7 @@ func (c *compiler) compileTable(member *symbols.Symbol) (Content, error) {
 	}
 	return Content{
 		kind:    ContentTable,
-		name:    member.Name,
+		name:    c.effectiveName(member),
 		caption: caption,
 		query:   query,
 		origin:  provenance.Symbol(member),
@@ -253,17 +267,17 @@ func (c *compiler) compileList(member *symbols.Symbol) (Content, error) {
 	}
 	return Content{
 		kind:   ContentList,
-		name:   member.Name,
+		name:   c.effectiveName(member),
 		style:  listStyle,
 		query:  query,
 		origin: provenance.Symbol(member),
 	}, nil
 }
 
-// rejectNestedContent rejects part usages nested inside a content block.
+// rejectNestedContent rejects content blocks nested inside a content block.
 func (c *compiler) rejectNestedContent(owner *symbols.Symbol) error {
-	for _, member := range scopeMembers(owner) {
-		if member.Kind == symbols.SymbolPartUsage {
+	for _, member := range c.effectiveMembers(owner) {
+		if member.Kind == symbols.SymbolPartUsage && c.isContent(member) {
 			return &Error{
 				Kind:     ErrorInvalidContent,
 				Document: c.document,
@@ -296,7 +310,7 @@ func (c *compiler) requiredQueryRef(member *symbols.Symbol) (*QueryRef, error) {
 // planned query reference, or nil when the block declares none.
 func (c *compiler) compileQueryRef(owner *symbols.Symbol) (*QueryRef, error) {
 	var usage *symbols.Symbol
-	for _, member := range scopeMembers(owner) {
+	for _, member := range c.effectiveMembers(owner) {
 		if member.Kind != symbols.SymbolCalcUsage {
 			continue
 		}
@@ -385,12 +399,12 @@ func (c *compiler) compileBindings(
 	}
 	bindings := make([]Binding, 0)
 	bound := make(map[string]bool)
-	for _, member := range scopeMembers(usage) {
+	for _, member := range localMembers(usage) {
 		declaration, ok := member.Decl.(*ast.Usage)
 		if !ok || declaration.Direction != ast.DirIn {
 			continue
 		}
-		name := member.Name
+		name := c.effectiveName(member)
 		if _, ok := known[name]; !ok {
 			return nil, &Error{
 				Kind:      ErrorUnknownParameter,
@@ -687,13 +701,13 @@ func (c *compiler) requiredText(member *symbols.Symbol, attribute string, missin
 
 // optionalText reads an optional string attribute of one structural member.
 func (c *compiler) optionalText(member *symbols.Symbol, attribute string) (string, bool, error) {
-	for _, candidate := range scopeMembers(member) {
-		if candidate.Kind != symbols.SymbolAttributeUsage || candidate.Name != attribute {
+	for _, candidate := range c.effectiveMembers(member) {
+		if candidate.Kind != symbols.SymbolAttributeUsage || c.effectiveName(candidate) != attribute {
 			continue
 		}
 		declaration, ok := candidate.Decl.(*ast.Usage)
 		if !ok || declaration.Value == nil {
-			return "", false, c.invalidAttribute(member, candidate, attribute)
+			continue // an unvalued declaration, such as the vocabulary base's
 		}
 		literal, ok := declaration.Value.(*ast.LiteralString)
 		if !ok {
@@ -725,9 +739,52 @@ func (c *compiler) contentName(member *symbols.Symbol) string {
 	return member.Name
 }
 
-func scopeMembers(sym *symbols.Symbol) []*symbols.Symbol {
+// localMemberSet identifies a scope's own declarations for local-only checks.
+func localMemberSet(sym *symbols.Symbol) map[*symbols.Symbol]bool {
+	members := localMembers(sym)
+	set := make(map[*symbols.Symbol]bool, len(members))
+	for _, member := range members {
+		set[member] = true
+	}
+	return set
+}
+
+// localMembers returns a scope's named and anonymous declarations in source order.
+func localMembers(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil || sym.Scope == nil {
 		return nil
 	}
-	return sym.Scope.Members()
+	members := sym.Scope.Members()
+	if sym.Scope.HasAnonymousMembers() {
+		members = append(members, sym.Scope.AnonymousMembers()...)
+		sort.SliceStable(members, func(i, j int) bool {
+			return members[i].DeclSpan.Offset < members[j].DeclSpan.Offset
+		})
+	}
+	return members
+}
+
+// effectiveMembers returns local declarations in source order followed by
+// unmasked inherited members.
+func (c *compiler) effectiveMembers(sym *symbols.Symbol) []*symbols.Symbol {
+	local := localMembers(sym)
+	seen := make(map[*symbols.Symbol]bool, len(local))
+	for _, member := range local {
+		seen[member] = true
+	}
+	members := local
+	for _, member := range c.model.MembersOf(sym) {
+		if !seen[member] {
+			members = append(members, member)
+		}
+	}
+	return members
+}
+
+// effectiveName returns a member's declared or redefinition-inherited name.
+func (c *compiler) effectiveName(sym *symbols.Symbol) string {
+	if name := c.model.EffectiveNameOf(sym); name != "" {
+		return name
+	}
+	return sym.Name
 }
