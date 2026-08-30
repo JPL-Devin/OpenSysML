@@ -2,7 +2,8 @@
 
 Syntax highlighting and language support for `.sysml` and `.kerml` files, backed by
 OpenSysML's `sysml-lsp` server: diagnostics, hover, go-to-definition, document
-symbols, typed completion, and a live diagram panel.
+symbols, typed completion, a live diagram panel, and Markdown rendering of
+native document definitions.
 
 This extension is built and side-loaded from this repository. It is deliberately
 **not published** to the Visual Studio Marketplace or Open VSX.
@@ -46,6 +47,21 @@ The command exists only when the server advertises
 without it. The requests behind the panel — `opensysml/render`,
 `opensysml/views` and the `opensysml/renderChanged` notification — are documented
 in [docs/reference/lsp.md](../../docs/reference/lsp.md).
+
+## Rendering documents
+
+`SysML: Render Document` renders a native document definition — a `part def`
+specializing `DocumentQueries::Document` — to Markdown: a quick pick lists the
+documents the workspace declares, and the rendering opens beside the editor as
+a Markdown preview. It is the pipeline behind the REPL's `%render-document`,
+run against the model as currently typed. An error — a query that fails to
+plan, a binding that resolves to nothing — is shown as a message rather than a
+crash.
+
+The command exists only when the server advertises
+`experimental: { openSysmlRenderDocument: true }`. The requests behind it —
+`opensysml/documents` and `opensysml/renderDocument` — are documented in
+[docs/reference/lsp.md](../../docs/reference/lsp.md).
 
 ## Settings
 
