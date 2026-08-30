@@ -15,6 +15,7 @@ import pytest
 from unittest.mock import patch, Mock, mock_open
 from opensysml.binary import (
     PINNED_SHA256,
+    binary_on_path,
     cache_lock,
     cached_release,
     default_github_repo,
@@ -23,10 +24,12 @@ from opensysml.binary import (
     download_binary,
     expected_digest,
     metadata_path,
+    named_binary,
     pinned_digest,
     lock_path,
     release_asset_name,
     resolve_latest_version,
+    service_binary_name,
     stable_binary_path,
     stale_cache_reason,
     verify_checksum,
@@ -40,6 +43,27 @@ from opensysml.errors import ConnectionError as OpenSysMLConnectionError
 def linked(content=b'cached binary'):
     """The digest-named path ensure_binary hands a caller for cached content."""
     return stable_binary_path(hashlib.sha256(content).hexdigest())
+
+
+@pytest.fixture(autouse=True)
+def resolution_environment(tmp_path, monkeypatch):
+    """Resolve binaries against this test's environment, not the developer's.
+
+    Every test in this file decides what $OPENSYSML_BINARY and $PATH offer, so a
+    sysml-grpc the host happens to have installed cannot answer for one of them.
+    """
+    empty = tmp_path / 'empty-path'
+    empty.mkdir()
+    monkeypatch.setenv('PATH', str(empty))
+    monkeypatch.delenv('OPENSYSML_BINARY', raising=False)
+    monkeypatch.delenv('OPENSYSML_GRPC_BINARY', raising=False)
+
+
+def executable(path, content=b'a sysml-grpc build'):
+    """Write executable content at a path, and return it as a string."""
+    path.write_bytes(content)
+    path.chmod(0o755)
+    return str(path)
 
 
 @pytest.fixture
@@ -95,6 +119,24 @@ def test_get_binary_path():
     path = get_binary_path()
     assert path.startswith(os.path.expanduser('~/.opensysml/bin/'))
     assert path.endswith('sysml-grpc') or path.endswith('sysml-grpc.exe')
+
+
+def test_service_binary_name_is_the_executable_one_on_windows():
+    """Test the name looked for on $PATH and in the cache carries the .exe suffix."""
+    assert service_binary_name('linux') == 'sysml-grpc'
+    assert service_binary_name('darwin') == 'sysml-grpc'
+    assert service_binary_name('windows') == 'sysml-grpc.exe'
+
+
+def test_binary_on_path_looks_for_the_windows_name_on_windows(tmp_path, monkeypatch):
+    """Test a Windows host scans $PATH for sysml-grpc.exe, not for sysml-grpc."""
+    monkeypatch.setattr('opensysml.binary.platform.system', lambda: 'Windows')
+    monkeypatch.setenv('PATH', str(tmp_path))
+    executable(tmp_path / 'sysml-grpc')
+    assert binary_on_path() is None
+
+    on_path = executable(tmp_path / 'sysml-grpc.exe')
+    assert binary_on_path() == on_path
 
 
 def test_download_binary(pins):
@@ -196,6 +238,144 @@ def test_ensure_binary_raises_without_version():
     with patch('os.path.exists', return_value=False):
         with pytest.raises(ConnectionError, match="Binary not found.*auto-download disabled"):
             ensure_binary()
+
+
+def test_ensure_binary_starts_the_build_named_for_it(cache, tmp_path, monkeypatch):
+    """Test $OPENSYSML_BINARY names the binary started, at exactly that path."""
+    named = executable(tmp_path / 'my-build')
+    monkeypatch.setenv('OPENSYSML_BINARY', named)
+    assert ensure_binary() == named
+
+
+def test_a_named_build_beats_the_cache_and_path(cache, tmp_path, monkeypatch):
+    """Test naming a build overrides every other place one could come from."""
+    cache(version='v0.0.7')
+    on_path = tmp_path / 'path-dir'
+    on_path.mkdir()
+    executable(on_path / 'sysml-grpc')
+    monkeypatch.setenv('PATH', str(on_path))
+    named = executable(tmp_path / 'my-build')
+    monkeypatch.setenv('OPENSYSML_BINARY', named)
+
+    assert ensure_binary() == named
+
+
+def test_a_named_build_that_is_missing_is_an_error(cache, tmp_path, monkeypatch):
+    """Test an instruction that cannot be honoured fails instead of looking elsewhere."""
+    cache(version='v0.0.7')
+    on_path = tmp_path / 'path-dir'
+    on_path.mkdir()
+    executable(on_path / 'sysml-grpc')
+    monkeypatch.setenv('PATH', str(on_path))
+    missing = str(tmp_path / 'not-here')
+    monkeypatch.setenv('OPENSYSML_BINARY', missing)
+
+    with pytest.raises(OpenSysMLConnectionError) as raised:
+        ensure_binary()
+    assert '$OPENSYSML_BINARY' in str(raised.value)
+    assert missing in str(raised.value)
+
+
+def test_a_named_build_that_is_not_executable_is_an_error(tmp_path, monkeypatch):
+    """Test a file that cannot be executed is reported, not silently skipped."""
+    unrunnable = tmp_path / 'my-build'
+    unrunnable.write_bytes(b'not chmod +x')
+    unrunnable.chmod(0o644)
+    monkeypatch.setenv('OPENSYSML_BINARY', str(unrunnable))
+
+    with pytest.raises(OpenSysMLConnectionError, match='not an executable file'):
+        ensure_binary()
+
+
+def test_ensure_binary_starts_a_service_installed_on_path(cache, tmp_path, monkeypatch):
+    """Test a sysml-grpc installed by a package manager answers for an empty cache."""
+    directory = tmp_path / 'usr-local-bin'
+    directory.mkdir()
+    on_path = executable(directory / 'sysml-grpc')
+    monkeypatch.setenv('PATH', str(directory))
+
+    # As it is found: its own path, not a digest-named link into the cache.
+    assert ensure_binary() == on_path
+
+
+def test_path_is_scanned_in_order_past_what_cannot_be_executed(tmp_path, monkeypatch):
+    """Test a non-executable sysml-grpc earlier on $PATH does not shadow a later one."""
+    first, second = tmp_path / 'first', tmp_path / 'second'
+    first.mkdir()
+    second.mkdir()
+    unrunnable = first / 'sysml-grpc'
+    unrunnable.write_bytes(b'not chmod +x')
+    unrunnable.chmod(0o644)
+    runnable = executable(second / 'sysml-grpc')
+    monkeypatch.setenv('PATH', os.pathsep.join([str(first), str(second)]))
+
+    assert binary_on_path() == runnable
+
+
+def test_the_cache_beats_a_service_on_path(cache, tmp_path, monkeypatch):
+    """Test the cache, whose release is known, is preferred to an unknown one on $PATH."""
+    cache(version='v0.0.7')
+    directory = tmp_path / 'usr-local-bin'
+    directory.mkdir()
+    executable(directory / 'sysml-grpc')
+    monkeypatch.setenv('PATH', str(directory))
+
+    assert ensure_binary() == linked()
+
+
+def test_a_download_that_fails_is_not_answered_from_path(cache, tmp_path, monkeypatch):
+    """Test a $PATH binary, of no known release, does not stand in for one asked for."""
+    directory = tmp_path / 'usr-local-bin'
+    directory.mkdir()
+    executable(directory / 'sysml-grpc')
+    monkeypatch.setenv('PATH', str(directory))
+
+    with patch('opensysml.binary.download_binary',
+               side_effect=OpenSysMLConnectionError('release not found')):
+        with pytest.raises(OpenSysMLConnectionError, match='release not found'):
+            ensure_binary(version='v9.9.9')
+
+
+def test_a_download_with_no_release_to_download_is_not_answered_from_path(
+    cache, tmp_path, monkeypatch
+):
+    """Test asking for a download without a release is an error, not a $PATH binary."""
+    directory = tmp_path / 'usr-local-bin'
+    directory.mkdir()
+    executable(directory / 'sysml-grpc')
+    monkeypatch.setenv('PATH', str(directory))
+
+    with pytest.raises(OpenSysMLConnectionError, match='without a release'):
+        ensure_binary(force_download=True)
+
+
+def test_a_local_build_answers_on_a_platform_no_release_is_published_for(
+    cache, tmp_path, monkeypatch
+):
+    """Test an architecture releases skip still resolves a named build and one on $PATH."""
+    monkeypatch.setattr('opensysml.binary.platform.machine', lambda: 'riscv64')
+    directory = tmp_path / 'usr-local-bin'
+    directory.mkdir()
+    on_path = executable(directory / 'sysml-grpc')
+    monkeypatch.setenv('PATH', str(directory))
+    assert ensure_binary() == on_path
+
+    named = executable(tmp_path / 'my-build')
+    monkeypatch.setenv('OPENSYSML_BINARY', named)
+    assert ensure_binary() == named
+
+
+def test_ensure_binary_reports_everywhere_it_looked(cache):
+    """Test the refusal names each place a binary could have come from."""
+    import opensysml.binary
+
+    with pytest.raises(OpenSysMLConnectionError) as raised:
+        ensure_binary()
+    message = str(raised.value)
+    assert '$OPENSYSML_BINARY' in message
+    assert opensysml.binary.get_binary_path() in message
+    assert '$PATH' in message
+    assert '$OPENSYSML_GRPC_VERSION' in message
 
 
 def test_download_binary_verifies_checksum(pins):
