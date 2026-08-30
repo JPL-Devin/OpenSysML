@@ -5,6 +5,9 @@ import (
 	"errors"
 	"io"
 	"strings"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 const (
@@ -72,8 +75,39 @@ func Loop(r LineReader, out io.Writer, s *Session) error {
 	}
 }
 
+// submit evaluates a bare expression as %eval does, so `2 + 3` at the prompt
+// answers rather than failing as a declaration; anything else joins the buffer.
 func submit(w io.Writer, s *Session, src string) {
+	if expr, ok := bareExpression(src); ok {
+		lines, err := s.EvalExpr(expr)
+		if err != nil {
+			printLines(w, []string{"error: " + err.Error()})
+			return
+		}
+		printLines(w, lines)
+		return
+	}
 	printLines(w, renderResult(s.Submit(src), s.verbosity))
+}
+
+// bareExpression reports whether src reads as an expression and not as a
+// namespace member. Only input the file grammar rejects is offered to the
+// expression grammar, so every declaration keeps its meaning.
+func bareExpression(src string) (string, bool) {
+	trimmed := strings.TrimSpace(src)
+	if trimmed == "" {
+		return "", false
+	}
+	fp := parser.New(source.New("<repl-input>", []byte(src)))
+	fp.ParseFile()
+	if len(fp.Diagnostics) == 0 {
+		return "", false
+	}
+	p := parser.New(source.New("<repl-input>", []byte(trimmed)))
+	if expr := p.ParseExpression(); expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(trimmed) {
+		return "", false
+	}
+	return trimmed, true
 }
 
 func printLines(w io.Writer, lines []string) {

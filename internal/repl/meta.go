@@ -1326,7 +1326,7 @@ func (s *Session) evalCalc(calcName, argText string) ([]string, []NamedValue, er
 		return nil, nil, errors.New("no declarations loaded")
 	}
 
-	sym, _, lerr := s.lookupSymbol(calcName)
+	sym, _, lerr := s.lookupSymbolOfKinds(calcName, symbols.SymbolCalcDef, symbols.SymbolCalcUsage)
 	if lerr != nil {
 		return nil, nil, lerr
 	}
@@ -1842,7 +1842,7 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
 	}
 
-	sym, fqn, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbolOfKinds(name, symbols.SymbolActionUsage, symbols.SymbolActionDef)
 	if lerr != nil {
 		return nil, lerr
 	}
@@ -2104,7 +2104,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
 	}
 
-	sym, fqn, lerr := s.lookupSymbol(name)
+	sym, fqn, lerr := s.lookupSymbolOfKinds(name, symbols.SymbolStateDef, symbols.SymbolStateUsage)
 	if lerr != nil {
 		return nil, lerr
 	}

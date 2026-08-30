@@ -2,6 +2,7 @@ package repl
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -174,8 +175,9 @@ func (s *Session) declaredSymbolNames() []string {
 }
 
 // notFoundError reports a name no declaration answers to, offering the
-// qualified name the index does know it under, or the nearest spellings.
-func (s *Session) notFoundError(name string) error {
+// qualified name the index does know it under, or the nearest spellings. want
+// narrows what is offered to the kinds the command can act on.
+func (s *Session) notFoundError(name string, want ...symbols.SymbolKind) error {
 	// Spelled as the notation writes it, so the name in the failure is the name
 	// that was typed — text still carrying quotes is one the notation could not
 	// read as a name, and is reported as typed rather than quoted again.
@@ -185,14 +187,91 @@ func (s *Session) notFoundError(name string) error {
 	}
 	err := unresolvedError(shown)
 	msg := err.Error()
-	if !strings.Contains(name, "::") {
-		if idx := s.browseIndex(); idx != nil {
-			if qualified := suggest.With(msg, name, s.qualifiedSuggestions(idx, name)); qualified != msg {
-				return suggestionError(err, msg, qualified)
-			}
+	if strings.Contains(name, "::") {
+		return suggestionError(err, msg, suggest.With(msg, name, s.qualifiedMissSuggestions(name, want)))
+	}
+	if idx := s.browseIndex(); idx != nil {
+		if qualified := suggest.With(msg, name, s.matchingKinds(s.qualifiedSuggestions(idx, name), want)); qualified != msg {
+			return suggestionError(err, msg, qualified)
 		}
 	}
-	return suggestionError(err, msg, suggest.With(msg, name, s.suggestSymbol(name)))
+	return suggestionError(err, msg, suggest.With(msg, name, s.matchingKinds(s.suggestSymbol(name), want)))
+}
+
+// qualifiedMissSuggestions offers the members of a qualified name's own
+// qualifier nearest its last segment. A near name under another qualifier is
+// not what was typed, so a qualifier that resolves nowhere offers nothing.
+func (s *Session) qualifiedMissSuggestions(name string, want []symbols.SymbolKind) []string {
+	idx := s.browseIndex()
+	if idx == nil {
+		return nil
+	}
+	cut := strings.LastIndex(name, "::")
+	qualifier, last := name[:cut], name[cut+2:]
+	matches := idx.LookupQualified(qualifier)
+	if len(matches) != 1 {
+		return nil
+	}
+	prefix := idx.GetFQN(matches[0])
+	if prefix == "" {
+		prefix = qualifier
+	}
+	var out []string
+	for _, member := range suggest.Nearest(last, s.memberNames(idx, prefix)) {
+		out = append(out, prefix+"::"+member)
+	}
+	return s.matchingKinds(out, want)
+}
+
+// memberNames lists the simple names the index registers directly under prefix.
+func (s *Session) memberNames(idx *symbols.Index, prefix string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, fqn := range idx.FQNs() {
+		rest, ok := strings.CutPrefix(fqn, prefix+"::")
+		if !ok || strings.Contains(rest, "::") || seen[rest] {
+			continue
+		}
+		seen[rest] = true
+		out = append(out, rest)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// matchingKinds keeps the candidates a command of the wanted kinds can act on,
+// so `-action` is not offered a function. Nothing wanted keeps every candidate.
+func (s *Session) matchingKinds(cands []string, want []symbols.SymbolKind) []string {
+	if len(want) == 0 || len(cands) == 0 {
+		return cands
+	}
+	out := make([]string, 0, len(cands))
+	for _, cand := range cands {
+		if s.candidateHasKind(cand, want) {
+			out = append(out, cand)
+		}
+	}
+	return out
+}
+
+// candidateHasKind reports whether any declaration cand denotes is of a wanted
+// kind, read from the index or from the session's own scope trees.
+func (s *Session) candidateHasKind(name string, want []symbols.SymbolKind) bool {
+	var matches []*symbols.Symbol
+	if idx := s.browseIndex(); idx != nil {
+		matches = idx.LookupQualified(name)
+	}
+	if len(matches) == 0 {
+		for _, scope := range s.docScopes() {
+			matches = append(matches, collectInScopeTree(scope, name)...)
+		}
+	}
+	for _, sym := range matches {
+		if slices.Contains(want, sym.Kind) {
+			return true
+		}
+	}
+	return false
 }
 
 // suggestionError offers what suggested added to msg while keeping err's
