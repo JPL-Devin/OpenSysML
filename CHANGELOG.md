@@ -4,7 +4,24 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
-## Unreleased
+## 0.4.1 — 2026-08-30
+
+Release 0.4.1 is about what the tools *say* about a model. Every surface that names a declaration —
+a rendering, the REPL's echo and search, a runtime diagnostic, LSP hover and completion — printed the
+classification the implementation keeps internally rather than the notation the file was written in,
+so a datatype read as an attribute and a KerML classifier grew a `def` it never had. The written form
+now has one source, and those surfaces all read from it; hover and completion documentation render as
+Markdown for a client that advertises it, and as plain text for one that does not.
+
+One import path moves: the public Go API is now `github.com/Open-MBEE/OpenSysML/client/opensysml`.
+The API itself is unchanged, but Go has no import alias, so **a Go consumer must edit the import
+line** — the one change in this release that a user has to make.
+
+Behind those, native document queries gain a compiled planning layer (planning only: nothing
+executes or renders yet), the Python and Rust clients move under `clients/` beside the Java and Node
+ones, and the SonarCloud gate is measuring the project it is meant to — every language's tests now
+count toward coverage, the Java sources are analyzed with types, and the bug and vulnerability
+backlog is empty.
 
 ### Changed
 
@@ -21,7 +38,40 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   client library from. Go has no import alias, so this breaks every consumer's import path; update
   the import, nothing else. The API is unchanged and still ships with the core `v*` tags.
 
+- **The Python and Rust clients live under `clients/`**, beside the Java and Node ones, rather than
+  at the repository root. Every path that named them moves with them: the CI jobs and publish
+  pipelines, the changed-area filters, the Makefile targets, the buf output paths, the analysis
+  inclusions and the documentation. Neither published package changes name, version or contents.
+
+### Added
+
+- **Native document queries now have a compiled planning layer.** Query definitions specialize the
+  bundled `DocumentQueries::Query` vocabulary, retain typed parameter/result metadata and source
+  provenance, and may invoke other named queries with explicit named bindings. Planning produces an
+  immutable dependency-ordered program and reports malformed definitions, unknown operations, bad
+  bindings, positional query composition, and complete direct or indirect composition cycles as
+  typed validation diagnostics. Execution and document rendering are not part of this release.
+
+- **Hover renders as Markdown when the editor supports it**: the signature is a fenced `sysml`
+  block and the doc comment reads as prose. A client that does not advertise Markdown still gets
+  the plain text it did before.
+
 ### Fixed
+
+- **An element is named the way its notation writes it**, on every surface that names one — a view
+  rendering, the REPL's echo and search, a runtime diagnostic, and LSP hover and completion. These
+  printed the internal classification of a declaration instead, so a `datatype` read as an attribute
+  and a KerML classifier was given a `def` suffix it never had. A short name that is not a valid
+  identifier is quoted as the notation requires, and emphasis a doc comment was authored with
+  survives into the rendered documentation.
+
+- **Hover keeps what the file says.** Each leading comment's delimiters are stripped on its own, a
+  doc comment keeps the line breaks it was written with, a named relationship's prefix stays out of
+  its signature, and a relationship is named by the keyword its name follows.
+
+- **Both operands of `?` may be conditional expressions.** The parser accepted one only in the else
+  branch, though `KerMLExpressions.xtext` makes both owned expressions and limits only the condition
+  to a null-coalescing expression.
 
 - **The Connect server's shutdown no longer runs on an already-cancelled context.** It derived its
   30-second grace period from `context.Background()`, dropping the request context's values; it now
@@ -67,6 +117,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **The header's Community Wiki link points at the wiki's landing page**, rather than at the wiki
   root, which lands on whatever page GitHub considers first.
 
+- **A deserialized `ModelException` cannot claim an unbounded diagnostic count**, so a hostile or
+  corrupt stream no longer has the Java client allocate for one.
+
 ### Project
 
 - **The SonarCloud bug and vulnerability backlog is cleared.** A sort compares by an explicit
@@ -75,6 +128,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   VS Code extension's webview ignores a message from any other origin. `sonar-project.properties`
   states, with its reason, each rule whose subject in one file is a developer command's documented
   behavior.
+
+- **The maintainability findings behind it are cleared too**, across Go, Java, Python, Rust,
+  TypeScript and the shell scripts: parameter lists over seven entries became option structs,
+  switches over thirty cases dispatch through kind-scoped helpers or lookup tables, duplicated
+  literals are hoisted, and the coverage script validates that the profile path it is given stays
+  in the working tree and reports a symlink loop rather than a traceback. Behavior is unchanged
+  throughout; the generated Python gRPC stubs and the cognitive complexity of Go test files are
+  excluded from analysis, since neither is code a reviewer edits.
 
 ## 0.4.0 — 2026-08-28
 
@@ -136,13 +197,6 @@ against it.
   Integer. Arithmetic is unchanged: the stored value was never rounded.
 
 ### Added
-
-- **Native document queries now have a compiled planning layer.** Query definitions specialize the
-  bundled `DocumentQueries::Query` vocabulary, retain typed parameter/result metadata and source
-  provenance, and may invoke other named queries with explicit named bindings. Planning produces an
-  immutable dependency-ordered program and reports malformed definitions, unknown operations, bad
-  bindings, positional query composition, and complete direct or indirect composition cycles as
-  typed validation diagnostics. Execution and document rendering are not part of this release.
 
 - **A typed state usage inherits the content of the definition typing it.** The definition's
   substates, initial transition, entry/do/exit behaviors, transitions, deferred events and
