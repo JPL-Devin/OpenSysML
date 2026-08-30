@@ -842,6 +842,82 @@ calc def Matching :> Query {
 	}
 }
 
+func TestExecuteUsesEffectiveNamesForAnonymousRedefinitions(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+calc def Base {
+	in zeta : Integer;
+}
+calc def Derived :> Base {
+	in : Integer;
+	in alpha : Integer;
+}
+calc def FilterName :> Query {
+	in source : Element;
+	Project(
+		source = WhereName(
+			source = OwnedElements(source = source),
+			operator = "=",
+			value = "zeta"
+		),
+		properties = ("name")
+	)
+}
+calc def ProjectNames :> Query {
+	in source : Element;
+	Project(
+		source = OwnedElements(source = source),
+		properties = ("name", "declaredName")
+	)
+}
+calc def OrderNames :> Query {
+	in source : Element;
+	Project(
+		source = OrderBy(
+			source = OwnedElements(source = source),
+			property = "name",
+			direction = "ascending",
+			missing = "error",
+			multiple = "error"
+		),
+		properties = ("name")
+	)
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "Derived"))}}
+	filtered, err := fixture.execute(t, "FilterName", bindings, Options{})
+	if err != nil {
+		t.Fatalf("filter by effective name: %v", err)
+	}
+	if got := projectedNames(t, filtered); !slices.Equal(got, []string{"zeta"}) {
+		t.Fatalf("filtered names = %v", got)
+	}
+
+	projected, err := fixture.execute(t, "ProjectNames", bindings, Options{})
+	if err != nil {
+		t.Fatalf("project effective names: %v", err)
+	}
+	rows := projected.Rows()
+	if len(rows) != 2 {
+		t.Fatalf("projected rows = %d, want 2", len(rows))
+	}
+	first := rows[0].Cells()
+	if len(first) != 2 || len(first[0].Values()) != 1 || len(first[1].Values()) != 0 {
+		t.Fatalf("anonymous redefinition cells = %+v", first)
+	}
+	name, ok := first[0].Values()[0].String()
+	if !ok || name != "zeta" {
+		t.Fatalf("anonymous redefinition name = %q, %v", name, ok)
+	}
+
+	ordered, err := fixture.execute(t, "OrderNames", bindings, Options{})
+	if err != nil {
+		t.Fatalf("order by effective name: %v", err)
+	}
+	if got := projectedNames(t, ordered); !slices.Equal(got, []string{"alpha", "zeta"}) {
+		t.Fatalf("ordered names = %v", got)
+	}
+}
+
 func TestExecutePreservesInterleavedOwnedDeclarationOrder(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part def Base {

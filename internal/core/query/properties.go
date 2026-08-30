@@ -32,12 +32,15 @@ func (r *PropertyReader) Values(sym *symbols.Symbol, property string) ([]string,
 	case PropertyID, PropertyQualifiedName:
 		return presentValues(fqn)
 	case PropertyName:
-		return presentValues(lastName(fqn))
+		if r.semantics != nil {
+			return presentValues(r.semantics.EffectiveNameOf(sym))
+		}
+		return presentValues(sym.Name)
 	case PropertyDeclaredName:
 		if sym.EffectiveName {
 			return nil, false
 		}
-		return presentValues(lastName(fqn))
+		return presentValues(sym.Name)
 	case PropertyOwner:
 		if sym.OwnerScope != nil && sym.OwnerScope.Owner() != nil {
 			return presentValues(r.index.GetFQN(sym.OwnerScope.Owner()))
@@ -103,13 +106,6 @@ func presentValues(value string) ([]string, bool) {
 		return nil, false
 	}
 	return []string{value}, true
-}
-
-func lastName(fqn string) string {
-	if i := strings.LastIndex(fqn, "::"); i >= 0 {
-		return fqn[i+2:]
-	}
-	return fqn
 }
 
 func ownerName(fqn string) string {

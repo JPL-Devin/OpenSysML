@@ -50,6 +50,43 @@ func (m *Model) RedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 	return out
 }
 
+// EffectiveNameOf returns a declaration's name, including one inherited through a unique redefinition.
+func (m *Model) EffectiveNameOf(sym *symbols.Symbol) string {
+	return m.effectiveNameOf(sym, make(map[*symbols.Symbol]bool))
+}
+
+func (m *Model) effectiveNameOf(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) string {
+	if sym == nil || seen[sym] {
+		return ""
+	}
+	if sym.Name != "" {
+		return sym.Name
+	}
+	seen[sym] = true
+
+	var targets []*symbols.Symbol
+	known := make(map[*symbols.Symbol]bool)
+	add := func(candidates []*symbols.Symbol) {
+		for _, candidate := range candidates {
+			if candidate == nil || candidate == sym || known[candidate] {
+				continue
+			}
+			known[candidate] = true
+			targets = append(targets, candidate)
+		}
+	}
+	if m != nil {
+		add(m.RedefinedFeatures(sym))
+		add(m.implicitParameterRedefinitions(sym))
+		add(m.implicitEndRedefinitions(sym))
+		add(m.ImplicitRoleRedefinitions(sym))
+	}
+	if len(targets) != 1 {
+		return ""
+	}
+	return m.effectiveNameOf(targets[0], seen)
+}
+
 // DeclaresRedefinition reports whether sym carries a `redefines`/`:>>` clause,
 // whether or not its target resolves.
 func DeclaresRedefinition(sym *symbols.Symbol) bool {
