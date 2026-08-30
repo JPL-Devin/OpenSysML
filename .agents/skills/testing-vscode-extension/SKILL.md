@@ -505,6 +505,28 @@ Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoo
 (language indicator "SysML v2"/"KerML", problem counts) and the completion popup — the popup's detail
 column is too small to read in a 1024x768 full screenshot.
 
+## Document-query authoring / `opensysml/renderDocument` (`internal/lsp/document.go`, `editors/vscode/src/document.ts`)
+
+- The fixture in `internal/lsp/document_test.go` (`package Observatory` with `DocumentQueries::*`,
+  `KerML::Root::Element`, `Subsystems`/`SubsystemTable :> Query`, `MassReport :> Document`) works
+  verbatim in a scratch workspace with 0 Problems — copy it and every expected value (documents list
+  `Observatory::MassReport`, markdown `# Telescope Mass Report` + `| optics | 8.5 |`, error
+  `... is not a document: ...`) is confirmable first with a stdio JSON-RPC probe
+  (`opensysml/documents` params `{}`, `opensysml/renderDocument` params `{"name": ...}`; capability
+  `capabilities.experimental.openSysmlRenderDocument === true`).
+- The command is Command Palette → **SysML: Render Document**; it opens an untitled Markdown doc
+  beside plus its preview. On a broken document the error is a bottom-right toast, truncated —
+  hover the toast to read the full message in a tooltip before judging it.
+- Good live-diagnostic oracle: `Ctrl+Shift+K` on the `attribute redefines title = ...;` line ⇒
+  Problems shows `document-plan(document-plan-missing-title)` at error severity spanning the
+  `part def MassReport` line; File: Revert File clears it. Deleting the binding name `root` while
+  testing completion also raises a `document-plan` missing-binding diagnostic live — expected, not
+  a mess-up.
+- Completion checks: double-click the type name after `calc rows : `, Delete, `Ctrl+Space`, type a
+  prefix (`Subsy`) — expect only the query defs (`Subsystems`, `SubsystemTable`), not the part def
+  `Subsystem`. In binding-name position (delete `root` before `= telescope`) the list is exactly
+  one item `root` with detail `attribute : Element`.
+
 ## Devin Secrets Needed
 
 None.
