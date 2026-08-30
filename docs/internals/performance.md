@@ -203,6 +203,29 @@ allocated by 32% (744.9 to 503.6 MiB), peak resident size by 23% (353 to
 Diagnostics, resolution results and exit status are byte-identical, over the
 bundled `.sysml` and `.kerml` fixtures as well as the test suite.
 
+### Per-token and per-name allocations the parser did not need
+
+Three allocation sources were paid once per token or per name parsed, where one
+allocation per file or none serves. Removing them cut allocation count on a
+12 000-element model by 15% (4.33M to 3.69M) and bytes allocated by 2.8%
+(487.7 to 474.1 MiB), with wall time unchanged — the savings are small objects,
+so the win is collector pressure rather than bytes:
+
+- The lexer materialized every keyword's text as a fresh string when it built
+  the token. The keyword table now maps each keyword to one canonical string,
+  so every `part`, `def` or `import` token shares it.
+- Every qualified name allocated a parts slice, though most names have one
+  segment. `ast.QualifiedName` now carries inline storage for a single segment
+  (`SetSingleton`), capped so appending a second segment copies out to an
+  ordinary slice; multi-segment names behave as before.
+- The resolver's inherited-member check built a redefinition-closure map per
+  inherited symbol and redefined-by maps per scope, though most symbols redefine
+  nothing. A symbol with no redefinitions is now checked directly against its
+  own entry, and the maps are built only when something redefines something.
+
+Diagnostics and exit status were verified byte-identical against the previous
+binary over the same models.
+
 ## What running a model costs
 
 Runs are measured against an already-loaded model, with the session's runtime
