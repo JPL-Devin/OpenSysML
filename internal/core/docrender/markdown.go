@@ -116,24 +116,13 @@ func diagramBlocks(name, caption string, rendering *view.Rendering, direction vi
 		blocks = append(blocks, "*"+inline(caption)+"*")
 	}
 	if rendering.Kind == view.KindTable {
-		return append(blocks, viewTable(rendering)), nil
+		return append(blocks, strings.TrimRight(rendering.Markdown(), "\n")), nil
 	}
 	if !rendering.Kind.Supported() {
 		return nil, &Error{Kind: ErrorUnrenderableDiagram, Content: name, Actual: string(rendering.Kind)}
 	}
 	mermaid := strings.TrimRight(rendering.MermaidDirected(direction), "\n")
 	return append(blocks, "```mermaid\n"+mermaid+"\n```"), nil
-}
-
-// viewTable writes a table-kind rendering's columns and rows as a pipe table.
-func viewTable(rendering *view.Rendering) string {
-	var b strings.Builder
-	writeTableRow(&b, rendering.Columns)
-	b.WriteString("|" + strings.Repeat(" --- |", len(rendering.Columns)) + "\n")
-	for _, row := range rendering.Rows {
-		writeTableRow(&b, row)
-	}
-	return strings.TrimRight(b.String(), "\n")
 }
 
 // tableCells renders one row's cells, padded or truncated to the column count.

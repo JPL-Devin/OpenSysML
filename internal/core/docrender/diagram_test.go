@@ -83,9 +83,29 @@ func TestDiagramTableKind(t *testing.T) {
 		Rows:    [][]string{{"optics", "8.5"}, {"mount|base", "15"}},
 	}
 	got := renderedDiagram(t, "Masses", rendering, "")
-	want := "*Masses*\n\n| name | mass |\n| --- | --- |\n| optics | 8.5 |\n| mount\\|base | 15 |"
+	want := "*Masses*\n\n<!-- table rendering -->\n| name | mass |\n| --- | --- |\n| optics | 8.5 |\n| mount\\|base | 15 |"
 	if got != want {
 		t.Errorf("table = %q, want %q", got, want)
+	}
+}
+
+func TestDiagramTableKindKeepsNotices(t *testing.T) {
+	rendering := &view.Rendering{
+		Kind:    view.KindTable,
+		Columns: []string{"name"},
+		Rows:    [][]string{{"optics"}},
+		Notices: []string{"attribute mass is not projected"},
+	}
+	got := renderedDiagram(t, "", rendering, "")
+	if !strings.Contains(got, "<!-- not represented: attribute mass is not projected -->") {
+		t.Errorf("notice lost: %s", got)
+	}
+}
+
+func TestDiagramTableKindExplainsAnEmptyRendering(t *testing.T) {
+	got := renderedDiagram(t, "", &view.Rendering{Kind: view.KindTable}, "")
+	if !strings.Contains(got, "the view exposes nothing; the rendering is empty") {
+		t.Errorf("empty table unexplained: %s", got)
 	}
 }
 
