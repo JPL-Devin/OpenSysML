@@ -56,7 +56,17 @@ const queryModel = `package Observatory {
 		in root : Element;
 		RelatedElements(
 			source = root,
-			relationshipKind = "specialization",
+			relationshipKind = "typing",
+			direction = "incoming",
+			maxDepth = 1
+		)
+	}
+
+	calc def UnknownRelatedQuery :> Query {
+		in root : Element;
+		RelatedElements(
+			source = root,
+			relationshipKind = "refinement",
 			direction = "outgoing",
 			maxDepth = 1
 		)
@@ -95,9 +105,15 @@ func TestRunQueryFlag(t *testing.T) {
 		0, "✓ Query Observatory::ComposedQuery returned 1 row",
 		"Row 1: Observatory::telescope::mount")
 
-	// A documented execution limitation is surfaced, not silently skipped.
-	wantReport(t, check(t, binary, queryModel, "-run-query", "RelatedQuery root=telescope"),
-		2, "not executable in this engine version")
+	// A named relationship traversal reports its related elements.
+	wantReport(t, check(t, binary, queryModel, "-run-query", "RelatedQuery root=Subsystem"),
+		0, "✓ Query Observatory::RelatedQuery returned 2 rows",
+		"Row 1: Observatory::telescope::optics",
+		"Row 2: Observatory::telescope::mount")
+
+	// An unsupported relationship kind is surfaced, not silently skipped.
+	wantReport(t, check(t, binary, queryModel, "-run-query", "UnknownRelatedQuery root=telescope"),
+		2, `does not support relationship kind "refinement"`)
 }
 
 // TestRunQueryJSON checks that a query's verdict is reported as data a build
