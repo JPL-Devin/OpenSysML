@@ -458,6 +458,47 @@ guarded handler):
   `port broken : NoSuchPort;` (expect `unresolved reference: NoSuchPort`) as the LSP smoke oracle
   rather than a non-zero problem count.
 
+## Hover presentation testing (`internal/lsp/hover.go`)
+
+VS Code advertises `hover.contentFormat: ["markdown", ...]`, so the GUI always exercises the
+Markdown branch (fenced ```sysml block + prose). The plain-text branch is only reachable from a
+probe that advertises `["plaintext"]` — test it there, not in the editor.
+
+- A compact fixture that covers signature text, multi-comment prose and hard breaks in one file:
+  ```
+  package Demo {
+      /* A wheel carries the load. */
+      /* Second comment about the wheel. */
+      part def Wheel;
+      doc /*
+       * First line.
+       * Second line.
+       */
+      part def Vehicle { part w : Wheel; }
+      part v : Vehicle;
+  }
+  ```
+  Expected on a server with `Symbol.Notation()` + per-comment stripping: `part def Wheel` /
+  `part def Vehicle` / `part w` in the fence (a pre-#676 server writes `partDef`/`partUsage`),
+  two comments as two paragraphs, and `First line.` / `Second line.` on separate rendered lines.
+- **Markdown hides delimiter bugs.** Leaked `*/` `/*` between two joined comments renders as
+  `... load. //Second comment ...` in the popup, not as literal `/*` — read the rendered text
+  carefully (or diff against a probe) rather than looking only for asterisks.
+- The fence colouring itself is a free oracle: `part def Wheel` gets keyword colours, while an
+  invalid signature like `partDef Wheel` renders as one plain identifier.
+- Hover popups are sticky: `mouse_move` to an empty area, wait ~2 s, then move onto the target, or
+  you will screenshot the previous symbol's popup and think the hover is wrong.
+- Completion `detail` comes from the same `Notation()` (`internal/lsp/completion.go`), so
+  `Wheel → part def` / `w → part : Wheel` in the detail column is the cheap second surface.
+  Note the completion **documentation** panel still shows the raw comment text with `/*` `*/`
+  (`symbolDocumentation` does no stripping) — that is unrelated to a hover fix, do not report it as
+  a regression without checking a main build.
+- The best negative control is one Settings-UI edit, no window reload: `Ctrl+,` → search
+  `opensysml.server.path` → point at a binary built from `origin/main` in a worktree, Enter, confirm
+  the swap with `pgrep -af sysml-lsp`, re-hover, then set it back. **Pitfall:** reopening Settings
+  lands on "Commonly Used" with an empty search box, so a blind `triple_click` at the old field
+  position edits `editor.fontSize` instead — always retype the search query first.
+
 ## Recording tips
 
 Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoom`ing the status bar
