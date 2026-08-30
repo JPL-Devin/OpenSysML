@@ -2387,6 +2387,14 @@ Traps found while testing it:
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
 
+No GUI terminal emulator may be installed at all: install one first
+(`sudo apt-get install -y xterm`) and maximize it with
+`DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz`.
+
+When killing a service from a *scripted* shell, `pkill -f sysml-grpc` matches the shell's own
+command line and kills the test shell itself; use `pkill -x sysml-grpc` or the self-excluding
+pattern `pkill -f 'sysml-grp[c]'`.
+
 ```bash
 cd /home/ubuntu/repos/OpenSysML && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)
 DISPLAY=:0 wmctrl -a "Konsole"
