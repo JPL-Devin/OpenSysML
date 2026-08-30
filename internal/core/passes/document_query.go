@@ -16,8 +16,9 @@ type DocumentQueryPass struct{}
 
 func (DocumentQueryPass) Level() PassLevel { return LevelConstraint }
 
-// ElementScoped marks the pass: each query definition is gated on its own.
-func (DocumentQueryPass) ElementScoped() {}
+func (DocumentQueryPass) ElementScoped() {
+	// A marker: each query definition is gated on its own, so there is nothing to do.
+}
 
 func (DocumentQueryPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {

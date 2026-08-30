@@ -385,135 +385,136 @@ impl Runner {
     }
 
     fn call(&self, method: &str, request: &DynamicMessage, model: Option<&Model>) -> Answer {
-        let string = |name: &str| -> Result<String, Error> {
-            request
-                .get_field_by_name(name)
-                .and_then(|value| value.as_ref().as_str().map(ToOwned::to_owned))
-                .ok_or_else(|| Error::Decode(format!("request field {name} is not a string")))
-        };
         match method {
             "GetServerInfo" => Answer::Response(self.wire_json(
                 "sysml.ServerInfoResponse",
                 self.connection.server_info().wire(),
             )),
-            "ParseFile" => {
-                let options = ParseOptions {
-                    language: request
-                        .get_field_by_name("language")
-                        .and_then(|value| value.as_ref().as_str().map(|value| value.to_owned()))
-                        .map(|value| {
-                            if value.eq_ignore_ascii_case("kerml") {
-                                Language::Kerml
-                            } else {
-                                Language::Sysml
-                            }
-                        })
-                        .unwrap_or(Language::Sysml),
-                    strict_conformance: request
-                        .get_field_by_name("strict_conformance")
-                        .and_then(|value| value.as_ref().as_bool())
-                        .unwrap_or(false),
-                };
-                let answer = match request_source(request) {
-                    Some(Source::Content(content)) => {
-                        self.connection.parse_content(&content, &options)
-                    }
-                    Some(Source::File(path)) => self.connection.parse_file(path, &options),
-                    None => {
-                        return Answer::Other(Error::Decode(
-                            "ParseFile source is not representable by typed API".to_owned(),
-                        ))
-                    }
-                };
-                match answer {
-                    Ok(model) => {
-                        Answer::Response(self.wire_json("sysml.ParseFileResponse", model.wire()))
-                    }
-                    Err(error) => classify_error(error),
-                }
-            }
-            "GetDiagnostics" => match string("model_hash") {
-                Ok(hash) => match self.connection.diagnostics(&hash) {
-                    Ok(diagnostics) => {
-                        let response = opensysml::wire::DiagnosticsResponse {
-                            diagnostics: diagnostics
-                                .iter()
-                                .map(|diagnostic| diagnostic.wire().clone())
-                                .collect(),
-                            error: String::new(),
-                        };
-                        Answer::Response(self.wire_json("sysml.DiagnosticsResponse", &response))
-                    }
-                    Err(error) => classify_error(error),
-                },
-                Err(error) => Answer::Other(error),
-            },
-            "GetSymbol" => {
-                let hash = match string("model_hash") {
-                    Ok(hash) => hash,
-                    Err(error) => return Answer::Other(error),
-                };
-                let symbol_id = match string("symbol_id") {
-                    Ok(value) => value,
-                    Err(error) => return Answer::Other(error),
-                };
-                let model = model
-                    .cloned()
-                    .unwrap_or_else(|| self.connection.model_by_hash(&hash));
-                match model.symbol(&symbol_id) {
-                    Ok(symbol) => {
-                        let response = opensysml::wire::SymbolResponse {
-                            symbol: Some(symbol.wire().clone()),
-                            error: String::new(),
-                        };
-                        Answer::Response(self.wire_json("sysml.SymbolResponse", &response))
-                    }
-                    Err(error) => classify_error(error),
-                }
-            }
-            "Evaluate" => {
-                let hash = match string("model_hash") {
-                    Ok(hash) => hash,
-                    Err(error) => return Answer::Other(error),
-                };
-                let expression = match string("expression") {
-                    Ok(value) => value,
-                    Err(error) => return Answer::Other(error),
-                };
-                let options = EvalOptions {
-                    context: string_or_none(request, "context_symbol_id"),
-                    subject: string_or_none(request, "subject_symbol_id"),
-                };
-                let model = model
-                    .cloned()
-                    .unwrap_or_else(|| self.connection.model_by_hash(&hash));
-                match model.evaluate(&expression, &options) {
-                    Ok(evaluation) => Answer::Response(
-                        self.wire_json("sysml.EvaluateResponse", evaluation.wire()),
-                    ),
-                    Err(error) => classify_error(error),
-                }
-            }
-            "Instantiate" => {
-                let hash = match string("model_hash") {
-                    Ok(hash) => hash,
-                    Err(error) => return Answer::Other(error),
-                };
-                let symbol_id = match string("symbol_id") {
-                    Ok(value) => value,
-                    Err(error) => return Answer::Other(error),
-                };
-                let model = model
-                    .cloned()
-                    .unwrap_or_else(|| self.connection.model_by_hash(&hash));
-                match model.instantiate(&symbol_id) {
-                    Ok(instantiation) => Answer::Response(
-                        self.wire_json("sysml.InstantiateResponse", instantiation.wire()),
-                    ),
-                    Err(error) => classify_error(error),
-                }
-            }
+            "ParseFile" => self.parse_file(request),
+            "GetDiagnostics" => self.get_diagnostics(request),
+            "GetSymbol" => self.get_symbol(request, model),
+            "Evaluate" => self.evaluate(request, model),
+            "Instantiate" => self.instantiate(request, model),
             other => Answer::Other(Error::Model(format!("v1 API does not cover {other}"))),
+        }
+    }
+
+    /// The model the scenario carries, or the one the server holds under the hash.
+    fn model_for(&self, hash: &str, model: Option<&Model>) -> Model {
+        model
+            .cloned()
+            .unwrap_or_else(|| self.connection.model_by_hash(hash))
+    }
+
+    fn parse_file(&self, request: &DynamicMessage) -> Answer {
+        let options = ParseOptions {
+            language: request
+                .get_field_by_name("language")
+                .and_then(|value| value.as_ref().as_str().map(|value| value.to_owned()))
+                .map(|value| {
+                    if value.eq_ignore_ascii_case("kerml") {
+                        Language::Kerml
+                    } else {
+                        Language::Sysml
+                    }
+                })
+                .unwrap_or(Language::Sysml),
+            strict_conformance: request
+                .get_field_by_name("strict_conformance")
+                .and_then(|value| value.as_ref().as_bool())
+                .unwrap_or(false),
+        };
+        let answer = match request_source(request) {
+            Some(Source::Content(content)) => self.connection.parse_content(&content, &options),
+            Some(Source::File(path)) => self.connection.parse_file(path, &options),
+            None => {
+                return Answer::Other(Error::Decode(
+                    "ParseFile source is not representable by typed API".to_owned(),
+                ))
+            }
+        };
+        match answer {
+            Ok(model) => Answer::Response(self.wire_json("sysml.ParseFileResponse", model.wire())),
+            Err(error) => classify_error(error),
+        }
+    }
+
+    fn get_diagnostics(&self, request: &DynamicMessage) -> Answer {
+        let hash = match string_field(request, "model_hash") {
+            Ok(hash) => hash,
+            Err(error) => return Answer::Other(error),
+        };
+        match self.connection.diagnostics(&hash) {
+            Ok(diagnostics) => {
+                let response = opensysml::wire::DiagnosticsResponse {
+                    diagnostics: diagnostics
+                        .iter()
+                        .map(|diagnostic| diagnostic.wire().clone())
+                        .collect(),
+                    error: String::new(),
+                };
+                Answer::Response(self.wire_json("sysml.DiagnosticsResponse", &response))
+            }
+            Err(error) => classify_error(error),
+        }
+    }
+
+    fn get_symbol(&self, request: &DynamicMessage, model: Option<&Model>) -> Answer {
+        let hash = match string_field(request, "model_hash") {
+            Ok(hash) => hash,
+            Err(error) => return Answer::Other(error),
+        };
+        let symbol_id = match string_field(request, "symbol_id") {
+            Ok(value) => value,
+            Err(error) => return Answer::Other(error),
+        };
+        match self.model_for(&hash, model).symbol(&symbol_id) {
+            Ok(symbol) => {
+                let response = opensysml::wire::SymbolResponse {
+                    symbol: Some(symbol.wire().clone()),
+                    error: String::new(),
+                };
+                Answer::Response(self.wire_json("sysml.SymbolResponse", &response))
+            }
+            Err(error) => classify_error(error),
+        }
+    }
+
+    fn evaluate(&self, request: &DynamicMessage, model: Option<&Model>) -> Answer {
+        let hash = match string_field(request, "model_hash") {
+            Ok(hash) => hash,
+            Err(error) => return Answer::Other(error),
+        };
+        let expression = match string_field(request, "expression") {
+            Ok(value) => value,
+            Err(error) => return Answer::Other(error),
+        };
+        let options = EvalOptions {
+            context: string_or_none(request, "context_symbol_id"),
+            subject: string_or_none(request, "subject_symbol_id"),
+        };
+        match self.model_for(&hash, model).evaluate(&expression, &options) {
+            Ok(evaluation) => {
+                Answer::Response(self.wire_json("sysml.EvaluateResponse", evaluation.wire()))
+            }
+            Err(error) => classify_error(error),
+        }
+    }
+
+    fn instantiate(&self, request: &DynamicMessage, model: Option<&Model>) -> Answer {
+        let hash = match string_field(request, "model_hash") {
+            Ok(hash) => hash,
+            Err(error) => return Answer::Other(error),
+        };
+        let symbol_id = match string_field(request, "symbol_id") {
+            Ok(value) => value,
+            Err(error) => return Answer::Other(error),
+        };
+        match self.model_for(&hash, model).instantiate(&symbol_id) {
+            Ok(instantiation) => {
+                Answer::Response(self.wire_json("sysml.InstantiateResponse", instantiation.wire()))
+            }
+            Err(error) => classify_error(error),
         }
     }
 
@@ -598,6 +599,13 @@ fn request_source(request: &DynamicMessage) -> Option<Source> {
 enum Source {
     Content(String),
     File(PathBuf),
+}
+
+fn string_field(request: &DynamicMessage, name: &str) -> Result<String, Error> {
+    request
+        .get_field_by_name(name)
+        .and_then(|value| value.as_ref().as_str().map(ToOwned::to_owned))
+        .ok_or_else(|| Error::Decode(format!("request field {name} is not a string")))
 }
 
 fn string_or_none(request: &DynamicMessage, name: &str) -> Option<String> {
