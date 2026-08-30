@@ -1590,6 +1590,20 @@ func (idx *Index) DocumentRoot(name string) *Scope {
 	return idx.docRoots.at(name)
 }
 
+// WorkspaceDocuments returns the names of the documents holding workspace
+// content — every document with a root scope that is not marked as bundled
+// library content — sorted for deterministic iteration.
+func (idx *Index) WorkspaceDocuments() []string {
+	var out []string
+	for _, name := range idx.docRoots.keys() {
+		if !idx.libraryDocs.at(name) {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // DocumentKind returns a document's recorded language, or infers it from its
 // name when the document was added without an explicit language.
 func (idx *Index) DocumentKind(name string) source.Kind {

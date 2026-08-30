@@ -602,12 +602,21 @@ calc def Defaulted :> Query {
 	in source : Element = root;
 	OwnedElements(source = source)
 }
-calc def Relationships :> Query {
+calc def UnknownKind :> Query {
+	in source : Element;
+	RelatedElements(
+		source = source,
+		relationshipKind = "refinement",
+		direction = "outgoing",
+		maxDepth = 1
+	)
+}
+calc def BadDirection :> Query {
 	in source : Element;
 	RelatedElements(
 		source = source,
 		relationshipKind = "specialization",
-		direction = "outgoing",
+		direction = "sideways",
 		maxDepth = 1
 	)
 }
@@ -643,11 +652,17 @@ calc def Relationships :> Query {
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorDefaultUnavailable {
 		t.Fatalf("default binding error = %v", err)
 	}
-	_, err = fixture.execute(t, "Relationships", Bindings{
+	_, err = fixture.execute(t, "UnknownKind", Bindings{
 		"source": {ElementValue(fixture.symbol(t, "root"))},
 	}, Options{})
-	if !errors.As(err, &executionError) || executionError.Kind != ErrorUnsupportedOperation {
-		t.Fatalf("relationship traversal error = %v", err)
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorUnknownRelationship {
+		t.Fatalf("unknown relationship kind error = %v", err)
+	}
+	_, err = fixture.execute(t, "BadDirection", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorInvalidOperator {
+		t.Fatalf("invalid direction error = %v", err)
 	}
 }
 

@@ -8,7 +8,7 @@ import (
 
 // docQueryModel declares document queries over a small part tree: a projecting
 // query, one relying on a default, one composing another by name, and one
-// traversing named relationships, which execution refuses as a typed failure.
+// traversing named relationships, plus one naming an unsupported kind.
 const docQueryModel = `package Observatory {
 	private import DocumentQueries::*;
 	private import KerML::Root::Element;
@@ -72,7 +72,17 @@ const docQueryModel = `package Observatory {
 		in root : Element;
 		RelatedElements(
 			source = root,
-			relationshipKind = "specialization",
+			relationshipKind = "typing",
+			direction = "incoming",
+			maxDepth = 1
+		)
+	}
+
+	calc def UnknownRelatedQuery :> Query {
+		in root : Element;
+		RelatedElements(
+			source = root,
+			relationshipKind = "refinement",
 			direction = "outgoing",
 			maxDepth = 1
 		)
@@ -146,9 +156,19 @@ func TestRunQuerySurfacesTypedExecutionFailures(t *testing.T) {
 	// A default is intentionally unavailable at execution time, not evaluated.
 	wants(t, run(t, s, "%run-query NamedSubsystems root=telescope"),
 		"error:", "relies on a default not retained in the plan")
-	// Named relationship traversal is a documented execution limitation.
-	wants(t, run(t, s, "%run-query RelatedQuery root=telescope"),
-		"error:", "not executable in this engine version")
+	// An unsupported relationship kind is a typed execution failure.
+	wants(t, run(t, s, "%run-query UnknownRelatedQuery root=telescope"),
+		"error:", `does not support relationship kind "refinement"`)
+}
+
+func TestRunQueryTraversesNamedRelationships(t *testing.T) {
+	s := docQuerySession(t)
+	wants(t, run(t, s, "%run-query RelatedQuery root=Subsystem"),
+		"✓ Query Observatory::RelatedQuery returned 3 rows",
+		"Row 1: Observatory::telescope::optics",
+		"Row 2: Observatory::telescope::segmentControl",
+		"Row 3: Observatory::telescope::mount",
+	)
 }
 
 func TestRunQueryExecutesComposedQueries(t *testing.T) {

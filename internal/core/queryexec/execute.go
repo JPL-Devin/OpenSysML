@@ -52,6 +52,7 @@ type executor struct {
 	program    map[string]queryplan.Definition
 	budget     *visitBudget
 	calls      *visitBudget
+	related    *relationshipTables
 	depthLeft  int
 	stack      []string
 }
@@ -93,6 +94,7 @@ func Execute(program *queryplan.Program, context Context, bindings Bindings, opt
 		program:    compiled,
 		budget:     &visitBudget{remaining: budget},
 		calls:      &visitBudget{remaining: calls},
+		related:    newRelationshipTables(),
 		depthLeft:  depth,
 		stack:      []string{definition.Name()},
 	}
@@ -293,12 +295,7 @@ func (e *executor) evaluate(expression queryplan.Expression) (sequence, error) {
 	case queryplan.OperationInvoke:
 		return e.evaluateInvoke(expression)
 	case queryplan.OperationRelatedElements:
-		return sequence{}, &Error{
-			Kind:      ErrorUnsupportedOperation,
-			Query:     e.definition.Name(),
-			Operation: expression.Operation(),
-			Origin:    expression.Origin(),
-		}
+		return e.evaluateRelated(expression)
 	default:
 		return sequence{}, &Error{
 			Kind:      ErrorUnsupportedOperation,
@@ -367,6 +364,7 @@ func (e *executor) evaluateInvoke(expression queryplan.Expression) (sequence, er
 		program:    e.program,
 		budget:     e.budget,
 		calls:      e.calls,
+		related:    e.related,
 		depthLeft:  e.depthLeft - 1,
 		stack:      append(append([]string(nil), e.stack...), target),
 	}
