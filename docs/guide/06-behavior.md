@@ -1,9 +1,9 @@
 # 6. Behavior: actions and state machines
 
-An action or a state machine is executed, not just parsed: a debugger steps it, and the
-non-interactive `-action`/`-state` flags run it to completion and report what it produced.
-An object may perform the behavior, in which case what it sends routes over that object's
-connections.
+Actions and state machines are executed rather than merely parsed. A debugger steps through
+them, and the non-interactive `-action` and `-state` flags run them to completion and report the
+values produced. An object may perform the behavior, in which case the messages it sends are
+routed over that object's connections.
 
 **Action execution (step-by-step):**
 ```sysml
@@ -42,11 +42,10 @@ sysml> %continue
 
 **State machine execution:**
 
-A machine completes when a transition reaches `done`, the end shot the standard
-library gives every state: entering it runs the exit actions and the machine
-reports itself completed. Inside orthogonal regions each region has its own
-`done`, and the machine completes only once every concurrent region has reached
-it.
+A machine completes when a transition reaches `done`, the terminal state that the standard
+library provides for every state machine. Entering it runs the exit actions, after which the
+machine reports itself as completed. Within orthogonal regions, each region has its own `done`,
+and the machine completes only once every concurrent region has reached it.
 
 ```sysml
 sysml> state TrafficLight {
@@ -109,16 +108,18 @@ sysml> %advance 30
 - `%advance <time>` — Advance simulation time by `<time>` units, processing every event due
 - `%stop` — Stop debugging
 
-**See [examples/action-executor-demo.sysml](../../examples/action-executor-demo.sysml),
-[examples/orthogonal-regions-demo.sysml](../../examples/orthogonal-regions-demo.sysml), and
-[examples/pseudostates-demo.sysml](../../examples/pseudostates-demo.sysml) for complete workflows.**
+For complete workflows, see
+[examples/action-executor-demo.sysml](../../examples/action-executor-demo.sysml),
+[examples/orthogonal-regions-demo.sysml](../../examples/orthogonal-regions-demo.sysml) and
+[examples/pseudostates-demo.sysml](../../examples/pseudostates-demo.sysml).
 
 ## An object runs the behaviors its type exhibits
 
 A type that exhibits a state machine or performs an action binds that behavior to every object of
-the type: materializing the object gives it an execution of its own, bound to its identity. Two
-objects of one type run two machines, with their own current state, event queue and feature values,
-and what a body assigns is the feature value of the object performing it.
+the type: materializing an object gives it an execution of its own, bound to its identity. Two
+objects of the same type run two independent machines, each with its own current state, event
+queue and feature values, and an assignment in a behavior body writes the feature value of the
+object performing it.
 
 ```sysml
 sysml> part def Monitor {
@@ -164,36 +165,38 @@ Features:
     apply = <unknown>
 ```
 
-`%instantiate` started the machine and `%state Monitor` bound the debugger to *that object's*
-machine rather than to a detached run of the usage, so `%step`, `%advance`, `%current` and
-`%events` drive it and `%features` shows what its entry actions wrote — `1` from `idle`, then
-`10` more from `awake` once the timer was dispatched.
+`%instantiate` started the machine, and `%state Monitor` bound the debugger to *that object's*
+machine rather than to a detached run of the usage. `%step`, `%advance`, `%current` and `%events`
+therefore drive that machine, and `%features` shows the values its entry actions wrote: `1` from
+`idle`, followed by `10` more from `awake` once the timer was dispatched.
 
 **When a machine starts, and how far it runs.** The object's feature values are built and its
-constant defaults evaluated first, so an entry action sees declared initial values; the machine is
-then initialized and run to *quiescence* — no event due at the current time, no runnable do action,
-no message in flight. A machine waiting on a timer or an `accept` is quiescent, and advancing time
-is what moves it on. Objects that signal each other are drained together, bounded by the event and
-do-step budgets in [reference/environment.md](../reference/environment.md): an exchange that never
-settles reports a budget error rather than hanging. Materializing the same name twice makes a second
-object with its own identity and its own machines; `%instantiate` reports the new object, and the
-name then denotes it. An exhibited machine with no initial state is reported; a performed action that
-states no flow simply has no step to perform, so the object is still created. A performed action
-parked at an `accept` is quiescent too, and a message a sibling object sends later wakes it.
+constant defaults evaluated first, so an entry action observes the declared initial values. The
+machine is then initialized and run to *quiescence*, meaning that no event is due at the current
+time, no do action is runnable, and no message is in flight. A machine waiting on a timer or an
+`accept` is quiescent, and advancing time is what allows it to proceed. Objects that signal one
+another are drained together, bounded by the event and do-step budgets documented in
+[reference/environment.md](../reference/environment.md); an exchange that never settles reports a
+budget error rather than hanging. Materializing the same name twice creates a second object with
+its own identity and its own machines: `%instantiate` reports the new object, and the name then
+refers to it. An exhibited machine with no initial state is reported as such. A performed action
+that states no flow has no step to perform, so the object is still created. A performed action
+waiting at an `accept` is likewise quiescent, and a message sent later by a sibling object
+resumes it.
 
-**Editing the model while an object runs.** An unrelated declaration keeps the object — its identity
-survives the rebuilt analysis — but not the execution it was running: an execution belongs to the
-graph, names and message bus of the analysis it started in, so the object's behaviors are **started
-again from their initial states** in the rebuilt analysis and what the discarded run wrote is
-dropped with them. The restart is reported (`note: the exhibited state machine modes of object #1 was
-restarted from its initial state because the model was rebuilt`), and a `%state` session follows the
-object onto its restarted machine, so a restarted behavior exchanges messages with objects
-materialized after the edit like any other. Re-declaring what the object runs — its type's features
-or the body of a machine or action it runs — makes it a different object, so it is dropped with a
-reported reason and `%instantiate` starts a fresh one.
+**Editing the model while an object runs.** An unrelated declaration preserves the object, whose
+identity survives the rebuilt analysis, but not the execution it was running. An execution belongs
+to the graph, names and message bus of the analysis in which it started, so the object's behaviors
+are **restarted from their initial states** in the rebuilt analysis, and any values written by the
+discarded run are dropped with it. The restart is reported (`note: the exhibited state machine
+modes of object #1 was restarted from its initial state because the model was rebuilt`), and a
+`%state` session follows the object onto its restarted machine, so a restarted behavior exchanges
+messages with objects materialized after the edit in the usual way. Re-declaring what the object
+runs — its type's features, or the body of a machine or action it runs — produces a different
+object, so the original is dropped with a reported reason and `%instantiate` creates a new one.
 
-**Invoking an operation.** `%invoke <object> <op> [<p>=<expr>]` runs an action the object's type
-owns, performed by that object:
+**Invoking an operation.** `%invoke <object> <op> [<p>=<expr>]` runs an action owned by the
+object's type, performed by that object:
 
 ```sysml
 sysml> %invoke Monitor bumpBy n=4
@@ -211,16 +214,16 @@ Features:
     apply = <unknown>
 ```
 
-Each argument is written `<parameter>=<expression>`; an unbound parameter, an argument naming no
-parameter, and an operation the type does not own are each reported as errors. A `calc` or
-`constraint` named as an operation is not invocable this way yet.
+Each argument is written as `<parameter>=<expression>`. An unbound parameter, an argument that
+names no parameter, and an operation the type does not own are each reported as errors. A `calc`
+or `constraint` named as an operation cannot yet be invoked in this way.
 
 ## Token-flow patterns
 
-Every model below is in
-[examples/action-executor-demo.sysml](../../examples/action-executor-demo.sysml), and the
-output shown is what `sysml -action ActionExecutorDemo::<name> examples/action-executor-demo.sysml`
-prints.
+Each model below is contained in
+[examples/action-executor-demo.sysml](../../examples/action-executor-demo.sysml), and the output
+shown is that of
+`sysml -action ActionExecutorDemo::<name> examples/action-executor-demo.sysml`.
 
 ### Sequential: start → action → done
 
@@ -236,7 +239,7 @@ action sequential {
 }
 ```
 
-One token spawns at `start`, moves to `compute`, which runs its body, and is consumed at
+A single token is created at `start`, moves to `compute`, which runs its body, and is consumed at
 `done`:
 
 ```
@@ -277,9 +280,9 @@ action forkJoin {
 }
 ```
 
-`fork` puts a token on each outgoing succession; `join` is an AND-join, so it waits for a
-token on *every* incoming succession before one continues. A fork duplicates control, not
-values: all three branches are steps of the one performance, so every assignment is visible
+`fork` places a token on each outgoing succession. `join` is an AND-join, so it waits for a token
+on *every* incoming succession before a single token continues. A fork duplicates control rather
+than values: all three branches are steps of the same performance, so every assignment is visible
 when it completes.
 
 ```bash
@@ -292,7 +295,8 @@ $ sysml -action ActionExecutorDemo::forkJoin examples/action-executor-demo.sysml
     task3 = 30
 ```
 
-A branch that never arrives is a deadlock, not a failure: the run is reported as undecided.
+A branch that never arrives constitutes a deadlock rather than a failure, and the run is reported
+as undecided.
 
 ---
 
@@ -320,8 +324,8 @@ action conditional {
 }
 ```
 
-`decide` evaluates its guards in the order written, with the action's features in scope, and
-takes the first that holds; `else` is taken when none does. With `x = 15`:
+`decide` evaluates its guards in the order written, with the action's features in scope, and takes
+the first guard that holds. The `else` branch is taken when no guard holds. With `x = 15`:
 
 ```bash
 $ sysml -action ActionExecutorDemo::conditional examples/action-executor-demo.sysml
@@ -332,14 +336,14 @@ $ sysml -action ActionExecutorDemo::conditional examples/action-executor-demo.sy
     x = 15
 ```
 
-Set `x` to `5` and `taken` is `2`. The state-machine counterparts — orthogonal regions,
-choice and junction — are in
+Setting `x` to `5` yields a `taken` value of `2`. The state-machine counterparts — orthogonal
+regions, choice and junction — appear in
 [examples/orthogonal-regions-demo.sysml](../../examples/orthogonal-regions-demo.sysml) and
-[examples/pseudostates-demo.sysml](../../examples/pseudostates-demo.sysml), and every case the executors are held to is under
-`internal/core/runtime/testdata/conformance/`.
+[examples/pseudostates-demo.sysml](../../examples/pseudostates-demo.sysml), and every case the
+executors are held to is located under `internal/core/runtime/testdata/conformance/`.
 
-A run that stops short — a deadlock, or a budget reached — is reported as a check that was never
-decided rather than as a failure; the bounds are in
+A run that stops short, whether through deadlock or by reaching a budget, is reported as an
+undecided check rather than as a failure. The applicable bounds are documented in
 [reference/environment.md](../reference/environment.md).
 
 ---

@@ -304,4 +304,4 @@ These patterns appear throughout the official standard library:
 
 - Hand-written recursive descent parser (zero overhead, full error recovery)
 - Grammar source: OMG pilot Xtext grammars (SysML.xtext + KerMLExpressions)
-- Notation the reference accepts and we still reject is enumerated in [the pilot differential](../docs/project/pilot-differential.md)
+- Notation the reference accepts and OpenSysML still rejects is enumerated in [the pilot differential](../docs/project/pilot-differential.md)

@@ -16,11 +16,11 @@ A SysML v2 and KerML 1.1 implementation delivering the integrated tooling experi
 
 ### Design Principles
 
-- **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (96/96 stdlib files parse clean: 94 vendored OMG files and 2 OpenSysML extensions)
-- **Executable models:** Not just validation—runtime that instantiates, evaluates, simulates
-- **Incremental & lazy:** Parse immediately, resolve semantics on-demand (gopls/rust-analyzer precedent)
-- **Immutable AST:** All semantic state lives in side tables keyed by node/symbol
+- **Performance:** sub-millisecond parsing, a single static binary, and no JVM or Eclipse runtime
+- **Completeness:** SysML v2 textual notation support (96 of 96 standard library files parse cleanly: 94 vendored OMG files and 2 OpenSysML extensions)
+- **Executable models:** beyond validation, a runtime that instantiates, evaluates and simulates
+- **Incremental and lazy:** parse immediately and resolve semantics on demand, following the precedent set by gopls and rust-analyzer
+- **Immutable AST:** all semantic state resides in side tables keyed by node or symbol
 
 ---
 
@@ -543,7 +543,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 - **Purpose:** Verify parser rejects malformed input gracefully
 - **Location:** `internal/core/parser/negative_test.go`
 - **Test:** `TestNegative`, one subtest per malformed input
-- **Acceptance:** Each case produces diagnostics (doesn't panic)
+- **Acceptance:** each case produces diagnostics rather than panicking
 - **Coverage:** Unclosed blocks, unexpected tokens, invalid syntax, incomplete behavioral members
 
 **Example:**
@@ -599,7 +599,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 ```
 
 #### 3. Golden Execution Traces
-- **Purpose:** Verify *how* execution proceeds (ordering, scheduling), not just final result
+- **Purpose:** verify *how* execution proceeds (ordering, scheduling), not only the final result
 - **Location:** `internal/core/runtime/trace_test.go`
 - **Test:** `TestExecutionTrace` compares executor traces against `.trace.golden`
 - **Determinism:** Token sorting by ID, fixed event queue tie-breaking

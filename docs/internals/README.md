@@ -1,7 +1,8 @@
 # Internals
 
-How it works, for someone changing the code. What the code does for a user is
-[the guide](../guide/) and [the reference](../reference/).
+Implementation documentation, intended for contributors changing the code.
+User-facing behavior is documented in [the guide](../guide/) and
+[the reference](../reference/).
 
 - **[Architecture](architecture.md)** — the pipeline, the tiers, the test contracts
 - **[Testing](testing.md)** — the test contracts each kind of change must satisfy
