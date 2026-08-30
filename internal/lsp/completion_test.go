@@ -96,12 +96,22 @@ const completionSrc = `package P {
 // right after the first occurrence of marker in src, keyed by label.
 func completionAt(t *testing.T, src, marker string) map[string]protocol.CompletionItem {
 	t.Helper()
+	return completionAtFor(t, src, marker, false)
+}
+
+// completionAtFor is completionAt for a client that does or does not render
+// Markdown in completion item documentation.
+func completionAtFor(t *testing.T, src, marker string, markdown bool) map[string]protocol.CompletionItem {
+	t.Helper()
 	cut := strings.Index(src, marker)
 	if cut < 0 {
 		t.Fatalf("marker %q not found in source", marker)
 	}
 	ws := model.NewWorkspace()
 	s := NewServer(ws)
+	if markdown {
+		initMarkdownCompletion(t, s)
+	}
 	name := uri.File("/tmp/completion.sysml").Filename()
 	ws.Open(name, []byte(src), 1)
 
@@ -368,4 +378,77 @@ func labelsOf(items map[string]protocol.CompletionItem) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// initMarkdownCompletion initializes s as a client that renders Markdown in
+// completion item documentation.
+func initMarkdownCompletion(t *testing.T, s *Server) {
+	t.Helper()
+	_, err := s.Initialize(context.Background(), &protocol.InitializeParams{
+		Capabilities: protocol.ClientCapabilities{
+			TextDocument: &protocol.TextDocumentClientCapabilities{
+				Completion: &protocol.CompletionTextDocumentClientCapabilities{
+					CompletionItem: &protocol.CompletionTextDocumentClientCapabilitiesItem{
+						DocumentationFormat: []protocol.MarkupKind{protocol.Markdown, protocol.PlainText},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Initialize err = %v", err)
+	}
+}
+
+const documentedSrc = `package P {
+	/* A wheel. */
+	/* Load-bearing. */
+	part def Wheel;
+	//* Carries the wheels.
+	   Two axles. */
+	part def Vehicle;
+	part v : Vehicle;
+}
+`
+
+// Markdown documentation reads as prose: each comment loses its delimiters and
+// stands as its own paragraph, and the lines an author wrote stay apart.
+func TestCompletionDocumentationIsProseWhenTheClientRendersMarkdown(t *testing.T) {
+	items := completionAtFor(t, documentedSrc, "part v : Vehicle;", true)
+
+	wheel, ok := items["Wheel"]
+	if !ok {
+		t.Fatal("completion missing 'Wheel'")
+	}
+	doc, ok := wheel.Documentation.(protocol.MarkupContent)
+	if !ok {
+		t.Fatalf("'Wheel' documentation = %#v, want MarkupContent", wheel.Documentation)
+	}
+	if doc.Kind != protocol.Markdown {
+		t.Errorf("'Wheel' documentation kind = %q, want %q", doc.Kind, protocol.Markdown)
+	}
+	if doc.Value != "A wheel.\n\nLoad-bearing." {
+		t.Errorf("'Wheel' documentation = %q, want two undelimited paragraphs", doc.Value)
+	}
+
+	vehicle, ok := items["Vehicle"]
+	if !ok {
+		t.Fatal("completion missing 'Vehicle'")
+	}
+	vdoc, _ := vehicle.Documentation.(protocol.MarkupContent)
+	if vdoc.Value != "Carries the wheels.  \nTwo axles." {
+		t.Errorf("'Vehicle' documentation = %q, want a block note with its line break kept", vdoc.Value)
+	}
+}
+
+// A client that never advertised Markdown keeps the plain text it can render.
+func TestCompletionDocumentationStaysPlainTextWithoutMarkdown(t *testing.T) {
+	items := completionAtFor(t, documentedSrc, "part v : Vehicle;", false)
+	doc, _ := items["Wheel"].Documentation.(protocol.MarkupContent)
+	if doc.Kind != protocol.PlainText {
+		t.Errorf("documentation kind = %q, want %q", doc.Kind, protocol.PlainText)
+	}
+	if !strings.Contains(doc.Value, "A wheel.") {
+		t.Errorf("documentation = %q, want the declaration's comment", doc.Value)
+	}
 }

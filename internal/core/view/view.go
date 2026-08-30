@@ -469,18 +469,7 @@ func (r *Renderer) notationName(sym *symbols.Symbol) string {
 // declKind names an element the way the notation declares it — "part def",
 // "state", "view" — so a rendering prints no Go type name.
 func declKind(sym *symbols.Symbol) string {
-	switch decl := sym.Decl.(type) {
-	case *ast.Definition:
-		return decl.Kind.String() + " def"
-	case *ast.Usage:
-		if decl.Kind == ast.UsageViewRendering {
-			return "render"
-		}
-		return decl.Kind.String()
-	}
-	// A cached library symbol carries no declaration; its kind is what the index
-	// classified it as.
-	return spacedWords(sym.Kind.String())
+	return sym.Notation()
 }
 
 // declType is the type a usage is declared with, as written ("Engine" of
@@ -524,20 +513,4 @@ func qualifiedText(node ast.Node) string {
 		return strings.Join(parts, "::")
 	}
 	return ast.SimpleName(node)
-}
-
-// spacedWords turns a camel-cased classification into lower-case words, so
-// "partUsage" reads as "part usage".
-func spacedWords(name string) string {
-	var b strings.Builder
-	for i, ch := range name {
-		if ch >= 'A' && ch <= 'Z' {
-			if i > 0 {
-				b.WriteByte(' ')
-			}
-			ch += 'a' - 'A'
-		}
-		b.WriteRune(ch)
-	}
-	return b.String()
 }

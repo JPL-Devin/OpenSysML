@@ -98,7 +98,11 @@ func commentBody(comment string) string {
 	for _, line := range strings.Split(comment, "\n") {
 		line = strings.TrimSpace(line)
 		line = strings.TrimPrefix(line, "//")
-		line = strings.TrimPrefix(line, "*")
+		// A doubled star opens Markdown emphasis the author wrote; a single one
+		// is the decoration a block comment runs down its left edge.
+		if !strings.HasPrefix(line, "**") {
+			line = strings.TrimPrefix(line, "*")
+		}
 		lines = append(lines, strings.TrimSpace(line))
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
@@ -129,12 +133,6 @@ func symbolAtOffset(scope *symbols.Scope, offset int) *symbols.Symbol {
 		}
 	}
 	return nil
-}
-
-// leadingDocText returns the concatenated text of comment/note trivia
-// preceding a declaration.
-func leadingDocText(content []byte, trivia []ast.Trivia) string {
-	return strings.Join(leadingDocComments(content, trivia), "\n")
 }
 
 // leadingDocComments returns the text of each comment/note trivia preceding a
