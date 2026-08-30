@@ -568,6 +568,42 @@ func (c *compiler) bindingValue(
 		return BindingValue{kind: BindingReal, real: real, origin: origin}, nil
 	case *ast.LiteralBool:
 		return BindingValue{kind: BindingBoolean, boolean: expression.Value, origin: origin}, nil
+	case *ast.OperatorExpr:
+		return c.signedBinding(content, member, entry, parameter, expression, origin)
+	default:
+		return BindingValue{}, c.unsupportedBinding(content, member, entry, parameter)
+	}
+}
+
+// signedBinding compiles a unary-signed numeric literal binding.
+func (c *compiler) signedBinding(
+	content *symbols.Symbol,
+	member *symbols.Symbol,
+	entry string,
+	parameter string,
+	expression *ast.OperatorExpr,
+	origin provenance.Origin,
+) (BindingValue, error) {
+	if (expression.Operator != ast.OpNeg && expression.Operator != ast.OpPos) || len(expression.Operands) != 1 {
+		return BindingValue{}, c.unsupportedBinding(content, member, entry, parameter)
+	}
+	sign := ""
+	if expression.Operator == ast.OpNeg {
+		sign = "-"
+	}
+	switch operand := expression.Operands[0].(type) {
+	case *ast.LiteralInteger:
+		integer, err := strconv.ParseInt(sign+operand.Value, 10, 64)
+		if err != nil {
+			return BindingValue{}, c.unsupportedBinding(content, member, entry, parameter)
+		}
+		return BindingValue{kind: BindingInteger, integer: integer, origin: origin}, nil
+	case *ast.LiteralReal:
+		real, err := strconv.ParseFloat(sign+operand.Value, 64)
+		if err != nil {
+			return BindingValue{}, c.unsupportedBinding(content, member, entry, parameter)
+		}
+		return BindingValue{kind: BindingReal, real: real, origin: origin}, nil
 	default:
 		return BindingValue{}, c.unsupportedBinding(content, member, entry, parameter)
 	}

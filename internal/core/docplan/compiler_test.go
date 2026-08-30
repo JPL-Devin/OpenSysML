@@ -506,6 +506,80 @@ func TestCompileReportsBindingMultiplicityMismatch(t *testing.T) {
 	}
 }
 
+func TestCompileAcceptsSignedNumericBindings(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		calc def Names :> Query {
+			in root : Element;
+			in offset : Integer;
+			in factor : Real;
+			OwnedElements(source = root)
+		}
+		part telescope;
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part list : List {
+				calc items : Names {
+					in root = telescope;
+					in offset = -3;
+					in factor = +2.5;
+				}
+			}
+		}
+	`)
+	plan, err := fixture.compile(t, "Report")
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	bindings := plan.Content()[0].Query().Bindings()
+	if len(bindings) != 3 {
+		t.Fatalf("bindings = %+v", bindings)
+	}
+	offset, ok := bindings[1].Values()[0].Integer()
+	if !ok || offset != -3 {
+		t.Fatalf("offset = %d %v", offset, ok)
+	}
+	if !bindings[1].Values()[0].Origin().Located() {
+		t.Fatalf("offset origin = %+v", bindings[1].Values()[0].Origin())
+	}
+	factor, ok := bindings[2].Values()[0].Real()
+	if !ok || factor != 2.5 {
+		t.Fatalf("factor = %g %v", factor, ok)
+	}
+}
+
+func TestCompileRejectsInvalidSignedBindings(t *testing.T) {
+	cases := map[string]string{
+		"overflow":   "in offset = -99999999999999999999;",
+		"nonNumeric": "in offset = -telescope;",
+	}
+	for name, binding := range cases {
+		t.Run(name, func(t *testing.T) {
+			fixture := loadPlanningFixture(t, `
+				calc def Names :> Query {
+					in root : Element;
+					in offset : Integer;
+					OwnedElements(source = root)
+				}
+				part telescope;
+				part def Report :> Document {
+					attribute redefines title = "Report";
+					part list : List {
+						calc items : Names {
+							in root = telescope;
+							`+binding+`
+						}
+					}
+				}
+			`)
+			_, err := fixture.compile(t, "Report")
+			planning := planningError(t, err)
+			if planning.Kind != ErrorUnsupportedBinding || planning.Parameter != "offset" {
+				t.Fatalf("error = %+v", planning)
+			}
+		})
+	}
+}
+
 func TestCompileReportsInvalidListStyle(t *testing.T) {
 	fixture := loadPlanningFixture(t, `
 		calc def Names :> Query {
