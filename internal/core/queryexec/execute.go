@@ -338,9 +338,7 @@ func (e *executor) evaluateInvoke(expression queryplan.Expression) (sequence, er
 		if err != nil {
 			return sequence{}, err
 		}
-		if len(value.columns) > 0 {
-			return sequence{}, e.invalidArgument(expression, argument.Name, "projected row set")
-		}
+		// A projected argument binds its row elements; columns and cells do not cross a binding.
 		bindings[argument.Name] = value.values
 	}
 	callee := &executor{

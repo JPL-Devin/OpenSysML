@@ -823,6 +823,47 @@ calc def Wrapped :> Query {
 	}
 }
 
+func TestExecuteInvocationBindsProjectedArgumentRowElements(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part alpha;
+	part beta;
+}
+calc def ProjectedChildren :> Query {
+	in source : Element;
+	Project(
+		source = OwnedElements(source = source),
+		properties = ("name")
+	)
+}
+calc def Named :> Query {
+	in items : Element[0..*];
+	WhereName(source = items, operator = "!=", value = "absent")
+}
+calc def Composed :> Query {
+	in source : Element;
+	Named(items = ProjectedChildren(source = source))
+}
+`)
+	result, err := fixture.execute(t, "Composed", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute projected-argument invocation: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"alpha", "beta"}) {
+		t.Fatalf("rows = %v", got)
+	}
+	if len(result.Columns()) != 0 {
+		t.Fatalf("columns = %+v, want none across the binding", result.Columns())
+	}
+	for _, row := range result.Rows() {
+		if !row.Origin().Located() {
+			t.Fatal("rows bound through a projected argument must preserve provenance")
+		}
+	}
+}
+
 func TestExecuteValidatesInvokedResultsAtTheirDeclaration(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part def Target;
