@@ -89,6 +89,18 @@ func TestDiagramTableKind(t *testing.T) {
 	}
 }
 
+func TestDiagramTableKindEscapesMarkdownPunctuation(t *testing.T) {
+	rendering := &view.Rendering{
+		Kind:    view.KindTable,
+		Columns: []string{"name"},
+		Rows:    [][]string{{"*engine* `raw` <b>#1_a_"}},
+	}
+	got := renderedDiagram(t, "", rendering, "")
+	if !strings.Contains(got, `| \*engine\* \`+"`"+`raw\`+"`"+` \<b>\#1\_a\_ |`) {
+		t.Errorf("punctuation not literal: %s", got)
+	}
+}
+
 func TestDiagramTableKindKeepsNotices(t *testing.T) {
 	rendering := &view.Rendering{
 		Kind:    view.KindTable,

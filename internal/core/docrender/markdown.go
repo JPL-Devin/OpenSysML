@@ -116,7 +116,7 @@ func diagramBlocks(name, caption string, rendering *view.Rendering, direction vi
 		blocks = append(blocks, "*"+inline(caption)+"*")
 	}
 	if rendering.Kind == view.KindTable {
-		return append(blocks, strings.TrimRight(rendering.Markdown(), "\n")), nil
+		return append(blocks, strings.TrimRight(rendering.MarkdownCells(tableCell), "\n")), nil
 	}
 	if !rendering.Kind.Supported() {
 		return nil, &Error{Kind: ErrorUnrenderableDiagram, Content: name, Actual: string(rendering.Kind)}
