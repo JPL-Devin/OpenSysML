@@ -1,5 +1,19 @@
 # Open Source SysML v2 Implementation
 
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/Open-MBEE/OpenSysML/tree/main.svg?style=shield)](https://dl.circleci.com/status-badge/redirect/gh/Open-MBEE/OpenSysML/tree/main)
+[![Quality gate](https://sonarcloud.io/api/project_badges/measure?project=Open-MBEE_OpenSysML&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Open-MBEE_OpenSysML)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Open-MBEE_OpenSysML&metric=coverage)](https://sonarcloud.io/component_measures?id=Open-MBEE_OpenSysML&metric=coverage)
+[![Maintainability](https://sonarcloud.io/api/project_badges/measure?project=Open-MBEE_OpenSysML&metric=sqale_rating)](https://sonarcloud.io/component_measures?id=Open-MBEE_OpenSysML&metric=Maintainability)
+[![Reliability](https://sonarcloud.io/api/project_badges/measure?project=Open-MBEE_OpenSysML&metric=reliability_rating)](https://sonarcloud.io/component_measures?id=Open-MBEE_OpenSysML&metric=Reliability)
+[![Security](https://sonarcloud.io/api/project_badges/measure?project=Open-MBEE_OpenSysML&metric=security_rating)](https://sonarcloud.io/component_measures?id=Open-MBEE_OpenSysML&metric=Security)
+
+[![Release](https://img.shields.io/github/v/release/Open-MBEE/OpenSysML?label=release)](https://github.com/Open-MBEE/OpenSysML/releases/latest)
+[![Go reference](https://pkg.go.dev/badge/github.com/Open-MBEE/OpenSysML.svg)](https://pkg.go.dev/github.com/Open-MBEE/OpenSysML)
+[![PyPI](https://img.shields.io/pypi/v/opensysml?label=pypi)](https://pypi.org/project/opensysml/)
+[![Python versions](https://img.shields.io/pypi/pyversions/opensysml)](https://pypi.org/project/opensysml/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-opensysml.org-blue)](https://opensysml.org/)
+
 A SysML v2 and KerML 1.1 implementation in Go—providing language server, interactive REPL, execution runtime, an embeddable Go API, and Python, Node/TypeScript, Java and Rust client libraries. Spanning the lifecycle from authoring to execution, delivering the integrated tooling experience systems engineers expect from modern language ecosystems.
 
 What that is measured against, and what it is not, is in [spec compliance](docs/project/spec-compliance.md) and the [pilot differential](docs/project/pilot-differential.md): we compare every diagnostic against the pinned OMG pilot implementation over its own corpora, and we do not claim conformance certification.
