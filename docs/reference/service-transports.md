@@ -64,8 +64,8 @@ exercised rather than described.
 
 ## Choose protobuf, not JSON
 
-**Protobuf is the body encoding for every client we ship or document. JSON is the debugging
-affordance.** This is not a style preference — it is the one strong measurement in the
+**Protobuf is the body encoding for every client shipped or documented by this project. JSON is
+the debugging affordance.** This is not a style preference; it is the strongest measurement in the
 evaluation:
 
 | 468 KB `Query` response | p50 | p95 | p99 |
@@ -181,7 +181,7 @@ default port instead. The prototype is kept, behind the flag, and tested — `in
 covers the protocol and `cmd/sysml-grpc` covers the binary answering a framed call — so that it
 cannot rot unnoticed while it is still in the tree.
 
-## Every protocol is tested, not just served
+## Every protocol is tested, not merely served
 
 A second protocol surface that no test drives rots. The conformance suite
 ([`conformance/`](https://github.com/Open-MBEE/OpenSysML/tree/main/conformance)) runs its whole

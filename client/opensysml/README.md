@@ -2,7 +2,7 @@
 
 `github.com/Open-MBEE/OpenSysML/client/opensysml` is the Go surface of OpenSysML:
 parse SysML v2 models, look up symbols, evaluate expressions and instantiate
-parts, from Go code, with the engine that is already linked into your binary.
+parts, from Go code, using the engine already linked into the calling binary.
 
 ```go
 client, err := opensysml.New()
@@ -25,8 +25,8 @@ parse cache and model hashes, the same capability list, the same in-band
 failures, the same runtime budgets (read from the environment, as the service
 reads them).
 
-`Dial` is for the service you did not start: a shared long-lived `sysml-grpc`
-someone else runs, addressed explicitly (`"host:50051"` or
+`Dial` addresses a service the caller did not start: a shared, long-lived
+`sysml-grpc` run elsewhere, addressed explicitly (`"host:50051"` or
 `"https://sysml.example.com"`). It speaks the Connect protocol with protobuf
 bodies by default — JSON (`WithJSONBody`) costs an order of magnitude in
 encoding time on large responses and is a debugging affordance, per

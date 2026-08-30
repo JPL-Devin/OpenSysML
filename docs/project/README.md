@@ -1,7 +1,7 @@
 # Project
 
-Where the project stands: what is implemented, what is known to be missing, and how
-a release is cut.
+The current state of the project: what is implemented, what is known to be missing, and
+how a release is produced.
 
 The conformance records below are engineering records rather than user documentation. Where one
 still uses a short internal label — a numbered development round, or an `F<n>` follow-up row — the
@@ -11,15 +11,15 @@ says so at the top.
 - **[Spec compliance](spec-compliance.md)** — faithful, approximate, or not implemented,
   rule by rule
 - **[Training examples](training-examples.md)** — the OMG corpus, adjudicated per file
-- **[Pilot corpora gate](pilot-corpora.md)** — our diagnostics on the three pinned OMG pilot
+- **[Pilot corpora gate](pilot-corpora.md)** — OpenSysML diagnostics on the three pinned OMG pilot
   corpora, ratcheted in CI
-- **[Pilot differential](pilot-differential.md)** — our diagnostics against the OMG pilot
-  implementation, advisory
+- **[Pilot differential](pilot-differential.md)** — OpenSysML diagnostics compared against the OMG
+  pilot implementation, advisory
 - **[Pilot execution referee](pilot-execution-referee.md)** — how far the pinned pilot's
   execution surface reaches, and which behavior rows it can adjudicate
 - **[Pilot Xpect expectations](pilot-xpect.md)** — the pilot's own inline `.xt` assertions as a
   declared-intent oracle, advisory
-- **[Grammar coverage](grammar-coverage.md)** — which OMG grammar productions our inputs
+- **[Grammar coverage](grammar-coverage.md)** — which OMG grammar productions the project's inputs
   exercise, on input-presence evidence, advisory
 - **[Validation adjudications](wave10-decisions.md)** — the three adjudications the validation work
   depends on, with the measurements behind them

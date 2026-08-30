@@ -50,8 +50,8 @@ gives no deadline guarantee, and nothing in it is scheduled: the runtime's step
 and time budgets bound how long an execution may run, which caps a worst case
 rather than promising one. Tails come from the Go garbage collector, the
 scheduler, TCP, and — for a cache miss — a parse whose cost scales with the
-document. Treat the p99 above as a soft budget, and measure your own p99 on your
-model sizes, cache state and concurrency before trusting one.
+document. Treat the p99 above as a soft budget, and measure the p99 for the
+relevant model sizes, cache state and concurrency before relying on it.
 
 What that means in practice:
 
@@ -61,12 +61,12 @@ What that means in practice:
   the service cache and costs ~0.5 ms, but asking the model itself (`model.eval`,
   `model.instantiate`, `model.execute_*`, which pass its hash) skips even that. The cache holds 100 models
   (`-cache-size`) and evicts least-recently-used, so a stream of distinct
-  sources will evict a model you still hold a hash for.
+  sources will evict a model whose hash is still held.
 - **Batch.** One RPC carrying many samples beats one RPC per sample; at ~0.5 ms
   of overhead per call, a per-sample loop tops out in the low thousands of calls
   per second per connection.
 - **Keep the hot loop local.** Filtering, thresholding and windowing over a
-  telemetry stream belong in NumPy in your own process. Use the service for the
+  telemetry stream belong in NumPy in the calling process. Use the service for the
   coarse-grained step — resolving a model question, instantiating, running an
   action or state machine, converting a model — not for every sample.
 - **Convert off the hot path.** Conversion re-parses its input on every call; it
@@ -199,9 +199,9 @@ dodge one.
   `TypedObject` provides (`instance`, `from_instance`, `sysml_id`) gets a trailing
   underscore (`instance_`); the SysML feature name it reads is unchanged.
 
-`opensysml.connect(host, port, auto_start=True)` returns a `Connection` of your
-own; the module-level functions share a lazily created singleton connection
-instead. Naming a host and port, writing `host:port` as the host, or setting
+`opensysml.connect(host, port, auto_start=True)` returns a caller-owned
+`Connection`; the module-level functions share a lazily created singleton
+connection instead. Naming a host and port, writing `host:port` as the host, or setting
 `$OPENSYSML_SERVICE=host:port`, is the opt-in to a service this client does not
 manage; with none of them the connection reaches a private child of this
 interpreter. A `host:port` address written as the host is read as one —
@@ -217,31 +217,31 @@ connections, stopped when the last is closed or the interpreter exits — and
 dies with that interpreter however it dies, because it exits at end of file on a
 stdin pipe only that process holds. Nothing about it is written to disk, so there
 is no record to authenticate, no pid outside its own `Popen` to signal, and no
-stale state for a later run to clean up. A connection to a service you manage
+stale state for a later run to clean up. A connection to a caller-managed service
 takes no reference and leaves it running, whatever it does.
 
-A service *you* manage is checked the way the cached binary is: it is asked what
+A caller-managed service is checked in the same way as the cached binary: it is asked what
 it is with `GetServerInfo`, and a release other than the one asked for raises
 `StaleServiceError` naming the mismatch and the remedy, instead of serving an old
 build whose first newer call fails as a `MissingCapabilityError`.
 `connect(version=…, require_capabilities=[…])` asks explicitly;
 `OPENSYSML_GRPC_VERSION` asks for a release for the binary cache and the running
 service alike, and with neither set whatever answers is accepted. Such a service
-is never stopped or replaced to satisfy the check — the remedy asks you to stop
-it, point the client elsewhere, or accept what is running — and the check stays
-lazy: a service of yours that is not listening yet is checked once it answers. A
+is never stopped or replaced to satisfy the check — the remedy is to stop it,
+point the client elsewhere, or accept what is running — and the check stays
+lazy: a caller-managed service that is not yet listening is checked once it answers. A
 private child cannot be a mismatch to begin with, since children are held per
 requirement, so a connection asking for another release starts its own rather
 than joining one. A service that only lacks a required *capability* is reported as
-`MissingCapabilityError`: capabilities come with a release, so the class you
-catch does not depend on who started the service.
+`MissingCapabilityError`: capabilities come with a release, so the class raised
+does not depend on who started the service.
 
 The client checks the advertised list before it makes a capability-gated call, so
 that error usually arrives without a round trip. When a call does reach a service
 that lacks the capability, the service refuses it with `UNIMPLEMENTED` naming the
 capability, and the client raises the same `MissingCapabilityError` with the gRPC
-error kept as its `__cause__` — so the class you catch does not depend on which
-side noticed either. A capability that only describes how a response is
+error kept as its `__cause__` — so the class raised does not depend on which
+side detected the problem either. A capability that only describes how a response is
 populated is not a refusal: the answer omits the fields it names, as documented
 per call.
 

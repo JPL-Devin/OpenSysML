@@ -279,7 +279,7 @@ part only when followed by a digit, which prevents `1..2` from becoming one
 real token. Exponents are consumed only when they contain the required digits.
 
 When changing number syntax, test neighboring punctuation and incomplete
-forms, not just the accepted literal.
+forms, not only the accepted literal.
 
 ### Adding or changing a token
 
@@ -379,8 +379,8 @@ Parser findings have two channels:
   such as a reserved keyword used where an unrestricted name was required.
 
 Choose the channel based on whether downstream code has the intended tree.
-Do not turn an ill-formed partial parse into a warning just to let a conformance
-gate pass.
+Do not turn an ill-formed partial parse into a warning merely to let a
+conformance gate pass.
 
 Diagnostics should:
 

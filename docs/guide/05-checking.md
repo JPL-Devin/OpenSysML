@@ -1,8 +1,9 @@
 # 5. Expressions, calculations, constraints and requirements
 
-What the runtime evaluates, and how each kind of check reports. A constraint declared on a
-definition is checked against the object carrying it, so instantiate first when you want a
-verdict about a value rather than about a default.
+This chapter describes what the runtime evaluates and how each kind of check reports its result.
+A constraint declared on a definition is checked against the object that carries it, so
+instantiate the definition first to obtain a verdict about a concrete value rather than about a
+default.
 
 ## Expressions
 
@@ -112,7 +113,8 @@ sysml> %requirement SafetyReq
 ✓ Requirement SafetyReq satisfied
 ```
 
-**See [examples/repl-behavioral-demo.sysml](../../examples/repl-behavioral-demo.sysml) for comprehensive examples.**
+For further examples, see
+[examples/repl-behavioral-demo.sysml](../../examples/repl-behavioral-demo.sysml).
 
 ---
 

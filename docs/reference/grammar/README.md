@@ -14,13 +14,13 @@ For reference, the official Xtext grammar files from OMG are available at:
 
 These files are licensed under Eclipse Public License 2.0 (EPL-2.0) and are not included in this repository to avoid license mixing. `./scripts/download-pilot-grammars.sh` fetches them at the pinned release into `build/pilot-grammars/` when they are needed.
 
-Which of their productions our test inputs have ever exercised is measured, on input-presence evidence rather than execution coverage, in [grammar-coverage.md](../../project/grammar-coverage.md).
+The productions exercised by this project's test inputs are measured, on input-presence evidence rather than execution coverage, in [grammar-coverage.md](../../project/grammar-coverage.md).
 
 ## Conformance Audit
 
 [conformance-audit.md](conformance-audit.md) records, with `file:line` citations
 at the pinned grammars, which words and constructs OpenSysML accepts are standard
-(silent), which are our own extensions (warned as `nonstandard-notation`), and
+(silent), which are OpenSysML extensions (warned as `nonstandard-notation`), and
 which are KerML-only in a `.sysml` file (warned as `kerml-notation`).
 
 ## State Machine Notation Beyond the OMG Grammar

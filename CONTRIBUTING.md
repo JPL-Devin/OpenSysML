@@ -1,6 +1,8 @@
 # Contributing to OpenSysML
 
-Thank you for your interest in contributing to OpenSysML!
+Thank you for your interest in contributing to OpenSysML. This document describes how to set up a
+development environment, the standards a change is expected to meet, and how contributions are
+reviewed and released.
 
 ## Development Setup
 
@@ -185,7 +187,7 @@ test(semantics): add conformance checking test cases
 
 ### Versioning
 
-We use [Semantic Versioning](https://semver.org/):
+The project follows [Semantic Versioning](https://semver.org/):
 
 - **MAJOR** (v1.0.0 → v2.0.0): Breaking changes
 - **MINOR** (v0.1.0 → v0.2.0): New features (backward compatible)
@@ -283,7 +285,7 @@ When a change needs documenting:
 - **Extend the chapter that already covers the surface** rather than adding a page per feature —
   a new REPL command belongs in [reference/repl-commands.md](docs/reference/repl-commands.md) and
   the chapter that teaches the workflow, not in a new `MY_FEATURE.md`.
-- **Teach in the guide, enumerate in the reference.** Don't repeat a flag table in both; link.
+- **Explain in the guide, enumerate in the reference.** Do not repeat a flag table in both; link to it.
 - **Measured numbers have one home** (fixture, corpus and conversion counts live in
   [docs/project/](docs/project/)); elsewhere, link to it instead of restating a number that
   will drift. Three release-gate surfaces are the deliberate exception, because
@@ -344,7 +346,7 @@ See [ARCHITECTURE.md](docs/internals/architecture.md) for detailed design.
 - **GitHub Issues:** three forms, picked when you open one — a **tool bug** (OpenSysML does
   something other than what it documents), a **spec conformance gap** (it disagrees with SysML v2
   or KerML, so name the clause), or an **objection to a ruling** (the behavior is deliberate and
-  you are arguing the interpretation is wrong). Check
+  the report argues that the interpretation is wrong). Check
   [spec-compliance.md](docs/project/spec-compliance.md) and
   [omg-issues.md](docs/project/omg-issues.md) first: a known divergence is usually already a row
   there with the reasoning behind it.
@@ -365,4 +367,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ---
 
-**Thank you for contributing to OpenSysML!** 🚀
+**Thank you for contributing to OpenSysML.**

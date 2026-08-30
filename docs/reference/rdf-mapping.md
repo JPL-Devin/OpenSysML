@@ -15,8 +15,8 @@ each of these is a deliberate property of it rather than a defect to report:
   74 are refused. See [Behavior](#behavior) and [Limitations](#limitations).
 - **The vocabulary may change without a compatibility path.** A graph written by
   one release may not read back into the next, and no migration is provided.
-  Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
-  of record.
+  Treat a `.ttl` as a regenerable interchange artifact rather than the copy of
+  record.
 - **Interoperability is not yet demonstrated**, and the gap is measured rather
   than argued. The `sysml:` vocabulary and the `elmt:` element base match Flexo
   MMS's `Namespaces.kt`; OpenSysML's ids — the part of an IRI after the final

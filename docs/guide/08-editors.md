@@ -1,15 +1,16 @@
 # 8. Editors
 
-`sysml-lsp` speaks LSP over stdio, so any editor with a generic LSP client can drive it. The
-VS Code extension in [editors/vscode](../../editors/vscode) adds `.sysml`/`.kerml` highlighting
-on top.
+`sysml-lsp` implements the Language Server Protocol over standard input and output, so any editor
+with a generic LSP client can use it. The VS Code extension in
+[editors/vscode](../../editors/vscode) additionally provides `.sysml` and `.kerml` syntax
+highlighting.
 
 ## VS Code
 
-This repository ships its own VS Code extension in
-[editors/vscode](../../editors/vscode): syntax highlighting for `.sysml` and
-`.kerml` plus an LSP client that launches `sysml-lsp`. It is not published to any
-marketplace, so build and side-load it:
+This repository provides a VS Code extension in [editors/vscode](../../editors/vscode), offering
+syntax highlighting for `.sysml` and `.kerml` together with an LSP client that launches
+`sysml-lsp`. The extension is not published to any marketplace, so it must be built and
+side-loaded:
 
 ```bash
 make build                                    # builds bin/sysml-lsp
@@ -19,15 +20,15 @@ npm run package                               # -> opensysml-sysml.vsix
 code --install-extension opensysml-sysml.vsix
 ```
 
-Open any `.sysml` file: it is highlighted immediately, and the extension starts
-the server it finds, in order:
+Opening any `.sysml` file highlights it immediately, and the extension starts the first server it
+finds, searching in the following order:
 
 1. `opensysml.server.path`, if set;
 2. `bin/sysml-lsp` inside an open workspace folder (a checkout that ran `make build`);
 3. `sysml-lsp` on `PATH`.
 
-If no server is found, highlighting still works and a warning explains how to
-build one. Point the extension at a specific build with `.vscode/settings.json`:
+If no server is found, highlighting continues to work and a warning explains how to build one. To
+direct the extension at a specific build, use `.vscode/settings.json`:
 
 ```json
 {
@@ -36,13 +37,13 @@ build one. Point the extension at a specific build with `.vscode/settings.json`:
 }
 ```
 
-### Asking the strict question in the editor
+### Strict conformance in the editor
 
-The server reports OpenSysML's own notation as warnings, like the CLI does. An
-editor that can send settings asks the strict question with the boolean
+As on the command line, the server reports OpenSysML's own notation extensions as warnings. An
+editor that can send settings enables strict conformance with the boolean
 `sysml.strictConformance` ([LSP extensions](../reference/lsp.md#strict-conformance-setting)),
-and the diagnostics of every open document are republished as errors at once. In
-this extension, start the server strictly instead:
+after which the diagnostics of every open document are republished as errors. In this extension,
+start the server in strict mode instead:
 
 ```json
 {
@@ -52,42 +53,38 @@ this extension, start the server strictly instead:
 
 ### The diagram panel
 
-`SysML: Open Diagram`, from the command palette with a `.sysml` or `.kerml` file
-open, puts a diagram of the model beside the editor. It draws the same
-renderings the REPL's `%view` prints, as Mermaid, and it redraws as the model is
-typed.
+Running `SysML: Open Diagram` from the command palette with a `.sysml` or `.kerml` file open
+displays a diagram of the model beside the editor. The panel draws the same renderings that the
+REPL's `%view` command prints, using Mermaid, and redraws as the model is edited.
 
-- **What it draws.** The view the document declares, picked from the dropdown
-  when it declares several, or — the usual case for a model being written — the
-  document itself, as a tree, an interconnection diagram, a state diagram, an
-  action flow, a sequence diagram or a table. A view whose rendering is not
-  supported (`geometry`, `textual`) stays in the picker, saying why it cannot be
-  drawn.
-- **Click a node** to jump to the declaration it was built from; move the cursor
-  in the editor and the node containing it is highlighted. A node with no
-  locatable declaration — a standard library symbol — is not clickable.
-- **While typing.** A keystroke that leaves the model unparseable dims the last
-  good diagram and puts the error in the status line under it; the panel never
-  blanks. What the rendering could not represent is listed under the diagram.
-- **Cost.** The panel asks for a diagram only while it is visible, and only once
-  an editing burst settles. Mermaid is bundled into the extension, so nothing is
-  fetched from the network.
+- **Content.** The panel draws the view the document declares, selected from a dropdown when the
+  document declares several, or, as is usual for a model under development, the document itself,
+  rendered as a tree, an interconnection diagram, a state diagram, an action flow, a sequence
+  diagram or a table. A view whose rendering is unsupported (`geometry`, `textual`) remains in the
+  picker and reports why it cannot be drawn.
+- **Navigation.** Clicking a node jumps to the declaration it was built from, and moving the
+  cursor in the editor highlights the node containing it. A node with no locatable declaration,
+  such as a standard library symbol, is not clickable.
+- **Behavior while editing.** A keystroke that leaves the model unparseable dims the last valid
+  diagram and reports the error in the status line beneath it; the panel is never blanked.
+  Anything the rendering could not represent is listed below the diagram.
+- **Resource use.** The panel requests a diagram only while it is visible, and only after an
+  editing burst has settled. Mermaid is bundled with the extension, so nothing is fetched from the
+  network.
 
-It is read-only: it renders the model, and editing the diagram does not edit the
-model. The panel appears only when the server it is talking to serves the render
-methods ([LSP extensions](../reference/lsp.md)), so an older `sysml-lsp` simply
-does not offer the command.
+The panel is read-only: it renders the model, and editing the diagram does not modify the model.
+It is available only when the server it is connected to provides the render methods
+([LSP extensions](../reference/lsp.md)), so an older `sysml-lsp` does not offer the command.
 
-Run `SysML: Restart Language Server` from the command palette after rebuilding
-the binary. `editors/vscode/README.md` documents every setting, the grammar
-generator (keywords come from `internal/core/lexer.Keywords()`, so they cannot
-drift) and the <kbd>F5</kbd> extension-debugging loop.
+After rebuilding the binary, run `SysML: Restart Language Server` from the command palette. The
+file `editors/vscode/README.md` documents every setting, the grammar generator (keywords are taken
+from `internal/core/lexer.Keywords()`, so they cannot drift) and the <kbd>F5</kbd>
+extension-debugging loop.
 
-Other editors can still launch `bin/sysml-lsp` over stdio through their own
-generic LSP client; only the highlighting is VS Code-specific.
+Other editors can launch `bin/sysml-lsp` over standard input and output through their own generic
+LSP client; only the syntax highlighting is specific to VS Code.
 
-**What the server advertises at `initialize`** — the capabilities it answers, taken
-from a live session with `bin/sysml-lsp`:
+**Capabilities advertised at `initialize`**, recorded from a live session with `bin/sysml-lsp`:
 
 - ✅ Document synchronization, incremental (`textDocumentSync.change: 2`)
 - ✅ Diagnostics (syntax + semantic errors, published on open and on change)
@@ -112,16 +109,16 @@ from a live session with `bin/sysml-lsp`:
   unresolved name, importing the namespace that declares it, inserting a missing
   semicolon the parser located exactly)
 
-**Not implemented:** semantic token deltas (`semanticTokens/full/delta` — the
-server holds no previous result to diff against, so a client re-requests the
-full set), signature help, range formatting, code lens, inlay hints. A client
-asking for one of those gets the method-not-found answer rather than a partial
-result. Quick fixes are offered only where the repair is unambiguous: a syntax
-error that may want either a body or a semicolon carries none.
+**Not implemented:** semantic token deltas (`semanticTokens/full/delta`; the server retains no
+previous result to diff against, so clients re-request the full set), signature help, range
+formatting, code lens and inlay hints. A client that requests one of these receives a
+method-not-found response rather than a partial result. Quick fixes are offered only where the
+repair is unambiguous: a syntax error that could require either a body or a semicolon carries
+none.
 
-**Test the server:** the protocol is JSON-RPC over stdio, so a request can be sent
-by hand. Formatting a badly indented file and renaming a definition, run against
-`bin/sysml-lsp`:
+**Testing the server:** the protocol is JSON-RPC over standard input and output, so requests can
+be sent manually. The following exchange formats a badly indented file and renames a definition,
+run against `bin/sysml-lsp`:
 
 ```
 → textDocument/formatting  (file: "package P {\npart def Wheel {\nattribute diameter = 16.0;\n}\npart w : Wheel;\n}\n")
@@ -134,10 +131,10 @@ by hand. Formatting a badly indented file and renaming a definition, run against
       {"range": {"start": {"line": 4, "character": 9}, "end": {"line": 4, "character": 14}}, "newText": "Tyre"}]}}
 ```
 
-The rename edits the declaration and the `part w : Wheel` reference together —
-it is resolution-driven, not a textual replace.
+The rename edits the declaration and the `part w : Wheel` reference together, because it is
+resolution-driven rather than a textual replacement.
 
-In an editor, check the install by hovering: open a file containing
+To verify the installation in an editor, open a file containing
 `part Wheel { attribute diameter = 16.0; }` and hover over `Wheel`.
 
 ---
