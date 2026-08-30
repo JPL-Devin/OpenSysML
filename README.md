@@ -200,7 +200,7 @@ The project is under active development, with the core infrastructure operationa
 | Semantic layer (operators, builtins, validation) | ✅ Complete |
 | Feature chain resolution (member access) | ✅ Complete |
 | Validation passes (typing conformance, redefinition) | ✅ Complete |
-| Native document-query planning | 🚧 Query definitions, typed immutable plans, named composition, cycle checks and diagnostics complete; execution and Markdown rendering are not yet implemented |
+| Native document-query planning | 🚧 Query definitions, typed immutable plans, named composition, cycle checks and diagnostics complete; execution is reachable via `%run-query` and `-run-query`; document composition and Markdown rendering are not yet implemented |
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
@@ -235,7 +235,7 @@ The project is under active development, with the core infrastructure operationa
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
 
-**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 765 tracked rules stays in [spec compliance](docs/project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
+**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 767 tracked rules stays in [spec compliance](docs/project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
 <!-- doc-counts:end refereed-figures -->
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).

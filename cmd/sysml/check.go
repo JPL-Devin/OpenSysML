@@ -20,6 +20,7 @@ type checks struct {
 	requirements stringSlice
 	satisfy      satisfyTargets
 	calcs        stringSlice
+	queries      stringSlice
 	actions      stringSlice
 	states       stringSlice
 	advance      advanceTime
@@ -47,7 +48,7 @@ func (a *advanceTime) Set(value string) error {
 func (c *checks) requested() bool {
 	return c.validate || c.jsonOut || c.advance.given || c.satisfy.given || len(c.instantiate) > 0 ||
 		len(c.constraints) > 0 || len(c.requirements) > 0 || len(c.calcs) > 0 ||
-		len(c.actions) > 0 || len(c.states) > 0
+		len(c.queries) > 0 || len(c.actions) > 0 || len(c.states) > 0
 }
 
 // checksOnly reports whether anything was asked about the model itself, as
@@ -55,7 +56,7 @@ func (c *checks) requested() bool {
 func (c *checks) checksOnly() bool {
 	return c.validate || len(c.instantiate) > 0 || len(c.constraints) > 0 ||
 		len(c.requirements) > 0 || len(c.satisfy.targets) > 0 || len(c.calcs) > 0 ||
-		len(c.actions) > 0 || len(c.states) > 0
+		len(c.queries) > 0 || len(c.actions) > 0 || len(c.states) > 0
 }
 
 // satisfyTargets collects -satisfy values. The flag takes an optional value: a
@@ -252,6 +253,9 @@ func runChecks(files []string, exprs []string, c checks) int {
 	}
 	for _, invocation := range c.calcs {
 		rep.verdict(sess.RunCalc(invocation))
+	}
+	for _, invocation := range c.queries {
+		rep.verdict(sess.RunDocumentQuery(invocation))
 	}
 	for _, value := range c.actions {
 		name, performer := splitPerformer(value)
