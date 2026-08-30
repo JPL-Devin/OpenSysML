@@ -7,7 +7,7 @@ import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "n
 import { mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import {
   ALLOW_UNPINNED_ENV,
   BINARY_ENV,
@@ -48,6 +48,14 @@ const saved = {
   allow: process.env[ALLOW_UNPINNED_ENV],
   path: process.env["PATH"],
 };
+
+// A binary or a release named in the environment would answer for the one under test.
+beforeEach(() => {
+  restore(BINARY_ENV, undefined);
+  restore(VERSION_ENV, undefined);
+  restore(REPO_ENV, undefined);
+  restore(ALLOW_UNPINNED_ENV, undefined);
+});
 
 afterEach(() => {
   restore(BINARY_ENV, saved.binary);
@@ -108,8 +116,6 @@ test("a binary on $PATH is used, and with nothing anywhere the error says so", a
   const executable = join(dir, binaryName());
   writeFileSync(executable, "#!/bin/sh\n");
   chmodSync(executable, 0o755);
-  restore(BINARY_ENV, undefined);
-  restore(VERSION_ENV, undefined);
   process.env["PATH"] = dir;
   assert.equal((await resolveBinary({ cacheDir: empty })).path, executable);
 
@@ -421,7 +427,6 @@ test("$OPENSYSML_GRPC_VERSION asks for the release the caller did not name", asy
   t.after(() => release.close());
   const options = pinned(release);
   process.env[VERSION_ENV] = VERSION;
-  restore(BINARY_ENV, undefined);
 
   const found = await resolveBinary(unasked(options));
   assert.deepEqual(await readFile(found.path), BODY);

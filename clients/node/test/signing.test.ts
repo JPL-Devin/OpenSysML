@@ -10,7 +10,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import {
   ALLOW_UNPINNED_ENV,
   BUNDLE_ASSET,
@@ -58,6 +58,11 @@ const SIGNER = new ReleaseSigner({
 });
 
 const saved = { allow: process.env[ALLOW_UNPINNED_ENV] };
+
+// Same-origin trust granted in the environment would hide what a signature is for.
+beforeEach(() => {
+  Reflect.deleteProperty(process.env, ALLOW_UNPINNED_ENV);
+});
 
 afterEach(() => {
   if (saved.allow === undefined) {
