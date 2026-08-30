@@ -343,6 +343,9 @@ def release_asset_name(goos=None, goarch=None):
 def service_binary_name(goos=None):
     """Name the service binary is installed under, on the cache and on $PATH.
 
+    Only the operating system names it, so this answers on a platform no release
+    is published for, where a local build is the only sysml-grpc there is.
+
     Args:
         goos (str, optional): GOOS, detected when omitted
 
@@ -350,7 +353,7 @@ def service_binary_name(goos=None):
         str: 'sysml-grpc', or 'sysml-grpc.exe' on Windows
     """
     if goos is None:
-        goos, _ = detect_platform()
+        goos = platform.system().lower()
     return 'sysml-grpc.exe' if goos == 'windows' else 'sysml-grpc'
 
 
@@ -950,6 +953,13 @@ def _ensure_binary_locked(force_download, version, github_repo, binary_path):
     
     # Nothing cached and no release asked for, so $PATH is next, outside the lock.
     if version is None:
+        # A download asked for with nothing to download is an error, as one that
+        # fails is: neither is answered by a $PATH binary of unknown release.
+        if force_download:
+            raise ConnectionError(
+                "A download was asked for without a release to download. Set "
+                "$OPENSYSML_GRPC_VERSION, or pass version= here."
+            )
         return None
     
     # Download binary with explicit version

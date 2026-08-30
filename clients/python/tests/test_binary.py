@@ -130,8 +130,7 @@ def test_service_binary_name_is_the_executable_one_on_windows():
 
 def test_binary_on_path_looks_for_the_windows_name_on_windows(tmp_path, monkeypatch):
     """Test a Windows host scans $PATH for sysml-grpc.exe, not for sysml-grpc."""
-    monkeypatch.setattr('opensysml.binary.detect_platform',
-                        lambda: ('windows', 'amd64'))
+    monkeypatch.setattr('opensysml.binary.platform.system', lambda: 'Windows')
     monkeypatch.setenv('PATH', str(tmp_path))
     executable(tmp_path / 'sysml-grpc')
     assert binary_on_path() is None
@@ -335,6 +334,35 @@ def test_a_download_that_fails_is_not_answered_from_path(cache, tmp_path, monkey
                side_effect=OpenSysMLConnectionError('release not found')):
         with pytest.raises(OpenSysMLConnectionError, match='release not found'):
             ensure_binary(version='v9.9.9')
+
+
+def test_a_download_with_no_release_to_download_is_not_answered_from_path(
+    cache, tmp_path, monkeypatch
+):
+    """Test asking for a download without a release is an error, not a $PATH binary."""
+    directory = tmp_path / 'usr-local-bin'
+    directory.mkdir()
+    executable(directory / 'sysml-grpc')
+    monkeypatch.setenv('PATH', str(directory))
+
+    with pytest.raises(OpenSysMLConnectionError, match='without a release'):
+        ensure_binary(force_download=True)
+
+
+def test_a_local_build_answers_on_a_platform_no_release_is_published_for(
+    cache, tmp_path, monkeypatch
+):
+    """Test an architecture releases skip still resolves a named build and one on $PATH."""
+    monkeypatch.setattr('opensysml.binary.platform.machine', lambda: 'riscv64')
+    directory = tmp_path / 'usr-local-bin'
+    directory.mkdir()
+    on_path = executable(directory / 'sysml-grpc')
+    monkeypatch.setenv('PATH', str(directory))
+    assert ensure_binary() == on_path
+
+    named = executable(tmp_path / 'my-build')
+    monkeypatch.setenv('OPENSYSML_BINARY', named)
+    assert ensure_binary() == named
 
 
 def test_ensure_binary_reports_everywhere_it_looked(cache):
