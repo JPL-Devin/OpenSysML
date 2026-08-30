@@ -1009,6 +1009,48 @@ calc def Composed :> Query {
 	}
 }
 
+func TestExecuteInvocationCountIsBounded(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part child;
+}
+calc def Leaf :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Fan1 :> Query {
+	in source : Element;
+	(Leaf(source = source), Leaf(source = source))
+}
+calc def Fan2 :> Query {
+	in source : Element;
+	(Fan1(source = source), Fan1(source = source))
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	if _, err := fixture.execute(t, "Fan2", bindings, Options{}); err != nil {
+		t.Fatalf("execute within default invocation budget: %v", err)
+	}
+	if _, err := fixture.execute(t, "Fan2", bindings, Options{InvocationBudget: 6}); err != nil {
+		t.Fatalf("execute at exact invocation budget: %v", err)
+	}
+	_, err := fixture.execute(t, "Fan2", bindings, Options{InvocationBudget: 5})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorInvocationBudget {
+		t.Fatalf("invocation budget error = %v", err)
+	}
+	if executionError.Query != "Observatory::Fan1" || executionError.Target != "Observatory::Leaf" {
+		t.Fatalf("invocation budget error detail = %+v", executionError)
+	}
+	if !executionError.Origin.Located() {
+		t.Fatal("invocation budget error must retain query provenance")
+	}
+	_, err = fixture.execute(t, "Fan2", bindings, Options{InvocationBudget: -1})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorInvalidContext {
+		t.Fatalf("negative invocation budget error = %v", err)
+	}
+}
+
 func TestExecuteUsesSemanticScalarBindingConformance(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part root;

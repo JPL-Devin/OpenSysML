@@ -28,6 +28,7 @@ const (
 	ErrorUnknownInvocation     ErrorKind = "unknown-invocation"
 	ErrorInvocationCycle       ErrorKind = "invocation-cycle"
 	ErrorInvocationDepth       ErrorKind = "invocation-depth"
+	ErrorInvocationBudget      ErrorKind = "invocation-budget"
 	ErrorVisitBudget           ErrorKind = "visit-budget"
 	ErrorResultType            ErrorKind = "result-type"
 	ErrorResultMultiplicity    ErrorKind = "result-multiplicity"
@@ -81,6 +82,8 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("query %s re-entered %s during invocation: %s", e.Query, e.Target, strings.Join(e.Path, " -> "))
 	case ErrorInvocationDepth:
 		return fmt.Sprintf("query %s exceeded the invocation depth limit invoking %s", e.Query, e.Target)
+	case ErrorInvocationBudget:
+		return fmt.Sprintf("query %s exceeded the invocation budget invoking %s", e.Query, e.Target)
 	case ErrorVisitBudget:
 		return fmt.Sprintf("query %s exceeded its visit budget", e.Query)
 	case ErrorResultType:

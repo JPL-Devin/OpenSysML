@@ -23,13 +23,15 @@ type Context struct {
 
 // Options controls bounded query execution.
 type Options struct {
-	VisitBudget     int
-	InvocationDepth int
+	VisitBudget      int
+	InvocationDepth  int
+	InvocationBudget int
 }
 
 const (
-	defaultVisitBudget     = 100_000
-	defaultInvocationDepth = 64
+	defaultVisitBudget      = 100_000
+	defaultInvocationDepth  = 64
+	defaultInvocationBudget = 10_000
 )
 
 type sequence struct {
@@ -49,6 +51,7 @@ type executor struct {
 	bindings   map[string]sequence
 	program    map[string]queryplan.Definition
 	budget     *visitBudget
+	calls      *visitBudget
 	depthLeft  int
 	stack      []string
 }
@@ -70,7 +73,11 @@ func Execute(program *queryplan.Program, context Context, bindings Bindings, opt
 	if depth == 0 {
 		depth = defaultInvocationDepth
 	}
-	if budget < 0 || depth < 0 {
+	calls := options.InvocationBudget
+	if calls == 0 {
+		calls = defaultInvocationBudget
+	}
+	if budget < 0 || depth < 0 || calls < 0 {
 		return nil, &Error{Kind: ErrorInvalidContext, Query: definition.Name()}
 	}
 	definitions := program.Definitions()
@@ -85,6 +92,7 @@ func Execute(program *queryplan.Program, context Context, bindings Bindings, opt
 		bindings:   make(map[string]sequence),
 		program:    compiled,
 		budget:     &visitBudget{remaining: budget},
+		calls:      &visitBudget{remaining: calls},
 		depthLeft:  depth,
 		stack:      []string{definition.Name()},
 	}
@@ -332,6 +340,16 @@ func (e *executor) evaluateInvoke(expression queryplan.Expression) (sequence, er
 			Origin:    expression.Origin(),
 		}
 	}
+	if e.calls.remaining <= 0 {
+		return sequence{}, &Error{
+			Kind:      ErrorInvocationBudget,
+			Query:     e.definition.Name(),
+			Operation: expression.Operation(),
+			Target:    target,
+			Origin:    expression.Origin(),
+		}
+	}
+	e.calls.remaining--
 	bindings := make(Bindings, len(expression.Arguments()))
 	for _, argument := range expression.Arguments() {
 		value, err := e.evaluate(argument.Value)
@@ -348,6 +366,7 @@ func (e *executor) evaluateInvoke(expression queryplan.Expression) (sequence, er
 		bindings:   make(map[string]sequence),
 		program:    e.program,
 		budget:     e.budget,
+		calls:      e.calls,
 		depthLeft:  e.depthLeft - 1,
 		stack:      append(append([]string(nil), e.stack...), target),
 	}
