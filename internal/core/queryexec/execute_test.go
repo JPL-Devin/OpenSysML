@@ -664,6 +664,109 @@ calc def ExactScore :> Query {
 	}
 }
 
+func TestExecuteComparesIntegerFeaturesWithRealOperands(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part lower {
+		attribute score : Integer = 2;
+	}
+	part higher {
+		attribute score : Integer = 3;
+	}
+}
+calc def EqualReal :> Query {
+	in source : Element;
+	WhereFeature(
+		source = OwnedElements(source = source),
+		'feature' = "score",
+		operator = "=",
+		value = "2.0"
+	)
+}
+calc def LessThanReal :> Query {
+	in source : Element;
+	WhereFeature(
+		source = OwnedElements(source = source),
+		'feature' = "score",
+		operator = "<",
+		value = "2.5"
+	)
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{
+		{query: "EqualReal", want: []string{"lower"}},
+		{query: "LessThanReal", want: []string{"lower"}},
+	} {
+		rows, err := fixture.execute(t, tc.query, bindings, Options{})
+		if err != nil {
+			t.Fatalf("execute %s: %v", tc.query, err)
+		}
+		if got := elementNames(rows); !slices.Equal(got, tc.want) {
+			t.Fatalf("%s rows = %v, want %v", tc.query, got, tc.want)
+		}
+	}
+}
+
+func TestExecuteOrdersMixedNumericValuesExactly(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part integerKey {
+		attribute score : Integer = 9007199254740993;
+	}
+	part realKey {
+		attribute score : Real = 9007199254740992.0;
+	}
+}
+calc def ExactOrder :> Query {
+	in source : Element;
+	OrderBy(
+		source = OwnedElements(source = source),
+		property = "score",
+		direction = "ascending",
+		missing = "error",
+		multiple = "error"
+	)
+}
+`)
+	rows, err := fixture.execute(t, "ExactOrder", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute mixed numeric ordering: %v", err)
+	}
+	if got := elementNames(rows); !slices.Equal(got, []string{"realKey", "integerKey"}) {
+		t.Fatalf("ordered rows = %v", got)
+	}
+}
+
+func TestExecuteWhereTypeUsesMetaclassConformance(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part child;
+}
+calc def Usages :> Query {
+	in source : Element;
+	WhereType(
+		source = OwnedElements(source = source),
+		type = "Usage"
+	)
+}
+`)
+	rows, err := fixture.execute(t, "Usages", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute metaclass query: %v", err)
+	}
+	if got := elementNames(rows); !slices.Equal(got, []string{"child"}) {
+		t.Fatalf("usage rows = %v", got)
+	}
+}
+
 func elementNames(result *RowSet) []string {
 	var names []string
 	for _, row := range result.Rows() {

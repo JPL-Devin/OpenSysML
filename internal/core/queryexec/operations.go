@@ -1,6 +1,8 @@
 package queryexec
 
 import (
+	"math"
+	"math/big"
 	"regexp"
 	"sort"
 	"strconv"
@@ -132,12 +134,19 @@ func (e *executor) evaluateWhereType(expression queryplan.Expression) (sequence,
 		return sequence{}, err
 	}
 	target := e.resolveClassification(typeName)
+	classification := typeName
+	if target != nil {
+		classification = symbols.FQNOf(target)
+	}
 	var result sequence
 	for i, value := range source.values {
 		sym, _ := value.Element()
 		matches := query.MetamodelTypeNameOf(sym) == typeName
 		if target != nil {
-			matches = matches || symbols.SameElement(sym, target) || e.context.Model.Conforms(sym, target)
+			matches = matches ||
+				e.context.Model.MetaclassConforms(sym, classification) ||
+				symbols.SameElement(sym, target) ||
+				e.context.Model.Conforms(sym, target)
 		}
 		if matches {
 			appendSelected(&result, source, i)
@@ -564,41 +573,30 @@ func compareValue(actual Value, operator, expected string) (bool, error) {
 		default:
 			return false, errComparison
 		}
-	case ValueInteger:
-		value, _ := actual.Integer()
-		if expected == "*" {
-			return compareOrdinal(-1, operator)
-		}
-		want, err := strconv.ParseInt(strings.ReplaceAll(expected, "_", ""), 10, 64)
+	case ValueInteger, ValueReal, ValueInfinity:
+		want, err := parseNumericValue(expected)
 		if err != nil {
 			return false, err
 		}
-		return compareOrdinal(compareInt(value, want), operator)
-	case ValueReal:
-		value, _ := actual.Real()
-		if expected == "*" {
-			return compareOrdinal(-1, operator)
-		}
-		want, err := strconv.ParseFloat(strings.ReplaceAll(expected, "_", ""), 64)
-		if err != nil {
-			return false, err
-		}
-		return compareNumber(value, operator, want)
-	case ValueInfinity:
-		if expected == "*" {
-			return compareOrdinal(0, operator)
-		}
-		if _, err := strconv.ParseFloat(strings.ReplaceAll(expected, "_", ""), 64); err != nil {
-			return false, err
-		}
-		return compareOrdinal(1, operator)
+		return compareOrdinal(compareNumeric(actual, want), operator)
 	default:
 		return false, errComparison
 	}
 }
 
-func compareNumber(actual float64, operator string, expected float64) (bool, error) {
-	return compareOrdinal(compareFloat(actual, expected), operator)
+func parseNumericValue(text string) (Value, error) {
+	if text == "*" {
+		return Value{kind: ValueInfinity}, nil
+	}
+	text = strings.ReplaceAll(text, "_", "")
+	if integer, err := strconv.ParseInt(text, 10, 64); err == nil {
+		return IntegerValue(integer), nil
+	}
+	real, err := strconv.ParseFloat(text, 64)
+	if err != nil || math.IsNaN(real) || math.IsInf(real, 0) {
+		return Value{}, strconv.ErrSyntax
+	}
+	return RealValue(real), nil
 }
 
 func compareOrdinal(comparison int, operator string) (bool, error) {
@@ -621,6 +619,31 @@ func compareOrdinal(comparison int, operator string) (bool, error) {
 }
 
 func compareOrdered(left, right Value) int {
+	if numericKind(left.Kind()) && numericKind(right.Kind()) {
+		return compareNumeric(left, right)
+	}
+	if left.Kind() != right.Kind() {
+		return strings.Compare(string(left.Kind()), string(right.Kind()))
+	}
+	switch left.Kind() {
+	case ValueString:
+		l, _ := left.String()
+		r, _ := right.String()
+		return strings.Compare(l, r)
+	case ValueBoolean:
+		l, _ := left.Boolean()
+		r, _ := right.Boolean()
+		if !l && r {
+			return -1
+		}
+		if l && !r {
+			return 1
+		}
+	}
+	return 0
+}
+
+func compareNumeric(left, right Value) int {
 	if left.Kind() == ValueInfinity {
 		if right.Kind() == ValueInfinity {
 			return 0
@@ -633,21 +656,14 @@ func compareOrdered(left, right Value) int {
 	if left.Kind() == ValueInteger && right.Kind() == ValueReal {
 		l, _ := left.Integer()
 		r, _ := right.Real()
-		return compareFloat(float64(l), r)
+		return compareIntReal(l, r)
 	}
 	if left.Kind() == ValueReal && right.Kind() == ValueInteger {
 		l, _ := left.Real()
 		r, _ := right.Integer()
-		return compareFloat(l, float64(r))
-	}
-	if left.Kind() != right.Kind() {
-		return strings.Compare(string(left.Kind()), string(right.Kind()))
+		return -compareIntReal(r, l)
 	}
 	switch left.Kind() {
-	case ValueString:
-		l, _ := left.String()
-		r, _ := right.String()
-		return strings.Compare(l, r)
 	case ValueInteger:
 		l, _ := left.Integer()
 		r, _ := right.Integer()
@@ -656,17 +672,14 @@ func compareOrdered(left, right Value) int {
 		l, _ := left.Real()
 		r, _ := right.Real()
 		return compareFloat(l, r)
-	case ValueBoolean:
-		l, _ := left.Boolean()
-		r, _ := right.Boolean()
-		if !l && r {
-			return -1
-		}
-		if l && !r {
-			return 1
-		}
 	}
 	return 0
+}
+
+func compareIntReal(integer int64, real float64) int {
+	left := new(big.Rat).SetInt64(integer)
+	right := new(big.Rat).SetFloat64(real)
+	return left.Cmp(right)
 }
 
 func compareInt(left, right int64) int {
