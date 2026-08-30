@@ -535,10 +535,14 @@ fn resolve_binary() -> Result<PathBuf, Error> {
         // an unknown version answers for it.
         (Err(error), Some(_)) => return Err(error),
         _ => {
-            if let Ok(path) = cached {
-                if path.is_file() {
-                    return Ok(path);
-                }
+            // The digest-named link, so an install over the cache does not change
+            // the binary this start is about to run.
+            if let Some(path) = cached
+                .ok()
+                .as_deref()
+                .and_then(binary::stable_cached_binary)
+            {
+                return Ok(path);
             }
         }
     }

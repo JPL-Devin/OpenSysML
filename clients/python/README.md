@@ -128,8 +128,8 @@ warning.
 The cache at `~/.opensysml/bin/sysml-grpc` is shared with the other clients, so
 deciding whether it is the release asked for and replacing the binary and its
 metadata is done holding `~/.opensysml/bin/sysml-grpc.lock` (`fcntl.lockf`, the
-same lock a Java `FileLock` takes). Concurrent installers therefore queue rather
-than pair one release's bytes with another's record. Because that lock is held
+same lock a Java `FileLock` and the Rust client take). Concurrent installers
+therefore queue rather than pair one release's bytes with another's record. Because that lock is held
 over the download, every response is read bounded — 512 MiB for a binary, 8 MiB
 for a checksum, manifest, bundle or release JSON — so an endless body is refused
 rather than filling memory while other clients wait.
@@ -138,8 +138,8 @@ What a service is started from is not that shared path but a link to it under it
 own digest, `~/.opensysml/bin/sysml-grpc-<first 16 hex of its SHA-256>`, made
 while the lock is held: the cache is replaced in place, so starting it after the
 lock is dropped could start whatever another client installed in between. The
-Java client names that file the same way, so the two share it, and a cache that
-cannot be hashed or linked is started directly with a warning saying so.
+Java and Rust clients name that file the same way, so the three share it, and a
+cache that cannot be hashed or linked is started directly with a warning saying so.
 
 At release time, after the service binaries are published and final:
 

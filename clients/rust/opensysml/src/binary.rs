@@ -1,7 +1,10 @@
 //! Downloading, verifying and caching the `sysml-grpc` release binary.
 //!
-//! The cache at `~/.opensysml/bin` is shared with the Python client, metadata
-//! shape included, so either client can tell which release it holds.
+//! The cache at `~/.opensysml/bin` is shared with the Python and Java clients,
+//! metadata shape included, so every client can tell which release it holds. It
+//! is replaced under the lock file they all take, and what a caller is handed is
+//! a link to the cached binary under its own digest rather than the cache path,
+//! which a later install replaces.
 //!
 //! # Known limitation: this client verifies pins only
 //!
@@ -17,10 +20,11 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
+use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -220,6 +224,192 @@ fn validate_version(version: &str) -> Result<(), Error> {
         )));
     }
     Ok(())
+}
+
+/// Path of the advisory lock every client holds while it replaces the cache.
+///
+/// Python and Java lock this same file, so no client pairs one release's bytes
+/// with another's metadata.
+pub(crate) fn lock_path(cache_dir: &Path) -> PathBuf {
+    cache_dir.join(format!("{}.lock", binary_file_name()))
+}
+
+/// Report to the caller the way this client can, since it has no logger.
+fn warn_on_stderr(message: &str) {
+    eprintln!("opensysml: warning: {message}");
+}
+
+/// One lock per cache, because a POSIX file lock belongs to the process rather
+/// than to the thread that took it.
+fn process_lock(cache_dir: &Path) -> &'static Mutex<()> {
+    static LOCKS: OnceLock<Mutex<BTreeMap<PathBuf, &'static Mutex<()>>>> = OnceLock::new();
+    let mut locks = LOCKS
+        .get_or_init(|| Mutex::new(BTreeMap::new()))
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    // Leaked because the lock outlives every downloader that takes it, and a
+    // process holds locks for a handful of caches at most.
+    locks
+        .entry(lock_path(cache_dir))
+        .or_insert_with(|| &*Box::leak(Box::new(Mutex::new(()))))
+}
+
+/// The shared cache, held against other threads, processes and clients.
+struct CacheGuard {
+    /// Dropped first, since closing any descriptor for the file drops the POSIX
+    /// lock this whole process holds on it.
+    _file: Option<File>,
+    /// Released last, so the next thread opens the lock file after this one closed it.
+    _threads: MutexGuard<'static, ()>,
+}
+
+/// Hold the shared cache until the guard is dropped.
+///
+/// A cache that cannot be locked across processes is still locked within this
+/// one, with a warning, rather than refusing to resolve a binary at all.
+fn cache_lock(cache_dir: &Path, warn: &dyn Fn(String)) -> CacheGuard {
+    let threads = process_lock(cache_dir)
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let path = lock_path(cache_dir);
+    let file = match lock_file(&path) {
+        Ok(file) => Some(file),
+        Err(error) => {
+            warn(format!(
+                "could not lock {} against other processes: {error}",
+                path.display(),
+            ));
+            None
+        }
+    };
+    CacheGuard {
+        _file: file,
+        _threads: threads,
+    }
+}
+
+/// Open the lock file and hold an exclusive lock on it.
+fn lock_file(path: &Path) -> Result<File, std::io::Error> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options.open(path)?;
+    lock_exclusively(&file)?;
+    Ok(file)
+}
+
+/// `fcntl(F_SETLKW)`, which is the lock Python's `lockf` and Java's `FileLock` take.
+#[cfg(unix)]
+fn lock_exclusively(file: &File) -> Result<(), std::io::Error> {
+    rustix::fs::fcntl_lock(file, rustix::fs::FlockOperation::LockExclusive).map_err(Into::into)
+}
+
+/// `LockFileEx`, which is the lock Python's `msvcrt.locking` and Java's `FileLock` take.
+#[cfg(windows)]
+fn lock_exclusively(file: &File) -> Result<(), std::io::Error> {
+    use fs4::fs_std::FileExt;
+    file.lock()
+}
+
+/// Path the cached binary is linked to under its own digest, named as the Python
+/// and Java clients name it so all three start the same file.
+fn stable_binary_path(binary_path: &Path, digest: &str) -> PathBuf {
+    let name = binary_file_name();
+    let (root, extension) = match name.strip_suffix(".exe") {
+        Some(root) => (root, ".exe"),
+        None => (name, ""),
+    };
+    binary_path.with_file_name(format!("{root}-{}{extension}", &digest[..16]))
+}
+
+/// Link the cached binary under its own digest and return that path, so an
+/// install over the cache cannot change what a caller starts.
+///
+/// Call it holding the cache lock, so nothing replaces the cache between the
+/// hashing and the linking.
+fn stable_binary(binary_path: &Path, warn: &dyn Fn(String)) -> PathBuf {
+    let digest = match file_digest(binary_path) {
+        Ok(digest) => digest,
+        Err(error) => {
+            warn(format!(
+                "could not hash {}, so a release installed over it may be started: {error}",
+                binary_path.display(),
+            ));
+            return binary_path.to_owned();
+        }
+    };
+    let stable = stable_binary_path(binary_path, &digest);
+    if is_executable(&stable) {
+        return stable;
+    }
+    match link(binary_path, &stable) {
+        Ok(()) => stable,
+        Err(error) => {
+            warn(format!(
+                "could not link {} to {}, so a release installed over it may be started: {error}",
+                binary_path.display(),
+                stable.display(),
+            ));
+            let _ = fs::remove_file(&stable);
+            binary_path.to_owned()
+        }
+    }
+}
+
+/// Hard link a file where the filesystem has links, and copy it where it does not.
+fn link(source: &Path, target: &Path) -> Result<(), std::io::Error> {
+    let mut staged = target.as_os_str().to_owned();
+    staged.push(".tmp");
+    let staged = PathBuf::from(staged);
+    let _ = fs::remove_file(&staged);
+    if fs::hard_link(source, &staged).is_err() {
+        fs::copy(source, &staged)?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(error) = fs::set_permissions(&staged, fs::Permissions::from_mode(0o700)) {
+            let _ = fs::remove_file(&staged);
+            return Err(error);
+        }
+    }
+    fs::rename(&staged, target).inspect_err(|_| {
+        let _ = fs::remove_file(&staged);
+    })
+}
+
+/// Whether a path is a file this user can execute.
+fn is_executable(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.is_file() && metadata.permissions().mode() & 0o100 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        metadata.is_file()
+    }
+}
+
+/// The digest-named link to the cached binary, when one is cached.
+///
+/// Resolution reaches the cache without a downloader when no release was asked for.
+pub(crate) fn stable_cached_binary(binary_path: &Path) -> Option<PathBuf> {
+    let cache_dir = binary_path.parent()?;
+    let _held = cache_lock(cache_dir, &|message| warn_on_stderr(&message));
+    binary_path
+        .is_file()
+        .then(|| stable_binary(binary_path, &|message| warn_on_stderr(&message)))
 }
 
 /// The SHA-256 hex digest of a file.
@@ -473,10 +663,17 @@ impl Downloader {
         }
     }
 
-    /// [`Self::install`] without the record of whether the cache was replaced.
+    /// [`Self::install`] under the cache lock, without the record of whether the
+    /// cache was replaced.
     #[cfg(test)]
     fn download_binary(&self, version: &str) -> Result<PathBuf, Error> {
+        let _held = self.hold_cache();
         self.install(version).map_err(|failure| failure.error)
+    }
+
+    /// Hold the shared cache against other threads, processes and clients.
+    fn hold_cache(&self) -> CacheGuard {
+        cache_lock(&self.cache_dir, &|message| self.warn(message))
     }
 
     /// Download a release binary into the cache, verifying it before installing it.
@@ -581,7 +778,22 @@ impl Downloader {
     /// A cache that is the release asked for is reused; a stale one is replaced
     /// with a warning; a replacement that cannot be downloaded leaves the working
     /// cache in place, unless the download was refused for integrity reasons.
+    ///
+    /// The decision is made holding the shared cache lock, and what is returned
+    /// for the cache is a digest-named link no later install replaces.
     pub(crate) fn ensure_binary(&self, version: Option<&str>) -> Result<PathBuf, Error> {
+        let _held = self.hold_cache();
+        let binary_path = self.binary_path();
+        let chosen = self.ensure_binary_locked(version)?;
+        Ok(if chosen == binary_path {
+            stable_binary(&binary_path, &|message| self.warn(message))
+        } else {
+            chosen
+        })
+    }
+
+    /// [`Self::ensure_binary`], with the shared cache held.
+    fn ensure_binary_locked(&self, version: Option<&str>) -> Result<PathBuf, Error> {
         let binary_path = self.binary_path();
         let mut cached = None;
         if binary_path.is_file() {
@@ -758,6 +970,11 @@ mod tests {
 
     fn digest_of(bytes: &[u8]) -> String {
         format!("{:x}", Sha256::digest(bytes))
+    }
+
+    /// The digest-named path a caller is handed for cached content.
+    fn linked(downloader: &Downloader, content: &[u8]) -> PathBuf {
+        stable_binary_path(&downloader.binary_path(), &digest_of(content))
     }
 
     fn release_routes(version: &str, body: &[u8], served_digest: &str) -> HashMap<String, Vec<u8>> {
@@ -1081,7 +1298,7 @@ mod tests {
         assert!(downloader.stale_cache_reason(None).is_none());
         assert_eq!(
             downloader.ensure_binary(Some("v0.0.7")).expect("the cache"),
-            downloader.binary_path()
+            linked(downloader, body)
         );
         assert!(downloader.warnings().is_empty());
     }
@@ -1150,7 +1367,7 @@ mod tests {
         assert!(downloader.stale_cache_reason(Some("latest")).is_none());
         assert_eq!(
             downloader.ensure_binary(Some("latest")).expect("the cache"),
-            downloader.binary_path()
+            linked(downloader, body)
         );
     }
 
@@ -1337,5 +1554,123 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Whether another process can take the cache lock right now, or `None` when
+    /// there is no probe to ask with.
+    #[cfg(unix)]
+    fn lock_is_free(path: &Path) -> Option<bool> {
+        // The Python client takes exactly this lock, so the probe is also a check
+        // that the two contend with one another.
+        let probe = "import fcntl, os, sys\n\
+                     fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o600)\n\
+                     try:\n\
+                     \x20   fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n\
+                     except OSError:\n\
+                     \x20   sys.exit(1)\n\
+                     sys.exit(0)\n";
+        let status = std::process::Command::new("python3")
+            .arg("-c")
+            .arg(probe)
+            .arg(path)
+            .status()
+            .ok()?;
+        Some(status.success())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_cache_lock_shuts_other_processes_out() {
+        let harness = harness("locked", HashMap::new(), PinTable::new());
+        let downloader = &harness.downloader;
+        let path = lock_path(&downloader.cache_dir);
+        assert_eq!(path, downloader.binary_path().with_extension("lock"));
+
+        let held = downloader.hold_cache();
+        let Some(free) = lock_is_free(&path) else {
+            eprintln!("skipping the cross-process lock test: python3 is not installed");
+            return;
+        };
+        assert!(!free, "another process took the lock while it was held");
+        drop(held);
+        assert_eq!(lock_is_free(&path), Some(true));
+        assert!(downloader.warnings().is_empty());
+    }
+
+    #[test]
+    fn an_installer_waits_for_the_cache_to_be_free() {
+        let body = b"the release asked for";
+        let digest = digest_of(body);
+        let harness = harness(
+            "waited",
+            release_routes("v0.1.0", body, &digest),
+            pin_table("v0.1.0", &digest),
+        );
+        let downloader = &harness.downloader;
+        let binary_path = downloader.binary_path();
+
+        let held = downloader.hold_cache();
+        thread::scope(|scope| {
+            let installing = scope.spawn(|| downloader.ensure_binary(Some("v0.1.0")));
+            thread::sleep(Duration::from_millis(250));
+            assert!(
+                !binary_path.exists(),
+                "a second installer replaced the cache while it was held"
+            );
+            drop(held);
+            let path = installing
+                .join()
+                .expect("the installing thread")
+                .expect("install");
+            assert_eq!(fs::read(path).expect("read the link"), body);
+        });
+        assert_eq!(fs::read(&binary_path).expect("read the cache"), body);
+    }
+
+    #[test]
+    fn what_a_caller_is_handed_is_not_replaced_by_a_later_install() {
+        let first = b"the release installed first";
+        let second = b"the release installed after it";
+        let mut routes = release_routes("v0.1.0", first, &digest_of(first));
+        routes.extend(release_routes("v0.2.0", second, &digest_of(second)));
+        let mut pins = pin_table("v0.1.0", &digest_of(first));
+        pins.get_mut(REPO).expect("the pinned repository").insert(
+            "v0.2.0".to_owned(),
+            pin_table("v0.2.0", &digest_of(second))[REPO]["v0.2.0"].clone(),
+        );
+        let harness = harness("stable", routes, pins);
+        let downloader = &harness.downloader;
+
+        let handed = downloader.ensure_binary(Some("v0.1.0")).expect("install");
+        assert_eq!(handed, linked(downloader, first));
+        assert_ne!(handed, downloader.binary_path());
+
+        let replaced = downloader.ensure_binary(Some("v0.2.0")).expect("replace");
+        assert_eq!(fs::read(&handed).expect("read the link"), first);
+        assert_eq!(fs::read(replaced).expect("read the link"), second);
+        assert_eq!(
+            fs::read(downloader.binary_path()).expect("read the cache"),
+            second
+        );
+        assert!(!temporaries_left(&downloader.cache_dir));
+    }
+
+    #[test]
+    fn a_cache_reached_without_a_downloader_is_handed_over_by_digest() {
+        let harness = harness("linked", HashMap::new(), PinTable::new());
+        let downloader = &harness.downloader;
+        let binary_path = downloader.binary_path();
+        assert!(stable_cached_binary(&binary_path).is_none());
+
+        let body = b"the cached binary";
+        fs::write(&binary_path, body).expect("place a cache");
+        let handed = stable_cached_binary(&binary_path).expect("the cache");
+        assert_eq!(handed, linked(downloader, body));
+
+        // Installed the way an install installs: written aside, then renamed over.
+        let staged = binary_path.with_extension("next");
+        fs::write(&staged, b"another release entirely").expect("stage a release");
+        fs::rename(&staged, &binary_path).expect("replace the cache");
+        assert_eq!(fs::read(handed).expect("read the link"), body);
     }
 }

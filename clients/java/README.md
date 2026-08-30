@@ -216,8 +216,8 @@ MiB for a binary, 8 MiB for a checksum, manifest, bundle or release listing —
 so an origin cannot answer a download with an endless body. Deciding whether the
 cache is the release asked for and replacing it when it is not is done holding
 `~/.opensysml/bin/sysml-grpc.lock`, so concurrent connections — in this JVM, in
-another, or in the Python client, which takes the same lock over the same span —
-do not install over each other.
+another, or in the Python or Rust clients, which take the same lock over the same
+span — do not install over each other.
 
 What a service is started from is not the shared path but a hard link to it
 named for its digest, `~/.opensysml/bin/sysml-grpc-<first 16 hex>`, made while

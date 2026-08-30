@@ -89,6 +89,18 @@ recorded digest before reusing a cache, so a hand-swapped binary is not read as
 the release it displaced. Without `$HOME` (`$USERPROFILE` on Windows) there is no
 cache: resolution says so rather than treating the working directory as a home.
 
+The cache is one path several clients install over, so two things guard it. The
+whole check-and-install is done holding `~/.opensysml/bin/sysml-grpc.lock` — the
+same advisory lock the Python and Java clients take (`fcntl` on POSIX,
+`LockFileEx` on Windows) — so no client pairs one release's bytes with another's
+metadata; a lock that cannot be taken across processes is reported and the
+install still runs, rather than failing to resolve a binary at all. What the
+caller is then handed is not the cache path but a hard link (a copy where the
+filesystem has no links) beside it named for its own digest,
+`sysml-grpc-<first 16 hex digits>`, which the Python and Java clients name the
+same way: a later install replaces the cache, never the file that was verified
+and is about to be started.
+
 | Variable | Effect |
 |---|---|
 | `$OPENSYSML_GRPC_BINARY` | Explicit binary path; nothing is downloaded. |
