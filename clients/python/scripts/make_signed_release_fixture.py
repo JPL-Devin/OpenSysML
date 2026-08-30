@@ -11,9 +11,13 @@ exactly as it verifies a production one. Every signature is real; only the
 instance that issued them is local, so the crypto and the bundle format the
 client parses are the real ones.
 
+The Node client verifies the same fixtures, recorded into its own tree with --out.
+
 Run it to re-record the fixtures after changing what they must contain:
 
     python clients/python/scripts/make_signed_release_fixture.py
+    python clients/python/scripts/make_signed_release_fixture.py \
+        --out clients/node/test/fixtures/signed_release
 
 The fixtures are committed, so this is not run by the test suite.
 """
@@ -45,6 +49,11 @@ DEFINITION = 'c3d1a44e-6cb7-4a2f-8f60-2b1d0e3f9a15'
 OTHER_ISSUER = 'https://oidc.circleci.com/org/00000000-0000-4000-8000-000000000000'
 OTHER_PROJECT = 'https://circleci.com/api/v2/projects/11111111-1111-4111-8111-111111111111'
 OTHER_DEFINITION = '22222222-2222-4222-8222-222222222222'
+
+# The fixture log's base URL, whose host is also its checkpoint origin: a verifier
+# derives the origin it expects from the base URL, so the two must agree.
+REKOR_BASE_URL = 'https://rekor.fixture.invalid'
+CHECKPOINT_ORIGIN = 'rekor.fixture.invalid'
 
 # Fixed times, so a re-recorded fixture verifies the same way: nothing in
 # verification is compared against the current time, and a signature's validity
@@ -367,11 +376,11 @@ def _checkpoint(rekor_key, root_hash, tree_size):
     Returns:
         str: Signed note envelope
     """
-    note = f'opensysml.fixture.rekor - 0\n{tree_size}\n{_b64(root_hash)}\n'
+    note = f'{CHECKPOINT_ORIGIN} - 0\n{tree_size}\n{_b64(root_hash)}\n'
     signature = rekor_key.sign(note.encode('utf-8'), ec.ECDSA(hashes.SHA256()))
     key_id = _key_id(rekor_key.public_key())
     signed = _b64(key_id[:4] + signature)
-    return f'{note}\n\u2014 opensysml.fixture.rekor {signed}\n'
+    return f'{note}\n\u2014 {CHECKPOINT_ORIGIN} {signed}\n'
 
 
 def _bundle(manifest, cert, signing_key, rekor_key, integrated_at=INTEGRATED_AT):
@@ -465,7 +474,7 @@ def _trusted_root(ca_cert, ct_key, rekor_key):
         'mediaType': 'application/vnd.dev.sigstore.trustedroot+json;version=0.1',
         'tlogs': [
             {
-                'baseUrl': 'https://rekor.fixture.invalid',
+                'baseUrl': REKOR_BASE_URL,
                 'hashAlgorithm': 'SHA2_256',
                 'publicKey': public_key(rekor_key),
                 'logId': {'keyId': _b64(_key_id(rekor_key.public_key()))},

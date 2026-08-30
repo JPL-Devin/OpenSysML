@@ -30,11 +30,13 @@ test("every platform package is built, described and digest-checked", () => {
   };
   assert.equal(manifest.packages.length, ASSETS.length);
 
+  // The optional dependencies also carry the sigstore packages a signed manifest is
+  // verified with, so only the platform packages are compared.
   const optional = Object.keys(
     (JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as {
       optionalDependencies: Record<string, string>;
     }).optionalDependencies,
-  );
+  ).filter((name) => name.startsWith("@opensysml/sysml-grpc-"));
   assert.deepEqual(
     manifest.packages.map((entry) => entry.name).sort(),
     optional.sort(),

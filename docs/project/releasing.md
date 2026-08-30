@@ -199,10 +199,10 @@ OIDC token exchanged with Fulcio, so **no signing key exists anywhere**: nothing
 to provision, rotate or leak. The job then verifies its own bundle and fails the
 release rather than publish a signature clients would reject.
 
-That signature is what lets `opensysml` install a core release published after
-it. For a release it pins no digest for, the client downloads the manifest and
-the bundle, verifies the bundle, and takes the asset's digest from the verified
-manifest. The only signature it accepts is this pipeline's:
+That signature is what lets the Python and Node clients install a core release
+published after them. For a release a client pins no digest for, it downloads
+the manifest and the bundle, verifies the bundle, and takes the asset's digest
+from the verified manifest. The only signature accepted is this pipeline's:
 
 | | |
 |---|---|
@@ -215,7 +215,8 @@ what CircleCI puts in the certificate. The client currently accepts any pipeline
 definition of that project, because no signature of the real one exists to read
 the identifier off yet — the verify step in `build-release` prints it, so after
 the first signed release set it as `definition=` on the signer in
-`clients/python/opensysml/signing.py` to narrow the pin to the one pipeline.
+`clients/python/opensysml/signing.py` and in `clients/node/src/node/signing.ts`
+to narrow the pin to the one pipeline.
 
 Anything short of a verified manifest is refused exactly as an unpinned release
 is today: no bundle asset, a bundle that does not verify, another signer, a
@@ -555,8 +556,11 @@ All six share the version in `clients/node/package.json`, because the
 published first, so `@opensysml/client` is never on the registry naming a
 version of them that is not. Where no package matches — a platform with no
 release build — the client falls back to `$OPENSYSML_BINARY`, a binary in
-`~/.opensysml/bin/`, `sysml-grpc` on `$PATH`, or an explicit external service;
-it never downloads anything. See `clients/node/README.md`.
+`~/.opensysml/bin/`, a release download into that cache, `sysml-grpc` on
+`$PATH`, or an explicit external service. That download is the Python client's:
+the same shared cache and metadata, the same pinned digests, and the same
+signed-manifest verification, refusing a release it can neither pin nor verify.
+See `clients/node/README.md`.
 
 `build-node-binaries` cross-compiles the five binaries from the tagged revision
 and writes a `.sha256` sidecar beside each; `npm run platform-packages` refuses

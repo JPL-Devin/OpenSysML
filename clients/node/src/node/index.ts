@@ -11,8 +11,47 @@ import { baseUrl, encodingOf, interceptors } from "../core/transport.js";
 import { acquirePrivateService } from "./service.js";
 
 export * from "../core/index.js";
-export { BINARY_ENV, BinaryNotFoundError, binaryName, platformPackage, resolveBinary } from "./binary.js";
-export type { Binary } from "./binary.js";
+export {
+  ALLOW_UNPINNED_ENV,
+  API_BASE_URL,
+  BINARY_ENV,
+  BinaryNotFoundError,
+  DEFAULT_GITHUB_REPO,
+  NETWORK_TIMEOUT_MS,
+  PINNED_SHA256,
+  RELEASES_BASE_URL,
+  REPO_ENV,
+  VERSION_ENV,
+  binaryName,
+  cachedBinaryPath,
+  cachedRelease,
+  defaultGithubRepo,
+  downloadBinary,
+  expectedDigest,
+  metadataPath,
+  pinnedDigest,
+  platformPackage,
+  releaseAssetName,
+  releaseDownloadUrl,
+  resolveBinary,
+  resolveLatestVersion,
+  signedManifestDigest,
+  staleCacheReason,
+  unpinnedDownloadsAllowed,
+  verifyChecksum,
+  writeMetadata,
+} from "./binary.js";
+export type { Binary, CacheMetadata, DownloadOptions, PinnedDigests } from "./binary.js";
+export {
+  BUNDLE_ASSET,
+  MANIFEST_ASSET,
+  ReleaseSigner,
+  SIGNED_MANIFEST_SIGNERS,
+  manifestDigest,
+  signerFor,
+  verifiedManifestDigest,
+  verifyManifest,
+} from "./signing.js";
 export { PrivateService, currentPrivateService } from "./service.js";
 
 /** Names a service to connect to instead of starting one. */

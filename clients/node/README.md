@@ -196,18 +196,75 @@ from its `os`/`cpu` metadata:
 | `@opensysml/sysml-grpc-win32-x64` | Windows x86-64 |
 
 That is a normal registry install: npm verifies the tarball against the
-registry's integrity hash, and **there is no postinstall script and nothing is
-ever downloaded by this client**. An unsupported platform installs none of them
-and fails on first use with a message naming every way to supply one, rather
-than fetching something.
+registry's integrity hash, and **there is no postinstall script**, so a platform
+with a package never downloads anything.
 
 Resolution order:
 
 1. `$OPENSYSML_BINARY` — a path to a binary, which wins over everything;
 2. the platform package above;
-3. `~/.opensysml/bin/sysml-grpc`, which the Python client also uses;
+3. `~/.opensysml/bin/sysml-grpc`, the cache the Python client also uses, filled
+   by a verified download of a release when nothing above resolved;
 4. `sysml-grpc` on `$PATH`;
 5. otherwise: an error, or connect to a service someone else runs.
+
+### Downloading a release
+
+`resolveBinary()` downloads a `sysml-grpc-<os>-<arch>` release asset into
+`~/.opensysml/bin/sysml-grpc` (`.exe` on Windows) when the steps above resolved
+nothing — the same cache, the same metadata beside it in `sysml-grpc.json`, and
+the same trust model as the Python client, so either client can use what the
+other downloaded. `process.platform`/`process.arch` map to the five published
+pairs (`linux-amd64`, `linux-arm64`, `darwin-amd64`, `darwin-arm64`,
+`windows-amd64`); any other pair is an error naming it rather than a fetch.
+
+| variable | effect |
+| --- | --- |
+| `$OPENSYSML_BINARY` | a path to a binary, which wins over everything |
+| `$OPENSYSML_GRPC_VERSION` | the release to download, else `latest` from the releases API |
+| `$OPENSYSML_GITHUB_REPO` | the release repository, default `Open-MBEE/OpenSysML` |
+| `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD` | `<owner/repo>`, or `1` for any repository: accept same-origin trust |
+
+The download goes to a temporary file, is hashed, and only then replaces the
+cache path atomically and is `chmod 0700`ed (POSIX); a download that does not
+verify leaves an existing cached binary and its metadata untouched and removes
+the temporary file. A cached binary of another version is replaced with a
+warning rather than used, and every request times out after 15 seconds. A
+transport failure falls back to a cached binary that still verifies; a digest or
+signature failure never does.
+
+### What a download is verified against
+
+In order, and each step refuses rather than falling back to the next:
+
+1. **A shipped pin.** `release-digests.json`, synced from
+   `clients/release-digests.json` by `python3 scripts/sync-release-digests.py`
+   and published in the tarball, pins the SHA-256 of every asset of a release.
+   Where it pins one, that is what the bytes must hash to, and a served
+   `.sha256` that disagrees is tampering: the download fails.
+2. **The release's signed manifest.** With no pin, the client downloads
+   `SHA256SUMS.txt` and its sigstore bundle `SHA256SUMS.txt.bundle`, verifies
+   the bundle against the release pipeline's certificate identity (the CircleCI
+   OIDC issuer and project in `src/node/signing.ts`), and takes the digest from
+   the verified manifest. Anything short of that — no bundle, a signature that
+   does not verify, another signer, an expired certificate, a manifest changed
+   after signing, a repository with no known signer, or the optional sigstore
+   packages not installed — is refused exactly as an unpinned release is. A
+   manifest digest that contradicts a pin is an error, not a downgrade.
+3. **Nothing.** The download fails naming the version, because the `.sha256`
+   served beside a binary comes from whoever served the binary: it detects
+   corruption but not a compromised release.
+   `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1` for any
+   repository) accepts that same-origin trust explicitly, with a warning saying
+   so. It is never a way around a failed signature or a pin mismatch.
+
+Verification uses `@sigstore/verify` with `@sigstore/bundle`,
+`@sigstore/protobuf-specs` and `@sigstore/tuf` — the packages the `sigstore`
+package is itself built from — as **optional** dependencies, so the client
+installs and works without them and a release with no pin is refused where they
+are missing. They are used rather than `sigstore.verify` because that entry
+point takes its trusted root only through TUF, and both the Python client and
+these tests verify against a recorded trusted root offline.
 
 The per-platform packages are built by
 `npm run platform-packages -- --binaries <dir>`, and each binary is packaged
