@@ -31,6 +31,36 @@ DEFAULT_GITHUB_REPO = 'Open-MBEE/OpenSysML'
 # that happens while the service-start lock is held, so it must not hang there.
 NETWORK_TIMEOUT = 15
 
+#: A release binary is tens of megabytes, so anything this large is not one.
+MAX_BINARY_BYTES = 512 * 1024 * 1024
+
+#: Checksums, manifests, signature bundles and release JSON are kilobytes.
+MAX_METADATA_BYTES = 8 * 1024 * 1024
+
+
+def read_bounded(response, url, limit):
+    """Read a response, refusing one too large to be what was asked for.
+
+    The cache lock is held over a download, so an endless body would otherwise
+    hold every other client out while filling this process's memory.
+
+    Args:
+        response: An open HTTP response
+        url (str): What is being read, for the refusal
+        limit (int): Most bytes the body may be
+
+    Returns:
+        bytes: The body
+
+    Raises:
+        ConnectionError: If the body is longer than the limit
+    """
+    body = response.read(limit + 1)
+    if len(body) > limit:
+        raise ConnectionError(f"{url} is larger than {limit} bytes")
+    return body
+
+
 #: The pinned digests, shipped beside this module as package data.
 PINNED_DIGESTS_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'release-digests.json'
@@ -215,7 +245,7 @@ def signed_manifest_digest(version, asset, github_repo=None):
         url = release_download_url(version, name, repo)
         try:
             with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
-                downloaded[name] = response.read()
+                downloaded[name] = read_bounded(response, url, MAX_METADATA_BYTES)
         except (OSError, http.client.HTTPException) as e:
             raise UnsignedReleaseError(
                 f"{version} of {repo} publishes no readable {name} ({url}: {e}), so "
@@ -243,7 +273,9 @@ def resolve_latest_version(github_repo=None):
     url = f'https://api.github.com/repos/{repo}/releases/latest'
     try:
         with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
-            release = json.loads(response.read().decode('utf-8'))
+            release = json.loads(
+                read_bounded(response, url, MAX_METADATA_BYTES).decode('utf-8')
+            )
     # urlopen leaves read-phase failures unwrapped, so a timeout, a reset
     # connection or a truncated body is not a URLError.
     except (OSError, http.client.HTTPException, ValueError) as e:
@@ -574,7 +606,9 @@ def _download_binary_locked(version, github_repo):
     try:
         # Download checksum file first
         with urllib.request.urlopen(checksum_url, timeout=NETWORK_TIMEOUT) as response:
-            checksum_content = response.read().decode('utf-8')
+            checksum_content = read_bounded(
+                response, checksum_url, MAX_METADATA_BYTES
+            ).decode('utf-8')
         
         # Parse checksum (format: "hexdigest  filename\n")
         served_checksum = checksum_content.split()[0]
@@ -598,7 +632,7 @@ def _download_binary_locked(version, github_repo):
         
         # Download binary
         with urllib.request.urlopen(binary_url, timeout=NETWORK_TIMEOUT) as response:
-            binary_data = response.read()
+            binary_data = read_bounded(response, binary_url, MAX_BINARY_BYTES)
         
         # Write to temporary file first
         temp_path = binary_path + '.tmp'

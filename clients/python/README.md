@@ -129,7 +129,10 @@ The cache at `~/.opensysml/bin/sysml-grpc` is shared with the other clients, so
 deciding whether it is the release asked for and replacing the binary and its
 metadata is done holding `~/.opensysml/bin/sysml-grpc.lock` (`fcntl.lockf`, the
 same lock a Java `FileLock` takes). Concurrent installers therefore queue rather
-than pair one release's bytes with another's record.
+than pair one release's bytes with another's record. Because that lock is held
+over the download, every response is read bounded — 512 MiB for a binary, 8 MiB
+for a checksum, manifest, bundle or release JSON — so an endless body is refused
+rather than filling memory while other clients wait.
 
 At release time, after the service binaries are published and final:
 

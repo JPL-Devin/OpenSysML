@@ -150,13 +150,16 @@ class _Response:
     def __exit__(self, *exc):
         return False
 
-    def read(self):
-        """The body served.
+    def read(self, size=None):
+        """The body served, at most as much of it as was asked for.
+
+        Args:
+            size (int, optional): Most bytes to return
 
         Returns:
             bytes: Content
         """
-        return self._content
+        return self._content if size is None else self._content[:size]
 
 
 def served_release(binary=None, manifest=None, bundle=None):

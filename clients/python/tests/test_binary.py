@@ -340,6 +340,43 @@ def test_download_binary_overwrites_the_cache_it_replaces(cache, pins):
     assert not os.path.exists(path + '.tmp')
 
 
+class _EndlessBody:
+    """A response that is always longer than whatever is read of it."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *closing):
+        return False
+
+    def read(self, size=None):
+        assert size is not None, 'an unbounded read of this would never return'
+        return b'\0' * size
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='the probe takes a POSIX fcntl lock')
+def test_download_binary_refuses_a_body_too_large_to_be_a_release(cache, pins, monkeypatch):
+    """Test an endless body is refused, rather than held for while filling memory."""
+    monkeypatch.setattr('opensysml.binary.MAX_BINARY_BYTES', 4096)
+    binary_path = cache(b'the release before', version='v0.0.5')
+    checksum = pins(hashlib.sha256(b'the release asked for').hexdigest(), 'v0.0.7')
+    responses = [
+        Mock(__enter__=Mock(return_value=Mock(read=Mock(
+            return_value=f"{checksum}  sysml-grpc-linux-amd64\n".encode()))),
+            __exit__=Mock(return_value=False)),
+        _EndlessBody(),
+    ]
+    with patch('urllib.request.urlopen', side_effect=responses):
+        with patch('opensysml.binary.detect_platform', return_value=('linux', 'amd64')):
+            with pytest.raises(OpenSysMLConnectionError, match='is larger than'):
+                download_binary(version='v0.0.7')
+
+    with open(binary_path, 'rb') as f:
+        assert f.read() == b'the release before'
+    assert not os.path.exists(binary_path + '.tmp')
+    assert _lock_is_free(lock_path())
+
+
 def test_download_binary_reports_a_cache_it_cannot_install_over(cache, pins):
     """Test a binary held open by a running service is reported, not raised raw."""
     binary_path = cache(version='v0.0.5')
