@@ -372,10 +372,12 @@ func (c *compiler) typingTargetSeen(sym *symbols.Symbol, seen map[*symbols.Symbo
 		return nil
 	}
 	seen[sym] = true
+	declared := false
 	for _, relationship := range semantics.RelationshipsOf(sym) {
 		if relationship == nil || relationship.Kind != ast.RelTyping || relationship.Target == nil {
 			continue
 		}
+		declared = true
 		target := relationship.Target
 		if reference, ok := target.(*ast.FeatureReference); ok {
 			target = reference.Name
@@ -389,6 +391,9 @@ func (c *compiler) typingTargetSeen(sym *symbols.Symbol, seen map[*symbols.Symbo
 				return canonical
 			}
 		}
+	}
+	if declared {
+		return nil // an explicit type that fails to resolve must not inherit one
 	}
 	for _, target := range c.model.RedefinedFeatures(sym) {
 		if resolved := c.typingTargetSeen(target, seen); resolved != nil {

@@ -670,6 +670,34 @@ func TestCompileFollowsRedefinitionLineage(t *testing.T) {
 	}
 }
 
+func TestCompileRejectsUnresolvedRedefinedQueryType(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part telescope;
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part def NameList :> List {
+			calc names : Names {
+				in root = telescope;
+			}
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part items : NameList {
+				calc redefines names : Missing {
+					in root = telescope;
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	var planning *Error
+	if !errors.As(err, &planning) || planning.Kind != ErrorUnknownQuery {
+		t.Fatalf("error = %+v", err)
+	}
+}
+
 func TestCompileReportsInheritedInvalidContent(t *testing.T) {
 	fixture := loadPlanningFixture(t, `
 		part telescope;
