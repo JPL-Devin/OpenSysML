@@ -1,0 +1,544 @@
+package docplan
+
+import (
+	"errors"
+	"os"
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+const planningImports = `
+private import DocumentQueries::*;
+private import KerML::Root::Element;
+private import ScalarValues::*;
+`
+
+const fixtureDoc = "document-planning.sysml"
+
+type planningFixture struct {
+	index    *symbols.Index
+	model    *semantics.Model
+	resolver *resolve.Resolver
+}
+
+func loadPlanningFixture(t *testing.T, body string) planningFixture {
+	t.Helper()
+	return loadPlanningSource(t, "package Observatory {"+planningImports+body+"}")
+}
+
+func loadPlanningFixtureFile(t *testing.T, path string) planningFixture {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	return loadPlanningSource(t, string(content))
+}
+
+func loadPlanningSource(t *testing.T, content string) planningFixture {
+	t.Helper()
+	index := symbols.NewIndex()
+	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
+		t.Fatalf("load standard library: %v", err)
+	}
+	p := parser.New(source.New(fixtureDoc, []byte(content)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("parse fixture: %v", p.Diagnostics)
+	}
+	index.AddDocument(fixtureDoc, root)
+	index.ExpandWildcardImports()
+	resolver := resolve.New(index)
+	return planningFixture{
+		index:    index,
+		model:    semantics.NewModel(resolver),
+		resolver: resolver,
+	}
+}
+
+func (f planningFixture) symbol(t *testing.T, name string) *symbols.Symbol {
+	t.Helper()
+	matches := symbols.PreferDeclared(f.index.LookupQualified("Observatory::" + name))
+	if len(matches) != 1 {
+		t.Fatalf("lookup %s: got %d symbols", name, len(matches))
+	}
+	return matches[0]
+}
+
+func (f planningFixture) compile(t *testing.T, name string) (*Plan, error) {
+	t.Helper()
+	return Compile(f.index, f.model, f.resolver, f.symbol(t, name))
+}
+
+func (f planningFixture) mustCompile(t *testing.T, name string) *Plan {
+	t.Helper()
+	plan, err := f.compile(t, name)
+	if err != nil {
+		t.Fatalf("compile %s: %v", name, err)
+	}
+	return plan
+}
+
+func planningError(t *testing.T, err error) *Error {
+	t.Helper()
+	var planning *Error
+	if !errors.As(err, &planning) {
+		t.Fatalf("error = %v, want *docplan.Error", err)
+	}
+	return planning
+}
+
+func TestCompileTelescopeDocument(t *testing.T) {
+	fixture := loadPlanningFixtureFile(t, "testdata/telescope_document.sysml")
+	plan := fixture.mustCompile(t, "MassReport")
+	if plan.Name() != "Observatory::MassReport" {
+		t.Fatalf("name = %q", plan.Name())
+	}
+	if plan.Title() != "Telescope Mass Report" {
+		t.Fatalf("title = %q", plan.Title())
+	}
+	if !plan.Origin().Located() || plan.Origin().Doc != fixtureDoc {
+		t.Fatalf("origin = %+v", plan.Origin())
+	}
+	content := plan.Content()
+	if len(content) != 2 {
+		t.Fatalf("content = %d nodes, want 2", len(content))
+	}
+
+	intro := content[0]
+	if intro.Kind() != ContentParagraph || intro.Name() != "intro" {
+		t.Fatalf("intro = %s %q", intro.Kind(), intro.Name())
+	}
+	if intro.Text() != "Mass rollup for the telescope assembly." || intro.Query() != nil {
+		t.Fatalf("intro text = %q query = %v", intro.Text(), intro.Query())
+	}
+	if !intro.Origin().Located() {
+		t.Fatalf("intro origin = %+v", intro.Origin())
+	}
+
+	breakdown := content[1]
+	if breakdown.Kind() != ContentSection || breakdown.Title() != "Subsystem Masses" {
+		t.Fatalf("breakdown = %s %q", breakdown.Kind(), breakdown.Title())
+	}
+	children := breakdown.Children()
+	if len(children) != 3 {
+		t.Fatalf("breakdown children = %d, want 3", len(children))
+	}
+
+	masses := children[0]
+	if masses.Kind() != ContentTable || masses.Caption() != "All subsystems by mass" {
+		t.Fatalf("masses = %s %q", masses.Kind(), masses.Caption())
+	}
+	query := masses.Query()
+	if query == nil || query.Entry() != "Observatory::SubsystemTable" {
+		t.Fatalf("masses query = %+v", query)
+	}
+	if query.Program() == nil || query.Program().Entry() != "Observatory::SubsystemTable" {
+		t.Fatalf("masses program = %+v", query.Program())
+	}
+	bindings := query.Bindings()
+	if len(bindings) != 1 || bindings[0].Parameter() != "root" {
+		t.Fatalf("masses bindings = %+v", bindings)
+	}
+	values := bindings[0].Values()
+	if len(values) != 1 {
+		t.Fatalf("masses binding values = %d", len(values))
+	}
+	element, ok := values[0].Element()
+	if !ok || symbols.FQNOf(element) != "Observatory::telescope" {
+		t.Fatalf("masses binding element = %v", element)
+	}
+	if !values[0].Origin().Located() {
+		t.Fatalf("masses binding origin = %+v", values[0].Origin())
+	}
+
+	heavy := children[1]
+	if heavy.Kind() != ContentSection || heavy.Title() != "Heavy Subsystems" {
+		t.Fatalf("heavy = %s %q", heavy.Kind(), heavy.Title())
+	}
+	heavyChildren := heavy.Children()
+	if len(heavyChildren) != 2 {
+		t.Fatalf("heavy children = %d, want 2", len(heavyChildren))
+	}
+	summary := heavyChildren[0]
+	if summary.Kind() != ContentParagraph || summary.Text() != "" || summary.Query() == nil {
+		t.Fatalf("summary = %s %q %v", summary.Kind(), summary.Text(), summary.Query())
+	}
+	if summary.Query().Entry() != "Observatory::HeavySubsystemNames" {
+		t.Fatalf("summary query = %q", summary.Query().Entry())
+	}
+	summaryBindings := summary.Query().Bindings()
+	if len(summaryBindings) != 2 || summaryBindings[1].Parameter() != "threshold" {
+		t.Fatalf("summary bindings = %+v", summaryBindings)
+	}
+	threshold, ok := summaryBindings[1].Values()[0].String()
+	if !ok || threshold != "10" {
+		t.Fatalf("summary threshold = %q", threshold)
+	}
+	heavyItems := heavyChildren[1]
+	if heavyItems.Kind() != ContentList || heavyItems.Style() != ListNumber {
+		t.Fatalf("heavyItems = %s %q", heavyItems.Kind(), heavyItems.Style())
+	}
+
+	missing := children[2]
+	if missing.Kind() != ContentSection || len(missing.Children()) != 2 {
+		t.Fatalf("missing = %s %d", missing.Kind(), len(missing.Children()))
+	}
+	if missing.Children()[1].Style() != ListBullet {
+		t.Fatalf("missing list style = %q", missing.Children()[1].Style())
+	}
+}
+
+func TestCompiledPlanIsImmutable(t *testing.T) {
+	fixture := loadPlanningFixtureFile(t, "testdata/telescope_document.sysml")
+	plan := fixture.mustCompile(t, "MassReport")
+	content := plan.Content()
+	content[0] = Content{}
+	if plan.Content()[0].Kind() != ContentParagraph {
+		t.Fatal("mutating returned content changed the plan")
+	}
+	section := plan.Content()[1]
+	children := section.Children()
+	children[0] = Content{}
+	if section.Children()[0].Kind() != ContentTable {
+		t.Fatal("mutating returned children changed the plan")
+	}
+	query := section.Children()[0].Query()
+	bindings := query.Bindings()
+	bindings[0] = Binding{}
+	if query.Bindings()[0].Parameter() != "root" {
+		t.Fatal("mutating returned bindings changed the plan")
+	}
+}
+
+func TestIsDocumentDefinition(t *testing.T) {
+	fixture := loadPlanningFixtureFile(t, "testdata/telescope_document.sysml")
+	if !IsDocumentDefinition(fixture.index, fixture.model, fixture.symbol(t, "MassReport")) {
+		t.Fatal("MassReport should be a document definition")
+	}
+	if IsDocumentDefinition(fixture.index, fixture.model, fixture.symbol(t, "Subsystem")) {
+		t.Fatal("Subsystem should not be a document definition")
+	}
+	if IsDocumentDefinition(fixture.index, fixture.model, fixture.symbol(t, "SubsystemTable")) {
+		t.Fatal("SubsystemTable should not be a document definition")
+	}
+}
+
+func TestCompileRejectsNonDocument(t *testing.T) {
+	fixture := loadPlanningFixtureFile(t, "testdata/telescope_document.sysml")
+	_, err := fixture.compile(t, "Subsystem")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorNotDocumentDefinition {
+		t.Fatalf("kind = %s", planning.Kind)
+	}
+}
+
+func TestCompileRequiresContext(t *testing.T) {
+	_, err := Compile(nil, nil, nil, nil)
+	planning := planningError(t, err)
+	if planning.Kind != ErrorInvalidContext {
+		t.Fatalf("kind = %s", planning.Kind)
+	}
+}
+
+func TestCompileReportsMissingTitle(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def Untitled :> Document {
+			part intro : Paragraph {
+				attribute redefines text = "text";
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Untitled")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorMissingTitle {
+		t.Fatalf("kind = %s", planning.Kind)
+	}
+	if !planning.Origin.Located() {
+		t.Fatalf("origin = %+v", planning.Origin)
+	}
+}
+
+func TestCompileReportsMissingSectionTitle(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part body : Section {
+				part intro : Paragraph {
+					attribute redefines text = "text";
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorMissingTitle || planning.Content != "Observatory::Report::body" {
+		t.Fatalf("error = %+v", planning)
+	}
+}
+
+func TestCompileReportsInvalidContent(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def Widget;
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part stray : Widget;
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorInvalidContent || planning.Content != "Observatory::Report::stray" {
+		t.Fatalf("error = %+v", planning)
+	}
+}
+
+func TestCompileReportsNestedDocument(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def Inner :> Document {
+			attribute redefines title = "Inner";
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part nested : Inner;
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorNestedDocument {
+		t.Fatalf("kind = %s", planning.Kind)
+	}
+}
+
+func TestCompileReportsParagraphWithoutContent(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part empty : Paragraph;
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorMissingText {
+		t.Fatalf("kind = %s", planning.Kind)
+	}
+}
+
+func TestCompileReportsParagraphWithTextAndQuery(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part telescope;
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part both : Paragraph {
+				attribute redefines text = "text";
+				calc names : Names {
+					in root = telescope;
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorConflictingText {
+		t.Fatalf("kind = %s", planning.Kind)
+	}
+}
+
+func TestCompileReportsTableWithoutQuery(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part empty : Table;
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorMissingQuery {
+		t.Fatalf("kind = %s", planning.Kind)
+	}
+}
+
+func TestCompileReportsUnknownQuery(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		calc def NotAQuery {
+			return result : Element[0..*] ordered;
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part table : Table {
+				calc rows : NotAQuery;
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorUnknownQuery {
+		t.Fatalf("kind = %s", planning.Kind)
+	}
+}
+
+func TestCompileWrapsQueryPlanningFailure(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		calc def Broken :> Query {
+			in root : Element;
+			OwnedElements(source = missing)
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part table : Table {
+				calc rows : Broken {
+					in root = Report;
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorQueryPlanning {
+		t.Fatalf("kind = %s", planning.Kind)
+	}
+	var inner *queryplan.Error
+	if !errors.As(err, &inner) || inner.Kind != queryplan.ErrorUnknownParameter {
+		t.Fatalf("inner = %v", planning.Err)
+	}
+}
+
+func TestCompileReportsUnknownParameter(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part telescope;
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part list : List {
+				calc items : Names {
+					in root = telescope;
+					in bogus = telescope;
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorUnknownParameter || planning.Parameter != "bogus" {
+		t.Fatalf("error = %+v", planning)
+	}
+	if !planning.Origin.Located() {
+		t.Fatalf("origin = %+v", planning.Origin)
+	}
+}
+
+func TestCompileReportsMissingBinding(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part list : List {
+				calc items : Names;
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorMissingBinding || planning.Parameter != "root" {
+		t.Fatalf("error = %+v", planning)
+	}
+}
+
+func TestCompileReportsBindingTypeMismatch(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part list : List {
+				calc items : Names {
+					in root = "telescope";
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorBindingType || planning.Parameter != "root" {
+		t.Fatalf("error = %+v", planning)
+	}
+}
+
+func TestCompileReportsBindingMultiplicityMismatch(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		calc def Names :> Query {
+			in root : Element[1];
+			OwnedElements(source = root)
+		}
+		part telescope;
+		part instruments;
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part list : List {
+				calc items : Names {
+					in root = (telescope, instruments);
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorBindingMultiplicity || planning.Parameter != "root" {
+		t.Fatalf("error = %+v", planning)
+	}
+}
+
+func TestCompileReportsInvalidListStyle(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		calc def Names :> Query {
+			in root : Element;
+			OwnedElements(source = root)
+		}
+		part telescope;
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part list : List {
+				attribute redefines style = "roman";
+				calc items : Names {
+					in root = telescope;
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorInvalidStyle || planning.Actual != "roman" {
+		t.Fatalf("error = %+v", planning)
+	}
+}
+
+func TestCompileReportsNonLiteralTitle(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def Report :> Document {
+			attribute redefines title = 42;
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorInvalidAttribute || planning.Parameter != "title" {
+		t.Fatalf("error = %+v", planning)
+	}
+}

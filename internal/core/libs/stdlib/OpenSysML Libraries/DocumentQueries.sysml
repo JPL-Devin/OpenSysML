@@ -75,4 +75,26 @@ library package DocumentQueries {
 		in properties : String[1..*] ordered;
 		return result : Element[0..*] ordered;
 	}
+
+	abstract part def Document {
+		attribute title : String[1];
+	}
+
+	abstract part def Section {
+		attribute title : String[1];
+	}
+
+	abstract part def ContentBlock;
+
+	part def Paragraph :> ContentBlock {
+		attribute text : String[0..1];
+	}
+
+	part def Table :> ContentBlock {
+		attribute caption : String[0..1];
+	}
+
+	part def List :> ContentBlock {
+		attribute style : String[0..1];
+	}
 }
