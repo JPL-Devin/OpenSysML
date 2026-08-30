@@ -38,7 +38,33 @@ model.edit().add_part("Vehicle", "engine", type="Engine").apply()
 Use `opensysml.loads(text, language="kerml")` for inline KerML content.
 
 Every call goes through the `sysml-grpc` service, which `opensysml` starts automatically from
-`~/.opensysml/bin/sysml-grpc`; the guide below describes how to install it there.
+the first place it finds one; the guide below describes how to install it there.
+
+## Resolving the service binary
+
+Every client resolves the service binary in the same order, and this one is no
+exception:
+
+1. **`$OPENSYSML_BINARY`**, when set and non-empty: exactly that path is started.
+   If it names something that is not an executable file, that is an error naming
+   the variable and the path — an explicit instruction is never a fallback.
+2. **The shared cache** `~/.opensysml/bin/sysml-grpc` (`sysml-grpc.exe` on
+   Windows), where a verified download puts it and where `make build` can put
+   your own build.
+3. **A release download** into that cache, when a release is asked for by
+   `ensure_binary(version=...)` or `$OPENSYSML_GRPC_VERSION`. A download that was
+   asked for and failed is an error, not a reason to try `$PATH`, whose binary is
+   of no known release.
+4. **`$PATH`**: the first executable `sysml-grpc` (`sysml-grpc.exe` on Windows)
+   on it, which is what a package manager or `go install` leaves behind.
+
+With none of those, the error lists everywhere it looked and what would fix it.
+
+A binary from `$OPENSYSML_BINARY` or `$PATH` is used exactly as it is found: it
+belongs to no release, so **it is not verified against the pinned digests below**,
+not copied into the shared cache, and started at its own path rather than a
+digest-named link. Naming it, or installing it on `$PATH`, is trusting it; the
+pinned-digest trust model covers downloads only.
 
 ## Service ownership
 

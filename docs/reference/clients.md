@@ -83,8 +83,8 @@ rather than bytes on the wire. See [service transports](service-transports.md).
 Only the Python and Node clients download a binary, and both pin a SHA-256 per release asset and
 verify the release's sigstore-signed manifest before they do. The others resolve one that is
 already there, and the resolution order is the same everywhere:
-`$OPENSYSML_GRPC_BINARY` (`$OPENSYSML_BINARY` in Node) first, then `~/.opensysml/bin/sysml-grpc`
-— where a verified download puts it — then `PATH`. The Node client adds its
+`$OPENSYSML_GRPC_BINARY` (`$OPENSYSML_BINARY` in the Node and Python clients) first, then
+`~/.opensysml/bin/sysml-grpc` — where a verified download puts it — then `PATH`. The Node client adds its
 per-platform npm package, whose tarball npm verifies, with no postinstall script; it is preferred
 over a download, which happens only when no package matches the platform.
 The Java client additionally verifies a digest the caller pins with `expectedBinarySha256`.

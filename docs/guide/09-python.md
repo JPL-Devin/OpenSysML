@@ -20,8 +20,10 @@ Those projects publish wheels for CPython 3.10 and later only, which is the rang
 
 ## Getting the service binary
 
-Every call is made through `sysml-grpc`. The client starts an instance of the service and expects
-to find the binary at `~/.opensysml/bin/sysml-grpc`. There are three ways to provide it:
+Every call is made through `sysml-grpc`. The client starts an instance of the service, resolving
+the binary in the order every client shares — `$OPENSYSML_BINARY`, then
+`~/.opensysml/bin/sysml-grpc` (`.exe` on Windows), then a release download into that cache when
+one is asked for, then `sysml-grpc` on `$PATH`. There are five ways to provide it:
 
 ```bash
 # 1. Download the release build (verified against the digest pinned in opensysml)
@@ -32,11 +34,19 @@ export OPENSYSML_GRPC_VERSION=latest      # or a tag like v0.0.5
 
 # 3. Build from source
 make build-grpc && mkdir -p ~/.opensysml/bin && cp bin/sysml-grpc ~/.opensysml/bin/
+
+# 4. Name a build to start, wherever it is
+export OPENSYSML_BINARY=$PWD/bin/sysml-grpc
+
+# 5. Install one on $PATH, with a package manager or `go install`
 ```
 
-If none of these is done, `connect()` raises `ConnectionError` rather than downloading anything
-unrequested. `OPENSYSML_GITHUB_REPO` overrides the repository releases are fetched from (default
-`Open-MBEE/OpenSysML`).
+If none of these is done, `connect()` raises `ConnectionError` naming everywhere it looked, rather
+than downloading anything unrequested. A binary from `$OPENSYSML_BINARY` or `$PATH` belongs to no
+release, so it is started as it is found: not copied into the cache and not verified against the
+pinned digests below. `$OPENSYSML_BINARY` naming something that is not executable is an error
+rather than a reason to look elsewhere. `OPENSYSML_GITHUB_REPO` overrides the repository releases
+are fetched from (default `Open-MBEE/OpenSysML`).
 
 A download records its release tag, repository and digest beside the binary
 (`~/.opensysml/bin/sysml-grpc.json`), so a cache left by an earlier release, or by another

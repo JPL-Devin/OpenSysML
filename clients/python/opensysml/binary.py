@@ -89,6 +89,10 @@ PINNED_SHA256 = _load_pinned_digests()
 #: binary.
 ALLOW_UNPINNED_ENV = 'OPENSYSML_ALLOW_UNPINNED_DOWNLOAD'
 
+#: Names a build to start in place of the cache, a download or one on $PATH,
+#: under the name the Node client reads for the same purpose.
+BINARY_ENV = 'OPENSYSML_BINARY'
+
 
 def default_github_repo():
     """Repository releases are downloaded from.
@@ -336,17 +340,86 @@ def release_asset_name(goos=None, goarch=None):
     return name + '.exe' if goos == 'windows' else name
 
 
+def service_binary_name(goos=None):
+    """Name the service binary is installed under, on the cache and on $PATH.
+
+    Args:
+        goos (str, optional): GOOS, detected when omitted
+
+    Returns:
+        str: 'sysml-grpc', or 'sysml-grpc.exe' on Windows
+    """
+    if goos is None:
+        goos, _ = detect_platform()
+    return 'sysml-grpc.exe' if goos == 'windows' else 'sysml-grpc'
+
+
 def get_binary_path():
     """Get the local path where sysml-grpc binary should be stored.
     
     Returns:
         str: Absolute path to binary (e.g. ~/.opensysml/bin/sysml-grpc)
     """
-    os_name, _ = detect_platform()
-    binary_name = 'sysml-grpc.exe' if os_name == 'windows' else 'sysml-grpc'
-    
     base_dir = os.path.expanduser('~/.opensysml/bin')
-    return os.path.join(base_dir, binary_name)
+    return os.path.join(base_dir, service_binary_name())
+
+
+def is_executable(path):
+    """Whether a path is a file this process may execute.
+
+    Args:
+        path (str): Path to a candidate binary
+
+    Returns:
+        bool: True when it is a regular file with the execute bit for this user
+    """
+    return os.path.isfile(path) and os.access(path, os.X_OK)
+
+
+def named_binary():
+    """The build $OPENSYSML_BINARY names, used as it is and verified against nothing.
+
+    There is no release to pin such a binary to, so it is neither copied into the
+    shared cache nor checked against the pinned digests: naming it is trusting it.
+
+    Returns:
+        str or None: The path named, exactly as named, or None when the
+            variable is unset or empty
+
+    Raises:
+        ConnectionError: If it names something that is not an executable file,
+            since an explicit instruction that cannot be honoured is an error
+            rather than a reason to look elsewhere
+    """
+    named = os.environ.get(BINARY_ENV) or ''
+    if named == '':
+        return None
+    if not is_executable(named):
+        raise ConnectionError(
+            f"${BINARY_ENV} names {named}, which is not an executable file. Point it "
+            f"at a sysml-grpc build, or unset it to resolve one from "
+            f"{get_binary_path()} or $PATH."
+        )
+    return named
+
+
+def binary_on_path():
+    """The first executable sysml-grpc on $PATH, used as it is and unverified.
+
+    A binary an operator installed is of no known release, so it is neither
+    copied into the shared cache nor checked against the pinned digests.
+
+    Returns:
+        str or None: Path to the binary, or None when $PATH holds none
+    """
+    name = service_binary_name()
+    for directory in (os.environ.get('PATH') or '').split(os.pathsep):
+        if not directory:
+            continue
+        candidate = os.path.join(directory, name)
+        if is_executable(candidate):
+            return candidate
+    return None
 
 
 def lock_path():
@@ -788,17 +861,26 @@ def _remove_quietly(path):
 
 def ensure_binary(force_download=False, version=None, github_repo=None):
     """Ensure sysml-grpc binary is available, downloading if necessary.
-    
+
+    Resolution is the order every client shares: $OPENSYSML_BINARY, then the
+    shared cache at ~/.opensysml/bin, then a release download when one is asked
+    for, then a sysml-grpc on $PATH.
+
     A cached binary is reused only when it is the release asked for; when no
     version is asked for, whatever is cached stands, locally built included. A
-    replacement that cannot be downloaded leaves the working cache in place. The
-    whole decision is made holding the shared cache lock, so a concurrent
-    installer - in another process or in the Java client - cannot install between
-    the check and the replacement.
+    replacement that cannot be downloaded leaves the working cache in place, and
+    a download that was asked for and failed is an error rather than a fall
+    through to $PATH, whose binary is of no known release. The whole cache
+    decision is made holding the shared cache lock, so a concurrent installer -
+    in another process or in the Java client - cannot install between the check
+    and the replacement.
 
     What is returned for the shared cache is a link to it under its own digest,
     not the cache path itself: the cache is replaced in place, so starting it
-    after the lock is dropped could start whatever was installed since.
+    after the lock is dropped could start whatever was installed since. A binary
+    from $OPENSYSML_BINARY or $PATH is returned at its own path instead, and is
+    used as it is found: it belongs to no release, so it is neither copied into
+    the cache nor checked against the pinned digests.
     
     Args:
         force_download (bool): If True, download even if binary exists
@@ -806,7 +888,8 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
                                  or 'latest' for the newest release. If None,
                                  $OPENSYSML_GRPC_VERSION is used; without it
                                  auto-download is disabled and the binary must be
-                                 pre-installed via `make build` or downloaded manually.
+                                 pre-installed via `make build`, named by
+                                 $OPENSYSML_BINARY, or found on $PATH.
     
     Returns:
         str: Path to binary, digest-named when it is the shared cache
@@ -817,17 +900,41 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     binary_path = get_binary_path()
     if version is None:
         version = os.environ.get('OPENSYSML_GRPC_VERSION') or None
+
+    # Neither of these touches the cache, so neither takes the lock over it.
+    named = named_binary()
+    if named is not None:
+        return named
+
     with cache_lock():
         chosen = _ensure_binary_locked(
             force_download, version, github_repo, binary_path
         )
-        return stable_binary() if chosen == binary_path else chosen
+        if chosen is not None:
+            return stable_binary() if chosen == binary_path else chosen
+
+    on_path = binary_on_path()
+    if on_path is not None:
+        return on_path
+
+    raise ConnectionError(
+        f"Binary not found at {binary_path}, named by ${BINARY_ENV} or on $PATH, and "
+        f"auto-download disabled. Looked at: ${BINARY_ENV}, {binary_path}, $PATH.\n"
+        f"  fix: build it (`make build-grpc`) and set ${BINARY_ENV} to the result, or\n"
+        f"       ask for a release to download by setting $OPENSYSML_GRPC_VERSION "
+        f"(e.g. latest), or passing version= here, or\n"
+        f"       install a sysml-grpc on $PATH, or\n"
+        f"       start a service yourself and pass its address to connect()."
+    )
 
 
 def _ensure_binary_locked(force_download, version, github_repo, binary_path):
-    """ensure_binary, with the shared cache held."""
-    from opensysml.errors import ConnectionError
+    """The cache or a download of the release asked for, with the shared cache held.
 
+    Returns:
+        str or None: The binary chosen, or None when nothing is cached and no
+            release was asked for, which leaves $PATH to answer
+    """
     # Check if binary already exists and is executable
     cached = None
     if not force_download and os.path.exists(binary_path):
@@ -841,13 +948,9 @@ def _ensure_binary_locked(force_download, version, github_repo, binary_path):
                 stacklevel=3,
             )
     
-    # If no binary and no version specified, cannot auto-download
+    # Nothing cached and no release asked for, so $PATH is next, outside the lock.
     if version is None:
-        raise ConnectionError(
-            f"Binary not found at {binary_path} and auto-download disabled. "
-            f"Build via `make build`, set $OPENSYSML_GRPC_VERSION, or specify "
-            f"version= parameter for download."
-        )
+        return None
     
     # Download binary with explicit version
     try:
