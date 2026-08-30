@@ -152,7 +152,8 @@ echo "%load model.sysml
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
 | `--render-all <dir>` | | Render every declared view into the directory, one artifact per view |
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
-| `--output <file>` | `-o` | Write the conversion or the rendering to a file instead of stdout |
+| `--render-document <name>` | | Compile a document definition — a `part def` specializing `DocumentQueries::Document` — run its queries against the model and write the rendered CommonMark Markdown, as `%render-document` does. Markdown is the only document form this build writes, and `-json` does not apply |
+| `--output <file>` | `-o` | Write the conversion, the rendering or the rendered document to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
 

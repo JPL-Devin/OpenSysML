@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 776 semantic rules: **687 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 783 semantic rules: **694 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -1852,9 +1852,32 @@ above. It does not alter SysML v2 language semantics.
 | Evaluating a plan executes each referenced query through the execution engine with the planned bindings and produces an immutable document tree — sections, paragraphs of text runs, tables of typed rows and cells, lists of items — in declaration and query-result order, with provenance on every node tracing to the model declaration, query row or projected value behind it | `docir/evaluate.go` `Evaluate`, `evaluator.evaluateNode`, `evaluator.executeQuery`, `executionValue`; `docir/ir.go` | `docir/evaluate_test.go:TestEvaluateTelescopeDocument`, `:TestEvaluatedDocumentIsImmutable` | ✅ Implemented |
 | An empty query result evaluates to a valid empty table or list preserving the projected column schema, and query execution failures — an invalid context or plan, an unsupported operation, an exhausted budget — surface as typed document-evaluation failures wrapping the execution error | `docir/evaluate.go` `evaluator.evaluateTable`, `evaluator.evaluateList`, `evaluator.executeQuery`; `docir/errors.go` | `docir/evaluate_test.go:TestEvaluateTelescopeDocument`, `:TestEvaluateRequiresPlanAndContext`, `:TestEvaluateWrapsQueryExecutionFailure`, `:TestEvaluateHonorsExecutionBudget` | ✅ Implemented |
 
-**Known limitations:** Markdown (or any other) rendering of the document tree is not implemented,
-and documents are not exposed through the REPL or CLI. A query-backed paragraph renders each
-projected value as one text run; richer inline formatting is not modeled.
+**Known limitations:** A query-backed paragraph renders each projected value as one text run;
+richer inline formatting is not modeled.
+
+---
+
+## Native Document Rendering (`internal/core/docrender`) — OpenSysML extension
+
+**Standard:** none. This is the rendering layer of the OpenSysML document-query extension: an
+evaluated document tree written out as a backend-specific artifact. The renderer consumes only the
+document IR — never plans, symbols or ASTs — so a rendering cannot drift from what evaluation
+produced. Markdown is the first and only backend.
+
+| Rule | Implementation (file:function) | Tests | Status |
+|---|---|---|---|
+| An evaluated document renders to deterministic CommonMark-compatible Markdown: the title as a level-1 ATX heading, each section one level deeper saturating at 6, paragraphs from space-joined text runs, and bullet and numbered lists, all in the IR's declaration order | `docrender/markdown.go` `Markdown`, `renderContent`, `heading`, `renderList` | `docrender/markdown_test.go:TestMarkdownTelescopeReportGolden`, `:TestMarkdownGoldenStructure` | ✅ Implemented |
+| A table renders as a GitHub-flavored pipe table under its caption, headed by the projected column names; a query without projected columns gets a single `element` column, and an empty result still writes its header and delimiter while an empty list renders as nothing | `docrender/markdown.go` `renderTable`, `tableCells`, `writeTableRow` | `docrender/markdown_test.go:TestMarkdownTelescopeReportGolden`, `:TestMarkdownGoldenStructure` | ✅ Implemented |
+| Typed values render faithfully as plain text: strings unquoted, integers in base 10, reals in shortest notation, booleans as `true`/`false`, unbounded multiplicity as `*`, and elements by qualified name with the declared name as fallback | `docrender/markdown.go` `valueText`, `cellText` | `docrender/markdown_test.go:TestMarkdownTelescopeReportGolden`, `:TestMarkdownGoldenStructure` | ✅ Implemented |
+| Content cannot corrupt document structure: `\|`, `*`, `_`, `#`, backticks, backslashes, brackets and HTML-sensitive characters are backslash-escaped, newlines fold to spaces in prose and `<br>` in table cells, and a leading quote, bullet or ordered-list marker in a paragraph is escaped | `docrender/markdown.go` `inline`, `tableCell`, `blockStart`, `inlineEscaper` | `docrender/markdown_test.go:TestMarkdownEscaping`, `:TestMarkdownGoldenStructure` | ✅ Implemented |
+| A whole document renders end to end from native SysML v2 source — parse, resolve, semantics, document planning, evaluation, rendering — locked by a committed golden Markdown file with an `-update` flag; a nil document is a typed rendering failure | `docrender/markdown.go` `Markdown`; `docrender/errors.go` | `docrender/markdown_test.go:TestMarkdownTelescopeReportGolden`, `:TestMarkdownNilDocument` | ✅ Implemented |
+| `%render-document <name>` compiles the named document, runs its queries and prints the Markdown; an unknown name, a non-document and extra arguments are reported as errors, since a document binds its queries' parameters in the model | `repl/docrender.go` `Session.RenderDocumentMarkdown`, `Session.doRenderDocument`; `repl/meta.go` (command table, dispatch) | `repl/docrender_test.go:TestRenderDocumentPrintsMarkdown`, `:TestRenderDocumentUsageAndErrors`, `:TestRenderDocumentListedInHelpAndCompletion` | ✅ Implemented |
+| `-render-document <name>` renders a document from a script, writing the Markdown to `-o` or stdout with notices on stderr; a document that could not be rendered leaves the unresolved exit status, and combining it with checks, `-json`, or another writing mode is refused | `cmd/sysml/main.go` (flag, mode exclusions); `cmd/sysml/render_document.go` `runRenderDocument` | `cmd/sysml/render_document_test.go:TestRenderDocumentFlag`, `:TestRenderDocumentOutputFile`, `:TestRenderDocumentFlagConflicts` | ✅ Implemented |
+
+**Known limitations:** Markdown is the only backend; PDF or other document forms are not produced.
+Documents are not exposed through the LSP server or any RPC surface. The document IR is not
+reported as JSON, so `-json` does not combine with `-render-document`. Inline formatting inside
+text runs (emphasis, links, code) is not modeled; run content renders as escaped plain text.
 
 ---
 

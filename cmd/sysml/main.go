@@ -114,6 +114,7 @@ var (
 	renderView    string
 	renderAllDir  string
 	renderForm    string
+	renderDoc     string
 	strictMode    bool
 	modelChecks   checks
 )
@@ -213,6 +214,12 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form markdown\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -o view.mmd\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-all rendered\n")
+	fmt.Fprintf(w, "\nRendering a document:\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport           # Markdown on stdout\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -o report.md\n")
+	fmt.Fprintf(w, "\nA document is a part def specializing DocumentQueries::Document. Its queries\n")
+	fmt.Fprintf(w, "are bound in the model and run against it, and the result is written as\n")
+	fmt.Fprintf(w, "CommonMark-compatible Markdown, the only document form this build writes.\n")
 	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
 	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
 	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
@@ -254,6 +261,7 @@ func runCLI() int {
 	flag.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
 	flag.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
 	flag.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
+	flag.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
@@ -321,8 +329,8 @@ func runCLI() int {
 		case convertFormat != "":
 			fmt.Fprintln(os.Stderr, "sysml: -render-all and -convert each write documents out; ask for one per run")
 			return 2
-		case queryText != "" || len(evalExprs) > 0 || fromFormat != "":
-			fmt.Fprintln(os.Stderr, "sysml: -render-all cannot be combined with -query, -eval or -from")
+		case queryText != "" || len(evalExprs) > 0 || fromFormat != "" || renderDoc != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-all cannot be combined with -query, -eval, -from or -render-document")
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,
@@ -343,8 +351,8 @@ func runCLI() int {
 			return refuse(modelChecks,
 				"-convert writes the model out and decides nothing about it; check it in its own run")
 		}
-		if renderView != "" {
-			fmt.Fprintln(os.Stderr, "sysml: -convert and -render each write a document out; ask for one per run")
+		if renderView != "" || renderDoc != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -convert, -render and -render-document each write a document out; ask for one per run")
 			return 2
 		}
 		if err := runConvert(args); err != nil {
@@ -354,8 +362,8 @@ func runCLI() int {
 	}
 
 	if queryText != "" {
-		if modelChecks.requested() || renderView != "" || len(evalExprs) > 0 || outputPath != "" || fromFormat != "" {
-			fmt.Fprintln(os.Stderr, "sysml: -query cannot be combined with checks, -eval, -render, -output or -from")
+		if modelChecks.requested() || renderView != "" || renderDoc != "" || len(evalExprs) > 0 || outputPath != "" || fromFormat != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -query cannot be combined with checks, -eval, -render, -render-document, -output or -from")
 			return 2
 		}
 		return runQuery(args, queryText)
@@ -366,7 +374,32 @@ func runCLI() int {
 			return refuse(modelChecks,
 				"-render writes a view out and decides nothing about the model; check it in its own run")
 		}
+		if renderDoc != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -render and -render-document each write a document out; ask for one per run")
+			return 2
+		}
 		if err := runRender(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if renderDoc != "" {
+		switch {
+		case modelChecks.checksOnly():
+			return refuse(modelChecks,
+				"-render-document writes a document out and decides nothing about the model; check it in its own run")
+		case modelChecks.jsonOut:
+			fmt.Fprintln(os.Stderr, "sysml: -render-document writes Markdown, not JSON; -json reports checks")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-render-document writes a document out and decides nothing about the model; check it in its own run")
+		case len(evalExprs) > 0 || fromFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-document cannot be combined with -eval or -from")
+			return 2
+		}
+		if err := runRenderDocument(args); err != nil {
 			return fail(err)
 		}
 		return exitHolds
