@@ -148,16 +148,16 @@ public final class ServiceRegistry {
   }
 
   /**
-   * Identity is the file, not the name: a download replaces the cached binary in place, and a child
-   * running the release it displaced must not be handed to a connection asking for the new one.
+   * Identity is the file itself, under whatever name: the cache and the digest-named link a service
+   * is started from are one file, while a download replaces the cache in place under the same name.
    */
   private static String key(Path binary) {
     try {
       Path real = binary.toRealPath();
-      Object inode = Files.readAttributes(real, BasicFileAttributes.class).fileKey();
-      // The inode where the filesystem has one; where it does not (Windows), the contents, because
-      // a replacement can have the size and modification time of what it displaced.
-      return real + "@" + (inode != null ? inode : digest(real));
+      Object fileKey = Files.readAttributes(real, BasicFileAttributes.class).fileKey();
+      // The file key is device and inode, so it separates filesystems too; where there is none
+      // (Windows), the contents, because a replacement can have the size and time it displaced.
+      return fileKey != null ? fileKey.toString() : digest(real);
     } catch (IOException e) {
       // Unreadable is not a reason to start a second child for the same name.
       return binary.toAbsolutePath().toString();

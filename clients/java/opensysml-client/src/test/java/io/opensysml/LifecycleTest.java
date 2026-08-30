@@ -94,6 +94,24 @@ class LifecycleTest {
   }
 
   @Test
+  void oneBinaryUnderTwoNamesSharesOneService(@TempDir Path directory) throws Exception {
+    // A download starts its service from a digest-named link to the cache, so keying by name
+    // would start a second child for the connection that resolved the cache itself.
+    Path binary = directory.resolve("sysml-grpc");
+    Files.copy(ServiceBinary.required(), binary);
+    binary.toFile().setExecutable(true, true);
+    Path link = directory.resolve("sysml-grpc-abcdef");
+    Files.createLink(link, binary);
+
+    try (Connection cached = Connection.open(ConnectionOptions.builder().binaryPath(binary).build());
+        Connection linked = Connection.open(ConnectionOptions.builder().binaryPath(link).build())) {
+      assertEquals(1, ServiceRegistry.sharedServiceCount());
+      assertEquals(cached.address(), linked.address());
+    }
+    assertEquals(0, ServiceRegistry.sharedServiceCount());
+  }
+
+  @Test
   void anIsolatedServiceIsNotShared() throws Exception {
     try (Connection shared = Connection.open(ServiceBinary.options().build());
         Connection isolated =
