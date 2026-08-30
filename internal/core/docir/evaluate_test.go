@@ -88,7 +88,7 @@ func (f evaluationFixture) plan(t *testing.T, name string) *docplan.Plan {
 
 func (f evaluationFixture) evaluate(t *testing.T, name string) (*Document, error) {
 	t.Helper()
-	return Evaluate(f.plan(t, name), f.context(), queryexec.Options{})
+	return Evaluate(f.plan(t, name), f.context(), queryexec.Options{}, nil)
 }
 
 func (f evaluationFixture) mustEvaluate(t *testing.T, name string) *Document {
@@ -281,18 +281,18 @@ func TestEvaluatedDocumentIsImmutable(t *testing.T) {
 }
 
 func TestEvaluateRequiresPlanAndContext(t *testing.T) {
-	_, err := Evaluate(nil, queryexec.Context{}, queryexec.Options{})
+	_, err := Evaluate(nil, queryexec.Context{}, queryexec.Options{}, nil)
 	var evaluation *Error
 	if !errors.As(err, &evaluation) || evaluation.Kind != ErrorInvalidPlan {
 		t.Fatalf("error = %v", err)
 	}
-	_, err = Evaluate(&docplan.Plan{}, queryexec.Context{}, queryexec.Options{})
+	_, err = Evaluate(&docplan.Plan{}, queryexec.Context{}, queryexec.Options{}, nil)
 	if !errors.As(err, &evaluation) || evaluation.Kind != ErrorInvalidPlan {
 		t.Fatalf("error = %v", err)
 	}
 	fixture := loadEvaluationFixtureFile(t, "testdata/telescope_document.sysml")
 	plan := fixture.plan(t, "MassReport")
-	_, err = Evaluate(plan, queryexec.Context{}, queryexec.Options{})
+	_, err = Evaluate(plan, queryexec.Context{}, queryexec.Options{}, nil)
 	if !errors.As(err, &evaluation) || evaluation.Kind != ErrorInvalidContext {
 		t.Fatalf("error = %v", err)
 	}
@@ -331,7 +331,7 @@ func TestEvaluateWrapsQueryExecutionFailure(t *testing.T) {
 func TestEvaluateHonorsExecutionBudget(t *testing.T) {
 	fixture := loadEvaluationFixtureFile(t, "testdata/telescope_document.sysml")
 	plan := fixture.plan(t, "MassReport")
-	_, err := Evaluate(plan, fixture.context(), queryexec.Options{VisitBudget: 1})
+	_, err := Evaluate(plan, fixture.context(), queryexec.Options{VisitBudget: 1}, nil)
 	var evaluation *Error
 	if !errors.As(err, &evaluation) || evaluation.Kind != ErrorQueryExecution {
 		t.Fatalf("error = %v", err)

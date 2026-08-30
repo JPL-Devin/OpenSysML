@@ -44,7 +44,8 @@ func (s *Session) RenderDocumentMarkdown(invocation string) (string, error) {
 	}
 	document, err := docir.Evaluate(plan,
 		queryexec.Context{Index: idx, Resolver: resolver, Model: model},
-		queryexec.Options{})
+		queryexec.Options{},
+		s.sessionSourceText())
 	if err != nil {
 		return "", err
 	}

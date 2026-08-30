@@ -2,6 +2,7 @@ package Observatory {
 	private import DocumentQueries::*;
 	private import KerML::Root::Element;
 	private import ScalarValues::*;
+	private import Views::*;
 
 	part def Subsystem {
 		attribute mass : Real;
@@ -22,6 +23,37 @@ package Observatory {
 		part 'baffle|shroud *tricky*' : Subsystem {
 			attribute redefines mass = 1.5;
 		}
+	}
+
+	port def DataPort;
+
+	part def Camera {
+		port output : DataPort;
+	}
+
+	part def Recorder {
+		port input : DataPort;
+	}
+
+	part imagingChain {
+		part camera : Camera;
+		part recorder : Recorder;
+		connection link connect camera.output to recorder.input;
+	}
+
+	state def ObservatoryStates {
+		entry; then idle;
+		state idle;
+		state observing;
+		transition first idle then observing;
+		transition first observing then idle;
+	}
+
+	state operatingStates : ObservatoryStates;
+
+	view interconnectView {
+		expose imagingChain;
+		render asInterconnectionDiagram;
 	}
 
 	calc def Subsystems :> Query {
@@ -138,6 +170,22 @@ package Observatory {
 						in root = telescope;
 					}
 				}
+			}
+		}
+
+		part diagrams : Section {
+			attribute redefines title = "Diagrams";
+
+			part imaging : Diagram {
+				attribute redefines caption = "Imaging chain interconnection";
+				ref redefines source = interconnectView;
+			}
+
+			part states : Diagram {
+				attribute redefines caption = "Observatory states, left to right";
+				attribute redefines kind = "state";
+				attribute redefines direction = "LR";
+				ref redefines source = operatingStates;
 			}
 		}
 

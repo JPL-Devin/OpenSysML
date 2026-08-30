@@ -5,6 +5,7 @@ package docir
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryexec"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // ContentKind classifies one evaluated content node.
@@ -15,6 +16,7 @@ const (
 	ContentParagraph ContentKind = "paragraph"
 	ContentTable     ContentKind = "table"
 	ContentList      ContentKind = "list"
+	ContentDiagram   ContentKind = "diagram"
 )
 
 // ListStyle is the rendering style of an evaluated list.
@@ -50,7 +52,8 @@ func (i ListItem) Runs() []TextRun { return append([]TextRun(nil), i.runs...) }
 // Origin returns the query row behind the item.
 func (i ListItem) Origin() provenance.Origin { return i.origin }
 
-// Content is one evaluated content node: a section, paragraph, table, or list.
+// Content is one evaluated content node: a section, paragraph, table, list,
+// or diagram.
 type Content struct {
 	kind        ContentKind
 	name        string
@@ -61,6 +64,8 @@ type Content struct {
 	columns     []queryexec.Column
 	rows        []queryexec.Row
 	items       []ListItem
+	rendering   *view.Rendering
+	direction   view.Direction
 	children    []Content
 	query       string
 	queryOrigin provenance.Origin
@@ -76,7 +81,7 @@ func (c Content) Name() string { return c.name }
 // Title returns the title of a section.
 func (c Content) Title() string { return c.title }
 
-// Caption returns the caption of a table.
+// Caption returns the caption of a table or diagram.
 func (c Content) Caption() string { return c.caption }
 
 // Style returns the style of a list.
@@ -100,6 +105,14 @@ func (c Content) Items() []ListItem {
 	}
 	return out
 }
+
+// Rendering returns a copy of the resolved view content of a diagram, nil
+// for every other kind.
+func (c Content) Rendering() *view.Rendering { return c.rendering.Clone() }
+
+// Direction returns the stated flow direction of a diagram, empty for the
+// kind's default.
+func (c Content) Direction() view.Direction { return c.direction }
 
 // Children returns the nested content of a section in declaration order.
 func (c Content) Children() []Content { return cloneContent(c.children) }
@@ -127,6 +140,8 @@ func cloneContent(content []Content) []Content {
 			columns:     append([]queryexec.Column(nil), child.columns...),
 			rows:        append([]queryexec.Row(nil), child.rows...),
 			items:       child.Items(),
+			rendering:   child.rendering.Clone(),
+			direction:   child.direction,
 			children:    cloneContent(child.children),
 			query:       child.query,
 			queryOrigin: child.queryOrigin,

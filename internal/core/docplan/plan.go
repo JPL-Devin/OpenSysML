@@ -6,6 +6,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // ContentKind classifies one planned content node.
@@ -16,6 +17,7 @@ const (
 	ContentParagraph ContentKind = "paragraph"
 	ContentTable     ContentKind = "table"
 	ContentList      ContentKind = "list"
+	ContentDiagram   ContentKind = "diagram"
 )
 
 // ListStyle is the declared rendering style of a planned list.
@@ -117,7 +119,37 @@ func (q *QueryRef) Bindings() []Binding {
 // Origin returns the source declaration behind the reference.
 func (q *QueryRef) Origin() provenance.Origin { return q.origin }
 
-// Content is one planned content node: a section, paragraph, table, or list.
+// DiagramRef is a planned reference to what a diagram renders: a declared
+// view usage, or a plain element with the rendering kind the diagram states.
+type DiagramRef struct {
+	view      *symbols.Symbol
+	target    *symbols.Symbol
+	kind      view.Kind
+	stated    string
+	direction view.Direction
+	origin    provenance.Origin
+}
+
+// View returns the declared view usage the diagram renders, when it names one.
+func (d *DiagramRef) View() (*symbols.Symbol, bool) { return d.view, d.view != nil }
+
+// Target returns the plain element the diagram renders, when it names one.
+func (d *DiagramRef) Target() (*symbols.Symbol, bool) { return d.target, d.target != nil }
+
+// Kind returns the resolved rendering kind.
+func (d *DiagramRef) Kind() view.Kind { return d.kind }
+
+// Stated returns how the kind was decided, the way a rendering reports it.
+func (d *DiagramRef) Stated() string { return d.stated }
+
+// Direction returns the stated flow direction, empty for the kind's default.
+func (d *DiagramRef) Direction() view.Direction { return d.direction }
+
+// Origin returns the source declaration behind the reference.
+func (d *DiagramRef) Origin() provenance.Origin { return d.origin }
+
+// Content is one planned content node: a section, paragraph, table, list, or
+// diagram.
 type Content struct {
 	kind     ContentKind
 	name     string
@@ -126,6 +158,7 @@ type Content struct {
 	caption  string
 	style    ListStyle
 	query    *QueryRef
+	diagram  *DiagramRef
 	children []Content
 	origin   provenance.Origin
 }
@@ -142,7 +175,7 @@ func (c Content) Title() string { return c.title }
 // Text returns the static text of a paragraph, empty when query-backed.
 func (c Content) Text() string { return c.text }
 
-// Caption returns the declared caption of a table.
+// Caption returns the declared caption of a table or diagram.
 func (c Content) Caption() string { return c.caption }
 
 // Style returns the declared style of a list.
@@ -150,6 +183,9 @@ func (c Content) Style() ListStyle { return c.style }
 
 // Query returns the referenced query of a query-backed node, or nil.
 func (c Content) Query() *QueryRef { return c.query }
+
+// Diagram returns the planned view reference of a diagram node, or nil.
+func (c Content) Diagram() *DiagramRef { return c.diagram }
 
 // Children returns the nested content of a section in declaration order.
 func (c Content) Children() []Content { return cloneContent(c.children) }
@@ -168,6 +204,7 @@ func cloneContent(content []Content) []Content {
 			caption:  child.caption,
 			style:    child.style,
 			query:    child.query,
+			diagram:  child.diagram,
 			children: cloneContent(child.children),
 			origin:   child.origin,
 		}

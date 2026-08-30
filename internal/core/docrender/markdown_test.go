@@ -50,7 +50,7 @@ func renderFixtureDocument(t *testing.T, path, name string) string {
 	if err != nil {
 		t.Fatalf("compile document %s: %v", name, err)
 	}
-	document, err := docir.Evaluate(plan, queryexec.Context{Index: index, Resolver: resolver, Model: model}, queryexec.Options{})
+	document, err := docir.Evaluate(plan, queryexec.Context{Index: index, Resolver: resolver, Model: model}, queryexec.Options{}, nil)
 	if err != nil {
 		t.Fatalf("evaluate document %s: %v", name, err)
 	}

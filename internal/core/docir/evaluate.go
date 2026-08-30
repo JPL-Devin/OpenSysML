@@ -6,14 +6,17 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/docplan"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryexec"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // Evaluate evaluates a compiled document plan into an immutable document,
 // executing every referenced query through the query execution engine.
+// text supplies notation labels to diagram renderings and may be nil.
 func Evaluate(
 	plan *docplan.Plan,
 	context queryexec.Context,
 	options queryexec.Options,
+	text view.SourceText,
 ) (*Document, error) {
 	if !plan.Compiled() {
 		return nil, &Error{Kind: ErrorInvalidPlan}
@@ -21,7 +24,7 @@ func Evaluate(
 	if context.Index == nil || context.Resolver == nil || context.Model == nil {
 		return nil, &Error{Kind: ErrorInvalidContext, Document: plan.Name()}
 	}
-	e := &evaluator{document: plan.Name(), context: context, options: options}
+	e := &evaluator{document: plan.Name(), context: context, options: options, text: text}
 	content, err := e.evaluateContent(plan.Content())
 	if err != nil {
 		return nil, err
@@ -38,6 +41,7 @@ type evaluator struct {
 	document string
 	context  queryexec.Context
 	options  queryexec.Options
+	text     view.SourceText
 }
 
 func (e *evaluator) evaluateContent(planned []docplan.Content) ([]Content, error) {
@@ -72,6 +76,8 @@ func (e *evaluator) evaluateNode(node docplan.Content) (Content, error) {
 		return e.evaluateTable(node)
 	case docplan.ContentList:
 		return e.evaluateList(node)
+	case docplan.ContentDiagram:
+		return e.evaluateDiagram(node)
 	default:
 		return Content{}, &Error{
 			Kind:     ErrorInvalidPlan,
@@ -139,6 +145,52 @@ func (e *evaluator) evaluateList(node docplan.Content) (Content, error) {
 		query:       node.Query().Entry(),
 		queryOrigin: result.Origin(),
 		origin:      node.Origin(),
+	}, nil
+}
+
+// evaluateDiagram renders the planned view reference of a diagram through the
+// view engine, storing the backend-neutral rendering in the node.
+func (e *evaluator) evaluateDiagram(node docplan.Content) (Content, error) {
+	reference := node.Diagram()
+	if reference == nil {
+		return Content{}, &Error{
+			Kind:     ErrorInvalidPlan,
+			Document: e.document,
+			Content:  node.Name(),
+			Origin:   node.Origin(),
+		}
+	}
+	renderer := view.NewRenderer(e.context.Model, e.context.Resolver, e.text)
+	var rendering *view.Rendering
+	var err error
+	if declared, ok := reference.View(); ok {
+		rendering, err = renderer.Render(declared)
+	} else if target, ok := reference.Target(); ok {
+		rendering, err = renderer.RenderExposed([]*symbols.Symbol{target}, reference.Kind(), reference.Stated())
+	} else {
+		return Content{}, &Error{
+			Kind:     ErrorInvalidPlan,
+			Document: e.document,
+			Content:  node.Name(),
+			Origin:   node.Origin(),
+		}
+	}
+	if err != nil {
+		return Content{}, &Error{
+			Kind:     ErrorViewRendering,
+			Document: e.document,
+			Content:  node.Name(),
+			Origin:   reference.Origin(),
+			Err:      err,
+		}
+	}
+	return Content{
+		kind:      ContentDiagram,
+		name:      node.Name(),
+		caption:   node.Caption(),
+		rendering: rendering,
+		direction: reference.Direction(),
+		origin:    node.Origin(),
 	}, nil
 }
 
