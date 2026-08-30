@@ -211,6 +211,23 @@ func TestHoverKeepsDocCommentLineBreaks(t *testing.T) {
 	}
 }
 
+// The star a block comment runs down its edge is decoration; the doubled star
+// an author writes is emphasis, and survives.
+func TestHoverKeepsAuthoredMarkdownEmphasis(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	initMarkdownHover(t, s)
+	name := uri.File("/tmp/hm.sysml").Filename()
+	src := "package P {\n    /*\n     * **Warning** load-bearing.\n     */\n    part def Wheel;\n}\n"
+	ws.Open(name, []byte(src), 1)
+
+	res := hoverInSrc(t, s, name, src, strings.Index(src, "Wheel;"))
+	want := "```sysml\npart def Wheel\n```\n\n**Warning** load-bearing."
+	if res.Contents.Value != want {
+		t.Errorf("hover value = %q, want %q", res.Contents.Value, want)
+	}
+}
+
 func TestHoverFallsBackToPlainTextWithoutMarkdownCapability(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)

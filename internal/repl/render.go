@@ -157,7 +157,7 @@ func nameOrAnon(id ast.Identification) string {
 		return lexer.NameText(id.Name)
 	}
 	if id.ShortName != "" {
-		return "<" + id.ShortName + ">"
+		return "<" + lexer.NameText(id.ShortName) + ">"
 	}
 	return "<anonymous>"
 }

@@ -110,3 +110,11 @@ func TestSummariesEchoTheWrittenNotation(t *testing.T) {
 		}
 	}
 }
+
+// A short name is echoed as it must be written too, quotes and all.
+func TestSummariesQuoteUnrestrictedShortNames(t *testing.T) {
+	root := parseRoot("part def <'1'>;")
+	if got := renderMember(root.Members[0]); got != "part def <'1'>" {
+		t.Errorf("member = %q, want %q", got, "part def <'1'>")
+	}
+}

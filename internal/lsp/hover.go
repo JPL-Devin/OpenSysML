@@ -98,7 +98,11 @@ func commentBody(comment string) string {
 	for _, line := range strings.Split(comment, "\n") {
 		line = strings.TrimSpace(line)
 		line = strings.TrimPrefix(line, "//")
-		line = strings.TrimPrefix(line, "*")
+		// A doubled star opens Markdown emphasis the author wrote; a single one
+		// is the decoration a block comment runs down its left edge.
+		if !strings.HasPrefix(line, "**") {
+			line = strings.TrimPrefix(line, "*")
+		}
 		lines = append(lines, strings.TrimSpace(line))
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
