@@ -127,6 +127,14 @@ def test_a_binding_the_wire_cannot_carry_is_refused():
         build_bindings({"root": object()})
 
 
+def test_an_oversized_int_binding_is_refused():
+    """An int outside int64 is a caller error, not a protobuf ValueError."""
+    with pytest.raises(DocumentQueryError, match="signed 64-bit"):
+        build_bindings({"threshold": 1 << 63})
+    with pytest.raises(DocumentQueryError, match="signed 64-bit"):
+        build_bindings({"threshold": -(1 << 63) - 1})
+
+
 def test_no_bindings_is_an_empty_request():
     assert build_bindings(None) == []
     assert build_bindings({}) == []

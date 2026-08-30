@@ -130,6 +130,11 @@ def _bound_value(parameter, value):
     if isinstance(value, str):
         return sysml_pb2.DocumentValue(string_value=value)
     if isinstance(value, int):
+        if not -(1 << 63) <= value < (1 << 63):
+            raise DocumentQueryError(
+                f"binding {parameter!r} cannot carry {value!r}: an int must "
+                f"fit in a signed 64-bit integer"
+            )
         return sysml_pb2.DocumentValue(int_value=value)
     if isinstance(value, float):
         return sysml_pb2.DocumentValue(real_value=value)
