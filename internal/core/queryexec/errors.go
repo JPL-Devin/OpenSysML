@@ -2,6 +2,7 @@ package queryexec
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
@@ -24,6 +25,10 @@ const (
 	ErrorUnknownProperty       ErrorKind = "unknown-property"
 	ErrorUnknownClassification ErrorKind = "unknown-classification"
 	ErrorUnevaluableFeature    ErrorKind = "unevaluable-feature"
+	ErrorUnknownInvocation     ErrorKind = "unknown-invocation"
+	ErrorInvocationCycle       ErrorKind = "invocation-cycle"
+	ErrorInvocationDepth       ErrorKind = "invocation-depth"
+	ErrorInvocationBudget      ErrorKind = "invocation-budget"
 	ErrorVisitBudget           ErrorKind = "visit-budget"
 	ErrorResultType            ErrorKind = "result-type"
 	ErrorResultMultiplicity    ErrorKind = "result-multiplicity"
@@ -36,6 +41,8 @@ type Error struct {
 	Operation queryplan.Operation
 	Parameter string
 	Property  string
+	Target    string
+	Path      []string
 	Expected  string
 	Actual    string
 	Origin    provenance.Origin
@@ -69,6 +76,14 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("query %s references unknown classification %s", e.Query, e.Actual)
 	case ErrorUnevaluableFeature:
 		return fmt.Sprintf("query %s cannot evaluate feature %s", e.Query, e.Property)
+	case ErrorUnknownInvocation:
+		return fmt.Sprintf("query %s invokes %s, which is not compiled into the plan", e.Query, e.Target)
+	case ErrorInvocationCycle:
+		return fmt.Sprintf("query %s re-entered %s during invocation: %s", e.Query, e.Target, strings.Join(e.Path, " -> "))
+	case ErrorInvocationDepth:
+		return fmt.Sprintf("query %s exceeded the invocation depth limit invoking %s", e.Query, e.Target)
+	case ErrorInvocationBudget:
+		return fmt.Sprintf("query %s exceeded the invocation budget invoking %s", e.Query, e.Target)
 	case ErrorVisitBudget:
 		return fmt.Sprintf("query %s exceeded its visit budget", e.Query)
 	case ErrorResultType:

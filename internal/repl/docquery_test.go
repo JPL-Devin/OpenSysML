@@ -7,8 +7,8 @@ import (
 )
 
 // docQueryModel declares document queries over a small part tree: a projecting
-// query, one relying on a default, and one composing another by name, which
-// execution refuses as a typed failure.
+// query, one relying on a default, one composing another by name, and one
+// traversing named relationships, which execution refuses as a typed failure.
 const docQueryModel = `package Observatory {
 	private import DocumentQueries::*;
 	private import KerML::Root::Element;
@@ -66,6 +66,16 @@ const docQueryModel = `package Observatory {
 	calc def ComposedQuery :> Query {
 		in root : Element;
 		HeavySubsystems(root = root)
+	}
+
+	calc def RelatedQuery :> Query {
+		in root : Element;
+		RelatedElements(
+			source = root,
+			relationshipKind = "specialization",
+			direction = "outgoing",
+			maxDepth = 1
+		)
 	}
 }
 `
@@ -136,9 +146,18 @@ func TestRunQuerySurfacesTypedExecutionFailures(t *testing.T) {
 	// A default is intentionally unavailable at execution time, not evaluated.
 	wants(t, run(t, s, "%run-query NamedSubsystems root=telescope"),
 		"error:", "relies on a default not retained in the plan")
-	// Named query invocation is a documented execution limitation.
-	wants(t, run(t, s, "%run-query ComposedQuery root=telescope"),
+	// Named relationship traversal is a documented execution limitation.
+	wants(t, run(t, s, "%run-query RelatedQuery root=telescope"),
 		"error:", "not executable in this engine version")
+}
+
+func TestRunQueryExecutesComposedQueries(t *testing.T) {
+	s := docQuerySession(t)
+	wants(t, run(t, s, "%run-query ComposedQuery root=telescope"),
+		"✓ Query Observatory::ComposedQuery returned 2 rows",
+		"Columns: name, mass",
+		"Row 1: Observatory::telescope::mount",
+		"Row 2: Observatory::telescope::segmentControl")
 }
 
 func TestRunQueryBindingExpressions(t *testing.T) {

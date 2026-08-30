@@ -591,16 +591,12 @@ calc def InvalidFeatureOperand :> Query {
 	}
 }
 
-func TestExecuteRejectsInvalidBindingsAndComposition(t *testing.T) {
+func TestExecuteRejectsInvalidBindingsAndRelationshipTraversal(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part root;
 calc def Children :> Query {
 	in source : Element;
 	OwnedElements(source = source)
-}
-calc def Composed :> Query {
-	in source : Element;
-	Children(source = source)
 }
 calc def Defaulted :> Query {
 	in source : Element = root;
@@ -647,17 +643,411 @@ calc def Relationships :> Query {
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorDefaultUnavailable {
 		t.Fatalf("default binding error = %v", err)
 	}
-	_, err = fixture.execute(t, "Composed", Bindings{
-		"source": {ElementValue(fixture.symbol(t, "root"))},
-	}, Options{})
-	if !errors.As(err, &executionError) || executionError.Kind != ErrorUnsupportedOperation {
-		t.Fatalf("composition error = %v", err)
-	}
 	_, err = fixture.execute(t, "Relationships", Bindings{
 		"source": {ElementValue(fixture.symbol(t, "root"))},
 	}, Options{})
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorUnsupportedOperation {
 		t.Fatalf("relationship traversal error = %v", err)
+	}
+}
+
+func TestExecuteInvokesNamedQueriesPreservingOrderAndIdentity(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Base {
+	part engine;
+	part motor;
+}
+part root : Base {
+	part namedOne;
+	part :>> engine :>> motor;
+	part namedTwo;
+}
+calc def Children :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Composed :> Query {
+	in source : Element;
+	Children(source = source)
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	want := []string{"namedOne", "", "namedTwo"}
+	direct, err := fixture.execute(t, "Children", bindings, Options{})
+	if err != nil {
+		t.Fatalf("execute direct query: %v", err)
+	}
+	composed, err := fixture.execute(t, "Composed", bindings, Options{})
+	if err != nil {
+		t.Fatalf("execute composed query: %v", err)
+	}
+	if got := elementNames(composed); !slices.Equal(got, want) {
+		t.Fatalf("composed rows = %v, want %v", got, want)
+	}
+	if !slices.Equal(elementNames(composed), elementNames(direct)) {
+		t.Fatalf("composed rows = %v, direct rows = %v", elementNames(composed), elementNames(direct))
+	}
+	for _, row := range composed.Rows() {
+		if !row.Origin().Located() {
+			t.Fatal("invoked rows must preserve model provenance")
+		}
+	}
+	if !composed.Origin().Located() {
+		t.Fatal("composed row set must preserve entry-query provenance")
+	}
+}
+
+func TestExecuteNestedInvocationPreservesProjectedColumnsAndCells(t *testing.T) {
+	fixture := loadExecutionFixtureFile(t, "testdata/tmt_collection.sysml")
+	direct, err := fixture.execute(t, "HeavySubsystems", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "telescope"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute direct query: %v", err)
+	}
+	nested := loadExecutionFixture(t, `
+part def Subsystem {
+	attribute mass : Real;
+}
+part telescope {
+	part optics : Subsystem {
+		attribute redefines mass = 8.5;
+	}
+	part segmentControl : Subsystem {
+		attribute redefines mass = 20.0;
+	}
+	part mount : Subsystem {
+		attribute redefines mass = 15.0;
+	}
+}
+calc def HeavySubsystems :> Query {
+	in root : Element;
+	Project(
+		source = OrderBy(
+			source = WhereFeature(
+				source = WhereType(
+					source = Descendants(source = root, maxDepth = 3),
+					type = "PartUsage"
+				),
+				'feature' = "mass",
+				operator = ">=",
+				value = "10"
+			),
+			property = "name",
+			direction = "ascending",
+			missing = "last",
+			multiple = "error"
+		),
+		properties = ("name", "qualifiedName", "mass")
+	)
+}
+calc def Middle :> Query {
+	in root : Element;
+	HeavySubsystems(root = root)
+}
+calc def Outer :> Query {
+	in root : Element;
+	Middle(root = root)
+}
+`)
+	result, err := nested.execute(t, "Outer", Bindings{
+		"root": {ElementValue(nested.symbol(t, "telescope"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute nested invocation: %v", err)
+	}
+	var columns []string
+	for _, column := range result.Columns() {
+		columns = append(columns, column.Name())
+	}
+	if !slices.Equal(columns, []string{"name", "qualifiedName", "mass"}) {
+		t.Fatalf("nested columns = %v", columns)
+	}
+	rows := result.Rows()
+	if len(rows) != len(direct.Rows()) {
+		t.Fatalf("nested rows = %d, want %d", len(rows), len(direct.Rows()))
+	}
+	var names []string
+	for _, row := range rows {
+		cells := row.Cells()
+		if len(cells) != 3 {
+			t.Fatalf("nested cells = %+v", cells)
+		}
+		name, ok := cells[0].Values()[0].String()
+		if !ok {
+			t.Fatalf("nested name cell = %+v", cells[0].Values())
+		}
+		names = append(names, name)
+		if !row.Origin().Located() || !cells[0].Origin().Located() {
+			t.Fatal("nested rows and cells must preserve model provenance")
+		}
+	}
+	if !slices.Equal(names, []string{"mount", "segmentControl"}) {
+		t.Fatalf("nested row names = %v", names)
+	}
+}
+
+func TestExecuteInvocationPropagatesEmptyResults(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part child;
+}
+calc def NamedProjection :> Query {
+	in source : Element;
+	Project(
+		source = WhereName(
+			source = OwnedElements(source = source),
+			operator = "=",
+			value = "absent"
+		),
+		properties = ("name")
+	)
+}
+calc def Wrapped :> Query {
+	in source : Element;
+	NamedProjection(source = source)
+}
+`)
+	result, err := fixture.execute(t, "Wrapped", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute empty invocation: %v", err)
+	}
+	if len(result.Rows()) != 0 {
+		t.Fatalf("rows = %d, want 0", len(result.Rows()))
+	}
+	columns := result.Columns()
+	if len(columns) != 1 || columns[0].Name() != "name" {
+		t.Fatalf("columns = %+v", columns)
+	}
+}
+
+func TestExecuteInvocationBindsProjectedArgumentRowElements(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part alpha;
+	part beta;
+}
+calc def ProjectedChildren :> Query {
+	in source : Element;
+	Project(
+		source = OwnedElements(source = source),
+		properties = ("name")
+	)
+}
+calc def Named :> Query {
+	in items : Element[0..*];
+	WhereName(source = items, operator = "!=", value = "absent")
+}
+calc def Composed :> Query {
+	in source : Element;
+	Named(items = ProjectedChildren(source = source))
+}
+`)
+	result, err := fixture.execute(t, "Composed", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute projected-argument invocation: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"alpha", "beta"}) {
+		t.Fatalf("rows = %v", got)
+	}
+	if len(result.Columns()) != 0 {
+		t.Fatalf("columns = %+v, want none across the binding", result.Columns())
+	}
+	for _, row := range result.Rows() {
+		if !row.Origin().Located() {
+			t.Fatal("rows bound through a projected argument must preserve provenance")
+		}
+	}
+}
+
+func TestExecuteValidatesInvokedResultsAtTheirDeclaration(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Target;
+part def Other;
+part invalidRoot {
+	part target : Target;
+	part other : Other;
+}
+part emptyRoot;
+calc def TargetResults :> Query {
+	in source : Element;
+	return result : Target[0..*] ordered;
+	OwnedElements(source = source)
+}
+calc def RequiredResults :> Query {
+	in source : Element;
+	return result : Target[1..*] ordered;
+	OwnedElements(source = source)
+}
+calc def InvokesTargets :> Query {
+	in source : Element;
+	TargetResults(source = source)
+}
+calc def InvokesRequired :> Query {
+	in source : Element;
+	return result : Target[0..*] ordered;
+	RequiredResults(source = source)
+}
+`)
+	_, err := fixture.execute(t, "InvokesTargets", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "invalidRoot"))},
+	}, Options{})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorResultType {
+		t.Fatalf("invoked result type error = %v", err)
+	}
+	if executionError.Query != "Observatory::TargetResults" {
+		t.Fatalf("result type error query = %s", executionError.Query)
+	}
+	_, err = fixture.execute(t, "InvokesRequired", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "emptyRoot"))},
+	}, Options{})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorResultMultiplicity {
+		t.Fatalf("invoked result multiplicity error = %v", err)
+	}
+	if executionError.Query != "Observatory::RequiredResults" {
+		t.Fatalf("result multiplicity error query = %s", executionError.Query)
+	}
+}
+
+func TestExecuteInvocationBindingMismatchFailsAtPlanning(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+calc def Children :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Mismatched :> Query {
+	in source : Element;
+	Children(source = "root")
+}
+`)
+	_, err := queryplan.Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, "Mismatched"))
+	var planningError *queryplan.Error
+	if !errors.As(err, &planningError) || planningError.Kind != queryplan.ErrorArgumentType {
+		t.Fatalf("planning binding mismatch = %v", err)
+	}
+}
+
+func TestExecuteInvocationDepthIsBounded(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root;
+calc def Level4 :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Level3 :> Query {
+	in source : Element;
+	Level4(source = source)
+}
+calc def Level2 :> Query {
+	in source : Element;
+	Level3(source = source)
+}
+calc def Level1 :> Query {
+	in source : Element;
+	Level2(source = source)
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	if _, err := fixture.execute(t, "Level1", bindings, Options{}); err != nil {
+		t.Fatalf("execute within default depth: %v", err)
+	}
+	if _, err := fixture.execute(t, "Level1", bindings, Options{InvocationDepth: 3}); err != nil {
+		t.Fatalf("execute at exact depth: %v", err)
+	}
+	_, err := fixture.execute(t, "Level1", bindings, Options{InvocationDepth: 2})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorInvocationDepth {
+		t.Fatalf("depth error = %v", err)
+	}
+	if executionError.Query != "Observatory::Level3" || executionError.Target != "Observatory::Level4" {
+		t.Fatalf("depth error detail = %+v", executionError)
+	}
+	if !executionError.Origin.Located() {
+		t.Fatal("depth error must retain query provenance")
+	}
+	_, err = fixture.execute(t, "Level1", bindings, Options{InvocationDepth: -1})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorInvalidContext {
+		t.Fatalf("negative depth error = %v", err)
+	}
+}
+
+func TestExecuteInvocationSharesTheVisitBudget(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part left {
+		part leftLeaf;
+	}
+	part right {
+		part rightLeaf;
+	}
+}
+calc def DescendantQuery :> Query {
+	in source : Element;
+	Descendants(source = source, maxDepth = 2)
+}
+calc def Composed :> Query {
+	in source : Element;
+	DescendantQuery(source = source)
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	if _, err := fixture.execute(t, "Composed", bindings, Options{VisitBudget: 4}); err != nil {
+		t.Fatalf("execute with exact shared budget: %v", err)
+	}
+	_, err := fixture.execute(t, "Composed", bindings, Options{VisitBudget: 3})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorVisitBudget {
+		t.Fatalf("shared budget error = %v", err)
+	}
+	if executionError.Query != "Observatory::DescendantQuery" {
+		t.Fatalf("shared budget error query = %s", executionError.Query)
+	}
+}
+
+func TestExecuteInvocationCountIsBounded(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part child;
+}
+calc def Leaf :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Fan1 :> Query {
+	in source : Element;
+	(Leaf(source = source), Leaf(source = source))
+}
+calc def Fan2 :> Query {
+	in source : Element;
+	(Fan1(source = source), Fan1(source = source))
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	if _, err := fixture.execute(t, "Fan2", bindings, Options{}); err != nil {
+		t.Fatalf("execute within default invocation budget: %v", err)
+	}
+	if _, err := fixture.execute(t, "Fan2", bindings, Options{InvocationBudget: 6}); err != nil {
+		t.Fatalf("execute at exact invocation budget: %v", err)
+	}
+	_, err := fixture.execute(t, "Fan2", bindings, Options{InvocationBudget: 5})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorInvocationBudget {
+		t.Fatalf("invocation budget error = %v", err)
+	}
+	if executionError.Query != "Observatory::Fan1" || executionError.Target != "Observatory::Leaf" {
+		t.Fatalf("invocation budget error detail = %+v", executionError)
+	}
+	if !executionError.Origin.Located() {
+		t.Fatal("invocation budget error must retain query provenance")
+	}
+	_, err = fixture.execute(t, "Fan2", bindings, Options{InvocationBudget: -1})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorInvalidContext {
+		t.Fatalf("negative invocation budget error = %v", err)
 	}
 }
 

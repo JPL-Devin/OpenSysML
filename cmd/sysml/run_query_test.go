@@ -51,6 +51,16 @@ const queryModel = `package Observatory {
 		in root : Element;
 		HeavySubsystems(root = root)
 	}
+
+	calc def RelatedQuery :> Query {
+		in root : Element;
+		RelatedElements(
+			source = root,
+			relationshipKind = "specialization",
+			direction = "outgoing",
+			maxDepth = 1
+		)
+	}
 }
 `
 
@@ -80,8 +90,13 @@ func TestRunQueryFlag(t *testing.T) {
 	wantReport(t, check(t, binary, queryModel, "-run-query", "HeavySubsystems"),
 		2, "requires binding root")
 
-	// A documented execution limitation is surfaced, not silently skipped.
+	// A composed query runs through its invoked definition.
 	wantReport(t, check(t, binary, queryModel, "-run-query", "ComposedQuery root=telescope"),
+		0, "✓ Query Observatory::ComposedQuery returned 1 row",
+		"Row 1: Observatory::telescope::mount")
+
+	// A documented execution limitation is surfaced, not silently skipped.
+	wantReport(t, check(t, binary, queryModel, "-run-query", "RelatedQuery root=telescope"),
 		2, "not executable in this engine version")
 }
 
