@@ -729,8 +729,8 @@ Where the standard is vague, these are the choices this implementation makes:
   operand, or an operand that is not a number is an `INVALID_ARGUMENT` error, not
   a false verdict. `*` parses as infinity, so `multiplicityUpper > 1` holds for
   an unbounded feature.
-- An element that simply *has no value* for the property fails the comparison —
-  that is a fact about the element, not a fault in the query.
+- An element that *has no value* for the property fails the comparison; this is a
+  fact about the element, not a fault in the query.
 - `inverse` negates the verdict of its own constraint, so a constraint and its
   inverse partition the scope.
 - `and`/`or` combine nested verdicts, short-circuiting once one is decisive.

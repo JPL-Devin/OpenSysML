@@ -37,8 +37,8 @@ model.edit().add_part("Vehicle", "engine", type="Engine").apply()
 
 Use `opensysml.loads(text, language="kerml")` for inline KerML content.
 
-Every call goes through the `sysml-grpc` service, which `opensysml` starts for you from
-`~/.opensysml/bin/sysml-grpc`; the guide below says how to put it there.
+Every call goes through the `sysml-grpc` service, which `opensysml` starts automatically from
+`~/.opensysml/bin/sysml-grpc`; the guide below describes how to install it there.
 
 ## Service ownership
 
@@ -207,7 +207,7 @@ model.eval("mass", subject="Demo::sedan")            # a method shadows nothing
 ```
 
 ```python
-from opensysml import eval          # shadows the builtin in this module — don't
+from opensysml import eval          # shadows the builtin in this module — avoid
 ```
 
 Guidance for this package and for code around it:

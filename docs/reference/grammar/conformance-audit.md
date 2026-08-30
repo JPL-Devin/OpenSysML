@@ -1,10 +1,10 @@
 # Grammar Conformance Audit — reserved words and state/action notation
 
 This is the reviewable claim behind two findings of the
-[pilot differential](../../project/pilot-differential.md) — that we reserved
-words the grammars do not, and that we rejected state-machine notation they
-admit: every word we reserve and every state-machine construct we accept,
-checked against the pinned OMG grammars, with the resulting policy.
+[pilot differential](../../project/pilot-differential.md): that OpenSysML reserved
+words the grammars do not, and rejected state-machine notation they admit. It
+lists every reserved word and every accepted state-machine construct, checked
+against the pinned OMG grammars, with the resulting policy.
 
 ## Ground truth
 
@@ -17,15 +17,15 @@ from a sparse clone rather than vendored:
 - `org.omg.kerml.expressions.xtext/src/org/omg/kerml/expressions/xtext/KerMLExpressions.xtext` — cited as `KerMLExpressions.xtext`
 
 A word is *standard* when it appears as a quoted literal in one of those files,
-in the position we accept it. Line numbers are at the pin.
+in the position OpenSysML accepts it. Line numbers are at the pin.
 
 ## Verdict per word
 
 All eleven words below appear as a literal in **none** of the three grammars, at
 any line: they are not notation OMG defines, so reserving them only stopped
 models from using them as names. Each is now an ordinary name, matched
-contextually where our own notation needs it — the treatment `point`, `on` and
-`var` already get.
+contextually where OpenSysML's own notation requires it, which is the treatment
+`point`, `on` and `var` already receive.
 
 | Word | `KerML.xtext` | `SysML.xtext` | `KerMLExpressions.xtext` | Verdict |
 |------|---------------|---------------|--------------------------|---------|
@@ -44,7 +44,7 @@ contextually where our own notation needs it — the treatment `point`, `on` and
 `done` is the acceptance test that unreserving worked: the bundled normative
 library declares features named `done` (`Systems Library/Actions.sysml:50`,
 `Items.sysml:34`, `Parts.sysml:29`, `States.sysml:34`, `UseCases.sysml:28`) and
-references them (`Flows.sysml:57`, `:69`). We reported an error on every one.
+references them (`Flows.sysml:57`, `:69`). OpenSysML reported an error on every one.
 
 ### `done` is a library name, not notation
 
@@ -54,7 +54,7 @@ Example.sysml:32`, `Control Structures Example.sysml:27`, `35. Use Cases/Use
 Case Usage Example.sysml:35`) and `snapshot junked = done;`
 (`27. Occurrences/Time Slice and Snapshot Example.sysml:25`). Those are plain
 references to `Actions::Action::done`, a feature of the standard library, not a
-keyword. Our parser reads `done;` as an anonymous final node and `then done;`
+keyword. The parser reads `done;` as an anonymous final node and `then done;`
 as a succession targeting the `done` library feature. Both stay **silent**:
 warning on them would warn on OMG-authored files, which the classification
 forbids. In a state body `then done;` names the same library feature and states
@@ -208,5 +208,5 @@ disagree with them:
   body; a state with no outgoing transition does not complete on its own, because
   an ancestor or cross-region transition may still leave it.
 - **State-body `fork`/`join` silent.** They are action node literals, and
-  `StateBodyItem` admits a `BehaviorUsageMember`, so we read them as standard in
+  `StateBodyItem` admits a `BehaviorUsageMember`, so they are read as standard in
   a state body even though the pilot's state examples do not use them there.

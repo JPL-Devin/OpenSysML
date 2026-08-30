@@ -1,15 +1,22 @@
 # Open Source SysML v2 Implementation
 
-A SysML v2 and KerML 1.1 implementation in Go—providing language server, interactive REPL, execution runtime, an embeddable Go API, and Python, Node/TypeScript, Java and Rust client libraries. Spanning the lifecycle from authoring to execution, delivering the integrated tooling experience systems engineers expect from modern language ecosystems.
+OpenSysML is a SysML v2 and KerML 1.1 implementation in Go. It provides a language server, an
+interactive REPL, an execution runtime, an embeddable Go API, and Python, Node/TypeScript, Java
+and Rust client libraries, covering the lifecycle from authoring through execution with the
+integrated tooling systems engineers expect from a modern language ecosystem.
 
-What that is measured against, and what it is not, is in [spec compliance](docs/project/spec-compliance.md) and the [pilot differential](docs/project/pilot-differential.md): we compare every diagnostic against the pinned OMG pilot implementation over its own corpora, and we do not claim conformance certification.
+The basis for these claims, and their limits, are documented in
+[spec compliance](docs/project/spec-compliance.md) and the
+[pilot differential](docs/project/pilot-differential.md): every diagnostic is compared against the
+pinned OMG pilot implementation over that implementation's own corpora, and no conformance
+certification is claimed.
 
-## Quick Start
+## Quick start
 
-**Get started in 5 minutes:** [the guide](docs/guide/)
+**Introductory material:** [the guide](docs/guide/)
 
-**All documentation, searchable:** <https://opensysml.org/> — the same
-pages as [docs/](docs/), rendered from `main`.
+**Complete searchable documentation:** <https://opensysml.org/> — the same pages as
+[docs/](docs/), rendered from `main`.
 
 ### Install
 
@@ -39,17 +46,18 @@ make build
 > so a tarball downloaded *in a browser* carries `com.apple.quarantine` and Gatekeeper shows
 > "cannot be opened because the developer cannot be verified". Homebrew downloads with
 > `curl`, which never sets that attribute, so `brew install` avoids the prompt entirely.
-> Fallback if you download the tarball directly (`curl -fL ... opensysml-darwin-arm64.tar.gz`,
-> then `xattr -d com.apple.quarantine`): see
-> [the guide](docs/guide/01-install.md#macos-gatekeeper). Signing/notarization is the eventual
-> fix — [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
+> When the tarball is downloaded directly (`curl -fL ... opensysml-darwin-arm64.tar.gz`, followed
+> by `xattr -d com.apple.quarantine`), see
+> [the guide](docs/guide/01-install.md#macos-gatekeeper). Signing and notarization are the
+> intended long-term resolution —
+> [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 >
 > Install by the **fully-qualified** name. Homebrew 6 requires third-party taps to be trusted
 > before their Ruby is loaded, and `brew install Open-MBEE/tap/opensysml` trusts just that
 > formula. `brew tap Open-MBEE/tap && brew install opensysml` needs
 > `brew trust --formula Open-MBEE/tap/opensysml` in between.
 
-### Try it
+### Examples
 
 **Interactive modeling:**
 ```bash
@@ -137,37 +145,39 @@ sysml> %advance 30
   Remaining events: 0
 ```
 
-**See [examples/repl-behavioral-demo.sysml](examples/repl-behavioral-demo.sysml) for comprehensive demos.**
+**Further demonstrations are available in
+[examples/repl-behavioral-demo.sysml](examples/repl-behavioral-demo.sysml).**
 
 ---
 
-## What is This?
+## Overview
 
-**Think Python/Rust/Go tooling, but for SysML v2:**
+The project provides the tooling familiar from the Python, Rust and Go ecosystems, applied to
+SysML v2:
 
 - **Language Server** — A standard LSP server (`sysml-lsp`) with live diagnostics, semantic hover, go-to-definition, find references, completion, workspace-wide symbol search, formatting, rename, semantic tokens and quick fixes. A VS Code extension with TextMate grammars for `.sysml` and `.kerml` ships in [editors/vscode](editors/vscode), and any editor with a generic LSP client can drive the server directly — [guide chapter 8](docs/guide/08-editors.md) walks through both. *Not yet:* the extension is built from source rather than published to a marketplace, and the server answers no semantic token delta requests or signature help.
-- **Interactive REPL** — Exploratory modeling environment: define models incrementally, evaluate expressions on-the-fly, instantiate parts, run calculations, inspect runtime state—like IPython/Jupyter for systems engineering.
-- **Constraint Solving** *(experimental)* — Beyond evaluating what holds of an object: an external SMT solver answers whether a constraint, requirement or satisfaction assertion *can* hold, which conditions conflict when it cannot, what values would satisfy it, which variants a model permits, and what optimizes an `analysis def`'s objectives. The solver is optional and discovered at runtime — [the REPL command reference](docs/reference/repl-commands.md) documents each command and [installing a solver](docs/guide/01-install.md#installing-a-solver-optional) how to get one.
-- **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent/AcceptEvent, sourceless transitions). See [spec compliance](docs/project/spec-compliance.md) for measured behavioral coverage.
-- **Embeddable Go API** — `client/opensysml` is the public Go surface: parse, look up symbols, evaluate expressions and instantiate parts from Go code, answered in process by the engine your binary already links — no port, no child process, no serialization round trip — or over the Connect protocol against a service someone else runs. See [client/opensysml/README.md](client/opensysml/README.md).
+- **Interactive REPL** — An exploratory modeling environment: define models incrementally, evaluate expressions interactively, instantiate parts, run calculations and inspect runtime state, comparable to IPython or Jupyter for systems engineering.
+- **Constraint Solving** *(experimental)* — In addition to evaluating what holds of an object, an external SMT solver determines whether a constraint, requirement or satisfaction assertion *can* hold, which conditions conflict when it cannot, which values would satisfy it, which variants a model permits, and what optimizes an `analysis def`'s objectives. The solver is optional and discovered at runtime. [The REPL command reference](docs/reference/repl-commands.md) documents each command, and [installing a solver](docs/guide/01-install.md#installing-a-solver-optional) describes how to obtain one.
+- **Execution Runtime** — More than a validator: instantiate parts, evaluate constraints against concrete values and execute calc and analysis cases. Action and state executor infrastructure is complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent/AcceptEvent, sourceless transitions). See [spec compliance](docs/project/spec-compliance.md) for measured behavioral coverage.
+- **Embeddable Go API** — `client/opensysml` is the public Go surface: parse, look up symbols, evaluate expressions and instantiate parts from Go code, answered in process by the engine the calling binary already links (no port, no child process and no serialization round trip), or over the Connect protocol against an externally hosted service. See [client/opensysml/README.md](client/opensysml/README.md).
 - **Python Client Library** — gRPC-based Python bindings for programmatic access: parse models, resolve symbols, evaluate expressions, instantiate parts, execute actions/state machines. Includes IPython display hooks for Jupyter notebooks and pandas DataFrame integration. Constraint, requirement, satisfaction and calc verdicts are available as RPCs (`verify_constraint`, `verify_requirement`, `verify_satisfaction`, `calc`).
 - **Node/TypeScript Client Library** — `@opensysml/client` for Node and the browser, over the Connect protocol with protobuf bodies: parse, evaluate, look up symbols and instantiate, with values as discriminated unions. No native addon and nothing downloaded at install time ([clients/node/README.md](clients/node/README.md)).
 - **Java Client Library** — `io.github.open-mbee:opensysml-client` for a JVM host application it does not own, on the JDK's own `java.net.http.HttpClient`, so no gRPC, Netty or `tcnative` reaches the host ([clients/java/README.md](clients/java/README.md)).
 - **Rust Client Library** — A blocking client for the local `sysml-grpc` service, with no asynchronous runtime in its default dependency tree, available from the [Rust crate documentation](clients/rust/README.md).
 
-Which client to pick, what the four newer ones cover, and what they deliberately leave to a v2 is [docs/reference/clients.md](docs/reference/clients.md).
-- **Modern Toolchain** — Incremental compilation, bundled standard library, persistent semantic caches. A model is a set of files, named on the command line or opened by the editor.
+Guidance on selecting a client, the coverage of the four newer clients, and the functionality they intentionally defer to a future version is provided in [docs/reference/clients.md](docs/reference/clients.md).
+- **Modern Toolchain** — Incremental compilation, a bundled standard library and persistent semantic caches. A model is a set of files, named on the command line or opened by the editor.
 
 ## Goals
 
-- **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (96/96 stdlib files parse clean: 94 vendored OMG files and 2 OpenSysML extensions)
-- **Executable models:** Instantiate, evaluate, simulate—turn specifications into running systems
-- **Real-world ergonomics:** Multi-file workspaces, incremental analysis, rich diagnostics
+- **Performance:** sub-millisecond parsing, a single static binary, and no JVM or Eclipse runtime
+- **Completeness:** SysML v2 textual notation support (96 of 96 standard library files parse cleanly: 94 vendored OMG files and 2 OpenSysML extensions)
+- **Executable models:** instantiate, evaluate and simulate, turning specifications into running systems
+- **Practical ergonomics:** multi-file workspaces, incremental analysis and detailed diagnostics
 
 ## Status
 
-**Active development. Core infrastructure operational:**
+The project is under active development, with the core infrastructure operational:
 
 | Component | Status |
 |-----------|--------|
@@ -196,7 +206,7 @@ Which client to pick, what the four newer ones cover, and what they deliberately
 | Public Go API (`client/opensysml`) | ✅ Complete for its v1 scope: parse, diagnostics, symbols, evaluation, instantiation and capability negotiation, answered in process or over Connect, with the edit API, conversion, verification, behaviour execution and Query out of scope ([client/opensysml/README.md](client/opensysml/README.md)) |
 | Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, constraint/requirement/satisfaction/calc verification, conversion, edits, Query, IPython hooks, DataFrame) |
 | Rust client library | 🚧 Blocking v1 client for parse, diagnostics, symbols, evaluation and instantiation; see the [Rust client README](clients/rust/README.md) |
-| Java client library | ✅ Complete for its v1 scope, and honest about the rest: connection lifecycle, parse/symbols/eval/instantiate and capability negotiation, with the edit API, conversion, verification, behaviour execution and Query out of scope. Connect protocol over the JDK's own HTTP client, so no gRPC or Netty reaches a host application ([clients/java/README.md](clients/java/README.md)) |
+| Java client library | ✅ Complete for its v1 scope, with the remaining scope stated explicitly: connection lifecycle, parse/symbols/eval/instantiate and capability negotiation, with the edit API, conversion, verification, behaviour execution and Query out of scope. Connect protocol over the JDK's own HTTP client, so no gRPC or Netty reaches a host application ([clients/java/README.md](clients/java/README.md)) |
 | Node/TypeScript client library | ✅ Complete for the same v1 scope, in Node and the browser, over the Connect protocol with protobuf bodies and no native addon; values arrive as discriminated unions ([clients/node/README.md](clients/node/README.md)) |
 
 <!-- doc-counts:begin refereed-figures -->
@@ -221,7 +231,7 @@ What these numbers cannot show: the OMG corpora are demonstrations rather than a
 **Reference differential:** 357 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (`2026-07`), 332 in full agreement; every divergence is enumerated and adjudicated in [the differential](docs/project/pilot-differential.md), reproducible with `go run ./cmd/pilot-diff`.
 **Rejection oracle:** the reverse direction — do we reject what the reference rejects? 120 hand-written invalid models validated by both implementations, 120 rejected by both, 0 the pinned pilot rejects and we accept; every permissiveness gap is enumerated with a reproducer and likely root cause in [the rejection oracle](docs/project/pilot-rejection.md), reproducible with `go run ./cmd/pilot-reject`. We wrote all 120 cases, so the count measures our coverage of the rejection surface, not our conformance — a sample, not a proof.
 **Training examples:** 100/100 files clean, gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [training examples](docs/project/training-examples.md) for analysis.
-**Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
+**Semantic layer:** a complete implementation of runtime operators, feature chains and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for a full demonstration.
 
 ## Architecture
 
@@ -242,12 +252,12 @@ What these numbers cannot show: the OMG corpora are demonstrations rather than a
 ```
 
 **Key design principles:**
-- **Incremental & lazy:** Parse immediately, resolve semantics on-demand (gopls/rust-analyzer precedent)
-- **Immutable AST:** All semantic state lives in side tables keyed by node/symbol
-- **Pluggable validation:** Tiered passes (syntax → names → types → constraints)
-- **Separated concerns:** Static analysis pipeline feeds execution runtime
+- **Incremental and lazy:** parse immediately and resolve semantics on demand, following the precedent set by gopls and rust-analyzer
+- **Immutable AST:** all semantic state resides in side tables keyed by node or symbol
+- **Pluggable validation:** tiered passes (syntax → names → types → constraints)
+- **Separated concerns:** the static analysis pipeline feeds the execution runtime
 
-## Module Structure
+## Module structure
 
 ```
 github.com/Open-MBEE/OpenSysML
@@ -282,12 +292,12 @@ github.com/Open-MBEE/OpenSysML
 
 ## Technology
 
-- **Language:** Go 1.25+ (goroutines for concurrency, single static binary, proven LSP track record)
-- **Parser:** Hand-written recursive descent (zero overhead, full error recovery, sub-ms parses)
-- **Grammar source:** OMG pilot Xtext grammars (`SysML.xtext` + `KerMLExpressions`)
+- **Language:** Go 1.25 or later (goroutines for concurrency, a single static binary, and an established record in language servers)
+- **Parser:** hand-written recursive descent (no framework overhead, full error recovery, sub-millisecond parses)
+- **Grammar source:** OMG pilot Xtext grammars (`SysML.xtext` and `KerMLExpressions`)
 - **Spec compliance:** [OMG SysML v2.1 Beta 1 / KerML 1.1](https://www.omg.org/spec/SysML/2.0) (2026-07 release)
 - **Standard library:** 94 files from [SysML v2 Pilot Implementation 2026-07](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-07), byte-identical, plus the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension
-- **CI/CD:** CircleCI for automated builds, tests, and releases
+- **CI/CD:** CircleCI for automated builds, tests and releases
 
 ## Releases
 
@@ -299,7 +309,7 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 - Windows (x64)
 
 **Release process:**
-- Every commit: Build + test
+- Every commit: build and test
 - Tagged releases (`v*`): the suite runs again on the tagged commit, then multi-platform
   binaries are published to GitHub Releases. Maintainer procedure:
   [docs/project/releasing.md](docs/project/releasing.md); what changed per release:
@@ -307,21 +317,21 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
 - The Python client is released on its own tag (`opensysml-v*`), which uploads `opensysml` to
   PyPI — its version is not coupled to the core's, since it resolves a `sysml-grpc` binary
   at runtime from whichever release the caller names
-- The Java client is not published yet: `mvn -f clients/java/pom.xml install` is how to consume
-  it, and what a maintainer must obtain for a first Maven Central upload is in
+- The Java client is not yet published: consume it with `mvn -f clients/java/pom.xml install`. The
+  prerequisites a maintainer must obtain for a first Maven Central upload are listed in
   [docs/project/releasing.md](docs/project/releasing.md)
 - The Node client is released the same way on `client-node-v*`, which publishes
   `@opensysml/client` and the five per-platform packages that carry the service binary
-- The Rust client is not published to crates.io yet: use a path or Git dependency, and see
+- The Rust client is not yet published to crates.io: use a path or Git dependency, and see
   [clients/rust/README.md](clients/rust/README.md) and
-  [docs/project/releasing.md](docs/project/releasing.md) for what a first publish needs
-- `client/opensysml`, the public Go API, needs no release of its own — it is part of this module,
-  so `go get github.com/Open-MBEE/OpenSysML@v0.3.0` is how a Go program pins it
+  [docs/project/releasing.md](docs/project/releasing.md) for the requirements of a first publish
+- `client/opensysml`, the public Go API, requires no release of its own. It is part of this
+  module, so a Go program pins it with `go get github.com/Open-MBEE/OpenSysML@v0.3.0`
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
 `sysml-lsp-<os>-<arch>.tar.gz`), `opensysml-<os>-<arch>.tar.gz` bundles containing both
 binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized and
-Windows binaries are not Authenticode signed — see
+Windows binaries are not Authenticode signed; see
 [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 
 ## Building
@@ -343,9 +353,9 @@ go build -o bin/sysml ./cmd/sysml
 go build -o bin/sysml-grpc ./cmd/sysml-grpc
 ```
 
-## Python Client
+## Python client
 
-**opensysml** provides a Python client library for programmatic access to OpenSysML's parsing and runtime capabilities via gRPC.
+**opensysml** is a Python client library providing programmatic access to OpenSysML's parsing and runtime capabilities over gRPC.
 
 **Installation:**
 ```bash
@@ -374,16 +384,17 @@ print(instance.slots["mass"])
 **Features:**
 - Jupyter notebook integration with rich HTML displays
 - pandas DataFrame integration for model analysis
-- Automatic service lifecycle management
-- Full runtime API access (eval, instantiate, execute actions/states)
+- automatic service lifecycle management
+- full runtime API access (evaluation, instantiation, action and state execution)
 
-See [clients/python/INSTALL.md](clients/python/INSTALL.md) for detailed installation and usage instructions.
+Detailed installation and usage instructions are in
+[clients/python/INSTALL.md](clients/python/INSTALL.md).
 
-## Node/TypeScript Client
+## Node/TypeScript client
 
-**@opensysml/client** is the same access over the Connect protocol, for Node and
-the browser. It has no native addon: an install is a normal registry fetch, and
-the service binary comes from a per-platform optional dependency.
+**@opensysml/client** provides the same access over the Connect protocol, for Node and the
+browser. It includes no native addon: installation is a standard registry fetch, and the service
+binary is supplied by a per-platform optional dependency.
 
 ```ts
 import { loads } from "@opensysml/client";
@@ -392,22 +403,22 @@ await using model = await loads("part def Wheel { attribute radius : ScalarValue
 const radius = await model.eval("0.3 * 2");
 ```
 
-v1 covers loading, evaluation, symbol lookup and instantiation, and negotiates on
-the capabilities the service advertises. It is not published yet — see
-[clients/node/README.md](clients/node/README.md) for the API, the two lifecycle
-modes (a private child of the calling process, or a service someone else runs),
-what the browser entry point can and cannot do, and what v1 leaves out.
+Version 1 covers loading, evaluation, symbol lookup and instantiation, and negotiates against the
+capabilities the service advertises. It is not yet published. See
+[clients/node/README.md](clients/node/README.md) for the API, the two lifecycle modes (a private
+child of the calling process, or an externally hosted service), the capabilities and limitations
+of the browser entry point, and the functionality version 1 omits.
 
 ## Documentation
 
 - **[The guide](docs/guide/)** — install, first model, CLI, REPL, checks, behavior, saving, editors, Python
-- **[Client libraries](docs/reference/clients.md)** — the Go, Python, Node, Java and Rust surfaces, and which to pick
+- **[Client libraries](docs/reference/clients.md)** — the Go, Python, Node, Java and Rust surfaces, and how to choose between them
 - **[Reference](docs/reference/)** — CLI flags, REPL commands, environment, the Go and Python APIs, service transports, RDF mapping
 - **[Internals](docs/internals/architecture.md)** — the pipeline, the tiers, testing and performance
-- **[Project status](docs/project/spec-compliance.md)** — spec compliance, roadmap, releasing
-- **[Examples](examples/)** — Runtime demos and behavioral model examples
+- **[Project status](docs/project/spec-compliance.md)** — spec compliance, roadmap and releasing
+- **[Examples](examples/)** — runtime demonstrations and behavioral model examples
 
-The full map is [docs/README.md](docs/README.md).
+A complete index is available in [docs/README.md](docs/README.md).
 
 ## License
 
@@ -415,7 +426,7 @@ Apache 2.0
 
 ## Contributing
 
-Project currently in active development. See [CONTRIBUTING.md](CONTRIBUTING.md) for build, test, and contribution guidelines.
+The project is under active development. See [CONTRIBUTING.md](CONTRIBUTING.md) for build, test and contribution guidelines.
 
 ## Contact
 

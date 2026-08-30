@@ -34,4 +34,5 @@ Each of these is a model and a walkthrough of the commands that exercise it.
 
 ## Other Examples
 
-Add your own example models here! SysML v2 files use `.sysml` extension, KerML files use `.kerml`.
+Additional example models may be added to this directory. SysML v2 files use the `.sysml`
+extension and KerML files use `.kerml`.
