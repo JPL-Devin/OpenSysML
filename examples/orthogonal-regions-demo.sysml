@@ -1,5 +1,5 @@
 package OrthogonalRegionsDemo {
-    private import ScalarValues::*;
+    private import SI::*;
     
     // Demonstrates concurrent orthogonal regions in state machines
     // Each region executes independently and processes events in parallel
@@ -8,33 +8,29 @@ package OrthogonalRegionsDemo {
     state def TrafficLight parallel {
         // Vehicle signal region
         state vehicleSignal {
-            entry; then start;
-            state start;
+            entry; then red;
             state red;
-            state yellow;
             state green;
+            state yellow;
             
-            succession first start then red;
-            transition first red then yellow;
-            transition first yellow then green;
-            transition first green then red;
+            transition first red accept after 30 [s] then green;
+            transition first green accept after 25 [s] then yellow;
+            transition first yellow accept after 5 [s] then red;
         }
         
         // Pedestrian signal region (runs concurrently)
         state pedestrianSignal {
-            entry; then start;
-            state start;
+            entry; then dontWalk;
             state dontWalk;
             state walk;
             
-            succession first start then dontWalk;
-            transition first dontWalk then walk;
-            transition first walk then dontWalk;
+            transition first dontWalk accept after 45 [s] then walk;
+            transition first walk accept after 15 [s] then dontWalk;
         }
         
         // Key concepts:
-        // - Both regions start simultaneously (v_start→red, p_start→dontWalk)
-        // - Active configuration: (red, dontWalk) or (yellow, walk) etc
+        // - Both regions start simultaneously (entry→red, entry→dontWalk)
+        // - Active configuration: (red, dontWalk) or (green, walk) etc
         // - Events broadcast to both regions independently
         // - Run-to-completion: one transition per region per event
     }

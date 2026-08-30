@@ -2449,6 +2449,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	// queueing work cannot hang the REPL and the way to raise the bound is the
 	// same one the executors report.
 	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
+	startTime := exec.CurrentTime()
 	var processed, doActions int64
 	for exec.State() == runtime.StateRunning &&
 		processed < maxEvents && doActions < maxDoActions {
@@ -2522,6 +2523,12 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	case processed >= maxEvents:
 		out = append(out, fmt.Sprintf("  Stopped at the event budget (%d events; raise %s to allow more)",
 			maxEvents, runtime.MaxStateEventsEnvVar))
+		// A drain that never advanced time is all at one instant — often a cycle
+		// of untriggered (completion) transitions, which no budget can drain.
+		if exec.State() == runtime.StateRunning && exec.CurrentTime() == startTime {
+			out = append(out, fmt.Sprintf("  All %d event(s) were processed at simulation time %s without advancing it; if the machine cycles through untriggered (completion) transitions, which re-fire immediately, no budget is large enough",
+				processed, runtime.FormatReal(startTime)))
+		}
 	case doActions >= maxDoActions:
 		out = append(out, fmt.Sprintf("  Stopped at the do action budget (%d steps; raise %s to allow more)",
 			maxDoActions, runtime.MaxDoStepsEnvVar))
