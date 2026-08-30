@@ -184,6 +184,67 @@ calc def DescendantQuery :> Query {
 	}
 }
 
+func TestExecuteTraversalBudgetsCountSemanticElements(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part <c> child {
+		part grandchild;
+		part sibling;
+	}
+}
+calc def Owned :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Recursive :> Query {
+	in source : Element;
+	Descendants(source = source, maxDepth = 2)
+}
+calc def Parents :> Query {
+	in source : Element[1..*] ordered;
+	Ancestors(source = source, maxDepth = 2)
+}
+`)
+	for _, tc := range []struct {
+		query  string
+		source []Value
+		budget int
+		want   []string
+	}{
+		{
+			query:  "Owned",
+			source: []Value{ElementValue(fixture.symbol(t, "root"))},
+			budget: 1,
+			want:   []string{"child"},
+		},
+		{
+			query:  "Recursive",
+			source: []Value{ElementValue(fixture.symbol(t, "root"))},
+			budget: 3,
+			want:   []string{"child", "grandchild", "sibling"},
+		},
+		{
+			query: "Parents",
+			source: []Value{
+				ElementValue(fixture.symbol(t, "root::child::grandchild")),
+				ElementValue(fixture.symbol(t, "root::child::sibling")),
+			},
+			budget: 2,
+			want:   []string{"child", "root"},
+		},
+	} {
+		rows, err := fixture.execute(t, tc.query, Bindings{
+			"source": tc.source,
+		}, Options{VisitBudget: tc.budget})
+		if err != nil {
+			t.Fatalf("execute %s with exact budget: %v", tc.query, err)
+		}
+		if got := elementNames(rows); !slices.Equal(got, tc.want) {
+			t.Fatalf("%s rows = %v, want %v", tc.query, got, tc.want)
+		}
+	}
+}
+
 func TestExecuteAncestorsBreadthFirstAndDeduplicated(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part root {
@@ -396,6 +457,63 @@ calc def UnevaluableFeature :> Query {
 	_, err = fixture.execute(t, "UnevaluableFeature", bindings, Options{})
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorUnevaluableFeature {
 		t.Fatalf("unevaluable feature error = %v", err)
+	}
+}
+
+func TestExecuteEmptyFeaturePipelinesReturnEmptyResults(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part child {
+		attribute score : Integer = 1;
+	}
+}
+calc def EmptyFeatureFilter :> Query {
+	in source : Element;
+	WhereFeature(
+		source = Project(
+			source = WhereName(
+				source = OwnedElements(source = source),
+				operator = "=",
+				value = "absent"
+			),
+			properties = ("name")
+		),
+		'feature' = "score",
+		operator = ">",
+		value = "0"
+	)
+}
+calc def EmptyOrdering :> Query {
+	in source : Element;
+	OrderBy(
+		source = Project(
+			source = WhereName(
+				source = OwnedElements(source = source),
+				operator = "=",
+				value = "absent"
+			),
+			properties = ("name")
+		),
+		property = "score",
+		direction = "ascending",
+		missing = "error",
+		multiple = "error"
+	)
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	for _, query := range []string{"EmptyFeatureFilter", "EmptyOrdering"} {
+		rows, err := fixture.execute(t, query, bindings, Options{})
+		if err != nil {
+			t.Fatalf("execute %s: %v", query, err)
+		}
+		if len(rows.Rows()) != 0 {
+			t.Fatalf("%s rows = %d, want 0", query, len(rows.Rows()))
+		}
+		columns := rows.Columns()
+		if len(columns) != 1 || columns[0].Name() != "name" {
+			t.Fatalf("%s columns = %+v", query, columns)
+		}
 	}
 }
 

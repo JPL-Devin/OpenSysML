@@ -26,10 +26,15 @@ func (e *executor) evaluateOwned(expression queryplan.Expression) (sequence, err
 			continue
 		}
 		for _, member := range sym.Scope.AllMembers() {
+			key := symbols.KeyOf(member)
+			if _, duplicate := seen[key]; duplicate {
+				continue
+			}
 			if !e.consumeVisit() {
 				return sequence{}, e.budgetError(expression)
 			}
-			appendElement(&result, member, seen)
+			seen[key] = struct{}{}
+			result.values = append(result.values, ElementValue(member))
 		}
 	}
 	return result, nil
@@ -64,12 +69,12 @@ func (e *executor) evaluateDescendants(expression queryplan.Expression) (sequenc
 			continue
 		}
 		for _, member := range next.sym.Scope.AllMembers() {
-			if !e.consumeVisit() {
-				return sequence{}, e.budgetError(expression)
-			}
 			key := symbols.KeyOf(member)
 			if _, duplicate := seen[key]; duplicate {
 				continue
+			}
+			if !e.consumeVisit() {
+				return sequence{}, e.budgetError(expression)
 			}
 			seen[key] = struct{}{}
 			result.values = append(result.values, ElementValue(member))
@@ -110,12 +115,12 @@ func (e *executor) evaluateAncestors(expression queryplan.Expression) (sequence,
 		if owner == nil {
 			continue
 		}
-		if !e.consumeVisit() {
-			return sequence{}, e.budgetError(expression)
-		}
 		key := symbols.KeyOf(owner)
 		if _, duplicate := seen[key]; duplicate {
 			continue
+		}
+		if !e.consumeVisit() {
+			return sequence{}, e.budgetError(expression)
 		}
 		seen[key] = struct{}{}
 		result.values = append(result.values, ElementValue(owner))
@@ -255,6 +260,9 @@ func (e *executor) evaluateWhereFeature(expression queryplan.Expression) (sequen
 	if err != nil {
 		return sequence{}, err
 	}
+	if len(source.values) == 0 {
+		return source, nil
+	}
 	var result sequence
 	known := false
 	for i, value := range source.values {
@@ -313,6 +321,9 @@ func (e *executor) evaluateOrderBy(expression queryplan.Expression) (sequence, e
 	}
 	if multiple != "first" && multiple != "last" && multiple != "error" {
 		return sequence{}, e.operatorError(expression, multiple)
+	}
+	if len(source.values) == 0 {
+		return source, nil
 	}
 	type sortable struct {
 		value Value
@@ -750,15 +761,6 @@ func appendSelected(result *sequence, source sequence, index int) {
 	if index < len(source.cells) {
 		result.cells = append(result.cells, cloneCells(source.cells[index]))
 	}
-}
-
-func appendElement(result *sequence, sym *symbols.Symbol, seen map[symbols.ElementKey]struct{}) {
-	key := symbols.KeyOf(sym)
-	if _, duplicate := seen[key]; duplicate {
-		return
-	}
-	seen[key] = struct{}{}
-	result.values = append(result.values, ElementValue(sym))
 }
 
 func (e *executor) consumeVisit() bool {
