@@ -25,7 +25,13 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 		offset := positionToOffset(doc.Content, params.Position)
 		scope := enclosingScope(doc.Scope, offset)
 		if path, ok := memberPathBefore(doc.Content, offset); ok {
-			for _, sym := range s.ws.MembersOnPath(scope, path) {
+			members := s.ws.MembersOnPath(scope, path)
+			// A qualified name in a calc usage's type position still names a
+			// query, so the package's members are filtered the same way.
+			if calcTypingPositionAt(doc.Content, memberPathStart(doc.Content, offset)) && s.insideDocumentDefinition(scope) {
+				members = queryTypeMembers(s, members)
+			}
+			for _, sym := range members {
 				c.addSymbol(s, sym)
 			}
 			return c.list(), nil
@@ -42,15 +48,12 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 		// The type of a calc usage inside a document definition is a query, so
 		// only query definitions (and the packages qualifying one) are offered.
 		if calcTypingPositionAt(doc.Content, offset) && s.insideDocumentDefinition(scope) {
-			var candidates []*symbols.Symbol
-			for sc := scope; sc != nil; sc = sc.Parent() {
-				candidates = append(candidates, sc.Members()...)
-			}
-			candidates = append(candidates, s.ws.TopLevelSymbols(name)...)
-			for _, sym := range s.ws.QueryDefinitions(candidates) {
+			for _, sym := range s.ws.QueryTypeCandidates(scope) {
 				c.addSymbol(s, sym)
 			}
-			for _, sym := range candidates {
+			// Library root packages, which a visible-name walk never offers as
+			// top-level names, may still qualify a query.
+			for _, sym := range s.ws.TopLevelSymbols(name) {
 				if sym != nil && (sym.Kind == symbols.SymbolPackage || sym.Kind == symbols.SymbolNamespace) {
 					c.addSymbol(s, sym)
 				}
@@ -65,7 +68,7 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 				if owner == nil {
 					continue
 				}
-				if params := s.ws.QueryUsageParameters(owner); len(params) > 0 {
+				if params, ok := s.ws.QueryUsageParameters(owner); ok {
 					for _, sym := range params {
 						c.addSymbol(s, sym)
 					}
@@ -361,6 +364,41 @@ func calcTypingPositionAt(content []byte, offset int) bool {
 	i = skipSpacesBefore(content, start)
 	start = identStart(content, i)
 	return string(content[start:i]) == "calc"
+}
+
+// memberPathStart returns the offset at which the member access ending at
+// offset begins: the start of `A::B::` for an offset after it.
+func memberPathStart(content []byte, offset int) int {
+	if offset > len(content) {
+		offset = len(content)
+	}
+	i := identStart(content, offset)
+	for {
+		sep := separatorBefore(content, i)
+		if sep == 0 {
+			return i
+		}
+		i = identStart(content, i-sep)
+	}
+}
+
+// queryTypeMembers filters members to what a query type may be spelled with:
+// query definitions and the namespaces qualifying one.
+func queryTypeMembers(s *Server, members []*symbols.Symbol) []*symbols.Symbol {
+	queries := map[*symbols.Symbol]bool{}
+	for _, sym := range s.ws.QueryDefinitions(members) {
+		queries[sym] = true
+	}
+	var out []*symbols.Symbol
+	for _, sym := range members {
+		if sym == nil {
+			continue
+		}
+		if queries[sym] || sym.Kind == symbols.SymbolPackage || sym.Kind == symbols.SymbolNamespace {
+			out = append(out, sym)
+		}
+	}
+	return out
 }
 
 // skipSpacesBefore returns the offset before any run of blanks ending at i.

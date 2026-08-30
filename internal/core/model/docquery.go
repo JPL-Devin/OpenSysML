@@ -48,6 +48,9 @@ func (w *Workspace) RenderDocumentMarkdown(fqn string) (string, error) {
 	if len(matches) == 0 {
 		return "", fmt.Errorf("no element named %s", fqn)
 	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("%s names %d elements; rename one so the name is unambiguous", fqn, len(matches))
+	}
 	sym := matches[0]
 	if !docplan.IsDocumentDefinition(w.index, sem, sym) {
 		return "", fmt.Errorf("%s is not a document: one is a part def specializing DocumentQueries::Document", fqn)
@@ -95,14 +98,14 @@ func (w *Workspace) QueryBindingParameter(sym *symbols.Symbol) (*symbols.Symbol,
 }
 
 // QueryUsageParameters lists the `in` parameters of the query definition a calc
-// usage is typed by; nil when the usage is not typed by one.
-func (w *Workspace) QueryUsageParameters(usage *symbols.Symbol) []*symbols.Symbol {
+// usage is typed by; false when the usage is not typed by one.
+func (w *Workspace) QueryUsageParameters(usage *symbols.Symbol) ([]*symbols.Symbol, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	resolver, sem := w.newResolver()
 	target := docplan.QueryTarget(w.index, sem, resolver, usage)
 	if target == nil {
-		return nil
+		return nil, false
 	}
 	scope := usage.OwnerScope
 	if usage.Scope != nil {
@@ -117,7 +120,7 @@ func (w *Workspace) QueryUsageParameters(usage *symbols.Symbol) []*symbols.Symbo
 			out = append(out, member)
 		}
 	}
-	return out
+	return out, true
 }
 
 // IsDocumentDefinition reports whether sym is a native document definition: a
@@ -127,6 +130,32 @@ func (w *Workspace) IsDocumentDefinition(sym *symbols.Symbol) bool {
 	defer w.mu.RUnlock()
 	_, sem := w.newResolver()
 	return docplan.IsDocumentDefinition(w.index, sem, sym)
+}
+
+// QueryTypeCandidates lists what a calc usage's type position may name: the
+// query definitions reachable by a single name from scope — imports and
+// inheritance included — and the namespaces a qualified name may start with.
+func (w *Workspace) QueryTypeCandidates(scope *symbols.Scope) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	seen := map[*symbols.Symbol]bool{}
+	for _, vn := range w.VisibleNames(scope, VisibleNamesOptions{MaxDepth: 1}) {
+		matches := symbols.PreferDeclared(w.LookupQualified(vn.FQN))
+		if len(matches) == 0 {
+			continue
+		}
+		sym := matches[0]
+		if sym == nil || seen[sym] {
+			continue
+		}
+		seen[sym] = true
+		switch {
+		case sym.Kind == symbols.SymbolPackage || sym.Kind == symbols.SymbolNamespace:
+			out = append(out, sym)
+		case len(w.QueryDefinitions([]*symbols.Symbol{sym})) > 0:
+			out = append(out, sym)
+		}
+	}
+	return out
 }
 
 // QueryDefinitions filters syms to the query definitions among them: the calc

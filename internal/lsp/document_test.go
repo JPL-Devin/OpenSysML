@@ -209,6 +209,126 @@ func TestCompletionBindingPositionOffersQueryParameters(t *testing.T) {
 	}
 }
 
+// queryLibModel is a query library another package imports, so completion is
+// exercised across documents and through package qualifiers.
+const queryLibModel = `package QueryLib {
+	private import DocumentQueries::*;
+	private import KerML::Root::Element;
+
+	calc def Everything :> Query {
+		in root : Element;
+		Descendants(source = root, maxDepth = 3)
+	}
+
+	calc def NoInputs :> Query {
+		Descendants(source = Everything, maxDepth = 1)
+	}
+
+	part def Widget;
+}
+`
+
+const reportModel = `package Reports {
+	private import DocumentQueries::*;
+	private import QueryLib::*;
+
+	part def WidgetReport :> Document {
+		attribute redefines title = "Widgets";
+
+		part w : Table {
+			calc rows : Everything {
+				in root = QueryLib;
+			}
+		}
+
+		part all : Table {
+			calc every : QueryLib:: {
+			}
+		}
+
+		part none : Table {
+			calc bare : NoInputs {
+			}
+		}
+	}
+}
+`
+
+func openReportModel(t *testing.T) (*Server, string) {
+	t.Helper()
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	ws.Open(uri.File("/tmp/lib.sysml").Filename(), []byte(queryLibModel), 1)
+	name := uri.File("/tmp/report.sysml").Filename()
+	ws.Open(name, []byte(reportModel), 1)
+	return s, name
+}
+
+func completionLabelsIn(t *testing.T, s *Server, name, src, anchor string, delta int) []string {
+	t.Helper()
+	off := strings.Index(src, anchor)
+	if off < 0 {
+		t.Fatalf("anchor %q not in fixture", anchor)
+	}
+	list, err := s.Completion(context.Background(), &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(src), off+delta),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Completion err = %v", err)
+	}
+	labels := make([]string, 0, len(list.Items))
+	for _, item := range list.Items {
+		labels = append(labels, item.Label)
+	}
+	return labels
+}
+
+func TestCompletionCalcTypingPositionOffersImportedQueries(t *testing.T) {
+	s, name := openReportModel(t)
+	labels := completionLabelsIn(t, s, name, reportModel, "Everything {", 0)
+	if !containsLabel(labels, "Everything") || !containsLabel(labels, "NoInputs") {
+		t.Fatalf("labels = %v, want the queries imported from QueryLib", labels)
+	}
+	if containsLabel(labels, "Widget") {
+		t.Fatalf("labels = %v, want no imported non-query definitions", labels)
+	}
+}
+
+func TestCompletionQualifiedCalcTypingPositionFiltersToQueries(t *testing.T) {
+	s, name := openReportModel(t)
+	anchor := "QueryLib:: {"
+	labels := completionLabelsIn(t, s, name, reportModel, anchor, len("QueryLib::"))
+	if !containsLabel(labels, "Everything") || !containsLabel(labels, "NoInputs") {
+		t.Fatalf("labels = %v, want QueryLib's query definitions", labels)
+	}
+	if containsLabel(labels, "Widget") {
+		t.Fatalf("labels = %v, want no non-query package members", labels)
+	}
+}
+
+func TestCompletionBindingPositionOfParameterlessQueryOffersNothing(t *testing.T) {
+	s, name := openReportModel(t)
+	anchor := "calc bare : NoInputs {"
+	labels := completionLabelsIn(t, s, name, reportModel, anchor, len(anchor))
+	if len(labels) != 0 {
+		t.Fatalf("labels = %v, want none: the query declares no parameters", labels)
+	}
+}
+
+func TestRenderDocumentAmbiguousName(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	ws.Open("one.sysml", []byte(documentModel), 1)
+	ws.Open("two.sysml", []byte(documentModel), 1)
+	if _, err := s.RenderDocument(&renderDocumentParams{Name: "Observatory::MassReport"}); err == nil ||
+		!strings.Contains(err.Error(), "names 2 elements") {
+		t.Fatalf("err = %v, want an ambiguity error", err)
+	}
+}
+
 func containsLabel(labels []string, want string) bool {
 	for _, l := range labels {
 		if l == want {
