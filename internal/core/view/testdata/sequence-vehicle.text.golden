@@ -8,4 +8,4 @@ messages:
   vehicle => driver: of es : EngineStatus
 
 not represented:
-  - the flows in action startVehicle are its action flow, not interaction messages; they are not shown
+  - the flows in perform action startVehicle are its action flow, not interaction messages; they are not shown

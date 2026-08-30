@@ -54,7 +54,7 @@ func (s *Session) doSearch(substr string) ([]string, bool, error) {
 		}
 		matches = append(matches, match{
 			fqn:    fqn,
-			kind:   sym.Kind.String(),
+			kind:   sym.Notation(),
 			onName: strings.Contains(suggest.LastSegment(lower), want),
 		})
 	}

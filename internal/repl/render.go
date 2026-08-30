@@ -9,6 +9,7 @@ import (
 	"golang.org/x/text/width"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -138,14 +139,14 @@ func renderMember(m ast.Node) string {
 		return "import " + importTarget(d)
 	case *ast.Dependency:
 		return "dependency " + nameOrAnon(d.Ident)
-	case *ast.RelationshipMember:
-		return d.Keyword + " " + nameOrAnon(d.Ident)
 	case *ast.Comment:
 		return "comment"
+	case *ast.RelationshipMember:
+		return ast.Notation(d) + " " + nameOrAnon(d.Ident)
 	case *ast.Definition:
-		return d.Kind.String() + " def " + nameOrAnon(d.Ident)
+		return ast.Notation(d) + " " + nameOrAnon(d.Ident)
 	case *ast.Usage:
-		return d.Kind.String() + " " + nameOrAnon(d.Ident)
+		return ast.Notation(d) + " " + nameOrAnon(d.Ident)
 	default:
 		return ""
 	}
@@ -153,7 +154,7 @@ func renderMember(m ast.Node) string {
 
 func nameOrAnon(id ast.Identification) string {
 	if id.Name != "" {
-		return id.Name
+		return lexer.NameText(id.Name)
 	}
 	if id.ShortName != "" {
 		return "<" + id.ShortName + ">"

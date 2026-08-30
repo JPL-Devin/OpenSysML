@@ -131,12 +131,6 @@ func symbolAtOffset(scope *symbols.Scope, offset int) *symbols.Symbol {
 	return nil
 }
 
-// leadingDocText returns the concatenated text of comment/note trivia
-// preceding a declaration.
-func leadingDocText(content []byte, trivia []ast.Trivia) string {
-	return strings.Join(leadingDocComments(content, trivia), "\n")
-}
-
 // leadingDocComments returns the text of each comment/note trivia preceding a
 // declaration, kept apart so each keeps its own delimiters.
 func leadingDocComments(content []byte, trivia []ast.Trivia) []string {

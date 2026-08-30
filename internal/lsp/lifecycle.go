@@ -14,6 +14,7 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 	if params != nil {
 		s.applyConformanceSettings(params.InitializationOptions)
 		s.setHoverMarkdown(clientRendersMarkdownHover(params.Capabilities))
+		s.setCompletionMarkdown(clientRendersMarkdownCompletion(params.Capabilities))
 	}
 	return &protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
@@ -67,6 +68,20 @@ func clientRendersMarkdownHover(caps protocol.ClientCapabilities) bool {
 		return false
 	}
 	for _, format := range caps.TextDocument.Hover.ContentFormat {
+		if format == protocol.Markdown {
+			return true
+		}
+	}
+	return false
+}
+
+// clientRendersMarkdownCompletion reports whether the client advertised Markdown
+// among the formats it accepts for completion item documentation.
+func clientRendersMarkdownCompletion(caps protocol.ClientCapabilities) bool {
+	if caps.TextDocument == nil || caps.TextDocument.Completion == nil || caps.TextDocument.Completion.CompletionItem == nil {
+		return false
+	}
+	for _, format := range caps.TextDocument.Completion.CompletionItem.DocumentationFormat {
 		if format == protocol.Markdown {
 			return true
 		}

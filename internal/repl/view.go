@@ -409,7 +409,7 @@ func (e concernEvaluator) IsViolation(err error) bool {
 
 // viewElementLine names an element by qualified name and kind, as %search does.
 func (s *Session) viewElementLine(sym *symbols.Symbol) string {
-	return fmt.Sprintf("%s (%s)", s.viewElementName(sym), sym.Kind.String())
+	return fmt.Sprintf("%s (%s)", s.viewElementName(sym), sym.Notation())
 }
 
 // viewElementName names an element as the notation writes it, for reporting.
