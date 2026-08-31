@@ -41,7 +41,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   unit.command` delivered the message on the sender's own identity under the port path
   `unit.command`, so the nested part never accepted it. Every receiving end of a route is now
   resolved to the object holding the port it names, so the copy is held to the nested part's
-  identity, as it already was for a connector an owner declares between two siblings.
+  identity, as it already was for a connector an owner declares between two siblings. An end whose
+  part holds no object this run has nothing behind it, so such a send is now `ErrUnroutableSend`
+  rather than a message posted to a port path no consumer reads.
 
 - **A send now crosses a connector its owner declared.** A part's port joined by its owner to a
   sibling's port reached nothing: routing consulted only the connections of the behavior and of

@@ -230,9 +230,24 @@ func (ctx *Context) endDeliveries(scope *symbols.Scope, self *Instance, end stri
 		out = append(out, ownerDelivery{object: addr.Object, port: addr.Port})
 	}
 	if len(out) == 0 {
+		if ctx.endNamesAStructuralPath(self, end) {
+			return nil, nil
+		}
 		return []ownerDelivery{{object: objectID(self), port: end}}, nil
 	}
 	return out, nil
+}
+
+// endNamesAStructuralPath reports whether an end reaches its port through a
+// non-port feature of the sender — a part it holds — so an end that resolved to
+// no object holds none this run and nothing behind it can receive.
+func (ctx *Context) endNamesAStructuralPath(self *Instance, end string) bool {
+	segments := strings.Split(end, ".")
+	if self == nil || len(segments) < 2 {
+		return false
+	}
+	fv, held := self.FeatureValues[segments[0]]
+	return held && !isPortFeature(fv.Feature) && !isBehaviorFeature(fv.Feature)
 }
 
 // routableConnections are the connections a `send … via p` of a behavior can
