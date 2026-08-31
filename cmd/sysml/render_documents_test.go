@@ -168,6 +168,10 @@ func TestRenderDocumentsAllOrNothing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "Reports-Appendix.md"), []byte(previous), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	bystander := "not ours\n"
+	if err := os.WriteFile(filepath.Join(dir, "Reports-Appendix.md.staged"), []byte(bystander), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	got := check(t, binary, linkedModel, "-render-documents", dir)
 	if got.status != 2 || !strings.Contains(got.stderr, "it is a directory") {
@@ -180,12 +184,19 @@ func TestRenderDocumentsAllOrNothing(t *testing.T) {
 	if string(appendix) != previous {
 		t.Errorf("failed set replaced the existing appendix:\n%s", appendix)
 	}
+	kept, err := os.ReadFile(filepath.Join(dir, "Reports-Appendix.md.staged"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(kept) != bystander {
+		t.Errorf("failed set touched an unrelated file:\n%s", kept)
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".staged") {
+		if strings.HasPrefix(entry.Name(), ".sysml-") {
 			t.Errorf("staged leftover %s", entry.Name())
 		}
 	}

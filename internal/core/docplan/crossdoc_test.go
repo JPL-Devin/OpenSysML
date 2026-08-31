@@ -307,6 +307,42 @@ func TestCompileInheritedContentTargetsDerivedDocument(t *testing.T) {
 	}
 }
 
+// TestCompileQualifiedInheritedContentTargetsNamedDocument checks a
+// qualified target naming an inherited block through a derived document
+// links to the document the author wrote, not the declaring base.
+func TestCompileQualifiedInheritedContentTargetsNamedDocument(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def BaseAppendix :> Document {
+			attribute redefines title = "Base Appendix";
+			part tables : Section {
+				attribute redefines title = "Detail Tables";
+				part body : Paragraph {
+					attribute redefines text = "detail";
+				}
+			}
+		}
+		part def DerivedAppendix :> BaseAppendix {
+			attribute redefines title = "Derived Appendix";
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part intro : Paragraph {
+				part see : Ref {
+					ref redefines target = DerivedAppendix::tables;
+				}
+			}
+		}
+	`)
+	plan := fixture.mustCompile(t, "Report")
+	run := plan.Content()[0].Runs()[0]
+	if run.RefDocument() != "Observatory::DerivedAppendix" {
+		t.Errorf("document = %q, want Observatory::DerivedAppendix", run.RefDocument())
+	}
+	if path := strings.Join(run.RefPath(), "/"); path != "tables" {
+		t.Errorf("path = %q", path)
+	}
+}
+
 // TestCompileAmbiguousChainRoot checks a chain rooted in a usage typed by
 // more than one document definition is an ambiguous target.
 func TestCompileAmbiguousChainRoot(t *testing.T) {

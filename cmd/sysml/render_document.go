@@ -74,44 +74,71 @@ func runRenderDocuments(files []string) error {
 }
 
 // commitDocumentSet writes a rendered document set all-or-nothing: every
-// document is staged beside its destination first, and the set is committed
-// by rename only after all staging succeeded, so a failure leaves whatever
-// was in the directory untouched.
-func commitDocumentSet(documents []repl.RenderedDocument) (err error) {
+// document is staged in the directory under a fresh temporary name, existing
+// destinations are set aside, and the staged set is renamed into place; any
+// failure restores the directory's previous contents.
+func commitDocumentSet(documents []repl.RenderedDocument) error {
 	for _, document := range documents {
 		path := filepath.Join(renderDocsDir, document.FileName)
-		if info, statErr := os.Lstat(path); statErr == nil && info.IsDir() {
+		if info, err := os.Lstat(path); err == nil && info.IsDir() {
 			return fmt.Errorf("cannot write %s: it is a directory", path)
 		}
 	}
-	staged := make([]string, 0, len(documents))
-	defer func() {
-		if err != nil {
-			for _, path := range staged {
-				if path != "" {
-					_ = os.Remove(path)
-				}
+	staged := make([]string, len(documents))
+	backups := make([]string, len(documents))
+	committed := make([]bool, len(documents))
+	replaced := make([]bool, len(documents))
+	rollback := func() {
+		for i := range documents {
+			path := filepath.Join(renderDocsDir, documents[i].FileName)
+			if staged[i] != "" {
+				_ = os.Remove(staged[i])
+			}
+			if committed[i] {
+				_ = os.Remove(path)
+			}
+			if backups[i] != "" {
+				_ = os.Rename(backups[i], path)
 			}
 		}
-	}()
-	for _, document := range documents {
-		path := filepath.Join(renderDocsDir, document.FileName)
-		out := []byte(strings.TrimRight(document.Markdown, "\n") + "\n")
-		// #nosec G306 -- a rendered document is not a secret.
-		if err = os.WriteFile(path+stagingSuffix, out, 0o644); err != nil {
-			return fmt.Errorf("stage %s: %w", path, err)
+	}
+	for i, document := range documents {
+		name, err := stageDocument(document)
+		if err != nil {
+			rollback()
+			return err
 		}
-		staged = append(staged, path+stagingSuffix)
+		staged[i] = name
 	}
 	for i, document := range documents {
 		path := filepath.Join(renderDocsDir, document.FileName)
-		_, statErr := os.Lstat(path)
-		if err = os.Rename(staged[i], path); err != nil {
+		if _, err := os.Lstat(path); err != nil {
+			continue
+		}
+		replaced[i] = true
+		name, err := setAside(path)
+		if err != nil {
+			rollback()
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+		backups[i] = name
+	}
+	for i, document := range documents {
+		path := filepath.Join(renderDocsDir, document.FileName)
+		if err := os.Rename(staged[i], path); err != nil {
+			rollback()
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 		staged[i] = ""
+		committed[i] = true
+	}
+	for i, document := range documents {
+		if backups[i] != "" {
+			_ = os.Remove(backups[i])
+		}
+		path := filepath.Join(renderDocsDir, document.FileName)
 		what := ""
-		if statErr == nil {
+		if replaced[i] {
 			what = ", replaced the existing file"
 		}
 		out := len(strings.TrimRight(document.Markdown, "\n")) + 1
@@ -120,9 +147,47 @@ func commitDocumentSet(documents []repl.RenderedDocument) (err error) {
 	return nil
 }
 
-// stagingSuffix marks a document staged beside its destination before the
-// set commits.
-const stagingSuffix = ".staged"
+// stageDocument writes a document to a fresh temporary file in the rendering
+// directory, so staging never touches a file the directory already holds.
+func stageDocument(document repl.RenderedDocument) (string, error) {
+	file, err := os.CreateTemp(renderDocsDir, ".sysml-staged-*")
+	if err != nil {
+		return "", fmt.Errorf("stage %s: %w", document.FileName, err)
+	}
+	name := file.Name()
+	out := strings.TrimRight(document.Markdown, "\n") + "\n"
+	if _, err := file.WriteString(out); err != nil {
+		_ = file.Close()
+		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
+	}
+	if err := file.Close(); err != nil {
+		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
+	}
+	// #nosec G302 -- a rendered document is not a secret.
+	if err := os.Chmod(name, 0o644); err != nil {
+		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
+	}
+	return name, nil
+}
+
+// setAside moves an existing destination to a fresh temporary name so a
+// failed commit can restore it.
+func setAside(path string) (string, error) {
+	file, err := os.CreateTemp(renderDocsDir, ".sysml-replaced-*")
+	if err != nil {
+		return "", err
+	}
+	name := file.Name()
+	if err := file.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	if err := os.Rename(path, name); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	return name, nil
+}
 
 // The forms -doc-form takes.
 const (

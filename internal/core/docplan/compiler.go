@@ -500,6 +500,25 @@ func (c *compiler) chainRoot(scope *symbols.Scope, chain *ast.FeatureChainExpr) 
 	return resolved
 }
 
+// qualifiedRoot returns the deepest document definition a resolved qualified
+// target's written prefix names, so an inherited block links to the document
+// the author wrote rather than the base declaring it.
+func (c *compiler) qualifiedRoot(name *ast.QualifiedName) *symbols.Symbol {
+	for i := len(name.Parts) - 2; i >= 0; i-- {
+		sym, ok := c.resolver.PartSymbol(name, i)
+		if !ok || sym == nil {
+			continue
+		}
+		if canonical, ok := c.resolver.ResolveAliasTarget(sym); ok {
+			sym = canonical
+		}
+		if sym.Kind == symbols.SymbolPartDef && c.model.Conforms(sym, c.bases.document) {
+			return sym
+		}
+	}
+	return nil
+}
+
 // rejectRunQuery rejects a query declared in an inline run.
 func (c *compiler) rejectRunQuery(member *symbols.Symbol) error {
 	for _, candidate := range c.effectiveMembers(member) {
@@ -670,7 +689,13 @@ func (c *compiler) documentRootTarget(sym *symbols.Symbol, run *Run) (*symbols.S
 // root typed by more than one document is an ambiguous target.
 func (c *compiler) chainRootDocument(run *Run) (*symbols.Symbol, error) {
 	root := run.refRoot
-	if root == nil || root.Kind == symbols.SymbolPartDef {
+	if root == nil {
+		return nil, nil
+	}
+	if root.Kind == symbols.SymbolPartDef {
+		if c.model.Conforms(root, c.bases.document) {
+			return root, nil
+		}
 		return nil, nil
 	}
 	defs := c.documentTypesOf(root)
@@ -1123,7 +1148,7 @@ func (c *compiler) namedTarget(
 		if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
 			resolved = canonical
 		}
-		return resolved, nil, true, nil
+		return resolved, c.qualifiedRoot(name), true, nil
 	}
 	for _, target := range c.model.RedefinedFeatures(candidate) {
 		resolved, root, stated, err := c.namedTarget(member, target, invalid, unknown, seen)
