@@ -89,6 +89,23 @@ const (
 // distinguishing it from a paragraph that is one emphasis run.
 const captionMarker = "<!-- caption -->"
 
+// markdownWithSpanCaptions rewrites each marked caption as a bracketed span
+// carrying the caption class, so converters that read the Markdown
+// themselves style captions the same way the prepared HTML does.
+func markdownWithSpanCaptions(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	out := make([]string, 0, len(lines))
+	for i := 0; i < len(lines); i++ {
+		if lines[i] == captionMarker && i+1 < len(lines) && isCaption(lines[i+1]) {
+			out = append(out, "["+lines[i+1]+"]{.caption}")
+			i++
+			continue
+		}
+		out = append(out, lines[i])
+	}
+	return strings.Join(out, "\n")
+}
+
 // fenceBody collects the lines of a fenced block opened before start,
 // returning the body, the index of the closing fence, and whether one closed.
 func fenceBody(lines []string, start int) (string, int, bool) {

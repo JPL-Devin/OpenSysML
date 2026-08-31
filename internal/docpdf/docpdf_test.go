@@ -155,6 +155,15 @@ func TestDocumentHTMLCaptionVersusEmphasisParagraph(t *testing.T) {
 	}
 }
 
+func TestMarkdownWithSpanCaptions(t *testing.T) {
+	md := "# T\n\n<!-- caption -->\n*Table 1\\. Masses*\n\n*just emphasis*\n"
+	got := markdownWithSpanCaptions(md)
+	want := "# T\n\n[*Table 1\\. Masses*]{.caption}\n\n*just emphasis*\n"
+	if got != want {
+		t.Fatalf("markdownWithSpanCaptions = %q, want %q", got, want)
+	}
+}
+
 func TestParseBlocksUnclosedFence(t *testing.T) {
 	_, err := parseBlocks("# T\n\n```mermaid\nflowchart LR\n")
 	var docErr *Error
