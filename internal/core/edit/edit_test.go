@@ -19,12 +19,7 @@ import (
 // the service does, so a fixture resolves ISQ and SI the way a real model does.
 func libraryIndex(t *testing.T) *symbols.Index {
 	t.Helper()
-	idx := symbols.NewIndex()
-	src := libs.DefaultSource()
-	cache, _ := libs.NewCache()
-	if err := libs.NewLoader(src, cache).LoadAll(idx); err != nil {
-		t.Fatalf("load the standard library: %v", err)
-	}
+	idx := libs.NewModelIndex()
 	idx.ExpandWildcardImports()
 	return idx
 }

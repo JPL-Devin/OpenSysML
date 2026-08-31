@@ -45,10 +45,7 @@ func loadEvaluationFixtureFile(t *testing.T, path string) evaluationFixture {
 
 func loadEvaluationSource(t *testing.T, content string) evaluationFixture {
 	t.Helper()
-	index := symbols.NewIndex()
-	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
-		t.Fatalf("load standard library: %v", err)
-	}
+	index := libs.NewModelIndex()
 	p := parser.New(source.New(fixtureDoc, []byte(content)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {

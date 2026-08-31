@@ -29,10 +29,7 @@ type queryFixture struct {
 
 func loadQueryFixture(t *testing.T, body string) queryFixture {
 	t.Helper()
-	index := symbols.NewIndex()
-	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
-		t.Fatalf("load standard library: %v", err)
-	}
+	index := libs.NewModelIndex()
 	name := "queries.sysml"
 	content := "package Fixture {" + queryImports + body + "}"
 	p := parser.New(source.New(name, []byte(content)))

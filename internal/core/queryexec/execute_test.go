@@ -43,10 +43,7 @@ func loadExecutionFixtureFile(t *testing.T, path string) executionFixture {
 
 func loadExecutionSource(t *testing.T, content string) executionFixture {
 	t.Helper()
-	index := symbols.NewIndex()
-	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
-		t.Fatalf("load standard library: %v", err)
-	}
+	index := libs.NewModelIndex()
 	name := "query-execution.sysml"
 	p := parser.New(source.New(name, []byte(content)))
 	root := p.ParseFile()
