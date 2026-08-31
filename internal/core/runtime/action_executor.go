@@ -1137,10 +1137,9 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		}
 		token.Wait = nil
 		if accept.ParamName != "" {
-			value, held := msg.Payload["value"]
-			if !held {
-				return fmt.Errorf("%w: accept %s: %s carries no single value to bind",
-					ErrNoValue, accept.ParamName, orAnonymousSignal(msg.SignalType))
+			value, err := e.ctx.acceptedValue(msg)
+			if err != nil {
+				return fmt.Errorf("accept %s: %w", accept.ParamName, err)
 			}
 			if err := e.setFeature(accept.ParamName, value); err != nil {
 				return err

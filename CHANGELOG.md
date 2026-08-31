@@ -8,6 +8,35 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **The public Go API covers every operation the service answers.** `ExecuteAction`,
+  `ExecuteState`, `VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction`, `EvaluateCalc`,
+  `Query`, `QueryOSLC`, `RunDocumentQuery`, `RenderDocument`, `Convert`, `ConvertSource`,
+  `ConvertFile` and `ApplyEdits` join parse, lookup, evaluation and instantiation on
+  `opensysml.Client`, in-process and over Connect alike, so an embedding program no longer drops
+  to the generated protobuf stubs for behaviour, verification, search, reporting, conversion or
+  editing. Queries are written with typed conditions (`Equals`, `Greater`, `Less`, `All`, `Any`
+  and `Not`, which De Morgans a composite rather than sending a shape the service rejects);
+  a verdict that is false or undecided is returned as an answer, while a request that cannot be
+  answered at all is a `VerifyError`, and a group of edits that will not apply is an `EditError`
+  naming the failure and the elements still referring to the target.
+
+- **A model spread over several files is parsed as one model.** `ParseFiles` and
+  `ParseDocuments` on the public Go API — the `ParseSources` RPC and the `parse_sources`
+  capability on the service — parse each document on its own and index all of them together, so
+  an import between them resolves and every symbol of the set is one lookup, evaluation or
+  instantiation away. Nothing is concatenated: a document keeps its own name, a diagnostic
+  locates itself in the file it came from, and `Model.Roots` holds each document's root. The two
+  operations that write one document's notation back out — conversion from a model hash, and
+  editing — refuse a model of several documents rather than picking one.
+
+- **A relay-probe walkthrough for the identity and lifecycle notation:**
+  [`examples/relay-probe-demo`](examples/relay-probe-demo/README.md) models one individual probe
+  across its mission phases — event occurrences ordered in time, snapshots and a timeslice of one
+  individual, occurrences with multiplicity, a calculation reading a feature across two snapshots,
+  a requirement whose bound subject is a snapshot, and a beacon inside a timeslice sending
+  telemetry through the probe's own antenna. It was written to find defects, and found the three
+  below.
+
 - **A second bomb-disposal walkthrough, written for the notation the first one does not reach:**
   [`examples/disposal-team-demo`](examples/disposal-team-demo/README.md) models the team around
   the robot — quantities with units and a payload budget, `select` and `reduce` over the fleet,
@@ -45,6 +74,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `sysml -query ''` was indistinguishable from an absent flag and started the interactive REPL
   instead of answering.
 
+- **The public Go API holds its contract for a binary that imports it.**
+  `ServerInfo.Version` reports the OpenSysML module version the importing program resolved rather
+  than that program's own; an in-process call honours its context as the wire does, refusing a
+  context already done; every call after `Close` is refused with `CodeUnavailable`, and closing
+  twice is not an error; and a `StatusError`, a quantity, an enum literal and an unset value print
+  as a caller would write them rather than as Go struct dumps.
+
 - **A caption is no longer confusable with an emphasized paragraph.** The
   Markdown renderer wrote a table or diagram caption and an emphasis-only
   paragraph identically as `*text*`, so the PDF backend styled every such
@@ -53,6 +89,27 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   renderers — and the PDF backend styles only marked lines as captions,
   rendering bare emphasized lines as ordinary paragraphs. A marker without
   a caption line after it is a typed `dangling-caption` error.
+
+- **A structural `first a then b;` is a succession, not an initial node.** Ordering two
+  snapshots of an individual in time (`first postSeparation then postFlyby;`) parsed as an
+  initial-node member named `postSeparation`, which shadowed the snapshot it named — the first
+  portion read as `<unknown>` and everything downstream of it (a calculation's default, a
+  requirement's bound subject) failed. A two-ended `first ... then ...` in a structural body now
+  parses as a `SuccessionAsUsage` over its members; the one-ended `first a;` stays an initial
+  node, and an action-carrying body's `first` still opens its initial-node member.
+
+- **An accepted signal message binds as an occurrence of its signal.** `send Telemetry(frames =
+  3.0) via antenna` matched an `accept t : Telemetry` but bound nothing: the message carried its
+  arguments, and the accept only understood a single carried value. The accepted name is now
+  bound to an occurrence of the signal, its features set from the send's named and positional
+  arguments — so a transition effect reads `t.frames`. A message carrying neither a value nor a
+  signal is still `ErrNoValue`.
+
+- **A send from inside a nested part finds its port on the enclosing part.** A beacon running in
+  a timeslice of the probe sending `via antenna` — the probe's port, not the timeslice's — was
+  unroutable: owner routing started at the sender itself, so the probe's connector was never
+  consulted. Routing now starts at the object actually holding the resolved `via` port, so the
+  enclosing part's connectors carry the message.
 
 - **A connector end through a multi-valued feature fans out.** A send over
   `connect console.command to units.command` where `part units : Unit[2]` was

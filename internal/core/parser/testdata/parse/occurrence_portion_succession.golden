@@ -1,0 +1,37 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Portions" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Craft" individual=true))
+      (Membership visibility="default"
+        (Usage kind="part" name="craft" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+          (Relationship kind="typing" target=Craft
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="postSeparation" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="postFlyby" ref=false direction="none" composite=false derived=false ordered=false nonunique=false snapshot=true))
+          (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (ConnectorEnd target="postSeparation"
+              (*ast.QualifiedName))
+            (ConnectorEnd target="postFlyby"
+              (*ast.QualifiedName)))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="separation" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="flyby" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (ConnectorEnd target="separation"
+              (*ast.QualifiedName))
+            (ConnectorEnd target="flyby"
+              (*ast.QualifiedName)))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="cruise" ref=false direction="none" composite=false derived=false ordered=false nonunique=false timeslice=true))
+          (Membership visibility="default"
+            (Usage kind="occurrence" name="burns" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Multiplicity range=false
+                (LiteralInteger value="2"))))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Sortie"
+          (InitialNode name="prep" successor="")
+          (Usage kind="action" name="prep" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))))

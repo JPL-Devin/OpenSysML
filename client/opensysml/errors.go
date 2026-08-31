@@ -78,9 +78,11 @@ type StatusError struct {
 	Message string
 }
 
-// Error renders the refusal with its canonical code name.
+// Error renders the refusal with its canonical code name. Code.String is
+// spelled out because a Code is itself an error, which fmt would render with
+// Error instead.
 func (e *StatusError) Error() string {
-	return fmt.Sprintf("opensysml: %s: %s", e.Code, e.Message)
+	return fmt.Sprintf("opensysml: %s: %s", e.Code.String(), e.Message)
 }
 
 // Unwrap exposes the Code, so errors.Is(err, opensysml.CodeNotFound) matches.
@@ -115,3 +117,32 @@ func (e *FailureError) Error() string {
 func (e *FailureError) Is(target error) bool {
 	return target == ErrFailure
 }
+
+// VerifyError is a verification or calculation the service could not answer at
+// all, classified: an undecided verdict about the model arrives as a Verdict
+// instead. It is a FailureError, so errors.Is(err, ErrFailure) matches.
+type VerifyError struct {
+	FailureError
+	// Reason says what kind of failure this is, so a caller acts on the kind.
+	Reason Reason
+}
+
+// EditError is a set of edits the service refused, classified by what it
+// refused. Every refusal is one kind: no edit is silently dropped. It is a
+// FailureError, so errors.Is(err, ErrFailure) matches.
+type EditError struct {
+	FailureError
+	// Failure says which refusal this is.
+	Failure EditFailure
+	// Referring are the FQNs of the namespaces referring to a declaration whose
+	// rename or deletion was refused.
+	Referring []string
+}
+
+// Unwrap exposes the failure, so errors.As recovers a *FailureError from a
+// classified one.
+func (e *VerifyError) Unwrap() error { return &e.FailureError }
+
+// Unwrap exposes the failure, so errors.As recovers a *FailureError from a
+// refusal.
+func (e *EditError) Unwrap() error { return &e.FailureError }

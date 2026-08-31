@@ -45,6 +45,11 @@ class SysMLServiceStub:
                 request_serializer=sysml__pb2.ParseFileRequest.SerializeToString,
                 response_deserializer=sysml__pb2.ParseFileResponse.FromString,
                 _registered_method=True)
+        self.ParseSources = channel.unary_unary(
+                '/sysml.SysMLService/ParseSources',
+                request_serializer=sysml__pb2.ParseSourcesRequest.SerializeToString,
+                response_deserializer=sysml__pb2.ParseSourcesResponse.FromString,
+                _registered_method=True)
         self.GetSymbol = channel.unary_unary(
                 '/sysml.SysMLService/GetSymbol',
                 request_serializer=sysml__pb2.GetSymbolRequest.SerializeToString,
@@ -137,6 +142,15 @@ class SysMLServiceServicer:
 
     def ParseFile(self, request, context):
         """Parse a SysML file and return model hash for subsequent queries
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ParseSources(self, request, context):
+        """Parse several documents as one model, so a name one document declares
+        resolves in another and an import between them is satisfied. Reported as
+        the "parse_sources" capability.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -269,6 +283,11 @@ def add_SysMLServiceServicer_to_server(servicer, server):
                     request_deserializer=sysml__pb2.ParseFileRequest.FromString,
                     response_serializer=sysml__pb2.ParseFileResponse.SerializeToString,
             ),
+            'ParseSources': grpc.unary_unary_rpc_method_handler(
+                    servicer.ParseSources,
+                    request_deserializer=sysml__pb2.ParseSourcesRequest.FromString,
+                    response_serializer=sysml__pb2.ParseSourcesResponse.SerializeToString,
+            ),
             'GetSymbol': grpc.unary_unary_rpc_method_handler(
                     servicer.GetSymbol,
                     request_deserializer=sysml__pb2.GetSymbolRequest.FromString,
@@ -400,6 +419,33 @@ class SysMLService:
             '/sysml.SysMLService/ParseFile',
             sysml__pb2.ParseFileRequest.SerializeToString,
             sysml__pb2.ParseFileResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ParseSources(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/ParseSources',
+            sysml__pb2.ParseSourcesRequest.SerializeToString,
+            sysml__pb2.ParseSourcesResponse.FromString,
             options,
             channel_credentials,
             insecure,

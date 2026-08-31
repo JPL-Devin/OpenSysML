@@ -42,6 +42,7 @@ type compiler struct {
 	model    *semantics.Model
 	resolver *resolve.Resolver
 	document string
+	entry    *symbols.Symbol
 	bases    bases
 	stack    []string
 	targets  map[*symbols.Symbol]refTarget
@@ -64,11 +65,13 @@ type bases struct {
 	linkColumn *symbols.Symbol
 }
 
-// refTarget is one referenceable content block: its named path from the
-// document root and the label a reference without text falls back to.
+// refTarget is one referenceable target: the document that owns it ("" for
+// the planned document), the named path from that document's root (empty for
+// a document root), and the label a reference without text falls back to.
 type refTarget struct {
-	path  []string
-	label string
+	document string
+	path     []string
+	label    string
 }
 
 // IsDocumentDefinition reports whether sym specializes DocumentQueries::Document.
@@ -128,6 +131,7 @@ func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Res
 		model:    model,
 		resolver: resolver,
 		document: name,
+		entry:    entry,
 		bases:    all,
 		targets:  make(map[*symbols.Symbol]refTarget),
 	}
@@ -606,11 +610,11 @@ func (c *compiler) compileRefRun(member *symbols.Symbol) (Run, error) {
 	if err != nil {
 		return Run{}, err
 	}
-	target, err := c.refRunTarget(member)
+	target, root, err := c.refRunTarget(member)
 	if err != nil {
 		return Run{}, err
 	}
-	return Run{kind: RunRef, text: text, refSym: target, origin: provenance.Symbol(member)}, nil
+	return Run{kind: RunRef, text: text, refSym: target, refRoot: root, origin: provenance.Symbol(member)}, nil
 }
 
 // requiredRunText reads a run's text attribute, which must be a non-empty
@@ -631,23 +635,70 @@ func (c *compiler) requiredRunText(member *symbols.Symbol) (string, error) {
 	return text, nil
 }
 
-// refRunTarget resolves the element a reference run's target names.
-func (c *compiler) refRunTarget(member *symbols.Symbol) (*symbols.Symbol, error) {
+// refRunTarget resolves the element a reference run's target names, and the
+// usage a dot-notation chain starts from, when the target is one.
+func (c *compiler) refRunTarget(member *symbols.Symbol) (*symbols.Symbol, *symbols.Symbol, error) {
 	for _, candidate := range c.effectiveMembers(member) {
 		if c.effectiveName(candidate) != "target" {
 			continue
 		}
-		resolved, stated, err := c.namedTarget(member, candidate, ErrorInvalidRefTarget, ErrorUnknownRefTarget, make(map[*symbols.Symbol]bool))
+		resolved, root, stated, err := c.namedTarget(member, candidate, ErrorInvalidRefTarget, ErrorUnknownRefTarget, make(map[*symbols.Symbol]bool))
 		if err != nil || stated {
-			return resolved, err
+			return resolved, root, err
 		}
 	}
-	return nil, &Error{
+	return nil, nil, &Error{
 		Kind:     ErrorMissingRefTarget,
 		Document: c.document,
 		Content:  c.contentName(member),
 		Origin:   provenance.Symbol(member),
 	}
+}
+
+// chainRoot resolves the usage a feature chain's innermost operand names.
+func (c *compiler) chainRoot(scope *symbols.Scope, chain *ast.FeatureChainExpr) *symbols.Symbol {
+	operand := chain.Operand
+	for {
+		inner, ok := operand.(*ast.FeatureChainExpr)
+		if !ok {
+			break
+		}
+		operand = inner.Operand
+	}
+	if reference, ok := operand.(*ast.FeatureReference); ok {
+		operand = reference.Name
+	}
+	name, ok := operand.(*ast.QualifiedName)
+	if !ok {
+		return nil
+	}
+	resolved, ok := c.resolver.ResolveQualified(scope, name)
+	if !ok || resolved == nil {
+		return nil
+	}
+	if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
+		return canonical
+	}
+	return resolved
+}
+
+// qualifiedRoot returns the deepest document definition a resolved qualified
+// target's written prefix names, so an inherited block links to the document
+// the author wrote rather than the base declaring it.
+func (c *compiler) qualifiedRoot(name *ast.QualifiedName) *symbols.Symbol {
+	for i := len(name.Parts) - 2; i >= 0; i-- {
+		sym, ok := c.resolver.PartSymbol(name, i)
+		if !ok || sym == nil {
+			continue
+		}
+		if canonical, ok := c.resolver.ResolveAliasTarget(sym); ok {
+			sym = canonical
+		}
+		if sym.Kind == symbols.SymbolPartDef && c.model.Conforms(sym, c.bases.document) {
+			return sym
+		}
+	}
+	return nil
 }
 
 // rejectRunQuery rejects a query declared in an inline run.
@@ -688,13 +739,11 @@ func (c *compiler) resolveRefs(content []Content) error {
 			}
 			target, ok := c.targets[run.refSym]
 			if !ok {
-				return &Error{
-					Kind:     ErrorInvalidRefTarget,
-					Document: c.document,
-					Content:  c.contentName(run.refSym),
-					Actual:   c.contentName(run.refSym),
-					Origin:   run.origin,
+				cross, err := c.crossDocumentTarget(run)
+				if err != nil {
+					return err
 				}
+				target = cross
 			}
 			for _, segment := range target.path {
 				if segment == "" {
@@ -708,6 +757,7 @@ func (c *compiler) resolveRefs(content []Content) error {
 				}
 			}
 			run.ref = append([]string(nil), target.path...)
+			run.refDocument = target.document
 			if run.text == "" {
 				run.text = target.label
 			}
@@ -717,6 +767,226 @@ func (c *compiler) resolveRefs(content []Content) error {
 		}
 	}
 	return nil
+}
+
+// crossDocumentTarget resolves a reference whose target lives outside the
+// planned document: another document definition's root or one of its named
+// content blocks.
+func (c *compiler) crossDocumentTarget(run *Run) (refTarget, error) {
+	sym := run.refSym
+	if root, err := c.documentRootTarget(sym, run); root != nil || err != nil {
+		if err != nil {
+			return refTarget{}, err
+		}
+		label, stated, err := c.optionalText(root, "title")
+		if err != nil {
+			return refTarget{}, err
+		}
+		if !stated || label == "" {
+			label = c.effectiveName(root)
+		}
+		return refTarget{document: symbols.FQNOf(root), label: label}, nil
+	}
+	destination, err := c.chainRootDocument(run)
+	if err != nil {
+		return refTarget{}, err
+	}
+	var path []string
+	node := sym
+	for node != nil && node.Kind == symbols.SymbolPartUsage && c.isContent(node) {
+		path = append([]string{c.effectiveName(node)}, path...)
+		owner := (*symbols.Symbol)(nil)
+		if node.OwnerScope != nil {
+			owner = node.OwnerScope.Owner()
+		}
+		if owner != nil && owner != c.entry && owner.Kind == symbols.SymbolPartDef && c.model.Conforms(owner, c.bases.document) {
+			label, err := c.crossContentLabel(sym)
+			if err != nil {
+				return refTarget{}, err
+			}
+			// A chain through a typed usage targets the usage's document,
+			// not the base definition declaring the inherited block.
+			if destination == nil {
+				destination = owner
+			}
+			if destination == c.entry {
+				return refTarget{path: path, label: label}, nil
+			}
+			return refTarget{document: symbols.FQNOf(destination), path: path, label: label}, nil
+		}
+		node = owner
+	}
+	return refTarget{}, &Error{
+		Kind:     ErrorInvalidRefTarget,
+		Document: c.document,
+		Content:  c.contentName(sym),
+		Actual:   c.contentName(sym),
+		Origin:   run.origin,
+	}
+}
+
+// documentRootTarget returns the document definition a reference names as a
+// whole: the definition itself, or the single document definition typing a
+// referenced document usage. A usage typed by more than one document
+// definition is an ambiguous target.
+func (c *compiler) documentRootTarget(sym *symbols.Symbol, run *Run) (*symbols.Symbol, error) {
+	if sym == nil || sym == c.entry {
+		return nil, nil
+	}
+	if sym.Kind == symbols.SymbolPartDef {
+		if c.model.Conforms(sym, c.bases.document) {
+			return sym, nil
+		}
+		return nil, nil
+	}
+	if _, usage := sym.Decl.(*ast.Usage); !usage || c.contentOwner(sym) != nil {
+		return nil, nil
+	}
+	defs := c.documentTypesOf(sym)
+	switch len(defs) {
+	case 0:
+		return nil, nil
+	case 1:
+		if defs[0] == c.entry {
+			return nil, nil
+		}
+		return defs[0], nil
+	default:
+		names := make([]string, len(defs))
+		for i, def := range defs {
+			names[i] = symbols.FQNOf(def)
+		}
+		return nil, &Error{
+			Kind:     ErrorAmbiguousRefTarget,
+			Document: c.document,
+			Content:  c.contentName(sym),
+			Actual:   strings.Join(names, " and "),
+			Origin:   run.origin,
+		}
+	}
+}
+
+// chainRootDocument returns the document definition typing the usage a
+// reference's dot-notation chain starts from, when there is exactly one; a
+// root typed by more than one document is an ambiguous target.
+func (c *compiler) chainRootDocument(run *Run) (*symbols.Symbol, error) {
+	root := run.refRoot
+	if root == nil {
+		return nil, nil
+	}
+	if root.Kind == symbols.SymbolPartDef {
+		if c.model.Conforms(root, c.bases.document) {
+			return root, nil
+		}
+		return nil, nil
+	}
+	defs := c.documentTypesOf(root)
+	switch len(defs) {
+	case 0:
+		return nil, nil
+	case 1:
+		return defs[0], nil
+	default:
+		names := make([]string, len(defs))
+		for i, def := range defs {
+			names[i] = symbols.FQNOf(def)
+		}
+		return nil, &Error{
+			Kind:     ErrorAmbiguousRefTarget,
+			Document: c.document,
+			Content:  c.contentName(root),
+			Actual:   strings.Join(names, " and "),
+			Origin:   run.origin,
+		}
+	}
+}
+
+// contentOwner returns the document definition a content block belongs to,
+// walking the block's owners; nil when sym is not owned by one.
+func (c *compiler) contentOwner(sym *symbols.Symbol) *symbols.Symbol {
+	node := sym
+	for node != nil && node.OwnerScope != nil {
+		owner := node.OwnerScope.Owner()
+		if owner != nil && owner.Kind == symbols.SymbolPartDef && c.model.Conforms(owner, c.bases.document) {
+			return owner
+		}
+		node = owner
+	}
+	return nil
+}
+
+// documentTypesOf returns the document definitions a usage has as types,
+// stated on the usage itself or inherited through its redefinition lineage
+// when the usage states none.
+func (c *compiler) documentTypesOf(sym *symbols.Symbol) []*symbols.Symbol {
+	return c.documentTypes(sym, make(map[*symbols.Symbol]bool))
+}
+
+func (c *compiler) documentTypes(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
+	if sym == nil || seen[sym] {
+		return nil
+	}
+	seen[sym] = true
+	var defs []*symbols.Symbol
+	stated := false
+	for _, relationship := range semantics.RelationshipsOf(sym) {
+		if relationship == nil || relationship.Kind != ast.RelTyping || relationship.Target == nil {
+			continue
+		}
+		stated = true
+		target := relationship.Target
+		if reference, ok := target.(*ast.FeatureReference); ok {
+			target = reference.Name
+		}
+		name, ok := target.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		resolved, ok := c.resolver.ResolveQualified(sym.OwnerScope, name)
+		if !ok || resolved == nil {
+			continue
+		}
+		if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
+			resolved = canonical
+		}
+		if resolved.Kind == symbols.SymbolPartDef && c.model.Conforms(resolved, c.bases.document) {
+			defs = appendDocumentType(defs, resolved)
+		}
+	}
+	if stated {
+		return defs
+	}
+	for _, target := range c.model.RedefinedFeatures(sym) {
+		for _, def := range c.documentTypes(target, seen) {
+			defs = appendDocumentType(defs, def)
+		}
+	}
+	return defs
+}
+
+// appendDocumentType adds a document definition to defs unless it holds it.
+func appendDocumentType(defs []*symbols.Symbol, def *symbols.Symbol) []*symbols.Symbol {
+	for _, held := range defs {
+		if held == def {
+			return defs
+		}
+	}
+	return append(defs, def)
+}
+
+// crossContentLabel derives the default reference label of another document's
+// content block: its title, caption, or effective name.
+func (c *compiler) crossContentLabel(sym *symbols.Symbol) (string, error) {
+	for _, attr := range []string{"title", "caption"} {
+		label, stated, err := c.optionalText(sym, attr)
+		if err != nil {
+			return "", err
+		}
+		if stated && label != "" {
+			return label, nil
+		}
+	}
+	return c.effectiveName(sym), nil
 }
 
 func (c *compiler) compileTable(member *symbols.Symbol) (Content, error) {
@@ -1036,20 +1306,22 @@ func (c *compiler) sourceTarget(
 	candidate *symbols.Symbol,
 	seen map[*symbols.Symbol]bool,
 ) (*symbols.Symbol, bool, error) {
-	return c.namedTarget(member, candidate, ErrorInvalidViewSource, ErrorUnknownViewSource, seen)
+	resolved, _, stated, err := c.namedTarget(member, candidate, ErrorInvalidViewSource, ErrorUnknownViewSource, seen)
+	return resolved, stated, err
 }
 
 // namedTarget resolves a reference declaration's named value, following
-// redefinition lineage when the declaration itself is unvalued.
+// redefinition lineage when the declaration itself is unvalued. The second
+// symbol is the usage a dot-notation chain starts from, nil otherwise.
 func (c *compiler) namedTarget(
 	member *symbols.Symbol,
 	candidate *symbols.Symbol,
 	invalid ErrorKind,
 	unknown ErrorKind,
 	seen map[*symbols.Symbol]bool,
-) (*symbols.Symbol, bool, error) {
+) (*symbols.Symbol, *symbols.Symbol, bool, error) {
 	if candidate == nil || seen[candidate] {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 	seen[candidate] = true
 	if declaration, ok := candidate.Decl.(*ast.Usage); ok && declaration.Value != nil {
@@ -1057,9 +1329,22 @@ func (c *compiler) namedTarget(
 		if reference, ok := target.(*ast.FeatureReference); ok {
 			target = reference.Name
 		}
+		if chain, ok := target.(*ast.FeatureChainExpr); ok {
+			resolved, ok := c.resolver.ResolveTarget(candidate.OwnerScope, chain)
+			if !ok || resolved == nil {
+				return nil, nil, false, &Error{
+					Kind:     unknown,
+					Document: c.document,
+					Content:  c.contentName(member),
+					Actual:   chainText(chain),
+					Origin:   provenance.Node(candidate.DocName, declaration.Value),
+				}
+			}
+			return resolved, c.chainRoot(candidate.OwnerScope, chain), true, nil
+		}
 		name, ok := target.(*ast.QualifiedName)
 		if !ok {
-			return nil, false, &Error{
+			return nil, nil, false, &Error{
 				Kind:     invalid,
 				Document: c.document,
 				Content:  c.contentName(member),
@@ -1068,7 +1353,7 @@ func (c *compiler) namedTarget(
 		}
 		resolved, ok := c.resolver.ResolveQualified(candidate.OwnerScope, name)
 		if !ok || resolved == nil {
-			return nil, false, &Error{
+			return nil, nil, false, &Error{
 				Kind:     unknown,
 				Document: c.document,
 				Content:  c.contentName(member),
@@ -1079,15 +1364,34 @@ func (c *compiler) namedTarget(
 		if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
 			resolved = canonical
 		}
-		return resolved, true, nil
+		return resolved, c.qualifiedRoot(name), true, nil
 	}
 	for _, target := range c.model.RedefinedFeatures(candidate) {
-		resolved, stated, err := c.namedTarget(member, target, invalid, unknown, seen)
+		resolved, root, stated, err := c.namedTarget(member, target, invalid, unknown, seen)
 		if err != nil || stated {
-			return resolved, stated, err
+			return resolved, root, stated, err
 		}
 	}
-	return nil, false, nil
+	return nil, nil, false, nil
+}
+
+// chainText renders a feature chain the way it was written, for diagnostics.
+func chainText(chain *ast.FeatureChainExpr) string {
+	operand := ""
+	switch node := chain.Operand.(type) {
+	case *ast.FeatureChainExpr:
+		operand = chainText(node)
+	case *ast.FeatureReference:
+		if node.Name != nil {
+			operand = qualifiedNameText(node.Name)
+		}
+	case *ast.QualifiedName:
+		operand = qualifiedNameText(node)
+	}
+	if chain.Member == nil {
+		return operand
+	}
+	return operand + "." + qualifiedNameText(chain.Member)
 }
 
 func qualifiedNameText(name *ast.QualifiedName) string {

@@ -2,6 +2,7 @@ package opensysml
 
 import (
 	"context"
+	"sync"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
@@ -9,6 +10,9 @@ import (
 // Client answers SysML v2 questions: parse, look up, evaluate, instantiate.
 // New gives the default in-process implementation and Dial a remote one; both
 // answer identically, which the conformance suite holds them to.
+//
+// A Client is safe for concurrent use: calls may be made from any number of
+// goroutines, and each answer is the caller's own.
 //
 // The interface is sealed: implementations come from this package only, so a
 // method can be added without breaking callers.
@@ -24,6 +28,15 @@ type Client interface {
 	// ParseSource parses inline model source, SysML unless WithLanguage says
 	// otherwise. Diagnostics arrive on the returned Model.
 	ParseSource(ctx context.Context, content string, opts ...ParseOption) (*Model, error)
+
+	// ParseFiles parses the model files at paths as one model, so a name one
+	// file declares resolves in another and an import between them is
+	// satisfied. Requires the parse_sources capability.
+	ParseFiles(ctx context.Context, paths []string, opts ...ParseOption) (*Model, error)
+
+	// ParseDocuments parses the documents named as one model, for files and
+	// inline sources together. Requires the parse_sources capability.
+	ParseDocuments(ctx context.Context, documents []Document, opts ...ParseOption) (*Model, error)
 
 	// Diagnostics reports every diagnostic of the parsed model, parser and
 	// semantic passes combined — the same list the Model already carries.
@@ -43,14 +56,104 @@ type Client interface {
 	// instantiation is a FailureError; an unknown model is CodeNotFound.
 	Instantiate(ctx context.Context, model *Model, symbolID string) (*Instantiation, error)
 
+	// ExecuteAction executes the named action with the inputs given, bound by
+	// parameter name, and reports the outputs it produced.
+	ExecuteAction(ctx context.Context, model *Model, actionSymbolID string, inputs map[string]Value) (*ActionRun, error)
+
+	// ExecuteState runs the named state machine, feeding it the events in
+	// order, and reports the states visited and the context left behind.
+	ExecuteState(ctx context.Context, model *Model, stateMachineSymbolID string, events []string) (*StateRun, error)
+
+	// VerifyConstraint evaluates the named constraint, optionally Against a
+	// part to instantiate and check. Requires the verification capability.
+	VerifyConstraint(ctx context.Context, model *Model, symbolID string, opts ...VerifyOption) (*Verification, error)
+
+	// VerifyRequirement evaluates the named requirement, optionally Against a
+	// part to instantiate and check. Requires the verification capability.
+	VerifyRequirement(ctx context.Context, model *Model, symbolID string, opts ...VerifyOption) (*Verification, error)
+
+	// VerifySatisfaction evaluates the satisfaction assertions the model
+	// states — every one, or those of the symbol named. Requires the
+	// verification capability.
+	VerifySatisfaction(ctx context.Context, model *Model, symbolID string) (*Satisfaction, error)
+
+	// EvaluateCalc invokes the named calculation with positional arguments, or,
+	// given none, evaluates a calc usage from its own members. Requires the
+	// verification capability.
+	EvaluateCalc(ctx context.Context, model *Model, symbolID string, arguments ...Value) (*Calculation, error)
+
+	// Query selects the model's elements the query matches, in declaration
+	// order. Requires the query capability.
+	Query(ctx context.Context, model *Model, query Query) ([]QueryElement, error)
+
+	// QueryOSLC selects elements with OSLC Query 3.0 parameter text. Requires
+	// the oslc_query capability.
+	QueryOSLC(ctx context.Context, model *Model, oslc string) ([]QueryElement, error)
+
+	// RunDocumentQuery runs the named document query, binding its entry
+	// parameters, and answers typed rows. Requires the document_query
+	// capability.
+	RunDocumentQuery(ctx context.Context, model *Model, queryID string, bindings ...Binding) (*Rows, error)
+
+	// RenderDocument renders the named document to Markdown. Requires the
+	// render_document capability.
+	RenderDocument(ctx context.Context, model *Model, documentID string) (string, error)
+
+	// Convert writes the model in another representation, from the source the
+	// parse read, so WithFromFormat does not apply and is refused. Requires the
+	// convert capability, and a model of one document. ConvertFile converts a
+	// file the client never parsed.
+	Convert(ctx context.Context, model *Model, to Format, opts ...ConvertOption) (*Conversion, error)
+
+	// ConvertFile writes the model file at path in another representation,
+	// inferring its notation from the extension unless WithFromFormat says
+	// otherwise. Requires the convert capability.
+	ConvertFile(ctx context.Context, path string, to Format, opts ...ConvertOption) (*Conversion, error)
+
+	// ConvertSource writes inline content in another representation. Name the
+	// notation it is written in with WithFromFormat: there is no file extension
+	// to read it from. Requires the convert capability.
+	ConvertSource(ctx context.Context, content string, to Format, opts ...ConvertOption) (*Conversion, error)
+
+	// ApplyEdits answers the model's source with every edit applied, or refuses
+	// them all with an EditError. Requires the apply_edits capability, and a
+	// model of one document.
+	ApplyEdits(ctx context.Context, model *Model, edits ...Edit) (*EditResult, error)
+
 	// Close releases what the implementation holds. The Client answers no
-	// further calls.
+	// further calls: each is refused with CodeUnavailable. Closing twice is
+	// not an error.
 	Close() error
 
 	sealed()
 }
 
-// ParseOption configures ParseFile and ParseSource.
+// Document is one document of a multi-document parse: a file to read, or inline
+// content under a name of the caller's choosing.
+type Document struct {
+	// Path is the file to read. Its extension says which notation it is, and
+	// Content, Name and Language are ignored when it is set.
+	Path string
+	// Content is inline model source, parsed when Path is empty.
+	Content string
+	// Name is what diagnostics call inline content, and the name it is indexed
+	// under. Two documents of one model may not share a name. Empty names it by
+	// its position in the parse.
+	Name string
+	// Language is the notation of inline content, SysML when empty. Requires the
+	// inline_language capability when set.
+	Language Language
+}
+
+// File is the document read from path.
+func File(path string) Document { return Document{Path: path} }
+
+// Source is inline content as a document reported by name.
+func Source(name, content string) Document {
+	return Document{Name: name, Content: content}
+}
+
+// ParseOption configures the parse calls.
 type ParseOption func(*parseOptions)
 
 type parseOptions struct {
@@ -99,21 +202,50 @@ func WithSubject(symbolID string) EvaluateOption {
 type caller interface {
 	serverInfo(ctx context.Context) (*pb.ServerInfoResponse, error)
 	parseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.ParseFileResponse, error)
+	parseSources(ctx context.Context, req *pb.ParseSourcesRequest) (*pb.ParseSourcesResponse, error)
 	getSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.SymbolResponse, error)
 	getDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest) (*pb.DiagnosticsResponse, error)
 	evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.EvaluateResponse, error)
 	instantiate(ctx context.Context, req *pb.InstantiateRequest) (*pb.InstantiateResponse, error)
+	executeAction(ctx context.Context, req *pb.ExecuteActionRequest) (*pb.ExecuteActionResponse, error)
+	executeState(ctx context.Context, req *pb.ExecuteStateRequest) (*pb.ExecuteStateResponse, error)
+	verifyConstraint(ctx context.Context, req *pb.VerifyConstraintRequest) (*pb.VerifyConstraintResponse, error)
+	verifyRequirement(ctx context.Context, req *pb.VerifyRequirementRequest) (*pb.VerifyRequirementResponse, error)
+	verifySatisfaction(ctx context.Context, req *pb.VerifySatisfactionRequest) (*pb.VerifySatisfactionResponse, error)
+	evaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest) (*pb.EvaluateCalcResponse, error)
+	query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error)
+	runDocumentQuery(ctx context.Context, req *pb.RunDocumentQueryRequest) (*pb.RunDocumentQueryResponse, error)
+	renderDocument(ctx context.Context, req *pb.RenderDocumentRequest) (*pb.RenderDocumentResponse, error)
+	convert(ctx context.Context, req *pb.ConvertRequest) (*pb.ConvertResponse, error)
+	applyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*pb.ApplyEditsResponse, error)
 	close() error
 }
 
 // client is the one Client implementation, over either caller.
 type client struct {
 	caller caller
+
+	mu     sync.Mutex
+	closed bool
 }
 
 func (c *client) sealed() { /* marker: Client is closed to outside implementations */ }
 
+// live refuses a call on a closed Client, the way a closed connection refuses
+// one.
+func (c *client) live() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return &StatusError{Code: CodeUnavailable, Message: "the client is closed"}
+	}
+	return nil
+}
+
 func (c *client) ServerInfo(ctx context.Context) (*ServerInfo, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	resp, err := c.caller.serverInfo(ctx)
 	if err != nil {
 		return nil, err
@@ -125,15 +257,78 @@ func (c *client) ServerInfo(ctx context.Context) (*ServerInfo, error) {
 }
 
 func (c *client) ParseFile(ctx context.Context, path string, opts ...ParseOption) (*Model, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	req := parseRequest(opts)
 	req.Source = &pb.ParseFileRequest_FilePath{FilePath: path}
 	return c.parse(ctx, req)
 }
 
 func (c *client) ParseSource(ctx context.Context, content string, opts ...ParseOption) (*Model, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	req := parseRequest(opts)
 	req.Source = &pb.ParseFileRequest_Content{Content: content}
 	return c.parse(ctx, req)
+}
+
+func (c *client) ParseFiles(ctx context.Context, paths []string, opts ...ParseOption) (*Model, error) {
+	documents := make([]Document, 0, len(paths))
+	for _, path := range paths {
+		documents = append(documents, File(path))
+	}
+	return c.ParseDocuments(ctx, documents, opts...)
+}
+
+func (c *client) ParseDocuments(ctx context.Context, documents []Document, opts ...ParseOption) (*Model, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
+	if len(documents) == 0 {
+		return nil, &StatusError{Code: CodeInvalidArgument, Message: "parse needs at least one document"}
+	}
+	var options parseOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	req := &pb.ParseSourcesRequest{
+		Documents:         make([]*pb.SourceDocument, 0, len(documents)),
+		StrictConformance: options.strict,
+	}
+	for _, doc := range documents {
+		pbDoc := &pb.SourceDocument{}
+		if doc.Path != "" {
+			pbDoc.Source = &pb.SourceDocument_FilePath{FilePath: doc.Path}
+		} else {
+			language := string(doc.Language)
+			if language == "" {
+				language = options.language
+			}
+			pbDoc.Source = &pb.SourceDocument_Content{Content: doc.Content}
+			pbDoc.Name = doc.Name
+			pbDoc.Language = language
+		}
+		req.Documents = append(req.Documents, pbDoc)
+	}
+	resp, err := c.caller.parseSources(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	diagnostics := diagnosticsFromProto(resp.Diagnostics)
+	if resp.Error != "" {
+		return nil, &FailureError{Op: "ParseDocuments", Message: resp.Error, Diagnostics: diagnostics}
+	}
+	roots := make([]*Symbol, 0, len(resp.Roots))
+	for _, root := range resp.Roots {
+		roots = append(roots, symbolFromProto(root))
+	}
+	model := &Model{Hash: resp.ModelHash, Roots: roots, Diagnostics: diagnostics}
+	if len(roots) > 0 {
+		model.Root = roots[0]
+	}
+	return model, nil
 }
 
 func parseRequest(opts []ParseOption) *pb.ParseFileRequest {
@@ -155,14 +350,19 @@ func (c *client) parse(ctx context.Context, req *pb.ParseFileRequest) (*Model, e
 	if resp.Error != "" {
 		return nil, &FailureError{Op: "ParseFile", Message: resp.Error, Diagnostics: diagnosticsFromProto(resp.Diagnostics)}
 	}
+	root := symbolFromProto(resp.Root)
 	return &Model{
 		Hash:        resp.ModelHash,
-		Root:        symbolFromProto(resp.Root),
+		Root:        root,
+		Roots:       []*Symbol{root},
 		Diagnostics: diagnosticsFromProto(resp.Diagnostics),
 	}, nil
 }
 
 func (c *client) Diagnostics(ctx context.Context, model *Model) ([]Diagnostic, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	hash, err := modelHash(model)
 	if err != nil {
 		return nil, err
@@ -178,6 +378,9 @@ func (c *client) Diagnostics(ctx context.Context, model *Model) ([]Diagnostic, e
 }
 
 func (c *client) LookupSymbol(ctx context.Context, model *Model, symbolID string) (*Symbol, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	hash, err := modelHash(model)
 	if err != nil {
 		return nil, err
@@ -193,6 +396,9 @@ func (c *client) LookupSymbol(ctx context.Context, model *Model, symbolID string
 }
 
 func (c *client) Evaluate(ctx context.Context, model *Model, expression string, opts ...EvaluateOption) (Value, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	hash, err := modelHash(model)
 	if err != nil {
 		return nil, err
@@ -217,6 +423,9 @@ func (c *client) Evaluate(ctx context.Context, model *Model, expression string, 
 }
 
 func (c *client) Instantiate(ctx context.Context, model *Model, symbolID string) (*Instantiation, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	hash, err := modelHash(model)
 	if err != nil {
 		return nil, err
@@ -239,15 +448,35 @@ func (c *client) Instantiate(ctx context.Context, model *Model, symbolID string)
 	}, nil
 }
 
+// Close releases the implementation once: a second call is a no-op, so a
+// deferred Close beside an explicit one is safe.
 func (c *client) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return nil
+	}
+	c.closed = true
 	return c.caller.close()
 }
 
-// modelHash is the hash a call sends for a model, refusing a nil model the way
-// the service refuses an unknown one.
+// modelHash is the hash a call sends for a model, refusing a model that names
+// none here rather than sending a hash the service cannot know.
 func modelHash(model *Model) (string, error) {
 	if model == nil {
 		return "", &StatusError{Code: CodeInvalidArgument, Message: "model is nil"}
 	}
+	if model.Hash == "" {
+		return "", &StatusError{Code: CodeInvalidArgument, Message: "model carries no hash: it did not come from a parse call"}
+	}
 	return model.Hash, nil
+}
+
+// call is the shared preamble of every model operation: a live client and the
+// hash the model is named by.
+func (c *client) call(model *Model) (string, error) {
+	if err := c.live(); err != nil {
+		return "", err
+	}
+	return modelHash(model)
 }

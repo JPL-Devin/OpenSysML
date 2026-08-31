@@ -1,8 +1,18 @@
 # opensysml — the public Go API
 
-`github.com/Open-MBEE/OpenSysML/client/opensysml` is the Go surface of OpenSysML:
-parse SysML v2 models, look up symbols, evaluate expressions and instantiate
-parts, from Go code, using the engine already linked into the calling binary.
+`github.com/Open-MBEE/OpenSysML` at `client/opensysml` is the Go surface of
+OpenSysML: parse SysML v2 models, look up symbols, evaluate expressions,
+instantiate parts, run actions and state machines, verify constraints and
+requirements, evaluate calculations, query the model, render documents, convert
+notations and edit source — from Go code, using the engine already linked into
+the calling binary. Every RPC the service answers is a method here.
+
+```sh
+go get github.com/Open-MBEE/OpenSysML@latest
+```
+
+Nothing else is installed: the SysML standard library is embedded in the module,
+and no operation shells out.
 
 ```go
 client, err := opensysml.New()
@@ -13,6 +23,120 @@ model, err := client.ParseFile(ctx, "vehicle.sysml")
 mass, err := client.Evaluate(ctx, model, "mass", opensysml.WithSubject("Demo::sedan"))
 inst, err := client.Instantiate(ctx, model, "Demo::Vehicle")
 ```
+
+## The whole surface
+
+| What you want | Call |
+| --- | --- |
+| Parse one document | `ParseFile`, `ParseSource` |
+| Parse a model of several documents | `ParseFiles`, `ParseDocuments` |
+| Read the model | `LookupSymbol`, `Diagnostics` |
+| Compute with it | `Evaluate`, `Instantiate`, `EvaluateCalc` |
+| Run behavior | `ExecuteAction`, `ExecuteState` |
+| Check it | `VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction` |
+| Search it | `Query`, `QueryOSLC` |
+| Report on it | `RunDocumentQuery`, `RenderDocument` |
+| Write it out | `Convert`, `ConvertFile`, `ConvertSource` |
+| Change its source | `ApplyEdits` |
+
+Execution and verification take the same handles the rest of the API takes:
+
+```go
+run, err := client.ExecuteAction(ctx, model, "Demo::addFive",
+	map[string]opensysml.Value{"result": opensysml.Int(10)})
+
+verification, err := client.VerifyConstraint(ctx, model, "Demo::massBudget",
+	opensysml.Against("Demo::sedan"))
+if !verification.Verdict.Holds {
+	// verification.Verdict.Condition names what evaluated false
+}
+```
+
+A verdict of false is an answer about the model, not an error: a verification
+fails only when it could not be evaluated at all, and then it is a
+`*VerifyError` whose `Reason` classifies the failure. A condition the runtime
+could not evaluate for one subject arrives as `Verdict.Undecided()`.
+
+Queries are built from typed conditions rather than a string dialect, so an
+unsupported operator is a compile error rather than a refused call:
+
+```go
+elements, err := client.Query(ctx, model, opensysml.Query{
+	Scope:  []string{"Demo"},
+	Select: []string{"name", "qualifiedName"},
+	Where: opensysml.All(
+		opensysml.Equals("@type", "PartUsage"),
+		opensysml.Equals("name", "engine").Not(),
+	),
+})
+```
+
+Edits are typed the same way — `SetValue`, `Rename`, `AddMember`, `Delete` —
+and either all apply, answering the edited source, or none do and the refusal
+arrives as an `*EditError` naming its kind:
+
+```go
+result, err := client.ApplyEdits(ctx, model,
+	opensysml.SetValue{Target: "Demo::sedan::mass", Value: "1200.0[SI::kg]"})
+
+var refused *opensysml.EditError
+if errors.As(err, &refused) && refused.Failure == opensysml.EditFailureRenameReferenced {
+	// refused.Referring names what still refers to it
+}
+```
+
+## What a model is here
+
+`ParseFile` reads the one path it is given and `ParseSource` the one string, and
+neither follows an import into a sibling file: a name declared in another file is
+an unresolved reference, reported as a diagnostic on the model rather than as a
+failed call.
+
+A model that lives in several files is parsed as one model by `ParseFiles`, or by
+`ParseDocuments` for files and in-memory sources together:
+
+```go
+model, err := client.ParseFiles(ctx, paths)
+
+model, err := client.ParseDocuments(ctx, []opensysml.Document{
+	opensysml.File("lib.sysml"),
+	opensysml.Source("top.sysml", generated),
+})
+```
+
+Each document is parsed on its own and all of them are indexed together, so an
+import between them resolves and every symbol of the set is one lookup,
+evaluation or instantiation away. Nothing is concatenated: a document keeps its
+own name, so a diagnostic locates itself in the file it came from, and
+`Model.Roots` holds each document's root namespace in the order given —
+`Model.Root` is the first, as it is for a one-document model. A set is cached by
+what is in it, so parsing the same documents again answers the same model hash.
+
+Two operations write one document's own notation back out, and they are refused
+with `CodeFailedPrecondition` for a model of several rather than applied to one
+of them: `Convert` from a model handle, and `ApplyEdits`. Convert a single
+document of such a set with `ConvertFile` or `ConvertSource`.
+
+## Concurrency, contexts and lifetime
+
+A `Client` is safe for concurrent use: any number of goroutines may call it, and
+each answer belongs to its caller. One `Client` per process is the intended
+shape — `New` builds and prewarms a standard-library index, which is what makes
+it worth keeping.
+
+Contexts are honoured as the wire honours them. A call whose context is already
+done is refused with `CodeCanceled` or `CodeDeadlineExceeded`; a context that
+ends while a call is running withholds the answer the same way, because the
+engine — like a service answering a caller who stopped listening — still runs
+the call it started. A deadline therefore bounds how long a caller waits, not
+how long the engine works.
+
+After `Close`, every call is refused with `CodeUnavailable`, and closing twice is
+not an error, so a deferred `Close` beside an explicit one is safe.
+
+`ServerInfo.Version` is the version of OpenSysML linked into the binary — the
+module version an importing program resolved, `dev` when it was built from a
+checkout. It is informational: negotiate on capabilities.
 
 ## Why in-process is the default
 
@@ -45,9 +169,10 @@ because it is part of the wire contract:
 | The call is refused | `*StatusError` | `errors.Is(err, opensysml.CodeNotFound)` | an unknown model hash, an unreadable path |
 | The answer reports a failure | `*FailureError` | `errors.Is(err, opensysml.ErrFailure)` | an unparsable expression, an unknown symbol |
 
-`StatusError.Code` is the canonical gRPC status code, whichever implementation
-answered: in process it is the code the handler refused with; remotely it is
-the Connect error code, which numbers identically. A transport failure that
+A `StatusError` renders as `opensysml: NOT_FOUND: model not found: …`, naming
+the code canonically. `StatusError.Code` is the canonical gRPC status code,
+whichever implementation answered: in process it is the code the handler refused
+with; remotely it is the Connect error code, which numbers identically. A transport failure that
 never reached the service is `CodeUnavailable`. A panic in the engine does not
 cross the boundary: it arrives as `CodeInternal`.
 
@@ -78,27 +203,24 @@ it (see `docs/project/releasing.md` for how releases are cut). Within `v0`,
 this package's exported surface is what OpenSysML commits to keeping
 compatible:
 
-- **Stable**: `Client` and its seven operations, `New`, `Dial`, the option
-  functions, the error model (`Code`, `StatusError`, `FailureError`,
-  `ErrFailure`), and the data types they exchange. Changes will be additive.
-- **Experimental**: nothing currently. A future addition that is not yet a
-  commitment will say so in its Godoc.
+- **Stable**: `Client` and its operations, `New`, `Dial`, the option functions,
+  the error model (`Code`, `StatusError`, `FailureError`, `VerifyError`,
+  `EditError`, `ErrFailure`), and the data types they exchange. Changes will be
+  additive.
+- **Experimental**: RDF conversion, whose vocabulary may change without a
+  compatibility path — a `Conversion` says so in `Experimental` and
+  `ExperimentalNotice`.
 
 The `Client` interface is sealed, so adding a method is not a breaking change.
 
-Explicitly **out of v1**, deliberately rather than half-implemented: generated
-model-ergonomics types, the edit API (`ApplyEdits`), RDF conversion
-(`Convert`), verification helpers (`VerifyConstraint`, `VerifyRequirement`,
-`VerifySatisfaction`), behavior execution (`ExecuteAction`, `ExecuteState`),
-calc evaluation (`EvaluateCalc`) and queries (`Query`). For those, use the
-generated stubs in `api/proto` / `api/proto/protoconnect` against a running
-service.
+One thing is deliberately absent: generated model-ergonomics types (a Go struct
+per SysML definition). Models are read through `Symbol`, `Instance` and
+`Value`, which need no code generation step.
 
-None of the v1 operations shells out to an SMT solver, so an in-process caller
-needs nothing installed. The verification RPCs are the ones that discover
-`z3`/`cvc5` (or `$OPENSYSML_SMT`); when verification helpers arrive here, the
-package will document that requirement and report a missing solver in the
-verdict rather than failing the call.
+No operation here shells out to an SMT solver: verification evaluates conditions
+with the runtime that `Evaluate` and `Instantiate` use, so an in-process caller
+needs nothing installed. The solver-backed analyses (`%check`, `%solve`,
+`%optimize`, `%explain`) belong to the REPL and are not part of the service API.
 
 ## Conformance
 
@@ -111,5 +233,6 @@ make conformance-pkg
 # or: go run ./cmd/conformance -protocols pkg,pkg-connect -allow-skips
 ```
 
-Scenarios for RPCs outside the v1 surface are reported as skips, with the
-reason named per scenario in the report; nothing covered is skipped.
+Two scenarios are reported as skips, because they state a request this API's
+types cannot express: a parse naming no source, and a query naming no comparison
+operator. Every other scenario runs through this package, on both protocols.

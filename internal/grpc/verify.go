@@ -76,7 +76,7 @@ func (v *verifyContext) declaringScope(sym *symbols.Symbol) *symbols.Scope {
 	if sym != nil && sym.OwnerScope != nil {
 		return sym.OwnerScope
 	}
-	return v.cached.Index.DocumentRoot(v.cached.Source.Name())
+	return v.cached.PrimaryRoot()
 }
 
 // subject instantiates the part/usage a request named, so a verdict can be about
@@ -208,7 +208,8 @@ func (s *Service) VerifySatisfaction(ctx context.Context, req *pb.VerifySatisfac
 		return nil, err
 	}
 
-	scope := v.cached.Index.DocumentRoot(v.cached.Source.Name())
+	// Every document of the model states assertions, unless one scope is named.
+	scopes := v.cached.DocumentRoots()
 	if req.SymbolId != "" {
 		sym, lerr := v.lookup(req.SymbolId)
 		if lerr != nil {
@@ -230,20 +231,22 @@ func (s *Service) VerifySatisfaction(ctx context.Context, req *pb.VerifySatisfac
 				FailureReason: pb.FailureReason_FAILURE_REASON_WRONG_KIND,
 			}, nil
 		}
-		scope = sym.Scope
+		scopes = []*symbols.Scope{sym.Scope}
 	}
 
 	resp := &pb.VerifySatisfactionResponse{}
 	seen := map[int64]bool{}
-	for _, a := range v.runtime.SatisfyAssertionsIn(scope) {
-		verdict, instances := v.satisfyVerdict(a)
-		resp.Verdicts = append(resp.Verdicts, verdict)
-		// One graph per response, so two assertions about the same object do
-		// not report it twice.
-		for _, inst := range instances {
-			if !seen[inst.Id] {
-				seen[inst.Id] = true
-				resp.Instances = append(resp.Instances, inst)
+	for _, scope := range scopes {
+		for _, a := range v.runtime.SatisfyAssertionsIn(scope) {
+			verdict, instances := v.satisfyVerdict(a)
+			resp.Verdicts = append(resp.Verdicts, verdict)
+			// One graph per response, so two assertions about the same object do
+			// not report it twice.
+			for _, inst := range instances {
+				if !seen[inst.Id] {
+					seen[inst.Id] = true
+					resp.Instances = append(resp.Instances, inst)
+				}
 			}
 		}
 	}

@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion7
 const (
 	SysMLService_GetServerInfo_FullMethodName      = "/sysml.SysMLService/GetServerInfo"
 	SysMLService_ParseFile_FullMethodName          = "/sysml.SysMLService/ParseFile"
+	SysMLService_ParseSources_FullMethodName       = "/sysml.SysMLService/ParseSources"
 	SysMLService_GetSymbol_FullMethodName          = "/sysml.SysMLService/GetSymbol"
 	SysMLService_GetDiagnostics_FullMethodName     = "/sysml.SysMLService/GetDiagnostics"
 	SysMLService_Evaluate_FullMethodName           = "/sysml.SysMLService/Evaluate"
@@ -48,6 +49,10 @@ type SysMLServiceClient interface {
 	GetServerInfo(ctx context.Context, in *ServerInfoRequest, opts ...grpc.CallOption) (*ServerInfoResponse, error)
 	// Parse a SysML file and return model hash for subsequent queries
 	ParseFile(ctx context.Context, in *ParseFileRequest, opts ...grpc.CallOption) (*ParseFileResponse, error)
+	// Parse several documents as one model, so a name one document declares
+	// resolves in another and an import between them is satisfied. Reported as
+	// the "parse_sources" capability.
+	ParseSources(ctx context.Context, in *ParseSourcesRequest, opts ...grpc.CallOption) (*ParseSourcesResponse, error)
 	// Get symbol information by qualified name
 	GetSymbol(ctx context.Context, in *GetSymbolRequest, opts ...grpc.CallOption) (*SymbolResponse, error)
 	// Get all diagnostics for a parsed model
@@ -109,6 +114,15 @@ func (c *sysMLServiceClient) GetServerInfo(ctx context.Context, in *ServerInfoRe
 func (c *sysMLServiceClient) ParseFile(ctx context.Context, in *ParseFileRequest, opts ...grpc.CallOption) (*ParseFileResponse, error) {
 	out := new(ParseFileResponse)
 	err := c.cc.Invoke(ctx, SysMLService_ParseFile_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sysMLServiceClient) ParseSources(ctx context.Context, in *ParseSourcesRequest, opts ...grpc.CallOption) (*ParseSourcesResponse, error) {
+	out := new(ParseSourcesResponse)
+	err := c.cc.Invoke(ctx, SysMLService_ParseSources_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -260,6 +274,10 @@ type SysMLServiceServer interface {
 	GetServerInfo(context.Context, *ServerInfoRequest) (*ServerInfoResponse, error)
 	// Parse a SysML file and return model hash for subsequent queries
 	ParseFile(context.Context, *ParseFileRequest) (*ParseFileResponse, error)
+	// Parse several documents as one model, so a name one document declares
+	// resolves in another and an import between them is satisfied. Reported as
+	// the "parse_sources" capability.
+	ParseSources(context.Context, *ParseSourcesRequest) (*ParseSourcesResponse, error)
 	// Get symbol information by qualified name
 	GetSymbol(context.Context, *GetSymbolRequest) (*SymbolResponse, error)
 	// Get all diagnostics for a parsed model
@@ -311,6 +329,9 @@ func (UnimplementedSysMLServiceServer) GetServerInfo(context.Context, *ServerInf
 }
 func (UnimplementedSysMLServiceServer) ParseFile(context.Context, *ParseFileRequest) (*ParseFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ParseFile not implemented")
+}
+func (UnimplementedSysMLServiceServer) ParseSources(context.Context, *ParseSourcesRequest) (*ParseSourcesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ParseSources not implemented")
 }
 func (UnimplementedSysMLServiceServer) GetSymbol(context.Context, *GetSymbolRequest) (*SymbolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSymbol not implemented")
@@ -402,6 +423,24 @@ func _SysMLService_ParseFile_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SysMLServiceServer).ParseFile(ctx, req.(*ParseFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SysMLService_ParseSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ParseSourcesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).ParseSources(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_ParseSources_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).ParseSources(ctx, req.(*ParseSourcesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -690,6 +729,10 @@ var SysMLService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ParseFile",
 			Handler:    _SysMLService_ParseFile_Handler,
+		},
+		{
+			MethodName: "ParseSources",
+			Handler:    _SysMLService_ParseSources_Handler,
 		},
 		{
 			MethodName: "GetSymbol",

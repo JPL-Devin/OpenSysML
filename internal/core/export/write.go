@@ -26,7 +26,7 @@ const newFileMode = 0o644
 // content to protect and replacing it by rename would destroy the pipe or
 // device the user pointed at.
 func WriteFile(path string, data []byte) (replaced bool, err error) {
-	target, info, err := destination(path)
+	target, info, err := Destination(path)
 	if err != nil {
 		return false, err
 	}
@@ -127,11 +127,11 @@ func syncDir(dir string) {
 	_ = f.Close()
 }
 
-// destination returns the file a save should write and what is there now, which
+// Destination returns the file a save should write and what is there now, which
 // is nil when nothing is. A symlink resolves to what it points at, so saving
 // over a linked model updates the model instead of unlinking it; a link that
 // resolves to nothing is written where it points.
-func destination(path string) (target string, info os.FileInfo, err error) {
+func Destination(path string) (target string, info os.FileInfo, err error) {
 	info, err = os.Stat(path)
 	switch {
 	case os.IsNotExist(err):
