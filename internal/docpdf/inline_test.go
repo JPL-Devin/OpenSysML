@@ -149,6 +149,7 @@ func TestDocumentHTMLInlineRuns(t *testing.T) {
 		"",
 		"- item with *style*",
 		"",
+		"<!-- caption -->",
 		"*Table 1\\. Grouped masses*",
 		"",
 	}, "\n")

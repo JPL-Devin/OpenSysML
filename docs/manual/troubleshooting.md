@@ -102,6 +102,11 @@ fact about the implementation, not a design position.
   only.
 - **Cross-references are in-document only.** A `Ref` targets a content block
   of the same document; cross-document references are not modeled.
+- **Captions are marked, not inferred.** The Markdown dialect writes a
+  `<!-- caption -->` comment line before every table and diagram caption; the
+  PDF backend styles only marked lines as captions, and an emphasized line
+  without the marker stays an ordinary paragraph. A marker whose next line is
+  not a fully emphasized caption is a typed `dangling-caption` error.
 - **PDF is CLI-only.** The REPL, gRPC and LSP surfaces render Markdown only.
 - **PDF reproducibility is per-toolchain.** Byte-identical output holds for
   one pinned converter toolchain; different converter versions or fonts

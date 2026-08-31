@@ -71,7 +71,7 @@ func TestDiagramDirection(t *testing.T) {
 
 func TestDiagramCaption(t *testing.T) {
 	got := renderedDiagram(t, "flow of a|b", graphRendering(view.KindTree), "")
-	if !strings.HasPrefix(got, "*flow of a\\|b*\n\n```mermaid") {
+	if !strings.HasPrefix(got, "<!-- caption -->\n*flow of a\\|b*\n\n```mermaid") {
 		t.Errorf("caption: %s", got)
 	}
 }
@@ -83,7 +83,7 @@ func TestDiagramTableKind(t *testing.T) {
 		Rows:    [][]string{{"optics", "8.5"}, {"mount|base", "15"}},
 	}
 	got := renderedDiagram(t, "Masses", rendering, "")
-	want := "*Masses*\n\n<!-- table rendering -->\n| name | mass |\n| --- | --- |\n| optics | 8.5 |\n| mount\\|base | 15 |"
+	want := "<!-- caption -->\n*Masses*\n\n<!-- table rendering -->\n| name | mass |\n| --- | --- |\n| optics | 8.5 |\n| mount\\|base | 15 |"
 	if got != want {
 		t.Errorf("table = %q, want %q", got, want)
 	}
