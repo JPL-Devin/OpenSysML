@@ -421,6 +421,51 @@ func TestBehaviorLocalPortShadowsThePerformersConnectedPort(t *testing.T) {
 	}
 }
 
+// A port a behavior inherits from its generalization shadows the performer's
+// connected port the same way one it declares does: the send resolves the
+// inherited port, so the owner's connector receives nothing.
+func TestInheritedBehaviorPortShadowsThePerformersConnectedPort(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
+		item def Ping;
+		part def Console { port command : Chan; }
+		part def Unit { port command : ~Chan; }
+		part def Site {
+			part console : Console;
+			part unit : Unit;
+			connect console.command to unit.command;
+		}
+		part site : Site;
+		state def BaseRadio {
+			port command : Chan;
+		}
+		state def Radio :> BaseRadio {
+			entry; then start;
+			state start;
+			state sent;
+			transition go first start do send Ping() via command then sent;
+		}
+	}`))
+	site, err := ctx.Instantiate(oneSymbol(t, idx, "P::site"))
+	if err != nil {
+		t.Fatalf("instantiate site: %v", err)
+	}
+	console := nestedObject(t, ctx, site, "console")
+	exec, err := newStateExecutor(ctx, oneSymbol(t, idx, "P::Radio"), console)
+	if err != nil {
+		t.Fatalf("create state executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("run state machine: err = %v, want %v", err, ErrUnroutableSend)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("pending messages = %v, want none over the shadowed connector", pending)
+	}
+}
+
 // A port declaring no flow features constrains no direction, so it receives
 // whatever reaches it in either direction (see also TestSendViaPortRoutesInEitherDirection).
 func TestUndirectedPortsReceiveInEitherDirection(t *testing.T) {

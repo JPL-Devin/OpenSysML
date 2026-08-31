@@ -779,14 +779,14 @@ func subsettingTarget(usage *ast.Usage) string {
 	return ""
 }
 
-// typingTarget returns the name a usage was typed with (`: T`), or "" when it
-// was declared without a type.
+// typingTarget returns the name a usage was typed with (`: T`), qualified as
+// written, or "" when it was declared without a type.
 func typingTarget(usage *ast.Usage) string {
 	for _, rel := range usage.Relationships {
 		if rel == nil || rel.Kind != ast.RelTyping {
 			continue
 		}
-		if name := ast.SimpleName(rel.Target); name != "" {
+		if name := ast.QualifiedText(rel.Target); name != "" {
 			return name
 		}
 	}

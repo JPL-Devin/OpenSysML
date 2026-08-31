@@ -199,9 +199,89 @@ func inheritedActionNode(body *symbols.Scope, name string, qualifier *symbols.Sy
 
 // FeatureSymbolInScope resolves a dotted feature path from the scope tree
 // alone, innermost scope first, so a local declaration shadows an outer one —
-// for lowering a send target without a resolver over its document.
+// for lowering a send target without a resolver over its document. At each
+// scope, a member the scope's declaration inherits from its generalizations
+// counts as the scope's own, so an inherited port shadows like a declared one.
 func FeatureSymbolInScope(scope *symbols.Scope, segments []string) (*symbols.Symbol, bool) {
-	return lookupScopePartsText(scope, segments)
+	if scope == nil || len(segments) == 0 {
+		return nil, false
+	}
+	for s := scope; s != nil; s = s.Parent() {
+		sym, ok := s.LookupLocal(segments[0])
+		if !ok {
+			sym, ok = inheritedFeature(s, segments[0], map[*symbols.Symbol]bool{})
+		}
+		if !ok {
+			continue
+		}
+		for _, part := range segments[1:] {
+			sym, ok = featureMember(sym, part)
+			if !ok {
+				sym = nil
+				break
+			}
+		}
+		if sym != nil {
+			return sym, true
+		}
+	}
+	return nil, false
+}
+
+// featureMember finds a member of the feature sym names: declared in sym's own
+// body, or reached through the type or generalizations its declaration states.
+func featureMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if sym == nil || sym.Scope == nil {
+		return nil, false
+	}
+	if member, ok := sym.Scope.LookupLocal(name); ok {
+		return member, true
+	}
+	return inheritedFeature(sym.Scope, name, map[*symbols.Symbol]bool{})
+}
+
+// inheritedFeature finds a member named name among the members body's
+// declaration inherits from the generalizations the scope tree resolves.
+func inheritedFeature(body *symbols.Scope, name string, seen map[*symbols.Symbol]bool) (*symbols.Symbol, bool) {
+	var rels []*ast.Relationship
+	switch n := body.Node().(type) {
+	case *ast.Definition:
+		rels = n.Relationships
+	case *ast.Usage:
+		rels = n.Relationships
+	default:
+		return nil, false
+	}
+	for _, rel := range rels {
+		if rel == nil || (rel.Kind != ast.RelSpecializes && rel.Kind != ast.RelTyping &&
+			rel.Kind != ast.RelSubsets && rel.Kind != ast.RelRedefines) {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		qn, ok := target.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		super, found := lookupScopeQualified(body.Parent(), qn)
+		if !found || super == nil || seen[super] {
+			continue
+		}
+		seen[super] = true
+		superBody := super.Scope
+		if superBody == nil {
+			continue
+		}
+		if member, held := superBody.LookupLocal(name); held {
+			return member, true
+		}
+		if member, held := inheritedFeature(superBody, name, seen); held {
+			return member, true
+		}
+	}
+	return nil, false
 }
 
 func lookupScopeParts(scope *symbols.Scope, parts []ast.NameSegment) (*symbols.Symbol, bool) {

@@ -676,6 +676,9 @@ func (ctx *Context) messageMatches(m Message, want string, scope *symbols.Scope)
 			return ctx.model.Conforms(m.Signal, wantSym)
 		}
 	}
+	if i := strings.LastIndex(want, "::"); i >= 0 {
+		want = want[i+2:]
+	}
 	return m.carriesSignal(want)
 }
 

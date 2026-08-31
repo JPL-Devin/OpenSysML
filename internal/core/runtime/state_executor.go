@@ -1013,7 +1013,7 @@ func (e *StateExecutor) triggerMatches(trigger ast.Node, scope *symbols.Scope, e
 		}
 		// The accept names the occurrence it takes either by its type
 		// (`accept Ping`) or by the event it subsets (`accept :> shutDown`).
-		if typed := ast.SimpleName(acceptEvent.SignalType); typed != "" {
+		if typed := ast.QualifiedText(acceptEvent.SignalType); typed != "" {
 			return e.ctx.messageMatches(msg, typed, scope)
 		}
 		subsets := ast.SimpleName(acceptEvent.Subsets)
@@ -1968,7 +1968,7 @@ func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) boo
 		if !msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self)) {
 			continue
 		}
-		if typed := ast.SimpleName(accept.SignalType); typed != "" {
+		if typed := ast.QualifiedText(accept.SignalType); typed != "" {
 			if e.ctx.messageMatches(msg, typed, trans.Scope) {
 				return true
 			}

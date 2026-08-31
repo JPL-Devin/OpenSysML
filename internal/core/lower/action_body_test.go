@@ -68,6 +68,28 @@ func TestActionBodyLowering(t *testing.T) {
 	}
 }
 
+// An accept typed with a qualified name keeps the whole qualifier, so the
+// runtime resolves the exact definition rather than any same-named one.
+func TestAcceptKeepsItsQualifiedSignalType(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			first start;
+			action reader accept payload : Alerts::Warning;
+			done;
+			succession first start then reader;
+			succession first reader then done;
+		}
+	`)
+
+	accept, ok := graph.Accepts[nodeNamed(t, graph, "reader")]
+	if !ok {
+		t.Fatal("reader lowered without an accept")
+	}
+	if accept.SignalType != "Alerts::Warning" {
+		t.Errorf("accept signal type = %q, want %q", accept.SignalType, "Alerts::Warning")
+	}
+}
+
 // A loop and a conditional are lowered as body statements of the node they were
 // written in, with the block each one owns lowered in turn, so the executor
 // reads control flow from the graph instead of walking the AST again.
