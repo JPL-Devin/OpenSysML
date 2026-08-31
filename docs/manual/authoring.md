@@ -42,7 +42,8 @@ part intro : Paragraph {
 ```
 
 **A query** — each projected value becomes one plain text run, joined by
-spaces:
+spaces (nested column runs restyle this — see
+[Styled query text](#styled-query-text-column-runs)):
 
 ```sysml
 part summary : Paragraph {
@@ -110,6 +111,57 @@ a link to it. `text` is optional; it defaults to the target's title (for a
 section), caption (for a table or diagram) or name. A target outside the
 document, or one without a stable name, is a typed planning error.
 Cross-document references are not modeled.
+
+## Styled query text (column runs)
+
+A query-backed paragraph or list may nest **column runs** — `SpanColumn` and
+`LinkColumn` parts — that map projected columns to styled runs. Each result
+row renders one run per column run, in declaration order:
+
+```sysml
+part styledSummary : Paragraph {
+	calc names : StyledHeavyNames {
+		in root = telescope;
+		in threshold = "10";
+	}
+	part styledName : SpanColumn {
+		attribute redefines column = "name";
+		attribute redefines styleColumn = "style";
+	}
+	part linkedName : LinkColumn {
+		attribute redefines column = "name";
+		attribute redefines targetColumn = "url";
+	}
+}
+```
+
+```markdown
+**mount** [mount](<https://example.com/parts#mount>) **segmentControl** [segmentControl](<https://example.com/parts#segmentControl>)
+```
+
+**`SpanColumn`** carries a required `column` naming the projected column its
+text comes from, plus at most one of:
+
+- `style` — a fixed `"plain"` (the default), `"emphasis"`, `"strong"` or
+  `"code"` applied to every row;
+- `styleColumn` — a projected column supplying each row's style. Each row
+  must supply exactly one string value among the four styles; anything else
+  is a typed evaluation error naming the query, column and row.
+
+**`LinkColumn`** carries a required `column` for the link text and a required
+`targetColumn` naming a projected column that supplies each row's one
+non-empty link destination.
+
+Computed columns (`Column(name, expression)`) feed column runs like any
+projected property, so a query can compute both the text and the style or
+target it renders with — the `styleColumn`/`targetColumn` example above uses
+computed `style` and `url` columns.
+
+Column names are checked against the query's statically-known projection at
+planning time; a projection only known at evaluation (e.g. a parameter-driven
+`properties`) is checked when the query runs. Column runs alongside static
+text or inline runs, on a paragraph without a query, or anywhere other than a
+query-backed paragraph or list, are typed planning errors.
 
 ## Tables
 
@@ -184,7 +236,8 @@ each group is the query's order.
 
 A `List` requires a query and renders each result value as one item. `style`
 is `"bullet"` (the default) or `"number"`; anything else is a typed planning
-error.
+error. Nested column runs restyle each item's runs — see
+[Styled query text](#styled-query-text-column-runs).
 
 ```sysml
 part heavyItems : List {

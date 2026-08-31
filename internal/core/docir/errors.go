@@ -10,11 +10,14 @@ import (
 type ErrorKind string
 
 const (
-	ErrorInvalidContext ErrorKind = "invalid-context"
-	ErrorInvalidPlan    ErrorKind = "invalid-plan"
-	ErrorQueryExecution ErrorKind = "query-execution"
-	ErrorViewRendering  ErrorKind = "view-rendering"
-	ErrorUnknownGroup   ErrorKind = "unknown-group-column"
+	ErrorInvalidContext   ErrorKind = "invalid-context"
+	ErrorInvalidPlan      ErrorKind = "invalid-plan"
+	ErrorQueryExecution   ErrorKind = "query-execution"
+	ErrorViewRendering    ErrorKind = "view-rendering"
+	ErrorUnknownGroup     ErrorKind = "unknown-group-column"
+	ErrorUnknownRunColumn ErrorKind = "unknown-run-column"
+	ErrorInvalidRunStyle  ErrorKind = "invalid-run-style"
+	ErrorInvalidRunTarget ErrorKind = "invalid-run-target"
 )
 
 // Error is a typed document-evaluation failure with its source location.
@@ -23,6 +26,8 @@ type Error struct {
 	Document string
 	Content  string
 	Query    string
+	Column   string
+	Row      int
 	Actual   string
 	Origin   provenance.Origin
 	Err      error
@@ -40,6 +45,18 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("document %s diagram %s: %v", e.Document, e.Content, e.Err)
 	case ErrorUnknownGroup:
 		return fmt.Sprintf("document %s table %s groups by %q, which query %s did not project", e.Document, e.Content, e.Actual, e.Query)
+	case ErrorUnknownRunColumn:
+		return fmt.Sprintf("document %s content %s column run names column %q, which query %s did not project", e.Document, e.Content, e.Column, e.Query)
+	case ErrorInvalidRunStyle:
+		return fmt.Sprintf(
+			"document %s content %s query %s row %d column %q must supply one style \"plain\", \"emphasis\", \"strong\" or \"code\", got %s",
+			e.Document, e.Content, e.Query, e.Row, e.Column, e.Actual,
+		)
+	case ErrorInvalidRunTarget:
+		return fmt.Sprintf(
+			"document %s content %s query %s row %d column %q must supply one non-empty link target, got %s",
+			e.Document, e.Content, e.Query, e.Row, e.Column, e.Actual,
+		)
 	default:
 		return fmt.Sprintf("document evaluation failed for %s", e.Document)
 	}

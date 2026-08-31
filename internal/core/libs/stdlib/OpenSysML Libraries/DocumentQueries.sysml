@@ -133,6 +133,27 @@ library package DocumentQueries {
 		ref target : Element[1];
 	}
 
+	/* Column runs style a query-backed paragraph's or list's text: each
+	 * result row renders one run per column run, in declaration order. */
+	abstract part def ColumnRun;
+
+	part def SpanColumn :> ColumnRun {
+		/* column: the projected column whose values become the run text. */
+		attribute column : String[1];
+		/* style: "plain", "emphasis", "strong" or "code". */
+		attribute style : String[0..1];
+		/* styleColumn: a projected column supplying each row's style. */
+		attribute styleColumn : String[0..1];
+	}
+
+	part def LinkColumn :> ColumnRun {
+		/* column: the projected column whose values become the link text. */
+		attribute column : String[1];
+		/* targetColumn: a projected column supplying each row's one link
+		 * destination. */
+		attribute targetColumn : String[1];
+	}
+
 	part def Table :> ContentBlock {
 		attribute caption : String[0..1];
 		/* groupBy: a projected column name; rows are grouped by its value
