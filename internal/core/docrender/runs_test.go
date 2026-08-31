@@ -107,6 +107,59 @@ func TestMarkdownAnchorsEmptyReferencedList(t *testing.T) {
 	}
 }
 
+// TestMarkdownGroupedTableEmpty checks that a grouped table whose filter
+// selects no rows still renders a header-only pipe table.
+func TestMarkdownGroupedTableEmpty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty_group.sysml")
+	model := `
+		package Groups {
+			private import DocumentQueries::*;
+			private import KerML::Root::Element;
+			private import ScalarValues::*;
+
+			calc def Zoned :> Query {
+				in root : Element;
+				WhereName(
+					source = Project(
+						source = OwnedElements(source = root),
+						properties = ("zone", "name")
+					),
+					operator = "==",
+					value = "nomatch"
+				)
+			}
+
+			part def Widget {
+				attribute zone : String;
+			}
+
+			part hollow {
+				part inner : Widget {
+					attribute redefines zone = "payload";
+				}
+			}
+
+			part def Report :> Document {
+				attribute redefines title = "Report";
+				part zones : Table {
+					attribute redefines groupBy = "zone";
+					calc rows : Zoned {
+						in root = hollow;
+					}
+				}
+			}
+		}
+	`
+	if err := os.WriteFile(path, []byte(model), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	got := renderFixtureDocument(t, path, "Groups::Report")
+	want := "| zone | name |\n| --- | --- |"
+	if !strings.Contains(got, want) {
+		t.Errorf("rendering does not contain %q\n%s", want, got)
+	}
+}
+
 // TestMarkdownGoldenInlineRuns spot-checks the rendered inline runs, anchors,
 // and grouped subtables of the telescope report.
 func TestMarkdownGoldenInlineRuns(t *testing.T) {
