@@ -18,7 +18,8 @@ import sys
 from pathlib import Path
 
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+# The destination is either angle-bracketed (CommonMark, may contain spaces) or bare.
+LINK = re.compile(r"\[[^\]]*\]\((<[^<>]*>|[^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HEADING = re.compile(r"^#{1,6}\s(.*)$", re.MULTILINE)
 ANCHOR = re.compile(r"<a\s+(?:id|name)=[\"']([^\"']+)[\"']", re.IGNORECASE)
 # A link naming any scheme points outside the tree, so this checker leaves it alone.
