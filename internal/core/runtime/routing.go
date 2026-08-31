@@ -428,16 +428,18 @@ func (ctx *Context) resolveType(scope *symbols.Scope, name string) *symbols.Symb
 		return nil
 	}
 	parts := strings.Split(name, "::")
-	global := parts[0] == "$"
-	if global {
-		parts = parts[1:]
-		if len(parts) == 0 {
-			return nil
-		}
-	}
-	qn := &ast.QualifiedName{Global: global, Parts: make([]ast.NameSegment, len(parts))}
+	qn := &ast.QualifiedName{Parts: make([]ast.NameSegment, len(parts))}
 	for i, part := range parts {
 		qn.Parts[i] = ast.NameSegment{Text: part}
+	}
+	return ctx.resolveTypeRef(scope, qn)
+}
+
+// resolveTypeRef resolves a type reference as written — the global qualifier
+// and segment boundaries intact — returning nil when the type is unavailable.
+func (ctx *Context) resolveTypeRef(scope *symbols.Scope, qn *ast.QualifiedName) *symbols.Symbol {
+	if ctx.resolver == nil || qn == nil || len(qn.Parts) == 0 {
+		return nil
 	}
 	sym, ok := ctx.resolver.ResolveQualified(scope, qn)
 	if !ok || sym == nil {

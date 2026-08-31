@@ -316,8 +316,8 @@ type Unsupported struct {
 func (Unsupported) statement() { /* marker: closed Statement set */ }
 
 // Accept is a lowered accept parameter: `action r accept msg : Warning;`.
-// SignalType is the parameter's declared type, empty when it was declared
-// without one, in which case the node accepts a message of any type.
+// SignalType is the parameter's declared type name as written, nil when it was
+// declared without one, in which case the node accepts a message of any type.
 //
 // ViaPort is the port named by `accept msg : Warning via p`, empty when the
 // accept named none. A port-routed message is only offered to an accept on the
@@ -331,7 +331,7 @@ func (Unsupported) statement() { /* marker: closed Statement set */ }
 // `accept when c`, nil when the accept waits for a message instead.
 type Accept struct {
 	ParamName    string
-	SignalType   string
+	SignalType   *ast.QualifiedName
 	ViaPort      string
 	SubsetsEvent string
 	Trigger      ast.Node
@@ -779,18 +779,18 @@ func subsettingTarget(usage *ast.Usage) string {
 	return ""
 }
 
-// typingTarget returns the name a usage was typed with (`: T`), qualified as
-// written, or "" when it was declared without a type.
-func typingTarget(usage *ast.Usage) string {
+// typingTarget returns the name a usage was typed with (`: T`) as written,
+// or nil when it was declared without a type.
+func typingTarget(usage *ast.Usage) *ast.QualifiedName {
 	for _, rel := range usage.Relationships {
 		if rel == nil || rel.Kind != ast.RelTyping {
 			continue
 		}
-		if name := ast.QualifiedText(rel.Target); name != "" {
-			return name
+		if qn := ast.AsQualifiedName(rel.Target); qn != nil && len(qn.Parts) > 0 {
+			return qn
 		}
 	}
-	return ""
+	return nil
 }
 
 // unwrapMembership extracts the actual member from a Membership wrapper.

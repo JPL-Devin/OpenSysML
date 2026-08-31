@@ -59,7 +59,7 @@ func TestActionBodyLowering(t *testing.T) {
 	if !ok {
 		t.Fatal("reader lowered without an accept")
 	}
-	if accept.ParamName != "payload" || accept.SignalType != "Warning" {
+	if accept.ParamName != "payload" || ast.QualifiedText(accept.SignalType) != "Warning" {
 		t.Errorf("reader accept = %+v, want {payload Warning}", accept)
 	}
 
@@ -85,8 +85,40 @@ func TestAcceptKeepsItsQualifiedSignalType(t *testing.T) {
 	if !ok {
 		t.Fatal("reader lowered without an accept")
 	}
-	if accept.SignalType != "Alerts::Warning" {
-		t.Errorf("accept signal type = %q, want %q", accept.SignalType, "Alerts::Warning")
+	if got := ast.QualifiedText(accept.SignalType); got != "Alerts::Warning" {
+		t.Errorf("accept signal type = %q, want %q", got, "Alerts::Warning")
+	}
+}
+
+// A globally qualified accept type keeps its root marker distinct from a
+// package literally named `$`, since the two resolve to different definitions.
+func TestAcceptKeepsTheGlobalQualifier(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			first start;
+			action reader accept payload : $::Alerts::Warning;
+			action other accept note : '$'::Warning;
+			done;
+			succession first start then reader;
+			succession first reader then other;
+			succession first other then done;
+		}
+	`)
+
+	accept, ok := graph.Accepts[nodeNamed(t, graph, "reader")]
+	if !ok {
+		t.Fatal("reader lowered without an accept")
+	}
+	if !accept.SignalType.Global || ast.QualifiedText(accept.SignalType) != "$::Alerts::Warning" {
+		t.Errorf("accept signal type = %+v, want global Alerts::Warning", accept.SignalType)
+	}
+
+	other, ok := graph.Accepts[nodeNamed(t, graph, "other")]
+	if !ok {
+		t.Fatal("other lowered without an accept")
+	}
+	if other.SignalType.Global || other.SignalType.Parts[0].Text != "$" {
+		t.Errorf("accept signal type = %+v, want package '$'", other.SignalType)
 	}
 }
 

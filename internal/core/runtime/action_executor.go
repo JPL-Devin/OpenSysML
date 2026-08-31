@@ -362,7 +362,7 @@ func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) func
 		if !m.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) {
 			return false
 		}
-		if accept.SignalType != "" {
+		if accept.SignalType != nil {
 			return e.ctx.messageMatches(m, accept.SignalType, accept.Scope)
 		}
 		return m.carriesSignal(accept.SubsetsEvent)
@@ -1117,7 +1117,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	} else if isAccept {
 		// An accept node waits for the occurrence its payload names: a message of
 		// the type it was typed with, or of the event it subsets.
-		want := accept.SignalType
+		want := ast.QualifiedText(accept.SignalType)
 		if want == "" {
 			want = accept.SubsetsEvent
 		}

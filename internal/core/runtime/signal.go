@@ -667,19 +667,16 @@ func (m Message) carriesSignal(signalType string) bool {
 // definition want resolves to, so a subtype message satisfies a supertype
 // accept and same-named definitions of different packages stay apart. Where
 // either side resolves to no symbol, the written names are compared instead.
-func (ctx *Context) messageMatches(m Message, want string, scope *symbols.Scope) bool {
-	if want == "" {
+func (ctx *Context) messageMatches(m Message, want *ast.QualifiedName, scope *symbols.Scope) bool {
+	if want == nil || len(want.Parts) == 0 {
 		return true
 	}
 	if m.Signal != nil && ctx.model != nil {
-		if wantSym := ctx.resolveType(scope, want); wantSym != nil {
+		if wantSym := ctx.resolveTypeRef(scope, want); wantSym != nil {
 			return ctx.model.Conforms(m.Signal, wantSym)
 		}
 	}
-	if i := strings.LastIndex(want, "::"); i >= 0 {
-		want = want[i+2:]
-	}
-	return m.carriesSignal(want)
+	return m.carriesSignal(want.Parts[len(want.Parts)-1].Text)
 }
 
 // buildMessage evaluates a send statement into a message.
