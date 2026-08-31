@@ -4,9 +4,83 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
-## Unreleased
+## 0.4.2 — 2026-08-31
+
+Release 0.4.2 is where document generation from a model becomes a working pipeline. 0.4.1 shipped the
+planning layer alone — nothing executed and nothing rendered. A document's queries now run (named
+invocation under a shared budget, relationship traversal, computed expression columns), an evaluated
+document renders as CommonMark Markdown or, through an external converter, as PDF, generated diagrams
+and cross-document references are content the document declares, and a whole document set is written
+as one atomic replacement. Every surface reaches it: `%run-query` and `%render-document` in the REPL,
+`-run-query`, `-render-document`, `-doc-form` and `-render-documents` on the command line,
+`RunDocumentQuery` and `RenderDocument` over gRPC and on the public Go API, and
+`opensysml/documents`/`opensysml/renderDocument` in the LSP, behind the VS Code extension's
+`SysML: Render Document`. The [document-generation manual](docs/manual/README.md) documents the
+pipeline with examples that are rendered by the binary the release ships.
+
+The public Go API stops being a subset of the service: behaviour, verification, search, reporting,
+conversion and editing are all methods on `opensysml.Client`, and a model spread over several files
+is parsed and indexed as one model rather than concatenated. The four non-Go clients now provision
+the service the same way — each downloads a `sysml-grpc` release and verifies it against digests
+pinned in one shared table, refusing an unverifiable release rather than answering from a cache.
+
+Two example walkthroughs were written to find defects and did: a relay probe across its mission
+phases and a bomb-disposal team around the robot. What they found is the runtime and parser half of
+this release — a structural `first a then b;` that parsed as an initial node and shadowed the
+snapshot it named, sends that could not cross a connector their owner declared or reach a nested
+part's identity, signals matched by short name instead of resolved identity, and a bound subject
+that did not carry its subject's type.
+
+Configuration unifies on the `OPENSYSML_` prefix, with the `SYSML_` spellings still accepted, and the
+load path allocates 15% less on a 12,000-element model. No model that validated under 0.4.1 stops
+validating and no import path moves.
 
 ### Added
+
+- **A document definition written in the model renders as Markdown.** `%render-document` in the REPL
+  and `-render-document` on the command line compile a `part def` specializing
+  `DocumentQueries::Document`, run its queries against the loaded model, render its diagram blocks
+  through the view engine, and write CommonMark. Sections nest, paragraphs and lists compose
+  statically-authored inline runs (`Span` with a `plain`/`emphasis`/`strong`/`code` style, `Link` to a
+  URL, `Ref` to another block's anchor) with query-backed values styled through nested `SpanColumn`
+  and `LinkColumn` column runs, a table's columns are the query's projected properties and its
+  computed `Column` names, and a `groupBy` column writes one subtable per group value. A `Diagram`
+  block embeds a declared view — or an element with a stated rendering kind — as a fenced `mermaid`
+  block, a table-kind view as a pipe table, with an optional caption and flow direction. Rendering is
+  deterministic: the same model and document produce the same bytes.
+
+- **The same document renders as PDF, through a converter chosen at run time.** `-doc-form pdf`
+  converts the rendered Markdown with `weasyprint` (default), `pandoc` or `prince`, selected by
+  `-pdf-engine`, so the binary links no PDF renderer and Markdown output needs none of them;
+  `-pdf-title-page`, `-pdf-toc` and `-pdf-number-sections` are the document-level options. A PDF is a
+  binary artifact, so `-doc-form pdf` requires `-o`, and a missing tool stops the run with a typed
+  error rather than a partial file.
+
+- **A model's documents render as one linked set.** A `Ref` may target a block in another document,
+  and `-render-documents <dir>` renders every document the model declares into a directory, one file
+  per document, so those references resolve as on-disk links. The set is committed atomically: the
+  rendered files replace their destinations together, a failure restores what was there, and a crash
+  cannot leave half a set behind.
+
+- **Document queries execute.** A query definition specializing `DocumentQueries::Query` runs as a
+  pipeline over the model — filtering, ordering, projection, named relationship traversal, and
+  invocation of another named query with explicit bindings under one shared visit-and-invocation
+  budget — and a `Column(name = …, expression = …)` projection is evaluated per row. `%run-query` and
+  `-run-query "<name> [<p>=<expr>…]"` report the rows directly, which is how a query is written and
+  checked before a document consumes it.
+
+- **The service, the LSP and the editors expose the pipeline.** gRPC gains `RunDocumentQuery` and
+  `RenderDocument`; the LSP gains `opensysml/documents` and `opensysml/renderDocument` behind an
+  `openSysmlRenderDocument` experimental capability, plus completion and hover for query authoring;
+  and the VS Code extension's `SysML: Render Document` renders the model as currently typed into a
+  Markdown preview beside the editor.
+
+- **Every client provisions `sysml-grpc` from a verified release.** The Node, Java and Rust clients
+  download the service binary for the host platform and verify it against a SHA-256 digest pinned in
+  the repository, and the Python client resolves a named or `$PATH` binary the way the others do.
+  Downloads are staged per process, bounded, and taken under a shared cache lock, an unverifiable
+  release is refused rather than answered from a cache, and the pins themselves are generated into
+  every client from one shared table.
 
 - **The public Go API covers every operation the service answers.** `ExecuteAction`,
   `ExecuteState`, `VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction`, `EvaluateCalc`,
@@ -43,6 +117,30 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   a command crossing the connector the site joins two parts by, a callout occurrence with a
   snapshot and a timeslice, and a requirement, use case, verification case and analysis case over
   the same subject. It was written to find defects, and found the three below.
+
+- **A document-generation manual**, [`docs/manual/`](docs/manual/README.md): the concepts, the
+  smallest working document end to end, a query cookbook, document authoring, the output forms and
+  their determinism, the CLI/REPL/gRPC/Python interfaces, a worked example and troubleshooting. Every
+  snippet in it parses and every rendered output shown was produced by the binary this release ships,
+  and the documentation link checker now reads the bracketed and angle-bracketed destinations those
+  pages use.
+
+### Changed
+
+- **Configuration is spelled `OPENSYSML_`.** Every variable `sysml`, `sysml-lsp` and `sysml-grpc`
+  read — the library path, the six execution budgets and the gRPC index pool — uses that prefix. The
+  legacy `SYSML_`-prefixed names remain accepted indefinitely; when both are set and the
+  `OPENSYSML_` value is non-empty it wins, and setting only the legacy name prints a one-time
+  deprecation warning naming the form to switch to.
+
+### Performance
+
+- **A load allocates 15% less.** Three allocation sources paid once per token or per name parsed — a
+  fresh string for every keyword's text, a parts slice for every qualified name, and a
+  redefinition-closure map per inherited symbol — now cost one allocation per file or none. On a
+  12,000-element model that is 3.69M allocations rather than 4.33M and 474.1 MiB rather than 487.7,
+  with wall time unchanged: the win is collector pressure, not bytes. Diagnostics and exit status
+  were verified byte-identical against the previous binary.
 
 ### Fixed
 
@@ -156,6 +254,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   usage's supertypes, so `truck.payload` named no member and `%check` refused the requirement.
   Implicit role redefinitions are direct supertypes, so a subject or objective bound in a usage
   reads the members of the role it redefines.
+
+- **`isReference` and `isComposite` are derived from what a usage declares.** Reflective reads
+  reported the flags a declaration carried literally, so a query over metaclass features answered
+  from the notation rather than from the reference semantics the usage has; every
+  declaration-backed metaclass modifier flag is now reflected the same way, and a metaclass feature
+  is read through metaclass conformance.
+
+- **The REPL evaluates a bare expression.** A line that was neither a command nor a declaration was
+  echoed rather than evaluated; it is now evaluated, a materialization failure is reported as one,
+  qualified suggestions are ranked ahead of unqualified ones, and warnings are printed before the
+  load lines they belong to rather than after them.
+
+- **The orthogonal-regions demo terminates.** Its regions completed only on each other's completion,
+  so running it livelocked; the demo now uses timed transitions, which is what the notation offers
+  for a region that must advance on its own.
+
+- **A rendered document set cannot be lost to a failed write.** Staged documents and their
+  directories are synced before the set is committed, a destination that already exists is replaced
+  portably rather than removed first, a case-aliased or colliding destination is rejected, and a
+  rollback restores a backup even where the failed replacement had removed its destination.
 
 ## 0.4.1 — 2026-08-30
 
