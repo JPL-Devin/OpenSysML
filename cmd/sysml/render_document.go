@@ -101,10 +101,16 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 		if info != nil && info.IsDir() {
 			return fmt.Errorf("cannot write %s: it is a directory", path)
 		}
-		if other, ok := resolved[target]; ok {
+		key := target
+		// Dangling links can reach one absent file through aliased
+		// directories; canonicalize the directory so they still collide.
+		if dir, dirErr := filepath.EvalSymlinks(filepath.Dir(target)); dirErr == nil {
+			key = filepath.Join(dir, filepath.Base(target))
+		}
+		if other, ok := resolved[key]; ok {
 			return fmt.Errorf("cannot write %s: %s and %s both resolve to %s; repoint one of the links so each document has its own file", path, other, document.FileName, target)
 		}
-		resolved[target] = document.FileName
+		resolved[key] = document.FileName
 		for j := range i {
 			if info != nil && infos[j] != nil && os.SameFile(info, infos[j]) {
 				return fmt.Errorf("cannot write %s: %s and %s both resolve to one file; repoint one of the links so each document has its own file", path, documents[j].FileName, document.FileName)
@@ -130,9 +136,7 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 			}
 			switch {
 			case committed[i] && backups[i] != "":
-				// Windows refuses a rename over an existing file.
-				_ = os.Remove(targets[i])
-				_ = os.Rename(backups[i], targets[i])
+				_ = replaceFile(backups[i], targets[i])
 			case committed[i]:
 				_ = os.Remove(targets[i])
 			case moved[i]:
@@ -257,6 +261,19 @@ func syncDir(dir string) {
 	}
 	_ = f.Sync()
 	_ = f.Close()
+}
+
+// replaceFile renames source over target, atomically where the platform
+// allows; Windows refuses a rename over an existing file, so it retries
+// after removing the target, keeping the target until the retry begins.
+func replaceFile(source, target string) error {
+	if err := os.Rename(source, target); err == nil {
+		return nil
+	}
+	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return os.Rename(source, target)
 }
 
 // backUp preserves an existing destination so a failed commit can restore

@@ -272,6 +272,69 @@ func TestRenderDocumentsRejectsAliasedTargets(t *testing.T) {
 	}
 }
 
+// TestRenderDocumentsRejectsDanglingAliasedTargets checks two dangling links
+// reaching one absent file through aliased directories are rejected, so the
+// later document cannot silently replace the first.
+func TestRenderDocumentsRejectsDanglingAliasedTargets(t *testing.T) {
+	binary := buildCLI(t)
+	dir := filepath.Join(t.TempDir(), "rendered")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	real := filepath.Join(t.TempDir(), "real")
+	if err := os.MkdirAll(real, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(real, alias); err != nil {
+		t.Fatal(err)
+	}
+	pairs := map[string]string{
+		"Reports-MainReport.md": filepath.Join(real, "shared.md"),
+		"Reports-Appendix.md":   filepath.Join(alias, "shared.md"),
+	}
+	for name, target := range pairs {
+		if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := check(t, binary, linkedModel, "-render-documents", dir)
+	if got.status != 2 || !strings.Contains(got.stderr, "both resolve to") {
+		t.Fatalf("exit = %d stderr = %q", got.status, got.stderr)
+	}
+	if _, err := os.Stat(filepath.Join(real, "shared.md")); !os.IsNotExist(err) {
+		t.Errorf("a rejected set wrote the shared file: %v", err)
+	}
+}
+
+// TestReplaceFileReplacesExistingTarget checks a rollback restore lands over
+// an existing committed file.
+func TestReplaceFileReplacesExistingTarget(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "backup")
+	target := filepath.Join(dir, "Reports-Appendix.md")
+	if err := os.WriteFile(source, []byte("previous\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("committed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := replaceFile(source, target); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(restored) != "previous\n" {
+		t.Errorf("target = %q", restored)
+	}
+	if _, err := os.Stat(source); !os.IsNotExist(err) {
+		t.Errorf("the backup remains after its restore: %v", err)
+	}
+}
+
 // TestRenderDocumentsCaseCollidingNames checks documents whose file names
 // differ only by letter case are rejected before anything is written, so a
 // set renders the same on case-sensitive and case-insensitive filesystems.
