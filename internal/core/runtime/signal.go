@@ -899,14 +899,6 @@ func (ctx *Context) objectSignalSymbol(id int64) *symbols.Symbol {
 	return nil
 }
 
-// objectSignalType names the type of an object sent as a message.
-func (ctx *Context) objectSignalType(id int64) string {
-	if sym := ctx.objectSignalSymbol(id); sym != nil {
-		return sym.Name
-	}
-	return ""
-}
-
 // isDefinitionSymbol reports whether a symbol declares a definition, not a usage.
 func isDefinitionSymbol(sym *symbols.Symbol) bool {
 	if sym == nil {
