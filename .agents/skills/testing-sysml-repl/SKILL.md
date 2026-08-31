@@ -36,6 +36,30 @@ line/column numbers, where a screenshot of the new behavior alone proves nothing
 the Makefile preserves the version ldflags before the binary is copied out of the worktree; plain
 `go build` would make `--version` report `dev` / `unknown`.
 
+## Document rendering (`-render-document` / `%render-document`)
+
+The document-query engine renders `part def`s specializing `DocumentQueries::Document` to Markdown:
+
+```bash
+./bin/sysml -render-document Observatory::MassReport internal/core/docrender/testdata/telescope_report.sysml
+printf '%%load <file.sysml>\n%%render-document <Qualified::Name>\n%%quit\n' | timeout 30 ./bin/sysml
+```
+
+- The REPL output is byte-identical to the CLI output except for the banner line, the `✓ package …`
+  load line, and a trailing `goodbye` — strip those before diffing REPL vs CLI.
+- If the model has any validation error, the CLI exits 2 with
+  `did not analyse cleanly; nothing was rendered` — diagnostics (including the typed Diagram
+  diagnostics: bad direction, missing kind on a plain-element source, direction on a
+  sequence/table kind) surface at analysis time, before any rendering.
+- `Diagram` content blocks emit fenced ```mermaid blocks. Validate mermaid syntax offline with
+  the pre-installed mermaid-cli instead of mermaid.live:
+  `echo '{"args":["--no-sandbox"]}' > /tmp/pptr.json` then
+  `/home/ubuntu/.local/mermaid/node_modules/.bin/mmdc -p /tmp/pptr.json -i block.mmd -o block.svg`
+  (add `-o block.png -b white -s 2` for PNG evidence). If that path is missing, install with
+  `npm install --prefix ~/.local/mermaid @mermaid-js/mermaid-cli`.
+- Extract mermaid blocks from the rendered Markdown with awk:
+  `awk '/```mermaid/{f=1;n++;next}/```/{f=0;next}f{print > "block"n".mmd"}' render.md`
+
 ## Library-cache cold/warm testing (`XDG_CACHE_HOME`)
 
 `bin/sysml` persists stdlib symbol indexes under `$XDG_CACHE_HOME/sysml-ls/libs/*-v<N>.idx`
@@ -2386,6 +2410,14 @@ Traps found while testing it:
 ## Recording setup (Linux/Plasma box)
 
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
+
+No GUI terminal emulator may be installed at all: install one first
+(`sudo apt-get install -y xterm`) and maximize it with
+`DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz`.
+
+When killing a service from a *scripted* shell, `pkill -f sysml-grpc` matches the shell's own
+command line and kills the test shell itself; use `pkill -x sysml-grpc` or the self-excluding
+pattern `pkill -f 'sysml-grp[c]'`.
 
 ```bash
 cd /home/ubuntu/repos/OpenSysML && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)

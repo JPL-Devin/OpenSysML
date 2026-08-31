@@ -4,7 +4,8 @@ import "github.com/Open-MBEE/OpenSysML/internal/core/source"
 
 // keywords is the union of KerML and SysML lowercase keyword literals.
 // A scanned ID matching a key is emitted as Kind==Keyword with KeywordID set.
-var keywords = map[string]struct{}{}
+// The value is the canonical string, so tokens share it instead of allocating.
+var keywords = map[string]string{}
 
 // keywordsKerML and keywordsSysML are the per-language sets. Xtext reserves a
 // literal only within the grammar that declares it, and the two grammars share
@@ -12,11 +13,13 @@ var keywords = map[string]struct{}{}
 var (
 	keywordsKerML = map[string]struct{}{}
 	keywordsSysML = map[string]struct{}{}
+	keywordsUnion = map[string]struct{}{}
 )
 
 func init() {
 	for _, kw := range keywordList {
-		keywords[kw] = struct{}{}
+		keywords[kw] = kw
+		keywordsUnion[kw] = struct{}{}
 	}
 	for _, kw := range keywordListKerML {
 		keywordsKerML[kw] = struct{}{}
@@ -35,7 +38,7 @@ func keywordSet(kind source.Kind) map[string]struct{} {
 	case source.KindSysML:
 		return keywordsSysML
 	default:
-		return keywords
+		return keywordsUnion
 	}
 }
 

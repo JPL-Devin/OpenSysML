@@ -101,13 +101,23 @@ func writeRoffExamples(w io.Writer, examples []Example, opensSection bool) {
 	if len(examples) == 0 {
 		return
 	}
-	width := commandWidth(examples)
+	width := commandWidth(examples, manLiteralWidth)
 	aligned := fitsAligned(examples, width)
 	if !opensSection {
 		fmt.Fprintf(w, ".PP\n")
 	}
 	fmt.Fprintf(w, ".RS 2\n.nf\n")
 	for _, ex := range examples {
+		folded := foldCommand(ex.Command, manLiteralWidth)
+		if len(folded) > 1 {
+			if ex.Comment != "" {
+				fmt.Fprintf(w, "# %s\n", roffEscape(ex.Comment))
+			}
+			for _, line := range folded {
+				fmt.Fprintf(w, "%s\n", roffEscape(line))
+			}
+			continue
+		}
 		if ex.Comment == "" {
 			fmt.Fprintf(w, "%s\n", roffEscape(ex.Command))
 			continue
@@ -126,7 +136,10 @@ func writeRoffExamples(w io.Writer, examples []Example, opensSection bool) {
 // literal line once its comment is aligned, since roff does not fill one.
 func fitsAligned(examples []Example, width int) bool {
 	for _, ex := range examples {
-		if ex.Comment != "" && width+4+len(ex.Comment) > manLiteralWidth {
+		if ex.Comment == "" || len(ex.Command) > manLiteralWidth {
+			continue
+		}
+		if width+4+len(ex.Comment) > manLiteralWidth {
 			return false
 		}
 	}

@@ -840,6 +840,10 @@ pub struct ServerInfoResponse {
     ///                   materializes.
     ///    "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
     ///                   preserving everything the edit did not touch.
+    ///    "document_query" - the RunDocumentQuery RPC runs a named document query
+    ///                   and answers with typed rows.
+    ///    "render_document" - the RenderDocument RPC renders a named document to
+    ///                   Markdown.
     #[prost(string, repeated, tag="2")]
     pub capabilities: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
@@ -940,6 +944,116 @@ pub struct QueryResultElement {
     pub r#type: ::prost::alloc::string::String,
     #[prost(map="string, string", tag="3")]
     pub properties: ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
+/// RunDocumentQueryRequest runs a named document query — a calc def
+/// specializing DocumentQueries::Query — against a model the service already
+/// parsed, binding its entry parameters. It answers as %run-query does, but with
+/// typed rows rather than formatted lines.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RunDocumentQueryRequest {
+    /// from ParseFile response
+    #[prost(string, tag="1")]
+    pub model_hash: ::prost::alloc::string::String,
+    /// FQN of the document query to run. Fails with NOT_FOUND when the model does
+    /// not declare it, and INVALID_ARGUMENT when it declares something else.
+    #[prost(string, tag="2")]
+    pub query_id: ::prost::alloc::string::String,
+    /// Entry-parameter bindings. Repeating a parameter appends to its binding, so
+    /// a nonscalar parameter can be given several values.
+    #[prost(message, repeated, tag="3")]
+    pub bindings: ::prost::alloc::vec::Vec<DocumentQueryBinding>,
+}
+/// DocumentQueryBinding binds one entry parameter of a document query.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DocumentQueryBinding {
+    #[prost(string, tag="1")]
+    pub parameter: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag="2")]
+    pub values: ::prost::alloc::vec::Vec<DocumentValue>,
+}
+/// DocumentValue is one typed document-query value. A request binds a model
+/// element by qualified name in element_id; a response also says what the
+/// element is in element_type. `infinity` denotes an unbounded multiplicity and
+/// is only ever answered, never bound.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DocumentValue {
+    /// Metamodel type of element_id ("PartUsage", ...); answered, ignored when bound.
+    #[prost(string, tag="7")]
+    pub element_type: ::prost::alloc::string::String,
+    #[prost(oneof="document_value::Kind", tags="1, 2, 3, 4, 5, 6")]
+    pub kind: ::core::option::Option<document_value::Kind>,
+}
+/// Nested message and enum types in `DocumentValue`.
+pub mod document_value {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Kind {
+        /// qualified name of a model element
+        #[prost(string, tag="1")]
+        ElementId(::prost::alloc::string::String),
+        #[prost(string, tag="2")]
+        StringValue(::prost::alloc::string::String),
+        #[prost(int64, tag="3")]
+        IntValue(i64),
+        #[prost(double, tag="4")]
+        RealValue(f64),
+        #[prost(bool, tag="5")]
+        BoolValue(bool),
+        #[prost(bool, tag="6")]
+        Infinity(bool),
+    }
+}
+/// DocumentQueryColumn is one projected property, in projection order.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DocumentQueryColumn {
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+}
+/// DocumentQueryCell is one row's values for one column, in the query's order.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DocumentQueryCell {
+    #[prost(message, repeated, tag="1")]
+    pub values: ::prost::alloc::vec::Vec<DocumentValue>,
+}
+/// DocumentQueryRow is one selected element and its projected cells, one per
+/// column in column order.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DocumentQueryRow {
+    /// The selected element itself, an element value with its qualified name.
+    #[prost(message, optional, tag="1")]
+    pub element: ::core::option::Option<DocumentValue>,
+    #[prost(message, repeated, tag="2")]
+    pub cells: ::prost::alloc::vec::Vec<DocumentQueryCell>,
+}
+/// RunDocumentQueryResponse is the query's answer: its projected columns and its
+/// rows, both in the deterministic order the engine reports. A query that
+/// selects nothing answers with no rows; a query that could not be run fails the
+/// call with the status its failure maps to.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RunDocumentQueryResponse {
+    #[prost(message, repeated, tag="1")]
+    pub columns: ::prost::alloc::vec::Vec<DocumentQueryColumn>,
+    #[prost(message, repeated, tag="2")]
+    pub rows: ::prost::alloc::vec::Vec<DocumentQueryRow>,
+}
+/// RenderDocumentRequest renders a named document — a part def specializing
+/// DocumentQueries::Document — to Markdown. A document binds its queries'
+/// parameters in the model, so the request carries none.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RenderDocumentRequest {
+    /// from ParseFile response
+    #[prost(string, tag="1")]
+    pub model_hash: ::prost::alloc::string::String,
+    /// FQN of the document to render. Fails with NOT_FOUND when the model does
+    /// not declare it, and INVALID_ARGUMENT when it declares something else.
+    #[prost(string, tag="2")]
+    pub document_id: ::prost::alloc::string::String,
+}
+/// RenderDocumentResponse carries the rendered Markdown, byte-for-byte what the
+/// CLI's -render-document writes.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RenderDocumentResponse {
+    #[prost(string, tag="1")]
+    pub markdown: ::prost::alloc::string::String,
 }
 /// FailureReason says what kind of failure an `error` reports, so a client acts
 /// on the kind rather than on the message text.

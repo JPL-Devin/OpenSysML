@@ -429,6 +429,8 @@ def _not_found_error(details, default):
         return ModelFileNotFoundError
     if "model not found" in lowered:
         return ModelNotFoundError
+    if "symbol not found" in lowered:
+        return SymbolNotFoundError
     return default
 
 
@@ -464,6 +466,9 @@ def from_rpc_error(exc, not_found=ModelNotFoundError, unimplemented=None):
 
     name = code.name if code is not None else "UNKNOWN"
     message = details or f"the sysml-grpc service failed the call with {name}"
+    if cls is SymbolNotFoundError:
+        # Its constructor takes the name, which the details end with.
+        return SymbolNotFoundError(message.rpartition("symbol not found: ")[2])
     if cls is ConnectionError:
         # ConnectionError is also raised for a service that would not start, so
         # a translated one says the service was reached for and was not there.

@@ -55,8 +55,18 @@ func (d Doc) WriteText(w io.Writer, fs *flag.FlagSet) {
 // writeExamples writes one command per line with the comments aligned in a
 // column, so a block of them reads as a table.
 func writeExamples(w io.Writer, examples []Example) {
-	width := commandWidth(examples)
+	width := commandWidth(examples, textWidth-2)
 	for _, ex := range examples {
+		folded := foldCommand(ex.Command, textWidth-2)
+		if len(folded) > 1 {
+			if ex.Comment != "" {
+				fmt.Fprintf(w, "  # %s\n", ex.Comment)
+			}
+			for _, line := range folded {
+				fmt.Fprintf(w, "  %s\n", line)
+			}
+			continue
+		}
 		if ex.Comment == "" {
 			fmt.Fprintf(w, "  %s\n", ex.Command)
 			continue
@@ -65,15 +75,39 @@ func writeExamples(w io.Writer, examples []Example) {
 	}
 }
 
-// commandWidth is the width the commented example commands are padded to.
-func commandWidth(examples []Example) int {
+// commandWidth is the width the commented example commands are padded to,
+// disregarding the ones too wide for a line, which are folded instead.
+func commandWidth(examples []Example, limit int) int {
 	width := 0
 	for _, ex := range examples {
-		if ex.Comment != "" && len(ex.Command) > width {
+		if ex.Comment != "" && len(ex.Command) > width && len(ex.Command) <= limit {
 			width = len(ex.Command)
 		}
 	}
 	return width
+}
+
+// foldCommand breaks a command too wide for width at its argument boundaries,
+// continuing each line the way a shell reads it.
+func foldCommand(command string, width int) []string {
+	if len(command) <= width {
+		return []string{command}
+	}
+	const continuation = " \\"
+	var lines []string
+	line := ""
+	for _, word := range strings.Fields(command) {
+		switch {
+		case line == "":
+			line = word
+		case len(line)+1+len(word)+len(continuation) <= width:
+			line += " " + word
+		default:
+			lines = append(lines, line+continuation)
+			line = "    " + word
+		}
+	}
+	return append(lines, line)
 }
 
 // writeItems writes a labelled list, in a column while the labels are short

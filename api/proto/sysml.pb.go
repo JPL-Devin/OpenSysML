@@ -4073,6 +4073,10 @@ type ServerInfoResponse struct {
 	//	               materializes.
 	//	"apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
 	//	               preserving everything the edit did not touch.
+	//	"document_query" - the RunDocumentQuery RPC runs a named document query
+	//	               and answers with typed rows.
+	//	"render_document" - the RenderDocument RPC renders a named document to
+	//	               Markdown.
 	Capabilities  []string `protobuf:"bytes,2,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -4578,6 +4582,590 @@ func (x *QueryResultElement) GetProperties() map[string]string {
 	return nil
 }
 
+// RunDocumentQueryRequest runs a named document query — a calc def
+// specializing DocumentQueries::Query — against a model the service already
+// parsed, binding its entry parameters. It answers as %run-query does, but with
+// typed rows rather than formatted lines.
+type RunDocumentQueryRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ModelHash string                 `protobuf:"bytes,1,opt,name=model_hash,json=modelHash,proto3" json:"model_hash,omitempty"` // from ParseFile response
+	// FQN of the document query to run. Fails with NOT_FOUND when the model does
+	// not declare it, and INVALID_ARGUMENT when it declares something else.
+	QueryId string `protobuf:"bytes,2,opt,name=query_id,json=queryId,proto3" json:"query_id,omitempty"`
+	// Entry-parameter bindings. Repeating a parameter appends to its binding, so
+	// a nonscalar parameter can be given several values.
+	Bindings      []*DocumentQueryBinding `protobuf:"bytes,3,rep,name=bindings,proto3" json:"bindings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunDocumentQueryRequest) Reset() {
+	*x = RunDocumentQueryRequest{}
+	mi := &file_sysml_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunDocumentQueryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunDocumentQueryRequest) ProtoMessage() {}
+
+func (x *RunDocumentQueryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunDocumentQueryRequest.ProtoReflect.Descriptor instead.
+func (*RunDocumentQueryRequest) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *RunDocumentQueryRequest) GetModelHash() string {
+	if x != nil {
+		return x.ModelHash
+	}
+	return ""
+}
+
+func (x *RunDocumentQueryRequest) GetQueryId() string {
+	if x != nil {
+		return x.QueryId
+	}
+	return ""
+}
+
+func (x *RunDocumentQueryRequest) GetBindings() []*DocumentQueryBinding {
+	if x != nil {
+		return x.Bindings
+	}
+	return nil
+}
+
+// DocumentQueryBinding binds one entry parameter of a document query.
+type DocumentQueryBinding struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Parameter     string                 `protobuf:"bytes,1,opt,name=parameter,proto3" json:"parameter,omitempty"`
+	Values        []*DocumentValue       `protobuf:"bytes,2,rep,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DocumentQueryBinding) Reset() {
+	*x = DocumentQueryBinding{}
+	mi := &file_sysml_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DocumentQueryBinding) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DocumentQueryBinding) ProtoMessage() {}
+
+func (x *DocumentQueryBinding) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DocumentQueryBinding.ProtoReflect.Descriptor instead.
+func (*DocumentQueryBinding) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *DocumentQueryBinding) GetParameter() string {
+	if x != nil {
+		return x.Parameter
+	}
+	return ""
+}
+
+func (x *DocumentQueryBinding) GetValues() []*DocumentValue {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+// DocumentValue is one typed document-query value. A request binds a model
+// element by qualified name in element_id; a response also says what the
+// element is in element_type. `infinity` denotes an unbounded multiplicity and
+// is only ever answered, never bound.
+type DocumentValue struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Kind:
+	//
+	//	*DocumentValue_ElementId
+	//	*DocumentValue_StringValue
+	//	*DocumentValue_IntValue
+	//	*DocumentValue_RealValue
+	//	*DocumentValue_BoolValue
+	//	*DocumentValue_Infinity
+	Kind isDocumentValue_Kind `protobuf_oneof:"kind"`
+	// Metamodel type of element_id ("PartUsage", ...); answered, ignored when bound.
+	ElementType   string `protobuf:"bytes,7,opt,name=element_type,json=elementType,proto3" json:"element_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DocumentValue) Reset() {
+	*x = DocumentValue{}
+	mi := &file_sysml_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DocumentValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DocumentValue) ProtoMessage() {}
+
+func (x *DocumentValue) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DocumentValue.ProtoReflect.Descriptor instead.
+func (*DocumentValue) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *DocumentValue) GetKind() isDocumentValue_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return nil
+}
+
+func (x *DocumentValue) GetElementId() string {
+	if x != nil {
+		if x, ok := x.Kind.(*DocumentValue_ElementId); ok {
+			return x.ElementId
+		}
+	}
+	return ""
+}
+
+func (x *DocumentValue) GetStringValue() string {
+	if x != nil {
+		if x, ok := x.Kind.(*DocumentValue_StringValue); ok {
+			return x.StringValue
+		}
+	}
+	return ""
+}
+
+func (x *DocumentValue) GetIntValue() int64 {
+	if x != nil {
+		if x, ok := x.Kind.(*DocumentValue_IntValue); ok {
+			return x.IntValue
+		}
+	}
+	return 0
+}
+
+func (x *DocumentValue) GetRealValue() float64 {
+	if x != nil {
+		if x, ok := x.Kind.(*DocumentValue_RealValue); ok {
+			return x.RealValue
+		}
+	}
+	return 0
+}
+
+func (x *DocumentValue) GetBoolValue() bool {
+	if x != nil {
+		if x, ok := x.Kind.(*DocumentValue_BoolValue); ok {
+			return x.BoolValue
+		}
+	}
+	return false
+}
+
+func (x *DocumentValue) GetInfinity() bool {
+	if x != nil {
+		if x, ok := x.Kind.(*DocumentValue_Infinity); ok {
+			return x.Infinity
+		}
+	}
+	return false
+}
+
+func (x *DocumentValue) GetElementType() string {
+	if x != nil {
+		return x.ElementType
+	}
+	return ""
+}
+
+type isDocumentValue_Kind interface {
+	isDocumentValue_Kind()
+}
+
+type DocumentValue_ElementId struct {
+	ElementId string `protobuf:"bytes,1,opt,name=element_id,json=elementId,proto3,oneof"` // qualified name of a model element
+}
+
+type DocumentValue_StringValue struct {
+	StringValue string `protobuf:"bytes,2,opt,name=string_value,json=stringValue,proto3,oneof"`
+}
+
+type DocumentValue_IntValue struct {
+	IntValue int64 `protobuf:"varint,3,opt,name=int_value,json=intValue,proto3,oneof"`
+}
+
+type DocumentValue_RealValue struct {
+	RealValue float64 `protobuf:"fixed64,4,opt,name=real_value,json=realValue,proto3,oneof"`
+}
+
+type DocumentValue_BoolValue struct {
+	BoolValue bool `protobuf:"varint,5,opt,name=bool_value,json=boolValue,proto3,oneof"`
+}
+
+type DocumentValue_Infinity struct {
+	Infinity bool `protobuf:"varint,6,opt,name=infinity,proto3,oneof"`
+}
+
+func (*DocumentValue_ElementId) isDocumentValue_Kind() {}
+
+func (*DocumentValue_StringValue) isDocumentValue_Kind() {}
+
+func (*DocumentValue_IntValue) isDocumentValue_Kind() {}
+
+func (*DocumentValue_RealValue) isDocumentValue_Kind() {}
+
+func (*DocumentValue_BoolValue) isDocumentValue_Kind() {}
+
+func (*DocumentValue_Infinity) isDocumentValue_Kind() {}
+
+// DocumentQueryColumn is one projected property, in projection order.
+type DocumentQueryColumn struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DocumentQueryColumn) Reset() {
+	*x = DocumentQueryColumn{}
+	mi := &file_sysml_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DocumentQueryColumn) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DocumentQueryColumn) ProtoMessage() {}
+
+func (x *DocumentQueryColumn) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DocumentQueryColumn.ProtoReflect.Descriptor instead.
+func (*DocumentQueryColumn) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *DocumentQueryColumn) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+// DocumentQueryCell is one row's values for one column, in the query's order.
+type DocumentQueryCell struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Values        []*DocumentValue       `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DocumentQueryCell) Reset() {
+	*x = DocumentQueryCell{}
+	mi := &file_sysml_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DocumentQueryCell) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DocumentQueryCell) ProtoMessage() {}
+
+func (x *DocumentQueryCell) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DocumentQueryCell.ProtoReflect.Descriptor instead.
+func (*DocumentQueryCell) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *DocumentQueryCell) GetValues() []*DocumentValue {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+// DocumentQueryRow is one selected element and its projected cells, one per
+// column in column order.
+type DocumentQueryRow struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The selected element itself, an element value with its qualified name.
+	Element       *DocumentValue       `protobuf:"bytes,1,opt,name=element,proto3" json:"element,omitempty"`
+	Cells         []*DocumentQueryCell `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DocumentQueryRow) Reset() {
+	*x = DocumentQueryRow{}
+	mi := &file_sysml_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DocumentQueryRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DocumentQueryRow) ProtoMessage() {}
+
+func (x *DocumentQueryRow) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DocumentQueryRow.ProtoReflect.Descriptor instead.
+func (*DocumentQueryRow) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *DocumentQueryRow) GetElement() *DocumentValue {
+	if x != nil {
+		return x.Element
+	}
+	return nil
+}
+
+func (x *DocumentQueryRow) GetCells() []*DocumentQueryCell {
+	if x != nil {
+		return x.Cells
+	}
+	return nil
+}
+
+// RunDocumentQueryResponse is the query's answer: its projected columns and its
+// rows, both in the deterministic order the engine reports. A query that
+// selects nothing answers with no rows; a query that could not be run fails the
+// call with the status its failure maps to.
+type RunDocumentQueryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Columns       []*DocumentQueryColumn `protobuf:"bytes,1,rep,name=columns,proto3" json:"columns,omitempty"`
+	Rows          []*DocumentQueryRow    `protobuf:"bytes,2,rep,name=rows,proto3" json:"rows,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunDocumentQueryResponse) Reset() {
+	*x = RunDocumentQueryResponse{}
+	mi := &file_sysml_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunDocumentQueryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunDocumentQueryResponse) ProtoMessage() {}
+
+func (x *RunDocumentQueryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunDocumentQueryResponse.ProtoReflect.Descriptor instead.
+func (*RunDocumentQueryResponse) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *RunDocumentQueryResponse) GetColumns() []*DocumentQueryColumn {
+	if x != nil {
+		return x.Columns
+	}
+	return nil
+}
+
+func (x *RunDocumentQueryResponse) GetRows() []*DocumentQueryRow {
+	if x != nil {
+		return x.Rows
+	}
+	return nil
+}
+
+// RenderDocumentRequest renders a named document — a part def specializing
+// DocumentQueries::Document — to Markdown. A document binds its queries'
+// parameters in the model, so the request carries none.
+type RenderDocumentRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ModelHash string                 `protobuf:"bytes,1,opt,name=model_hash,json=modelHash,proto3" json:"model_hash,omitempty"` // from ParseFile response
+	// FQN of the document to render. Fails with NOT_FOUND when the model does
+	// not declare it, and INVALID_ARGUMENT when it declares something else.
+	DocumentId    string `protobuf:"bytes,2,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenderDocumentRequest) Reset() {
+	*x = RenderDocumentRequest{}
+	mi := &file_sysml_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenderDocumentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenderDocumentRequest) ProtoMessage() {}
+
+func (x *RenderDocumentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenderDocumentRequest.ProtoReflect.Descriptor instead.
+func (*RenderDocumentRequest) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *RenderDocumentRequest) GetModelHash() string {
+	if x != nil {
+		return x.ModelHash
+	}
+	return ""
+}
+
+func (x *RenderDocumentRequest) GetDocumentId() string {
+	if x != nil {
+		return x.DocumentId
+	}
+	return ""
+}
+
+// RenderDocumentResponse carries the rendered Markdown, byte-for-byte what the
+// CLI's -render-document writes.
+type RenderDocumentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Markdown      string                 `protobuf:"bytes,1,opt,name=markdown,proto3" json:"markdown,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenderDocumentResponse) Reset() {
+	*x = RenderDocumentResponse{}
+	mi := &file_sysml_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenderDocumentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenderDocumentResponse) ProtoMessage() {}
+
+func (x *RenderDocumentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sysml_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenderDocumentResponse.ProtoReflect.Descriptor instead.
+func (*RenderDocumentResponse) Descriptor() ([]byte, []int) {
+	return file_sysml_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *RenderDocumentResponse) GetMarkdown() string {
+	if x != nil {
+		return x.Markdown
+	}
+	return ""
+}
+
 var File_sysml_proto protoreflect.FileDescriptor
 
 const file_sysml_proto_rawDesc = "" +
@@ -4923,7 +5511,44 @@ const file_sysml_proto_rawDesc = "" +
 	"properties\x1a=\n" +
 	"\x0fPropertiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x93\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8c\x01\n" +
+	"\x17RunDocumentQueryRequest\x12\x1d\n" +
+	"\n" +
+	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12\x19\n" +
+	"\bquery_id\x18\x02 \x01(\tR\aqueryId\x127\n" +
+	"\bbindings\x18\x03 \x03(\v2\x1b.sysml.DocumentQueryBindingR\bbindings\"b\n" +
+	"\x14DocumentQueryBinding\x12\x1c\n" +
+	"\tparameter\x18\x01 \x01(\tR\tparameter\x12,\n" +
+	"\x06values\x18\x02 \x03(\v2\x14.sysml.DocumentValueR\x06values\"\xff\x01\n" +
+	"\rDocumentValue\x12\x1f\n" +
+	"\n" +
+	"element_id\x18\x01 \x01(\tH\x00R\telementId\x12#\n" +
+	"\fstring_value\x18\x02 \x01(\tH\x00R\vstringValue\x12\x1d\n" +
+	"\tint_value\x18\x03 \x01(\x03H\x00R\bintValue\x12\x1f\n" +
+	"\n" +
+	"real_value\x18\x04 \x01(\x01H\x00R\trealValue\x12\x1f\n" +
+	"\n" +
+	"bool_value\x18\x05 \x01(\bH\x00R\tboolValue\x12\x1c\n" +
+	"\binfinity\x18\x06 \x01(\bH\x00R\binfinity\x12!\n" +
+	"\felement_type\x18\a \x01(\tR\velementTypeB\x06\n" +
+	"\x04kind\")\n" +
+	"\x13DocumentQueryColumn\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"A\n" +
+	"\x11DocumentQueryCell\x12,\n" +
+	"\x06values\x18\x01 \x03(\v2\x14.sysml.DocumentValueR\x06values\"r\n" +
+	"\x10DocumentQueryRow\x12.\n" +
+	"\aelement\x18\x01 \x01(\v2\x14.sysml.DocumentValueR\aelement\x12.\n" +
+	"\x05cells\x18\x02 \x03(\v2\x18.sysml.DocumentQueryCellR\x05cells\"}\n" +
+	"\x18RunDocumentQueryResponse\x124\n" +
+	"\acolumns\x18\x01 \x03(\v2\x1a.sysml.DocumentQueryColumnR\acolumns\x12+\n" +
+	"\x04rows\x18\x02 \x03(\v2\x17.sysml.DocumentQueryRowR\x04rows\"W\n" +
+	"\x15RenderDocumentRequest\x12\x1d\n" +
+	"\n" +
+	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12\x1f\n" +
+	"\vdocument_id\x18\x02 \x01(\tR\n" +
+	"documentId\"4\n" +
+	"\x16RenderDocumentResponse\x12\x1a\n" +
+	"\bmarkdown\x18\x01 \x01(\tR\bmarkdown*\x93\x01\n" +
 	"\rFailureReason\x12\x1e\n" +
 	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19FAILURE_REASON_EVALUATION\x10\x01\x12\x1d\n" +
@@ -4955,7 +5580,7 @@ const file_sysml_proto_rawDesc = "" +
 	"\x11CompositeOperator\x12\"\n" +
 	"\x1eCOMPOSITE_OPERATOR_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16COMPOSITE_OPERATOR_AND\x10\x01\x12\x19\n" +
-	"\x15COMPOSITE_OPERATOR_OR\x10\x022\xb4\b\n" +
+	"\x15COMPOSITE_OPERATOR_OR\x10\x022\xd8\t\n" +
 	"\fSysMLService\x12D\n" +
 	"\rGetServerInfo\x12\x18.sysml.ServerInfoRequest\x1a\x19.sysml.ServerInfoResponse\x12>\n" +
 	"\tParseFile\x12\x17.sysml.ParseFileRequest\x1a\x18.sysml.ParseFileResponse\x12;\n" +
@@ -4972,7 +5597,9 @@ const file_sysml_proto_rawDesc = "" +
 	"\x11VerifyRequirement\x12\x1f.sysml.VerifyRequirementRequest\x1a .sysml.VerifyRequirementResponse\x12Y\n" +
 	"\x12VerifySatisfaction\x12 .sysml.VerifySatisfactionRequest\x1a!.sysml.VerifySatisfactionResponse\x12G\n" +
 	"\fEvaluateCalc\x12\x1a.sysml.EvaluateCalcRequest\x1a\x1b.sysml.EvaluateCalcResponse\x122\n" +
-	"\x05Query\x12\x13.sysml.QueryRequest\x1a\x14.sysml.QueryResponseB@\n" +
+	"\x05Query\x12\x13.sysml.QueryRequest\x1a\x14.sysml.QueryResponse\x12S\n" +
+	"\x10RunDocumentQuery\x12\x1e.sysml.RunDocumentQueryRequest\x1a\x1f.sysml.RunDocumentQueryResponse\x12M\n" +
+	"\x0eRenderDocument\x12\x1c.sysml.RenderDocumentRequest\x1a\x1d.sysml.RenderDocumentResponseB@\n" +
 	"\x12io.opensysml.protoP\x01Z(github.com/Open-MBEE/OpenSysML/api/protob\x06proto3"
 
 var (
@@ -4988,7 +5615,7 @@ func file_sysml_proto_rawDescGZIP() []byte {
 }
 
 var file_sysml_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_sysml_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
+var file_sysml_proto_msgTypes = make([]protoimpl.MessageInfo, 73)
 var file_sysml_proto_goTypes = []any{
 	(FailureReason)(0),                 // 0: sysml.FailureReason
 	(EditFailure)(0),                   // 1: sysml.EditFailure
@@ -5052,12 +5679,21 @@ var file_sysml_proto_goTypes = []any{
 	(*PrimitiveConstraint)(nil),        // 59: sysml.PrimitiveConstraint
 	(*CompositeConstraint)(nil),        // 60: sysml.CompositeConstraint
 	(*QueryResultElement)(nil),         // 61: sysml.QueryResultElement
-	nil,                                // 62: sysml.Instance.FeatureValuesEntry
-	nil,                                // 63: sysml.ExecuteActionRequest.InputsEntry
-	nil,                                // 64: sysml.ExecuteActionResponse.OutputsEntry
-	nil,                                // 65: sysml.ExecuteStateResponse.FinalContextEntry
-	nil,                                // 66: sysml.SymbolInfo.MetadataEntry
-	nil,                                // 67: sysml.QueryResultElement.PropertiesEntry
+	(*RunDocumentQueryRequest)(nil),    // 62: sysml.RunDocumentQueryRequest
+	(*DocumentQueryBinding)(nil),       // 63: sysml.DocumentQueryBinding
+	(*DocumentValue)(nil),              // 64: sysml.DocumentValue
+	(*DocumentQueryColumn)(nil),        // 65: sysml.DocumentQueryColumn
+	(*DocumentQueryCell)(nil),          // 66: sysml.DocumentQueryCell
+	(*DocumentQueryRow)(nil),           // 67: sysml.DocumentQueryRow
+	(*RunDocumentQueryResponse)(nil),   // 68: sysml.RunDocumentQueryResponse
+	(*RenderDocumentRequest)(nil),      // 69: sysml.RenderDocumentRequest
+	(*RenderDocumentResponse)(nil),     // 70: sysml.RenderDocumentResponse
+	nil,                                // 71: sysml.Instance.FeatureValuesEntry
+	nil,                                // 72: sysml.ExecuteActionRequest.InputsEntry
+	nil,                                // 73: sysml.ExecuteActionResponse.OutputsEntry
+	nil,                                // 74: sysml.ExecuteStateResponse.FinalContextEntry
+	nil,                                // 75: sysml.SymbolInfo.MetadataEntry
+	nil,                                // 76: sysml.QueryResultElement.PropertiesEntry
 }
 var file_sysml_proto_depIdxs = []int32{
 	0,  // 0: sysml.Verdict.failure_reason:type_name -> sysml.FailureReason
@@ -5083,16 +5719,16 @@ var file_sysml_proto_depIdxs = []int32{
 	51, // 20: sysml.DiagnosticsResponse.diagnostics:type_name -> sysml.Diagnostic
 	45, // 21: sysml.EvaluateResponse.result:type_name -> sysml.Value
 	51, // 22: sysml.EvaluateResponse.diagnostics:type_name -> sysml.Diagnostic
-	62, // 23: sysml.Instance.feature_values:type_name -> sysml.Instance.FeatureValuesEntry
+	71, // 23: sysml.Instance.feature_values:type_name -> sysml.Instance.FeatureValuesEntry
 	45, // 24: sysml.FeatureValue.value:type_name -> sysml.Value
 	45, // 25: sysml.FeatureValue.values:type_name -> sysml.Value
 	22, // 26: sysml.InstantiateResponse.instance:type_name -> sysml.Instance
 	51, // 27: sysml.InstantiateResponse.diagnostics:type_name -> sysml.Diagnostic
 	22, // 28: sysml.InstantiateResponse.instances:type_name -> sysml.Instance
-	63, // 29: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
-	64, // 30: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
+	72, // 29: sysml.ExecuteActionRequest.inputs:type_name -> sysml.ExecuteActionRequest.InputsEntry
+	73, // 30: sysml.ExecuteActionResponse.outputs:type_name -> sysml.ExecuteActionResponse.OutputsEntry
 	51, // 31: sysml.ExecuteActionResponse.diagnostics:type_name -> sysml.Diagnostic
-	65, // 32: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
+	74, // 32: sysml.ExecuteStateResponse.final_context:type_name -> sysml.ExecuteStateResponse.FinalContextEntry
 	51, // 33: sysml.ExecuteStateResponse.diagnostics:type_name -> sysml.Diagnostic
 	51, // 34: sysml.ConvertResponse.diagnostics:type_name -> sysml.Diagnostic
 	33, // 35: sysml.ApplyEditsRequest.operations:type_name -> sysml.EditOperation
@@ -5103,7 +5739,7 @@ var file_sysml_proto_depIdxs = []int32{
 	39, // 40: sysml.ApplyEditsResponse.applied:type_name -> sysml.AppliedEdit
 	1,  // 41: sysml.ApplyEditsResponse.failure:type_name -> sysml.EditFailure
 	51, // 42: sysml.ApplyEditsResponse.diagnostics:type_name -> sysml.Diagnostic
-	66, // 43: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
+	75, // 43: sysml.SymbolInfo.metadata:type_name -> sysml.SymbolInfo.MetadataEntry
 	44, // 44: sysml.SymbolInfo.attributes:type_name -> sysml.AttributeInfo
 	42, // 45: sysml.SymbolInfo.type_info:type_name -> sysml.TypeInfo
 	43, // 46: sysml.SymbolInfo.multiplicity:type_name -> sysml.MultiplicityInfo
@@ -5124,46 +5760,57 @@ var file_sysml_proto_depIdxs = []int32{
 	2,  // 61: sysml.PrimitiveConstraint.operator:type_name -> sysml.PrimitiveOperator
 	3,  // 62: sysml.CompositeConstraint.operator:type_name -> sysml.CompositeOperator
 	58, // 63: sysml.CompositeConstraint.constraint:type_name -> sysml.Constraint
-	67, // 64: sysml.QueryResultElement.properties:type_name -> sysml.QueryResultElement.PropertiesEntry
-	23, // 65: sysml.Instance.FeatureValuesEntry.value:type_name -> sysml.FeatureValue
-	45, // 66: sysml.ExecuteActionRequest.InputsEntry.value:type_name -> sysml.Value
-	45, // 67: sysml.ExecuteActionResponse.OutputsEntry.value:type_name -> sysml.Value
-	45, // 68: sysml.ExecuteStateResponse.FinalContextEntry.value:type_name -> sysml.Value
-	53, // 69: sysml.SysMLService.GetServerInfo:input_type -> sysml.ServerInfoRequest
-	14, // 70: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
-	16, // 71: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
-	18, // 72: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
-	20, // 73: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
-	24, // 74: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
-	26, // 75: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
-	28, // 76: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
-	30, // 77: sysml.SysMLService.Convert:input_type -> sysml.ConvertRequest
-	32, // 78: sysml.SysMLService.ApplyEdits:input_type -> sysml.ApplyEditsRequest
-	5,  // 79: sysml.SysMLService.VerifyConstraint:input_type -> sysml.VerifyConstraintRequest
-	7,  // 80: sysml.SysMLService.VerifyRequirement:input_type -> sysml.VerifyRequirementRequest
-	9,  // 81: sysml.SysMLService.VerifySatisfaction:input_type -> sysml.VerifySatisfactionRequest
-	11, // 82: sysml.SysMLService.EvaluateCalc:input_type -> sysml.EvaluateCalcRequest
-	55, // 83: sysml.SysMLService.Query:input_type -> sysml.QueryRequest
-	54, // 84: sysml.SysMLService.GetServerInfo:output_type -> sysml.ServerInfoResponse
-	15, // 85: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
-	17, // 86: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
-	19, // 87: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
-	21, // 88: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
-	25, // 89: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
-	27, // 90: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
-	29, // 91: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
-	31, // 92: sysml.SysMLService.Convert:output_type -> sysml.ConvertResponse
-	38, // 93: sysml.SysMLService.ApplyEdits:output_type -> sysml.ApplyEditsResponse
-	6,  // 94: sysml.SysMLService.VerifyConstraint:output_type -> sysml.VerifyConstraintResponse
-	8,  // 95: sysml.SysMLService.VerifyRequirement:output_type -> sysml.VerifyRequirementResponse
-	10, // 96: sysml.SysMLService.VerifySatisfaction:output_type -> sysml.VerifySatisfactionResponse
-	12, // 97: sysml.SysMLService.EvaluateCalc:output_type -> sysml.EvaluateCalcResponse
-	56, // 98: sysml.SysMLService.Query:output_type -> sysml.QueryResponse
-	84, // [84:99] is the sub-list for method output_type
-	69, // [69:84] is the sub-list for method input_type
-	69, // [69:69] is the sub-list for extension type_name
-	69, // [69:69] is the sub-list for extension extendee
-	0,  // [0:69] is the sub-list for field type_name
+	76, // 64: sysml.QueryResultElement.properties:type_name -> sysml.QueryResultElement.PropertiesEntry
+	63, // 65: sysml.RunDocumentQueryRequest.bindings:type_name -> sysml.DocumentQueryBinding
+	64, // 66: sysml.DocumentQueryBinding.values:type_name -> sysml.DocumentValue
+	64, // 67: sysml.DocumentQueryCell.values:type_name -> sysml.DocumentValue
+	64, // 68: sysml.DocumentQueryRow.element:type_name -> sysml.DocumentValue
+	66, // 69: sysml.DocumentQueryRow.cells:type_name -> sysml.DocumentQueryCell
+	65, // 70: sysml.RunDocumentQueryResponse.columns:type_name -> sysml.DocumentQueryColumn
+	67, // 71: sysml.RunDocumentQueryResponse.rows:type_name -> sysml.DocumentQueryRow
+	23, // 72: sysml.Instance.FeatureValuesEntry.value:type_name -> sysml.FeatureValue
+	45, // 73: sysml.ExecuteActionRequest.InputsEntry.value:type_name -> sysml.Value
+	45, // 74: sysml.ExecuteActionResponse.OutputsEntry.value:type_name -> sysml.Value
+	45, // 75: sysml.ExecuteStateResponse.FinalContextEntry.value:type_name -> sysml.Value
+	53, // 76: sysml.SysMLService.GetServerInfo:input_type -> sysml.ServerInfoRequest
+	14, // 77: sysml.SysMLService.ParseFile:input_type -> sysml.ParseFileRequest
+	16, // 78: sysml.SysMLService.GetSymbol:input_type -> sysml.GetSymbolRequest
+	18, // 79: sysml.SysMLService.GetDiagnostics:input_type -> sysml.DiagnosticsRequest
+	20, // 80: sysml.SysMLService.Evaluate:input_type -> sysml.EvaluateRequest
+	24, // 81: sysml.SysMLService.Instantiate:input_type -> sysml.InstantiateRequest
+	26, // 82: sysml.SysMLService.ExecuteAction:input_type -> sysml.ExecuteActionRequest
+	28, // 83: sysml.SysMLService.ExecuteState:input_type -> sysml.ExecuteStateRequest
+	30, // 84: sysml.SysMLService.Convert:input_type -> sysml.ConvertRequest
+	32, // 85: sysml.SysMLService.ApplyEdits:input_type -> sysml.ApplyEditsRequest
+	5,  // 86: sysml.SysMLService.VerifyConstraint:input_type -> sysml.VerifyConstraintRequest
+	7,  // 87: sysml.SysMLService.VerifyRequirement:input_type -> sysml.VerifyRequirementRequest
+	9,  // 88: sysml.SysMLService.VerifySatisfaction:input_type -> sysml.VerifySatisfactionRequest
+	11, // 89: sysml.SysMLService.EvaluateCalc:input_type -> sysml.EvaluateCalcRequest
+	55, // 90: sysml.SysMLService.Query:input_type -> sysml.QueryRequest
+	62, // 91: sysml.SysMLService.RunDocumentQuery:input_type -> sysml.RunDocumentQueryRequest
+	69, // 92: sysml.SysMLService.RenderDocument:input_type -> sysml.RenderDocumentRequest
+	54, // 93: sysml.SysMLService.GetServerInfo:output_type -> sysml.ServerInfoResponse
+	15, // 94: sysml.SysMLService.ParseFile:output_type -> sysml.ParseFileResponse
+	17, // 95: sysml.SysMLService.GetSymbol:output_type -> sysml.SymbolResponse
+	19, // 96: sysml.SysMLService.GetDiagnostics:output_type -> sysml.DiagnosticsResponse
+	21, // 97: sysml.SysMLService.Evaluate:output_type -> sysml.EvaluateResponse
+	25, // 98: sysml.SysMLService.Instantiate:output_type -> sysml.InstantiateResponse
+	27, // 99: sysml.SysMLService.ExecuteAction:output_type -> sysml.ExecuteActionResponse
+	29, // 100: sysml.SysMLService.ExecuteState:output_type -> sysml.ExecuteStateResponse
+	31, // 101: sysml.SysMLService.Convert:output_type -> sysml.ConvertResponse
+	38, // 102: sysml.SysMLService.ApplyEdits:output_type -> sysml.ApplyEditsResponse
+	6,  // 103: sysml.SysMLService.VerifyConstraint:output_type -> sysml.VerifyConstraintResponse
+	8,  // 104: sysml.SysMLService.VerifyRequirement:output_type -> sysml.VerifyRequirementResponse
+	10, // 105: sysml.SysMLService.VerifySatisfaction:output_type -> sysml.VerifySatisfactionResponse
+	12, // 106: sysml.SysMLService.EvaluateCalc:output_type -> sysml.EvaluateCalcResponse
+	56, // 107: sysml.SysMLService.Query:output_type -> sysml.QueryResponse
+	68, // 108: sysml.SysMLService.RunDocumentQuery:output_type -> sysml.RunDocumentQueryResponse
+	70, // 109: sysml.SysMLService.RenderDocument:output_type -> sysml.RenderDocumentResponse
+	93, // [93:110] is the sub-list for method output_type
+	76, // [76:93] is the sub-list for method input_type
+	76, // [76:76] is the sub-list for extension type_name
+	76, // [76:76] is the sub-list for extension extendee
+	0,  // [0:76] is the sub-list for field type_name
 }
 
 func init() { file_sysml_proto_init() }
@@ -5206,13 +5853,21 @@ func file_sysml_proto_init() {
 		(*Constraint_Primitive)(nil),
 		(*Constraint_Composite)(nil),
 	}
+	file_sysml_proto_msgTypes[60].OneofWrappers = []any{
+		(*DocumentValue_ElementId)(nil),
+		(*DocumentValue_StringValue)(nil),
+		(*DocumentValue_IntValue)(nil),
+		(*DocumentValue_RealValue)(nil),
+		(*DocumentValue_BoolValue)(nil),
+		(*DocumentValue_Infinity)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sysml_proto_rawDesc), len(file_sysml_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   64,
+			NumMessages:   73,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

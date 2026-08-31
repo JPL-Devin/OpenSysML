@@ -221,21 +221,27 @@ func (s *Session) viewRenderer() (*view.Renderer, error) {
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	resolver.SetModel(model)
-	var text view.SourceText
-	if docs := s.sessionDocs(); len(docs) > 0 {
-		files := make(map[string]*source.SourceFile, len(docs))
-		for _, doc := range docs {
-			files[doc.Name] = source.New(doc.Name, doc.Content)
-		}
-		text = func(name string, span source.Span) string {
-			sf, ok := files[name]
-			if !ok {
-				return ""
-			}
-			return sf.Text(span)
-		}
+	return view.NewRenderer(model, resolver, s.sessionSourceText()), nil
+}
+
+// sessionSourceText reads notation from the session's loaded documents, and
+// is nil when none are loaded.
+func (s *Session) sessionSourceText() view.SourceText {
+	docs := s.sessionDocs()
+	if len(docs) == 0 {
+		return nil
 	}
-	return view.NewRenderer(model, resolver, text), nil
+	files := make(map[string]*source.SourceFile, len(docs))
+	for _, doc := range docs {
+		files[doc.Name] = source.New(doc.Name, doc.Content)
+	}
+	return func(name string, span source.Span) string {
+		sf, ok := files[name]
+		if !ok {
+			return ""
+		}
+		return sf.Text(span)
+	}
 }
 
 // conformanceLines renders a conformance report in declaration order: each

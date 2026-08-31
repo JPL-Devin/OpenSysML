@@ -9,6 +9,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/docir"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryexec"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // elementColumn heads the single column of a table whose query projected no
@@ -18,7 +19,8 @@ const elementColumn = "element"
 // Markdown renders an evaluated document as deterministic CommonMark: the
 // title as a level-1 ATX heading, each section one level deeper (saturating
 // at 6), paragraphs from space-joined text runs, GitHub-flavored pipe tables
-// with projected column headers, and bullet or numbered lists. Metacharacters
+// with projected column headers, bullet or numbered lists, and diagrams as
+// fenced Mermaid blocks (table-kind views as pipe tables). Metacharacters
 // in content are escaped so no value can corrupt the document structure.
 func Markdown(document *docir.Document) (string, error) {
 	if document == nil {
@@ -56,6 +58,8 @@ func renderContent(node docir.Content, level int) ([]string, error) {
 		return renderTable(node), nil
 	case docir.ContentList:
 		return renderList(node), nil
+	case docir.ContentDiagram:
+		return renderDiagram(node)
 	default:
 		return nil, &Error{Kind: ErrorUnknownContent, Content: node.Name(), Actual: string(node.Kind())}
 	}
@@ -92,6 +96,33 @@ func renderTable(node docir.Content) []string {
 		writeTableRow(&b, tableCells(row, len(columns)))
 	}
 	return append(blocks, strings.TrimRight(b.String(), "\n"))
+}
+
+// renderDiagram writes one diagram, preceded by its caption in emphasis: a
+// table-kind view as a pipe table, every other supported kind as a fenced
+// Mermaid block drawn in the diagram's direction.
+func renderDiagram(node docir.Content) ([]string, error) {
+	return diagramBlocks(node.Name(), node.Caption(), node.Rendering(), node.Direction())
+}
+
+// diagramBlocks writes a caption in emphasis, then the rendering itself: a
+// table-kind view as a pipe table, every other supported kind as Mermaid.
+func diagramBlocks(name, caption string, rendering *view.Rendering, direction view.Direction) ([]string, error) {
+	if rendering == nil {
+		return nil, &Error{Kind: ErrorMissingRendering, Content: name}
+	}
+	var blocks []string
+	if caption != "" {
+		blocks = append(blocks, "*"+inline(caption)+"*")
+	}
+	if rendering.Kind == view.KindTable {
+		return append(blocks, strings.TrimRight(rendering.MarkdownCells(tableCell), "\n")), nil
+	}
+	if !rendering.Kind.Supported() {
+		return nil, &Error{Kind: ErrorUnrenderableDiagram, Content: name, Actual: string(rendering.Kind)}
+	}
+	mermaid := strings.TrimRight(rendering.MermaidDirected(direction), "\n")
+	return append(blocks, "```mermaid\n"+mermaid+"\n```"), nil
 }
 
 // tableCells renders one row's cells, padded or truncated to the column count.

@@ -128,6 +128,10 @@ private static final long serialVersionUID = 0L;
    * materializes.
    * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
    * preserving everything the edit did not touch.
+   * "document_query" - the RunDocumentQuery RPC runs a named document query
+   * and answers with typed rows.
+   * "render_document" - the RenderDocument RPC renders a named document to
+   * Markdown.
    * </pre>
    *
    * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -160,6 +164,10 @@ private static final long serialVersionUID = 0L;
    * materializes.
    * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
    * preserving everything the edit did not touch.
+   * "document_query" - the RunDocumentQuery RPC runs a named document query
+   * and answers with typed rows.
+   * "render_document" - the RenderDocument RPC renders a named document to
+   * Markdown.
    * </pre>
    *
    * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -191,6 +199,10 @@ private static final long serialVersionUID = 0L;
    * materializes.
    * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
    * preserving everything the edit did not touch.
+   * "document_query" - the RunDocumentQuery RPC runs a named document query
+   * and answers with typed rows.
+   * "render_document" - the RenderDocument RPC renders a named document to
+   * Markdown.
    * </pre>
    *
    * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -223,6 +235,10 @@ private static final long serialVersionUID = 0L;
    * materializes.
    * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
    * preserving everything the edit did not touch.
+   * "document_query" - the RunDocumentQuery RPC runs a named document query
+   * and answers with typed rows.
+   * "render_document" - the RenderDocument RPC renders a named document to
+   * Markdown.
    * </pre>
    *
    * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -704,6 +720,10 @@ private static final long serialVersionUID = 0L;
      * materializes.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
+     * "document_query" - the RunDocumentQuery RPC runs a named document query
+     * and answers with typed rows.
+     * "render_document" - the RenderDocument RPC renders a named document to
+     * Markdown.
      * </pre>
      *
      * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -737,6 +757,10 @@ private static final long serialVersionUID = 0L;
      * materializes.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
+     * "document_query" - the RunDocumentQuery RPC runs a named document query
+     * and answers with typed rows.
+     * "render_document" - the RenderDocument RPC renders a named document to
+     * Markdown.
      * </pre>
      *
      * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -768,6 +792,10 @@ private static final long serialVersionUID = 0L;
      * materializes.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
+     * "document_query" - the RunDocumentQuery RPC runs a named document query
+     * and answers with typed rows.
+     * "render_document" - the RenderDocument RPC renders a named document to
+     * Markdown.
      * </pre>
      *
      * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -800,6 +828,10 @@ private static final long serialVersionUID = 0L;
      * materializes.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
+     * "document_query" - the RunDocumentQuery RPC runs a named document query
+     * and answers with typed rows.
+     * "render_document" - the RenderDocument RPC renders a named document to
+     * Markdown.
      * </pre>
      *
      * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -833,6 +865,10 @@ private static final long serialVersionUID = 0L;
      * materializes.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
+     * "document_query" - the RunDocumentQuery RPC runs a named document query
+     * and answers with typed rows.
+     * "render_document" - the RenderDocument RPC renders a named document to
+     * Markdown.
      * </pre>
      *
      * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -872,6 +908,10 @@ private static final long serialVersionUID = 0L;
      * materializes.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
+     * "document_query" - the RunDocumentQuery RPC runs a named document query
+     * and answers with typed rows.
+     * "render_document" - the RenderDocument RPC renders a named document to
+     * Markdown.
      * </pre>
      *
      * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -910,6 +950,10 @@ private static final long serialVersionUID = 0L;
      * materializes.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
+     * "document_query" - the RunDocumentQuery RPC runs a named document query
+     * and answers with typed rows.
+     * "render_document" - the RenderDocument RPC renders a named document to
+     * Markdown.
      * </pre>
      *
      * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -948,6 +992,10 @@ private static final long serialVersionUID = 0L;
      * materializes.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
+     * "document_query" - the RunDocumentQuery RPC runs a named document query
+     * and answers with typed rows.
+     * "render_document" - the RenderDocument RPC renders a named document to
+     * Markdown.
      * </pre>
      *
      * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>
@@ -983,6 +1031,10 @@ private static final long serialVersionUID = 0L;
      * materializes.
      * "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
      * preserving everything the edit did not touch.
+     * "document_query" - the RunDocumentQuery RPC runs a named document query
+     * and answers with typed rows.
+     * "render_document" - the RenderDocument RPC renders a named document to
+     * Markdown.
      * </pre>
      *
      * <code>repeated string capabilities = 2 [json_name = "capabilities"];</code>

@@ -31,6 +31,14 @@ const (
 	ErrorUnsupportedBinding    ErrorKind = "unsupported-binding"
 	ErrorBindingType           ErrorKind = "binding-type"
 	ErrorBindingMultiplicity   ErrorKind = "binding-multiplicity"
+	ErrorMissingViewSource     ErrorKind = "missing-view-source"
+	ErrorInvalidViewSource     ErrorKind = "invalid-view-source"
+	ErrorUnknownViewSource     ErrorKind = "unknown-view-source"
+	ErrorMissingDiagramKind    ErrorKind = "missing-diagram-kind"
+	ErrorConflictingKind       ErrorKind = "conflicting-diagram-kind"
+	ErrorUnsupportedKind       ErrorKind = "unsupported-diagram-kind"
+	ErrorInvalidDirection      ErrorKind = "invalid-direction"
+	ErrorUnsupportedDirection  ErrorKind = "unsupported-direction"
 )
 
 // Error is a typed document-planning failure with its source location.
@@ -124,6 +132,25 @@ func (e *Error) Error() string {
 			e.Actual,
 			e.Expected,
 		)
+	case ErrorMissingViewSource:
+		return fmt.Sprintf("document %s diagram %s names no source view or element", e.Document, e.Content)
+	case ErrorInvalidViewSource:
+		return fmt.Sprintf("document %s diagram %s source must name a view or an element", e.Document, e.Content)
+	case ErrorUnknownViewSource:
+		return fmt.Sprintf("document %s diagram %s names unknown source %s", e.Document, e.Content, e.Actual)
+	case ErrorMissingDiagramKind:
+		return fmt.Sprintf("document %s diagram %s renders a plain element and must state a kind", e.Document, e.Content)
+	case ErrorConflictingKind:
+		return fmt.Sprintf("document %s diagram %s states kind %q, but its source is a view that states its own rendering", e.Document, e.Content, e.Actual)
+	case ErrorUnsupportedKind:
+		if e.Err != nil {
+			return fmt.Sprintf("document %s diagram %s: %v", e.Document, e.Content, e.Err)
+		}
+		return fmt.Sprintf("document %s diagram %s states unsupported kind %q", e.Document, e.Content, e.Actual)
+	case ErrorInvalidDirection:
+		return fmt.Sprintf("document %s diagram %s direction must be \"TB\", \"LR\", \"RL\" or \"BT\", got %q", e.Document, e.Content, e.Actual)
+	case ErrorUnsupportedDirection:
+		return fmt.Sprintf("document %s diagram %s states direction %q, but a %s rendering has none", e.Document, e.Content, e.Actual, e.Expected)
 	default:
 		return fmt.Sprintf("document planning failed for %s", e.Document)
 	}

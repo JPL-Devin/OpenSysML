@@ -39,6 +39,10 @@ Write a CPU profile of the run to this file, for go tool pprof
 Report every diagnostic over the whole session buffer, with the pass that
 produced it
 .TP
+.BI \-doc\-form " string"
+Form \-render\-document writes: markdown (default) or pdf, which drives an
+external converter
+.TP
 .BI \-e " value"
 Evaluate expression and exit (shorthand)
 .TP
@@ -77,6 +81,18 @@ Write conversion output to this file (shorthand)
 .TP
 .BI \-output " string"
 Write conversion output to this file (default: stdout)
+.TP
+.BI \-pdf\-engine " string"
+Converter \-doc\-form pdf drives: weasyprint (default), pandoc or prince
+.TP
+.B \-pdf\-number\-sections
+Number the section headings hierarchically (\-doc\-form pdf)
+.TP
+.B \-pdf\-title\-page
+Put the document title on a page of its own (\-doc\-form pdf)
+.TP
+.B \-pdf\-toc
+Write a table of contents ahead of the content (\-doc\-form pdf)
 .TP
 .BI \-query " string"
 Evaluate OSLC Query text against the model instead of running the REPL
@@ -222,12 +238,23 @@ rendering cannot represent \(em go on stderr.
 # Markdown on stdout
 sysml model.sysml \-render\-document Reports::MassReport
 sysml model.sysml \-render\-document Reports::MassReport \-o report.md
+sysml model.sysml \-render\-document Reports::MassReport \-doc\-form pdf \e
+    \-o report.pdf
+sysml model.sysml \-render\-document Reports::MassReport \-doc\-form pdf \e
+    \-pdf\-engine pandoc \-pdf\-title\-page \-pdf\-toc \-pdf\-number\-sections \e
+    \-o report.pdf
 .fi
 .RE
 .PP
 A document is a part def specializing DocumentQueries::Document. Its queries
 are bound in the model and run against it, and the result is written as
-CommonMark\-compatible Markdown, the only document form this build writes.
+CommonMark\-compatible Markdown.
+.PP
+\-doc\-form pdf converts that Markdown with an external converter named by
+\-pdf\-engine \(em weasyprint (default), pandoc or prince \(em run as a
+subprocess, never linked in; diagrams are pre\-rendered to SVG with
+mermaid\-cli (mmdc). None of these tools is needed until PDF output is asked
+for; scripts/download\-doc\-pdf\-toolchain.sh provisions pinned copies.
 .SH FLAG ORDER
 Flags may be written before or after the model they apply to. A file named
 like a flag is read as a file after \-\-, which ends the flags: sysml \-trace

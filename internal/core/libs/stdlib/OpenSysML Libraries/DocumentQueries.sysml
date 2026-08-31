@@ -100,4 +100,15 @@ library package DocumentQueries {
 	part def List :> ContentBlock {
 		attribute style : String[0..1];
 	}
+
+	part def Diagram :> ContentBlock {
+		attribute caption : String[0..1];
+		/* kind: a supported rendering kind ("tree", "interconnection",
+		 * "state", "action", "table" or "sequence"); required when source
+		 * is a plain element, stated by the view when source is a view. */
+		attribute kind : String[0..1];
+		/* direction: "TB", "LR", "RL" or "BT", for kinds drawn as graphs. */
+		attribute direction : String[0..1];
+		ref source : Element[0..1];
+	}
 }

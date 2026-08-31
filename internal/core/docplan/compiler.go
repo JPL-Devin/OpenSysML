@@ -1,8 +1,11 @@
 package docplan
 
 import (
+	"errors"
+	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
@@ -10,6 +13,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 const (
@@ -18,7 +22,12 @@ const (
 	paragraphBaseFQN = "DocumentQueries::Paragraph"
 	tableBaseFQN     = "DocumentQueries::Table"
 	listBaseFQN      = "DocumentQueries::List"
+	diagramBaseFQN   = "DocumentQueries::Diagram"
 )
+
+// diagramSourceName is the reference member a diagram names its view or
+// target element through.
+const diagramSourceName = "source"
 
 type compiler struct {
 	index    *symbols.Index
@@ -34,6 +43,7 @@ type bases struct {
 	paragraph *symbols.Symbol
 	table     *symbols.Symbol
 	list      *symbols.Symbol
+	diagram   *symbols.Symbol
 }
 
 // IsDocumentDefinition reports whether sym specializes DocumentQueries::Document.
@@ -41,6 +51,20 @@ func IsDocumentDefinition(index *symbols.Index, model *semantics.Model, sym *sym
 	base := libraryBase(index, documentBaseFQN)
 	return base != nil && sym != nil && sym != base &&
 		sym.Kind == symbols.SymbolPartDef && model != nil && model.Conforms(sym, base)
+}
+
+// QueryTarget resolves the query definition a calc usage is typed by, following
+// redefinition lineage; nil when it is not typed by a query definition.
+func QueryTarget(index *symbols.Index, model *semantics.Model, resolver *resolve.Resolver, usage *symbols.Symbol) *symbols.Symbol {
+	if index == nil || model == nil || resolver == nil || usage == nil || usage.Kind != symbols.SymbolCalcUsage {
+		return nil
+	}
+	c := &compiler{index: index, model: model, resolver: resolver}
+	target := c.typingTarget(usage)
+	if target == nil || !queryplan.IsQueryDefinition(index, model, target) {
+		return nil
+	}
+	return target
 }
 
 // Compile compiles a document definition into an immutable document plan.
@@ -54,8 +78,10 @@ func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Res
 		paragraph: libraryBase(index, paragraphBaseFQN),
 		table:     libraryBase(index, tableBaseFQN),
 		list:      libraryBase(index, listBaseFQN),
+		diagram:   libraryBase(index, diagramBaseFQN),
 	}
-	if all.document == nil || all.section == nil || all.paragraph == nil || all.table == nil || all.list == nil {
+	if all.document == nil || all.section == nil || all.paragraph == nil ||
+		all.table == nil || all.list == nil || all.diagram == nil {
 		return nil, &Error{Kind: ErrorLibraryUnavailable}
 	}
 	name := symbols.FQNOf(entry)
@@ -134,7 +160,8 @@ func (c *compiler) isContent(member *symbols.Symbol) bool {
 		c.model.Conforms(member, c.bases.section) ||
 		c.model.Conforms(member, c.bases.paragraph) ||
 		c.model.Conforms(member, c.bases.table) ||
-		c.model.Conforms(member, c.bases.list)
+		c.model.Conforms(member, c.bases.list) ||
+		c.model.Conforms(member, c.bases.diagram)
 }
 
 func (c *compiler) compileContent(member *symbols.Symbol) (Content, error) {
@@ -154,6 +181,8 @@ func (c *compiler) compileContent(member *symbols.Symbol) (Content, error) {
 		return c.compileTable(member)
 	case c.model.Conforms(member, c.bases.list):
 		return c.compileList(member)
+	case c.model.Conforms(member, c.bases.diagram):
+		return c.compileDiagram(member)
 	default:
 		return Content{}, &Error{
 			Kind:     ErrorInvalidContent,
@@ -272,6 +301,209 @@ func (c *compiler) compileList(member *symbols.Symbol) (Content, error) {
 		query:  query,
 		origin: provenance.Symbol(member),
 	}, nil
+}
+
+// compileDiagram compiles a diagram content block: the view or element its
+// source names, the resolved rendering kind, and the stated presentation.
+func (c *compiler) compileDiagram(member *symbols.Symbol) (Content, error) {
+	caption, _, err := c.optionalText(member, "caption")
+	if err != nil {
+		return Content{}, err
+	}
+	kindText, kindStated, err := c.optionalText(member, "kind")
+	if err != nil {
+		return Content{}, err
+	}
+	directionText, directionStated, err := c.optionalText(member, "direction")
+	if err != nil {
+		return Content{}, err
+	}
+	source, err := c.diagramSource(member)
+	if err != nil {
+		return Content{}, err
+	}
+	reference := &DiagramRef{origin: provenance.Symbol(member)}
+	if semantics.IsView(source) {
+		if kindStated {
+			return Content{}, &Error{
+				Kind:     ErrorConflictingKind,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Actual:   kindText,
+				Origin:   provenance.Symbol(member),
+			}
+		}
+		renderer := view.NewRenderer(c.model, c.resolver, nil)
+		kind, stated, err := renderer.KindOf(source)
+		if err != nil {
+			if errors.Is(err, view.ErrUnsupportedKind) {
+				return Content{}, &Error{
+					Kind:     ErrorUnsupportedKind,
+					Document: c.document,
+					Content:  c.contentName(member),
+					Origin:   provenance.Symbol(member),
+					Err:      err,
+				}
+			}
+			return Content{}, &Error{
+				Kind:     ErrorInvalidViewSource,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Origin:   provenance.Symbol(member),
+				Err:      err,
+			}
+		}
+		reference.view, reference.kind, reference.stated = source, kind, stated
+	} else {
+		if !kindStated {
+			return Content{}, &Error{
+				Kind:     ErrorMissingDiagramKind,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Origin:   provenance.Symbol(member),
+			}
+		}
+		kind, ok := view.PseudoViewKind(kindText)
+		if !ok {
+			return Content{}, &Error{
+				Kind:     ErrorUnsupportedKind,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Actual:   kindText,
+				Origin:   provenance.Symbol(member),
+			}
+		}
+		reference.target, reference.kind = source, kind
+		reference.stated = fmt.Sprintf("the diagram states kind %q", kindText)
+	}
+	if directionStated {
+		direction, ok := view.ParseDirection(directionText)
+		if !ok {
+			return Content{}, &Error{
+				Kind:     ErrorInvalidDirection,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Actual:   directionText,
+				Origin:   provenance.Symbol(member),
+			}
+		}
+		if !reference.kind.SupportsDirection() {
+			return Content{}, &Error{
+				Kind:     ErrorUnsupportedDirection,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Expected: string(reference.kind),
+				Actual:   directionText,
+				Origin:   provenance.Symbol(member),
+			}
+		}
+		reference.direction = direction
+	}
+	if err := c.rejectDiagramQuery(member); err != nil {
+		return Content{}, err
+	}
+	if err := c.rejectNestedContent(member); err != nil {
+		return Content{}, err
+	}
+	return Content{
+		kind:    ContentDiagram,
+		name:    c.effectiveName(member),
+		caption: caption,
+		diagram: reference,
+		origin:  provenance.Symbol(member),
+	}, nil
+}
+
+// diagramSource resolves the element the diagram's source reference names.
+func (c *compiler) diagramSource(member *symbols.Symbol) (*symbols.Symbol, error) {
+	for _, candidate := range c.effectiveMembers(member) {
+		if c.effectiveName(candidate) != diagramSourceName {
+			continue
+		}
+		resolved, stated, err := c.sourceTarget(member, candidate, make(map[*symbols.Symbol]bool))
+		if err != nil || stated {
+			return resolved, err
+		}
+	}
+	return nil, &Error{
+		Kind:     ErrorMissingViewSource,
+		Document: c.document,
+		Content:  c.contentName(member),
+		Origin:   provenance.Symbol(member),
+	}
+}
+
+// sourceTarget resolves a source declaration's named value, following
+// redefinition lineage when the declaration itself is unvalued.
+func (c *compiler) sourceTarget(
+	member *symbols.Symbol,
+	candidate *symbols.Symbol,
+	seen map[*symbols.Symbol]bool,
+) (*symbols.Symbol, bool, error) {
+	if candidate == nil || seen[candidate] {
+		return nil, false, nil
+	}
+	seen[candidate] = true
+	if declaration, ok := candidate.Decl.(*ast.Usage); ok && declaration.Value != nil {
+		target := declaration.Value
+		if reference, ok := target.(*ast.FeatureReference); ok {
+			target = reference.Name
+		}
+		name, ok := target.(*ast.QualifiedName)
+		if !ok {
+			return nil, false, &Error{
+				Kind:     ErrorInvalidViewSource,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Origin:   provenance.Node(candidate.DocName, declaration.Value),
+			}
+		}
+		resolved, ok := c.resolver.ResolveQualified(candidate.OwnerScope, name)
+		if !ok || resolved == nil {
+			return nil, false, &Error{
+				Kind:     ErrorUnknownViewSource,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Actual:   qualifiedNameText(name),
+				Origin:   provenance.Node(candidate.DocName, declaration.Value),
+			}
+		}
+		if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
+			resolved = canonical
+		}
+		return resolved, true, nil
+	}
+	for _, target := range c.model.RedefinedFeatures(candidate) {
+		resolved, stated, err := c.sourceTarget(member, target, seen)
+		if err != nil || stated {
+			return resolved, stated, err
+		}
+	}
+	return nil, false, nil
+}
+
+func qualifiedNameText(name *ast.QualifiedName) string {
+	parts := make([]string, 0, len(name.Parts))
+	for _, part := range name.Parts {
+		parts = append(parts, part.Text)
+	}
+	return strings.Join(parts, "::")
+}
+
+// rejectDiagramQuery rejects a query declared in a diagram, which renders a
+// view rather than query rows.
+func (c *compiler) rejectDiagramQuery(member *symbols.Symbol) error {
+	for _, candidate := range c.effectiveMembers(member) {
+		if candidate.Kind == symbols.SymbolCalcUsage {
+			return &Error{
+				Kind:     ErrorInvalidContent,
+				Document: c.document,
+				Content:  c.contentName(candidate),
+				Origin:   provenance.Symbol(candidate),
+			}
+		}
+	}
+	return nil
 }
 
 // rejectNestedContent rejects content blocks nested inside a content block.

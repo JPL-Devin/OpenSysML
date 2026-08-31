@@ -72,6 +72,12 @@ const (
 	SysMLServiceEvaluateCalcProcedure = "/sysml.SysMLService/EvaluateCalc"
 	// SysMLServiceQueryProcedure is the fully-qualified name of the SysMLService's Query RPC.
 	SysMLServiceQueryProcedure = "/sysml.SysMLService/Query"
+	// SysMLServiceRunDocumentQueryProcedure is the fully-qualified name of the SysMLService's
+	// RunDocumentQuery RPC.
+	SysMLServiceRunDocumentQueryProcedure = "/sysml.SysMLService/RunDocumentQuery"
+	// SysMLServiceRenderDocumentProcedure is the fully-qualified name of the SysMLService's
+	// RenderDocument RPC.
+	SysMLServiceRenderDocumentProcedure = "/sysml.SysMLService/RenderDocument"
 )
 
 // SysMLServiceClient is a client for the sysml.SysMLService service.
@@ -114,6 +120,13 @@ type SysMLServiceClient interface {
 	// as the standard defines them, so a client that speaks that API can filter a
 	// model here. Reported as the "query" capability.
 	Query(context.Context, *connect.Request[proto.QueryRequest]) (*connect.Response[proto.QueryResponse], error)
+	// Run a named document query with parameter bindings, the answer the REPL's
+	// %run-query gives, as typed rows rather than formatted lines. Reported as
+	// the "document_query" capability.
+	RunDocumentQuery(context.Context, *connect.Request[proto.RunDocumentQueryRequest]) (*connect.Response[proto.RunDocumentQueryResponse], error)
+	// Render a named document to Markdown, as the CLI's -render-document does.
+	// Reported as the "render_document" capability.
+	RenderDocument(context.Context, *connect.Request[proto.RenderDocumentRequest]) (*connect.Response[proto.RenderDocumentResponse], error)
 }
 
 // NewSysMLServiceClient constructs a client for the sysml.SysMLService service. By default, it uses
@@ -217,6 +230,18 @@ func NewSysMLServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(sysMLServiceMethods.ByName("Query")),
 			connect.WithClientOptions(opts...),
 		),
+		runDocumentQuery: connect.NewClient[proto.RunDocumentQueryRequest, proto.RunDocumentQueryResponse](
+			httpClient,
+			baseURL+SysMLServiceRunDocumentQueryProcedure,
+			connect.WithSchema(sysMLServiceMethods.ByName("RunDocumentQuery")),
+			connect.WithClientOptions(opts...),
+		),
+		renderDocument: connect.NewClient[proto.RenderDocumentRequest, proto.RenderDocumentResponse](
+			httpClient,
+			baseURL+SysMLServiceRenderDocumentProcedure,
+			connect.WithSchema(sysMLServiceMethods.ByName("RenderDocument")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -237,6 +262,8 @@ type sysMLServiceClient struct {
 	verifySatisfaction *connect.Client[proto.VerifySatisfactionRequest, proto.VerifySatisfactionResponse]
 	evaluateCalc       *connect.Client[proto.EvaluateCalcRequest, proto.EvaluateCalcResponse]
 	query              *connect.Client[proto.QueryRequest, proto.QueryResponse]
+	runDocumentQuery   *connect.Client[proto.RunDocumentQueryRequest, proto.RunDocumentQueryResponse]
+	renderDocument     *connect.Client[proto.RenderDocumentRequest, proto.RenderDocumentResponse]
 }
 
 // GetServerInfo calls sysml.SysMLService.GetServerInfo.
@@ -314,6 +341,16 @@ func (c *sysMLServiceClient) Query(ctx context.Context, req *connect.Request[pro
 	return c.query.CallUnary(ctx, req)
 }
 
+// RunDocumentQuery calls sysml.SysMLService.RunDocumentQuery.
+func (c *sysMLServiceClient) RunDocumentQuery(ctx context.Context, req *connect.Request[proto.RunDocumentQueryRequest]) (*connect.Response[proto.RunDocumentQueryResponse], error) {
+	return c.runDocumentQuery.CallUnary(ctx, req)
+}
+
+// RenderDocument calls sysml.SysMLService.RenderDocument.
+func (c *sysMLServiceClient) RenderDocument(ctx context.Context, req *connect.Request[proto.RenderDocumentRequest]) (*connect.Response[proto.RenderDocumentResponse], error) {
+	return c.renderDocument.CallUnary(ctx, req)
+}
+
 // SysMLServiceHandler is an implementation of the sysml.SysMLService service.
 type SysMLServiceHandler interface {
 	// Report what this build of the service can do, so a client can require a
@@ -354,6 +391,13 @@ type SysMLServiceHandler interface {
 	// as the standard defines them, so a client that speaks that API can filter a
 	// model here. Reported as the "query" capability.
 	Query(context.Context, *connect.Request[proto.QueryRequest]) (*connect.Response[proto.QueryResponse], error)
+	// Run a named document query with parameter bindings, the answer the REPL's
+	// %run-query gives, as typed rows rather than formatted lines. Reported as
+	// the "document_query" capability.
+	RunDocumentQuery(context.Context, *connect.Request[proto.RunDocumentQueryRequest]) (*connect.Response[proto.RunDocumentQueryResponse], error)
+	// Render a named document to Markdown, as the CLI's -render-document does.
+	// Reported as the "render_document" capability.
+	RenderDocument(context.Context, *connect.Request[proto.RenderDocumentRequest]) (*connect.Response[proto.RenderDocumentResponse], error)
 }
 
 // NewSysMLServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -453,6 +497,18 @@ func NewSysMLServiceHandler(svc SysMLServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(sysMLServiceMethods.ByName("Query")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sysMLServiceRunDocumentQueryHandler := connect.NewUnaryHandler(
+		SysMLServiceRunDocumentQueryProcedure,
+		svc.RunDocumentQuery,
+		connect.WithSchema(sysMLServiceMethods.ByName("RunDocumentQuery")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sysMLServiceRenderDocumentHandler := connect.NewUnaryHandler(
+		SysMLServiceRenderDocumentProcedure,
+		svc.RenderDocument,
+		connect.WithSchema(sysMLServiceMethods.ByName("RenderDocument")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sysml.SysMLService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SysMLServiceGetServerInfoProcedure:
@@ -485,6 +541,10 @@ func NewSysMLServiceHandler(svc SysMLServiceHandler, opts ...connect.HandlerOpti
 			sysMLServiceEvaluateCalcHandler.ServeHTTP(w, r)
 		case SysMLServiceQueryProcedure:
 			sysMLServiceQueryHandler.ServeHTTP(w, r)
+		case SysMLServiceRunDocumentQueryProcedure:
+			sysMLServiceRunDocumentQueryHandler.ServeHTTP(w, r)
+		case SysMLServiceRenderDocumentProcedure:
+			sysMLServiceRenderDocumentHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -552,4 +612,12 @@ func (UnimplementedSysMLServiceHandler) EvaluateCalc(context.Context, *connect.R
 
 func (UnimplementedSysMLServiceHandler) Query(context.Context, *connect.Request[proto.QueryRequest]) (*connect.Response[proto.QueryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sysml.SysMLService.Query is not implemented"))
+}
+
+func (UnimplementedSysMLServiceHandler) RunDocumentQuery(context.Context, *connect.Request[proto.RunDocumentQueryRequest]) (*connect.Response[proto.RunDocumentQueryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sysml.SysMLService.RunDocumentQuery is not implemented"))
+}
+
+func (UnimplementedSysMLServiceHandler) RenderDocument(context.Context, *connect.Request[proto.RenderDocumentRequest]) (*connect.Response[proto.RenderDocumentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sysml.SysMLService.RenderDocument is not implemented"))
 }

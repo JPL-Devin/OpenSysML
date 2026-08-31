@@ -116,6 +116,11 @@ var (
 	renderAllDir  string
 	renderForm    string
 	renderDoc     string
+	docForm       string
+	pdfEngine     string
+	pdfTitlePage  bool
+	pdfTOC        bool
+	pdfNumbering  bool
 	strictMode    bool
 	modelChecks   checks
 )
@@ -205,6 +210,11 @@ func runCLI() int {
 		return 2
 	}
 
+	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
+		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
+		return 2
+	}
+
 	if renderAllDir != "" {
 		switch {
 		case renderView != "":
@@ -277,7 +287,7 @@ func runCLI() int {
 			return refuse(modelChecks,
 				"-render-document writes a document out and decides nothing about the model; check it in its own run")
 		case modelChecks.jsonOut:
-			fmt.Fprintln(os.Stderr, "sysml: -render-document writes Markdown, not JSON; -json reports checks")
+			fmt.Fprintln(os.Stderr, "sysml: -render-document writes a document, not JSON; -json reports checks")
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,

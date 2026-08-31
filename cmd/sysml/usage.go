@@ -89,12 +89,20 @@ func doc() usage.Doc {
 			Examples: []usage.Example{
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport", "Markdown on stdout"),
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -o report.md", ""),
+				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf", ""),
+				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form pdf "+
+					"-pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf", ""),
 			},
 			Paragraphs: []string{
 				"A document is a part def specializing DocumentQueries::Document. Its " +
 					"queries are bound in the model and run against it, and the " +
-					"result is written as CommonMark-compatible Markdown, the only " +
-					"document form this build writes.",
+					"result is written as CommonMark-compatible Markdown.",
+				"-doc-form pdf converts that Markdown with an external converter named " +
+					"by -pdf-engine — weasyprint (default), pandoc or prince — run as " +
+					"a subprocess, never linked in; diagrams are pre-rendered to SVG " +
+					"with mermaid-cli (mmdc). None of these tools is needed until PDF " +
+					"output is asked for; scripts/download-doc-pdf-toolchain.sh " +
+					"provisions pinned copies.",
 			},
 		}, {
 			Title: "Flag order",
@@ -194,6 +202,11 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
 	fs.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
 	fs.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
+	fs.StringVar(&docForm, "doc-form", "", "Form -render-document writes: markdown (default) or pdf, which drives an external converter")
+	fs.StringVar(&pdfEngine, "pdf-engine", "", "Converter -doc-form pdf drives: weasyprint (default), pandoc or prince")
+	fs.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
+	fs.BoolVar(&pdfTOC, "pdf-toc", false, "Write a table of contents ahead of the content (-doc-form pdf)")
+	fs.BoolVar(&pdfNumbering, "pdf-number-sections", false, "Number the section headings hierarchically (-doc-form pdf)")
 	fs.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	fs.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	fs.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")

@@ -11,6 +11,12 @@ import (
 // rendering could not represent is written as Markdown comments, so no notice is
 // lost.
 func (r *Rendering) Markdown() string {
+	return r.MarkdownCells(markdownCell)
+}
+
+// MarkdownCells is Markdown with the caller's cell escaping, for a host whose
+// Markdown dialect escapes more than a pipe and a newline.
+func (r *Rendering) MarkdownCells(escape func(string) string) string {
 	var b strings.Builder
 	if r.View == "" {
 		fmt.Fprintf(&b, "<!-- %s rendering", r.Kind)
@@ -32,24 +38,24 @@ func (r *Rendering) Markdown() string {
 	if len(columns) == 0 {
 		columns = tableColumns
 	}
-	writeMarkdownRow(&b, columns)
+	writeMarkdownRow(&b, columns, escape)
 	rule := make([]string, len(columns))
 	for i := range rule {
 		rule[i] = "---"
 	}
-	writeMarkdownRow(&b, rule)
+	writeMarkdownRow(&b, rule, escape)
 	for _, row := range r.Rows {
-		writeMarkdownRow(&b, padRow(row, len(columns)))
+		writeMarkdownRow(&b, padRow(row, len(columns)), escape)
 	}
 	return b.String()
 }
 
 // writeMarkdownRow writes one row of a Markdown table, escaping what a cell may
 // not carry literally.
-func writeMarkdownRow(b *strings.Builder, cells []string) {
+func writeMarkdownRow(b *strings.Builder, cells []string, escape func(string) string) {
 	quoted := make([]string, 0, len(cells))
 	for _, cell := range cells {
-		quoted = append(quoted, markdownCell(cell))
+		quoted = append(quoted, escape(cell))
 	}
 	fmt.Fprintf(b, "| %s |\n", strings.Join(quoted, " | "))
 }
