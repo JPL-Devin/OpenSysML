@@ -134,7 +134,7 @@ func TestRenderDocumentFlagConflicts(t *testing.T) {
 	binary := buildCLI(t)
 
 	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-json"),
-		2, "-render-document writes Markdown, not JSON")
+		2, "-render-document writes a document, not JSON")
 	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-render", "SomeView"),
 		2, "ask for one per run")
 	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport", "-constraint", "C"),

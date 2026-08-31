@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 790 semantic rules: **701 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 793 semantic rules: **704 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -1866,7 +1866,9 @@ richer inline formatting is not modeled.
 **Standard:** none. This is the rendering layer of the OpenSysML document-query extension: an
 evaluated document tree written out as a backend-specific artifact. The renderer consumes only the
 document IR — never plans, symbols or ASTs — so a rendering cannot drift from what evaluation
-produced. Markdown is the first and only backend.
+produced. Markdown is the first backend; PDF output (`internal/docpdf`) converts that Markdown
+through external converter subprocesses, so the binary links no PDF renderer and the IR stays
+presentation-neutral.
 
 | Rule | Implementation (file:function) | Tests | Status |
 |---|---|---|---|
@@ -1878,13 +1880,21 @@ produced. Markdown is the first and only backend.
 | A whole document renders end to end from native SysML v2 source — parse, resolve, semantics, document planning, evaluation, rendering — locked by a committed golden Markdown file with an `-update` flag; a nil document is a typed rendering failure | `docrender/markdown.go` `Markdown`; `docrender/errors.go` | `docrender/markdown_test.go:TestMarkdownTelescopeReportGolden`, `:TestMarkdownNilDocument` | ✅ Implemented |
 | `%render-document <name>` compiles the named document, runs its queries and prints the Markdown; an unknown name, a non-document and extra arguments are reported as errors, since a document binds its queries' parameters in the model | `repl/docrender.go` `Session.RenderDocumentMarkdown`, `Session.doRenderDocument`; `repl/meta.go` (command table, dispatch) | `repl/docrender_test.go:TestRenderDocumentPrintsMarkdown`, `:TestRenderDocumentUsageAndErrors`, `:TestRenderDocumentListedInHelpAndCompletion` | ✅ Implemented |
 | `-render-document <name>` renders a document from a script, writing the Markdown to `-o` or stdout with notices on stderr; a document that could not be rendered leaves the unresolved exit status, and combining it with checks, `-json`, or another writing mode is refused | `cmd/sysml/main.go` (flag, mode exclusions); `cmd/sysml/render_document.go` `runRenderDocument` | `cmd/sysml/render_document_test.go:TestRenderDocumentFlag`, `:TestRenderDocumentOutputFile`, `:TestRenderDocumentFlagConflicts` | ✅ Implemented |
+| `-doc-form pdf` converts the rendered Markdown to PDF through a swappable external converter — WeasyPrint (default), pandoc or Prince, selected with `-pdf-engine` — run as a subprocess with `SOURCE_DATE_EPOCH` pinned; the binary links no PDF renderer, Markdown output needs none of the tools, and a missing tool is a typed error naming it, its override variable and the other engines | `docpdf/converter.go` `Converter`, `EngineNamed`, `tool.locate`, `runTool`; `docpdf/docpdf.go` `Render`; `cmd/sysml/render_document.go` `documentForm` | `docpdf/docpdf_test.go:TestEngineNamed`, `:TestRenderToolMissing`, `:TestRenderWithFakeConverter`, `:TestRenderToolFailed`, `:TestRenderNoPDF`; `cmd/sysml/render_document_pdf_test.go:TestRenderDocumentPDF`, `:TestRenderDocumentPDFEngineMissing`, `:TestRenderDocumentPDFFlagConflicts`; `docpdf/integration_test.go` (real tools, skipped when absent) | ✅ Implemented |
+| PDF deliverable options — a title page, a table of contents, hierarchical section numbering — are flags of the output step (`-pdf-title-page`, `-pdf-toc`, `-pdf-number-sections`), never document-model attributes, applied by the backend's own HTML generation (or pandoc's equivalent flags) | `docpdf/html.go` `Options`, `documentHTML`; `docpdf/converter.go` `pandocConverter.Convert`; `cmd/sysml/main.go` (flags) | `docpdf/docpdf_test.go:TestDocumentHTML`; `cmd/sysml/render_document_pdf_test.go:TestRenderDocumentPDF`, `:TestRenderDocumentPDFFlagConflicts` | ✅ Implemented |
+| Diagram blocks in PDF output are pre-rendered to SVG through mermaid-cli (`mmdc`) as a subprocess and embedded by relative reference; a document without diagrams needs no diagram tool, an unclosed Mermaid fence and a missing or failing renderer are typed errors | `docpdf/mermaid.go` `renderDiagrams`, `markdownWithImages`; `docpdf/markdown.go` `parseBlocks`; `docpdf/errors.go` | `docpdf/docpdf_test.go:TestParseBlocksUnclosedFence`, `:TestRenderDiagramsWithFakeTools`, `:TestRenderDiagramToolMissing`, `:TestParseTelescopeGolden`; `docpdf/integration_test.go:TestRenderDiagramsWithInstalledMermaid` | ✅ Implemented |
 | `opensysml/documents` lists the workspace's document definitions in qualified-name order and `opensysml/renderDocument` renders one to Markdown through the same planning/evaluation/rendering pipeline, advertised as the `openSysmlRenderDocument` experimental capability; an unknown name, an ambiguous name, a non-document, and a plan or execution failure fail the request with the typed error's message | `internal/lsp/document.go` `Server.Documents`, `Server.RenderDocument`; `internal/lsp/render.go` `renderHandler`; `internal/core/model/docquery.go` `Workspace.DocumentDefinitions`, `Workspace.RenderDocumentMarkdown` | `internal/lsp/document_test.go:TestDocumentsListsWorkspaceDocuments`, `:TestRenderDocumentMarkdown`, `:TestRenderDocumentTypedErrors`, `:TestRenderDocumentAmbiguousName` | ✅ Implemented |
 | Authoring a document in the editor is served by the standard LSP methods: `document-query`/`document-plan` diagnostics publish live with spans and codes, definition jumps from a query invocation to its calc def, from a binding name to the query's parameter, and from a bound value to the model element, hover on a reference shows the target's signature and doc comment, and completion offers the visible query definitions — imports included, qualified names filtered the same way — in a calc usage's type position and exactly the query's `in` parameters in binding position | `internal/lsp/diagnostics.go`; `internal/lsp/definition.go` `Server.Definition`; `internal/lsp/hover.go` `Server.Hover`; `internal/lsp/completion.go` `Server.Completion`, `calcTypingPositionAt`; `internal/core/model/docquery.go` `Workspace.QueryBindingParameter`, `Workspace.QueryUsageParameters`, `Workspace.QueryTypeCandidates`; `internal/core/docplan/compiler.go` `QueryTarget` | `internal/lsp/document_test.go` (definition, hover, completion, live document-plan diagnostics), `internal/lsp/diagnostics_test.go:TestPublishDiagnosticsKeepsQueryDependencyErrorsInTheirDocument` | ✅ Implemented |
 
-**Known limitations:** Markdown is the only backend; PDF or other document forms are not produced.
+**Known limitations:** PDF output is CLI-only: the REPL, gRPC and LSP surfaces render Markdown
+only. The PDF layer parses docrender's own Markdown dialect rather than consuming the document IR
+directly, so it renders documents, not arbitrary Markdown. Prince is recognized as an engine but
+not provisioned by `scripts/download-doc-pdf-toolchain.sh` (it is commercial). PDF output is
+byte-reproducible against one pinned toolchain (`SOURCE_DATE_EPOCH` is pinned); different converter
+versions or system fonts produce different bytes.
 Backend-wide presentation defaults (a Mermaid theme, for example) are not configurable: a diagram's
-model-level attributes (caption, direction) are the whole presentation surface, and a renderer
-options struct is deferred until a second knob exists to justify it.
+model-level attributes (caption, direction) are the whole presentation surface beyond the PDF
+deliverable flags.
 The document IR is not reported as JSON, so `-json` does not combine with `-render-document`.
 Inline formatting inside text runs (emphasis, links, code) is not modeled; run content renders as
 escaped plain text. The editor's Markdown rendering is on demand (the Render Document command),
