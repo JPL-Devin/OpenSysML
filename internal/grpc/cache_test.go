@@ -44,8 +44,8 @@ func TestCachePutGet(t *testing.T) {
 
 	hash1 := "abc123"
 	model1 := &CachedModel{
-		Root:  &ast.RootNamespace{},
-		Index: symbols.NewIndex(),
+		Documents: []*CachedDocument{{Root: &ast.RootNamespace{}}},
+		Index:     symbols.NewIndex(),
 	}
 
 	cache.Put(hash1, model1)
@@ -71,9 +71,9 @@ func TestCacheMiss(t *testing.T) {
 func TestCacheLRUEviction(t *testing.T) {
 	cache := mustNewCache(t, 2)
 
-	model1 := &CachedModel{Root: &ast.RootNamespace{}}
-	model2 := &CachedModel{Root: &ast.RootNamespace{}}
-	model3 := &CachedModel{Root: &ast.RootNamespace{}}
+	model1 := &CachedModel{Documents: []*CachedDocument{{Root: &ast.RootNamespace{}}}}
+	model2 := &CachedModel{Documents: []*CachedDocument{{Root: &ast.RootNamespace{}}}}
+	model3 := &CachedModel{Documents: []*CachedDocument{{Root: &ast.RootNamespace{}}}}
 
 	cache.Put("hash1", model1)
 	cache.Put("hash2", model2)
@@ -104,7 +104,7 @@ func TestCacheThreadSafety(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			model := &CachedModel{Root: &ast.RootNamespace{}}
+			model := &CachedModel{Documents: []*CachedDocument{{Root: &ast.RootNamespace{}}}}
 			cache.Put(fmt.Sprintf("key%d", n), model)
 		}(i)
 	}

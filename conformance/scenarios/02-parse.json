@@ -89,6 +89,106 @@
       }
     },
     {
+      "id": "parse_sources/several_documents_are_one_model",
+      "description": "Two documents parse as one model, so the import between them resolves and each document answers with its own root.",
+      "rpc": "ParseSources",
+      "requires_capabilities": [
+        "parse_sources"
+      ],
+      "request": {
+        "documents": [
+          {
+            "content": "${fixture:engine_library.sysml}",
+            "name": "engine_library.sysml"
+          },
+          {
+            "content": "${fixture:engine_user.sysml}",
+            "name": "engine_user.sysml"
+          }
+        ]
+      },
+      "expect": {
+        "non_empty": [
+          "model_hash"
+        ],
+        "counts": {
+          "diagnostics": 0,
+          "roots": 2
+        },
+        "response": {
+          "roots": [
+            {
+              "kind": "RootNamespace"
+            },
+            {
+              "kind": "RootNamespace"
+            }
+          ]
+        }
+      },
+      "expect_without_capability": {
+        "status": "UNIMPLEMENTED",
+        "status_message_contains": "parse_sources"
+      }
+    },
+    {
+      "id": "parse_sources/naming_no_document_is_invalid",
+      "description": "A request carrying no document is refused: a model of no documents is not a model.",
+      "rpc": "ParseSources",
+      "requires_capabilities": [
+        "parse_sources"
+      ],
+      "request": {},
+      "expect": {
+        "status": "INVALID_ARGUMENT"
+      }
+    },
+    {
+      "id": "parse_sources/two_documents_of_one_name_are_invalid",
+      "description": "Documents are told apart by name — a diagnostic names the document it came from — so a repeated name is refused rather than resolved by position.",
+      "rpc": "ParseSources",
+      "requires_capabilities": [
+        "parse_sources"
+      ],
+      "request": {
+        "documents": [
+          {
+            "content": "${fixture:engine_library.sysml}",
+            "name": "same.sysml"
+          },
+          {
+            "content": "${fixture:engine_user.sysml}",
+            "name": "same.sysml"
+          }
+        ]
+      },
+      "expect": {
+        "status": "INVALID_ARGUMENT"
+      }
+    },
+    {
+      "id": "parse_sources/an_absent_file_is_not_found",
+      "description": "One unreadable document fails the whole request with NOT_FOUND, as parsing one file does, rather than answering a model missing a document.",
+      "rpc": "ParseSources",
+      "requires_capabilities": [
+        "parse_sources"
+      ],
+      "request": {
+        "documents": [
+          {
+            "content": "${fixture:engine_library.sysml}",
+            "name": "engine_library.sysml"
+          },
+          {
+            "filePath": "/nonexistent/path/to/file.sysml"
+          }
+        ]
+      },
+      "expect": {
+        "status": "NOT_FOUND"
+      }
+    },
+    {
       "id": "diagnostics/a_parsed_model_answers_for_its_diagnostics",
       "description": "The diagnostics of a cached model are readable without reparsing it.",
       "rpc": "GetDiagnostics",

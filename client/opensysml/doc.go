@@ -13,13 +13,40 @@
 //	client, err := opensysml.New()
 //	// or: client, err := opensysml.Dial("localhost:50051")
 //
+// # Models of several documents
+//
+// ParseFile and ParseSource each parse one document, which reads no sibling
+// file: a name imported from another file is an unresolved-reference diagnostic
+// rather than an error. ParseFiles and ParseDocuments parse several documents as
+// one model, so an import between them is satisfied and every symbol resolves
+// across them:
+//
+//	model, err := client.ParseFiles(ctx, []string{"lib.sysml", "top.sysml"})
+//
+// Each document keeps its own name, so a diagnostic locates itself in the file
+// it came from, and Model.Roots holds the root namespace of each in the order
+// parsed. The rest of the API takes such a model as it takes any other, except
+// that an operation rewriting one document's own notation — conversion from a
+// model handle, and editing — is refused with CodeFailedPrecondition rather than
+// applied to one document of several.
+//
+// # Concurrency, contexts and lifetime
+//
+// A Client is safe for concurrent use from any number of goroutines. A call
+// whose context is already done is refused with CodeCanceled or
+// CodeDeadlineExceeded, and a context that ends while a call is running
+// withholds its answer the same way — the engine, like a service, still runs
+// the call it started. After Close every call is refused with CodeUnavailable,
+// and closing twice is not an error.
+//
 // # Errors
 //
 // A call fails in one of two documented ways, and the difference is part of
 // the API because it is part of the wire contract:
 //
 //   - A refused call is a *StatusError carrying the canonical gRPC status
-//     code, whichever implementation answered. errors.Is(err, CodeNotFound)
+//     code (rendered by its canonical name, as in "opensysml: NOT_FOUND: …"),
+//     whichever implementation answered. errors.Is(err, CodeNotFound)
 //     tests the code: an unknown model hash, for example, is CodeNotFound.
 //   - A failure the service reports inside a successful answer — an
 //     unparsable expression, an unknown symbol, a failed instantiation — is a

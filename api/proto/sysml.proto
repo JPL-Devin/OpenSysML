@@ -13,6 +13,11 @@ service SysMLService {
 
   // Parse a SysML file and return model hash for subsequent queries
   rpc ParseFile(ParseFileRequest) returns (ParseFileResponse);
+
+  // Parse several documents as one model, so a name one document declares
+  // resolves in another and an import between them is satisfied. Reported as
+  // the "parse_sources" capability.
+  rpc ParseSources(ParseSourcesRequest) returns (ParseSourcesResponse);
   
   // Get symbol information by qualified name
   rpc GetSymbol(GetSymbolRequest) returns (SymbolResponse);
@@ -213,6 +218,41 @@ message ParseFileRequest {
   // admits is an error rather than a warning. Part of the cache key, so the two
   // modes never serve each other's diagnostics.
   bool strict_conformance = 5;
+}
+
+// SourceDocument is one document of a multi-document parse.
+message SourceDocument {
+  oneof source {
+    string file_path = 1;
+    string content = 2;
+  }
+  // Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+  // and is ignored for a file_path, whose extension says which language it is.
+  string language = 3;
+  // Name to report inline content by in diagnostics, and the name the document
+  // is indexed under. Empty names the document by its position in the request,
+  // and is ignored for a file_path, which is named by its path.
+  string name = 4;
+}
+
+// ParseSourcesRequest specifies the documents that make up one model. Two
+// documents may not carry the same name: each is a distinct document of the
+// model, and diagnostics name the document they came from.
+message ParseSourcesRequest {
+  repeated SourceDocument documents = 1;
+  // Judge every document as conforming SysML v2, as ParseFileRequest does.
+  bool strict_conformance = 2;
+}
+
+// ParseSourcesResponse contains the parsed model, whose documents are one model
+// for every later request: a model_hash names all of them together.
+message ParseSourcesResponse {
+  string model_hash = 1;
+  // Root namespace per document, in the order the request named them.
+  repeated SymbolInfo roots = 2;
+  // Diagnostics of every document, each naming the document it came from.
+  repeated Diagnostic diagnostics = 3;
+  string error = 4;
 }
 
 // ParseFileResponse contains parsed model info

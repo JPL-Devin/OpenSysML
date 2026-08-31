@@ -38,12 +38,19 @@ func (s *Service) ApplyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*p
 		return nil, err
 	}
 
+	// Edits rewrite one document's own notation, so a model of several is refused
+	// rather than edited in one of them.
+	doc, err := cached.SoleDocument()
+	if err != nil {
+		return nil, err
+	}
+
 	model := edit.Model{
-		Source:     cached.Source,
-		Root:       cached.Root,
+		Source:     doc.Source,
+		Root:       doc.Root,
 		Index:      cached.Index,
-		ParseDiags: cached.ParseDiags,
-		SemDiags:   cached.PassesDiags,
+		ParseDiags: doc.ParseDiags,
+		SemDiags:   doc.PassesDiags,
 		// The edited notation is analyzed in an index of its own: the model's own
 		// index already holds the document under this name, and the libraries are
 		// what the new source has to resolve against.
@@ -51,7 +58,7 @@ func (s *Service) ApplyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*p
 	}
 	result, err := edit.Apply(model, ops)
 	if err != nil {
-		return editRefusal(err, cached.Source)
+		return editRefusal(err, doc.Source)
 	}
 	return &pb.ApplyEditsResponse{
 		Content: string(result.Content),

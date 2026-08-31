@@ -61,6 +61,11 @@ func (a *ConnectAdapter) ParseFile(ctx context.Context, req *connect.Request[pb.
 	return connectCall(ctx, req, a.svc.ParseFile)
 }
 
+// ParseSources parses several documents as one model.
+func (a *ConnectAdapter) ParseSources(ctx context.Context, req *connect.Request[pb.ParseSourcesRequest]) (*connect.Response[pb.ParseSourcesResponse], error) {
+	return connectCall(ctx, req, a.svc.ParseSources)
+}
+
 // GetSymbol returns symbol information by qualified name.
 func (a *ConnectAdapter) GetSymbol(ctx context.Context, req *connect.Request[pb.GetSymbolRequest]) (*connect.Response[pb.SymbolResponse], error) {
 	return connectCall(ctx, req, a.svc.GetSymbol)
