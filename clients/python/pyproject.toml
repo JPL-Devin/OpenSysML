@@ -78,8 +78,9 @@ version = { attr = "opensysml._version.VERSION" }
 include = ["opensysml*"]
 
 [tool.setuptools.package-data]
-# The marker that tells type checkers the shipped annotations are usable.
-opensysml = ["py.typed"]
+# The marker that tells type checkers the shipped annotations are usable, and the
+# pinned release digests a download is verified against.
+opensysml = ["py.typed", "release-digests.json"]
 # The generated protobuf stubs: the modules themselves build their classes at
 # import time, so these are the only annotations for them.
 "opensysml.proto" = ["*.pyi"]

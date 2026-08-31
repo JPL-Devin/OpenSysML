@@ -16,6 +16,14 @@ import (
 // rendering could not represent is written as comments, so no notice is lost in
 // the machine-readable form either.
 func (r *Rendering) Mermaid() string {
+	return r.MermaidDirected("")
+}
+
+// MermaidDirected is the Mermaid form drawn in the stated direction: a
+// flowchart flows that way, and a state diagram states it as a `direction`
+// statement. The empty direction keeps each kind's default, and a kind no
+// direction applies to ignores it.
+func (r *Rendering) MermaidDirected(direction Direction) string {
 	var b strings.Builder
 	if r.View == "" {
 		fmt.Fprintf(&b, "%%%% %s rendering", r.Kind)
@@ -31,25 +39,28 @@ func (r *Rendering) Mermaid() string {
 	}
 	switch r.Kind {
 	case KindState:
-		r.writeStateDiagram(&b)
+		r.writeStateDiagram(&b, direction)
 		return b.String()
 	case KindSequence:
 		r.writeSequenceDiagram(&b)
 		return b.String()
 	}
-	r.writeFlowchart(&b)
+	r.writeFlowchart(&b, direction)
 	return b.String()
 }
 
 // writeFlowchart writes the tree, interconnection and action renderings as a
 // Mermaid flowchart: a node with children is a subgraph, containment in a tree
 // is an edge, and every other edge is the one the rendering holds.
-func (r *Rendering) writeFlowchart(b *strings.Builder) {
-	direction := "TD"
+func (r *Rendering) writeFlowchart(b *strings.Builder, direction Direction) {
+	flow := "TD"
 	if r.Kind == KindInterconnection {
-		direction = "LR"
+		flow = "LR"
 	}
-	fmt.Fprintf(b, "flowchart %s\n", direction)
+	if direction != "" {
+		flow = string(direction)
+	}
+	fmt.Fprintf(b, "flowchart %s\n", flow)
 	if r.Empty() {
 		fmt.Fprintf(b, "  empty[\"%s\"]\n", mermaidText(r.emptyReason()))
 		return
@@ -93,8 +104,11 @@ func writeFlowchartNode(b *strings.Builder, node *Node, depth int, containment b
 // writeStateDiagram writes a state rendering as a Mermaid state diagram: each
 // machine and composite state is a composite state, an initial state is entered
 // from the start marker, and every transition carries its label.
-func (r *Rendering) writeStateDiagram(b *strings.Builder) {
+func (r *Rendering) writeStateDiagram(b *strings.Builder, direction Direction) {
 	b.WriteString("stateDiagram-v2\n")
+	if direction != "" {
+		fmt.Fprintf(b, "  direction %s\n", direction)
+	}
 	if r.Empty() {
 		// A state diagram takes a note only attached to a state, so the reason
 		// is a state of its own.

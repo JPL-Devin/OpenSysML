@@ -299,10 +299,10 @@ func (lx *Lexer) scanIdentOrKeyword(start int) Token {
 	}
 	sp := lx.span(start)
 	// The map index over a []byte->string conversion is optimized by the
-	// compiler to avoid allocating; only materialize the string for KeywordID
-	// on the (less common) keyword path.
-	if _, ok := keywords[string(lx.src[start:lx.pos])]; ok {
-		return Token{Kind: Keyword, Span: sp, KeywordID: string(lx.src[start:lx.pos])}
+	// compiler to avoid allocating; the keyword path shares the canonical
+	// string stored in the map, so no token allocates its own copy.
+	if kw, ok := keywords[string(lx.src[start:lx.pos])]; ok {
+		return Token{Kind: Keyword, Span: sp, KeywordID: kw}
 	}
 	return Token{Kind: Identifier, Span: sp}
 }

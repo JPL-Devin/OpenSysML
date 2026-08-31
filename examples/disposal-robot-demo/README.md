@@ -145,6 +145,36 @@ wrote rendered/RobotViews.partsTable.md (markdown, 835 bytes)
 wrote rendered/RobotViews.criticalParts.mmd (mermaid, 878 bytes)
 ```
 
+**Identify elements with an OSLC query.** `-query` takes
+[OSLC Query text](../../docs/reference/oslc-query.md), either as a bare
+where-clause or as a URL-encoded parameter string, and reports one element per
+line as qualified name, metamodel type, and the properties `oslc.select` names.
+
+```bash
+./bin/sysml examples/disposal-robot-demo/robot.sysml \
+  -query 'oslc.where=rdf:type%3Dsysml:PartUsage+and+sysml:multiplicityUpper%3E1&oslc.select=sysml:type,sysml:multiplicityUpper'
+./bin/sysml examples/disposal-robot-demo/robot.sysml \
+  -query 'oslc.where=sysml:owner%3D%22Robot::Platform%22&oslc.orderBy=-sysml:name&oslc.select=sysml:name'
+```
+
+```
+Robot::Mobility::wheels  PartUsage  type=Robot::Wheel  multiplicityUpper=4
+```
+
+```
+Robot::Platform::withinMassBudget  ConstraintUsage  name=withinMassBudget
+Robot::Platform::radio  PartUsage  name=radio
+Robot::Platform::pack  PartUsage  name=pack
+…
+Robot::Platform::arm  PartUsage  name=arm
+```
+
+A value is a literal, so a qualified name needs its quotes:
+`sysml:owner="Robot::Platform"`, not `sysml:owner=Robot::Platform`. A query
+matching nothing says `no elements matched` on standard error, so the result
+rows that follow the validation report on standard output remain one line per
+match.
+
 ## From the REPL
 
 ```bash

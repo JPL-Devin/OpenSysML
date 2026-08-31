@@ -2,17 +2,17 @@
 
 The pins are what makes the download check independent of the serving origin, so
 the script that produces them is held to hashing what it downloaded, refusing a
-release whose sidecar disagrees, and rewriting the table without touching
-anything else in the module.
+release whose sidecar disagrees, and syncing what it wrote into every client
+that ships a copy.
 """
 
 import importlib.util
+import json
 import os
-import re
 
 import pytest
 
-from opensysml.binary import PINNED_SHA256, pinned_digest
+from opensysml.binary import PINNED_DIGESTS_FILE, PINNED_SHA256, pinned_digest
 
 PYTHON_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PIN_SCRIPT = os.path.join(PYTHON_DIR, "scripts", "pin_release_checksums.py")
@@ -27,6 +27,7 @@ def _load_pin_script():
 
 
 pin = _load_pin_script()
+sync = pin.sync_script
 
 
 @pytest.fixture(autouse=True)
@@ -37,16 +38,14 @@ def token(monkeypatch):
 
 
 def test_the_table_it_reads_is_the_one_the_package_uses():
-    """It reads the pins with ast, so they cannot drift from the module's."""
+    """The package ships a copy of the table the script maintains."""
     assert pin.pinned_table() == PINNED_SHA256
 
 
 def test_rendering_the_table_it_read_changes_nothing():
     """Rewriting without a new version is a no-op, so a diff is only new pins."""
-    with open(pin.BINARY_FILE, encoding="utf-8") as f:
-        source = f.read()
-    literal = re.search(r"^PINNED_SHA256 = \{.*?^\}\n", source, re.DOTALL | re.MULTILINE)
-    assert literal.group(0) == pin.render_table(pin.pinned_table())
+    with open(pin.DIGESTS_FILE, encoding="utf-8") as f:
+        assert f.read() == pin.render_table(pin.pinned_table())
 
 
 def test_a_pinned_version_is_reachable_through_the_package():
@@ -57,28 +56,50 @@ def test_a_pinned_version_is_reachable_through_the_package():
 
 
 def test_writing_a_release_adds_only_its_pins(tmp_path, monkeypatch):
-    """Pinning a release leaves the module, and the other releases, as they were."""
-    binary_file = tmp_path / "binary.py"
-    with open(pin.BINARY_FILE, encoding="utf-8") as f:
-        source = f.read()
-    binary_file.write_text(source)
-    monkeypatch.setattr(pin, "BINARY_FILE", str(binary_file))
+    """Pinning a release leaves the releases already pinned as they were."""
+    digests_file = tmp_path / "release-digests.json"
+    digests_file.write_text(pin.render_table(pin.pinned_table()))
+    monkeypatch.setattr(pin, "DIGESTS_FILE", str(digests_file))
+    monkeypatch.setattr(pin, "sync_clients", lambda digests_file=None: None)
     monkeypatch.setattr(
         pin, "digests_of", lambda repo, version: {"sysml-grpc-linux-amd64": "ab" * 32}
     )
 
     assert pin.main(["--version", "v9.9.9", "--write"]) == 0
 
-    table = pin.pinned_table(str(binary_file))
+    table = pin.pinned_table(str(digests_file))
     assert table["Open-MBEE/OpenSysML"]["v9.9.9"] == {"sysml-grpc-linux-amd64": "ab" * 32}
     assert table["Open-MBEE/OpenSysML"]["v0.0.7"] == (
         PINNED_SHA256["Open-MBEE/OpenSysML"]["v0.0.7"]
     )
-    # Only the table changed: the rest of the module is untouched.
-    rest = re.sub(r"^PINNED_SHA256 = \{.*?^\}\n", "", binary_file.read_text(),
-                  flags=re.DOTALL | re.MULTILINE)
-    assert rest == re.sub(r"^PINNED_SHA256 = \{.*?^\}\n", "", source,
-                          flags=re.DOTALL | re.MULTILINE)
+
+
+def test_writing_syncs_the_copy_the_package_ships(tmp_path, monkeypatch):
+    """A client verifies against its own copy, so writing must reach it."""
+    digests_file = tmp_path / "release-digests.json"
+    digests_file.write_text(pin.render_table(pin.pinned_table()))
+    shipped = tmp_path / "opensysml" / "release-digests.json"
+    shipped.parent.mkdir()
+    shipped.write_text("{}\n")
+    monkeypatch.setattr(pin, "DIGESTS_FILE", str(digests_file))
+    monkeypatch.setattr(sync, "REPO_ROOT", str(tmp_path))
+    monkeypatch.setattr(sync, "COPIES", (os.path.join("opensysml", "release-digests.json"),))
+    monkeypatch.setattr(
+        pin, "digests_of", lambda repo, version: {"sysml-grpc-linux-amd64": "ab" * 32}
+    )
+
+    assert pin.main(["--version", "v9.9.9", "--write"]) == 0
+
+    assert json.loads(shipped.read_text()) == pin.pinned_table(str(digests_file))
+
+
+def test_the_shipped_copy_is_the_table():
+    """The committed copies do not drift from the table they are synced from."""
+    with open(pin.DIGESTS_FILE, encoding="utf-8") as f:
+        table = f.read()
+    with open(PINNED_DIGESTS_FILE, encoding="utf-8") as f:
+        assert f.read() == table
+    assert sync.sync(check=True) == []
 
 
 def test_a_release_whose_sidecar_disagrees_is_not_pinned(monkeypatch):

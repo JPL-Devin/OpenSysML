@@ -40,13 +40,18 @@ export {
   upgradeRemedy,
 } from "./capabilities.js";
 export {
+  ChecksumMismatchError,
   ClosedConnectionError,
+  DownloadError,
   EvaluationError,
+  ManifestSignatureError,
   OpenSysMLError,
   ParseError,
   ServiceError,
   ServiceStartError,
   SymbolNotFoundError,
+  UnpinnedReleaseError,
+  UnsignedReleaseError,
 } from "./errors.js";
 export type { FailureCause, ModelDiagnostic } from "./errors.js";
 export { decodeValue, decodeVerdict, formatValue } from "./values.js";

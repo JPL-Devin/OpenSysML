@@ -313,6 +313,39 @@ func TestJSONReportsWarningsOfACleanModel(t *testing.T) {
 	}
 }
 
+// TestWarningsPrintBeforeTheLoadTheyQualify checks the run's output reads in
+// order: what analysis found about a model comes before the line reporting it
+// loaded, so a success and its caveats are never read out of order.
+func TestWarningsPrintBeforeTheLoadTheyQualify(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, warningModel, "-constraint", "Rover::MassBudget", "-json")
+	if got.status != 0 {
+		t.Fatalf("exit status = %d, want 0\n%s", got.status, got.output())
+	}
+	var report struct {
+		Output []string `json:"output"`
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.stdout)
+	}
+	warning, loaded := -1, -1
+	for i, line := range report.Output {
+		if warning < 0 && strings.Contains(line, "warning:") {
+			warning = i
+		}
+		if loaded < 0 && strings.Contains(line, "✓ package Rover") {
+			loaded = i
+		}
+	}
+	if warning < 0 || loaded < 0 {
+		t.Fatalf("output misses the warning (%d) or the load line (%d):\n%s", warning, loaded, got.stdout)
+	}
+	if warning > loaded {
+		t.Errorf("the warning prints after the load it qualifies:\n%s", got.stdout)
+	}
+}
+
 // TestJSONLocatesADiagnosticInItsOwnFile checks that a finding is reported where
 // its file has it, rather than at its line in the accumulated session buffer.
 func TestJSONLocatesADiagnosticInItsOwnFile(t *testing.T) {

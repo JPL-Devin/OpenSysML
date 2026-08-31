@@ -41,6 +41,14 @@ const CapabilityVerification = "verification"
 // SysML v2 API & Services Query over a parsed model.
 const CapabilityQuery = "query"
 
+// CapabilityDocumentQuery names the capability of the RunDocumentQuery RPC,
+// which runs a named document query and answers with typed rows.
+const CapabilityDocumentQuery = "document_query"
+
+// CapabilityRenderDocument names the capability of the RenderDocument RPC,
+// which renders a named document to Markdown.
+const CapabilityRenderDocument = "render_document"
+
 // CapabilityOSLCQuery names the capability of evaluating OSLC Query text.
 const CapabilityOSLCQuery = "oslc_query"
 
@@ -78,14 +86,19 @@ const CapabilityStrictConformance = "strict_conformance"
 // Instance.feature_values, which replaced the pre-0.1.0 Instance.slots.
 const CapabilityFeatureValues = "feature_values"
 
+// CapabilityParseSources names the ParseSources RPC, which parses several
+// documents as one model so a name one declares resolves in another.
+const CapabilityParseSources = "parse_sources"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
-	CapabilityOSLCQuery,
-	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
-	CapabilityUnsetValue, CapabilityFeatureValues, CapabilityApplyEdits,
-	CapabilityAuthoring, CapabilityInlineLanguage, CapabilityStrictConformance,
+	CapabilityOSLCQuery, CapabilityEnumValues, CapabilityEvaluateSubject,
+	CapabilitySymbolAttributes, CapabilityUnsetValue, CapabilityFeatureValues,
+	CapabilityApplyEdits, CapabilityAuthoring, CapabilityInlineLanguage,
+	CapabilityStrictConformance, CapabilityDocumentQuery, CapabilityRenderDocument,
+	CapabilityParseSources,
 }
 
 type capabilityAvailability struct {
@@ -232,6 +245,14 @@ func (s *Service) newRuntime(semModel *semantics.Model, resolver *resolve.Resolv
 	return ctx
 }
 
+// sourceInput is one document a parse request named, read and ready to parse.
+type sourceInput struct {
+	name     string
+	language string
+	content  string
+	kind     source.Kind
+}
+
 // ParseFile parses a SysML file and caches the result
 func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.ParseFileResponse, error) {
 	if req.StrictConformance {
@@ -245,90 +266,183 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 		}
 	}
 
-	// Extract source content and file path
-	var content string
-	var filePath string
-	var kind source.Kind
-
+	var input sourceInput
+	var err error
 	switch src := req.Source.(type) {
 	case *pb.ParseFileRequest_Content:
-		content = src.Content
-		filePath = "<content>"
-		kind = source.KindSysML
-		switch req.Language {
-		case "", "sysml":
-		case "kerml":
-			kind = source.KindKerML
-		default:
-			return nil, statusErrorf(connect.CodeInvalidArgument,
-				"language must be sysml or kerml, got %q", req.Language)
-		}
+		input, err = inlineInput("<content>", req.Language, src.Content)
 	case *pb.ParseFileRequest_FilePath:
-		filePath = src.FilePath
-		kind = source.KindOf(filePath)
-		// #nosec G304 -- the client names the model file it wants parsed; reading
-		// arbitrary paths is the service's purpose, and it runs with the caller's
-		// own privileges.
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, statusErrorf(connect.CodeNotFound, "file not found: %v", err)
-		}
-		content = string(data)
+		input, err = fileInput(src.FilePath)
 	default:
 		return nil, statusError(connect.CodeInvalidArgument, "source must be file_path or content")
 	}
-
-	// Keyed by what was read, not by the hash the request carried: a hash
-	// disagreeing with its content would serve another model. The file name is
-	// part of the key, since a record's diagnostics name the file it came from.
-	// The conformance mode is part of the key: the same source asks a different
-	// question in each mode, so one mode's diagnostics may not serve the other.
-	mode := conformance.ModeOf(req.StrictConformance)
-	modelHash := computeHash(filePath + "\x00" + req.Language + "\x00" + mode.String() + "\x00" + content)
-	if cached, ok := s.cache.Get(modelHash); ok {
-		return s.buildParseResponse(modelHash, cached), nil
+	if err != nil {
+		return nil, err
 	}
 
-	// Parse the file
-	srcFile := source.NewWithKind(filePath, []byte(content), kind)
-	p := parser.New(srcFile)
-	root := p.ParseFile()
+	mode := conformance.ModeOf(req.StrictConformance)
+	modelHash, model := s.parseModel([]sourceInput{input}, mode)
+	return s.buildParseResponse(modelHash, model), nil
+}
 
-	// Get parser diagnostics
-	parseDiags := p.Diagnostics
+// ParseSources parses several documents as one model, so a name one document
+// declares resolves in another.
+func (s *Service) ParseSources(ctx context.Context, req *pb.ParseSourcesRequest) (*pb.ParseSourcesResponse, error) {
+	if err := s.requireCapability(CapabilityParseSources); err != nil {
+		return nil, err
+	}
+	if req.StrictConformance {
+		if err := s.requireCapability(CapabilityStrictConformance); err != nil {
+			return nil, err
+		}
+	}
+	if len(req.Documents) == 0 {
+		return nil, statusError(connect.CodeInvalidArgument, "documents must name at least one document")
+	}
+
+	inputs := make([]sourceInput, 0, len(req.Documents))
+	named := make(map[string]int, len(req.Documents))
+	for position, doc := range req.Documents {
+		input, err := s.documentInput(doc, position)
+		if err != nil {
+			return nil, err
+		}
+		if first, taken := named[input.name]; taken {
+			return nil, statusErrorf(connect.CodeInvalidArgument,
+				"documents %d and %d are both named %q: each document of a model needs its own name",
+				first, position, input.name)
+		}
+		named[input.name] = position
+		inputs = append(inputs, input)
+	}
+
+	modelHash, model := s.parseModel(inputs, conformance.ModeOf(req.StrictConformance))
+	roots := make([]*pb.SymbolInfo, 0, len(model.Documents))
+	for _, doc := range model.Documents {
+		roots = append(roots, s.rootSymbol(model, doc))
+	}
+	return &pb.ParseSourcesResponse{
+		ModelHash:   modelHash,
+		Roots:       roots,
+		Diagnostics: s.modelDiagnostics(model),
+	}, nil
+}
+
+// documentInput reads one document of a ParseSources request. position names an
+// inline document the request left unnamed, so two of them stay distinct.
+func (s *Service) documentInput(doc *pb.SourceDocument, position int) (sourceInput, error) {
+	switch src := doc.GetSource().(type) {
+	case *pb.SourceDocument_Content:
+		if doc.Language != "" {
+			if err := s.requireCapability(CapabilityInlineLanguage); err != nil {
+				return sourceInput{}, err
+			}
+		}
+		name := doc.Name
+		if name == "" {
+			name = fmt.Sprintf("<content-%d>", position)
+		}
+		return inlineInput(name, doc.Language, src.Content)
+	case *pb.SourceDocument_FilePath:
+		return fileInput(src.FilePath)
+	default:
+		return sourceInput{}, statusErrorf(connect.CodeInvalidArgument,
+			"document %d must carry file_path or content", position)
+	}
+}
+
+// inlineInput is inline content as a document of the language named, SysML when
+// the request named none.
+func inlineInput(name, language, content string) (sourceInput, error) {
+	kind := source.KindSysML
+	switch language {
+	case "", "sysml":
+	case "kerml":
+		kind = source.KindKerML
+	default:
+		return sourceInput{}, statusErrorf(connect.CodeInvalidArgument,
+			"language must be sysml or kerml, got %q", language)
+	}
+	return sourceInput{name: name, language: language, content: content, kind: kind}, nil
+}
+
+// fileInput reads a document from the path the client named.
+func fileInput(path string) (sourceInput, error) {
+	// #nosec G304 -- the client names the model file it wants parsed; reading
+	// arbitrary paths is the service's purpose, and it runs with the caller's
+	// own privileges.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return sourceInput{}, statusErrorf(connect.CodeNotFound, "file not found: %v", err)
+	}
+	return sourceInput{name: path, content: string(data), kind: source.KindOf(path)}, nil
+}
+
+// parseModel parses the documents into one model and caches it, or returns the
+// cached model when these very documents were parsed before. Every document goes
+// into one index, so a name one declares resolves in the others.
+//
+// Semantic analysis runs only when every document parsed clean, per the tier
+// gating in AGENTS.md §4: a document that failed to parse contributes no symbols,
+// so analyzing its siblings would report names as unresolved that the model
+// declares.
+func (s *Service) parseModel(inputs []sourceInput, mode conformance.Mode) (string, *CachedModel) {
+	// Keyed by what was read, not by the hash a request carried: a hash
+	// disagreeing with its content would serve another model. Each document's
+	// name is part of the key, since its diagnostics name the document they came
+	// from. The conformance mode is part of the key: the same source asks a
+	// different question in each mode, so one mode's diagnostics may not serve
+	// the other. Every field is length-delimited, so no document set can spell
+	// the key of another whose names or contents carry the delimiter.
+	var key strings.Builder
+	fmt.Fprintf(&key, "%s\x00%d", mode.String(), len(inputs))
+	for _, input := range inputs {
+		for _, field := range []string{input.name, input.language, input.content} {
+			fmt.Fprintf(&key, "\x00%d\x00%s", len(field), field)
+		}
+	}
+	modelHash := computeHash(key.String())
+	if cached, ok := s.cache.Get(modelHash); ok {
+		return modelHash, cached
+	}
 
 	// Take an index carrying the standard library, which type resolution needs:
 	// an overlay over the one library index the service holds. The model's own
-	// document goes into the overlay alone, so what it resolves against does not
+	// documents go into the overlay alone, so what they resolve against does not
 	// depend on prewarming or on any other model.
 	idx := s.libIndexes.get()
 
-	// Add user document
-	idx.AddDocumentWithKind(filePath, root, kind)
-
-	// Run semantic passes (name-resolution, type, constraint)
-	// Only run if no parse errors (tier gating per AGENTS.md §4)
-	var passesDiags []passes.Diagnostic
-	if len(parseDiags) == 0 {
-		// passes.Analyze expects parser diagnostics converted to passes.Diagnostic
-		parseDiagsConverted := make([]passes.Diagnostic, 0) // No parse errors to convert
-		passesDiags = passes.AnalyzeWithOptions(filePath, kind, root, parseDiagsConverted, idx,
-			passes.Options{Conformance: mode})
+	documents := make([]*CachedDocument, 0, len(inputs))
+	parsedClean := true
+	for _, input := range inputs {
+		srcFile := source.NewWithKind(input.name, []byte(input.content), input.kind)
+		p := parser.New(srcFile)
+		root := p.ParseFile()
+		idx.AddDocumentWithKind(input.name, root, input.kind)
+		if len(p.Diagnostics) > 0 {
+			parsedClean = false
+		}
+		documents = append(documents, &CachedDocument{
+			Root:       root,
+			Source:     srcFile,
+			ParseDiags: p.Diagnostics,
+		})
 	}
 
-	// Create cached model
-	model := &CachedModel{
-		Root:        root,
-		Index:       idx,
-		Source:      srcFile,
-		ParseDiags:  parseDiags,
-		PassesDiags: passesDiags,
+	// Registers what a wildcard import re-exports, so a qualified name reaches a
+	// symbol another document imported. Only sound once every document is in.
+	idx.ExpandWildcardImports()
+
+	if parsedClean {
+		for i, doc := range documents {
+			doc.PassesDiags = passes.AnalyzeWithOptions(inputs[i].name, inputs[i].kind, doc.Root,
+				make([]passes.Diagnostic, 0), idx, passes.Options{Conformance: mode})
+		}
 	}
 
-	// Cache the model
+	model := &CachedModel{Documents: documents, Index: idx}
 	s.cache.Put(modelHash, model)
-
-	return s.buildParseResponse(modelHash, model), nil
+	return modelHash, model
 }
 
 // GetSymbol retrieves symbol information by FQN
@@ -361,20 +475,24 @@ func (s *Service) GetDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest
 		return nil, statusErrorf(connect.CodeNotFound, msgModelNotFound, req.ModelHash)
 	}
 
-	// Convert parser diagnostics to proto
-	var pbDiags []*pb.Diagnostic
-	for _, diag := range cached.ParseDiags {
-		pbDiags = append(pbDiags, ParserDiagnosticToProto(diag, cached.Source))
-	}
-
-	// Convert semantic pass diagnostics to proto
-	for _, diag := range cached.PassesDiags {
-		pbDiags = append(pbDiags, DiagnosticToProto(diag, cached.Source))
-	}
-
 	return &pb.DiagnosticsResponse{
-		Diagnostics: pbDiags,
+		Diagnostics: s.modelDiagnostics(cached),
 	}, nil
+}
+
+// modelDiagnostics are every document's diagnostics, document by document, each
+// located in the source it came from.
+func (s *Service) modelDiagnostics(model *CachedModel) []*pb.Diagnostic {
+	var pbDiags []*pb.Diagnostic
+	for _, doc := range model.Documents {
+		for _, diag := range doc.ParseDiags {
+			pbDiags = append(pbDiags, ParserDiagnosticToProto(diag, doc.Source))
+		}
+		for _, diag := range doc.PassesDiags {
+			pbDiags = append(pbDiags, DiagnosticToProto(diag, doc.Source))
+		}
+	}
+	return pbDiags
 }
 
 // Evaluate evaluates a SysML expression in the context of a parsed model
@@ -436,7 +554,7 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	}
 	if scope == nil {
 		// Use document root as default scope
-		scope = cached.Index.DocumentRoot(cached.Source.Name())
+		scope = cached.PrimaryRoot()
 	}
 
 	// Create runtime context
@@ -481,7 +599,7 @@ func evalScope(sym *symbols.Symbol, cached *CachedModel) *symbols.Scope {
 	case sym.OwnerScope != nil:
 		return sym.OwnerScope
 	default:
-		return cached.Index.DocumentRoot(cached.Source.Name())
+		return cached.PrimaryRoot()
 	}
 }
 
@@ -624,41 +742,35 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 
 // buildParseResponse constructs ParseFileResponse from cached model
 func (s *Service) buildParseResponse(modelHash string, model *CachedModel) *pb.ParseFileResponse {
-	// Convert parser + semantic diagnostics
-	var pbDiags []*pb.Diagnostic
-	for _, diag := range model.ParseDiags {
-		pbDiags = append(pbDiags, ParserDiagnosticToProto(diag, model.Source))
-	}
-	for _, diag := range model.PassesDiags {
-		pbDiags = append(pbDiags, DiagnosticToProto(diag, model.Source))
-	}
-
-	// Convert root namespace to SymbolInfo
-	var rootSymbol *pb.SymbolInfo
-	if model.Root != nil {
-		// Find root symbol in index
-		rootSyms := model.Index.LookupQualified("") // Root has empty name
-		if len(rootSyms) == 0 {
-			// Fallback: use DocumentRoot
-			rootScope := model.Index.DocumentRoot(model.Source.Name())
-			if rootScope != nil {
-				rootSymbol = &pb.SymbolInfo{
-					Id:       "",
-					Name:     "",
-					Kind:     "RootNamespace",
-					Metadata: make(map[string]string),
-					ChildIds: collectChildIDs(rootScope, model.Index),
-				}
-			}
-		} else {
-			rootSymbol = s.symbolToProto(rootSyms[0], model.SymbolContext())
-		}
-	}
-
 	return &pb.ParseFileResponse{
 		ModelHash:   modelHash,
-		Root:        rootSymbol,
-		Diagnostics: pbDiags,
+		Root:        s.rootSymbol(model, model.Primary()),
+		Diagnostics: s.modelDiagnostics(model),
+	}
+}
+
+// rootSymbol is one document's root namespace: the index's own root symbol for
+// it, else the document's root scope described as one, which is what a document
+// declaring no root symbol has.
+func (s *Service) rootSymbol(model *CachedModel, doc *CachedDocument) *pb.SymbolInfo {
+	if doc.Root == nil {
+		return nil
+	}
+	rootScope := model.Index.DocumentRoot(doc.Source.Name())
+	for _, sym := range model.Index.LookupQualified("") { // Root has empty name
+		if sym.Scope == rootScope {
+			return s.symbolToProto(sym, model.SymbolContext())
+		}
+	}
+	if rootScope == nil {
+		return nil
+	}
+	return &pb.SymbolInfo{
+		Id:       "",
+		Name:     "",
+		Kind:     "RootNamespace",
+		Metadata: make(map[string]string),
+		ChildIds: collectChildIDs(rootScope, model.Index),
 	}
 }
 

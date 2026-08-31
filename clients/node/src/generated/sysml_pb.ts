@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sysml.proto.
  */
 export const file_sysml: GenFile = /*@__PURE__*/
-  fileDesc("CgtzeXNtbC5wcm90bxIFc3lzbWwiygEKB1ZlcmRpY3QSDAoEa2luZBgBIAEoCRISCgplbGVtZW50X2lkGAIgASgJEg8KB2VsZW1lbnQYAyABKAkSDQoFaG9sZHMYBCABKAgSEQoJY29uZGl0aW9uGAUgASgJEhMKC2luc3RhbmNlX2lkGAYgASgDEhgKEGluc3RhbmNlX3R5cGVfaWQYByABKAkSDQoFZXJyb3IYCCABKAkSLAoOZmFpbHVyZV9yZWFzb24YCSABKA4yFC5zeXNtbC5GYWlsdXJlUmVhc29uIlsKF1ZlcmlmeUNvbnN0cmFpbnRSZXF1ZXN0EhIKCm1vZGVsX2hhc2gYASABKAkSEQoJc3ltYm9sX2lkGAIgASgJEhkKEXN1YmplY3Rfc3ltYm9sX2lkGAMgASgJIpYBChhWZXJpZnlDb25zdHJhaW50UmVzcG9uc2USHwoHdmVyZGljdBgBIAEoCzIOLnN5c21sLlZlcmRpY3QSIgoJaW5zdGFuY2VzGAIgAygLMg8uc3lzbWwuSW5zdGFuY2USDQoFZXJyb3IYAyABKAkSJgoLZGlhZ25vc3RpY3MYBCADKAsyES5zeXNtbC5EaWFnbm9zdGljIlwKGFZlcmlmeVJlcXVpcmVtZW50UmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEhEKCXN5bWJvbF9pZBgCIAEoCRIZChFzdWJqZWN0X3N5bWJvbF9pZBgDIAEoCSKXAQoZVmVyaWZ5UmVxdWlyZW1lbnRSZXNwb25zZRIfCgd2ZXJkaWN0GAEgASgLMg4uc3lzbWwuVmVyZGljdBIiCglpbnN0YW5jZXMYAiADKAsyDy5zeXNtbC5JbnN0YW5jZRINCgVlcnJvchgDIAEoCRImCgtkaWFnbm9zdGljcxgEIAMoCzIRLnN5c21sLkRpYWdub3N0aWMiQgoZVmVyaWZ5U2F0aXNmYWN0aW9uUmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEhEKCXN5bWJvbF9pZBgCIAEoCSLHAQoaVmVyaWZ5U2F0aXNmYWN0aW9uUmVzcG9uc2USIAoIdmVyZGljdHMYASADKAsyDi5zeXNtbC5WZXJkaWN0EiIKCWluc3RhbmNlcxgCIAMoCzIPLnN5c21sLkluc3RhbmNlEg0KBWVycm9yGAMgASgJEiYKC2RpYWdub3N0aWNzGAQgAygLMhEuc3lzbWwuRGlhZ25vc3RpYxIsCg5mYWlsdXJlX3JlYXNvbhgFIAEoDjIULnN5c21sLkZhaWx1cmVSZWFzb24iXQoTRXZhbHVhdGVDYWxjUmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEhEKCXN5bWJvbF9pZBgCIAEoCRIfCglhcmd1bWVudHMYAyADKAsyDC5zeXNtbC5WYWx1ZSK9AQoURXZhbHVhdGVDYWxjUmVzcG9uc2USHAoGcmVzdWx0GAEgASgLMgwuc3lzbWwuVmFsdWUSIgoHb3V0cHV0cxgCIAMoCzIRLnN5c21sLkNhbGNPdXRwdXQSDQoFZXJyb3IYAyABKAkSJgoLZGlhZ25vc3RpY3MYBCADKAsyES5zeXNtbC5EaWFnbm9zdGljEiwKDmZhaWx1cmVfcmVhc29uGAUgASgOMhQuc3lzbWwuRmFpbHVyZVJlYXNvbiI3CgpDYWxjT3V0cHV0EgwKBG5hbWUYASABKAkSGwoFdmFsdWUYAiABKAsyDC5zeXNtbC5WYWx1ZSKMAQoQUGFyc2VGaWxlUmVxdWVzdBITCglmaWxlX3BhdGgYASABKAlIABIRCgdjb250ZW50GAIgASgJSAASGAoMY29udGVudF9oYXNoGAMgASgJQgIYARIQCghsYW5ndWFnZRgEIAEoCRIaChJzdHJpY3RfY29uZm9ybWFuY2UYBSABKAhCCAoGc291cmNlIn8KEVBhcnNlRmlsZVJlc3BvbnNlEhIKCm1vZGVsX2hhc2gYASABKAkSHwoEcm9vdBgCIAEoCzIRLnN5c21sLlN5bWJvbEluZm8SJgoLZGlhZ25vc3RpY3MYAyADKAsyES5zeXNtbC5EaWFnbm9zdGljEg0KBWVycm9yGAQgASgJIjkKEEdldFN5bWJvbFJlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCRIRCglzeW1ib2xfaWQYAiABKAkiQgoOU3ltYm9sUmVzcG9uc2USIQoGc3ltYm9sGAEgASgLMhEuc3lzbWwuU3ltYm9sSW5mbxINCgVlcnJvchgCIAEoCSIoChJEaWFnbm9zdGljc1JlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCSJMChNEaWFnbm9zdGljc1Jlc3BvbnNlEiYKC2RpYWdub3N0aWNzGAEgAygLMhEuc3lzbWwuRGlhZ25vc3RpYxINCgVlcnJvchgCIAEoCSJvCg9FdmFsdWF0ZVJlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCRISCgpleHByZXNzaW9uGAIgASgJEhkKEWNvbnRleHRfc3ltYm9sX2lkGAMgASgJEhkKEXN1YmplY3Rfc3ltYm9sX2lkGAQgASgJImcKEEV2YWx1YXRlUmVzcG9uc2USHAoGcmVzdWx0GAEgASgLMgwuc3lzbWwuVmFsdWUSDQoFZXJyb3IYAiABKAkSJgoLZGlhZ25vc3RpY3MYAyADKAsyES5zeXNtbC5EaWFnbm9zdGljIsIBCghJbnN0YW5jZRIKCgJpZBgBIAEoAxIWCg50eXBlX3N5bWJvbF9pZBgCIAEoCRI6Cg5mZWF0dXJlX3ZhbHVlcxgEIAMoCzIiLnN5c21sLkluc3RhbmNlLkZlYXR1cmVWYWx1ZXNFbnRyeRpJChJGZWF0dXJlVmFsdWVzRW50cnkSCwoDa2V5GAEgASgJEiIKBXZhbHVlGAIgASgLMhMuc3lzbWwuRmVhdHVyZVZhbHVlOgI4AUoECAMQBFIFc2xvdHMihAEKDEZlYXR1cmVWYWx1ZRIUCgxmZWF0dXJlX25hbWUYASABKAkSGwoFdmFsdWUYAiABKAsyDC5zeXNtbC5WYWx1ZRIcCgZ2YWx1ZXMYAyADKAsyDC5zeXNtbC5WYWx1ZRIUCgxtYXRlcmlhbGl6ZWQYBCABKAgSDQoFZXJyb3IYBSABKAkiOwoSSW5zdGFudGlhdGVSZXF1ZXN0EhIKCm1vZGVsX2hhc2gYASABKAkSEQoJc3ltYm9sX2lkGAIgASgJIpMBChNJbnN0YW50aWF0ZVJlc3BvbnNlEiEKCGluc3RhbmNlGAEgASgLMg8uc3lzbWwuSW5zdGFuY2USDQoFZXJyb3IYAiABKAkSJgoLZGlhZ25vc3RpY3MYAyADKAsyES5zeXNtbC5EaWFnbm9zdGljEiIKCWluc3RhbmNlcxgEIAMoCzIPLnN5c21sLkluc3RhbmNlIroBChRFeGVjdXRlQWN0aW9uUmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEhgKEGFjdGlvbl9zeW1ib2xfaWQYAiABKAkSNwoGaW5wdXRzGAMgAygLMicuc3lzbWwuRXhlY3V0ZUFjdGlvblJlcXVlc3QuSW5wdXRzRW50cnkaOwoLSW5wdXRzRW50cnkSCwoDa2V5GAEgASgJEhsKBXZhbHVlGAIgASgLMgwuc3lzbWwuVmFsdWU6AjgBIsgBChVFeGVjdXRlQWN0aW9uUmVzcG9uc2USOgoHb3V0cHV0cxgBIAMoCzIpLnN5c21sLkV4ZWN1dGVBY3Rpb25SZXNwb25zZS5PdXRwdXRzRW50cnkSDQoFZXJyb3IYAiABKAkSJgoLZGlhZ25vc3RpY3MYAyADKAsyES5zeXNtbC5EaWFnbm9zdGljGjwKDE91dHB1dHNFbnRyeRILCgNrZXkYASABKAkSGwoFdmFsdWUYAiABKAsyDC5zeXNtbC5WYWx1ZToCOAEiWgoTRXhlY3V0ZVN0YXRlUmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEh8KF3N0YXRlX21hY2hpbmVfc3ltYm9sX2lkGAIgASgJEg4KBmV2ZW50cxgDIAMoCSLuAQoURXhlY3V0ZVN0YXRlUmVzcG9uc2USFgoOc3RhdGVzX3Zpc2l0ZWQYASADKAkSRAoNZmluYWxfY29udGV4dBgCIAMoCzItLnN5c21sLkV4ZWN1dGVTdGF0ZVJlc3BvbnNlLkZpbmFsQ29udGV4dEVudHJ5Eg0KBWVycm9yGAMgASgJEiYKC2RpYWdub3N0aWNzGAQgAygLMhEuc3lzbWwuRGlhZ25vc3RpYxpBChFGaW5hbENvbnRleHRFbnRyeRILCgNrZXkYASABKAkSGwoFdmFsdWUYAiABKAsyDC5zeXNtbC5WYWx1ZToCOAEioAEKDkNvbnZlcnRSZXF1ZXN0EhMKCWZpbGVfcGF0aBgBIAEoCUgAEhEKB2NvbnRlbnQYAiABKAlIABIUCgptb2RlbF9oYXNoGAYgASgJSAASEwoLZnJvbV9mb3JtYXQYAyABKAkSEQoJdG9fZm9ybWF0GAQgASgJEh4KFnRvbGVyYXRlX3N5bnRheF9lcnJvcnMYBSABKAhCCAoGc291cmNlIrQBCg9Db252ZXJ0UmVzcG9uc2USDwoHY29udGVudBgBIAEoCRITCgtmcm9tX2Zvcm1hdBgCIAEoCRIRCgl0b19mb3JtYXQYAyABKAkSDQoFZXJyb3IYBCABKAkSJgoLZGlhZ25vc3RpY3MYBSADKAsyES5zeXNtbC5EaWFnbm9zdGljEhQKDGV4cGVyaW1lbnRhbBgGIAEoCBIbChNleHBlcmltZW50YWxfbm90aWNlGAcgASgJIlEKEUFwcGx5RWRpdHNSZXF1ZXN0EhIKCm1vZGVsX2hhc2gYASABKAkSKAoKb3BlcmF0aW9ucxgCIAMoCzIULnN5c21sLkVkaXRPcGVyYXRpb24ivAEKDUVkaXRPcGVyYXRpb24SKAoJc2V0X3ZhbHVlGAEgASgLMhMuc3lzbWwuU2V0VmFsdWVFZGl0SAASIwoGcmVuYW1lGAIgASgLMhEuc3lzbWwuUmVuYW1lRWRpdEgAEioKCmFkZF9tZW1iZXIYAyABKAsyFC5zeXNtbC5BZGRNZW1iZXJFZGl0SAASIwoGZGVsZXRlGAQgASgLMhEuc3lzbWwuRGVsZXRlRWRpdEgAQgsKCW9wZXJhdGlvbiKCAQoNQWRkTWVtYmVyRWRpdBINCgVvd25lchgBIAEoCRIMCgRraW5kGAIgASgJEgwKBG5hbWUYAyABKAkSDAoEdHlwZRgEIAEoCRIUCgxtdWx0aXBsaWNpdHkYBSABKAkSDQoFdmFsdWUYBiABKAkSEwoLc3BlY2lhbGl6ZXMYByADKAkiLQoKRGVsZXRlRWRpdBIOCgZ0YXJnZXQYASABKAkSDwoHY2FzY2FkZRgCIAEoCCItCgxTZXRWYWx1ZUVkaXQSDgoGdGFyZ2V0GAEgASgJEg0KBXZhbHVlGAIgASgJIi4KClJlbmFtZUVkaXQSDgoGdGFyZ2V0GAEgASgJEhAKCG5ld19uYW1lGAIgASgJIsIBChJBcHBseUVkaXRzUmVzcG9uc2USDwoHY29udGVudBgBIAEoCRIjCgdhcHBsaWVkGAIgAygLMhIuc3lzbWwuQXBwbGllZEVkaXQSDQoFZXJyb3IYAyABKAkSIwoHZmFpbHVyZRgEIAEoDjISLnN5c21sLkVkaXRGYWlsdXJlEiYKC2RpYWdub3N0aWNzGAUgAygLMhEuc3lzbWwuRGlhZ25vc3RpYxIaChJyZWZlcnJpbmdfZWxlbWVudHMYBiADKAkiegoLQXBwbGllZEVkaXQSFwoPb3BlcmF0aW9uX2luZGV4GAEgASgFEg4KBnRhcmdldBgCIAEoCRIOCgZvZmZzZXQYAyABKAUSDgoGbGVuZ3RoGAQgASgFEhAKCG9sZF90ZXh0GAUgASgJEhAKCG5ld190ZXh0GAYgASgJIv0CCgpTeW1ib2xJbmZvEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEa2luZBgDIAEoCRIxCghtZXRhZGF0YRgEIAMoCzIfLnN5c21sLlN5bWJvbEluZm8uTWV0YWRhdGFFbnRyeRIRCgljaGlsZF9pZHMYBSADKAkSKAoKYXR0cmlidXRlcxgGIAMoCzIULnN5c21sLkF0dHJpYnV0ZUluZm8SIgoJdHlwZV9pbmZvGAcgASgLMg8uc3lzbWwuVHlwZUluZm8SLQoMbXVsdGlwbGljaXR5GAggASgLMhcuc3lzbWwuTXVsdGlwbGljaXR5SW5mbxIuCg9zcGVjaWFsaXphdGlvbnMYCSADKAsyFS5zeXNtbC5TcGVjaWFsaXphdGlvbhIjCht3aXRoaGVsZF9saWJyYXJ5X2F0dHJpYnV0ZXMYCiABKAUaLwoNTWV0YWRhdGFFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIlgKDlNwZWNpYWxpemF0aW9uEgwKBGtpbmQYASABKAkSEAoIZGVjbGFyZWQYAiABKAkSEQoJdGFyZ2V0X2lkGAMgASgJEhMKC3RhcmdldF9raW5kGAQgASgJIpUBCghUeXBlSW5mbxIQCghkZWNsYXJlZBgBIAEoCRITCgtyZXNvbHZlZF9pZBgCIAEoCRIVCg1yZXNvbHZlZF9raW5kGAMgASgJEhEKCXByaW1pdGl2ZRgEIAEoCRIYChBwcmltaXRpdmVfc291cmNlGAUgASgJEhAKCHF1YW50aXR5GAYgASgIEgwKBHVuaXQYByABKAkiMAoQTXVsdGlwbGljaXR5SW5mbxINCgVsb3dlchgBIAEoCRINCgV1cHBlchgCIAEoCSJWCg1BdHRyaWJ1dGVJbmZvEgwKBG5hbWUYASABKAkSDAoEdHlwZRgCIAEoCRIbCgV2YWx1ZRgDIAEoCzIMLnN5c21sLlZhbHVlEgwKBHVuaXQYBCABKAkimwIKBVZhbHVlEhMKCWludF92YWx1ZRgBIAEoA0gAEhQKCnJlYWxfdmFsdWUYAiABKAFIABIUCgpib29sX3ZhbHVlGAMgASgISAASFgoMc3RyaW5nX3ZhbHVlGAQgASgJSAASFQoLaW5zdGFuY2VfaWQYBSABKANIABIoCghzZXF1ZW5jZRgGIAEoCzIULnN5c21sLlZhbHVlU2VxdWVuY2VIABIOCgRudWxsGAcgASgJSAASIwoIcXVhbnRpdHkYCCABKAsyDy5zeXNtbC5RdWFudGl0eUgAEioKDGVudW1fbGl0ZXJhbBgJIAEoCzISLnN5c21sLkVudW1MaXRlcmFsSAASDwoFdW5zZXQYCiABKAhIAEIGCgRraW5kIkcKC0VudW1MaXRlcmFsEhIKCmxpdGVyYWxfaWQYASABKAkSFgoOZW51bWVyYXRpb25faWQYAiABKAkSDAoEbmFtZRgDIAEoCSIvCg1WYWx1ZVNlcXVlbmNlEh4KCGVsZW1lbnRzGAEgAygLMgwuc3lzbWwuVmFsdWUifAoIUXVhbnRpdHkSFwoNaW50X21hZ25pdHVkZRgBIAEoA0gAEhgKDnJlYWxfbWFnbml0dWRlGAIgASgBSAASDAoEdW5pdBgDIAEoCRIiCgl1bml0X3Rlcm0YBCABKAsyDy5zeXNtbC5Vbml0VGVybUILCgltYWduaXR1ZGUiVAoIVW5pdFRlcm0SEQoJc2NhbGVfbnVtGAEgASgBEhEKCXNjYWxlX2RlbhgCIAEoARIiCgdmYWN0b3JzGAMgAygLMhEuc3lzbWwuVW5pdEZhY3RvciIvCgpVbml0RmFjdG9yEg8KB3VuaXRfaWQYASABKAkSEAoIZXhwb25lbnQYAiABKAEiSgoKRGlhZ25vc3RpYxIQCghzZXZlcml0eRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEhkKBHNwYW4YAyABKAsyCy5zeXNtbC5TcGFuIl4KBFNwYW4SDAoEZmlsZRgBIAEoCRISCgpzdGFydF9saW5lGAIgASgFEhEKCXN0YXJ0X2NvbBgDIAEoBRIQCghlbmRfbGluZRgEIAEoBRIPCgdlbmRfY29sGAUgASgFIhMKEVNlcnZlckluZm9SZXF1ZXN0IjsKElNlcnZlckluZm9SZXNwb25zZRIPCgd2ZXJzaW9uGAEgASgJEhQKDGNhcGFiaWxpdGllcxgCIAMoCSJTCgxRdWVyeVJlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCRIbCgVxdWVyeRgCIAEoCzIMLnN5c21sLlF1ZXJ5EhIKCm9zbGNfcXVlcnkYAyABKAkiPAoNUXVlcnlSZXNwb25zZRIrCghlbGVtZW50cxgBIAMoCzIZLnN5c21sLlF1ZXJ5UmVzdWx0RWxlbWVudCJICgVRdWVyeRINCgVzY29wZRgBIAMoCRIOCgZzZWxlY3QYAiADKAkSIAoFd2hlcmUYAyABKAsyES5zeXNtbC5Db25zdHJhaW50InwKCkNvbnN0cmFpbnQSLwoJcHJpbWl0aXZlGAEgASgLMhouc3lzbWwuUHJpbWl0aXZlQ29uc3RyYWludEgAEi8KCWNvbXBvc2l0ZRgCIAEoCzIaLnN5c21sLkNvbXBvc2l0ZUNvbnN0cmFpbnRIAEIMCgpjb25zdHJhaW50InMKE1ByaW1pdGl2ZUNvbnN0cmFpbnQSDwoHaW52ZXJzZRgBIAEoCBIQCghwcm9wZXJ0eRgCIAEoCRIqCghvcGVyYXRvchgDIAEoDjIYLnN5c21sLlByaW1pdGl2ZU9wZXJhdG9yEg0KBXZhbHVlGAQgAygJImgKE0NvbXBvc2l0ZUNvbnN0cmFpbnQSKgoIb3BlcmF0b3IYASABKA4yGC5zeXNtbC5Db21wb3NpdGVPcGVyYXRvchIlCgpjb25zdHJhaW50GAIgAygLMhEuc3lzbWwuQ29uc3RyYWludCKgAQoSUXVlcnlSZXN1bHRFbGVtZW50EgoKAmlkGAEgASgJEgwKBHR5cGUYAiABKAkSPQoKcHJvcGVydGllcxgDIAMoCzIpLnN5c21sLlF1ZXJ5UmVzdWx0RWxlbWVudC5Qcm9wZXJ0aWVzRW50cnkaMQoPUHJvcGVydGllc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEqkwEKDUZhaWx1cmVSZWFzb24SHgoaRkFJTFVSRV9SRUFTT05fVU5TUEVDSUZJRUQQABIdChlGQUlMVVJFX1JFQVNPTl9FVkFMVUFUSU9OEAESHQoZRkFJTFVSRV9SRUFTT05fV1JPTkdfS0lORBACEiQKIEZBSUxVUkVfUkVBU09OX0FNQklHVU9VU19TVUJKRUNUEAMqnQQKC0VkaXRGYWlsdXJlEhwKGEVESVRfRkFJTFVSRV9VTlNQRUNJRklFRBAAEh4KGkVESVRfRkFJTFVSRV9OT19PUEVSQVRJT05TEAESHwobRURJVF9GQUlMVVJFX1VOS05PV05fVEFSR0VUEAISIQodRURJVF9GQUlMVVJFX0FNQklHVU9VU19UQVJHRVQQAxIbChdFRElUX0ZBSUxVUkVfTk9UX1ZBTFVFRBAEEh4KGkVESVRfRkFJTFVSRV9JTlZBTElEX1ZBTFVFEAUSHQoZRURJVF9GQUlMVVJFX0lOVkFMSURfTkFNRRAGEhoKFkVESVRfRkFJTFVSRV9OT1RfTkFNRUQQBxIiCh5FRElUX0ZBSUxVUkVfUkVOQU1FX1JFRkVSRU5DRUQQCBIiCh5FRElUX0ZBSUxVUkVfT1ZFUkxBUFBJTkdfRURJVFMQCRIfChtFRElUX0ZBSUxVUkVfUkVTVUxUX0lOVkFMSUQQChIeChpFRElUX0ZBSUxVUkVfT1dORVJfVU5LTk9XThALEiQKIEVESVRfRkFJTFVSRV9PV05FUl9OT1RfTkFNRVNQQUNFEAwSHQoZRURJVF9GQUlMVVJFX0lMTEVHQUxfS0lORBANEiIKHkVESVRfRkFJTFVSRV9NRU1CRVJfTkFNRV9UQUtFThAOEiIKHkVESVRfRkFJTFVSRV9ERUxFVEVfUkVGRVJFTkNFRBAPKpIBChFQcmltaXRpdmVPcGVyYXRvchIiCh5QUklNSVRJVkVfT1BFUkFUT1JfVU5TUEVDSUZJRUQQABIcChhQUklNSVRJVkVfT1BFUkFUT1JfRVFVQUwQARIeChpQUklNSVRJVkVfT1BFUkFUT1JfR1JFQVRFUhACEhsKF1BSSU1JVElWRV9PUEVSQVRPUl9MRVNTEAMqbgoRQ29tcG9zaXRlT3BlcmF0b3ISIgoeQ09NUE9TSVRFX09QRVJBVE9SX1VOU1BFQ0lGSUVEEAASGgoWQ09NUE9TSVRFX09QRVJBVE9SX0FORBABEhkKFUNPTVBPU0lURV9PUEVSQVRPUl9PUhACMrQICgxTeXNNTFNlcnZpY2USRAoNR2V0U2VydmVySW5mbxIYLnN5c21sLlNlcnZlckluZm9SZXF1ZXN0Ghkuc3lzbWwuU2VydmVySW5mb1Jlc3BvbnNlEj4KCVBhcnNlRmlsZRIXLnN5c21sLlBhcnNlRmlsZVJlcXVlc3QaGC5zeXNtbC5QYXJzZUZpbGVSZXNwb25zZRI7CglHZXRTeW1ib2wSFy5zeXNtbC5HZXRTeW1ib2xSZXF1ZXN0GhUuc3lzbWwuU3ltYm9sUmVzcG9uc2USRwoOR2V0RGlhZ25vc3RpY3MSGS5zeXNtbC5EaWFnbm9zdGljc1JlcXVlc3QaGi5zeXNtbC5EaWFnbm9zdGljc1Jlc3BvbnNlEjsKCEV2YWx1YXRlEhYuc3lzbWwuRXZhbHVhdGVSZXF1ZXN0Ghcuc3lzbWwuRXZhbHVhdGVSZXNwb25zZRJECgtJbnN0YW50aWF0ZRIZLnN5c21sLkluc3RhbnRpYXRlUmVxdWVzdBoaLnN5c21sLkluc3RhbnRpYXRlUmVzcG9uc2USSgoNRXhlY3V0ZUFjdGlvbhIbLnN5c21sLkV4ZWN1dGVBY3Rpb25SZXF1ZXN0Ghwuc3lzbWwuRXhlY3V0ZUFjdGlvblJlc3BvbnNlEkcKDEV4ZWN1dGVTdGF0ZRIaLnN5c21sLkV4ZWN1dGVTdGF0ZVJlcXVlc3QaGy5zeXNtbC5FeGVjdXRlU3RhdGVSZXNwb25zZRI4CgdDb252ZXJ0EhUuc3lzbWwuQ29udmVydFJlcXVlc3QaFi5zeXNtbC5Db252ZXJ0UmVzcG9uc2USQQoKQXBwbHlFZGl0cxIYLnN5c21sLkFwcGx5RWRpdHNSZXF1ZXN0Ghkuc3lzbWwuQXBwbHlFZGl0c1Jlc3BvbnNlElMKEFZlcmlmeUNvbnN0cmFpbnQSHi5zeXNtbC5WZXJpZnlDb25zdHJhaW50UmVxdWVzdBofLnN5c21sLlZlcmlmeUNvbnN0cmFpbnRSZXNwb25zZRJWChFWZXJpZnlSZXF1aXJlbWVudBIfLnN5c21sLlZlcmlmeVJlcXVpcmVtZW50UmVxdWVzdBogLnN5c21sLlZlcmlmeVJlcXVpcmVtZW50UmVzcG9uc2USWQoSVmVyaWZ5U2F0aXNmYWN0aW9uEiAuc3lzbWwuVmVyaWZ5U2F0aXNmYWN0aW9uUmVxdWVzdBohLnN5c21sLlZlcmlmeVNhdGlzZmFjdGlvblJlc3BvbnNlEkcKDEV2YWx1YXRlQ2FsYxIaLnN5c21sLkV2YWx1YXRlQ2FsY1JlcXVlc3QaGy5zeXNtbC5FdmFsdWF0ZUNhbGNSZXNwb25zZRIyCgVRdWVyeRITLnN5c21sLlF1ZXJ5UmVxdWVzdBoULnN5c21sLlF1ZXJ5UmVzcG9uc2VCKlooZ2l0aHViLmNvbS9PcGVuLU1CRUUvT3BlblN5c01ML2FwaS9wcm90b2IGcHJvdG8z");
+  fileDesc("CgtzeXNtbC5wcm90bxIFc3lzbWwiygEKB1ZlcmRpY3QSDAoEa2luZBgBIAEoCRISCgplbGVtZW50X2lkGAIgASgJEg8KB2VsZW1lbnQYAyABKAkSDQoFaG9sZHMYBCABKAgSEQoJY29uZGl0aW9uGAUgASgJEhMKC2luc3RhbmNlX2lkGAYgASgDEhgKEGluc3RhbmNlX3R5cGVfaWQYByABKAkSDQoFZXJyb3IYCCABKAkSLAoOZmFpbHVyZV9yZWFzb24YCSABKA4yFC5zeXNtbC5GYWlsdXJlUmVhc29uIlsKF1ZlcmlmeUNvbnN0cmFpbnRSZXF1ZXN0EhIKCm1vZGVsX2hhc2gYASABKAkSEQoJc3ltYm9sX2lkGAIgASgJEhkKEXN1YmplY3Rfc3ltYm9sX2lkGAMgASgJIpYBChhWZXJpZnlDb25zdHJhaW50UmVzcG9uc2USHwoHdmVyZGljdBgBIAEoCzIOLnN5c21sLlZlcmRpY3QSIgoJaW5zdGFuY2VzGAIgAygLMg8uc3lzbWwuSW5zdGFuY2USDQoFZXJyb3IYAyABKAkSJgoLZGlhZ25vc3RpY3MYBCADKAsyES5zeXNtbC5EaWFnbm9zdGljIlwKGFZlcmlmeVJlcXVpcmVtZW50UmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEhEKCXN5bWJvbF9pZBgCIAEoCRIZChFzdWJqZWN0X3N5bWJvbF9pZBgDIAEoCSKXAQoZVmVyaWZ5UmVxdWlyZW1lbnRSZXNwb25zZRIfCgd2ZXJkaWN0GAEgASgLMg4uc3lzbWwuVmVyZGljdBIiCglpbnN0YW5jZXMYAiADKAsyDy5zeXNtbC5JbnN0YW5jZRINCgVlcnJvchgDIAEoCRImCgtkaWFnbm9zdGljcxgEIAMoCzIRLnN5c21sLkRpYWdub3N0aWMiQgoZVmVyaWZ5U2F0aXNmYWN0aW9uUmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEhEKCXN5bWJvbF9pZBgCIAEoCSLHAQoaVmVyaWZ5U2F0aXNmYWN0aW9uUmVzcG9uc2USIAoIdmVyZGljdHMYASADKAsyDi5zeXNtbC5WZXJkaWN0EiIKCWluc3RhbmNlcxgCIAMoCzIPLnN5c21sLkluc3RhbmNlEg0KBWVycm9yGAMgASgJEiYKC2RpYWdub3N0aWNzGAQgAygLMhEuc3lzbWwuRGlhZ25vc3RpYxIsCg5mYWlsdXJlX3JlYXNvbhgFIAEoDjIULnN5c21sLkZhaWx1cmVSZWFzb24iXQoTRXZhbHVhdGVDYWxjUmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEhEKCXN5bWJvbF9pZBgCIAEoCRIfCglhcmd1bWVudHMYAyADKAsyDC5zeXNtbC5WYWx1ZSK9AQoURXZhbHVhdGVDYWxjUmVzcG9uc2USHAoGcmVzdWx0GAEgASgLMgwuc3lzbWwuVmFsdWUSIgoHb3V0cHV0cxgCIAMoCzIRLnN5c21sLkNhbGNPdXRwdXQSDQoFZXJyb3IYAyABKAkSJgoLZGlhZ25vc3RpY3MYBCADKAsyES5zeXNtbC5EaWFnbm9zdGljEiwKDmZhaWx1cmVfcmVhc29uGAUgASgOMhQuc3lzbWwuRmFpbHVyZVJlYXNvbiI3CgpDYWxjT3V0cHV0EgwKBG5hbWUYASABKAkSGwoFdmFsdWUYAiABKAsyDC5zeXNtbC5WYWx1ZSKMAQoQUGFyc2VGaWxlUmVxdWVzdBITCglmaWxlX3BhdGgYASABKAlIABIRCgdjb250ZW50GAIgASgJSAASGAoMY29udGVudF9oYXNoGAMgASgJQgIYARIQCghsYW5ndWFnZRgEIAEoCRIaChJzdHJpY3RfY29uZm9ybWFuY2UYBSABKAhCCAoGc291cmNlImIKDlNvdXJjZURvY3VtZW50EhMKCWZpbGVfcGF0aBgBIAEoCUgAEhEKB2NvbnRlbnQYAiABKAlIABIQCghsYW5ndWFnZRgDIAEoCRIMCgRuYW1lGAQgASgJQggKBnNvdXJjZSJbChNQYXJzZVNvdXJjZXNSZXF1ZXN0EigKCWRvY3VtZW50cxgBIAMoCzIVLnN5c21sLlNvdXJjZURvY3VtZW50EhoKEnN0cmljdF9jb25mb3JtYW5jZRgCIAEoCCKDAQoUUGFyc2VTb3VyY2VzUmVzcG9uc2USEgoKbW9kZWxfaGFzaBgBIAEoCRIgCgVyb290cxgCIAMoCzIRLnN5c21sLlN5bWJvbEluZm8SJgoLZGlhZ25vc3RpY3MYAyADKAsyES5zeXNtbC5EaWFnbm9zdGljEg0KBWVycm9yGAQgASgJIn8KEVBhcnNlRmlsZVJlc3BvbnNlEhIKCm1vZGVsX2hhc2gYASABKAkSHwoEcm9vdBgCIAEoCzIRLnN5c21sLlN5bWJvbEluZm8SJgoLZGlhZ25vc3RpY3MYAyADKAsyES5zeXNtbC5EaWFnbm9zdGljEg0KBWVycm9yGAQgASgJIjkKEEdldFN5bWJvbFJlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCRIRCglzeW1ib2xfaWQYAiABKAkiQgoOU3ltYm9sUmVzcG9uc2USIQoGc3ltYm9sGAEgASgLMhEuc3lzbWwuU3ltYm9sSW5mbxINCgVlcnJvchgCIAEoCSIoChJEaWFnbm9zdGljc1JlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCSJMChNEaWFnbm9zdGljc1Jlc3BvbnNlEiYKC2RpYWdub3N0aWNzGAEgAygLMhEuc3lzbWwuRGlhZ25vc3RpYxINCgVlcnJvchgCIAEoCSJvCg9FdmFsdWF0ZVJlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCRISCgpleHByZXNzaW9uGAIgASgJEhkKEWNvbnRleHRfc3ltYm9sX2lkGAMgASgJEhkKEXN1YmplY3Rfc3ltYm9sX2lkGAQgASgJImcKEEV2YWx1YXRlUmVzcG9uc2USHAoGcmVzdWx0GAEgASgLMgwuc3lzbWwuVmFsdWUSDQoFZXJyb3IYAiABKAkSJgoLZGlhZ25vc3RpY3MYAyADKAsyES5zeXNtbC5EaWFnbm9zdGljIsIBCghJbnN0YW5jZRIKCgJpZBgBIAEoAxIWCg50eXBlX3N5bWJvbF9pZBgCIAEoCRI6Cg5mZWF0dXJlX3ZhbHVlcxgEIAMoCzIiLnN5c21sLkluc3RhbmNlLkZlYXR1cmVWYWx1ZXNFbnRyeRpJChJGZWF0dXJlVmFsdWVzRW50cnkSCwoDa2V5GAEgASgJEiIKBXZhbHVlGAIgASgLMhMuc3lzbWwuRmVhdHVyZVZhbHVlOgI4AUoECAMQBFIFc2xvdHMihAEKDEZlYXR1cmVWYWx1ZRIUCgxmZWF0dXJlX25hbWUYASABKAkSGwoFdmFsdWUYAiABKAsyDC5zeXNtbC5WYWx1ZRIcCgZ2YWx1ZXMYAyADKAsyDC5zeXNtbC5WYWx1ZRIUCgxtYXRlcmlhbGl6ZWQYBCABKAgSDQoFZXJyb3IYBSABKAkiOwoSSW5zdGFudGlhdGVSZXF1ZXN0EhIKCm1vZGVsX2hhc2gYASABKAkSEQoJc3ltYm9sX2lkGAIgASgJIpMBChNJbnN0YW50aWF0ZVJlc3BvbnNlEiEKCGluc3RhbmNlGAEgASgLMg8uc3lzbWwuSW5zdGFuY2USDQoFZXJyb3IYAiABKAkSJgoLZGlhZ25vc3RpY3MYAyADKAsyES5zeXNtbC5EaWFnbm9zdGljEiIKCWluc3RhbmNlcxgEIAMoCzIPLnN5c21sLkluc3RhbmNlIroBChRFeGVjdXRlQWN0aW9uUmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEhgKEGFjdGlvbl9zeW1ib2xfaWQYAiABKAkSNwoGaW5wdXRzGAMgAygLMicuc3lzbWwuRXhlY3V0ZUFjdGlvblJlcXVlc3QuSW5wdXRzRW50cnkaOwoLSW5wdXRzRW50cnkSCwoDa2V5GAEgASgJEhsKBXZhbHVlGAIgASgLMgwuc3lzbWwuVmFsdWU6AjgBIsgBChVFeGVjdXRlQWN0aW9uUmVzcG9uc2USOgoHb3V0cHV0cxgBIAMoCzIpLnN5c21sLkV4ZWN1dGVBY3Rpb25SZXNwb25zZS5PdXRwdXRzRW50cnkSDQoFZXJyb3IYAiABKAkSJgoLZGlhZ25vc3RpY3MYAyADKAsyES5zeXNtbC5EaWFnbm9zdGljGjwKDE91dHB1dHNFbnRyeRILCgNrZXkYASABKAkSGwoFdmFsdWUYAiABKAsyDC5zeXNtbC5WYWx1ZToCOAEiWgoTRXhlY3V0ZVN0YXRlUmVxdWVzdBISCgptb2RlbF9oYXNoGAEgASgJEh8KF3N0YXRlX21hY2hpbmVfc3ltYm9sX2lkGAIgASgJEg4KBmV2ZW50cxgDIAMoCSLuAQoURXhlY3V0ZVN0YXRlUmVzcG9uc2USFgoOc3RhdGVzX3Zpc2l0ZWQYASADKAkSRAoNZmluYWxfY29udGV4dBgCIAMoCzItLnN5c21sLkV4ZWN1dGVTdGF0ZVJlc3BvbnNlLkZpbmFsQ29udGV4dEVudHJ5Eg0KBWVycm9yGAMgASgJEiYKC2RpYWdub3N0aWNzGAQgAygLMhEuc3lzbWwuRGlhZ25vc3RpYxpBChFGaW5hbENvbnRleHRFbnRyeRILCgNrZXkYASABKAkSGwoFdmFsdWUYAiABKAsyDC5zeXNtbC5WYWx1ZToCOAEioAEKDkNvbnZlcnRSZXF1ZXN0EhMKCWZpbGVfcGF0aBgBIAEoCUgAEhEKB2NvbnRlbnQYAiABKAlIABIUCgptb2RlbF9oYXNoGAYgASgJSAASEwoLZnJvbV9mb3JtYXQYAyABKAkSEQoJdG9fZm9ybWF0GAQgASgJEh4KFnRvbGVyYXRlX3N5bnRheF9lcnJvcnMYBSABKAhCCAoGc291cmNlIrQBCg9Db252ZXJ0UmVzcG9uc2USDwoHY29udGVudBgBIAEoCRITCgtmcm9tX2Zvcm1hdBgCIAEoCRIRCgl0b19mb3JtYXQYAyABKAkSDQoFZXJyb3IYBCABKAkSJgoLZGlhZ25vc3RpY3MYBSADKAsyES5zeXNtbC5EaWFnbm9zdGljEhQKDGV4cGVyaW1lbnRhbBgGIAEoCBIbChNleHBlcmltZW50YWxfbm90aWNlGAcgASgJIlEKEUFwcGx5RWRpdHNSZXF1ZXN0EhIKCm1vZGVsX2hhc2gYASABKAkSKAoKb3BlcmF0aW9ucxgCIAMoCzIULnN5c21sLkVkaXRPcGVyYXRpb24ivAEKDUVkaXRPcGVyYXRpb24SKAoJc2V0X3ZhbHVlGAEgASgLMhMuc3lzbWwuU2V0VmFsdWVFZGl0SAASIwoGcmVuYW1lGAIgASgLMhEuc3lzbWwuUmVuYW1lRWRpdEgAEioKCmFkZF9tZW1iZXIYAyABKAsyFC5zeXNtbC5BZGRNZW1iZXJFZGl0SAASIwoGZGVsZXRlGAQgASgLMhEuc3lzbWwuRGVsZXRlRWRpdEgAQgsKCW9wZXJhdGlvbiKCAQoNQWRkTWVtYmVyRWRpdBINCgVvd25lchgBIAEoCRIMCgRraW5kGAIgASgJEgwKBG5hbWUYAyABKAkSDAoEdHlwZRgEIAEoCRIUCgxtdWx0aXBsaWNpdHkYBSABKAkSDQoFdmFsdWUYBiABKAkSEwoLc3BlY2lhbGl6ZXMYByADKAkiLQoKRGVsZXRlRWRpdBIOCgZ0YXJnZXQYASABKAkSDwoHY2FzY2FkZRgCIAEoCCItCgxTZXRWYWx1ZUVkaXQSDgoGdGFyZ2V0GAEgASgJEg0KBXZhbHVlGAIgASgJIi4KClJlbmFtZUVkaXQSDgoGdGFyZ2V0GAEgASgJEhAKCG5ld19uYW1lGAIgASgJIsIBChJBcHBseUVkaXRzUmVzcG9uc2USDwoHY29udGVudBgBIAEoCRIjCgdhcHBsaWVkGAIgAygLMhIuc3lzbWwuQXBwbGllZEVkaXQSDQoFZXJyb3IYAyABKAkSIwoHZmFpbHVyZRgEIAEoDjISLnN5c21sLkVkaXRGYWlsdXJlEiYKC2RpYWdub3N0aWNzGAUgAygLMhEuc3lzbWwuRGlhZ25vc3RpYxIaChJyZWZlcnJpbmdfZWxlbWVudHMYBiADKAkiegoLQXBwbGllZEVkaXQSFwoPb3BlcmF0aW9uX2luZGV4GAEgASgFEg4KBnRhcmdldBgCIAEoCRIOCgZvZmZzZXQYAyABKAUSDgoGbGVuZ3RoGAQgASgFEhAKCG9sZF90ZXh0GAUgASgJEhAKCG5ld190ZXh0GAYgASgJIv0CCgpTeW1ib2xJbmZvEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEa2luZBgDIAEoCRIxCghtZXRhZGF0YRgEIAMoCzIfLnN5c21sLlN5bWJvbEluZm8uTWV0YWRhdGFFbnRyeRIRCgljaGlsZF9pZHMYBSADKAkSKAoKYXR0cmlidXRlcxgGIAMoCzIULnN5c21sLkF0dHJpYnV0ZUluZm8SIgoJdHlwZV9pbmZvGAcgASgLMg8uc3lzbWwuVHlwZUluZm8SLQoMbXVsdGlwbGljaXR5GAggASgLMhcuc3lzbWwuTXVsdGlwbGljaXR5SW5mbxIuCg9zcGVjaWFsaXphdGlvbnMYCSADKAsyFS5zeXNtbC5TcGVjaWFsaXphdGlvbhIjCht3aXRoaGVsZF9saWJyYXJ5X2F0dHJpYnV0ZXMYCiABKAUaLwoNTWV0YWRhdGFFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIlgKDlNwZWNpYWxpemF0aW9uEgwKBGtpbmQYASABKAkSEAoIZGVjbGFyZWQYAiABKAkSEQoJdGFyZ2V0X2lkGAMgASgJEhMKC3RhcmdldF9raW5kGAQgASgJIpUBCghUeXBlSW5mbxIQCghkZWNsYXJlZBgBIAEoCRITCgtyZXNvbHZlZF9pZBgCIAEoCRIVCg1yZXNvbHZlZF9raW5kGAMgASgJEhEKCXByaW1pdGl2ZRgEIAEoCRIYChBwcmltaXRpdmVfc291cmNlGAUgASgJEhAKCHF1YW50aXR5GAYgASgIEgwKBHVuaXQYByABKAkiMAoQTXVsdGlwbGljaXR5SW5mbxINCgVsb3dlchgBIAEoCRINCgV1cHBlchgCIAEoCSJWCg1BdHRyaWJ1dGVJbmZvEgwKBG5hbWUYASABKAkSDAoEdHlwZRgCIAEoCRIbCgV2YWx1ZRgDIAEoCzIMLnN5c21sLlZhbHVlEgwKBHVuaXQYBCABKAkimwIKBVZhbHVlEhMKCWludF92YWx1ZRgBIAEoA0gAEhQKCnJlYWxfdmFsdWUYAiABKAFIABIUCgpib29sX3ZhbHVlGAMgASgISAASFgoMc3RyaW5nX3ZhbHVlGAQgASgJSAASFQoLaW5zdGFuY2VfaWQYBSABKANIABIoCghzZXF1ZW5jZRgGIAEoCzIULnN5c21sLlZhbHVlU2VxdWVuY2VIABIOCgRudWxsGAcgASgJSAASIwoIcXVhbnRpdHkYCCABKAsyDy5zeXNtbC5RdWFudGl0eUgAEioKDGVudW1fbGl0ZXJhbBgJIAEoCzISLnN5c21sLkVudW1MaXRlcmFsSAASDwoFdW5zZXQYCiABKAhIAEIGCgRraW5kIkcKC0VudW1MaXRlcmFsEhIKCmxpdGVyYWxfaWQYASABKAkSFgoOZW51bWVyYXRpb25faWQYAiABKAkSDAoEbmFtZRgDIAEoCSIvCg1WYWx1ZVNlcXVlbmNlEh4KCGVsZW1lbnRzGAEgAygLMgwuc3lzbWwuVmFsdWUifAoIUXVhbnRpdHkSFwoNaW50X21hZ25pdHVkZRgBIAEoA0gAEhgKDnJlYWxfbWFnbml0dWRlGAIgASgBSAASDAoEdW5pdBgDIAEoCRIiCgl1bml0X3Rlcm0YBCABKAsyDy5zeXNtbC5Vbml0VGVybUILCgltYWduaXR1ZGUiVAoIVW5pdFRlcm0SEQoJc2NhbGVfbnVtGAEgASgBEhEKCXNjYWxlX2RlbhgCIAEoARIiCgdmYWN0b3JzGAMgAygLMhEuc3lzbWwuVW5pdEZhY3RvciIvCgpVbml0RmFjdG9yEg8KB3VuaXRfaWQYASABKAkSEAoIZXhwb25lbnQYAiABKAEiSgoKRGlhZ25vc3RpYxIQCghzZXZlcml0eRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEhkKBHNwYW4YAyABKAsyCy5zeXNtbC5TcGFuIl4KBFNwYW4SDAoEZmlsZRgBIAEoCRISCgpzdGFydF9saW5lGAIgASgFEhEKCXN0YXJ0X2NvbBgDIAEoBRIQCghlbmRfbGluZRgEIAEoBRIPCgdlbmRfY29sGAUgASgFIhMKEVNlcnZlckluZm9SZXF1ZXN0IjsKElNlcnZlckluZm9SZXNwb25zZRIPCgd2ZXJzaW9uGAEgASgJEhQKDGNhcGFiaWxpdGllcxgCIAMoCSJTCgxRdWVyeVJlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCRIbCgVxdWVyeRgCIAEoCzIMLnN5c21sLlF1ZXJ5EhIKCm9zbGNfcXVlcnkYAyABKAkiPAoNUXVlcnlSZXNwb25zZRIrCghlbGVtZW50cxgBIAMoCzIZLnN5c21sLlF1ZXJ5UmVzdWx0RWxlbWVudCJICgVRdWVyeRINCgVzY29wZRgBIAMoCRIOCgZzZWxlY3QYAiADKAkSIAoFd2hlcmUYAyABKAsyES5zeXNtbC5Db25zdHJhaW50InwKCkNvbnN0cmFpbnQSLwoJcHJpbWl0aXZlGAEgASgLMhouc3lzbWwuUHJpbWl0aXZlQ29uc3RyYWludEgAEi8KCWNvbXBvc2l0ZRgCIAEoCzIaLnN5c21sLkNvbXBvc2l0ZUNvbnN0cmFpbnRIAEIMCgpjb25zdHJhaW50InMKE1ByaW1pdGl2ZUNvbnN0cmFpbnQSDwoHaW52ZXJzZRgBIAEoCBIQCghwcm9wZXJ0eRgCIAEoCRIqCghvcGVyYXRvchgDIAEoDjIYLnN5c21sLlByaW1pdGl2ZU9wZXJhdG9yEg0KBXZhbHVlGAQgAygJImgKE0NvbXBvc2l0ZUNvbnN0cmFpbnQSKgoIb3BlcmF0b3IYASABKA4yGC5zeXNtbC5Db21wb3NpdGVPcGVyYXRvchIlCgpjb25zdHJhaW50GAIgAygLMhEuc3lzbWwuQ29uc3RyYWludCKgAQoSUXVlcnlSZXN1bHRFbGVtZW50EgoKAmlkGAEgASgJEgwKBHR5cGUYAiABKAkSPQoKcHJvcGVydGllcxgDIAMoCzIpLnN5c21sLlF1ZXJ5UmVzdWx0RWxlbWVudC5Qcm9wZXJ0aWVzRW50cnkaMQoPUHJvcGVydGllc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEibgoXUnVuRG9jdW1lbnRRdWVyeVJlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCRIQCghxdWVyeV9pZBgCIAEoCRItCghiaW5kaW5ncxgDIAMoCzIbLnN5c21sLkRvY3VtZW50UXVlcnlCaW5kaW5nIk8KFERvY3VtZW50UXVlcnlCaW5kaW5nEhEKCXBhcmFtZXRlchgBIAEoCRIkCgZ2YWx1ZXMYAiADKAsyFC5zeXNtbC5Eb2N1bWVudFZhbHVlIrABCg1Eb2N1bWVudFZhbHVlEhQKCmVsZW1lbnRfaWQYASABKAlIABIWCgxzdHJpbmdfdmFsdWUYAiABKAlIABITCglpbnRfdmFsdWUYAyABKANIABIUCgpyZWFsX3ZhbHVlGAQgASgBSAASFAoKYm9vbF92YWx1ZRgFIAEoCEgAEhIKCGluZmluaXR5GAYgASgISAASFAoMZWxlbWVudF90eXBlGAcgASgJQgYKBGtpbmQiIwoTRG9jdW1lbnRRdWVyeUNvbHVtbhIMCgRuYW1lGAEgASgJIjkKEURvY3VtZW50UXVlcnlDZWxsEiQKBnZhbHVlcxgBIAMoCzIULnN5c21sLkRvY3VtZW50VmFsdWUiYgoQRG9jdW1lbnRRdWVyeVJvdxIlCgdlbGVtZW50GAEgASgLMhQuc3lzbWwuRG9jdW1lbnRWYWx1ZRInCgVjZWxscxgCIAMoCzIYLnN5c21sLkRvY3VtZW50UXVlcnlDZWxsIm4KGFJ1bkRvY3VtZW50UXVlcnlSZXNwb25zZRIrCgdjb2x1bW5zGAEgAygLMhouc3lzbWwuRG9jdW1lbnRRdWVyeUNvbHVtbhIlCgRyb3dzGAIgAygLMhcuc3lzbWwuRG9jdW1lbnRRdWVyeVJvdyJAChVSZW5kZXJEb2N1bWVudFJlcXVlc3QSEgoKbW9kZWxfaGFzaBgBIAEoCRITCgtkb2N1bWVudF9pZBgCIAEoCSIqChZSZW5kZXJEb2N1bWVudFJlc3BvbnNlEhAKCG1hcmtkb3duGAEgASgJKpMBCg1GYWlsdXJlUmVhc29uEh4KGkZBSUxVUkVfUkVBU09OX1VOU1BFQ0lGSUVEEAASHQoZRkFJTFVSRV9SRUFTT05fRVZBTFVBVElPThABEh0KGUZBSUxVUkVfUkVBU09OX1dST05HX0tJTkQQAhIkCiBGQUlMVVJFX1JFQVNPTl9BTUJJR1VPVVNfU1VCSkVDVBADKp0ECgtFZGl0RmFpbHVyZRIcChhFRElUX0ZBSUxVUkVfVU5TUEVDSUZJRUQQABIeChpFRElUX0ZBSUxVUkVfTk9fT1BFUkFUSU9OUxABEh8KG0VESVRfRkFJTFVSRV9VTktOT1dOX1RBUkdFVBACEiEKHUVESVRfRkFJTFVSRV9BTUJJR1VPVVNfVEFSR0VUEAMSGwoXRURJVF9GQUlMVVJFX05PVF9WQUxVRUQQBBIeChpFRElUX0ZBSUxVUkVfSU5WQUxJRF9WQUxVRRAFEh0KGUVESVRfRkFJTFVSRV9JTlZBTElEX05BTUUQBhIaChZFRElUX0ZBSUxVUkVfTk9UX05BTUVEEAcSIgoeRURJVF9GQUlMVVJFX1JFTkFNRV9SRUZFUkVOQ0VEEAgSIgoeRURJVF9GQUlMVVJFX09WRVJMQVBQSU5HX0VESVRTEAkSHwobRURJVF9GQUlMVVJFX1JFU1VMVF9JTlZBTElEEAoSHgoaRURJVF9GQUlMVVJFX09XTkVSX1VOS05PV04QCxIkCiBFRElUX0ZBSUxVUkVfT1dORVJfTk9UX05BTUVTUEFDRRAMEh0KGUVESVRfRkFJTFVSRV9JTExFR0FMX0tJTkQQDRIiCh5FRElUX0ZBSUxVUkVfTUVNQkVSX05BTUVfVEFLRU4QDhIiCh5FRElUX0ZBSUxVUkVfREVMRVRFX1JFRkVSRU5DRUQQDyqSAQoRUHJpbWl0aXZlT3BlcmF0b3ISIgoeUFJJTUlUSVZFX09QRVJBVE9SX1VOU1BFQ0lGSUVEEAASHAoYUFJJTUlUSVZFX09QRVJBVE9SX0VRVUFMEAESHgoaUFJJTUlUSVZFX09QRVJBVE9SX0dSRUFURVIQAhIbChdQUklNSVRJVkVfT1BFUkFUT1JfTEVTUxADKm4KEUNvbXBvc2l0ZU9wZXJhdG9yEiIKHkNPTVBPU0lURV9PUEVSQVRPUl9VTlNQRUNJRklFRBAAEhoKFkNPTVBPU0lURV9PUEVSQVRPUl9BTkQQARIZChVDT01QT1NJVEVfT1BFUkFUT1JfT1IQAjKhCgoMU3lzTUxTZXJ2aWNlEkQKDUdldFNlcnZlckluZm8SGC5zeXNtbC5TZXJ2ZXJJbmZvUmVxdWVzdBoZLnN5c21sLlNlcnZlckluZm9SZXNwb25zZRI+CglQYXJzZUZpbGUSFy5zeXNtbC5QYXJzZUZpbGVSZXF1ZXN0Ghguc3lzbWwuUGFyc2VGaWxlUmVzcG9uc2USRwoMUGFyc2VTb3VyY2VzEhouc3lzbWwuUGFyc2VTb3VyY2VzUmVxdWVzdBobLnN5c21sLlBhcnNlU291cmNlc1Jlc3BvbnNlEjsKCUdldFN5bWJvbBIXLnN5c21sLkdldFN5bWJvbFJlcXVlc3QaFS5zeXNtbC5TeW1ib2xSZXNwb25zZRJHCg5HZXREaWFnbm9zdGljcxIZLnN5c21sLkRpYWdub3N0aWNzUmVxdWVzdBoaLnN5c21sLkRpYWdub3N0aWNzUmVzcG9uc2USOwoIRXZhbHVhdGUSFi5zeXNtbC5FdmFsdWF0ZVJlcXVlc3QaFy5zeXNtbC5FdmFsdWF0ZVJlc3BvbnNlEkQKC0luc3RhbnRpYXRlEhkuc3lzbWwuSW5zdGFudGlhdGVSZXF1ZXN0Ghouc3lzbWwuSW5zdGFudGlhdGVSZXNwb25zZRJKCg1FeGVjdXRlQWN0aW9uEhsuc3lzbWwuRXhlY3V0ZUFjdGlvblJlcXVlc3QaHC5zeXNtbC5FeGVjdXRlQWN0aW9uUmVzcG9uc2USRwoMRXhlY3V0ZVN0YXRlEhouc3lzbWwuRXhlY3V0ZVN0YXRlUmVxdWVzdBobLnN5c21sLkV4ZWN1dGVTdGF0ZVJlc3BvbnNlEjgKB0NvbnZlcnQSFS5zeXNtbC5Db252ZXJ0UmVxdWVzdBoWLnN5c21sLkNvbnZlcnRSZXNwb25zZRJBCgpBcHBseUVkaXRzEhguc3lzbWwuQXBwbHlFZGl0c1JlcXVlc3QaGS5zeXNtbC5BcHBseUVkaXRzUmVzcG9uc2USUwoQVmVyaWZ5Q29uc3RyYWludBIeLnN5c21sLlZlcmlmeUNvbnN0cmFpbnRSZXF1ZXN0Gh8uc3lzbWwuVmVyaWZ5Q29uc3RyYWludFJlc3BvbnNlElYKEVZlcmlmeVJlcXVpcmVtZW50Eh8uc3lzbWwuVmVyaWZ5UmVxdWlyZW1lbnRSZXF1ZXN0GiAuc3lzbWwuVmVyaWZ5UmVxdWlyZW1lbnRSZXNwb25zZRJZChJWZXJpZnlTYXRpc2ZhY3Rpb24SIC5zeXNtbC5WZXJpZnlTYXRpc2ZhY3Rpb25SZXF1ZXN0GiEuc3lzbWwuVmVyaWZ5U2F0aXNmYWN0aW9uUmVzcG9uc2USRwoMRXZhbHVhdGVDYWxjEhouc3lzbWwuRXZhbHVhdGVDYWxjUmVxdWVzdBobLnN5c21sLkV2YWx1YXRlQ2FsY1Jlc3BvbnNlEjIKBVF1ZXJ5EhMuc3lzbWwuUXVlcnlSZXF1ZXN0GhQuc3lzbWwuUXVlcnlSZXNwb25zZRJTChBSdW5Eb2N1bWVudFF1ZXJ5Eh4uc3lzbWwuUnVuRG9jdW1lbnRRdWVyeVJlcXVlc3QaHy5zeXNtbC5SdW5Eb2N1bWVudFF1ZXJ5UmVzcG9uc2USTQoOUmVuZGVyRG9jdW1lbnQSHC5zeXNtbC5SZW5kZXJEb2N1bWVudFJlcXVlc3QaHS5zeXNtbC5SZW5kZXJEb2N1bWVudFJlc3BvbnNlQipaKGdpdGh1Yi5jb20vT3Blbi1NQkVFL09wZW5TeXNNTC9hcGkvcHJvdG9iBnByb3RvMw");
 
 /**
  * Verdict is one verification's answer: whether the condition held, and, when
@@ -477,6 +477,121 @@ export const ParseFileRequestSchema: GenMessage<ParseFileRequest> = /*@__PURE__*
   messageDesc(file_sysml, 10);
 
 /**
+ * SourceDocument is one document of a multi-document parse.
+ *
+ * @generated from message sysml.SourceDocument
+ */
+export type SourceDocument = Message<"sysml.SourceDocument"> & {
+  /**
+   * @generated from oneof sysml.SourceDocument.source
+   */
+  source: {
+    /**
+     * @generated from field: string file_path = 1;
+     */
+    value: string;
+    case: "filePath";
+  } | {
+    /**
+     * @generated from field: string content = 2;
+     */
+    value: string;
+    case: "content";
+  } | { case: undefined; value?: undefined };
+
+  /**
+   * Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+   * and is ignored for a file_path, whose extension says which language it is.
+   *
+   * @generated from field: string language = 3;
+   */
+  language: string;
+
+  /**
+   * Name to report inline content by in diagnostics, and the name the document
+   * is indexed under. Empty names the document by its position in the request,
+   * and is ignored for a file_path, which is named by its path.
+   *
+   * @generated from field: string name = 4;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message sysml.SourceDocument.
+ * Use `create(SourceDocumentSchema)` to create a new message.
+ */
+export const SourceDocumentSchema: GenMessage<SourceDocument> = /*@__PURE__*/
+  messageDesc(file_sysml, 11);
+
+/**
+ * ParseSourcesRequest specifies the documents that make up one model. Two
+ * documents may not carry the same name: each is a distinct document of the
+ * model, and diagnostics name the document they came from.
+ *
+ * @generated from message sysml.ParseSourcesRequest
+ */
+export type ParseSourcesRequest = Message<"sysml.ParseSourcesRequest"> & {
+  /**
+   * @generated from field: repeated sysml.SourceDocument documents = 1;
+   */
+  documents: SourceDocument[];
+
+  /**
+   * Judge every document as conforming SysML v2, as ParseFileRequest does.
+   *
+   * @generated from field: bool strict_conformance = 2;
+   */
+  strictConformance: boolean;
+};
+
+/**
+ * Describes the message sysml.ParseSourcesRequest.
+ * Use `create(ParseSourcesRequestSchema)` to create a new message.
+ */
+export const ParseSourcesRequestSchema: GenMessage<ParseSourcesRequest> = /*@__PURE__*/
+  messageDesc(file_sysml, 12);
+
+/**
+ * ParseSourcesResponse contains the parsed model, whose documents are one model
+ * for every later request: a model_hash names all of them together.
+ *
+ * @generated from message sysml.ParseSourcesResponse
+ */
+export type ParseSourcesResponse = Message<"sysml.ParseSourcesResponse"> & {
+  /**
+   * @generated from field: string model_hash = 1;
+   */
+  modelHash: string;
+
+  /**
+   * Root namespace per document, in the order the request named them.
+   *
+   * @generated from field: repeated sysml.SymbolInfo roots = 2;
+   */
+  roots: SymbolInfo[];
+
+  /**
+   * Diagnostics of every document, each naming the document it came from.
+   *
+   * @generated from field: repeated sysml.Diagnostic diagnostics = 3;
+   */
+  diagnostics: Diagnostic[];
+
+  /**
+   * @generated from field: string error = 4;
+   */
+  error: string;
+};
+
+/**
+ * Describes the message sysml.ParseSourcesResponse.
+ * Use `create(ParseSourcesResponseSchema)` to create a new message.
+ */
+export const ParseSourcesResponseSchema: GenMessage<ParseSourcesResponse> = /*@__PURE__*/
+  messageDesc(file_sysml, 13);
+
+/**
  * ParseFileResponse contains parsed model info
  *
  * @generated from message sysml.ParseFileResponse
@@ -514,7 +629,7 @@ export type ParseFileResponse = Message<"sysml.ParseFileResponse"> & {
  * Use `create(ParseFileResponseSchema)` to create a new message.
  */
 export const ParseFileResponseSchema: GenMessage<ParseFileResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 11);
+  messageDesc(file_sysml, 14);
 
 /**
  * GetSymbolRequest queries for a specific symbol
@@ -540,7 +655,7 @@ export type GetSymbolRequest = Message<"sysml.GetSymbolRequest"> & {
  * Use `create(GetSymbolRequestSchema)` to create a new message.
  */
 export const GetSymbolRequestSchema: GenMessage<GetSymbolRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 12);
+  messageDesc(file_sysml, 15);
 
 /**
  * SymbolResponse contains symbol information
@@ -564,7 +679,7 @@ export type SymbolResponse = Message<"sysml.SymbolResponse"> & {
  * Use `create(SymbolResponseSchema)` to create a new message.
  */
 export const SymbolResponseSchema: GenMessage<SymbolResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 13);
+  messageDesc(file_sysml, 16);
 
 /**
  * DiagnosticsRequest gets all diagnostics for a model
@@ -583,7 +698,7 @@ export type DiagnosticsRequest = Message<"sysml.DiagnosticsRequest"> & {
  * Use `create(DiagnosticsRequestSchema)` to create a new message.
  */
 export const DiagnosticsRequestSchema: GenMessage<DiagnosticsRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 14);
+  messageDesc(file_sysml, 17);
 
 /**
  * DiagnosticsResponse contains diagnostic list
@@ -607,7 +722,7 @@ export type DiagnosticsResponse = Message<"sysml.DiagnosticsResponse"> & {
  * Use `create(DiagnosticsResponseSchema)` to create a new message.
  */
 export const DiagnosticsResponseSchema: GenMessage<DiagnosticsResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 15);
+  messageDesc(file_sysml, 18);
 
 /**
  * EvaluateRequest requests evaluation of a SysML expression
@@ -650,7 +765,7 @@ export type EvaluateRequest = Message<"sysml.EvaluateRequest"> & {
  * Use `create(EvaluateRequestSchema)` to create a new message.
  */
 export const EvaluateRequestSchema: GenMessage<EvaluateRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 16);
+  messageDesc(file_sysml, 19);
 
 /**
  * EvaluateResponse contains evaluation result
@@ -681,7 +796,7 @@ export type EvaluateResponse = Message<"sysml.EvaluateResponse"> & {
  * Use `create(EvaluateResponseSchema)` to create a new message.
  */
 export const EvaluateResponseSchema: GenMessage<EvaluateResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 17);
+  messageDesc(file_sysml, 20);
 
 /**
  * Instance represents a runtime instance of a part/usage
@@ -714,7 +829,7 @@ export type Instance = Message<"sysml.Instance"> & {
  * Use `create(InstanceSchema)` to create a new message.
  */
 export const InstanceSchema: GenMessage<Instance> = /*@__PURE__*/
-  messageDesc(file_sysml, 18);
+  messageDesc(file_sysml, 21);
 
 /**
  * FeatureValue is what an object holds for one feature of its type.
@@ -759,7 +874,7 @@ export type FeatureValue = Message<"sysml.FeatureValue"> & {
  * Use `create(FeatureValueSchema)` to create a new message.
  */
 export const FeatureValueSchema: GenMessage<FeatureValue> = /*@__PURE__*/
-  messageDesc(file_sysml, 19);
+  messageDesc(file_sysml, 22);
 
 /**
  * InstantiateRequest requests instantiation of a part/usage
@@ -785,7 +900,7 @@ export type InstantiateRequest = Message<"sysml.InstantiateRequest"> & {
  * Use `create(InstantiateRequestSchema)` to create a new message.
  */
 export const InstantiateRequestSchema: GenMessage<InstantiateRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 20);
+  messageDesc(file_sysml, 23);
 
 /**
  * InstantiateResponse contains the created instance
@@ -822,7 +937,7 @@ export type InstantiateResponse = Message<"sysml.InstantiateResponse"> & {
  * Use `create(InstantiateResponseSchema)` to create a new message.
  */
 export const InstantiateResponseSchema: GenMessage<InstantiateResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 21);
+  messageDesc(file_sysml, 24);
 
 /**
  * ExecuteActionRequest requests action execution
@@ -855,7 +970,7 @@ export type ExecuteActionRequest = Message<"sysml.ExecuteActionRequest"> & {
  * Use `create(ExecuteActionRequestSchema)` to create a new message.
  */
 export const ExecuteActionRequestSchema: GenMessage<ExecuteActionRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 22);
+  messageDesc(file_sysml, 25);
 
 /**
  * ExecuteActionResponse contains action execution results
@@ -886,7 +1001,7 @@ export type ExecuteActionResponse = Message<"sysml.ExecuteActionResponse"> & {
  * Use `create(ExecuteActionResponseSchema)` to create a new message.
  */
 export const ExecuteActionResponseSchema: GenMessage<ExecuteActionResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 23);
+  messageDesc(file_sysml, 26);
 
 /**
  * ExecuteStateRequest requests state machine execution
@@ -917,7 +1032,7 @@ export type ExecuteStateRequest = Message<"sysml.ExecuteStateRequest"> & {
  * Use `create(ExecuteStateRequestSchema)` to create a new message.
  */
 export const ExecuteStateRequestSchema: GenMessage<ExecuteStateRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 24);
+  messageDesc(file_sysml, 27);
 
 /**
  * ExecuteStateResponse contains state machine execution trace
@@ -953,7 +1068,7 @@ export type ExecuteStateResponse = Message<"sysml.ExecuteStateResponse"> & {
  * Use `create(ExecuteStateResponseSchema)` to create a new message.
  */
 export const ExecuteStateResponseSchema: GenMessage<ExecuteStateResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 25);
+  messageDesc(file_sysml, 28);
 
 /**
  * ConvertRequest asks for a model in another representation. A model_hash
@@ -1018,7 +1133,7 @@ export type ConvertRequest = Message<"sysml.ConvertRequest"> & {
  * Use `create(ConvertRequestSchema)` to create a new message.
  */
 export const ConvertRequestSchema: GenMessage<ConvertRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 26);
+  messageDesc(file_sysml, 29);
 
 /**
  * ConvertResponse contains the converted model.
@@ -1083,7 +1198,7 @@ export type ConvertResponse = Message<"sysml.ConvertResponse"> & {
  * Use `create(ConvertResponseSchema)` to create a new message.
  */
 export const ConvertResponseSchema: GenMessage<ConvertResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 27);
+  messageDesc(file_sysml, 30);
 
 /**
  * ApplyEditsRequest asks for a model's source with edits applied to it. The
@@ -1114,7 +1229,7 @@ export type ApplyEditsRequest = Message<"sysml.ApplyEditsRequest"> & {
  * Use `create(ApplyEditsRequestSchema)` to create a new message.
  */
 export const ApplyEditsRequestSchema: GenMessage<ApplyEditsRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 28);
+  messageDesc(file_sysml, 31);
 
 /**
  * EditOperation is one source-preserving change to make.
@@ -1157,7 +1272,7 @@ export type EditOperation = Message<"sysml.EditOperation"> & {
  * Use `create(EditOperationSchema)` to create a new message.
  */
 export const EditOperationSchema: GenMessage<EditOperation> = /*@__PURE__*/
-  messageDesc(file_sysml, 29);
+  messageDesc(file_sysml, 32);
 
 /**
  * AddMemberEdit inserts a declaration into a namespace or the document root.
@@ -1220,7 +1335,7 @@ export type AddMemberEdit = Message<"sysml.AddMemberEdit"> & {
  * Use `create(AddMemberEditSchema)` to create a new message.
  */
 export const AddMemberEditSchema: GenMessage<AddMemberEdit> = /*@__PURE__*/
-  messageDesc(file_sysml, 30);
+  messageDesc(file_sysml, 33);
 
 /**
  * DeleteEdit removes a declaration and its owned trivia.
@@ -1248,7 +1363,7 @@ export type DeleteEdit = Message<"sysml.DeleteEdit"> & {
  * Use `create(DeleteEditSchema)` to create a new message.
  */
 export const DeleteEditSchema: GenMessage<DeleteEdit> = /*@__PURE__*/
-  messageDesc(file_sysml, 31);
+  messageDesc(file_sysml, 34);
 
 /**
  * SetValueEdit sets the value of a feature that already exists, replacing the
@@ -1278,7 +1393,7 @@ export type SetValueEdit = Message<"sysml.SetValueEdit"> & {
  * Use `create(SetValueEditSchema)` to create a new message.
  */
 export const SetValueEditSchema: GenMessage<SetValueEdit> = /*@__PURE__*/
-  messageDesc(file_sysml, 32);
+  messageDesc(file_sysml, 35);
 
 /**
  * RenameEdit rewrites the name token of a declaration. References to the
@@ -1308,7 +1423,7 @@ export type RenameEdit = Message<"sysml.RenameEdit"> & {
  * Use `create(RenameEditSchema)` to create a new message.
  */
 export const RenameEditSchema: GenMessage<RenameEdit> = /*@__PURE__*/
-  messageDesc(file_sysml, 33);
+  messageDesc(file_sysml, 36);
 
 /**
  * ApplyEditsResponse carries the edited source, or says why nothing was edited.
@@ -1368,7 +1483,7 @@ export type ApplyEditsResponse = Message<"sysml.ApplyEditsResponse"> & {
  * Use `create(ApplyEditsResponseSchema)` to create a new message.
  */
 export const ApplyEditsResponseSchema: GenMessage<ApplyEditsResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 34);
+  messageDesc(file_sysml, 37);
 
 /**
  * AppliedEdit is one byte range of the original source that an operation
@@ -1426,7 +1541,7 @@ export type AppliedEdit = Message<"sysml.AppliedEdit"> & {
  * Use `create(AppliedEditSchema)` to create a new message.
  */
 export const AppliedEditSchema: GenMessage<AppliedEdit> = /*@__PURE__*/
-  messageDesc(file_sysml, 35);
+  messageDesc(file_sysml, 38);
 
 /**
  * SymbolInfo represents any SysML element
@@ -1508,7 +1623,7 @@ export type SymbolInfo = Message<"sysml.SymbolInfo"> & {
  * Use `create(SymbolInfoSchema)` to create a new message.
  */
 export const SymbolInfoSchema: GenMessage<SymbolInfo> = /*@__PURE__*/
-  messageDesc(file_sysml, 36);
+  messageDesc(file_sysml, 39);
 
 /**
  * Specialization is one generalization edge an element declares.
@@ -1550,7 +1665,7 @@ export type Specialization = Message<"sysml.Specialization"> & {
  * Use `create(SpecializationSchema)` to create a new message.
  */
 export const SpecializationSchema: GenMessage<Specialization> = /*@__PURE__*/
-  messageDesc(file_sysml, 37);
+  messageDesc(file_sysml, 40);
 
 /**
  * TypeInfo is the static type of a usage, or the classification of a
@@ -1616,7 +1731,7 @@ export type TypeInfo = Message<"sysml.TypeInfo"> & {
  * Use `create(TypeInfoSchema)` to create a new message.
  */
 export const TypeInfoSchema: GenMessage<TypeInfo> = /*@__PURE__*/
-  messageDesc(file_sysml, 38);
+  messageDesc(file_sysml, 41);
 
 /**
  * MultiplicityInfo is a declared multiplicity range. A bound the service cannot
@@ -1645,7 +1760,7 @@ export type MultiplicityInfo = Message<"sysml.MultiplicityInfo"> & {
  * Use `create(MultiplicityInfoSchema)` to create a new message.
  */
 export const MultiplicityInfoSchema: GenMessage<MultiplicityInfo> = /*@__PURE__*/
-  messageDesc(file_sysml, 39);
+  messageDesc(file_sysml, 42);
 
 /**
  * AttributeInfo represents an attribute with its value
@@ -1679,7 +1794,7 @@ export type AttributeInfo = Message<"sysml.AttributeInfo"> & {
  * Use `create(AttributeInfoSchema)` to create a new message.
  */
 export const AttributeInfoSchema: GenMessage<AttributeInfo> = /*@__PURE__*/
-  messageDesc(file_sysml, 40);
+  messageDesc(file_sysml, 43);
 
 /**
  * Value represents a runtime-evaluable value
@@ -1767,7 +1882,7 @@ export type Value = Message<"sysml.Value"> & {
  * Use `create(ValueSchema)` to create a new message.
  */
 export const ValueSchema: GenMessage<Value> = /*@__PURE__*/
-  messageDesc(file_sysml, 41);
+  messageDesc(file_sysml, 44);
 
 /**
  * EnumLiteral is one literal of an enumeration definition. A literal is its own
@@ -1804,7 +1919,7 @@ export type EnumLiteral = Message<"sysml.EnumLiteral"> & {
  * Use `create(EnumLiteralSchema)` to create a new message.
  */
 export const EnumLiteralSchema: GenMessage<EnumLiteral> = /*@__PURE__*/
-  messageDesc(file_sysml, 42);
+  messageDesc(file_sysml, 45);
 
 /**
  * @generated from message sysml.ValueSequence
@@ -1821,7 +1936,7 @@ export type ValueSequence = Message<"sysml.ValueSequence"> & {
  * Use `create(ValueSequenceSchema)` to create a new message.
  */
 export const ValueSequenceSchema: GenMessage<ValueSequence> = /*@__PURE__*/
-  messageDesc(file_sysml, 43);
+  messageDesc(file_sysml, 46);
 
 /**
  * Quantity is a magnitude and the measurement reference it is expressed in, sent
@@ -1872,7 +1987,7 @@ export type Quantity = Message<"sysml.Quantity"> & {
  * Use `create(QuantitySchema)` to create a new message.
  */
 export const QuantitySchema: GenMessage<Quantity> = /*@__PURE__*/
-  messageDesc(file_sysml, 44);
+  messageDesc(file_sysml, 47);
 
 /**
  * UnitTerm is a unit reduced to a scale factor over base units: `km/h` reduces
@@ -1906,7 +2021,7 @@ export type UnitTerm = Message<"sysml.UnitTerm"> & {
  * Use `create(UnitTermSchema)` to create a new message.
  */
 export const UnitTermSchema: GenMessage<UnitTerm> = /*@__PURE__*/
-  messageDesc(file_sysml, 45);
+  messageDesc(file_sysml, 48);
 
 /**
  * UnitFactor is one base unit raised to an exponent.
@@ -1932,7 +2047,7 @@ export type UnitFactor = Message<"sysml.UnitFactor"> & {
  * Use `create(UnitFactorSchema)` to create a new message.
  */
 export const UnitFactorSchema: GenMessage<UnitFactor> = /*@__PURE__*/
-  messageDesc(file_sysml, 46);
+  messageDesc(file_sysml, 49);
 
 /**
  * Diagnostic represents a parse/semantic error or warning
@@ -1963,7 +2078,7 @@ export type Diagnostic = Message<"sysml.Diagnostic"> & {
  * Use `create(DiagnosticSchema)` to create a new message.
  */
 export const DiagnosticSchema: GenMessage<Diagnostic> = /*@__PURE__*/
-  messageDesc(file_sysml, 47);
+  messageDesc(file_sysml, 50);
 
 /**
  * Span represents a source location
@@ -2002,7 +2117,7 @@ export type Span = Message<"sysml.Span"> & {
  * Use `create(SpanSchema)` to create a new message.
  */
 export const SpanSchema: GenMessage<Span> = /*@__PURE__*/
-  messageDesc(file_sysml, 48);
+  messageDesc(file_sysml, 51);
 
 /**
  * ServerInfoRequest asks the service to describe itself. It carries no fields;
@@ -2018,7 +2133,7 @@ export type ServerInfoRequest = Message<"sysml.ServerInfoRequest"> & {
  * Use `create(ServerInfoRequestSchema)` to create a new message.
  */
 export const ServerInfoRequestSchema: GenMessage<ServerInfoRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 49);
+  messageDesc(file_sysml, 52);
 
 /**
  * ServerInfoResponse describes the running service.
@@ -2057,6 +2172,10 @@ export type ServerInfoResponse = Message<"sysml.ServerInfoResponse"> & {
    *                  materializes.
    *   "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
    *                  preserving everything the edit did not touch.
+   *   "document_query" - the RunDocumentQuery RPC runs a named document query
+   *                  and answers with typed rows.
+   *   "render_document" - the RenderDocument RPC renders a named document to
+   *                  Markdown.
    *
    * @generated from field: repeated string capabilities = 2;
    */
@@ -2068,7 +2187,7 @@ export type ServerInfoResponse = Message<"sysml.ServerInfoResponse"> & {
  * Use `create(ServerInfoResponseSchema)` to create a new message.
  */
 export const ServerInfoResponseSchema: GenMessage<ServerInfoResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 50);
+  messageDesc(file_sysml, 53);
 
 /**
  * QueryRequest runs a Query against a model the service already parsed.
@@ -2101,7 +2220,7 @@ export type QueryRequest = Message<"sysml.QueryRequest"> & {
  * Use `create(QueryRequestSchema)` to create a new message.
  */
 export const QueryRequestSchema: GenMessage<QueryRequest> = /*@__PURE__*/
-  messageDesc(file_sysml, 51);
+  messageDesc(file_sysml, 54);
 
 /**
  * QueryResponse contains the elements the query selected, in the order they are
@@ -2123,7 +2242,7 @@ export type QueryResponse = Message<"sysml.QueryResponse"> & {
  * Use `create(QueryResponseSchema)` to create a new message.
  */
 export const QueryResponseSchema: GenMessage<QueryResponse> = /*@__PURE__*/
-  messageDesc(file_sysml, 52);
+  messageDesc(file_sysml, 55);
 
 /**
  * Query is the standard's Query resource (SysML v2 API & Services). Its `@type`
@@ -2163,7 +2282,7 @@ export type Query = Message<"sysml.Query"> & {
  * Use `create(QuerySchema)` to create a new message.
  */
 export const QuerySchema: GenMessage<Query> = /*@__PURE__*/
-  messageDesc(file_sysml, 53);
+  messageDesc(file_sysml, 56);
 
 /**
  * Constraint is the standard's Constraint, whose `@type` discriminates between
@@ -2195,7 +2314,7 @@ export type Constraint = Message<"sysml.Constraint"> & {
  * Use `create(ConstraintSchema)` to create a new message.
  */
 export const ConstraintSchema: GenMessage<Constraint> = /*@__PURE__*/
-  messageDesc(file_sysml, 54);
+  messageDesc(file_sysml, 57);
 
 /**
  * PrimitiveConstraint compares one property of an element against a value.
@@ -2238,7 +2357,7 @@ export type PrimitiveConstraint = Message<"sysml.PrimitiveConstraint"> & {
  * Use `create(PrimitiveConstraintSchema)` to create a new message.
  */
 export const PrimitiveConstraintSchema: GenMessage<PrimitiveConstraint> = /*@__PURE__*/
-  messageDesc(file_sysml, 55);
+  messageDesc(file_sysml, 58);
 
 /**
  * CompositeConstraint combines constraints. An empty constraint list fails the
@@ -2263,7 +2382,7 @@ export type CompositeConstraint = Message<"sysml.CompositeConstraint"> & {
  * Use `create(CompositeConstraintSchema)` to create a new message.
  */
 export const CompositeConstraintSchema: GenMessage<CompositeConstraint> = /*@__PURE__*/
-  messageDesc(file_sysml, 56);
+  messageDesc(file_sysml, 59);
 
 /**
  * QueryResultElement is one matched element. `id` and `type` are always
@@ -2299,7 +2418,281 @@ export type QueryResultElement = Message<"sysml.QueryResultElement"> & {
  * Use `create(QueryResultElementSchema)` to create a new message.
  */
 export const QueryResultElementSchema: GenMessage<QueryResultElement> = /*@__PURE__*/
-  messageDesc(file_sysml, 57);
+  messageDesc(file_sysml, 60);
+
+/**
+ * RunDocumentQueryRequest runs a named document query — a calc def
+ * specializing DocumentQueries::Query — against a model the service already
+ * parsed, binding its entry parameters. It answers as %run-query does, but with
+ * typed rows rather than formatted lines.
+ *
+ * @generated from message sysml.RunDocumentQueryRequest
+ */
+export type RunDocumentQueryRequest = Message<"sysml.RunDocumentQueryRequest"> & {
+  /**
+   * from ParseFile response
+   *
+   * @generated from field: string model_hash = 1;
+   */
+  modelHash: string;
+
+  /**
+   * FQN of the document query to run. Fails with NOT_FOUND when the model does
+   * not declare it, and INVALID_ARGUMENT when it declares something else.
+   *
+   * @generated from field: string query_id = 2;
+   */
+  queryId: string;
+
+  /**
+   * Entry-parameter bindings. Repeating a parameter appends to its binding, so
+   * a nonscalar parameter can be given several values.
+   *
+   * @generated from field: repeated sysml.DocumentQueryBinding bindings = 3;
+   */
+  bindings: DocumentQueryBinding[];
+};
+
+/**
+ * Describes the message sysml.RunDocumentQueryRequest.
+ * Use `create(RunDocumentQueryRequestSchema)` to create a new message.
+ */
+export const RunDocumentQueryRequestSchema: GenMessage<RunDocumentQueryRequest> = /*@__PURE__*/
+  messageDesc(file_sysml, 61);
+
+/**
+ * DocumentQueryBinding binds one entry parameter of a document query.
+ *
+ * @generated from message sysml.DocumentQueryBinding
+ */
+export type DocumentQueryBinding = Message<"sysml.DocumentQueryBinding"> & {
+  /**
+   * @generated from field: string parameter = 1;
+   */
+  parameter: string;
+
+  /**
+   * @generated from field: repeated sysml.DocumentValue values = 2;
+   */
+  values: DocumentValue[];
+};
+
+/**
+ * Describes the message sysml.DocumentQueryBinding.
+ * Use `create(DocumentQueryBindingSchema)` to create a new message.
+ */
+export const DocumentQueryBindingSchema: GenMessage<DocumentQueryBinding> = /*@__PURE__*/
+  messageDesc(file_sysml, 62);
+
+/**
+ * DocumentValue is one typed document-query value. A request binds a model
+ * element by qualified name in element_id; a response also says what the
+ * element is in element_type. `infinity` denotes an unbounded multiplicity and
+ * is only ever answered, never bound.
+ *
+ * @generated from message sysml.DocumentValue
+ */
+export type DocumentValue = Message<"sysml.DocumentValue"> & {
+  /**
+   * @generated from oneof sysml.DocumentValue.kind
+   */
+  kind: {
+    /**
+     * qualified name of a model element
+     *
+     * @generated from field: string element_id = 1;
+     */
+    value: string;
+    case: "elementId";
+  } | {
+    /**
+     * @generated from field: string string_value = 2;
+     */
+    value: string;
+    case: "stringValue";
+  } | {
+    /**
+     * @generated from field: int64 int_value = 3;
+     */
+    value: bigint;
+    case: "intValue";
+  } | {
+    /**
+     * @generated from field: double real_value = 4;
+     */
+    value: number;
+    case: "realValue";
+  } | {
+    /**
+     * @generated from field: bool bool_value = 5;
+     */
+    value: boolean;
+    case: "boolValue";
+  } | {
+    /**
+     * @generated from field: bool infinity = 6;
+     */
+    value: boolean;
+    case: "infinity";
+  } | { case: undefined; value?: undefined };
+
+  /**
+   * Metamodel type of element_id ("PartUsage", ...); answered, ignored when bound.
+   *
+   * @generated from field: string element_type = 7;
+   */
+  elementType: string;
+};
+
+/**
+ * Describes the message sysml.DocumentValue.
+ * Use `create(DocumentValueSchema)` to create a new message.
+ */
+export const DocumentValueSchema: GenMessage<DocumentValue> = /*@__PURE__*/
+  messageDesc(file_sysml, 63);
+
+/**
+ * DocumentQueryColumn is one projected property, in projection order.
+ *
+ * @generated from message sysml.DocumentQueryColumn
+ */
+export type DocumentQueryColumn = Message<"sysml.DocumentQueryColumn"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message sysml.DocumentQueryColumn.
+ * Use `create(DocumentQueryColumnSchema)` to create a new message.
+ */
+export const DocumentQueryColumnSchema: GenMessage<DocumentQueryColumn> = /*@__PURE__*/
+  messageDesc(file_sysml, 64);
+
+/**
+ * DocumentQueryCell is one row's values for one column, in the query's order.
+ *
+ * @generated from message sysml.DocumentQueryCell
+ */
+export type DocumentQueryCell = Message<"sysml.DocumentQueryCell"> & {
+  /**
+   * @generated from field: repeated sysml.DocumentValue values = 1;
+   */
+  values: DocumentValue[];
+};
+
+/**
+ * Describes the message sysml.DocumentQueryCell.
+ * Use `create(DocumentQueryCellSchema)` to create a new message.
+ */
+export const DocumentQueryCellSchema: GenMessage<DocumentQueryCell> = /*@__PURE__*/
+  messageDesc(file_sysml, 65);
+
+/**
+ * DocumentQueryRow is one selected element and its projected cells, one per
+ * column in column order.
+ *
+ * @generated from message sysml.DocumentQueryRow
+ */
+export type DocumentQueryRow = Message<"sysml.DocumentQueryRow"> & {
+  /**
+   * The selected element itself, an element value with its qualified name.
+   *
+   * @generated from field: sysml.DocumentValue element = 1;
+   */
+  element?: DocumentValue | undefined;
+
+  /**
+   * @generated from field: repeated sysml.DocumentQueryCell cells = 2;
+   */
+  cells: DocumentQueryCell[];
+};
+
+/**
+ * Describes the message sysml.DocumentQueryRow.
+ * Use `create(DocumentQueryRowSchema)` to create a new message.
+ */
+export const DocumentQueryRowSchema: GenMessage<DocumentQueryRow> = /*@__PURE__*/
+  messageDesc(file_sysml, 66);
+
+/**
+ * RunDocumentQueryResponse is the query's answer: its projected columns and its
+ * rows, both in the deterministic order the engine reports. A query that
+ * selects nothing answers with no rows; a query that could not be run fails the
+ * call with the status its failure maps to.
+ *
+ * @generated from message sysml.RunDocumentQueryResponse
+ */
+export type RunDocumentQueryResponse = Message<"sysml.RunDocumentQueryResponse"> & {
+  /**
+   * @generated from field: repeated sysml.DocumentQueryColumn columns = 1;
+   */
+  columns: DocumentQueryColumn[];
+
+  /**
+   * @generated from field: repeated sysml.DocumentQueryRow rows = 2;
+   */
+  rows: DocumentQueryRow[];
+};
+
+/**
+ * Describes the message sysml.RunDocumentQueryResponse.
+ * Use `create(RunDocumentQueryResponseSchema)` to create a new message.
+ */
+export const RunDocumentQueryResponseSchema: GenMessage<RunDocumentQueryResponse> = /*@__PURE__*/
+  messageDesc(file_sysml, 67);
+
+/**
+ * RenderDocumentRequest renders a named document — a part def specializing
+ * DocumentQueries::Document — to Markdown. A document binds its queries'
+ * parameters in the model, so the request carries none.
+ *
+ * @generated from message sysml.RenderDocumentRequest
+ */
+export type RenderDocumentRequest = Message<"sysml.RenderDocumentRequest"> & {
+  /**
+   * from ParseFile response
+   *
+   * @generated from field: string model_hash = 1;
+   */
+  modelHash: string;
+
+  /**
+   * FQN of the document to render. Fails with NOT_FOUND when the model does
+   * not declare it, and INVALID_ARGUMENT when it declares something else.
+   *
+   * @generated from field: string document_id = 2;
+   */
+  documentId: string;
+};
+
+/**
+ * Describes the message sysml.RenderDocumentRequest.
+ * Use `create(RenderDocumentRequestSchema)` to create a new message.
+ */
+export const RenderDocumentRequestSchema: GenMessage<RenderDocumentRequest> = /*@__PURE__*/
+  messageDesc(file_sysml, 68);
+
+/**
+ * RenderDocumentResponse carries the rendered Markdown, byte-for-byte what the
+ * CLI's -render-document writes.
+ *
+ * @generated from message sysml.RenderDocumentResponse
+ */
+export type RenderDocumentResponse = Message<"sysml.RenderDocumentResponse"> & {
+  /**
+   * @generated from field: string markdown = 1;
+   */
+  markdown: string;
+};
+
+/**
+ * Describes the message sysml.RenderDocumentResponse.
+ * Use `create(RenderDocumentResponseSchema)` to create a new message.
+ */
+export const RenderDocumentResponseSchema: GenMessage<RenderDocumentResponse> = /*@__PURE__*/
+  messageDesc(file_sysml, 69);
 
 /**
  * FailureReason says what kind of failure an `error` reports, so a client acts
@@ -2573,6 +2966,18 @@ export const SysMLService: GenService<{
     output: typeof ParseFileResponseSchema;
   },
   /**
+   * Parse several documents as one model, so a name one document declares
+   * resolves in another and an import between them is satisfied. Reported as
+   * the "parse_sources" capability.
+   *
+   * @generated from rpc sysml.SysMLService.ParseSources
+   */
+  parseSources: {
+    methodKind: "unary";
+    input: typeof ParseSourcesRequestSchema;
+    output: typeof ParseSourcesResponseSchema;
+  },
+  /**
    * Get symbol information by qualified name
    *
    * @generated from rpc sysml.SysMLService.GetSymbol
@@ -2701,6 +3106,29 @@ export const SysMLService: GenService<{
     methodKind: "unary";
     input: typeof QueryRequestSchema;
     output: typeof QueryResponseSchema;
+  },
+  /**
+   * Run a named document query with parameter bindings, the answer the REPL's
+   * %run-query gives, as typed rows rather than formatted lines. Reported as
+   * the "document_query" capability.
+   *
+   * @generated from rpc sysml.SysMLService.RunDocumentQuery
+   */
+  runDocumentQuery: {
+    methodKind: "unary";
+    input: typeof RunDocumentQueryRequestSchema;
+    output: typeof RunDocumentQueryResponseSchema;
+  },
+  /**
+   * Render a named document to Markdown, as the CLI's -render-document does.
+   * Reported as the "render_document" capability.
+   *
+   * @generated from rpc sysml.SysMLService.RenderDocument
+   */
+  renderDocument: {
+    methodKind: "unary";
+    input: typeof RenderDocumentRequestSchema;
+    output: typeof RenderDocumentResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sysml, 0);

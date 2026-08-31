@@ -100,7 +100,7 @@ export class PrivateService {
 
   /** Starts a child and waits for the address it bound. */
   static async start(): Promise<PrivateService> {
-    const binary = resolveBinary();
+    const binary = await resolveBinary();
     const child = spawn(
       binary.path,
       ["-port", "0", "-health-port", "0", "-report-address", "-exit-with-parent"],

@@ -152,7 +152,14 @@ echo "%load model.sysml
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
 | `--render-all <dir>` | | Render every declared view into the directory, one artifact per view |
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
-| `--output <file>` | `-o` | Write the conversion or the rendering to a file instead of stdout |
+| `--render-document <name>` | | Compile a document definition — a `part def` specializing `DocumentQueries::Document` — run its queries against the model, render its diagram blocks through the view engine and write the rendered CommonMark Markdown, as `%render-document` does. Paragraphs compose statically-authored inline runs (`Span` with a `plain`/`emphasis`/`strong`/`code` style, `Link` to a URL, `Ref` linking to another content block's anchor), a query-backed paragraph or list styles its projected values through nested `SpanColumn`/`LinkColumn` column runs, and a table with a `groupBy` column writes one subtable per group value; table columns are the query's projected properties and computed `Column` names. A `Diagram` content block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default document form, `-doc-form pdf` converts it (see [Rendering a document as PDF](#rendering-a-document-as-pdf)), and `-json` does not apply |
+| `--doc-form <form>` | | Form `--render-document` writes: `markdown` (default) or `pdf`, which drives an external converter |
+| `--render-documents <dir>` | | Render every document definition the model declares as a linked Markdown set into the directory, one file per document, so cross-document references resolve on disk |
+| `--pdf-engine <engine>` | | Converter `--doc-form pdf` drives: `weasyprint` (default), `pandoc` or `prince` |
+| `--pdf-title-page` | | Put the document title on a page of its own (`--doc-form pdf`) |
+| `--pdf-toc` | | Write a table of contents ahead of the content (`--doc-form pdf`) |
+| `--pdf-number-sections` | | Number the section headings hierarchically (`--doc-form pdf`) |
+| `--output <file>` | `-o` | Write the conversion, the rendering or the rendered document to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
 
@@ -168,6 +175,7 @@ written in, so the verdicts after it are about that object:
 | `-satisfy=<name>` | Only the assertions the named element states (`-satisfy=false` asks for none) |
 | `-instantiate <name>` | Creates an object first, so the verdicts are about it |
 | `-calc "<name>(<args>)"` | Invokes a calculation and reports what it computed |
+| `-run-query "<name> [<p>=<expr>...]"` | Executes a document query and reports its rows, as `%run-query` does — including any computed `Column(name = "<column>", expression = <expr>)` projections evaluated per row. Each binding is written as `<parameter>=<expression>` |
 | `-action "<name> [object]"` | Runs an action to completion and reports its outputs |
 | `-state "<name> [object]"` | Runs a state machine and reports where it settled |
 | `-advance <time>` | Simulated time units each `-state` machine is run for |
@@ -271,6 +279,69 @@ has dedicated state diagram and sequence diagram grammars; a table is written as
 which Mermaid has no grammar for, so `-render-form mermaid` of a table names Markdown rather than
 drawing a diagram of rows.
 
+`-render-documents <dir>` renders every document definition the loaded model declares into the
+directory, one Markdown file per document, in fully-qualified-name order. Each file name is the
+document's fully qualified name with `::` replaced by `-` and any byte outside ASCII letters,
+digits and `_` escaped as `.XX` (uppercase hex), plus `.md` — deterministic, so cross-document
+references (see [the authoring chapter](../manual/authoring.md)) resolve as relative links between
+the written files. Repeated runs write identical bytes.
+
+```bash
+sysml model.sysml -render-documents rendered
+```
+
+The directory is created when necessary; written paths go to stderr and stdout stays empty. A
+model that declares no documents, more than one document with the same name, or does not analyse
+cleanly stops the run with status 2. `-render-documents` cannot be combined with
+`-render-document`, `-render`, `-render-all`, `-o`, `-convert`, a query flag, or a check flag.
+A single `-render-document` of a document with cross-document references still succeeds: the links
+point at the targets' expected file names and dangle until those documents are rendered into the
+same directory.
+
+## Rendering a document as PDF
+
+`-render-document <name> -doc-form pdf -o report.pdf` converts the rendered Markdown to PDF. The
+conversion never runs inside the `sysml` binary: it drives an external converter as a subprocess,
+selected with `-pdf-engine`, so the binary links no PDF renderer and Markdown output needs none of
+these tools.
+
+```bash
+sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf
+sysml model.sysml -render-document Reports::MassReport -doc-form pdf \
+    -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf
+```
+
+The engines, each discovered on `PATH` by its default name unless an environment variable points
+at a specific executable:
+
+| Engine | Tools it drives | Override |
+|--------|-----------------|----------|
+| `weasyprint` (default) | `weasyprint`, an HTML-to-PDF paged-media engine | `OPENSYSML_WEASYPRINT` |
+| `pandoc` | `pandoc` reading the Markdown itself, with WeasyPrint as its PDF engine | `OPENSYSML_PANDOC` (and `OPENSYSML_WEASYPRINT`) |
+| `prince` | `prince`, a commercial HTML-to-PDF engine | `OPENSYSML_PRINCE` |
+
+The title page, table of contents and section numbering are choices of this output step alone —
+they are flags of the run, never attributes of the document model, so the same document renders to
+Markdown unchanged.
+
+Diagram blocks are pre-rendered to SVG with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli)
+(`mmdc`, override `OPENSYSML_MMDC`; `OPENSYSML_MMDC_PUPPETEER` names a puppeteer configuration file
+for a browser that needs launch flags, such as `--no-sandbox` in a container). A document without
+diagrams needs no diagram tool.
+
+Inline runs render semantically in PDF: emphasis, strong and code styling, links, and `Ref`
+cross-references as clickable internal links to their targets' invisible anchors, in every engine —
+`weasyprint` and `prince` through the prepared HTML, `pandoc` through the Markdown itself. A grouped
+table's group key renders in strong type above each subtable.
+
+A PDF is a binary artifact, so `-doc-form pdf` requires `-o`. A missing tool stops the run with
+status 2 and a report naming the tool, its override variable and the other engines; a converter
+that fails reports its own words. `scripts/download-doc-pdf-toolchain.sh` provisions pinned copies
+of WeasyPrint, pandoc and mermaid-cli under `build/doc-pdf/` and prints the variables to export
+(Prince is commercial and installed separately). Every tool is run with `SOURCE_DATE_EPOCH=0`, so
+an engine that embeds a creation date embeds the same one every run and the artifact is
+reproducible against one toolchain.
+
 ## Output Format
 
 All evaluations include checkmark and result:
@@ -351,7 +422,7 @@ links here.
 |--------|-------|
 | `0` | What was asked for was done: every file loaded and analysed cleanly, every `-e` expression produced a value, every check held, a conversion was written. Warnings leave the status `0`. |
 | `1` | The model answered false: a constraint, requirement or satisfaction assertion the model decided did not hold. Only a verdict reports this status. |
-| `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an object whose feature values did not materialize, an unresolved name, a check that could not be made, a conversion that could not be written because the RDF graph cannot rebuild a source construct, a misused flag or an invalid `SYSML_MAX_*` value. |
+| `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an object whose feature values did not materialize, an unresolved name, a check that could not be made, a conversion that could not be written because the RDF graph cannot rebuild a source construct, a misused flag or an invalid `OPENSYSML_MAX_*` value. |
 
 ```bash
 $ printf '%s\n' 'constraint MassBudget { 1 > 2 }' > model.sysml
@@ -365,8 +436,8 @@ $ sysml -debug -quiet model.sysml; echo $?
 sysml: -debug and -quiet are mutually exclusive
 2
 
-$ SYSML_MAX_STEPS=abc sysml -e "1+1"; echo $?
-sysml: SYSML_MAX_STEPS="abc" is not an integer: set it to a positive number of evaluation steps (default 10000000)
+$ OPENSYSML_MAX_STEPS=abc sysml -e "1+1"; echo $?
+sysml: OPENSYSML_MAX_STEPS="abc" is not an integer: set it to a positive number of evaluation steps (default 10000000)
 2
 
 $ sysml examples/parser_features_demo_advanced_bodies.kerml -convert ttl; echo $?

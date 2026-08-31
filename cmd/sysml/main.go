@@ -114,6 +114,13 @@ var (
 	renderView    string
 	renderAllDir  string
 	renderForm    string
+	renderDoc     string
+	renderDocsDir string
+	docForm       string
+	pdfEngine     string
+	pdfTitlePage  bool
+	pdfTOC        bool
+	pdfNumbering  bool
 	strictMode    bool
 	modelChecks   checks
 )
@@ -156,6 +163,18 @@ func wrapped(text string, width int) string {
 	return strings.Join(append(lines, line), "\n")
 }
 
+// flagGiven reports whether the run named this flag, which an empty value
+// cannot be told apart from otherwise.
+func flagGiven(name string) bool {
+	given := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			given = true
+		}
+	})
+	return given
+}
+
 // printUsage writes the help to w: the caller chooses the stream, since help
 // asked for is a result and help shown over a misuse belongs with the error.
 func printUsage(w io.Writer) {
@@ -184,6 +203,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "  sysml -validate model.sysml                    # Report diagnostics only\n")
 	fmt.Fprintf(w, "  sysml -validate -strict model.sysml            # ...asking whether it is conforming SysML v2\n")
 	fmt.Fprintf(w, "  sysml -calc \"Fall(3, 4)\" model.sysml           # Invoke a calculation\n")
+	fmt.Fprintf(w, "  sysml -run-query \"Heavy root=scope\" model.sysml # Execute a document query\n")
 	fmt.Fprintf(w, "  sysml -action Drive model.sysml                # Run an action to completion\n")
 	fmt.Fprintf(w, "  sysml -state Mission -advance 10 model.sysml   # Run a state machine for 10 time units\n")
 	fmt.Fprintf(w, "  sysml -satisfy -json model.sysml               # Report the verdicts as JSON\n")
@@ -212,6 +232,20 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form markdown\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -o view.mmd\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-all rendered\n")
+	fmt.Fprintf(w, "\nRendering a document:\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport           # Markdown on stdout\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -o report.md\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-documents rendered                     # every document, linked\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf \\\n")
+	fmt.Fprintf(w, "        -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf\n")
+	fmt.Fprintf(w, "\nA document is a part def specializing DocumentQueries::Document. Its queries\n")
+	fmt.Fprintf(w, "are bound in the model and run against it, and the result is written as\n")
+	fmt.Fprintf(w, "CommonMark-compatible Markdown. -doc-form pdf converts that Markdown with an\n")
+	fmt.Fprintf(w, "external converter named by -pdf-engine — weasyprint (default), pandoc or\n")
+	fmt.Fprintf(w, "prince — run as a subprocess, never linked in; diagrams are pre-rendered to\n")
+	fmt.Fprintf(w, "SVG with mermaid-cli (mmdc). None of these tools is needed until PDF output\n")
+	fmt.Fprintf(w, "is asked for; scripts/download-doc-pdf-toolchain.sh provisions pinned copies.\n")
 	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
 	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
 	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
@@ -253,6 +287,13 @@ func runCLI() int {
 	flag.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
 	flag.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
 	flag.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
+	flag.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
+	flag.StringVar(&renderDocsDir, "render-documents", "", "Render every document definition as linked Markdown into this directory")
+	flag.StringVar(&docForm, "doc-form", "", "Form -render-document writes: markdown (default) or pdf, which drives an external converter")
+	flag.StringVar(&pdfEngine, "pdf-engine", "", "Converter -doc-form pdf drives: weasyprint (default), pandoc or prince")
+	flag.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
+	flag.BoolVar(&pdfTOC, "pdf-toc", false, "Write a table of contents ahead of the content (-doc-form pdf)")
+	flag.BoolVar(&pdfNumbering, "pdf-number-sections", false, "Number the section headings hierarchically (-doc-form pdf)")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
@@ -260,6 +301,7 @@ func runCLI() int {
 	flag.Var(&modelChecks.satisfy, "satisfy", "Evaluate every satisfaction assertion, or with -satisfy=<name> those the named element states (repeatable)")
 	flag.BoolVar(&modelChecks.validate, "validate", false, "Analyse the model and report its diagnostics, exiting nonzero on an error")
 	flag.Var(&modelChecks.calcs, "calc", "Invoke this calculation and report what it computed, as -calc \"Fall(3, 4)\" (repeatable)")
+	flag.Var(&modelChecks.queries, "run-query", "Execute this document query and report its rows, as -run-query \"HeavySubsystems root=telescope\" (repeatable)")
 	flag.Var(&modelChecks.actions, "action", "Run this action to completion, as -action \"Drive rover1\" to run it on an object (repeatable)")
 	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
 	flag.Var(&modelChecks.advance, "advance", "Simulated time units to run each -state machine for (default: only its initial transition)")
@@ -300,12 +342,48 @@ func runCLI() int {
 		return 0
 	}
 
+	// A mode asked for with an empty value is a misuse, not an absent flag: it
+	// would otherwise silently run the REPL instead of the query.
+	if flagGiven("query") && queryText == "" {
+		fmt.Fprintln(os.Stderr, `sysml: -query is empty; give it OSLC Query text, as -query 'sysml:name="battery"'`)
+		return 2
+	}
+
 	// Get positional arguments (files to load)
 	args := flag.Args()
 
 	if renderForm != "" && renderView == "" && renderAllDir == "" {
 		fmt.Fprintln(os.Stderr, "sysml: -render-form is the form -render or -render-all writes; name the view to render with -render or a directory with -render-all")
 		return 2
+	}
+
+	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
+		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
+		return 2
+	}
+
+	if renderDocsDir != "" {
+		switch {
+		case renderDoc != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents renders every document; -render-document renders one; ask for one per run")
+			return 2
+		case renderView != "" || renderAllDir != "" || convertFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents, -render, -render-all and -convert each write documents out; ask for one per run")
+			return 2
+		case outputPath != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents writes into its directory and cannot be combined with -output")
+			return 2
+		case queryText != "" || len(evalExprs) > 0 || fromFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents cannot be combined with -query, -eval or -from")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-render-documents writes documents out and decides nothing about the model; check it in its own run")
+		}
+		if err := runRenderDocuments(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
 	}
 
 	if renderAllDir != "" {
@@ -319,8 +397,8 @@ func runCLI() int {
 		case convertFormat != "":
 			fmt.Fprintln(os.Stderr, "sysml: -render-all and -convert each write documents out; ask for one per run")
 			return 2
-		case queryText != "" || len(evalExprs) > 0 || fromFormat != "":
-			fmt.Fprintln(os.Stderr, "sysml: -render-all cannot be combined with -query, -eval or -from")
+		case queryText != "" || len(evalExprs) > 0 || fromFormat != "" || renderDoc != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-all cannot be combined with -query, -eval, -from or -render-document")
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,
@@ -341,8 +419,8 @@ func runCLI() int {
 			return refuse(modelChecks,
 				"-convert writes the model out and decides nothing about it; check it in its own run")
 		}
-		if renderView != "" {
-			fmt.Fprintln(os.Stderr, "sysml: -convert and -render each write a document out; ask for one per run")
+		if renderView != "" || renderDoc != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -convert, -render and -render-document each write a document out; ask for one per run")
 			return 2
 		}
 		if err := runConvert(args); err != nil {
@@ -352,8 +430,8 @@ func runCLI() int {
 	}
 
 	if queryText != "" {
-		if modelChecks.requested() || renderView != "" || len(evalExprs) > 0 || outputPath != "" || fromFormat != "" {
-			fmt.Fprintln(os.Stderr, "sysml: -query cannot be combined with checks, -eval, -render, -output or -from")
+		if modelChecks.requested() || renderView != "" || renderDoc != "" || len(evalExprs) > 0 || outputPath != "" || fromFormat != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -query cannot be combined with checks, -eval, -render, -render-document, -output or -from")
 			return 2
 		}
 		return runQuery(args, queryText)
@@ -364,7 +442,32 @@ func runCLI() int {
 			return refuse(modelChecks,
 				"-render writes a view out and decides nothing about the model; check it in its own run")
 		}
+		if renderDoc != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -render and -render-document each write a document out; ask for one per run")
+			return 2
+		}
 		if err := runRender(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if renderDoc != "" {
+		switch {
+		case modelChecks.checksOnly():
+			return refuse(modelChecks,
+				"-render-document writes a document out and decides nothing about the model; check it in its own run")
+		case modelChecks.jsonOut:
+			fmt.Fprintln(os.Stderr, "sysml: -render-document writes a document, not JSON; -json reports checks")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-render-document writes a document out and decides nothing about the model; check it in its own run")
+		case len(evalExprs) > 0 || fromFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-document cannot be combined with -eval or -from")
+			return 2
+		}
+		if err := runRenderDocument(args); err != nil {
 			return fail(err)
 		}
 		return exitHolds

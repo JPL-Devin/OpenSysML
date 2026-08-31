@@ -61,6 +61,11 @@ func (a *ConnectAdapter) ParseFile(ctx context.Context, req *connect.Request[pb.
 	return connectCall(ctx, req, a.svc.ParseFile)
 }
 
+// ParseSources parses several documents as one model.
+func (a *ConnectAdapter) ParseSources(ctx context.Context, req *connect.Request[pb.ParseSourcesRequest]) (*connect.Response[pb.ParseSourcesResponse], error) {
+	return connectCall(ctx, req, a.svc.ParseSources)
+}
+
 // GetSymbol returns symbol information by qualified name.
 func (a *ConnectAdapter) GetSymbol(ctx context.Context, req *connect.Request[pb.GetSymbolRequest]) (*connect.Response[pb.SymbolResponse], error) {
 	return connectCall(ctx, req, a.svc.GetSymbol)
@@ -124,4 +129,14 @@ func (a *ConnectAdapter) EvaluateCalc(ctx context.Context, req *connect.Request[
 // Query evaluates a SysML v2 API & Services Query over a parsed model.
 func (a *ConnectAdapter) Query(ctx context.Context, req *connect.Request[pb.QueryRequest]) (*connect.Response[pb.QueryResponse], error) {
 	return connectCall(ctx, req, a.svc.Query)
+}
+
+// RunDocumentQuery runs a named document query and answers with typed rows.
+func (a *ConnectAdapter) RunDocumentQuery(ctx context.Context, req *connect.Request[pb.RunDocumentQueryRequest]) (*connect.Response[pb.RunDocumentQueryResponse], error) {
+	return connectCall(ctx, req, a.svc.RunDocumentQuery)
+}
+
+// RenderDocument renders a named document to Markdown.
+func (a *ConnectAdapter) RenderDocument(ctx context.Context, req *connect.Request[pb.RenderDocumentRequest]) (*connect.Response[pb.RenderDocumentResponse], error) {
+	return connectCall(ctx, req, a.svc.RenderDocument)
 }

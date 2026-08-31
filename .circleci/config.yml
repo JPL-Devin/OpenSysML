@@ -95,6 +95,12 @@ jobs:
           name: Check quoted oracle figures name the round they measured
           command: python3 scripts/check-doc-figures.py
 
+      # Each client verifies a download against the copy of the pinned digests it
+      # ships, so a copy that drifts from the table pins something else.
+      - run:
+          name: Check the clients ship the pinned release digests
+          command: python3 scripts/sync-release-digests.py --check
+
       - run:
           name: Run static analysis (staticcheck + gosec)
           command: make lint

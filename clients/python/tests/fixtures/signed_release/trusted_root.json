@@ -5,14 +5,14 @@
       "baseUrl": "https://rekor.fixture.invalid",
       "hashAlgorithm": "SHA2_256",
       "publicKey": {
-        "rawBytes": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEOHqx6De0E2+yepLlrvL9YBKFZoc+nfAhdEynII+BVePWNm6ttJB1rINPf6FfLpXizKFeDi2uDI6yjMBC24hlIA==",
+        "rawBytes": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAECWmB3NKOYuwty22Lh564E5XigtrF7C/O//eNy0EQsrfAO8Pwe469zWnZYGY9MlyKuiqaQRytk5CodS49g68nyw==",
         "keyDetails": "PKIX_ECDSA_P256_SHA_256",
         "validFor": {
           "start": "2016-01-04T00:00:00Z"
         }
       },
       "logId": {
-        "keyId": "OmrMg7SV4g/nkLU8C6TrNteSvBKH8cihit/C+NH+nxQ="
+        "keyId": "5KUg7j7hCohJKNV3aDMW8L/gN2L2IyhLH23WRNxgotM="
       }
     }
   ],
@@ -26,7 +26,7 @@
       "certChain": {
         "certificates": [
           {
-            "rawBytes": "MIIBijCCATCgAwIBAgIUCtMBMIV+eQGtRwxenxfcvxnrlEwwCgYIKoZIzj0EAwIwIzEhMB8GA1UEAwwYb3BlbnN5c21sIGZpeHR1cmUgZnVsY2lvMB4XDTE2MDEwNDAwMDAwMFoXDTM1MTIzMDAwMDAwMFowIzEhMB8GA1UEAwwYb3BlbnN5c21sIGZpeHR1cmUgZnVsY2lvMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEPyTi3Qf+RYtCqxb+a+SyYPl8CUlhkJGVL+anBtmAo/R96nTGcyWa5TrchZkUbnt5nrt7q7Y1cAzQWn8o1TJb8aNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFMnG4XDCLLhg0NxZOowFOqzepmg+MAoGCCqGSM49BAMCA0gAMEUCIFUWwhZkFovRUQccU7+wWAA6ByCQF1K/LSQgmQYyEQzhAiEA4UJ5PfaPtqd2Glmzs6NgZHqy1humnWCucX1MnkDI7Ks="
+            "rawBytes": "MIIBizCCATCgAwIBAgIULIBcv36vouaUdd+PFozCTHsr6owwCgYIKoZIzj0EAwIwIzEhMB8GA1UEAwwYb3BlbnN5c21sIGZpeHR1cmUgZnVsY2lvMB4XDTE2MDEwNDAwMDAwMFoXDTM1MTIzMDAwMDAwMFowIzEhMB8GA1UEAwwYb3BlbnN5c21sIGZpeHR1cmUgZnVsY2lvMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkMH6y+TMjJmMZ5mVytb4dx30LIZoM/nOQVHbwdqskliAufXL0FVYndPONt26MiLi/n7xuUDFF0gOj/iH7e1DmqNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYEFC4irqQQpag7alzwILBiPTSRmD81MAoGCCqGSM49BAMCA0kAMEYCIQCHPwuujL5QfipHEHoajwiYn12Y/0AEIXDnf8LOPJ2czQIhANZffnDWd9csxGNXYlJ2nnhJN+HLy5DlCFyQo6AMB9a/"
           }
         ]
       },
@@ -40,14 +40,14 @@
       "baseUrl": "https://ctfe.fixture.invalid",
       "hashAlgorithm": "SHA2_256",
       "publicKey": {
-        "rawBytes": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElzrhGcVVSfmFb9TEc0VdEAwdMg6CEpz1L6gBdVwGjhLtXwB3f8U6pBXpZcmn6qNSZIgCtSXVuq3Bu7wx+A8sqQ==",
+        "rawBytes": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEmiu35FYewJ1N3bY0IDoD4dfiQ1uYFNgkiqXMPxpmQAshqCkpipcDcNlthLU1MnElcxlSUCr8DoG2Y7ck3ja9cQ==",
         "keyDetails": "PKIX_ECDSA_P256_SHA_256",
         "validFor": {
           "start": "2016-01-04T00:00:00Z"
         }
       },
       "logId": {
-        "keyId": "m1ZC6MlxdherFF/afn0F41QxNqQmgFNAZ81ztEmAuXc="
+        "keyId": "MJbpED9wE3COjOlM3FiUNb1CezUmwAf3F6ow9V+vU6U="
       }
     }
   ],

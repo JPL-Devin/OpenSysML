@@ -37,7 +37,7 @@ func WithConformanceMode(mode conformance.Mode) Option {
 }
 
 // NewWorkspace returns a workspace with stdlib pre-loaded into the global index.
-// Stdlib files are loaded from embedded sources (or SYSML_LIBRARY_PATH if set).
+// Stdlib files are loaded from embedded sources (or OPENSYSML_LIBRARY_PATH if set).
 // Without options it analyzes in the default conformance mode.
 func NewWorkspace(opts ...Option) *Workspace {
 	return NewWorkspaceWithIndex(libs.NewModelIndex(), opts...)

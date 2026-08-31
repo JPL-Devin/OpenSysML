@@ -43,7 +43,7 @@ func TestDirSourceOverride(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "Custom.kerml"), []byte("package Custom;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SYSML_LIBRARY_PATH", dir)
+	t.Setenv(LibraryPathEnvVar, dir)
 	src := DefaultSource()
 	names := src.List()
 	if len(names) != 1 || names[0] != "Custom.kerml" {

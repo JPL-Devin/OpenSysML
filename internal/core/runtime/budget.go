@@ -3,9 +3,10 @@ package runtime
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/envvar"
 )
 
 // Default bounds on one run. Each one stops a different kind of runaway, so each
@@ -47,14 +48,15 @@ const (
 const MaxCalcDepthCeiling int64 = 25000
 
 // Environment variables overriding the defaults above, following the
-// SYSML_LIBRARY_PATH convention.
+// OPENSYSML_LIBRARY_PATH convention. The legacy SYSML_-prefixed names remain
+// accepted via envvar.Lookup, with the OPENSYSML_ name winning when both are set.
 const (
-	MaxStepsEnvVar       = "SYSML_MAX_STEPS"
-	MaxActionStepsEnvVar = "SYSML_MAX_ACTION_STEPS"
-	MaxStateEventsEnvVar = "SYSML_MAX_EVENTS"
-	MaxDoStepsEnvVar     = "SYSML_MAX_DO_STEPS"
-	MaxElementsEnvVar    = "SYSML_MAX_ELEMENTS"
-	MaxCalcDepthEnvVar   = "SYSML_MAX_CALC_DEPTH"
+	MaxStepsEnvVar       = "OPENSYSML_MAX_STEPS"
+	MaxActionStepsEnvVar = "OPENSYSML_MAX_ACTION_STEPS"
+	MaxStateEventsEnvVar = "OPENSYSML_MAX_EVENTS"
+	MaxDoStepsEnvVar     = "OPENSYSML_MAX_DO_STEPS"
+	MaxElementsEnvVar    = "OPENSYSML_MAX_ELEMENTS"
+	MaxCalcDepthEnvVar   = "OPENSYSML_MAX_CALC_DEPTH"
 )
 
 // Budgets bounds one run of the runtime. The six bounds count incommensurable
@@ -126,7 +128,7 @@ func (b Budgets) Validate() error {
 // unusable value is reported, naming its variable and the value, so a typo is
 // reported instead of silently leaving the default in place.
 func BudgetsFromEnv() (Budgets, error) {
-	return budgetsFromLookup(os.Getenv)
+	return budgetsFromLookup(envvar.Lookup)
 }
 
 // budgetsFromLookup is BudgetsFromEnv over an explicit lookup, so the parsing

@@ -17,9 +17,11 @@ from opensysml.capabilities import (
     CAPABILITY_AUTHORING, CAPABILITY_INLINE_LANGUAGE,
     CAPABILITY_STRICT_CONFORMANCE,
     CAPABILITY_CONVERT,
+    CAPABILITY_DOCUMENT_QUERY,
     CAPABILITY_EVALUATE_SUBJECT,
     CAPABILITY_FEATURE_VALUES,
     CAPABILITY_QUERY,
+    CAPABILITY_RENDER_DOCUMENT,
     CAPABILITY_VERIFICATION,
     MissingCapabilityError,
     ServerInfo,
@@ -34,6 +36,7 @@ from opensysml.conversion import (
     is_experimental,
 )
 from opensysml.diagnostic import Diagnostic
+from opensysml.document import build_bindings, result_of as document_result
 from opensysml.edit import error_for_failure, failure_name, result_of
 from opensysml.enumeration import EnumLiteral
 from opensysml.errors import (
@@ -43,6 +46,7 @@ from opensysml.errors import (
     ModelFileNotFoundError,
     ModelNotFoundError,
     StaleServiceError,
+    SymbolNotFoundError,
     UnsupportedValueError,
     WrongKindError,
     from_rpc_error,
@@ -914,6 +918,82 @@ class Connection:
         ):
             response = self._stub.Query(request)
         return elements_of(response)
+
+    def run_document_query(self, model_hash, query_id, bindings=None):
+        """Run a named document query and answer its typed rows.
+
+        The query is the model's own — a calc def specializing
+        ``DocumentQueries::Query`` — not the standard's Query object that
+        :meth:`query` evaluates. See :mod:`opensysml.document`.
+
+        Args:
+            model_hash (str): Hash of the model holding the query
+            query_id (str): Qualified name of the document query
+            bindings (Mapping, optional): Parameter name to a value or list of
+                values; an :class:`~opensysml.document.ElementRef` binds a
+                model element
+
+        Returns:
+            DocumentQueryResult: Projected columns and typed rows, in the
+            engine's deterministic order
+
+        Raises:
+            MissingCapabilityError: If the service cannot run document queries
+            InvalidRequestError: If the query is not one, or a binding is wrong
+            SymbolNotFoundError: If the model does not declare the query
+            ModelNotFoundError: If the model is no longer cached
+        """
+        require(
+            self.server_info(),
+            CAPABILITY_DOCUMENT_QUERY,
+            upgrade_remedy(CAPABILITY_DOCUMENT_QUERY),
+        )
+        request = sysml_pb2.RunDocumentQueryRequest(
+            model_hash=model_hash,
+            query_id=query_id,
+            bindings=build_bindings(bindings),
+        )
+        with translate_rpc_errors(
+            not_found=SymbolNotFoundError,
+            unimplemented=self._capability_refusal((CAPABILITY_DOCUMENT_QUERY,)),
+        ):
+            response = self._stub.RunDocumentQuery(request)
+        return document_result(response)
+
+    def render_document(self, model_hash, document_id):
+        """Render a named document to Markdown.
+
+        The document is the model's own — a part def specializing
+        ``DocumentQueries::Document`` — whose queries are bound in the model.
+
+        Args:
+            model_hash (str): Hash of the model holding the document
+            document_id (str): Qualified name of the document
+
+        Returns:
+            str: The rendered Markdown
+
+        Raises:
+            MissingCapabilityError: If the service cannot render documents
+            InvalidRequestError: If the symbol named is not a document
+            SymbolNotFoundError: If the model does not declare the document
+            ModelNotFoundError: If the model is no longer cached
+        """
+        require(
+            self.server_info(),
+            CAPABILITY_RENDER_DOCUMENT,
+            upgrade_remedy(CAPABILITY_RENDER_DOCUMENT),
+        )
+        request = sysml_pb2.RenderDocumentRequest(
+            model_hash=model_hash,
+            document_id=document_id,
+        )
+        with translate_rpc_errors(
+            not_found=SymbolNotFoundError,
+            unimplemented=self._capability_refusal((CAPABILITY_RENDER_DOCUMENT,)),
+        ):
+            response = self._stub.RenderDocument(request)
+        return response.markdown
 
     def get_symbol(self, model_hash, symbol_id):
         """Fetch symbol by ID from cached model.

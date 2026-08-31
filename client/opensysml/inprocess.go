@@ -48,12 +48,41 @@ func New(opts ...Option) (Client, error) {
 	return &client{caller: &inprocess{svc: svc}}, nil
 }
 
-// buildVersion is the module version of this binary, informational only.
+// modulePath is the module buildVersion looks for among the binary's deps.
+const modulePath = "github.com/Open-MBEE/OpenSysML"
+
+// buildVersion is the version of OpenSysML linked into this binary — the
+// dependency's version in an importing program, the main module's when this
+// repository is the program. Informational only.
 func buildVersion() string {
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
-		return info.Main.Version
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	if info.Main.Path == modulePath {
+		return released(info.Main.Version)
+	}
+	for _, dep := range info.Deps {
+		if dep.Path != modulePath {
+			continue
+		}
+		if dep.Replace != nil {
+			if version := released(dep.Replace.Version); version != "dev" {
+				return version
+			}
+		}
+		return released(dep.Version)
 	}
 	return "dev"
+}
+
+// released reports a module version, or "dev" for one the toolchain leaves
+// unstamped: an unversioned build or a directory replacement.
+func released(version string) string {
+	if version == "" || version == "(devel)" {
+		return "dev"
+	}
+	return version
 }
 
 // inprocess calls the service implementation directly. Errors cross as
@@ -62,40 +91,131 @@ type inprocess struct {
 	svc *sysmlgrpc.Service
 }
 
-func (p *inprocess) serverInfo(ctx context.Context) (resp *pb.ServerInfoResponse, err error) {
-	defer recoverToError(&err)
-	resp, callErr := p.svc.GetServerInfo(ctx, &pb.ServerInfoRequest{})
-	return resp, statusToError(callErr)
+func (p *inprocess) serverInfo(ctx context.Context) (*pb.ServerInfoResponse, error) {
+	return answer(ctx, &pb.ServerInfoRequest{}, p.svc.GetServerInfo)
 }
 
-func (p *inprocess) parseFile(ctx context.Context, req *pb.ParseFileRequest) (resp *pb.ParseFileResponse, err error) {
-	defer recoverToError(&err)
-	resp, callErr := p.svc.ParseFile(ctx, req)
-	return resp, statusToError(callErr)
+func (p *inprocess) parseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.ParseFileResponse, error) {
+	return answer(ctx, req, p.svc.ParseFile)
 }
 
-func (p *inprocess) getSymbol(ctx context.Context, req *pb.GetSymbolRequest) (resp *pb.SymbolResponse, err error) {
-	defer recoverToError(&err)
-	resp, callErr := p.svc.GetSymbol(ctx, req)
-	return resp, statusToError(callErr)
+func (p *inprocess) parseSources(
+	ctx context.Context,
+	req *pb.ParseSourcesRequest,
+) (*pb.ParseSourcesResponse, error) {
+	return answer(ctx, req, p.svc.ParseSources)
 }
 
-func (p *inprocess) getDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest) (resp *pb.DiagnosticsResponse, err error) {
-	defer recoverToError(&err)
-	resp, callErr := p.svc.GetDiagnostics(ctx, req)
-	return resp, statusToError(callErr)
+func (p *inprocess) getSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.SymbolResponse, error) {
+	return answer(ctx, req, p.svc.GetSymbol)
 }
 
-func (p *inprocess) evaluate(ctx context.Context, req *pb.EvaluateRequest) (resp *pb.EvaluateResponse, err error) {
-	defer recoverToError(&err)
-	resp, callErr := p.svc.Evaluate(ctx, req)
-	return resp, statusToError(callErr)
+func (p *inprocess) getDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest) (*pb.DiagnosticsResponse, error) {
+	return answer(ctx, req, p.svc.GetDiagnostics)
 }
 
-func (p *inprocess) instantiate(ctx context.Context, req *pb.InstantiateRequest) (resp *pb.InstantiateResponse, err error) {
+func (p *inprocess) evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.EvaluateResponse, error) {
+	return answer(ctx, req, p.svc.Evaluate)
+}
+
+func (p *inprocess) instantiate(ctx context.Context, req *pb.InstantiateRequest) (*pb.InstantiateResponse, error) {
+	return answer(ctx, req, p.svc.Instantiate)
+}
+
+func (p *inprocess) executeAction(
+	ctx context.Context,
+	req *pb.ExecuteActionRequest,
+) (*pb.ExecuteActionResponse, error) {
+	return answer(ctx, req, p.svc.ExecuteAction)
+}
+
+func (p *inprocess) executeState(ctx context.Context, req *pb.ExecuteStateRequest) (*pb.ExecuteStateResponse, error) {
+	return answer(ctx, req, p.svc.ExecuteState)
+}
+
+func (p *inprocess) verifyConstraint(
+	ctx context.Context,
+	req *pb.VerifyConstraintRequest,
+) (*pb.VerifyConstraintResponse, error) {
+	return answer(ctx, req, p.svc.VerifyConstraint)
+}
+
+func (p *inprocess) verifyRequirement(
+	ctx context.Context,
+	req *pb.VerifyRequirementRequest,
+) (*pb.VerifyRequirementResponse, error) {
+	return answer(ctx, req, p.svc.VerifyRequirement)
+}
+
+func (p *inprocess) verifySatisfaction(
+	ctx context.Context,
+	req *pb.VerifySatisfactionRequest,
+) (*pb.VerifySatisfactionResponse, error) {
+	return answer(ctx, req, p.svc.VerifySatisfaction)
+}
+
+func (p *inprocess) evaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest) (*pb.EvaluateCalcResponse, error) {
+	return answer(ctx, req, p.svc.EvaluateCalc)
+}
+
+func (p *inprocess) query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error) {
+	return answer(ctx, req, p.svc.Query)
+}
+
+func (p *inprocess) runDocumentQuery(
+	ctx context.Context,
+	req *pb.RunDocumentQueryRequest,
+) (*pb.RunDocumentQueryResponse, error) {
+	return answer(ctx, req, p.svc.RunDocumentQuery)
+}
+
+func (p *inprocess) renderDocument(
+	ctx context.Context,
+	req *pb.RenderDocumentRequest,
+) (*pb.RenderDocumentResponse, error) {
+	return answer(ctx, req, p.svc.RenderDocument)
+}
+
+func (p *inprocess) convert(ctx context.Context, req *pb.ConvertRequest) (*pb.ConvertResponse, error) {
+	return answer(ctx, req, p.svc.Convert)
+}
+
+func (p *inprocess) applyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*pb.ApplyEditsResponse, error) {
+	return answer(ctx, req, p.svc.ApplyEdits)
+}
+
+// answer runs one handler with the guarantees this boundary makes: the
+// context decides whether an answer is delivered, as it does on the wire, and
+// a panic becomes CodeInternal instead of crossing.
+func answer[Req, Resp any](ctx context.Context, req Req, handler func(context.Context, Req) (Resp, error)) (resp Resp, err error) {
 	defer recoverToError(&err)
-	resp, callErr := p.svc.Instantiate(ctx, req)
-	return resp, statusToError(callErr)
+	var zero Resp
+	if err := contextStatus(ctx); err != nil {
+		return zero, err
+	}
+	resp, callErr := handler(ctx, req)
+	// The engine runs a call to completion; a done context withholds whatever it
+	// produced, answer or error, as the wire does.
+	if err := contextStatus(ctx); err != nil {
+		return zero, err
+	}
+	if callErr != nil {
+		return zero, statusToError(callErr)
+	}
+	return resp, nil
+}
+
+// contextStatus is the status a done context produces, matching the code a
+// remote caller sees for the same context.
+func contextStatus(ctx context.Context) error {
+	switch err := ctx.Err(); {
+	case err == nil:
+		return nil
+	case errors.Is(err, context.DeadlineExceeded):
+		return &StatusError{Code: CodeDeadlineExceeded, Message: err.Error()}
+	default:
+		return &StatusError{Code: CodeCanceled, Message: err.Error()}
+	}
 }
 
 func (p *inprocess) close() error {

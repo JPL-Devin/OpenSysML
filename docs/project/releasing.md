@@ -199,10 +199,10 @@ OIDC token exchanged with Fulcio, so **no signing key exists anywhere**: nothing
 to provision, rotate or leak. The job then verifies its own bundle and fails the
 release rather than publish a signature clients would reject.
 
-That signature is what lets `opensysml` install a core release published after
-it. For a release it pins no digest for, the client downloads the manifest and
-the bundle, verifies the bundle, and takes the asset's digest from the verified
-manifest. The only signature it accepts is this pipeline's:
+That signature is what lets the Python and Node clients install a core release
+published after them. For a release a client pins no digest for, it downloads
+the manifest and the bundle, verifies the bundle, and takes the asset's digest
+from the verified manifest. The only signature accepted is this pipeline's:
 
 | | |
 |---|---|
@@ -215,7 +215,8 @@ what CircleCI puts in the certificate. The client currently accepts any pipeline
 definition of that project, because no signature of the real one exists to read
 the identifier off yet — the verify step in `build-release` prints it, so after
 the first signed release set it as `definition=` on the signer in
-`clients/python/opensysml/signing.py` to narrow the pin to the one pipeline.
+`clients/python/opensysml/signing.py` and in `clients/node/src/node/signing.ts`
+to narrow the pin to the one pipeline.
 
 Anything short of a verified manifest is refused exactly as an unpinned release
 is today: no bundle asset, a bundle that does not verify, another signer, a
@@ -226,8 +227,9 @@ it — same origin as the binary — and remains behind
 
 ### Pinned release digests
 
-`PINNED_SHA256` in `clients/python/opensysml/binary.py` still covers the releases
-published before signing existed, and it stays the override: where a pin exists
+The table in `clients/release-digests.json`, which every client ships a synced
+copy of, still covers the releases published before signing existed, and it
+stays the override: where a pin exists
 it wins, and a verified manifest that disagrees with a pin is an error rather
 than a downgrade. **Per release there is now nothing to do** — pinning a release
 signed by the pipeline is optional. Pinning still works, and is worth doing for
@@ -360,7 +362,7 @@ package.
 `opensysml` does not ship the service: it downloads a `sysml-grpc` binary at
 runtime for whatever release the caller names (`version=`,
 `$OPENSYSML_GRPC_VERSION`, or `latest`), verifying it against the digest it pins
-for that release (`PINNED_SHA256` in `clients/python/opensysml/binary.py`) or, for a
+for that release (its copy of `clients/release-digests.json`) or, for a
 release it pins nothing for, against the digest in the release's signed
 `SHA256SUMS.txt` (see [the signed checksum manifest](#the-signed-checksum-manifest)),
 which is why a core release published after a client release needs no new client
@@ -554,8 +556,11 @@ All six share the version in `clients/node/package.json`, because the
 published first, so `@opensysml/client` is never on the registry naming a
 version of them that is not. Where no package matches — a platform with no
 release build — the client falls back to `$OPENSYSML_BINARY`, a binary in
-`~/.opensysml/bin/`, `sysml-grpc` on `$PATH`, or an explicit external service;
-it never downloads anything. See `clients/node/README.md`.
+`~/.opensysml/bin/`, a release download into that cache, `sysml-grpc` on
+`$PATH`, or an explicit external service. That download is the Python client's:
+the same shared cache and metadata, the same pinned digests, and the same
+signed-manifest verification, refusing a release it can neither pin nor verify.
+See `clients/node/README.md`.
 
 `build-node-binaries` cross-compiles the five binaries from the tagged revision
 and writes a `.sha256` sidecar beside each; `npm run platform-packages` refuses
@@ -690,6 +695,18 @@ one: the client does not ship the service, so its version says nothing about
 which core release it runs against, and a Maven Central version can never be
 replaced, so it must not hang off a `v*` core tag that `ghr -replace` re-runs.
 
+Like the Python client, it downloads a `sysml-grpc` binary at runtime for
+whatever release the caller names (`ConnectionOptions.downloadVersion()`,
+`$OPENSYSML_GRPC_VERSION`, or `latest`) and verifies it against the digest its
+own copy of `clients/release-digests.json` — shipped in the jar as
+`release-digests.json` — pins for that release, or, for a release it pins
+nothing for, against the digest in the release's signed `SHA256SUMS.txt` (see
+[the signed checksum manifest](#the-signed-checksum-manifest)). A core release
+published after a client release therefore needs no new client release. The
+`dev.sigstore:sigstore-java` dependency is what verifies that bundle, so a
+consumer that excludes it can install only pinned releases. See
+`clients/java/README.md`.
+
 ### What the build already produces
 
 `mvn -f clients/java/pom.xml install` attaches everything Central validates:
@@ -760,10 +777,14 @@ What the crate is ready for, and what it is not:
   published crate documents its own minimum supported Rust version.
 - `opensysml-conformance` is a workspace member and a runner, not a library, and
   is **not** published: it reads `conformance/scenarios` from this repository.
-- The client resolves a `sysml-grpc` binary and never downloads one, so a
-  published crate carries no binary asset and needs no checksum manifest of its
-  own. If a downloader is ever added, it inherits the Python client's pinned
-  digests and signed-manifest verification first — see `clients/rust/README.md`.
+- The client downloads a `sysml-grpc` release binary when `$OPENSYSML_GRPC_VERSION`
+  asks for one, and verifies it against `clients/rust/opensysml/release-digests.json`,
+  which the crate embeds with `include_str!` and its `include` list ships — so a
+  release whose digests are not in the published crate is refused rather than
+  installed. Unlike the Python client it does not verify the signed
+  `SHA256SUMS.txt` manifest, so publishing a release also means shipping a crate
+  version that pins it if Rust callers are to install it; see
+  `clients/rust/README.md`.
 
 The procedure, once the name is settled:
 

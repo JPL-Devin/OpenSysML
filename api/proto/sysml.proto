@@ -13,6 +13,11 @@ service SysMLService {
 
   // Parse a SysML file and return model hash for subsequent queries
   rpc ParseFile(ParseFileRequest) returns (ParseFileResponse);
+
+  // Parse several documents as one model, so a name one document declares
+  // resolves in another and an import between them is satisfied. Reported as
+  // the "parse_sources" capability.
+  rpc ParseSources(ParseSourcesRequest) returns (ParseSourcesResponse);
   
   // Get symbol information by qualified name
   rpc GetSymbol(GetSymbolRequest) returns (SymbolResponse);
@@ -52,6 +57,15 @@ service SysMLService {
   // as the standard defines them, so a client that speaks that API can filter a
   // model here. Reported as the "query" capability.
   rpc Query(QueryRequest) returns (QueryResponse);
+
+  // Run a named document query with parameter bindings, the answer the REPL's
+  // %run-query gives, as typed rows rather than formatted lines. Reported as
+  // the "document_query" capability.
+  rpc RunDocumentQuery(RunDocumentQueryRequest) returns (RunDocumentQueryResponse);
+
+  // Render a named document to Markdown, as the CLI's -render-document does.
+  // Reported as the "render_document" capability.
+  rpc RenderDocument(RenderDocumentRequest) returns (RenderDocumentResponse);
 }
 
 // FailureReason says what kind of failure an `error` reports, so a client acts
@@ -204,6 +218,41 @@ message ParseFileRequest {
   // admits is an error rather than a warning. Part of the cache key, so the two
   // modes never serve each other's diagnostics.
   bool strict_conformance = 5;
+}
+
+// SourceDocument is one document of a multi-document parse.
+message SourceDocument {
+  oneof source {
+    string file_path = 1;
+    string content = 2;
+  }
+  // Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+  // and is ignored for a file_path, whose extension says which language it is.
+  string language = 3;
+  // Name to report inline content by in diagnostics, and the name the document
+  // is indexed under. Empty names the document by its position in the request,
+  // and is ignored for a file_path, which is named by its path.
+  string name = 4;
+}
+
+// ParseSourcesRequest specifies the documents that make up one model. Two
+// documents may not carry the same name: each is a distinct document of the
+// model, and diagnostics name the document they came from.
+message ParseSourcesRequest {
+  repeated SourceDocument documents = 1;
+  // Judge every document as conforming SysML v2, as ParseFileRequest does.
+  bool strict_conformance = 2;
+}
+
+// ParseSourcesResponse contains the parsed model, whose documents are one model
+// for every later request: a model_hash names all of them together.
+message ParseSourcesResponse {
+  string model_hash = 1;
+  // Root namespace per document, in the order the request named them.
+  repeated SymbolInfo roots = 2;
+  // Diagnostics of every document, each naming the document it came from.
+  repeated Diagnostic diagnostics = 3;
+  string error = 4;
 }
 
 // ParseFileResponse contains parsed model info
@@ -662,6 +711,10 @@ message ServerInfoResponse {
   //                  materializes.
   //   "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
   //                  preserving everything the edit did not touch.
+  //   "document_query" - the RunDocumentQuery RPC runs a named document query
+  //                  and answers with typed rows.
+  //   "render_document" - the RenderDocument RPC renders a named document to
+  //                  Markdown.
   repeated string capabilities = 2;
 }
 
@@ -749,4 +802,84 @@ message QueryResultElement {
   string id = 1;    // qualified name, the identity this service reports
   string type = 2;  // metamodel type name ("PartUsage", "PartDefinition", ...)
   map<string, string> properties = 3;
+}
+
+// RunDocumentQueryRequest runs a named document query — a calc def
+// specializing DocumentQueries::Query — against a model the service already
+// parsed, binding its entry parameters. It answers as %run-query does, but with
+// typed rows rather than formatted lines.
+message RunDocumentQueryRequest {
+  string model_hash = 1;  // from ParseFile response
+  // FQN of the document query to run. Fails with NOT_FOUND when the model does
+  // not declare it, and INVALID_ARGUMENT when it declares something else.
+  string query_id = 2;
+  // Entry-parameter bindings. Repeating a parameter appends to its binding, so
+  // a nonscalar parameter can be given several values.
+  repeated DocumentQueryBinding bindings = 3;
+}
+
+// DocumentQueryBinding binds one entry parameter of a document query.
+message DocumentQueryBinding {
+  string parameter = 1;
+  repeated DocumentValue values = 2;
+}
+
+// DocumentValue is one typed document-query value. A request binds a model
+// element by qualified name in element_id; a response also says what the
+// element is in element_type. `infinity` denotes an unbounded multiplicity and
+// is only ever answered, never bound.
+message DocumentValue {
+  oneof kind {
+    string element_id = 1;   // qualified name of a model element
+    string string_value = 2;
+    int64 int_value = 3;
+    double real_value = 4;
+    bool bool_value = 5;
+    bool infinity = 6;
+  }
+  // Metamodel type of element_id ("PartUsage", ...); answered, ignored when bound.
+  string element_type = 7;
+}
+
+// DocumentQueryColumn is one projected property, in projection order.
+message DocumentQueryColumn {
+  string name = 1;
+}
+
+// DocumentQueryCell is one row's values for one column, in the query's order.
+message DocumentQueryCell {
+  repeated DocumentValue values = 1;
+}
+
+// DocumentQueryRow is one selected element and its projected cells, one per
+// column in column order.
+message DocumentQueryRow {
+  // The selected element itself, an element value with its qualified name.
+  DocumentValue element = 1;
+  repeated DocumentQueryCell cells = 2;
+}
+
+// RunDocumentQueryResponse is the query's answer: its projected columns and its
+// rows, both in the deterministic order the engine reports. A query that
+// selects nothing answers with no rows; a query that could not be run fails the
+// call with the status its failure maps to.
+message RunDocumentQueryResponse {
+  repeated DocumentQueryColumn columns = 1;
+  repeated DocumentQueryRow rows = 2;
+}
+
+// RenderDocumentRequest renders a named document — a part def specializing
+// DocumentQueries::Document — to Markdown. A document binds its queries'
+// parameters in the model, so the request carries none.
+message RenderDocumentRequest {
+  string model_hash = 1;  // from ParseFile response
+  // FQN of the document to render. Fails with NOT_FOUND when the model does
+  // not declare it, and INVALID_ARGUMENT when it declares something else.
+  string document_id = 2;
+}
+
+// RenderDocumentResponse carries the rendered Markdown, byte-for-byte what the
+// CLI's -render-document writes.
+message RenderDocumentResponse {
+  string markdown = 1;
 }

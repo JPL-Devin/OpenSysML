@@ -30,6 +30,12 @@
       <artifactId>protobuf-java-util</artifactId>
       <optional>true</optional>
     </dependency>
+    <!-- Verifies the sigstore bundle over a release's SHA256SUMS.txt, which is what lets a
+         release newer than this client's pinned digests install. -->
+    <dependency>
+      <groupId>dev.sigstore</groupId>
+      <artifactId>sigstore-java</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>

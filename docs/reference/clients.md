@@ -23,9 +23,8 @@ The protocols and what the service serves on a single port are described in
   directly, so there is no port, no child process and no serialization round trip. A Go program
   that starts a service to talk to itself has paid for a child whose only job is to run the code
   it already links.
-- **In a notebook, or for the whole RPC surface: Python.** `opensysml` is the one client that
-  covers every RPC the service has — verification, behaviour execution, RDF conversion, edits,
-  `Query` — plus generated typed classes, Jupyter display hooks and DataFrame integration.
+- **In a notebook: Python.** `opensysml` adds generated typed classes, Jupyter display hooks and
+  DataFrame integration to the full RPC surface.
 - **In a browser or a Node service: `@opensysml/client`.** No native addon, and the browser entry
   point needs only `fetch` against a service that allows the page's origin.
 - **In a JVM host application the caller does not control — an Eclipse-based tool, a Cameo plugin,
@@ -34,23 +33,30 @@ The protocols and what the service serves on a single port are described in
 - **In a Rust program: `opensysml`.** Blocking, with no asynchronous runtime in its default
   dependency tree, and safe to call from inside one.
 
-## What the four newer surfaces cover
+The Go and Python clients each cover every RPC the service has; the Node, Java and Rust clients
+cover the v1 subset described below.
 
-The Go, Node, Java and Rust clients are v1 surfaces with the same scope: connection lifecycle,
+## What the newer surfaces cover
+
+The Node, Java and Rust clients are v1 surfaces with the same scope: connection lifecycle,
 capability negotiation, parsing (a file or inline source), diagnostics, symbol lookup, expression
-evaluation and instantiation. Deliberately **not** in v1, in all four rather than half-implemented
-in some:
+evaluation and instantiation. Deliberately **not** in v1, in all three rather than
+half-implemented in some:
 
 - the edit API (`ApplyEdits`) and generated model-ergonomics types;
 - RDF conversion (`Convert`);
 - verification (`VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction`) and `EvaluateCalc`;
 - behaviour execution (`ExecuteAction`, `ExecuteState`);
-- `Query` and OSLC query.
+- `Query` and OSLC query;
+- native document queries and rendering (`RunDocumentQuery`, `RenderDocument`).
 
-Those RPCs exist and are served. Reach them from the Python client, or from the generated stubs
-each client ships beside its ergonomic layer, until a v2 wraps them. Each client's conformance
-report names, per scenario, which of these a skip belongs to, so a shrinking surface cannot pass
-quietly.
+Those RPCs exist and are served. Reach them from the Go or Python client, or from the generated
+stubs each client ships beside its ergonomic layer, until a v2 wraps them. Each client's
+conformance report names, per scenario, which of these a skip belongs to, so a shrinking surface
+cannot pass quietly.
+
+The Go API covers all of them but the generated model-ergonomics types: it reads models through
+`Symbol`, `Instance` and `Value` instead.
 
 ## Two lifecycle modes, and one guarantee
 
@@ -80,12 +86,13 @@ rather than bytes on the wire. See [service transports](service-transports.md).
 
 ## Providing the service binary
 
-No client downloads a binary except the Python one, which pins a SHA-256 per release asset and
-verifies the release's sigstore-signed manifest before it does. The others resolve one that is
+Only the Python and Node clients download a binary, and both pin a SHA-256 per release asset and
+verify the release's sigstore-signed manifest before they do. The others resolve one that is
 already there, and the resolution order is the same everywhere:
-`$OPENSYSML_GRPC_BINARY` (`$OPENSYSML_BINARY` in Node) first, then `~/.opensysml/bin/sysml-grpc`
-— where the Python client's verified download puts it — then `PATH`. The Node client adds its
-per-platform npm package, whose tarball npm verifies, with no postinstall script and no download.
+`$OPENSYSML_GRPC_BINARY` (`$OPENSYSML_BINARY` in the Node and Python clients) first, then
+`~/.opensysml/bin/sysml-grpc` — where a verified download puts it — then `PATH`. The Node client adds its
+per-platform npm package, whose tarball npm verifies, with no postinstall script; it is preferred
+over a download, which happens only when no package matches the platform.
 The Java client additionally verifies a digest the caller pins with `expectedBinarySha256`.
 
 An unresolvable binary is an error naming every way to supply one, rather than a fetch.

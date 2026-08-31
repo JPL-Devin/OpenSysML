@@ -365,6 +365,17 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, redefined)
 	}
 
+	// The subject or objective of a case, requirement or their usages implicitly
+	// redefines the same role of each general, so it takes that role's type when
+	// it declares none (see roles.go).
+	for _, redefined := range m.ImplicitRoleRedefinitions(sym) {
+		if redefined == nil || redefined == sym || seen[redefined] {
+			continue
+		}
+		seen[redefined] = true
+		out = append(out, redefined)
+	}
+
 	// A declaration keeps its kind's base whatever else it declares; implicitBase
 	// suppresses it only when a declared chain already reaches that base. A
 	// metadata keyword supplies the kind itself, so its baseType stands in.

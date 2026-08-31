@@ -26,6 +26,9 @@ from opensysml.capabilities import MissingCapabilityError, ServerInfo
 from opensysml.values import UNSET, UnsetType
 from opensysml.verdict import CalcResult, Verdict
 from opensysml.query import QueryElement, QueryError
+from opensysml.document import (
+    DocumentQueryError, DocumentQueryResult, DocumentRow, ElementRef, INFINITY,
+)
 from opensysml.conversion import (
     FORMAT_SYSML, FORMAT_TURTLE, Conversion, ExperimentalFeatureWarning,
     format_of_path, is_experimental,
@@ -56,6 +59,8 @@ __all__ = [
     "Editor", "EditResult", "AppliedEdit",
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",
+    "DocumentQueryError", "DocumentQueryResult", "DocumentRow", "ElementRef",
+    "INFINITY",
     "OpenSysMLError", "ChecksumMismatchError", "ConnectionError",
     "ConversionError", "ExecutionError", "FeatureValueError",
     "EditError", "NoEditsError", "EditTargetError", "InvalidEditError",

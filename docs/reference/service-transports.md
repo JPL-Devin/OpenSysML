@@ -51,7 +51,7 @@ definition rather than a client's guess:
 
 | The capability describes | A request that needs it | What a client should do |
 |---|---|---|
-| what the service can be *asked*: `strict_conformance`, `inline_language`, `evaluate_subject`, `verification`, `convert`, `apply_edits`, `authoring`, `query`, `oslc_query` | is **refused** with `UNIMPLEMENTED`, naming the capability | check the advertised list first, and report the missing capability locally rather than spending a round trip |
+| what the service can be *asked*: `strict_conformance`, `inline_language`, `parse_sources`, `evaluate_subject`, `verification`, `convert`, `apply_edits`, `authoring`, `query`, `oslc_query`, `document_query`, `render_document` | is **refused** with `UNIMPLEMENTED`, naming the capability | check the advertised list first, and report the missing capability locally rather than spending a round trip |
 | how a response is *populated*: `type_facts`, `symbol_attributes`, `feature_values`, `enum_values`, `unset_value` | is answered with those fields **omitted** | check before reading the fields; an omitted field is not an error |
 
 So a client cannot treat "the call succeeded" as "the field was computed", and cannot treat

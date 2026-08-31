@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"connectrpc.com/connect"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
@@ -12,16 +14,60 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// CachedModel holds parsed model data with semantic analysis results
-type CachedModel struct {
+// CachedDocument is one parsed document of a model.
+type CachedDocument struct {
 	Root        *ast.RootNamespace
-	Index       *symbols.Index      // For symbol lookups by FQN
 	Source      *source.SourceFile  // For diagnostic line/col mapping
 	ParseDiags  []parser.Diagnostic // Parser diagnostics
 	PassesDiags []passes.Diagnostic // Semantic pass diagnostics (name-resolution, type, constraint)
+}
+
+// CachedModel holds parsed model data with semantic analysis results
+type CachedModel struct {
+	// Documents are the model's documents, at least one, in the order the parse
+	// request named them. They share Index, so a name one declares resolves in
+	// another and an import between them is satisfied.
+	Documents []*CachedDocument
+	Index     *symbols.Index // For symbol lookups by FQN
 
 	symCtxOnce sync.Once
 	symCtx     *SymbolContext
+}
+
+// Primary is the document a model is named by: the only one of a single-document
+// model, and the first named of a multi-document one, whose root namespace is
+// where a name with nothing else to resolve against is looked up.
+func (m *CachedModel) Primary() *CachedDocument {
+	return m.Documents[0]
+}
+
+// DocumentRoots are the root scopes of the model's documents, in order, skipping
+// any the index does not hold.
+func (m *CachedModel) DocumentRoots() []*symbols.Scope {
+	roots := make([]*symbols.Scope, 0, len(m.Documents))
+	for _, doc := range m.Documents {
+		if root := m.Index.DocumentRoot(doc.Source.Name()); root != nil {
+			roots = append(roots, root)
+		}
+	}
+	return roots
+}
+
+// PrimaryRoot is the root scope of the document the model is named by.
+func (m *CachedModel) PrimaryRoot() *symbols.Scope {
+	return m.Index.DocumentRoot(m.Primary().Source.Name())
+}
+
+// SoleDocument is the model's one document, for an operation defined on a single
+// document's own source — editing it, or writing it back out. A model of several
+// documents is refused rather than answered about one of them.
+func (m *CachedModel) SoleDocument() (*CachedDocument, error) {
+	if len(m.Documents) > 1 {
+		return nil, statusErrorf(connect.CodeFailedPrecondition,
+			"this operation is defined on one document, and the model has %d: "+
+				"name the document to operate on by parsing it on its own", len(m.Documents))
+	}
+	return m.Primary(), nil
 }
 
 // SymbolContext returns the conversion context for this model, building it on

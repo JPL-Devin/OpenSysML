@@ -33,7 +33,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "release-digests.json"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -56,9 +57,14 @@
     "@opensysml/sysml-grpc-darwin-x64": "0.1.0",
     "@opensysml/sysml-grpc-linux-arm64": "0.1.0",
     "@opensysml/sysml-grpc-linux-x64": "0.1.0",
-    "@opensysml/sysml-grpc-win32-x64": "0.1.0"
+    "@opensysml/sysml-grpc-win32-x64": "0.1.0",
+    "@sigstore/bundle": "4.0.0",
+    "@sigstore/protobuf-specs": "0.5.1",
+    "@sigstore/tuf": "4.0.2",
+    "@sigstore/verify": "3.1.1"
   },
   "devDependencies": {
+    "@types/make-fetch-happen": "^10.0.4",
     "@types/node": "22.10.5",
     "c8": "11.0.0",
     "eslint": "9.39.5",

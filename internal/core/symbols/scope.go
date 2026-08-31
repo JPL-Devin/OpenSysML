@@ -16,6 +16,7 @@ type Scope struct {
 	node             ast.Node                           // the owning declaration node
 	names            []string                           // named members in declaration order
 	syms             []*Symbol                          // named members in declaration order
+	members          []*Symbol                          // all registrations in declaration order
 	memberIndex      atomic.Pointer[map[string][]int32] // lazily built lookup index for larger scopes
 	anonymousMembers []*Symbol                          // anonymous symbols (no name)
 	children         []*Scope
@@ -113,12 +114,14 @@ func (s *Scope) Define(name string, sym *Symbol) {
 	}
 	s.names = append(s.names, name)
 	s.syms = append(s.syms, sym)
+	s.members = append(s.members, sym)
 	s.memberIndex.Store(nil)
 }
 
 // DefineAnonymous adds an anonymous symbol (without name) to this scope.
 func (s *Scope) DefineAnonymous(sym *Symbol) {
 	s.anonymousMembers = append(s.anonymousMembers, sym)
+	s.members = append(s.members, sym)
 }
 
 // HasAnonymousMembers reports whether any member is declared without a name.
@@ -264,7 +267,7 @@ func (s *Scope) MemberNames() []string {
 	return out
 }
 
-// AllMembers returns named and anonymous symbols in declaration order, with named members first.
+// AllMembers returns named and anonymous symbol registrations in declaration order.
 func (s *Scope) AllMembers() []*Symbol {
 	var all []*Symbol
 	s.ForEachMember(func(sym *Symbol) bool {
@@ -274,20 +277,13 @@ func (s *Scope) AllMembers() []*Symbol {
 	return all
 }
 
-// ForEachMember visits named and anonymous symbols in declaration order, with named members first.
+// ForEachMember visits named and anonymous symbol registrations in declaration order.
 func (s *Scope) ForEachMember(yield func(*Symbol) bool) {
 	if s == nil || yield == nil {
 		return
 	}
-	namedLen := len(s.syms)
-	for i := 0; i < namedLen; i++ {
-		if !yield(s.syms[i]) {
-			return
-		}
-	}
-	anonymousLen := len(s.anonymousMembers)
-	for i := 0; i < anonymousLen; i++ {
-		if !yield(s.anonymousMembers[i]) {
+	for _, sym := range s.members {
+		if !yield(sym) {
 			return
 		}
 	}

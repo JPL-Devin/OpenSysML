@@ -223,6 +223,60 @@ func TestSendViaPortReachesConnectedAccept(t *testing.T) {
 	assertIntOutput(t, outputs, "got", 42)
 }
 
+const commandItem = "\n\titem def Command { attribute code : Integer; }\n" +
+	"\tport def CommandPort { out item issued : Command; }\n"
+
+// An item usage is a message of its own (`item cmd : Command { … }` then
+// `send cmd via p`): the object is typed by the definition typing the usage, so
+// an accept of that definition takes it and reads its features.
+func TestSendOfAnItemObjectIsTypedByItsDefinition(t *testing.T) {
+	outputs, err := executeActionSource(t, "ship", `package P {
+		private import ScalarValues::*;`+commandItem+`
+		action ship {
+			attribute got : Integer = 0;
+			item cmd : Command { attribute :>> code = 7; }
+			port src : CommandPort;
+			port dst : ~CommandPort;
+			connect src to dst;
+			first start;
+			action sender { send cmd via src; }
+			action reader accept order : Command via dst { assign got := order.code; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 7)
+}
+
+// The type of such a message is the definition, not the usage sent, so an accept
+// naming the usage waits on: nothing was sent of that type.
+func TestSendOfAnItemObjectIsNotTypedByTheUsageSent(t *testing.T) {
+	_, err := executeActionSource(t, "ship", `package P {
+		private import ScalarValues::*;`+commandItem+`
+		action ship {
+			item cmd : Command { attribute :>> code = 7; }
+			port src : CommandPort;
+			port dst : ~CommandPort;
+			connect src to dst;
+			first start;
+			action sender { send cmd via src; }
+			action reader accept order : cmd via dst;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`)
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Fatalf("execute action: err = %v, want %v", err, ErrAcceptDeadlock)
+	}
+}
+
 // A standard-library feature named receiver must not shadow the sibling
 // receiving node a routed send addresses.
 func TestSendViaPortToReceiverWithLibraries(t *testing.T) {
@@ -1107,6 +1161,44 @@ func TestAddressedSendThroughMultiplePartIsTyped(t *testing.T) {
 	}
 }
 
+// A path through a multi-valued feature of the sending object denotes every
+// element it holds (KerML §7.3.4.6): one send delivers one message per element,
+// each on that element's own identity, with the port path kept for each.
+func TestAddressedSendFansOutOverAMultiValuedFeature(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Leaf { port inPort : PingPort; }
+		part def Node {
+			part nodes : Leaf[3];
+			action listen { first start; done; succession first start then done; }
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{
+		Target:     "nodes.inPort",
+		TargetPath: true,
+		Scope:      declScope(oneSymbol(t, idx, "test::Node::listen")),
+	}
+	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, alpha); err != nil {
+		t.Fatalf("post to nodes.inPort: %v", err)
+	}
+	elements, err := ctx.fvObjects(alpha, "nodes")
+	if err != nil || len(elements) != 3 {
+		t.Fatalf("nodes elements = %v, err = %v, want 3", elements, err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 3 {
+		t.Fatalf("pending messages = %+v, want one per element", pending)
+	}
+	for i, msg := range pending {
+		if msg.Port != "inPort" || msg.Object != elements[i].ID {
+			t.Errorf("message %d delivered as %+v, want port inPort of object %d", i, msg, elements[i].ID)
+		}
+	}
+}
+
 // An object's behavior addresses a receiving node of an action it performs: the
 // performance is no object of its own, so identity must not exclude it.
 func TestAddressedSendReachesPerformedAction(t *testing.T) {
@@ -1347,4 +1439,45 @@ func TestSendRoutesThroughAnEnclosingNestedFlowsConnector(t *testing.T) {
 		t.Fatalf("execute action sending from a nested flow: %v", err)
 	}
 	assertIntOutput(t, outputs, "got", 7)
+}
+
+// An accepted signal materializes one occurrence per message: the guard read
+// during transition selection and the firing effect see the same object.
+func TestAcceptedSignalMaterializesOneOccurrencePerMessage(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		private import ScalarValues::*;
+		attribute def Ping { attribute n : Real; }
+		state sm {
+			attribute total : Real = 0.0;
+			entry; then idle;
+			state idle;
+			state seen;
+			transition first idle accept p : Ping if p.n > 0.0 do assign total := total + p.n then seen;
+		}
+	}`))
+	exec, err := newStateExecutor(ctx, oneSymbol(t, idx, "test::sm"), nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	ping := oneSymbol(t, idx, "test::Ping")
+	exec.enqueueSignal(Message{SignalType: "Ping", Signal: ping, Payload: map[string]Value{
+		"n": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 2}},
+	}})
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	assertCurrentState(t, exec, "seen")
+
+	count := 0
+	for _, inst := range ctx.instances {
+		if inst.Type == ping {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected one Ping occurrence for one message, got %d", count)
+	}
 }

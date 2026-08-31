@@ -248,6 +248,66 @@ class Model:
             self._hash, payload, scope=scope, select=select, where=where,
         )
 
+    def run_document_query(self, query_id, bindings=None):
+        """Run one of this model's named document queries.
+
+        The query is the model's own — a calc def specializing
+        ``DocumentQueries::Query`` — not the standard's Query object
+        :meth:`query` evaluates. See :mod:`opensysml.document`.
+
+        Args:
+            query_id (str): Qualified name of the document query
+            bindings (Mapping, optional): Parameter name to a value or list of
+                values; an :class:`~opensysml.document.ElementRef` binds a
+                model element
+
+        Returns:
+            DocumentQueryResult: Projected columns and typed rows, in the
+            engine's deterministic order
+
+        Raises:
+            MissingCapabilityError: If the service cannot run document queries
+            InvalidRequestError: If the query is not one, or a binding is wrong
+            SymbolNotFoundError: If this model does not declare the query
+            ModelNotFoundError: If the service no longer holds this model
+
+        Example:
+            >>> from opensysml.document import ElementRef
+            >>> result = model.run_document_query(
+            ...     "Observatory::SubsystemTable",
+            ...     bindings={"root": ElementRef("Observatory::telescope")})
+            >>> result.columns
+            ('name', 'mass')
+        """
+        return self.connection.run_document_query(
+            self._hash, query_id, bindings=bindings,
+        )
+
+    def render_document(self, document_id):
+        """Render one of this model's named documents to Markdown.
+
+        The document is a part def specializing ``DocumentQueries::Document``,
+        whose queries are bound in the model.
+
+        Args:
+            document_id (str): Qualified name of the document
+
+        Returns:
+            str: The rendered Markdown
+
+        Raises:
+            MissingCapabilityError: If the service cannot render documents
+            InvalidRequestError: If the symbol named is not a document
+            SymbolNotFoundError: If this model does not declare the document
+            ModelNotFoundError: If the service no longer holds this model
+
+        Example:
+            >>> markdown = model.render_document("Observatory::MassReport")
+            >>> markdown.splitlines()[0]
+            '# Telescope Mass Report'
+        """
+        return self.connection.render_document(self._hash, document_id)
+
     def find(self, name):
         """Find symbol by short name or fully-qualified name (breadth-first).
 

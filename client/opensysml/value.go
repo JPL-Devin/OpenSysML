@@ -1,5 +1,7 @@
 package opensysml
 
+import "fmt"
+
 // Value is one evaluated SysML value. It is a sealed sum: the concrete types
 // are Int, Real, Bool, String, InstanceID, Sequence, Null, Unset, Quantity and
 // EnumLiteral, and a type switch over them is exhaustive.
@@ -79,6 +81,34 @@ type EnumLiteral struct {
 	EnumerationID string
 	// Name is the literal as a reader writes it ("Color::red").
 	Name string
+}
+
+// String renders the quantity as it was written: magnitude then unit.
+func (q Quantity) String() string {
+	magnitude := fmt.Sprintf("%v", q.Magnitude)
+	if q.Unit == "" {
+		return magnitude
+	}
+	return magnitude + " " + q.Unit
+}
+
+// String is the literal as a reader writes it, the Name the service reported.
+func (e EnumLiteral) String() string {
+	return e.Name
+}
+
+// String reports the absence of a value, with the service's reason when it
+// gave one.
+func (n Null) String() string {
+	if n == "" {
+		return "null"
+	}
+	return "null: " + string(n)
+}
+
+// String reports a materialized feature holding no value.
+func (Unset) String() string {
+	return "unset"
 }
 
 func (Int) isValue()         { /* marker: closed Value set */ }

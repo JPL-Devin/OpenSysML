@@ -1,12 +1,15 @@
 # LSP extensions
 
-`sysml-lsp` speaks the Language Server Protocol, plus the three methods on this
+`sysml-lsp` speaks the Language Server Protocol, plus the methods on this
 page. They are not in the protocol, so a client must ask for them by name; the
 server says it serves them by advertising, in the `initialize` result:
 
 ```json
-{ "capabilities": { "experimental": { "openSysmlRender": true } } }
+{ "capabilities": { "experimental": { "openSysmlRender": true, "openSysmlRenderDocument": true } } }
 ```
+
+`openSysmlRender` covers the view-rendering methods, `openSysmlRenderDocument`
+the document-rendering ones.
 
 A client that does not see that capability must not send these methods — that is
 how a new client and an older server stay compatible.
@@ -164,6 +167,46 @@ with `supported: false` and the reason, so a client can say why it cannot be
 drawn instead of hiding it. `pseudoViews` lists the supported `#<kind>` specs
 in sorted order; a client can use it to offer pseudo-views without duplicating
 the server's supported-kind list.
+
+## `opensysml/documents` (request)
+
+Lists the document definitions the workspace holds — the `part def`s
+specializing `DocumentQueries::Document` — which is what fills a Render
+Document command's picker. It takes no parameters.
+
+```json
+{
+  "documents": [
+    { "name": "Observatory::MassReport", "uri": "file:///tmp/observatory.sysml" }
+  ]
+}
+```
+
+Documents come in qualified-name order; `uri` is the file declaring one.
+Standard-library documents are not listed: the listing is of what the
+workspace's own files declare.
+
+## `opensysml/renderDocument` (request)
+
+Renders one document definition to Markdown: the document is compiled to a plan,
+its queries are executed against the workspace model, and the result is written
+the way the REPL's `%render-document` and `sysml -render-document` write it —
+the same pipeline, from the same workspace the diagnostics are computed from.
+
+```json
+{ "name": "Observatory::MassReport" }
+```
+
+```json
+{ "name": "Observatory::MassReport", "markdown": "# Telescope Mass Report\n…" }
+```
+
+`name` is the qualified name of a document definition, as `opensysml/documents`
+lists it. A name that resolves to nothing, names an element that is not a
+document, or names a document whose plan or query execution fails, fails the
+request with the typed error's message — `Observatory::Subsystem is not a
+document: one is a part def specializing DocumentQueries::Document` — rather
+than crashing or answering with partial output.
 
 ## `opensysml/renderChanged` (notification, server → client)
 

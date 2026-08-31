@@ -116,6 +116,15 @@ func TestQueryAndMetaQuery(t *testing.T) {
 	if len(lines) != 1 || !strings.HasPrefix(lines[0], "error: ") {
 		t.Fatalf("malformed %%query = %v", lines)
 	}
+	// A query that matched nothing must not be silent, or a caller cannot tell
+	// it apart from one that failed to run.
+	lines, _, err = s.runMeta(`%query oslc.where=sysml:name="spare"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != "no elements matched" {
+		t.Fatalf("no-match %%query = %v", lines)
+	}
 }
 
 // A body-expression parameter and a loop- or branch-body declaration exist only

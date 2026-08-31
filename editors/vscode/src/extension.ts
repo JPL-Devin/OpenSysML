@@ -9,6 +9,7 @@ import {
 } from "vscode-languageclient/node";
 
 import { DiagramPanels } from "./diagram";
+import { DocumentRendering } from "./document";
 
 const EXECUTABLE = process.platform === "win32" ? "sysml-lsp.exe" : "sysml-lsp";
 
@@ -16,6 +17,7 @@ let client: LanguageClient | undefined;
 let output: vscode.OutputChannel;
 let watcher: vscode.FileSystemWatcher;
 let diagrams: DiagramPanels;
+let documents: DocumentRendering;
 // Start/stop run one at a time: overlapping restarts would otherwise leave an
 // unreferenced client, and its server process, running forever.
 let queue: Promise<void> = Promise.resolve();
@@ -32,8 +34,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // The panel is the client of the server's render methods, and is registered
   // only once a server that serves them has started.
   diagrams = new DiagramPanels(context.extensionUri, output);
+  documents = new DocumentRendering(output);
   context.subscriptions.push(
     diagrams,
+    documents,
     vscode.commands.registerCommand("opensysml.restartServer", () => restart()),
     // The server binary is resolved at start, so pointing the setting at a fresh
     // build takes effect on the next restart rather than on reload.
@@ -103,12 +107,14 @@ async function startClient(): Promise<void> {
     void vscode.window.showErrorMessage(`SysML v2 language server failed to start: ${String(err)}`);
   }
   diagrams.attach(client);
+  documents.attach(client);
 }
 
 async function stopClient(): Promise<void> {
   const running = client;
   client = undefined;
   diagrams.detach();
+  documents.detach();
   if (running) {
     await running.stop();
   }

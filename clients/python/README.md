@@ -38,7 +38,33 @@ model.edit().add_part("Vehicle", "engine", type="Engine").apply()
 Use `opensysml.loads(text, language="kerml")` for inline KerML content.
 
 Every call goes through the `sysml-grpc` service, which `opensysml` starts automatically from
-`~/.opensysml/bin/sysml-grpc`; the guide below describes how to install it there.
+the first place it finds one; the guide below describes how to install it there.
+
+## Resolving the service binary
+
+Every client resolves the service binary in the same order, and this one is no
+exception:
+
+1. **`$OPENSYSML_BINARY`**, when set and non-empty: exactly that path is started.
+   If it names something that is not an executable file, that is an error naming
+   the variable and the path — an explicit instruction is never a fallback.
+2. **The shared cache** `~/.opensysml/bin/sysml-grpc` (`sysml-grpc.exe` on
+   Windows), where a verified download puts it and where `make build` can put
+   your own build.
+3. **A release download** into that cache, when a release is asked for by
+   `ensure_binary(version=...)` or `$OPENSYSML_GRPC_VERSION`. A download that was
+   asked for and failed is an error, not a reason to try `$PATH`, whose binary is
+   of no known release.
+4. **`$PATH`**: the first executable `sysml-grpc` (`sysml-grpc.exe` on Windows)
+   on it, which is what a package manager or `go install` leaves behind.
+
+With none of those, the error lists everywhere it looked and what would fix it.
+
+A binary from `$OPENSYSML_BINARY` or `$PATH` is used exactly as it is found: it
+belongs to no release, so **it is not verified against the pinned digests below**,
+not copied into the shared cache, and started at its own path rather than a
+digest-named link. Naming it, or installing it on `$PATH`, is trusting it; the
+pinned-digest trust model covers downloads only.
 
 ## Service ownership
 
@@ -113,8 +139,11 @@ each model N times, against a cache hit some 500x cheaper.
 
 ## Pinned release digests
 
-A download is verified against `PINNED_SHA256` in `opensysml/binary.py`, which
-pins the SHA-256 of every asset of a release. The `.sha256` served beside a
+A download is verified against the table in `clients/release-digests.json`, which
+pins the SHA-256 of every asset of a release and is the one table every client
+verifies against; `opensysml` ships its own synced copy of it as
+`opensysml/release-digests.json` and reads it as `binary.PINNED_SHA256`, because a
+pin resolved from outside the published wheel would not be a pin. The `.sha256` served beside a
 binary comes from whoever served the binary, so it detects corruption but not a
 republished release; a pinned digest is independent of that origin. A download
 with no pin fails with a message naming the version, rather than falling back to
@@ -122,17 +151,35 @@ the served checksum — `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=
 any repository) accepts same-origin trust explicitly for what it names, with a
 warning.
 
+The cache at `~/.opensysml/bin/sysml-grpc` is shared with the other clients, so
+deciding whether it is the release asked for and replacing the binary and its
+metadata is done holding `~/.opensysml/bin/sysml-grpc.lock` (`fcntl.lockf`, the
+same lock a Java `FileLock` and the Rust client take). Concurrent installers
+therefore queue rather than pair one release's bytes with another's record. Because that lock is held
+over the download, every response is read bounded — 512 MiB for a binary, 8 MiB
+for a checksum, manifest, bundle or release JSON — so an endless body is refused
+rather than filling memory while other clients wait.
+
+What a service is started from is not that shared path but a link to it under its
+own digest, `~/.opensysml/bin/sysml-grpc-<first 16 hex of its SHA-256>`, made
+while the lock is held: the cache is replaced in place, so starting it after the
+lock is dropped could start whatever another client installed in between. The
+Java and Rust clients name that file the same way, so the three share it, and a
+cache that cannot be hashed or linked is started directly with a warning saying so.
+
 At release time, after the service binaries are published and final:
 
 ```bash
 export GITHUB_TOKEN=...            # the release API rate-limits unauthenticated calls
 python scripts/pin_release_checksums.py --version v0.0.9 --write
-git commit -am 'chore(python): pin release digests for v0.0.9'
+git commit -am 'chore(clients): pin release digests for v0.0.9'
 ```
 
 The script downloads every `sysml-grpc-*` asset of that release, hashes what it
 downloaded, refuses the release if a `.sha256` sidecar disagrees with the asset
-it describes, and rewrites the table in place. `--check` re-hashes the assets of
+it describes, rewrites the table in place, and syncs it into every client that
+ships a copy (`python3 scripts/sync-release-digests.py`, whose `--check` mode CI
+runs so a copy cannot drift). `--check` re-hashes the assets of
 every pinned release and fails on any disagreement, catching a release
 republished with another binary. A opensysml release therefore pins the service
 releases published before it; asking for a newer one needs a newer opensysml (or

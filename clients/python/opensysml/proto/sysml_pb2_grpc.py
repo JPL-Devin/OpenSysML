@@ -45,6 +45,11 @@ class SysMLServiceStub:
                 request_serializer=sysml__pb2.ParseFileRequest.SerializeToString,
                 response_deserializer=sysml__pb2.ParseFileResponse.FromString,
                 _registered_method=True)
+        self.ParseSources = channel.unary_unary(
+                '/sysml.SysMLService/ParseSources',
+                request_serializer=sysml__pb2.ParseSourcesRequest.SerializeToString,
+                response_deserializer=sysml__pb2.ParseSourcesResponse.FromString,
+                _registered_method=True)
         self.GetSymbol = channel.unary_unary(
                 '/sysml.SysMLService/GetSymbol',
                 request_serializer=sysml__pb2.GetSymbolRequest.SerializeToString,
@@ -110,6 +115,16 @@ class SysMLServiceStub:
                 request_serializer=sysml__pb2.QueryRequest.SerializeToString,
                 response_deserializer=sysml__pb2.QueryResponse.FromString,
                 _registered_method=True)
+        self.RunDocumentQuery = channel.unary_unary(
+                '/sysml.SysMLService/RunDocumentQuery',
+                request_serializer=sysml__pb2.RunDocumentQueryRequest.SerializeToString,
+                response_deserializer=sysml__pb2.RunDocumentQueryResponse.FromString,
+                _registered_method=True)
+        self.RenderDocument = channel.unary_unary(
+                '/sysml.SysMLService/RenderDocument',
+                request_serializer=sysml__pb2.RenderDocumentRequest.SerializeToString,
+                response_deserializer=sysml__pb2.RenderDocumentResponse.FromString,
+                _registered_method=True)
 
 
 class SysMLServiceServicer:
@@ -127,6 +142,15 @@ class SysMLServiceServicer:
 
     def ParseFile(self, request, context):
         """Parse a SysML file and return model hash for subsequent queries
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ParseSources(self, request, context):
+        """Parse several documents as one model, so a name one document declares
+        resolves in another and an import between them is satisfied. Reported as
+        the "parse_sources" capability.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -229,6 +253,23 @@ class SysMLServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RunDocumentQuery(self, request, context):
+        """Run a named document query with parameter bindings, the answer the REPL's
+        %run-query gives, as typed rows rather than formatted lines. Reported as
+        the "document_query" capability.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RenderDocument(self, request, context):
+        """Render a named document to Markdown, as the CLI's -render-document does.
+        Reported as the "render_document" capability.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SysMLServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -241,6 +282,11 @@ def add_SysMLServiceServicer_to_server(servicer, server):
                     servicer.ParseFile,
                     request_deserializer=sysml__pb2.ParseFileRequest.FromString,
                     response_serializer=sysml__pb2.ParseFileResponse.SerializeToString,
+            ),
+            'ParseSources': grpc.unary_unary_rpc_method_handler(
+                    servicer.ParseSources,
+                    request_deserializer=sysml__pb2.ParseSourcesRequest.FromString,
+                    response_serializer=sysml__pb2.ParseSourcesResponse.SerializeToString,
             ),
             'GetSymbol': grpc.unary_unary_rpc_method_handler(
                     servicer.GetSymbol,
@@ -307,6 +353,16 @@ def add_SysMLServiceServicer_to_server(servicer, server):
                     request_deserializer=sysml__pb2.QueryRequest.FromString,
                     response_serializer=sysml__pb2.QueryResponse.SerializeToString,
             ),
+            'RunDocumentQuery': grpc.unary_unary_rpc_method_handler(
+                    servicer.RunDocumentQuery,
+                    request_deserializer=sysml__pb2.RunDocumentQueryRequest.FromString,
+                    response_serializer=sysml__pb2.RunDocumentQueryResponse.SerializeToString,
+            ),
+            'RenderDocument': grpc.unary_unary_rpc_method_handler(
+                    servicer.RenderDocument,
+                    request_deserializer=sysml__pb2.RenderDocumentRequest.FromString,
+                    response_serializer=sysml__pb2.RenderDocumentResponse.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'sysml.SysMLService', rpc_method_handlers)
@@ -363,6 +419,33 @@ class SysMLService:
             '/sysml.SysMLService/ParseFile',
             sysml__pb2.ParseFileRequest.SerializeToString,
             sysml__pb2.ParseFileResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ParseSources(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/ParseSources',
+            sysml__pb2.ParseSourcesRequest.SerializeToString,
+            sysml__pb2.ParseSourcesResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -714,6 +797,60 @@ class SysMLService:
             '/sysml.SysMLService/Query',
             sysml__pb2.QueryRequest.SerializeToString,
             sysml__pb2.QueryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RunDocumentQuery(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/RunDocumentQuery',
+            sysml__pb2.RunDocumentQueryRequest.SerializeToString,
+            sysml__pb2.RunDocumentQueryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RenderDocument(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/RenderDocument',
+            sysml__pb2.RenderDocumentRequest.SerializeToString,
+            sysml__pb2.RenderDocumentResponse.FromString,
             options,
             channel_credentials,
             insecure,

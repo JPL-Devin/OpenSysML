@@ -140,16 +140,16 @@ type queryEval struct {
 	reader *corequery.PropertyReader
 }
 
-// candidates returns the elements a query considers, in declaration order: the
-// whole loaded document when the scope is empty, else each scoped element and
-// everything nested inside it.
+// candidates returns the elements a query considers, in declaration order: every
+// loaded document of the model when the scope is empty, else each scoped element
+// and everything nested inside it.
 func (e *queryEval) candidates(cached *CachedModel, scope []string) ([]*symbols.Symbol, error) {
 	if len(scope) == 0 {
-		root := e.sc.Index.DocumentRoot(cached.Source.Name())
-		if root == nil {
-			return nil, nil
+		var out []*symbols.Symbol
+		for _, root := range cached.DocumentRoots() {
+			out = append(out, e.collect(root)...)
 		}
-		return e.collect(root), nil
+		return out, nil
 	}
 
 	var out []*symbols.Symbol

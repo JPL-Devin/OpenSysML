@@ -90,6 +90,197 @@ func (e *UnroutableSendError) Error() string {
 
 func (e *UnroutableSendError) Unwrap() error { return ErrUnroutableSend }
 
+// ownerDelivery is where a connection of an object holding the sender delivers:
+// the peer object reached and the port within it the message arrives at.
+type ownerDelivery struct {
+	object int64
+	port   string
+}
+
+// ownerDeliveries answers where a `send … via p` arrives through the connectors
+// of the objects holding the sender: a part's port joined by its owner to a
+// sibling's port reaches that sibling on the sibling's own identity, since the
+// owner writes its ends as paths from itself (SysML v2 §7.16). The second result
+// reports an end refusing the message because its inward features are typed for
+// another, which decides the error a send delivered nowhere gives.
+func (ctx *Context) ownerDeliveries(
+	self *Instance, send lower.Send, msg Message, typed bool,
+) ([]ownerDelivery, bool, error) {
+	var out []ownerDelivery
+	mismatch := false
+	seen := map[ownerDelivery]bool{}
+	path := ""
+	for child := ctx.viaPortHolder(self, send); child != nil && child.owner != nil; child = child.owner {
+		if child.ownerFeature == "" {
+			break
+		}
+		if path == "" {
+			path = child.ownerFeature
+		} else {
+			path = child.ownerFeature + "." + path
+		}
+		owner := child.owner
+		sending := path + "." + send.Target
+		conns := ctx.realizedConnections(ctx.objectConnections(owner.Type), owner)
+		for _, conn := range conns {
+			if !ctx.joinsTarget(conn, sending, send.TargetSym) {
+				continue
+			}
+			for _, end := range conn.Ends {
+				if end == sending {
+					continue
+				}
+				accepts := true
+				if typed {
+					var refused bool
+					accepts, refused = ctx.endReceivesMessage(conn.Scope, end, msg)
+					mismatch = mismatch || refused
+				} else {
+					accepts = ctx.endReceives(conn.Scope, end)
+				}
+				if !accepts {
+					continue
+				}
+				addrs, err := ctx.featureAddresses(conn.Scope, owner, strings.Split(end, "."))
+				if err != nil {
+					return nil, mismatch, err
+				}
+				for _, addr := range addrs {
+					if addr.Delivery != DeliverPort || addr.Object == 0 {
+						continue
+					}
+					delivery := ownerDelivery{object: addr.Object, port: addr.Port}
+					if seen[delivery] {
+						continue
+					}
+					seen[delivery] = true
+					out = append(out, delivery)
+				}
+			}
+		}
+	}
+	return out, mismatch, nil
+}
+
+// viaPortHolder is the object whose feature a via send's resolved port is: the
+// sender itself, or the nearest ancestor holding it when the behavior runs in a
+// part nested inside — a suboccurrence or portion sends through its whole's port.
+func (ctx *Context) viaPortHolder(self *Instance, send lower.Send) *Instance {
+	segments := strings.Split(send.Target, ".")
+	for inst := self; inst != nil; inst = inst.owner {
+		if ctx.holdsViaPort(inst, segments, send.TargetSym) {
+			return inst
+		}
+	}
+	return self
+}
+
+// holdsViaPort reports whether the dotted via path, walked through the objects
+// inst's features hold, ends at a port — the resolved one when the send has it.
+func (ctx *Context) holdsViaPort(inst *Instance, segments []string, want *symbols.Symbol) bool {
+	current := inst
+	for _, segment := range segments[:len(segments)-1] {
+		held, ok, err := ctx.fvObject(current, segment)
+		if err != nil || !ok {
+			return false
+		}
+		current = held
+	}
+	fv, held := current.FeatureValues[segments[len(segments)-1]]
+	if !held || !isPortFeature(fv.Feature) {
+		return false
+	}
+	return want == nil || fv.Feature.Symbol == want
+}
+
+// connectedDeliveries answers where a `send … via p` arrives through the
+// connections the sender routes over, each receiving end resolved to the object
+// holding the port it names (SysML v2 §7.16). The later results are the ends
+// that refused the message, which decide the error a send delivered nowhere gives.
+func (ctx *Context) connectedDeliveries(
+	conns []lower.Connection, self *Instance, send lower.Send, msg Message, typed bool,
+) ([]ownerDelivery, []string, bool, error) {
+	if send.Target == "" {
+		return nil, nil, false, nil
+	}
+	var out []ownerDelivery
+	var outbound []string
+	mismatch := false
+	seen := map[ownerDelivery]bool{}
+	seenEnd := map[string]bool{send.Target: true}
+	for _, conn := range conns {
+		one := []lower.Connection{conn}
+		var receiving, refused []string
+		if typed {
+			var connMismatch bool
+			receiving, refused, connMismatch = ctx.receivingEndsForMessage(one, send.Target, send.TargetSym, msg)
+			mismatch = mismatch || connMismatch
+		} else {
+			receiving, refused = ctx.receivingEnds(one, send.Target, send.TargetSym)
+		}
+		for _, end := range refused {
+			if !seenEnd[end] {
+				seenEnd[end] = true
+				outbound = append(outbound, end)
+			}
+		}
+		for _, end := range receiving {
+			if seenEnd[end] {
+				continue
+			}
+			seenEnd[end] = true
+			deliveries, err := ctx.endDeliveries(conn.Scope, self, end)
+			if err != nil {
+				return nil, outbound, mismatch, err
+			}
+			for _, delivery := range deliveries {
+				if seen[delivery] {
+					continue
+				}
+				seen[delivery] = true
+				out = append(out, delivery)
+			}
+		}
+	}
+	return out, outbound, mismatch, nil
+}
+
+// endDeliveries resolves the port an end names to the objects holding it. An end
+// naming a port of a behavior, or one this run's instance graph does not reach,
+// is delivered to the sender under the path as written.
+func (ctx *Context) endDeliveries(scope *symbols.Scope, self *Instance, end string) ([]ownerDelivery, error) {
+	addrs, err := ctx.featureAddresses(scope, self, strings.Split(end, "."))
+	if err != nil {
+		return nil, err
+	}
+	var out []ownerDelivery
+	for _, addr := range addrs {
+		if addr.Delivery != DeliverPort || addr.Object == 0 {
+			continue
+		}
+		out = append(out, ownerDelivery{object: addr.Object, port: addr.Port})
+	}
+	if len(out) == 0 {
+		if ctx.endNamesAStructuralPath(self, end) {
+			return nil, nil
+		}
+		return []ownerDelivery{{object: objectID(self), port: end}}, nil
+	}
+	return out, nil
+}
+
+// endNamesAStructuralPath reports whether an end reaches its port through a
+// non-port feature of the sender — a part it holds — so an end that resolved to
+// no object holds none this run and nothing behind it can receive.
+func (ctx *Context) endNamesAStructuralPath(self *Instance, end string) bool {
+	segments := strings.Split(end, ".")
+	if self == nil || len(segments) < 2 {
+		return false
+	}
+	fv, held := self.FeatureValues[segments[0]]
+	return held && !isPortFeature(fv.Feature) && !isBehaviorFeature(fv.Feature)
+}
+
 // routableConnections are the connections a `send … via p` of a behavior can
 // travel over: the ones the behavior's own body declares, and the ones declared
 // by the part performing it, whose ports the send names. The performer is the
@@ -225,13 +416,13 @@ func (ctx *Context) heldVariant(inst *Instance, variation string) string {
 // direction of its own, so what a message may traverse is decided by the flow
 // features of the port each end names, conjugated where the port's type is
 // (SysML v2 §7.15). Each list is in declaration order and without duplicates.
-func (ctx *Context) receivingEnds(conns []lower.Connection, sendingPort string) (receiving, outbound []string) {
+func (ctx *Context) receivingEnds(conns []lower.Connection, sendingPort string, target *symbols.Symbol) (receiving, outbound []string) {
 	if sendingPort == "" {
 		return nil, nil
 	}
 	seen := map[string]bool{sendingPort: true}
 	for _, conn := range conns {
-		if !joins(conn.Ends, sendingPort) {
+		if !ctx.joinsTarget(conn, sendingPort, target) {
 			continue
 		}
 		for _, end := range conn.Ends {
@@ -252,14 +443,14 @@ func (ctx *Context) receivingEnds(conns []lower.Connection, sendingPort string) 
 // receivingEndsForMessage finds connected receiving ends and distinguishes
 // typed message mismatches from ends that are outbound or otherwise unroutable.
 func (ctx *Context) receivingEndsForMessage(
-	conns []lower.Connection, sendingPort, signalType string,
+	conns []lower.Connection, sendingPort string, target *symbols.Symbol, msg Message,
 ) (receiving, outbound []string, typeMismatch bool) {
 	if sendingPort == "" {
 		return nil, nil, false
 	}
 	seen := map[string]bool{sendingPort: true}
 	for _, conn := range conns {
-		if !joins(conn.Ends, sendingPort) {
+		if !ctx.joinsTarget(conn, sendingPort, target) {
 			continue
 		}
 		for _, end := range conn.Ends {
@@ -267,7 +458,7 @@ func (ctx *Context) receivingEndsForMessage(
 				continue
 			}
 			seen[end] = true
-			accepts, mismatch := ctx.endReceivesMessage(conn.Scope, end, signalType)
+			accepts, mismatch := ctx.endReceivesMessage(conn.Scope, end, msg)
 			if accepts {
 				receiving = append(receiving, end)
 			} else if mismatch {
@@ -304,7 +495,7 @@ func (ctx *Context) endReceives(scope *symbols.Scope, end string) bool {
 
 // endReceivesMessage classifies a port for this message, reporting a mismatch
 // only when typed inward features reject it; conformance is accepted either way.
-func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end, signalType string) (bool, bool) {
+func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end string, msg Message) (bool, bool) {
 	sym, ok := ctx.portSymbol(scope, end)
 	if !ok {
 		return true, false
@@ -322,7 +513,10 @@ func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end, signalType str
 	if !inward {
 		return false, false
 	}
-	messageSym := ctx.resolveType(scope, signalType)
+	messageSym := msg.Signal
+	if messageSym == nil {
+		messageSym = ctx.resolveType(scope, msg.SignalType)
+	}
 	if messageSym == nil {
 		return true, false
 	}
@@ -356,6 +550,15 @@ func (ctx *Context) resolveType(scope *symbols.Scope, name string) *symbols.Symb
 	qn := &ast.QualifiedName{Parts: make([]ast.NameSegment, len(parts))}
 	for i, part := range parts {
 		qn.Parts[i] = ast.NameSegment{Text: part}
+	}
+	return ctx.resolveTypeRef(scope, qn)
+}
+
+// resolveTypeRef resolves a type reference as written — the global qualifier
+// and segment boundaries intact — returning nil when the type is unavailable.
+func (ctx *Context) resolveTypeRef(scope *symbols.Scope, qn *ast.QualifiedName) *symbols.Symbol {
+	if ctx.resolver == nil || qn == nil || len(qn.Parts) == 0 {
+		return nil
 	}
 	sym, ok := ctx.resolver.ResolveQualified(scope, qn)
 	if !ok || sym == nil {
@@ -401,4 +604,23 @@ func joins(ends []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// joinsTarget reports whether a connection has an end naming the sending
+// feature: an end written as want that also resolves to the feature the send
+// target denotes, so a local port shadowing a connected port's name diverts
+// the route away from the connector. An end or a target this run does not
+// resolve is matched by its written path alone.
+func (ctx *Context) joinsTarget(conn lower.Connection, want string, target *symbols.Symbol) bool {
+	if !joins(conn.Ends, want) {
+		return false
+	}
+	if target == nil {
+		return true
+	}
+	sym, ok := ctx.pathSymbol(conn.Scope, strings.Split(want, "."))
+	if !ok || sym == nil {
+		return true
+	}
+	return sym == target || ctx.model.Conforms(sym, target) || ctx.model.Conforms(target, sym)
 }

@@ -29,6 +29,16 @@ type QualifiedName struct {
 	NodeBase
 	Global bool
 	Parts  []NameSegment
+	// part0 backs Parts for the common single-segment name, so parsing one
+	// costs no slice allocation of its own (see SetSingleton).
+	part0 [1]NameSegment
+}
+
+// SetSingleton makes seg the name's only part, backed by the node's own
+// storage. The slice is capped so appending a later segment copies out.
+func (q *QualifiedName) SetSingleton(seg NameSegment) {
+	q.part0[0] = seg
+	q.Parts = q.part0[:1:1]
 }
 
 // AsQualifiedName unwraps the two forms a name reference parses to: a bare
@@ -52,6 +62,23 @@ func SimpleName(node Node) string {
 		return ""
 	}
 	return qname.Parts[len(qname.Parts)-1].Text
+}
+
+// QualifiedText renders a reference's whole name as written ("A::B::C"), or ""
+// when node names nothing.
+func QualifiedText(node Node) string {
+	qname := AsQualifiedName(node)
+	if qname == nil || len(qname.Parts) == 0 {
+		return ""
+	}
+	out := qname.Parts[0].Text
+	if qname.Global {
+		out = "$::" + out
+	}
+	for _, part := range qname.Parts[1:] {
+		out += "::" + part.Text
+	}
+	return out
 }
 
 // TargetName returns the last segment of a relationship target — a qualified

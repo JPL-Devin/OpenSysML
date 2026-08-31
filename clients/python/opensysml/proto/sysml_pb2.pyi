@@ -207,6 +207,38 @@ class ParseFileRequest(_message.Message):
     strict_conformance: bool
     def __init__(self, file_path: _Optional[str] = ..., content: _Optional[str] = ..., content_hash: _Optional[str] = ..., language: _Optional[str] = ..., strict_conformance: _Optional[bool] = ...) -> None: ...
 
+class SourceDocument(_message.Message):
+    __slots__ = ("file_path", "content", "language", "name")
+    FILE_PATH_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    LANGUAGE_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    file_path: str
+    content: str
+    language: str
+    name: str
+    def __init__(self, file_path: _Optional[str] = ..., content: _Optional[str] = ..., language: _Optional[str] = ..., name: _Optional[str] = ...) -> None: ...
+
+class ParseSourcesRequest(_message.Message):
+    __slots__ = ("documents", "strict_conformance")
+    DOCUMENTS_FIELD_NUMBER: _ClassVar[int]
+    STRICT_CONFORMANCE_FIELD_NUMBER: _ClassVar[int]
+    documents: _containers.RepeatedCompositeFieldContainer[SourceDocument]
+    strict_conformance: bool
+    def __init__(self, documents: _Optional[_Iterable[_Union[SourceDocument, _Mapping]]] = ..., strict_conformance: _Optional[bool] = ...) -> None: ...
+
+class ParseSourcesResponse(_message.Message):
+    __slots__ = ("model_hash", "roots", "diagnostics", "error")
+    MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
+    ROOTS_FIELD_NUMBER: _ClassVar[int]
+    DIAGNOSTICS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    model_hash: str
+    roots: _containers.RepeatedCompositeFieldContainer[SymbolInfo]
+    diagnostics: _containers.RepeatedCompositeFieldContainer[Diagnostic]
+    error: str
+    def __init__(self, model_hash: _Optional[str] = ..., roots: _Optional[_Iterable[_Union[SymbolInfo, _Mapping]]] = ..., diagnostics: _Optional[_Iterable[_Union[Diagnostic, _Mapping]]] = ..., error: _Optional[str] = ...) -> None: ...
+
 class ParseFileResponse(_message.Message):
     __slots__ = ("model_hash", "root", "diagnostics", "error")
     MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
@@ -770,3 +802,81 @@ class QueryResultElement(_message.Message):
     type: str
     properties: _containers.ScalarMap[str, str]
     def __init__(self, id: _Optional[str] = ..., type: _Optional[str] = ..., properties: _Optional[_Mapping[str, str]] = ...) -> None: ...
+
+class RunDocumentQueryRequest(_message.Message):
+    __slots__ = ("model_hash", "query_id", "bindings")
+    MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
+    QUERY_ID_FIELD_NUMBER: _ClassVar[int]
+    BINDINGS_FIELD_NUMBER: _ClassVar[int]
+    model_hash: str
+    query_id: str
+    bindings: _containers.RepeatedCompositeFieldContainer[DocumentQueryBinding]
+    def __init__(self, model_hash: _Optional[str] = ..., query_id: _Optional[str] = ..., bindings: _Optional[_Iterable[_Union[DocumentQueryBinding, _Mapping]]] = ...) -> None: ...
+
+class DocumentQueryBinding(_message.Message):
+    __slots__ = ("parameter", "values")
+    PARAMETER_FIELD_NUMBER: _ClassVar[int]
+    VALUES_FIELD_NUMBER: _ClassVar[int]
+    parameter: str
+    values: _containers.RepeatedCompositeFieldContainer[DocumentValue]
+    def __init__(self, parameter: _Optional[str] = ..., values: _Optional[_Iterable[_Union[DocumentValue, _Mapping]]] = ...) -> None: ...
+
+class DocumentValue(_message.Message):
+    __slots__ = ("element_id", "string_value", "int_value", "real_value", "bool_value", "infinity", "element_type")
+    ELEMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
+    INT_VALUE_FIELD_NUMBER: _ClassVar[int]
+    REAL_VALUE_FIELD_NUMBER: _ClassVar[int]
+    BOOL_VALUE_FIELD_NUMBER: _ClassVar[int]
+    INFINITY_FIELD_NUMBER: _ClassVar[int]
+    ELEMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    element_id: str
+    string_value: str
+    int_value: int
+    real_value: float
+    bool_value: bool
+    infinity: bool
+    element_type: str
+    def __init__(self, element_id: _Optional[str] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., infinity: _Optional[bool] = ..., element_type: _Optional[str] = ...) -> None: ...
+
+class DocumentQueryColumn(_message.Message):
+    __slots__ = ("name",)
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    def __init__(self, name: _Optional[str] = ...) -> None: ...
+
+class DocumentQueryCell(_message.Message):
+    __slots__ = ("values",)
+    VALUES_FIELD_NUMBER: _ClassVar[int]
+    values: _containers.RepeatedCompositeFieldContainer[DocumentValue]
+    def __init__(self, values: _Optional[_Iterable[_Union[DocumentValue, _Mapping]]] = ...) -> None: ...
+
+class DocumentQueryRow(_message.Message):
+    __slots__ = ("element", "cells")
+    ELEMENT_FIELD_NUMBER: _ClassVar[int]
+    CELLS_FIELD_NUMBER: _ClassVar[int]
+    element: DocumentValue
+    cells: _containers.RepeatedCompositeFieldContainer[DocumentQueryCell]
+    def __init__(self, element: _Optional[_Union[DocumentValue, _Mapping]] = ..., cells: _Optional[_Iterable[_Union[DocumentQueryCell, _Mapping]]] = ...) -> None: ...
+
+class RunDocumentQueryResponse(_message.Message):
+    __slots__ = ("columns", "rows")
+    COLUMNS_FIELD_NUMBER: _ClassVar[int]
+    ROWS_FIELD_NUMBER: _ClassVar[int]
+    columns: _containers.RepeatedCompositeFieldContainer[DocumentQueryColumn]
+    rows: _containers.RepeatedCompositeFieldContainer[DocumentQueryRow]
+    def __init__(self, columns: _Optional[_Iterable[_Union[DocumentQueryColumn, _Mapping]]] = ..., rows: _Optional[_Iterable[_Union[DocumentQueryRow, _Mapping]]] = ...) -> None: ...
+
+class RenderDocumentRequest(_message.Message):
+    __slots__ = ("model_hash", "document_id")
+    MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
+    DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    model_hash: str
+    document_id: str
+    def __init__(self, model_hash: _Optional[str] = ..., document_id: _Optional[str] = ...) -> None: ...
+
+class RenderDocumentResponse(_message.Message):
+    __slots__ = ("markdown",)
+    MARKDOWN_FIELD_NUMBER: _ClassVar[int]
+    markdown: str
+    def __init__(self, markdown: _Optional[str] = ...) -> None: ...

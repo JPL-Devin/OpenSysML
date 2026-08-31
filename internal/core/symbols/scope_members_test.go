@@ -140,13 +140,13 @@ func TestScopeMemberNamesLargeScopeBuildsIndex(t *testing.T) {
 func TestScopeMembersPreserveInterleavedDeclarationOrder(t *testing.T) {
 	s := NewScope(nil, nil)
 	first := &Symbol{Name: "first"}
-	second := &Symbol{Name: "second"}
+	anonymous := &Symbol{}
 	third := &Symbol{Name: "third"}
 	s.Define("a", first)
-	s.Define("b", second)
+	s.DefineAnonymous(anonymous)
 	s.Define("a", third)
 
-	want := []*Symbol{first, second, third}
+	want := []*Symbol{first, anonymous, third}
 	for i, got := range s.AllMembers() {
 		if got != want[i] {
 			t.Fatalf("AllMembers()[%d] = %p, want %p", i, got, want[i])
@@ -165,9 +165,14 @@ func TestScopeMembersPreserveInterleavedDeclarationOrder(t *testing.T) {
 			t.Fatalf("ForEachMember()[%d] = %p, want %p", i, got[i], want[i])
 		}
 	}
-	for i, got := range s.Members() {
-		if got != want[i] {
-			t.Fatalf("Members()[%d] = %p, want %p", i, got, want[i])
+	wantNamed := []*Symbol{first, third}
+	named := s.Members()
+	if len(named) != len(wantNamed) {
+		t.Fatalf("Members() returned %d symbols, want %d", len(named), len(wantNamed))
+	}
+	for i, got := range named {
+		if got != wantNamed[i] {
+			t.Fatalf("Members()[%d] = %p, want %p", i, got, wantNamed[i])
 		}
 	}
 }
