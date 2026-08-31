@@ -106,6 +106,11 @@ fact about the implementation, not a design position.
   linked set together. Rendering one document alone still succeeds, but its
   cross-document links point at the target's expected file name and dangle
   until that document is rendered into the same directory.
+- **Captions are marked, not inferred.** The Markdown dialect writes a
+  `<!-- caption -->` comment line before every table and diagram caption; the
+  PDF backend styles only marked lines as captions, and an emphasized line
+  without the marker stays an ordinary paragraph. A marker whose next line is
+  not a fully emphasized caption is a typed `dangling-caption` error.
 - **PDF is CLI-only.** The REPL, gRPC and LSP surfaces render Markdown only.
 - **PDF reproducibility is per-toolchain.** Byte-identical output holds for
   one pinned converter toolchain; different converter versions or fonts

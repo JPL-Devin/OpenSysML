@@ -41,6 +41,12 @@ func parseBlocks(markdown string) ([]block, error) {
 		switch {
 		case strings.TrimSpace(line) == "":
 			continue
+		case line == captionMarker:
+			if i+1 >= len(lines) || !isCaption(lines[i+1]) {
+				return nil, &Error{Kind: ErrorDanglingCaption}
+			}
+			blocks = append(blocks, block{Kind: blockCaption, Text: lines[i+1][1 : len(lines[i+1])-1]})
+			i++
 		case strings.HasPrefix(line, "<!--") && strings.HasSuffix(line, "-->"):
 			// docrender's table-rendering provenance and notice comments are
 			// metadata, not prose.
@@ -65,8 +71,6 @@ func parseBlocks(markdown string) ([]block, error) {
 			list, next := listBlock(lines, i)
 			blocks = append(blocks, list)
 			i = next
-		case isCaption(line):
-			blocks = append(blocks, block{Kind: blockCaption, Text: line[1 : len(line)-1]})
 		default:
 			blocks = append(blocks, block{Kind: blockParagraph, Text: line})
 		}
@@ -80,6 +84,27 @@ const (
 	anchorOpen  = `<a id="`
 	anchorClose = `"></a>`
 )
+
+// captionMarker is the comment line docrender writes before a caption,
+// distinguishing it from a paragraph that is one emphasis run.
+const captionMarker = "<!-- caption -->"
+
+// markdownWithSpanCaptions rewrites each marked caption as a bracketed span
+// carrying the caption class, so converters that read the Markdown
+// themselves style captions the same way the prepared HTML does.
+func markdownWithSpanCaptions(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	out := make([]string, 0, len(lines))
+	for i := 0; i < len(lines); i++ {
+		if lines[i] == captionMarker && i+1 < len(lines) && isCaption(lines[i+1]) {
+			out = append(out, "["+lines[i+1]+"]{.caption}")
+			i++
+			continue
+		}
+		out = append(out, lines[i])
+	}
+	return strings.Join(out, "\n")
+}
 
 // fenceBody collects the lines of a fenced block opened before start,
 // returning the body, the index of the closing fence, and whether one closed.
@@ -204,8 +229,8 @@ func listBlock(lines []string, i int) (block, int) {
 }
 
 // isCaption reports whether a line is one fully-emphasized span, which is
-// how docrender writes captions: the first unescaped asterisk after the
-// opener must be the line's last byte.
+// how docrender writes a caption's text under its marker: the first
+// unescaped asterisk after the opener must be the line's last byte.
 func isCaption(line string) bool {
 	if len(line) < 3 || line[0] != '*' {
 		return false

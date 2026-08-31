@@ -16,6 +16,11 @@ import (
 // properties, so its rows are the elements themselves.
 const elementColumn = "element"
 
+// captionMarker precedes every caption line, distinguishing a caption from a
+// paragraph that is one emphasis run; both are written as *text*. The marker
+// is an HTML comment, so rendered output is unaffected.
+const captionMarker = "<!-- caption -->"
+
 // Markdown renders an evaluated document as deterministic CommonMark: the
 // title as a level-1 ATX heading, each section one level deeper (saturating
 // at 6), paragraphs from space-joined text runs, GitHub-flavored pipe tables
@@ -85,15 +90,15 @@ func heading(level int, title string) string {
 	return strings.Repeat("#", level) + " " + inline(title)
 }
 
-// renderTable writes one pipe table, preceded by its caption in emphasis.
-// A query without projected columns gets a single "element" column, and a
-// table without rows still writes its header and delimiter. A grouped table
-// writes one subtable per group, each preceded by its group key in strong
+// renderTable writes one pipe table, preceded by its marked caption in
+// emphasis. A query without projected columns gets a single "element"
+// column, and a table without rows still writes its header and delimiter.
+// A grouped table writes one subtable per group, each preceded by its group key in strong
 // emphasis; the group column keeps its place in every subtable.
 func renderTable(node docir.Content) []string {
 	var blocks []string
 	if node.Caption() != "" {
-		blocks = append(blocks, "*"+inline(node.Caption())+"*")
+		blocks = append(blocks, captionMarker+"\n*"+inline(node.Caption())+"*")
 	}
 	columns := node.Columns()
 	names := make([]string, 0, len(columns))
@@ -127,22 +132,22 @@ func pipeTable(names []string, rows []queryexec.Row, columns int) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// renderDiagram writes one diagram, preceded by its caption in emphasis: a
-// table-kind view as a pipe table, every other supported kind as a fenced
-// Mermaid block drawn in the diagram's direction.
+// renderDiagram writes one diagram, preceded by its marked caption in
+// emphasis: a table-kind view as a pipe table, every other supported kind
+// as a fenced Mermaid block drawn in the diagram's direction.
 func renderDiagram(node docir.Content) ([]string, error) {
 	return diagramBlocks(node.Name(), node.Caption(), node.Rendering(), node.Direction())
 }
 
-// diagramBlocks writes a caption in emphasis, then the rendering itself: a
-// table-kind view as a pipe table, every other supported kind as Mermaid.
+// diagramBlocks writes a marked caption in emphasis, then the rendering
+// itself: a table-kind view as a pipe table, every other kind as Mermaid.
 func diagramBlocks(name, caption string, rendering *view.Rendering, direction view.Direction) ([]string, error) {
 	if rendering == nil {
 		return nil, &Error{Kind: ErrorMissingRendering, Content: name}
 	}
 	var blocks []string
 	if caption != "" {
-		blocks = append(blocks, "*"+inline(caption)+"*")
+		blocks = append(blocks, captionMarker+"\n*"+inline(caption)+"*")
 	}
 	if rendering.Kind == view.KindTable {
 		return append(blocks, strings.TrimRight(rendering.MarkdownCells(tableCell), "\n")), nil
