@@ -24,6 +24,12 @@ func renderDiagrams(dir string, blocks []block) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	// HTML labels live in <foreignObject>, which PDF-oriented SVG renderers
+	// do not draw; plain <text> labels render everywhere.
+	config := "mermaid-config.json"
+	if err := os.WriteFile(filepath.Join(dir, config), []byte(`{"htmlLabels":false,"flowchart":{"htmlLabels":false},"class":{"htmlLabels":false}}`), 0o600); err != nil {
+		return nil, err
+	}
 	images := make([]string, 0, len(sources))
 	for i, source := range sources {
 		input := fmt.Sprintf("diagram-%d.mmd", i+1)
@@ -31,9 +37,9 @@ func renderDiagrams(dir string, blocks []block) ([]string, error) {
 		if err := os.WriteFile(filepath.Join(dir, input), []byte(source+"\n"), 0o600); err != nil {
 			return nil, err
 		}
-		args := []string{"--input", input, "--output", output, "--quiet"}
-		if config := strings.TrimSpace(os.Getenv(MermaidPuppeteerEnv)); config != "" {
-			args = append(args, "--puppeteerConfigFile", config)
+		args := []string{"--input", input, "--output", output, "--quiet", "--configFile", config}
+		if puppeteer := strings.TrimSpace(os.Getenv(MermaidPuppeteerEnv)); puppeteer != "" {
+			args = append(args, "--puppeteerConfigFile", puppeteer)
 		}
 		if err := runTool(dir, mmdc, args...); err != nil {
 			return nil, err
