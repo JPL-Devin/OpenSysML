@@ -101,11 +101,6 @@ fact about the implementation, not a design position.
   `Ref`) applies to statically-authored runs only.
 - **Cross-references are in-document only.** A `Ref` targets a content block
   of the same document; cross-document references are not modeled.
-- **PDF does not yet render inline runs or anchors.** Paragraphs composed of
-  runs, `Ref` anchors and grouped-table group keys appear in PDF output as
-  literal Markdown text (`*generated*`, `<a id="...">`, `**zone: ...**`)
-  rather than styled text and working links. A follow-up is planned; use
-  Markdown output for documents that rely on inline runs.
 - **PDF is CLI-only.** The REPL, gRPC and LSP surfaces render Markdown only.
 - **PDF reproducibility is per-toolchain.** Byte-identical output holds for
   one pinned converter toolchain; different converter versions or fonts

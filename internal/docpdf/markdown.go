@@ -15,6 +15,7 @@ const (
 	blockTable
 	blockList
 	blockMermaid
+	blockAnchor
 )
 
 // block is one parsed Markdown block. Text fields hold Markdown-escaped
@@ -23,6 +24,7 @@ type block struct {
 	Kind    blockKind
 	Level   int        // blockHeading: ATX level 1..6
 	Text    string     // blockHeading, blockParagraph, blockCaption
+	Anchor  string     // blockAnchor: the stable identifier
 	Header  []string   // blockTable: column headers
 	Rows    [][]string // blockTable: body rows
 	Ordered bool       // blockList
@@ -43,6 +45,8 @@ func parseBlocks(markdown string) ([]block, error) {
 			// docrender's table-rendering provenance and notice comments are
 			// metadata, not prose.
 			continue
+		case strings.HasPrefix(line, anchorOpen) && strings.HasSuffix(line, anchorClose):
+			blocks = append(blocks, block{Kind: blockAnchor, Anchor: line[len(anchorOpen) : len(line)-len(anchorClose)]})
 		case line == "```mermaid":
 			body, next, ok := fenceBody(lines, i+1)
 			if !ok {
@@ -69,6 +73,13 @@ func parseBlocks(markdown string) ([]block, error) {
 	}
 	return blocks, nil
 }
+
+// anchorOpen and anchorClose delimit the standalone HTML anchor line
+// docrender writes before a content node a reference targets.
+const (
+	anchorOpen  = `<a id="`
+	anchorClose = `"></a>`
+)
 
 // fenceBody collects the lines of a fenced block opened before start,
 // returning the body, the index of the closing fence, and whether one closed.
