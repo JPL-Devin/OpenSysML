@@ -4,6 +4,13 @@
 parse SysML v2 models, look up symbols, evaluate expressions and instantiate
 parts, from Go code, using the engine already linked into the calling binary.
 
+```sh
+go get github.com/Open-MBEE/OpenSysML@latest
+```
+
+Nothing else is installed: the SysML standard library is embedded in the module,
+and the v1 operations never shell out.
+
 ```go
 client, err := opensysml.New()
 if err != nil { ... }
@@ -13,6 +20,52 @@ model, err := client.ParseFile(ctx, "vehicle.sysml")
 mass, err := client.Evaluate(ctx, model, "mass", opensysml.WithSubject("Demo::sedan"))
 inst, err := client.Instantiate(ctx, model, "Demo::Vehicle")
 ```
+
+## What a model is here
+
+A `Model` is one parsed document. `ParseFile` reads the one path it is given and
+`ParseSource` the one string, and neither follows an import into a sibling file:
+a name declared in another file is an unresolved reference, reported as a
+diagnostic on the model rather than as a failed call. A model that lives in
+several files is embedded by concatenating their sources into one `ParseSource`
+call — packages are namespaces, so the qualified names, evaluation and
+instantiation are the same afterwards:
+
+```go
+var b strings.Builder
+for _, path := range paths {
+	src, err := os.ReadFile(path)
+	if err != nil { ... }
+	b.Write(src)
+	b.WriteString("\n")
+}
+model, err := client.ParseSource(ctx, b.String())
+```
+
+Loading several files as one model is a `sysml` command-line feature, not a
+service one, so it is not on this interface either; workspace management is out
+of scope for the service (`docs/internals/design/python-grpc-bindings.md`).
+
+## Concurrency, contexts and lifetime
+
+A `Client` is safe for concurrent use: any number of goroutines may call it, and
+each answer belongs to its caller. One `Client` per process is the intended
+shape — `New` builds and prewarms a standard-library index, which is what makes
+it worth keeping.
+
+Contexts are honoured as the wire honours them. A call whose context is already
+done is refused with `CodeCanceled` or `CodeDeadlineExceeded`; a context that
+ends while a call is running withholds the answer the same way, because the
+engine — like a service answering a caller who stopped listening — still runs
+the call it started. A deadline therefore bounds how long a caller waits, not
+how long the engine works.
+
+After `Close`, every call is refused with `CodeUnavailable`, and closing twice is
+not an error, so a deferred `Close` beside an explicit one is safe.
+
+`ServerInfo.Version` is the version of OpenSysML linked into the binary — the
+module version an importing program resolved, `dev` when it was built from a
+checkout. It is informational: negotiate on capabilities.
 
 ## Why in-process is the default
 
@@ -45,9 +98,10 @@ because it is part of the wire contract:
 | The call is refused | `*StatusError` | `errors.Is(err, opensysml.CodeNotFound)` | an unknown model hash, an unreadable path |
 | The answer reports a failure | `*FailureError` | `errors.Is(err, opensysml.ErrFailure)` | an unparsable expression, an unknown symbol |
 
-`StatusError.Code` is the canonical gRPC status code, whichever implementation
-answered: in process it is the code the handler refused with; remotely it is
-the Connect error code, which numbers identically. A transport failure that
+A `StatusError` renders as `opensysml: NOT_FOUND: model not found: …`, naming
+the code canonically. `StatusError.Code` is the canonical gRPC status code,
+whichever implementation answered: in process it is the code the handler refused
+with; remotely it is the Connect error code, which numbers identically. A transport failure that
 never reached the service is `CodeUnavailable`. A panic in the engine does not
 cross the boundary: it arrives as `CodeInternal`.
 

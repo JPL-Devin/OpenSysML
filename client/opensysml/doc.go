@@ -13,13 +13,33 @@
 //	client, err := opensysml.New()
 //	// or: client, err := opensysml.Dial("localhost:50051")
 //
+// # One document per model
+//
+// A Model is one parsed document: ParseFile reads one path and ParseSource one
+// string, and neither reads a sibling file, so a name imported from another
+// file is an unresolved-reference diagnostic rather than an error. A model
+// spread over several files is embedded by concatenating their sources into one
+// ParseSource call — packages are namespaces, so nothing else changes. The
+// sysml command's multi-file loading is a command-line feature, not a service
+// one.
+//
+// # Concurrency, contexts and lifetime
+//
+// A Client is safe for concurrent use from any number of goroutines. A call
+// whose context is already done is refused with CodeCanceled or
+// CodeDeadlineExceeded, and a context that ends while a call is running
+// withholds its answer the same way — the engine, like a service, still runs
+// the call it started. After Close every call is refused with CodeUnavailable,
+// and closing twice is not an error.
+//
 // # Errors
 //
 // A call fails in one of two documented ways, and the difference is part of
 // the API because it is part of the wire contract:
 //
 //   - A refused call is a *StatusError carrying the canonical gRPC status
-//     code, whichever implementation answered. errors.Is(err, CodeNotFound)
+//     code (rendered by its canonical name, as in "opensysml: NOT_FOUND: …"),
+//     whichever implementation answered. errors.Is(err, CodeNotFound)
 //     tests the code: an unknown model hash, for example, is CodeNotFound.
 //   - A failure the service reports inside a successful answer — an
 //     unparsable expression, an unknown symbol, a failed instantiation — is a

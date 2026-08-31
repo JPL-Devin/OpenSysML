@@ -10,6 +10,10 @@ importing binary already links, or over Connect against a service someone else r
 only package covered by a compatibility commitment; everything under `internal/` below is
 documented for contributors and may change without notice.
 
+```sh
+go get github.com/Open-MBEE/OpenSysML@latest
+```
+
 ```go
 client, err := opensysml.New()          // in process; Dial(address) for a remote service
 defer client.Close()
@@ -17,6 +21,12 @@ defer client.Close()
 model, err := client.ParseFile(ctx, "vehicle.sysml")
 mass, err := client.Evaluate(ctx, model, "mass", opensysml.WithSubject("Demo::sedan"))
 ```
+
+Nothing else is installed — the standard library is embedded in the module and the v1 operations
+never shell out — and a `Client` is safe to share across goroutines, so one per process is the
+intended shape. A `Model` is one parsed document: loading several files as one model is a `sysml`
+command-line feature, so an embedding program concatenates their sources into one `ParseSource`
+call.
 
 Its errors, ownership rules, capability negotiation and v1 boundary are in
 [client/opensysml/README.md](../../client/opensysml/README.md), and the other client languages are on

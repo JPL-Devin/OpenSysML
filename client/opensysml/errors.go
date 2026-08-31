@@ -78,9 +78,11 @@ type StatusError struct {
 	Message string
 }
 
-// Error renders the refusal with its canonical code name.
+// Error renders the refusal with its canonical code name. Code.String is
+// spelled out because a Code is itself an error, which fmt would render with
+// Error instead.
 func (e *StatusError) Error() string {
-	return fmt.Sprintf("opensysml: %s: %s", e.Code, e.Message)
+	return fmt.Sprintf("opensysml: %s: %s", e.Code.String(), e.Message)
 }
 
 // Unwrap exposes the Code, so errors.Is(err, opensysml.CodeNotFound) matches.

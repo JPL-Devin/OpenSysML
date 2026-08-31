@@ -2,6 +2,7 @@ package opensysml
 
 import (
 	"context"
+	"sync"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
@@ -9,6 +10,9 @@ import (
 // Client answers SysML v2 questions: parse, look up, evaluate, instantiate.
 // New gives the default in-process implementation and Dial a remote one; both
 // answer identically, which the conformance suite holds them to.
+//
+// A Client is safe for concurrent use: calls may be made from any number of
+// goroutines, and each answer is the caller's own.
 //
 // The interface is sealed: implementations come from this package only, so a
 // method can be added without breaking callers.
@@ -44,7 +48,8 @@ type Client interface {
 	Instantiate(ctx context.Context, model *Model, symbolID string) (*Instantiation, error)
 
 	// Close releases what the implementation holds. The Client answers no
-	// further calls.
+	// further calls: each is refused with CodeUnavailable. Closing twice is
+	// not an error.
 	Close() error
 
 	sealed()
@@ -109,11 +114,28 @@ type caller interface {
 // client is the one Client implementation, over either caller.
 type client struct {
 	caller caller
+
+	mu     sync.Mutex
+	closed bool
 }
 
 func (c *client) sealed() { /* marker: Client is closed to outside implementations */ }
 
+// live refuses a call on a closed Client, the way a closed connection refuses
+// one.
+func (c *client) live() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return &StatusError{Code: CodeUnavailable, Message: "the client is closed"}
+	}
+	return nil
+}
+
 func (c *client) ServerInfo(ctx context.Context) (*ServerInfo, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	resp, err := c.caller.serverInfo(ctx)
 	if err != nil {
 		return nil, err
@@ -125,12 +147,18 @@ func (c *client) ServerInfo(ctx context.Context) (*ServerInfo, error) {
 }
 
 func (c *client) ParseFile(ctx context.Context, path string, opts ...ParseOption) (*Model, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	req := parseRequest(opts)
 	req.Source = &pb.ParseFileRequest_FilePath{FilePath: path}
 	return c.parse(ctx, req)
 }
 
 func (c *client) ParseSource(ctx context.Context, content string, opts ...ParseOption) (*Model, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	req := parseRequest(opts)
 	req.Source = &pb.ParseFileRequest_Content{Content: content}
 	return c.parse(ctx, req)
@@ -163,6 +191,9 @@ func (c *client) parse(ctx context.Context, req *pb.ParseFileRequest) (*Model, e
 }
 
 func (c *client) Diagnostics(ctx context.Context, model *Model) ([]Diagnostic, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	hash, err := modelHash(model)
 	if err != nil {
 		return nil, err
@@ -178,6 +209,9 @@ func (c *client) Diagnostics(ctx context.Context, model *Model) ([]Diagnostic, e
 }
 
 func (c *client) LookupSymbol(ctx context.Context, model *Model, symbolID string) (*Symbol, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	hash, err := modelHash(model)
 	if err != nil {
 		return nil, err
@@ -193,6 +227,9 @@ func (c *client) LookupSymbol(ctx context.Context, model *Model, symbolID string
 }
 
 func (c *client) Evaluate(ctx context.Context, model *Model, expression string, opts ...EvaluateOption) (Value, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	hash, err := modelHash(model)
 	if err != nil {
 		return nil, err
@@ -217,6 +254,9 @@ func (c *client) Evaluate(ctx context.Context, model *Model, expression string, 
 }
 
 func (c *client) Instantiate(ctx context.Context, model *Model, symbolID string) (*Instantiation, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
 	hash, err := modelHash(model)
 	if err != nil {
 		return nil, err
@@ -239,7 +279,15 @@ func (c *client) Instantiate(ctx context.Context, model *Model, symbolID string)
 	}, nil
 }
 
+// Close releases the implementation once: a second call is a no-op, so a
+// deferred Close beside an explicit one is safe.
 func (c *client) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return nil
+	}
+	c.closed = true
 	return c.caller.close()
 }
 
