@@ -240,6 +240,134 @@ calc def Masses :> Query {
 	}
 }
 
+func TestExecuteComputedDefaultsWhenNoRowConforms(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Tank {
+	attribute level : Real;
+}
+part def Crate;
+part yard {
+	part a : Crate;
+	part b : Crate;
+}
+calc def Levels :> Query {
+	in root : Element;
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		properties = ("name"),
+		columns = (Column(name = "level", expression = Tank::level ?? 0.0))
+	)
+}`)
+	result, err := fixture.execute(t, "Levels", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "yard"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute Levels: %v", err)
+	}
+	for _, row := range result.Rows() {
+		if level, ok := row.Cells()[1].Values()[0].Real(); !ok || level != 0.0 {
+			t.Fatalf("level cell = %+v", row.Cells()[1].Values())
+		}
+	}
+}
+
+func TestExecuteComputedMultiValuedParameterIsTyped(t *testing.T) {
+	fixture := computedFixture(t, `
+calc def Bad :> Query {
+	in root : Element;
+	in factors : Real[0..*];
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		columns = (Column(name = "f", expression = factors))
+	)
+}`)
+	_, err := fixture.execute(t, "Bad", Bindings{
+		"root":    {ElementValue(fixture.symbol(t, "system"))},
+		"factors": {RealValue(1.0), RealValue(2.0)},
+	}, Options{})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorColumnCardinality {
+		t.Fatalf("error = %v", err)
+	}
+	if executionError.Property != "f" || executionError.Actual != "2" {
+		t.Fatalf("error provenance = %+v", executionError)
+	}
+	if !executionError.Origin.Located() {
+		t.Fatal("cardinality errors must retain source provenance")
+	}
+}
+
+func TestExecuteComputedMultiValuedFeatureIsTyped(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Box {
+	attribute sizes : Real[0..*];
+}
+part shed {
+	part b : Box {
+		attribute redefines sizes = (1.0, 2.0);
+	}
+}
+calc def Bad :> Query {
+	in root : Element;
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		columns = (Column(name = "s", expression = Box::sizes))
+	)
+}`)
+	_, err := fixture.execute(t, "Bad", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "shed"))},
+	}, Options{})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorColumnCardinality {
+		t.Fatalf("error = %v", err)
+	}
+	if executionError.Property != "s" || executionError.Actual != "2" {
+		t.Fatalf("error provenance = %+v", executionError)
+	}
+	if !executionError.Origin.Located() {
+		t.Fatal("cardinality errors must retain source provenance")
+	}
+}
+
+func TestExecuteComputedUserFeatureNamedLikeMetadata(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Widget {
+	attribute name : String;
+}
+part shelf {
+	part gadget : Widget {
+		attribute redefines name = "custom label";
+	}
+}
+calc def Labels :> Query {
+	in root : Element;
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		properties = ("name"),
+		columns = (Column(name = "label", expression = Widget::name))
+	)
+}`)
+	result, err := fixture.execute(t, "Labels", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "shelf"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute Labels: %v", err)
+	}
+	rows := result.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	cells := rows[0].Cells()
+	metadata, _ := cells[0].Values()[0].String()
+	label, ok := cells[1].Values()[0].String()
+	if !ok || label != "custom label" {
+		t.Fatalf("label cell = %+v", cells[1].Values())
+	}
+	if metadata == label {
+		t.Fatalf("metadata name %q must stay distinct from the declared feature", metadata)
+	}
+}
+
 func TestExecuteComputedColumnFailuresAreTyped(t *testing.T) {
 	cases := []struct {
 		name  string

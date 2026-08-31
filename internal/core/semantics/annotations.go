@@ -372,6 +372,19 @@ func (m *Model) ConstantFeatureValues(sym *symbols.Symbol, feature string) ([]sy
 	return m.constantFeatureValues(member, make(map[*symbols.Symbol]bool))
 }
 
+// DeclaredFeatureValues returns a declared member feature's ordered constant
+// values, never answering reflective metaclass features of the same name.
+func (m *Model) DeclaredFeatureValues(sym *symbols.Symbol, feature string) ([]symbols.FilterValue, bool) {
+	if m == nil || sym == nil || feature == "" {
+		return nil, false
+	}
+	member, ok := m.LookupMember(sym, feature)
+	if !ok || member == nil {
+		return nil, false
+	}
+	return m.constantFeatureValues(member, make(map[*symbols.Symbol]bool))
+}
+
 func (m *Model) constantFeatureValues(member *symbols.Symbol, seen map[*symbols.Symbol]bool) ([]symbols.FilterValue, bool) {
 	if member == nil || seen[member] {
 		return nil, false

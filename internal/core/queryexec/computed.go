@@ -89,6 +89,11 @@ func (e *executor) evaluateColumnCell(
 		return nil, e.columnError(
 			ErrorColumnAbsent, column.name, sym, column.expression.Origin(), "", "")
 	}
+	if len(values) > 1 {
+		return nil, e.columnError(
+			ErrorColumnCardinality, column.name, sym, column.expression.Origin(),
+			"", strconv.Itoa(len(values)))
+	}
 	return values, nil
 }
 
@@ -101,15 +106,24 @@ func (e *executor) evaluateColumnExpression(
 	switch expression.Operation() {
 	case queryplan.OperationRowProperty:
 		property := expression.Target()
-		if !e.rowDeclaresProperty(sym, expression) {
-			tracker.record(property, false)
+		_, declaring := expression.Literal()
+		if declaringIsElement(declaring) {
+			values, present, err := e.propertyValues(sym, property)
+			if err != nil {
+				return nil, e.featureError(expression, property)
+			}
+			tracker.record(property, present)
+			return values, nil
+		}
+		if !e.rowConformsTo(sym, declaring) {
+			// The row is unrelated to the declaring type: read as absent so a
+			// ?? operator can default it. The feature resolved at planning.
 			return nil, nil
 		}
-		values, present, err := e.propertyValues(sym, property)
+		values, _, err := e.declaredFeatureValues(sym, property)
 		if err != nil {
 			return nil, e.featureError(expression, property)
 		}
-		tracker.record(property, present)
 		return values, nil
 	case queryplan.OperationLiteral:
 		value, err := e.evaluateLiteral(expression)
@@ -136,19 +150,15 @@ func (e *executor) evaluateColumnExpression(
 	}
 }
 
-// rowDeclaresProperty reports whether the row conforms to the type declaring
-// a planned row property; unrelated same-named features read as absent.
-func (e *executor) rowDeclaresProperty(
-	sym *symbols.Symbol,
-	expression queryplan.Expression,
-) bool {
-	_, declaring := expression.Literal()
-	if declaring == "" || isQueryableProperty(expression.Target()) {
-		return true
-	}
-	if declaring == "Element" || declaring == "KerML::Root::Element" {
-		return true
-	}
+// declaringIsElement reports whether a planned row property was declared on
+// Element (or without a declaring type), so it reads query metadata.
+func declaringIsElement(declaring string) bool {
+	return declaring == "" || declaring == "Element" || declaring == "KerML::Root::Element"
+}
+
+// rowConformsTo reports whether the row conforms to a feature's declaring
+// type; unrelated same-named features read as absent.
+func (e *executor) rowConformsTo(sym *symbols.Symbol, declaring string) bool {
 	for _, target := range e.context.Index.LookupQualified(declaring) {
 		if symbols.SameElement(sym, target) || e.context.Model.Conforms(sym, target) {
 			return true

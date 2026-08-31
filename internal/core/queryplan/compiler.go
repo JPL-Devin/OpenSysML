@@ -613,12 +613,23 @@ func (c *compiler) compileBuiltinArguments(
 	dependency func(string),
 ) ([]Argument, error) {
 	if len(expression.Args) > 0 {
-		if len(expression.Args) != len(targetParams) {
+		if len(expression.Args) > len(targetParams) {
 			return nil, &Error{
 				Kind:   ErrorArgumentCount,
 				Query:  symbols.FQNOf(query),
 				Target: qualifiedName(expression.Type),
 				Origin: provenance.Node(owner.DocName, expression),
+			}
+		}
+		// Trailing defaulted parameters may be omitted positionally.
+		for _, param := range targetParams[len(expression.Args):] {
+			if !param.HasDefault {
+				return nil, &Error{
+					Kind:   ErrorArgumentCount,
+					Query:  symbols.FQNOf(query),
+					Target: qualifiedName(expression.Type),
+					Origin: provenance.Node(owner.DocName, expression),
+				}
 			}
 		}
 		args := make([]Argument, 0, len(expression.Args))

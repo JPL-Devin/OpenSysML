@@ -94,6 +94,42 @@ calc def Margins :> Query {
 	}
 }
 
+func TestCompilePositionalProjectOmitsDefaultedColumns(t *testing.T) {
+	fixture := loadQueryFixture(t, computedFixture+`
+calc def Named :> Query {
+	in root : Element;
+	Project(Descendants(source = root, maxDepth = 1), ("name"))
+}
+`)
+	program := fixture.compile(t, "Named")
+	definition := entryDefinition(t, program)
+	project := definition.Expression()
+	if project.Operation() != OperationProject {
+		t.Fatalf("operation = %s", project.Operation())
+	}
+	arguments := project.Arguments()
+	if len(arguments) != 2 {
+		t.Fatalf("arguments = %d, want 2", len(arguments))
+	}
+	if arguments[0].Name != "source" || arguments[1].Name != "properties" {
+		t.Fatalf("argument names = %s, %s", arguments[0].Name, arguments[1].Name)
+	}
+}
+
+func TestCompilePositionalSurplusArgumentsAreTyped(t *testing.T) {
+	fixture := loadQueryFixture(t, computedFixture+`
+calc def Bad :> Query {
+	in root : Element;
+	Project(Descendants(source = root, maxDepth = 1), ("name"), null, null)
+}
+`)
+	_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, "Bad"))
+	planning := planningError(t, err, ErrorArgumentCount)
+	if !planning.Origin.Located() {
+		t.Fatal("planning diagnostics must carry source spans")
+	}
+}
+
 func TestCompileComputedColumnDiagnostics(t *testing.T) {
 	cases := []struct {
 		name string

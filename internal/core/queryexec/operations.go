@@ -531,7 +531,12 @@ func (e *executor) propertyValues(sym *symbols.Symbol, property string) ([]Value
 		}
 		return result, true, nil
 	}
-	values, present := e.context.Model.ConstantFeatureValues(sym, property)
+	return e.declaredFeatureValues(sym, property)
+}
+
+// declaredFeatureValues reads a declared (non-metadata) feature of a row.
+func (e *executor) declaredFeatureValues(sym *symbols.Symbol, property string) ([]Value, bool, error) {
+	values, present := e.context.Model.DeclaredFeatureValues(sym, property)
 	if !present {
 		return nil, false, nil
 	}
