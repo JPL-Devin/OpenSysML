@@ -223,6 +223,60 @@ func TestSendViaPortReachesConnectedAccept(t *testing.T) {
 	assertIntOutput(t, outputs, "got", 42)
 }
 
+const commandItem = "\n\titem def Command { attribute code : Integer; }\n" +
+	"\tport def CommandPort { out item issued : Command; }\n"
+
+// An item usage is a message of its own (`item cmd : Command { … }` then
+// `send cmd via p`): the object is typed by the definition typing the usage, so
+// an accept of that definition takes it and reads its features.
+func TestSendOfAnItemObjectIsTypedByItsDefinition(t *testing.T) {
+	outputs, err := executeActionSource(t, "ship", `package P {
+		private import ScalarValues::*;`+commandItem+`
+		action ship {
+			attribute got : Integer = 0;
+			item cmd : Command { attribute :>> code = 7; }
+			port src : CommandPort;
+			port dst : ~CommandPort;
+			connect src to dst;
+			first start;
+			action sender { send cmd via src; }
+			action reader accept order : Command via dst { assign got := order.code; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 7)
+}
+
+// The type of such a message is the definition, not the usage sent, so an accept
+// naming the usage waits on: nothing was sent of that type.
+func TestSendOfAnItemObjectIsNotTypedByTheUsageSent(t *testing.T) {
+	_, err := executeActionSource(t, "ship", `package P {
+		private import ScalarValues::*;`+commandItem+`
+		action ship {
+			item cmd : Command { attribute :>> code = 7; }
+			port src : CommandPort;
+			port dst : ~CommandPort;
+			connect src to dst;
+			first start;
+			action sender { send cmd via src; }
+			action reader accept order : cmd via dst;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`)
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Fatalf("execute action: err = %v, want %v", err, ErrAcceptDeadlock)
+	}
+}
+
 // A standard-library feature named receiver must not shadow the sibling
 // receiving node a routed send addresses.
 func TestSendViaPortToReceiverWithLibraries(t *testing.T) {
