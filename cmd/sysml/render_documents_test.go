@@ -239,6 +239,39 @@ func TestRenderDocumentsWritesThroughSymlink(t *testing.T) {
 	}
 }
 
+// TestRenderDocumentsRejectsAliasedTargets checks two destinations resolving
+// to one file fail the set before anything is written, so the later document
+// cannot silently replace the earlier one.
+func TestRenderDocumentsRejectsAliasedTargets(t *testing.T) {
+	binary := buildCLI(t)
+	dir := filepath.Join(t.TempDir(), "rendered")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	shared := filepath.Join(t.TempDir(), "shared.md")
+	previous := "previous\n"
+	if err := os.WriteFile(shared, []byte(previous), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Reports-MainReport.md", "Reports-Appendix.md"} {
+		if err := os.Symlink(shared, filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := check(t, binary, linkedModel, "-render-documents", dir)
+	if got.status != 2 || !strings.Contains(got.stderr, "both resolve to") {
+		t.Fatalf("exit = %d stderr = %q", got.status, got.stderr)
+	}
+	kept, err := os.ReadFile(shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(kept) != previous {
+		t.Errorf("a rejected set wrote the shared file:\n%s", kept)
+	}
+}
+
 // TestRenderDocumentsCaseCollidingNames checks documents whose file names
 // differ only by letter case are rejected before anything is written, so a
 // set renders the same on case-sensitive and case-insensitive filesystems.

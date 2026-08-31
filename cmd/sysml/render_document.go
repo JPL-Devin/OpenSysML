@@ -88,6 +88,10 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 	direct := make([]bool, len(documents))
 	replaced := make([]bool, len(documents))
 	perms := make([]os.FileMode, len(documents))
+	// Two destinations may be symlinks resolving to one file; such a set
+	// would silently keep only the later document.
+	resolved := make(map[string]string, len(documents))
+	infos := make([]os.FileInfo, len(documents))
 	for i, document := range documents {
 		path := filepath.Join(renderDocsDir, document.FileName)
 		target, info, err := export.Destination(path)
@@ -97,6 +101,16 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 		if info != nil && info.IsDir() {
 			return fmt.Errorf("cannot write %s: it is a directory", path)
 		}
+		if other, ok := resolved[target]; ok {
+			return fmt.Errorf("cannot write %s: %s and %s both resolve to %s; repoint one of the links so each document has its own file", path, other, document.FileName, target)
+		}
+		resolved[target] = document.FileName
+		for j := range i {
+			if info != nil && infos[j] != nil && os.SameFile(info, infos[j]) {
+				return fmt.Errorf("cannot write %s: %s and %s both resolve to one file; repoint one of the links so each document has its own file", path, documents[j].FileName, document.FileName)
+			}
+		}
+		infos[i] = info
 		targets[i] = target
 		replaced[i] = info != nil
 		perms[i] = 0o644
@@ -116,6 +130,8 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 			}
 			switch {
 			case committed[i] && backups[i] != "":
+				// Windows refuses a rename over an existing file.
+				_ = os.Remove(targets[i])
 				_ = os.Rename(backups[i], targets[i])
 			case committed[i]:
 				_ = os.Remove(targets[i])
