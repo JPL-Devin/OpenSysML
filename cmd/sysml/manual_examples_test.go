@@ -7,10 +7,8 @@ import (
 	"testing"
 )
 
-// TestManualWorkedExampleMatchesCommittedOutput renders the user manual's
-// worked example (docs/manual/examples/observatory.sysml) through the binary
-// and compares it against the committed rendered output, so the manual's
-// "full rendered output" can never drift from what the binary produces.
+// TestManualWorkedExampleMatchesCommittedOutput renders the manual's worked
+// example and compares it against the committed output, so the two never drift.
 func TestManualWorkedExampleMatchesCommittedOutput(t *testing.T) {
 	binary := buildCLI(t)
 	examples := filepath.Join("..", "..", "docs", "manual", "examples")
