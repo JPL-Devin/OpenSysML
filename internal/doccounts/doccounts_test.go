@@ -169,7 +169,8 @@ func TestRewriteBlockUsesConsumerRelativeLinksAndIsIdempotent(t *testing.T) {
 
 // TestRewriteBlockRendersTheLandingBandFromTheSameCensus keeps the landing page's
 // figures the generated ones: the band states the same census as the prose block,
-// and its links are MkDocs url filters, which the site build resolves and checks.
+// and its links go through the site's record() global, which resolves each record to
+// its page or to the repository, and which the site build checks.
 func TestRewriteBlockRendersTheLandingBandFromTheSameCensus(t *testing.T) {
 	root := t.TempDir()
 	writeDoccountsFixture(t, root)
@@ -187,8 +188,10 @@ func TestRewriteBlockRendersTheLandingBandFromTheSameCensus(t *testing.T) {
 		"<code>2026-05</code>", "artifact <code>0.60.1</code>",
 		">1 of 2<", ">1 of 11<", ">7 of 8<", ">3 of 12<",
 		"the 1 behavioral rules",
-		"href=\"{{ 'project/pilot-differential/'|url }}\"",
-		"href=\"{{ 'project/spec-compliance/'|url }}\"",
+		"href=\"{{ record('project/pilot-differential.md', base_url) }}\"",
+		"href=\"{{ record('project/spec-compliance.md', base_url) }}\"",
+		"href=\"{{ record('project/pilot-xpect.md', base_url) }}\"",
+		"href=\"{{ record('project/pilot-rejection.md', base_url) }}\"",
 		"<section>", "</section>",
 	} {
 		if !strings.Contains(got, want) {

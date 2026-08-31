@@ -333,19 +333,19 @@
       committed baseline, and anyone can reproduce it.
     </p>
     <div class="osml-referee__grid">
-      <a class="osml-referee__figure" href="{{ 'project/pilot-differential/'|url }}">
+      <a class="osml-referee__figure" href="{{ record('project/pilot-differential.md', base_url) }}">
         <span class="osml-referee__number">332 of 359</span>
         <span class="osml-referee__label">files agree diagnostic-by-diagnostic; 20 diagnostics are ours alone and 53 the reference's alone</span>
       </a>
-      <a class="osml-referee__figure" href="{{ 'project/pilot-xpect/'|url }}">
+      <a class="osml-referee__figure" href="{{ record('project/pilot-xpect.md', base_url) }}">
         <span class="osml-referee__number">0 of 511</span>
         <span class="osml-referee__label">declared diagnostics in the reference's own test suites that we report nothing at all for</span>
       </a>
-      <a class="osml-referee__figure" href="{{ 'project/pilot-xpect/'|url }}">
+      <a class="osml-referee__figure" href="{{ record('project/pilot-xpect.md', base_url) }}">
         <span class="osml-referee__number">230 of 230</span>
         <span class="osml-referee__label">declared name-resolution assertions our scopes match exactly</span>
       </a>
-      <a class="osml-referee__figure" href="{{ 'project/pilot-rejection/'|url }}">
+      <a class="osml-referee__figure" href="{{ record('project/pilot-rejection.md', base_url) }}">
         <span class="osml-referee__number">2 of 120</span>
         <span class="osml-referee__label">invalid models we wrote ourselves that the reference rejects and we accept by default</span>
       </a>
@@ -354,8 +354,8 @@
       What this is not: the corpora are demonstrations rather than an official conformance
       suite, the comparison is of the diagnostics two implementations report on the same
       files, and no certification or percentage of the specification is claimed. Read
-      <a href="{{ 'project/pilot-differential/'|url }}">how each figure is measured</a>, or
-      <a href="{{ 'project/spec-compliance/'|url }}">which rules are faithful, approximate or missing</a>
+      <a href="{{ record('project/pilot-differential.md', base_url) }}">how each figure is measured</a>, or
+      <a href="{{ record('project/spec-compliance.md', base_url) }}">which rules are faithful, approximate or missing</a>
       &mdash; including the 148 behavioral rules the pinned reference cannot referee, because it
       evaluates expressions but executes neither actions nor state machines.
     </p>
@@ -421,7 +421,7 @@ go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
       conformance certification is claimed.</p>
     </div>
     <div>
-      <h3><a href="{{ 'project/omg-issues/'|url }}">Defects, declared</a></h3>
+      <h3><a href="{{ record('project/omg-issues.md', base_url) }}">Defects, declared</a></h3>
       <p>Where the published reference material is itself defective, the correction is
       declared and the corpus left as published.</p>
     </div>

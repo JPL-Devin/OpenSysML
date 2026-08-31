@@ -566,8 +566,8 @@ const refereedBlockTemplateText = "<!-- doc-counts:begin {{.Name}} -->\n" +
 
 // landingBlockTemplateText states the same census as markup, for the band the
 // documentation site's landing page opens with: the four refereed figures and the
-// caveats that keep them readable as measurements. siteURL writes MkDocs' own url
-// filter, so a renamed conformance record fails the site build like any link.
+// caveats that keep them readable as measurements. recordURL resolves each record
+// when the site is built, to its page when published and to the repository when not.
 const landingBlockTemplateText = `    <!-- doc-counts:begin {{.Name}} -->
     <p class="osml-referee__eyebrow">Refereed against the OMG pilot implementation &middot; pin <code>{{.PilotTag}}</code>, artifact <code>{{.PilotArtifact}}</code></p>
     <h2>Not self-assessed &mdash; measured against the reference implementation.</h2>
@@ -577,19 +577,19 @@ const landingBlockTemplateText = `    <!-- doc-counts:begin {{.Name}} -->
       committed baseline, and anyone can reproduce it.
     </p>
     <div class="osml-referee__grid">
-      <a class="osml-referee__figure" href="{{siteURL .LinkPrefix "pilot-differential/"}}">
+      <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-differential.md"}}">
         <span class="osml-referee__number">{{.FilesAgreeing}} of {{.Files}}</span>
         <span class="osml-referee__label">files agree diagnostic-by-diagnostic; {{.OursOnly}} diagnostics are ours alone and {{.PilotOnly}} the reference's alone</span>
       </a>
-      <a class="osml-referee__figure" href="{{siteURL .LinkPrefix "pilot-xpect/"}}">
+      <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-xpect.md"}}">
         <span class="osml-referee__number">{{.Silent}} of {{.DeclaredErrors}}</span>
         <span class="osml-referee__label">declared diagnostics in the reference's own test suites that we report nothing at all for</span>
       </a>
-      <a class="osml-referee__figure" href="{{siteURL .LinkPrefix "pilot-xpect/"}}">
+      <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-xpect.md"}}">
         <span class="osml-referee__number">{{.ScopeExact}} of {{.ScopeTotal}}</span>
         <span class="osml-referee__label">declared name-resolution assertions our scopes match exactly</span>
       </a>
-      <a class="osml-referee__figure" href="{{siteURL .LinkPrefix "pilot-rejection/"}}">
+      <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-rejection.md"}}">
         <span class="osml-referee__number">{{.RejectDefaultPilotOnly}} of {{.RejectCases}}</span>
         <span class="osml-referee__label">invalid models we wrote ourselves that the reference rejects and we accept by default</span>
       </a>
@@ -598,18 +598,19 @@ const landingBlockTemplateText = `    <!-- doc-counts:begin {{.Name}} -->
       What this is not: the corpora are demonstrations rather than an official conformance
       suite, the comparison is of the diagnostics two implementations report on the same
       files, and no certification or percentage of the specification is claimed. Read
-      <a href="{{siteURL .LinkPrefix "pilot-differential/"}}">how each figure is measured</a>, or
-      <a href="{{siteURL .LinkPrefix "spec-compliance/"}}">which rules are faithful, approximate or missing</a>
+      <a href="{{recordURL .LinkPrefix "pilot-differential.md"}}">how each figure is measured</a>, or
+      <a href="{{recordURL .LinkPrefix "spec-compliance.md"}}">which rules are faithful, approximate or missing</a>
       &mdash; including the {{.SelfAssessed}} behavioral rules the pinned reference cannot referee, because it
       evaluates expressions but executes neither actions nor state machines.
     </p>
     <!-- doc-counts:end {{.Name}} -->`
 
-// blockTemplateFuncs writes the one link a Go template cannot spell literally:
-// MkDocs' url filter, resolved when the site is built.
+// blockTemplateFuncs writes the one link a Go template cannot spell literally: the
+// site's record() global, which publishes a docs/ path as a page or as the file on
+// GitHub, depending on whether the site publishes that record at all.
 var blockTemplateFuncs = template.FuncMap{
-	"siteURL": func(prefix, target string) string {
-		return fmt.Sprintf("{{ '%s%s'|url }}", prefix, target)
+	"recordURL": func(prefix, record string) string {
+		return fmt.Sprintf("{{ record('%s%s', base_url) }}", prefix, record)
 	},
 }
 
