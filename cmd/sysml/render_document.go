@@ -91,6 +91,7 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 	// Two destinations may be symlinks resolving to one file; such a set
 	// would silently keep only the later document.
 	resolved := make(map[string]string, len(documents))
+	folding := make(map[string]bool)
 	infos := make([]os.FileInfo, len(documents))
 	for i, document := range documents {
 		path := filepath.Join(renderDocsDir, document.FileName)
@@ -106,6 +107,15 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 		// directories; canonicalize the directory so they still collide.
 		if dir, dirErr := filepath.EvalSymlinks(filepath.Dir(target)); dirErr == nil {
 			key = filepath.Join(dir, filepath.Base(target))
+		}
+		dir := filepath.Dir(key)
+		folds, known := folding[dir]
+		if !known {
+			folds = foldsCase(dir)
+			folding[dir] = folds
+		}
+		if folds {
+			key = strings.ToLower(key)
 		}
 		if other, ok := resolved[key]; ok {
 			return fmt.Errorf("cannot write %s: %s and %s both resolve to %s; repoint one of the links so each document has its own file", path, other, document.FileName, target)
@@ -173,7 +183,7 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 		if direct[i] {
 			continue
 		}
-		if err := os.Rename(staged[i], targets[i]); err != nil {
+		if err := replaceFile(staged[i], targets[i]); err != nil {
 			rollback()
 			return fmt.Errorf("write %s: %w", targets[i], err)
 		}
@@ -261,6 +271,28 @@ func syncDir(dir string) {
 	}
 	_ = f.Sync()
 	_ = f.Close()
+}
+
+// foldsCase reports whether a directory treats names differing only by
+// letter case as one entry, probed with a fresh file, so aliases of an
+// absent file are detected before a document lands on them.
+func foldsCase(dir string) bool {
+	file, err := os.CreateTemp(dir, ".sysml-case-*a")
+	if err != nil {
+		return false
+	}
+	name := file.Name()
+	_ = file.Close()
+	defer func() { _ = os.Remove(name) }()
+	lower, err := os.Stat(name)
+	if err != nil {
+		return false
+	}
+	upper, err := os.Stat(name[:len(name)-1] + "A")
+	if err != nil {
+		return false
+	}
+	return os.SameFile(lower, upper)
 }
 
 // replaceFile renames source over target, atomically where the platform

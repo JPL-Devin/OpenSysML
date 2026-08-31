@@ -308,6 +308,35 @@ func TestRenderDocumentsRejectsDanglingAliasedTargets(t *testing.T) {
 	}
 }
 
+// TestRenderDocumentsRejectsCaseAliasedTargets checks two dangling links
+// naming case variants of one absent file are rejected on a case-insensitive
+// filesystem, where they would land on one entry.
+func TestRenderDocumentsRejectsCaseAliasedTargets(t *testing.T) {
+	binary := buildCLI(t)
+	outside := t.TempDir()
+	if !foldsCase(outside) {
+		t.Skip("the filesystem distinguishes names by case")
+	}
+	dir := filepath.Join(t.TempDir(), "rendered")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	pairs := map[string]string{
+		"Reports-MainReport.md": filepath.Join(outside, "shared.md"),
+		"Reports-Appendix.md":   filepath.Join(outside, "SHARED.md"),
+	}
+	for name, target := range pairs {
+		if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := check(t, binary, linkedModel, "-render-documents", dir)
+	if got.status != 2 || !strings.Contains(got.stderr, "both resolve to") {
+		t.Fatalf("exit = %d stderr = %q", got.status, got.stderr)
+	}
+}
+
 // TestReplaceFileReplacesExistingTarget checks a rollback restore lands over
 // an existing committed file.
 func TestReplaceFileReplacesExistingTarget(t *testing.T) {
