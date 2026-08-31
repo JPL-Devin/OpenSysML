@@ -452,6 +452,36 @@ func TestRedefinedFeatureIsOneVariable(t *testing.T) {
 	}
 }
 
+// TestBoundSubjectReadsTheSubjectsFeatures: a usage binding the subject role
+// keeps the definition's subject type, so conditions chaining through it translate.
+func TestBoundSubjectReadsTheSubjectsFeatures(t *testing.T) {
+	q := requirementQuery(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Truck {
+				attribute payload : Real;
+				attribute payloadLimit : Real;
+			}
+			requirement def PayloadReq {
+				subject truck : Truck;
+				require constraint { truck.payload <= truck.payloadLimit }
+			}
+			part loaded : Truck;
+			requirement payloadHolds : PayloadReq {
+				subject truck = loaded;
+			}
+		}
+	`, "test::payloadHolds")
+	if len(q.Vars) != 2 {
+		t.Fatalf("declared %d variables, want one per chain through the subject:\n%s", len(q.Vars), Script(q))
+	}
+	for _, v := range q.Vars {
+		if !v.Sort.Equal(Real) {
+			t.Errorf("%s is %s, want Real", v.Name, v.Sort.Name)
+		}
+	}
+}
+
 // TestEnumerationIsAFiniteSort: an enumeration-typed feature ranges over the
 // literals its definition declares, encoded as a datatype rather than a number.
 func TestEnumerationIsAFiniteSort(t *testing.T) {

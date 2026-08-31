@@ -23,6 +23,23 @@ func TestImplicitRoleRedefinitionDeduplicatesDiamond(t *testing.T) {
 	}
 }
 
+func TestBoundSubjectInheritsTheRedefinedSubjectsMembers(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def Truck { attribute payload; }
+		requirement def Req { subject truck : Truck; }
+		part truck : Truck;
+		requirement bound : Req { subject truck = truck; }
+	}`)
+	p := sym(t, root, "P")
+	subject := nested(t, nested(t, p.Scope, "bound").Scope, "truck")
+	payload := nested(t, nested(t, p.Scope, "Truck").Scope, "payload")
+
+	got, ok := m.LookupMember(subject, "payload")
+	if !ok || got != payload {
+		t.Fatalf("LookupMember(bound's subject, %q) = %v, %v, want the truck's payload", "payload", got, ok)
+	}
+}
+
 func TestImplicitRoleRedefinitionMatchesRole(t *testing.T) {
 	m, root := buildModel(t, `package P {
 		verification def Base {
