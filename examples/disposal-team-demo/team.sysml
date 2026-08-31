@@ -138,6 +138,18 @@ package TeamComms {
     }
 
     part site : Site;
+
+    // A connector end reached through a multi-valued part denotes every element
+    // it holds: each send delivers one message per unit, on that unit's own
+    // identity.
+    part def SquadSite {
+        part console : Console;
+        part units : Unit[2];
+
+        connect console.command to units.command;
+    }
+
+    part squad : SquadSite;
 }
 
 // A callout is an occurrence: the individual that happened has a snapshot of

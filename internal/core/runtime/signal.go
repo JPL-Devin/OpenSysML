@@ -28,11 +28,16 @@ import (
 // what of that destination a consumer must satisfy to take the message.
 type Message struct {
 	SignalType string
-	Target     string
-	Port       string
-	Object     int64
-	Delivery   DeliveryKind
-	Payload    map[string]Value
+	// Signal is the definition SignalType resolved to when the send was built,
+	// nil where the message's type is known only as a name. An accept matches it
+	// by conformance, so a subtype message satisfies a supertype accept and
+	// same-named definitions of different packages stay apart.
+	Signal   *symbols.Symbol
+	Target   string
+	Port     string
+	Object   int64
+	Delivery DeliveryKind
+	Payload  map[string]Value
 }
 
 // DeliveryKind is what a message's destination resolved to, and so what a
@@ -168,12 +173,12 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 	var typeMismatch bool
 	if receiver != "" {
 		receiving, outbound, typeMismatch = ctx.receivingEndsForMessage(
-			routable, send.Target, msg.SignalType,
+			routable, send.Target, send.TargetSym, msg,
 		)
 	} else {
-		receiving, outbound = ctx.receivingEnds(routable, send.Target)
+		receiving, outbound = ctx.receivingEnds(routable, send.Target, send.TargetSym)
 	}
-	crossing, crossMismatch, err := ctx.ownerDeliveries(self, send, msg.SignalType, receiver != "")
+	crossing, crossMismatch, err := ctx.ownerDeliveries(self, send, msg, receiver != "")
 	if err != nil {
 		return err
 	}
@@ -224,14 +229,23 @@ func (ctx *Context) resolveRoutedReceiver(send lower.Send, self *Instance) (mess
 	if !ctx.routedReceiverExists(send.Scope, segments, len(segments) > 1, self) {
 		return messageAddress{}, fmt.Errorf("receiver %q is unresolved", send.Target)
 	}
-	addr, err := ctx.resolveAddress(send, self)
-	if err != nil || addr.Delivery != DeliverReceiver {
-		if err == nil {
-			err = fmt.Errorf("receiver %q is not a receiving node", send.Target)
-		}
+	addrs, err := ctx.resolveAddresses(send, self)
+	if err != nil {
 		return messageAddress{}, err
 	}
-	return addr, nil
+	// A routed receiver is a node of the sending object, so of the addresses
+	// resolved the one held to that object — or to none — is the receiver's.
+	for _, addr := range addrs {
+		if addr.Delivery == DeliverReceiver && (addr.Object == 0 || addr.Object == objectID(self)) {
+			return addr, nil
+		}
+	}
+	for _, addr := range addrs {
+		if addr.Delivery == DeliverReceiver {
+			return addr, nil
+		}
+	}
+	return messageAddress{}, fmt.Errorf("receiver %q is not a receiving node", send.Target)
 }
 
 // routedReceiverExists prefers a directly declared receiving node over inherited
@@ -318,158 +332,185 @@ func objectAddress(object int64) (messageAddress, bool) {
 	return messageAddress{Delivery: DeliverObject, Object: object}, true
 }
 
-// postTo delivers an addressed send to the object its target resolves to,
-// leaving the message for that object alone.
+// postTo delivers an addressed send to every object its target resolves to,
+// one copy per address, each held to that object's own identity.
 func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
-	addr, err := ctx.resolveAddress(send, self)
+	addrs, err := ctx.resolveAddresses(send, self)
 	if err != nil {
 		return err
 	}
-	msg.Target, msg.Port, msg.Object = addr.Name, addr.Port, addr.Object
-	msg.Delivery = addr.Delivery
-	ctx.PostMessage(msg)
+	for _, addr := range addrs {
+		copied := msg
+		copied.Target, copied.Port, copied.Object = addr.Name, addr.Port, addr.Object
+		copied.Delivery = addr.Delivery
+		ctx.PostMessage(copied)
+	}
 	return nil
 }
 
-// resolveAddress answers what a `send m to t` addressed: the object t belongs to
-// and the port path within it, resolved through the instance graph. A chain the
-// graph does not reach is a port of the sender itself, and unroutable if it is
-// neither; a name reaching neither is the receiving node of that name.
-func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddress, error) {
+// resolveAddresses answers what a `send m to t` addressed: the objects t
+// belongs to and the port path within them, resolved through the instance
+// graph — several where the target reaches through a multi-valued feature. A
+// chain the graph does not reach is a port of the sender itself, and
+// unroutable if it is neither; a name reaching neither is the receiving node
+// of that name.
+func (ctx *Context) resolveAddresses(send lower.Send, self *Instance) ([]messageAddress, error) {
 	if send.Target == "" {
 		// A send addressing no one is for the sending object, or for whoever accepts
 		// it where no object sent it.
 		if addr, ok := objectAddress(objectID(self)); ok {
-			return addr, nil
+			return []messageAddress{addr}, nil
 		}
-		return messageAddress{Delivery: DeliverAnyone}, nil
+		return []messageAddress{{Delivery: DeliverAnyone}}, nil
 	}
 	if !send.TargetPath {
-		return ctx.namedAddress(send, self)
+		return ctx.namedAddresses(send, self)
 	}
 	segments := strings.Split(send.Target, ".")
-	addr, ok, err := ctx.featureAddress(send.Scope, self, segments)
+	addrs, err := ctx.featureAddresses(send.Scope, self, segments)
 	if err != nil {
-		return messageAddress{}, err
+		return nil, err
 	}
-	if ok {
-		return addr, nil
+	if len(addrs) > 0 {
+		return addrs, nil
 	}
 	if sym, ok := ctx.portSymbol(send.Scope, send.Target); ok &&
 		sym.Kind == symbols.SymbolPortUsage && ctx.ownPortPath(send.Scope, segments) {
 		if addr, ok := portAddress(send.Target, objectID(self)); ok {
-			return addr, nil
+			return []messageAddress{addr}, nil
 		}
 	}
-	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+	return nil, &UnroutableSendError{Port: send.Target, Address: true}
 }
 
-// namedAddress resolves a target named rather than chained (`R`, `P::R`): an
+// namedAddresses resolves a target named rather than chained (`R`, `P::R`): an
 // unqualified name is a feature, port or receiving node of the sending object,
 // and a qualified one is the element its path names, never a same-named element
 // of the sender.
-func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddress, error) {
+func (ctx *Context) namedAddresses(send lower.Send, self *Instance) ([]messageAddress, error) {
 	segments := strings.Split(send.Target, "::")
 	name := segments[len(segments)-1]
 	if len(segments) > 1 {
-		return ctx.qualifiedAddress(send, self, segments)
+		return ctx.qualifiedAddresses(send, self, segments)
 	}
-	addr, ok, err := ctx.featureAddress(send.Scope, self, segments)
+	addrs, err := ctx.featureAddresses(send.Scope, self, segments)
 	if err != nil {
-		return messageAddress{}, err
+		return nil, err
 	}
-	if ok {
-		return addr, nil
+	if len(addrs) > 0 {
+		return addrs, nil
 	}
 	if sym, resolved := ctx.pathSymbol(send.Scope, segments); resolved &&
 		sym.Kind == symbols.SymbolPortUsage {
 		if addr, built := portAddress(name, objectID(self)); built {
-			return addr, nil
+			return []messageAddress{addr}, nil
 		}
-		return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+		return nil, &UnroutableSendError{Port: send.Target, Address: true}
 	}
 	if addr, built := receiverAddress(name, objectID(self)); built {
-		return addr, nil
+		return []messageAddress{addr}, nil
 	}
-	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+	return nil, &UnroutableSendError{Port: send.Target, Address: true}
 }
 
-// qualifiedAddress resolves a target naming a namespace path (`alpha::reader`,
+// qualifiedAddresses resolves a target naming a namespace path (`alpha::reader`,
 // `P::Driver`) to the element that path names, never to a same-named feature of
 // the sender: the qualifier chooses the object, so the address is the occurrence
 // the path leads through, or unroutable where this run reaches none.
-func (ctx *Context) qualifiedAddress(send lower.Send, self *Instance, segments []string) (messageAddress, error) {
-	addr, ok, err := ctx.featureAddress(send.Scope, nil, segments)
+func (ctx *Context) qualifiedAddresses(send lower.Send, self *Instance, segments []string) ([]messageAddress, error) {
+	addrs, err := ctx.featureAddresses(send.Scope, nil, segments)
 	if err != nil {
-		return messageAddress{}, err
+		return nil, err
 	}
-	if ok {
-		return addr, nil
+	if len(addrs) > 0 {
+		return addrs, nil
 	}
 	target, resolved := ctx.pathSymbol(send.Scope, segments)
 	if !resolved {
-		return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+		return nil, &UnroutableSendError{Port: send.Target, Address: true}
 	}
 	name := segments[len(segments)-1]
 	// A path leading through no occurrence names an element of the sending
 	// behavior's own namespace, where its bare name is that same element:
 	// `P::Node::Machine` is the sender's machine, `P::alpha::inPort` is alpha's.
 	if local, ok := ctx.pathSymbol(send.Scope, []string{name}); ok && local == target {
-		addr, ok, err := ctx.featureAddress(send.Scope, self, []string{name})
+		addrs, err := ctx.featureAddresses(send.Scope, self, []string{name})
 		if err != nil {
-			return messageAddress{}, err
+			return nil, err
 		}
-		if ok {
-			return addr, nil
+		if len(addrs) > 0 {
+			return addrs, nil
 		}
 		if target.Kind == symbols.SymbolPortUsage {
 			if addr, built := portAddress(name, objectID(self)); built {
-				return addr, nil
+				return []messageAddress{addr}, nil
 			}
 		} else if addr, built := receiverAddress(name, objectID(self)); built {
-			return addr, nil
+			return []messageAddress{addr}, nil
 		}
 	}
 	// A receiver no object owns has no identity of its own; a sender that has one
 	// cannot address it by name without reaching its own same-named element.
 	if self == nil && target.Kind != symbols.SymbolPortUsage {
 		if addr, built := receiverAddress(name, 0); built {
-			return addr, nil
+			return []messageAddress{addr}, nil
 		}
 	}
-	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+	return nil, &UnroutableSendError{Port: send.Target, Address: true}
 }
 
-// featureAddress walks a target through the instance graph from the object its
-// first segment belongs to, reporting no address where a segment names no
-// feature, or one that is neither a port nor an occurrence to descend into. A
-// failure to read an object of the graph is that failure, not a bad address.
-func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segments []string) (messageAddress, bool, error) {
+// featureAddresses walks a target through the instance graph from the object
+// its first segment belongs to. A segment held as a collection denotes every
+// element it holds (KerML §7.3.4.6), so the walk carries a set of objects and
+// the target resolves to one address per object reached, without duplicates.
+// No address is reported where a segment names no feature, or one that is
+// neither a port nor an occurrence to descend into. A failure to read an
+// object of the graph is that failure, not a bad address.
+func (ctx *Context) featureAddresses(scope *symbols.Scope, self *Instance, segments []string) ([]messageAddress, error) {
 	owner, rest, ok, err := ctx.addressOwner(scope, self, segments)
 	if err != nil || !ok {
-		return messageAddress{}, false, err
+		return nil, err
+	}
+	owners := []*Instance{owner}
+	var out []messageAddress
+	seen := map[messageAddress]bool{}
+	add := func(addr messageAddress, built bool) {
+		if built && !seen[addr] {
+			seen[addr] = true
+			out = append(out, addr)
+		}
 	}
 	for i, segment := range rest {
-		fv, held := owner.FeatureValues[segment]
-		if !held {
-			return messageAddress{}, false, nil
+		var next []*Instance
+		for _, owner := range owners {
+			fv, held := owner.FeatureValues[segment]
+			if !held {
+				continue
+			}
+			if isPortFeature(fv.Feature) {
+				add(portAddress(strings.Join(rest[i:], "."), owner.ID))
+				continue
+			}
+			// A behavior of an object is a receiving node of it, addressed by name.
+			if i == len(rest)-1 && isBehaviorFeature(fv.Feature) {
+				add(receiverAddress(segment, owner.ID))
+				continue
+			}
+			held2, err := ctx.fvObjects(owner, segment)
+			if err != nil {
+				return nil, err
+			}
+			next = append(next, held2...)
 		}
-		if isPortFeature(fv.Feature) {
-			addr, built := portAddress(strings.Join(rest[i:], "."), owner.ID)
-			return addr, built, nil
-		}
-		// A behavior of an object is a receiving node of it, addressed by name.
-		if i == len(rest)-1 && isBehaviorFeature(fv.Feature) {
-			addr, built := receiverAddress(segment, owner.ID)
-			return addr, built, nil
-		}
-		owner, ok, err = ctx.fvObject(owner, segment)
-		if err != nil || !ok {
-			return messageAddress{}, false, err
+		owners = next
+		if len(owners) == 0 {
+			return out, nil
 		}
 	}
-	addr, built := objectAddress(owner.ID)
-	return addr, built, nil
+	for _, owner := range owners {
+		add(objectAddress(owner.ID))
+	}
+	return out, nil
 }
 
 // addressOwner answers which object a target's leading segments belong to: the
@@ -533,9 +574,9 @@ func (ctx *Context) ownPortPath(scope *symbols.Scope, segments []string) bool {
 	return sym.Kind != symbols.SymbolPackage && sym.Kind != symbols.SymbolNamespace
 }
 
-// featureValueObject reads the object a feature of inst holds, materializing it, and
-// reports whether the feature holds one at all. A feature value that cannot be read is
-// that failure rather than a feature holding no object.
+// fvObject reads the object a feature of inst holds as its scalar value,
+// materializing it, and reports whether the feature holds one at all. A feature
+// value that cannot be read is that failure rather than a feature holding no object.
 func (ctx *Context) fvObject(inst *Instance, name string) (*Instance, bool, error) {
 	fv, err := inst.GetFeatureValue(ctx, name)
 	if err != nil {
@@ -546,6 +587,43 @@ func (ctx *Context) fvObject(inst *Instance, name string) (*Instance, bool, erro
 	}
 	held, ok := ctx.instances[fv.Value.Instance]
 	return held, ok, nil
+}
+
+// fvObjects reads every object a feature of inst holds, materializing it: the
+// one its scalar value names, or each element of its collection in order.
+func (ctx *Context) fvObjects(inst *Instance, name string) ([]*Instance, error) {
+	fv, err := inst.GetFeatureValue(ctx, name)
+	if err != nil || fv == nil {
+		return nil, err
+	}
+	var out []*Instance
+	for _, v := range heldElements(fv.HeldValue()) {
+		if v.Kind != ValInstance {
+			continue
+		}
+		if held, ok := ctx.instances[v.Instance]; ok {
+			out = append(out, held)
+		}
+	}
+	return out, nil
+}
+
+// heldElements flattens a held value to the values it holds: the elements of a
+// collection, or the value itself.
+func heldElements(v Value) []Value {
+	switch v.Kind {
+	case ValSequence:
+		if v.Sequence == nil {
+			return nil
+		}
+		return v.Sequence.Elements()
+	case ValSet:
+		if v.Set == nil {
+			return nil
+		}
+		return v.Set.Elements()
+	}
+	return []Value{v}
 }
 
 // isPortFeature reports whether a feature is a port, where an address stops: the
@@ -584,6 +662,23 @@ func (m Message) carriesSignal(signalType string) bool {
 	return signalType == "" || signalType == m.SignalType
 }
 
+// messageMatches reports whether a message satisfies an accept whose parameter
+// is typed as want, written in scope: the message's type must conform to the
+// definition want resolves to, so a subtype message satisfies a supertype
+// accept and same-named definitions of different packages stay apart. Where
+// either side resolves to no symbol, the written names are compared instead.
+func (ctx *Context) messageMatches(m Message, want string, scope *symbols.Scope) bool {
+	if want == "" {
+		return true
+	}
+	if m.Signal != nil && ctx.model != nil {
+		if wantSym := ctx.resolveType(scope, want); wantSym != nil {
+			return ctx.model.Conforms(m.Signal, wantSym)
+		}
+	}
+	return m.carriesSignal(want)
+}
+
 // buildMessage evaluates a send statement into a message.
 //
 // A send whose message names a type sends that type with no payload
@@ -598,8 +693,8 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 	if send.IsVia {
 		target = send.Receiver
 	}
-	if typeName, ok := e.namedType(scope, send.Message); ok {
-		return Message{SignalType: typeName, Target: target, Payload: map[string]Value{}}, nil
+	if sym, ok := e.namedType(scope, send.Message); ok {
+		return Message{SignalType: sym.Name, Signal: sym, Target: target, Payload: map[string]Value{}}, nil
 	}
 
 	// `send Data(data) via p`, `send shutDown() to self`: the invoked name is
@@ -610,7 +705,7 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 	// A calculation of that name is called, though: what is sent is the value it
 	// returns, not a message named after it.
 	if invocation, ok := send.Message.(*ast.InvocationExpr); ok && !e.invokesCalc(scope, invocation) {
-		return e.buildInvokedMessage(invocation, target)
+		return e.buildInvokedMessage(scope, invocation, target)
 	}
 
 	value, err := e.Eval(send.Message)
@@ -618,14 +713,19 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 		return Message{}, fmt.Errorf("eval send message: %w", err)
 	}
 	signalType := valueTypeName(value)
+	var signal *symbols.Symbol
 	if signalType == "" && value.Kind == ValInstance {
-		signalType = e.ctx.objectSignalType(value.Instance)
+		signal = e.ctx.objectSignalSymbol(value.Instance)
+		if signal != nil {
+			signalType = signal.Name
+		}
 	}
 	if signalType == "" {
 		return Message{}, fmt.Errorf("send: message of kind %v has no signal type", value.Kind)
 	}
 	return Message{
 		SignalType: signalType,
+		Signal:     signal,
 		Target:     target,
 		Payload:    map[string]Value{"value": value},
 	}, nil
@@ -655,7 +755,7 @@ func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.Invocati
 // named where the send named it and by position where it did not. A single
 // positional argument is also carried as `value`, which is what an accept binds
 // its payload parameter to.
-func (e *EvalContext) buildInvokedMessage(invocation *ast.InvocationExpr, target string) (Message, error) {
+func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.InvocationExpr, target string) (Message, error) {
 	signalType := ast.SimpleName(invocation.Type)
 	if signalType == "" {
 		return Message{}, fmt.Errorf("send: the message names no signal")
@@ -687,7 +787,13 @@ func (e *EvalContext) buildInvokedMessage(invocation *ast.InvocationExpr, target
 		payload[name] = value
 	}
 
-	return Message{SignalType: signalType, Target: target, Payload: payload}, nil
+	var signal *symbols.Symbol
+	if scope != nil && e.ctx != nil && e.ctx.resolver != nil {
+		if sym, ok := e.ctx.resolver.ResolveQualified(scope, invocation.Type); ok && isDefinitionSymbol(sym) {
+			signal = sym
+		}
+	}
+	return Message{SignalType: signalType, Signal: signal, Target: target, Payload: payload}, nil
 }
 
 // triggerName describes a transition's trigger for traces. Traces are compared
@@ -758,37 +864,45 @@ func orAny(name string) string {
 	return name
 }
 
-// namedType reports the type name when expr names a type definition rather than
-// denoting a value.
-func (e *EvalContext) namedType(scope *symbols.Scope, expr ast.Node) (string, bool) {
+// namedType reports the definition expr names when it names a type definition
+// rather than denoting a value.
+func (e *EvalContext) namedType(scope *symbols.Scope, expr ast.Node) (*symbols.Symbol, bool) {
 	qname := ast.AsQualifiedName(expr)
 	if qname == nil || scope == nil || e.ctx == nil || e.ctx.resolver == nil {
-		return "", false
+		return nil, false
 	}
 	sym, ok := e.ctx.resolver.ResolveQualified(scope, qname)
 	if !ok || sym == nil {
-		return "", false
+		return nil, false
 	}
 	if !isDefinitionSymbol(sym) {
-		return "", false
+		return nil, false
 	}
-	return sym.Name, true
+	return sym, true
 }
 
-// objectSignalType names the type of an object sent as a message: the definition
-// it materializes, which is the type an accept of it names.
-func (ctx *Context) objectSignalType(id int64) string {
+// objectSignalSymbol is the definition an object sent as a message
+// materializes, which is the type an accept of it matches by conformance.
+func (ctx *Context) objectSignalSymbol(id int64) *symbols.Symbol {
 	inst, ok := ctx.instances[id]
 	if !ok || inst == nil || ctx.model == nil {
-		return ""
+		return nil
 	}
 	if isDefinitionSymbol(inst.Type) {
-		return inst.Type.Name
+		return inst.Type
 	}
 	for _, sup := range ctx.model.AllSupertypes(inst.Type) {
 		if isDefinitionSymbol(sup) {
-			return sup.Name
+			return sup
 		}
+	}
+	return nil
+}
+
+// objectSignalType names the type of an object sent as a message.
+func (ctx *Context) objectSignalType(id int64) string {
+	if sym := ctx.objectSignalSymbol(id); sym != nil {
+		return sym.Name
 	}
 	return ""
 }

@@ -1161,6 +1161,44 @@ func TestAddressedSendThroughMultiplePartIsTyped(t *testing.T) {
 	}
 }
 
+// A path through a multi-valued feature of the sending object denotes every
+// element it holds (KerML §7.3.4.6): one send delivers one message per element,
+// each on that element's own identity, with the port path kept for each.
+func TestAddressedSendFansOutOverAMultiValuedFeature(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Leaf { port inPort : PingPort; }
+		part def Node {
+			part nodes : Leaf[3];
+			action listen { first start; done; succession first start then done; }
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{
+		Target:     "nodes.inPort",
+		TargetPath: true,
+		Scope:      declScope(oneSymbol(t, idx, "test::Node::listen")),
+	}
+	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, alpha); err != nil {
+		t.Fatalf("post to nodes.inPort: %v", err)
+	}
+	elements, err := ctx.fvObjects(alpha, "nodes")
+	if err != nil || len(elements) != 3 {
+		t.Fatalf("nodes elements = %v, err = %v, want 3", elements, err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 3 {
+		t.Fatalf("pending messages = %+v, want one per element", pending)
+	}
+	for i, msg := range pending {
+		if msg.Port != "inPort" || msg.Object != elements[i].ID {
+			t.Errorf("message %d delivered as %+v, want port inPort of object %d", i, msg, elements[i].ID)
+		}
+	}
+}
+
 // An object's behavior addresses a receiving node of an action it performs: the
 // performance is no object of its own, so identity must not exclude it.
 func TestAddressedSendReachesPerformedAction(t *testing.T) {

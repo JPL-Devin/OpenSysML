@@ -104,7 +104,7 @@ type ownerDelivery struct {
 // reports an end refusing the message because its inward features are typed for
 // another, which decides the error a send delivered nowhere gives.
 func (ctx *Context) ownerDeliveries(
-	self *Instance, send lower.Send, signalType string, typed bool,
+	self *Instance, send lower.Send, msg Message, typed bool,
 ) ([]ownerDelivery, bool, error) {
 	var out []ownerDelivery
 	mismatch := false
@@ -123,7 +123,7 @@ func (ctx *Context) ownerDeliveries(
 		sending := path + "." + send.Target
 		conns := ctx.realizedConnections(ctx.objectConnections(owner.Type), owner)
 		for _, conn := range conns {
-			if !joins(conn.Ends, sending) {
+			if !ctx.joinsTarget(conn, sending, send.TargetSym) {
 				continue
 			}
 			for _, end := range conn.Ends {
@@ -133,7 +133,7 @@ func (ctx *Context) ownerDeliveries(
 				accepts := true
 				if typed {
 					var refused bool
-					accepts, refused = ctx.endReceivesMessage(conn.Scope, end, signalType)
+					accepts, refused = ctx.endReceivesMessage(conn.Scope, end, msg)
 					mismatch = mismatch || refused
 				} else {
 					accepts = ctx.endReceives(conn.Scope, end)
@@ -141,19 +141,21 @@ func (ctx *Context) ownerDeliveries(
 				if !accepts {
 					continue
 				}
-				addr, ok, err := ctx.featureAddress(conn.Scope, owner, strings.Split(end, "."))
+				addrs, err := ctx.featureAddresses(conn.Scope, owner, strings.Split(end, "."))
 				if err != nil {
 					return nil, mismatch, err
 				}
-				if !ok || addr.Delivery != DeliverPort || addr.Object == 0 {
-					continue
+				for _, addr := range addrs {
+					if addr.Delivery != DeliverPort || addr.Object == 0 {
+						continue
+					}
+					delivery := ownerDelivery{object: addr.Object, port: addr.Port}
+					if seen[delivery] {
+						continue
+					}
+					seen[delivery] = true
+					out = append(out, delivery)
 				}
-				delivery := ownerDelivery{object: addr.Object, port: addr.Port}
-				if seen[delivery] {
-					continue
-				}
-				seen[delivery] = true
-				out = append(out, delivery)
 			}
 		}
 	}
@@ -295,13 +297,13 @@ func (ctx *Context) heldVariant(inst *Instance, variation string) string {
 // direction of its own, so what a message may traverse is decided by the flow
 // features of the port each end names, conjugated where the port's type is
 // (SysML v2 §7.15). Each list is in declaration order and without duplicates.
-func (ctx *Context) receivingEnds(conns []lower.Connection, sendingPort string) (receiving, outbound []string) {
+func (ctx *Context) receivingEnds(conns []lower.Connection, sendingPort string, target *symbols.Symbol) (receiving, outbound []string) {
 	if sendingPort == "" {
 		return nil, nil
 	}
 	seen := map[string]bool{sendingPort: true}
 	for _, conn := range conns {
-		if !joins(conn.Ends, sendingPort) {
+		if !ctx.joinsTarget(conn, sendingPort, target) {
 			continue
 		}
 		for _, end := range conn.Ends {
@@ -322,14 +324,14 @@ func (ctx *Context) receivingEnds(conns []lower.Connection, sendingPort string) 
 // receivingEndsForMessage finds connected receiving ends and distinguishes
 // typed message mismatches from ends that are outbound or otherwise unroutable.
 func (ctx *Context) receivingEndsForMessage(
-	conns []lower.Connection, sendingPort, signalType string,
+	conns []lower.Connection, sendingPort string, target *symbols.Symbol, msg Message,
 ) (receiving, outbound []string, typeMismatch bool) {
 	if sendingPort == "" {
 		return nil, nil, false
 	}
 	seen := map[string]bool{sendingPort: true}
 	for _, conn := range conns {
-		if !joins(conn.Ends, sendingPort) {
+		if !ctx.joinsTarget(conn, sendingPort, target) {
 			continue
 		}
 		for _, end := range conn.Ends {
@@ -337,7 +339,7 @@ func (ctx *Context) receivingEndsForMessage(
 				continue
 			}
 			seen[end] = true
-			accepts, mismatch := ctx.endReceivesMessage(conn.Scope, end, signalType)
+			accepts, mismatch := ctx.endReceivesMessage(conn.Scope, end, msg)
 			if accepts {
 				receiving = append(receiving, end)
 			} else if mismatch {
@@ -374,7 +376,7 @@ func (ctx *Context) endReceives(scope *symbols.Scope, end string) bool {
 
 // endReceivesMessage classifies a port for this message, reporting a mismatch
 // only when typed inward features reject it; conformance is accepted either way.
-func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end, signalType string) (bool, bool) {
+func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end string, msg Message) (bool, bool) {
 	sym, ok := ctx.portSymbol(scope, end)
 	if !ok {
 		return true, false
@@ -392,7 +394,10 @@ func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end, signalType str
 	if !inward {
 		return false, false
 	}
-	messageSym := ctx.resolveType(scope, signalType)
+	messageSym := msg.Signal
+	if messageSym == nil {
+		messageSym = ctx.resolveType(scope, msg.SignalType)
+	}
 	if messageSym == nil {
 		return true, false
 	}
@@ -471,4 +476,23 @@ func joins(ends []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// joinsTarget reports whether a connection has an end naming the sending
+// feature: an end written as want that also resolves to the feature the send
+// target denotes, so a local port shadowing a connected port's name diverts
+// the route away from the connector. An end or a target this run does not
+// resolve is matched by its written path alone.
+func (ctx *Context) joinsTarget(conn lower.Connection, want string, target *symbols.Symbol) bool {
+	if !joins(conn.Ends, want) {
+		return false
+	}
+	if target == nil {
+		return true
+	}
+	sym, ok := ctx.pathSymbol(conn.Scope, strings.Split(want, "."))
+	if !ok || sym == nil {
+		return true
+	}
+	return sym == target || ctx.model.Conforms(sym, target) || ctx.model.Conforms(target, sym)
 }

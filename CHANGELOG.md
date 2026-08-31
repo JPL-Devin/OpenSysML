@@ -17,6 +17,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **A connector end through a multi-valued feature fans out.** A send over
+  `connect console.command to units.command` where `part units : Unit[2]` was
+  `ErrUnroutableSend`: an end reached through a multi-valued feature resolved to no object. Such
+  an end now denotes every element the feature holds (KerML 1.0 §7.3.4.6), so one send delivers
+  one message per element, each on that element's own identity — of addressing generally, not
+  only the owner-level route. The squad site of
+  [`examples/disposal-team-demo`](examples/disposal-team-demo/README.md) shows it.
+
+- **Message signals match by semantic identity, not short name.** Two same-named item or signal
+  definitions in different packages were conflated, and an accept of a supertype did not take a
+  message of a subtype. A message now carries its resolved signal symbol, and an accept takes a
+  message whose signal conforms to the type it names — qualified identity plus subtype
+  conformance through the semantic model.
+
+- **`send x via p` routes by what `p` resolves to, not the name written.** Connector-end
+  matching compared the written name, so a port a behavior declares under the name of one of the
+  performer's connected ports did not divert the route. The `via` target is now resolved once at
+  lowering with the usual scope-aware shadowing, so the behavior-local port is used and the outer
+  connector receives nothing.
+
 - **A send now crosses a connector its owner declared.** A part's port joined by its owner to a
   sibling's port reached nothing: routing consulted only the connections of the behavior and of
   the sending object, so a console commanding a unit over the connector their site declares

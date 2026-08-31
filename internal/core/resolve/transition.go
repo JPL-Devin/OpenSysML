@@ -197,6 +197,13 @@ func inheritedActionNode(body *symbols.Scope, name string, qualifier *symbols.Sy
 	return nil, nil, false, uncertain
 }
 
+// FeatureSymbolInScope resolves a dotted feature path from the scope tree
+// alone, innermost scope first, so a local declaration shadows an outer one —
+// for lowering a send target without a resolver over its document.
+func FeatureSymbolInScope(scope *symbols.Scope, segments []string) (*symbols.Symbol, bool) {
+	return lookupScopePartsText(scope, segments)
+}
+
 func lookupScopeParts(scope *symbols.Scope, parts []ast.NameSegment) (*symbols.Symbol, bool) {
 	if scope == nil || len(parts) == 0 {
 		return nil, false

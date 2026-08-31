@@ -1,0 +1,21 @@
+{
+  "type": "instance",
+  "instantiate": "SendSubtypeAccept::site",
+  "objects": [
+    {
+      "path": "console",
+      "finalState": "sending",
+      "stateVisits": ["idle", "sending"],
+      "slots": {"sent": {"type": "Integer", "value": 1}}
+    },
+    {
+      "path": "unit",
+      "finalState": "working",
+      "stateVisits": ["standingBy", "working"],
+      "slots": {
+        "accepted": {"type": "Integer", "value": 1},
+        "lastCode": {"type": "Integer", "value": 9}
+      }
+    }
+  ]
+}

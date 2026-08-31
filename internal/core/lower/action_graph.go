@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -82,9 +83,15 @@ type Statement interface {
 // that the name is a port of the sender rather than a receiver, in which case it
 // is the whole path the port was written as and the message goes to whatever the
 // graph's Connections join that port to.
+//
+// TargetSym is the feature a via target resolves to where it was written, so
+// routing matches the feature the name denotes rather than the name alone: a
+// port a behavior declares under a connected port's name shadows that port.
+// It is nil where the scope tree alone does not resolve the path.
 type Send struct {
-	Message ast.Node
-	Target  string
+	Message   ast.Node
+	Target    string
+	TargetSym *symbols.Symbol
 	// TargetPath records that Target is a feature chain (`a.b`) reaching through
 	// the sender's features, rather than a name in a namespace (`R`, `P::R`).
 	TargetPath bool
@@ -328,6 +335,8 @@ type Accept struct {
 	ViaPort      string
 	SubsetsEvent string
 	Trigger      ast.Node
+	// Scope is the scope the accept was declared in, in which SignalType resolves.
+	Scope *symbols.Scope
 }
 
 // Attribute is a lowered attribute default written among a behavior's members
@@ -537,7 +546,7 @@ func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 			graph.Bodies[node] = append(graph.Bodies[node], lowerStatement(m, scope))
 		}
 	}
-	lowerAccept(graph, node)
+	lowerAccept(graph, node, scope)
 }
 
 // lowerNodeBody records the statements the body of an action node declares, so
@@ -581,8 +590,10 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 		// a namespace (`P::Driver`), which resolve differently. A `via` target names
 		// a port of the sender, rendered as connector ends are so the two match.
 		target, isPath := SendTarget(m.Target)
+		var targetSym *symbols.Symbol
 		if m.IsVia {
 			target, isPath = FeaturePath(m.Target), true
+			targetSym, _ = resolve.FeatureSymbolInScope(scope, strings.Split(target, "."))
 		}
 		message := m.Message
 		if message == nil {
@@ -599,6 +610,7 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 		return Send{
 			Message:      message,
 			Target:       target,
+			TargetSym:    targetSym,
 			TargetPath:   isPath,
 			IsVia:        m.IsVia,
 			Receiver:     receiver,

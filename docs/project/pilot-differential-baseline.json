@@ -60,7 +60,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 24,
-        "digest": "sha256:f2b20eac0b080360f000dce89d0df7e4ff96b313a0c72334f31297e471539ffc"
+        "digest": "sha256:4f0ef34f4f914664a56b909ba9acef1783fb0f1a7e8f668a184b2ad87bdcedde"
       },
       {
         "name": "probes",
@@ -818,7 +818,7 @@
               "count": 1
             },
             {
-              "line": 259,
+              "line": 271,
               "severity": "error",
               "category": "unmapped",
               "count": 1
