@@ -13,15 +13,22 @@
 //	client, err := opensysml.New()
 //	// or: client, err := opensysml.Dial("localhost:50051")
 //
-// # One document per model
+// # Models of several documents
 //
-// A Model is one parsed document: ParseFile reads one path and ParseSource one
-// string, and neither reads a sibling file, so a name imported from another
-// file is an unresolved-reference diagnostic rather than an error. A model
-// spread over several files is embedded by concatenating their sources into one
-// ParseSource call — packages are namespaces, so nothing else changes. The
-// sysml command's multi-file loading is a command-line feature, not a service
-// one.
+// ParseFile and ParseSource each parse one document, which reads no sibling
+// file: a name imported from another file is an unresolved-reference diagnostic
+// rather than an error. ParseFiles and ParseDocuments parse several documents as
+// one model, so an import between them is satisfied and every symbol resolves
+// across them:
+//
+//	model, err := client.ParseFiles(ctx, []string{"lib.sysml", "top.sysml"})
+//
+// Each document keeps its own name, so a diagnostic locates itself in the file
+// it came from, and Model.Roots holds the root namespace of each in the order
+// parsed. The rest of the API takes such a model as it takes any other, except
+// that an operation rewriting one document's own notation — conversion from a
+// model handle, and editing — is refused with CodeFailedPrecondition rather than
+// applied to one document of several.
 //
 // # Concurrency, contexts and lifetime
 //

@@ -54,6 +54,8 @@ func (c *pkgClient) dispatch(ctx context.Context, method string, request protore
 		return c.serverInfo(ctx)
 	case "ParseFile":
 		return c.parseFile(ctx, request)
+	case "ParseSources":
+		return c.parseSources(ctx, request)
 	case "GetSymbol":
 		return c.getSymbol(ctx, request)
 	case "GetDiagnostics":
@@ -110,6 +112,48 @@ func (c *pkgClient) parseFile(ctx context.Context, request protoreflect.Message)
 		Root:        symbolToProto(model.Root),
 		Diagnostics: diagnosticsToProto(model.Diagnostics),
 	}, nil
+}
+
+func (c *pkgClient) parseSources(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.ParseSourcesRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	documents := make([]opensysml.Document, 0, len(req.Documents))
+	for _, document := range req.Documents {
+		converted := opensysml.Document{Name: document.Name, Language: opensysml.Language(document.Language)}
+		switch source := document.Source.(type) {
+		case *pb.SourceDocument_FilePath:
+			converted.Path = source.FilePath
+		case *pb.SourceDocument_Content:
+			converted.Content = source.Content
+		}
+		documents = append(documents, converted)
+	}
+	var opts []opensysml.ParseOption
+	if req.StrictConformance {
+		opts = append(opts, opensysml.WithStrictConformance())
+	}
+	model, err := c.api.ParseDocuments(ctx, documents, opts...)
+	var failure *opensysml.FailureError
+	if errors.As(err, &failure) {
+		return &pb.ParseSourcesResponse{
+			Error:       failure.Message,
+			Diagnostics: diagnosticsToProto(failure.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	c.models[model.Hash] = model
+	response := &pb.ParseSourcesResponse{
+		ModelHash:   model.Hash,
+		Diagnostics: diagnosticsToProto(model.Diagnostics),
+	}
+	for _, root := range model.Roots {
+		response.Roots = append(response.Roots, symbolToProto(root))
+	}
+	return response, nil
 }
 
 func (c *pkgClient) getSymbol(ctx context.Context, request protoreflect.Message) (proto.Message, error) {

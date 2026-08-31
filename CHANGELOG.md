@@ -8,6 +8,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **A model spread over several files is parsed as one model.** `ParseFiles` and
+  `ParseDocuments` on the public Go API — the `ParseSources` RPC and the `parse_sources`
+  capability on the service — parse each document on its own and index all of them together, so
+  an import between them resolves and every symbol of the set is one lookup, evaluation or
+  instantiation away. Nothing is concatenated: a document keeps its own name, a diagnostic
+  locates itself in the file it came from, and `Model.Roots` holds each document's root. The two
+  operations that write one document's notation back out — conversion from a model hash, and
+  editing — refuse a model of several documents rather than picking one.
+
 - **A second bomb-disposal walkthrough, written for the notation the first one does not reach:**
   [`examples/disposal-team-demo`](examples/disposal-team-demo/README.md) models the team around
   the robot — quantities with units and a payload budget, `select` and `reduce` over the fleet,
@@ -16,6 +25,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the same subject. It was written to find defects, and found the three below.
 
 ### Fixed
+
+- **The public Go API holds its contract for a binary that imports it.**
+  `ServerInfo.Version` reports the OpenSysML module version the importing program resolved rather
+  than that program's own; an in-process call honours its context as the wire does, refusing a
+  context already done; every call after `Close` is refused with `CodeUnavailable`, and closing
+  twice is not an error; and a `StatusError`, a quantity, an enum literal and an unset value print
+  as a caller would write them rather than as Go struct dumps.
 
 - **A connector end through a multi-valued feature fans out.** A send over
   `connect console.command to units.command` where `part units : Unit[2]` was

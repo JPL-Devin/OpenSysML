@@ -86,6 +86,14 @@ func (r *remote) parseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.P
 	return resp.Msg, nil
 }
 
+func (r *remote) parseSources(ctx context.Context, req *pb.ParseSourcesRequest) (*pb.ParseSourcesResponse, error) {
+	resp, err := r.rpc.ParseSources(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
 func (r *remote) getSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.SymbolResponse, error) {
 	resp, err := r.rpc.GetSymbol(ctx, connect.NewRequest(req))
 	if err != nil {

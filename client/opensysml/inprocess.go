@@ -99,6 +99,13 @@ func (p *inprocess) parseFile(ctx context.Context, req *pb.ParseFileRequest) (*p
 	return answer(ctx, req, p.svc.ParseFile)
 }
 
+func (p *inprocess) parseSources(
+	ctx context.Context,
+	req *pb.ParseSourcesRequest,
+) (*pb.ParseSourcesResponse, error) {
+	return answer(ctx, req, p.svc.ParseSources)
+}
+
 func (p *inprocess) getSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.SymbolResponse, error) {
 	return answer(ctx, req, p.svc.GetSymbol)
 }

@@ -86,7 +86,7 @@ func (s *Service) RenderDocument(ctx context.Context, req *pb.RenderDocumentRequ
 	}
 	document, err := docir.Evaluate(plan,
 		queryexec.Context{Index: sc.Index, Resolver: sc.Resolver, Model: sc.Semantics},
-		queryexec.Options{}, cachedSourceText(cached.Source))
+		queryexec.Options{}, cachedSourceText(cached))
 	if err != nil {
 		return nil, documentStatus(err)
 	}
@@ -293,14 +293,21 @@ func docPlanCode(kind docplan.ErrorKind) connect.Code {
 	}
 }
 
-// cachedSourceText reads notation from the cached model's one source file, for
-// the labels a diagram rendering takes verbatim.
-func cachedSourceText(sf *source.SourceFile) view.SourceText {
-	if sf == nil {
+// cachedSourceText reads notation from whichever of the model's documents a span
+// belongs to, for the labels a diagram rendering takes verbatim.
+func cachedSourceText(model *CachedModel) view.SourceText {
+	sources := make(map[string]*source.SourceFile, len(model.Documents))
+	for _, doc := range model.Documents {
+		if doc.Source != nil {
+			sources[doc.Source.Name()] = doc.Source
+		}
+	}
+	if len(sources) == 0 {
 		return nil
 	}
 	return func(name string, span source.Span) string {
-		if name != sf.Name() {
+		sf, ok := sources[name]
+		if !ok {
 			return ""
 		}
 		return sf.Text(span)

@@ -24,6 +24,7 @@ const (
 	CapabilityAuthoring         = sysmlgrpc.CapabilityAuthoring
 	CapabilityInlineLanguage    = sysmlgrpc.CapabilityInlineLanguage
 	CapabilityStrictConformance = sysmlgrpc.CapabilityStrictConformance
+	CapabilityParseSources      = sysmlgrpc.CapabilityParseSources
 )
 
 // ServerInfo describes the implementation answering a Client's calls.
@@ -47,8 +48,11 @@ func (si *ServerInfo) Has(capability string) bool {
 type Model struct {
 	// Hash is the content-addressed cache key the service assigned the parse.
 	Hash string
-	// Root is the model's root namespace.
+	// Root is the root namespace of the model's first document.
 	Root *Symbol
+	// Roots is the root namespace of each document, in the order the parse named
+	// them; one entry for a model parsed from a single file or source.
+	Roots []*Symbol
 	// Diagnostics from parsing and semantic analysis. A syntax error is a
 	// diagnostic here, not a failed call.
 	Diagnostics []Diagnostic

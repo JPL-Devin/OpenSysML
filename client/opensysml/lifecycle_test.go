@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -34,6 +33,10 @@ func TestACancelledContextRefusesTheCall(t *testing.T) {
 		}
 		if _, err := client.ParseSource(ctx, vehicleSource); !errors.Is(err, opensysml.CodeCanceled) {
 			t.Errorf("ParseSource err = %v, want CodeCanceled", err)
+		}
+		documents := []opensysml.Document{opensysml.Source("v.sysml", vehicleSource)}
+		if _, err := client.ParseDocuments(ctx, documents); !errors.Is(err, opensysml.CodeCanceled) {
+			t.Errorf("ParseDocuments err = %v, want CodeCanceled", err)
 		}
 		if _, err := client.LookupSymbol(ctx, model, "Demo::Vehicle"); !errors.Is(err, opensysml.CodeCanceled) {
 			t.Errorf("LookupSymbol err = %v, want CodeCanceled", err)
@@ -72,6 +75,14 @@ func TestAClosedClientAnswersNoFurtherCalls(t *testing.T) {
 			"LookupSymbol": func() error { _, err := client.LookupSymbol(context.Background(), model, "Demo::Vehicle"); return err },
 			"Evaluate":     func() error { _, err := client.Evaluate(context.Background(), model, "2 + 2"); return err },
 			"Instantiate":  func() error { _, err := client.Instantiate(context.Background(), model, "Demo::Vehicle"); return err },
+			"ParseFiles": func() error {
+				_, err := client.ParseFiles(context.Background(), []string{"vehicle.sysml"})
+				return err
+			},
+			"ParseDocuments": func() error {
+				_, err := client.ParseDocuments(context.Background(), []opensysml.Document{opensysml.Source("v.sysml", vehicleSource)})
+				return err
+			},
 		} {
 			if err := call(); !errors.Is(err, opensysml.CodeUnavailable) {
 				t.Errorf("%s after Close: err = %v, want CodeUnavailable", name, err)
@@ -107,31 +118,6 @@ func TestCallsAreSafeFromManyGoroutines(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-}
-
-func TestSeveralSourcesParseAsOneModel(t *testing.T) {
-	client := newClient(t)
-	library := "package Lib {\n\tpart def Engine {\n\t\tattribute power = 150;\n\t}\n}\n"
-	top := "package Top {\n\tprivate import Lib::*;\n\tpart def Car {\n\t\tpart motor : Engine;\n\t}\n}\n"
-
-	separate, err := client.ParseSource(context.Background(), top)
-	if err != nil {
-		t.Fatalf("ParseSource: %v", err)
-	}
-	if len(separate.Diagnostics) == 0 {
-		t.Error("a file importing another parsed clean on its own; the one-document scope no longer holds")
-	}
-
-	joined, err := client.ParseSource(context.Background(), strings.Join([]string{library, top}, "\n"))
-	if err != nil {
-		t.Fatalf("ParseSource: %v", err)
-	}
-	if len(joined.Diagnostics) != 0 {
-		t.Errorf("concatenated sources have diagnostics: %v", joined.Diagnostics)
-	}
-	if _, err := client.Instantiate(context.Background(), joined, "Top::Car"); err != nil {
-		t.Errorf("Instantiate: %v", err)
-	}
 }
 
 func TestServerInfoReportsTheEngineVersion(t *testing.T) {

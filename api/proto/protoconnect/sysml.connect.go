@@ -38,6 +38,9 @@ const (
 	SysMLServiceGetServerInfoProcedure = "/sysml.SysMLService/GetServerInfo"
 	// SysMLServiceParseFileProcedure is the fully-qualified name of the SysMLService's ParseFile RPC.
 	SysMLServiceParseFileProcedure = "/sysml.SysMLService/ParseFile"
+	// SysMLServiceParseSourcesProcedure is the fully-qualified name of the SysMLService's ParseSources
+	// RPC.
+	SysMLServiceParseSourcesProcedure = "/sysml.SysMLService/ParseSources"
 	// SysMLServiceGetSymbolProcedure is the fully-qualified name of the SysMLService's GetSymbol RPC.
 	SysMLServiceGetSymbolProcedure = "/sysml.SysMLService/GetSymbol"
 	// SysMLServiceGetDiagnosticsProcedure is the fully-qualified name of the SysMLService's
@@ -88,6 +91,10 @@ type SysMLServiceClient interface {
 	GetServerInfo(context.Context, *connect.Request[proto.ServerInfoRequest]) (*connect.Response[proto.ServerInfoResponse], error)
 	// Parse a SysML file and return model hash for subsequent queries
 	ParseFile(context.Context, *connect.Request[proto.ParseFileRequest]) (*connect.Response[proto.ParseFileResponse], error)
+	// Parse several documents as one model, so a name one document declares
+	// resolves in another and an import between them is satisfied. Reported as
+	// the "parse_sources" capability.
+	ParseSources(context.Context, *connect.Request[proto.ParseSourcesRequest]) (*connect.Response[proto.ParseSourcesResponse], error)
 	// Get symbol information by qualified name
 	GetSymbol(context.Context, *connect.Request[proto.GetSymbolRequest]) (*connect.Response[proto.SymbolResponse], error)
 	// Get all diagnostics for a parsed model
@@ -150,6 +157,12 @@ func NewSysMLServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+SysMLServiceParseFileProcedure,
 			connect.WithSchema(sysMLServiceMethods.ByName("ParseFile")),
+			connect.WithClientOptions(opts...),
+		),
+		parseSources: connect.NewClient[proto.ParseSourcesRequest, proto.ParseSourcesResponse](
+			httpClient,
+			baseURL+SysMLServiceParseSourcesProcedure,
+			connect.WithSchema(sysMLServiceMethods.ByName("ParseSources")),
 			connect.WithClientOptions(opts...),
 		),
 		getSymbol: connect.NewClient[proto.GetSymbolRequest, proto.SymbolResponse](
@@ -249,6 +262,7 @@ func NewSysMLServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 type sysMLServiceClient struct {
 	getServerInfo      *connect.Client[proto.ServerInfoRequest, proto.ServerInfoResponse]
 	parseFile          *connect.Client[proto.ParseFileRequest, proto.ParseFileResponse]
+	parseSources       *connect.Client[proto.ParseSourcesRequest, proto.ParseSourcesResponse]
 	getSymbol          *connect.Client[proto.GetSymbolRequest, proto.SymbolResponse]
 	getDiagnostics     *connect.Client[proto.DiagnosticsRequest, proto.DiagnosticsResponse]
 	evaluate           *connect.Client[proto.EvaluateRequest, proto.EvaluateResponse]
@@ -274,6 +288,11 @@ func (c *sysMLServiceClient) GetServerInfo(ctx context.Context, req *connect.Req
 // ParseFile calls sysml.SysMLService.ParseFile.
 func (c *sysMLServiceClient) ParseFile(ctx context.Context, req *connect.Request[proto.ParseFileRequest]) (*connect.Response[proto.ParseFileResponse], error) {
 	return c.parseFile.CallUnary(ctx, req)
+}
+
+// ParseSources calls sysml.SysMLService.ParseSources.
+func (c *sysMLServiceClient) ParseSources(ctx context.Context, req *connect.Request[proto.ParseSourcesRequest]) (*connect.Response[proto.ParseSourcesResponse], error) {
+	return c.parseSources.CallUnary(ctx, req)
 }
 
 // GetSymbol calls sysml.SysMLService.GetSymbol.
@@ -359,6 +378,10 @@ type SysMLServiceHandler interface {
 	GetServerInfo(context.Context, *connect.Request[proto.ServerInfoRequest]) (*connect.Response[proto.ServerInfoResponse], error)
 	// Parse a SysML file and return model hash for subsequent queries
 	ParseFile(context.Context, *connect.Request[proto.ParseFileRequest]) (*connect.Response[proto.ParseFileResponse], error)
+	// Parse several documents as one model, so a name one document declares
+	// resolves in another and an import between them is satisfied. Reported as
+	// the "parse_sources" capability.
+	ParseSources(context.Context, *connect.Request[proto.ParseSourcesRequest]) (*connect.Response[proto.ParseSourcesResponse], error)
 	// Get symbol information by qualified name
 	GetSymbol(context.Context, *connect.Request[proto.GetSymbolRequest]) (*connect.Response[proto.SymbolResponse], error)
 	// Get all diagnostics for a parsed model
@@ -417,6 +440,12 @@ func NewSysMLServiceHandler(svc SysMLServiceHandler, opts ...connect.HandlerOpti
 		SysMLServiceParseFileProcedure,
 		svc.ParseFile,
 		connect.WithSchema(sysMLServiceMethods.ByName("ParseFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sysMLServiceParseSourcesHandler := connect.NewUnaryHandler(
+		SysMLServiceParseSourcesProcedure,
+		svc.ParseSources,
+		connect.WithSchema(sysMLServiceMethods.ByName("ParseSources")),
 		connect.WithHandlerOptions(opts...),
 	)
 	sysMLServiceGetSymbolHandler := connect.NewUnaryHandler(
@@ -515,6 +544,8 @@ func NewSysMLServiceHandler(svc SysMLServiceHandler, opts ...connect.HandlerOpti
 			sysMLServiceGetServerInfoHandler.ServeHTTP(w, r)
 		case SysMLServiceParseFileProcedure:
 			sysMLServiceParseFileHandler.ServeHTTP(w, r)
+		case SysMLServiceParseSourcesProcedure:
+			sysMLServiceParseSourcesHandler.ServeHTTP(w, r)
 		case SysMLServiceGetSymbolProcedure:
 			sysMLServiceGetSymbolHandler.ServeHTTP(w, r)
 		case SysMLServiceGetDiagnosticsProcedure:
@@ -560,6 +591,10 @@ func (UnimplementedSysMLServiceHandler) GetServerInfo(context.Context, *connect.
 
 func (UnimplementedSysMLServiceHandler) ParseFile(context.Context, *connect.Request[proto.ParseFileRequest]) (*connect.Response[proto.ParseFileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sysml.SysMLService.ParseFile is not implemented"))
+}
+
+func (UnimplementedSysMLServiceHandler) ParseSources(context.Context, *connect.Request[proto.ParseSourcesRequest]) (*connect.Response[proto.ParseSourcesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sysml.SysMLService.ParseSources is not implemented"))
 }
 
 func (UnimplementedSysMLServiceHandler) GetSymbol(context.Context, *connect.Request[proto.GetSymbolRequest]) (*connect.Response[proto.SymbolResponse], error) {

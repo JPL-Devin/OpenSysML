@@ -24,9 +24,9 @@ mass, err := client.Evaluate(ctx, model, "mass", opensysml.WithSubject("Demo::se
 
 Nothing else is installed — the standard library is embedded in the module and the v1 operations
 never shell out — and a `Client` is safe to share across goroutines, so one per process is the
-intended shape. A `Model` is one parsed document: loading several files as one model is a `sysml`
-command-line feature, so an embedding program concatenates their sources into one `ParseSource`
-call.
+intended shape. `ParseFile` and `ParseSource` each parse one document; `ParseFiles` and
+`ParseDocuments` parse several as one model, each keeping its own name, so an import between them
+resolves and a diagnostic locates itself in the file it came from.
 
 Its errors, ownership rules, capability negotiation and v1 boundary are in
 [client/opensysml/README.md](../../client/opensysml/README.md), and the other client languages are on

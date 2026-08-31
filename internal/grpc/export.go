@@ -78,7 +78,13 @@ func (s *Service) convertSource(req *pb.ConvertRequest) (string, []byte, error) 
 				"model %s is no longer cached: parse it again, or convert its file_path or content",
 				src.ModelHash)
 		}
-		return cached.Source.Name(), cached.Source.Bytes(), nil
+		// Conversion writes one document out, so a model of several is refused
+		// rather than converted from one of them.
+		doc, err := cached.SoleDocument()
+		if err != nil {
+			return "", nil, err
+		}
+		return doc.Source.Name(), doc.Source.Bytes(), nil
 	case *pb.ConvertRequest_FilePath:
 		// #nosec G304 -- reading the model file the client names is the point,
 		// and the service runs with the caller's own privileges.

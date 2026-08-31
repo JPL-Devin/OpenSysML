@@ -7,16 +7,16 @@ package io.opensysml.proto;
 
 /**
  * <pre>
- * ParseFileRequest specifies the source to parse
+ * SourceDocument is one document of a multi-document parse.
  * </pre>
  *
- * Protobuf type {@code sysml.ParseFileRequest}
+ * Protobuf type {@code sysml.SourceDocument}
  */
 @com.google.protobuf.Generated
-public final class ParseFileRequest extends
+public final class SourceDocument extends
     com.google.protobuf.GeneratedMessage implements
-    // @@protoc_insertion_point(message_implements:sysml.ParseFileRequest)
-    ParseFileRequestOrBuilder {
+    // @@protoc_insertion_point(message_implements:sysml.SourceDocument)
+    SourceDocumentOrBuilder {
 private static final long serialVersionUID = 0L;
   static {
     com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
@@ -25,28 +25,28 @@ private static final long serialVersionUID = 0L;
       /* minor= */ 33,
       /* patch= */ 1,
       /* suffix= */ "",
-      "ParseFileRequest");
+      "SourceDocument");
   }
-  // Use ParseFileRequest.newBuilder() to construct.
-  private ParseFileRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+  // Use SourceDocument.newBuilder() to construct.
+  private SourceDocument(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
     super(builder);
   }
-  private ParseFileRequest() {
-    contentHash_ = "";
+  private SourceDocument() {
     language_ = "";
+    name_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return io.opensysml.proto.Sysml.internal_static_sysml_ParseFileRequest_descriptor;
+    return io.opensysml.proto.Sysml.internal_static_sysml_SourceDocument_descriptor;
   }
 
   @java.lang.Override
   protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return io.opensysml.proto.Sysml.internal_static_sysml_ParseFileRequest_fieldAccessorTable
+    return io.opensysml.proto.Sysml.internal_static_sysml_SourceDocument_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
-            io.opensysml.proto.ParseFileRequest.class, io.opensysml.proto.ParseFileRequest.Builder.class);
+            io.opensysml.proto.SourceDocument.class, io.opensysml.proto.SourceDocument.Builder.class);
   }
 
   private int sourceCase_ = 0;
@@ -195,68 +195,16 @@ private static final long serialVersionUID = 0L;
     }
   }
 
-  public static final int CONTENT_HASH_FIELD_NUMBER = 3;
-  @SuppressWarnings("serial")
-  private volatile java.lang.Object contentHash_ = "";
-  /**
-   * <pre>
-   * Ignored: the service keys its cache by the source it read, so a repeated
-   * parse hits the cache whether or not a client sends this.
-   * </pre>
-   *
-   * <code>string content_hash = 3 [json_name = "contentHash", deprecated = true];</code>
-   * @deprecated sysml.ParseFileRequest.content_hash is deprecated.
-   *     See sysml.proto;l=213
-   * @return The contentHash.
-   */
-  @java.lang.Override
-  @java.lang.Deprecated public java.lang.String getContentHash() {
-    java.lang.Object ref = contentHash_;
-    if (ref instanceof java.lang.String) {
-      return (java.lang.String) ref;
-    } else {
-      com.google.protobuf.ByteString bs = 
-          (com.google.protobuf.ByteString) ref;
-      java.lang.String s = bs.toStringUtf8();
-      contentHash_ = s;
-      return s;
-    }
-  }
-  /**
-   * <pre>
-   * Ignored: the service keys its cache by the source it read, so a repeated
-   * parse hits the cache whether or not a client sends this.
-   * </pre>
-   *
-   * <code>string content_hash = 3 [json_name = "contentHash", deprecated = true];</code>
-   * @deprecated sysml.ParseFileRequest.content_hash is deprecated.
-   *     See sysml.proto;l=213
-   * @return The bytes for contentHash.
-   */
-  @java.lang.Override
-  @java.lang.Deprecated public com.google.protobuf.ByteString
-      getContentHashBytes() {
-    java.lang.Object ref = contentHash_;
-    if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
-          com.google.protobuf.ByteString.copyFromUtf8(
-              (java.lang.String) ref);
-      contentHash_ = b;
-      return b;
-    } else {
-      return (com.google.protobuf.ByteString) ref;
-    }
-  }
-
-  public static final int LANGUAGE_FIELD_NUMBER = 4;
+  public static final int LANGUAGE_FIELD_NUMBER = 3;
   @SuppressWarnings("serial")
   private volatile java.lang.Object language_ = "";
   /**
    * <pre>
-   * Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
+   * Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+   * and is ignored for a file_path, whose extension says which language it is.
    * </pre>
    *
-   * <code>string language = 4 [json_name = "language"];</code>
+   * <code>string language = 3 [json_name = "language"];</code>
    * @return The language.
    */
   @java.lang.Override
@@ -274,10 +222,11 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
+   * Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+   * and is ignored for a file_path, whose extension says which language it is.
    * </pre>
    *
-   * <code>string language = 4 [json_name = "language"];</code>
+   * <code>string language = 3 [json_name = "language"];</code>
    * @return The bytes for language.
    */
   @java.lang.Override
@@ -295,21 +244,55 @@ private static final long serialVersionUID = 0L;
     }
   }
 
-  public static final int STRICT_CONFORMANCE_FIELD_NUMBER = 5;
-  private boolean strictConformance_ = false;
+  public static final int NAME_FIELD_NUMBER = 4;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object name_ = "";
   /**
    * <pre>
-   * Judge the source as conforming SysML v2: notation no pinned production
-   * admits is an error rather than a warning. Part of the cache key, so the two
-   * modes never serve each other's diagnostics.
+   * Name to report inline content by in diagnostics, and the name the document
+   * is indexed under. Empty names the document by its position in the request,
+   * and is ignored for a file_path, which is named by its path.
    * </pre>
    *
-   * <code>bool strict_conformance = 5 [json_name = "strictConformance"];</code>
-   * @return The strictConformance.
+   * <code>string name = 4 [json_name = "name"];</code>
+   * @return The name.
    */
   @java.lang.Override
-  public boolean getStrictConformance() {
-    return strictConformance_;
+  public java.lang.String getName() {
+    java.lang.Object ref = name_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      name_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * Name to report inline content by in diagnostics, and the name the document
+   * is indexed under. Empty names the document by its position in the request,
+   * and is ignored for a file_path, which is named by its path.
+   * </pre>
+   *
+   * <code>string name = 4 [json_name = "name"];</code>
+   * @return The bytes for name.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getNameBytes() {
+    java.lang.Object ref = name_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      name_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
   }
 
   private byte memoizedIsInitialized = -1;
@@ -332,14 +315,11 @@ private static final long serialVersionUID = 0L;
     if (sourceCase_ == 2) {
       com.google.protobuf.GeneratedMessage.writeString(output, 2, source_);
     }
-    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(contentHash_)) {
-      com.google.protobuf.GeneratedMessage.writeString(output, 3, contentHash_);
-    }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(language_)) {
-      com.google.protobuf.GeneratedMessage.writeString(output, 4, language_);
+      com.google.protobuf.GeneratedMessage.writeString(output, 3, language_);
     }
-    if (strictConformance_ != false) {
-      output.writeBool(5, strictConformance_);
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(name_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 4, name_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -356,15 +336,11 @@ private static final long serialVersionUID = 0L;
     if (sourceCase_ == 2) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(2, source_);
     }
-    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(contentHash_)) {
-      size += com.google.protobuf.GeneratedMessage.computeStringSize(3, contentHash_);
-    }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(language_)) {
-      size += com.google.protobuf.GeneratedMessage.computeStringSize(4, language_);
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(3, language_);
     }
-    if (strictConformance_ != false) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeBoolSize(5, strictConformance_);
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(name_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(4, name_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -376,17 +352,15 @@ private static final long serialVersionUID = 0L;
     if (obj == this) {
      return true;
     }
-    if (!(obj instanceof io.opensysml.proto.ParseFileRequest)) {
+    if (!(obj instanceof io.opensysml.proto.SourceDocument)) {
       return super.equals(obj);
     }
-    io.opensysml.proto.ParseFileRequest other = (io.opensysml.proto.ParseFileRequest) obj;
+    io.opensysml.proto.SourceDocument other = (io.opensysml.proto.SourceDocument) obj;
 
-    if (!getContentHash()
-        .equals(other.getContentHash())) return false;
     if (!getLanguage()
         .equals(other.getLanguage())) return false;
-    if (getStrictConformance()
-        != other.getStrictConformance()) return false;
+    if (!getName()
+        .equals(other.getName())) return false;
     if (!getSourceCase().equals(other.getSourceCase())) return false;
     switch (sourceCase_) {
       case 1:
@@ -411,13 +385,10 @@ private static final long serialVersionUID = 0L;
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
-    hash = (37 * hash) + CONTENT_HASH_FIELD_NUMBER;
-    hash = (53 * hash) + getContentHash().hashCode();
     hash = (37 * hash) + LANGUAGE_FIELD_NUMBER;
     hash = (53 * hash) + getLanguage().hashCode();
-    hash = (37 * hash) + STRICT_CONFORMANCE_FIELD_NUMBER;
-    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
-        getStrictConformance());
+    hash = (37 * hash) + NAME_FIELD_NUMBER;
+    hash = (53 * hash) + getName().hashCode();
     switch (sourceCase_) {
       case 1:
         hash = (37 * hash) + FILE_PATH_FIELD_NUMBER;
@@ -435,44 +406,44 @@ private static final long serialVersionUID = 0L;
     return hash;
   }
 
-  public static io.opensysml.proto.ParseFileRequest parseFrom(
+  public static io.opensysml.proto.SourceDocument parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static io.opensysml.proto.ParseFileRequest parseFrom(
+  public static io.opensysml.proto.SourceDocument parseFrom(
       java.nio.ByteBuffer data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static io.opensysml.proto.ParseFileRequest parseFrom(
+  public static io.opensysml.proto.SourceDocument parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static io.opensysml.proto.ParseFileRequest parseFrom(
+  public static io.opensysml.proto.SourceDocument parseFrom(
       com.google.protobuf.ByteString data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static io.opensysml.proto.ParseFileRequest parseFrom(byte[] data)
+  public static io.opensysml.proto.SourceDocument parseFrom(byte[] data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static io.opensysml.proto.ParseFileRequest parseFrom(
+  public static io.opensysml.proto.SourceDocument parseFrom(
       byte[] data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static io.opensysml.proto.ParseFileRequest parseFrom(java.io.InputStream input)
+  public static io.opensysml.proto.SourceDocument parseFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessage
         .parseWithIOException(PARSER, input);
   }
-  public static io.opensysml.proto.ParseFileRequest parseFrom(
+  public static io.opensysml.proto.SourceDocument parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
@@ -480,26 +451,26 @@ private static final long serialVersionUID = 0L;
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
-  public static io.opensysml.proto.ParseFileRequest parseDelimitedFrom(java.io.InputStream input)
+  public static io.opensysml.proto.SourceDocument parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessage
         .parseDelimitedWithIOException(PARSER, input);
   }
 
-  public static io.opensysml.proto.ParseFileRequest parseDelimitedFrom(
+  public static io.opensysml.proto.SourceDocument parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessage
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
-  public static io.opensysml.proto.ParseFileRequest parseFrom(
+  public static io.opensysml.proto.SourceDocument parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessage
         .parseWithIOException(PARSER, input);
   }
-  public static io.opensysml.proto.ParseFileRequest parseFrom(
+  public static io.opensysml.proto.SourceDocument parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
@@ -512,7 +483,7 @@ private static final long serialVersionUID = 0L;
   public static Builder newBuilder() {
     return DEFAULT_INSTANCE.toBuilder();
   }
-  public static Builder newBuilder(io.opensysml.proto.ParseFileRequest prototype) {
+  public static Builder newBuilder(io.opensysml.proto.SourceDocument prototype) {
     return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
   }
   @java.lang.Override
@@ -529,29 +500,29 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * ParseFileRequest specifies the source to parse
+   * SourceDocument is one document of a multi-document parse.
    * </pre>
    *
-   * Protobuf type {@code sysml.ParseFileRequest}
+   * Protobuf type {@code sysml.SourceDocument}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-      // @@protoc_insertion_point(builder_implements:sysml.ParseFileRequest)
-      io.opensysml.proto.ParseFileRequestOrBuilder {
+      // @@protoc_insertion_point(builder_implements:sysml.SourceDocument)
+      io.opensysml.proto.SourceDocumentOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.opensysml.proto.Sysml.internal_static_sysml_ParseFileRequest_descriptor;
+      return io.opensysml.proto.Sysml.internal_static_sysml_SourceDocument_descriptor;
     }
 
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.opensysml.proto.Sysml.internal_static_sysml_ParseFileRequest_fieldAccessorTable
+      return io.opensysml.proto.Sysml.internal_static_sysml_SourceDocument_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              io.opensysml.proto.ParseFileRequest.class, io.opensysml.proto.ParseFileRequest.Builder.class);
+              io.opensysml.proto.SourceDocument.class, io.opensysml.proto.SourceDocument.Builder.class);
     }
 
-    // Construct using io.opensysml.proto.ParseFileRequest.newBuilder()
+    // Construct using io.opensysml.proto.SourceDocument.newBuilder()
     private Builder() {
 
     }
@@ -565,9 +536,8 @@ private static final long serialVersionUID = 0L;
     public Builder clear() {
       super.clear();
       bitField0_ = 0;
-      contentHash_ = "";
       language_ = "";
-      strictConformance_ = false;
+      name_ = "";
       sourceCase_ = 0;
       source_ = null;
       return this;
@@ -576,17 +546,17 @@ private static final long serialVersionUID = 0L;
     @java.lang.Override
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return io.opensysml.proto.Sysml.internal_static_sysml_ParseFileRequest_descriptor;
+      return io.opensysml.proto.Sysml.internal_static_sysml_SourceDocument_descriptor;
     }
 
     @java.lang.Override
-    public io.opensysml.proto.ParseFileRequest getDefaultInstanceForType() {
-      return io.opensysml.proto.ParseFileRequest.getDefaultInstance();
+    public io.opensysml.proto.SourceDocument getDefaultInstanceForType() {
+      return io.opensysml.proto.SourceDocument.getDefaultInstance();
     }
 
     @java.lang.Override
-    public io.opensysml.proto.ParseFileRequest build() {
-      io.opensysml.proto.ParseFileRequest result = buildPartial();
+    public io.opensysml.proto.SourceDocument build() {
+      io.opensysml.proto.SourceDocument result = buildPartial();
       if (!result.isInitialized()) {
         throw newUninitializedMessageException(result);
       }
@@ -594,56 +564,50 @@ private static final long serialVersionUID = 0L;
     }
 
     @java.lang.Override
-    public io.opensysml.proto.ParseFileRequest buildPartial() {
-      io.opensysml.proto.ParseFileRequest result = new io.opensysml.proto.ParseFileRequest(this);
+    public io.opensysml.proto.SourceDocument buildPartial() {
+      io.opensysml.proto.SourceDocument result = new io.opensysml.proto.SourceDocument(this);
       if (bitField0_ != 0) { buildPartial0(result); }
       buildPartialOneofs(result);
       onBuilt();
       return result;
     }
 
-    private void buildPartial0(io.opensysml.proto.ParseFileRequest result) {
+    private void buildPartial0(io.opensysml.proto.SourceDocument result) {
       int from_bitField0_ = bitField0_;
       if (((from_bitField0_ & 0x00000004) != 0)) {
-        result.contentHash_ = contentHash_;
-      }
-      if (((from_bitField0_ & 0x00000008) != 0)) {
         result.language_ = language_;
       }
-      if (((from_bitField0_ & 0x00000010) != 0)) {
-        result.strictConformance_ = strictConformance_;
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.name_ = name_;
       }
     }
 
-    private void buildPartialOneofs(io.opensysml.proto.ParseFileRequest result) {
+    private void buildPartialOneofs(io.opensysml.proto.SourceDocument result) {
       result.sourceCase_ = sourceCase_;
       result.source_ = this.source_;
     }
 
     @java.lang.Override
     public Builder mergeFrom(com.google.protobuf.Message other) {
-      if (other instanceof io.opensysml.proto.ParseFileRequest) {
-        return mergeFrom((io.opensysml.proto.ParseFileRequest)other);
+      if (other instanceof io.opensysml.proto.SourceDocument) {
+        return mergeFrom((io.opensysml.proto.SourceDocument)other);
       } else {
         super.mergeFrom(other);
         return this;
       }
     }
 
-    public Builder mergeFrom(io.opensysml.proto.ParseFileRequest other) {
-      if (other == io.opensysml.proto.ParseFileRequest.getDefaultInstance()) return this;
-      if (!other.getContentHash().isEmpty()) {
-        contentHash_ = other.contentHash_;
+    public Builder mergeFrom(io.opensysml.proto.SourceDocument other) {
+      if (other == io.opensysml.proto.SourceDocument.getDefaultInstance()) return this;
+      if (!other.getLanguage().isEmpty()) {
+        language_ = other.language_;
         bitField0_ |= 0x00000004;
         onChanged();
       }
-      if (!other.getLanguage().isEmpty()) {
-        language_ = other.language_;
+      if (!other.getName().isEmpty()) {
+        name_ = other.name_;
         bitField0_ |= 0x00000008;
         onChanged();
-      }
-      if (other.getStrictConformance() != false) {
-        setStrictConformance(other.getStrictConformance());
       }
       switch (other.getSourceCase()) {
         case FILE_PATH: {
@@ -701,20 +665,15 @@ private static final long serialVersionUID = 0L;
               break;
             } // case 18
             case 26: {
-              contentHash_ = input.readStringRequireUtf8();
+              language_ = input.readStringRequireUtf8();
               bitField0_ |= 0x00000004;
               break;
             } // case 26
             case 34: {
-              language_ = input.readStringRequireUtf8();
+              name_ = input.readStringRequireUtf8();
               bitField0_ |= 0x00000008;
               break;
             } // case 34
-            case 40: {
-              strictConformance_ = input.readBool();
-              bitField0_ |= 0x00000010;
-              break;
-            } // case 40
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -933,120 +892,14 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    private java.lang.Object contentHash_ = "";
-    /**
-     * <pre>
-     * Ignored: the service keys its cache by the source it read, so a repeated
-     * parse hits the cache whether or not a client sends this.
-     * </pre>
-     *
-     * <code>string content_hash = 3 [json_name = "contentHash", deprecated = true];</code>
-     * @deprecated sysml.ParseFileRequest.content_hash is deprecated.
-     *     See sysml.proto;l=213
-     * @return The contentHash.
-     */
-    @java.lang.Deprecated public java.lang.String getContentHash() {
-      java.lang.Object ref = contentHash_;
-      if (!(ref instanceof java.lang.String)) {
-        com.google.protobuf.ByteString bs =
-            (com.google.protobuf.ByteString) ref;
-        java.lang.String s = bs.toStringUtf8();
-        contentHash_ = s;
-        return s;
-      } else {
-        return (java.lang.String) ref;
-      }
-    }
-    /**
-     * <pre>
-     * Ignored: the service keys its cache by the source it read, so a repeated
-     * parse hits the cache whether or not a client sends this.
-     * </pre>
-     *
-     * <code>string content_hash = 3 [json_name = "contentHash", deprecated = true];</code>
-     * @deprecated sysml.ParseFileRequest.content_hash is deprecated.
-     *     See sysml.proto;l=213
-     * @return The bytes for contentHash.
-     */
-    @java.lang.Deprecated public com.google.protobuf.ByteString
-        getContentHashBytes() {
-      java.lang.Object ref = contentHash_;
-      if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
-            com.google.protobuf.ByteString.copyFromUtf8(
-                (java.lang.String) ref);
-        contentHash_ = b;
-        return b;
-      } else {
-        return (com.google.protobuf.ByteString) ref;
-      }
-    }
-    /**
-     * <pre>
-     * Ignored: the service keys its cache by the source it read, so a repeated
-     * parse hits the cache whether or not a client sends this.
-     * </pre>
-     *
-     * <code>string content_hash = 3 [json_name = "contentHash", deprecated = true];</code>
-     * @deprecated sysml.ParseFileRequest.content_hash is deprecated.
-     *     See sysml.proto;l=213
-     * @param value The contentHash to set.
-     * @return This builder for chaining.
-     */
-    @java.lang.Deprecated public Builder setContentHash(
-        java.lang.String value) {
-      if (value == null) { throw new NullPointerException(); }
-      contentHash_ = value;
-      bitField0_ |= 0x00000004;
-      onChanged();
-      return this;
-    }
-    /**
-     * <pre>
-     * Ignored: the service keys its cache by the source it read, so a repeated
-     * parse hits the cache whether or not a client sends this.
-     * </pre>
-     *
-     * <code>string content_hash = 3 [json_name = "contentHash", deprecated = true];</code>
-     * @deprecated sysml.ParseFileRequest.content_hash is deprecated.
-     *     See sysml.proto;l=213
-     * @return This builder for chaining.
-     */
-    @java.lang.Deprecated public Builder clearContentHash() {
-      contentHash_ = getDefaultInstance().getContentHash();
-      bitField0_ = (bitField0_ & ~0x00000004);
-      onChanged();
-      return this;
-    }
-    /**
-     * <pre>
-     * Ignored: the service keys its cache by the source it read, so a repeated
-     * parse hits the cache whether or not a client sends this.
-     * </pre>
-     *
-     * <code>string content_hash = 3 [json_name = "contentHash", deprecated = true];</code>
-     * @deprecated sysml.ParseFileRequest.content_hash is deprecated.
-     *     See sysml.proto;l=213
-     * @param value The bytes for contentHash to set.
-     * @return This builder for chaining.
-     */
-    @java.lang.Deprecated public Builder setContentHashBytes(
-        com.google.protobuf.ByteString value) {
-      if (value == null) { throw new NullPointerException(); }
-      checkByteStringIsUtf8(value);
-      contentHash_ = value;
-      bitField0_ |= 0x00000004;
-      onChanged();
-      return this;
-    }
-
     private java.lang.Object language_ = "";
     /**
      * <pre>
-     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
+     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+     * and is ignored for a file_path, whose extension says which language it is.
      * </pre>
      *
-     * <code>string language = 4 [json_name = "language"];</code>
+     * <code>string language = 3 [json_name = "language"];</code>
      * @return The language.
      */
     public java.lang.String getLanguage() {
@@ -1063,10 +916,11 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
+     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+     * and is ignored for a file_path, whose extension says which language it is.
      * </pre>
      *
-     * <code>string language = 4 [json_name = "language"];</code>
+     * <code>string language = 3 [json_name = "language"];</code>
      * @return The bytes for language.
      */
     public com.google.protobuf.ByteString
@@ -1084,10 +938,11 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
+     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+     * and is ignored for a file_path, whose extension says which language it is.
      * </pre>
      *
-     * <code>string language = 4 [json_name = "language"];</code>
+     * <code>string language = 3 [json_name = "language"];</code>
      * @param value The language to set.
      * @return This builder for chaining.
      */
@@ -1095,30 +950,32 @@ private static final long serialVersionUID = 0L;
         java.lang.String value) {
       if (value == null) { throw new NullPointerException(); }
       language_ = value;
-      bitField0_ |= 0x00000008;
+      bitField0_ |= 0x00000004;
       onChanged();
       return this;
     }
     /**
      * <pre>
-     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
+     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+     * and is ignored for a file_path, whose extension says which language it is.
      * </pre>
      *
-     * <code>string language = 4 [json_name = "language"];</code>
+     * <code>string language = 3 [json_name = "language"];</code>
      * @return This builder for chaining.
      */
     public Builder clearLanguage() {
       language_ = getDefaultInstance().getLanguage();
-      bitField0_ = (bitField0_ & ~0x00000008);
+      bitField0_ = (bitField0_ & ~0x00000004);
       onChanged();
       return this;
     }
     /**
      * <pre>
-     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
+     * Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+     * and is ignored for a file_path, whose extension says which language it is.
      * </pre>
      *
-     * <code>string language = 4 [json_name = "language"];</code>
+     * <code>string language = 3 [json_name = "language"];</code>
      * @param value The bytes for language to set.
      * @return This builder for chaining.
      */
@@ -1127,78 +984,130 @@ private static final long serialVersionUID = 0L;
       if (value == null) { throw new NullPointerException(); }
       checkByteStringIsUtf8(value);
       language_ = value;
+      bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object name_ = "";
+    /**
+     * <pre>
+     * Name to report inline content by in diagnostics, and the name the document
+     * is indexed under. Empty names the document by its position in the request,
+     * and is ignored for a file_path, which is named by its path.
+     * </pre>
+     *
+     * <code>string name = 4 [json_name = "name"];</code>
+     * @return The name.
+     */
+    public java.lang.String getName() {
+      java.lang.Object ref = name_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        name_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Name to report inline content by in diagnostics, and the name the document
+     * is indexed under. Empty names the document by its position in the request,
+     * and is ignored for a file_path, which is named by its path.
+     * </pre>
+     *
+     * <code>string name = 4 [json_name = "name"];</code>
+     * @return The bytes for name.
+     */
+    public com.google.protobuf.ByteString
+        getNameBytes() {
+      java.lang.Object ref = name_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        name_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Name to report inline content by in diagnostics, and the name the document
+     * is indexed under. Empty names the document by its position in the request,
+     * and is ignored for a file_path, which is named by its path.
+     * </pre>
+     *
+     * <code>string name = 4 [json_name = "name"];</code>
+     * @param value The name to set.
+     * @return This builder for chaining.
+     */
+    public Builder setName(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      name_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Name to report inline content by in diagnostics, and the name the document
+     * is indexed under. Empty names the document by its position in the request,
+     * and is ignored for a file_path, which is named by its path.
+     * </pre>
+     *
+     * <code>string name = 4 [json_name = "name"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearName() {
+      name_ = getDefaultInstance().getName();
+      bitField0_ = (bitField0_ & ~0x00000008);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Name to report inline content by in diagnostics, and the name the document
+     * is indexed under. Empty names the document by its position in the request,
+     * and is ignored for a file_path, which is named by its path.
+     * </pre>
+     *
+     * <code>string name = 4 [json_name = "name"];</code>
+     * @param value The bytes for name to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNameBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      name_ = value;
       bitField0_ |= 0x00000008;
       onChanged();
       return this;
     }
 
-    private boolean strictConformance_ ;
-    /**
-     * <pre>
-     * Judge the source as conforming SysML v2: notation no pinned production
-     * admits is an error rather than a warning. Part of the cache key, so the two
-     * modes never serve each other's diagnostics.
-     * </pre>
-     *
-     * <code>bool strict_conformance = 5 [json_name = "strictConformance"];</code>
-     * @return The strictConformance.
-     */
-    @java.lang.Override
-    public boolean getStrictConformance() {
-      return strictConformance_;
-    }
-    /**
-     * <pre>
-     * Judge the source as conforming SysML v2: notation no pinned production
-     * admits is an error rather than a warning. Part of the cache key, so the two
-     * modes never serve each other's diagnostics.
-     * </pre>
-     *
-     * <code>bool strict_conformance = 5 [json_name = "strictConformance"];</code>
-     * @param value The strictConformance to set.
-     * @return This builder for chaining.
-     */
-    public Builder setStrictConformance(boolean value) {
-
-      strictConformance_ = value;
-      bitField0_ |= 0x00000010;
-      onChanged();
-      return this;
-    }
-    /**
-     * <pre>
-     * Judge the source as conforming SysML v2: notation no pinned production
-     * admits is an error rather than a warning. Part of the cache key, so the two
-     * modes never serve each other's diagnostics.
-     * </pre>
-     *
-     * <code>bool strict_conformance = 5 [json_name = "strictConformance"];</code>
-     * @return This builder for chaining.
-     */
-    public Builder clearStrictConformance() {
-      bitField0_ = (bitField0_ & ~0x00000010);
-      strictConformance_ = false;
-      onChanged();
-      return this;
-    }
-
-    // @@protoc_insertion_point(builder_scope:sysml.ParseFileRequest)
+    // @@protoc_insertion_point(builder_scope:sysml.SourceDocument)
   }
 
-  // @@protoc_insertion_point(class_scope:sysml.ParseFileRequest)
-  private static final io.opensysml.proto.ParseFileRequest DEFAULT_INSTANCE;
+  // @@protoc_insertion_point(class_scope:sysml.SourceDocument)
+  private static final io.opensysml.proto.SourceDocument DEFAULT_INSTANCE;
   static {
-    DEFAULT_INSTANCE = new io.opensysml.proto.ParseFileRequest();
+    DEFAULT_INSTANCE = new io.opensysml.proto.SourceDocument();
   }
 
-  public static io.opensysml.proto.ParseFileRequest getDefaultInstance() {
+  public static io.opensysml.proto.SourceDocument getDefaultInstance() {
     return DEFAULT_INSTANCE;
   }
 
-  private static final com.google.protobuf.Parser<ParseFileRequest>
-      PARSER = new com.google.protobuf.AbstractParser<ParseFileRequest>() {
+  private static final com.google.protobuf.Parser<SourceDocument>
+      PARSER = new com.google.protobuf.AbstractParser<SourceDocument>() {
     @java.lang.Override
-    public ParseFileRequest parsePartialFrom(
+    public SourceDocument parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1217,17 +1126,17 @@ private static final long serialVersionUID = 0L;
     }
   };
 
-  public static com.google.protobuf.Parser<ParseFileRequest> parser() {
+  public static com.google.protobuf.Parser<SourceDocument> parser() {
     return PARSER;
   }
 
   @java.lang.Override
-  public com.google.protobuf.Parser<ParseFileRequest> getParserForType() {
+  public com.google.protobuf.Parser<SourceDocument> getParserForType() {
     return PARSER;
   }
 
   @java.lang.Override
-  public io.opensysml.proto.ParseFileRequest getDefaultInstanceForType() {
+  public io.opensysml.proto.SourceDocument getDefaultInstanceForType() {
     return DEFAULT_INSTANCE;
   }
 

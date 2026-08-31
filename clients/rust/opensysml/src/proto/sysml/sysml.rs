@@ -195,6 +195,57 @@ pub mod parse_file_request {
         Content(::prost::alloc::string::String),
     }
 }
+/// SourceDocument is one document of a multi-document parse.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SourceDocument {
+    /// Language for inline content: "sysml" or "kerml". Empty defaults to SysML,
+    /// and is ignored for a file_path, whose extension says which language it is.
+    #[prost(string, tag="3")]
+    pub language: ::prost::alloc::string::String,
+    /// Name to report inline content by in diagnostics, and the name the document
+    /// is indexed under. Empty names the document by its position in the request,
+    /// and is ignored for a file_path, which is named by its path.
+    #[prost(string, tag="4")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(oneof="source_document::Source", tags="1, 2")]
+    pub source: ::core::option::Option<source_document::Source>,
+}
+/// Nested message and enum types in `SourceDocument`.
+pub mod source_document {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Source {
+        #[prost(string, tag="1")]
+        FilePath(::prost::alloc::string::String),
+        #[prost(string, tag="2")]
+        Content(::prost::alloc::string::String),
+    }
+}
+/// ParseSourcesRequest specifies the documents that make up one model. Two
+/// documents may not carry the same name: each is a distinct document of the
+/// model, and diagnostics name the document they came from.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ParseSourcesRequest {
+    #[prost(message, repeated, tag="1")]
+    pub documents: ::prost::alloc::vec::Vec<SourceDocument>,
+    /// Judge every document as conforming SysML v2, as ParseFileRequest does.
+    #[prost(bool, tag="2")]
+    pub strict_conformance: bool,
+}
+/// ParseSourcesResponse contains the parsed model, whose documents are one model
+/// for every later request: a model_hash names all of them together.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ParseSourcesResponse {
+    #[prost(string, tag="1")]
+    pub model_hash: ::prost::alloc::string::String,
+    /// Root namespace per document, in the order the request named them.
+    #[prost(message, repeated, tag="2")]
+    pub roots: ::prost::alloc::vec::Vec<SymbolInfo>,
+    /// Diagnostics of every document, each naming the document it came from.
+    #[prost(message, repeated, tag="3")]
+    pub diagnostics: ::prost::alloc::vec::Vec<Diagnostic>,
+    #[prost(string, tag="4")]
+    pub error: ::prost::alloc::string::String,
+}
 /// ParseFileResponse contains parsed model info
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ParseFileResponse {

@@ -29,6 +29,15 @@ type Client interface {
 	// otherwise. Diagnostics arrive on the returned Model.
 	ParseSource(ctx context.Context, content string, opts ...ParseOption) (*Model, error)
 
+	// ParseFiles parses the model files at paths as one model, so a name one
+	// file declares resolves in another and an import between them is
+	// satisfied. Requires the parse_sources capability.
+	ParseFiles(ctx context.Context, paths []string, opts ...ParseOption) (*Model, error)
+
+	// ParseDocuments parses the documents named as one model, for files and
+	// inline sources together. Requires the parse_sources capability.
+	ParseDocuments(ctx context.Context, documents []Document, opts ...ParseOption) (*Model, error)
+
 	// Diagnostics reports every diagnostic of the parsed model, parser and
 	// semantic passes combined — the same list the Model already carries.
 	Diagnostics(ctx context.Context, model *Model) ([]Diagnostic, error)
@@ -55,7 +64,32 @@ type Client interface {
 	sealed()
 }
 
-// ParseOption configures ParseFile and ParseSource.
+// Document is one document of a multi-document parse: a file to read, or inline
+// content under a name of the caller's choosing.
+type Document struct {
+	// Path is the file to read. Its extension says which notation it is, and
+	// Content, Name and Language are ignored when it is set.
+	Path string
+	// Content is inline model source, parsed when Path is empty.
+	Content string
+	// Name is what diagnostics call inline content, and the name it is indexed
+	// under. Two documents of one model may not share a name. Empty names it by
+	// its position in the parse.
+	Name string
+	// Language is the notation of inline content, SysML when empty. Requires the
+	// inline_language capability when set.
+	Language Language
+}
+
+// File is the document read from path.
+func File(path string) Document { return Document{Path: path} }
+
+// Source is inline content as a document reported by name.
+func Source(name, content string) Document {
+	return Document{Name: name, Content: content}
+}
+
+// ParseOption configures the parse calls.
 type ParseOption func(*parseOptions)
 
 type parseOptions struct {
@@ -104,6 +138,7 @@ func WithSubject(symbolID string) EvaluateOption {
 type caller interface {
 	serverInfo(ctx context.Context) (*pb.ServerInfoResponse, error)
 	parseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.ParseFileResponse, error)
+	parseSources(ctx context.Context, req *pb.ParseSourcesRequest) (*pb.ParseSourcesResponse, error)
 	getSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.SymbolResponse, error)
 	getDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest) (*pb.DiagnosticsResponse, error)
 	evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.EvaluateResponse, error)
@@ -164,6 +199,63 @@ func (c *client) ParseSource(ctx context.Context, content string, opts ...ParseO
 	return c.parse(ctx, req)
 }
 
+func (c *client) ParseFiles(ctx context.Context, paths []string, opts ...ParseOption) (*Model, error) {
+	documents := make([]Document, 0, len(paths))
+	for _, path := range paths {
+		documents = append(documents, File(path))
+	}
+	return c.ParseDocuments(ctx, documents, opts...)
+}
+
+func (c *client) ParseDocuments(ctx context.Context, documents []Document, opts ...ParseOption) (*Model, error) {
+	if err := c.live(); err != nil {
+		return nil, err
+	}
+	if len(documents) == 0 {
+		return nil, &StatusError{Code: CodeInvalidArgument, Message: "parse needs at least one document"}
+	}
+	var options parseOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	req := &pb.ParseSourcesRequest{
+		Documents:         make([]*pb.SourceDocument, 0, len(documents)),
+		StrictConformance: options.strict,
+	}
+	for _, doc := range documents {
+		pbDoc := &pb.SourceDocument{}
+		if doc.Path != "" {
+			pbDoc.Source = &pb.SourceDocument_FilePath{FilePath: doc.Path}
+		} else {
+			language := string(doc.Language)
+			if language == "" {
+				language = options.language
+			}
+			pbDoc.Source = &pb.SourceDocument_Content{Content: doc.Content}
+			pbDoc.Name = doc.Name
+			pbDoc.Language = language
+		}
+		req.Documents = append(req.Documents, pbDoc)
+	}
+	resp, err := c.caller.parseSources(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	diagnostics := diagnosticsFromProto(resp.Diagnostics)
+	if resp.Error != "" {
+		return nil, &FailureError{Op: "ParseDocuments", Message: resp.Error, Diagnostics: diagnostics}
+	}
+	roots := make([]*Symbol, 0, len(resp.Roots))
+	for _, root := range resp.Roots {
+		roots = append(roots, symbolFromProto(root))
+	}
+	model := &Model{Hash: resp.ModelHash, Roots: roots, Diagnostics: diagnostics}
+	if len(roots) > 0 {
+		model.Root = roots[0]
+	}
+	return model, nil
+}
+
 func parseRequest(opts []ParseOption) *pb.ParseFileRequest {
 	var options parseOptions
 	for _, opt := range opts {
@@ -183,9 +275,11 @@ func (c *client) parse(ctx context.Context, req *pb.ParseFileRequest) (*Model, e
 	if resp.Error != "" {
 		return nil, &FailureError{Op: "ParseFile", Message: resp.Error, Diagnostics: diagnosticsFromProto(resp.Diagnostics)}
 	}
+	root := symbolFromProto(resp.Root)
 	return &Model{
 		Hash:        resp.ModelHash,
-		Root:        symbolFromProto(resp.Root),
+		Root:        root,
+		Roots:       []*Symbol{root},
 		Diagnostics: diagnosticsFromProto(resp.Diagnostics),
 	}, nil
 }

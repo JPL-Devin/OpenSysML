@@ -23,28 +23,35 @@ inst, err := client.Instantiate(ctx, model, "Demo::Vehicle")
 
 ## What a model is here
 
-A `Model` is one parsed document. `ParseFile` reads the one path it is given and
-`ParseSource` the one string, and neither follows an import into a sibling file:
-a name declared in another file is an unresolved reference, reported as a
-diagnostic on the model rather than as a failed call. A model that lives in
-several files is embedded by concatenating their sources into one `ParseSource`
-call — packages are namespaces, so the qualified names, evaluation and
-instantiation are the same afterwards:
+`ParseFile` reads the one path it is given and `ParseSource` the one string, and
+neither follows an import into a sibling file: a name declared in another file is
+an unresolved reference, reported as a diagnostic on the model rather than as a
+failed call.
+
+A model that lives in several files is parsed as one model by `ParseFiles`, or by
+`ParseDocuments` for files and in-memory sources together:
 
 ```go
-var b strings.Builder
-for _, path := range paths {
-	src, err := os.ReadFile(path)
-	if err != nil { ... }
-	b.Write(src)
-	b.WriteString("\n")
-}
-model, err := client.ParseSource(ctx, b.String())
+model, err := client.ParseFiles(ctx, paths)
+
+model, err := client.ParseDocuments(ctx, []opensysml.Document{
+	opensysml.File("lib.sysml"),
+	opensysml.Source("top.sysml", generated),
+})
 ```
 
-Loading several files as one model is a `sysml` command-line feature, not a
-service one, so it is not on this interface either; workspace management is out
-of scope for the service (`docs/internals/design/python-grpc-bindings.md`).
+Each document is parsed on its own and all of them are indexed together, so an
+import between them resolves and every symbol of the set is one lookup,
+evaluation or instantiation away. Nothing is concatenated: a document keeps its
+own name, so a diagnostic locates itself in the file it came from, and
+`Model.Roots` holds each document's root namespace in the order given —
+`Model.Root` is the first, as it is for a one-document model. A set is cached by
+what is in it, so parsing the same documents again answers the same model hash.
+
+Two operations write one document's own notation back out, and they are refused
+with `CodeFailedPrecondition` for a model of several rather than applied to one
+of them: conversion from a model handle, and editing. Both are outside the v1
+surface anyway (see below).
 
 ## Concurrency, contexts and lifetime
 
