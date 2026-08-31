@@ -41,7 +41,7 @@ func lowerActionNode(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) 
 		lowerBody(graph, node, scope)
 		return
 	}
-	lowerAccept(graph, node)
+	lowerAccept(graph, node, scope)
 	if graph.Subflows == nil {
 		graph.Subflows = make(map[ast.Node]*Subflow)
 	}
@@ -51,7 +51,7 @@ func lowerActionNode(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) 
 
 // lowerAccept records the message a nested action node waits for, which a node
 // owning a flow still does before that flow starts.
-func lowerAccept(graph *ActionGraph, node *ast.Usage) {
+func lowerAccept(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 	for _, member := range node.Members {
 		m, ok := unwrapMembership(member).(*ast.Usage)
 		if !ok || !m.IsAccept {
@@ -63,6 +63,7 @@ func lowerAccept(graph *ActionGraph, node *ast.Usage) {
 			ViaPort:      acceptPort(node),
 			SubsetsEvent: subsettingTarget(m),
 			Trigger:      m.Value,
+			Scope:        scope,
 		}
 	}
 }

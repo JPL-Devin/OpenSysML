@@ -580,7 +580,7 @@ func (e *StateExecutor) defersEvent(event *Event) bool {
 	for _, state := range e.activeStates() {
 		for _, ancestor := range e.getParentChain(state) {
 			for _, trigger := range e.graph.Deferred[ancestor] {
-				if triggerMatches(trigger, event) {
+				if e.triggerMatches(trigger, e.graph.StateScopes[ancestor], event) {
 					return true
 				}
 			}
@@ -972,7 +972,7 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 
 	switch event.Type {
 	case EventAccept, EventCall, EventChange:
-		if !triggerMatches(trans.Trigger, event) {
+		if !e.triggerMatches(trans.Trigger, trans.Scope, event) {
 			return false
 		}
 		// `accept … via <port>` takes only an occurrence that arrived at that
@@ -998,8 +998,9 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 }
 
 // triggerMatches reports whether a trigger reacts to an event, whether the
-// trigger belongs to a transition or to a state's deferred set.
-func triggerMatches(trigger ast.Node, event *Event) bool {
+// trigger belongs to a transition or to a state's deferred set. scope is where
+// the trigger was declared, in which the type it accepts resolves.
+func (e *StateExecutor) triggerMatches(trigger ast.Node, scope *symbols.Scope, event *Event) bool {
 	switch event.Type {
 	case EventAccept:
 		acceptEvent, ok := trigger.(*ast.AcceptEvent)
@@ -1012,14 +1013,14 @@ func triggerMatches(trigger ast.Node, event *Event) bool {
 		}
 		// The accept names the occurrence it takes either by its type
 		// (`accept Ping`) or by the event it subsets (`accept :> shutDown`).
-		expectedSignal := ast.SimpleName(acceptEvent.SignalType)
-		if expectedSignal == "" {
-			expectedSignal = ast.SimpleName(acceptEvent.Subsets)
+		if typed := ast.AsQualifiedName(acceptEvent.SignalType); typed != nil && len(typed.Parts) > 0 {
+			return e.ctx.messageMatches(msg, typed, scope)
 		}
-		if expectedSignal == "" {
+		subsets := ast.SimpleName(acceptEvent.Subsets)
+		if subsets == "" {
 			return false
 		}
-		return msg.carriesSignal(expectedSignal)
+		return msg.carriesSignal(subsets)
 
 	case EventCall:
 		callEvent, ok := trigger.(*ast.CallEvent)
@@ -1967,11 +1968,13 @@ func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) boo
 		if !msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self)) {
 			continue
 		}
-		signal := ast.SimpleName(accept.SignalType)
-		if signal == "" {
-			signal = ast.SimpleName(accept.Subsets)
+		if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
+			if e.ctx.messageMatches(msg, typed, trans.Scope) {
+				return true
+			}
+			continue
 		}
-		if signal != "" && msg.carriesSignal(signal) {
+		if signal := ast.SimpleName(accept.Subsets); signal != "" && msg.carriesSignal(signal) {
 			return true
 		}
 	}

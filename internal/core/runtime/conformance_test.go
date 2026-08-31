@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -1037,25 +1038,38 @@ func identityPair(t *testing.T, ctx *Context, inst *Instance, pair []string) (in
 }
 
 // objectAtPath walks a dotted path of feature names from inst and returns the
-// object it reaches.
+// object it reaches. A numeric segment indexes into the collection the feature
+// before it holds, counted from 1 ("units.2").
 func objectAtPath(t *testing.T, ctx *Context, inst *Instance, path string) int64 {
 	t.Helper()
 	cur := inst
 	segments := strings.Split(path, ".")
-	for i, name := range segments {
+	for i := 0; i < len(segments); i++ {
+		name := segments[i]
 		fv, err := cur.GetFeatureValue(ctx, name)
 		if err != nil {
 			t.Fatalf("%s: feature value %q: %v", path, name, err)
 		}
-		id, isObject := fv.HeldValue().Object()
+		held := fv.HeldValue()
+		if i+1 < len(segments) {
+			if n, numErr := strconv.Atoi(segments[i+1]); numErr == nil {
+				elements := heldElements(held)
+				if n < 1 || n > len(elements) {
+					t.Fatalf("%s: %q holds %d elements, index %d is out of range", path, name, len(elements), n)
+				}
+				held = elements[n-1]
+				i++
+			}
+		}
+		id, isObject := held.Object()
 		if !isObject {
-			t.Fatalf("%s: %q holds %s, want an object", path, name, fv.HeldValue().Kind)
+			t.Fatalf("%s: %q holds %s, want an object", path, name, held.Kind)
 		}
 		if i == len(segments)-1 {
 			return id
 		}
-		next, held := ctx.Instance(id)
-		if !held {
+		next, isHeld := ctx.Instance(id)
+		if !isHeld {
 			t.Fatalf("%s: %q names object %d, which the context does not hold", path, name, id)
 		}
 		cur = next

@@ -344,17 +344,29 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 		if !isAccept || accept.Trigger != nil {
 			continue
 		}
-		want := accept.SignalType
-		if want == "" {
-			want = accept.SubsetsEvent
-		}
+		matches := e.acceptMatch(accept, usage)
 		for _, msg := range e.ctx.PendingMessages() {
-			if msg.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) && msg.carriesSignal(want) {
+			if matches(msg) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// acceptMatch is the predicate an accept node holds a message to: it reaches
+// the node, and conforms to the type the accept names or carries the event it
+// subsets.
+func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) func(Message) bool {
+	return func(m Message) bool {
+		if !m.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) {
+			return false
+		}
+		if accept.SignalType != nil {
+			return e.ctx.messageMatches(m, accept.SignalType, accept.Scope)
+		}
+		return m.carriesSignal(accept.SubsetsEvent)
+	}
 }
 
 // breakpointHit returns the name of a breakpoint node a token sits on and has
@@ -1105,13 +1117,11 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	} else if isAccept {
 		// An accept node waits for the occurrence its payload names: a message of
 		// the type it was typed with, or of the event it subsets.
-		want := accept.SignalType
+		want := ast.QualifiedText(accept.SignalType)
 		if want == "" {
 			want = accept.SubsetsEvent
 		}
-		msg, taken := e.ctx.TakeMessage(func(m Message) bool {
-			return m.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) && m.carriesSignal(want)
-		})
+		msg, taken := e.ctx.TakeMessage(e.acceptMatch(accept, usage))
 		if !taken {
 			if token.Wait == nil {
 				token.Wait = &AcceptWait{

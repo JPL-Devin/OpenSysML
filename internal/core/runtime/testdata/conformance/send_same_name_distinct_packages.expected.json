@@ -1,0 +1,18 @@
+{
+  "type": "instance",
+  "instantiate": "SendSameNameDistinct::site",
+  "objects": [
+    {
+      "path": "console",
+      "finalState": "sending",
+      "stateVisits": ["idle", "sending"],
+      "slots": {"sent": {"type": "Integer", "value": 1}}
+    },
+    {
+      "path": "unit",
+      "finalState": "standingBy",
+      "stateVisits": ["standingBy"],
+      "slots": {"accepted": {"type": "Integer", "value": 0}}
+    }
+  ]
+}

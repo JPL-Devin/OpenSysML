@@ -1,0 +1,24 @@
+{
+  "type": "instance",
+  "instantiate": "AcceptQualified::site",
+  "objects": [
+    {
+      "path": "console",
+      "finalState": "sending",
+      "stateVisits": ["idle", "sending"],
+      "slots": {"sent": {"type": "Integer", "value": 1}}
+    },
+    {
+      "path": "unit",
+      "finalState": "standingBy",
+      "stateVisits": ["standingBy"],
+      "slots": {"accepted": {"type": "Integer", "value": 0}}
+    },
+    {
+      "path": "taker",
+      "finalState": "working",
+      "stateVisits": ["standingBy", "working"],
+      "slots": {"accepted": {"type": "Integer", "value": 1}}
+    }
+  ]
+}

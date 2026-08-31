@@ -17,7 +17,7 @@ The four packages:
 | Package | What it holds |
 | --- | --- |
 | `Team` | the truck, its two cradles and two robots, a payload budget in kilograms, and two calculations over the fleet — one `select`, one `reduce` |
-| `TeamComms` | the command item, a port definition and its conjugate, the interface joining them, the console and unit state machines that send and accept command items, and the site that connects them |
+| `TeamComms` | the command item, a port definition and its conjugate, the interface joining them, the console and unit state machines that send and accept command items, the site that connects one console to one unit, and the squad site whose connector fans out to two units |
 | `TeamMission` | the callout occurrence, the individual that happened, and a snapshot and a timeslice holding the crew it had |
 | `TeamCases` | the payload requirement and the satisfaction assertion, the calculation usages, the use case, the verification case, and the analysis case the solver optimizes |
 
@@ -125,6 +125,49 @@ between two parts means. They are also the trace of the machine's path — the
 states print as `<unknown>` because `%features` reads values, not the
 configuration — so the unit entered `working` twice, its unguarded transition
 returning it to `standingBy` each time.
+
+**One send, every unit.** `SquadSite` connects the console's port to
+`units.command`, where `units : Unit[2]` — a connector end reached through a
+multi-valued feature denotes every element it holds, so each send is delivered
+once per unit, on that unit's own identity.
+
+```
+sysml> %instantiate TeamComms::squad
+sysml> %features TeamComms::squad
+```
+
+```
+Instance: TeamComms::squad (ID: 1)
+Features:
+  console = Instance(ID: 3)
+    ...
+    issued = 2
+    ...
+  units = [Instance(ID: 6), Instance(ID: 7)]
+    command = Instance(ID: 12)
+      issued = Instance(ID: 16)
+        code = <unset>
+    accepted = 2
+    lastCode = 2
+    duty = Instance(ID: 8)
+      standingBy = <unknown>
+      working = <unknown>
+    command = Instance(ID: 13)
+      issued = Instance(ID: 18)
+        code = <unset>
+    accepted = 2
+    lastCode = 2
+    duty = Instance(ID: 9)
+      standingBy = <unknown>
+      working = <unknown>
+  (anonymous connector) = Instance(ID: 2)
+    source = Instance(ID: 11)
+    target = [Instance(ID: 12), Instance(ID: 13)]
+```
+
+The console issued two commands, and each unit accepted both — `accepted = 2`
+and `lastCode = 2` on each element, not on the collection: every delivery keeps
+the element's own port and identity.
 
 **The callout that happened.** An individual is one occurrence, and its snapshot
 and timeslice are objects of their own, each holding the crew it had while the
