@@ -128,7 +128,7 @@ package RoverStructure {
         port power : ~PowerPort;
     }
 
-    // --- Telecom ---
+    // --- Telecom: peripherals of the data bus, so their ends are conjugated ---
 
     part def UHFAntenna {
         attribute returnRateBitsPerSec : Real = 2000000.0;
@@ -149,7 +149,7 @@ package RoverStructure {
         part uhf : UHFAntenna;
         part hga : HighGainAntenna;
         part lga : LowGainAntenna;
-        port bus : DataPort;
+        port bus : ~DataPort;
         port power : ~PowerPort;
     }
 
@@ -169,7 +169,7 @@ package RoverStructure {
         part wheels : Wheel[6];
         part suspension : RockerBogieSuspension;
         port power : ~PowerPort;
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     // --- Robotic arm and sampling ---
@@ -183,7 +183,7 @@ package RoverStructure {
         attribute jointCount : Integer = 5;
         part drill : Drill;
         port power : ~PowerPort;
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     part def SampleTube {
@@ -195,7 +195,7 @@ package RoverStructure {
         part tubes : SampleTube[43];
         port sampleOut : SampleTransferPort;
         port power : ~PowerPort;
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     // --- Science instruments ---
@@ -203,34 +203,34 @@ package RoverStructure {
     #SciencePayload part def Mastcam_Z {
         attribute mass : MassValue = 4.0 [kg];
         attribute zoomFocalLengthMax : LengthValue = 0.11 [m];
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     #SciencePayload part def SuperCam {
         attribute mass : MassValue = 10.6 [kg];
         attribute laserRange : LengthValue = 7.0 [m];
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     #SciencePayload part def PIXL {
         attribute mass : MassValue = 6.9 [kg];
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     #SciencePayload part def SHERLOC {
         attribute mass : MassValue = 4.7 [kg];
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     #SciencePayload part def MEDA {
         attribute mass : MassValue = 5.5 [kg];
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     #SciencePayload part def RIMFAX {
         attribute mass : MassValue = 3.0 [kg];
         attribute penetrationDepth : LengthValue = 10.0 [m];
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     // In-Situ Resource Utilization Experiment: makes oxygen from CO2.
@@ -240,7 +240,7 @@ package RoverStructure {
         in item intake : MartianAtmosphere;
         out item product : Oxygen;
         port power : ~PowerPort;
-        port bus : DataPort;
+        port bus : ~DataPort;
     }
 
     part def ScienceInstrumentSuite {
@@ -291,7 +291,7 @@ package RoverStructure {
         interface cachingFeed : PowerBus connect mmrtg.supply to caching.power;
         interface moxieFeed : PowerBus connect mmrtg.supply to instruments.moxie.power;
 
-        // Data bus from the compute elements to the peripherals.
+        // Data bus from the compute element hosts to the conjugated peripherals.
         connect rce.bus to telecom.bus;
         connect rce.bus to mobility.bus;
         connect rce.bus to arm.bus;
@@ -424,7 +424,9 @@ package RoverBehavior {
         action abradeSurface;
         action drillCore;
         action transferToCarousel;
-        action sealTube;
+        action sealTube {
+            assign cachedSample.sealed := true;
+        }
         action storeTube;
 
         succession first start then abradeSurface;
