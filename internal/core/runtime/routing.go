@@ -428,7 +428,14 @@ func (ctx *Context) resolveType(scope *symbols.Scope, name string) *symbols.Symb
 		return nil
 	}
 	parts := strings.Split(name, "::")
-	qn := &ast.QualifiedName{Parts: make([]ast.NameSegment, len(parts))}
+	global := parts[0] == "$"
+	if global {
+		parts = parts[1:]
+		if len(parts) == 0 {
+			return nil
+		}
+	}
+	qn := &ast.QualifiedName{Global: global, Parts: make([]ast.NameSegment, len(parts))}
 	for i, part := range parts {
 		qn.Parts[i] = ast.NameSegment{Text: part}
 	}

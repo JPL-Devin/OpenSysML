@@ -72,6 +72,9 @@ func QualifiedText(node Node) string {
 		return ""
 	}
 	out := qname.Parts[0].Text
+	if qname.Global {
+		out = "$::" + out
+	}
 	for _, part := range qname.Parts[1:] {
 		out += "::" + part.Text
 	}
