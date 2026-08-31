@@ -25,6 +25,18 @@ func (m *Model) UsageMayTimeVary(sym *symbols.Symbol) bool {
 		(usage.Kind != ast.UsageAction && !m.conformsByName(sym, "Actions::Action"))
 }
 
+// usageIsReferential derives SysML Usage::isReference: attribute usages are
+// always referential; other usages are referential unless composite.
+func usageIsReferential(usage *ast.Usage) bool {
+	if usage == nil {
+		return false
+	}
+	if usage.Kind == ast.UsageAttribute {
+		return true
+	}
+	return !usageIsComposite(usage)
+}
+
 func usageIsComposite(usage *ast.Usage) bool {
 	if usage == nil || usage.IsReference || usage.Direction != ast.DirNone ||
 		usage.IsEnd || usage.IsEvent {
