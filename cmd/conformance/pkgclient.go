@@ -498,7 +498,10 @@ func (c *pkgClient) convert(ctx context.Context, request protoreflect.Message) (
 	if err := retype(request, req); err != nil {
 		return nil, err
 	}
-	opts := []opensysml.ConvertOption{opensysml.WithFromFormat(opensysml.Format(req.FromFormat))}
+	var opts []opensysml.ConvertOption
+	if req.FromFormat != "" {
+		opts = append(opts, opensysml.WithFromFormat(opensysml.Format(req.FromFormat)))
+	}
 	if req.TolerateSyntaxErrors {
 		opts = append(opts, opensysml.WithTolerateSyntaxErrors())
 	}
@@ -506,6 +509,11 @@ func (c *pkgClient) convert(ctx context.Context, request protoreflect.Message) (
 	var err error
 	switch source := req.Source.(type) {
 	case *pb.ConvertRequest_ModelHash:
+		if req.FromFormat != "" {
+			return nil, &uncoveredError{
+				reason: "the public Go API reads a parsed model as the notation the parse read",
+			}
+		}
 		conversion, err = c.api.Convert(ctx, c.model(source.ModelHash), opensysml.Format(req.ToFormat), opts...)
 	case *pb.ConvertRequest_FilePath:
 		conversion, err = c.api.ConvertFile(ctx, source.FilePath, opensysml.Format(req.ToFormat), opts...)

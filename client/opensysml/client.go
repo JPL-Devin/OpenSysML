@@ -100,8 +100,9 @@ type Client interface {
 	RenderDocument(ctx context.Context, model *Model, documentID string) (string, error)
 
 	// Convert writes the model in another representation, from the source the
-	// parse read. Requires the convert capability, and a model of one
-	// document. ConvertFile converts a file the client never parsed.
+	// parse read, so WithFromFormat does not apply and is refused. Requires the
+	// convert capability, and a model of one document. ConvertFile converts a
+	// file the client never parsed.
 	Convert(ctx context.Context, model *Model, to Format, opts ...ConvertOption) (*Conversion, error)
 
 	// ConvertFile writes the model file at path in another representation,

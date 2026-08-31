@@ -77,9 +77,9 @@ func (m *Model) Errors() []Diagnostic {
 }
 
 // OK reports a model that parsed and analyzed without an error diagnostic.
-// Warnings do not make it false.
+// Warnings do not make it false; no model at all does.
 func (m *Model) OK() bool {
-	return len(m.Errors()) == 0
+	return m != nil && len(m.Errors()) == 0
 }
 
 // Symbol is one element of a parsed model.

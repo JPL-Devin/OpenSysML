@@ -35,7 +35,8 @@ type convertOptions struct {
 }
 
 // WithFromFormat names the notation to read, for a file whose extension does
-// not say. A parsed model is read as the notation the parse read.
+// not say and for inline content, which has no extension. Convert refuses it:
+// a parse established what a parsed model was written in.
 func WithFromFormat(from Format) ConvertOption {
 	return func(o *convertOptions) { o.from = from }
 }
@@ -72,6 +73,12 @@ func (c *client) Convert(ctx context.Context, model *Model, to Format, opts ...C
 		return nil, err
 	}
 	req := convertRequest(to, opts)
+	if req.FromFormat != "" {
+		return nil, &StatusError{
+			Code:    CodeInvalidArgument,
+			Message: "WithFromFormat does not apply to a parsed model: it is read as the notation the parse read",
+		}
+	}
 	req.Source = &pb.ConvertRequest_ModelHash{ModelHash: hash}
 	return c.convert(ctx, req)
 }

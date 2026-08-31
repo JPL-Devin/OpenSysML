@@ -428,6 +428,24 @@ func TestRenderDocumentAnswersMarkdown(t *testing.T) {
 	}
 }
 
+func TestConvertRefusesAFromFormatForAParsedModel(t *testing.T) {
+	client := newClient(t)
+	model := parse(t, client, editableSource)
+	_, err := client.Convert(context.Background(), model, opensysml.FormatSysML,
+		opensysml.WithFromFormat(opensysml.FormatTTL))
+	var status *opensysml.StatusError
+	if !errors.As(err, &status) || status.Code != opensysml.CodeInvalidArgument {
+		t.Fatalf("err = %v (%T), want an invalid-argument StatusError", err, err)
+	}
+}
+
+func TestModelOKIsFalseWithoutAModel(t *testing.T) {
+	var model *opensysml.Model
+	if model.OK() {
+		t.Error("a nil model reports itself usable")
+	}
+}
+
 func TestConvertWritesTheModelInAnotherNotation(t *testing.T) {
 	client := newClient(t)
 	model := parse(t, client, editableSource)
