@@ -51,6 +51,12 @@ func TestQueryFlagRejectsEmptyQueryText(t *testing.T) {
 	if outcome.status != 2 || !strings.Contains(outcome.stderr, "-query is empty") {
 		t.Fatalf("outcome = %#v", outcome)
 	}
+
+	// -version reports the build whatever else the run asked for.
+	outcome = runCommand(t, exec.Command(binary, "-version", "-query", "", model))
+	if outcome.status != 0 || !strings.Contains(outcome.stdout, "sysml ") {
+		t.Fatalf("version outcome = %#v", outcome)
+	}
 }
 
 func TestQueryFlagRefusesWildcardValue(t *testing.T) {

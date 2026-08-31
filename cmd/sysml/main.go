@@ -323,13 +323,6 @@ func runCLI() int {
 		return 2
 	}
 
-	// A mode asked for with an empty value is a misuse, not an absent flag: it
-	// would otherwise silently run the REPL instead of the query.
-	if flagGiven("query") && queryText == "" {
-		fmt.Fprintln(os.Stderr, `sysml: -query is empty; give it OSLC Query text, as -query 'sysml:name="battery"'`)
-		return 2
-	}
-
 	stopProfiling, err := startProfiling()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, errPrefix, err)
@@ -344,6 +337,13 @@ func runCLI() int {
 		fmt.Printf("  Build time: %s\n", BuildTime)
 		fmt.Printf("  Go version: %s\n", GoVersion)
 		return 0
+	}
+
+	// A mode asked for with an empty value is a misuse, not an absent flag: it
+	// would otherwise silently run the REPL instead of the query.
+	if flagGiven("query") && queryText == "" {
+		fmt.Fprintln(os.Stderr, `sysml: -query is empty; give it OSLC Query text, as -query 'sysml:name="battery"'`)
+		return 2
 	}
 
 	// Get positional arguments (files to load)
