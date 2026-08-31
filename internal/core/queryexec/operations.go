@@ -143,7 +143,7 @@ func (e *executor) evaluateWhereType(expression queryplan.Expression) (sequence,
 	if target != nil {
 		classification = symbols.FQNOf(target)
 	}
-	var result sequence
+	result := filtered(source)
 	for i, value := range source.values {
 		sym, _ := value.Element()
 		matches := query.MetamodelTypeNameOf(sym) == typeName
@@ -188,7 +188,7 @@ func (e *executor) evaluateWhereMetadata(expression queryplan.Expression) (seque
 			Origin:    expression.Origin(),
 		}
 	}
-	var result sequence
+	result := filtered(source)
 	for i, value := range source.values {
 		sym, _ := value.Element()
 		for _, annotation := range e.context.Model.AnnotationFactsOf(sym) {
@@ -228,7 +228,7 @@ func (e *executor) evaluateWhereName(expression queryplan.Expression) (sequence,
 		}
 		return sequence{}, e.operatorError(expression, operator)
 	}
-	var result sequence
+	result := filtered(source)
 	for i, value := range source.values {
 		sym, _ := value.Element()
 		names, _ := e.reader.Values(sym, query.PropertyName)
@@ -275,7 +275,7 @@ func (e *executor) evaluateWhereFeature(expression queryplan.Expression) (sequen
 	if len(source.values) == 0 {
 		return source, nil
 	}
-	var result sequence
+	result := filtered(source)
 	known := false
 	for i, value := range source.values {
 		sym, _ := value.Element()
@@ -792,11 +792,14 @@ func knownMetamodelType(name string) bool {
 	return false
 }
 
+// filtered starts a filter's result, keeping the source's projected columns
+// even when no row is selected.
+func filtered(source sequence) sequence {
+	return sequence{columns: append([]Column(nil), source.columns...)}
+}
+
 func appendSelected(result *sequence, source sequence, index int) {
 	result.values = append(result.values, source.values[index])
-	if len(result.columns) == 0 && len(source.columns) > 0 {
-		result.columns = append([]Column(nil), source.columns...)
-	}
 	if index < len(source.cells) {
 		result.cells = append(result.cells, cloneCells(source.cells[index]))
 	}

@@ -93,8 +93,33 @@ library package DocumentQueries {
 		attribute text : String[0..1];
 	}
 
+	/* Inline runs compose a paragraph in declaration order, joined by
+	 * single spaces. */
+	abstract part def Run;
+
+	part def Span :> Run {
+		attribute text : String[1];
+		/* style: "plain", "emphasis", "strong" or "code". */
+		attribute style : String[0..1];
+	}
+
+	part def Link :> Run {
+		attribute text : String[1];
+		attribute target : String[1];
+	}
+
+	/* Ref links to another named content block of the same document; text
+	 * defaults to the target's title, caption or name. */
+	part def Ref :> Run {
+		attribute text : String[0..1];
+		ref target : Element[1];
+	}
+
 	part def Table :> ContentBlock {
 		attribute caption : String[0..1];
+		/* groupBy: a projected column name; rows are grouped by its value
+		 * into subtables in order of first appearance. */
+		attribute groupBy : String[0..1];
 	}
 
 	part def List :> ContentBlock {
