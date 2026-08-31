@@ -172,6 +172,74 @@ calc def Margins :> Query {
 	}
 }
 
+func TestExecuteComputedBareAbsentFeatureIsTyped(t *testing.T) {
+	fixture := computedFixture(t, `
+calc def Bad :> Query {
+	in root : Element;
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		columns = (Column(name = "alloc", expression = Subsystem::alloc))
+	)
+}`)
+	_, err := fixture.execute(t, "Bad", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "system"))},
+	}, Options{})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorColumnAbsent {
+		t.Fatalf("error = %v", err)
+	}
+	if executionError.Property != "alloc" || executionError.Target == "" {
+		t.Fatalf("error provenance = %+v", executionError)
+	}
+	if !executionError.Origin.Located() {
+		t.Fatal("absent column errors must retain source provenance")
+	}
+}
+
+func TestExecuteComputedColumnSkipsUnrelatedSameNamedFeatures(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Tank {
+	attribute mass : Real;
+}
+part def Report {
+	attribute mass : String;
+}
+part mixed {
+	part tank : Tank {
+		attribute redefines mass = 3.5;
+	}
+	part report : Report {
+		attribute redefines mass = "heavy";
+	}
+}
+calc def Masses :> Query {
+	in root : Element;
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		properties = ("name"),
+		columns = (Column(name = "m", expression = Tank::mass ?? 0.0))
+	)
+}`)
+	result, err := fixture.execute(t, "Masses", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "mixed"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute Masses: %v", err)
+	}
+	values := make(map[string]Value)
+	for _, row := range result.Rows() {
+		name, _ := row.Cells()[0].Values()[0].String()
+		values[name] = row.Cells()[1].Values()[0]
+	}
+	if mass, ok := values["tank"].Real(); !ok || mass != 3.5 {
+		t.Fatalf("tank mass = %+v", values["tank"])
+	}
+	// Report::mass is unrelated to Tank::mass; the ?? default must apply.
+	if mass, ok := values["report"].Real(); !ok || mass != 0.0 {
+		t.Fatalf("report mass = %+v", values["report"])
+	}
+}
+
 func TestExecuteComputedColumnFailuresAreTyped(t *testing.T) {
 	cases := []struct {
 		name  string

@@ -171,6 +171,37 @@ calc def Bad :> Query {
 }`,
 		},
 		{
+			name: "explicit null properties",
+			kind: ErrorEmptyProjection,
+			body: `
+calc def Bad :> Query {
+	in root : Element;
+	Project(source = Descendants(source = root, maxDepth = 1), properties = null)
+}`,
+		},
+		{
+			name: "explicit null columns",
+			kind: ErrorEmptyProjection,
+			body: `
+calc def Bad :> Query {
+	in root : Element;
+	Project(source = Descendants(source = root, maxDepth = 1), columns = null)
+}`,
+		},
+		{
+			name: "explicit null properties and columns",
+			kind: ErrorEmptyProjection,
+			body: `
+calc def Bad :> Query {
+	in root : Element;
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		properties = null,
+		columns = null
+	)
+}`,
+		},
+		{
 			name: "missing column expression",
 			kind: ErrorMissingArgument,
 			body: `

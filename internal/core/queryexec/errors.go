@@ -36,6 +36,7 @@ const (
 	ErrorColumnOperand         ErrorKind = "column-operand"
 	ErrorColumnOperandType     ErrorKind = "column-operand-type"
 	ErrorColumnDivisionByZero  ErrorKind = "column-division-by-zero"
+	ErrorColumnAbsent          ErrorKind = "column-absent"
 )
 
 // Error is a typed query-execution failure with plan provenance.
@@ -112,6 +113,13 @@ func (e *Error) Error() string {
 			e.Property,
 			e.Parameter,
 			e.Actual,
+			e.Target,
+		)
+	case ErrorColumnAbsent:
+		return fmt.Sprintf(
+			"query %s column %s has no value for %s; use ?? to supply a default",
+			e.Query,
+			e.Property,
 			e.Target,
 		)
 	case ErrorColumnDivisionByZero:

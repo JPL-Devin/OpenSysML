@@ -80,8 +80,10 @@ library package DocumentQueries {
 	/* A column expression references row properties by their declared
 	 * feature (e.g. Subsystem::mass), supports +, -, *, / arithmetic,
 	 * string concatenation with +, and ?? for absent-value defaults.
-	 * A failing expression fails the query with a typed error naming
-	 * the row, column and expression. */
+	 * A row not conforming to the feature's declaring type reads it as
+	 * absent; a failing expression or an absent result not defaulted
+	 * with ?? fails the query with a typed error naming the row and
+	 * column. */
 	calc def Column {
 		in name : String[1];
 		in expression : ScalarValue[0..1];

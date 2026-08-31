@@ -241,8 +241,27 @@ func (c *compiler) compileColumnReference(
 	return Expression{
 		operation: OperationRowProperty,
 		target:    target.Name,
+		value:     declaringTypeFQN(target),
 		origin:    provenance.Node(owner.DocName, expression),
 	}, c.staticPrimType(target), nil
+}
+
+// declaringTypeFQN names the type declaring a feature, so execution reads it
+// only from rows conforming to that type; empty for non-type owners.
+func declaringTypeFQN(target *symbols.Symbol) string {
+	scope := target.OwnerScope
+	if scope == nil {
+		return ""
+	}
+	owner := scope.Owner()
+	if owner == nil || owner == target {
+		return ""
+	}
+	switch owner.Kind {
+	case symbols.SymbolPackage, symbols.SymbolNamespace, symbols.SymbolUnknown:
+		return ""
+	}
+	return symbols.FQNOf(owner)
 }
 
 func (c *compiler) staticPrimType(sym *symbols.Symbol) semantics.PrimType {
@@ -404,7 +423,7 @@ func (c *compiler) validateProject(
 			columns = &args[i]
 		}
 	}
-	if properties == nil && columns == nil {
+	if staticallyEmpty(properties) && staticallyEmpty(columns) {
 		return &Error{
 			Kind:   ErrorEmptyProjection,
 			Query:  symbols.FQNOf(query),
@@ -433,6 +452,21 @@ func (c *compiler) validateProject(
 		seen[name] = true
 	}
 	return nil
+}
+
+// staticallyEmpty reports whether a projection argument is provably empty:
+// absent, an explicit null, or an empty sequence.
+func staticallyEmpty(argument *Argument) bool {
+	if argument == nil {
+		return true
+	}
+	switch argument.Value.operation {
+	case OperationLiteral:
+		return argument.Value.literal == LiteralNull
+	case OperationSequence:
+		return len(argument.Value.arguments) == 0
+	}
+	return false
 }
 
 // staticStrings collects the literal strings of a planned properties value;

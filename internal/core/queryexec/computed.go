@@ -75,14 +75,21 @@ func (t *propertyTracker) missing() (string, bool) {
 }
 
 // evaluateColumnCell evaluates one computed column for one row element.
-// A failing expression fails the query with a typed error; ?? is the
-// deliberate fallback for absent values.
+// A failure or absent final result fails the query; ?? defaults absence.
 func (e *executor) evaluateColumnCell(
 	column computedColumn,
 	sym *symbols.Symbol,
 	tracker *propertyTracker,
 ) ([]Value, error) {
-	return e.evaluateColumnExpression(column.expression, column.name, sym, tracker)
+	values, err := e.evaluateColumnExpression(column.expression, column.name, sym, tracker)
+	if err != nil {
+		return nil, err
+	}
+	if len(values) == 0 {
+		return nil, e.columnError(
+			ErrorColumnAbsent, column.name, sym, column.expression.Origin(), "", "")
+	}
+	return values, nil
 }
 
 func (e *executor) evaluateColumnExpression(
@@ -94,6 +101,10 @@ func (e *executor) evaluateColumnExpression(
 	switch expression.Operation() {
 	case queryplan.OperationRowProperty:
 		property := expression.Target()
+		if !e.rowDeclaresProperty(sym, expression) {
+			tracker.record(property, false)
+			return nil, nil
+		}
 		values, present, err := e.propertyValues(sym, property)
 		if err != nil {
 			return nil, e.featureError(expression, property)
@@ -123,6 +134,34 @@ func (e *executor) evaluateColumnExpression(
 			Origin:    expression.Origin(),
 		}
 	}
+}
+
+// rowDeclaresProperty reports whether the row conforms to the type declaring
+// a planned row property; unrelated same-named features read as absent.
+func (e *executor) rowDeclaresProperty(
+	sym *symbols.Symbol,
+	expression queryplan.Expression,
+) bool {
+	_, declaring := expression.Literal()
+	if declaring == "" || isQueryableProperty(expression.Target()) {
+		return true
+	}
+	if declaring == "Element" || declaring == "KerML::Root::Element" {
+		return true
+	}
+	for _, target := range e.context.Index.LookupQualified(declaring) {
+		if symbols.SameElement(sym, target) || e.context.Model.Conforms(sym, target) {
+			return true
+		}
+		// An index may hold a distinct Symbol for the same declaration, so
+		// compare the supertype chain by declaration, not pointer.
+		for _, super := range e.context.Model.AllSupertypes(sym) {
+			if symbols.SameElement(super, target) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (e *executor) evaluateColumnOperator(
