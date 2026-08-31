@@ -77,8 +77,10 @@ func runRenderDocuments(files []string) error {
 // document is staged in the directory under a fresh temporary name, existing
 // destinations are set aside, and the staged set is renamed into place; any
 // failure restores the directory's previous contents. A symlink is written
-// through to its target, keeping the link; a pipe or device is written as it
-// stands, last, since its bytes cannot be staged and restored.
+// through to its target, keeping the link. A pipe or device is written as it
+// stands, last, after the regular set commits; bytes a pipe or device already
+// received cannot be recalled, so the all-or-nothing guarantee covers the
+// regular files of the set only.
 func commitDocumentSet(documents []repl.RenderedDocument) error {
 	targets := make([]string, len(documents))
 	direct := make([]bool, len(documents))
@@ -150,6 +152,17 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 		staged[i] = ""
 		committed[i] = true
 	}
+	// Flush the renames before the backups go, so a crash keeps one of the
+	// two sets whole.
+	dirs := make(map[string]bool)
+	for i := range documents {
+		if committed[i] {
+			dirs[filepath.Dir(targets[i])] = true
+		}
+	}
+	for dir := range dirs {
+		syncDir(dir)
+	}
 	for i, document := range documents {
 		if !direct[i] {
 			continue
@@ -192,6 +205,12 @@ func stageDocument(document repl.RenderedDocument, perm os.FileMode) (string, er
 		_ = file.Close()
 		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
 	}
+	// Without this a crash after the commit renames can leave an empty file
+	// where a document was.
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
+	}
 	if err := file.Close(); err != nil {
 		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
 	}
@@ -201,6 +220,18 @@ func stageDocument(document repl.RenderedDocument, perm os.FileMode) (string, er
 		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
 	}
 	return name, nil
+}
+
+// syncDir flushes a directory's entries after renames. Best-effort: the set
+// is already written, so a filesystem that refuses is not a failed render.
+func syncDir(dir string) {
+	// #nosec G304 -- dir holds a destination the caller asked to write.
+	f, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	_ = f.Sync()
+	_ = f.Close()
 }
 
 // setAside moves an existing destination to a fresh temporary name so a
