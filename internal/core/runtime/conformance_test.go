@@ -243,7 +243,7 @@ func runConformanceCase(t *testing.T, conformanceDir, caseName string) {
 
 	idx := symbols.NewIndex()
 	if expected.Libraries {
-		loadLibraries(t, idx)
+		idx = libs.NewModelIndex()
 	}
 	idx.AddDocument(sysmlPath, file)
 	if expected.Libraries {

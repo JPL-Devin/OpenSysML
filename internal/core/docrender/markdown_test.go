@@ -29,10 +29,7 @@ func renderFixtureDocument(t *testing.T, path, name string) string {
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-	index := symbols.NewIndex()
-	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
-		t.Fatalf("load standard library: %v", err)
-	}
+	index := libs.NewModelIndex()
 	p := parser.New(source.New(filepath.Base(path), []byte(content)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {

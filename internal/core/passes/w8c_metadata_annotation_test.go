@@ -4,10 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // metadataDiags analyzes src as KerML against the standard library and returns
@@ -15,15 +13,7 @@ import (
 func metadataDiags(t *testing.T, src string) []metadataFinding {
 	t.Helper()
 
-	idx := symbols.NewIndex()
-	libSrc := libs.DefaultSource()
-	cache, err := libs.NewCache()
-	if err != nil {
-		cache = nil
-	}
-	if err := libs.NewLoader(libSrc, cache).LoadAll(idx); err != nil {
-		t.Fatalf("load the library: %v", err)
-	}
+	idx := newTestIndex()
 	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
 	idx.AddDocument("<t>.kerml", root)
 	idx.ExpandWildcardImports()
