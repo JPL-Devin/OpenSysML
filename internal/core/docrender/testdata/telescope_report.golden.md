@@ -2,6 +2,28 @@
 
 Mass rollup for the telescope assembly. Masses are in kg \| not \#grams, \*not\* \_lbs\_, \`raw\`, \<b>\&plain\</b>.
 
+Reading order: *em\*ph\*asis* **bold\_move** `` mass >= `limit` `` [the \[spec\]](<https://example.com/spec(v2).md>) [Subsystem Masses \| by \*name\*](#breakdown) [the zone groups](#zones)
+
+<a id="zones"></a>
+
+*Subsystems grouped by zone*
+
+**zone: support \| \*frame\***
+
+| zone | name | mass |
+| --- | --- | --- |
+| support \| \*frame\* | baffle\|shroud \*tricky\* | 1.5 |
+| support \| \*frame\* | mount | 15 |
+
+**zone: payload**
+
+| zone | name | mass |
+| --- | --- | --- |
+| payload | optics | 8.5 |
+| payload | segmentControl | 20 |
+
+<a id="breakdown"></a>
+
 ## Subsystem Masses \| by \*name\*
 
 *All subsystems by mass*

@@ -28,6 +28,66 @@ const (
 	ListNumber ListStyle = "number"
 )
 
+// RunKind classifies one planned inline run of a paragraph.
+type RunKind string
+
+const (
+	RunSpan RunKind = "span"
+	RunLink RunKind = "link"
+	RunRef  RunKind = "ref"
+)
+
+// RunStyle is the declared inline style of a span run.
+type RunStyle string
+
+const (
+	StylePlain    RunStyle = "plain"
+	StyleEmphasis RunStyle = "emphasis"
+	StyleStrong   RunStyle = "strong"
+	StyleCode     RunStyle = "code"
+)
+
+// Run is one planned inline run: a styled span, a link, or a reference to
+// another content block of the same document.
+type Run struct {
+	kind   RunKind
+	text   string
+	style  RunStyle
+	target string
+	refSym *symbols.Symbol
+	ref    []string
+	origin provenance.Origin
+}
+
+// Kind returns the classification of the run.
+func (r Run) Kind() RunKind { return r.kind }
+
+// Text returns the run's text; for a reference, the resolved label when the
+// run states none.
+func (r Run) Text() string { return r.text }
+
+// Style returns the inline style of a span run.
+func (r Run) Style() RunStyle { return r.style }
+
+// Target returns the destination of a link run.
+func (r Run) Target() string { return r.target }
+
+// RefPath returns the named content path of a reference run, from the
+// document root to the referenced content block.
+func (r Run) RefPath() []string { return append([]string(nil), r.ref...) }
+
+// Origin returns the source declaration behind the run.
+func (r Run) Origin() provenance.Origin { return r.origin }
+
+func cloneRuns(runs []Run) []Run {
+	out := make([]Run, len(runs))
+	for i, run := range runs {
+		out[i] = run
+		out[i].ref = append([]string(nil), run.ref...)
+	}
+	return out
+}
+
 // BindingKind classifies one planned binding value.
 type BindingKind string
 
@@ -157,6 +217,8 @@ type Content struct {
 	text     string
 	caption  string
 	style    ListStyle
+	groupBy  string
+	runs     []Run
 	query    *QueryRef
 	diagram  *DiagramRef
 	children []Content
@@ -181,6 +243,13 @@ func (c Content) Caption() string { return c.caption }
 // Style returns the declared style of a list.
 func (c Content) Style() ListStyle { return c.style }
 
+// GroupBy returns the projected column a table groups its rows by, empty
+// when ungrouped.
+func (c Content) GroupBy() string { return c.groupBy }
+
+// Runs returns the planned inline runs of a paragraph in declaration order.
+func (c Content) Runs() []Run { return cloneRuns(c.runs) }
+
 // Query returns the referenced query of a query-backed node, or nil.
 func (c Content) Query() *QueryRef { return c.query }
 
@@ -203,6 +272,8 @@ func cloneContent(content []Content) []Content {
 			text:     child.text,
 			caption:  child.caption,
 			style:    child.style,
+			groupBy:  child.groupBy,
+			runs:     cloneRuns(child.runs),
 			query:    child.query,
 			diagram:  child.diagram,
 			children: cloneContent(child.children),

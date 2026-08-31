@@ -39,8 +39,20 @@ func Markdown(document *docir.Document) (string, error) {
 }
 
 // renderContent renders one content node, with level the ATX heading level a
-// section at this depth writes.
+// section at this depth writes. A node a reference targets is preceded by an
+// HTML anchor carrying its stable identifier.
 func renderContent(node docir.Content, level int) ([]string, error) {
+	blocks, err := renderNode(node, level)
+	if err != nil {
+		return nil, err
+	}
+	if node.Anchor() != "" && len(blocks) > 0 {
+		blocks = append([]string{`<a id="` + node.Anchor() + `"></a>`}, blocks...)
+	}
+	return blocks, nil
+}
+
+func renderNode(node docir.Content, level int) ([]string, error) {
 	switch node.Kind() {
 	case docir.ContentSection:
 		blocks := []string{heading(level, node.Title())}
@@ -75,7 +87,9 @@ func heading(level int, title string) string {
 
 // renderTable writes one pipe table, preceded by its caption in emphasis.
 // A query without projected columns gets a single "element" column, and a
-// table without rows still writes its header and delimiter.
+// table without rows still writes its header and delimiter. A grouped table
+// writes one subtable per group, each preceded by its group key in strong
+// emphasis; the group column keeps its place in every subtable.
 func renderTable(node docir.Content) []string {
 	var blocks []string
 	if node.Caption() != "" {
@@ -89,13 +103,28 @@ func renderTable(node docir.Content) []string {
 	if len(names) == 0 {
 		names = []string{elementColumn}
 	}
+	if node.GroupBy() != "" {
+		for _, group := range node.Groups() {
+			blocks = append(blocks, "**"+inline(node.GroupBy()+": "+group.Key())+"**")
+			blocks = append(blocks, pipeTable(names, group.Rows(), len(columns)))
+		}
+		if len(node.Groups()) == 0 {
+			blocks = append(blocks, pipeTable(names, nil, len(columns)))
+		}
+		return blocks
+	}
+	return append(blocks, pipeTable(names, node.Rows(), len(columns)))
+}
+
+// pipeTable writes one pipe table: header, delimiter, and one line per row.
+func pipeTable(names []string, rows []queryexec.Row, columns int) string {
 	var b strings.Builder
 	writeTableRow(&b, names)
 	b.WriteString("|" + strings.Repeat(" --- |", len(names)) + "\n")
-	for _, row := range node.Rows() {
-		writeTableRow(&b, tableCells(row, len(columns)))
+	for _, row := range rows {
+		writeTableRow(&b, tableCells(row, columns))
 	}
-	return append(blocks, strings.TrimRight(b.String(), "\n"))
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // renderDiagram writes one diagram, preceded by its caption in emphasis: a
@@ -183,13 +212,84 @@ func blockText(runs []docir.TextRun) string {
 	return blockStart(itemText(runs))
 }
 
-// itemText joins text runs by single spaces with inline escaping.
+// itemText joins text runs by single spaces, rendering each by its kind:
+// plain runs as escaped prose, styled runs in emphasis or strong delimiters
+// or as code spans, links and references as inline links.
 func itemText(runs []docir.TextRun) string {
 	parts := make([]string, len(runs))
 	for i, run := range runs {
-		parts[i] = inline(run.Text())
+		parts[i] = runText(run)
 	}
 	return strings.Join(parts, " ")
+}
+
+func runText(run docir.TextRun) string {
+	switch run.Kind() {
+	case docir.RunEmphasis:
+		return delimited("*", run.Text())
+	case docir.RunStrong:
+		return delimited("**", run.Text())
+	case docir.RunCode:
+		return codeSpan(run.Text())
+	case docir.RunLink:
+		return "[" + inline(run.Text()) + "](<" + destination(run.Target()) + ">)"
+	case docir.RunRef:
+		return "[" + inline(run.Text()) + "](#" + run.Target() + ")"
+	default:
+		return inline(run.Text())
+	}
+}
+
+// delimited wraps escaped text in emphasis delimiters, keeping leading and
+// trailing whitespace outside them so the delimiters stay flanking.
+func delimited(marker, text string) string {
+	escaped := inline(text)
+	trimmed := strings.Trim(escaped, " ")
+	if trimmed == "" {
+		return escaped
+	}
+	left := escaped[:strings.Index(escaped, trimmed)]
+	right := escaped[len(left)+len(trimmed):]
+	return left + marker + trimmed + marker + right
+}
+
+// codeSpan wraps text in a backtick fence longer than any backtick sequence
+// inside it, padding with spaces when the content starts or ends with a
+// backtick or a space. Newlines fold to spaces as everywhere in prose.
+func codeSpan(text string) string {
+	text = strings.ReplaceAll(newlineNormalizer.Replace(text), "\n", " ")
+	longest, current := 0, 0
+	for i := 0; i < len(text); i++ {
+		if text[i] == '`' {
+			current++
+			if current > longest {
+				longest = current
+			}
+		} else {
+			current = 0
+		}
+	}
+	fence := strings.Repeat("`", longest+1)
+	if text == "" || strings.HasPrefix(text, "`") || strings.HasSuffix(text, "`") ||
+		strings.HasPrefix(text, " ") || strings.HasSuffix(text, " ") {
+		return fence + " " + text + " " + fence
+	}
+	return fence + text + fence
+}
+
+// destinationEscaper escapes the characters that would end or corrupt a
+// pointy-bracket link destination.
+var destinationEscaper = strings.NewReplacer(
+	`\`, `\\`,
+	"<", `\<`,
+	">", `\>`,
+)
+
+// destination escapes a link destination for the pointy-bracket form, which
+// admits any character except unescaped angle brackets and newlines; newlines
+// percent-encode since a backslash cannot escape them.
+func destination(target string) string {
+	return strings.ReplaceAll(destinationEscaper.Replace(newlineNormalizer.Replace(target)), "\n", "%0A")
 }
 
 // valueText renders one typed value as plain, unescaped text: elements by

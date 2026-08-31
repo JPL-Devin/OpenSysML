@@ -23,6 +23,10 @@ const (
 	tableBaseFQN     = "DocumentQueries::Table"
 	listBaseFQN      = "DocumentQueries::List"
 	diagramBaseFQN   = "DocumentQueries::Diagram"
+	runBaseFQN       = "DocumentQueries::Run"
+	spanBaseFQN      = "DocumentQueries::Span"
+	linkBaseFQN      = "DocumentQueries::Link"
+	refBaseFQN       = "DocumentQueries::Ref"
 )
 
 // diagramSourceName is the reference member a diagram names its view or
@@ -35,6 +39,8 @@ type compiler struct {
 	resolver *resolve.Resolver
 	document string
 	bases    bases
+	stack    []string
+	targets  map[*symbols.Symbol]refTarget
 }
 
 type bases struct {
@@ -44,6 +50,17 @@ type bases struct {
 	table     *symbols.Symbol
 	list      *symbols.Symbol
 	diagram   *symbols.Symbol
+	run       *symbols.Symbol
+	span      *symbols.Symbol
+	link      *symbols.Symbol
+	ref       *symbols.Symbol
+}
+
+// refTarget is one referenceable content block: its named path from the
+// document root and the label a reference without text falls back to.
+type refTarget struct {
+	path  []string
+	label string
 }
 
 // IsDocumentDefinition reports whether sym specializes DocumentQueries::Document.
@@ -79,22 +96,37 @@ func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Res
 		table:     libraryBase(index, tableBaseFQN),
 		list:      libraryBase(index, listBaseFQN),
 		diagram:   libraryBase(index, diagramBaseFQN),
+		run:       libraryBase(index, runBaseFQN),
+		span:      libraryBase(index, spanBaseFQN),
+		link:      libraryBase(index, linkBaseFQN),
+		ref:       libraryBase(index, refBaseFQN),
 	}
 	if all.document == nil || all.section == nil || all.paragraph == nil ||
-		all.table == nil || all.list == nil || all.diagram == nil {
+		all.table == nil || all.list == nil || all.diagram == nil ||
+		all.run == nil || all.span == nil || all.link == nil || all.ref == nil {
 		return nil, &Error{Kind: ErrorLibraryUnavailable}
 	}
 	name := symbols.FQNOf(entry)
 	if entry == nil || entry == all.document || entry.Kind != symbols.SymbolPartDef || !model.Conforms(entry, all.document) {
 		return nil, &Error{Kind: ErrorNotDocumentDefinition, Document: name, Origin: provenance.Symbol(entry)}
 	}
-	c := &compiler{index: index, model: model, resolver: resolver, document: name, bases: all}
+	c := &compiler{
+		index:    index,
+		model:    model,
+		resolver: resolver,
+		document: name,
+		bases:    all,
+		targets:  make(map[*symbols.Symbol]refTarget),
+	}
 	title, err := c.requiredText(entry, "title", ErrorMissingTitle)
 	if err != nil {
 		return nil, err
 	}
 	content, err := c.compileMembers(entry)
 	if err != nil {
+		return nil, err
+	}
+	if err := c.resolveRefs(content); err != nil {
 		return nil, err
 	}
 	return &Plan{
@@ -123,10 +155,17 @@ func (c *compiler) compileMembers(owner *symbols.Symbol) ([]Content, error) {
 	content := make([]Content, 0)
 	for _, member := range c.effectiveMembers(owner) {
 		if member.Kind == symbols.SymbolPartUsage && c.isContent(member) {
+			c.stack = append(c.stack, c.effectiveName(member))
 			node, err := c.compileContent(member)
 			if err != nil {
+				c.stack = c.stack[:len(c.stack)-1]
 				return nil, err
 			}
+			c.targets[member] = refTarget{
+				path:  append([]string(nil), c.stack...),
+				label: contentLabel(node),
+			}
+			c.stack = c.stack[:len(c.stack)-1]
 			content = append(content, node)
 			continue
 		}
@@ -220,6 +259,18 @@ func (c *compiler) compileParagraph(member *symbols.Symbol) (Content, error) {
 	if err != nil {
 		return Content{}, err
 	}
+	runs, err := c.compileRuns(member)
+	if err != nil {
+		return Content{}, err
+	}
+	if len(runs) > 0 && (stated || query != nil) {
+		return Content{}, &Error{
+			Kind:     ErrorConflictingRuns,
+			Document: c.document,
+			Content:  c.contentName(member),
+			Origin:   provenance.Symbol(member),
+		}
+	}
 	if stated && query != nil {
 		return Content{}, &Error{
 			Kind:     ErrorConflictingText,
@@ -228,7 +279,7 @@ func (c *compiler) compileParagraph(member *symbols.Symbol) (Content, error) {
 			Origin:   provenance.Symbol(member),
 		}
 	}
-	if !stated && query == nil {
+	if !stated && query == nil && len(runs) == 0 {
 		return Content{}, &Error{
 			Kind:     ErrorMissingText,
 			Document: c.document,
@@ -243,9 +294,232 @@ func (c *compiler) compileParagraph(member *symbols.Symbol) (Content, error) {
 		kind:   ContentParagraph,
 		name:   c.effectiveName(member),
 		text:   text,
+		runs:   runs,
 		query:  query,
 		origin: provenance.Symbol(member),
 	}, nil
+}
+
+// compileRuns compiles the ordered inline runs declared in a paragraph.
+func (c *compiler) compileRuns(member *symbols.Symbol) ([]Run, error) {
+	var runs []Run
+	for _, candidate := range c.effectiveMembers(member) {
+		if candidate.Kind != symbols.SymbolPartUsage || !c.isRun(candidate) {
+			continue
+		}
+		run, err := c.compileRun(candidate)
+		if err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+	return runs, nil
+}
+
+// isRun reports whether a part usage conforms to an inline run kind.
+func (c *compiler) isRun(member *symbols.Symbol) bool {
+	return c.model.Conforms(member, c.bases.run)
+}
+
+// compileRun compiles one inline run: a styled span, a link, or a reference.
+func (c *compiler) compileRun(member *symbols.Symbol) (Run, error) {
+	if err := c.rejectNestedContent(member); err != nil {
+		return Run{}, err
+	}
+	if err := c.rejectRunQuery(member); err != nil {
+		return Run{}, err
+	}
+	span := c.model.Conforms(member, c.bases.span)
+	link := c.model.Conforms(member, c.bases.link)
+	ref := c.model.Conforms(member, c.bases.ref)
+	if (span && link) || (span && ref) || (link && ref) {
+		return Run{}, &Error{
+			Kind:     ErrorAmbiguousRun,
+			Document: c.document,
+			Content:  c.contentName(member),
+			Origin:   provenance.Symbol(member),
+		}
+	}
+	switch {
+	case span:
+		return c.compileSpanRun(member)
+	case link:
+		return c.compileLinkRun(member)
+	case ref:
+		return c.compileRefRun(member)
+	default:
+		return Run{}, &Error{
+			Kind:     ErrorInvalidContent,
+			Document: c.document,
+			Content:  c.contentName(member),
+			Origin:   provenance.Symbol(member),
+		}
+	}
+}
+
+func (c *compiler) compileSpanRun(member *symbols.Symbol) (Run, error) {
+	text, err := c.requiredRunText(member)
+	if err != nil {
+		return Run{}, err
+	}
+	style, stated, err := c.optionalText(member, "style")
+	if err != nil {
+		return Run{}, err
+	}
+	runStyle := StylePlain
+	if stated {
+		runStyle = RunStyle(style)
+		switch runStyle {
+		case StylePlain, StyleEmphasis, StyleStrong, StyleCode:
+		default:
+			return Run{}, &Error{
+				Kind:     ErrorInvalidRunStyle,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Actual:   style,
+				Origin:   provenance.Symbol(member),
+			}
+		}
+	}
+	return Run{kind: RunSpan, text: text, style: runStyle, origin: provenance.Symbol(member)}, nil
+}
+
+func (c *compiler) compileLinkRun(member *symbols.Symbol) (Run, error) {
+	text, err := c.requiredRunText(member)
+	if err != nil {
+		return Run{}, err
+	}
+	target, stated, err := c.optionalText(member, "target")
+	if err != nil {
+		return Run{}, err
+	}
+	if !stated || target == "" {
+		return Run{}, &Error{
+			Kind:     ErrorMissingLinkTarget,
+			Document: c.document,
+			Content:  c.contentName(member),
+			Origin:   provenance.Symbol(member),
+		}
+	}
+	return Run{kind: RunLink, text: text, target: target, origin: provenance.Symbol(member)}, nil
+}
+
+func (c *compiler) compileRefRun(member *symbols.Symbol) (Run, error) {
+	text, _, err := c.optionalText(member, "text")
+	if err != nil {
+		return Run{}, err
+	}
+	target, err := c.refRunTarget(member)
+	if err != nil {
+		return Run{}, err
+	}
+	return Run{kind: RunRef, text: text, refSym: target, origin: provenance.Symbol(member)}, nil
+}
+
+// requiredRunText reads a run's text attribute, which must be a non-empty
+// string.
+func (c *compiler) requiredRunText(member *symbols.Symbol) (string, error) {
+	text, stated, err := c.optionalText(member, "text")
+	if err != nil {
+		return "", err
+	}
+	if !stated || text == "" {
+		return "", &Error{
+			Kind:     ErrorMissingRunText,
+			Document: c.document,
+			Content:  c.contentName(member),
+			Origin:   provenance.Symbol(member),
+		}
+	}
+	return text, nil
+}
+
+// refRunTarget resolves the element a reference run's target names.
+func (c *compiler) refRunTarget(member *symbols.Symbol) (*symbols.Symbol, error) {
+	for _, candidate := range c.effectiveMembers(member) {
+		if c.effectiveName(candidate) != "target" {
+			continue
+		}
+		resolved, stated, err := c.namedTarget(member, candidate, ErrorInvalidRefTarget, ErrorUnknownRefTarget, make(map[*symbols.Symbol]bool))
+		if err != nil || stated {
+			return resolved, err
+		}
+	}
+	return nil, &Error{
+		Kind:     ErrorMissingRefTarget,
+		Document: c.document,
+		Content:  c.contentName(member),
+		Origin:   provenance.Symbol(member),
+	}
+}
+
+// rejectRunQuery rejects a query declared in an inline run.
+func (c *compiler) rejectRunQuery(member *symbols.Symbol) error {
+	for _, candidate := range c.effectiveMembers(member) {
+		if candidate.Kind == symbols.SymbolCalcUsage {
+			return &Error{
+				Kind:     ErrorInvalidContent,
+				Document: c.document,
+				Content:  c.contentName(candidate),
+				Origin:   provenance.Symbol(candidate),
+			}
+		}
+	}
+	return nil
+}
+
+// contentLabel is what a reference without text renders: the target's title,
+// caption, or declared name.
+func contentLabel(node Content) string {
+	if node.title != "" {
+		return node.title
+	}
+	if node.caption != "" {
+		return node.caption
+	}
+	return node.name
+}
+
+// resolveRefs resolves every reference run against the compiled content tree,
+// filling its named path and fallback label.
+func (c *compiler) resolveRefs(content []Content) error {
+	for i := range content {
+		for r := range content[i].runs {
+			run := &content[i].runs[r]
+			if run.kind != RunRef {
+				continue
+			}
+			target, ok := c.targets[run.refSym]
+			if !ok {
+				return &Error{
+					Kind:     ErrorInvalidRefTarget,
+					Document: c.document,
+					Content:  c.contentName(run.refSym),
+					Actual:   c.contentName(run.refSym),
+					Origin:   run.origin,
+				}
+			}
+			for _, segment := range target.path {
+				if segment == "" {
+					return &Error{
+						Kind:     ErrorInvalidRefTarget,
+						Document: c.document,
+						Content:  c.contentName(run.refSym),
+						Actual:   "an anonymous content block",
+						Origin:   run.origin,
+					}
+				}
+			}
+			run.ref = append([]string(nil), target.path...)
+			if run.text == "" {
+				run.text = target.label
+			}
+		}
+		if err := c.resolveRefs(content[i].children); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *compiler) compileTable(member *symbols.Symbol) (Content, error) {
@@ -253,9 +527,26 @@ func (c *compiler) compileTable(member *symbols.Symbol) (Content, error) {
 	if err != nil {
 		return Content{}, err
 	}
+	groupBy, groupStated, err := c.optionalText(member, "groupBy")
+	if err != nil {
+		return Content{}, err
+	}
 	query, err := c.requiredQueryRef(member)
 	if err != nil {
 		return Content{}, err
+	}
+	if groupStated {
+		if columns, known := staticColumns(query.program, query.entry); groupBy == "" ||
+			(known && !containsColumn(columns, groupBy)) {
+			return Content{}, &Error{
+				Kind:     ErrorUnknownGroupColumn,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Query:    query.entry,
+				Actual:   groupBy,
+				Origin:   provenance.Symbol(member),
+			}
+		}
 	}
 	if err := c.rejectNestedContent(member); err != nil {
 		return Content{}, err
@@ -264,9 +555,86 @@ func (c *compiler) compileTable(member *symbols.Symbol) (Content, error) {
 		kind:    ContentTable,
 		name:    c.effectiveName(member),
 		caption: caption,
+		groupBy: groupBy,
 		query:   query,
 		origin:  provenance.Symbol(member),
 	}, nil
+}
+
+// staticColumns resolves the columns a compiled query statically projects,
+// mirroring how execution carries cells: projection sets them, filters and
+// ordering preserve them, traversals drop them. known is false when the
+// projected properties are parameter-driven.
+func staticColumns(program *queryplan.Program, entry string) ([]string, bool) {
+	for _, definition := range program.Definitions() {
+		if definition.Name() == entry {
+			return expressionColumns(program, definition.Expression())
+		}
+	}
+	return nil, true
+}
+
+func expressionColumns(program *queryplan.Program, expression queryplan.Expression) ([]string, bool) {
+	switch expression.Operation() {
+	case queryplan.OperationProject:
+		for _, argument := range expression.Arguments() {
+			if argument.Name != "properties" {
+				continue
+			}
+			return literalStrings(argument.Value)
+		}
+		return nil, false
+	case queryplan.OperationInvoke:
+		return staticColumns(program, expression.Target())
+	case queryplan.OperationWhereType,
+		queryplan.OperationWhereMetadata,
+		queryplan.OperationWhereName,
+		queryplan.OperationWhereFeature,
+		queryplan.OperationOrderBy:
+		for _, argument := range expression.Arguments() {
+			if argument.Name == "source" {
+				return expressionColumns(program, argument.Value)
+			}
+		}
+		return nil, true
+	default:
+		return nil, true
+	}
+}
+
+// literalStrings extracts the string literals of a planned argument value;
+// ok is false when any element is not a string literal.
+func literalStrings(value queryplan.Expression) ([]string, bool) {
+	if value.Operation() == queryplan.OperationSequence {
+		var out []string
+		for _, element := range value.Arguments() {
+			strings, ok := literalStrings(element.Value)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, strings...)
+		}
+		return out, true
+	}
+	if value.Operation() == queryplan.OperationLiteral {
+		if kind, raw := value.Literal(); kind == queryplan.LiteralString {
+			text, err := strconv.Unquote(raw)
+			if err != nil {
+				return nil, false
+			}
+			return []string{text}, true
+		}
+	}
+	return nil, false
+}
+
+func containsColumn(columns []string, name string) bool {
+	for _, column := range columns {
+		if column == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *compiler) compileList(member *symbols.Symbol) (Content, error) {
@@ -440,6 +808,18 @@ func (c *compiler) sourceTarget(
 	candidate *symbols.Symbol,
 	seen map[*symbols.Symbol]bool,
 ) (*symbols.Symbol, bool, error) {
+	return c.namedTarget(member, candidate, ErrorInvalidViewSource, ErrorUnknownViewSource, seen)
+}
+
+// namedTarget resolves a reference declaration's named value, following
+// redefinition lineage when the declaration itself is unvalued.
+func (c *compiler) namedTarget(
+	member *symbols.Symbol,
+	candidate *symbols.Symbol,
+	invalid ErrorKind,
+	unknown ErrorKind,
+	seen map[*symbols.Symbol]bool,
+) (*symbols.Symbol, bool, error) {
 	if candidate == nil || seen[candidate] {
 		return nil, false, nil
 	}
@@ -452,7 +832,7 @@ func (c *compiler) sourceTarget(
 		name, ok := target.(*ast.QualifiedName)
 		if !ok {
 			return nil, false, &Error{
-				Kind:     ErrorInvalidViewSource,
+				Kind:     invalid,
 				Document: c.document,
 				Content:  c.contentName(member),
 				Origin:   provenance.Node(candidate.DocName, declaration.Value),
@@ -461,7 +841,7 @@ func (c *compiler) sourceTarget(
 		resolved, ok := c.resolver.ResolveQualified(candidate.OwnerScope, name)
 		if !ok || resolved == nil {
 			return nil, false, &Error{
-				Kind:     ErrorUnknownViewSource,
+				Kind:     unknown,
 				Document: c.document,
 				Content:  c.contentName(member),
 				Actual:   qualifiedNameText(name),
@@ -474,7 +854,7 @@ func (c *compiler) sourceTarget(
 		return resolved, true, nil
 	}
 	for _, target := range c.model.RedefinedFeatures(candidate) {
-		resolved, stated, err := c.sourceTarget(member, target, seen)
+		resolved, stated, err := c.namedTarget(member, target, invalid, unknown, seen)
 		if err != nil || stated {
 			return resolved, stated, err
 		}
@@ -506,10 +886,15 @@ func (c *compiler) rejectDiagramQuery(member *symbols.Symbol) error {
 	return nil
 }
 
-// rejectNestedContent rejects content blocks nested inside a content block.
+// rejectNestedContent rejects content blocks nested inside a content block,
+// and inline runs nested anywhere but a paragraph.
 func (c *compiler) rejectNestedContent(owner *symbols.Symbol) error {
+	allowRuns := c.model.Conforms(owner, c.bases.paragraph)
 	for _, member := range c.effectiveMembers(owner) {
-		if member.Kind == symbols.SymbolPartUsage && c.isContent(member) {
+		if member.Kind != symbols.SymbolPartUsage {
+			continue
+		}
+		if c.isContent(member) || (!allowRuns && c.isRun(member)) {
 			return &Error{
 				Kind:     ErrorInvalidContent,
 				Document: c.document,
