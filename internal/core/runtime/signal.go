@@ -173,7 +173,12 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 	} else {
 		receiving, outbound = ctx.receivingEnds(routable, send.Target)
 	}
-	if len(receiving) == 0 {
+	crossing, crossMismatch, err := ctx.ownerDeliveries(self, send, msg.SignalType, receiver != "")
+	if err != nil {
+		return err
+	}
+	typeMismatch = typeMismatch || crossMismatch
+	if len(receiving) == 0 && len(crossing) == 0 {
 		if typeMismatch && receiver != "" {
 			return &SendPortTypeMismatchError{
 				Port: send.Target, Receiver: receiver, SignalType: msg.SignalType,
@@ -186,6 +191,19 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 		routed.Target = receiver
 		routed.Port = peer
 		routed.Object = objectID(self)
+		routed.Delivery = DeliverPort
+		if receiver != "" {
+			routed.Delivery = DeliverPortReceiver
+		}
+		ctx.PostMessage(routed)
+	}
+	// A connection of an owner joins two objects, so the copy it carries is held to
+	// the peer object's identity rather than to the sender's.
+	for _, delivery := range crossing {
+		routed := msg
+		routed.Target = receiver
+		routed.Port = delivery.port
+		routed.Object = delivery.object
 		routed.Delivery = DeliverPort
 		if receiver != "" {
 			routed.Delivery = DeliverPortReceiver
@@ -600,6 +618,9 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 		return Message{}, fmt.Errorf("eval send message: %w", err)
 	}
 	signalType := valueTypeName(value)
+	if signalType == "" && value.Kind == ValInstance {
+		signalType = e.ctx.objectSignalType(value.Instance)
+	}
 	if signalType == "" {
 		return Message{}, fmt.Errorf("send: message of kind %v has no signal type", value.Kind)
 	}
@@ -748,10 +769,37 @@ func (e *EvalContext) namedType(scope *symbols.Scope, expr ast.Node) (string, bo
 	if !ok || sym == nil {
 		return "", false
 	}
-	if _, isDef := sym.Decl.(*ast.Definition); !isDef {
+	if !isDefinitionSymbol(sym) {
 		return "", false
 	}
 	return sym.Name, true
+}
+
+// objectSignalType names the type of an object sent as a message: the definition
+// it materializes, which is the type an accept of it names.
+func (ctx *Context) objectSignalType(id int64) string {
+	inst, ok := ctx.instances[id]
+	if !ok || inst == nil || ctx.model == nil {
+		return ""
+	}
+	if isDefinitionSymbol(inst.Type) {
+		return inst.Type.Name
+	}
+	for _, sup := range ctx.model.AllSupertypes(inst.Type) {
+		if isDefinitionSymbol(sup) {
+			return sup.Name
+		}
+	}
+	return ""
+}
+
+// isDefinitionSymbol reports whether a symbol declares a definition, not a usage.
+func isDefinitionSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	_, isDef := sym.Decl.(*ast.Definition)
+	return isDef
 }
 
 // valueTypeName names the type of a value, as a send statement's signal type.

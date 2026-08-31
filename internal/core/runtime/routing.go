@@ -90,6 +90,76 @@ func (e *UnroutableSendError) Error() string {
 
 func (e *UnroutableSendError) Unwrap() error { return ErrUnroutableSend }
 
+// ownerDelivery is where a connection of an object holding the sender delivers:
+// the peer object reached and the port within it the message arrives at.
+type ownerDelivery struct {
+	object int64
+	port   string
+}
+
+// ownerDeliveries answers where a `send … via p` arrives through the connectors
+// of the objects holding the sender: a part's port joined by its owner to a
+// sibling's port reaches that sibling on the sibling's own identity, since the
+// owner writes its ends as paths from itself (SysML v2 §7.16). The second result
+// reports an end refusing the message because its inward features are typed for
+// another, which decides the error a send delivered nowhere gives.
+func (ctx *Context) ownerDeliveries(
+	self *Instance, send lower.Send, signalType string, typed bool,
+) ([]ownerDelivery, bool, error) {
+	var out []ownerDelivery
+	mismatch := false
+	seen := map[ownerDelivery]bool{}
+	path := ""
+	for child := self; child != nil && child.owner != nil; child = child.owner {
+		if child.ownerFeature == "" {
+			break
+		}
+		if path == "" {
+			path = child.ownerFeature
+		} else {
+			path = child.ownerFeature + "." + path
+		}
+		owner := child.owner
+		sending := path + "." + send.Target
+		conns := ctx.realizedConnections(ctx.objectConnections(owner.Type), owner)
+		for _, conn := range conns {
+			if !joins(conn.Ends, sending) {
+				continue
+			}
+			for _, end := range conn.Ends {
+				if end == sending {
+					continue
+				}
+				accepts := true
+				if typed {
+					var refused bool
+					accepts, refused = ctx.endReceivesMessage(conn.Scope, end, signalType)
+					mismatch = mismatch || refused
+				} else {
+					accepts = ctx.endReceives(conn.Scope, end)
+				}
+				if !accepts {
+					continue
+				}
+				addr, ok, err := ctx.featureAddress(conn.Scope, owner, strings.Split(end, "."))
+				if err != nil {
+					return nil, mismatch, err
+				}
+				if !ok || addr.Delivery != DeliverPort || addr.Object == 0 {
+					continue
+				}
+				delivery := ownerDelivery{object: addr.Object, port: addr.Port}
+				if seen[delivery] {
+					continue
+				}
+				seen[delivery] = true
+				out = append(out, delivery)
+			}
+		}
+	}
+	return out, mismatch, nil
+}
+
 // routableConnections are the connections a `send … via p` of a behavior can
 // travel over: the ones the behavior's own body declares, and the ones declared
 // by the part performing it, whose ports the send names. The performer is the

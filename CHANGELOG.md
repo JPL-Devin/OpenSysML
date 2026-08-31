@@ -4,6 +4,36 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### Added
+
+- **A second bomb-disposal walkthrough, written for the notation the first one does not reach:**
+  [`examples/disposal-team-demo`](examples/disposal-team-demo/README.md) models the team around
+  the robot — quantities with units and a payload budget, `select` and `reduce` over the fleet,
+  a command crossing the connector the site joins two parts by, a callout occurrence with a
+  snapshot and a timeslice, and a requirement, use case, verification case and analysis case over
+  the same subject. It was written to find defects, and found the three below.
+
+### Fixed
+
+- **A send now crosses a connector its owner declared.** A part's port joined by its owner to a
+  sibling's port reached nothing: routing consulted only the connections of the behavior and of
+  the sending object, so a console commanding a unit over the connector their site declares
+  reported `send reaches no receiving port`. Deliveries now also follow the connections of every
+  object holding the sender, and arrive on the peer object's own identity.
+
+- **An item object can be sent.** `send cmd via p`, where `cmd` is an `item cmd : Command { … }`,
+  reported `message of kind instance has no signal type`: a message took its type from a scalar
+  value only, so an object had none. An object's message is typed by the definition it
+  materializes, which is the type an accept of it names.
+
+- **A bound subject now carries the subject's type.** `requirement r : Req { subject truck = loaded; }`
+  redefines the definition's `subject truck : Truck`, but the redefinition was not among the
+  usage's supertypes, so `truck.payload` named no member and `%check` refused the requirement.
+  Implicit role redefinitions are direct supertypes, so a subject or objective bound in a usage
+  reads the members of the role it redefines.
+
 ## 0.4.1 — 2026-08-30
 
 Release 0.4.1 is about what the tools *say* about a model. Every surface that names a declaration —
