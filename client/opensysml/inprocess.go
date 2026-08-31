@@ -59,21 +59,30 @@ func buildVersion() string {
 	if !ok {
 		return "dev"
 	}
-	if info.Main.Path == modulePath && info.Main.Version != "" {
-		return info.Main.Version
+	if info.Main.Path == modulePath {
+		return released(info.Main.Version)
 	}
 	for _, dep := range info.Deps {
 		if dep.Path != modulePath {
 			continue
 		}
-		if dep.Replace != nil && dep.Replace.Version != "" {
-			return dep.Replace.Version
+		if dep.Replace != nil {
+			if version := released(dep.Replace.Version); version != "dev" {
+				return version
+			}
 		}
-		if dep.Version != "" {
-			return dep.Version
-		}
+		return released(dep.Version)
 	}
 	return "dev"
+}
+
+// released reports a module version, or "dev" for one the toolchain leaves
+// unstamped: an unversioned build or a directory replacement.
+func released(version string) string {
+	if version == "" || version == "(devel)" {
+		return "dev"
+	}
+	return version
 }
 
 // inprocess calls the service implementation directly. Errors cross as
