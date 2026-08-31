@@ -375,23 +375,20 @@ listing, an empty table cell in a document).
 
 ## Computed columns
 
-Beyond declared properties, a projection can compute columns: `columns` takes
-`Column(name, expression)` specs whose expressions are evaluated once per row.
-Expressions support `+`, `-`, `*`, `/` arithmetic, string concatenation with
-`+`, and `??` for defaulting a value the row lacks. Row properties are
-referenced by their declaring type (`Subsystem::mass`, `Element::name`), and
-a computed name is a full column: `OrderBy`, `groupBy`, and document `Ref`
-checks all see it.
+A projection may also derive columns: each `Column(name, expression)` entry
+appends a named column whose expression is evaluated once per row over the
+row element's declared features. Arithmetic (`+`, `-`, `*`, `/`), string
+concatenation with `+` and `??` defaults for absent values are supported:
 
 ```sysml
 calc def MassBudget :> Query {
 	in root : Element;
 	Project(
 		source = PartsByMass(root = root),
-		properties = ("name"),
+		properties = ("name", "mass"),
 		columns = (
-			Column(name = "label", expression = "part: " + Element::name),
-			Column(name = "budget", expression = (Subsystem::mass ?? 0.0) * 1.1)
+			Column(name = "massLbs", expression = (Subsystem::mass ?? 0.0) * 2.2),
+			Column(name = "label", expression = "part: " + Element::name)
 		)
 	)
 }
@@ -400,33 +397,21 @@ calc def MassBudget :> Query {
 ```console
 $ sysml cookbook.sysml -run-query "Cookbook::MassBudget root=Cookbook::telescope"
 ✓ Query Cookbook::MassBudget returned 5 rows
-  Columns: name, label, budget
+  Columns: name, mass, massLbs, label
   Row 1: Cookbook::telescope::mountControl
     name = "mountControl"
+    mass = 15.0
+    massLbs = 33.0
     label = "part: mountControl"
-    budget = 16.5
-  Row 2: Cookbook::telescope::primaryMirror
-    name = "primaryMirror"
-    label = "part: primaryMirror"
-    budget = 11.0
-  Row 3: Cookbook::telescope::instrumentCluster
-    name = "instrumentCluster"
-    label = "part: instrumentCluster"
-    budget = 4.95
-  Row 4: Cookbook::telescope::opticalPath
-    name = "opticalPath"
-    label = "part: opticalPath"
-    budget = 0.0
-  Row 5: Cookbook::telescope::dataPath
-    name = "dataPath"
-    label = "part: dataPath"
-    budget = 0.0
+  ...
 ```
 
-The connections have no `mass`, so `?? 0.0` supplies their budget. A failing
-expression, an absent value not defaulted with `??`, or a multi-valued result
-fails the whole query with a typed error naming the row and column — a
-computed cell is never silently empty.
+Feature references name the declaring definition (`Subsystem::mass`,
+`Element::name`); a row element that lacks the feature makes the expression
+fail with a typed error naming the query, column and row — unless a `??`
+default covers it, which is why `MassBudget`'s `massLbs` defaults to `0.0`
+for the two connections in its results. Computed names join the projection:
+`OrderBy` can sort by them and a table's `groupBy` can group by them.
 
 ## Query invokes query
 

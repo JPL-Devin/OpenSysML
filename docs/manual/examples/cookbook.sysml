@@ -131,10 +131,10 @@ package Cookbook {
 		in root : Element;
 		Project(
 			source = PartsByMass(root = root),
-			properties = ("name"),
+			properties = ("name", "mass"),
 			columns = (
-				Column(name = "label", expression = "part: " + Element::name),
-				Column(name = "budget", expression = (Subsystem::mass ?? 0.0) * 1.1)
+				Column(name = "massLbs", expression = (Subsystem::mass ?? 0.0) * 2.2),
+				Column(name = "label", expression = "part: " + Element::name)
 			)
 		)
 	}
