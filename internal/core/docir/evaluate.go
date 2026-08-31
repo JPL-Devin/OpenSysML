@@ -1,7 +1,9 @@
 package docir
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/docplan"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryexec"
@@ -24,7 +26,13 @@ func Evaluate(
 	if context.Index == nil || context.Resolver == nil || context.Model == nil {
 		return nil, &Error{Kind: ErrorInvalidContext, Document: plan.Name()}
 	}
-	e := &evaluator{document: plan.Name(), context: context, options: options, text: text}
+	e := &evaluator{
+		document:   plan.Name(),
+		context:    context,
+		options:    options,
+		text:       text,
+		referenced: referencedAnchors(plan.Content()),
+	}
 	content, err := e.evaluateContent(plan.Content())
 	if err != nil {
 		return nil, err
@@ -38,19 +46,67 @@ func Evaluate(
 }
 
 type evaluator struct {
-	document string
-	context  queryexec.Context
-	options  queryexec.Options
-	text     view.SourceText
+	document   string
+	context    queryexec.Context
+	options    queryexec.Options
+	text       view.SourceText
+	referenced map[string]bool
+	path       []string
+}
+
+// referencedAnchors collects the anchors of every content node a reference
+// run targets.
+func referencedAnchors(planned []docplan.Content) map[string]bool {
+	anchors := make(map[string]bool)
+	var walk func(nodes []docplan.Content)
+	walk = func(nodes []docplan.Content) {
+		for _, node := range nodes {
+			for _, run := range node.Runs() {
+				if run.Kind() == docplan.RunRef {
+					anchors[anchorFor(run.RefPath())] = true
+				}
+			}
+			walk(node.Children())
+		}
+	}
+	walk(planned)
+	return anchors
+}
+
+// anchorFor derives a content node's stable anchor from its named path:
+// segments joined by "-", with every byte outside [A-Za-z0-9_] encoded as
+// "." and two uppercase hex digits, so distinct paths never collide.
+func anchorFor(path []string) string {
+	segments := make([]string, len(path))
+	for i, segment := range path {
+		var b strings.Builder
+		for j := 0; j < len(segment); j++ {
+			ch := segment[j]
+			switch {
+			case ch >= 'A' && ch <= 'Z', ch >= 'a' && ch <= 'z', ch >= '0' && ch <= '9', ch == '_':
+				b.WriteByte(ch)
+			default:
+				fmt.Fprintf(&b, ".%02X", ch)
+			}
+		}
+		segments[i] = b.String()
+	}
+	return strings.Join(segments, "-")
 }
 
 func (e *evaluator) evaluateContent(planned []docplan.Content) ([]Content, error) {
 	content := make([]Content, 0, len(planned))
 	for _, node := range planned {
+		e.path = append(e.path, node.Name())
 		evaluated, err := e.evaluateNode(node)
 		if err != nil {
+			e.path = e.path[:len(e.path)-1]
 			return nil, err
 		}
+		if anchor := anchorFor(e.path); e.referenced[anchor] {
+			evaluated.anchor = anchor
+		}
+		e.path = e.path[:len(e.path)-1]
 		content = append(content, evaluated)
 	}
 	return content, nil
@@ -94,6 +150,13 @@ func (e *evaluator) evaluateParagraph(node docplan.Content) (Content, error) {
 		name:   node.Name(),
 		origin: node.Origin(),
 	}
+	if planned := node.Runs(); len(planned) > 0 {
+		content.runs = make([]TextRun, len(planned))
+		for i, run := range planned {
+			content.runs[i] = evaluatedRun(run)
+		}
+		return content, nil
+	}
 	if node.Query() == nil {
 		content.runs = []TextRun{{text: node.Text(), origin: node.Origin()}}
 		return content, nil
@@ -115,16 +178,99 @@ func (e *evaluator) evaluateTable(node docplan.Content) (Content, error) {
 	if err != nil {
 		return Content{}, err
 	}
-	return Content{
+	content := Content{
 		kind:        ContentTable,
 		name:        node.Name(),
 		caption:     node.Caption(),
+		groupBy:     node.GroupBy(),
 		columns:     result.Columns(),
 		rows:        result.Rows(),
 		query:       node.Query().Entry(),
 		queryOrigin: result.Origin(),
 		origin:      node.Origin(),
-	}, nil
+	}
+	if content.groupBy != "" {
+		groups, err := e.groupRows(node, content.columns, content.rows)
+		if err != nil {
+			return Content{}, err
+		}
+		content.groups = groups
+	}
+	return content, nil
+}
+
+// groupRows partitions a grouped table's rows by the group column's cell
+// text, in order of first appearance.
+func (e *evaluator) groupRows(node docplan.Content, columns []queryexec.Column, rows []queryexec.Row) ([]TableGroup, error) {
+	index := -1
+	for i, column := range columns {
+		if column.Name() == node.GroupBy() {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		return nil, &Error{
+			Kind:     ErrorUnknownGroup,
+			Document: e.document,
+			Content:  node.Name(),
+			Query:    node.Query().Entry(),
+			Actual:   node.GroupBy(),
+			Origin:   node.Origin(),
+		}
+	}
+	var groups []TableGroup
+	at := make(map[string]int)
+	for _, row := range rows {
+		key := ""
+		if cells := row.Cells(); index < len(cells) {
+			key = e.cellText(cells[index])
+		}
+		position, ok := at[key]
+		if !ok {
+			position = len(groups)
+			at[key] = position
+			groups = append(groups, TableGroup{key: key})
+		}
+		groups[position].rows = append(groups[position].rows, row)
+	}
+	return groups, nil
+}
+
+// cellText renders one projected cell as deterministic plain text: its
+// values joined by ", ".
+func (e *evaluator) cellText(cell queryexec.Cell) string {
+	values := cell.Values()
+	parts := make([]string, len(values))
+	for i, value := range values {
+		parts[i] = e.valueText(value)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// evaluatedRun converts one planned inline run into an IR text run.
+func evaluatedRun(run docplan.Run) TextRun {
+	switch run.Kind() {
+	case docplan.RunLink:
+		return TextRun{kind: RunLink, text: run.Text(), target: run.Target(), origin: run.Origin()}
+	case docplan.RunRef:
+		return TextRun{kind: RunRef, text: run.Text(), target: anchorFor(run.RefPath()), origin: run.Origin()}
+	default:
+		return TextRun{kind: styledKind(run.Style()), text: run.Text(), origin: run.Origin()}
+	}
+}
+
+func styledKind(style docplan.RunStyle) RunKind {
+	switch style {
+	case docplan.StyleEmphasis:
+		return RunEmphasis
+	case docplan.StyleStrong:
+		return RunStrong
+	case docplan.StyleCode:
+		return RunCode
+	default:
+		return RunPlain
+	}
 }
 
 func (e *evaluator) evaluateList(node docplan.Content) (Content, error) {

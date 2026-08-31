@@ -1491,6 +1491,40 @@ calc def Usages :> Query {
 	}
 }
 
+// TestExecuteFilterKeepsProjectedColumnsWhenEmpty checks that a filter over a
+// projection keeps the projected columns even when it selects no row.
+func TestExecuteFilterKeepsProjectedColumnsWhenEmpty(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part child;
+}
+calc def Names :> Query {
+	in source : Element;
+	WhereName(
+		source = Project(
+			source = OwnedElements(source = source),
+			properties = ("name")
+		),
+		operator = "==",
+		value = "nomatch"
+	)
+}
+`)
+	rows, err := fixture.execute(t, "Names", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute filtered projection: %v", err)
+	}
+	if len(rows.Rows()) != 0 {
+		t.Fatalf("rows = %v", elementNames(rows))
+	}
+	columns := rows.Columns()
+	if len(columns) != 1 || columns[0].Name() != "name" {
+		t.Fatalf("columns = %+v", columns)
+	}
+}
+
 func elementNames(result *RowSet) []string {
 	var names []string
 	for _, row := range result.Rows() {

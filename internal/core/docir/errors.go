@@ -14,6 +14,7 @@ const (
 	ErrorInvalidPlan    ErrorKind = "invalid-plan"
 	ErrorQueryExecution ErrorKind = "query-execution"
 	ErrorViewRendering  ErrorKind = "view-rendering"
+	ErrorUnknownGroup   ErrorKind = "unknown-group-column"
 )
 
 // Error is a typed document-evaluation failure with its source location.
@@ -22,6 +23,7 @@ type Error struct {
 	Document string
 	Content  string
 	Query    string
+	Actual   string
 	Origin   provenance.Origin
 	Err      error
 }
@@ -36,6 +38,8 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("document %s content %s query %s: %v", e.Document, e.Content, e.Query, e.Err)
 	case ErrorViewRendering:
 		return fmt.Sprintf("document %s diagram %s: %v", e.Document, e.Content, e.Err)
+	case ErrorUnknownGroup:
+		return fmt.Sprintf("document %s table %s groups by %q, which query %s did not project", e.Document, e.Content, e.Actual, e.Query)
 	default:
 		return fmt.Sprintf("document evaluation failed for %s", e.Document)
 	}

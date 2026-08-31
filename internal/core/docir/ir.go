@@ -27,18 +27,66 @@ const (
 	ListNumber ListStyle = "number"
 )
 
+// RunKind classifies one text run: plain prose, an inline style, a link to
+// an external destination, or a reference to another content node.
+type RunKind string
+
+const (
+	RunPlain    RunKind = "plain"
+	RunEmphasis RunKind = "emphasis"
+	RunStrong   RunKind = "strong"
+	RunCode     RunKind = "code"
+	RunLink     RunKind = "link"
+	RunRef      RunKind = "ref"
+)
+
 // TextRun is one piece of paragraph or list-item text with its provenance:
 // static text carries its declaration, query-backed text its query value.
 type TextRun struct {
+	kind   RunKind
 	text   string
+	target string
 	origin provenance.Origin
+}
+
+// Kind returns the classification of the run; the zero value is plain.
+func (r TextRun) Kind() RunKind {
+	if r.kind == "" {
+		return RunPlain
+	}
+	return r.kind
 }
 
 // Text returns the run's text.
 func (r TextRun) Text() string { return r.text }
 
+// Target returns a link run's destination, or a reference run's anchor —
+// the stable identifier of the referenced content node.
+func (r TextRun) Target() string { return r.target }
+
 // Origin returns the source declaration or query value behind the run.
 func (r TextRun) Origin() provenance.Origin { return r.origin }
+
+// TableGroup is one group of a grouped table's rows sharing a group-column
+// value, in order of first appearance.
+type TableGroup struct {
+	key  string
+	rows []queryexec.Row
+}
+
+// Key returns the shared group-column text of the group's rows.
+func (g TableGroup) Key() string { return g.key }
+
+// Rows returns the group's rows in result order.
+func (g TableGroup) Rows() []queryexec.Row { return append([]queryexec.Row(nil), g.rows...) }
+
+func cloneGroups(groups []TableGroup) []TableGroup {
+	out := make([]TableGroup, len(groups))
+	for i, group := range groups {
+		out[i] = TableGroup{key: group.key, rows: append([]queryexec.Row(nil), group.rows...)}
+	}
+	return out
+}
 
 // ListItem is one evaluated list item, produced from one query row.
 type ListItem struct {
@@ -60,9 +108,12 @@ type Content struct {
 	title       string
 	caption     string
 	style       ListStyle
+	anchor      string
+	groupBy     string
 	runs        []TextRun
 	columns     []queryexec.Column
 	rows        []queryexec.Row
+	groups      []TableGroup
 	items       []ListItem
 	rendering   *view.Rendering
 	direction   view.Direction
@@ -86,6 +137,17 @@ func (c Content) Caption() string { return c.caption }
 
 // Style returns the style of a list.
 func (c Content) Style() ListStyle { return c.style }
+
+// Anchor returns the node's stable identifier when a reference run targets
+// it, empty otherwise.
+func (c Content) Anchor() string { return c.anchor }
+
+// GroupBy returns the projected column a table groups its rows by, empty
+// when ungrouped.
+func (c Content) GroupBy() string { return c.groupBy }
+
+// Groups returns the ordered row groups of a grouped table.
+func (c Content) Groups() []TableGroup { return cloneGroups(c.groups) }
 
 // Runs returns the text runs of a paragraph in row and column order.
 func (c Content) Runs() []TextRun { return append([]TextRun(nil), c.runs...) }
@@ -136,9 +198,12 @@ func cloneContent(content []Content) []Content {
 			title:       child.title,
 			caption:     child.caption,
 			style:       child.style,
+			anchor:      child.anchor,
+			groupBy:     child.groupBy,
 			runs:        append([]TextRun(nil), child.runs...),
 			columns:     append([]queryexec.Column(nil), child.columns...),
 			rows:        append([]queryexec.Row(nil), child.rows...),
+			groups:      cloneGroups(child.groups),
 			items:       child.Items(),
 			rendering:   child.rendering.Clone(),
 			direction:   child.direction,
