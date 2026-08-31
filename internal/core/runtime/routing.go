@@ -110,7 +110,7 @@ func (ctx *Context) ownerDeliveries(
 	mismatch := false
 	seen := map[ownerDelivery]bool{}
 	path := ""
-	for child := self; child != nil && child.owner != nil; child = child.owner {
+	for child := ctx.viaPortHolder(self, send); child != nil && child.owner != nil; child = child.owner {
 		if child.ownerFeature == "" {
 			break
 		}
@@ -160,6 +160,37 @@ func (ctx *Context) ownerDeliveries(
 		}
 	}
 	return out, mismatch, nil
+}
+
+// viaPortHolder is the object whose feature a via send's resolved port is: the
+// sender itself, or the nearest ancestor holding it when the behavior runs in a
+// part nested inside — a suboccurrence or portion sends through its whole's port.
+func (ctx *Context) viaPortHolder(self *Instance, send lower.Send) *Instance {
+	segments := strings.Split(send.Target, ".")
+	for inst := self; inst != nil; inst = inst.owner {
+		if ctx.holdsViaPort(inst, segments, send.TargetSym) {
+			return inst
+		}
+	}
+	return self
+}
+
+// holdsViaPort reports whether the dotted via path, walked through the objects
+// inst's features hold, ends at a port — the resolved one when the send has it.
+func (ctx *Context) holdsViaPort(inst *Instance, segments []string, want *symbols.Symbol) bool {
+	current := inst
+	for _, segment := range segments[:len(segments)-1] {
+		held, ok, err := ctx.fvObject(current, segment)
+		if err != nil || !ok {
+			return false
+		}
+		current = held
+	}
+	fv, held := current.FeatureValues[segments[len(segments)-1]]
+	if !held || !isPortFeature(fv.Feature) {
+		return false
+	}
+	return want == nil || fv.Feature.Symbol == want
 }
 
 // connectedDeliveries answers where a `send … via p` arrives through the

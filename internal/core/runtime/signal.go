@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -720,6 +721,68 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 		Target:     target,
 		Payload:    map[string]Value{"value": value},
 	}, nil
+}
+
+// acceptedValue is the value an accept binds its payload name to: the single
+// value the message carries, or an occurrence of its signal built from the
+// arguments the send named, so `accept p : Ping` sees a Ping object either way.
+// The occurrence is cached on the message: a guard evaluated during transition
+// selection and the firing that follows read the same object.
+func (ctx *Context) acceptedValue(msg Message) (Value, error) {
+	if value, ok := msg.Payload["value"]; ok {
+		return value, nil
+	}
+	if msg.Signal == nil {
+		return Value{}, fmt.Errorf("%w: %s carries no single value to bind",
+			ErrNoValue, orAnonymousSignal(msg.SignalType))
+	}
+	value, err := ctx.materializeAccepted(msg)
+	if err != nil {
+		return Value{}, err
+	}
+	msg.Payload["value"] = value
+	return value, nil
+}
+
+// materializeAccepted builds the occurrence a typed message binds as, leaving
+// no instance behind when a payload argument does not fit it.
+func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
+	mark := len(ctx.created)
+	inst, err := ctx.materialize(msg.Signal, 0)
+	if err != nil {
+		ctx.abandonInstancesSince(mark)
+		return Value{}, fmt.Errorf("materialize accepted %s: %w", msg.SignalType, err)
+	}
+	features := ctx.FeaturesOf(msg.Signal)
+	for name, value := range msg.Payload {
+		target := name
+		if _, held := inst.FeatureValues[name]; !held {
+			n := positionalArg(name)
+			if n == 0 || n > len(features) {
+				ctx.abandonInstancesSince(mark)
+				return Value{}, fmt.Errorf("accepted %s: %q names no feature it carries",
+					msg.SignalType, name)
+			}
+			target = features[n-1].Name
+		}
+		if err := inst.SetFeatureValue(ctx, target, value); err != nil {
+			ctx.abandonInstancesSince(mark)
+			return Value{}, fmt.Errorf("accepted %s: %w", msg.SignalType, err)
+		}
+	}
+	return Value{Kind: ValInstance, Instance: inst.ID}, nil
+}
+
+// positionalArg returns N for a payload entry named argN, or 0 for any other.
+func positionalArg(name string) int {
+	if !strings.HasPrefix(name, "arg") {
+		return 0
+	}
+	n, err := strconv.Atoi(name[len("arg"):])
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
 }
 
 // invokesCalc reports whether an invocation calls a calculation — a calc

@@ -56,6 +56,70 @@ type Client interface {
 	// instantiation is a FailureError; an unknown model is CodeNotFound.
 	Instantiate(ctx context.Context, model *Model, symbolID string) (*Instantiation, error)
 
+	// ExecuteAction executes the named action with the inputs given, bound by
+	// parameter name, and reports the outputs it produced.
+	ExecuteAction(ctx context.Context, model *Model, actionSymbolID string, inputs map[string]Value) (*ActionRun, error)
+
+	// ExecuteState runs the named state machine, feeding it the events in
+	// order, and reports the states visited and the context left behind.
+	ExecuteState(ctx context.Context, model *Model, stateMachineSymbolID string, events []string) (*StateRun, error)
+
+	// VerifyConstraint evaluates the named constraint, optionally Against a
+	// part to instantiate and check. Requires the verification capability.
+	VerifyConstraint(ctx context.Context, model *Model, symbolID string, opts ...VerifyOption) (*Verification, error)
+
+	// VerifyRequirement evaluates the named requirement, optionally Against a
+	// part to instantiate and check. Requires the verification capability.
+	VerifyRequirement(ctx context.Context, model *Model, symbolID string, opts ...VerifyOption) (*Verification, error)
+
+	// VerifySatisfaction evaluates the satisfaction assertions the model
+	// states — every one, or those of the symbol named. Requires the
+	// verification capability.
+	VerifySatisfaction(ctx context.Context, model *Model, symbolID string) (*Satisfaction, error)
+
+	// EvaluateCalc invokes the named calculation with positional arguments, or,
+	// given none, evaluates a calc usage from its own members. Requires the
+	// verification capability.
+	EvaluateCalc(ctx context.Context, model *Model, symbolID string, arguments ...Value) (*Calculation, error)
+
+	// Query selects the model's elements the query matches, in declaration
+	// order. Requires the query capability.
+	Query(ctx context.Context, model *Model, query Query) ([]QueryElement, error)
+
+	// QueryOSLC selects elements with OSLC Query 3.0 parameter text. Requires
+	// the oslc_query capability.
+	QueryOSLC(ctx context.Context, model *Model, oslc string) ([]QueryElement, error)
+
+	// RunDocumentQuery runs the named document query, binding its entry
+	// parameters, and answers typed rows. Requires the document_query
+	// capability.
+	RunDocumentQuery(ctx context.Context, model *Model, queryID string, bindings ...Binding) (*Rows, error)
+
+	// RenderDocument renders the named document to Markdown. Requires the
+	// render_document capability.
+	RenderDocument(ctx context.Context, model *Model, documentID string) (string, error)
+
+	// Convert writes the model in another representation, from the source the
+	// parse read, so WithFromFormat does not apply and is refused. Requires the
+	// convert capability, and a model of one document. ConvertFile converts a
+	// file the client never parsed.
+	Convert(ctx context.Context, model *Model, to Format, opts ...ConvertOption) (*Conversion, error)
+
+	// ConvertFile writes the model file at path in another representation,
+	// inferring its notation from the extension unless WithFromFormat says
+	// otherwise. Requires the convert capability.
+	ConvertFile(ctx context.Context, path string, to Format, opts ...ConvertOption) (*Conversion, error)
+
+	// ConvertSource writes inline content in another representation. Name the
+	// notation it is written in with WithFromFormat: there is no file extension
+	// to read it from. Requires the convert capability.
+	ConvertSource(ctx context.Context, content string, to Format, opts ...ConvertOption) (*Conversion, error)
+
+	// ApplyEdits answers the model's source with every edit applied, or refuses
+	// them all with an EditError. Requires the apply_edits capability, and a
+	// model of one document.
+	ApplyEdits(ctx context.Context, model *Model, edits ...Edit) (*EditResult, error)
+
 	// Close releases what the implementation holds. The Client answers no
 	// further calls: each is refused with CodeUnavailable. Closing twice is
 	// not an error.
@@ -143,6 +207,17 @@ type caller interface {
 	getDiagnostics(ctx context.Context, req *pb.DiagnosticsRequest) (*pb.DiagnosticsResponse, error)
 	evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.EvaluateResponse, error)
 	instantiate(ctx context.Context, req *pb.InstantiateRequest) (*pb.InstantiateResponse, error)
+	executeAction(ctx context.Context, req *pb.ExecuteActionRequest) (*pb.ExecuteActionResponse, error)
+	executeState(ctx context.Context, req *pb.ExecuteStateRequest) (*pb.ExecuteStateResponse, error)
+	verifyConstraint(ctx context.Context, req *pb.VerifyConstraintRequest) (*pb.VerifyConstraintResponse, error)
+	verifyRequirement(ctx context.Context, req *pb.VerifyRequirementRequest) (*pb.VerifyRequirementResponse, error)
+	verifySatisfaction(ctx context.Context, req *pb.VerifySatisfactionRequest) (*pb.VerifySatisfactionResponse, error)
+	evaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest) (*pb.EvaluateCalcResponse, error)
+	query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error)
+	runDocumentQuery(ctx context.Context, req *pb.RunDocumentQueryRequest) (*pb.RunDocumentQueryResponse, error)
+	renderDocument(ctx context.Context, req *pb.RenderDocumentRequest) (*pb.RenderDocumentResponse, error)
+	convert(ctx context.Context, req *pb.ConvertRequest) (*pb.ConvertResponse, error)
+	applyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*pb.ApplyEditsResponse, error)
 	close() error
 }
 
@@ -385,11 +460,23 @@ func (c *client) Close() error {
 	return c.caller.close()
 }
 
-// modelHash is the hash a call sends for a model, refusing a nil model the way
-// the service refuses an unknown one.
+// modelHash is the hash a call sends for a model, refusing a model that names
+// none here rather than sending a hash the service cannot know.
 func modelHash(model *Model) (string, error) {
 	if model == nil {
 		return "", &StatusError{Code: CodeInvalidArgument, Message: "model is nil"}
 	}
+	if model.Hash == "" {
+		return "", &StatusError{Code: CodeInvalidArgument, Message: "model carries no hash: it did not come from a parse call"}
+	}
 	return model.Hash, nil
+}
+
+// call is the shared preamble of every model operation: a live client and the
+// hash the model is named by.
+func (c *client) call(model *Model) (string, error) {
+	if err := c.live(); err != nil {
+		return "", err
+	}
+	return modelHash(model)
 }

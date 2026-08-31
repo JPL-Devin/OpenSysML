@@ -5108,22 +5108,26 @@ func testFlowNamingNoPin(t *testing.T) {
 	}
 }
 
-// testAcceptPayloadWithoutAValue: an accept that names a payload binds the
-// single value the accepted message carries, so a message carrying none is
-// reported rather than binding an empty value the guard and effect would read.
+// testAcceptPayloadWithoutAValue: a message carrying no value and naming no
+// signal definition gives the accept's payload name nothing to bind, which is
+// reported rather than bound to nothing.
 func testAcceptPayloadWithoutAValue(t *testing.T) {
-	_, err := executeActionSource(t, "pipeline", `package P {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
 		item def Ping;
 		action pipeline {
 			first start;
-			action sender { send Ping() to reader; }
 			action reader accept p : Ping;
 			done;
-			succession first start then sender;
-			succession first sender then reader;
+			succession first start then reader;
 			succession first reader then done;
 		}
-	}`)
+	}`))
+	exec, err := ctx.CreateActionExecutor(oneSymbol(t, idx, "P::pipeline"))
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	ctx.PostMessage(Message{SignalType: "Ping", Target: "reader", Payload: map[string]Value{}})
+	err = exec.RunToCompletion()
 	if err == nil {
 		t.Fatal("expected the payload-less message to be reported")
 	}
