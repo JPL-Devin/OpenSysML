@@ -458,6 +458,9 @@ func (s *Session) metaDebugCommand(fields []string, line string) (metaResult, bo
 		if err != nil {
 			return metaOut([]string{errPrefix + err.Error()}, false, nil), true
 		}
+		if len(lines) == 0 {
+			return metaOut([]string{"no elements matched"}, false, nil), true
+		}
 		return metaOut(lines, false, nil), true
 	case "%events":
 		return metaOut(s.doEvents()), true

@@ -22,6 +22,12 @@ func runQuery(files []string, text string) int {
 	if err != nil {
 		return fail(err)
 	}
+	if len(lines) == 0 {
+		// Stdout carries one matched element per line, so this report stays out
+		// of it.
+		fmt.Fprintln(os.Stderr, "sysml: no elements matched")
+		return exitHolds
+	}
 	writeLines(os.Stdout, lines)
 	return exitHolds
 }

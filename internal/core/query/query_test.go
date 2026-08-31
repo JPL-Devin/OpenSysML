@@ -139,6 +139,37 @@ func TestEvaluateNotEqualAndIn(t *testing.T) {
 	}
 }
 
+func TestEvaluateRefusesWildcardValueExceptOnMultiplicity(t *testing.T) {
+	infinite := &symbols.Symbol{}
+	model := &testModel{
+		symbols: []*symbols.Symbol{infinite},
+		values: map[*symbols.Symbol]map[string][]string{
+			infinite: {PropertyID: {"wheels"}, PropertyMultiplicityUpper: {"*"}},
+		},
+	}
+	for _, query := range []Query{
+		{Where: []Predicate{{Property: PropertyName, Operator: Equal, Values: []string{"*"}}}},
+		{Where: []Predicate{{Property: PropertyQualifiedName, Operator: NotEqual, Values: []string{"*"}}}},
+		{Where: []Predicate{{Property: PropertyName, Operator: In, Values: []string{"battery", "*"}}}},
+	} {
+		_, err := Evaluate(model, query)
+		got, ok := err.(*Error)
+		if !ok || got.Kind != ErrUnsupportedWildcard {
+			t.Errorf("Evaluate(%#v) error = %#v, want ErrUnsupportedWildcard", query, err)
+		}
+	}
+
+	results, err := Evaluate(model, Query{
+		Where: []Predicate{{Property: PropertyMultiplicityUpper, Operator: Equal, Values: []string{"*"}}},
+	})
+	if err != nil {
+		t.Fatalf("infinite multiplicity bound: %v", err)
+	}
+	if len(results) != 1 || results[0].ID != "wheels" {
+		t.Fatalf("results = %#v", results)
+	}
+}
+
 func TestEvaluateRejectsUnorderedAndMultiOperandOrderedPredicates(t *testing.T) {
 	tests := []Query{
 		{Where: []Predicate{{Property: PropertyName, Operator: Greater, Values: []string{"1"}}}},

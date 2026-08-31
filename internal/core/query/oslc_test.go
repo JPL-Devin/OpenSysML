@@ -1,6 +1,9 @@
 package query
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseOSLCOperatorsAndValues(t *testing.T) {
 	q, err := ParseOSLC(`sysml:name="wheel" and sysml:multiplicityLower>=2 and sysml:type in [sysml:PartUsage, "x"]`)
@@ -98,6 +101,78 @@ func TestOSLCPropertyMappingCoversQueryableProperties(t *testing.T) {
 	rebound["sysml"] = "urn:custom:"
 	if _, err := resolveProperty("sysml:name", rebound); err == nil {
 		t.Fatal("rebound sysml prefix unexpectedly selected a built-in property")
+	}
+}
+
+func TestParseOSLCReducesURIAndPrefixedValuesAlike(t *testing.T) {
+	for _, text := range []string{
+		`rdf:type=<https://www.omg.org/spec/SysML#PartUsage>`,
+		`rdf:type=sysml:PartUsage`,
+		`rdf:type="PartUsage"`,
+	} {
+		q, err := ParseOSLC(text)
+		if err != nil {
+			t.Fatalf("ParseOSLC(%q): %v", text, err)
+		}
+		if len(q.Where) != 1 || q.Where[0].Values[0] != "PartUsage" {
+			t.Fatalf("ParseOSLC(%q) = %#v, want the value PartUsage", text, q.Where)
+		}
+	}
+	q, err := ParseOSLC(`sysml:name=<urn:example:battery>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Where[0].Values[0] != "urn:example:battery" {
+		t.Fatalf("value = %#v, want a foreign IRI kept whole", q.Where[0].Values)
+	}
+}
+
+func TestParseOSLCRefusesParametersItDoesNotRead(t *testing.T) {
+	tests := []string{
+		`oslc.wheree=sysml:name%3D%22battery%22`,
+		`oslc.pageSize=10&oslc.where=sysml:name%3D%22battery%22`,
+		`oslc.where=sysml:name%3D%22battery%22&oslc.where=sysml:name%3D%22gripper%22`,
+		`oslc.where=`,
+		`oslc.select=`,
+		`oslc.orderBy=`,
+		`oslc.prefix=`,
+		`oslc.select=+&oslc.where=sysml:name%3D%22battery%22`,
+		`oslc.properties=sysml:name`,
+	}
+	for _, text := range tests {
+		q, err := ParseOSLC(text)
+		if err == nil {
+			t.Errorf("%q unexpectedly parsed as %#v", text, q)
+			continue
+		}
+		if got, ok := err.(*Error); !ok || got.Kind != ErrMalformed {
+			t.Errorf("%q error = %#v, want ErrMalformed", text, err)
+		}
+	}
+}
+
+func TestParseOSLCRefusesQualifiedNameValueUnquoted(t *testing.T) {
+	q, err := ParseOSLC(`sysml:qualifiedName=Robot::Platform::battery`)
+	if err == nil {
+		t.Fatalf("unexpectedly parsed as %#v", q)
+	}
+	got, ok := err.(*Error)
+	if !ok || got.Kind != ErrMalformed {
+		t.Fatalf("error = %#v, want ErrMalformed", err)
+	}
+	if !strings.Contains(got.Message, "quoted literal") {
+		t.Fatalf("error message = %q, want it to name the quoted form", got.Message)
+	}
+	if _, err := ParseOSLC(`sysml:qualifiedName="Robot::Platform::battery"`); err != nil {
+		t.Fatalf("quoted qualified name: %v", err)
+	}
+	// A "::" inside the local part of a prefixed name is that name's business.
+	q, err = ParseParameters(`oslc.prefix=ex%3D%3Chttps://example.org/%3E&oslc.where=sysml:name%3Dex:a::b`)
+	if err != nil {
+		t.Fatalf("prefixed name with a local \"::\": %v", err)
+	}
+	if q.Where[0].Values[0] != "https://example.org/a::b" {
+		t.Fatalf("value = %#v", q.Where[0].Values)
 	}
 }
 

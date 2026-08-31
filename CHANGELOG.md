@@ -46,6 +46,35 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **An OSLC `<uri>` value selects what the prefixed name selects.** A term written
+  `rdf:type=<https://www.omg.org/spec/SysML#PartUsage>` parsed and then matched nothing, because a
+  URI value was compared whole while `rdf:type=sysml:PartUsage` was reduced to the local name the
+  model holds. Both forms now reduce alike for the SysML namespace; a URI outside it is still
+  compared whole.
+
+- **An OSLC query parameter this implementation does not read is refused, not ignored.** A misspelt
+  `oslc.wheree=…` was dropped and the query then selected the whole model — the widest possible
+  wrong answer, reported as success. An unknown parameter, a parameter given twice, a parameter
+  written with no value (`oslc.where=`, `oslc.select=`, `oslc.orderBy=`, `oslc.prefix=`), and a
+  non-wildcard `oslc.properties` (which names `oslc.select` in its message) are now typed
+  malformed-query errors.
+
+- **An unquoted model qualified name says what to write instead.** `sysml:qualifiedName=Robot::Platform::battery`
+  reported `OSLC prefix "Robot" is unbound`, naming a prefix the caller never wrote; it now names
+  the quoted literal form the value needs.
+
+- **A query that matches nothing says so.** Both query surfaces printed nothing at all, which a
+  caller could not tell apart from a query that failed to run: `%query` now prints `no elements
+  matched`, and `sysml -query` reports it on standard error, so the result rows on standard output
+  remain one line per match.
+
+- **A `*` value is refused off the multiplicity bounds, and empty `-query` text is a misuse.**
+  `sysml:name=*` was compared as the literal value `*` and reported a successful no-match, while the
+  same wildcard elsewhere in a query was a typed refusal; it is now refused on every property but
+  `multiplicityLower` and `multiplicityUpper`, where `*` is the model's own infinity value.
+  `sysml -query ''` was indistinguishable from an absent flag and started the interactive REPL
+  instead of answering.
+
 - **The public Go API holds its contract for a binary that imports it.**
   `ServerInfo.Version` reports the OpenSysML module version the importing program resolved rather
   than that program's own; an in-process call honours its context as the wire does, refusing a
