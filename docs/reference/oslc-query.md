@@ -104,5 +104,5 @@ The REPL accepts `%query <oslc-query>`. The `sysml` command accepts
 `-query <oslc-query>` alongside the other model modes. Both print one matched
 element per line as qualified name and metamodel type, followed by selected
 properties. A query that matches nothing says so — the REPL prints `no
-elements matched`, and the command reports it on standard error, keeping
-standard output one line per match.
+elements matched`, and the command reports it on standard error, so the result
+rows on standard output remain one line per match.

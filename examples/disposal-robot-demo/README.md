@@ -171,8 +171,9 @@ Robot::Platform::arm  PartUsage  name=arm
 
 A value is a literal, so a qualified name needs its quotes:
 `sysml:owner="Robot::Platform"`, not `sysml:owner=Robot::Platform`. A query
-matching nothing says `no elements matched` on standard error, leaving standard
-output one line per match.
+matching nothing says `no elements matched` on standard error, so the result
+rows that follow the validation report on standard output remain one line per
+match.
 
 ## From the REPL
 

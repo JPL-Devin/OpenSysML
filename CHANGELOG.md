@@ -35,8 +35,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 - **A query that matches nothing says so.** Both query surfaces printed nothing at all, which a
   caller could not tell apart from a query that failed to run: `%query` now prints `no elements
-  matched`, and `sysml -query` reports it on standard error, leaving standard output one line per
-  match.
+  matched`, and `sysml -query` reports it on standard error, so the result rows on standard output
+  remain one line per match.
 
 - **A caption is no longer confusable with an emphasized paragraph.** The
   Markdown renderer wrote a table or diagram caption and an emphasis-only

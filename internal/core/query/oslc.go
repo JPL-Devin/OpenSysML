@@ -122,6 +122,9 @@ func ParseParameters(text string) (Query, error) {
 		q.OrderBy = terms
 	}
 	if where, present := values[paramWhere]; present {
+		if strings.TrimSpace(where[0]) == "" {
+			return Query{}, errorf(ErrMalformed, "%s is empty: omit it to select every element", paramWhere)
+		}
 		p := oslcParser{s: where[0], prefixes: prefixes}
 		parsed, err := p.parseCompound()
 		if err != nil {
