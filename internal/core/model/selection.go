@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/docplan"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -30,6 +31,27 @@ func DeclaredDocumentDefinitions(index *symbols.Index, sem *semantics.Model, sco
 		}
 	})
 	return out
+}
+
+// SiblingDocumentPlans compiles the document definitions the workspace
+// documents declare other than entry, skipping any whose plan does not
+// compile, so a single-document render can emit the anchors incoming
+// cross-document references expect.
+func SiblingDocumentPlans(index *symbols.Index, sem *semantics.Model, resolver *resolve.Resolver, entry *symbols.Symbol) []*docplan.Plan {
+	var plans []*docplan.Plan
+	for _, doc := range index.WorkspaceDocuments() {
+		for _, sym := range DeclaredDocumentDefinitions(index, sem, index.DocumentRoot(doc)) {
+			if sym == entry {
+				continue
+			}
+			plan, err := docplan.Compile(index, sem, resolver, sym)
+			if err != nil {
+				continue
+			}
+			plans = append(plans, plan)
+		}
+	}
+	return plans
 }
 
 // TopLevelDeclarations returns root declarations, expanding packages one level.

@@ -55,6 +55,7 @@ type Run struct {
 	style       RunStyle
 	target      string
 	refSym      *symbols.Symbol
+	refRoot     *symbols.Symbol
 	ref         []string
 	refDocument string
 	origin      provenance.Origin

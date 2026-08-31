@@ -90,15 +90,17 @@ func TestMarkdownLinkedDocumentsGolden(t *testing.T) {
 	rendered := renderFixtureDocumentSet(t,
 		filepath.Join("testdata", "linked_reports.sysml"),
 		[]string{"Observatory::SystemReport", "Observatory::Mass Appendix"})
-	for file, golden := range map[string]string{
-		"Observatory-SystemReport.md":    "linked_system_report.golden.md",
-		"Observatory-Mass.20Appendix.md": "linked_mass_appendix.golden.md",
+	// The goldens keep the deterministic output names so the links
+	// between them resolve on disk exactly as a rendered set's do.
+	for _, file := range []string{
+		"Observatory-SystemReport.md",
+		"Observatory-Mass.20Appendix.md",
 	} {
 		got, ok := rendered[file]
 		if !ok {
 			t.Fatalf("no document rendered as %s; got %v", file, keys(rendered))
 		}
-		path := filepath.Join("testdata", golden)
+		path := filepath.Join("testdata", "linked", file)
 		if *update {
 			if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
 				t.Fatalf("update golden: %v", err)

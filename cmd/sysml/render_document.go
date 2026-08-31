@@ -4,12 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-
 	"path/filepath"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 	"github.com/Open-MBEE/OpenSysML/internal/docpdf"
+	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
 // runRenderDocument renders the document -render-document names of the model
@@ -53,10 +54,7 @@ func runRenderDocument(files []string) error {
 // names, so cross-document references resolve on disk.
 func runRenderDocuments(files []string) error {
 	if len(files) == 0 {
-		return errors.New("no model to render; name the file the documents are declared in, as `sysml model.sysml -render-documents rendered`")
-	}
-	if len(files) > 1 {
-		return fmt.Errorf("-render-documents renders the documents of one model; unexpected extra argument %q", files[1])
+		return errors.New("no model to render; name the files the documents are declared in, as `sysml model.sysml -render-documents rendered`")
 	}
 	sess, err := loadRenderingModel(files)
 	if err != nil {
@@ -72,14 +70,59 @@ func runRenderDocuments(files []string) error {
 	if err := os.MkdirAll(renderDocsDir, 0o750); err != nil {
 		return fmt.Errorf("create rendering directory %s: %w", renderDocsDir, err)
 	}
+	return commitDocumentSet(documents)
+}
+
+// commitDocumentSet writes a rendered document set all-or-nothing: every
+// document is staged beside its destination first, and the set is committed
+// by rename only after all staging succeeded, so a failure leaves whatever
+// was in the directory untouched.
+func commitDocumentSet(documents []repl.RenderedDocument) (err error) {
 	for _, document := range documents {
 		path := filepath.Join(renderDocsDir, document.FileName)
-		if err := writeArtifactFile(path, document.Markdown, view.FormMarkdown); err != nil {
-			return err
+		if info, statErr := os.Lstat(path); statErr == nil && info.IsDir() {
+			return fmt.Errorf("cannot write %s: it is a directory", path)
 		}
+	}
+	staged := make([]string, 0, len(documents))
+	defer func() {
+		if err != nil {
+			for _, path := range staged {
+				if path != "" {
+					_ = os.Remove(path)
+				}
+			}
+		}
+	}()
+	for _, document := range documents {
+		path := filepath.Join(renderDocsDir, document.FileName)
+		out := []byte(strings.TrimRight(document.Markdown, "\n") + "\n")
+		// #nosec G306 -- a rendered document is not a secret.
+		if err = os.WriteFile(path+stagingSuffix, out, 0o644); err != nil {
+			return fmt.Errorf("stage %s: %w", path, err)
+		}
+		staged = append(staged, path+stagingSuffix)
+	}
+	for i, document := range documents {
+		path := filepath.Join(renderDocsDir, document.FileName)
+		_, statErr := os.Lstat(path)
+		if err = os.Rename(staged[i], path); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+		staged[i] = ""
+		what := ""
+		if statErr == nil {
+			what = ", replaced the existing file"
+		}
+		out := len(strings.TrimRight(document.Markdown, "\n")) + 1
+		fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes%s)\n", path, view.FormMarkdown, out, what)
 	}
 	return nil
 }
+
+// stagingSuffix marks a document staged beside its destination before the
+// set commits.
+const stagingSuffix = ".staged"
 
 // The forms -doc-form takes.
 const (

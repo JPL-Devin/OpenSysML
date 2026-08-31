@@ -37,16 +37,17 @@ func (s *Session) RenderDocumentMarkdown(invocation string) (string, error) {
 		return "", fmt.Errorf("runtime init: %w", err)
 	}
 	idx := s.browseIndex()
-	model, resolver := ctx.Model(), ctx.Resolver()
-	if !docplan.IsDocumentDefinition(idx, model, sym) {
+	sem, resolver := ctx.Model(), ctx.Resolver()
+	if !docplan.IsDocumentDefinition(idx, sem, sym) {
 		return "", fmt.Errorf("%s is not a document: one is a part def specializing DocumentQueries::Document", notationName(fqn))
 	}
-	plan, err := docplan.Compile(idx, model, resolver, sym)
+	plan, err := docplan.Compile(idx, sem, resolver, sym)
 	if err != nil {
 		return "", err
 	}
-	document, err := docir.Evaluate(plan,
-		queryexec.Context{Index: idx, Resolver: resolver, Model: model},
+	document, err := docir.EvaluateLinked(plan,
+		model.SiblingDocumentPlans(idx, sem, resolver, sym),
+		queryexec.Context{Index: idx, Resolver: resolver, Model: sem},
 		queryexec.Options{},
 		s.sessionSourceText())
 	if err != nil {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -88,6 +89,118 @@ func TestRenderDocumentsFlag(t *testing.T) {
 		if string(first) != string(second) {
 			t.Errorf("%s differs between runs", name)
 		}
+	}
+}
+
+// TestRenderDocumentsAcrossFiles checks documents declared in different model
+// files render together as one linked set.
+func TestRenderDocumentsAcrossFiles(t *testing.T) {
+	binary := buildCLI(t)
+	models := t.TempDir()
+	appendix := filepath.Join(models, "appendix.sysml")
+	if err := os.WriteFile(appendix, []byte(`package Appendices {
+	private import DocumentQueries::*;
+	private import ScalarValues::*;
+
+	part def Appendix :> Document {
+		attribute redefines title = "Appendix";
+		part tables : Section {
+			attribute redefines title = "Detail Tables";
+			part body : Paragraph {
+				attribute redefines text = "detail";
+			}
+		}
+	}
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report := filepath.Join(models, "report.sysml")
+	if err := os.WriteFile(report, []byte(`package Reports {
+	private import DocumentQueries::*;
+	private import ScalarValues::*;
+
+	ref appendixDoc : Appendices::Appendix;
+
+	part def MainReport :> Document {
+		attribute redefines title = "Main Report";
+		part intro : Paragraph {
+			part see : Ref {
+				ref redefines target = appendixDoc.tables;
+			}
+		}
+	}
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Join(t.TempDir(), "rendered")
+	got := runCommand(t, exec.Command(binary, appendix, report, "-render-documents", dir))
+	if got.status != 0 {
+		t.Fatalf("exit = %d\n%s", got.status, got.output())
+	}
+	main, err := os.ReadFile(filepath.Join(dir, "Reports-MainReport.md"))
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	if !strings.Contains(string(main), "[Detail Tables](Appendices-Appendix.md#tables)") {
+		t.Errorf("report lacks cross-file document link:\n%s", main)
+	}
+	side, err := os.ReadFile(filepath.Join(dir, "Appendices-Appendix.md"))
+	if err != nil {
+		t.Fatalf("read appendix: %v", err)
+	}
+	if !strings.Contains(string(side), `<a id="tables"></a>`) {
+		t.Errorf("appendix lacks referenced anchor:\n%s", side)
+	}
+}
+
+// TestRenderDocumentsAllOrNothing checks a set that cannot be written in full
+// leaves the directory as it was, with no staged leftovers.
+func TestRenderDocumentsAllOrNothing(t *testing.T) {
+	binary := buildCLI(t)
+	dir := filepath.Join(t.TempDir(), "rendered")
+	if err := os.MkdirAll(filepath.Join(dir, "Reports-MainReport.md"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	previous := "previous appendix\n"
+	if err := os.WriteFile(filepath.Join(dir, "Reports-Appendix.md"), []byte(previous), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := check(t, binary, linkedModel, "-render-documents", dir)
+	if got.status != 2 || !strings.Contains(got.stderr, "it is a directory") {
+		t.Fatalf("exit = %d stderr = %q", got.status, got.stderr)
+	}
+	appendix, err := os.ReadFile(filepath.Join(dir, "Reports-Appendix.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(appendix) != previous {
+		t.Errorf("failed set replaced the existing appendix:\n%s", appendix)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".staged") {
+			t.Errorf("staged leftover %s", entry.Name())
+		}
+	}
+}
+
+// TestRenderDocumentEmitsIncomingAnchors checks a document rendered on its own
+// carries the anchors other documents of the workspace link into it.
+func TestRenderDocumentEmitsIncomingAnchors(t *testing.T) {
+	binary := buildCLI(t)
+	got := check(t, binary, linkedModel, "-render-document", "Reports::Appendix")
+	if got.status != 0 {
+		t.Fatalf("exit = %d\n%s", got.status, got.output())
+	}
+	if !strings.Contains(got.stdout, `<a id="tables"></a>`) {
+		t.Errorf("separately rendered appendix lacks the incoming anchor:\n%s", got.stdout)
 	}
 }
 

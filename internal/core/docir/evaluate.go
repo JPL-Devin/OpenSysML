@@ -23,6 +23,26 @@ func Evaluate(
 	return evaluate(plan, context, options, text, nil)
 }
 
+// EvaluateLinked evaluates one plan like Evaluate while also emitting the
+// stable anchors the sibling documents' plans reference into it, so a
+// document rendered on its own carries the anchors incoming cross-document
+// links expect once the files share a directory.
+func EvaluateLinked(
+	plan *docplan.Plan,
+	siblings []*docplan.Plan,
+	context queryexec.Context,
+	options queryexec.Options,
+	text view.SourceText,
+) (*Document, error) {
+	external := make(map[string]map[string]bool)
+	for _, sibling := range siblings {
+		if sibling.Compiled() {
+			collectCrossAnchors(sibling.Content(), external)
+		}
+	}
+	return evaluate(plan, context, options, text, external[plan.Name()])
+}
+
 // EvaluateSet evaluates a set of compiled document plans together, so a
 // content block one document references from another carries its anchor in
 // the rendered target document.

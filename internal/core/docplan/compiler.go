@@ -428,11 +428,11 @@ func (c *compiler) compileRefRun(member *symbols.Symbol) (Run, error) {
 	if err != nil {
 		return Run{}, err
 	}
-	target, err := c.refRunTarget(member)
+	target, root, err := c.refRunTarget(member)
 	if err != nil {
 		return Run{}, err
 	}
-	return Run{kind: RunRef, text: text, refSym: target, origin: provenance.Symbol(member)}, nil
+	return Run{kind: RunRef, text: text, refSym: target, refRoot: root, origin: provenance.Symbol(member)}, nil
 }
 
 // requiredRunText reads a run's text attribute, which must be a non-empty
@@ -453,23 +453,51 @@ func (c *compiler) requiredRunText(member *symbols.Symbol) (string, error) {
 	return text, nil
 }
 
-// refRunTarget resolves the element a reference run's target names.
-func (c *compiler) refRunTarget(member *symbols.Symbol) (*symbols.Symbol, error) {
+// refRunTarget resolves the element a reference run's target names, and the
+// usage a dot-notation chain starts from, when the target is one.
+func (c *compiler) refRunTarget(member *symbols.Symbol) (*symbols.Symbol, *symbols.Symbol, error) {
 	for _, candidate := range c.effectiveMembers(member) {
 		if c.effectiveName(candidate) != "target" {
 			continue
 		}
-		resolved, stated, err := c.namedTarget(member, candidate, ErrorInvalidRefTarget, ErrorUnknownRefTarget, make(map[*symbols.Symbol]bool))
+		resolved, root, stated, err := c.namedTarget(member, candidate, ErrorInvalidRefTarget, ErrorUnknownRefTarget, make(map[*symbols.Symbol]bool))
 		if err != nil || stated {
-			return resolved, err
+			return resolved, root, err
 		}
 	}
-	return nil, &Error{
+	return nil, nil, &Error{
 		Kind:     ErrorMissingRefTarget,
 		Document: c.document,
 		Content:  c.contentName(member),
 		Origin:   provenance.Symbol(member),
 	}
+}
+
+// chainRoot resolves the usage a feature chain's innermost operand names.
+func (c *compiler) chainRoot(scope *symbols.Scope, chain *ast.FeatureChainExpr) *symbols.Symbol {
+	operand := chain.Operand
+	for {
+		inner, ok := operand.(*ast.FeatureChainExpr)
+		if !ok {
+			break
+		}
+		operand = inner.Operand
+	}
+	if reference, ok := operand.(*ast.FeatureReference); ok {
+		operand = reference.Name
+	}
+	name, ok := operand.(*ast.QualifiedName)
+	if !ok {
+		return nil
+	}
+	resolved, ok := c.resolver.ResolveQualified(scope, name)
+	if !ok || resolved == nil {
+		return nil
+	}
+	if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
+		return canonical
+	}
+	return resolved
 }
 
 // rejectRunQuery rejects a query declared in an inline run.
@@ -558,6 +586,10 @@ func (c *compiler) crossDocumentTarget(run *Run) (refTarget, error) {
 		}
 		return refTarget{document: symbols.FQNOf(root), label: label}, nil
 	}
+	destination, err := c.chainRootDocument(run)
+	if err != nil {
+		return refTarget{}, err
+	}
 	var path []string
 	node := sym
 	for node != nil && node.Kind == symbols.SymbolPartUsage && c.isContent(node) {
@@ -571,7 +603,15 @@ func (c *compiler) crossDocumentTarget(run *Run) (refTarget, error) {
 			if err != nil {
 				return refTarget{}, err
 			}
-			return refTarget{document: symbols.FQNOf(owner), path: path, label: label}, nil
+			// A chain through a typed usage targets the usage's document,
+			// not the base definition declaring the inherited block.
+			if destination == nil {
+				destination = owner
+			}
+			if destination == c.entry {
+				return refTarget{path: path, label: label}, nil
+			}
+			return refTarget{document: symbols.FQNOf(destination), path: path, label: label}, nil
 		}
 		node = owner
 	}
@@ -619,6 +659,35 @@ func (c *compiler) documentRootTarget(sym *symbols.Symbol, run *Run) (*symbols.S
 			Kind:     ErrorAmbiguousRefTarget,
 			Document: c.document,
 			Content:  c.contentName(sym),
+			Actual:   strings.Join(names, " and "),
+			Origin:   run.origin,
+		}
+	}
+}
+
+// chainRootDocument returns the document definition typing the usage a
+// reference's dot-notation chain starts from, when there is exactly one; a
+// root typed by more than one document is an ambiguous target.
+func (c *compiler) chainRootDocument(run *Run) (*symbols.Symbol, error) {
+	root := run.refRoot
+	if root == nil || root.Kind == symbols.SymbolPartDef {
+		return nil, nil
+	}
+	defs := c.documentTypesOf(root)
+	switch len(defs) {
+	case 0:
+		return nil, nil
+	case 1:
+		return defs[0], nil
+	default:
+		names := make([]string, len(defs))
+		for i, def := range defs {
+			names[i] = symbols.FQNOf(def)
+		}
+		return nil, &Error{
+			Kind:     ErrorAmbiguousRefTarget,
+			Document: c.document,
+			Content:  c.contentName(root),
 			Actual:   strings.Join(names, " and "),
 			Origin:   run.origin,
 		}
@@ -996,20 +1065,22 @@ func (c *compiler) sourceTarget(
 	candidate *symbols.Symbol,
 	seen map[*symbols.Symbol]bool,
 ) (*symbols.Symbol, bool, error) {
-	return c.namedTarget(member, candidate, ErrorInvalidViewSource, ErrorUnknownViewSource, seen)
+	resolved, _, stated, err := c.namedTarget(member, candidate, ErrorInvalidViewSource, ErrorUnknownViewSource, seen)
+	return resolved, stated, err
 }
 
 // namedTarget resolves a reference declaration's named value, following
-// redefinition lineage when the declaration itself is unvalued.
+// redefinition lineage when the declaration itself is unvalued. The second
+// symbol is the usage a dot-notation chain starts from, nil otherwise.
 func (c *compiler) namedTarget(
 	member *symbols.Symbol,
 	candidate *symbols.Symbol,
 	invalid ErrorKind,
 	unknown ErrorKind,
 	seen map[*symbols.Symbol]bool,
-) (*symbols.Symbol, bool, error) {
+) (*symbols.Symbol, *symbols.Symbol, bool, error) {
 	if candidate == nil || seen[candidate] {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 	seen[candidate] = true
 	if declaration, ok := candidate.Decl.(*ast.Usage); ok && declaration.Value != nil {
@@ -1020,7 +1091,7 @@ func (c *compiler) namedTarget(
 		if chain, ok := target.(*ast.FeatureChainExpr); ok {
 			resolved, ok := c.resolver.ResolveTarget(candidate.OwnerScope, chain)
 			if !ok || resolved == nil {
-				return nil, false, &Error{
+				return nil, nil, false, &Error{
 					Kind:     unknown,
 					Document: c.document,
 					Content:  c.contentName(member),
@@ -1028,11 +1099,11 @@ func (c *compiler) namedTarget(
 					Origin:   provenance.Node(candidate.DocName, declaration.Value),
 				}
 			}
-			return resolved, true, nil
+			return resolved, c.chainRoot(candidate.OwnerScope, chain), true, nil
 		}
 		name, ok := target.(*ast.QualifiedName)
 		if !ok {
-			return nil, false, &Error{
+			return nil, nil, false, &Error{
 				Kind:     invalid,
 				Document: c.document,
 				Content:  c.contentName(member),
@@ -1041,7 +1112,7 @@ func (c *compiler) namedTarget(
 		}
 		resolved, ok := c.resolver.ResolveQualified(candidate.OwnerScope, name)
 		if !ok || resolved == nil {
-			return nil, false, &Error{
+			return nil, nil, false, &Error{
 				Kind:     unknown,
 				Document: c.document,
 				Content:  c.contentName(member),
@@ -1052,15 +1123,15 @@ func (c *compiler) namedTarget(
 		if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
 			resolved = canonical
 		}
-		return resolved, true, nil
+		return resolved, nil, true, nil
 	}
 	for _, target := range c.model.RedefinedFeatures(candidate) {
-		resolved, stated, err := c.namedTarget(member, target, invalid, unknown, seen)
+		resolved, root, stated, err := c.namedTarget(member, target, invalid, unknown, seen)
 		if err != nil || stated {
-			return resolved, stated, err
+			return resolved, root, stated, err
 		}
 	}
-	return nil, false, nil
+	return nil, nil, false, nil
 }
 
 // chainText renders a feature chain the way it was written, for diagnostics.

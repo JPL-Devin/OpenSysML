@@ -270,6 +270,79 @@ func TestCompileAmbiguousCrossDocumentRef(t *testing.T) {
 	}
 }
 
+// TestCompileInheritedContentTargetsDerivedDocument checks a chain through a
+// usage typed by a derived document links to that document, not to the base
+// definition declaring the inherited block.
+func TestCompileInheritedContentTargetsDerivedDocument(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		ref extra : DerivedAppendix;
+		part def BaseAppendix :> Document {
+			attribute redefines title = "Base Appendix";
+			part tables : Section {
+				attribute redefines title = "Detail Tables";
+				part body : Paragraph {
+					attribute redefines text = "detail";
+				}
+			}
+		}
+		part def DerivedAppendix :> BaseAppendix {
+			attribute redefines title = "Derived Appendix";
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part intro : Paragraph {
+				part see : Ref {
+					ref redefines target = extra.tables;
+				}
+			}
+		}
+	`)
+	plan := fixture.mustCompile(t, "Report")
+	run := plan.Content()[0].Runs()[0]
+	if run.RefDocument() != "Observatory::DerivedAppendix" {
+		t.Errorf("document = %q, want Observatory::DerivedAppendix", run.RefDocument())
+	}
+	if path := strings.Join(run.RefPath(), "/"); path != "tables" {
+		t.Errorf("path = %q", path)
+	}
+}
+
+// TestCompileAmbiguousChainRoot checks a chain rooted in a usage typed by
+// more than one document definition is an ambiguous target.
+func TestCompileAmbiguousChainRoot(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		ref both : Appendix, Glossary;
+		part def Appendix :> Document {
+			attribute redefines title = "Appendix";
+			part tables : Section {
+				attribute redefines title = "Detail Tables";
+				part body : Paragraph {
+					attribute redefines text = "detail";
+				}
+			}
+		}
+		part def Glossary :> Appendix {
+			attribute redefines title = "Glossary";
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part intro : Paragraph {
+				part see : Ref {
+					ref redefines target = both.tables;
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	var planErr *Error
+	if !errors.As(err, &planErr) || planErr.Kind != ErrorAmbiguousRefTarget {
+		t.Fatalf("error = %v, want kind %s", err, ErrorAmbiguousRefTarget)
+	}
+	if !strings.Contains(planErr.Error(), "Observatory::Appendix and Observatory::Glossary") {
+		t.Errorf("message = %q", planErr.Error())
+	}
+}
+
 // TestCompileUnknownChainTarget checks a dot-notation target whose member
 // does not exist is an unknown target naming the written chain.
 func TestCompileUnknownChainTarget(t *testing.T) {

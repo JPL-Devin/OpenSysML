@@ -59,7 +59,8 @@ func (w *Workspace) RenderDocumentMarkdown(fqn string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	document, err := docir.Evaluate(plan,
+	document, err := docir.EvaluateLinked(plan,
+		SiblingDocumentPlans(w.index, sem, resolver, sym),
 		queryexec.Context{Index: w.index, Resolver: resolver, Model: sem},
 		queryexec.Options{}, w.sourceTextLocked())
 	if err != nil {
