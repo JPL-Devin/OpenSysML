@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"path/filepath"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 	"github.com/Open-MBEE/OpenSysML/internal/docpdf"
@@ -44,6 +46,39 @@ func runRenderDocument(files []string) error {
 		return writePDFArtifact(pdf)
 	}
 	return writeArtifact(markdown, view.FormMarkdown)
+}
+
+// runRenderDocuments renders every document definition of the model named on
+// the command line as linked Markdown files in the directory -render-documents
+// names, so cross-document references resolve on disk.
+func runRenderDocuments(files []string) error {
+	if len(files) == 0 {
+		return errors.New("no model to render; name the file the documents are declared in, as `sysml model.sysml -render-documents rendered`")
+	}
+	if len(files) > 1 {
+		return fmt.Errorf("-render-documents renders the documents of one model; unexpected extra argument %q", files[1])
+	}
+	sess, err := loadRenderingModel(files)
+	if err != nil {
+		return err
+	}
+	documents, err := sess.RenderDocumentSetMarkdown()
+	if err != nil {
+		return err
+	}
+	if len(documents) == 0 {
+		return errors.New("the model declares no documents; nothing was rendered")
+	}
+	if err := os.MkdirAll(renderDocsDir, 0o750); err != nil {
+		return fmt.Errorf("create rendering directory %s: %w", renderDocsDir, err)
+	}
+	for _, document := range documents {
+		path := filepath.Join(renderDocsDir, document.FileName)
+		if err := writeArtifactFile(path, document.Markdown, view.FormMarkdown); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // The forms -doc-form takes.

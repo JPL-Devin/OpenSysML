@@ -99,8 +99,12 @@ fact about the implementation, not a design position.
 - **Query-generated text is plain.** A query-backed paragraph renders each
   projected value as an escaped plain run; inline formatting (`Span`, `Link`,
   `Ref`) applies to statically-authored runs only.
-- **Cross-references are in-document only.** A `Ref` targets a content block
-  of the same document; cross-document references are not modeled.
+- **Cross-document links assume one output directory.** A `Ref` may target
+  a content block or the root of another document (see the authoring
+  chapter's cross-document pattern), and `-render-documents` writes the
+  linked set together. Rendering one document alone still succeeds, but its
+  cross-document links point at the target's expected file name and dangle
+  until that document is rendered into the same directory.
 - **PDF does not yet render inline runs or anchors.** Paragraphs composed of
   runs, `Ref` anchors and grouped-table group keys appear in PDF output as
   literal Markdown text (`*generated*`, `<a id="...">`, `**zone: ...**`)

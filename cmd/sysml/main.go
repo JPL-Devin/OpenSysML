@@ -115,6 +115,7 @@ var (
 	renderAllDir  string
 	renderForm    string
 	renderDoc     string
+	renderDocsDir string
 	docForm       string
 	pdfEngine     string
 	pdfTitlePage  bool
@@ -223,6 +224,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport           # Markdown on stdout\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -o report.md\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-documents rendered                     # every document, linked\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf \\\n")
 	fmt.Fprintf(w, "        -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf\n")
 	fmt.Fprintf(w, "\nA document is a part def specializing DocumentQueries::Document. Its queries\n")
@@ -274,6 +276,7 @@ func runCLI() int {
 	flag.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
 	flag.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
 	flag.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
+	flag.StringVar(&renderDocsDir, "render-documents", "", "Render every document definition as linked Markdown into this directory")
 	flag.StringVar(&docForm, "doc-form", "", "Form -render-document writes: markdown (default) or pdf, which drives an external converter")
 	flag.StringVar(&pdfEngine, "pdf-engine", "", "Converter -doc-form pdf drives: weasyprint (default), pandoc or prince")
 	flag.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
@@ -338,6 +341,30 @@ func runCLI() int {
 	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
 		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
 		return 2
+	}
+
+	if renderDocsDir != "" {
+		switch {
+		case renderDoc != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents renders every document; -render-document renders one; ask for one per run")
+			return 2
+		case renderView != "" || renderAllDir != "" || convertFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents, -render, -render-all and -convert each write documents out; ask for one per run")
+			return 2
+		case outputPath != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents writes into its directory and cannot be combined with -output")
+			return 2
+		case queryText != "" || len(evalExprs) > 0 || fromFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents cannot be combined with -query, -eval or -from")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-render-documents writes documents out and decides nothing about the model; check it in its own run")
+		}
+		if err := runRenderDocuments(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
 	}
 
 	if renderAllDir != "" {

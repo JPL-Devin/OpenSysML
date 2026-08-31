@@ -234,10 +234,30 @@ func runText(run docir.TextRun) string {
 	case docir.RunLink:
 		return "[" + inline(run.Text()) + "](<" + destination(run.Target()) + ">)"
 	case docir.RunRef:
-		return "[" + inline(run.Text()) + "](#" + run.Target() + ")"
+		return "[" + inline(run.Text()) + "](" + refDestination(run) + ")"
 	default:
 		return inline(run.Text())
 	}
+}
+
+// refDestination maps a reference run to its Markdown destination: an
+// in-document anchor, or a relative link into another document's file.
+func refDestination(run docir.TextRun) string {
+	if run.TargetDocument() == "" {
+		return "#" + run.Target()
+	}
+	destination := DocumentFileName(run.TargetDocument())
+	if run.Target() != "" {
+		destination += "#" + run.Target()
+	}
+	return destination
+}
+
+// DocumentFileName derives the deterministic Markdown file name of a rendered
+// document from its fully-qualified name, using the same escaping as anchors
+// so distinct documents never collide.
+func DocumentFileName(fqn string) string {
+	return docir.AnchorFor(strings.Split(fqn, "::")) + ".md"
 }
 
 // delimited wraps escaped text in emphasis delimiters, keeping leading and

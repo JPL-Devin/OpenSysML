@@ -166,8 +166,8 @@ func TestAnchorForEncoding(t *testing.T) {
 		{[]string{"a-b"}, "a.2Db"},
 		{[]string{"a", "b"}, "a-b"},
 	} {
-		if got := anchorFor(c.path); got != c.want {
-			t.Errorf("anchorFor(%q) = %q, want %q", c.path, got, c.want)
+		if got := AnchorFor(c.path); got != c.want {
+			t.Errorf("AnchorFor(%q) = %q, want %q", c.path, got, c.want)
 		}
 	}
 }

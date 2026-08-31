@@ -102,14 +102,51 @@ fence past any backticks in the text.
 an inline Markdown link with the destination in pointy brackets (so
 parentheses and spaces in URLs survive).
 
-**`Ref`** cross-references another content block *of the same document* by
-name: `ref redefines target = <block>`. The renderer gives the referenced
-block a stable HTML anchor derived from its named path —
+**`Ref`** cross-references a named content block of this document — or of
+another document — by name: `ref redefines target = <block>`. The renderer
+gives the referenced block a stable HTML anchor derived from its named path —
 `<a id="breakdown"></a>` before the section above — and the `Ref` renders as
 a link to it. `text` is optional; it defaults to the target's title (for a
-section), caption (for a table or diagram) or name. A target outside the
-document, or one without a stable name, is a typed planning error.
-Cross-document references are not modeled.
+section), caption (for a table or diagram) or name. A target that is neither
+a content block nor a document, or one without a stable name, is a typed
+planning error.
+
+### Cross-document references
+
+To reference another document, declare a usage typed by the target document
+definition, then name it (for the document's root) or reach into it with dot
+notation (for one of its content blocks):
+
+```sysml
+ref appendix : 'Mass Appendix';
+
+part def SystemReport :> Document {
+	attribute redefines title = "System Report";
+	part intro : Paragraph {
+		part see : Ref {
+			ref redefines target = appendix.tables.masses;
+		}
+		part whole : Ref {
+			ref redefines target = appendix;
+		}
+	}
+}
+```
+
+Targets resolve at planning time against the loaded workspace. A content
+target renders as a relative link into the target document's generated file
+with the block's stable anchor — a destination like
+`Observatory-Mass.20Appendix.md#tables-masses` behind the link text;
+a root target links to the file alone. The file name is deterministic: the
+target document's fully qualified name with `::` replaced by `-` and any
+byte outside ASCII letters, digits and `_` escaped as `.XX` (uppercase hex),
+plus `.md`. Render the whole set with `-render-documents <dir>` so the links
+resolve on disk. Rendering a single document that references another still
+succeeds — the link points at the expected file name of the unrendered
+target, and it dangles until that document is rendered into the same
+directory. An unknown target is a typed planning error, and a target usage
+typed by more than one document definition is an ambiguous-target error;
+both carry the reference's source location.
 
 ## Tables
 

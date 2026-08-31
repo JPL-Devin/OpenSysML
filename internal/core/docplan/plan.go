@@ -48,15 +48,16 @@ const (
 )
 
 // Run is one planned inline run: a styled span, a link, or a reference to
-// another content block of the same document.
+// a content block of this or another document, or another document's root.
 type Run struct {
-	kind   RunKind
-	text   string
-	style  RunStyle
-	target string
-	refSym *symbols.Symbol
-	ref    []string
-	origin provenance.Origin
+	kind        RunKind
+	text        string
+	style       RunStyle
+	target      string
+	refSym      *symbols.Symbol
+	ref         []string
+	refDocument string
+	origin      provenance.Origin
 }
 
 // Kind returns the classification of the run.
@@ -73,8 +74,13 @@ func (r Run) Style() RunStyle { return r.style }
 func (r Run) Target() string { return r.target }
 
 // RefPath returns the named content path of a reference run, from the
-// document root to the referenced content block.
+// target document's root to the referenced content block; empty when the
+// run references another document's root.
 func (r Run) RefPath() []string { return append([]string(nil), r.ref...) }
+
+// RefDocument returns the fully-qualified name of the document a reference
+// run targets, or "" when it targets the document being planned.
+func (r Run) RefDocument() string { return r.refDocument }
 
 // Origin returns the source declaration behind the run.
 func (r Run) Origin() provenance.Origin { return r.origin }

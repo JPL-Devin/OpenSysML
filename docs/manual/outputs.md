@@ -31,6 +31,24 @@ on every run, which is why the repository can keep rendered documents as
 golden files (this manual does exactly that — see
 [the worked example](worked-example.md)).
 
+### Multi-document sets
+
+`-render-documents <dir>` renders every document definition the model
+declares into the directory, one Markdown file per document:
+
+```console
+$ sysml reports.sysml -render-documents rendered
+```
+
+File names are deterministic — the document's fully qualified name with `::`
+replaced by `-` and any byte outside ASCII letters, digits and `_` escaped as
+`.XX` (uppercase hex), plus `.md` — so cross-document references (see
+[the authoring chapter](authoring.md)) resolve as relative links between the
+written files, and repeated runs write identical bytes. A single-document
+render of a cross-referencing document still succeeds; its external links
+point at the targets' expected file names and dangle until those documents
+are rendered into the same directory.
+
 ## PDF
 
 `-doc-form pdf` renders the same document tree to PDF. It requires `-o`

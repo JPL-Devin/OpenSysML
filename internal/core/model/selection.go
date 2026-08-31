@@ -3,6 +3,7 @@ package model
 import (
 	"sort"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/docplan"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -13,6 +14,18 @@ func DeclaredViews(scope *symbols.Scope) []*symbols.Symbol {
 	var out []*symbols.Symbol
 	walkScope(scope, func(sym *symbols.Symbol) {
 		if semantics.IsView(sym) {
+			out = append(out, sym)
+		}
+	})
+	return out
+}
+
+// DeclaredDocumentDefinitions returns the document definitions declared in
+// scope and its nested scopes, outermost first and in declaration order.
+func DeclaredDocumentDefinitions(index *symbols.Index, sem *semantics.Model, scope *symbols.Scope) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	walkScope(scope, func(sym *symbols.Symbol) {
+		if docplan.IsDocumentDefinition(index, sem, sym) {
 			out = append(out, sym)
 		}
 	})
