@@ -1,6 +1,8 @@
 package docrender
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -12,6 +14,8 @@ func TestMarkdownEmphasisDelimiters(t *testing.T) {
 		{"*", "plain", "*plain*"},
 		{"*", "with *stars*", `*with \*stars\**`},
 		{"*", " padded ", " *padded* "},
+		{"*", "\ttabbed\t", "\t*tabbed*\t"},
+		{"*", "\t ", "\t "},
 		{"*", "  ", "  "},
 		{"**", "bold_move", `**bold\_move**`},
 		{"**", "a|b", `**a\|b**`},
@@ -53,6 +57,52 @@ func TestMarkdownLinkDestinations(t *testing.T) {
 	} {
 		if got := destination(c.in); got != c.want {
 			t.Errorf("destination(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestMarkdownAnchorsEmptyReferencedList checks that a referenced list keeps
+// its anchor even when its query returns no rows.
+func TestMarkdownAnchorsEmptyReferencedList(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty_ref.sysml")
+	model := `
+		package Anchors {
+			private import DocumentQueries::*;
+			private import KerML::Root::Element;
+			private import ScalarValues::*;
+
+			calc def Names :> Query {
+				in root : Element;
+				Project(
+					source = OwnedElements(source = root),
+					properties = ("name")
+				)
+			}
+
+			part hollow;
+
+			part def Report :> Document {
+				attribute redefines title = "Report";
+				part formatted : Paragraph {
+					part see : Ref {
+						ref redefines target = items;
+					}
+				}
+				part items : List {
+					calc rows : Names {
+						in root = hollow;
+					}
+				}
+			}
+		}
+	`
+	if err := os.WriteFile(path, []byte(model), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	got := renderFixtureDocument(t, path, "Anchors::Report")
+	for _, want := range []string{`<a id="items"></a>`, `[items](#items)`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendering does not contain %q\n%s", want, got)
 		}
 	}
 }

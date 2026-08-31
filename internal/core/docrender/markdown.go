@@ -46,7 +46,7 @@ func renderContent(node docir.Content, level int) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if node.Anchor() != "" && len(blocks) > 0 {
+	if node.Anchor() != "" {
 		blocks = append([]string{`<a id="` + node.Anchor() + `"></a>`}, blocks...)
 	}
 	return blocks, nil
@@ -244,7 +244,7 @@ func runText(run docir.TextRun) string {
 // trailing whitespace outside them so the delimiters stay flanking.
 func delimited(marker, text string) string {
 	escaped := inline(text)
-	trimmed := strings.Trim(escaped, " ")
+	trimmed := strings.TrimSpace(escaped)
 	if trimmed == "" {
 		return escaped
 	}

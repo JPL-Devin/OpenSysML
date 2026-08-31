@@ -161,10 +161,10 @@ func (c *compiler) compileMembers(owner *symbols.Symbol) ([]Content, error) {
 				c.stack = c.stack[:len(c.stack)-1]
 				return nil, err
 			}
-			c.targets[member] = refTarget{
+			c.registerTarget(member, refTarget{
 				path:  append([]string(nil), c.stack...),
 				label: contentLabel(node),
-			}
+			})
 			c.stack = c.stack[:len(c.stack)-1]
 			content = append(content, node)
 			continue
@@ -176,6 +176,21 @@ func (c *compiler) compileMembers(owner *symbols.Symbol) ([]Content, error) {
 		}
 	}
 	return content, nil
+}
+
+// registerTarget records a reference target under the content symbol and every
+// feature it redefines, transitively, so an inherited reference that resolves
+// to a base document's content binds to its effective replacement.
+func (c *compiler) registerTarget(member *symbols.Symbol, target refTarget) {
+	pending := []*symbols.Symbol{member}
+	for i := 0; i < len(pending); i++ {
+		sym := pending[i]
+		if _, seen := c.targets[sym]; seen {
+			continue
+		}
+		c.targets[sym] = target
+		pending = append(pending, c.model.RedefinedFeatures(sym)...)
+	}
 }
 
 // rejectStructural rejects declarations that cannot appear in a structural

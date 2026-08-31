@@ -115,6 +115,52 @@ func TestCompiledRunsAreImmutable(t *testing.T) {
 	}
 }
 
+// TestCompileRefToRedefinedContent checks that an inherited reference binds to
+// the derived document's redefinition of its target.
+func TestCompileRefToRedefinedContent(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def Base :> Document {
+			attribute redefines title = "Base";
+			part formatted : Paragraph {
+				part see : Ref {
+					ref redefines target = details;
+				}
+			}
+			part details : Section {
+				attribute redefines title = "Details";
+				part body : Paragraph {
+					attribute redefines text = "body";
+				}
+			}
+		}
+		part def Report :> Base {
+			attribute redefines title = "Derived";
+			part redefines details : Section {
+				attribute redefines title = "Replaced";
+				part body : Paragraph {
+					attribute redefines text = "new body";
+				}
+			}
+		}
+	`)
+	plan := fixture.mustCompile(t, "Report")
+	var runs []Run
+	for _, node := range plan.Content() {
+		if node.Name() == "formatted" {
+			runs = node.Runs()
+		}
+	}
+	if len(runs) != 1 || runs[0].Kind() != RunRef {
+		t.Fatalf("runs = %+v", runs)
+	}
+	if runs[0].Text() != "Replaced" {
+		t.Errorf("ref label = %q, want %q", runs[0].Text(), "Replaced")
+	}
+	if path := strings.Join(runs[0].RefPath(), "/"); path != "details" {
+		t.Errorf("ref path = %q", path)
+	}
+}
+
 // TestCompileGroupedTable locks a grouped table plan: the group column is
 // checked against the query's statically-known projection.
 func TestCompileGroupedTable(t *testing.T) {
