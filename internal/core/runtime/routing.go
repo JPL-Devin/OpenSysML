@@ -166,18 +166,31 @@ func (ctx *Context) ownerDeliveries(
 // sender itself, or the nearest ancestor holding it when the behavior runs in a
 // part nested inside — a suboccurrence or portion sends through its whole's port.
 func (ctx *Context) viaPortHolder(self *Instance, send lower.Send) *Instance {
-	segment, _, _ := strings.Cut(send.Target, ".")
+	segments := strings.Split(send.Target, ".")
 	for inst := self; inst != nil; inst = inst.owner {
-		fv, held := inst.FeatureValues[segment]
-		if !held || !isPortFeature(fv.Feature) {
-			continue
+		if ctx.holdsViaPort(inst, segments, send.TargetSym) {
+			return inst
 		}
-		if send.TargetSym != nil && fv.Feature.Symbol != send.TargetSym {
-			continue
-		}
-		return inst
 	}
 	return self
+}
+
+// holdsViaPort reports whether the dotted via path, walked through the objects
+// inst's features hold, ends at a port — the resolved one when the send has it.
+func (ctx *Context) holdsViaPort(inst *Instance, segments []string, want *symbols.Symbol) bool {
+	current := inst
+	for _, segment := range segments[:len(segments)-1] {
+		held, ok, err := ctx.fvObject(current, segment)
+		if err != nil || !ok {
+			return false
+		}
+		current = held
+	}
+	fv, held := current.FeatureValues[segments[len(segments)-1]]
+	if !held || !isPortFeature(fv.Feature) {
+		return false
+	}
+	return want == nil || fv.Feature.Symbol == want
 }
 
 // connectedDeliveries answers where a `send … via p` arrives through the

@@ -1,0 +1,19 @@
+{
+  "type": "instance",
+  "instantiate": "test::mission",
+  "objects": [
+    {
+      "path": "probe.cruise",
+      "finalState": "sending",
+      "stateVisits": ["sending"]
+    },
+    {
+      "path": "station",
+      "finalState": "logged",
+      "stateVisits": ["standingBy", "logged"],
+      "slots": {
+        "frames": {"type": "Real", "value": 5.0}
+      }
+    }
+  ]
+}
