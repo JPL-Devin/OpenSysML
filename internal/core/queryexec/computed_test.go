@@ -343,6 +343,7 @@ part floor {
 	variation part v : Widget;
 	ref part r : Widget;
 	part p : Widget;
+	attribute tag : String;
 }
 calc def Flags :> Query {
 	in root : Element;
@@ -379,6 +380,8 @@ calc def Flags :> Query {
 		"v": {variation: true},
 		"r": {reference: true},
 		"p": {},
+		// Attribute usages are implicitly referential.
+		"tag": {reference: true},
 	}
 	for name, expected := range want {
 		if values[name] != expected {

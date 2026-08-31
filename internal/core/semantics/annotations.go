@@ -585,7 +585,7 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 		case "isSufficient":
 			return boolValue(d.IsAll), true
 		case "isComposite":
-			return boolValue(d.IsComposite), true
+			return boolValue(d.IsComposite || !usageIsReferential(d)), true
 		case "isDerived":
 			return boolValue(d.IsDerived), true
 		case "isEnd":
@@ -605,7 +605,7 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 		case "isVariant":
 			return boolValue(d.IsVariant), true
 		case "isReference":
-			return boolValue(d.IsReference), true
+			return boolValue(!d.IsComposite && usageIsReferential(d)), true
 		case "isIndividual":
 			return boolValue(d.IsIndividual), true
 		case "isParallel":
