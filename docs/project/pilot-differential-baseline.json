@@ -59,8 +59,8 @@
         "name": "examples",
         "dir": "examples",
         "origin": "ours",
-        "files": 24,
-        "digest": "sha256:4f0ef34f4f914664a56b909ba9acef1783fb0f1a7e8f668a184b2ad87bdcedde"
+        "files": 25,
+        "digest": "sha256:ce7186ad62d1aac6ad2a626a766a44a781c01c52da24633bea727b43d946eb32"
       },
       {
         "name": "probes",
@@ -73,14 +73,14 @@
     "recorded": "2026-08-31"
   },
   "totals": {
-    "files": 358,
+    "files": 359,
     "filesFullyAgreeing": 332,
     "agreement": 34,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
-    "pilotOnly": 50,
+    "pilotOnly": 52,
     "openSysMLDiagnostics": 56,
-    "pilotDiagnostics": 86
+    "pilotDiagnostics": 88
   },
   "roots": [
     {
@@ -733,14 +733,14 @@
       "name": "examples",
       "dir": "examples",
       "totals": {
-        "files": 24,
+        "files": 25,
         "filesFullyAgreeing": 19,
         "agreement": 0,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
-        "pilotOnly": 24,
+        "pilotOnly": 26,
         "openSysMLDiagnostics": 2,
-        "pilotDiagnostics": 25
+        "pilotDiagnostics": 27
       },
       "files": [
         {
@@ -819,6 +819,26 @@
             },
             {
               "line": 271,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "path": "mars2020-perseverance/perseverance.sysml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": [
+            {
+              "line": 534,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 575,
               "severity": "error",
               "category": "unmapped",
               "count": 1
@@ -1013,7 +1033,7 @@
     {
       "side": "pilot",
       "message": "Cannot override a binding feature value",
-      "count": 9
+      "count": 11
     },
     {
       "side": "pilot",
@@ -1183,14 +1203,14 @@
       }
     ],
     "totals": {
-      "files": 358,
+      "files": 359,
       "filesFullyAgreeing": 333,
       "agreement": 34,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
-      "pilotOnly": 50,
+      "pilotOnly": 52,
       "openSysMLDiagnostics": 55,
-      "pilotDiagnostics": 86
+      "pilotDiagnostics": 88
     },
     "findings": [
       {
