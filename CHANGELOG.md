@@ -38,6 +38,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   matched`, and `sysml -query` reports it on standard error, so the result rows on standard output
   remain one line per match.
 
+- **A `*` value is refused off the multiplicity bounds, and empty `-query` text is a misuse.**
+  `sysml:name=*` was compared as the literal value `*` and reported a successful no-match, while the
+  same wildcard elsewhere in a query was a typed refusal; it is now refused on every property but
+  `multiplicityLower` and `multiplicityUpper`, where `*` is the model's own infinity value.
+  `sysml -query ''` was indistinguishable from an absent flag and started the interactive REPL
+  instead of answering.
+
 - **A caption is no longer confusable with an emphasized paragraph.** The
   Markdown renderer wrote a table or diagram caption and an emphasis-only
   paragraph identically as `*text*`, so the PDF backend styled every such

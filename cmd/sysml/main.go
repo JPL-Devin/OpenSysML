@@ -162,6 +162,18 @@ func wrapped(text string, width int) string {
 	return strings.Join(append(lines, line), "\n")
 }
 
+// flagGiven reports whether the run named this flag, which an empty value
+// cannot be told apart from otherwise.
+func flagGiven(name string) bool {
+	given := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			given = true
+		}
+	})
+	return given
+}
+
 // printUsage writes the help to w: the caller chooses the stream, since help
 // asked for is a result and help shown over a misuse belongs with the error.
 func printUsage(w io.Writer) {
@@ -308,6 +320,13 @@ func runCLI() int {
 
 	if debugMode && quietMode {
 		fmt.Fprintln(os.Stderr, "sysml: -debug and -quiet are mutually exclusive")
+		return 2
+	}
+
+	// A mode asked for with an empty value is a misuse, not an absent flag: it
+	// would otherwise silently run the REPL instead of the query.
+	if flagGiven("query") && queryText == "" {
+		fmt.Fprintln(os.Stderr, `sysml: -query is empty; give it OSLC Query text, as -query 'sysml:name="battery"'`)
 		return 2
 	}
 

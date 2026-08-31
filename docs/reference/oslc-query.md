@@ -74,8 +74,11 @@ projection; identity and metamodel type remain present on every result.
 `oslc.orderBy` compares multiplicity properties numerically, with `*` as
 positive infinity, and compares other properties lexically. Missing values
 retain the existing ordering behavior.
-For ordered multiplicity comparisons, `*` is positive infinity. For `=`, `!=`,
-and `in`, a value `*` is compared lexically.
+For ordered multiplicity comparisons, `*` is positive infinity, and the two
+multiplicity properties also compare it as a value: `sysml:multiplicityUpper=*`
+identifies the unbounded usages. On every other property a `*` value is a
+wildcard this implementation does not evaluate, so it is refused rather than
+compared lexically into a no-match.
 
 OSLC compound terms have no `or`, so OSLC text and the structured API Query
 surface are deliberately not interchangeable: structured queries retain their
@@ -88,6 +91,7 @@ operators.
 | --- | --- |
 | `scoped_term` / nested property query | Typed error. The OSLC rationale is to match a resource using a related resource's property; graph-pattern traversal is not implemented by this symbol-index evaluator. |
 | Property wildcard (`*` in `oslc.where`, `oslc.select`, or `oslc.orderBy`) | Typed error. Generic property wildcards are not implemented. |
+| Value wildcard (`*` compared against any property but the two multiplicity bounds) | Typed error. On the multiplicity bounds `*` is the model's own infinity value, not a wildcard. |
 | `oslc.searchTerms` | Typed error. Free-text search is distinct from property identification. |
 | `oslc.properties` | Typed error naming `oslc.select`, which reports the property projection. |
 | Any other `oslc.*` parameter, or a repeated one | Typed error. |
@@ -105,4 +109,6 @@ The REPL accepts `%query <oslc-query>`. The `sysml` command accepts
 element per line as qualified name and metamodel type, followed by selected
 properties. A query that matches nothing says so — the REPL prints `no
 elements matched`, and the command reports it on standard error, so the result
-rows on standard output remain one line per match.
+rows on standard output remain one line per match. `-query` with empty text is a
+misuse rather than an absent flag: it is refused instead of starting the
+interactive REPL.
