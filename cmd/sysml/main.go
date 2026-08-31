@@ -115,6 +115,11 @@ var (
 	renderAllDir  string
 	renderForm    string
 	renderDoc     string
+	docForm       string
+	pdfEngine     string
+	pdfTitlePage  bool
+	pdfTOC        bool
+	pdfNumbering  bool
 	strictMode    bool
 	modelChecks   checks
 )
@@ -217,9 +222,16 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "\nRendering a document:\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport           # Markdown on stdout\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -o report.md\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf \\\n")
+	fmt.Fprintf(w, "        -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf\n")
 	fmt.Fprintf(w, "\nA document is a part def specializing DocumentQueries::Document. Its queries\n")
 	fmt.Fprintf(w, "are bound in the model and run against it, and the result is written as\n")
-	fmt.Fprintf(w, "CommonMark-compatible Markdown, the only document form this build writes.\n")
+	fmt.Fprintf(w, "CommonMark-compatible Markdown. -doc-form pdf converts that Markdown with an\n")
+	fmt.Fprintf(w, "external converter named by -pdf-engine — weasyprint (default), pandoc or\n")
+	fmt.Fprintf(w, "prince — run as a subprocess, never linked in; diagrams are pre-rendered to\n")
+	fmt.Fprintf(w, "SVG with mermaid-cli (mmdc). None of these tools is needed until PDF output\n")
+	fmt.Fprintf(w, "is asked for; scripts/download-doc-pdf-toolchain.sh provisions pinned copies.\n")
 	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
 	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
 	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
@@ -262,6 +274,11 @@ func runCLI() int {
 	flag.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
 	flag.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
 	flag.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
+	flag.StringVar(&docForm, "doc-form", "", "Form -render-document writes: markdown (default) or pdf, which drives an external converter")
+	flag.StringVar(&pdfEngine, "pdf-engine", "", "Converter -doc-form pdf drives: weasyprint (default), pandoc or prince")
+	flag.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
+	flag.BoolVar(&pdfTOC, "pdf-toc", false, "Write a table of contents ahead of the content (-doc-form pdf)")
+	flag.BoolVar(&pdfNumbering, "pdf-number-sections", false, "Number the section headings hierarchically (-doc-form pdf)")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
@@ -315,6 +332,11 @@ func runCLI() int {
 
 	if renderForm != "" && renderView == "" && renderAllDir == "" {
 		fmt.Fprintln(os.Stderr, "sysml: -render-form is the form -render or -render-all writes; name the view to render with -render or a directory with -render-all")
+		return 2
+	}
+
+	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
+		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
 		return 2
 	}
 
@@ -390,7 +412,7 @@ func runCLI() int {
 			return refuse(modelChecks,
 				"-render-document writes a document out and decides nothing about the model; check it in its own run")
 		case modelChecks.jsonOut:
-			fmt.Fprintln(os.Stderr, "sysml: -render-document writes Markdown, not JSON; -json reports checks")
+			fmt.Fprintln(os.Stderr, "sysml: -render-document writes a document, not JSON; -json reports checks")
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,

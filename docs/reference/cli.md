@@ -152,7 +152,12 @@ echo "%load model.sysml
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
 | `--render-all <dir>` | | Render every declared view into the directory, one artifact per view |
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
-| `--render-document <name>` | | Compile a document definition — a `part def` specializing `DocumentQueries::Document` — run its queries against the model, render its diagram blocks through the view engine and write the rendered CommonMark Markdown, as `%render-document` does. A `Diagram` content block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the only document form this build writes, and `-json` does not apply |
+| `--render-document <name>` | | Compile a document definition — a `part def` specializing `DocumentQueries::Document` — run its queries against the model, render its diagram blocks through the view engine and write the rendered CommonMark Markdown, as `%render-document` does. A `Diagram` content block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default document form, `-doc-form pdf` converts it (see [Rendering a document as PDF](#rendering-a-document-as-pdf)), and `-json` does not apply |
+| `--doc-form <form>` | | Form `--render-document` writes: `markdown` (default) or `pdf`, which drives an external converter |
+| `--pdf-engine <engine>` | | Converter `--doc-form pdf` drives: `weasyprint` (default), `pandoc` or `prince` |
+| `--pdf-title-page` | | Put the document title on a page of its own (`--doc-form pdf`) |
+| `--pdf-toc` | | Write a table of contents ahead of the content (`--doc-form pdf`) |
+| `--pdf-number-sections` | | Number the section headings hierarchically (`--doc-form pdf`) |
 | `--output <file>` | `-o` | Write the conversion, the rendering or the rendered document to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
@@ -272,6 +277,45 @@ it renders as-is in Markdown, documentation sites and editors without a separate
 has dedicated state diagram and sequence diagram grammars; a table is written as a Markdown table,
 which Mermaid has no grammar for, so `-render-form mermaid` of a table names Markdown rather than
 drawing a diagram of rows.
+
+## Rendering a document as PDF
+
+`-render-document <name> -doc-form pdf -o report.pdf` converts the rendered Markdown to PDF. The
+conversion never runs inside the `sysml` binary: it drives an external converter as a subprocess,
+selected with `-pdf-engine`, so the binary links no PDF renderer and Markdown output needs none of
+these tools.
+
+```bash
+sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf
+sysml model.sysml -render-document Reports::MassReport -doc-form pdf \
+    -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf
+```
+
+The engines, each discovered on `PATH` by its default name unless an environment variable points
+at a specific executable:
+
+| Engine | Tools it drives | Override |
+|--------|-----------------|----------|
+| `weasyprint` (default) | `weasyprint`, an HTML-to-PDF paged-media engine | `OPENSYSML_WEASYPRINT` |
+| `pandoc` | `pandoc` reading the Markdown itself, with WeasyPrint as its PDF engine | `OPENSYSML_PANDOC` (and `OPENSYSML_WEASYPRINT`) |
+| `prince` | `prince`, a commercial HTML-to-PDF engine | `OPENSYSML_PRINCE` |
+
+The title page, table of contents and section numbering are choices of this output step alone —
+they are flags of the run, never attributes of the document model, so the same document renders to
+Markdown unchanged.
+
+Diagram blocks are pre-rendered to SVG with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli)
+(`mmdc`, override `OPENSYSML_MMDC`; `OPENSYSML_MMDC_PUPPETEER` names a puppeteer configuration file
+for a browser that needs launch flags, such as `--no-sandbox` in a container). A document without
+diagrams needs no diagram tool.
+
+A PDF is a binary artifact, so `-doc-form pdf` requires `-o`. A missing tool stops the run with
+status 2 and a report naming the tool, its override variable and the other engines; a converter
+that fails reports its own words. `scripts/download-doc-pdf-toolchain.sh` provisions pinned copies
+of WeasyPrint, pandoc and mermaid-cli under `build/doc-pdf/` and prints the variables to export
+(Prince is commercial and installed separately). Every tool is run with `SOURCE_DATE_EPOCH=0`, so
+an engine that embeds a creation date embeds the same one every run and the artifact is
+reproducible against one toolchain.
 
 ## Output Format
 
