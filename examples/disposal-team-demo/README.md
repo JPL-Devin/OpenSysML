@@ -121,7 +121,10 @@ Features:
 
 `accepted = 2` and `lastCode = 2` are the unit's own values: the messages were
 delivered on the unit's identity, not the console's, which is what a connector
-between two parts means.
+between two parts means. They are also the trace of the machine's path — the
+states print as `<unknown>` because `%features` reads values, not the
+configuration — so the unit entered `working` twice, its unguarded transition
+returning it to `standingBy` each time.
 
 **The callout that happened.** An individual is one occurrence, and its snapshot
 and timeslice are objects of their own, each holding the crew it had while the
@@ -165,6 +168,11 @@ sysml> %optimize TeamCases::HeaviestPair
   TeamCases::HeaviestPair::cradleMass = 60000.0 [gram]
   TeamCases::HeaviestPair::robotMass = 540000.0 [gram]
 ```
+
+The values `%check` prints are a witness the solver chose, not the model's
+defaults: the requirement's subject leaves `payload` and `payloadLimit` free, and
+`0.0 <= 0.0` satisfies it. `-constraint withinPayload` and `-satisfy` above are
+what evaluate the declared masses.
 
 The heaviest pair the budget allows is 540 kg a robot once the two cradles take
 their 60 kg each — `2 * 540 + 2 * 60 = 1200`.
