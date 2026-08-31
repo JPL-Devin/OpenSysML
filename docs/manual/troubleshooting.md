@@ -96,9 +96,6 @@ fact about the implementation, not a design position.
 - **The vocabulary is non-normative.** `DocumentQueries` is an OpenSysML
   extension; other SysML v2 tools will parse models that use it but will not
   render documents from them.
-- **Computed table columns are not modeled.** `Project` projects declared
-  properties only — a column is always a property's value, never an
-  expression over one (no sums, no unit conversions, no concatenation).
 - **Query-generated text is plain.** A query-backed paragraph renders each
   projected value as an escaped plain run; inline formatting (`Span`, `Link`,
   `Ref`) applies to statically-authored runs only.

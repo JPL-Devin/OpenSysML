@@ -371,9 +371,47 @@ $ sysml cookbook.sysml -run-query "Cookbook::MassTable root=Cookbook::telescope"
 ```
 
 A cell for a property the element lacks is empty (`(none)` in the CLI's row
-listing, an empty table cell in a document). Columns are the property's value,
-never an expression over it — computed columns are a
-[known limitation](troubleshooting.md#limitations).
+listing, an empty table cell in a document).
+
+## Computed columns
+
+A projection may also derive columns: each `Column(name, expression)` entry
+appends a named column whose expression is evaluated once per row over the
+row element's declared features. Arithmetic (`+`, `-`, `*`, `/`), string
+concatenation with `+` and `??` defaults for absent values are supported:
+
+```sysml
+calc def MassBudget :> Query {
+	in root : Element;
+	Project(
+		source = PartsByMass(root = root),
+		properties = ("name", "mass"),
+		columns = (
+			Column(name = "massLbs", expression = (Subsystem::mass ?? 0.0) * 2.2),
+			Column(name = "label", expression = "part: " + Element::name)
+		)
+	)
+}
+```
+
+```console
+$ sysml cookbook.sysml -run-query "Cookbook::MassBudget root=Cookbook::telescope"
+✓ Query Cookbook::MassBudget returned 5 rows
+  Columns: name, mass, massLbs, label
+  Row 1: Cookbook::telescope::mountControl
+    name = "mountControl"
+    mass = 15.0
+    massLbs = 33.0
+    label = "part: mountControl"
+  ...
+```
+
+Feature references name the declaring definition (`Subsystem::mass`,
+`Element::name`); a row element that lacks the feature makes the expression
+fail with a typed error naming the query, column and row — unless a `??`
+default covers it, which is why `MassBudget`'s `massLbs` defaults to `0.0`
+for the two connections in its results. Computed names join the projection:
+`OrderBy` can sort by them and a table's `groupBy` can group by them.
 
 ## Query invokes query
 
