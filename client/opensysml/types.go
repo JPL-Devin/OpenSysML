@@ -1,6 +1,7 @@
 package opensysml
 
 import (
+	"fmt"
 	"slices"
 
 	sysmlgrpc "github.com/Open-MBEE/OpenSysML/internal/grpc"
@@ -15,6 +16,8 @@ const (
 	CapabilityVerification      = sysmlgrpc.CapabilityVerification
 	CapabilityQuery             = sysmlgrpc.CapabilityQuery
 	CapabilityOSLCQuery         = sysmlgrpc.CapabilityOSLCQuery
+	CapabilityDocumentQuery     = sysmlgrpc.CapabilityDocumentQuery
+	CapabilityRenderDocument    = sysmlgrpc.CapabilityRenderDocument
 	CapabilityEnumValues        = sysmlgrpc.CapabilityEnumValues
 	CapabilityEvaluateSubject   = sysmlgrpc.CapabilityEvaluateSubject
 	CapabilitySymbolAttributes  = sysmlgrpc.CapabilitySymbolAttributes
@@ -56,6 +59,27 @@ type Model struct {
 	// Diagnostics from parsing and semantic analysis. A syntax error is a
 	// diagnostic here, not a failed call.
 	Diagnostics []Diagnostic
+}
+
+// Errors are the model's diagnostics of severity "error", the ones that make a
+// model unusable rather than merely questionable.
+func (m *Model) Errors() []Diagnostic {
+	if m == nil {
+		return nil
+	}
+	var errs []Diagnostic
+	for _, diagnostic := range m.Diagnostics {
+		if diagnostic.Severity == SeverityError {
+			errs = append(errs, diagnostic)
+		}
+	}
+	return errs
+}
+
+// OK reports a model that parsed and analyzed without an error diagnostic.
+// Warnings do not make it false; no model at all does.
+func (m *Model) OK() bool {
+	return m != nil && len(m.Errors()) == 0
 }
 
 // Symbol is one element of a parsed model.
@@ -134,13 +158,29 @@ type Specialization struct {
 	TargetKind string
 }
 
+// The severities a Diagnostic reports.
+const (
+	SeverityError   = "error"
+	SeverityWarning = "warning"
+	SeverityInfo    = "info"
+)
+
 // Diagnostic is one parse or semantic finding.
 type Diagnostic struct {
-	// Severity is "error", "warning" or "info".
+	// Severity is SeverityError, SeverityWarning or SeverityInfo.
 	Severity string
 	Message  string
 	// Span locates the finding in its source, nil when it has no location.
 	Span *Span
+}
+
+// String renders the finding as a compiler does, locating it when it has a
+// location: "vehicle.sysml:3:5: error: unresolved reference: Engine".
+func (d Diagnostic) String() string {
+	if d.Span == nil {
+		return d.Severity + ": " + d.Message
+	}
+	return fmt.Sprintf("%s:%d:%d: %s: %s", d.Span.File, d.Span.StartLine, d.Span.StartCol, d.Severity, d.Message)
 }
 
 // Span is a source location.
@@ -188,6 +228,20 @@ type Instantiation struct {
 	Instances []*Instance
 	// Diagnostics the answer carried, if any.
 	Diagnostics []Diagnostic
+}
+
+// Instance resolves an InstanceID a value referred to, nil when this
+// instantiation holds no such instance.
+func (i *Instantiation) Instance(id InstanceID) *Instance {
+	if i == nil {
+		return nil
+	}
+	for _, instance := range i.Instances {
+		if instance != nil && instance.ID == int64(id) {
+			return instance
+		}
+	}
+	return nil
 }
 
 // Language selects the notation of inline content.

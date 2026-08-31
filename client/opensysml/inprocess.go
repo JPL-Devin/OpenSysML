@@ -122,6 +122,68 @@ func (p *inprocess) instantiate(ctx context.Context, req *pb.InstantiateRequest)
 	return answer(ctx, req, p.svc.Instantiate)
 }
 
+func (p *inprocess) executeAction(
+	ctx context.Context,
+	req *pb.ExecuteActionRequest,
+) (*pb.ExecuteActionResponse, error) {
+	return answer(ctx, req, p.svc.ExecuteAction)
+}
+
+func (p *inprocess) executeState(ctx context.Context, req *pb.ExecuteStateRequest) (*pb.ExecuteStateResponse, error) {
+	return answer(ctx, req, p.svc.ExecuteState)
+}
+
+func (p *inprocess) verifyConstraint(
+	ctx context.Context,
+	req *pb.VerifyConstraintRequest,
+) (*pb.VerifyConstraintResponse, error) {
+	return answer(ctx, req, p.svc.VerifyConstraint)
+}
+
+func (p *inprocess) verifyRequirement(
+	ctx context.Context,
+	req *pb.VerifyRequirementRequest,
+) (*pb.VerifyRequirementResponse, error) {
+	return answer(ctx, req, p.svc.VerifyRequirement)
+}
+
+func (p *inprocess) verifySatisfaction(
+	ctx context.Context,
+	req *pb.VerifySatisfactionRequest,
+) (*pb.VerifySatisfactionResponse, error) {
+	return answer(ctx, req, p.svc.VerifySatisfaction)
+}
+
+func (p *inprocess) evaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest) (*pb.EvaluateCalcResponse, error) {
+	return answer(ctx, req, p.svc.EvaluateCalc)
+}
+
+func (p *inprocess) query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error) {
+	return answer(ctx, req, p.svc.Query)
+}
+
+func (p *inprocess) runDocumentQuery(
+	ctx context.Context,
+	req *pb.RunDocumentQueryRequest,
+) (*pb.RunDocumentQueryResponse, error) {
+	return answer(ctx, req, p.svc.RunDocumentQuery)
+}
+
+func (p *inprocess) renderDocument(
+	ctx context.Context,
+	req *pb.RenderDocumentRequest,
+) (*pb.RenderDocumentResponse, error) {
+	return answer(ctx, req, p.svc.RenderDocument)
+}
+
+func (p *inprocess) convert(ctx context.Context, req *pb.ConvertRequest) (*pb.ConvertResponse, error) {
+	return answer(ctx, req, p.svc.Convert)
+}
+
+func (p *inprocess) applyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*pb.ApplyEditsResponse, error) {
+	return answer(ctx, req, p.svc.ApplyEdits)
+}
+
 // answer runs one handler with the guarantees this boundary makes: the
 // context decides whether an answer is delivered, as it does on the wire, and
 // a panic becomes CodeInternal instead of crossing.

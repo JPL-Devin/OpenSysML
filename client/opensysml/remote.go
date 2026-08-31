@@ -126,6 +126,106 @@ func (r *remote) instantiate(ctx context.Context, req *pb.InstantiateRequest) (*
 	return resp.Msg, nil
 }
 
+func (r *remote) executeAction(ctx context.Context, req *pb.ExecuteActionRequest) (*pb.ExecuteActionResponse, error) {
+	resp, err := r.rpc.ExecuteAction(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) executeState(ctx context.Context, req *pb.ExecuteStateRequest) (*pb.ExecuteStateResponse, error) {
+	resp, err := r.rpc.ExecuteState(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) verifyConstraint(
+	ctx context.Context,
+	req *pb.VerifyConstraintRequest,
+) (*pb.VerifyConstraintResponse, error) {
+	resp, err := r.rpc.VerifyConstraint(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) verifyRequirement(
+	ctx context.Context,
+	req *pb.VerifyRequirementRequest,
+) (*pb.VerifyRequirementResponse, error) {
+	resp, err := r.rpc.VerifyRequirement(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) verifySatisfaction(
+	ctx context.Context,
+	req *pb.VerifySatisfactionRequest,
+) (*pb.VerifySatisfactionResponse, error) {
+	resp, err := r.rpc.VerifySatisfaction(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) evaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest) (*pb.EvaluateCalcResponse, error) {
+	resp, err := r.rpc.EvaluateCalc(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryResponse, error) {
+	resp, err := r.rpc.Query(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) runDocumentQuery(
+	ctx context.Context,
+	req *pb.RunDocumentQueryRequest,
+) (*pb.RunDocumentQueryResponse, error) {
+	resp, err := r.rpc.RunDocumentQuery(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) renderDocument(ctx context.Context, req *pb.RenderDocumentRequest) (*pb.RenderDocumentResponse, error) {
+	resp, err := r.rpc.RenderDocument(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) convert(ctx context.Context, req *pb.ConvertRequest) (*pb.ConvertResponse, error) {
+	resp, err := r.rpc.Convert(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
+func (r *remote) applyEdits(ctx context.Context, req *pb.ApplyEditsRequest) (*pb.ApplyEditsResponse, error) {
+	resp, err := r.rpc.ApplyEdits(ctx, connect.NewRequest(req))
+	if err != nil {
+		return nil, connectToError(err)
+	}
+	return resp.Msg, nil
+}
+
 func (r *remote) close() error {
 	return nil
 }
