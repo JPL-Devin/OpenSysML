@@ -63,7 +63,7 @@ func TestRenderDocumentFlag(t *testing.T) {
 		"# Telescope Mass Report",
 		"Mass rollup for the telescope assembly.",
 		"## Heavy Subsystems",
-		"*Heavy subsystems by mass*",
+		"<!-- caption -->\n*Heavy subsystems by mass*",
 		"| name | mass |",
 		"| --- | --- |",
 		"| mount | 15 |")

@@ -20,6 +20,9 @@ const (
 	ErrorNoPDF ErrorKind = "no-pdf"
 	// ErrorUnclosedFence reports a Mermaid fence the Markdown never closes.
 	ErrorUnclosedFence ErrorKind = "unclosed-fence"
+	// ErrorDanglingCaption reports a caption marker not followed by a
+	// fully-emphasized caption line.
+	ErrorDanglingCaption ErrorKind = "dangling-caption"
 )
 
 // Error is a typed PDF-rendering failure.
@@ -71,6 +74,8 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("%s reported success but wrote no PDF", e.Tool)
 	case ErrorUnclosedFence:
 		return "the document's Markdown opens a Mermaid fence it never closes"
+	case ErrorDanglingCaption:
+		return "the document's Markdown has a caption marker without a caption line after it"
 	default:
 		return "PDF rendering failed"
 	}

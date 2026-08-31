@@ -211,7 +211,7 @@ nav.toc a { text-decoration: none; color: inherit; }
 table { border-collapse: collapse; margin: 0.8em 0; }
 th, td { border: 0.5pt solid #666666; padding: 0.3em 0.6em; text-align: left; }
 th { background: #eeeeee; }
-p.caption { font-size: 9.5pt; color: #444444; }
+p.caption, span.caption { font-size: 9.5pt; color: #444444; }
 figure { margin: 0.8em 0; }
 figure img { max-width: 100%; }
 `
