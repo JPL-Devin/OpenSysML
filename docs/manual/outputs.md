@@ -74,16 +74,16 @@ and Mermaid CLI and prints the exports to use them.
 
 All three are off by default and only valid with `-doc-form pdf`.
 
-### PDF caveat: inline runs and anchors
+### PDF rendering of inline runs and anchors
 
-The PDF path does not yet render inline runs or cross-reference anchors
-semantically. A paragraph built from `Span`/`Link`/`Ref` runs, a `Ref`
-anchor, and a grouped table's group-key line appear in the PDF as their
-literal Markdown text — `*generated*`, `<a id="breakdown"></a>`,
-`**zone: support**` — rather than as styled text, working links and
-invisible anchors. Static-text paragraphs, tables, lists and diagrams render
-normally. If your document uses inline runs, prefer Markdown output for now;
-a follow-up is planned.
+Inline runs and cross-reference anchors render semantically in PDF. A
+paragraph built from `Span`/`Link`/`Ref` runs renders with emphasis, strong
+and code styling and working links; a `Ref` anchor becomes an invisible
+PDF-native anchor, so an in-document `Ref` is a clickable internal link; and
+a grouped table's group key renders in strong type above each subtable. All
+three engines support internal links: `weasyprint` and `prince` from the
+prepared HTML's element ids and fragment hrefs, and `pandoc` from the
+Markdown itself, whose CommonMark reader keeps the anchor's raw HTML.
 
 ## Determinism
 
