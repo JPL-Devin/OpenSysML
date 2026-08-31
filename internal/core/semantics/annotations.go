@@ -571,6 +571,12 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 			return boolValue(d.IsAll), true
 		case "isConstant":
 			return boolValue(d.IsConstant), true
+		case "isVariation":
+			return boolValue(d.IsVariation), true
+		case "isIndividual":
+			return boolValue(d.IsIndividual), true
+		case "isParallel":
+			return boolValue(d.IsParallel), true
 		}
 	case *ast.Usage:
 		switch feature {
@@ -594,6 +600,16 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 			return boolValue(d.IsConstant), true
 		case "isPortion":
 			return boolValue(d.Portion != ast.PortionNone), true
+		case "isVariation":
+			return boolValue(d.IsVariation), true
+		case "isVariant":
+			return boolValue(d.IsVariant), true
+		case "isReference":
+			return boolValue(d.IsReference), true
+		case "isIndividual":
+			return boolValue(d.IsIndividual), true
+		case "isParallel":
+			return boolValue(d.IsParallel), true
 		}
 	}
 	return symbols.FilterValue{}, false

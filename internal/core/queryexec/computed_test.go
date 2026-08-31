@@ -336,6 +336,57 @@ calc def Abstracts :> Query {
 	}
 }
 
+func TestExecuteComputedMetaclassModifierFlags(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Widget;
+part floor {
+	variation part v : Widget;
+	ref part r : Widget;
+	part p : Widget;
+}
+calc def Flags :> Query {
+	in root : Element;
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		properties = ("name"),
+		columns = (
+			Column(name = "variation", expression = SysML::Usage::isVariation ?? false),
+			Column(name = "reference", expression = SysML::Usage::isReference ?? false)
+		)
+	)
+}`)
+	result, err := fixture.execute(t, "Flags", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "floor"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute Flags: %v", err)
+	}
+	type flags struct{ variation, reference bool }
+	values := make(map[string]flags)
+	for _, row := range result.Rows() {
+		name, _ := row.Cells()[0].Values()[0].String()
+		variation, ok := row.Cells()[1].Values()[0].Boolean()
+		if !ok {
+			t.Fatalf("variation cell for %s = %+v", name, row.Cells()[1].Values())
+		}
+		reference, ok := row.Cells()[2].Values()[0].Boolean()
+		if !ok {
+			t.Fatalf("reference cell for %s = %+v", name, row.Cells()[2].Values())
+		}
+		values[name] = flags{variation, reference}
+	}
+	want := map[string]flags{
+		"v": {variation: true},
+		"r": {reference: true},
+		"p": {},
+	}
+	for name, expected := range want {
+		if values[name] != expected {
+			t.Fatalf("%s flags = %+v, want %+v", name, values[name], expected)
+		}
+	}
+}
+
 func TestExecuteComputedMultiValuedFeatureIsTyped(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part def Box {
