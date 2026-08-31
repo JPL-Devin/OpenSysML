@@ -2,6 +2,7 @@ package queryexec
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
@@ -115,6 +116,12 @@ func (e *executor) evaluateColumnExpression(
 			tracker.record(property, present)
 			return values, nil
 		}
+		if isMetaclassFQN(declaring) {
+			if !e.context.Model.MetaclassConforms(sym, declaring) {
+				return nil, nil
+			}
+			return e.reflectiveFeatureValues(expression, property, sym)
+		}
 		if !e.rowConformsTo(sym, declaring) {
 			// The row is unrelated to the declaring type: read as absent so a
 			// ?? operator can default it. The feature resolved at planning.
@@ -154,6 +161,33 @@ func (e *executor) evaluateColumnExpression(
 // Element (or without a declaring type), so it reads query metadata.
 func declaringIsElement(declaring string) bool {
 	return declaring == "" || declaring == "Element" || declaring == "KerML::Root::Element"
+}
+
+// isMetaclassFQN reports whether a declaring type is a reflective metaclass
+// of the abstract syntax, which the stdlib declares under KerML and SysML.
+func isMetaclassFQN(fqn string) bool {
+	return strings.HasPrefix(fqn, "KerML::") || strings.HasPrefix(fqn, "SysML::")
+}
+
+// reflectiveFeatureValues reads a metaclass feature (e.g. Type::isAbstract)
+// from the row's declaration; an underived one is a typed failure.
+func (e *executor) reflectiveFeatureValues(
+	expression queryplan.Expression,
+	property string,
+	sym *symbols.Symbol,
+) ([]Value, error) {
+	value, ok := e.context.Model.ReflectiveFeatureValue(sym, property)
+	if !ok {
+		return nil, e.featureError(expression, property)
+	}
+	if value.Kind == symbols.FilterValueEmpty {
+		return nil, nil
+	}
+	converted, ok := filterValue(value, sym)
+	if !ok {
+		return nil, e.featureError(expression, property)
+	}
+	return []Value{converted}, nil
 }
 
 // rowConformsTo reports whether the row conforms to a feature's declaring

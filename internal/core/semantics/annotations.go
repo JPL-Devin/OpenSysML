@@ -543,6 +543,15 @@ func kermlMetaclassName(sym *symbols.Symbol, isKerML bool) string {
 	return ""
 }
 
+// ReflectiveFeatureValue reads a metaclass feature derived from the
+// candidate's declaration; ok is false where none is derived.
+func (m *Model) ReflectiveFeatureValue(sym *symbols.Symbol, feature string) (symbols.FilterValue, bool) {
+	if m == nil || sym == nil {
+		return symbols.FilterValue{}, false
+	}
+	return m.reflectiveFeatureValue(sym, feature)
+}
+
 // reflectiveFeatureValue is what the candidate's declaration states for a
 // metaclass feature of it, and whether that feature is derived here at all
 // (KerML 1.1 §8.2.4); an underived one is unevaluable, not false.

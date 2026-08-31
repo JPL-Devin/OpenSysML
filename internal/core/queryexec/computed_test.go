@@ -297,6 +297,45 @@ calc def Bad :> Query {
 	}
 }
 
+func TestExecuteComputedMetaclassFeatureReadsDeclaration(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Widget;
+part floor {
+	abstract part a : Widget;
+	attribute tag : String;
+}
+calc def Abstracts :> Query {
+	in root : Element;
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		properties = ("name"),
+		columns = (Column(name = "abs", expression = SysML::PartUsage::isAbstract ?? false))
+	)
+}`)
+	result, err := fixture.execute(t, "Abstracts", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "floor"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute Abstracts: %v", err)
+	}
+	values := make(map[string]bool)
+	for _, row := range result.Rows() {
+		name, _ := row.Cells()[0].Values()[0].String()
+		abs, ok := row.Cells()[1].Values()[0].Boolean()
+		if !ok {
+			t.Fatalf("abs cell for %s = %+v", name, row.Cells()[1].Values())
+		}
+		values[name] = abs
+	}
+	if !values["a"] {
+		t.Fatal("abstract part must read isAbstract = true")
+	}
+	// The attribute's metaclass is not a PartUsage; the ?? default applies.
+	if values["tag"] {
+		t.Fatal("non-conforming row must take the ?? default")
+	}
+}
+
 func TestExecuteComputedMultiValuedFeatureIsTyped(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part def Box {
