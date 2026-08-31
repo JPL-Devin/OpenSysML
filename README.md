@@ -201,7 +201,7 @@ The project is under active development, with the core infrastructure operationa
 | Semantic layer (operators, builtins, validation) | ✅ Complete |
 | Feature chain resolution (member access) | ✅ Complete |
 | Validation passes (typing conformance, redefinition) | ✅ Complete |
-| Native document generation | ✅ Document queries (`%run-query`, `-run-query`), document definitions with sections, paragraphs, inline runs, tables (including grouped, with computed columns), lists and embedded diagrams, rendered to Markdown (`-render-document`, `%render-document`), a linked multi-document set (`-render-documents`) with cross-document references, or PDF (`-doc-form pdf`) — see [the document generation manual](docs/manual/README.md). *Not yet:* semantic inline runs in PDF |
+| Native document generation | ✅ Document queries (`%run-query`, `-run-query`), document definitions with sections, paragraphs, inline runs, tables (including grouped, with computed columns), lists and embedded diagrams, rendered to Markdown (`-render-document`, `%render-document`), a linked multi-document set (`-render-documents`) with cross-document references, or PDF (`-doc-form pdf`) — see [the document generation manual](docs/manual/README.md) |
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |

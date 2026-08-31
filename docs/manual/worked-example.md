@@ -22,7 +22,7 @@ $ sysml docs/manual/examples/observatory.sysml \
     -render-document Observatory::MassReport -o observatory.md
 ```
 
-or as a PDF (subject to the [inline-run caveat](outputs.md#pdf-caveat-inline-runs-and-anchors)):
+or as a PDF ([how inline runs and anchors render](outputs.md#pdf-rendering-of-inline-runs-and-anchors)):
 
 ```console
 $ sysml docs/manual/examples/observatory.sysml \

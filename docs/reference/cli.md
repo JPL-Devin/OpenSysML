@@ -329,6 +329,11 @@ Diagram blocks are pre-rendered to SVG with [mermaid-cli](https://github.com/mer
 for a browser that needs launch flags, such as `--no-sandbox` in a container). A document without
 diagrams needs no diagram tool.
 
+Inline runs render semantically in PDF: emphasis, strong and code styling, links, and `Ref`
+cross-references as clickable internal links to their targets' invisible anchors, in every engine —
+`weasyprint` and `prince` through the prepared HTML, `pandoc` through the Markdown itself. A grouped
+table's group key renders in strong type above each subtable.
+
 A PDF is a binary artifact, so `-doc-form pdf` requires `-o`. A missing tool stops the run with
 status 2 and a report naming the tool, its override variable and the other engines; a converter
 that fails reports its own words. `scripts/download-doc-pdf-toolchain.sh` provisions pinned copies

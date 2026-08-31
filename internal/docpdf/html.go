@@ -40,9 +40,14 @@ func documentHTML(blocks []block, images []string, opts Options) string {
 // documentTitle is the text of the document's title heading: the level-1
 // heading docrender writes first.
 func documentTitle(blocks []block) string {
+	return unescape(titleHeading(blocks))
+}
+
+// titleHeading is the still-escaped text of the document's title heading.
+func titleHeading(blocks []block) string {
 	for _, blk := range blocks {
 		if blk.Kind == blockHeading && blk.Level == 1 {
-			return unescape(blk.Text)
+			return blk.Text
 		}
 	}
 	return ""
@@ -51,7 +56,7 @@ func documentTitle(blocks []block) string {
 // writeTitle writes the document title: on a page of its own when the title
 // page was asked for, and as the opening heading otherwise.
 func writeTitle(b *strings.Builder, blocks []block, opts Options) {
-	title := inlineHTML(documentTitle(blocks))
+	title := inlineHTML(titleHeading(blocks))
 	if opts.TitlePage {
 		b.WriteString("<div class=\"title-page\"><h1>" + title + "</h1></div>\n")
 		return
@@ -73,7 +78,7 @@ func writeTOC(b *strings.Builder, blocks []block, opts Options) {
 			entries = true
 		}
 		number, anchor := headingNumber(&counters, blk.Level)
-		label := inlineHTML(unescape(blk.Text))
+		label := inlineHTML(blk.Text)
 		if opts.NumberSections {
 			label = number + " " + label
 		}
@@ -97,16 +102,18 @@ func writeContent(b *strings.Builder, blocks []block, images []string, opts Opti
 				continue
 			}
 			number, anchor := headingNumber(&counters, blk.Level)
-			label := inlineHTML(unescape(blk.Text))
+			label := inlineHTML(blk.Text)
 			if opts.NumberSections {
 				label = "<span class=\"section-number\">" + number + "</span> " + label
 			}
 			level := blk.Level
 			b.WriteString(fmt.Sprintf("<h%d id=\"%s\">%s</h%d>\n", level, anchor, label, level))
 		case blockParagraph:
-			b.WriteString("<p>" + inlineHTML(unescape(blk.Text)) + "</p>\n")
+			b.WriteString("<p>" + inlineHTML(blk.Text) + "</p>\n")
 		case blockCaption:
-			b.WriteString("<p class=\"caption\"><em>" + inlineHTML(unescape(blk.Text)) + "</em></p>\n")
+			b.WriteString("<p class=\"caption\"><em>" + inlineHTML(blk.Text) + "</em></p>\n")
+		case blockAnchor:
+			b.WriteString(`<a id="` + html.EscapeString(blk.Anchor) + `"></a>` + "\n")
 		case blockTable:
 			writeTable(b, blk)
 		case blockList:
@@ -162,7 +169,7 @@ func writeList(b *strings.Builder, blk block) {
 	}
 	b.WriteString("<" + tag + ">\n")
 	for _, item := range blk.Items {
-		b.WriteString("<li>" + inlineHTML(unescape(item)) + "</li>\n")
+		b.WriteString("<li>" + inlineHTML(item) + "</li>\n")
 	}
 	b.WriteString("</" + tag + ">\n")
 }
@@ -173,14 +180,9 @@ func writeList(b *strings.Builder, blk block) {
 func cellHTML(cell string) string {
 	parts := strings.Split(cell, "<br>")
 	for i, part := range parts {
-		parts[i] = inlineHTML(unescape(part))
+		parts[i] = inlineHTML(part)
 	}
 	return strings.Join(parts, "<br>")
-}
-
-// inlineHTML escapes literal text for element content.
-func inlineHTML(text string) string {
-	return html.EscapeString(text)
 }
 
 // styleSheet lays the document out for print: pages numbered in the footer,

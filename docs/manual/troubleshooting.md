@@ -105,11 +105,6 @@ fact about the implementation, not a design position.
   linked set together. Rendering one document alone still succeeds, but its
   cross-document links point at the target's expected file name and dangle
   until that document is rendered into the same directory.
-- **PDF does not yet render inline runs or anchors.** Paragraphs composed of
-  runs, `Ref` anchors and grouped-table group keys appear in PDF output as
-  literal Markdown text (`*generated*`, `<a id="...">`, `**zone: ...**`)
-  rather than styled text and working links. A follow-up is planned; use
-  Markdown output for documents that rely on inline runs.
 - **PDF is CLI-only.** The REPL, gRPC and LSP surfaces render Markdown only.
 - **PDF reproducibility is per-toolchain.** Byte-identical output holds for
   one pinned converter toolchain; different converter versions or fonts
