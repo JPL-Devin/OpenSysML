@@ -26,6 +26,7 @@
     .osml-hero__inner,
     .osml-features,
     .osml-install,
+    .osml-referee__inner,
     .osml-strip__inner {
       width: 100%;
       max-width: 61rem;
@@ -126,6 +127,71 @@
     .osml-terminal .osml-prompt { color: #90caf9; }
     .osml-terminal .osml-ok     { color: #a5d6a7; }
     .osml-terminal .osml-dim    { opacity: .68; }
+
+    /* The refereed band: the first thing below the hero, because measurement
+       against the reference implementation is the claim the rest rests on. */
+    .osml-referee {
+      background: var(--md-code-bg-color);
+      border-bottom: 1px solid var(--md-default-fg-color--lightest);
+    }
+    .osml-referee__inner {
+      padding: 2.4rem 1.2rem 2.2rem;
+    }
+    .osml-referee__eyebrow {
+      font-size: .64rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--md-primary-fg-color);
+      font-weight: 700;
+      margin: 0 0 .4rem;
+    }
+    .osml-referee h2 {
+      font-size: 1.1rem;
+      margin: 0 0 .5rem;
+    }
+    .osml-referee__lede,
+    .osml-referee__note {
+      font-size: .7rem;
+      line-height: 1.65;
+      color: var(--md-default-fg-color--light);
+      margin: 0 0 1.2rem;
+      max-width: 44rem;
+    }
+    .osml-referee__note {
+      margin: 1.2rem 0 0;
+    }
+    .osml-referee__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+      gap: .8rem;
+    }
+    .osml-referee__figure {
+      display: block;
+      padding: .9rem 1rem;
+      background: var(--md-default-bg-color);
+      border: 1px solid var(--md-default-fg-color--lightest);
+      border-radius: .35rem;
+      color: inherit;
+      transition: border-color .2s, transform .2s;
+    }
+    a.osml-referee__figure:hover {
+      border-color: var(--md-accent-fg-color);
+      transform: translateY(-2px);
+    }
+    .osml-referee__number {
+      display: block;
+      font-size: 1.15rem;
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--md-primary-fg-color);
+    }
+    .osml-referee__label {
+      display: block;
+      margin-top: .3rem;
+      font-size: .66rem;
+      line-height: 1.55;
+      color: var(--md-default-fg-color--light);
+    }
 
     .osml-features {
       padding: 2.6rem 1.2rem .4rem;
@@ -230,10 +296,10 @@
         <a class="osml-btn osml-btn--primary" href="{{ 'guide/01-install/'|url }}">Install</a>
         <a class="osml-btn" href="{{ 'guide/'|url }}">Read the guide</a>
         <a class="osml-btn" href="{{ config.repo_url }}">Source</a>
+        <a class="osml-btn" href="#refereed">How it compares</a>
       </div>
       <p class="osml-hero__meta">
-        Apache-2.0 &middot; Linux, macOS and Windows binaries &middot;
-        measured against the <a href="{{ 'project/pilot-differential/'|url }}">OMG pilot implementation</a>
+        Apache-2.0 &middot; Linux, macOS and Windows binaries
       </p>
     </div>
     <div class="osml-terminal">
@@ -253,6 +319,47 @@
   <span class="osml-dim">= 30</span>
 </code></pre>
     </div>
+  </div>
+</section>
+
+<section class="osml-referee" id="refereed">
+  <div class="osml-referee__inner">
+    <!-- doc-counts:begin landing-figures -->
+    <p class="osml-referee__eyebrow">Refereed against the OMG pilot implementation &middot; pin <code>2026-07</code>, artifact <code>0.61.0</code></p>
+    <h2>Not self-assessed &mdash; measured against the reference implementation.</h2>
+    <p class="osml-referee__lede">
+      Both implementations validate the reference's own corpora and their diagnostics are
+      compared file by file, in both directions. Every figure below is generated from a
+      committed baseline, and anyone can reproduce it.
+    </p>
+    <div class="osml-referee__grid">
+      <a class="osml-referee__figure" href="{{ 'project/pilot-differential/'|url }}">
+        <span class="osml-referee__number">332 of 359</span>
+        <span class="osml-referee__label">files agree diagnostic-by-diagnostic; 20 diagnostics are ours alone and 53 the reference's alone</span>
+      </a>
+      <a class="osml-referee__figure" href="{{ 'project/pilot-xpect/'|url }}">
+        <span class="osml-referee__number">0 of 511</span>
+        <span class="osml-referee__label">declared diagnostics in the reference's own test suites that we report nothing at all for</span>
+      </a>
+      <a class="osml-referee__figure" href="{{ 'project/pilot-xpect/'|url }}">
+        <span class="osml-referee__number">230 of 230</span>
+        <span class="osml-referee__label">declared name-resolution assertions our scopes match exactly</span>
+      </a>
+      <a class="osml-referee__figure" href="{{ 'project/pilot-rejection/'|url }}">
+        <span class="osml-referee__number">2 of 120</span>
+        <span class="osml-referee__label">invalid models we wrote ourselves that the reference rejects and we accept by default</span>
+      </a>
+    </div>
+    <p class="osml-referee__note">
+      What this is not: the corpora are demonstrations rather than an official conformance
+      suite, the comparison is of the diagnostics two implementations report on the same
+      files, and no certification or percentage of the specification is claimed. Read
+      <a href="{{ 'project/pilot-differential/'|url }}">how each figure is measured</a>, or
+      <a href="{{ 'project/spec-compliance/'|url }}">which rules are faithful, approximate or missing</a>
+      &mdash; including the 148 behavioral rules the pinned reference cannot referee, because it
+      evaluates expressions but executes neither actions nor state machines.
+    </p>
+    <!-- doc-counts:end landing-figures -->
   </div>
 </section>
 
@@ -314,9 +421,9 @@ go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
       conformance certification is claimed.</p>
     </div>
     <div>
-      <h3><a href="{{ 'project/pilot-differential/'|url }}">Refereed against the pilot</a></h3>
-      <p>Our diagnostics are compared with the pinned OMG pilot implementation over
-      its own corpora, and the difference is published.</p>
+      <h3><a href="{{ 'project/omg-issues/'|url }}">Defects, declared</a></h3>
+      <p>Where the published reference material is itself defective, the correction is
+      declared and the corpus left as published.</p>
     </div>
     <div>
       <h3><a href="{{ 'project/roadmap/'|url }}">Known gaps</a></h3>

@@ -1,11 +1,11 @@
 ---
 name: testing-doc-counts
-description: How to end-to-end test the generated documentation figures (cmd/doc-counts + internal/doccounts + `make docs-counts`) on Linux — proving `-check` is a real gate, that both block consumers cannot drift, that marker mutations fail loudly, and that no measured number moved.
+description: How to end-to-end test the generated documentation figures (cmd/doc-counts + internal/doccounts + `make docs-counts`) on Linux — proving `-check` is a real gate, that the block consumers cannot drift, that marker mutations fail loudly, and that no measured number moved.
 ---
 
 # Testing the generated documentation figures (`cmd/doc-counts`)
 
-`cmd/doc-counts` regenerates three kinds of derived documentation from committed sources:
+`cmd/doc-counts` regenerates four kinds of derived documentation from committed sources:
 
 1. the census header line in `docs/project/spec-compliance.md` (from that file's own status markers);
 2. single-copy baseline lines in `README.md` (`**Reference differential:**`, `**Rejection oracle:**`);
@@ -13,7 +13,11 @@ description: How to end-to-end test the generated documentation figures (cmd/doc
    `<!-- doc-counts:end refereed-figures -->`, rendered from **one** template in
    `internal/doccounts/doccounts.go` into **two** consumers (`README.md` and
    `docs/internals/architecture.md`), differing only by `Block.LinkPrefix`
-   (`docs/project/` vs `../project/`).
+   (`docs/project/` vs `../project/`);
+4. the `landing-figures` block in `overrides/home.html` — the same census as markup, for the
+   documentation site's landing band. Its links are emitted as MkDocs `|url` filters, so
+   `scripts/mkdocs_landing.py` validates them and `make docs PYTHON=~/pv/bin/python` fails
+   `--strict` when a conformance record is renamed.
 
 Inputs are `docs/project/spec-compliance.md` and the three committed baselines
 `docs/project/pilot-{differential,xpect,rejection}-baseline.json` (`doccounts.ReadRefereedCounts`).
@@ -53,10 +57,11 @@ Copy **all** `build/pilot-*` dirs together: the validator launchers resolve the 
   exit 1 with `open <path>: permission denied` and write nothing (writability of *all* pending files
   is checked before any is written).
 - **Baseline propagation:** mutate one figure in each baseline JSON in turn; `-check` must name
-  **both** consumers, the guard tests must fail while the tree is stale
+  **every** consumer stating it — both Markdown pages, and `overrides/home.html` too when the
+  figure is one of the four the landing band states — the guard tests must fail while the tree is stale
   (`TestCheckCommittedTreeIsCurrent`, `TestPilotDifferentialDocumentCountsMatchBaseline`,
   `TestW6FXpectDocumentCountsMatchBaseline`, `TestPilotRejectionDocumentCountsMatchBaseline`), and
-  regeneration must write the new number into both. Restore with `git checkout -- .`.
+  regeneration must write the new number into every one of them. Restore with `git checkout -- .`.
   **Pick a figure that is not cross-constrained.** Mutating the xpect `errors` kind's `rows`
   (510→509) makes `Silent = rows - agree - sameLocation - sameLine - severityDiffers -
   elsewhereInFile` negative, so the tool correctly *errors*
@@ -68,7 +73,11 @@ Copy **all** `build/pilot-*` dirs together: the validator launchers resolve the 
   `named block "refereed-figures" is missing or unterminated` or
   `duplicate "<!-- doc-counts:begin refereed-figures -->" marker`, and `wc -c` on the file must be
   unchanged (no truncation, no `already current`).
-- **The two consumers cannot drift:** extract each block with
+- **The landing band states the same figures:** its four numbers must be the differential's
+  `filesAgreeing`/`files`, the Xpect silence and scope pairs, and the rejection corpus's
+  by-default gap — the same values the prose block states. Build the site and grep
+  `site/index.html` for them, since a Jinja mistake renders as literal `{{ … }}`.
+- **The two Markdown consumers cannot drift:** extract each block with
   `sed -n '/doc-counts:begin refereed-figures/,/doc-counts:end refereed-figures/p'`, normalise
   `(../project/` → `(docs/project/` in the architecture copy, and `diff` — must be empty. Then
   `test -f` all four link targets from each consumer's own directory.

@@ -167,6 +167,55 @@ func TestRewriteBlockUsesConsumerRelativeLinksAndIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestRewriteBlockRendersTheLandingBandFromTheSameCensus keeps the landing page's
+// figures the generated ones: the band states the same census as the prose block,
+// and its links are MkDocs url filters, which the site build resolves and checks.
+func TestRewriteBlockRendersTheLandingBandFromTheSameCensus(t *testing.T) {
+	root := t.TempDir()
+	writeDoccountsFixture(t, root)
+	counts, err := ReadRefereedCounts(root)
+	if err != nil {
+		t.Fatalf("read baselines: %v", err)
+	}
+	spec := Block{Path: LandingPath, Name: landingBlockName, LinkPrefix: "project/"}
+	content := "<section>\n    <!-- doc-counts:begin landing-figures -->\n    stale\n    <!-- doc-counts:end landing-figures -->\n</section>\n"
+	got, err := RewriteBlock(content, spec, counts)
+	if err != nil {
+		t.Fatalf("rewrite landing block: %v", err)
+	}
+	for _, want := range []string{
+		"<code>2026-05</code>", "artifact <code>0.60.1</code>",
+		">1 of 2<", ">1 of 11<", ">7 of 8<", ">3 of 12<",
+		"the 1 behavioral rules",
+		"href=\"{{ 'project/pilot-differential/'|url }}\"",
+		"href=\"{{ 'project/spec-compliance/'|url }}\"",
+		"<section>", "</section>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("landing band lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "stale") {
+		t.Fatal("landing band kept the stale content")
+	}
+	again, err := RewriteBlock(got, spec, counts)
+	if err != nil {
+		t.Fatalf("second landing rewrite: %v", err)
+	}
+	if again != got {
+		t.Fatal("landing block rewrite is not idempotent")
+	}
+}
+
+// TestRewriteBlockRejectsABlockWithNoTemplate keeps a new consumer from silently
+// emptying a block: a name no template renders is an error, not empty markup.
+func TestRewriteBlockRejectsABlockWithNoTemplate(t *testing.T) {
+	content := "<!-- doc-counts:begin invented -->\nkept\n<!-- doc-counts:end invented -->\n"
+	if _, err := RewriteBlock(content, Block{Path: ReadmePath, Name: "invented"}, RefereedCounts{}); err == nil {
+		t.Fatal("want an error for a block name no template renders")
+	}
+}
+
 func TestRewriteBlockRejectsMalformedMarkers(t *testing.T) {
 	spec := Block{Path: "README.md", Name: "refereed-figures"}
 	counts := RefereedCounts{}
