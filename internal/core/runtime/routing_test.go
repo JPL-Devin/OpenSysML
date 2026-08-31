@@ -359,6 +359,45 @@ func TestSendCrossesAnOwnerConnectionToASiblingPart(t *testing.T) {
 	}
 }
 
+// A part joining its own port to the port of a part it holds delegates inward:
+// the send routes over the part's own connection, and the copy is held to the
+// nested part's identity rather than to the sender's (SysML v2 §7.16).
+func TestSendDelegatesToTheNestedPartItIsConnectedTo(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
+		part def Unit { port command : ~Chan; }
+		part def Bay {
+			port command : Chan;
+			part unit : Unit;
+			connect command to unit.command;
+		}
+		part bay : Bay {
+			action ship {
+				first start;
+				action sender { send 9 via command; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+		}
+	}`))
+	bay, err := ctx.Instantiate(oneSymbol(t, idx, "P::bay"))
+	if err != nil {
+		t.Fatalf("instantiate bay: %v", err)
+	}
+	unit := nestedObject(t, ctx, bay, "unit")
+	if _, err := ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::bay::ship"), bay, nil); err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 {
+		t.Fatalf("pending messages = %v, want one delivered inward", pending)
+	}
+	if got := pending[0]; got.Object != unit.ID || got.Port != "command" {
+		t.Errorf("delivered to object %d port %q, want object %d port %q",
+			got.Object, got.Port, unit.ID, "command")
+	}
+}
+
 // The direction of the peer end's flow features decides an owner's connection as
 // it does a behavior's own: a sibling port that only carries outward receives
 // nothing, so the send is reported rather than delivered.
