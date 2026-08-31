@@ -2,6 +2,7 @@ package query
 
 import (
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -11,9 +12,32 @@ import (
 
 // Query parameters this package names in more than one place.
 const (
-	paramSelect  = "oslc.select"
-	paramOrderBy = "oslc.orderBy"
+	paramWhere      = "oslc.where"
+	paramSelect     = "oslc.select"
+	paramOrderBy    = "oslc.orderBy"
+	paramPrefix     = "oslc.prefix"
+	paramProperties = "oslc.properties"
+	paramSearch     = "oslc.searchTerms"
 )
+
+// oslcParameters is the closed set of query parameters this implementation
+// reads. Ignoring any other one would answer a different query than the one
+// asked: a misspelt oslc.where would select the whole model rather than fail.
+var oslcParameters = map[string]bool{
+	paramWhere: true, paramSelect: true, paramOrderBy: true,
+	paramPrefix: true, paramProperties: true, paramSearch: true,
+}
+
+// ParameterNames returns the query parameters this implementation reads, in
+// stable order. It is what an unknown-parameter error lists.
+func ParameterNames() []string {
+	out := make([]string, 0, len(oslcParameters))
+	for name := range oslcParameters {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
 
 // DefaultPrefixes are the prefixes available without an oslc.prefix binding.
 var DefaultPrefixes = map[string]string{
@@ -67,17 +91,23 @@ func ParseParameters(text string) (Query, error) {
 	if err != nil {
 		return Query{}, errorf(ErrMalformed, "malformed OSLC query parameters: %v", err)
 	}
+	if err := checkParameters(values); err != nil {
+		return Query{}, err
+	}
 	prefixes := clonePrefixes(DefaultPrefixes)
-	if prefixText := values.Get("oslc.prefix"); prefixText != "" {
+	if prefixText := values.Get(paramPrefix); prefixText != "" {
 		if err := parsePrefixes(prefixText, prefixes); err != nil {
 			return Query{}, err
 		}
 	}
-	if _, present := values["oslc.searchTerms"]; present {
+	if _, present := values[paramSearch]; present {
 		return Query{}, errorf(ErrUnsupportedSearchTerms, "oslc.searchTerms is not implemented: the implementation performs element identification, not free-text search")
 	}
-	if properties, present := values["oslc.properties"]; present && len(properties) > 0 && strings.TrimSpace(properties[0]) == "*" {
-		return Query{}, wildcardError("oslc.properties")
+	if properties, present := values[paramProperties]; present && len(properties) > 0 {
+		if strings.TrimSpace(properties[0]) == "*" {
+			return Query{}, wildcardError(paramProperties)
+		}
+		return Query{}, errorf(ErrMalformed, "oslc.properties is not implemented: name the properties to report with %s", paramSelect)
 	}
 	selectTerms, err := splitCommaStrict(values.Get(paramSelect), paramSelect)
 	if err != nil {
@@ -91,8 +121,8 @@ func ParseParameters(text string) (Query, error) {
 		}
 		q.OrderBy = terms
 	}
-	if where := values.Get("oslc.where"); where != "" {
-		p := oslcParser{s: where, prefixes: prefixes}
+	if where, present := values[paramWhere]; present {
+		p := oslcParser{s: where[0], prefixes: prefixes}
 		parsed, err := p.parseCompound()
 		if err != nil {
 			return Query{}, err
@@ -115,8 +145,28 @@ func ParseParameters(text string) (Query, error) {
 	return q, nil
 }
 
+// checkParameters refuses a parameter this implementation does not read, and
+// one given more than once: reading only the first would discard the rest.
+func checkParameters(values url.Values) error {
+	names := make([]string, 0, len(values))
+	for name := range values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if !oslcParameters[name] {
+			return errorf(ErrMalformed, "unknown OSLC query parameter %q; this implementation reads %s",
+				name, strings.Join(ParameterNames(), ", "))
+		}
+		if len(values[name]) > 1 {
+			return errorf(ErrMalformed, "OSLC query parameter %q is given %d times", name, len(values[name]))
+		}
+	}
+	return nil
+}
+
 func parsePrefixes(text string, prefixes map[string]string) error {
-	bindings, err := splitCommaStrict(text, "oslc.prefix")
+	bindings, err := splitCommaStrict(text, paramPrefix)
 	if err != nil {
 		return err
 	}
@@ -285,7 +335,7 @@ func (p *oslcParser) value() (string, error) {
 			return "", errorf(ErrMalformed, "unterminated URI value")
 		}
 		p.pos = start + end + 1
-		return p.s[start : start+end], nil
+		return localValue(p.s[start : start+end]), nil
 	}
 	if p.s[p.pos] == '"' {
 		p.pos++
@@ -390,14 +440,25 @@ func resolveProperty(name string, prefixes map[string]string) (string, error) {
 }
 
 func resolveValue(name string, prefixes map[string]string) (string, error) {
+	if strings.Contains(name, "::") {
+		return "", errorf(ErrMalformed,
+			"OSLC value %q is a model qualified name, not a prefixed name; write it as a quoted literal %q", name, name)
+	}
 	iri, err := expandName(name, prefixes)
 	if err != nil {
 		return "", err
 	}
+	return localValue(iri), nil
+}
+
+// localValue reads the value an IRI denotes: a term of the SysML namespace
+// denotes the model value its local name spells. A `<uri>` and the prefixed
+// name expanding to it must reduce alike.
+func localValue(iri string) string {
 	if strings.HasPrefix(iri, rdf.SysML) {
-		return strings.TrimPrefix(iri, rdf.SysML), nil
+		return strings.TrimPrefix(iri, rdf.SysML)
 	}
-	return iri, nil
+	return iri
 }
 
 func expandName(name string, prefixes map[string]string) (string, error) {

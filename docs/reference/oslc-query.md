@@ -21,11 +21,24 @@ quoted strings (with `\"` and `\\` escapes), `true`, `false`, or a decimal.
 The supported typed literal suffixes are `^^xsd:string`, `^^xsd:boolean`,
 `^^xsd:integer`, `^^xsd:decimal`, and `^^xsd:double`.
 
+A `<uri>` in the SysML namespace and the prefixed name that expands to it are
+the same value, so `rdf:type=<https://www.omg.org/spec/SysML#PartUsage>`,
+`rdf:type=sysml:PartUsage`, and `rdf:type="PartUsage"` select alike. A model
+qualified name is a literal, not a prefixed name: write
+`sysml:qualifiedName="Robot::Platform::battery"` with the quotes. The same
+holds for `sysml:type`, whose values are the qualified names of typing
+definitions.
+
 The `oslc.where`, `oslc.select`, `oslc.orderBy`, and `oslc.prefix` parameters
 may be supplied as a URL-encoded query-parameter string. Standard decoding
 applies: `+` means a space and percent-encoded sequences are decoded. A bare
 where-clause remains accepted. `oslc.orderBy` accepts `+` and `-` prefixes.
 Selection and ordering are comma-separated.
+
+A parameter this implementation does not read is a typed error rather than an
+omission, because ignoring one answers a different question than the one asked:
+a misspelt `oslc.wheree` would otherwise select the whole model. A parameter
+given twice is refused for the same reason, as is an empty `oslc.where`.
 
 ## Prefixes and properties
 
@@ -76,6 +89,8 @@ operators.
 | `scoped_term` / nested property query | Typed error. The OSLC rationale is to match a resource using a related resource's property; graph-pattern traversal is not implemented by this symbol-index evaluator. |
 | Property wildcard (`*` in `oslc.where`, `oslc.select`, or `oslc.orderBy`) | Typed error. Generic property wildcards are not implemented. |
 | `oslc.searchTerms` | Typed error. Free-text search is distinct from property identification. |
+| `oslc.properties` | Typed error naming `oslc.select`, which reports the property projection. |
+| Any other `oslc.*` parameter, or a repeated one | Typed error. |
 | Language-tagged literals | Typed error; model properties do not carry language tags. |
 | Non-`xsd:` or unsupported `xsd:` datatypes | Typed error rather than a potentially misleading lexical comparison. |
 
@@ -88,4 +103,6 @@ exclusive with the structured `query` field. The service advertises the
 The REPL accepts `%query <oslc-query>`. The `sysml` command accepts
 `-query <oslc-query>` alongside the other model modes. Both print one matched
 element per line as qualified name and metamodel type, followed by selected
-properties.
+properties. A query that matches nothing says so — the REPL prints `no
+elements matched`, and the command reports it on standard error, keeping
+standard output one line per match.

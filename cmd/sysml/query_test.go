@@ -21,6 +21,25 @@ func TestQueryFlagIdentifiesElements(t *testing.T) {
 	}
 }
 
+func TestQueryFlagReportsNoMatchOnStderr(t *testing.T) {
+	binary := buildCLI(t)
+	model := filepath.Join(t.TempDir(), "model.sysml")
+	const queryModel = `package Demo { part def Wheel; part wheel : Wheel; }`
+	if err := os.WriteFile(model, []byte(queryModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outcome := runCommand(t, exec.Command(binary, "-query", `sysml:name="spare"`, model))
+	if outcome.status != 0 {
+		t.Fatalf("outcome = %#v", outcome)
+	}
+	if !strings.Contains(outcome.stderr, "no elements matched") {
+		t.Fatalf("stderr = %q, want a no-match report", outcome.stderr)
+	}
+	if strings.Contains(outcome.stdout, "no elements matched") {
+		t.Fatalf("stdout = %q, want it to carry only matches", outcome.stdout)
+	}
+}
+
 func TestQueryFlagRejectsConversion(t *testing.T) {
 	binary := buildCLI(t)
 	model := filepath.Join(t.TempDir(), "model.sysml")
