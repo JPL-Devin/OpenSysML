@@ -35,6 +35,15 @@ Reading order: *em\*ph\*asis* **bold\_move** `` mass >= `limit` `` [the \[spec\]
 | optics | 8.5 |
 | segmentControl | 20 |
 
+*Mass margins (allocated - estimated)*
+
+| name | label | margin |
+| --- | --- | --- |
+| baffle\|shroud \*tricky\* | subsystem: baffle\|shroud \*tricky\* | -1.5 |
+| mount | subsystem: mount | 0 |
+| optics | subsystem: optics | 1.5 |
+| segmentControl | subsystem: segmentControl | 5.5 |
+
 ### Heavy Subsystems
 
 mount segmentControl

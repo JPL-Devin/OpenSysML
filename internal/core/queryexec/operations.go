@@ -343,14 +343,31 @@ func (e *executor) evaluateOrderBy(expression queryplan.Expression) (sequence, e
 		key   Value
 		set   bool
 	}
+	// A property matching a projected column orders by its cells, so a
+	// computed column is orderable by name.
+	columnIndex := -1
+	for i, column := range source.columns {
+		if column.name == property {
+			columnIndex = i
+			break
+		}
+	}
 	items := make([]sortable, len(source.values))
 	known := false
 	var orderedKind ValueKind
 	for i, value := range source.values {
 		sym, _ := value.Element()
-		values, present, valueErr := e.propertyValues(sym, property)
-		if valueErr != nil {
-			return sequence{}, e.featureError(expression, property)
+		var values []Value
+		var present bool
+		if columnIndex >= 0 && i < len(source.cells) {
+			values = source.cells[i][columnIndex].Values()
+			present = true
+		} else {
+			var valueErr error
+			values, present, valueErr = e.propertyValues(sym, property)
+			if valueErr != nil {
+				return sequence{}, e.featureError(expression, property)
+			}
 		}
 		known = known || present
 		items[i].value = value
@@ -423,25 +440,50 @@ func (e *executor) evaluateProject(expression queryplan.Expression) (sequence, e
 	if err != nil {
 		return sequence{}, err
 	}
-	properties, err := e.stringsArgument(expression, "properties")
-	if err != nil {
-		return sequence{}, err
+	var properties []string
+	if hasArgument(expression, "properties") {
+		properties, err = e.stringsArgument(expression, "properties")
+		if err != nil {
+			return sequence{}, err
+		}
 	}
-	if len(properties) == 0 {
+	var computed []computedColumn
+	if columnsValue, ok := argumentValue(expression, "columns"); ok {
+		computed, err = e.computedColumns(expression, columnsValue)
+		if err != nil {
+			return sequence{}, err
+		}
+	}
+	total := len(properties) + len(computed)
+	if total == 0 {
 		return sequence{}, e.invalidArgument(expression, "properties", "empty")
+	}
+	seen := make(map[string]bool, total)
+	for _, property := range properties {
+		seen[property] = true
+	}
+	for _, column := range computed {
+		if seen[column.name] {
+			return sequence{}, e.invalidArgument(expression, "columns", column.name)
+		}
+		seen[column.name] = true
 	}
 	result := sequence{
 		values:  append([]Value(nil), source.values...),
-		columns: make([]Column, len(properties)),
+		columns: make([]Column, total),
 		cells:   make([][]Cell, len(source.values)),
 	}
 	known := make([]bool, len(properties))
 	for i, property := range properties {
 		result.columns[i] = Column{name: property, origin: expression.Origin()}
 	}
+	for i, column := range computed {
+		result.columns[len(properties)+i] = Column{name: column.name, origin: column.origin.Origin()}
+	}
+	tracker := newPropertyTracker()
 	for row, value := range source.values {
 		sym, _ := value.Element()
-		result.cells[row] = make([]Cell, len(properties))
+		result.cells[row] = make([]Cell, total)
 		for column, property := range properties {
 			values, present, valueErr := e.propertyValues(sym, property)
 			if valueErr != nil {
@@ -453,9 +495,24 @@ func (e *executor) evaluateProject(expression queryplan.Expression) (sequence, e
 				origin: value.Origin(),
 			}
 		}
+		for i, column := range computed {
+			values, cellErr := e.evaluateColumnCell(column, sym, tracker)
+			if cellErr != nil {
+				return sequence{}, cellErr
+			}
+			result.cells[row][len(properties)+i] = Cell{
+				values: values,
+				origin: value.Origin(),
+			}
+		}
 	}
-	for i, property := range properties {
-		if !known[i] && len(source.values) > 0 {
+	if len(source.values) > 0 {
+		for i, property := range properties {
+			if !known[i] {
+				return sequence{}, e.unknownProperty(expression, property)
+			}
+		}
+		if property, missing := tracker.missing(); missing {
 			return sequence{}, e.unknownProperty(expression, property)
 		}
 	}
@@ -474,7 +531,12 @@ func (e *executor) propertyValues(sym *symbols.Symbol, property string) ([]Value
 		}
 		return result, true, nil
 	}
-	values, present := e.context.Model.ConstantFeatureValues(sym, property)
+	return e.declaredFeatureValues(sym, property)
+}
+
+// declaredFeatureValues reads a declared (non-metadata) feature of a row.
+func (e *executor) declaredFeatureValues(sym *symbols.Symbol, property string) ([]Value, bool, error) {
+	values, present := e.context.Model.DeclaredFeatureValues(sym, property)
 	if !present {
 		return nil, false, nil
 	}

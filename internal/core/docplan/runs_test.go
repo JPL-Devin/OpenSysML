@@ -189,6 +189,38 @@ func TestCompileGroupedTable(t *testing.T) {
 	}
 }
 
+// TestCompileGroupedTableSeesComputedColumns locks that static projection
+// inspection recognizes computed Column names for groupBy validation.
+func TestCompileGroupedTableSeesComputedColumns(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		part def Subsystem {
+			attribute mass : Real;
+		}
+		calc def Margins :> Query {
+			in root : Element;
+			Project(
+				source = OwnedElements(source = root),
+				properties = ("name"),
+				columns = (Column(name = "label", expression = "sub: " + Element::name))
+			)
+		}
+		part telescope;
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part labels : Table {
+				attribute redefines groupBy = "label";
+				calc rows : Margins {
+					in root = telescope;
+				}
+			}
+		}
+	`)
+	plan := fixture.mustCompile(t, "Report")
+	if got := plan.Content()[0].GroupBy(); got != "label" {
+		t.Fatalf("groupBy = %q", got)
+	}
+}
+
 // TestCompileReportsRunAndGroupErrors locks the typed diagnostics for every
 // malformed inline-run and grouping form.
 func TestCompileReportsRunAndGroupErrors(t *testing.T) {
