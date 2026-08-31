@@ -144,3 +144,52 @@ func TestOneDocumentOperationsRefuseAModelOfSeveral(t *testing.T) {
 		t.Errorf("ApplyEdits err = %v, want a FAILED_PRECONDITION naming the one-document limit", editErr)
 	}
 }
+
+func TestAReexportBetweenDocumentsIsIndexed(t *testing.T) {
+	srv := mustNewService(t, 10)
+	defer srv.Close()
+
+	// A name re-exported by one document is registered under the re-exporting
+	// namespace only once every document of the model is in the index.
+	resp, err := srv.ParseSources(context.Background(), &pb.ParseSourcesRequest{
+		Documents: inlineDocuments(
+			"lib.sysml", "package EngineLib {\n\tpart def Engine;\n}\n",
+			"facade.sysml", "package EngineFacade {\n\tpublic import EngineLib::*;\n}\n",
+			"top.sysml", "package Top {\n\tprivate import EngineFacade::*;\n\tpart def Car {\n\t\tpart motor : Engine;\n\t}\n}\n",
+		),
+	})
+	if err != nil {
+		t.Fatalf("ParseSources: %v", err)
+	}
+	if len(resp.Diagnostics) != 0 {
+		t.Errorf("diagnostics from a chained import: %v", resp.Diagnostics)
+	}
+
+	cached, ok := srv.cache.Get(resp.ModelHash)
+	if !ok {
+		t.Fatal("the model was not cached")
+	}
+	if syms := lookupNamed(cached.Index, "EngineFacade::Engine"); len(syms) == 0 {
+		t.Error("the name EngineFacade re-exports is not in the model's index")
+	}
+}
+
+func TestTwoDocumentSetsDoNotShareAModel(t *testing.T) {
+	srv := mustNewService(t, 10)
+	defer srv.Close()
+
+	// The two sets differ only in where a boundary falls, which a key that ran
+	// its fields together would spell the same way.
+	hashOf := func(documents []*pb.SourceDocument) string {
+		resp, err := srv.ParseSources(context.Background(), &pb.ParseSourcesRequest{Documents: documents})
+		if err != nil {
+			t.Fatalf("ParseSources: %v", err)
+		}
+		return resp.ModelHash
+	}
+	one := hashOf(inlineDocuments("a.sysml", "package A;\x00b.sysml\x00package B;"))
+	two := hashOf(inlineDocuments("a.sysml", "package A;", "b.sysml", "package B;"))
+	if one == two {
+		t.Error("two document sets share one model hash")
+	}
+}

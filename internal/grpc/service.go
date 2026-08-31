@@ -392,12 +392,16 @@ func (s *Service) parseModel(inputs []sourceInput, mode conformance.Mode) (strin
 	// name is part of the key, since its diagnostics name the document they came
 	// from. The conformance mode is part of the key: the same source asks a
 	// different question in each mode, so one mode's diagnostics may not serve
-	// the other.
-	key := mode.String()
+	// the other. Every field is length-delimited, so no document set can spell
+	// the key of another whose names or contents carry the delimiter.
+	var key strings.Builder
+	fmt.Fprintf(&key, "%s\x00%d", mode.String(), len(inputs))
 	for _, input := range inputs {
-		key += "\x00" + input.name + "\x00" + input.language + "\x00" + input.content
+		for _, field := range []string{input.name, input.language, input.content} {
+			fmt.Fprintf(&key, "\x00%d\x00%s", len(field), field)
+		}
 	}
-	modelHash := computeHash(key)
+	modelHash := computeHash(key.String())
 	if cached, ok := s.cache.Get(modelHash); ok {
 		return modelHash, cached
 	}
@@ -424,6 +428,10 @@ func (s *Service) parseModel(inputs []sourceInput, mode conformance.Mode) (strin
 			ParseDiags: p.Diagnostics,
 		})
 	}
+
+	// Registers what a wildcard import re-exports, so a qualified name reaches a
+	// symbol another document imported. Only sound once every document is in.
+	idx.ExpandWildcardImports()
 
 	if parsedClean {
 		for i, doc := range documents {

@@ -132,13 +132,13 @@ func answer[Req, Resp any](ctx context.Context, req Req, handler func(context.Co
 		return zero, err
 	}
 	resp, callErr := handler(ctx, req)
-	if callErr != nil {
-		return zero, statusToError(callErr)
-	}
-	// The engine runs a call to completion; a done context withholds the answer,
-	// as it does on the wire.
+	// The engine runs a call to completion; a done context withholds whatever it
+	// produced, answer or error, as the wire does.
 	if err := contextStatus(ctx); err != nil {
 		return zero, err
+	}
+	if callErr != nil {
+		return zero, statusToError(callErr)
 	}
 	return resp, nil
 }
