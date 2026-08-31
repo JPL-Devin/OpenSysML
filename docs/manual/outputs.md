@@ -14,7 +14,8 @@ What the renderer emits:
 - The document title as a level-1 ATX heading; each section one level deeper,
   saturating at level 6.
 - Paragraphs as prose, with inline runs styled (`*emphasis*`, `**strong**`,
-  `` `code` ``, `[text](<url>)`).
+  `` `code` ``, and links as `[text]` followed by the angle-bracketed URL in
+  parentheses).
 - A stable `<a id="..."></a>` anchor before every block that a `Ref` targets;
   the reference renders as a link to it.
 - Tables as GitHub-flavored pipe tables; grouped tables as one subtable per

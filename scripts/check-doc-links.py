@@ -113,6 +113,9 @@ def page_failures(md: Path, root: Path, anchors: dict[Path, set[str]]) -> list[s
     failures: list[str] = []
     for raw in LINK.findall(text):
         link = raw.strip()
+        # CommonMark allows the destination in angle brackets: [text](<dest>).
+        if link.startswith("<") and link.endswith(">"):
+            link = link[1:-1]
         if not link or link.startswith(SKIP_PREFIX):
             continue
         failure = link_failure(md, link, root, anchors)
