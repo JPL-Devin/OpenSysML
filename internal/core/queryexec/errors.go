@@ -33,6 +33,9 @@ const (
 	ErrorVisitBudget           ErrorKind = "visit-budget"
 	ErrorResultType            ErrorKind = "result-type"
 	ErrorResultMultiplicity    ErrorKind = "result-multiplicity"
+	ErrorColumnOperand         ErrorKind = "column-operand"
+	ErrorColumnOperandType     ErrorKind = "column-operand-type"
+	ErrorColumnDivisionByZero  ErrorKind = "column-division-by-zero"
 )
 
 // Error is a typed query-execution failure with plan provenance.
@@ -93,6 +96,26 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("query %s produced %s, expected %s", e.Query, e.Actual, e.Expected)
 	case ErrorResultMultiplicity:
 		return fmt.Sprintf("query %s produced multiplicity %s, expected %s", e.Query, e.Actual, e.Expected)
+	case ErrorColumnOperand:
+		return fmt.Sprintf(
+			"query %s column %s requires one value per %q operand, got %s for %s",
+			e.Query,
+			e.Property,
+			e.Parameter,
+			e.Actual,
+			e.Target,
+		)
+	case ErrorColumnOperandType:
+		return fmt.Sprintf(
+			"query %s column %s cannot apply %q to %s for %s",
+			e.Query,
+			e.Property,
+			e.Parameter,
+			e.Actual,
+			e.Target,
+		)
+	case ErrorColumnDivisionByZero:
+		return fmt.Sprintf("query %s column %s divides by zero for %s", e.Query, e.Property, e.Target)
 	default:
 		return fmt.Sprintf("query execution failed for %s", e.Query)
 	}

@@ -73,9 +73,25 @@ library package DocumentQueries {
 		return result : Element[0..*] ordered;
 	}
 
+	/* One computed table column: an explicit name plus a calc expression
+	 * evaluated on each projected row element. */
+	attribute def ColumnSpec;
+
+	/* A column expression references row properties by their declared
+	 * feature (e.g. Subsystem::mass), supports +, -, *, / arithmetic,
+	 * string concatenation with +, and ?? for absent-value defaults.
+	 * A failing expression fails the query with a typed error naming
+	 * the row, column and expression. */
+	calc def Column {
+		in name : String[1];
+		in expression : ScalarValue[0..1];
+		return result : ColumnSpec[1];
+	}
+
 	calc def Project {
 		in source : Element[0..*] ordered;
-		in properties : String[1..*] ordered;
+		in properties : String[0..*] ordered = null;
+		in columns : ColumnSpec[0..*] ordered = null;
 		return result : Element[0..*] ordered;
 	}
 

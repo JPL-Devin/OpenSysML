@@ -30,6 +30,13 @@ const (
 	ErrorCompositionCycle       ErrorKind = "composition-cycle"
 	ErrorUnknownParameter       ErrorKind = "unknown-parameter"
 	ErrorUnsupportedExpression  ErrorKind = "unsupported-expression"
+	ErrorInvalidColumn          ErrorKind = "invalid-column"
+	ErrorColumnName             ErrorKind = "column-name"
+	ErrorUnknownColumnProperty  ErrorKind = "unknown-column-property"
+	ErrorColumnOperator         ErrorKind = "column-operator"
+	ErrorColumnType             ErrorKind = "column-type"
+	ErrorDuplicateColumn        ErrorKind = "duplicate-column"
+	ErrorEmptyProjection        ErrorKind = "empty-projection"
 )
 
 // Error is a typed query-planning failure with its source location.
@@ -98,6 +105,26 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("query %s references unknown parameter %s", e.Query, e.Parameter)
 	case ErrorUnsupportedExpression:
 		return fmt.Sprintf("query %s contains an unsupported result expression", e.Query)
+	case ErrorInvalidColumn:
+		return fmt.Sprintf("query %s must build the columns of Project from Column(name, expression) invocations", e.Query)
+	case ErrorColumnName:
+		return fmt.Sprintf("query %s must name each computed column with a string literal", e.Query)
+	case ErrorUnknownColumnProperty:
+		return fmt.Sprintf("query %s column %s references unknown property %s", e.Query, e.Target, e.Parameter)
+	case ErrorColumnOperator:
+		return fmt.Sprintf("query %s column %s does not support operator %q", e.Query, e.Target, e.Actual)
+	case ErrorColumnType:
+		return fmt.Sprintf(
+			"query %s column %s cannot apply %q to %s",
+			e.Query,
+			e.Target,
+			e.Parameter,
+			e.Actual,
+		)
+	case ErrorDuplicateColumn:
+		return fmt.Sprintf("query %s projects column %s more than once", e.Query, e.Parameter)
+	case ErrorEmptyProjection:
+		return fmt.Sprintf("query %s must project at least one property or computed column", e.Query)
 	default:
 		return fmt.Sprintf("query planning failed for %s", e.Query)
 	}

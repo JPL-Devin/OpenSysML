@@ -592,13 +592,23 @@ func staticColumns(program *queryplan.Program, entry string) ([]string, bool) {
 func expressionColumns(program *queryplan.Program, expression queryplan.Expression) ([]string, bool) {
 	switch expression.Operation() {
 	case queryplan.OperationProject:
+		var names []string
+		known := false
 		for _, argument := range expression.Arguments() {
-			if argument.Name != "properties" {
-				continue
+			switch argument.Name {
+			case "properties":
+				properties, ok := literalStrings(argument.Value)
+				if !ok {
+					return nil, false
+				}
+				names = append(names, properties...)
+				known = true
+			case "columns":
+				names = append(names, columnNames(argument.Value)...)
+				known = true
 			}
-			return literalStrings(argument.Value)
 		}
-		return nil, false
+		return names, known
 	case queryplan.OperationInvoke:
 		return staticColumns(program, expression.Target())
 	case queryplan.OperationWhereType,
@@ -641,6 +651,22 @@ func literalStrings(value queryplan.Expression) ([]string, bool) {
 		}
 	}
 	return nil, false
+}
+
+// columnNames extracts the explicit names of a projection's planned
+// computed columns.
+func columnNames(value queryplan.Expression) []string {
+	if value.Operation() == queryplan.OperationSequence {
+		var out []string
+		for _, element := range value.Arguments() {
+			out = append(out, columnNames(element.Value)...)
+		}
+		return out
+	}
+	if value.Operation() == queryplan.OperationColumn {
+		return []string{value.Target()}
+	}
+	return nil
 }
 
 func containsColumn(columns []string, name string) bool {

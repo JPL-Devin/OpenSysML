@@ -510,6 +510,13 @@ func (c *compiler) compileInvocation(
 		}
 	}
 	targetName := symbols.FQNOf(target)
+	if targetName == columnFQN {
+		return typedExpression{}, &Error{
+			Kind:   ErrorInvalidColumn,
+			Query:  symbols.FQNOf(query),
+			Origin: provenance.Node(owner.DocName, expression),
+		}
+	}
 	if operation, ok := builtins[targetName]; ok {
 		targetParams, targetResult, err := c.signature(target)
 		if err != nil {
@@ -526,6 +533,11 @@ func (c *compiler) compileInvocation(
 		)
 		if err != nil {
 			return typedExpression{}, err
+		}
+		if operation.operation == OperationProject {
+			if err := c.validateProject(query, owner, expression, args); err != nil {
+				return typedExpression{}, err
+			}
 		}
 		return typedExpression{
 			expression: Expression{
@@ -611,6 +623,14 @@ func (c *compiler) compileBuiltinArguments(
 		}
 		args := make([]Argument, 0, len(expression.Args))
 		for i, node := range expression.Args {
+			if targetParams[i].Type == columnSpecFQN {
+				columns, err := c.compileColumns(query, owner, params, node)
+				if err != nil {
+					return nil, err
+				}
+				args = append(args, Argument{Name: targetParams[i].Name, Value: columns})
+				continue
+			}
 			value, err := c.compileExpression(query, owner, params, node, dependency)
 			if err != nil {
 				return nil, err
@@ -691,6 +711,14 @@ func (c *compiler) compileNamedArguments(
 					Origin:    provenance.Node(owner.DocName, expression),
 				}
 			}
+			continue
+		}
+		if param.Type == columnSpecFQN {
+			columns, err := c.compileColumns(query, owner, callerParams, node)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, Argument{Name: param.Name, Named: true, Value: columns})
 			continue
 		}
 		value, err := c.compileExpression(query, owner, callerParams, node, dependency)

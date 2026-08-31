@@ -435,6 +435,20 @@ func (e *executor) evaluateSequence(expression queryplan.Expression) (sequence, 
 	return result, nil
 }
 
+func hasArgument(expression queryplan.Expression, name string) bool {
+	_, ok := argumentValue(expression, name)
+	return ok
+}
+
+func argumentValue(expression queryplan.Expression, name string) (queryplan.Expression, bool) {
+	for _, argument := range expression.Arguments() {
+		if argument.Name == name {
+			return argument.Value, true
+		}
+	}
+	return queryplan.Expression{}, false
+}
+
 func (e *executor) argument(expression queryplan.Expression, name string) (sequence, error) {
 	for _, argument := range expression.Arguments() {
 		if argument.Name == name {

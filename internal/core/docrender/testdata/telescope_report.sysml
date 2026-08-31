@@ -6,6 +6,7 @@ package Observatory {
 
 	part def Subsystem {
 		attribute mass : Real;
+		attribute allocatedMass : Real;
 		attribute zone : String;
 	}
 
@@ -14,14 +15,17 @@ package Observatory {
 	part telescope : 'Assembly *frame*' {
 		part optics : Subsystem {
 			attribute redefines mass = 8.5;
+			attribute redefines allocatedMass = 10.0;
 			attribute redefines zone = "payload";
 		}
 		part segmentControl : Subsystem {
 			attribute redefines mass = 20.0;
+			attribute redefines allocatedMass = 25.5;
 			attribute redefines zone = "payload";
 		}
 		part mount : Subsystem {
 			attribute redefines mass = 15.0;
+			attribute redefines allocatedMass = 15.0;
 			attribute redefines zone = "support | *frame*";
 		}
 		part 'baffle|shroud *tricky*' : Subsystem {
@@ -117,6 +121,27 @@ package Observatory {
 		)
 	}
 
+	calc def MassMargins :> Query {
+		in root : Element;
+		Project(
+			source = OrderBy(
+				source = Subsystems(root = root),
+				property = "name",
+				direction = "ascending",
+				missing = "last",
+				multiple = "error"
+			),
+			properties = ("name"),
+			columns = (
+				Column(name = "label", expression = "subsystem: " + Element::name),
+				Column(
+					name = "margin",
+					expression = (Subsystem::allocatedMass ?? 0.0) - Subsystem::mass
+				)
+			)
+		)
+	}
+
 	calc def MissingSubsystems :> Query {
 		in root : Element;
 		Project(
@@ -189,6 +214,13 @@ package Observatory {
 			part masses : Table {
 				attribute redefines caption = "All subsystems by mass";
 				calc rows : SubsystemTable {
+					in root = telescope;
+				}
+			}
+
+			part margins : Table {
+				attribute redefines caption = "Mass margins (allocated - estimated)";
+				calc rows : MassMargins {
 					in root = telescope;
 				}
 			}

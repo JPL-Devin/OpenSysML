@@ -1,0 +1,274 @@
+package queryexec
+
+import (
+	"strconv"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
+	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+// computedColumn is one planned Column(name, expression) of a projection.
+type computedColumn struct {
+	name       string
+	expression queryplan.Expression
+	origin     queryplan.Expression
+}
+
+// computedColumns decodes Project's structural columns argument.
+func (e *executor) computedColumns(
+	project queryplan.Expression,
+	value queryplan.Expression,
+) ([]computedColumn, error) {
+	var elements []queryplan.Expression
+	switch value.Operation() {
+	case queryplan.OperationSequence:
+		for _, argument := range value.Arguments() {
+			elements = append(elements, argument.Value)
+		}
+	case queryplan.OperationColumn:
+		elements = []queryplan.Expression{value}
+	default:
+		return nil, e.invalidArgument(project, "columns", string(value.Operation()))
+	}
+	columns := make([]computedColumn, 0, len(elements))
+	for _, element := range elements {
+		if element.Operation() != queryplan.OperationColumn {
+			return nil, e.invalidArgument(project, "columns", string(element.Operation()))
+		}
+		column := computedColumn{name: element.Target(), origin: element}
+		expression, ok := argumentValue(element, "expression")
+		if !ok {
+			return nil, e.invalidArgument(project, "columns", column.name)
+		}
+		column.expression = expression
+		columns = append(columns, column)
+	}
+	return columns, nil
+}
+
+// propertyTracker records the row properties a projection read and whether
+// each was ever present, so an unknown property stays a typed failure.
+type propertyTracker struct {
+	order   []string
+	present map[string]bool
+}
+
+func newPropertyTracker() *propertyTracker {
+	return &propertyTracker{present: make(map[string]bool)}
+}
+
+func (t *propertyTracker) record(property string, present bool) {
+	if _, seen := t.present[property]; !seen {
+		t.order = append(t.order, property)
+	}
+	t.present[property] = t.present[property] || present
+}
+
+func (t *propertyTracker) missing() (string, bool) {
+	for _, property := range t.order {
+		if !t.present[property] {
+			return property, true
+		}
+	}
+	return "", false
+}
+
+// evaluateColumnCell evaluates one computed column for one row element.
+// A failing expression fails the query with a typed error; ?? is the
+// deliberate fallback for absent values.
+func (e *executor) evaluateColumnCell(
+	column computedColumn,
+	sym *symbols.Symbol,
+	tracker *propertyTracker,
+) ([]Value, error) {
+	return e.evaluateColumnExpression(column.expression, column.name, sym, tracker)
+}
+
+func (e *executor) evaluateColumnExpression(
+	expression queryplan.Expression,
+	column string,
+	sym *symbols.Symbol,
+	tracker *propertyTracker,
+) ([]Value, error) {
+	switch expression.Operation() {
+	case queryplan.OperationRowProperty:
+		property := expression.Target()
+		values, present, err := e.propertyValues(sym, property)
+		if err != nil {
+			return nil, e.featureError(expression, property)
+		}
+		tracker.record(property, present)
+		return values, nil
+	case queryplan.OperationLiteral:
+		value, err := e.evaluateLiteral(expression)
+		if err != nil {
+			return nil, err
+		}
+		return value.values, nil
+	case queryplan.OperationParameter:
+		binding, ok := e.bindings[expression.Target()]
+		if !ok {
+			return nil, e.errorAt(ErrorMissingBinding, expression)
+		}
+		return append([]Value(nil), binding.values...), nil
+	case queryplan.OperationColumnOperator:
+		return e.evaluateColumnOperator(expression, column, sym, tracker)
+	default:
+		return nil, &Error{
+			Kind:      ErrorUnsupportedOperation,
+			Query:     e.definition.Name(),
+			Operation: expression.Operation(),
+			Property:  column,
+			Origin:    expression.Origin(),
+		}
+	}
+}
+
+func (e *executor) evaluateColumnOperator(
+	expression queryplan.Expression,
+	column string,
+	sym *symbols.Symbol,
+	tracker *propertyTracker,
+) ([]Value, error) {
+	_, operator := expression.Literal()
+	operands := expression.Arguments()
+	if operator == "??" {
+		left, err := e.evaluateColumnExpression(operands[0].Value, column, sym, tracker)
+		if err != nil {
+			return nil, err
+		}
+		if len(left) > 0 {
+			return left, nil
+		}
+		return e.evaluateColumnExpression(operands[1].Value, column, sym, tracker)
+	}
+	values := make([]Value, len(operands))
+	for i, operand := range operands {
+		operandValues, err := e.evaluateColumnExpression(operand.Value, column, sym, tracker)
+		if err != nil {
+			return nil, err
+		}
+		if len(operandValues) != 1 {
+			return nil, e.columnError(ErrorColumnOperand, column, sym, operand.Value.Origin(),
+				operator, strconv.Itoa(len(operandValues)))
+		}
+		values[i] = operandValues[0]
+	}
+	result, err := e.applyColumnOperator(expression, column, sym, operator, values)
+	if err != nil {
+		return nil, err
+	}
+	return []Value{valueAt(result, expression.Origin())}, nil
+}
+
+func (e *executor) applyColumnOperator(
+	expression queryplan.Expression,
+	column string,
+	sym *symbols.Symbol,
+	operator string,
+	values []Value,
+) (Value, error) {
+	mismatch := func() error {
+		kinds := string(values[0].Kind())
+		if len(values) == 2 {
+			kinds += " and " + string(values[1].Kind())
+		}
+		return e.columnError(ErrorColumnOperandType, column, sym, expression.Origin(), operator, kinds)
+	}
+	if len(values) == 1 {
+		// Unary + and - require one numeric operand.
+		switch values[0].Kind() {
+		case ValueInteger:
+			integer, _ := values[0].Integer()
+			if operator == "-" {
+				integer = -integer
+			}
+			return IntegerValue(integer), nil
+		case ValueReal:
+			real, _ := values[0].Real()
+			if operator == "-" {
+				real = -real
+			}
+			return RealValue(real), nil
+		default:
+			return Value{}, mismatch()
+		}
+	}
+	left, right := values[0], values[1]
+	if operator == "+" && left.Kind() == ValueString && right.Kind() == ValueString {
+		l, _ := left.String()
+		r, _ := right.String()
+		return StringValue(l + r), nil
+	}
+	if !arithmeticKind(left.Kind()) || !arithmeticKind(right.Kind()) {
+		return Value{}, mismatch()
+	}
+	if left.Kind() == ValueInteger && right.Kind() == ValueInteger {
+		l, _ := left.Integer()
+		r, _ := right.Integer()
+		switch operator {
+		case "+":
+			return IntegerValue(l + r), nil
+		case "-":
+			return IntegerValue(l - r), nil
+		case "*":
+			return IntegerValue(l * r), nil
+		case "/":
+			if r == 0 {
+				return Value{}, e.columnError(
+					ErrorColumnDivisionByZero, column, sym, expression.Origin(), operator, "")
+			}
+			return IntegerValue(l / r), nil
+		}
+	}
+	l := realOperand(left)
+	r := realOperand(right)
+	switch operator {
+	case "+":
+		return RealValue(l + r), nil
+	case "-":
+		return RealValue(l - r), nil
+	case "*":
+		return RealValue(l * r), nil
+	case "/":
+		if r == 0 {
+			return Value{}, e.columnError(
+				ErrorColumnDivisionByZero, column, sym, expression.Origin(), operator, "")
+		}
+		return RealValue(l / r), nil
+	}
+	return Value{}, e.operatorError(expression, operator)
+}
+
+func arithmeticKind(kind ValueKind) bool {
+	return kind == ValueInteger || kind == ValueReal
+}
+
+func realOperand(value Value) float64 {
+	if integer, ok := value.Integer(); ok {
+		return float64(integer)
+	}
+	real, _ := value.Real()
+	return real
+}
+
+func (e *executor) columnError(
+	kind ErrorKind,
+	column string,
+	sym *symbols.Symbol,
+	origin provenance.Origin,
+	operator string,
+	actual string,
+) error {
+	return &Error{
+		Kind:      kind,
+		Query:     e.definition.Name(),
+		Operation: queryplan.OperationProject,
+		Property:  column,
+		Target:    symbols.FQNOf(sym),
+		Parameter: operator,
+		Actual:    actual,
+		Origin:    origin,
+	}
+}
