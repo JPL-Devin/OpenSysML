@@ -117,7 +117,8 @@ def page_failures(md: Path, root: Path, anchors: dict[Path, set[str]]) -> list[s
         link = raw.strip()
         # CommonMark allows the destination in angle brackets: [text](<dest>).
         if link.startswith("<") and link.endswith(">"):
-            link = re.sub(r"\\(.)", r"\1", link[1:-1])
+            # A backslash escapes only ASCII punctuation; elsewhere it is literal.
+            link = re.sub(r"\\([!-/:-@\[-`{-~])", r"\1", link[1:-1])
         if not link or link.startswith(SKIP_PREFIX):
             continue
         failure = link_failure(md, link, root, anchors)
