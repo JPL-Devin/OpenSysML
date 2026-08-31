@@ -59,8 +59,8 @@
         "name": "examples",
         "dir": "examples",
         "origin": "ours",
-        "files": 24,
-        "digest": "sha256:4f0ef34f4f914664a56b909ba9acef1783fb0f1a7e8f668a184b2ad87bdcedde"
+        "files": 25,
+        "digest": "sha256:9041485058af8378777057723f6150ac8325d950875fd199f55e75580460c674"
       },
       {
         "name": "probes",
@@ -73,14 +73,14 @@
     "recorded": "2026-08-31"
   },
   "totals": {
-    "files": 358,
+    "files": 359,
     "filesFullyAgreeing": 332,
     "agreement": 34,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
-    "pilotOnly": 50,
+    "pilotOnly": 53,
     "openSysMLDiagnostics": 56,
-    "pilotDiagnostics": 86
+    "pilotDiagnostics": 89
   },
   "roots": [
     {
@@ -733,14 +733,14 @@
       "name": "examples",
       "dir": "examples",
       "totals": {
-        "files": 24,
+        "files": 25,
         "filesFullyAgreeing": 19,
         "agreement": 0,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
-        "pilotOnly": 24,
+        "pilotOnly": 27,
         "openSysMLDiagnostics": 2,
-        "pilotDiagnostics": 25
+        "pilotDiagnostics": 28
       },
       "files": [
         {
@@ -868,6 +868,32 @@
               "line": 20,
               "severity": "error",
               "category": "syntax",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "path": "relay-probe-demo/mission.sysml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": [
+            {
+              "line": 44,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 47,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 133,
+              "severity": "error",
+              "category": "kind-mismatch",
               "count": 1
             }
           ]
@@ -1013,7 +1039,7 @@
     {
       "side": "pilot",
       "message": "Cannot override a binding feature value",
-      "count": 9
+      "count": 11
     },
     {
       "side": "pilot",
@@ -1183,14 +1209,14 @@
       }
     ],
     "totals": {
-      "files": 358,
+      "files": 359,
       "filesFullyAgreeing": 333,
       "agreement": 34,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
-      "pilotOnly": 50,
+      "pilotOnly": 53,
       "openSysMLDiagnostics": 55,
-      "pilotDiagnostics": 86
+      "pilotDiagnostics": 89
     },
     "findings": [
       {

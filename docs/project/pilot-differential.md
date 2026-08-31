@@ -198,7 +198,7 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-07`, 358 files)
+## Results (pilot `2026-07`, 359 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -207,9 +207,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 24 | 19 | 2 | 25 | 0 | 1 | 1 | 24 |
+| `examples` | 25 | 19 | 2 | 28 | 0 | 1 | 1 | 27 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **358** | **332** | **56** | **86** | **34** | **2** | **20** | **50** |
+| **Total** | **359** | **332** | **56** | **89** | **34** | **2** | **20** | **53** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -335,8 +335,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **50** |
-| pilot diagnostics | 123 | **86** |
+| only pilot | 82 | **53** |
+| pilot diagnostics | 123 | **89** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -540,7 +540,11 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 8 syntax, 11 `unmapped`, 4 `kind-mismatch`, 1 `unresolved-reference` — all of them
+`examples` 8 syntax, 13 `unmapped`, 5 `kind-mismatch`, 1 `unresolved-reference` — of which
+`relay-probe-demo/mission.sysml` carries three: two `unmapped` where the pilot rejects a snapshot
+redefining the mass its individual binds (`Cannot override a binding feature value`) and one
+`kind-mismatch` on its send of a `Telemetry` instantiation, the same two rules it already flags on
+`solver-demo.sysml` and the send-statement demos — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -582,7 +586,7 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **24** |
+| `examples`: only pilot | **40** | **27** |
 | `examples`: fully agreeing | **15** | **19** |
 | `unmapped`, our side | **20** | **19** |
 

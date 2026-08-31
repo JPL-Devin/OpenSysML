@@ -1440,3 +1440,44 @@ func TestSendRoutesThroughAnEnclosingNestedFlowsConnector(t *testing.T) {
 	}
 	assertIntOutput(t, outputs, "got", 7)
 }
+
+// An accepted signal materializes one occurrence per message: the guard read
+// during transition selection and the firing effect see the same object.
+func TestAcceptedSignalMaterializesOneOccurrencePerMessage(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		private import ScalarValues::*;
+		attribute def Ping { attribute n : Real; }
+		state sm {
+			attribute total : Real = 0.0;
+			entry; then idle;
+			state idle;
+			state seen;
+			transition first idle accept p : Ping if p.n > 0.0 do assign total := total + p.n then seen;
+		}
+	}`))
+	exec, err := newStateExecutor(ctx, oneSymbol(t, idx, "test::sm"), nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	ping := oneSymbol(t, idx, "test::Ping")
+	exec.enqueueSignal(Message{SignalType: "Ping", Signal: ping, Payload: map[string]Value{
+		"n": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 2}},
+	}})
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	assertCurrentState(t, exec, "seen")
+
+	count := 0
+	for _, inst := range ctx.instances {
+		if inst.Type == ping {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected one Ping occurrence for one message, got %d", count)
+	}
+}

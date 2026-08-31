@@ -926,10 +926,9 @@ func (e *StateExecutor) bindAcceptPayload(acceptEvent *ast.AcceptEvent, event *E
 		return unbind, fmt.Errorf("accept %s: event carries %T, not a message",
 			name.Text, event.Payload)
 	}
-	value, ok := msg.Payload["value"]
-	if !ok {
-		return unbind, fmt.Errorf("%w: accept %s: %s carries no single value to bind",
-			ErrNoValue, name.Text, orAnonymousSignal(msg.SignalType))
+	value, err := e.ctx.acceptedValue(msg)
+	if err != nil {
+		return unbind, fmt.Errorf("accept %s: %w", name.Text, err)
 	}
 	e.stateData[name.Text] = value
 	return unbind, nil
