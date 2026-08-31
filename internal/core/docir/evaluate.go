@@ -311,7 +311,10 @@ func (e *evaluator) rowTarget(node docplan.Content, template docplan.ColumnRun, 
 	if len(values) != 1 {
 		return "", invalid(fmt.Sprintf("%d values", len(values)))
 	}
-	target := e.valueText(values[0])
+	target, ok := values[0].String()
+	if !ok {
+		return "", invalid(strconv.Quote(e.valueText(values[0])))
+	}
 	if target == "" {
 		return "", invalid("an empty value")
 	}

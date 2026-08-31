@@ -217,6 +217,32 @@ func TestEvaluateColumnRunErrors(t *testing.T) {
 					}
 				}`,
 		},
+		{
+			name:   "non-string link target",
+			kind:   ErrorInvalidRunTarget,
+			column: "mass",
+			row:    1,
+			body: `
+				calc def Massed :> Query {
+					in root : Element;
+					Project(
+						source = WhereType(source = OwnedElements(source = root), type = "Observatory::Sub"),
+						properties = ("name", "mass")
+					)
+				}
+				part def Report :> Document {
+					attribute redefines title = "Report";
+					part styled : Paragraph {
+						calc names : Massed {
+							in root = telescope;
+						}
+						part linked : LinkColumn {
+							attribute redefines column = "name";
+							attribute redefines targetColumn = "mass";
+						}
+					}
+				}`,
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
