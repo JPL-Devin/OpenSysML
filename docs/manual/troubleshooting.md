@@ -1,0 +1,124 @@
+# Limitations and Troubleshooting
+
+## How errors surface
+
+Document generation fails loudly and early, never partially. Every mistake is
+a **typed error**: planning problems (structure, query references, bindings)
+surface when the document is compiled — as `document-plan-*` diagnostics in
+the editor, and as source-located errors from the CLI — while execution
+problems (a query that cannot run) stop the render with the query error's
+message. A document that cannot be rendered exits `2`; nothing is written.
+
+```console
+$ sysml report.sysml -render-document E::R
+✓ package E
+sysml: document E::R content t query E::Q: query E::Q references unknown property massss
+$ echo $?
+2
+```
+
+## Common mistakes
+
+### Document structure
+
+| Mistake | Error |
+|---|---|
+| Rendering a name that is not a document | `... is not a document: one is a part def specializing DocumentQueries::Document` |
+| Rendering a name that resolves to nothing | `unresolved reference: <name>` |
+| No `title` on a document or section | `missing-title` — the title is required, not defaulted |
+| A document nested inside a document | `nested-document` |
+| A `title`, `caption` or other attribute that is not a literal string | `invalid-attribute` |
+
+### Paragraphs and runs
+
+| Mistake | Error |
+|---|---|
+| A paragraph with neither text, a query, nor runs | `missing-text` |
+| A paragraph with both text and a query, or runs alongside either | `conflicting-text` / `conflicting-runs` |
+| A `Span` without `text` | `missing-run-text` |
+| A `Span` style other than `plain`/`emphasis`/`strong`/`code` | `invalid-run-style` |
+| A `Link` without a `target` URL | `missing-link-target` |
+| A `Ref` without a target | `missing-ref-target` |
+| A `Ref` target that is not a content block of the same document | `unknown-ref-target` / `invalid-ref-target` |
+| A run that is somehow both kinds at once, or carries nested content | `ambiguous-run` |
+
+### Tables, lists and queries
+
+| Mistake | Error |
+|---|---|
+| A `Table` or `List` without a query | `missing-query` |
+| Two queries on one block | `conflicting-query` |
+| A query name that resolves to nothing, or not to a document query | `unknown-query` |
+| A list style other than `bullet`/`number` | `list style must be "bullet" or "number", got "roman"` |
+| A `groupBy` column the query does not project | `unknown-group-column` |
+| Binding a parameter the query does not declare | `unknown-parameter` |
+| Binding the same parameter twice | `duplicate-binding` |
+| Not binding a required parameter | `missing-binding` |
+| A binding whose value's type or multiplicity does not fit | `binding-type` / `binding-multiplicity` |
+
+### Diagrams
+
+| Mistake | Error |
+|---|---|
+| No `source` | `missing-view-source` |
+| A plain-element source without a `kind` | `missing-diagram-kind` |
+| A `kind` on a declared view (which brings its own) | `conflicting-diagram-kind` |
+| A kind other than `tree`/`interconnection`/`state`/`action`/`table`/`sequence` | `unsupported-diagram-kind` |
+| A direction other than `TB`/`LR`/`RL`/`BT` | `invalid-direction` |
+| A direction on a kind that is not a directed graph (e.g. sequence) | `unsupported-direction` |
+
+### Query execution
+
+| Mistake | Error |
+|---|---|
+| Filtering, ordering or projecting a property no source element has | `unknown-property` |
+| A `WhereType` name that is neither a metamodel type nor resolvable | `unknown-classification` |
+| An unknown comparison operator | `invalid-operator` |
+| `OrderBy` over incomparable value types, or `missing`/`multiple = "error"` triggered | `invalid-order` |
+| An unknown relationship kind or direction | `unknown-relationship` |
+| A query invoking a query that does not exist | `unknown-invocation` |
+| A query invocation cycle, or exceeding a depth, count or visit budget | `invocation-cycle` / `invocation-depth` / `invocation-budget` / `visit-budget` — the engine terminates rather than hangs |
+
+### PDF
+
+| Mistake | Error |
+|---|---|
+| `-doc-form pdf` without `-o` | refused — a PDF is a binary artifact |
+| The selected converter not installed | `tool-missing`, naming the tool, its `OPENSYSML_*` override variable and the other engines |
+| The converter exits non-zero | `tool-failed`, with the tool's own words |
+| `-pdf-*` flags without `-doc-form pdf` | flag-conflict error |
+
+## Limitations
+
+Kept honest per the project's compliance record; each of these is a current
+fact about the implementation, not a design position.
+
+- **The vocabulary is non-normative.** `DocumentQueries` is an OpenSysML
+  extension; other SysML v2 tools will parse models that use it but will not
+  render documents from them.
+- **Computed table columns are not modeled.** `Project` projects declared
+  properties only — a column is always a property's value, never an
+  expression over one (no sums, no unit conversions, no concatenation).
+- **Query-generated text is plain.** A query-backed paragraph renders each
+  projected value as an escaped plain run; inline formatting (`Span`, `Link`,
+  `Ref`) applies to statically-authored runs only.
+- **Cross-references are in-document only.** A `Ref` targets a content block
+  of the same document; cross-document references are not modeled.
+- **PDF does not yet render inline runs or anchors.** Paragraphs composed of
+  runs, `Ref` anchors and grouped-table group keys appear in PDF output as
+  literal Markdown text (`*generated*`, `<a id="...">`, `**zone: ...**`)
+  rather than styled text and working links. A follow-up is planned; use
+  Markdown output for documents that rely on inline runs.
+- **PDF is CLI-only.** The REPL, gRPC and LSP surfaces render Markdown only.
+- **PDF reproducibility is per-toolchain.** Byte-identical output holds for
+  one pinned converter toolchain; different converter versions or fonts
+  produce different bytes. Prince is recognized but not provisioned by the
+  toolchain download script (it is commercial).
+- **Presentation is not configurable.** No Mermaid theme or stylesheet
+  options; a diagram's caption and direction, plus the PDF deliverable
+  flags, are the whole presentation surface.
+- **`-json` does not combine with `-render-document`** — the document IR is
+  not reported as JSON.
+- **Editor rendering is on demand.** The Render Document command re-renders
+  when invoked; there is no live preview that updates as you type (the
+  `renderChanged` notification tells a client *when* to re-request).

@@ -27,7 +27,8 @@ certification is claimed.
 
 ## Quick start
 
-**Introductory material:** [the guide](docs/guide/)
+**Introductory material:** [the guide](docs/guide/) and the
+[document generation manual](docs/manual/README.md)
 
 **Complete searchable documentation:** <https://opensysml.org/> — the same pages as
 [docs/](docs/), rendered from `main`.
@@ -200,7 +201,7 @@ The project is under active development, with the core infrastructure operationa
 | Semantic layer (operators, builtins, validation) | ✅ Complete |
 | Feature chain resolution (member access) | ✅ Complete |
 | Validation passes (typing conformance, redefinition) | ✅ Complete |
-| Native document-query planning | 🚧 Query definitions, typed immutable plans, named composition, cycle checks and diagnostics complete; execution is reachable via `%run-query` and `-run-query`; document composition and Markdown rendering are not yet implemented |
+| Native document generation | ✅ Document queries (`%run-query`, `-run-query`), document definitions with sections, paragraphs, inline runs, tables (including grouped), lists and embedded diagrams, rendered to Markdown (`-render-document`, `%render-document`) or PDF (`-doc-form pdf`) — see [the document generation manual](docs/manual/README.md). *Not yet:* computed table columns, cross-document references, semantic inline runs in PDF |
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
