@@ -1115,16 +1115,17 @@ jobs:
             
             # Bundle archives: both binaries under their plain names
             # (sysml, sysml-lsp), which is the layout a Homebrew formula or a
-            # PATH install expects, with the manual pages beside them under
-            # share/man/man1 for a formula or a package to install. The
-            # per-binary archives above are kept unchanged so existing download
-            # links keep working.
+            # PATH install expects, with their manual pages beside them under
+            # share/man/man1 for a formula or a package to install. sysml-grpc
+            # is not in the bundle, so its page is not either. The per-binary
+            # archives above are kept unchanged so existing download links keep
+            # working.
             for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
               stage="stage/${platform}"
               mkdir -p "$stage/share/man/man1"
               cp "sysml-${platform}" "${stage}/sysml"
               cp "sysml-lsp-${platform}" "${stage}/sysml-lsp"
-              cp ../man/man1/*.1 "${stage}/share/man/man1/"
+              cp ../man/man1/sysml.1 ../man/man1/sysml-lsp.1 "${stage}/share/man/man1/"
               tar czf "opensysml-${platform}.tar.gz" -C "$stage" sysml sysml-lsp share
             done
             mkdir -p stage/windows-amd64

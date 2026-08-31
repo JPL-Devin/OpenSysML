@@ -292,8 +292,11 @@ write its own page, which is what `make man` calls:
 sysml -man > sysml.1
 ```
 
-Homebrew installs the pages too, from the release bundle, so `man sysml` works
-after `brew install Open-MBEE/tap/opensysml`.
+Homebrew installs the pages for the binaries it ships, from the release bundle,
+so `man sysml` and `man sysml-lsp` work after
+`brew install Open-MBEE/tap/opensysml`. `sysml-grpc` is published raw for the
+Python client rather than in the bundle, so its page comes from a source
+install.
 
 ---
 
