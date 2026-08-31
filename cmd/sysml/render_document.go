@@ -293,10 +293,8 @@ func foldsCase(dir string) bool {
 	return os.SameFile(lower, upper)
 }
 
-// restoreBackup returns an uncommitted destination to its pre-commit state:
-// a set-aside backup always moves back, and a hard-linked one moves back
-// when a failed replacement removed the destination, or is shed when the
-// destination is still in place.
+// restoreBackup moves a backup back over a missing or set-aside destination,
+// and sheds a hard-linked backup when the destination is still in place.
 func restoreBackup(target, backup string, movedAside bool) {
 	if movedAside {
 		_ = os.Rename(backup, target)
