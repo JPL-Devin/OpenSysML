@@ -239,6 +239,64 @@ func TestRenderDocumentsWritesThroughSymlink(t *testing.T) {
 	}
 }
 
+// TestRenderDocumentsCaseCollidingNames checks documents whose file names
+// differ only by letter case are rejected before anything is written, so a
+// set renders the same on case-sensitive and case-insensitive filesystems.
+func TestRenderDocumentsCaseCollidingNames(t *testing.T) {
+	binary := buildCLI(t)
+	model := `package Reports {
+	private import DocumentQueries::*;
+	private import ScalarValues::*;
+
+	part def Weekly :> Document {
+		attribute redefines title = "Weekly";
+	}
+	part def WEEKLY :> Document {
+		attribute redefines title = "WEEKLY";
+	}
+}
+`
+	dir := filepath.Join(t.TempDir(), "rendered")
+	got := check(t, binary, model, "-render-documents", dir)
+	if got.status != 2 || !strings.Contains(got.stderr, "differ only by letter case") {
+		t.Fatalf("exit = %d stderr = %q", got.status, got.stderr)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("a rejected set created the directory: %v", err)
+	}
+}
+
+// TestBackUpKeepsDestinationInPlace checks a backup leaves the destination
+// itself untouched, so an interrupted commit never hides a document.
+func TestBackUpKeepsDestinationInPlace(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "Reports-Appendix.md")
+	if err := os.WriteFile(target, []byte("previous\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	name, movedAside, err := backUp(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if movedAside {
+		t.Fatal("a hard-link filesystem fell back to a set-aside rename")
+	}
+	held, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("the backed-up destination is gone: %v", err)
+	}
+	if string(held) != "previous\n" {
+		t.Errorf("destination = %q", held)
+	}
+	kept, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(kept) != "previous\n" {
+		t.Errorf("backup = %q", kept)
+	}
+}
+
 // TestRenderDocumentEmitsIncomingAnchors checks a document rendered on its own
 // carries the anchors other documents of the workspace link into it.
 func TestRenderDocumentEmitsIncomingAnchors(t *testing.T) {

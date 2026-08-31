@@ -74,9 +74,11 @@ func runRenderDocuments(files []string) error {
 }
 
 // commitDocumentSet writes a rendered document set all-or-nothing: every
-// document is staged in the directory under a fresh temporary name, existing
-// destinations are set aside, and the staged set is renamed into place; any
-// failure restores the directory's previous contents. A symlink is written
+// document is staged beside its destination under a fresh temporary name,
+// existing destinations are preserved through hard-linked backups, and the
+// staged set is renamed over the destinations; any failure restores the
+// directory's previous contents, and an interruption leaves every
+// destination in place, old or new, never missing. A symlink is written
 // through to its target, keeping the link. A pipe or device is written as it
 // stands, last, after the regular set commits; bytes a pipe or device already
 // received cannot be recalled, so the all-or-nothing guarantee covers the
@@ -105,17 +107,22 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 	}
 	staged := make([]string, len(documents))
 	backups := make([]string, len(documents))
+	moved := make([]bool, len(documents))
 	committed := make([]bool, len(documents))
 	rollback := func() {
 		for i := range documents {
 			if staged[i] != "" {
 				_ = os.Remove(staged[i])
 			}
-			if committed[i] {
-				_ = os.Remove(targets[i])
-			}
-			if backups[i] != "" {
+			switch {
+			case committed[i] && backups[i] != "":
 				_ = os.Rename(backups[i], targets[i])
+			case committed[i]:
+				_ = os.Remove(targets[i])
+			case moved[i]:
+				_ = os.Rename(backups[i], targets[i])
+			case backups[i] != "":
+				_ = os.Remove(backups[i])
 			}
 		}
 	}
@@ -123,7 +130,7 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 		if direct[i] {
 			continue
 		}
-		name, err := stageDocument(document, perms[i])
+		name, err := stageDocument(document, perms[i], filepath.Dir(targets[i]))
 		staged[i] = name
 		if err != nil {
 			rollback()
@@ -134,12 +141,13 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 		if direct[i] || !replaced[i] {
 			continue
 		}
-		name, err := setAside(targets[i])
+		name, movedAside, err := backUp(targets[i])
 		if err != nil {
 			rollback()
 			return fmt.Errorf("write %s: %w", targets[i], err)
 		}
 		backups[i] = name
+		moved[i] = movedAside
 	}
 	for i := range documents {
 		if direct[i] {
@@ -193,10 +201,11 @@ func documentBytes(document repl.RenderedDocument) []byte {
 	return []byte(strings.TrimRight(document.Markdown, "\n") + "\n")
 }
 
-// stageDocument writes a document to a fresh temporary file in the rendering
-// directory, so staging never touches a file the directory already holds.
-func stageDocument(document repl.RenderedDocument, perm os.FileMode) (string, error) {
-	file, err := os.CreateTemp(renderDocsDir, ".sysml-staged-*")
+// stageDocument writes a document to a fresh temporary file beside its
+// destination, so staging never touches an existing file and the commit
+// rename never crosses a filesystem.
+func stageDocument(document repl.RenderedDocument, perm os.FileMode, dir string) (string, error) {
+	file, err := os.CreateTemp(dir, ".sysml-staged-*")
 	if err != nil {
 		return "", fmt.Errorf("stage %s: %w", document.FileName, err)
 	}
@@ -234,23 +243,29 @@ func syncDir(dir string) {
 	_ = f.Close()
 }
 
-// setAside moves an existing destination to a fresh temporary name so a
-// failed commit can restore it.
-func setAside(path string) (string, error) {
-	file, err := os.CreateTemp(renderDocsDir, ".sysml-replaced-*")
+// backUp preserves an existing destination so a failed commit can restore
+// it: a hard link keeps the destination itself in place through the commit,
+// falling back to a set-aside rename where the filesystem has no hard links.
+func backUp(target string) (name string, movedAside bool, err error) {
+	file, err := os.CreateTemp(filepath.Dir(target), ".sysml-replaced-*")
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	name := file.Name()
+	name = file.Name()
 	if err := file.Close(); err != nil {
 		_ = os.Remove(name)
-		return "", err
+		return "", false, err
 	}
-	if err := os.Rename(path, name); err != nil {
-		_ = os.Remove(name)
-		return "", err
+	if err := os.Remove(name); err != nil {
+		return "", false, err
 	}
-	return name, nil
+	if os.Link(target, name) == nil {
+		return name, false, nil
+	}
+	if err := os.Rename(target, name); err != nil {
+		return "", false, err
+	}
+	return name, true, nil
 }
 
 // The forms -doc-form takes.

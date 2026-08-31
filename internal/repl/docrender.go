@@ -81,6 +81,9 @@ func (s *Session) RenderDocumentSetMarkdown() ([]RenderedDocument, error) {
 	})
 	plans := make([]*docplan.Plan, 0, len(syms))
 	names := map[string]bool{}
+	// Filenames are compared case-folded so the set stays writable on
+	// case-insensitive filesystems.
+	files := map[string]string{}
 	for _, sym := range syms {
 		plan, err := docplan.Compile(idx, sem, resolver, sym)
 		if err != nil {
@@ -90,6 +93,11 @@ func (s *Session) RenderDocumentSetMarkdown() ([]RenderedDocument, error) {
 			return nil, fmt.Errorf("%s names more than one document; rename one so the name is unambiguous", notationName(plan.Name()))
 		}
 		names[plan.Name()] = true
+		file := docrender.DocumentFileName(plan.Name())
+		if other, ok := files[strings.ToLower(file)]; ok {
+			return nil, fmt.Errorf("%s and %s render to file names that differ only by letter case; rename one so both files can coexist on a case-insensitive filesystem", notationName(other), notationName(plan.Name()))
+		}
+		files[strings.ToLower(file)] = plan.Name()
 		plans = append(plans, plan)
 	}
 	documents, err := docir.EvaluateSet(plans,
