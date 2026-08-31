@@ -122,9 +122,6 @@ func ParseParameters(text string) (Query, error) {
 		q.OrderBy = terms
 	}
 	if where, present := values[paramWhere]; present {
-		if strings.TrimSpace(where[0]) == "" {
-			return Query{}, errorf(ErrMalformed, "%s is empty: omit it to select every element", paramWhere)
-		}
 		p := oslcParser{s: where[0], prefixes: prefixes}
 		parsed, err := p.parseCompound()
 		if err != nil {
@@ -148,8 +145,18 @@ func ParseParameters(text string) (Query, error) {
 	return q, nil
 }
 
-// checkParameters refuses a parameter this implementation does not read, and
-// one given more than once: reading only the first would discard the rest.
+// omitting names, per parameter, what leaving it out asks for: an empty value
+// is a misuse, since the parameter as written narrows nothing.
+var omitting = map[string]string{
+	paramWhere:   "select every element",
+	paramSelect:  "report every property",
+	paramOrderBy: "keep declaration order",
+	paramPrefix:  "use the default prefixes",
+}
+
+// checkParameters refuses a parameter this implementation does not read, one
+// given more than once (reading only the first would discard the rest), and
+// one given no value.
 func checkParameters(values url.Values) error {
 	names := make([]string, 0, len(values))
 	for name := range values {
@@ -163,6 +170,9 @@ func checkParameters(values url.Values) error {
 		}
 		if len(values[name]) > 1 {
 			return errorf(ErrMalformed, "OSLC query parameter %q is given %d times", name, len(values[name]))
+		}
+		if omit, read := omitting[name]; read && strings.TrimSpace(values[name][0]) == "" {
+			return errorf(ErrMalformed, "%s is empty: omit it to %s", name, omit)
 		}
 	}
 	return nil

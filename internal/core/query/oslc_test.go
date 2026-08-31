@@ -133,6 +133,10 @@ func TestParseOSLCRefusesParametersItDoesNotRead(t *testing.T) {
 		`oslc.pageSize=10&oslc.where=sysml:name%3D%22battery%22`,
 		`oslc.where=sysml:name%3D%22battery%22&oslc.where=sysml:name%3D%22gripper%22`,
 		`oslc.where=`,
+		`oslc.select=`,
+		`oslc.orderBy=`,
+		`oslc.prefix=`,
+		`oslc.select=+&oslc.where=sysml:name%3D%22battery%22`,
 		`oslc.properties=sysml:name`,
 	}
 	for _, text := range tests {

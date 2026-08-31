@@ -38,7 +38,9 @@ Selection and ordering are comma-separated.
 A parameter this implementation does not read is a typed error rather than an
 omission, because ignoring one answers a different question than the one asked:
 a misspelt `oslc.wheree` would otherwise select the whole model. A parameter
-given twice is refused for the same reason, as is an empty `oslc.where`.
+given twice is refused for the same reason, as is a parameter written with no
+value: `oslc.select=` narrows nothing, so it names what omitting it asks for
+(every property) rather than quietly reporting it.
 
 ## Prefixes and properties
 

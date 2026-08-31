@@ -54,9 +54,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 - **An OSLC query parameter this implementation does not read is refused, not ignored.** A misspelt
   `oslc.wheree=…` was dropped and the query then selected the whole model — the widest possible
-  wrong answer, reported as success. An unknown parameter, a parameter given twice, an empty
-  `oslc.where`, and a non-wildcard `oslc.properties` (which names `oslc.select` in its message) are
-  now typed malformed-query errors.
+  wrong answer, reported as success. An unknown parameter, a parameter given twice, a parameter
+  written with no value (`oslc.where=`, `oslc.select=`, `oslc.orderBy=`, `oslc.prefix=`), and a
+  non-wildcard `oslc.properties` (which names `oslc.select` in its message) are now typed
+  malformed-query errors.
 
 - **An unquoted model qualified name says what to write instead.** `sysml:qualifiedName=Robot::Platform::battery`
   reported `OSLC prefix "Robot" is unbound`, naming a prefix the caller never wrote; it now names
