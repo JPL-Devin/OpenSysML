@@ -47,6 +47,7 @@ const (
 	ErrorMissingRefTarget      ErrorKind = "missing-ref-target"
 	ErrorUnknownRefTarget      ErrorKind = "unknown-ref-target"
 	ErrorInvalidRefTarget      ErrorKind = "invalid-ref-target"
+	ErrorAmbiguousRefTarget    ErrorKind = "ambiguous-ref-target"
 	ErrorUnknownGroupColumn    ErrorKind = "unknown-group-column"
 	ErrorColumnRunWithoutQuery ErrorKind = "column-run-without-query"
 	ErrorConflictingColumnRuns ErrorKind = "conflicting-column-runs"
@@ -188,8 +189,10 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("document %s reference %s names no target", e.Document, e.Content)
 	case ErrorUnknownRefTarget:
 		return fmt.Sprintf("document %s reference %s names unknown target %s", e.Document, e.Content, e.Actual)
+	case ErrorAmbiguousRefTarget:
+		return fmt.Sprintf("document %s reference %s targets a usage typed by more than one document: %s", e.Document, e.Content, e.Actual)
 	case ErrorInvalidRefTarget:
-		return fmt.Sprintf("document %s reference %s must target a named content block of the same document, got %s", e.Document, e.Content, e.Actual)
+		return fmt.Sprintf("document %s reference %s must target a named content block of a document, or another document itself, got %s", e.Document, e.Content, e.Actual)
 	case ErrorUnknownGroupColumn:
 		return fmt.Sprintf("document %s table %s groups by %q, which its query does not project", e.Document, e.Content, e.Actual)
 	case ErrorColumnRunWithoutQuery:

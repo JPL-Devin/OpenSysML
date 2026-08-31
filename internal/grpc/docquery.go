@@ -9,6 +9,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/docir"
 	"github.com/Open-MBEE/OpenSysML/internal/core/docplan"
 	"github.com/Open-MBEE/OpenSysML/internal/core/docrender"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
 	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryexec"
@@ -84,7 +85,8 @@ func (s *Service) RenderDocument(ctx context.Context, req *pb.RenderDocumentRequ
 	if err != nil {
 		return nil, documentStatus(err)
 	}
-	document, err := docir.Evaluate(plan,
+	document, err := docir.EvaluateLinked(plan,
+		model.SiblingDocumentPlans(sc.Index, sc.Semantics, sc.Resolver, sym),
 		queryexec.Context{Index: sc.Index, Resolver: sc.Resolver, Model: sc.Semantics},
 		queryexec.Options{}, cachedSourceText(cached.Source))
 	if err != nil {

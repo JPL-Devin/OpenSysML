@@ -20,18 +20,79 @@ func Evaluate(
 	options queryexec.Options,
 	text view.SourceText,
 ) (*Document, error) {
+	return evaluate(plan, context, options, text, nil)
+}
+
+// EvaluateLinked evaluates one plan like Evaluate while also emitting the
+// stable anchors the sibling documents' plans reference into it, so a
+// document rendered on its own carries the anchors incoming cross-document
+// links expect once the files share a directory.
+func EvaluateLinked(
+	plan *docplan.Plan,
+	siblings []*docplan.Plan,
+	context queryexec.Context,
+	options queryexec.Options,
+	text view.SourceText,
+) (*Document, error) {
+	external := make(map[string]map[string]bool)
+	for _, sibling := range siblings {
+		if sibling.Compiled() {
+			collectCrossAnchors(sibling.Content(), external)
+		}
+	}
+	return evaluate(plan, context, options, text, external[plan.Name()])
+}
+
+// EvaluateSet evaluates a set of compiled document plans together, so a
+// content block one document references from another carries its anchor in
+// the rendered target document.
+func EvaluateSet(
+	plans []*docplan.Plan,
+	context queryexec.Context,
+	options queryexec.Options,
+	text view.SourceText,
+) ([]*Document, error) {
+	external := make(map[string]map[string]bool)
+	for _, plan := range plans {
+		if !plan.Compiled() {
+			return nil, &Error{Kind: ErrorInvalidPlan}
+		}
+		collectCrossAnchors(plan.Content(), external)
+	}
+	documents := make([]*Document, 0, len(plans))
+	for _, plan := range plans {
+		document, err := evaluate(plan, context, options, text, external[plan.Name()])
+		if err != nil {
+			return nil, err
+		}
+		documents = append(documents, document)
+	}
+	return documents, nil
+}
+
+func evaluate(
+	plan *docplan.Plan,
+	context queryexec.Context,
+	options queryexec.Options,
+	text view.SourceText,
+	external map[string]bool,
+) (*Document, error) {
 	if !plan.Compiled() {
 		return nil, &Error{Kind: ErrorInvalidPlan}
 	}
 	if context.Index == nil || context.Resolver == nil || context.Model == nil {
 		return nil, &Error{Kind: ErrorInvalidContext, Document: plan.Name()}
 	}
+	referenced := referencedAnchors(plan.Content())
+	for anchor := range external {
+		referenced[anchor] = true
+	}
 	e := &evaluator{
 		document:   plan.Name(),
 		context:    context,
 		options:    options,
 		text:       text,
-		referenced: referencedAnchors(plan.Content()),
+		referenced: referenced,
 	}
 	content, err := e.evaluateContent(plan.Content())
 	if err != nil {
@@ -43,6 +104,23 @@ func Evaluate(
 		content: content,
 		origin:  plan.Origin(),
 	}, nil
+}
+
+// collectCrossAnchors records, per target document, the anchors that other
+// documents' reference runs require it to emit.
+func collectCrossAnchors(planned []docplan.Content, external map[string]map[string]bool) {
+	for _, node := range planned {
+		for _, run := range node.Runs() {
+			if run.Kind() != docplan.RunRef || run.RefDocument() == "" || len(run.RefPath()) == 0 {
+				continue
+			}
+			if external[run.RefDocument()] == nil {
+				external[run.RefDocument()] = make(map[string]bool)
+			}
+			external[run.RefDocument()][AnchorFor(run.RefPath())] = true
+		}
+		collectCrossAnchors(node.Children(), external)
+	}
 }
 
 type evaluator struct {
@@ -62,8 +140,8 @@ func referencedAnchors(planned []docplan.Content) map[string]bool {
 	walk = func(nodes []docplan.Content) {
 		for _, node := range nodes {
 			for _, run := range node.Runs() {
-				if run.Kind() == docplan.RunRef {
-					anchors[anchorFor(run.RefPath())] = true
+				if run.Kind() == docplan.RunRef && run.RefDocument() == "" {
+					anchors[AnchorFor(run.RefPath())] = true
 				}
 			}
 			walk(node.Children())
@@ -73,10 +151,10 @@ func referencedAnchors(planned []docplan.Content) map[string]bool {
 	return anchors
 }
 
-// anchorFor derives a content node's stable anchor from its named path:
+// AnchorFor derives a content node's stable anchor from its named path:
 // segments joined by "-", with every byte outside [A-Za-z0-9_] encoded as
 // "." and two uppercase hex digits, so distinct paths never collide.
-func anchorFor(path []string) string {
+func AnchorFor(path []string) string {
 	segments := make([]string, len(path))
 	for i, segment := range path {
 		var b strings.Builder
@@ -103,7 +181,7 @@ func (e *evaluator) evaluateContent(planned []docplan.Content) ([]Content, error
 			e.path = e.path[:len(e.path)-1]
 			return nil, err
 		}
-		if anchor := anchorFor(e.path); e.referenced[anchor] {
+		if anchor := AnchorFor(e.path); e.referenced[anchor] {
 			evaluated.anchor = anchor
 		}
 		e.path = e.path[:len(e.path)-1]
@@ -402,7 +480,11 @@ func evaluatedRun(run docplan.Run) TextRun {
 	case docplan.RunLink:
 		return TextRun{kind: RunLink, text: run.Text(), target: run.Target(), origin: run.Origin()}
 	case docplan.RunRef:
-		return TextRun{kind: RunRef, text: run.Text(), target: anchorFor(run.RefPath()), origin: run.Origin()}
+		var anchor string
+		if path := run.RefPath(); len(path) > 0 {
+			anchor = AnchorFor(path)
+		}
+		return TextRun{kind: RunRef, text: run.Text(), target: anchor, document: run.RefDocument(), origin: run.Origin()}
 	default:
 		return TextRun{kind: styledKind(run.Style()), text: run.Text(), origin: run.Origin()}
 	}

@@ -43,10 +43,11 @@ const (
 // TextRun is one piece of paragraph or list-item text with its provenance:
 // static text carries its declaration, query-backed text its query value.
 type TextRun struct {
-	kind   RunKind
-	text   string
-	target string
-	origin provenance.Origin
+	kind     RunKind
+	text     string
+	target   string
+	document string
+	origin   provenance.Origin
 }
 
 // Kind returns the classification of the run; the zero value is plain.
@@ -61,8 +62,13 @@ func (r TextRun) Kind() RunKind {
 func (r TextRun) Text() string { return r.text }
 
 // Target returns a link run's destination, or a reference run's anchor —
-// the stable identifier of the referenced content node.
+// the stable identifier of the referenced content node. A reference to
+// another document's root has no anchor.
 func (r TextRun) Target() string { return r.target }
+
+// TargetDocument returns the fully-qualified name of the document a
+// reference run targets, or "" when it targets its own document.
+func (r TextRun) TargetDocument() string { return r.document }
 
 // Origin returns the source declaration or query value behind the run.
 func (r TextRun) Origin() provenance.Origin { return r.origin }

@@ -100,8 +100,12 @@ fact about the implementation, not a design position.
   query-produced text and can link to external URLs, but `Ref`-style
   cross-references to other content blocks apply to statically-authored runs
   only.
-- **Cross-references are in-document only.** A `Ref` targets a content block
-  of the same document; cross-document references are not modeled.
+- **Cross-document links assume one output directory.** A `Ref` may target
+  a content block or the root of another document (see the authoring
+  chapter's cross-document pattern), and `-render-documents` writes the
+  linked set together. Rendering one document alone still succeeds, but its
+  cross-document links point at the target's expected file name and dangle
+  until that document is rendered into the same directory.
 - **Captions are marked, not inferred.** The Markdown dialect writes a
   `<!-- caption -->` comment line before every table and diagram caption; the
   PDF backend styles only marked lines as captions, and an emphasized line

@@ -154,6 +154,7 @@ echo "%load model.sysml
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
 | `--render-document <name>` | | Compile a document definition — a `part def` specializing `DocumentQueries::Document` — run its queries against the model, render its diagram blocks through the view engine and write the rendered CommonMark Markdown, as `%render-document` does. Paragraphs compose statically-authored inline runs (`Span` with a `plain`/`emphasis`/`strong`/`code` style, `Link` to a URL, `Ref` linking to another content block's anchor), a query-backed paragraph or list styles its projected values through nested `SpanColumn`/`LinkColumn` column runs, and a table with a `groupBy` column writes one subtable per group value; table columns are the query's projected properties and computed `Column` names. A `Diagram` content block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default document form, `-doc-form pdf` converts it (see [Rendering a document as PDF](#rendering-a-document-as-pdf)), and `-json` does not apply |
 | `--doc-form <form>` | | Form `--render-document` writes: `markdown` (default) or `pdf`, which drives an external converter |
+| `--render-documents <dir>` | | Render every document definition the model declares as a linked Markdown set into the directory, one file per document, so cross-document references resolve on disk |
 | `--pdf-engine <engine>` | | Converter `--doc-form pdf` drives: `weasyprint` (default), `pandoc` or `prince` |
 | `--pdf-title-page` | | Put the document title on a page of its own (`--doc-form pdf`) |
 | `--pdf-toc` | | Write a table of contents ahead of the content (`--doc-form pdf`) |
@@ -277,6 +278,25 @@ it renders as-is in Markdown, documentation sites and editors without a separate
 has dedicated state diagram and sequence diagram grammars; a table is written as a Markdown table,
 which Mermaid has no grammar for, so `-render-form mermaid` of a table names Markdown rather than
 drawing a diagram of rows.
+
+`-render-documents <dir>` renders every document definition the loaded model declares into the
+directory, one Markdown file per document, in fully-qualified-name order. Each file name is the
+document's fully qualified name with `::` replaced by `-` and any byte outside ASCII letters,
+digits and `_` escaped as `.XX` (uppercase hex), plus `.md` — deterministic, so cross-document
+references (see [the authoring chapter](../manual/authoring.md)) resolve as relative links between
+the written files. Repeated runs write identical bytes.
+
+```bash
+sysml model.sysml -render-documents rendered
+```
+
+The directory is created when necessary; written paths go to stderr and stdout stays empty. A
+model that declares no documents, more than one document with the same name, or does not analyse
+cleanly stops the run with status 2. `-render-documents` cannot be combined with
+`-render-document`, `-render`, `-render-all`, `-o`, `-convert`, a query flag, or a check flag.
+A single `-render-document` of a document with cross-document references still succeeds: the links
+point at the targets' expected file names and dangle until those documents are rendered into the
+same directory.
 
 ## Rendering a document as PDF
 
