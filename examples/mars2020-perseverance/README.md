@@ -54,3 +54,20 @@ sysml> %state RoverBehavior::SurfaceStates
 sysml> %view RoverViews::criticalItems
 sysml> %render RoverViews::structure
 ```
+
+The surface state machine starts in `awake`/`idle` and moves on timed triggers — after 10 s
+of idling it samples, 20 s later it downlinks, 5 s later it is idle again — so each `%advance`
+processes only the events that come due:
+
+```
+sysml> %state RoverBehavior::SurfaceStates
+  Current state: idle
+sysml> %advance 12
+✓ Advanced to 12.0 (1 event(s) processed)
+  Current state: sampling
+sysml> %advance 25
+✓ Advanced to 37.0 (2 event(s) processed)
+  Current state: idle
+```
+
+A `Command` occurrence sends it driving, and a `FaultAlarm` occurrence drops it into `safe`.

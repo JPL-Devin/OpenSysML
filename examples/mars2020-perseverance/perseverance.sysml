@@ -43,6 +43,8 @@ package RoverFlows {
         attribute sealed : Boolean;
     }
 
+    item def FaultAlarm;
+
     item def MartianAtmosphere;
 
     item def Oxygen;
@@ -306,6 +308,7 @@ package RoverStructure {
 // it performs, ending with the sample-caching action it exists to carry out.
 package RoverBehavior {
     private import ScalarValues::*;
+    private import SI::*;
     private import MarsSurfaceEnvironment::*;
     private import RoverFlows::*;
     private import RoverStructure::*;
@@ -351,9 +354,9 @@ package RoverBehavior {
 
             transition first idle accept Command then driving;
             transition first driving then idle;
-            transition first idle then sampling;
-            transition first sampling then communicating;
-            transition first communicating then idle;
+            transition first idle accept after 10 [s] then sampling;
+            transition first sampling accept after 20 [s] then communicating;
+            transition first communicating accept after 5 [s] then idle;
         }
 
         state asleep;
@@ -364,8 +367,8 @@ package RoverBehavior {
             if batteryCharge < 0.2
             then asleep;
 
-        transition first asleep then awake;
-        transition first awake then safe;
+        transition first asleep accept after 30 [s] then awake;
+        transition first awake accept FaultAlarm then safe;
     }
 
     // One sol of surface operations, planned on Earth and run on Mars.

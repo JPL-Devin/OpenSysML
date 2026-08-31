@@ -60,7 +60,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 26,
-        "digest": "sha256:2c58943e9b0e9e750079fb6f76cb2390a356e239f3a87c2bb44d36b1782272df"
+        "digest": "sha256:8b9503cff48a2ebef668488c952fa32c07f8ea362e769c6b62a8c9c533f9004a"
       },
       {
         "name": "probes",
@@ -832,13 +832,13 @@
           "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 534,
+              "line": 537,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 575,
+              "line": 578,
               "severity": "error",
               "category": "unmapped",
               "count": 1
