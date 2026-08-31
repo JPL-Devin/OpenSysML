@@ -39,6 +39,10 @@ func parseBlocks(markdown string) ([]block, error) {
 		switch {
 		case strings.TrimSpace(line) == "":
 			continue
+		case strings.HasPrefix(line, "<!--") && strings.HasSuffix(line, "-->"):
+			// docrender's table-rendering provenance and notice comments are
+			// metadata, not prose.
+			continue
 		case line == "```mermaid":
 			body, next, ok := fenceBody(lines, i+1)
 			if !ok {
@@ -90,14 +94,15 @@ func headingParts(line string) (int, string) {
 }
 
 // tableBlock parses a pipe table from index i, returning it and the index of
-// its last line. The delimiter row is recognized and dropped.
+// its last line. Only the row right after the header is the delimiter; every
+// later pipe line is data, hyphen-only cells included.
 func tableBlock(lines []string, i int) (block, int) {
 	table := block{Kind: blockTable}
 	table.Header = tableCells(lines[i])
 	last := i
 	for j := i + 1; j < len(lines) && strings.HasPrefix(lines[j], "|"); j++ {
 		last = j
-		if isDelimiterRow(lines[j]) {
+		if j == i+1 && isDelimiterRow(lines[j]) {
 			continue
 		}
 		table.Rows = append(table.Rows, tableCells(lines[j]))
@@ -153,30 +158,32 @@ func isListItem(line string) bool {
 	if strings.HasPrefix(line, "- ") {
 		return true
 	}
-	return numberedItemText(line) != ""
+	_, ok := numberedItemText(line)
+	return ok
 }
 
-// numberedItemText returns the text of a "N. item" line, or "" when the line
-// is no numbered item.
-func numberedItemText(line string) string {
+// numberedItemText returns the text of a "N. item" line and whether the line
+// is a numbered item; an item's text may be empty.
+func numberedItemText(line string) (string, bool) {
 	digits := 0
 	for digits < len(line) && line[digits] >= '0' && line[digits] <= '9' {
 		digits++
 	}
 	if digits == 0 || !strings.HasPrefix(line[digits:], ". ") {
-		return ""
+		return "", false
 	}
-	return line[digits+2:]
+	return line[digits+2:], true
 }
 
 // listBlock parses a list from index i, returning it and the index of its
 // last line.
 func listBlock(lines []string, i int) (block, int) {
-	list := block{Kind: blockList, Ordered: numberedItemText(lines[i]) != ""}
+	_, ordered := numberedItemText(lines[i])
+	list := block{Kind: blockList, Ordered: ordered}
 	last := i
 	for j := i; j < len(lines) && isListItem(lines[j]); j++ {
 		last = j
-		if text := numberedItemText(lines[j]); text != "" {
+		if text, ok := numberedItemText(lines[j]); ok {
 			list.Items = append(list.Items, text)
 		} else {
 			list.Items = append(list.Items, strings.TrimPrefix(lines[j], "- "))
@@ -186,26 +193,25 @@ func listBlock(lines []string, i int) (block, int) {
 }
 
 // isCaption reports whether a line is one fully-emphasized span, which is
-// how docrender writes captions; literal asterisks inside are escaped.
+// how docrender writes captions: the first unescaped asterisk after the
+// opener must be the line's last byte.
 func isCaption(line string) bool {
-	if len(line) < 3 || line[0] != '*' || line[len(line)-1] != '*' {
+	if len(line) < 3 || line[0] != '*' {
 		return false
 	}
-	if strings.HasSuffix(line, `\*`) {
-		return false
-	}
+	inner := line[1:]
 	escaped := false
-	for _, r := range line[1 : len(line)-1] {
+	for i, r := range inner {
 		switch {
 		case escaped:
 			escaped = false
 		case r == '\\':
 			escaped = true
 		case r == '*':
-			return false
+			return i == len(inner)-1
 		}
 	}
-	return !escaped
+	return false
 }
 
 // unescape removes the backslash escapes docrender writes before ASCII

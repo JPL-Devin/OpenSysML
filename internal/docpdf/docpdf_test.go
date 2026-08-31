@@ -44,6 +44,59 @@ func TestParseBlocks(t *testing.T) {
 	}
 }
 
+func TestParseBlocksSkipsHTMLComments(t *testing.T) {
+	md := "# T\n\n<!-- Parts::table — table rendering -->\n<!-- not represented: attribute mass is not projected -->\n| Name |\n| --- |\n| Mirror |\n"
+	blocks, err := parseBlocks(md)
+	if err != nil {
+		t.Fatalf("parseBlocks: %v", err)
+	}
+	if len(blocks) != 2 || blocks[0].Kind != blockHeading || blocks[1].Kind != blockTable {
+		t.Fatalf("comments not skipped: %+v", blocks)
+	}
+}
+
+func TestParseBlocksHyphenOnlyRows(t *testing.T) {
+	md := "| Name | Note |\n| --- | --- |\n| --- | - |\n| - | ---- |\n"
+	blocks, err := parseBlocks(md)
+	if err != nil {
+		t.Fatalf("parseBlocks: %v", err)
+	}
+	if len(blocks) != 1 || len(blocks[0].Rows) != 2 {
+		t.Fatalf("hyphen-only rows dropped: %+v", blocks)
+	}
+	if blocks[0].Rows[0][0] != "---" || blocks[0].Rows[1][1] != "----" {
+		t.Fatalf("hyphen cells: %+v", blocks[0].Rows)
+	}
+}
+
+func TestParseBlocksEmptyNumberedItem(t *testing.T) {
+	blocks, err := parseBlocks("1. \n2. second\n")
+	if err != nil {
+		t.Fatalf("parseBlocks: %v", err)
+	}
+	if len(blocks) != 1 || !blocks[0].Ordered {
+		t.Fatalf("empty item split the list: %+v", blocks)
+	}
+	if len(blocks[0].Items) != 2 || blocks[0].Items[0] != "" || blocks[0].Items[1] != "second" {
+		t.Fatalf("items: %+v", blocks[0].Items)
+	}
+}
+
+func TestIsCaptionEscapes(t *testing.T) {
+	for line, want := range map[string]bool{
+		`*Figure 1\. Flow*`:  true,
+		`*ends with \\*`:     true,  // escaped backslash, live closer
+		`*unterminated\*`:    false, // escaped closer
+		`*inner * asterisk*`: false,
+		`**`:                 false,
+		`*x*`:                true,
+	} {
+		if got := isCaption(line); got != want {
+			t.Fatalf("isCaption(%q) = %v, want %v", line, got, want)
+		}
+	}
+}
+
 func TestParseBlocksUnclosedFence(t *testing.T) {
 	_, err := parseBlocks("# T\n\n```mermaid\nflowchart LR\n")
 	var docErr *Error
