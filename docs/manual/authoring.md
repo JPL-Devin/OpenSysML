@@ -126,6 +126,7 @@ part masses : Table {
 ```
 
 ```markdown
+<!-- caption -->
 *All subsystems by mass*
 
 | name | mass |
@@ -160,6 +161,7 @@ part zones : Table {
 ```
 
 ```markdown
+<!-- caption -->
 *Subsystems grouped by zone*
 
 **zone: support**

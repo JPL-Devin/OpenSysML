@@ -23,6 +23,10 @@ What the renderer emits:
 - Lists as `-` bullets or `1.` numbered items.
 - Diagrams as fenced ` ```mermaid ` blocks (or a pipe table for the `table`
   kind), with captions in emphasis.
+- Every table and diagram caption preceded by a `<!-- caption -->` marker
+  line, so the caption is distinguishable from an emphasis-only paragraph.
+  The marker is metadata of OpenSysML's Markdown dialect: ordinary Markdown
+  renderers treat it as a comment and display nothing.
 - All model-derived text escaped so it cannot break document structure.
 - A single trailing newline, no trailing whitespace.
 

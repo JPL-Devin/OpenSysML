@@ -17,6 +17,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **A caption is no longer confusable with an emphasized paragraph.** The
+  Markdown renderer wrote a table or diagram caption and an emphasis-only
+  paragraph identically as `*text*`, so the PDF backend styled every such
+  paragraph as a caption. The renderer now precedes every caption with a
+  `<!-- caption -->` metadata line — invisible in ordinary Markdown
+  renderers — and the PDF backend styles only marked lines as captions,
+  rendering bare emphasized lines as ordinary paragraphs. A marker without
+  a caption line after it is a typed `dangling-caption` error.
+
 - **A connector end through a multi-valued feature fans out.** A send over
   `connect console.command to units.command` where `part units : Unit[2]` was
   `ErrUnroutableSend`: an end reached through a multi-valued feature resolved to no object. Such
