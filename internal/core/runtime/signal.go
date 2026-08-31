@@ -169,14 +169,11 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 		receiver = addr.Name
 	}
 	routable := ctx.realizedConnections(ctx.routableConnections(conns, self, send.Scope), self)
-	var receiving, outbound []string
-	var typeMismatch bool
-	if receiver != "" {
-		receiving, outbound, typeMismatch = ctx.receivingEndsForMessage(
-			routable, send.Target, send.TargetSym, msg,
-		)
-	} else {
-		receiving, outbound = ctx.receivingEnds(routable, send.Target, send.TargetSym)
+	receiving, outbound, typeMismatch, err := ctx.connectedDeliveries(
+		routable, self, send, msg, receiver != "",
+	)
+	if err != nil {
+		return err
 	}
 	crossing, crossMismatch, err := ctx.ownerDeliveries(self, send, msg, receiver != "")
 	if err != nil {
@@ -191,20 +188,14 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 		}
 		return &UnroutableSendError{Port: send.Target, Outbound: outbound}
 	}
-	for _, peer := range receiving {
-		routed := msg
-		routed.Target = receiver
-		routed.Port = peer
-		routed.Object = objectID(self)
-		routed.Delivery = DeliverPort
-		if receiver != "" {
-			routed.Delivery = DeliverPortReceiver
+	// A connection joins two objects, so each copy is held to the identity of the
+	// object whose port the end resolved to rather than to the sender's.
+	posted := map[ownerDelivery]bool{}
+	for _, delivery := range append(receiving, crossing...) {
+		if posted[delivery] {
+			continue
 		}
-		ctx.PostMessage(routed)
-	}
-	// A connection of an owner joins two objects, so the copy it carries is held to
-	// the peer object's identity rather than to the sender's.
-	for _, delivery := range crossing {
+		posted[delivery] = true
 		routed := msg
 		routed.Target = receiver
 		routed.Port = delivery.port
