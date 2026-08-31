@@ -13,7 +13,9 @@ import (
 	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryexec"
 	"github.com/Open-MBEE/OpenSysML/internal/core/queryplan"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // RunDocumentQuery runs a named document query with parameter bindings, the
@@ -84,7 +86,7 @@ func (s *Service) RenderDocument(ctx context.Context, req *pb.RenderDocumentRequ
 	}
 	document, err := docir.Evaluate(plan,
 		queryexec.Context{Index: sc.Index, Resolver: sc.Resolver, Model: sc.Semantics},
-		queryexec.Options{})
+		queryexec.Options{}, cachedSourceText(cached.Source))
 	if err != nil {
 		return nil, documentStatus(err)
 	}
@@ -288,6 +290,20 @@ func docPlanCode(kind docplan.ErrorKind) connect.Code {
 		return connect.CodeInternal
 	default:
 		return connect.CodeFailedPrecondition
+	}
+}
+
+// cachedSourceText reads notation from the cached model's one source file, for
+// the labels a diagram rendering takes verbatim.
+func cachedSourceText(sf *source.SourceFile) view.SourceText {
+	if sf == nil {
+		return nil
+	}
+	return func(name string, span source.Span) string {
+		if name != sf.Name() {
+			return ""
+		}
+		return sf.Text(span)
 	}
 }
 

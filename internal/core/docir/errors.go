@@ -13,6 +13,7 @@ const (
 	ErrorInvalidContext ErrorKind = "invalid-context"
 	ErrorInvalidPlan    ErrorKind = "invalid-plan"
 	ErrorQueryExecution ErrorKind = "query-execution"
+	ErrorViewRendering  ErrorKind = "view-rendering"
 )
 
 // Error is a typed document-evaluation failure with its source location.
@@ -33,10 +34,12 @@ func (e *Error) Error() string {
 		return "document evaluation requires a compiled document plan"
 	case ErrorQueryExecution:
 		return fmt.Sprintf("document %s content %s query %s: %v", e.Document, e.Content, e.Query, e.Err)
+	case ErrorViewRendering:
+		return fmt.Sprintf("document %s diagram %s: %v", e.Document, e.Content, e.Err)
 	default:
 		return fmt.Sprintf("document evaluation failed for %s", e.Document)
 	}
 }
 
-// Unwrap returns the underlying query-execution failure, if any.
+// Unwrap returns the underlying execution or rendering failure, if any.
 func (e *Error) Unwrap() error { return e.Err }

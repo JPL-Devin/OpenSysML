@@ -61,7 +61,7 @@ func (w *Workspace) RenderDocumentMarkdown(fqn string) (string, error) {
 	}
 	document, err := docir.Evaluate(plan,
 		queryexec.Context{Index: w.index, Resolver: resolver, Model: sem},
-		queryexec.Options{})
+		queryexec.Options{}, w.sourceTextLocked())
 	if err != nil {
 		return "", err
 	}
