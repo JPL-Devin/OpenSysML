@@ -15,14 +15,7 @@ import (
 // value types and their measurement references resolve.
 func dimensionModel(t *testing.T) (*semantics.Model, *symbols.Index) {
 	t.Helper()
-	idx := symbols.NewIndex()
-	cache, err := libs.NewCache()
-	if err != nil {
-		cache = nil
-	}
-	if err := libs.NewLoader(libs.DefaultSource(), cache).LoadAll(idx); err != nil {
-		t.Fatalf("load the libraries: %v", err)
-	}
+	idx := libs.NewModelIndex()
 	idx.AddDocument("<t>", parser.New(source.New("<t>", []byte(
 		"package T { private import ISQ::*; attribute t : DurationValue; }"))).ParseFile())
 	idx.ExpandWildcardImports()

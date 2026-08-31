@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
@@ -5669,8 +5670,7 @@ func buildRuntime(t *testing.T, path string, file *ast.RootNamespace) (*symbols.
 // the standard library, for a model that names its elements.
 func buildRuntimeWithLibraries(t *testing.T, path string, file *ast.RootNamespace) (*symbols.Index, *semantics.Model, *Context) {
 	t.Helper()
-	idx := symbols.NewIndex()
-	loadLibraries(t, idx)
+	idx := libs.NewModelIndex()
 	idx.AddDocument(path, file)
 	idx.ExpandWildcardImports()
 	resolver := resolve.New(idx)

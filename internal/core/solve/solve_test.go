@@ -19,8 +19,7 @@ import (
 // appears in the provenance a script records.
 func fixture(t *testing.T, path, src string) (*runtime.Context, *symbols.Index) {
 	t.Helper()
-	idx := symbols.NewIndex()
-	loadLibraries(t, idx)
+	idx := libraryIndex()
 	sf := source.New(path, []byte(src))
 	idx.AddDocument(path, parser.New(sf).ParseFile())
 	idx.ExpandWildcardImports()
@@ -41,18 +40,10 @@ func fixtureFile(t *testing.T, name string) (*runtime.Context, *symbols.Index) {
 	return fixture(t, name, string(src))
 }
 
-// loadLibraries indexes the bundled standard library, which is what makes units,
-// quantity value types and the scalar value types resolve.
-func loadLibraries(t *testing.T, idx *symbols.Index) {
-	t.Helper()
-	cache, err := libs.NewCache()
-	if err != nil {
-		t.Fatalf("library cache: %v", err)
-	}
-	src := libs.DefaultSource()
-	if err := libs.NewLoader(src, cache).LoadAll(idx); err != nil {
-		t.Fatalf("load the library: %v", err)
-	}
+// libraryIndex is an index over the process-wide frozen standard library, which
+// is what makes units, quantity value types and the scalar value types resolve.
+func libraryIndex() *symbols.Index {
+	return libs.NewModelIndex()
 }
 
 // symbolNamed returns the single symbol with that qualified name.

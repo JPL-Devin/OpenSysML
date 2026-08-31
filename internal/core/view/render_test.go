@@ -33,8 +33,7 @@ func loadFixture(t *testing.T, file string) (*Renderer, *symbols.Index) {
 	for _, diag := range p.Diagnostics {
 		t.Fatalf("%s: parse diagnostic: %v", file, diag)
 	}
-	idx := symbols.NewIndex()
-	libs.LoadInto(idx)
+	idx := libs.NewModelIndex()
 	idx.AddDocument(file, root)
 	idx.ExpandWildcardImports()
 	resolver := resolve.New(idx)
