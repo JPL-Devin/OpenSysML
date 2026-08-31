@@ -119,6 +119,95 @@ func valueFromProto(value *pb.Value) Value {
 	}
 }
 
+// valueToProto marshals a value a caller supplies. Unset is refused here, the
+// way the service refuses it: it reports that a feature holds no value, which
+// is something to read rather than to send.
+func valueToProto(value Value) (*pb.Value, error) {
+	switch v := value.(type) {
+	case nil:
+		return nil, nil
+	case Int:
+		return &pb.Value{Kind: &pb.Value_IntValue{IntValue: int64(v)}}, nil
+	case Real:
+		return &pb.Value{Kind: &pb.Value_RealValue{RealValue: float64(v)}}, nil
+	case Bool:
+		return &pb.Value{Kind: &pb.Value_BoolValue{BoolValue: bool(v)}}, nil
+	case String:
+		return &pb.Value{Kind: &pb.Value_StringValue{StringValue: string(v)}}, nil
+	case InstanceID:
+		return &pb.Value{Kind: &pb.Value_InstanceId{InstanceId: int64(v)}}, nil
+	case Null:
+		return &pb.Value{Kind: &pb.Value_Null{Null: string(v)}}, nil
+	case Sequence:
+		sequence := &pb.ValueSequence{Elements: make([]*pb.Value, 0, len(v))}
+		for _, element := range v {
+			sent, err := valueToProto(element)
+			if err != nil {
+				return nil, err
+			}
+			sequence.Elements = append(sequence.Elements, sent)
+		}
+		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: sequence}}, nil
+	case Quantity:
+		return &pb.Value{Kind: &pb.Value_Quantity{Quantity: quantityToProto(v)}}, nil
+	case EnumLiteral:
+		return &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: &pb.EnumLiteral{
+			LiteralId:     v.LiteralID,
+			EnumerationId: v.EnumerationID,
+			Name:          v.Name,
+		}}}, nil
+	case Unset:
+		return nil, &StatusError{
+			Code:    CodeInvalidArgument,
+			Message: "unset is not a value a caller can supply",
+		}
+	default:
+		return nil, &StatusError{Code: CodeInvalidArgument, Message: "unknown value kind"}
+	}
+}
+
+func quantityToProto(quantity Quantity) *pb.Quantity {
+	out := &pb.Quantity{Unit: quantity.Unit}
+	switch magnitude := quantity.Magnitude.(type) {
+	case Int:
+		out.Magnitude = &pb.Quantity_IntMagnitude{IntMagnitude: int64(magnitude)}
+	case Real:
+		out.Magnitude = &pb.Quantity_RealMagnitude{RealMagnitude: float64(magnitude)}
+	}
+	if quantity.Term != nil {
+		term := &pb.UnitTerm{ScaleNum: quantity.Term.ScaleNum, ScaleDen: quantity.Term.ScaleDen}
+		for _, factor := range quantity.Term.Factors {
+			term.Factors = append(term.Factors, &pb.UnitFactor{UnitId: factor.UnitID, Exponent: factor.Exponent})
+		}
+		out.UnitTerm = term
+	}
+	return out
+}
+
+// valuesFromProto converts a map of values, keeping the keys the service used.
+func valuesFromProto(values map[string]*pb.Value) map[string]Value {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string]Value, len(values))
+	for name, value := range values {
+		out[name] = valueFromProto(value)
+	}
+	return out
+}
+
+// instancesFromProto converts an instance graph.
+func instancesFromProto(instances []*pb.Instance) []*Instance {
+	if len(instances) == 0 {
+		return nil
+	}
+	out := make([]*Instance, 0, len(instances))
+	for _, instance := range instances {
+		out = append(out, instanceFromProto(instance))
+	}
+	return out
+}
+
 func quantityFromProto(quantity *pb.Quantity) Quantity {
 	out := Quantity{Unit: quantity.GetUnit()}
 	switch magnitude := quantity.GetMagnitude().(type) {

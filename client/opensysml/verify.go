@@ -1,0 +1,286 @@
+package opensysml
+
+import (
+	"context"
+
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+)
+
+// Reason says what kind of failure an undecided verdict or a failed calculation
+// reports, so a caller acts on the kind rather than on the message text.
+type Reason int32
+
+// The failure kinds a verification or calculation reports.
+const (
+	// ReasonUnspecified is no failure, or one the service did not classify.
+	ReasonUnspecified Reason = Reason(pb.FailureReason_FAILURE_REASON_UNSPECIFIED)
+	// ReasonEvaluation is a condition or calculation that could not be evaluated.
+	ReasonEvaluation Reason = Reason(pb.FailureReason_FAILURE_REASON_EVALUATION)
+	// ReasonWrongKind is a symbol that declares something else than was asked about.
+	ReasonWrongKind Reason = Reason(pb.FailureReason_FAILURE_REASON_WRONG_KIND)
+	// ReasonAmbiguousSubject is several objects carrying the element: name one.
+	ReasonAmbiguousSubject Reason = Reason(pb.FailureReason_FAILURE_REASON_AMBIGUOUS_SUBJECT)
+)
+
+// String names the reason as the wire enum spells it.
+func (r Reason) String() string {
+	return pb.FailureReason(r).String()
+}
+
+// Verdict is one verification's answer: whether the condition held, and, when
+// it did not, what the model answered false about.
+type Verdict struct {
+	// Kind is what was verified: "constraint", "requirement" or "satisfy".
+	Kind string
+	// ElementID is the FQN verified, empty for an anonymous satisfy assertion.
+	ElementID string
+	// Element is the element as a reader names it, or the assertion as written.
+	Element string
+	// Holds is the model's answer. False with an empty Error is a verdict of
+	// false; false with an Error is no verdict at all — see Undecided.
+	Holds bool
+	// Condition is the condition that evaluated to false, as written, when the
+	// runtime names one.
+	Condition string
+	// InstanceID is the object the verdict is about, 0 when it is about declared
+	// values alone. Verification.Instances carries its feature values.
+	InstanceID int64
+	// InstanceTypeID is the FQN of that object's type.
+	InstanceTypeID string
+	// Error is set when evaluation failed rather than the model answering false.
+	Error string
+	// Reason says what kind of failure Error reports.
+	Reason Reason
+}
+
+// Undecided reports a verdict that is no answer about the model: evaluation
+// failed instead of the condition holding or not.
+func (v *Verdict) Undecided() bool { return v != nil && v.Error != "" }
+
+// Verification is one constraint's or requirement's verdict, with the objects
+// it is about.
+type Verification struct {
+	// Verdict is the answer.
+	Verdict *Verdict
+	// Instances are the objects reachable from the verdict's subject, including
+	// it, so its feature values need no follow-up call.
+	Instances []*Instance
+	// Diagnostics the verification reported.
+	Diagnostics []Diagnostic
+}
+
+// Satisfaction is the verdict of each satisfaction assertion evaluated, in
+// declaration order. A model stating none answers with no verdicts.
+type Satisfaction struct {
+	// Verdicts is one verdict per assertion evaluated.
+	Verdicts []Verdict
+	// Instances are the objects the verdicts are about, each reported once.
+	Instances []*Instance
+	// Diagnostics the verification reported.
+	Diagnostics []Diagnostic
+}
+
+// Holds reports whether every assertion was decided and held. A model stating
+// no assertion holds trivially.
+func (s *Satisfaction) Holds() bool {
+	for i := range s.Verdicts {
+		if s.Verdicts[i].Undecided() || !s.Verdicts[i].Holds {
+			return false
+		}
+	}
+	return true
+}
+
+// Calculation is what one calculation computed: the value an invocation
+// returned, or the output features a calc usage evaluated from its own members.
+type Calculation struct {
+	// Result is what an invocation returned, nil when Outputs carries the answer.
+	Result Value
+	// Outputs are a calc usage's output features in declaration order, empty for
+	// an invocation with arguments.
+	Outputs []CalcOutput
+	// Diagnostics the calculation reported.
+	Diagnostics []Diagnostic
+}
+
+// CalcOutput is one output feature a calc usage computed.
+type CalcOutput struct {
+	Name  string
+	Value Value
+}
+
+// VerifyOption configures VerifyConstraint and VerifyRequirement.
+type VerifyOption func(*verifyOptions)
+
+type verifyOptions struct {
+	subjectSymbolID string
+}
+
+// Against names a part or usage to instantiate and verify against, so the
+// verdict is about that object's values rather than declared defaults. It is
+// what WithSubject is to Evaluate.
+func Against(symbolID string) VerifyOption {
+	return func(o *verifyOptions) { o.subjectSymbolID = symbolID }
+}
+
+func (c *client) VerifyConstraint(
+	ctx context.Context,
+	model *Model,
+	symbolID string,
+	opts ...VerifyOption,
+) (*Verification, error) {
+	hash, err := c.call(model)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.caller.verifyConstraint(ctx, &pb.VerifyConstraintRequest{
+		ModelHash:       hash,
+		SymbolId:        symbolID,
+		SubjectSymbolId: verifySubject(opts),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return verification("VerifyConstraint", resp.Verdict, resp.Instances, resp.Error,
+		ReasonUnspecified, resp.Diagnostics)
+}
+
+func (c *client) VerifyRequirement(
+	ctx context.Context,
+	model *Model,
+	symbolID string,
+	opts ...VerifyOption,
+) (*Verification, error) {
+	hash, err := c.call(model)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.caller.verifyRequirement(ctx, &pb.VerifyRequirementRequest{
+		ModelHash:       hash,
+		SymbolId:        symbolID,
+		SubjectSymbolId: verifySubject(opts),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return verification("VerifyRequirement", resp.Verdict, resp.Instances, resp.Error,
+		ReasonUnspecified, resp.Diagnostics)
+}
+
+func (c *client) VerifySatisfaction(ctx context.Context, model *Model, symbolID string) (*Satisfaction, error) {
+	hash, err := c.call(model)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.caller.verifySatisfaction(ctx, &pb.VerifySatisfactionRequest{
+		ModelHash: hash,
+		SymbolId:  symbolID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	diagnostics := diagnosticsFromProto(resp.Diagnostics)
+	if resp.Error != "" {
+		return nil, &VerifyError{
+			FailureError: FailureError{Op: "VerifySatisfaction", Message: resp.Error, Diagnostics: diagnostics},
+			Reason:       Reason(resp.FailureReason),
+		}
+	}
+	out := &Satisfaction{
+		Instances:   instancesFromProto(resp.Instances),
+		Diagnostics: diagnostics,
+	}
+	for _, verdict := range resp.Verdicts {
+		if converted := verdictFromProto(verdict); converted != nil {
+			out.Verdicts = append(out.Verdicts, *converted)
+		}
+	}
+	return out, nil
+}
+
+func (c *client) EvaluateCalc(
+	ctx context.Context,
+	model *Model,
+	symbolID string,
+	arguments ...Value,
+) (*Calculation, error) {
+	hash, err := c.call(model)
+	if err != nil {
+		return nil, err
+	}
+	req := &pb.EvaluateCalcRequest{ModelHash: hash, SymbolId: symbolID}
+	for _, argument := range arguments {
+		sent, err := valueToProto(argument)
+		if err != nil {
+			return nil, err
+		}
+		req.Arguments = append(req.Arguments, sent)
+	}
+	resp, err := c.caller.evaluateCalc(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	diagnostics := diagnosticsFromProto(resp.Diagnostics)
+	if resp.Error != "" {
+		return nil, &VerifyError{
+			FailureError: FailureError{Op: "EvaluateCalc", Message: resp.Error, Diagnostics: diagnostics},
+			Reason:       Reason(resp.FailureReason),
+		}
+	}
+	out := &Calculation{Result: valueFromProto(resp.Result), Diagnostics: diagnostics}
+	for _, output := range resp.Outputs {
+		out.Outputs = append(out.Outputs, CalcOutput{Name: output.Name, Value: valueFromProto(output.Value)})
+	}
+	return out, nil
+}
+
+// verifySubject is the subject the options name, empty for none.
+func verifySubject(opts []VerifyOption) string {
+	var options verifyOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return options.subjectSymbolID
+}
+
+// verification builds the answer a constraint or requirement verification gives.
+// A request that could not be answered at all is a failure, while a condition
+// that could not be evaluated is an undecided verdict.
+func verification(
+	op string,
+	verdict *pb.Verdict,
+	instances []*pb.Instance,
+	failure string,
+	reason Reason,
+	diags []*pb.Diagnostic,
+) (*Verification, error) {
+	diagnostics := diagnosticsFromProto(diags)
+	if failure != "" {
+		return nil, &VerifyError{
+			FailureError: FailureError{Op: op, Message: failure, Diagnostics: diagnostics},
+			Reason:       reason,
+		}
+	}
+	return &Verification{
+		Verdict:     verdictFromProto(verdict),
+		Instances:   instancesFromProto(instances),
+		Diagnostics: diagnostics,
+	}, nil
+}
+
+func verdictFromProto(verdict *pb.Verdict) *Verdict {
+	if verdict == nil {
+		return nil
+	}
+	return &Verdict{
+		Kind:           verdict.Kind,
+		ElementID:      verdict.ElementId,
+		Element:        verdict.Element,
+		Holds:          verdict.Holds,
+		Condition:      verdict.Condition,
+		InstanceID:     verdict.InstanceId,
+		InstanceTypeID: verdict.InstanceTypeId,
+		Error:          verdict.Error,
+		Reason:         Reason(verdict.FailureReason),
+	}
+}

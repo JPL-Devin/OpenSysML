@@ -8,7 +8,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // f67Clean resolves src and requires it to produce no diagnostics.
@@ -159,14 +158,7 @@ func TestF67RecursivePrivateImportDoesNotReexport(t *testing.T) {
 }
 
 func TestF67ISQRecursiveMembershipReexport(t *testing.T) {
-	cache, err := libs.NewCache()
-	if err != nil {
-		t.Fatalf("create library cache: %v", err)
-	}
-	idx := symbols.NewIndex()
-	if err := libs.NewLoader(libs.DefaultSource(), cache).LoadAll(idx); err != nil {
-		t.Fatalf("load standard library: %v", err)
-	}
+	idx := libs.NewModelIndex()
 	const src = `package K {
 		public import ISQ::**;
 		part v { attribute totalMass : MassValue; }

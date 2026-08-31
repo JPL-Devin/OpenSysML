@@ -37,6 +37,31 @@ func (p *Parser) atChainedFirstSuccession() bool {
 	return chained && t.Kind == lexer.Keyword && t.KeywordID == "then"
 }
 
+// atTwoEndedFirst reports whether the `first` at the cursor names both ends —
+// `first <source> then <target>` — before its member ends, as opposed to the
+// one-ended `first <node>;` form that opens an InitialNodeMember.
+func (p *Parser) atTwoEndedFirst() bool {
+	if !p.atKeyword("first") {
+		return false
+	}
+	for depth, i := 0, 1; i < 60; i++ {
+		tok := p.peekN(i)
+		switch tok.Kind {
+		case lexer.EOF, lexer.Semicolon, lexer.LBrace, lexer.RBrace:
+			return false
+		case lexer.LParen, lexer.LBracket:
+			depth++
+		case lexer.RParen, lexer.RBracket:
+			depth--
+		case lexer.Keyword:
+			if depth == 0 && tok.KeywordID == "then" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // nonOccurrenceUsageKeywords are the usage keywords a `then` may not precede:
 // SysML.xtext lists them under NonOccurrenceUsageElement rather than under
 // StructureUsageElement or BehaviorUsageElement.

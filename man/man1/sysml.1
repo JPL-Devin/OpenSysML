@@ -111,6 +111,9 @@ Render every declared view into this directory
 Compile this document definition, run its queries and write the rendered
 Markdown
 .TP
+.BI \-render\-documents " string"
+Render every document definition as linked Markdown into this directory
+.TP
 .BI \-render\-form " string"
 Form \-render or \-render\-all writes: text, mermaid or markdown (default:
 destination\-dependent for \-render, each kind's machine form for
@@ -240,6 +243,8 @@ sysml model.sysml \-render\-document Reports::MassReport
 sysml model.sysml \-render\-document Reports::MassReport \-o report.md
 sysml model.sysml \-render\-document Reports::MassReport \-doc\-form pdf \e
     \-o report.pdf
+# every document, linked
+sysml model.sysml \-render\-documents rendered
 sysml model.sysml \-render\-document Reports::MassReport \-doc\-form pdf \e
     \-pdf\-engine pandoc \-pdf\-title\-page \-pdf\-toc \-pdf\-number\-sections \e
     \-o report.pdf

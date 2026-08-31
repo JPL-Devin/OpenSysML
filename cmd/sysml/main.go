@@ -116,6 +116,7 @@ var (
 	renderAllDir  string
 	renderForm    string
 	renderDoc     string
+	renderDocsDir string
 	docForm       string
 	pdfEngine     string
 	pdfTitlePage  bool
@@ -142,6 +143,18 @@ func (s *stringSlice) Set(value string) error {
 
 func main() {
 	os.Exit(runCLI())
+}
+
+// flagGiven reports whether the run named this flag, which an empty value
+// cannot be told apart from otherwise.
+func flagGiven(name string) bool {
+	given := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			given = true
+		}
+	})
+	return given
 }
 
 // printUsage writes the help to w: the caller chooses the stream, since help
@@ -202,6 +215,13 @@ func runCLI() int {
 		return 0
 	}
 
+	// A mode asked for with an empty value is a misuse, not an absent flag: it
+	// would otherwise silently run the REPL instead of the query.
+	if flagGiven("query") && queryText == "" {
+		fmt.Fprintln(os.Stderr, `sysml: -query is empty; give it OSLC Query text, as -query 'sysml:name="battery"'`)
+		return 2
+	}
+
 	// Get positional arguments (files to load)
 	args := flag.Args()
 
@@ -213,6 +233,30 @@ func runCLI() int {
 	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
 		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
 		return 2
+	}
+
+	if renderDocsDir != "" {
+		switch {
+		case renderDoc != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents renders every document; -render-document renders one; ask for one per run")
+			return 2
+		case renderView != "" || renderAllDir != "" || convertFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents, -render, -render-all and -convert each write documents out; ask for one per run")
+			return 2
+		case outputPath != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents writes into its directory and cannot be combined with -output")
+			return 2
+		case queryText != "" || len(evalExprs) > 0 || fromFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents cannot be combined with -query, -eval or -from")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-render-documents writes documents out and decides nothing about the model; check it in its own run")
+		}
+		if err := runRenderDocuments(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
 	}
 
 	if renderAllDir != "" {

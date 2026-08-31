@@ -301,7 +301,7 @@ func TestParseFileCachesPerFileName(t *testing.T) {
 		if !ok {
 			t.Fatalf("model for %s was not cached", path)
 		}
-		if got := record.Source.Name(); got != path {
+		if got := record.Primary().Source.Name(); got != path {
 			t.Errorf("cached source name = %q, want %q", got, path)
 		}
 
@@ -319,7 +319,7 @@ func TestParseFileCachesPerFileName(t *testing.T) {
 		t.Error("expected a model hash per file name, got one for both")
 	}
 	// The first file's record survived the second file's parse.
-	if record, ok := srv.cache.Get(hashes[paths[0]]); !ok || record.Source.Name() != paths[0] {
+	if record, ok := srv.cache.Get(hashes[paths[0]]); !ok || record.Primary().Source.Name() != paths[0] {
 		t.Errorf("first file's record = %v, want one naming %q", record, paths[0])
 	}
 }

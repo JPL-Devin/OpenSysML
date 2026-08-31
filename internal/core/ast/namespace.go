@@ -64,6 +64,23 @@ func SimpleName(node Node) string {
 	return qname.Parts[len(qname.Parts)-1].Text
 }
 
+// QualifiedText renders a reference's whole name as written ("A::B::C"), or ""
+// when node names nothing.
+func QualifiedText(node Node) string {
+	qname := AsQualifiedName(node)
+	if qname == nil || len(qname.Parts) == 0 {
+		return ""
+	}
+	out := qname.Parts[0].Text
+	if qname.Global {
+		out = "$::" + out
+	}
+	for _, part := range qname.Parts[1:] {
+		out += "::" + part.Text
+	}
+	return out
+}
+
 // TargetName returns the last segment of a relationship target — a qualified
 // name, a feature reference, or a feature chain (`providePower.generateTorque`)
 // — together with its span, or "" when node names nothing.

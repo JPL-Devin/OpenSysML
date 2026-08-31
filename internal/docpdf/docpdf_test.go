@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-const sampleMarkdown = "# Mass Report\n\nGenerated for review\\.\n\n## Components\n\n| Name | Mass \\| kg |\n| --- | --- |\n| Mirror | 120 |\n| Strut<br>Assembly | 4\\.5 |\n\n*Table 1\\. Masses*\n\n- primary\n- secondary\n\n### Ordering\n\n1. first\n2. second\n\n```mermaid\nflowchart LR\n  a --> b\n```\n\n*Figure 1\\. Flow*\n"
+const sampleMarkdown = "# Mass Report\n\nGenerated for review\\.\n\n## Components\n\n| Name | Mass \\| kg |\n| --- | --- |\n| Mirror | 120 |\n| Strut<br>Assembly | 4\\.5 |\n\n<!-- caption -->\n*Table 1\\. Masses*\n\n- primary\n- secondary\n\n### Ordering\n\n1. first\n2. second\n\n```mermaid\nflowchart LR\n  a --> b\n```\n\n<!-- caption -->\n*Figure 1\\. Flow*\n"
 
 func TestParseBlocks(t *testing.T) {
 	blocks, err := parseBlocks(sampleMarkdown)
@@ -94,6 +94,73 @@ func TestIsCaptionEscapes(t *testing.T) {
 		if got := isCaption(line); got != want {
 			t.Fatalf("isCaption(%q) = %v, want %v", line, got, want)
 		}
+	}
+}
+
+func TestParseBlocksCaptionNeedsMarker(t *testing.T) {
+	md := "# T\n\n<!-- caption -->\n*Table 1\\. Masses*\n\n*just emphasis*\n\n<!-- caption -->\n*Figure 1\\. Flow*\n"
+	blocks, err := parseBlocks(md)
+	if err != nil {
+		t.Fatalf("parseBlocks: %v", err)
+	}
+	want := []blockKind{blockHeading, blockCaption, blockParagraph, blockCaption}
+	if len(blocks) != len(want) {
+		t.Fatalf("got %d blocks, want %d: %+v", len(blocks), len(want), blocks)
+	}
+	for i := range want {
+		if blocks[i].Kind != want[i] {
+			t.Fatalf("block %d: got kind %d, want %d", i, blocks[i].Kind, want[i])
+		}
+	}
+	if blocks[1].Text != `Table 1\. Masses` || blocks[3].Text != `Figure 1\. Flow` {
+		t.Fatalf("caption texts: %q, %q", blocks[1].Text, blocks[3].Text)
+	}
+	if blocks[2].Text != "*just emphasis*" {
+		t.Fatalf("emphasis paragraph: %q", blocks[2].Text)
+	}
+}
+
+func TestParseBlocksDanglingCaptionMarker(t *testing.T) {
+	for _, md := range []string{
+		"# T\n\n<!-- caption -->\n",
+		"# T\n\n<!-- caption -->\nplain paragraph\n",
+		"# T\n\n<!-- caption -->\n*inner * asterisk*\n",
+	} {
+		_, err := parseBlocks(md)
+		var docErr *Error
+		if !errors.As(err, &docErr) || docErr.Kind != ErrorDanglingCaption {
+			t.Fatalf("parseBlocks(%q) = %v, want ErrorDanglingCaption", md, err)
+		}
+		if err.Error() == "" {
+			t.Fatal("empty error message")
+		}
+	}
+}
+
+func TestDocumentHTMLCaptionVersusEmphasisParagraph(t *testing.T) {
+	md := "# T\n\n<!-- caption -->\n*Table 1\\. Masses*\n\n*just emphasis*\n"
+	blocks, err := parseBlocks(md)
+	if err != nil {
+		t.Fatalf("parseBlocks: %v", err)
+	}
+	page := documentHTML(blocks, nil, Options{})
+	if !strings.Contains(page, `<p class="caption"><em>Table 1. Masses</em></p>`) {
+		t.Fatalf("caption not styled as caption:\n%s", page)
+	}
+	if !strings.Contains(page, "<p><em>just emphasis</em></p>") {
+		t.Fatalf("emphasis paragraph not a plain paragraph:\n%s", page)
+	}
+	if strings.Contains(page, `<p class="caption"><em>just emphasis</em></p>`) {
+		t.Fatalf("emphasis paragraph styled as caption:\n%s", page)
+	}
+}
+
+func TestMarkdownWithSpanCaptions(t *testing.T) {
+	md := "# T\n\n<!-- caption -->\n*Table 1\\. Masses*\n\n*just emphasis*\n"
+	got := markdownWithSpanCaptions(md)
+	want := "# T\n\n[*Table 1\\. Masses*]{.caption}\n\n*just emphasis*\n"
+	if got != want {
+		t.Fatalf("markdownWithSpanCaptions = %q, want %q", got, want)
 	}
 }
 

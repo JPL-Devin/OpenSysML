@@ -2,8 +2,32 @@
 
 Mass rollup for the telescope assembly. Masses are in kg \| not \#grams, \*not\* \_lbs\_, \`raw\`, \<b>\&plain\</b>.
 
+Reading order: *em\*ph\*asis* **bold\_move** `` mass >= `limit` `` [the \[spec\]](<https://example.com/spec(v2).md>) [Subsystem Masses \| by \*name\*](#breakdown) [the zone groups](#zones)
+
+<a id="zones"></a>
+
+<!-- caption -->
+*Subsystems grouped by zone*
+
+**zone: support \| \*frame\***
+
+| zone | name | mass |
+| --- | --- | --- |
+| support \| \*frame\* | baffle\|shroud \*tricky\* | 1.5 |
+| support \| \*frame\* | mount | 15 |
+
+**zone: payload**
+
+| zone | name | mass |
+| --- | --- | --- |
+| payload | optics | 8.5 |
+| payload | segmentControl | 20 |
+
+<a id="breakdown"></a>
+
 ## Subsystem Masses \| by \*name\*
 
+<!-- caption -->
 *All subsystems by mass*
 
 | name | mass |
@@ -13,12 +37,27 @@ Mass rollup for the telescope assembly. Masses are in kg \| not \#grams, \*not\*
 | optics | 8.5 |
 | segmentControl | 20 |
 
+<!-- caption -->
+*Mass margins (allocated - estimated)*
+
+| name | label | margin |
+| --- | --- | --- |
+| baffle\|shroud \*tricky\* | subsystem: baffle\|shroud \*tricky\* | -1.5 |
+| mount | subsystem: mount | 0 |
+| optics | subsystem: optics | 1.5 |
+| segmentControl | subsystem: segmentControl | 5.5 |
+
 ### Heavy Subsystems
 
 mount segmentControl
 
 1. mount
 2. segmentControl
+
+**mount** [mount](<https://example.com/parts#mount>) **segmentControl** [segmentControl](<https://example.com/parts#segmentControl>)
+
+- `mount`
+- `segmentControl`
 
 ### Missing Subsystems
 
@@ -27,6 +66,7 @@ mount segmentControl
 
 ## Diagrams
 
+<!-- caption -->
 *Imaging chain interconnection*
 
 ```mermaid
@@ -39,6 +79,7 @@ flowchart LR
   n1 ---|"link"| n2
 ```
 
+<!-- caption -->
 *Observatory states, left to right*
 
 ```mermaid
@@ -58,6 +99,7 @@ stateDiagram-v2
 
 The declared type of the telescope, by relationship traversal.
 
+<!-- caption -->
 *Type of telescope*
 
 | element |

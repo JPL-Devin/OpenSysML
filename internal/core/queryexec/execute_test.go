@@ -43,10 +43,7 @@ func loadExecutionFixtureFile(t *testing.T, path string) executionFixture {
 
 func loadExecutionSource(t *testing.T, content string) executionFixture {
 	t.Helper()
-	index := symbols.NewIndex()
-	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
-		t.Fatalf("load standard library: %v", err)
-	}
+	index := libs.NewModelIndex()
 	name := "query-execution.sysml"
 	p := parser.New(source.New(name, []byte(content)))
 	root := p.ParseFile()
@@ -1488,6 +1485,40 @@ calc def Usages :> Query {
 	}
 	if got := elementNames(rows); !slices.Equal(got, []string{"child"}) {
 		t.Fatalf("usage rows = %v", got)
+	}
+}
+
+// TestExecuteFilterKeepsProjectedColumnsWhenEmpty checks that a filter over a
+// projection keeps the projected columns even when it selects no row.
+func TestExecuteFilterKeepsProjectedColumnsWhenEmpty(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part child;
+}
+calc def Names :> Query {
+	in source : Element;
+	WhereName(
+		source = Project(
+			source = OwnedElements(source = source),
+			properties = ("name")
+		),
+		operator = "==",
+		value = "nomatch"
+	)
+}
+`)
+	rows, err := fixture.execute(t, "Names", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute filtered projection: %v", err)
+	}
+	if len(rows.Rows()) != 0 {
+		t.Fatalf("rows = %v", elementNames(rows))
+	}
+	columns := rows.Columns()
+	if len(columns) != 1 || columns[0].Name() != "name" {
+		t.Fatalf("columns = %+v", columns)
 	}
 }
 

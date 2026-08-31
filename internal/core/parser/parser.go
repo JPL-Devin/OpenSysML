@@ -63,6 +63,9 @@ type bodyContext int
 const (
 	bodyOther bodyContext = iota
 	bodyInterface
+	// bodyBehavior is an action-carrying body (action, state, calc, case),
+	// whose `first` opens an InitialNodeMember rather than a SuccessionAsUsage.
+	bodyBehavior
 )
 
 // pushBodyContext enters a body of the given notation and returns the function

@@ -39,6 +39,21 @@ const (
 	ErrorUnsupportedKind       ErrorKind = "unsupported-diagram-kind"
 	ErrorInvalidDirection      ErrorKind = "invalid-direction"
 	ErrorUnsupportedDirection  ErrorKind = "unsupported-direction"
+	ErrorConflictingRuns       ErrorKind = "conflicting-runs"
+	ErrorAmbiguousRun          ErrorKind = "ambiguous-run"
+	ErrorMissingRunText        ErrorKind = "missing-run-text"
+	ErrorInvalidRunStyle       ErrorKind = "invalid-run-style"
+	ErrorMissingLinkTarget     ErrorKind = "missing-link-target"
+	ErrorMissingRefTarget      ErrorKind = "missing-ref-target"
+	ErrorUnknownRefTarget      ErrorKind = "unknown-ref-target"
+	ErrorInvalidRefTarget      ErrorKind = "invalid-ref-target"
+	ErrorAmbiguousRefTarget    ErrorKind = "ambiguous-ref-target"
+	ErrorUnknownGroupColumn    ErrorKind = "unknown-group-column"
+	ErrorColumnRunWithoutQuery ErrorKind = "column-run-without-query"
+	ErrorConflictingColumnRuns ErrorKind = "conflicting-column-runs"
+	ErrorMissingRunColumn      ErrorKind = "missing-run-column"
+	ErrorConflictingRunStyle   ErrorKind = "conflicting-run-style"
+	ErrorUnknownRunColumn      ErrorKind = "unknown-run-column"
 )
 
 // Error is a typed document-planning failure with its source location.
@@ -76,7 +91,7 @@ func (e *Error) Error() string {
 	case ErrorNestedDocument:
 		return fmt.Sprintf("document %s nests document %s", e.Document, e.Content)
 	case ErrorMissingText:
-		return fmt.Sprintf("document %s paragraph %s has neither text nor a query", e.Document, e.Content)
+		return fmt.Sprintf("document %s paragraph %s has neither text, inline runs, nor a query", e.Document, e.Content)
 	case ErrorConflictingText:
 		return fmt.Sprintf("document %s paragraph %s has both text and a query", e.Document, e.Content)
 	case ErrorMissingQuery:
@@ -151,6 +166,45 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("document %s diagram %s direction must be \"TB\", \"LR\", \"RL\" or \"BT\", got %q", e.Document, e.Content, e.Actual)
 	case ErrorUnsupportedDirection:
 		return fmt.Sprintf("document %s diagram %s states direction %q, but a %s rendering has none", e.Document, e.Content, e.Actual, e.Expected)
+	case ErrorConflictingRuns:
+		return fmt.Sprintf("document %s paragraph %s declares inline runs alongside text or a query", e.Document, e.Content)
+	case ErrorAmbiguousRun:
+		return fmt.Sprintf("document %s run %s conforms to more than one run kind", e.Document, e.Content)
+	case ErrorMissingRunText:
+		return fmt.Sprintf("document %s run %s states no text", e.Document, e.Content)
+	case ErrorInvalidRunStyle:
+		return fmt.Sprintf(
+			"document %s run %s style must be %q, %q, %q or %q, got %q",
+			e.Document,
+			e.Content,
+			StylePlain,
+			StyleEmphasis,
+			StyleStrong,
+			StyleCode,
+			e.Actual,
+		)
+	case ErrorMissingLinkTarget:
+		return fmt.Sprintf("document %s link %s states no target", e.Document, e.Content)
+	case ErrorMissingRefTarget:
+		return fmt.Sprintf("document %s reference %s names no target", e.Document, e.Content)
+	case ErrorUnknownRefTarget:
+		return fmt.Sprintf("document %s reference %s names unknown target %s", e.Document, e.Content, e.Actual)
+	case ErrorAmbiguousRefTarget:
+		return fmt.Sprintf("document %s reference %s targets a usage typed by more than one document: %s", e.Document, e.Content, e.Actual)
+	case ErrorInvalidRefTarget:
+		return fmt.Sprintf("document %s reference %s must target a named content block of a document, or another document itself, got %s", e.Document, e.Content, e.Actual)
+	case ErrorUnknownGroupColumn:
+		return fmt.Sprintf("document %s table %s groups by %q, which its query does not project", e.Document, e.Content, e.Actual)
+	case ErrorColumnRunWithoutQuery:
+		return fmt.Sprintf("document %s paragraph %s declares column runs but no query", e.Document, e.Content)
+	case ErrorConflictingColumnRuns:
+		return fmt.Sprintf("document %s paragraph %s declares column runs alongside text or inline runs", e.Document, e.Content)
+	case ErrorMissingRunColumn:
+		return fmt.Sprintf("document %s column run %s states no %s", e.Document, e.Content, e.Parameter)
+	case ErrorConflictingRunStyle:
+		return fmt.Sprintf("document %s column run %s states both style and styleColumn", e.Document, e.Content)
+	case ErrorUnknownRunColumn:
+		return fmt.Sprintf("document %s column run %s names column %q, which query %s does not project", e.Document, e.Content, e.Actual, e.Query)
 	default:
 		return fmt.Sprintf("document planning failed for %s", e.Document)
 	}

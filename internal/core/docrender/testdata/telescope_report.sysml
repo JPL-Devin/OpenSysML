@@ -6,6 +6,8 @@ package Observatory {
 
 	part def Subsystem {
 		attribute mass : Real;
+		attribute allocatedMass : Real;
+		attribute zone : String;
 	}
 
 	part def 'Assembly *frame*';
@@ -13,15 +15,22 @@ package Observatory {
 	part telescope : 'Assembly *frame*' {
 		part optics : Subsystem {
 			attribute redefines mass = 8.5;
+			attribute redefines allocatedMass = 10.0;
+			attribute redefines zone = "payload";
 		}
 		part segmentControl : Subsystem {
 			attribute redefines mass = 20.0;
+			attribute redefines allocatedMass = 25.5;
+			attribute redefines zone = "payload";
 		}
 		part mount : Subsystem {
 			attribute redefines mass = 15.0;
+			attribute redefines allocatedMass = 15.0;
+			attribute redefines zone = "support | *frame*";
 		}
 		part 'baffle|shroud *tricky*' : Subsystem {
 			attribute redefines mass = 1.5;
+			attribute redefines zone = "support | *frame*";
 		}
 	}
 
@@ -98,6 +107,65 @@ package Observatory {
 		)
 	}
 
+	calc def ZonedSubsystems :> Query {
+		in root : Element;
+		Project(
+			source = OrderBy(
+				source = Subsystems(root = root),
+				property = "name",
+				direction = "ascending",
+				missing = "last",
+				multiple = "error"
+			),
+			properties = ("zone", "name", "mass")
+		)
+	}
+
+	calc def MassMargins :> Query {
+		in root : Element;
+		Project(
+			source = OrderBy(
+				source = Subsystems(root = root),
+				property = "name",
+				direction = "ascending",
+				missing = "last",
+				multiple = "error"
+			),
+			properties = ("name"),
+			columns = (
+				Column(name = "label", expression = "subsystem: " + Element::name),
+				Column(
+					name = "margin",
+					expression = (Subsystem::allocatedMass ?? 0.0) - Subsystem::mass
+				)
+			)
+		)
+	}
+
+	calc def StyledHeavyNames :> Query {
+		in root : Element;
+		in threshold : String;
+		Project(
+			source = OrderBy(
+				source = WhereFeature(
+					source = Subsystems(root = root),
+					'feature' = "mass",
+					operator = ">=",
+					value = threshold
+				),
+				property = "name",
+				direction = "ascending",
+				missing = "last",
+				multiple = "error"
+			),
+			properties = ("name"),
+			columns = (
+				Column(name = "style", expression = "strong"),
+				Column(name = "url", expression = "https://example.com/parts#" + Element::name)
+			)
+		)
+	}
+
 	calc def MissingSubsystems :> Query {
 		in root : Element;
 		Project(
@@ -127,12 +195,56 @@ package Observatory {
 			attribute redefines text = "Mass rollup for the telescope assembly. Masses are in kg | not #grams, *not* _lbs_, `raw`, <b>&plain</b>.";
 		}
 
+		part formatted : Paragraph {
+			part lead : Span {
+				attribute redefines text = "Reading order:";
+			}
+			part em : Span {
+				attribute redefines text = "em*ph*asis";
+				attribute redefines style = "emphasis";
+			}
+			part bold : Span {
+				attribute redefines text = "bold_move";
+				attribute redefines style = "strong";
+			}
+			part code : Span {
+				attribute redefines text = "mass >= `limit`";
+				attribute redefines style = "code";
+			}
+			part spec : Link {
+				attribute redefines text = "the [spec]";
+				attribute redefines target = "https://example.com/spec(v2).md";
+			}
+			part see : Ref {
+				ref redefines target = breakdown;
+			}
+			part zonesRef : Ref {
+				attribute redefines text = "the zone groups";
+				ref redefines target = zones;
+			}
+		}
+
+		part zones : Table {
+			attribute redefines caption = "Subsystems grouped by zone";
+			attribute redefines groupBy = "zone";
+			calc rows : ZonedSubsystems {
+				in root = telescope;
+			}
+		}
+
 		part breakdown : Section {
 			attribute redefines title = "Subsystem Masses | by *name*";
 
 			part masses : Table {
 				attribute redefines caption = "All subsystems by mass";
 				calc rows : SubsystemTable {
+					in root = telescope;
+				}
+			}
+
+			part margins : Table {
+				attribute redefines caption = "Mass margins (allocated - estimated)";
+				calc rows : MassMargins {
 					in root = telescope;
 				}
 			}
@@ -152,6 +264,32 @@ package Observatory {
 					calc items : HeavySubsystemNames {
 						in root = telescope;
 						in threshold = "10";
+					}
+				}
+
+				part styledSummary : Paragraph {
+					calc names : StyledHeavyNames {
+						in root = telescope;
+						in threshold = "10";
+					}
+					part styledName : SpanColumn {
+						attribute redefines column = "name";
+						attribute redefines styleColumn = "style";
+					}
+					part linkedName : LinkColumn {
+						attribute redefines column = "name";
+						attribute redefines targetColumn = "url";
+					}
+				}
+
+				part codeItems : List {
+					calc items : StyledHeavyNames {
+						in root = telescope;
+						in threshold = "10";
+					}
+					part codeName : SpanColumn {
+						attribute redefines column = "name";
+						attribute redefines style = "code";
 					}
 				}
 			}

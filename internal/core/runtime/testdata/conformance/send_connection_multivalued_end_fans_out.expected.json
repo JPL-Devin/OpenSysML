@@ -1,0 +1,30 @@
+{
+  "type": "instance",
+  "instantiate": "SendFanOut::site",
+  "objects": [
+    {
+      "path": "console",
+      "finalState": "sending",
+      "stateVisits": ["idle", "sending"],
+      "slots": {"sent": {"type": "Integer", "value": 1}}
+    },
+    {
+      "path": "units.1",
+      "finalState": "working",
+      "stateVisits": ["standingBy", "working"],
+      "slots": {
+        "accepted": {"type": "Integer", "value": 1},
+        "lastCode": {"type": "Integer", "value": 7}
+      }
+    },
+    {
+      "path": "units.2",
+      "finalState": "working",
+      "stateVisits": ["standingBy", "working"],
+      "slots": {
+        "accepted": {"type": "Integer", "value": 1},
+        "lastCode": {"type": "Integer", "value": 7}
+      }
+    }
+  ]
+}

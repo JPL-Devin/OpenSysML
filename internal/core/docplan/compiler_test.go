@@ -44,10 +44,7 @@ func loadPlanningFixtureFile(t *testing.T, path string) planningFixture {
 
 func loadPlanningSource(t *testing.T, content string) planningFixture {
 	t.Helper()
-	index := symbols.NewIndex()
-	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
-		t.Fatalf("load standard library: %v", err)
-	}
+	index := libs.NewModelIndex()
 	p := parser.New(source.New(fixtureDoc, []byte(content)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {

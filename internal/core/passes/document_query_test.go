@@ -4,18 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func documentQueryDiagnostics(t *testing.T, body string) []Diagnostic {
 	t.Helper()
-	index := symbols.NewIndex()
-	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
-		t.Fatalf("load standard library: %v", err)
-	}
+	index := newTestIndex()
 	name := "queries.sysml"
 	p := parser.New(source.New(name, []byte(`
 package Fixture {
@@ -120,10 +115,7 @@ calc def Specialized :> Base {
 }
 
 func TestDocumentQueryPassReportsDependencyErrorInDeclaringDocument(t *testing.T) {
-	index := symbols.NewIndex()
-	if err := libs.NewLoader(libs.DefaultSource(), nil).LoadAll(index); err != nil {
-		t.Fatalf("load standard library: %v", err)
-	}
+	index := newTestIndex()
 	dependencyName := "dependency.sysml"
 	dependencyParser := parser.New(source.New(dependencyName, []byte(`
 package Shared {

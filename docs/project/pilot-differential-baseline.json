@@ -59,8 +59,8 @@
         "name": "examples",
         "dir": "examples",
         "origin": "ours",
-        "files": 23,
-        "digest": "sha256:4e68b963d9ebe6ab946cfe94baad42389f82af03e39aa7853e16d2a74ffccf9b"
+        "files": 25,
+        "digest": "sha256:9041485058af8378777057723f6150ac8325d950875fd199f55e75580460c674"
       },
       {
         "name": "probes",
@@ -70,17 +70,17 @@
         "digest": "sha256:b0153c55bbfcdacabab911725dc44e0e7f4d3a501a281b1f3f2a13cda19737c6"
       }
     ],
-    "recorded": "2026-08-30"
+    "recorded": "2026-08-31"
   },
   "totals": {
-    "files": 357,
+    "files": 359,
     "filesFullyAgreeing": 332,
     "agreement": 34,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
-    "pilotOnly": 45,
+    "pilotOnly": 53,
     "openSysMLDiagnostics": 56,
-    "pilotDiagnostics": 81
+    "pilotDiagnostics": 89
   },
   "roots": [
     {
@@ -733,14 +733,14 @@
       "name": "examples",
       "dir": "examples",
       "totals": {
-        "files": 23,
+        "files": 25,
         "filesFullyAgreeing": 19,
         "agreement": 0,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
-        "pilotOnly": 19,
+        "pilotOnly": 27,
         "openSysMLDiagnostics": 2,
-        "pilotDiagnostics": 20
+        "pilotDiagnostics": 28
       },
       "files": [
         {
@@ -794,6 +794,38 @@
           ]
         },
         {
+          "path": "disposal-team-demo/team.sysml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": [
+            {
+              "line": 29,
+              "severity": "warning",
+              "category": "kind-mismatch",
+              "count": 2
+            },
+            {
+              "line": 117,
+              "severity": "error",
+              "category": "kind-mismatch",
+              "count": 1
+            },
+            {
+              "line": 117,
+              "severity": "warning",
+              "category": "kind-mismatch",
+              "count": 1
+            },
+            {
+              "line": 271,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            }
+          ]
+        },
+        {
           "path": "pseudostates-demo.sysml",
           "agreement": [],
           "severityMismatch": [
@@ -836,6 +868,32 @@
               "line": 20,
               "severity": "error",
               "category": "syntax",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "path": "relay-probe-demo/mission.sysml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": [
+            {
+              "line": 44,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 47,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 133,
+              "severity": "error",
+              "category": "kind-mismatch",
               "count": 1
             }
           ]
@@ -981,7 +1039,7 @@
     {
       "side": "pilot",
       "message": "Cannot override a binding feature value",
-      "count": 8
+      "count": 11
     },
     {
       "side": "pilot",
@@ -1151,14 +1209,14 @@
       }
     ],
     "totals": {
-      "files": 357,
+      "files": 359,
       "filesFullyAgreeing": 333,
       "agreement": 34,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
-      "pilotOnly": 45,
+      "pilotOnly": 53,
       "openSysMLDiagnostics": 55,
-      "pilotDiagnostics": 81
+      "pilotDiagnostics": 89
     },
     "findings": [
       {

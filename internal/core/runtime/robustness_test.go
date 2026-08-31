@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
@@ -163,6 +164,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
+	t.Run("send_via_connector_into_an_empty_part", testSendViaConnectorIntoAnEmptyPart)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
 	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
 	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
@@ -2568,6 +2570,41 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendViaConnectorIntoAnEmptyPart: the connector joins the sender's port to
+// the port of a part it holds, but the part holds no object this run, so nothing
+// is behind the end and the send is reported rather than delivered to a port path
+// no consumer reads.
+func testSendViaConnectorIntoAnEmptyPart(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
+		part def Unit { port command : ~Chan; }
+		part def Bay {
+			port command : Chan;
+			part unit : Unit[0];
+			connect command to unit.command;
+		}
+		part bay : Bay {
+			action ship {
+				first start;
+				action sender { send 9 via command; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+		}
+	}`))
+	bay, err := ctx.Instantiate(oneSymbol(t, idx, "P::bay"))
+	if err != nil {
+		t.Fatalf("instantiate bay: %v", err)
+	}
+	_, err = ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::bay::ship"), bay, nil)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("execute action: err = %v, want %v", err, ErrUnroutableSend)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("pending messages = %+v, want none", pending)
 	}
 }
 
@@ -5072,22 +5109,26 @@ func testFlowNamingNoPin(t *testing.T) {
 	}
 }
 
-// testAcceptPayloadWithoutAValue: an accept that names a payload binds the
-// single value the accepted message carries, so a message carrying none is
-// reported rather than binding an empty value the guard and effect would read.
+// testAcceptPayloadWithoutAValue: a message carrying no value and naming no
+// signal definition gives the accept's payload name nothing to bind, which is
+// reported rather than bound to nothing.
 func testAcceptPayloadWithoutAValue(t *testing.T) {
-	_, err := executeActionSource(t, "pipeline", `package P {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
 		item def Ping;
 		action pipeline {
 			first start;
-			action sender { send Ping() to reader; }
 			action reader accept p : Ping;
 			done;
-			succession first start then sender;
-			succession first sender then reader;
+			succession first start then reader;
 			succession first reader then done;
 		}
-	}`)
+	}`))
+	exec, err := ctx.CreateActionExecutor(oneSymbol(t, idx, "P::pipeline"))
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	ctx.PostMessage(Message{SignalType: "Ping", Target: "reader", Payload: map[string]Value{}})
+	err = exec.RunToCompletion()
 	if err == nil {
 		t.Fatal("expected the payload-less message to be reported")
 	}
@@ -5629,8 +5670,7 @@ func buildRuntime(t *testing.T, path string, file *ast.RootNamespace) (*symbols.
 // the standard library, for a model that names its elements.
 func buildRuntimeWithLibraries(t *testing.T, path string, file *ast.RootNamespace) (*symbols.Index, *semantics.Model, *Context) {
 	t.Helper()
-	idx := symbols.NewIndex()
-	loadLibraries(t, idx)
+	idx := libs.NewModelIndex()
 	idx.AddDocument(path, file)
 	idx.ExpandWildcardImports()
 	resolver := resolve.New(idx)

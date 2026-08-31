@@ -223,7 +223,7 @@ func modelOf(t *testing.T, path string, src []byte, libraries bool) (*runtime.Co
 	t.Helper()
 	idx := symbols.NewIndex()
 	if libraries {
-		loadLibraries(t, idx)
+		idx = libraryIndex()
 	}
 	sf := source.New(path, src)
 	idx.AddDocument(path, parser.New(sf).ParseFile())

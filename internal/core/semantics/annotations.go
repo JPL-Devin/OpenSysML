@@ -372,6 +372,19 @@ func (m *Model) ConstantFeatureValues(sym *symbols.Symbol, feature string) ([]sy
 	return m.constantFeatureValues(member, make(map[*symbols.Symbol]bool))
 }
 
+// DeclaredFeatureValues returns a declared member feature's ordered constant
+// values, never answering reflective metaclass features of the same name.
+func (m *Model) DeclaredFeatureValues(sym *symbols.Symbol, feature string) ([]symbols.FilterValue, bool) {
+	if m == nil || sym == nil || feature == "" {
+		return nil, false
+	}
+	member, ok := m.LookupMember(sym, feature)
+	if !ok || member == nil {
+		return nil, false
+	}
+	return m.constantFeatureValues(member, make(map[*symbols.Symbol]bool))
+}
+
 func (m *Model) constantFeatureValues(member *symbols.Symbol, seen map[*symbols.Symbol]bool) ([]symbols.FilterValue, bool) {
 	if member == nil || seen[member] {
 		return nil, false
@@ -530,6 +543,15 @@ func kermlMetaclassName(sym *symbols.Symbol, isKerML bool) string {
 	return ""
 }
 
+// ReflectiveFeatureValue reads a metaclass feature derived from the
+// candidate's declaration; ok is false where none is derived.
+func (m *Model) ReflectiveFeatureValue(sym *symbols.Symbol, feature string) (symbols.FilterValue, bool) {
+	if m == nil || sym == nil {
+		return symbols.FilterValue{}, false
+	}
+	return m.reflectiveFeatureValue(sym, feature)
+}
+
 // reflectiveFeatureValue is what the candidate's declaration states for a
 // metaclass feature of it, and whether that feature is derived here at all
 // (KerML 1.1 §8.2.4); an underived one is unevaluable, not false.
@@ -549,6 +571,12 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 			return boolValue(d.IsAll), true
 		case "isConstant":
 			return boolValue(d.IsConstant), true
+		case "isVariation":
+			return boolValue(d.IsVariation), true
+		case "isIndividual":
+			return boolValue(d.IsIndividual), true
+		case "isParallel":
+			return boolValue(d.IsParallel), true
 		}
 	case *ast.Usage:
 		switch feature {
@@ -557,7 +585,7 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 		case "isSufficient":
 			return boolValue(d.IsAll), true
 		case "isComposite":
-			return boolValue(d.IsComposite), true
+			return boolValue(d.IsComposite || !usageIsReferential(d)), true
 		case "isDerived":
 			return boolValue(d.IsDerived), true
 		case "isEnd":
@@ -572,6 +600,16 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 			return boolValue(d.IsConstant), true
 		case "isPortion":
 			return boolValue(d.Portion != ast.PortionNone), true
+		case "isVariation":
+			return boolValue(d.IsVariation), true
+		case "isVariant":
+			return boolValue(d.IsVariant), true
+		case "isReference":
+			return boolValue(!d.IsComposite && usageIsReferential(d)), true
+		case "isIndividual":
+			return boolValue(d.IsIndividual), true
+		case "isParallel":
+			return boolValue(d.IsParallel), true
 		}
 	}
 	return symbols.FilterValue{}, false

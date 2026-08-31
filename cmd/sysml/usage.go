@@ -90,6 +90,7 @@ func doc() usage.Doc {
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport", "Markdown on stdout"),
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -o report.md", ""),
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf", ""),
+				usage.Ex("sysml model.sysml -render-documents rendered", "every document, linked"),
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form pdf "+
 					"-pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf", ""),
 			},
@@ -201,6 +202,7 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
 	fs.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
 	fs.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
+	fs.StringVar(&renderDocsDir, "render-documents", "", "Render every document definition as linked Markdown into this directory")
 	fs.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
 	fs.StringVar(&docForm, "doc-form", "", "Form -render-document writes: markdown (default) or pdf, which drives an external converter")
 	fs.StringVar(&pdfEngine, "pdf-engine", "", "Converter -doc-form pdf drives: weasyprint (default), pandoc or prince")

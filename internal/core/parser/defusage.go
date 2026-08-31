@@ -1446,6 +1446,9 @@ func defBodyContext(kind ast.DefinitionKind) bodyContext {
 	switch kind {
 	case ast.DefInterface:
 		return bodyInterface
+	case ast.DefAction, ast.DefState, ast.DefCalc, ast.DefCase,
+		ast.DefAnalysisCase, ast.DefVerificationCase, ast.DefUseCase, ast.DefBehavior:
+		return bodyBehavior
 	}
 	return bodyOther
 }
@@ -1456,6 +1459,10 @@ func usageBodyContext(kind ast.UsageKind) bodyContext {
 	switch kind {
 	case ast.UsageInterface:
 		return bodyInterface
+	case ast.UsageAction, ast.UsageState, ast.UsageTransition, ast.UsageStep,
+		ast.UsageCalc, ast.UsageCase, ast.UsageAnalysisCase,
+		ast.UsageVerificationCase, ast.UsageUseCase, ast.UsageBehavior:
+		return bodyBehavior
 	}
 	return bodyOther
 }
@@ -2465,7 +2472,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Check for behavioral statements in structural contexts (occurrence/part with temporal ordering)
 	// These include: first/then succession edges for snapshot ordering
 	if p.atKeyword("first") {
-		if p.atChainedFirstSuccession() {
+		// A structural body has no token flow, so `first a then b;` is a
+		// SuccessionAsUsage over its members (SysML v2 8.2.2.13.3), never an
+		// InitialNodeMember — which would declare a member shadowing end `a`.
+		// The one-ended `first a;` stays an initial node (extension notation).
+		if p.atChainedFirstSuccession() ||
+			(p.bodyContext() != bodyBehavior && p.atTwoEndedFirst()) {
 			return p.parseSuccessionAsUsage(start)
 		}
 		firstTok := p.advance()

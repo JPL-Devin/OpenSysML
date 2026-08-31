@@ -296,13 +296,222 @@ func TestSendRoutesOverAnInterfaceTypedConnection(t *testing.T) {
 	assertIntOutput(t, outputs, "got", 13)
 }
 
+// nestedObject reads the object a chain of features of inst holds.
+func nestedObject(t *testing.T, ctx *Context, inst *Instance, path ...string) *Instance {
+	t.Helper()
+	for _, name := range path {
+		held, ok, err := ctx.fvObject(inst, name)
+		if err != nil || !ok {
+			t.Fatalf("read %s: held = %v, err = %v", name, ok, err)
+		}
+		inst = held
+	}
+	return inst
+}
+
+// ownerConnectedParts is a site whose connector joins the port of a part nested
+// two levels down to the port of a sibling part, with the receiving port's type
+// left to the caller so the same model states a receiving and an outbound end.
+func ownerConnectedParts(receiving string) string {
+	return `package P {` + directedPorts + `
+		part def Console { port command : Chan; }
+		part def Bay { part console : Console; }
+		part def Unit { port command : ` + receiving + `; }
+		part def Site {
+			part bay : Bay;
+			part unit : Unit;
+			connect bay.console.command to unit.command;
+		}
+		part site : Site {
+			action ship {
+				first start;
+				action sender { send 9 via command; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+		}
+	}`
+}
+
+// A connector its owner declares joins two objects, so a send through the port
+// of one arrives at the port of the other, held to that object's identity rather
+// than to the sender's (SysML v2 §7.16). The connector names the sending port by
+// the path from itself, so a part nested deeper is reached through that path.
+func TestSendCrossesAnOwnerConnectionToASiblingPart(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, ownerConnectedParts("~Chan")))
+	site, err := ctx.Instantiate(oneSymbol(t, idx, "P::site"))
+	if err != nil {
+		t.Fatalf("instantiate site: %v", err)
+	}
+	console := nestedObject(t, ctx, site, "bay", "console")
+	unit := nestedObject(t, ctx, site, "unit")
+	if _, err := ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::site::ship"), console, nil); err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 {
+		t.Fatalf("pending messages = %v, want one delivered across the connection", pending)
+	}
+	if got := pending[0]; got.Object != unit.ID || got.Port != "command" {
+		t.Errorf("delivered to object %d port %q, want object %d port %q",
+			got.Object, got.Port, unit.ID, "command")
+	}
+}
+
+// A part joining its own port to the port of a part it holds delegates inward:
+// the send routes over the part's own connection, and the copy is held to the
+// nested part's identity rather than to the sender's (SysML v2 §7.16).
+func TestSendDelegatesToTheNestedPartItIsConnectedTo(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
+		part def Unit { port command : ~Chan; }
+		part def Bay {
+			port command : Chan;
+			part unit : Unit;
+			connect command to unit.command;
+		}
+		part bay : Bay {
+			action ship {
+				first start;
+				action sender { send 9 via command; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+		}
+	}`))
+	bay, err := ctx.Instantiate(oneSymbol(t, idx, "P::bay"))
+	if err != nil {
+		t.Fatalf("instantiate bay: %v", err)
+	}
+	unit := nestedObject(t, ctx, bay, "unit")
+	if _, err := ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::bay::ship"), bay, nil); err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 {
+		t.Fatalf("pending messages = %v, want one delivered inward", pending)
+	}
+	if got := pending[0]; got.Object != unit.ID || got.Port != "command" {
+		t.Errorf("delivered to object %d port %q, want object %d port %q",
+			got.Object, got.Port, unit.ID, "command")
+	}
+}
+
+// The direction of the peer end's flow features decides an owner's connection as
+// it does a behavior's own: a sibling port that only carries outward receives
+// nothing, so the send is reported rather than delivered.
+func TestSendCrossingToAnOutboundOnlySiblingEndIsATypedError(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, ownerConnectedParts("Chan")))
+	site, err := ctx.Instantiate(oneSymbol(t, idx, "P::site"))
+	if err != nil {
+		t.Fatalf("instantiate site: %v", err)
+	}
+	console := nestedObject(t, ctx, site, "bay", "console")
+	_, err = ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::site::ship"), console, nil)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("execute action: err = %v, want %v", err, ErrUnroutableSend)
+	}
+	if len(ctx.PendingMessages()) != 0 {
+		t.Errorf("pending messages = %v, want none", ctx.PendingMessages())
+	}
+}
+
+// A port a behavior declares under the name of the performer's connected port
+// shadows it: the send resolves the behavior's own port, so the owner's
+// connector receives nothing, and the unjoined local port is reported.
+func TestBehaviorLocalPortShadowsThePerformersConnectedPort(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
+		item def Ping;
+		part def Console { port command : Chan; }
+		part def Unit { port command : ~Chan; }
+		part def Site {
+			part console : Console;
+			part unit : Unit;
+			connect console.command to unit.command;
+		}
+		part site : Site;
+		state def Radio {
+			port command : Chan;
+			entry; then start;
+			state start;
+			state sent;
+			transition go first start do send Ping() via command then sent;
+		}
+	}`))
+	site, err := ctx.Instantiate(oneSymbol(t, idx, "P::site"))
+	if err != nil {
+		t.Fatalf("instantiate site: %v", err)
+	}
+	console := nestedObject(t, ctx, site, "console")
+	exec, err := newStateExecutor(ctx, oneSymbol(t, idx, "P::Radio"), console)
+	if err != nil {
+		t.Fatalf("create state executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("run state machine: err = %v, want %v", err, ErrUnroutableSend)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("pending messages = %v, want none over the shadowed connector", pending)
+	}
+}
+
+// A port a behavior inherits from its generalization shadows the performer's
+// connected port the same way one it declares does: the send resolves the
+// inherited port, so the owner's connector receives nothing.
+func TestInheritedBehaviorPortShadowsThePerformersConnectedPort(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
+		item def Ping;
+		part def Console { port command : Chan; }
+		part def Unit { port command : ~Chan; }
+		part def Site {
+			part console : Console;
+			part unit : Unit;
+			connect console.command to unit.command;
+		}
+		part site : Site;
+		state def BaseRadio {
+			port command : Chan;
+		}
+		state def Radio :> BaseRadio {
+			entry; then start;
+			state start;
+			state sent;
+			transition go first start do send Ping() via command then sent;
+		}
+	}`))
+	site, err := ctx.Instantiate(oneSymbol(t, idx, "P::site"))
+	if err != nil {
+		t.Fatalf("instantiate site: %v", err)
+	}
+	console := nestedObject(t, ctx, site, "console")
+	exec, err := newStateExecutor(ctx, oneSymbol(t, idx, "P::Radio"), console)
+	if err != nil {
+		t.Fatalf("create state executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("run state machine: err = %v, want %v", err, ErrUnroutableSend)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("pending messages = %v, want none over the shadowed connector", pending)
+	}
+}
+
 // A port declaring no flow features constrains no direction, so it receives
 // whatever reaches it in either direction (see also TestSendViaPortRoutesInEitherDirection).
 func TestUndirectedPortsReceiveInEitherDirection(t *testing.T) {
 	_, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P { }`))
 	conns := []lower.Connection{{Ends: []string{"a", "b"}}}
 	for _, from := range []string{"a", "b"} {
-		receiving, outbound := ctx.receivingEnds(conns, from)
+		receiving, outbound := ctx.receivingEnds(conns, from, nil)
 		if len(receiving) != 1 || len(outbound) != 0 {
 			t.Errorf("from %s: receiving = %v, outbound = %v, want one receiving end", from, receiving, outbound)
 		}

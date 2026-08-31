@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -22,14 +21,6 @@ func libraryFixtureDiags(t *testing.T, file string) []Diagnostic {
 		t.Fatalf("read fixture: %v", err)
 	}
 	idx := newTestIndex()
-	libSrc := libs.DefaultSource()
-	cache, err := libs.NewCache()
-	if err != nil {
-		cache = nil
-	}
-	if err := libs.NewLoader(libSrc, cache).LoadAll(idx); err != nil {
-		t.Fatalf("load the library: %v", err)
-	}
 	root := parser.New(source.New(file, data)).ParseFile()
 	idx.AddDocument(file, root)
 	idx.ExpandWildcardImports()

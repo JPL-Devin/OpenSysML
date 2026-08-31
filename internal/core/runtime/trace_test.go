@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -90,7 +91,7 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string, exp
 	// quantity is one — resolves them only with the standard library indexed,
 	// exactly as the conformance harness loads it.
 	if expected.Libraries {
-		loadLibraries(t, idx)
+		idx = libs.NewModelIndex()
 	}
 	idx.AddDocument(sysmlPath, file)
 	if expected.Libraries {

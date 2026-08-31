@@ -198,7 +198,7 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-07`, 357 files)
+## Results (pilot `2026-07`, 359 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -207,9 +207,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 23 | 19 | 2 | 20 | 0 | 1 | 1 | 19 |
+| `examples` | 25 | 19 | 2 | 28 | 0 | 1 | 1 | 27 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **357** | **332** | **56** | **81** | **34** | **2** | **20** | **45** |
+| **Total** | **359** | **332** | **56** | **89** | **34** | **2** | **20** | **53** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -275,10 +275,11 @@ What remains is adjudicated as extension notation this project supports delibera
   supported and stays demonstrated. `pseudostates-demo.sysml` is now the only file that writes it, and
   says so; its 1 only-ours warning, 1 severity-only pair and 5 pilot rows are that file alone.
 - **`attribute :>> best = <expression>` and a second objective** (`solver-demo.sysml`,
-  `robot.sysml`) — the trade-study contract this project reads (`internal/core/solve/doc.go`). The
+  `robot.sysml`, `disposal-team-demo/team.sysml`) — the trade-study contract this project reads
+  (`internal/core/solve/doc.go`). The
   library binds `best`, so the reference reports `Cannot override a binding feature value` for the
   expression to improve, and it admits one objective per analysis case where we improve several
-  lexicographically: 8 + 2 `unmapped` rows.
+  lexicographically: 8 + 2 + 1 `unmapped` rows.
 - **`frame concern` in a view usage** (`views-demo.sysml`, `robot.sysml`) — `FramedConcernMember` is
   a requirement-body member in the pilot grammar, not a view-body one, and the demos frame a concern
   in the view because that is what `%view` evaluates the exposed elements against. Declaring the
@@ -288,6 +289,18 @@ What remains is adjudicated as extension notation this project supports delibera
 The `testdata` fixtures the same notation appears in are unchanged: `passes/import_no_visibility.sysml`
 and `parse/namespaces.sysml` exist to exercise the diagnostics they carry, so their rows stay
 adjudicated where they are rather than rewritten away.
+
+### The team demo
+
+`examples/disposal-team-demo/team.sysml` was written to exercise notation the robot demo does not
+reach, and validates clean here. The reference reports four rows on it, none of them a rule of ours
+that is missing:
+
+| Row | The reference's reading | Verdict |
+|---|---|---|
+| `:29` (2 `warning: Bound features should have conforming types`) | `attribute payload : MassValue = sum(robots.mass) + sum(cradles.mass);` — the value is an operator expression, and the reference compares the argument types of the implicit binding | Same family as `BindingConnector_Invalid2.sysml.xt:42`: our `W9CBoundFeatureTypesPass` checks feature endpoints, and no numbered constraint was found for argument-level conformance on an expression |
+| `:117` (`error: Referent must be time varying.` + the same warning) | `assign accepted := accepted + 1;` in a state's entry action, where `accepted` is an attribute of the enclosing `part def` | Reference-side asymmetry: the identical assignment written in an `action` of the same part def, nested or not, is clean on both sides, so the referent's `mayTimeVary` is not what the two implementations read differently — the state's entry action is |
+| `:259` (`error`, `unmapped`) | `attribute :>> best = robotMass;` in the analysis objective | The trade-study notation adjudicated in the bullet above |
 
 ### Package-keyword round
 
@@ -322,8 +335,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **45** |
-| pilot diagnostics | 123 | **81** |
+| only pilot | 82 | **53** |
+| pilot diagnostics | 123 | **89** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -527,7 +540,11 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 8 syntax, 10 `unmapped`, 1 `unresolved-reference` — all of them
+`examples` 8 syntax, 13 `unmapped`, 5 `kind-mismatch`, 1 `unresolved-reference` — of which
+`relay-probe-demo/mission.sysml` carries three: two `unmapped` where the pilot rejects a snapshot
+redefining the mass its individual binds (`Cannot override a binding feature value`) and one
+`kind-mismatch` on its send of a `Telemetry` instantiation, the same two rules it already flags on
+`solver-demo.sysml` and the send-statement demos — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -569,7 +586,7 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **19** |
+| `examples`: only pilot | **40** | **27** |
 | `examples`: fully agreeing | **15** | **19** |
 | `unmapped`, our side | **20** | **19** |
 

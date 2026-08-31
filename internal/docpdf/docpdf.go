@@ -31,7 +31,7 @@ func Render(markdown, engine string, opts Options) ([]byte, error) {
 	doc := &Prepared{Dir: dir, MarkdownFile: "document.md", HTMLFile: "document.html", Options: opts}
 	switch converter.Capabilities().Input {
 	case InputMarkdown:
-		md := markdownWithImages(markdown, images)
+		md := markdownWithImages(markdownWithSpanCaptions(markdown), images)
 		if err := os.WriteFile(filepath.Join(dir, doc.MarkdownFile), []byte(md), 0o600); err != nil {
 			return nil, err
 		}

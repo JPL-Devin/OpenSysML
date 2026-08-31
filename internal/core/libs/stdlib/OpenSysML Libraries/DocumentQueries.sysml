@@ -73,9 +73,27 @@ library package DocumentQueries {
 		return result : Element[0..*] ordered;
 	}
 
+	/* One computed table column: an explicit name plus a calc expression
+	 * evaluated on each projected row element. */
+	attribute def ColumnSpec;
+
+	/* A column expression references row properties by their declared
+	 * feature (e.g. Subsystem::mass), supports +, -, *, / arithmetic,
+	 * string concatenation with +, and ?? for absent-value defaults.
+	 * A row not conforming to the feature's declaring type reads it as
+	 * absent; a failing expression, an absent result not defaulted
+	 * with ??, or a multi-valued result fails the query with a typed
+	 * error naming the row and column. */
+	calc def Column {
+		in name : String[1];
+		in expression : ScalarValue[0..1];
+		return result : ColumnSpec[1];
+	}
+
 	calc def Project {
 		in source : Element[0..*] ordered;
-		in properties : String[1..*] ordered;
+		in properties : String[0..*] ordered = null;
+		in columns : ColumnSpec[0..*] ordered = null;
 		return result : Element[0..*] ordered;
 	}
 
@@ -93,8 +111,55 @@ library package DocumentQueries {
 		attribute text : String[0..1];
 	}
 
+	/* Inline runs compose a paragraph in declaration order, joined by
+	 * single spaces. */
+	abstract part def Run;
+
+	part def Span :> Run {
+		attribute text : String[1];
+		/* style: "plain", "emphasis", "strong" or "code". */
+		attribute style : String[0..1];
+	}
+
+	part def Link :> Run {
+		attribute text : String[1];
+		attribute target : String[1];
+	}
+
+	/* Ref links to a named content block of this or another document, or to
+	 * another document itself; text defaults to the target's title, caption
+	 * or name. */
+	part def Ref :> Run {
+		attribute text : String[0..1];
+		ref target : Element[1];
+	}
+
+	/* Column runs style a query-backed paragraph's or list's text: each
+	 * result row renders one run per column run, in declaration order. */
+	abstract part def ColumnRun;
+
+	part def SpanColumn :> ColumnRun {
+		/* column: the projected column whose values become the run text. */
+		attribute column : String[1];
+		/* style: "plain", "emphasis", "strong" or "code". */
+		attribute style : String[0..1];
+		/* styleColumn: a projected column supplying each row's style. */
+		attribute styleColumn : String[0..1];
+	}
+
+	part def LinkColumn :> ColumnRun {
+		/* column: the projected column whose values become the link text. */
+		attribute column : String[1];
+		/* targetColumn: a projected column supplying each row's one link
+		 * destination. */
+		attribute targetColumn : String[1];
+	}
+
 	part def Table :> ContentBlock {
 		attribute caption : String[0..1];
+		/* groupBy: a projected column name; rows are grouped by its value
+		 * into subtables in order of first appearance. */
+		attribute groupBy : String[0..1];
 	}
 
 	part def List :> ContentBlock {

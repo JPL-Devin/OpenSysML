@@ -271,6 +271,15 @@ func validate(q Query) error {
 		if len(p.Values) == 0 {
 			return errorf(ErrMalformed, "query property %q has no value to compare against", p.Property)
 		}
+		// "*" is the infinite multiplicity bound; anywhere else it is a wildcard
+		// no model value spells, so comparing it lexically answers no-match.
+		if !IsOrdered(p.Property) {
+			for _, value := range p.Values {
+				if value == "*" {
+					return errorf(ErrUnsupportedWildcard, `value wildcards are not implemented: query property %q cannot be compared against "*"; omit the term to select every element`, p.Property)
+				}
+			}
+		}
 		switch p.Operator {
 		case Equal, NotEqual, In:
 		case Less, Greater, LessEqual, GreaterEqual:

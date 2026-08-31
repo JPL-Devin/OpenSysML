@@ -21,6 +21,9 @@ const (
 	OperationWhereFeature    Operation = "where-feature"
 	OperationOrderBy         Operation = "order-by"
 	OperationProject         Operation = "project"
+	OperationColumn          Operation = "column"
+	OperationRowProperty     Operation = "row-property"
+	OperationColumnOperator  Operation = "column-operator"
 )
 
 // LiteralKind classifies a literal retained in a query plan.

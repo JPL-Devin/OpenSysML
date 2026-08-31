@@ -1,0 +1,20 @@
+{
+  "type": "instance",
+  "instantiate": "test::site",
+  "objects": [
+    {
+      "path": "probe",
+      "finalState": "sending",
+      "stateVisits": ["sending"]
+    },
+    {
+      "path": "station",
+      "finalState": "acknowledged",
+      "stateVisits": ["standingBy", "logged", "acknowledged"],
+      "slots": {
+        "frames": {"type": "Real", "value": 3.0},
+        "pinged": {"type": "Integer", "value": 1}
+      }
+    }
+  ]
+}

@@ -152,8 +152,9 @@ echo "%load model.sysml
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
 | `--render-all <dir>` | | Render every declared view into the directory, one artifact per view |
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
-| `--render-document <name>` | | Compile a document definition — a `part def` specializing `DocumentQueries::Document` — run its queries against the model, render its diagram blocks through the view engine and write the rendered CommonMark Markdown, as `%render-document` does. A `Diagram` content block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default document form, `-doc-form pdf` converts it (see [Rendering a document as PDF](#rendering-a-document-as-pdf)), and `-json` does not apply |
+| `--render-document <name>` | | Compile a document definition — a `part def` specializing `DocumentQueries::Document` — run its queries against the model, render its diagram blocks through the view engine and write the rendered CommonMark Markdown, as `%render-document` does. Paragraphs compose statically-authored inline runs (`Span` with a `plain`/`emphasis`/`strong`/`code` style, `Link` to a URL, `Ref` linking to another content block's anchor), a query-backed paragraph or list styles its projected values through nested `SpanColumn`/`LinkColumn` column runs, and a table with a `groupBy` column writes one subtable per group value; table columns are the query's projected properties and computed `Column` names. A `Diagram` content block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default document form, `-doc-form pdf` converts it (see [Rendering a document as PDF](#rendering-a-document-as-pdf)), and `-json` does not apply |
 | `--doc-form <form>` | | Form `--render-document` writes: `markdown` (default) or `pdf`, which drives an external converter |
+| `--render-documents <dir>` | | Render every document definition the model declares as a linked Markdown set into the directory, one file per document, so cross-document references resolve on disk |
 | `--pdf-engine <engine>` | | Converter `--doc-form pdf` drives: `weasyprint` (default), `pandoc` or `prince` |
 | `--pdf-title-page` | | Put the document title on a page of its own (`--doc-form pdf`) |
 | `--pdf-toc` | | Write a table of contents ahead of the content (`--doc-form pdf`) |
@@ -175,7 +176,7 @@ written in, so the verdicts after it are about that object:
 | `-satisfy=<name>` | Only the assertions the named element states (`-satisfy=false` asks for none) |
 | `-instantiate <name>` | Creates an object first, so the verdicts are about it |
 | `-calc "<name>(<args>)"` | Invokes a calculation and reports what it computed |
-| `-run-query "<name> [<p>=<expr>...]"` | Executes a document query and reports its rows, as `%run-query` does. Each binding is written as `<parameter>=<expression>` |
+| `-run-query "<name> [<p>=<expr>...]"` | Executes a document query and reports its rows, as `%run-query` does — including any computed `Column(name = "<column>", expression = <expr>)` projections evaluated per row. Each binding is written as `<parameter>=<expression>` |
 | `-action "<name> [object]"` | Runs an action to completion and reports its outputs |
 | `-state "<name> [object]"` | Runs a state machine and reports where it settled |
 | `-advance <time>` | Simulated time units each `-state` machine is run for |
@@ -279,6 +280,25 @@ has dedicated state diagram and sequence diagram grammars; a table is written as
 which Mermaid has no grammar for, so `-render-form mermaid` of a table names Markdown rather than
 drawing a diagram of rows.
 
+`-render-documents <dir>` renders every document definition the loaded model declares into the
+directory, one Markdown file per document, in fully-qualified-name order. Each file name is the
+document's fully qualified name with `::` replaced by `-` and any byte outside ASCII letters,
+digits and `_` escaped as `.XX` (uppercase hex), plus `.md` — deterministic, so cross-document
+references (see [the authoring chapter](../manual/authoring.md)) resolve as relative links between
+the written files. Repeated runs write identical bytes.
+
+```bash
+sysml model.sysml -render-documents rendered
+```
+
+The directory is created when necessary; written paths go to stderr and stdout stays empty. A
+model that declares no documents, more than one document with the same name, or does not analyse
+cleanly stops the run with status 2. `-render-documents` cannot be combined with
+`-render-document`, `-render`, `-render-all`, `-o`, `-convert`, a query flag, or a check flag.
+A single `-render-document` of a document with cross-document references still succeeds: the links
+point at the targets' expected file names and dangle until those documents are rendered into the
+same directory.
+
 ## Rendering a document as PDF
 
 `-render-document <name> -doc-form pdf -o report.pdf` converts the rendered Markdown to PDF. The
@@ -309,6 +329,11 @@ Diagram blocks are pre-rendered to SVG with [mermaid-cli](https://github.com/mer
 (`mmdc`, override `OPENSYSML_MMDC`; `OPENSYSML_MMDC_PUPPETEER` names a puppeteer configuration file
 for a browser that needs launch flags, such as `--no-sandbox` in a container). A document without
 diagrams needs no diagram tool.
+
+Inline runs render semantically in PDF: emphasis, strong and code styling, links, and `Ref`
+cross-references as clickable internal links to their targets' invisible anchors, in every engine —
+`weasyprint` and `prince` through the prepared HTML, `pandoc` through the Markdown itself. A grouped
+table's group key renders in strong type above each subtable.
 
 A PDF is a binary artifact, so `-doc-form pdf` requires `-o`. A missing tool stops the run with
 status 2 and a report naming the tool, its override variable and the other engines; a converter
