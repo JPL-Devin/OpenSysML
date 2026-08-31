@@ -162,6 +162,14 @@ func TestParseOSLCRefusesQualifiedNameValueUnquoted(t *testing.T) {
 	if _, err := ParseOSLC(`sysml:qualifiedName="Robot::Platform::battery"`); err != nil {
 		t.Fatalf("quoted qualified name: %v", err)
 	}
+	// A "::" inside the local part of a prefixed name is that name's business.
+	q, err = ParseParameters(`oslc.prefix=ex%3D%3Chttps://example.org/%3E&oslc.where=sysml:name%3Dex:a::b`)
+	if err != nil {
+		t.Fatalf("prefixed name with a local \"::\": %v", err)
+	}
+	if q.Where[0].Values[0] != "https://example.org/a::b" {
+		t.Fatalf("value = %#v", q.Where[0].Values)
+	}
 }
 
 func TestParseParametersPreservesEncodedSemicolonAndDecodesValues(t *testing.T) {

@@ -440,7 +440,9 @@ func resolveProperty(name string, prefixes map[string]string) (string, error) {
 }
 
 func resolveValue(name string, prefixes map[string]string) (string, error) {
-	if strings.Contains(name, "::") {
+	// A model qualified name separates its first two segments with "::", where a
+	// prefixed name separates prefix from local part with one ":".
+	if _, local, _ := strings.Cut(name, ":"); strings.HasPrefix(local, ":") {
 		return "", errorf(ErrMalformed,
 			"OSLC value %q is a model qualified name, not a prefixed name; write it as a quoted literal %q", name, name)
 	}
