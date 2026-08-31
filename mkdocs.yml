@@ -136,6 +136,17 @@ nav:
       - guide/08-editors.md
       - guide/09-python.md
       - guide/10-troubleshooting.md
+  - Document generation:
+      - manual/README.md
+      - Introduction and concepts: manual/introduction.md
+      - Getting started: manual/getting-started.md
+      - Query cookbook: manual/query-cookbook.md
+      - Document authoring: manual/authoring.md
+      - Outputs: manual/outputs.md
+      - Interfaces: manual/interfaces.md
+      - Worked example: manual/worked-example.md
+      - Limitations and troubleshooting: manual/troubleshooting.md
+      - Worked example output: manual/examples/observatory.md
   - Reference:
       - reference/README.md
       - CLI: reference/cli.md

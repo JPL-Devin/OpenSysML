@@ -11,6 +11,13 @@
 Runnable models are provided in [examples/](../examples/), together with a catalog describing what
 each one demonstrates.
 
+**[Document generation manual](manual/README.md)** — generating documents from models with native
+document queries: [concepts](manual/introduction.md), [getting started](manual/getting-started.md),
+a [query cookbook](manual/query-cookbook.md), [document authoring](manual/authoring.md),
+[outputs](manual/outputs.md) (Markdown and PDF), [interfaces](manual/interfaces.md),
+a [complete worked example](manual/worked-example.md) and
+[limitations and troubleshooting](manual/troubleshooting.md).
+
 ## Reference
 
 - **[CLI](reference/cli.md)** — every flag of `sysml`, the modes, and the exit status
