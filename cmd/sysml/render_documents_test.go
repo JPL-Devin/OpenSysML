@@ -337,6 +337,43 @@ func TestRenderDocumentsRejectsCaseAliasedTargets(t *testing.T) {
 	}
 }
 
+// TestRestoreBackupRevivesRemovedDestination checks a rollback moves a
+// hard-linked backup back when a failed replacement removed the destination,
+// and only sheds it while the destination still stands.
+func TestRestoreBackupRevivesRemovedDestination(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "Reports-Appendix.md")
+	backup := filepath.Join(dir, "backup")
+	if err := os.WriteFile(target, []byte("previous\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(target, backup); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	restoreBackup(target, backup, false)
+	restored, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("the destination stayed missing: %v", err)
+	}
+	if string(restored) != "previous\n" {
+		t.Errorf("target = %q", restored)
+	}
+
+	if err := os.Link(target, backup); err != nil {
+		t.Fatal(err)
+	}
+	restoreBackup(target, backup, false)
+	if _, err := os.ReadFile(target); err != nil {
+		t.Fatalf("an intact destination was disturbed: %v", err)
+	}
+	if _, err := os.Stat(backup); !os.IsNotExist(err) {
+		t.Errorf("the backup remains beside an intact destination: %v", err)
+	}
+}
+
 // TestReplaceFileReplacesExistingTarget checks a rollback restore lands over
 // an existing committed file.
 func TestReplaceFileReplacesExistingTarget(t *testing.T) {

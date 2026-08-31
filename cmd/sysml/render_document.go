@@ -149,10 +149,8 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 				_ = replaceFile(backups[i], targets[i])
 			case committed[i]:
 				_ = os.Remove(targets[i])
-			case moved[i]:
-				_ = os.Rename(backups[i], targets[i])
 			case backups[i] != "":
-				_ = os.Remove(backups[i])
+				restoreBackup(targets[i], backups[i], moved[i])
 			}
 		}
 	}
@@ -293,6 +291,22 @@ func foldsCase(dir string) bool {
 		return false
 	}
 	return os.SameFile(lower, upper)
+}
+
+// restoreBackup returns an uncommitted destination to its pre-commit state:
+// a set-aside backup always moves back, and a hard-linked one moves back
+// when a failed replacement removed the destination, or is shed when the
+// destination is still in place.
+func restoreBackup(target, backup string, movedAside bool) {
+	if movedAside {
+		_ = os.Rename(backup, target)
+		return
+	}
+	if _, err := os.Lstat(target); err != nil {
+		_ = os.Rename(backup, target)
+		return
+	}
+	_ = os.Remove(backup)
 }
 
 // replaceFile renames source over target, atomically where the platform
