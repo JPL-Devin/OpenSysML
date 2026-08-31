@@ -51,6 +51,11 @@ mount segmentControl
 1. mount
 2. segmentControl
 
+**mount** [mount](<https://example.com/parts#mount>) **segmentControl** [segmentControl](<https://example.com/parts#segmentControl>)
+
+- `mount`
+- `segmentControl`
+
 ### Missing Subsystems
 
 | name | mass |

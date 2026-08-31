@@ -167,10 +167,158 @@ func (e *evaluator) evaluateParagraph(node docplan.Content) (Content, error) {
 	}
 	content.query = node.Query().Entry()
 	content.queryOrigin = result.Origin()
+	if templates := node.ColumnRuns(); len(templates) > 0 {
+		at, err := e.templateIndexes(node, result.Columns(), templates)
+		if err != nil {
+			return Content{}, err
+		}
+		for number, row := range result.Rows() {
+			runs, err := e.templateRuns(node, at, templates, row, number+1)
+			if err != nil {
+				return Content{}, err
+			}
+			content.runs = append(content.runs, runs...)
+		}
+		return content, nil
+	}
 	for _, row := range result.Rows() {
 		content.runs = append(content.runs, e.rowRuns(row)...)
 	}
 	return content, nil
+}
+
+// templateIndexes resolves every column a node's column runs name against
+// the result's projected columns.
+func (e *evaluator) templateIndexes(
+	node docplan.Content,
+	columns []queryexec.Column,
+	templates []docplan.ColumnRun,
+) (map[string]int, error) {
+	at := make(map[string]int, len(columns))
+	for i, column := range columns {
+		at[column.Name()] = i
+	}
+	for _, template := range templates {
+		for _, name := range []string{template.Column(), template.StyleColumn(), template.TargetColumn()} {
+			if name == "" {
+				continue
+			}
+			if _, ok := at[name]; !ok {
+				return nil, &Error{
+					Kind:     ErrorUnknownRunColumn,
+					Document: e.document,
+					Content:  node.Name(),
+					Query:    node.Query().Entry(),
+					Column:   name,
+					Origin:   template.Origin(),
+				}
+			}
+		}
+	}
+	return at, nil
+}
+
+// templateRuns renders one query row through the node's column runs, in
+// declaration order; number is the row's 1-based position.
+func (e *evaluator) templateRuns(
+	node docplan.Content,
+	at map[string]int,
+	templates []docplan.ColumnRun,
+	row queryexec.Row,
+	number int,
+) ([]TextRun, error) {
+	cells := row.Cells()
+	cellOf := func(name string) queryexec.Cell {
+		if i, ok := at[name]; ok && i < len(cells) {
+			return cells[i]
+		}
+		return queryexec.Cell{}
+	}
+	var runs []TextRun
+	for _, template := range templates {
+		switch template.Kind() {
+		case docplan.TemplateLink:
+			target, err := e.rowTarget(node, template, cellOf(template.TargetColumn()), number)
+			if err != nil {
+				return nil, err
+			}
+			for _, value := range cellOf(template.Column()).Values() {
+				runs = append(runs, TextRun{kind: RunLink, text: e.valueText(value), target: target, origin: value.Origin()})
+			}
+		default:
+			kind := styledKind(template.Style())
+			if template.StyleColumn() != "" {
+				styled, err := e.rowStyle(node, template, cellOf(template.StyleColumn()), number)
+				if err != nil {
+					return nil, err
+				}
+				kind = styled
+			}
+			for _, value := range cellOf(template.Column()).Values() {
+				runs = append(runs, TextRun{kind: kind, text: e.valueText(value), origin: value.Origin()})
+			}
+		}
+	}
+	return runs, nil
+}
+
+// rowStyle reads one row's style from a span column run's style column.
+func (e *evaluator) rowStyle(node docplan.Content, template docplan.ColumnRun, cell queryexec.Cell, number int) (RunKind, error) {
+	invalid := func(actual string) error {
+		return &Error{
+			Kind:     ErrorInvalidRunStyle,
+			Document: e.document,
+			Content:  node.Name(),
+			Query:    node.Query().Entry(),
+			Column:   template.StyleColumn(),
+			Row:      number,
+			Actual:   actual,
+			Origin:   template.Origin(),
+		}
+	}
+	values := cell.Values()
+	if len(values) != 1 {
+		return "", invalid(fmt.Sprintf("%d values", len(values)))
+	}
+	style, ok := values[0].String()
+	if !ok {
+		return "", invalid(strconv.Quote(e.valueText(values[0])))
+	}
+	switch docplan.RunStyle(style) {
+	case docplan.StylePlain, docplan.StyleEmphasis, docplan.StyleStrong, docplan.StyleCode:
+		return styledKind(docplan.RunStyle(style)), nil
+	default:
+		return "", invalid(strconv.Quote(style))
+	}
+}
+
+// rowTarget reads one row's link destination from a link column run's
+// target column.
+func (e *evaluator) rowTarget(node docplan.Content, template docplan.ColumnRun, cell queryexec.Cell, number int) (string, error) {
+	invalid := func(actual string) error {
+		return &Error{
+			Kind:     ErrorInvalidRunTarget,
+			Document: e.document,
+			Content:  node.Name(),
+			Query:    node.Query().Entry(),
+			Column:   template.TargetColumn(),
+			Row:      number,
+			Actual:   actual,
+			Origin:   template.Origin(),
+		}
+	}
+	values := cell.Values()
+	if len(values) != 1 {
+		return "", invalid(fmt.Sprintf("%d values", len(values)))
+	}
+	target, ok := values[0].String()
+	if !ok {
+		return "", invalid(strconv.Quote(e.valueText(values[0])))
+	}
+	if target == "" {
+		return "", invalid("an empty value")
+	}
+	return target, nil
 }
 
 func (e *evaluator) evaluateTable(node docplan.Content) (Content, error) {
@@ -280,6 +428,28 @@ func (e *evaluator) evaluateList(node docplan.Content) (Content, error) {
 	}
 	rows := result.Rows()
 	items := make([]ListItem, 0, len(rows))
+	if templates := node.ColumnRuns(); len(templates) > 0 {
+		at, err := e.templateIndexes(node, result.Columns(), templates)
+		if err != nil {
+			return Content{}, err
+		}
+		for number, row := range rows {
+			runs, err := e.templateRuns(node, at, templates, row, number+1)
+			if err != nil {
+				return Content{}, err
+			}
+			items = append(items, ListItem{runs: runs, origin: row.Origin()})
+		}
+		return Content{
+			kind:        ContentList,
+			name:        node.Name(),
+			style:       ListStyle(node.Style()),
+			items:       items,
+			query:       node.Query().Entry(),
+			queryOrigin: result.Origin(),
+			origin:      node.Origin(),
+		}, nil
+	}
 	for _, row := range rows {
 		items = append(items, ListItem{runs: e.rowRuns(row), origin: row.Origin()})
 	}

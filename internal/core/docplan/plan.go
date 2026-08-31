@@ -88,6 +88,45 @@ func cloneRuns(runs []Run) []Run {
 	return out
 }
 
+// TemplateKind classifies one planned column run of a query-backed node.
+type TemplateKind string
+
+const (
+	TemplateSpan TemplateKind = "span"
+	TemplateLink TemplateKind = "link"
+)
+
+// ColumnRun maps one projected column of a query-backed paragraph or list
+// to a styled run per result row.
+type ColumnRun struct {
+	kind         TemplateKind
+	column       string
+	style        RunStyle
+	styleColumn  string
+	targetColumn string
+	origin       provenance.Origin
+}
+
+// Kind returns the classification of the column run.
+func (r ColumnRun) Kind() TemplateKind { return r.kind }
+
+// Column returns the projected column the run's text comes from.
+func (r ColumnRun) Column() string { return r.column }
+
+// Style returns the fixed inline style of a span column run.
+func (r ColumnRun) Style() RunStyle { return r.style }
+
+// StyleColumn returns the projected column supplying each row's style,
+// empty when the style is fixed.
+func (r ColumnRun) StyleColumn() string { return r.styleColumn }
+
+// TargetColumn returns the projected column supplying each row's link
+// destination.
+func (r ColumnRun) TargetColumn() string { return r.targetColumn }
+
+// Origin returns the source declaration behind the column run.
+func (r ColumnRun) Origin() provenance.Origin { return r.origin }
+
 // BindingKind classifies one planned binding value.
 type BindingKind string
 
@@ -211,18 +250,19 @@ func (d *DiagramRef) Origin() provenance.Origin { return d.origin }
 // Content is one planned content node: a section, paragraph, table, list, or
 // diagram.
 type Content struct {
-	kind     ContentKind
-	name     string
-	title    string
-	text     string
-	caption  string
-	style    ListStyle
-	groupBy  string
-	runs     []Run
-	query    *QueryRef
-	diagram  *DiagramRef
-	children []Content
-	origin   provenance.Origin
+	kind       ContentKind
+	name       string
+	title      string
+	text       string
+	caption    string
+	style      ListStyle
+	groupBy    string
+	runs       []Run
+	columnRuns []ColumnRun
+	query      *QueryRef
+	diagram    *DiagramRef
+	children   []Content
+	origin     provenance.Origin
 }
 
 // Kind returns the classification of the node.
@@ -250,6 +290,10 @@ func (c Content) GroupBy() string { return c.groupBy }
 // Runs returns the planned inline runs of a paragraph in declaration order.
 func (c Content) Runs() []Run { return cloneRuns(c.runs) }
 
+// ColumnRuns returns the planned column runs of a query-backed paragraph or
+// list in declaration order.
+func (c Content) ColumnRuns() []ColumnRun { return append([]ColumnRun(nil), c.columnRuns...) }
+
 // Query returns the referenced query of a query-backed node, or nil.
 func (c Content) Query() *QueryRef { return c.query }
 
@@ -266,18 +310,19 @@ func cloneContent(content []Content) []Content {
 	out := make([]Content, len(content))
 	for i, child := range content {
 		out[i] = Content{
-			kind:     child.kind,
-			name:     child.name,
-			title:    child.title,
-			text:     child.text,
-			caption:  child.caption,
-			style:    child.style,
-			groupBy:  child.groupBy,
-			runs:     cloneRuns(child.runs),
-			query:    child.query,
-			diagram:  child.diagram,
-			children: cloneContent(child.children),
-			origin:   child.origin,
+			kind:       child.kind,
+			name:       child.name,
+			title:      child.title,
+			text:       child.text,
+			caption:    child.caption,
+			style:      child.style,
+			groupBy:    child.groupBy,
+			runs:       cloneRuns(child.runs),
+			columnRuns: append([]ColumnRun(nil), child.columnRuns...),
+			query:      child.query,
+			diagram:    child.diagram,
+			children:   cloneContent(child.children),
+			origin:     child.origin,
 		}
 	}
 	return out

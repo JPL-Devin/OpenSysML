@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 803 semantic rules: **714 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 805 semantic rules: **716 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -1862,9 +1862,12 @@ above. It does not alter SysML v2 language semantics.
 | An empty query result evaluates to a valid empty table or list preserving the projected column schema, and query execution failures — an invalid context or plan, an unsupported operation, an exhausted budget — surface as typed document-evaluation failures wrapping the execution error | `docir/evaluate.go` `evaluator.evaluateTable`, `evaluator.evaluateList`, `evaluator.executeQuery`; `docir/errors.go` | `docir/evaluate_test.go:TestEvaluateTelescopeDocument`, `:TestEvaluateRequiresPlanAndContext`, `:TestEvaluateWrapsQueryExecutionFailure`, `:TestEvaluateHonorsExecutionBudget` | ✅ Implemented |
 | Planned inline runs evaluate into typed, backend-neutral IR runs — plain, emphasis, strong, code, link, reference — each keeping its provenance; a referenced content node carries a stable anchor derived from its named path, and a reference run's target is that anchor, so backends need no name resolution | `docir/evaluate.go` `evaluatedRun`, `styledKind`, `anchorFor`, `referencedAnchors`; `docir/ir.go` `TextRun`, `RunKind` | `docir/runs_test.go:TestEvaluateInlineRuns`, `:TestAnchorForEncoding` | ✅ Implemented |
 | A grouped table's rows partition immutably by the group column's cell text in order of first appearance, keeping row order inside each group and the full ungrouped row set beside them; a group column missing from the executed result is a typed failure | `docir/evaluate.go` `evaluator.groupRows`, `evaluator.cellText`; `docir/ir.go` `TableGroup` | `docir/runs_test.go:TestEvaluateGroupedTable`, `:TestEvaluatedGroupsAreImmutable` | ✅ Implemented |
+| A query-backed paragraph or list nests column runs — a `SpanColumn` maps a projected column to spans with a fixed style or a per-row style column, a `LinkColumn` maps text and target columns to links — compiled immutably in declaration order and validated at planning time against the query's statically-known projection: a missing column name, an unprojected name, an invalid fixed style, combining `style` with `styleColumn`, column runs without a query or alongside text or inline runs, and a column run outside a paragraph or list are distinct typed failures | `docplan/compiler.go` `compiler.compileColumnRuns`, `compiler.compileColumnRun`, `compiler.requiredColumn`, `compiler.validateRunColumns`; `docplan/plan.go` `ColumnRun` | `docplan/columnruns_test.go:TestCompileColumnRuns`, `:TestCompiledColumnRunsAreImmutable`, `:TestCompileColumnRunsSkipsUnknownableProjections`, `:TestCompileReportsColumnRunErrors` | ✅ Implemented |
+| Column runs evaluate each result row into typed IR runs in template order — emphasis, strong, code, plain, or links — with each run keeping its projected value's provenance; a projection only known at evaluation is checked then, and an unprojected column, a row whose style column does not supply exactly one of the four style strings, and a row whose target column does not supply one non-empty destination are typed failures naming the query, column and row | `docir/evaluate.go` `evaluator.templateIndexes`, `evaluator.templateRuns`, `evaluator.rowStyle`, `evaluator.rowTarget`; `docir/errors.go` | `docir/columnruns_test.go:TestEvaluateColumnRuns`, `:TestEvaluateColumnRunErrors`; `docrender/markdown_test.go:TestMarkdownTelescopeReportGolden` | ✅ Implemented |
 
-**Known limitations:** A query-backed paragraph renders each projected value as one plain text
-run; inline formatting applies to statically-authored runs only. Computed column expressions
+**Known limitations:** Column runs style query-produced text and link to external URLs;
+query-produced `Ref`-style cross-references to other content blocks are not modeled.
+Computed column expressions
 cover feature references, literals, arithmetic, string concatenation and `??` defaults;
 feature chains, invocations and comparison operators inside a column expression are typed
 planning failures.

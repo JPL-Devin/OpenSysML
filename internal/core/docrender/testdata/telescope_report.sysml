@@ -142,6 +142,30 @@ package Observatory {
 		)
 	}
 
+	calc def StyledHeavyNames :> Query {
+		in root : Element;
+		in threshold : String;
+		Project(
+			source = OrderBy(
+				source = WhereFeature(
+					source = Subsystems(root = root),
+					'feature' = "mass",
+					operator = ">=",
+					value = threshold
+				),
+				property = "name",
+				direction = "ascending",
+				missing = "last",
+				multiple = "error"
+			),
+			properties = ("name"),
+			columns = (
+				Column(name = "style", expression = "strong"),
+				Column(name = "url", expression = "https://example.com/parts#" + Element::name)
+			)
+		)
+	}
+
 	calc def MissingSubsystems :> Query {
 		in root : Element;
 		Project(
@@ -240,6 +264,32 @@ package Observatory {
 					calc items : HeavySubsystemNames {
 						in root = telescope;
 						in threshold = "10";
+					}
+				}
+
+				part styledSummary : Paragraph {
+					calc names : StyledHeavyNames {
+						in root = telescope;
+						in threshold = "10";
+					}
+					part styledName : SpanColumn {
+						attribute redefines column = "name";
+						attribute redefines styleColumn = "style";
+					}
+					part linkedName : LinkColumn {
+						attribute redefines column = "name";
+						attribute redefines targetColumn = "url";
+					}
+				}
+
+				part codeItems : List {
+					calc items : StyledHeavyNames {
+						in root = telescope;
+						in threshold = "10";
+					}
+					part codeName : SpanColumn {
+						attribute redefines column = "name";
+						attribute redefines style = "code";
 					}
 				}
 			}
