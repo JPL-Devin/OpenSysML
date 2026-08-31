@@ -163,6 +163,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
+	t.Run("send_via_connector_into_an_empty_part", testSendViaConnectorIntoAnEmptyPart)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
 	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
 	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
@@ -2568,6 +2569,41 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendViaConnectorIntoAnEmptyPart: the connector joins the sender's port to
+// the port of a part it holds, but the part holds no object this run, so nothing
+// is behind the end and the send is reported rather than delivered to a port path
+// no consumer reads.
+func testSendViaConnectorIntoAnEmptyPart(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
+		part def Unit { port command : ~Chan; }
+		part def Bay {
+			port command : Chan;
+			part unit : Unit[0];
+			connect command to unit.command;
+		}
+		part bay : Bay {
+			action ship {
+				first start;
+				action sender { send 9 via command; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+		}
+	}`))
+	bay, err := ctx.Instantiate(oneSymbol(t, idx, "P::bay"))
+	if err != nil {
+		t.Fatalf("instantiate bay: %v", err)
+	}
+	_, err = ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::bay::ship"), bay, nil)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("execute action: err = %v, want %v", err, ErrUnroutableSend)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("pending messages = %+v, want none", pending)
 	}
 }
 

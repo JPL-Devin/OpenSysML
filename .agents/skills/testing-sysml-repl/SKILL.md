@@ -59,6 +59,9 @@ printf '%%load <file.sysml>\n%%render-document <Qualified::Name>\n%%quit\n' | ti
   `npm install --prefix ~/.local/mermaid @mermaid-js/mermaid-cli`.
 - Extract mermaid blocks from the rendered Markdown with awk:
   `awk '/```mermaid/{f=1;n++;next}/```/{f=0;next}f{print > "block"n".mmd"}' render.md`
+- A failed `%render-document` leaves the REPL session alive and usable — but `%load`ing a second
+  file that declares the same package makes its symbols ambiguous (`use a qualified name`).
+  Restart the session, or use distinct package names between fixtures.
 
 ## Library-cache cold/warm testing (`XDG_CACHE_HOME`)
 

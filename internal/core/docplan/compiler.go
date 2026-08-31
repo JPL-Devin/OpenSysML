@@ -27,6 +27,10 @@ const (
 	spanBaseFQN      = "DocumentQueries::Span"
 	linkBaseFQN      = "DocumentQueries::Link"
 	refBaseFQN       = "DocumentQueries::Ref"
+
+	columnRunBaseFQN  = "DocumentQueries::ColumnRun"
+	spanColumnBaseFQN = "DocumentQueries::SpanColumn"
+	linkColumnBaseFQN = "DocumentQueries::LinkColumn"
 )
 
 // diagramSourceName is the reference member a diagram names its view or
@@ -55,6 +59,10 @@ type bases struct {
 	span      *symbols.Symbol
 	link      *symbols.Symbol
 	ref       *symbols.Symbol
+
+	columnRun  *symbols.Symbol
+	spanColumn *symbols.Symbol
+	linkColumn *symbols.Symbol
 }
 
 // refTarget is one referenceable target: the document that owns it ("" for
@@ -103,10 +111,15 @@ func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Res
 		span:      libraryBase(index, spanBaseFQN),
 		link:      libraryBase(index, linkBaseFQN),
 		ref:       libraryBase(index, refBaseFQN),
+
+		columnRun:  libraryBase(index, columnRunBaseFQN),
+		spanColumn: libraryBase(index, spanColumnBaseFQN),
+		linkColumn: libraryBase(index, linkColumnBaseFQN),
 	}
 	if all.document == nil || all.section == nil || all.paragraph == nil ||
 		all.table == nil || all.list == nil || all.diagram == nil ||
-		all.run == nil || all.span == nil || all.link == nil || all.ref == nil {
+		all.run == nil || all.span == nil || all.link == nil || all.ref == nil ||
+		all.columnRun == nil || all.spanColumn == nil || all.linkColumn == nil {
 		return nil, &Error{Kind: ErrorLibraryUnavailable}
 	}
 	name := symbols.FQNOf(entry)
@@ -282,6 +295,26 @@ func (c *compiler) compileParagraph(member *symbols.Symbol) (Content, error) {
 	if err != nil {
 		return Content{}, err
 	}
+	columnRuns, err := c.compileColumnRuns(member, query)
+	if err != nil {
+		return Content{}, err
+	}
+	if len(columnRuns) > 0 && query == nil {
+		return Content{}, &Error{
+			Kind:     ErrorColumnRunWithoutQuery,
+			Document: c.document,
+			Content:  c.contentName(member),
+			Origin:   provenance.Symbol(member),
+		}
+	}
+	if len(columnRuns) > 0 && (stated || len(runs) > 0) {
+		return Content{}, &Error{
+			Kind:     ErrorConflictingColumnRuns,
+			Document: c.document,
+			Content:  c.contentName(member),
+			Origin:   provenance.Symbol(member),
+		}
+	}
 	if len(runs) > 0 && (stated || query != nil) {
 		return Content{}, &Error{
 			Kind:     ErrorConflictingRuns,
@@ -310,13 +343,162 @@ func (c *compiler) compileParagraph(member *symbols.Symbol) (Content, error) {
 		return Content{}, err
 	}
 	return Content{
-		kind:   ContentParagraph,
-		name:   c.effectiveName(member),
-		text:   text,
-		runs:   runs,
-		query:  query,
-		origin: provenance.Symbol(member),
+		kind:       ContentParagraph,
+		name:       c.effectiveName(member),
+		text:       text,
+		runs:       runs,
+		columnRuns: columnRuns,
+		query:      query,
+		origin:     provenance.Symbol(member),
 	}, nil
+}
+
+// compileColumnRuns compiles the ordered column runs declared in a
+// query-backed paragraph or list.
+func (c *compiler) compileColumnRuns(member *symbols.Symbol, query *QueryRef) ([]ColumnRun, error) {
+	var runs []ColumnRun
+	for _, candidate := range c.effectiveMembers(member) {
+		if candidate.Kind != symbols.SymbolPartUsage || !c.isColumnRun(candidate) {
+			continue
+		}
+		run, err := c.compileColumnRun(candidate, query)
+		if err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+	return runs, nil
+}
+
+// isColumnRun reports whether a part usage conforms to a column run kind.
+func (c *compiler) isColumnRun(member *symbols.Symbol) bool {
+	return c.model.Conforms(member, c.bases.columnRun)
+}
+
+// compileColumnRun compiles one column run: a styled span or link template
+// applied to each result row.
+func (c *compiler) compileColumnRun(member *symbols.Symbol, query *QueryRef) (ColumnRun, error) {
+	if err := c.rejectNestedContent(member); err != nil {
+		return ColumnRun{}, err
+	}
+	if err := c.rejectRunQuery(member); err != nil {
+		return ColumnRun{}, err
+	}
+	span := c.model.Conforms(member, c.bases.spanColumn)
+	link := c.model.Conforms(member, c.bases.linkColumn)
+	if span == link {
+		kind := ErrorInvalidContent
+		if span {
+			kind = ErrorAmbiguousRun
+		}
+		return ColumnRun{}, &Error{
+			Kind:     kind,
+			Document: c.document,
+			Content:  c.contentName(member),
+			Origin:   provenance.Symbol(member),
+		}
+	}
+	column, err := c.requiredColumn(member, "column")
+	if err != nil {
+		return ColumnRun{}, err
+	}
+	run := ColumnRun{kind: TemplateSpan, column: column, style: StylePlain, origin: provenance.Symbol(member)}
+	if link {
+		targetColumn, err := c.requiredColumn(member, "targetColumn")
+		if err != nil {
+			return ColumnRun{}, err
+		}
+		run.kind, run.style, run.targetColumn = TemplateLink, "", targetColumn
+	} else {
+		style, styleStated, err := c.optionalText(member, "style")
+		if err != nil {
+			return ColumnRun{}, err
+		}
+		styleColumn, styleColumnStated, err := c.optionalText(member, "styleColumn")
+		if err != nil {
+			return ColumnRun{}, err
+		}
+		if styleStated && styleColumnStated {
+			return ColumnRun{}, &Error{
+				Kind:     ErrorConflictingRunStyle,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Origin:   provenance.Symbol(member),
+			}
+		}
+		if styleStated {
+			run.style = RunStyle(style)
+			switch run.style {
+			case StylePlain, StyleEmphasis, StyleStrong, StyleCode:
+			default:
+				return ColumnRun{}, &Error{
+					Kind:     ErrorInvalidRunStyle,
+					Document: c.document,
+					Content:  c.contentName(member),
+					Actual:   style,
+					Origin:   provenance.Symbol(member),
+				}
+			}
+		}
+		if styleColumnStated {
+			if styleColumn == "" {
+				return ColumnRun{}, &Error{
+					Kind:      ErrorMissingRunColumn,
+					Document:  c.document,
+					Content:   c.contentName(member),
+					Parameter: "styleColumn",
+					Origin:    provenance.Symbol(member),
+				}
+			}
+			run.style, run.styleColumn = "", styleColumn
+		}
+	}
+	if query != nil {
+		if err := c.validateRunColumns(member, query, run); err != nil {
+			return ColumnRun{}, err
+		}
+	}
+	return run, nil
+}
+
+// requiredColumn reads a column run's required column-name attribute.
+func (c *compiler) requiredColumn(member *symbols.Symbol, attribute string) (string, error) {
+	name, stated, err := c.optionalText(member, attribute)
+	if err != nil {
+		return "", err
+	}
+	if !stated || name == "" {
+		return "", &Error{
+			Kind:      ErrorMissingRunColumn,
+			Document:  c.document,
+			Content:   c.contentName(member),
+			Parameter: attribute,
+			Origin:    provenance.Symbol(member),
+		}
+	}
+	return name, nil
+}
+
+// validateRunColumns checks a column run's names against the columns its
+// query statically projects.
+func (c *compiler) validateRunColumns(member *symbols.Symbol, query *QueryRef, run ColumnRun) error {
+	columns, known := staticColumns(query.program, query.entry)
+	if !known {
+		return nil
+	}
+	for _, name := range []string{run.column, run.styleColumn, run.targetColumn} {
+		if name != "" && !containsColumn(columns, name) {
+			return &Error{
+				Kind:     ErrorUnknownRunColumn,
+				Document: c.document,
+				Content:  c.contentName(member),
+				Query:    query.entry,
+				Actual:   name,
+				Origin:   provenance.Symbol(member),
+			}
+		}
+	}
+	return nil
 }
 
 // compileRuns compiles the ordered inline runs declared in a paragraph.
@@ -970,15 +1152,20 @@ func (c *compiler) compileList(member *symbols.Symbol) (Content, error) {
 	if err != nil {
 		return Content{}, err
 	}
+	columnRuns, err := c.compileColumnRuns(member, query)
+	if err != nil {
+		return Content{}, err
+	}
 	if err := c.rejectNestedContent(member); err != nil {
 		return Content{}, err
 	}
 	return Content{
-		kind:   ContentList,
-		name:   c.effectiveName(member),
-		style:  listStyle,
-		query:  query,
-		origin: provenance.Symbol(member),
+		kind:       ContentList,
+		name:       c.effectiveName(member),
+		style:      listStyle,
+		columnRuns: columnRuns,
+		query:      query,
+		origin:     provenance.Symbol(member),
 	}, nil
 }
 
@@ -1232,14 +1419,17 @@ func (c *compiler) rejectDiagramQuery(member *symbols.Symbol) error {
 }
 
 // rejectNestedContent rejects content blocks nested inside a content block,
-// and inline runs nested anywhere but a paragraph.
+// inline runs nested anywhere but a paragraph, and column runs nested
+// anywhere but a paragraph or list.
 func (c *compiler) rejectNestedContent(owner *symbols.Symbol) error {
 	allowRuns := c.model.Conforms(owner, c.bases.paragraph)
+	allowColumnRuns := allowRuns || c.model.Conforms(owner, c.bases.list)
 	for _, member := range c.effectiveMembers(owner) {
 		if member.Kind != symbols.SymbolPartUsage {
 			continue
 		}
-		if c.isContent(member) || (!allowRuns && c.isRun(member)) {
+		if c.isContent(member) || (!allowRuns && c.isRun(member)) ||
+			(!allowColumnRuns && c.isColumnRun(member)) {
 			return &Error{
 				Kind:     ErrorInvalidContent,
 				Document: c.document,

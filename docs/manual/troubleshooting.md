@@ -96,9 +96,10 @@ fact about the implementation, not a design position.
 - **The vocabulary is non-normative.** `DocumentQueries` is an OpenSysML
   extension; other SysML v2 tools will parse models that use it but will not
   render documents from them.
-- **Query-generated text is plain.** A query-backed paragraph renders each
-  projected value as an escaped plain run; inline formatting (`Span`, `Link`,
-  `Ref`) applies to statically-authored runs only.
+- **Query-generated runs cannot cross-reference.** Column runs restyle
+  query-produced text and can link to external URLs, but `Ref`-style
+  cross-references to other content blocks apply to statically-authored runs
+  only.
 - **Cross-document links assume one output directory.** A `Ref` may target
   a content block or the root of another document (see the authoring
   chapter's cross-document pattern), and `-render-documents` writes the

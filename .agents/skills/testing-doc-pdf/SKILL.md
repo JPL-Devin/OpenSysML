@@ -1,0 +1,25 @@
+---
+name: testing-doc-pdf
+description: How to end-to-end test the sysml PDF document backend (internal/docpdf + -doc-form pdf) on Linux — provisioning the pinned WeasyPrint/mermaid toolchain, rendering the worked example and the docrender golden, and proving inline runs, anchors and links render rather than appearing literal.
+---
+
+# Testing the PDF document backend
+
+## Toolchain
+- Provision once: `./scripts/download-doc-pdf-toolchain.sh` installs a pinned WeasyPrint venv and mermaid-cli under `build/doc-pdf/`.
+- Export before any PDF render (env does NOT persist between exec tool calls even in the same shell session — re-export in the same command line):
+  - `OPENSYSML_WEASYPRINT=$PWD/build/doc-pdf/weasyprint/bin/weasyprint`
+  - `OPENSYSML_MMDC=$PWD/build/doc-pdf/mermaid/node_modules/.bin/mmdc`
+  - `OPENSYSML_MMDC_PUPPETEER=$PWD/build/doc-pdf/mermaid/puppeteer.json`
+
+## Rendering
+- Worked example: `bin/sysml docs/manual/examples/observatory.sysml -render-document Observatory::MassReport -doc-form pdf -pdf-title-page -pdf-toc -pdf-number-sections -o /tmp/observatory.pdf`. It exercises emphasis, code span, external Link, Ref (`#breakdown`), a standalone `<a id="breakdown"></a>` anchor line, grouped table (`**zone: ...**` headings), numbered list and two mermaid diagrams.
+- Richest input: `internal/core/docrender/testdata/telescope_report.golden.md` covers every inline construct including escaped `\*`/`\|`/`` \` `` prose and reference links. Drive it via a throwaway `tmp_render_main.go` at repo root calling `docpdf.Render(md, "weasyprint", docpdf.Options{...})` with `go run` (delete afterwards).
+- Markdown regression: `-o foo.md` must diff-equal `docs/manual/examples/observatory.md`.
+
+## Verifying the PDF is real, not literal
+- Install pypdf into the WeasyPrint venv (`build/doc-pdf/weasyprint/bin/pip install pypdf`) — the box's system python is a venv where `pip --user` fails.
+- Text assertions: extracted text must contain no `<a id`, `**`, `](`, or backticks; escaped source (`\*not\*`) legitimately leaves literal `*` — check against the source before calling it a failure.
+- Font-level proof of styling (visual zoom can be ambiguous): use `page.extract_text(visitor_text=...)` and check `/BaseFont` — emphasis → `DejaVu-Serif-Oblique`, strong/group headings → `DejaVu-Serif-Bold`, code → a mono face.
+- Link proof: iterate `page['/Annots']` — external links are `/URI` actions; Ref links and TOC entries must be internal `/Dest` (e.g. `breakdown`, `sec-1`), not `/URI` to `#...`.
+- Visual/recorded: open the PDF in Chrome (`google-chrome --start-maximized file:///tmp/x.pdf`); typing a file:// URL into an already-focused omnibox may get treated as a search — click the omnibox, ctrl+a, then type. Clicking a Ref link should scroll to the target section.

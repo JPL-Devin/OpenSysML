@@ -162,6 +162,94 @@ func (ctx *Context) ownerDeliveries(
 	return out, mismatch, nil
 }
 
+// connectedDeliveries answers where a `send … via p` arrives through the
+// connections the sender routes over, each receiving end resolved to the object
+// holding the port it names (SysML v2 §7.16). The later results are the ends
+// that refused the message, which decide the error a send delivered nowhere gives.
+func (ctx *Context) connectedDeliveries(
+	conns []lower.Connection, self *Instance, send lower.Send, msg Message, typed bool,
+) ([]ownerDelivery, []string, bool, error) {
+	if send.Target == "" {
+		return nil, nil, false, nil
+	}
+	var out []ownerDelivery
+	var outbound []string
+	mismatch := false
+	seen := map[ownerDelivery]bool{}
+	seenEnd := map[string]bool{send.Target: true}
+	for _, conn := range conns {
+		one := []lower.Connection{conn}
+		var receiving, refused []string
+		if typed {
+			var connMismatch bool
+			receiving, refused, connMismatch = ctx.receivingEndsForMessage(one, send.Target, send.TargetSym, msg)
+			mismatch = mismatch || connMismatch
+		} else {
+			receiving, refused = ctx.receivingEnds(one, send.Target, send.TargetSym)
+		}
+		for _, end := range refused {
+			if !seenEnd[end] {
+				seenEnd[end] = true
+				outbound = append(outbound, end)
+			}
+		}
+		for _, end := range receiving {
+			if seenEnd[end] {
+				continue
+			}
+			seenEnd[end] = true
+			deliveries, err := ctx.endDeliveries(conn.Scope, self, end)
+			if err != nil {
+				return nil, outbound, mismatch, err
+			}
+			for _, delivery := range deliveries {
+				if seen[delivery] {
+					continue
+				}
+				seen[delivery] = true
+				out = append(out, delivery)
+			}
+		}
+	}
+	return out, outbound, mismatch, nil
+}
+
+// endDeliveries resolves the port an end names to the objects holding it. An end
+// naming a port of a behavior, or one this run's instance graph does not reach,
+// is delivered to the sender under the path as written.
+func (ctx *Context) endDeliveries(scope *symbols.Scope, self *Instance, end string) ([]ownerDelivery, error) {
+	addrs, err := ctx.featureAddresses(scope, self, strings.Split(end, "."))
+	if err != nil {
+		return nil, err
+	}
+	var out []ownerDelivery
+	for _, addr := range addrs {
+		if addr.Delivery != DeliverPort || addr.Object == 0 {
+			continue
+		}
+		out = append(out, ownerDelivery{object: addr.Object, port: addr.Port})
+	}
+	if len(out) == 0 {
+		if ctx.endNamesAStructuralPath(self, end) {
+			return nil, nil
+		}
+		return []ownerDelivery{{object: objectID(self), port: end}}, nil
+	}
+	return out, nil
+}
+
+// endNamesAStructuralPath reports whether an end reaches its port through a
+// non-port feature of the sender — a part it holds — so an end that resolved to
+// no object holds none this run and nothing behind it can receive.
+func (ctx *Context) endNamesAStructuralPath(self *Instance, end string) bool {
+	segments := strings.Split(end, ".")
+	if self == nil || len(segments) < 2 {
+		return false
+	}
+	fv, held := self.FeatureValues[segments[0]]
+	return held && !isPortFeature(fv.Feature) && !isBehaviorFeature(fv.Feature)
+}
+
 // routableConnections are the connections a `send … via p` of a behavior can
 // travel over: the ones the behavior's own body declares, and the ones declared
 // by the part performing it, whose ports the send names. The performer is the

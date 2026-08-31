@@ -49,6 +49,11 @@ const (
 	ErrorInvalidRefTarget      ErrorKind = "invalid-ref-target"
 	ErrorAmbiguousRefTarget    ErrorKind = "ambiguous-ref-target"
 	ErrorUnknownGroupColumn    ErrorKind = "unknown-group-column"
+	ErrorColumnRunWithoutQuery ErrorKind = "column-run-without-query"
+	ErrorConflictingColumnRuns ErrorKind = "conflicting-column-runs"
+	ErrorMissingRunColumn      ErrorKind = "missing-run-column"
+	ErrorConflictingRunStyle   ErrorKind = "conflicting-run-style"
+	ErrorUnknownRunColumn      ErrorKind = "unknown-run-column"
 )
 
 // Error is a typed document-planning failure with its source location.
@@ -190,6 +195,16 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("document %s reference %s must target a named content block of a document, or another document itself, got %s", e.Document, e.Content, e.Actual)
 	case ErrorUnknownGroupColumn:
 		return fmt.Sprintf("document %s table %s groups by %q, which its query does not project", e.Document, e.Content, e.Actual)
+	case ErrorColumnRunWithoutQuery:
+		return fmt.Sprintf("document %s paragraph %s declares column runs but no query", e.Document, e.Content)
+	case ErrorConflictingColumnRuns:
+		return fmt.Sprintf("document %s paragraph %s declares column runs alongside text or inline runs", e.Document, e.Content)
+	case ErrorMissingRunColumn:
+		return fmt.Sprintf("document %s column run %s states no %s", e.Document, e.Content, e.Parameter)
+	case ErrorConflictingRunStyle:
+		return fmt.Sprintf("document %s column run %s states both style and styleColumn", e.Document, e.Content)
+	case ErrorUnknownRunColumn:
+		return fmt.Sprintf("document %s column run %s names column %q, which query %s does not project", e.Document, e.Content, e.Actual, e.Query)
 	default:
 		return fmt.Sprintf("document planning failed for %s", e.Document)
 	}
