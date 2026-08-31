@@ -18,8 +18,9 @@ import sys
 from pathlib import Path
 
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-# The destination is either angle-bracketed (CommonMark, may contain spaces) or bare.
-LINK = re.compile(r"\[[^\]]*\]\((<[^<>]*>|[^)\s]+)(?:\s+\"[^\"]*\")?\)")
+# The destination is either angle-bracketed (CommonMark, may contain spaces and
+# backslash-escaped characters) or bare.
+LINK = re.compile(r"\[[^\]]*\]\((<(?:\\.|[^<>\\])*>|[^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HEADING = re.compile(r"^#{1,6}\s(.*)$", re.MULTILINE)
 ANCHOR = re.compile(r"<a\s+(?:id|name)=[\"']([^\"']+)[\"']", re.IGNORECASE)
 # A link naming any scheme points outside the tree, so this checker leaves it alone.
@@ -116,7 +117,7 @@ def page_failures(md: Path, root: Path, anchors: dict[Path, set[str]]) -> list[s
         link = raw.strip()
         # CommonMark allows the destination in angle brackets: [text](<dest>).
         if link.startswith("<") and link.endswith(">"):
-            link = link[1:-1]
+            link = re.sub(r"\\(.)", r"\1", link[1:-1])
         if not link or link.startswith(SKIP_PREFIX):
             continue
         failure = link_failure(md, link, root, anchors)
