@@ -36,8 +36,13 @@ func TestManualWorkedExampleMatchesCommittedOutput(t *testing.T) {
 func TestManualCookbookModelAnalysesCleanly(t *testing.T) {
 	binary := buildCLI(t)
 	source := filepath.Join("..", "..", "docs", "manual", "examples", "cookbook.sysml")
-	cmd := exec.Command(binary, source, "-run-query", "Cookbook::MassTable root=Cookbook::telescope")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("cookbook query: %v\n%s", err, output)
+	for _, query := range []string{
+		"Cookbook::MassTable root=Cookbook::telescope",
+		"Cookbook::MassBudget root=Cookbook::telescope",
+	} {
+		cmd := exec.Command(binary, source, "-run-query", query)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("cookbook query %s: %v\n%s", query, err, output)
+		}
 	}
 }

@@ -127,6 +127,18 @@ package Cookbook {
 		)
 	}
 
+	calc def MassBudget :> Query {
+		in root : Element;
+		Project(
+			source = PartsByMass(root = root),
+			properties = ("name"),
+			columns = (
+				Column(name = "label", expression = "part: " + Element::name),
+				Column(name = "budget", expression = (Subsystem::mass ?? 0.0) * 1.1)
+			)
+		)
+	}
+
 	calc def ConnectedTo :> Query {
 		in origin : Element;
 		RelatedElements(
