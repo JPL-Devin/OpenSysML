@@ -1,5 +1,8 @@
-// Package opensysml is the public Go API for OpenSysML: parse SysML v2
-// models, look up symbols, evaluate expressions and instantiate parts.
+// Package opensysml is the public Go API for OpenSysML: parse SysML v2 models,
+// look up symbols, evaluate expressions, instantiate parts, run actions and
+// state machines, verify constraints and requirements, evaluate calculations,
+// query the model, render documents, convert notations and edit source. Every
+// RPC the service answers is a method on Client.
 //
 // # Two implementations, one interface
 //
@@ -29,6 +32,14 @@
 // that an operation rewriting one document's own notation — conversion from a
 // model handle, and editing — is refused with CodeFailedPrecondition rather than
 // applied to one document of several.
+//
+// # Answers, verdicts and refusals
+//
+// Operations that ask something of the model answer what it says rather than
+// treating an unwelcome answer as an error. A constraint that does not hold is
+// a Verdict with Holds false; only a verification that could not be evaluated
+// at all is an error, a *VerifyError whose Reason classifies it. A set of edits
+// either all apply or none do, and a refusal is an *EditError naming its kind.
 //
 // # Concurrency, contexts and lifetime
 //
@@ -74,7 +85,12 @@
 //
 // The module is v0, so the Go compatibility promise does not yet bind it.
 // Within v0, the surface of this package is what OpenSysML commits to keeping
-// compatible: see the package README for the statement and the explicit list
-// of what v1 leaves out (editing, conversion, verification, behavior
-// execution, generated model types).
+// compatible: see the package README for the statement. RDF conversion is
+// experimental — a Conversion says so — and generated model-ergonomics types
+// are deliberately absent, models being read through Symbol, Instance and
+// Value.
+//
+// No operation shells out to an SMT solver: verification evaluates conditions
+// with the same runtime Evaluate and Instantiate use. The solver-backed
+// analyses belong to the REPL.
 package opensysml

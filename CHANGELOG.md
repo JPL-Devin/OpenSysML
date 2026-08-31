@@ -8,6 +8,18 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **The public Go API covers every operation the service answers.** `ExecuteAction`,
+  `ExecuteState`, `VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction`, `EvaluateCalc`,
+  `Query`, `QueryOSLC`, `RunDocumentQuery`, `RenderDocument`, `Convert`, `ConvertSource`,
+  `ConvertFile` and `ApplyEdits` join parse, lookup, evaluation and instantiation on
+  `opensysml.Client`, in-process and over Connect alike, so an embedding program no longer drops
+  to the generated protobuf stubs for behaviour, verification, search, reporting, conversion or
+  editing. Queries are written with typed conditions (`Equals`, `Greater`, `Less`, `All`, `Any`
+  and `Not`, which De Morgans a composite rather than sending a shape the service rejects);
+  a verdict that is false or undecided is returned as an answer, while a request that cannot be
+  answered at all is a `VerifyError`, and a group of edits that will not apply is an `EditError`
+  naming the failure and the elements still referring to the target.
+
 - **A model spread over several files is parsed as one model.** `ParseFiles` and
   `ParseDocuments` on the public Go API — the `ParseSources` RPC and the `parse_sources`
   capability on the service — parse each document on its own and index all of them together, so

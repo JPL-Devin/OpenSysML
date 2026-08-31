@@ -64,8 +64,30 @@ func (c *pkgClient) dispatch(ctx context.Context, method string, request protore
 		return c.evaluate(ctx, request)
 	case "Instantiate":
 		return c.instantiate(ctx, request)
+	case "ExecuteAction":
+		return c.executeAction(ctx, request)
+	case "ExecuteState":
+		return c.executeState(ctx, request)
+	case "VerifyConstraint":
+		return c.verifyConstraint(ctx, request)
+	case "VerifyRequirement":
+		return c.verifyRequirement(ctx, request)
+	case "VerifySatisfaction":
+		return c.verifySatisfaction(ctx, request)
+	case "EvaluateCalc":
+		return c.evaluateCalc(ctx, request)
+	case "Query":
+		return c.query(ctx, request)
+	case "RunDocumentQuery":
+		return c.runDocumentQuery(ctx, request)
+	case "RenderDocument":
+		return c.renderDocument(ctx, request)
+	case "Convert":
+		return c.convert(ctx, request)
+	case "ApplyEdits":
+		return c.applyEdits(ctx, request)
 	default:
-		return nil, &uncoveredError{reason: fmt.Sprintf("the public Go API's v1 surface does not cover %s", method)}
+		return nil, &uncoveredError{reason: fmt.Sprintf("the public Go API does not cover %s", method)}
 	}
 }
 
@@ -234,6 +256,328 @@ func (c *pkgClient) instantiate(ctx context.Context, request protoreflect.Messag
 	return response, nil
 }
 
+func (c *pkgClient) executeAction(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.ExecuteActionRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	inputs := make(map[string]opensysml.Value, len(req.Inputs))
+	for name, value := range req.Inputs {
+		inputs[name] = valueFromProto(value)
+	}
+	run, err := c.api.ExecuteAction(ctx, c.model(req.ModelHash), req.ActionSymbolId, inputs)
+	var failure *opensysml.FailureError
+	if errors.As(err, &failure) {
+		return &pb.ExecuteActionResponse{
+			Error:       failure.Message,
+			Diagnostics: diagnosticsToProto(failure.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	return &pb.ExecuteActionResponse{
+		Outputs:     valuesToProto(run.Outputs),
+		Diagnostics: diagnosticsToProto(run.Diagnostics),
+	}, nil
+}
+
+func (c *pkgClient) executeState(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.ExecuteStateRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	run, err := c.api.ExecuteState(ctx, c.model(req.ModelHash), req.StateMachineSymbolId, req.Events)
+	var failure *opensysml.FailureError
+	if errors.As(err, &failure) {
+		return &pb.ExecuteStateResponse{
+			Error:       failure.Message,
+			Diagnostics: diagnosticsToProto(failure.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	return &pb.ExecuteStateResponse{
+		StatesVisited: run.Visited,
+		FinalContext:  valuesToProto(run.Context),
+		Diagnostics:   diagnosticsToProto(run.Diagnostics),
+	}, nil
+}
+
+func (c *pkgClient) verifyConstraint(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.VerifyConstraintRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	verification, err := c.api.VerifyConstraint(ctx, c.model(req.ModelHash), req.SymbolId,
+		opensysml.Against(req.SubjectSymbolId))
+	var failure *opensysml.FailureError
+	if errors.As(err, &failure) {
+		return &pb.VerifyConstraintResponse{
+			Error:       failure.Message,
+			Diagnostics: diagnosticsToProto(failure.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	return &pb.VerifyConstraintResponse{
+		Verdict:     verdictToProto(verification.Verdict),
+		Instances:   instancesToProto(verification.Instances),
+		Diagnostics: diagnosticsToProto(verification.Diagnostics),
+	}, nil
+}
+
+func (c *pkgClient) verifyRequirement(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.VerifyRequirementRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	verification, err := c.api.VerifyRequirement(ctx, c.model(req.ModelHash), req.SymbolId,
+		opensysml.Against(req.SubjectSymbolId))
+	var failure *opensysml.FailureError
+	if errors.As(err, &failure) {
+		return &pb.VerifyRequirementResponse{
+			Error:       failure.Message,
+			Diagnostics: diagnosticsToProto(failure.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	return &pb.VerifyRequirementResponse{
+		Verdict:     verdictToProto(verification.Verdict),
+		Instances:   instancesToProto(verification.Instances),
+		Diagnostics: diagnosticsToProto(verification.Diagnostics),
+	}, nil
+}
+
+func (c *pkgClient) verifySatisfaction(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.VerifySatisfactionRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	satisfaction, err := c.api.VerifySatisfaction(ctx, c.model(req.ModelHash), req.SymbolId)
+	var verifyErr *opensysml.VerifyError
+	if errors.As(err, &verifyErr) {
+		return &pb.VerifySatisfactionResponse{
+			Error:         verifyErr.Message,
+			FailureReason: pb.FailureReason(verifyErr.Reason),
+			Diagnostics:   diagnosticsToProto(verifyErr.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	response := &pb.VerifySatisfactionResponse{
+		Instances:   instancesToProto(satisfaction.Instances),
+		Diagnostics: diagnosticsToProto(satisfaction.Diagnostics),
+	}
+	for i := range satisfaction.Verdicts {
+		response.Verdicts = append(response.Verdicts, verdictToProto(&satisfaction.Verdicts[i]))
+	}
+	return response, nil
+}
+
+func (c *pkgClient) evaluateCalc(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.EvaluateCalcRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	arguments := make([]opensysml.Value, 0, len(req.Arguments))
+	for _, argument := range req.Arguments {
+		arguments = append(arguments, valueFromProto(argument))
+	}
+	calculation, err := c.api.EvaluateCalc(ctx, c.model(req.ModelHash), req.SymbolId, arguments...)
+	var verifyErr *opensysml.VerifyError
+	if errors.As(err, &verifyErr) {
+		return &pb.EvaluateCalcResponse{
+			Error:         verifyErr.Message,
+			FailureReason: pb.FailureReason(verifyErr.Reason),
+			Diagnostics:   diagnosticsToProto(verifyErr.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	response := &pb.EvaluateCalcResponse{
+		Result:      valueToProto(calculation.Result),
+		Diagnostics: diagnosticsToProto(calculation.Diagnostics),
+	}
+	for _, output := range calculation.Outputs {
+		response.Outputs = append(response.Outputs, &pb.CalcOutput{
+			Name:  output.Name,
+			Value: valueToProto(output.Value),
+		})
+	}
+	return response, nil
+}
+
+func (c *pkgClient) query(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.QueryRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	model := c.model(req.ModelHash)
+	var elements []opensysml.QueryElement
+	var err error
+	switch {
+	case req.OslcQuery != "":
+		elements, err = c.api.QueryOSLC(ctx, model, req.OslcQuery)
+	default:
+		query, converted := queryFromProto(req.Query)
+		if !converted {
+			return nil, &uncoveredError{reason: "the public Go API cannot send a query with no comparison operator"}
+		}
+		elements, err = c.api.Query(ctx, model, query)
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	response := &pb.QueryResponse{}
+	for _, element := range elements {
+		response.Elements = append(response.Elements, &pb.QueryResultElement{
+			Id:         element.ID,
+			Type:       element.Type,
+			Properties: element.Properties,
+		})
+	}
+	return response, nil
+}
+
+func (c *pkgClient) runDocumentQuery(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.RunDocumentQueryRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	bindings := make([]opensysml.Binding, 0, len(req.Bindings))
+	for _, binding := range req.Bindings {
+		converted := opensysml.Binding{Parameter: binding.Parameter}
+		for _, value := range binding.Values {
+			converted.Values = append(converted.Values, cellFromProto(value))
+		}
+		bindings = append(bindings, converted)
+	}
+	rows, err := c.api.RunDocumentQuery(ctx, c.model(req.ModelHash), req.QueryId, bindings...)
+	if err != nil {
+		return nil, apiError(err)
+	}
+	response := &pb.RunDocumentQueryResponse{}
+	for _, column := range rows.Columns {
+		response.Columns = append(response.Columns, &pb.DocumentQueryColumn{Name: column})
+	}
+	for _, row := range rows.Rows {
+		converted := &pb.DocumentQueryRow{Element: cellToProto(row.Element)}
+		for _, cell := range row.Cells {
+			values := &pb.DocumentQueryCell{}
+			for _, value := range cell {
+				values.Values = append(values.Values, cellToProto(value))
+			}
+			converted.Cells = append(converted.Cells, values)
+		}
+		response.Rows = append(response.Rows, converted)
+	}
+	return response, nil
+}
+
+func (c *pkgClient) renderDocument(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.RenderDocumentRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	markdown, err := c.api.RenderDocument(ctx, c.model(req.ModelHash), req.DocumentId)
+	if err != nil {
+		return nil, apiError(err)
+	}
+	return &pb.RenderDocumentResponse{Markdown: markdown}, nil
+}
+
+func (c *pkgClient) convert(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.ConvertRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	opts := []opensysml.ConvertOption{opensysml.WithFromFormat(opensysml.Format(req.FromFormat))}
+	if req.TolerateSyntaxErrors {
+		opts = append(opts, opensysml.WithTolerateSyntaxErrors())
+	}
+	var conversion *opensysml.Conversion
+	var err error
+	switch source := req.Source.(type) {
+	case *pb.ConvertRequest_ModelHash:
+		conversion, err = c.api.Convert(ctx, c.model(source.ModelHash), opensysml.Format(req.ToFormat), opts...)
+	case *pb.ConvertRequest_FilePath:
+		conversion, err = c.api.ConvertFile(ctx, source.FilePath, opensysml.Format(req.ToFormat), opts...)
+	case *pb.ConvertRequest_Content:
+		conversion, err = c.api.ConvertSource(ctx, source.Content, opensysml.Format(req.ToFormat), opts...)
+	default:
+		return nil, &uncoveredError{reason: "the public Go API cannot send a conversion naming no source"}
+	}
+	var failure *opensysml.FailureError
+	if errors.As(err, &failure) {
+		return &pb.ConvertResponse{
+			Error:       failure.Message,
+			Diagnostics: diagnosticsToProto(failure.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	return &pb.ConvertResponse{
+		Content:            conversion.Content,
+		FromFormat:         string(conversion.From),
+		ToFormat:           string(conversion.To),
+		Experimental:       conversion.Experimental,
+		ExperimentalNotice: conversion.ExperimentalNotice,
+		Diagnostics:        diagnosticsToProto(conversion.Diagnostics),
+	}, nil
+}
+
+func (c *pkgClient) applyEdits(ctx context.Context, request protoreflect.Message) (proto.Message, error) {
+	req := &pb.ApplyEditsRequest{}
+	if err := retype(request, req); err != nil {
+		return nil, err
+	}
+	edits := make([]opensysml.Edit, 0, len(req.Operations))
+	for _, operation := range req.Operations {
+		edit, converted := editFromProto(operation)
+		if !converted {
+			return nil, &uncoveredError{reason: "the public Go API cannot send an edit naming no operation"}
+		}
+		edits = append(edits, edit)
+	}
+	result, err := c.api.ApplyEdits(ctx, c.model(req.ModelHash), edits...)
+	var editErr *opensysml.EditError
+	if errors.As(err, &editErr) {
+		return &pb.ApplyEditsResponse{
+			Error:             editErr.Message,
+			Failure:           pb.EditFailure(editErr.Failure),
+			ReferringElements: editErr.Referring,
+			Diagnostics:       diagnosticsToProto(editErr.Diagnostics),
+		}, nil
+	}
+	if err != nil {
+		return nil, apiError(err)
+	}
+	response := &pb.ApplyEditsResponse{
+		Content:     result.Content,
+		Diagnostics: diagnosticsToProto(result.Diagnostics),
+	}
+	for _, applied := range result.Applied {
+		// #nosec G115 -- source offsets and lengths fit in int32.
+		response.Applied = append(response.Applied, &pb.AppliedEdit{
+			OperationIndex: int32(applied.Index),
+			Target:         applied.Target,
+			Offset:         int32(applied.Offset),
+			Length:         int32(applied.Length),
+			OldText:        applied.OldText,
+			NewText:        applied.NewText,
+		})
+	}
+	return response, nil
+}
+
 // model answers the handle a hash names: the parse this client made, or a bare
 // handle so an unknown hash reaches the service and is refused there.
 func (c *pkgClient) model(hash string) *opensysml.Model {
@@ -366,6 +710,227 @@ func valueToProto(value opensysml.Value) *pb.Value {
 		}}}
 	default:
 		return nil
+	}
+}
+
+func valuesToProto(values map[string]opensysml.Value) map[string]*pb.Value {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string]*pb.Value, len(values))
+	for name, value := range values {
+		out[name] = valueToProto(value)
+	}
+	return out
+}
+
+// valueFromProto reads a scenario's request value into the public type a call
+// takes, so a request the suite states reaches the API as the API states it.
+func valueFromProto(value *pb.Value) opensysml.Value {
+	switch kind := value.GetKind().(type) {
+	case *pb.Value_IntValue:
+		return opensysml.Int(kind.IntValue)
+	case *pb.Value_RealValue:
+		return opensysml.Real(kind.RealValue)
+	case *pb.Value_BoolValue:
+		return opensysml.Bool(kind.BoolValue)
+	case *pb.Value_StringValue:
+		return opensysml.String(kind.StringValue)
+	case *pb.Value_InstanceId:
+		return opensysml.InstanceID(kind.InstanceId)
+	case *pb.Value_Null:
+		return opensysml.Null(kind.Null)
+	case *pb.Value_Unset:
+		return opensysml.Unset{}
+	case *pb.Value_Sequence:
+		sequence := make(opensysml.Sequence, 0, len(kind.Sequence.GetElements()))
+		for _, element := range kind.Sequence.GetElements() {
+			sequence = append(sequence, valueFromProto(element))
+		}
+		return sequence
+	case *pb.Value_Quantity:
+		return quantityFromProto(kind.Quantity)
+	case *pb.Value_EnumLiteral:
+		return opensysml.EnumLiteral{
+			LiteralID:     kind.EnumLiteral.GetLiteralId(),
+			EnumerationID: kind.EnumLiteral.GetEnumerationId(),
+			Name:          kind.EnumLiteral.GetName(),
+		}
+	default:
+		return nil
+	}
+}
+
+func quantityFromProto(quantity *pb.Quantity) opensysml.Quantity {
+	out := opensysml.Quantity{Unit: quantity.GetUnit()}
+	switch magnitude := quantity.GetMagnitude().(type) {
+	case *pb.Quantity_IntMagnitude:
+		out.Magnitude = opensysml.Int(magnitude.IntMagnitude)
+	case *pb.Quantity_RealMagnitude:
+		out.Magnitude = opensysml.Real(magnitude.RealMagnitude)
+	}
+	if term := quantity.GetUnitTerm(); term != nil {
+		converted := &opensysml.UnitTerm{ScaleNum: term.GetScaleNum(), ScaleDen: term.GetScaleDen()}
+		for _, factor := range term.GetFactors() {
+			converted.Factors = append(converted.Factors, opensysml.UnitFactor{
+				UnitID:   factor.GetUnitId(),
+				Exponent: factor.GetExponent(),
+			})
+		}
+		out.Term = converted
+	}
+	return out
+}
+
+func instancesToProto(instances []*opensysml.Instance) []*pb.Instance {
+	var out []*pb.Instance
+	for _, instance := range instances {
+		out = append(out, instanceToProto(instance))
+	}
+	return out
+}
+
+func verdictToProto(verdict *opensysml.Verdict) *pb.Verdict {
+	if verdict == nil {
+		return nil
+	}
+	return &pb.Verdict{
+		Kind:           verdict.Kind,
+		ElementId:      verdict.ElementID,
+		Element:        verdict.Element,
+		Holds:          verdict.Holds,
+		Condition:      verdict.Condition,
+		InstanceId:     verdict.InstanceID,
+		InstanceTypeId: verdict.InstanceTypeID,
+		Error:          verdict.Error,
+		FailureReason:  pb.FailureReason(verdict.Reason),
+	}
+}
+
+// queryFromProto reads a scenario's query into the public builders. It reports
+// false for a query the builders cannot state, such as one naming no operator.
+func queryFromProto(query *pb.Query) (opensysml.Query, bool) {
+	out := opensysml.Query{Scope: query.GetScope(), Select: query.GetSelect()}
+	if query.GetWhere() == nil {
+		return out, true
+	}
+	where, ok := conditionFromProto(query.GetWhere())
+	if !ok {
+		return out, false
+	}
+	out.Where = where
+	return out, true
+}
+
+func conditionFromProto(constraint *pb.Constraint) (*opensysml.Condition, bool) {
+	switch kind := constraint.GetConstraint().(type) {
+	case *pb.Constraint_Primitive:
+		primitive := kind.Primitive
+		var condition *opensysml.Condition
+		switch primitive.GetOperator() {
+		case pb.PrimitiveOperator_PRIMITIVE_OPERATOR_EQUAL:
+			condition = opensysml.Equals(primitive.GetProperty(), primitive.GetValue()...)
+		case pb.PrimitiveOperator_PRIMITIVE_OPERATOR_GREATER:
+			condition = opensysml.Greater(primitive.GetProperty(), firstValue(primitive.GetValue()))
+		case pb.PrimitiveOperator_PRIMITIVE_OPERATOR_LESS:
+			condition = opensysml.Less(primitive.GetProperty(), firstValue(primitive.GetValue()))
+		default:
+			return nil, false
+		}
+		if primitive.GetInverse() {
+			condition = condition.Not()
+		}
+		return condition, true
+	case *pb.Constraint_Composite:
+		operands := make([]*opensysml.Condition, 0, len(kind.Composite.GetConstraint()))
+		for _, operand := range kind.Composite.GetConstraint() {
+			converted, ok := conditionFromProto(operand)
+			if !ok {
+				return nil, false
+			}
+			operands = append(operands, converted)
+		}
+		switch kind.Composite.GetOperator() {
+		case pb.CompositeOperator_COMPOSITE_OPERATOR_AND:
+			return opensysml.All(operands...), true
+		case pb.CompositeOperator_COMPOSITE_OPERATOR_OR:
+			return opensysml.Any(operands...), true
+		default:
+			return nil, false
+		}
+	default:
+		return nil, false
+	}
+}
+
+func firstValue(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+func cellFromProto(value *pb.DocumentValue) opensysml.Cell {
+	switch kind := value.GetKind().(type) {
+	case *pb.DocumentValue_ElementId:
+		return opensysml.Element{ID: kind.ElementId, Type: value.GetElementType()}
+	case *pb.DocumentValue_StringValue:
+		return opensysml.String(kind.StringValue)
+	case *pb.DocumentValue_IntValue:
+		return opensysml.Int(kind.IntValue)
+	case *pb.DocumentValue_RealValue:
+		return opensysml.Real(kind.RealValue)
+	case *pb.DocumentValue_BoolValue:
+		return opensysml.Bool(kind.BoolValue)
+	case *pb.DocumentValue_Infinity:
+		return opensysml.Infinity{}
+	default:
+		return nil
+	}
+}
+
+func cellToProto(cell opensysml.Cell) *pb.DocumentValue {
+	switch value := cell.(type) {
+	case opensysml.Element:
+		return &pb.DocumentValue{
+			Kind:        &pb.DocumentValue_ElementId{ElementId: value.ID},
+			ElementType: value.Type,
+		}
+	case opensysml.String:
+		return &pb.DocumentValue{Kind: &pb.DocumentValue_StringValue{StringValue: string(value)}}
+	case opensysml.Int:
+		return &pb.DocumentValue{Kind: &pb.DocumentValue_IntValue{IntValue: int64(value)}}
+	case opensysml.Real:
+		return &pb.DocumentValue{Kind: &pb.DocumentValue_RealValue{RealValue: float64(value)}}
+	case opensysml.Bool:
+		return &pb.DocumentValue{Kind: &pb.DocumentValue_BoolValue{BoolValue: bool(value)}}
+	case opensysml.Infinity:
+		return &pb.DocumentValue{Kind: &pb.DocumentValue_Infinity{Infinity: true}}
+	default:
+		return nil
+	}
+}
+
+func editFromProto(operation *pb.EditOperation) (opensysml.Edit, bool) {
+	switch kind := operation.GetOperation().(type) {
+	case *pb.EditOperation_SetValue:
+		return opensysml.SetValue{Target: kind.SetValue.GetTarget(), Value: kind.SetValue.GetValue()}, true
+	case *pb.EditOperation_Rename:
+		return opensysml.Rename{Target: kind.Rename.GetTarget(), NewName: kind.Rename.GetNewName()}, true
+	case *pb.EditOperation_AddMember:
+		return opensysml.AddMember{
+			Owner:        kind.AddMember.GetOwner(),
+			Kind:         kind.AddMember.GetKind(),
+			Name:         kind.AddMember.GetName(),
+			Type:         kind.AddMember.GetType(),
+			Multiplicity: kind.AddMember.GetMultiplicity(),
+			Value:        kind.AddMember.GetValue(),
+			Specializes:  kind.AddMember.GetSpecializes(),
+		}, true
+	case *pb.EditOperation_Delete:
+		return opensysml.Delete{Target: kind.Delete.GetTarget(), Cascade: kind.Delete.GetCascade()}, true
+	default:
+		return nil, false
 	}
 }
 
