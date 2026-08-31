@@ -343,6 +343,50 @@ func TestCompileQualifiedInheritedContentTargetsNamedDocument(t *testing.T) {
 	}
 }
 
+// TestCompileUntypedRedefinitionInheritsDocument checks references through an
+// untyped redefining usage inherit the redefined usage's document type, for a
+// document-root target and a chained content target alike.
+func TestCompileUntypedRedefinitionInheritsDocument(t *testing.T) {
+	fixture := loadPlanningFixture(t, `
+		ref appx : Appendix;
+		ref extra :>> appx;
+		part def Appendix :> Document {
+			attribute redefines title = "Appendix";
+			part tables : Section {
+				attribute redefines title = "Detail Tables";
+				part body : Paragraph {
+					attribute redefines text = "detail";
+				}
+			}
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part intro : Paragraph {
+				part see : Ref {
+					ref redefines target = extra.tables;
+				}
+				part whole : Ref {
+					ref redefines target = extra;
+				}
+			}
+		}
+	`)
+	plan := fixture.mustCompile(t, "Report")
+	runs := plan.Content()[0].Runs()
+	if runs[0].RefDocument() != "Observatory::Appendix" {
+		t.Errorf("chain document = %q, want Observatory::Appendix", runs[0].RefDocument())
+	}
+	if path := strings.Join(runs[0].RefPath(), "/"); path != "tables" {
+		t.Errorf("chain path = %q", path)
+	}
+	if runs[1].RefDocument() != "Observatory::Appendix" {
+		t.Errorf("root document = %q, want Observatory::Appendix", runs[1].RefDocument())
+	}
+	if len(runs[1].RefPath()) != 0 {
+		t.Errorf("root path = %v, want none", runs[1].RefPath())
+	}
+}
+
 // TestCompileAmbiguousChainRoot checks a chain rooted in a usage typed by
 // more than one document definition is an ambiguous target.
 func TestCompileAmbiguousChainRoot(t *testing.T) {

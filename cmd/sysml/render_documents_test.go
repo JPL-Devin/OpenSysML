@@ -202,6 +202,43 @@ func TestRenderDocumentsAllOrNothing(t *testing.T) {
 	}
 }
 
+// TestRenderDocumentsWritesThroughSymlink checks a destination that is a
+// symlink stays a symlink, with the rendered document written to its target.
+func TestRenderDocumentsWritesThroughSymlink(t *testing.T) {
+	binary := buildCLI(t)
+	dir := filepath.Join(t.TempDir(), "rendered")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := filepath.Join(t.TempDir(), "linked-appendix.md")
+	if err := os.WriteFile(elsewhere, []byte("previous\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "Reports-Appendix.md")
+	if err := os.Symlink(elsewhere, link); err != nil {
+		t.Fatal(err)
+	}
+
+	got := check(t, binary, linkedModel, "-render-documents", dir)
+	if got.status != 0 {
+		t.Fatalf("exit = %d\n%s", got.status, got.output())
+	}
+	info, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Error("the destination symlink was replaced by a file")
+	}
+	target, err := os.ReadFile(elsewhere)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(target), `<a id="tables"></a>`) {
+		t.Errorf("the link's target lacks the rendered appendix:\n%s", target)
+	}
+}
+
 // TestRenderDocumentEmitsIncomingAnchors checks a document rendered on its own
 // carries the anchors other documents of the workspace link into it.
 func TestRenderDocumentEmitsIncomingAnchors(t *testing.T) {

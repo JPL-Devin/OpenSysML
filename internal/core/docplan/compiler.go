@@ -733,14 +733,25 @@ func (c *compiler) contentOwner(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// documentTypesOf returns the document definitions a usage is declared to
-// have as types.
+// documentTypesOf returns the document definitions a usage has as types,
+// stated on the usage itself or inherited through its redefinition lineage
+// when the usage states none.
 func (c *compiler) documentTypesOf(sym *symbols.Symbol) []*symbols.Symbol {
+	return c.documentTypes(sym, make(map[*symbols.Symbol]bool))
+}
+
+func (c *compiler) documentTypes(sym *symbols.Symbol, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
+	if sym == nil || seen[sym] {
+		return nil
+	}
+	seen[sym] = true
 	var defs []*symbols.Symbol
+	stated := false
 	for _, relationship := range semantics.RelationshipsOf(sym) {
 		if relationship == nil || relationship.Kind != ast.RelTyping || relationship.Target == nil {
 			continue
 		}
+		stated = true
 		target := relationship.Target
 		if reference, ok := target.(*ast.FeatureReference); ok {
 			target = reference.Name
@@ -757,10 +768,28 @@ func (c *compiler) documentTypesOf(sym *symbols.Symbol) []*symbols.Symbol {
 			resolved = canonical
 		}
 		if resolved.Kind == symbols.SymbolPartDef && c.model.Conforms(resolved, c.bases.document) {
-			defs = append(defs, resolved)
+			defs = appendDocumentType(defs, resolved)
+		}
+	}
+	if stated {
+		return defs
+	}
+	for _, target := range c.model.RedefinedFeatures(sym) {
+		for _, def := range c.documentTypes(target, seen) {
+			defs = appendDocumentType(defs, def)
 		}
 	}
 	return defs
+}
+
+// appendDocumentType adds a document definition to defs unless it holds it.
+func appendDocumentType(defs []*symbols.Symbol, def *symbols.Symbol) []*symbols.Symbol {
+	for _, held := range defs {
+		if held == def {
+			return defs
+		}
+	}
+	return append(defs, def)
 }
 
 // crossContentLabel derives the default reference label of another document's

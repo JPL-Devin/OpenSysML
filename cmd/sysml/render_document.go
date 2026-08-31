@@ -76,61 +76,89 @@ func runRenderDocuments(files []string) error {
 // commitDocumentSet writes a rendered document set all-or-nothing: every
 // document is staged in the directory under a fresh temporary name, existing
 // destinations are set aside, and the staged set is renamed into place; any
-// failure restores the directory's previous contents.
+// failure restores the directory's previous contents. A symlink is written
+// through to its target, keeping the link; a pipe or device is written as it
+// stands, last, since its bytes cannot be staged and restored.
 func commitDocumentSet(documents []repl.RenderedDocument) error {
-	for _, document := range documents {
+	targets := make([]string, len(documents))
+	direct := make([]bool, len(documents))
+	replaced := make([]bool, len(documents))
+	perms := make([]os.FileMode, len(documents))
+	for i, document := range documents {
 		path := filepath.Join(renderDocsDir, document.FileName)
-		if info, err := os.Lstat(path); err == nil && info.IsDir() {
+		target, info, err := export.Destination(path)
+		if err != nil {
+			return fmt.Errorf("cannot write %s: %w", path, err)
+		}
+		if info != nil && info.IsDir() {
 			return fmt.Errorf("cannot write %s: it is a directory", path)
+		}
+		targets[i] = target
+		replaced[i] = info != nil
+		perms[i] = 0o644
+		if info != nil {
+			perms[i] = info.Mode().Perm()
+			direct[i] = !info.Mode().IsRegular()
 		}
 	}
 	staged := make([]string, len(documents))
 	backups := make([]string, len(documents))
 	committed := make([]bool, len(documents))
-	replaced := make([]bool, len(documents))
 	rollback := func() {
 		for i := range documents {
-			path := filepath.Join(renderDocsDir, documents[i].FileName)
 			if staged[i] != "" {
 				_ = os.Remove(staged[i])
 			}
 			if committed[i] {
-				_ = os.Remove(path)
+				_ = os.Remove(targets[i])
 			}
 			if backups[i] != "" {
-				_ = os.Rename(backups[i], path)
+				_ = os.Rename(backups[i], targets[i])
 			}
 		}
 	}
 	for i, document := range documents {
-		name, err := stageDocument(document)
+		if direct[i] {
+			continue
+		}
+		name, err := stageDocument(document, perms[i])
+		staged[i] = name
 		if err != nil {
 			rollback()
 			return err
 		}
-		staged[i] = name
 	}
-	for i, document := range documents {
-		path := filepath.Join(renderDocsDir, document.FileName)
-		if _, err := os.Lstat(path); err != nil {
+	for i := range documents {
+		if direct[i] || !replaced[i] {
 			continue
 		}
-		replaced[i] = true
-		name, err := setAside(path)
+		name, err := setAside(targets[i])
 		if err != nil {
 			rollback()
-			return fmt.Errorf("write %s: %w", path, err)
+			return fmt.Errorf("write %s: %w", targets[i], err)
 		}
 		backups[i] = name
 	}
-	for i, document := range documents {
-		path := filepath.Join(renderDocsDir, document.FileName)
-		if err := os.Rename(staged[i], path); err != nil {
+	for i := range documents {
+		if direct[i] {
+			continue
+		}
+		if err := os.Rename(staged[i], targets[i]); err != nil {
 			rollback()
-			return fmt.Errorf("write %s: %w", path, err)
+			return fmt.Errorf("write %s: %w", targets[i], err)
 		}
 		staged[i] = ""
 		committed[i] = true
+	}
+	for i, document := range documents {
+		if !direct[i] {
+			continue
+		}
+		path := filepath.Join(renderDocsDir, document.FileName)
+		if _, err := export.WriteFile(path, documentBytes(document)); err != nil {
+			rollback()
+			return err
+		}
 	}
 	for i, document := range documents {
 		if backups[i] != "" {
@@ -141,30 +169,35 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 		if replaced[i] {
 			what = ", replaced the existing file"
 		}
-		out := len(strings.TrimRight(document.Markdown, "\n")) + 1
-		fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes%s)\n", path, view.FormMarkdown, out, what)
+		fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes%s)\n", path, view.FormMarkdown, len(documentBytes(document)), what)
 	}
 	return nil
 }
 
+// documentBytes is what a rendered document writes: the Markdown with one
+// trailing newline.
+func documentBytes(document repl.RenderedDocument) []byte {
+	return []byte(strings.TrimRight(document.Markdown, "\n") + "\n")
+}
+
 // stageDocument writes a document to a fresh temporary file in the rendering
 // directory, so staging never touches a file the directory already holds.
-func stageDocument(document repl.RenderedDocument) (string, error) {
+func stageDocument(document repl.RenderedDocument, perm os.FileMode) (string, error) {
 	file, err := os.CreateTemp(renderDocsDir, ".sysml-staged-*")
 	if err != nil {
 		return "", fmt.Errorf("stage %s: %w", document.FileName, err)
 	}
 	name := file.Name()
-	out := strings.TrimRight(document.Markdown, "\n") + "\n"
-	if _, err := file.WriteString(out); err != nil {
+	if _, err := file.Write(documentBytes(document)); err != nil {
 		_ = file.Close()
 		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
 	}
 	if err := file.Close(); err != nil {
 		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
 	}
-	// #nosec G302 -- a rendered document is not a secret.
-	if err := os.Chmod(name, 0o644); err != nil {
+	// #nosec G302 -- a rendered document is not a secret, and an existing
+	// destination keeps its permissions.
+	if err := os.Chmod(name, perm); err != nil {
 		return name, fmt.Errorf("stage %s: %w", document.FileName, err)
 	}
 	return name, nil
