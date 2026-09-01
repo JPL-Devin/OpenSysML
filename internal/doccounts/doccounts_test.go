@@ -167,6 +167,59 @@ func TestRewriteBlockUsesConsumerRelativeLinksAndIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestRewriteBlockRendersTheLandingBandFromTheSameCensus keeps the landing page's
+// figures the generated ones: the band states the same census as the prose block,
+// and its links go through the site's record() global, which resolves each record to
+// its page or to the repository, and which the site build checks.
+func TestRewriteBlockRendersTheLandingBandFromTheSameCensus(t *testing.T) {
+	root := t.TempDir()
+	writeDoccountsFixture(t, root)
+	counts, err := ReadRefereedCounts(root)
+	if err != nil {
+		t.Fatalf("read baselines: %v", err)
+	}
+	spec := Block{Path: LandingPath, Name: landingBlockName, LinkPrefix: "project/"}
+	content := "<section>\n    <!-- doc-counts:begin landing-figures -->\n    stale\n    <!-- doc-counts:end landing-figures -->\n</section>\n"
+	got, err := RewriteBlock(content, spec, counts)
+	if err != nil {
+		t.Fatalf("rewrite landing block: %v", err)
+	}
+	for _, want := range []string{
+		"<code>2026-05</code>", "artifact <code>0.60.1</code>",
+		">1 of 2<", ">10 of 11<", ">7 of 8<", ">9 of 12<",
+		"we are silent on 1", "2 more only when asked strictly, 1 not at all",
+		"the 1 behavioral rules",
+		"href=\"{{ record('project/pilot-differential.md', base_url) }}\"",
+		"href=\"{{ record('project/spec-compliance.md', base_url) }}\"",
+		"href=\"{{ record('project/pilot-xpect.md', base_url) }}\"",
+		"href=\"{{ record('project/pilot-rejection.md', base_url) }}\"",
+		"<section>", "</section>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("landing band lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "stale") {
+		t.Fatal("landing band kept the stale content")
+	}
+	again, err := RewriteBlock(got, spec, counts)
+	if err != nil {
+		t.Fatalf("second landing rewrite: %v", err)
+	}
+	if again != got {
+		t.Fatal("landing block rewrite is not idempotent")
+	}
+}
+
+// TestRewriteBlockRejectsABlockWithNoTemplate keeps a new consumer from silently
+// emptying a block: a name no template renders is an error, not empty markup.
+func TestRewriteBlockRejectsABlockWithNoTemplate(t *testing.T) {
+	content := "<!-- doc-counts:begin invented -->\nkept\n<!-- doc-counts:end invented -->\n"
+	if _, err := RewriteBlock(content, Block{Path: ReadmePath, Name: "invented"}, RefereedCounts{}); err == nil {
+		t.Fatal("want an error for a block name no template renders")
+	}
+}
+
 func TestRewriteBlockRejectsMalformedMarkers(t *testing.T) {
 	spec := Block{Path: "README.md", Name: "refereed-figures"}
 	counts := RefereedCounts{}

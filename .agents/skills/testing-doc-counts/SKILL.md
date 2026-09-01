@@ -1,11 +1,11 @@
 ---
 name: testing-doc-counts
-description: How to end-to-end test the generated documentation figures (cmd/doc-counts + internal/doccounts + `make docs-counts`) on Linux — proving `-check` is a real gate, that both block consumers cannot drift, that marker mutations fail loudly, and that no measured number moved.
+description: How to end-to-end test the generated documentation figures (cmd/doc-counts + internal/doccounts + `make docs-counts`) on Linux — proving `-check` is a real gate, that the block consumers cannot drift, that marker mutations fail loudly, and that no measured number moved.
 ---
 
 # Testing the generated documentation figures (`cmd/doc-counts`)
 
-`cmd/doc-counts` regenerates three kinds of derived documentation from committed sources:
+`cmd/doc-counts` regenerates four kinds of derived documentation from committed sources:
 
 1. the census header line in `docs/project/spec-compliance.md` (from that file's own status markers);
 2. single-copy baseline lines in `README.md` (`**Reference differential:**`, `**Rejection oracle:**`);
@@ -13,7 +13,24 @@ description: How to end-to-end test the generated documentation figures (cmd/doc
    `<!-- doc-counts:end refereed-figures -->`, rendered from **one** template in
    `internal/doccounts/doccounts.go` into **two** consumers (`README.md` and
    `docs/internals/architecture.md`), differing only by `Block.LinkPrefix`
-   (`docs/project/` vs `../project/`).
+   (`docs/project/` vs `../project/`);
+4. the `landing-figures` block in `overrides/home.html` — the same census as markup, for the
+   documentation site's landing band. Its conformance-record links are emitted as
+   `{{ record('project/x.md', base_url) }}`, the global `scripts/mkdocs_landing.py` installs:
+   it resolves to the page when the site publishes that record and to the file on GitHub when
+   it does not, the way `scripts/mkdocs_repo_links.py` resolves such a link in Markdown.
+
+**Know which records the site publishes before writing a template link.** `mkdocs.yml`'s
+`exclude_docs` keeps the engineering records in the repository rather than on the site: as of
+this writing `omg-issues`, `pilot-xpect`, `pilot-rejection`, `pilot-corpora`,
+`pilot-execution-referee`, `grammar-coverage`, `training-examples` and `wave*` are **not
+published**; only `spec-compliance`, `pilot-differential`, `roadmap` and `project/README`
+are. A `|url` filter naming an unpublished page is a hard 404 — under MkDocs 1.6
+`exclude_docs` leaves the page *in* `files` with `inclusion.is_included() == False`, so the
+hook's presence test asks for publication, not mere existence, and `record()` is what a link
+to a possibly-unpublished record must use. `scripts/check-doc-links.py` only walks Markdown,
+so it never sees `overrides/*.html`; the hook is the only guard, and both of its warnings
+(`which no page publishes`, `which does not exist`) fail `--strict`.
 
 Inputs are `docs/project/spec-compliance.md` and the three committed baselines
 `docs/project/pilot-{differential,xpect,rejection}-baseline.json` (`doccounts.ReadRefereedCounts`).
@@ -53,10 +70,11 @@ Copy **all** `build/pilot-*` dirs together: the validator launchers resolve the 
   exit 1 with `open <path>: permission denied` and write nothing (writability of *all* pending files
   is checked before any is written).
 - **Baseline propagation:** mutate one figure in each baseline JSON in turn; `-check` must name
-  **both** consumers, the guard tests must fail while the tree is stale
+  **every** consumer stating it — both Markdown pages, and `overrides/home.html` too when the
+  figure is one of the four the landing band states — the guard tests must fail while the tree is stale
   (`TestCheckCommittedTreeIsCurrent`, `TestPilotDifferentialDocumentCountsMatchBaseline`,
   `TestW6FXpectDocumentCountsMatchBaseline`, `TestPilotRejectionDocumentCountsMatchBaseline`), and
-  regeneration must write the new number into both. Restore with `git checkout -- .`.
+  regeneration must write the new number into every one of them. Restore with `git checkout -- .`.
   **Pick a figure that is not cross-constrained.** Mutating the xpect `errors` kind's `rows`
   (510→509) makes `Silent = rows - agree - sameLocation - sameLine - severityDiffers -
   elsewhereInFile` negative, so the tool correctly *errors*
@@ -68,7 +86,17 @@ Copy **all** `build/pilot-*` dirs together: the validator launchers resolve the 
   `named block "refereed-figures" is missing or unterminated` or
   `duplicate "<!-- doc-counts:begin refereed-figures -->" marker`, and `wc -c` on the file must be
   unchanged (no truncation, no `already current`).
-- **The two consumers cannot drift:** extract each block with
+- **Every landing link resolves on the built site:** grep the `href`s out of
+  `/tmp/site/index.html` and check each one — a site-relative target must exist under
+  `/tmp/site`, a repository target must exist under `docs/` — then click them in a browser
+  against a served copy (`python3 -m http.server -d /tmp/site`; `file://` breaks directory
+  URLs). Prove the guard is live both ways: point a link at a page that does not exist and
+  at an excluded page, and `--strict` must abort in each case.
+- **The landing band states the same figures:** its four numbers must be the differential's
+  `filesAgreeing`/`files`, the Xpect silence and scope pairs, and the rejection corpus's
+  by-default gap — the same values the prose block states. Build the site and grep
+  `site/index.html` for them, since a Jinja mistake renders as literal `{{ … }}`.
+- **The two Markdown consumers cannot drift:** extract each block with
   `sed -n '/doc-counts:begin refereed-figures/,/doc-counts:end refereed-figures/p'`, normalise
   `(../project/` → `(docs/project/` in the architecture copy, and `diff` — must be empty. Then
   `test -f` all four link targets from each consumer's own directory.
@@ -96,7 +124,13 @@ Copy **all** `build/pilot-*` dirs together: the validator launchers resolve the 
 
 ## Recording
 
-Shell-only; no GUI, so no recording is needed.
+The `cmd/doc-counts` checks are shell-only; no GUI, so no recording is needed. If the change
+touches `overrides/home.html`, the landing page itself must be verified in a browser (band
+renders, links navigate, light/dark, narrow viewport) — record that part. Serve the build
+with `python3 -m http.server 8899 -d /tmp/site`, maximize Chrome with
+`wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz`, and force a narrow viewport with
+`xdotool getactivewindow windowsize 620 1100` plus a couple of `ctrl+plus` page zooms
+(Chrome will not size its window below roughly 500px).
 
 ## Devin Secrets Needed
 
