@@ -8,6 +8,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/identity"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // IdentityMetadataPass validates the IdentityMetadata annotations of a
@@ -26,15 +27,38 @@ func (IdentityMetadataPass) Run(ctx *Context, name string, root *ast.RootNamespa
 	if rootScope == nil {
 		return nil
 	}
-	table := identity.Build(ctx.Model(), ctx.Resolver(), rootScope)
-	c := &identityChecker{table: table}
+	// A project scope may span workspace documents, so uniqueness is judged
+	// over all of them; each document only reports its own elements.
+	roots := []*symbols.Scope{rootScope}
+	for _, doc := range ctx.Index.WorkspaceDocuments() {
+		if doc == name {
+			continue
+		}
+		if r := ctx.Index.DocumentRoot(doc); r != nil {
+			roots = append(roots, r)
+		}
+	}
+	table := identity.Build(ctx.Model(), ctx.Resolver(), roots...)
+	c := &identityChecker{table: table, docRoot: rootScope}
 	c.check()
 	return c.diags
 }
 
 type identityChecker struct {
-	table *identity.Table
-	diags []Diagnostic
+	table   *identity.Table
+	docRoot *symbols.Scope
+	diags   []Diagnostic
+}
+
+// inDocument reports whether the info's symbol is declared in the document
+// under validation, so each document reports only its own elements.
+func (c *identityChecker) inDocument(info *identity.Info) bool {
+	for sc := info.Symbol.OwnerScope; sc != nil; sc = sc.Parent() {
+		if sc == c.docRoot {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *identityChecker) check() {
@@ -45,7 +69,7 @@ func (c *identityChecker) check() {
 		if !ok {
 			continue
 		}
-		if info.Annotated {
+		if info.Annotated && c.inDocument(info) {
 			c.checkShape(info)
 			if info.Scope == nil {
 				c.errorf(info.AnnotationSpan, "identity-unscoped-id",
@@ -72,8 +96,14 @@ func scopeKey(info *identity.Info) string {
 	return "bound\x00" + info.Scope.Key()
 }
 
-// checkShape reports the first byte of a declared id outside [a-zA-Z0-9_-].
+// checkShape reports the first byte of a declared id outside [a-zA-Z0-9_-],
+// including the empty id, which has no legal byte at all.
 func (c *identityChecker) checkShape(info *identity.Info) {
+	if info.Declared && info.DeclaredID == "" {
+		c.errorf(info.AnnotationSpan, "identity-id-shape",
+			"element id of %s is empty; an id needs at least one byte of [a-zA-Z0-9_-]", info.FQN)
+		return
+	}
 	for i := 0; i < len(info.DeclaredID); i++ {
 		b := info.DeclaredID[i]
 		if b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '-' {
@@ -106,6 +136,9 @@ func (c *identityChecker) checkScope(infos []*identity.Info) {
 		}
 		sort.Strings(names)
 		for _, info := range group {
+			if !c.inDocument(info) {
+				continue
+			}
 			c.errorf(c.spanOf(info), "identity-duplicate-id",
 				"duplicate element id %q in one project scope: %s",
 				info.EffectiveID, strings.Join(names, " and "))
@@ -146,12 +179,16 @@ func (c *identityChecker) reportDerivedCollision(info *identity.Info, owners []*
 		if owner == info {
 			continue
 		}
-		c.errorf(info.AnnotationSpan, "identity-duplicate-id",
-			"element id %q of %s collides with %s of %s",
-			info.DeclaredID, info.FQN, space, owner.FQN)
-		c.errorf(c.spanOf(owner), "identity-duplicate-id",
-			"%s of %s collides with element id %q of %s",
-			space, owner.FQN, info.DeclaredID, info.FQN)
+		if c.inDocument(info) {
+			c.errorf(info.AnnotationSpan, "identity-duplicate-id",
+				"element id %q of %s collides with %s of %s",
+				info.DeclaredID, info.FQN, space, owner.FQN)
+		}
+		if c.inDocument(owner) {
+			c.errorf(c.spanOf(owner), "identity-duplicate-id",
+				"%s of %s collides with element id %q of %s",
+				space, owner.FQN, info.DeclaredID, info.FQN)
+		}
 	}
 }
 

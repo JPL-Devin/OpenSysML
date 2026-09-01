@@ -3,7 +3,86 @@ package passes
 import (
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
+
+// identityDiagsAcross analyses two workspace documents with the default
+// registry and returns each document's diagnostics.
+func identityDiagsAcross(t *testing.T, srcA, srcB string) ([]Diagnostic, []Diagnostic) {
+	t.Helper()
+	rootA := parser.New(source.New("<a>", []byte(srcA))).ParseFile()
+	rootB := parser.New(source.New("<b>", []byte(srcB))).ParseFile()
+	idx := newTestIndex()
+	idx.AddDocument("<a>", rootA)
+	idx.AddDocument("<b>", rootB)
+	return Analyze("<a>", rootA, nil, idx), Analyze("<b>", rootB, nil, idx)
+}
+
+func TestIdentityDuplicateIdsAcrossDocumentsOfOneProject(t *testing.T) {
+	srcA := `package PA {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def A {
+		@IdentityMetadata::ElementId { id = "same-id"; }
+	}
+}
+`
+	srcB := `package PB {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def B {
+		@IdentityMetadata::ElementId { id = "same-id"; }
+	}
+}
+`
+	diagsA, diagsB := identityDiagsAcross(t, srcA, srcB)
+	for _, diags := range [][]Diagnostic{only(diagsA, "identity-duplicate-id"), only(diagsB, "identity-duplicate-id")} {
+		if len(diags) != 1 {
+			t.Fatalf("got %d duplicate-id diagnostics in one document, want 1: %v", len(diags), diags)
+		}
+		if !strings.Contains(diags[0].Message, "PA::A") || !strings.Contains(diags[0].Message, "PB::B") {
+			t.Fatalf("diagnostic must name both elements: %q", diags[0].Message)
+		}
+	}
+}
+
+func TestIdentityDuplicateIdsAcrossDocumentsOfDifferentProjectsAreLegal(t *testing.T) {
+	srcA := `package PA {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def A {
+		@IdentityMetadata::ElementId { id = "same-id"; }
+	}
+}
+`
+	srcB := `package PB {
+	@IdentityMetadata::ProjectRef { projectId = "proj-2"; }
+	part def B {
+		@IdentityMetadata::ElementId { id = "same-id"; }
+	}
+}
+`
+	diagsA, diagsB := identityDiagsAcross(t, srcA, srcB)
+	if n := len(only(diagsA, "identity-duplicate-id")) + len(only(diagsB, "identity-duplicate-id")); n != 0 {
+		t.Fatalf("got %d duplicate-id diagnostics, want none across different projects", n)
+	}
+}
+
+func TestIdentityEmptyIdFailsTheShapeCheck(t *testing.T) {
+	src := `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def A {
+		@IdentityMetadata::ElementId { id = ""; }
+	}
+}
+`
+	diags := only(w8dDiags(t, src), "identity-id-shape")
+	if len(diags) != 1 {
+		t.Fatalf("got %d shape diagnostics, want 1: %v", len(diags), diags)
+	}
+	if !strings.Contains(diags[0].Message, "empty") {
+		t.Fatalf("diagnostic must call the id empty: %q", diags[0].Message)
+	}
+}
 
 func TestIdentityDuplicateDeclaredIdsInOneScope(t *testing.T) {
 	src := `package P {

@@ -48,8 +48,10 @@ type Info struct {
 	EffectiveID string
 	// Annotated reports an ElementId annotation on the element.
 	Annotated bool
-	// DeclaredID is the evaluated ElementId id; empty when the annotation's
-	// value is not a constant string, in which case the derived id stands.
+	// Declared reports that the annotation's id evaluated to a constant
+	// string; when false the derived id stands.
+	Declared bool
+	// DeclaredID is the evaluated ElementId id, possibly empty.
 	DeclaredID string
 	// AnnotationSpan locates the ElementId annotation, for diagnostics.
 	AnnotationSpan source.Span
@@ -72,8 +74,9 @@ func (t *Table) Info(sym *symbols.Symbol) (*Info, bool) {
 // Symbols returns the table's symbols in deterministic walk order.
 func (t *Table) Symbols() []*symbols.Symbol { return t.order }
 
-// Build computes the identity side table of every named symbol under root.
-func Build(model *semantics.Model, res *resolve.Resolver, root *symbols.Scope) *Table {
+// Build computes the identity side table of every named symbol under the
+// given roots, in root order.
+func Build(model *semantics.Model, res *resolve.Resolver, roots ...*symbols.Scope) *Table {
 	b := &builder{
 		model:  model,
 		res:    res,
@@ -82,7 +85,10 @@ func Build(model *semantics.Model, res *resolve.Resolver, root *symbols.Scope) *
 		known:  make(map[*symbols.Symbol]bool),
 	}
 	t := &Table{infos: make(map[*symbols.Symbol]*Info)}
-	for _, sym := range collectSymbols(root) {
+	for _, sym := range collectSymbols(roots) {
+		if _, ok := t.infos[sym]; ok {
+			continue
+		}
 		info := b.infoOf(sym)
 		if info == nil {
 			continue
@@ -115,9 +121,12 @@ func (b *builder) infoOf(sym *symbols.Symbol) *Info {
 	if span, ok := b.annotationSpan(sym, ElementIdFQN); ok {
 		info.Annotated = true
 		info.AnnotationSpan = span
-		if id, ok := b.stringFact(sym, ElementIdFQN, "id"); ok && id != "" {
+		if id, ok := b.stringFact(sym, ElementIdFQN, "id"); ok {
+			info.Declared = true
 			info.DeclaredID = id
-			info.EffectiveID = id
+			if id != "" {
+				info.EffectiveID = id
+			}
 		}
 	}
 	info.Scope = b.scopeOf(sym)
@@ -198,9 +207,9 @@ func (b *builder) stringFact(sym *symbols.Symbol, typeFQN, feature string) (stri
 	return "", false
 }
 
-// collectSymbols visits every symbol of the scope subtree exactly once, in
+// collectSymbols visits every symbol of the scope subtrees exactly once, in
 // declaration order.
-func collectSymbols(root *symbols.Scope) []*symbols.Symbol {
+func collectSymbols(roots []*symbols.Scope) []*symbols.Symbol {
 	seenSyms := make(map[*symbols.Symbol]bool)
 	seenScopes := make(map[*symbols.Scope]bool)
 	var out []*symbols.Symbol
@@ -223,6 +232,8 @@ func collectSymbols(root *symbols.Scope) []*symbols.Symbol {
 			walk(child)
 		}
 	}
-	walk(root)
+	for _, root := range roots {
+		walk(root)
+	}
 	return out
 }
