@@ -155,6 +155,42 @@ package Meta {
 	}
 }
 
+func TestUnnamedAboutFormElementIdCarriesItsDeclaredID(t *testing.T) {
+	table, idx := buildTable(t, `package Vehicles {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def Vehicle;
+	metadata : IdentityMetadata::ElementId about Vehicle {
+		id = "8f3a41d0";
+	}
+}
+`)
+	info := infoOf(t, table, idx, "Vehicles::Vehicle")
+	if !info.Annotated || info.DeclaredID != "8f3a41d0" || info.EffectiveID != "8f3a41d0" {
+		t.Fatalf("annotated=%v declared=%q effective=%q, want the unnamed about-form id 8f3a41d0",
+			info.Annotated, info.DeclaredID, info.EffectiveID)
+	}
+	if len(info.Declarations) != 1 || !info.Declarations[0].About {
+		t.Fatalf("declarations = %+v, want one about-form declaration", info.Declarations)
+	}
+}
+
+func TestUnnamedAboutFormProjectRefBindsTheScope(t *testing.T) {
+	table, idx := buildTable(t, `package Vehicles {
+	part def Vehicle;
+}
+package Meta {
+	metadata : IdentityMetadata::ProjectRef about Vehicles {
+		projectId = "proj-1";
+		org = "org-a";
+	}
+}
+`)
+	info := infoOf(t, table, idx, "Vehicles::Vehicle")
+	if info.Scope == nil || info.Scope.ProjectID != "proj-1" || info.Scope.Org != "org-a" {
+		t.Fatalf("scope = %+v, want proj-1/org-a from the unnamed about-form ProjectRef", info.Scope)
+	}
+}
+
 func TestInlineAndAboutFormDeclarationsAreBothRecorded(t *testing.T) {
 	table, idx := buildTable(t, `package Vehicles {
 	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }

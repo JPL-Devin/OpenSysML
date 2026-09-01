@@ -30,6 +30,8 @@ type annotation struct {
 	values map[string]symbols.FilterValue
 	// node states the annotation: the prefix-metadata node or metadata usage.
 	node ast.Node
+	// scope is where the annotating node is declared.
+	scope *symbols.Scope
 	// about marks an annotation stated elsewhere with an `about` clause.
 	about bool
 }
@@ -89,8 +91,11 @@ func (m *Model) AnnotationFactsOf(sym *symbols.Symbol) []symbols.AnnotationFacts
 type AnnotationSite struct {
 	TypeFQN string
 	Node    ast.Node
-	About   bool
-	Values  []symbols.AnnotationValueFacts
+	// Scope is where the annotating node is declared; for an `about`-form
+	// annotation that may be another document than the annotated element's.
+	Scope  *symbols.Scope
+	About  bool
+	Values []symbols.AnnotationValueFacts
 }
 
 // AnnotationSitesOf returns the metadata annotating sym with the nodes stating
@@ -106,7 +111,7 @@ func (m *Model) AnnotationSitesOf(sym *symbols.Symbol) []AnnotationSite {
 		if typFQN == "" || a.node == nil {
 			continue
 		}
-		site := AnnotationSite{TypeFQN: typFQN, Node: a.node, About: a.about}
+		site := AnnotationSite{TypeFQN: typFQN, Node: a.node, Scope: a.scope, About: a.about}
 		for _, feature := range sortedFeatureNames(a.values) {
 			site.Values = append(site.Values, symbols.AnnotationValueFacts{
 				Feature: feature,
@@ -203,6 +208,7 @@ func (m *Model) prefixAnnotation(scope *symbols.Scope, p *ast.PrefixMetadata) (a
 	}
 	a := m.annotationOfType(typ, scope, p.Body)
 	a.node = p
+	a.scope = scope
 	return a, true
 }
 
@@ -228,6 +234,7 @@ func (m *Model) usageAnnotation(scope *symbols.Scope, u *ast.Usage) (annotation,
 		}
 		a := m.annotationOfType(typ, bodyScope(u, scope), u.Members)
 		a.node = u
+		a.scope = scope
 		return a, true
 	}
 	return annotation{}, false
@@ -286,27 +293,37 @@ func (m *Model) annotationsAbout() map[*symbols.Symbol][]annotation {
 		return m.aboutAnnots
 	}
 	seen := make(map[*symbols.Symbol]bool)
-	for _, fqn := range idx.FQNs() {
-		for _, sym := range idx.LookupQualified(fqn) {
-			if sym == nil || seen[sym] || sym.Kind != symbols.SymbolMetadataUsage {
-				continue
-			}
-			seen[sym] = true
-			usage, ok := sym.Decl.(*ast.Usage)
-			if !ok || !annotatesOthers(usage) {
-				continue
-			}
-			a, ok := m.usageAnnotation(sym.OwnerScope, usage)
-			if !ok {
-				continue
-			}
-			a.about = true
-			for _, target := range m.annotatedElements(sym.OwnerScope, usage) {
-				m.aboutAnnots[target] = append(m.aboutAnnots[target], a)
-			}
-		}
+	for _, doc := range idx.WorkspaceDocuments() {
+		m.collectAboutAnnotations(idx.DocumentRoot(doc), seen)
 	}
 	return m.aboutAnnots
+}
+
+// collectAboutAnnotations walks a scope tree — anonymous members included, so
+// `metadata : T about x;` counts like a named usage — indexing every `about`
+// metadata usage by the elements it annotates.
+func (m *Model) collectAboutAnnotations(scope *symbols.Scope, seen map[*symbols.Symbol]bool) {
+	if scope == nil {
+		return
+	}
+	scope.ForEachMember(func(sym *symbols.Symbol) bool {
+		if sym == nil || seen[sym] {
+			return true
+		}
+		seen[sym] = true
+		if sym.Kind == symbols.SymbolMetadataUsage {
+			if usage, ok := sym.Decl.(*ast.Usage); ok && annotatesOthers(usage) {
+				if a, ok := m.usageAnnotation(sym.OwnerScope, usage); ok {
+					a.about = true
+					for _, target := range m.annotatedElements(sym.OwnerScope, usage) {
+						m.aboutAnnots[target] = append(m.aboutAnnots[target], a)
+					}
+				}
+			}
+		}
+		m.collectAboutAnnotations(sym.Scope, seen)
+		return true
+	})
 }
 
 // annotatedElements resolves the elements a metadata usage's `about` clause

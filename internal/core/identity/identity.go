@@ -49,6 +49,9 @@ type Declaration struct {
 	About bool
 	// Span locates the annotating node, for diagnostics.
 	Span source.Span
+	// Scope is where the annotating node is declared; for an `about`-form
+	// annotation that may be another document than the element's.
+	Scope *symbols.Scope
 }
 
 // Info is one symbol's identity: its effective id, whether an ElementId
@@ -138,7 +141,7 @@ func (b *builder) infoOf(sym *symbols.Symbol) *Info {
 		if site.TypeFQN != ElementIdFQN {
 			continue
 		}
-		d := Declaration{About: site.About, Span: site.Node.Span()}
+		d := Declaration{About: site.About, Span: site.Node.Span(), Scope: site.Scope}
 		if id, ok := siteString(site, "id"); ok {
 			d.Declared = true
 			d.ID = id

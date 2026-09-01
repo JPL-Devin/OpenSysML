@@ -359,6 +359,75 @@ func TestIdentityAboutFormBadIdShapeErrorsAtTheUsage(t *testing.T) {
 	w8dWantLines(t, src, "identity-id-shape", 4)
 }
 
+func TestIdentityUnnamedAboutFormBadIdShapeErrorsAtTheUsage(t *testing.T) {
+	src := `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def X;
+	metadata : IdentityMetadata::ElementId about X {
+		id = "bad id";
+	}
+}
+`
+	diags := only(w8dDiags(t, src), "identity-id-shape")
+	if len(diags) != 1 || !strings.Contains(diags[0].Message, "0x20") {
+		t.Fatalf("got %v, want one shape error naming byte 0x20", diags)
+	}
+	w8dWantLines(t, src, "identity-id-shape", 4)
+}
+
+func TestIdentityCrossDocumentAboutAnnotationErrorsInItsOwnDocument(t *testing.T) {
+	srcA := `package PA {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def X;
+}
+`
+	srcB := `package PB {
+	metadata xid : IdentityMetadata::ElementId about PA::X {
+		id = "bad id";
+	}
+}
+`
+	diagsA, diagsB := identityDiagsAcross(t, srcA, srcB)
+	if n := len(only(diagsA, "identity-id-shape")); n != 0 {
+		t.Fatalf("the annotated element's document must stay clean, got %v", only(diagsA, "identity-id-shape"))
+	}
+	diags := only(diagsB, "identity-id-shape")
+	if len(diags) != 1 || !strings.Contains(diags[0].Message, "PA::X") {
+		t.Fatalf("got %v, want one shape error in the annotating document naming PA::X", diags)
+	}
+	if line := w8dLine(srcB, diags[0].Span); line != 2 {
+		t.Fatalf("got line %d, want the annotating usage's line 2", line)
+	}
+}
+
+func TestIdentityCrossDocumentConflictErrorsInEachDeclaringDocument(t *testing.T) {
+	srcA := `package PA {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def X {
+		@IdentityMetadata::ElementId { id = "inline-id"; }
+	}
+}
+`
+	srcB := `package PB {
+	metadata xid : IdentityMetadata::ElementId about PA::X {
+		id = "about-id";
+	}
+}
+`
+	diagsA, diagsB := identityDiagsAcross(t, srcA, srcB)
+	confA, confB := only(diagsA, "identity-conflicting-ids"), only(diagsB, "identity-conflicting-ids")
+	if len(confA) != 1 || len(confB) != 1 {
+		t.Fatalf("got %d and %d conflict diagnostics, want one per declaring document: %v %v",
+			len(confA), len(confB), confA, confB)
+	}
+	if line := w8dLine(srcA, confA[0].Span); line != 4 {
+		t.Fatalf("got line %d in the inline document, want 4", line)
+	}
+	if line := w8dLine(srcB, confB[0].Span); line != 2 {
+		t.Fatalf("got line %d in the annotating document, want 2", line)
+	}
+}
+
 func TestIdentityAboutFormProjectRefScopesTheElements(t *testing.T) {
 	src := `package PA {
 	part def A {

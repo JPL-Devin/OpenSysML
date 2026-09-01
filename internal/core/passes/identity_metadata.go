@@ -54,7 +54,18 @@ type identityChecker struct {
 // inDocument reports whether the info's symbol is declared in the document
 // under validation, so each document reports only its own elements.
 func (c *identityChecker) inDocument(info *identity.Info) bool {
-	for sc := info.Symbol.OwnerScope; sc != nil; sc = sc.Parent() {
+	return c.inDoc(info.Symbol.OwnerScope)
+}
+
+// declInDocument reports whether the annotating node is declared in the
+// document under validation: an `about`-form annotation may live in another
+// document than the element it annotates, and its diagnostics belong there.
+func (c *identityChecker) declInDocument(d identity.Declaration) bool {
+	return c.inDoc(d.Scope)
+}
+
+func (c *identityChecker) inDoc(scope *symbols.Scope) bool {
+	for sc := scope; sc != nil; sc = sc.Parent() {
 		if sc == c.docRoot {
 			return true
 		}
@@ -70,12 +81,14 @@ func (c *identityChecker) check() {
 		if !ok {
 			continue
 		}
-		if info.Annotated && c.inDocument(info) {
+		if info.Annotated {
 			c.checkShape(info)
 			c.checkConflicts(info)
 			if info.Scope == nil {
-				c.errorf(info.AnnotationSpan, "identity-unscoped-id",
-					"ElementId on %s has no enclosing ProjectRef to resolve against", info.FQN)
+				if d, ok := c.firstInDocument(info); ok {
+					c.errorf(d.Span, "identity-unscoped-id",
+						"ElementId on %s has no enclosing ProjectRef to resolve against", info.FQN)
+				}
 			}
 		}
 		key := scopeKey(info)
@@ -102,7 +115,7 @@ func scopeKey(info *identity.Info) string {
 // including the empty id, which has no legal byte at all.
 func (c *identityChecker) checkShape(info *identity.Info) {
 	for _, d := range info.Declarations {
-		if !d.Declared {
+		if !d.Declared || !c.declInDocument(d) {
 			continue
 		}
 		if d.ID == "" {
@@ -141,7 +154,7 @@ func (c *identityChecker) checkConflicts(info *identity.Info) {
 	}
 	sort.Strings(distinct)
 	for _, d := range info.Declarations {
-		if !d.Declared {
+		if !d.Declared || !c.declInDocument(d) {
 			continue
 		}
 		c.errorf(d.Span, "identity-conflicting-ids",
@@ -169,12 +182,11 @@ func (c *identityChecker) checkScope(infos []*identity.Info) {
 		}
 		sort.Strings(names)
 		for _, info := range group {
-			if !c.inDocument(info) {
-				continue
+			if span, ok := c.reportSite(info); ok {
+				c.errorf(span, "identity-duplicate-id",
+					"duplicate element id %q in one project scope: %s",
+					info.EffectiveID, strings.Join(names, " and "))
 			}
-			c.errorf(c.spanOf(info), "identity-duplicate-id",
-				"duplicate element id %q in one project scope: %s",
-				info.EffectiveID, strings.Join(names, " and "))
 		}
 	}
 	for _, info := range infos {
@@ -231,26 +243,41 @@ func (c *identityChecker) reportDerivedCollision(info *identity.Info, d identity
 		if owner == info {
 			continue
 		}
-		if c.inDocument(info) {
+		if c.declInDocument(d) {
 			c.errorf(d.Span, "identity-duplicate-id",
 				"element id %q of %s collides with %s of %s",
 				d.ID, info.FQN, space, owner.FQN)
 		}
-		if c.inDocument(owner) {
-			c.errorf(c.spanOf(owner), "identity-duplicate-id",
+		if span, ok := c.reportSite(owner); ok {
+			c.errorf(span, "identity-duplicate-id",
 				"%s of %s collides with element id %q of %s",
 				space, owner.FQN, d.ID, info.FQN)
 		}
 	}
 }
 
-// spanOf locates an element for a diagnostic: its ElementId annotation when it
-// carries one, its declaration otherwise.
-func (c *identityChecker) spanOf(info *identity.Info) source.Span {
-	if info.Annotated {
-		return info.AnnotationSpan
+// firstInDocument is the element's first ElementId annotation declared in the
+// document under validation.
+func (c *identityChecker) firstInDocument(info *identity.Info) (identity.Declaration, bool) {
+	for _, d := range info.Declarations {
+		if c.declInDocument(d) {
+			return d, true
+		}
 	}
-	return info.Symbol.DeclSpan
+	return identity.Declaration{}, false
+}
+
+// reportSite locates an element's diagnostic in the document under validation:
+// its first in-document ElementId annotation, or its declaration when the
+// element itself is in-document; not-ok when neither is.
+func (c *identityChecker) reportSite(info *identity.Info) (source.Span, bool) {
+	if d, ok := c.firstInDocument(info); ok {
+		return d.Span, true
+	}
+	if c.inDocument(info) {
+		return info.Symbol.DeclSpan, true
+	}
+	return source.Span{}, false
 }
 
 func (c *identityChecker) errorf(span source.Span, code, format string, args ...any) {
