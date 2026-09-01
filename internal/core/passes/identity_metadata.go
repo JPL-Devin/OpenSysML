@@ -7,6 +7,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/identity"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -152,7 +153,9 @@ func (c *identityChecker) checkScope(infos []*identity.Info) {
 			c.reportDerivedCollision(info, byID[base], "the owning-membership id")
 		}
 		for i := strings.Index(info.DeclaredID, "_p"); i >= 0; {
-			c.reportDerivedCollision(info, byID[info.DeclaredID[:i]], "an expression-node id")
+			if expressionPositions(info.DeclaredID[i+2:]) {
+				c.reportDerivedCollision(info, byID[info.DeclaredID[:i]], "an expression-node id")
+			}
 			next := strings.Index(info.DeclaredID[i+1:], "_p")
 			if next < 0 {
 				break
@@ -160,6 +163,21 @@ func (c *identityChecker) checkScope(infos []*identity.Info) {
 			i += 1 + next
 		}
 	}
+}
+
+// expressionPositions reports whether rest is a chain of `_p`-separated
+// encoded positions, as rdf.ExpressionNodeID composes under an owner id; only
+// then can an id land in an owner's expression-node id space.
+func expressionPositions(rest string) bool {
+	if rest == "" {
+		return false
+	}
+	for _, part := range strings.Split(rest, "_p") {
+		if _, ok := rdf.DecodeElementID(part); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // anyAnnotated reports whether any element of the group declares its id.

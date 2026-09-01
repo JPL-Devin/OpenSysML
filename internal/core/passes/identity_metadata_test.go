@@ -194,6 +194,20 @@ func TestIdentityDeclaredIdEmbeddingPCollidesWithAnExpressionNodeId(t *testing.T
 	}
 }
 
+func TestIdentityIdsWithUndecodableSuffixesAfterPAreLegal(t *testing.T) {
+	for _, id := range []string{"P__X_p", "P__X_p_"} {
+		src := `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def X;
+	part def Y {
+		@IdentityMetadata::ElementId { id = "` + id + `"; }
+	}
+}
+`
+		w8dWantLines(t, src, "identity-duplicate-id")
+	}
+}
+
 func TestIdentityIdShapeErrorNamesTheOffendingByte(t *testing.T) {
 	src := `package P {
 	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
