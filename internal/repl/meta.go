@@ -289,20 +289,20 @@ func (s *Session) metaSessionCommand(fields []string, line string) (metaResult, 
 		if verr != nil {
 			return metaOut([]string{errPrefix + verr.Error()}, false, nil), true
 		}
-		s.SetVerbosity(v)
+		s.verbosity = v
 		return metaOut([]string{fmt.Sprintf("verbosity: %s", v)}, false, nil), true
 	case "%trace":
 		if len(fields) >= 2 {
 			switch fields[1] {
 			case "on":
-				s.SetTracing(true)
+				s.setTracing(true)
 			case "off":
-				s.SetTracing(false)
+				s.setTracing(false)
 			default:
 				return metaOut([]string{fmt.Sprintf("error: unknown trace setting %q (want on or off)", fields[1])}, false, nil), true
 			}
 		}
-		return metaOut([]string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil), true
+		return metaOut([]string{fmt.Sprintf("trace: %s", onOff(s.trace != nil))}, false, nil), true
 	case "%strict":
 		return metaOut(s.doStrict(fields[1:]), false, nil), true
 	case "%budget":
@@ -483,7 +483,7 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	lines, err := s.InstantiateNamed(name)
+	lines, err := s.instantiateLines(name)
 	if err != nil {
 		return []string{errPrefix + err.Error()}, false, nil
 	}
@@ -936,7 +936,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool, error) {
 // doBudget lists the bounds one run of this session may spend, each with the
 // variable that raises it.
 func (s *Session) doBudget() []string {
-	b := s.Budgets()
+	b := s.budgets
 	return []string{
 		"budgets (each bounds one run, not the session):",
 		fmt.Sprintf("  evaluation steps     %-10d %s", b.MaxSteps, runtime.MaxStepsEnvVar),
@@ -1651,7 +1651,7 @@ func parseWholeExpr(text string) (ast.Node, error) {
 
 // doConstraint evaluates a constraint definition.
 func (s *Session) doConstraint(name string) ([]string, bool, error) {
-	return s.CheckConstraint(name).Lines, false, nil
+	return s.withTrace(s.checkConstraint(name)).Lines, false, nil
 }
 
 // promptScope is the namespace a prompt expression is evaluated in: the last
@@ -1745,7 +1745,7 @@ func onInstance(inst *runtime.Instance, owner string) string {
 
 // doRequirement evaluates a requirement definition.
 func (s *Session) doRequirement(name string) ([]string, bool, error) {
-	return s.CheckRequirement(name).Lines, false, nil
+	return s.withTrace(s.checkRequirement(name)).Lines, false, nil
 }
 
 // doSatisfy evaluates satisfaction assertions: every one the model states, or,
@@ -1756,7 +1756,7 @@ func (s *Session) doSatisfy(args []string) ([]string, bool, error) {
 		name = args[0]
 	}
 	var out []string
-	for _, v := range s.CheckSatisfy(name) {
+	for _, v := range s.satisfyVerdicts(name) {
 		out = append(out, v.Lines...)
 	}
 	return out, false, nil

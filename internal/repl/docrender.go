@@ -21,6 +21,12 @@ const renderDocumentUsage = "usage: %render-document <name>"
 // document binds its queries' parameters in the model, so the invocation is
 // the document's name alone.
 func (s *Session) RenderDocumentMarkdown(invocation string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.renderDocumentMarkdown(invocation)
+}
+
+func (s *Session) renderDocumentMarkdown(invocation string) (string, error) {
 	fields := splitQueryArgs(strings.TrimSpace(invocation))
 	if len(fields) == 0 {
 		return "", fmt.Errorf("a document to render must be named")
@@ -67,6 +73,8 @@ type RenderedDocument struct {
 // model declares, evaluates them together, and renders each as Markdown with
 // its deterministic file name, so cross-document references link on disk.
 func (s *Session) RenderDocumentSetMarkdown() ([]RenderedDocument, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, fmt.Errorf("runtime init: %w", err)
@@ -128,7 +136,7 @@ func (s *Session) doRenderDocument(invocation string) ([]string, bool, error) {
 	if strings.TrimSpace(invocation) == "" {
 		return []string{renderDocumentUsage}, false, nil
 	}
-	markdown, err := s.RenderDocumentMarkdown(invocation)
+	markdown, err := s.renderDocumentMarkdown(invocation)
 	if err != nil {
 		return []string{errPrefix + err.Error()}, false, nil
 	}

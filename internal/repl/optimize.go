@@ -13,6 +13,12 @@ import (
 // admit, over the conditions the case requires or assumes. Experimental: SysML v2
 // defines no solving, and the runtime evaluator remains normative.
 func (s *Session) OptimizeSolve(name string) []SolveReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.optimizeSolve(name)
+}
+
+func (s *Session) optimizeSolve(name string) []SolveReport {
 	target, bad := s.resolveCheckTarget(name)
 	if bad != nil {
 		return []SolveReport{unavailableReport(name, strings.TrimPrefix(bad.Lines[0], "error: "))}
@@ -149,7 +155,7 @@ func extremeWord(dir solve.Direction) string {
 // doOptimize carries out %optimize.
 func (s *Session) doOptimize(name string) ([]string, bool, error) {
 	var out []string
-	for _, r := range s.OptimizeSolve(name) {
+	for _, r := range s.optimizeSolve(name) {
 		out = append(out, r.Lines...)
 	}
 	return out, false, nil

@@ -18,6 +18,12 @@ import (
 // is synthesised. Experimental: SysML v2 defines no solving, and the runtime
 // evaluator remains normative. Read-only: no object is created.
 func (s *Session) SolveValues(name string) []SolveReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.solveValues(name)
+}
+
+func (s *Session) solveValues(name string) []SolveReport {
 	queries, unfixed, bad := s.solveQueriesWith(name, s.declaredPins(name))
 	if bad != nil {
 		return []SolveReport{*bad}
@@ -260,6 +266,12 @@ func plural(n int, one, many string) string {
 // consistent selections up to the bound (limit, when a count follows `all`).
 // Experimental, and read-only: no object is created and no variant is bound.
 func (s *Session) ConfigureVariants(name string, args []string) []SolveReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.configureVariants(name, args)
+}
+
+func (s *Session) configureVariants(name string, args []string) []SolveReport {
 	request, err := parseConfigure(args)
 	if err != nil {
 		return []SolveReport{unavailableReport(name, err.Error())}
@@ -602,7 +614,7 @@ func selectionLines(selection []solve.Assignment) []string {
 // doSolve carries out %solve.
 func (s *Session) doSolve(name string) ([]string, bool, error) {
 	var out []string
-	for _, r := range s.SolveValues(name) {
+	for _, r := range s.solveValues(name) {
 		out = append(out, r.Lines...)
 	}
 	return out, false, nil
@@ -611,7 +623,7 @@ func (s *Session) doSolve(name string) ([]string, bool, error) {
 // doConfigure carries out %configure.
 func (s *Session) doConfigure(name string, args []string) ([]string, bool, error) {
 	var out []string
-	for _, r := range s.ConfigureVariants(name, args) {
+	for _, r := range s.configureVariants(name, args) {
 		out = append(out, r.Lines...)
 	}
 	return out, false, nil
