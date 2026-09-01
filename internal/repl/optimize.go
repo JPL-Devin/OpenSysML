@@ -34,6 +34,14 @@ func (s *Session) OptimizeSolve(name string) []SolveReport {
 // optimizeQuery asks the solver for the query's optima and renders them, or says
 // why there is no optimum to render.
 func (s *Session) optimizeQuery(name string, solver *solve.Solver, q *solve.Query) SolveReport {
+	// An optimum over conditions the evaluator rounds is a claim about exact
+	// reals, not about the evaluator's arithmetic, so none is reported.
+	if q.Rounded() {
+		return SolveReport{Subject: name, Status: SolveUnknown, Lines: []string{
+			fmt.Sprintf("? %s is undecided, so no optimum was reported", solveSubject(q)),
+			"  " + roundedClaim,
+		}}
+	}
 	result, err := solver.Optimize(context.Background(), q)
 	if err != nil {
 		return unavailableReport(name, err.Error())

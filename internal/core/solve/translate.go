@@ -624,6 +624,9 @@ func (t *translator) multiplicative(n *ast.OperatorExpr, scope *symbols.Scope, o
 		if err := t.divisor(n, right); err != nil {
 			return nil, err
 		}
+		if left.Sort.Kind == SortInt && right.Sort.Kind == SortInt {
+			return RatioDiv(left, right), nil
+		}
 		return Binary(OpDiv, Real, ToReal(left), ToReal(right)), nil
 	}
 	if !left.Literal() && !right.Literal() {

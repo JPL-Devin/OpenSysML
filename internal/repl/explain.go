@@ -37,6 +37,14 @@ func (s *Session) explainQuery(name string, solver *solve.Solver, q *solve.Query
 	subject := solveSubject(q)
 	switch result.Status {
 	case solve.StatusUnsat:
+		// A conflict resting on conditions the evaluator rounds is not an
+		// evaluator conflict; one among exact conditions alone still is.
+		if q.Rounded() && result.Core.Rounded() {
+			return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver, Lines: []string{
+				fmt.Sprintf("? %s is undecided, so there is nothing to explain (%s)", subject, solveDetail(result)),
+				"  " + roundedUnsat,
+			}}
+		}
 		return SolveReport{Subject: name, Status: SolveUnsat, Solver: result.Solver,
 			Lines: conflictLines(subject, result)}
 	case solve.StatusSat:

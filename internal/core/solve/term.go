@@ -102,6 +102,10 @@ type Term struct {
 
 	// Str holds an OpString literal or the name of an OpValue datatype value.
 	Str string
+
+	// IntRatio marks an OpDiv over widened integers: a whole-number quotient,
+	// which the evaluator computes as the exact ratio rounded once to float64.
+	IntRatio bool
 }
 
 // Literal reports whether the term is a literal value, which is what makes a
@@ -129,6 +133,14 @@ func StringTerm(s string) *Term { return &Term{Op: OpString, Sort: String, Str: 
 // ValueTerm returns a value of a datatype sort, named by one of its values.
 func ValueTerm(sort Sort, value string) *Term {
 	return &Term{Op: OpValue, Sort: sort, Str: value}
+}
+
+// RatioDiv returns the exact real quotient of two integer terms, marked as a
+// whole-number ratio for the evaluator-arithmetic replay.
+func RatioDiv(a, b *Term) *Term {
+	t := Binary(OpDiv, Real, ToReal(a), ToReal(b))
+	t.IntRatio = true
+	return t
 }
 
 // VarTerm returns a term reading a variable.
