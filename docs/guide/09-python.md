@@ -15,8 +15,9 @@ starts and stops for itself.
 | Rust | `opensysml` | Connect, blocking, with no async runtime | [Rust API](../reference/rust-api.md) |
 
 They do not all cover the same ground. Go and Python answer every RPC the service answers; Node,
-Java and Rust cover a v1 surface — parse, look a symbol up, evaluate, instantiate — and reach the
-rest through their generated stubs. Only Python and Go are published so far.
+Java and Rust cover a v1 surface — parse, look a symbol up, evaluate, instantiate — and of those
+three only Node has an escape hatch to the rest, in the generated Connect client it exposes. Only
+Python and Go are published so far.
 [Client libraries](../reference/clients.md) sets out what each covers and how to choose;
 [the troubleshooting chapter](10-troubleshooting.md) covers a run that stops short.
 
@@ -769,7 +770,7 @@ that has its own. Nothing is published yet; `make build` then
 `mvn -f clients/java/pom.xml install` puts it in the local repository.
 
 Everything answered is immutable, and no protobuf message appears in the public API: `Value` is a
-sealed interface over records, so a `switch` needs no impossible default, and `Symbol`, `Diagnostic`,
+sealed interface over records, so its variants are closed and enumerable, and `Symbol`, `Diagnostic`,
 `Instance` and `Instantiation` are records with copied collections. Everything thrown is unchecked
 and descends from `OpenSysMLException`, with `ServiceException` (the call was refused) distinguished
 from `ModelException` (the call succeeded and the answer reports a model failure).

@@ -50,10 +50,11 @@ half-implemented in some:
 - `Query` and OSLC query;
 - native document queries and rendering (`RunDocumentQuery`, `RenderDocument`).
 
-Those RPCs exist and are served. Reach them from the Go or Python client, or from the generated
-stubs each client ships beside its ergonomic layer, until a v2 wraps them. Each client's
-conformance report names, per scenario, which of these a skip belongs to, so a shrinking surface
-cannot pass quietly.
+Those RPCs exist and are served. Only the Node client offers an escape hatch to them —
+`connection.rpc` is the generated Connect client — so from Java or Rust, reach them from the Go or
+Python client until a v2 wraps them: those two ship the protobuf messages but no public call that
+sends one. Each client's conformance report names, per scenario, which of these a skip belongs to,
+so a shrinking surface cannot pass quietly.
 
 The Go API covers all of them but the generated model-ergonomics types: it reads models through
 `Symbol`, `Instance` and `Value` instead.

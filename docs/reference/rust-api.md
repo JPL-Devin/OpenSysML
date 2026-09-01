@@ -163,7 +163,10 @@ release means upgrading the crate.
 
 Deliberately out of scope: generated model-ergonomics types beyond the domain
 objects above, the edit API, RDF conversion and the verification helpers. The
-service still serves them, and `wire` plus the connection is the escape hatch.
+service still serves them, but this crate has no generic RPC escape hatch:
+`Connection` exposes only the calls above, and `opensysml::wire` gives the message
+types for reading a field off an answer, not a way to make a call the typed surface
+omits. Reach those RPCs from the Go or Python client until a v2 wraps them here.
 
 ## Conformance
 

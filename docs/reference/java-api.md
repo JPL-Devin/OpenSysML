@@ -88,23 +88,27 @@ Instantiation built = model.instantiate("Demo::Vehicle");
 ## Values and the rest of the domain
 
 Every answer is immutable, and no generated protobuf message or builder appears in
-the public API. `Value` is a **sealed** interface, so a `switch` over it needs no
-default that cannot happen:
+the public API. `Value` is a **sealed** interface over records, so its variants are
+closed and a caller can enumerate them exhaustively. The snippets here stay inside
+the JDK 17 baseline, so they use type patterns rather than a pattern `switch`,
+which JDK 17 offers only as a preview:
 
 ```java
-String rendered = switch (value) {
-  case Value.IntegerValue v -> Long.toString(v.value());
-  case Value.RealValue v -> Double.toString(v.value());
-  case Value.BooleanValue v -> Boolean.toString(v.value());
-  case Value.StringValue v -> v.value();
-  case Value.QuantityValue v -> v.quantity().toString();
-  case Value.EnumerationValue v -> v.literal().name();
-  case Value.InstanceReference v -> "instance " + v.instanceId();
-  case Value.Sequence v -> v.elements().toString();
-  case Value.NullValue v -> "null";            // evaluated, no value
-  case Value.UnsetValue v -> "unset";          // declared, never given one
-};
+String rendered;
+if (value instanceof Value.IntegerValue v)              rendered = Long.toString(v.value());
+else if (value instanceof Value.RealValue v)            rendered = Double.toString(v.value());
+else if (value instanceof Value.BooleanValue v)         rendered = Boolean.toString(v.value());
+else if (value instanceof Value.StringValue v)          rendered = v.value();
+else if (value instanceof Value.QuantityValue v)        rendered = v.quantity().toString();
+else if (value instanceof Value.EnumerationValue v)     rendered = v.literal().name();
+else if (value instanceof Value.InstanceReference v)    rendered = "instance " + v.instanceId();
+else if (value instanceof Value.Sequence v)             rendered = v.elements().toString();
+else if (value instanceof Value.NullValue v)            rendered = "null";    // evaluated, no value
+else                                                    rendered = "unset";   // declared, never given one
 ```
+
+On a host running JDK 21 or later the same variants are a pattern `switch` needing
+no default, since the interface is sealed.
 
 `Symbol` is a record of `id`, `name`, `kind`, `metadata`, `childIds`,
 `attributes`, `typeFacts`, `multiplicity`, `specializations` and
@@ -171,9 +175,11 @@ Deliberately out of scope, rather than half-implemented: the edit API
 (`ApplyEdits`), RDF conversion (`Convert`), the verification helpers
 (`VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction`), behaviour
 execution (`ExecuteAction`, `ExecuteState`), `EvaluateCalc`, `Query`/OSLC, and
-generated model-ergonomics types. The service still serves all of them; reach them
-from another client, or from the generated messages in `io.opensysml.proto`, until
-a v2 wraps them.
+generated model-ergonomics types. The service still serves all of them, but the
+public API offers no generic call: `io.opensysml.proto` carries the request and
+response messages, and the transport that would send one is
+`io.opensysml.internal`, which is internal and not a compatibility promise. Reach
+those RPCs from the Go or Python client until a v2 wraps them here.
 
 ## Conformance
 
