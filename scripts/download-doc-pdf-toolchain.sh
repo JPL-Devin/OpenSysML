@@ -42,7 +42,7 @@ if [[ -x "$pandoc_dir/bin/pandoc" ]]; then
 else
 	tarball="$dest/pandoc-$PANDOC_VERSION-linux-$pandoc_arch.tar.gz"
 	echo "Fetching pandoc $PANDOC_VERSION ($pandoc_arch) ..."
-	curl -fsSL -o "$tarball" \
+	curl -fsSL --proto '=https' --proto-redir '=https' -o "$tarball" \
 		"https://github.com/jgm/pandoc/releases/download/$PANDOC_VERSION/pandoc-$PANDOC_VERSION-linux-$pandoc_arch.tar.gz"
 	echo "$pandoc_sha256  $tarball" | sha256sum -c -
 	tar -xzf "$tarball" -C "$dest"
@@ -65,9 +65,17 @@ else
 	echo "Installing @mermaid-js/mermaid-cli $MERMAID_CLI_VERSION ..."
 	mkdir -p "$mermaid"
 	printf '{"dependencies":{"@mermaid-js/mermaid-cli":"%s"}}' "$MERMAID_CLI_VERSION" >"$mermaid/package.json"
-	(cd "$mermaid" && npm install --silent --no-fund --no-audit)
+	# No dependency's lifecycle script runs; the one that is needed, puppeteer's
+	# browser download, is run below on its own, into build/doc-pdf.
+	(cd "$mermaid" && npm install --silent --no-fund --no-audit --ignore-scripts)
+	# The installer answers "chrome@<version> <path to the executable>".
+	installed="$(PUPPETEER_CACHE_DIR="$mermaid/browsers" \
+		"$mermaid/node_modules/.bin/puppeteer" browsers install chrome)"
+	chrome="${installed##* }"
+	# That browser is outside puppeteer's default cache, so name it here.
 	# Sandboxing needs user namespaces, which containers often lack.
-	printf '{"args":["--no-sandbox","--disable-setuid-sandbox"]}' >"$mermaid/puppeteer.json"
+	printf '{"executablePath":"%s","args":["--no-sandbox","--disable-setuid-sandbox"]}' \
+		"$chrome" >"$mermaid/puppeteer.json"
 fi
 
 echo

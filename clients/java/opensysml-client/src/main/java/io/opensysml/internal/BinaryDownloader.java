@@ -33,10 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -867,21 +864,28 @@ public final class BinaryDownloader {
   private byte[] read(InputStream body, String url, long maxBytes) throws IOException {
     AtomicLong lastRead = new AtomicLong(System.nanoTime());
     AtomicBoolean stalled = new AtomicBoolean();
-    ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(WATCHDOG);
+    long every = Math.max(stallTimeout.toMillis() / 4, 1);
+    Thread watchdog =
+        WATCHDOG.newThread(
+            () -> {
+              while (true) {
+                try {
+                  Thread.sleep(every);
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                  return;
+                }
+                if (System.nanoTime() - lastRead.get() > stallTimeout.toNanos()
+                    && stalled.compareAndSet(false, true)) {
+                  // Closing the body is what unblocks a read waiting on bytes that are not coming.
+                  closeQuietly(body);
+                  return;
+                }
+              }
+            });
+    watchdog.start();
     ByteArrayOutputStream read = new ByteArrayOutputStream();
     try {
-      long every = Math.max(stallTimeout.toMillis() / 4, 1);
-      watchdog.scheduleWithFixedDelay(
-          () -> {
-            if (System.nanoTime() - lastRead.get() > stallTimeout.toNanos()
-                && stalled.compareAndSet(false, true)) {
-              // Closing the body is what unblocks a read waiting on bytes that are not coming.
-              closeQuietly(body);
-            }
-          },
-          every,
-          every,
-          TimeUnit.MILLISECONDS);
       byte[] buffer = new byte[65536];
       for (int n = body.read(buffer); n >= 0; n = body.read(buffer)) {
         lastRead.set(System.nanoTime());
@@ -893,7 +897,7 @@ public final class BinaryDownloader {
     } catch (IOException e) {
       throw stalled.get() ? stall(url, e) : e;
     } finally {
-      watchdog.shutdownNow();
+      watchdog.interrupt();
     }
     if (stalled.get()) {
       throw stall(url, null);
