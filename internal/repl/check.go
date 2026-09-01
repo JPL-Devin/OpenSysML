@@ -97,6 +97,9 @@ func (s *Session) solveQuery(name string, solver *solve.Solver, q *solve.Query) 
 		return SolveReport{Subject: name, Status: SolveSat, Solver: result.Solver,
 			Lines: append(lines, assignmentLines(result.Model)...)}
 	case solve.StatusUnsat:
+		if report, rounded := roundedUnsatReport(name, subject, result, q); rounded {
+			return report
+		}
 		return SolveReport{Subject: name, Status: SolveUnsat, Solver: result.Solver, Lines: []string{
 			fmt.Sprintf("✗ %s is unsatisfiable (%s)", subject, solveDetail(result)),
 		}}
@@ -107,6 +110,26 @@ func (s *Session) solveQuery(name string, solver *solve.Solver, q *solve.Query) 
 		}
 		return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver, Lines: lines}
 	}
+}
+
+// roundedUnsat explains an exact-real unsat left undecided: the evaluator
+// rounds these conditions in float64, which the exact encoding does not model.
+const roundedUnsat = "Reason: no exact-real values satisfy it, but the evaluator rounds these conditions in floating point, which may still accept values"
+
+// roundedClaim explains a solver claim withheld outright: what it would state
+// about exact reals does not decide the evaluator's floating-point arithmetic.
+const roundedClaim = "Reason: the conditions round in floating point when evaluated, which the exact-real encoding does not decide"
+
+// roundedUnsatReport downgrades an unsat about conditions the evaluator rounds:
+// exact-real unsatisfiability does not decide the evaluator's own arithmetic.
+func roundedUnsatReport(name, subject string, result *solve.Result, q *solve.Query) (SolveReport, bool) {
+	if !q.Rounded() {
+		return SolveReport{}, false
+	}
+	return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver, Lines: []string{
+		fmt.Sprintf("? %s is undecided (%s)", subject, solveDetail(result)),
+		"  " + roundedUnsat,
+	}}, true
 }
 
 // solveSubject names the element a report is about, as a verdict about it would.

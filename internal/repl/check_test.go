@@ -88,6 +88,28 @@ func TestCheckReportsUnsatisfiable(t *testing.T) {
 	}
 }
 
+// An exact-real unsat about conditions the evaluator rounds is reported
+// undecided: the evaluator's float64 arithmetic may still accept values.
+func TestCheckLeavesRoundedUnsatUndecided(t *testing.T) {
+	requireSolver(t)
+	s := checkSession(t, `
+		package Check {
+			private import ScalarValues::Integer;
+			constraint def HalfUlp {
+				in a : Integer;
+				assert constraint { a == 9007199254740993 }
+				assert constraint { a / 2 == 4503599627370496.0 }
+			}
+		}`)
+	got := run(t, s, "%check HalfUlp")
+	wants(t, got, "? Constraint HalfUlp is undecided", "rounds these conditions in floating point")
+	rejects(t, got, "unsatisfiable")
+
+	if reports := s.CheckSolve("HalfUlp"); reports[0].Status != SolveUnknown {
+		t.Errorf("status is %s, want unknown", reports[0].Status)
+	}
+}
+
 func TestCheckSolvesARequirement(t *testing.T) {
 	requireSolver(t)
 	s := checkSession(t, checkModel)
