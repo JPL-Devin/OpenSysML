@@ -1,7 +1,7 @@
 // The conformance runner: it executes each scenario through the client's public
 // API and compares the answer by the rules in conformance/README.md.
 
-import { ConnectError, Code } from "@connectrpc/connect";
+import { ConnectError } from "@connectrpc/connect";
 import { readFileSync } from "node:fs";
 import { isAbsolute, join, normalize, resolve as resolvePath, sep } from "node:path";
 import type { DescMessage, Message } from "@bufbuild/protobuf";
@@ -9,6 +9,7 @@ import type { DescMessage, Message } from "@bufbuild/protobuf";
 import { SysMLService } from "../src/generated/sysml_pb.js";
 import type { Connection } from "../src/core/connection.js";
 import { Model } from "../src/core/model.js";
+import { statusName } from "../src/core/status.js";
 import { check, render } from "./compare.js";
 import { byCodeUnit } from "./order.js";
 import { MODEL_HASH_PLACEHOLDER, Normalizer } from "./normalize.js";
@@ -67,25 +68,6 @@ export interface RunnerOptions {
   log?: (line: string) => void;
   mutate?: Mutation;
 }
-
-const STATUS_NAMES = new Map<Code, string>([
-  [Code.Canceled, "CANCELLED"],
-  [Code.Unknown, "UNKNOWN"],
-  [Code.InvalidArgument, "INVALID_ARGUMENT"],
-  [Code.DeadlineExceeded, "DEADLINE_EXCEEDED"],
-  [Code.NotFound, "NOT_FOUND"],
-  [Code.AlreadyExists, "ALREADY_EXISTS"],
-  [Code.PermissionDenied, "PERMISSION_DENIED"],
-  [Code.ResourceExhausted, "RESOURCE_EXHAUSTED"],
-  [Code.FailedPrecondition, "FAILED_PRECONDITION"],
-  [Code.Aborted, "ABORTED"],
-  [Code.OutOfRange, "OUT_OF_RANGE"],
-  [Code.Unimplemented, "UNIMPLEMENTED"],
-  [Code.Internal, "INTERNAL"],
-  [Code.Unavailable, "UNAVAILABLE"],
-  [Code.DataLoss, "DATA_LOSS"],
-  [Code.Unauthenticated, "UNAUTHENTICATED"],
-]);
 
 const FIXTURE_REFERENCE = /^\$\{fixture:([^}]+)\}$/;
 
@@ -451,11 +433,6 @@ export function accumulate(report: Report, summary: Summary): void {
   report.failed += summary.failed;
   report.skipped += summary.skipped;
   report.errored += summary.errored;
-}
-
-/** A status code as a scenario spells it. */
-export function statusName(code: Code): string {
-  return STATUS_NAMES.get(code) ?? String(code);
 }
 
 /** The response schema of an RPC, which the normalizer reads the answer by. */
