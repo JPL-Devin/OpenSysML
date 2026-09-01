@@ -132,7 +132,7 @@ opensysml.convert("sysml", file_path="model.ttl")  # and back
 ```
 
 The client API is documented in [reference/python-api.md](../reference/python-api.md), and
-[chapter 9](09-python.md) describes its use.
+[chapter 9](09-python.md#from-python) describes its use.
 
 ## Round-tripping
 

@@ -220,6 +220,10 @@ All commits and tags trigger CI:
 - Run full test suite
 - Run race detector
 
+The conformance job stores its JSON report as an artifact and its JUnit XML
+(`bin/conformance-report.xml`) as test results, so a failing scenario is named in the Tests tab
+rather than only in the log.
+
 **On tags (`v*`):**
 - Build release binaries (all platforms)
 - Create GitHub Release

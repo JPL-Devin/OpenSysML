@@ -1,13 +1,77 @@
-# 9. From Python
+# 9. From your own program
+
+Everything the REPL and the editors do is available to a program. There are five ways to reach the
+engine, and all of them answer through the same implementation, so a model reads the same whichever
+one a script or an application uses: the Go API calls the engine in the process that imports it, and
+the Python, Node/TypeScript, Java and Rust clients call the `sysml-grpc` service, which each of them
+starts and stops for itself.
+
+| Language | Package | Reaches the engine by | Reference |
+| --- | --- | --- | --- |
+| Go | `github.com/Open-MBEE/OpenSysML/client/opensysml` | in process, or Connect to a service | [Go packages](../reference/api.md) |
+| Python | `opensysml` | gRPC, to a private child service or a named one | [Python API](../reference/python-api.md) |
+| Node/TypeScript | `@opensysml/client` | Connect, from Node or from a browser page | [Node API](../reference/node-api.md) |
+| Java | `io.github.open-mbee:opensysml-client` | Connect, over the JDK's own HTTP client | [Java API](../reference/java-api.md) |
+| Rust | `opensysml` | Connect, blocking, with no async runtime | [Rust API](../reference/rust-api.md) |
+
+They do not all cover the same ground. Go and Python answer every RPC the service answers; Node,
+Java and Rust cover a v1 surface — parse, look a symbol up, evaluate, instantiate — and of those
+three only Node has an escape hatch to the rest, in the generated Connect client it exposes. Only
+Python and Go are published so far.
+[Client libraries](../reference/clients.md) sets out what each covers and how to choose;
+[the troubleshooting chapter](10-troubleshooting.md) covers a run that stops short.
+
+Python has the longest section below because it is the oldest and most complete client, not because
+it is the intended one.
+
+## From Go
+
+A Go program that imports OpenSysML links the parser, the semantic engine and the runtime, so
+`opensysml.New()` calls them directly — no port, no child process, no serialization:
+
+```go
+client, err := opensysml.New()
+if err != nil { ... }
+defer client.Close()
+
+model, err := client.ParseFile(ctx, "vehicle.sysml")
+mass, err := client.Evaluate(ctx, model, "mass", opensysml.WithSubject("Demo::sedan"))
+inst, err := client.Instantiate(ctx, model, "Demo::Vehicle")
+```
+
+```sh
+go get github.com/Open-MBEE/OpenSysML@latest
+```
+
+Nothing else is installed: the SysML standard library is embedded in the module and no operation
+shells out. Every RPC the service answers is a method — `ParseFiles` for a model of several
+documents, `ExecuteAction` and `ExecuteState`, `VerifyConstraint`, `VerifyRequirement`,
+`VerifySatisfaction`, `EvaluateCalc`, `Query`, `RunDocumentQuery`, `RenderDocument`, `Convert` and
+`ApplyEdits` — and queries and edits are built from typed values rather than a string dialect, so an
+unsupported operator is a compile error rather than a refused call.
+
+`Dial("host:50051")` is the other constructor, for a shared `sysml-grpc` someone else runs; this
+package never spawns a service, because a private child's whole job would be to serve the code `New`
+already calls.
+
+A call fails in exactly one of two ways, and the difference is the wire contract's: a refused call is
+a `*StatusError` (`errors.Is(err, opensysml.CodeNotFound)`), while an answer that reports a failure
+is a `*FailureError` (`errors.Is(err, opensysml.ErrFailure)`). Syntax errors are neither — parsing
+broken source succeeds and the errors are `Model.Diagnostics`. A false verdict is likewise an answer
+about the model, not an error.
+
+[The Go package reference](../reference/api.md) documents the surface type by type, and
+[client/opensysml/README.md](https://github.com/Open-MBEE/OpenSysML/blob/main/client/opensysml/README.md)
+states its concurrency, ownership and stability promises.
+
+## From Python
 
 `opensysml` is the Python client. Every call is made through the `sysml-grpc` service, which the
 client starts and stops automatically, so a script can parse, inspect, execute and convert a model
-without invoking `sysml` as a subprocess.
+without invoking `sysml` as a subprocess. The complete API surface, the generated typed classes and
+the measured latency are documented in [reference/python-api.md](../reference/python-api.md).
 
-The complete API surface, the generated typed classes and the measured latency are documented in
-[reference/python-api.md](../reference/python-api.md).
-
-## Installation
+### Installation
 
 ```bash
 pip install opensysml             # from PyPI
@@ -18,7 +82,7 @@ The dependencies (`grpcio`, `protobuf>=7.35.1`, `filelock`, `psutil`) are instal
 Those projects publish wheels for CPython 3.10 and later only, which is the range declared by
 `requires-python`.
 
-## Getting the service binary
+### Getting the service binary
 
 Every call is made through `sysml-grpc`. The client starts an instance of the service, resolving
 the binary in the order every client shares — `$OPENSYSML_BINARY`, then
@@ -73,7 +137,7 @@ Releases up to v0.0.4 contain the `sysml` and `sysml-lsp` archives only. `sysml-
 published from the following release onward; until then, build the service from source
 (option 3).
 
-## A first script
+### A first script
 
 ```python
 import opensysml
@@ -89,7 +153,7 @@ Evaluation is performed on the model, as is every other operation, so a script n
 the model hash back to the connection. `model.eval(expr, context_symbol_id=…)` resolves the
 expression's names in that element's scope.
 
-## Requiring a usable model
+### Requiring a usable model
 
 A model containing syntax errors still parses to a `Model`, because the service reports what it
 could read together with diagnostics. A script that does not inspect those diagnostics therefore
@@ -134,7 +198,7 @@ A service that predates the field raises `MissingCapabilityError` rather than si
 the default question. Support is advertised as `strict_conformance` in
 `Connection.server_info().capabilities`.
 
-## Inspecting symbols
+### Inspecting symbols
 
 `Model.find` takes a **short** name and searches the symbol tree, returning `None` when no such
 symbol exists. `model["Vehicle"]` is the raising counterpart: it names the missing symbol, whereas
@@ -164,7 +228,7 @@ engine.multiplicity      # Multiplicity(lower='0', upper='1'), or None if undecl
 engine.specializations   # [Specialization(kind='typing', target_id='Demo::Engine', ...)]
 ```
 
-## Instances
+### Instances
 
 Feature values are returned as Python values, and a feature value holding an object is returned as
 a nested `Instance`:
@@ -242,7 +306,7 @@ Every call concerning a loaded model is a `Model` method. The module-level
 instantiating directly from a file (`opensysml.instantiate("Demo::Vehicle",
 file_path="model.sysml")`) or against a hash obtained elsewhere (`model_hash=…`).
 
-## Verifying constraints, requirements, satisfaction and calculations
+### Verifying constraints, requirements, satisfaction and calculations
 
 The checks the REPL performs with `%constraint`, `%requirement`, `%satisfy` and `%calc` are also
 available as RPCs, so whether a model satisfies its requirements can be determined from a script.
@@ -339,7 +403,7 @@ Verification is capability-negotiated in the same way as conversion: against a s
 not report the `verification` capability, these calls raise `MissingCapabilityError` naming the
 required upgrade rather than failing on an unimplemented method.
 
-## Errors
+### Errors
 
 Every failure a caller can act on is an `OpenSysMLError`. The service's gRPC status codes are
 translated at the client boundary, so a script never needs to `import grpc` and switch on status
@@ -388,7 +452,7 @@ existing `except opensysml.errors.RuntimeError` clauses continue to work — and
 alone because it also corrects existing code that never caught the old class, and the alias is
 excluded from `__all__` so a star-import no longer shadows the built-in.
 
-### Names that no longer shadow a built-in
+#### Names that no longer shadow a built-in
 
 Both names that the package previously bound over a Python built-in were renamed before 0.2.0 was
 published, so no deprecation cycle is required:
@@ -404,7 +468,7 @@ continue to work — and emits a `DeprecationWarning` on access. Neither appears
 `from opensysml import *` no longer binds over `eval` or `RuntimeError`. The `Model.eval` and
 `Connection.eval` *methods* retain their name, because an attribute of an object shadows nothing.
 
-## Writing a model back out
+### Writing a model back out
 
 A loaded model can be written back to SysML notation or RDF Turtle. The service performs the
 conversion using the same code as `sysml -convert`, so the client contributes no second
@@ -461,7 +525,7 @@ the status is derived from the formats it reports, so an RDF conversion warns in
 Suppress the warning with `warnings.simplefilter("ignore",
 opensysml.ExperimentalFeatureWarning)`, which no stable feature uses.
 
-## Changing a model and writing it back
+### Changing a model and writing it back
 
 A loaded model can be edited in place — setting the value of a feature, renaming a declaration —
 and written back with its comments, blank lines and indentation intact. The edit is described
@@ -568,7 +632,7 @@ Editing is capability-negotiated in the same way as conversion: a service that d
 `apply_edits` capability raises `MissingCapabilityError` naming the required upgrade before any
 call is made.
 
-## Querying a model using the standard query model
+### Querying a model using the standard query model
 
 `model.query(...)` runs the query defined by the **SysML v2 API & Services** standard, using
 `scope`, `select` and `where`, so a payload written for that API works verbatim. This is the form
@@ -611,7 +675,7 @@ under this part" is expressed as a `scope`, while "everything specializing this 
 be expressed at all. It is an interoperability surface rather than OpenSysML's expressive query
 facility; [the API reference](../reference/api.md) states precisely what is supported.
 
-## Native document queries and rendered documents
+### Native document queries and rendered documents
 
 `model.run_document_query(...)` runs a *document query* — a `calc def` specializing
 `DocumentQueries::Query` — and `model.render_document(...)` renders a *document* — a `part def`
@@ -644,6 +708,108 @@ what `sysml -render-document` writes.
 An unknown query or document raises `SymbolNotFoundError`, a wrong binding raises
 `InvalidRequestError` naming the parameter, and both calls are capability-negotiated
 (`document_query` and `render_document`) the same way as everything above.
+
+## From Node or a browser
+
+```ts
+import { loads } from "@opensysml/client";
+
+await using model = await loads(`package Demo {
+  part def Wheel { attribute radius : ScalarValues::Real = 0.3; }
+  part def Car { part wheels : Wheel[4]; attribute mass : ScalarValues::Real = 1500.0; }
+}`);
+
+const value = await model.eval("2 + 2");
+const car = await model.symbol("Demo::Car");
+const tree = await model.instantiate("Demo::Car");
+tree.get("wheels");
+```
+
+`@opensysml/client` is not published yet, so a checkout builds it: `npm install && npm run build` in
+`clients/node`. `loads` and `load` are the one-shot forms; `connect()` keeps a connection — and so a
+service and its parse cache — for several models. Both a connection and a model are async-disposable,
+so `await using` closes them, and `close()` is the explicit form. Values arrive as discriminated
+unions to switch on (`value.kind === "quantity"`), integers as `bigint` so an `int64` is never
+rounded, and `unset` — a feature the model never gives a value — is distinct from `absent`, a field
+the answer did not carry.
+
+The same package runs in a browser, from a second entry point that spawns nothing:
+
+```ts
+import { connect } from "@opensysml/client/browser";
+
+await using connection = await connect({ address: "https://sysml.example.com" });
+```
+
+That needs a service which allows the page's exact origin — `sysml-grpc -cors-allowed-origins
+https://app.example.com`, never `*` — and TLS for an HTTPS page to reach it at all.
+
+The ergonomic layer covers `GetServerInfo`, `ParseFile`, `GetSymbol`, `Evaluate` and `Instantiate`;
+`connection.rpc` is the generated Connect client, and reaches everything else.
+[The Node API reference](../reference/node-api.md) documents the exports, the errors and the binary
+resolution.
+
+## From Java
+
+```java
+try (Connection connection = Connection.open()) {      // starts a private sysml-grpc
+  Model model = connection.load(Path.of("model.sysml"));
+
+  Value sum = model.eval("1 + 2 * 3");                 // Value.IntegerValue[value=7]
+  Value mass = model.evalWithSubject("mass", "Demo::sedan");
+
+  Symbol vehicle = model.symbol("Demo::Vehicle");      // findSymbol returns Optional
+  Instantiation built = model.instantiate("Demo::Vehicle");
+}
+```
+
+The client targets a JVM host application it does not own — an Eclipse-based tool, a Cameo plugin, a
+web service — so it is built for JDK 17 and its only compile-scope dependency is `protobuf-java`:
+the transport is `java.net.http.HttpClient` speaking Connect, which keeps gRPC's Netty out of a host
+that has its own. Nothing is published yet; `make build` then
+`mvn -f clients/java/pom.xml install` puts it in the local repository.
+
+Everything answered is immutable, and no protobuf message appears in the public API: `Value` is a
+sealed interface over records, so its variants are closed and enumerable, and `Symbol`, `Diagnostic`,
+`Instance` and `Instantiation` are records with copied collections. Everything thrown is unchecked
+and descends from `OpenSysMLException`, with `ServiceException` (the call was refused) distinguished
+from `ModelException` (the call succeeded and the answer reports a model failure).
+
+One private service is started per classloader, so an Eclipse plugin and a web application in one JVM
+each own one and share nothing, while every connection made through one copy of the client shares a
+child and therefore its parse cache. Call `Connection.stopSharedServices()` from a plugin's `stop()`
+or a `ServletContextListener`, since unloading a classloader does not by itself stop a child.
+
+[The Java API reference](../reference/java-api.md) documents the surface, the exceptions and the
+options.
+
+## From Rust
+
+```rust
+use opensysml::{loads, Value};
+
+let model = loads("package Demo { part def Car { attribute mass : ScalarValues::Real = 1500.0; } }")?;
+
+let value = model.eval("2 + 2")?;                    // Value::Integer(4)
+let car = model.symbol("Demo::Car")?;
+let built = model.instantiate("Demo::Car")?;
+```
+
+The crate is blocking and pulls in no async runtime: every one of the service's RPCs is unary and the
+usual consumer talks to a local child that answers in milliseconds, so a private `tokio::Runtime`
+inside a library would tax every consumer for little. Calling it from inside a runtime is fine, and a
+test pins that. It is not on crates.io yet, so a consumer takes it from a path or from git, and the
+minimum supported Rust version is 1.83.
+
+`load`/`loads` connect and parse in one call; `Connection::private()`, `Connection::external(host,
+port)` and `Connection::connect()` (which honours `$OPENSYSML_SERVICE`) are the explicit forms.
+`Drop` releases a private child deterministically, and the stdin pipe the client holds is what
+survives a `SIGKILL`. `Error` is one enum over every failure, keeping `Error::Service` (refused)
+apart from `Error::Model` (answered, and the answer reports a model failure), and every domain type
+exposes `wire()` for a field the typed surface does not carry yet.
+
+[The Rust API reference](../reference/rust-api.md) documents the API, the error variants and the one
+gap in its release verification.
 
 ---
 

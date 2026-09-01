@@ -368,7 +368,48 @@ go build -o bin/sysml ./cmd/sysml
 go build -o bin/sysml-grpc ./cmd/sysml-grpc
 ```
 
-## Python client
+## Test and conformance reports
+
+Both cross-implementation harnesses write their results in machine-readable form as well as prose,
+so a CI system can render them without parsing text:
+
+```bash
+make conformance      # bin/conformance-report.json + bin/conformance-report.xml
+go run ./cmd/conformance -report - -junit bin/conformance-report.xml
+go run ./cmd/pilot-diff   # build/pilot-diff/pilot-diff.{txt,json,xml,sarif}
+```
+
+- **JSON** stays the source of truth for both: aggregate totals, and per scenario or per file every
+  outcome, status, duration and mismatch. The other renderings are derived from the same run.
+- **JUnit XML** — `bin/conformance-report.xml` holds one suite per configuration and protocol and
+  one case per scenario, so CI shows per-scenario results in its own test report;
+  `build/pilot-diff/pilot-diff.xml` holds one suite per corpus root and one case per file that drew
+  a diagnostic. CI stores the conformance XML as test results on every run, pass or fail.
+- **SARIF 2.1.0** — `build/pilot-diff/pilot-diff.sarif` carries one result per disagreeing
+  diagnostic group, located on the compared model file, for a code-scanning viewer.
+
+The suites themselves are described in [conformance/README.md](conformance/README.md) and
+[the pilot differential](docs/project/pilot-differential.md); nothing in the differential gates CI.
+
+## Clients
+
+Five surfaces reach the same engine: the Go API, used in the calling process, and four clients of
+the `sysml-grpc` service. [Client libraries](docs/reference/clients.md) states what each covers and
+how to choose; [guide chapter 9](docs/guide/09-python.md) works through each one.
+
+| Surface | Reaches the engine by | Published | API reference |
+|---|---|---|---|
+| Go, `client/opensysml` | in process, or Connect to a service | with the core (`v*` tags) | [Go packages](docs/reference/api.md) |
+| Python, `opensysml` | gRPC, to a private child service or a named one | PyPI, on `opensysml-v*` tags | [Python API](docs/reference/python-api.md) |
+| Node/TypeScript, `@opensysml/client` | Connect, from Node or a browser page | not yet | [Node API](docs/reference/node-api.md) |
+| Java, `io.github.open-mbee:opensysml-client` | Connect, over the JDK's own HTTP client | not yet | [Java API](docs/reference/java-api.md) |
+| Rust, `opensysml` | Connect, blocking, no async runtime | not yet | [Rust API](docs/reference/rust-api.md) |
+
+The Go and Python clients cover every RPC the service serves; Node, Java and Rust cover a v1
+subset — connection lifecycle, capability negotiation, parsing, diagnostics, symbol lookup,
+evaluation and instantiation — enumerated in the client libraries page.
+
+### Python
 
 **opensysml** is a Python client library providing programmatic access to OpenSysML's parsing and runtime capabilities over gRPC.
 
@@ -403,9 +444,10 @@ print(instance.slots["mass"])
 - full runtime API access (evaluation, instantiation, action and state execution)
 
 Detailed installation and usage instructions are in
-[clients/python/INSTALL.md](clients/python/INSTALL.md).
+[clients/python/INSTALL.md](clients/python/INSTALL.md), and the API in
+[docs/reference/python-api.md](docs/reference/python-api.md).
 
-## Node/TypeScript client
+### Node/TypeScript
 
 **@opensysml/client** provides the same access over the Connect protocol, for Node and the
 browser. It includes no native addon: installation is a standard registry fetch, and the service
@@ -419,16 +461,32 @@ const radius = await model.eval("0.3 * 2");
 ```
 
 Version 1 covers loading, evaluation, symbol lookup and instantiation, and negotiates against the
-capabilities the service advertises. It is not yet published. See
-[clients/node/README.md](clients/node/README.md) for the API, the two lifecycle modes (a private
-child of the calling process, or an externally hosted service), the capabilities and limitations
-of the browser entry point, and the functionality version 1 omits.
+capabilities the service advertises. It is not yet published. See the
+[Node API](docs/reference/node-api.md) and [clients/node/README.md](clients/node/README.md) for the
+two lifecycle modes (a private child of the calling process, or an externally hosted service), the
+capabilities and limitations of the browser entry point, and the functionality version 1 omits.
+
+### Go, Java and Rust
+
+```go
+client, err := opensysml.New()   // in process; opensysml.Dial(addr) for a running service
+defer client.Close()
+model, err := client.ParseFile(ctx, "vehicle.sysml")
+mass, err := client.Evaluate(ctx, model, "mass", opensysml.WithSubject("Demo::sedan"))
+```
+
+The Go API is documented type by type in [Go packages](docs/reference/api.md) and
+[client/opensysml/README.md](client/opensysml/README.md). The Java client is a `try`-with-resources
+`Connection` over the JDK's HTTP client ([Java API](docs/reference/java-api.md),
+[clients/java/README.md](clients/java/README.md)); the Rust client is blocking, with no async
+runtime in its default dependency tree ([Rust API](docs/reference/rust-api.md),
+[clients/rust/README.md](clients/rust/README.md)). Neither is published yet.
 
 ## Documentation
 
-- **[The guide](docs/guide/)** — install, first model, CLI, REPL, checks, behavior, saving, editors, Python
+- **[The guide](docs/guide/)** — install, first model, CLI, REPL, checks, behavior, saving, editors, and [driving it from your own program](docs/guide/09-python.md)
 - **[Client libraries](docs/reference/clients.md)** — the Go, Python, Node, Java and Rust surfaces, and how to choose between them
-- **[Reference](docs/reference/)** — CLI flags, REPL commands, environment, the Go and Python APIs, service transports, RDF mapping
+- **[Reference](docs/reference/)** — CLI flags, REPL commands, environment, each client's API, service transports, RDF mapping
 - **[Internals](docs/internals/architecture.md)** — the pipeline, the tiers, testing and performance
 - **[Project status](docs/project/spec-compliance.md)** — spec compliance, roadmap and releasing
 - **[Examples](examples/)** — runtime demonstrations and behavioral model examples

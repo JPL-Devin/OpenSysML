@@ -222,7 +222,7 @@ it disabled otherwise. Each finding names the standard notation to use instead, 
 which each extension is measured. The same setting is available as `%strict` at the prompt
 ([4. The REPL](04-repl.md)), as the `sysml.strictConformance` editor setting
 ([8. Editors](08-editors.md)) and as `strict_conformance=True` from Python
-([9. Python](09-python.md)).
+([9. From your own program](09-python.md#from-python)).
 
 ## Running behavior
 
