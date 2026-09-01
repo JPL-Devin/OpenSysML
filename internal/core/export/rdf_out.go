@@ -178,6 +178,9 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 	if err := e.encode(root.Members, "", rdf.Term{}); err != nil {
 		return nil, err
 	}
+	if e.idErr != nil {
+		return nil, e.idErr
+	}
 	return e.graph, nil
 }
 
@@ -191,9 +194,21 @@ type encoder struct {
 	// ids is the document's identity side table: effective ids, declaredness,
 	// scopes, and the annotation nodes consumed into it.
 	ids *identityFacts
-	// subjects maps each element IRI to the qualified name it stands for, so
-	// two elements whose ids land on one IRI are refused rather than merged.
+	// subjects maps each minted IRI — element or membership — to what it
+	// stands for, so two ids landing on one IRI are refused rather than merged.
 	subjects map[string]string
+	// idErr holds a collision found where no error can propagate directly.
+	idErr error
+}
+
+// claim reserves an IRI for what it stands for, returning the holder it
+// collides with, if any.
+func (e *encoder) claim(iri, standsFor string) (string, bool) {
+	if prior, taken := e.subjects[iri]; taken && prior != standsFor {
+		return prior, true
+	}
+	e.subjects[iri] = standsFor
+	return "", false
 }
 
 // declaredKeyword records the kind keyword as written when it is a synonym of
@@ -301,13 +316,12 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
 	subject := e.ids.subjectFor(fqn)
-	if prior, taken := e.subjects[subject.Value]; taken && prior != fqn {
+	if prior, taken := e.claim(subject.Value, fqn); taken {
 		return &UnsupportedError{
 			What: fmt.Sprintf("the declaration of %s at %s", fqn, e.where(node)),
 			Note: fmt.Sprintf("its id lands on the same IRI as %s, and merging two elements into one subject would be a different model", prior),
 		}
 	}
-	e.subjects[subject.Value] = fqn
 
 	// A metaclass name this mapping invents is typed in the OpenSysML namespace,
 	// so a consumer can tell it from the standard OMG vocabulary.
@@ -643,6 +657,13 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf
 	// the API's payloads carry for it; anything else through an OwningMembership.
 	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && ontology.IsAncestorOrSelf(ownerClass, "Type")
 	membership := rdf.OwningMembershipIRIOf(member)
+	// The membership shares the element namespace, so its IRI is reserved too.
+	if prior, taken := e.claim(membership.Value, memberFQN+"'s owning membership"); taken && e.idErr == nil {
+		e.idErr = &UnsupportedError{
+			What: fmt.Sprintf("the owning membership of %s", memberFQN),
+			Note: fmt.Sprintf("its id lands on the same IRI as %s, and merging two elements into one subject would be a different model", prior),
+		}
+	}
 	e.graph.Add(member, e.sysml(pOwner), owner)
 	e.graph.Add(member, e.sysml(pOwningRelationship), membership)
 	e.graph.Add(member, e.sysml(pOwningMembership), membership)

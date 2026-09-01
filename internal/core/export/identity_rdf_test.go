@@ -363,6 +363,54 @@ func TestQualifiedNameKeyedGraphStillLinks(t *testing.T) {
 	}
 }
 
+// TestDeclaredIDCollidingWithMembershipIsRefused declares an id equal to the
+// membership id minted for another element: both live in the element
+// namespace, and merging them would corrupt the graph.
+func TestDeclaredIDCollidingWithMembershipIsRefused(t *testing.T) {
+	_, err := export.Convert("m.sysml", []byte(`package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def A {
+		@IdentityMetadata::ElementId { id = "stable"; }
+	}
+	part def B {
+		@IdentityMetadata::ElementId { id = "stable_om"; }
+	}
+}
+`), export.FormatSysML, export.FormatTurtle)
+	if err == nil {
+		t.Fatal("an id landing on a membership IRI was not refused")
+	}
+	if !strings.Contains(err.Error(), "lands on the same IRI") {
+		t.Errorf("collision reported for the wrong reason: %v", err)
+	}
+}
+
+// TestDeclaredIDLikeExpressionNodeStaysDisjoint declares an id spelled like
+// another element's expression-node id: expression nodes live in their own
+// namespace, so both round-trip without merging.
+func TestDeclaredIDLikeExpressionNodeStaysDisjoint(t *testing.T) {
+	turtle := roundTripsExactly(t, `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	attribute a = 1 {
+		@IdentityMetadata::ElementId { id = "stable"; }
+	}
+	part def B {
+		@IdentityMetadata::ElementId { id = "stable_pvalue"; }
+	}
+}
+`)
+	graph, err := rdf.ParseTurtle(turtle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rdf.LocalName(graph.Type(rdf.IRI("urn:sysmlv2:element:stable_pvalue"))); got != "PartDefinition" {
+		t.Errorf("element stable_pvalue typed %q, want PartDefinition", got)
+	}
+	if got := rdf.LocalName(graph.Type(rdf.IRI("urn:opensysml:expr:stable_pvalue"))); got == "PartDefinition" {
+		t.Error("expression node merged with the element sharing its spelling")
+	}
+}
+
 // TestMembershipIDsAreDisjointFromAdversarialElements checks the graph a
 // foreign-looking id produces still separates the element from the membership
 // minted for it.
