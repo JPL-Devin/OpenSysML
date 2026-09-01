@@ -64,7 +64,7 @@ func runSyncDiff(files []string) int {
 	}
 
 	if syncAnnotate != "" {
-		if err := writeAnnotated(model, set, syncAnnotate); err != nil {
+		if err := writeAnnotated(local, model, set, syncAnnotate); err != nil {
 			return fail(err)
 		}
 	}
@@ -117,7 +117,7 @@ func loadSyncState(model string, scope reposync.Scope) (*reposync.State, error) 
 
 // writeAnnotated appends an about-form ElementId annotation per minted id to
 // the model's original text, preserving comments — the explicit opt-in write-back.
-func writeAnnotated(model string, set *reposync.ChangeSet, path string) error {
+func writeAnnotated(local *rdf.Graph, model string, set *reposync.ChangeSet, path string) error {
 	minted := mintedChanges(set)
 	if len(minted) == 0 {
 		return fmt.Errorf("nothing to annotate: no id was minted, so %s would repeat the model unchanged", path)
@@ -134,9 +134,19 @@ func writeAnnotated(model string, set *reposync.ChangeSet, path string) error {
 	if len(data) > 0 && data[len(data)-1] != '\n' {
 		out.WriteByte('\n')
 	}
+	named := namedElements(local)
+	annotated := 0
 	for _, change := range minted {
+		if !addressable(change.QualifiedName, named) {
+			fmt.Fprintf(os.Stderr, "note: %s (%s) has no name to write an annotation against; its minted id %s stays in the repository only\n", change.ID, change.Metaclass, change.MintedID)
+			continue
+		}
 		fmt.Fprintf(&out, "metadata : IdentityMetadata::ElementId about %s { id = \"%s\"; }\n",
 			lexer.QualifiedNameText(change.QualifiedName), change.MintedID)
+		annotated++
+	}
+	if annotated == 0 {
+		return fmt.Errorf("nothing to annotate: no minted element has a name to write an annotation against, so %s would repeat the model unchanged", path)
 	}
 	notation := []byte(out.String())
 	if _, err := export.SysMLToRDF(name, notation); err != nil {
@@ -150,8 +160,39 @@ func writeAnnotated(model string, set *reposync.ChangeSet, path string) error {
 	if replaced {
 		what = ", replaced the existing file"
 	}
-	fmt.Fprintf(os.Stderr, "wrote %s with %d minted id(s) annotated (%d bytes%s)\n", path, len(minted), len(notation), what)
+	fmt.Fprintf(os.Stderr, "wrote %s with %d minted id(s) annotated (%d bytes%s)\n", path, annotated, len(notation), what)
 	return nil
+}
+
+// namedElements indexes the graph's qualified names that carry a declared
+// name, so a positional address (an unnamed declaration) is told apart from
+// an element genuinely named that way.
+func namedElements(g *rdf.Graph) map[string]bool {
+	named := make(map[string]bool)
+	for _, triple := range g.Triples() {
+		if triple.Predicate.Value != rdf.SysML+"qualifiedName" {
+			continue
+		}
+		if _, ok := g.Object(triple.Subject, rdf.SysML+"declaredName"); ok {
+			named[triple.Object.Value] = true
+		}
+	}
+	return named
+}
+
+// addressable reports whether a qualified name reaches its element by declared
+// names alone: every segment path must belong to an element that declares one.
+func addressable(fqn string, named map[string]bool) bool {
+	if fqn == "" {
+		return false
+	}
+	segments := strings.Split(fqn, "::")
+	for i := range segments {
+		if !named[strings.Join(segments[:i+1], "::")] {
+			return false
+		}
+	}
+	return true
 }
 
 // mintedChanges lists the creates that minted an id, in change-set order.
