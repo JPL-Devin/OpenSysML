@@ -120,12 +120,18 @@ func Diff(local, repository *rdf.Graph, opts Options) (*ChangeSet, error) {
 		if err != nil {
 			return nil, fmt.Errorf("baseline graph: %w", err)
 		}
-		if !scope.IsZero() && !baseScope.IsZero() {
-			if !scope.sameProject(baseScope) {
-				return nil, fmt.Errorf("the model is scoped to %s but the baseline graph carries %s", scope, baseScope)
+		// The baseline is checked against the effective scope: the model's,
+		// or the repository's when the model is unbound.
+		against := scope
+		if against.IsZero() {
+			against = repoScope
+		}
+		if !against.IsZero() && !baseScope.IsZero() {
+			if !against.sameProject(baseScope) {
+				return nil, fmt.Errorf("the sync is scoped to %s but the baseline graph carries %s", against, baseScope)
 			}
-			if scope.Branch != "" && baseScope.Branch != "" && scope.Branch != baseScope.Branch {
-				return nil, fmt.Errorf("%w: the model names branch %q, the baseline graph branch %q", ErrTwoBranches, scope.Branch, baseScope.Branch)
+			if against.Branch != "" && baseScope.Branch != "" && against.Branch != baseScope.Branch {
+				return nil, fmt.Errorf("%w: the sync names branch %q, the baseline graph branch %q", ErrTwoBranches, against.Branch, baseScope.Branch)
 			}
 		}
 		baseView, err = viewOf(opts.Base)
@@ -306,14 +312,15 @@ func viewOf(g *rdf.Graph) (map[string]*subjectView, error) {
 		if identityPredicate(triple.Predicate.Value) {
 			continue
 		}
-		name := rdf.LocalName(triple.Predicate.Value)
-		view.props[name] = append(view.props[name], triple.Object.String())
+		// Keyed by full predicate IRI so same-named properties from
+		// different namespaces never conflate.
+		view.props[triple.Predicate.Value] = append(view.props[triple.Predicate.Value], objectValue(triple.Object))
 	}
 	for _, view := range views {
 		for _, values := range view.props {
 			sort.Strings(values)
 		}
-		if names := view.props["qualifiedName"]; len(names) > 0 {
+		if names := view.props[rdf.SysML+"qualifiedName"]; len(names) > 0 {
 			view.qualifiedName = strings.Trim(names[0], `"`)
 		}
 		view.declared = declaredID(g, view)
@@ -377,10 +384,29 @@ func propertyDeltas(local, repository *subjectView) []PropertyDelta {
 	for _, name := range sorted {
 		at, was := local.props[name], repository.props[name]
 		if !equalValues(at, was) {
-			deltas = append(deltas, PropertyDelta{Property: name, Local: at, Repository: was})
+			deltas = append(deltas, PropertyDelta{Property: propertyLabel(name), Local: at, Repository: was})
 		}
 	}
 	return deltas
+}
+
+// propertyLabel renders a predicate IRI for the report: the bare name for the
+// SysML vocabulary, the full IRI for anything else.
+func propertyLabel(iri string) string {
+	if name, ok := strings.CutPrefix(iri, rdf.SysML); ok {
+		return name
+	}
+	return iri
+}
+
+// objectValue reduces an object term for comparison: a model-internal IRI
+// compares by its effective id, so scoped and unscoped spellings of one
+// reference are equal; literals and external IRIs compare as written.
+func objectValue(term rdf.Term) string {
+	if term.IsIRI() && (strings.HasPrefix(term.Value, rdf.Element) || strings.HasPrefix(term.Value, rdf.Expression)) {
+		return rdf.LocalName(term.Value)
+	}
+	return term.String()
 }
 
 func equalValues(a, b []string) bool {

@@ -304,6 +304,73 @@ func TestDuplicateEffectiveIDIsAnError(t *testing.T) {
 	}
 }
 
+// TestScopedReferencesAreNotUpdates: a reference compares by its target's
+// effective id, so scoped and unscoped spellings of one link are equal.
+func TestScopedReferencesAreNotUpdates(t *testing.T) {
+	ref := func(iri rdf.Term) *rdf.Graph {
+		g := rdf.NewGraph()
+		subject := rdf.ElementIRIForID("8f3a41d0")
+		g.Add(subject, rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"PartDefinition"))
+		g.Add(subject, rdf.IRI(rdf.SysML+"owner"), iri)
+		return g
+	}
+	local := ref(rdf.ElementIRIForID("P__Owner"))
+	repository := ref(rdf.ScopedElementIRIForID(rdf.ScopeQualifier("", "proj-1"), "P__Owner"))
+	set, err := reposync.Diff(local, repository, reposync.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Changes) != 0 {
+		t.Errorf("one reference under two IRI spellings produced %d change(s):\n%s", len(set.Changes), set.Text())
+	}
+}
+
+// TestSameNamedPredicatesAreNotConflated: two predicates sharing a local name
+// compare independently, so a change to one is its own delta.
+func TestSameNamedPredicatesAreNotConflated(t *testing.T) {
+	build := func(a, b string) *rdf.Graph {
+		g := rdf.NewGraph()
+		subject := rdf.ElementIRIForID("8f3a41d0")
+		g.Add(subject, rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"PartDefinition"))
+		g.Add(subject, rdf.IRI(rdf.SysML+"value"), rdf.String(a))
+		g.Add(subject, rdf.IRI("https://example.org/other#value"), rdf.String(b))
+		return g
+	}
+	set, err := reposync.Diff(build("1", "x"), build("2", "x"), reposync.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updates := byKind(set, reposync.KindUpdate)
+	if len(updates) != 1 || len(updates[0].Deltas) != 1 || updates[0].Deltas[0].Property != "value" {
+		t.Fatalf("changing one of two same-named predicates must be exactly its own delta:\n%s", set.Text())
+	}
+}
+
+// TestWriteBackLeavesPrefixSharingNeighborsAlone: an element whose id merely
+// begins with a minted id plus `_om`/`_p` text is not that element's satellite.
+func TestWriteBackLeavesPrefixSharingNeighborsAlone(t *testing.T) {
+	g := rdf.NewGraph()
+	minted := rdf.ElementIRIForID("P__A")
+	g.Add(minted, rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"PartDefinition"))
+	for _, neighbor := range []string{"P__A_omg", "P__A_persist"} {
+		g.Add(rdf.ElementIRIForID(neighbor), rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"PartDefinition"))
+		g.Add(rdf.ElementIRIForID(neighbor), rdf.IRI(rdf.SysML+"elementId"), rdf.String(neighbor))
+	}
+	membership := rdf.OwningMembershipIRIOf(minted)
+	g.Add(membership, rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"OwningMembership"))
+
+	out := reposync.WriteBack(g, map[string]string{"P__A": "11111111-2222-4333-8444-555555555555"})
+	for _, neighbor := range []string{"P__A_omg", "P__A_persist"} {
+		if _, ok := out.Object(rdf.ElementIRIForID(neighbor), rdf.RDFType); !ok {
+			t.Errorf("write-back moved the unrelated element %s", neighbor)
+		}
+	}
+	moved := rdf.ElementIRIForID("11111111-2222-4333-8444-555555555555_om")
+	if _, ok := out.Object(moved, rdf.RDFType); !ok {
+		t.Error("write-back did not move the minted element's own membership")
+	}
+}
+
 func TestBaselineScopeMismatchIsAnError(t *testing.T) {
 	local := graphOf(t, scoped(vehicle))
 	repository := graphOf(t, scoped(vehicle))

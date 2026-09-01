@@ -52,28 +52,49 @@ func WriteBack(g *rdf.Graph, mints map[string]string) *rdf.Graph {
 }
 
 // mintedTerm maps an IRI onto its minted spelling: the element itself exactly,
-// and its memberships and expression nodes by their derivation suffix.
+// its owning membership by its exact suffix, and its expression nodes by the
+// longest minted owner — never another element whose id merely shares a prefix.
 func mintedTerm(term rdf.Term, mints map[string]string) rdf.Term {
 	if !term.IsIRI() {
 		return term
 	}
-	var ns, id string
 	switch {
 	case strings.HasPrefix(term.Value, rdf.Element):
-		ns, id = rdf.Element, term.Value[len(rdf.Element):]
-	case strings.HasPrefix(term.Value, rdf.Expression):
-		ns, id = rdf.Expression, term.Value[len(rdf.Expression):]
-	default:
-		return term
-	}
-	for old, minted := range mints {
-		if id == old {
-			return rdf.IRI(ns + minted)
+		id := term.Value[len(rdf.Element):]
+		if minted, ok := mints[id]; ok {
+			return rdf.IRI(rdf.Element + minted)
 		}
-		rest, ok := strings.CutPrefix(id, old)
-		if ok && (strings.HasPrefix(rest, membershipSuffix) || strings.HasPrefix(rest, expressionSuffix)) {
-			return rdf.IRI(ns + minted + rest)
+		// The only element-namespace satellite is the owning membership,
+		// derived by the exact suffix; any longer id is another element's.
+		if owner, ok := strings.CutSuffix(id, membershipSuffix); ok {
+			if minted, exists := mints[owner]; exists {
+				return rdf.IRI(rdf.Element + minted + membershipSuffix)
+			}
+		}
+	case strings.HasPrefix(term.Value, rdf.Expression):
+		id := term.Value[len(rdf.Expression):]
+		if owner, rest := longestMintedOwner(id, mints); owner != "" {
+			return rdf.IRI(rdf.Expression + mints[owner] + rest)
 		}
 	}
 	return term
+}
+
+// longestMintedOwner finds the minted id an expression node derives from: the
+// longest minted owner followed by the position separator, so a minted id that
+// is a prefix of another never captures the other's nodes.
+func longestMintedOwner(id string, mints map[string]string) (string, string) {
+	best := ""
+	for old := range mints {
+		if len(old) <= len(best) {
+			continue
+		}
+		if rest, ok := strings.CutPrefix(id, old); ok && strings.HasPrefix(rest, expressionSuffix) {
+			best = old
+		}
+	}
+	if best == "" {
+		return "", ""
+	}
+	return best, id[len(best):]
 }
