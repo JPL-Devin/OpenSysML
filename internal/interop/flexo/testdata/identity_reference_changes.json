@@ -1,0 +1,136 @@
+{
+  "comment": [
+    "The same model as identity_model.sysml, written the way the Flexo MMS SysML v2 service's",
+    "own commit path takes it: SysML v2 JSON changes with standard metamodel properties only.",
+    "Element ids repeat the effective ids OpenSysML encodes — the annotated UUIDs where the",
+    "notation declares them, the encoded qualified names elsewhere — so the read-back says",
+    "whether declared identity survives the service's own path.",
+    "The 'comment' key is documentation for a reader; the harness posts only 'change'."
+  ],
+  "@type": "Commit",
+  "change": [
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "Package",
+        "@id": "IdentityInterop",
+        "elementId": "IdentityInterop",
+        "declaredName": "IdentityInterop",
+        "qualifiedName": "IdentityInterop",
+        "owner": null,
+        "ownedElement": [
+          {"@id": "0b6e3c1a-4d2f-4e8b-9a7c-5d1f0e9b2a7c"},
+          {"@id": "8f3a41d0-0d3e-4c2a-9c3f-2f6a1b5c7d90"},
+          {"@id": "IdentityInterop__Rover"}
+        ]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "0b6e3c1a-4d2f-4e8b-9a7c-5d1f0e9b2a7c",
+        "elementId": "0b6e3c1a-4d2f-4e8b-9a7c-5d1f0e9b2a7c",
+        "declaredName": "Component",
+        "qualifiedName": "IdentityInterop::Component",
+        "isAbstract": false,
+        "owner": {"@id": "IdentityInterop"},
+        "ownedElement": [{"@id": "IdentityInterop__Component__mass"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "AttributeUsage",
+        "@id": "IdentityInterop__Component__mass",
+        "elementId": "IdentityInterop__Component__mass",
+        "declaredName": "mass",
+        "qualifiedName": "IdentityInterop::Component::mass",
+        "owner": {"@id": "0b6e3c1a-4d2f-4e8b-9a7c-5d1f0e9b2a7c"},
+        "value": {"@id": "IdentityInterop__Component__mass_pvalue"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "LiteralRational",
+        "@id": "IdentityInterop__Component__mass_pvalue",
+        "elementId": "IdentityInterop__Component__mass_pvalue",
+        "owner": {"@id": "IdentityInterop__Component__mass"},
+        "value": 0.0
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "8f3a41d0-0d3e-4c2a-9c3f-2f6a1b5c7d90",
+        "elementId": "8f3a41d0-0d3e-4c2a-9c3f-2f6a1b5c7d90",
+        "declaredName": "Battery",
+        "qualifiedName": "IdentityInterop::Battery",
+        "isAbstract": false,
+        "owner": {"@id": "IdentityInterop"},
+        "ownedElement": [{"@id": "IdentityInterop__Battery__capacity"}],
+        "ownedSpecialization": [{"@id": "IdentityInterop__Battery__spec0"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "Subclassification",
+        "@id": "IdentityInterop__Battery__spec0",
+        "elementId": "IdentityInterop__Battery__spec0",
+        "owner": {"@id": "8f3a41d0-0d3e-4c2a-9c3f-2f6a1b5c7d90"},
+        "specific": {"@id": "8f3a41d0-0d3e-4c2a-9c3f-2f6a1b5c7d90"},
+        "general": {"@id": "0b6e3c1a-4d2f-4e8b-9a7c-5d1f0e9b2a7c"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "AttributeUsage",
+        "@id": "IdentityInterop__Battery__capacity",
+        "elementId": "IdentityInterop__Battery__capacity",
+        "declaredName": "capacity",
+        "qualifiedName": "IdentityInterop::Battery::capacity",
+        "owner": {"@id": "8f3a41d0-0d3e-4c2a-9c3f-2f6a1b5c7d90"},
+        "value": {"@id": "IdentityInterop__Battery__capacity_pvalue"}
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "LiteralRational",
+        "@id": "IdentityInterop__Battery__capacity_pvalue",
+        "elementId": "IdentityInterop__Battery__capacity_pvalue",
+        "owner": {"@id": "IdentityInterop__Battery__capacity"},
+        "value": 1500.0
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartDefinition",
+        "@id": "IdentityInterop__Rover",
+        "elementId": "IdentityInterop__Rover",
+        "declaredName": "Rover",
+        "qualifiedName": "IdentityInterop::Rover",
+        "isAbstract": false,
+        "owner": {"@id": "IdentityInterop"},
+        "ownedElement": [{"@id": "IdentityInterop__Rover__battery"}]
+      }
+    },
+    {
+      "@type": "DataVersion",
+      "payload": {
+        "@type": "PartUsage",
+        "@id": "IdentityInterop__Rover__battery",
+        "elementId": "IdentityInterop__Rover__battery",
+        "declaredName": "battery",
+        "qualifiedName": "IdentityInterop::Rover::battery",
+        "owner": {"@id": "IdentityInterop__Rover"},
+        "type": [{"@id": "8f3a41d0-0d3e-4c2a-9c3f-2f6a1b5c7d90"}]
+      }
+    }
+  ]
+}

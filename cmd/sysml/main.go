@@ -123,6 +123,13 @@ var (
 	pdfNumbering  bool
 	strictMode    bool
 	modelChecks   checks
+
+	syncDiffWith       string
+	syncBase           string
+	syncState          string
+	syncConfirmDeletes bool
+	syncMintIDs        bool
+	syncAnnotate       string
 )
 
 // budgets holds the run bounds the environment resolves to, read once at startup.
@@ -227,6 +234,18 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
 	fmt.Fprintf(w, "Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is\n")
 	fmt.Fprintf(w, "stable.\n")
+	fmt.Fprintf(w, "\nSyncing against a repository (dry run):\n")
+	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl          # Show the change set, keyed by effective id\n")
+	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-base last-seen.ttl\n")
+	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-confirm-deletes\n")
+	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-mint-ids -sync-annotate out.sysml\n")
+	fmt.Fprintf(w, "\nThe diff correlates elements by their effective id — an @ElementId annotation, or\n")
+	fmt.Fprintf(w, "the encoded qualified name — so a rename, move or retype is an update, never a\n")
+	fmt.Fprintf(w, "delete plus a create. Repository-only elements are reported as deletes but applying\n")
+	fmt.Fprintf(w, "them needs -sync-confirm-deletes; conflicts — a declared id the branch no longer\n")
+	fmt.Fprintf(w, "has, or a repository change since the last-seen commit — exit 1 and are never\n")
+	fmt.Fprintf(w, "resolved silently. The last-seen commit is tool state in <model>.sync.json (or\n")
+	fmt.Fprintf(w, "-sync-state), never written into the notation.\n")
 	fmt.Fprintf(w, "\nRendering a view:\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # ASCII text at a terminal\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form markdown\n")
@@ -294,6 +313,12 @@ func runCLI() int {
 	flag.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
 	flag.BoolVar(&pdfTOC, "pdf-toc", false, "Write a table of contents ahead of the content (-doc-form pdf)")
 	flag.BoolVar(&pdfNumbering, "pdf-number-sections", false, "Number the section headings hierarchically (-doc-form pdf)")
+	flag.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository graph (.ttl), keyed by effective element id, instead of running it")
+	flag.StringVar(&syncBase, "sync-base", "", "Repository graph at the last-seen commit; with it, repository changes since then surface as conflicts")
+	flag.StringVar(&syncState, "sync-state", "", "Sync state file recording project, branch and last-seen commit (default: <model>.sync.json beside the model)")
+	flag.BoolVar(&syncConfirmDeletes, "sync-confirm-deletes", false, "Confirm repository-side deletes; without it the diff reports them but applying is refused")
+	flag.BoolVar(&syncMintIDs, "sync-mint-ids", false, "Mint a UUID for each unannotated element being created, so the repository can address it stably")
+	flag.StringVar(&syncAnnotate, "sync-annotate", "", "Write the model to this file with each minted id declared as an @ElementId annotation (needs -sync-mint-ids)")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
@@ -359,6 +384,29 @@ func runCLI() int {
 
 	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
 		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
+		return 2
+	}
+
+	if flagGiven("sync-diff") && syncDiffWith == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph to diff against")
+		return 2
+	}
+	if syncDiffWith != "" {
+		switch {
+		case convertFormat != "" || renderView != "" || renderDoc != "" || renderAllDir != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0:
+			fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query or -eval")
+			return 2
+		case outputPath != "" || fromFormat != "" || renderForm != "" || docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering:
+			fmt.Fprintln(os.Stderr, "sysml: -sync-diff reads SysML or Turtle inputs and prints the change set; -output, -from and the render options do not apply")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-sync-diff shows a change set and decides nothing else about the model; check it in its own run")
+		}
+		return runSyncDiff(args)
+	}
+	if syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff; name the repository graph to diff against")
 		return 2
 	}
 
