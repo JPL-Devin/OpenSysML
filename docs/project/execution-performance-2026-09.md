@@ -2,45 +2,33 @@
 
 A follow-up to the September 2026 performance census, measuring model
 *execution* rather than validation: expression and calculation evaluation
-head-to-head against the pinned OMG pilot's headless evaluator, absolute
-state-machine and instantiation throughput from the Go benchmarks, and CPU
-and allocation profiles of the execution paths.
+throughput, absolute state-machine and instantiation throughput from the Go
+benchmarks, and CPU and allocation profiles of the execution paths.
 
 All figures were taken on one machine — `Intel Xeon Platinum 8559C`, 8 CPUs,
-Go 1.25, Linux, Java 21 for the pilot — at revision `af33e195`. Treat absolute
-numbers as ratios elsewhere.
+Go 1.25, Linux — at revision `af33e195`. Treat absolute numbers as ratios
+elsewhere.
 
 ## Method: marginal cost per evaluation
 
-Both sides evaluate a batch of identical cases against the same model
+A batch of identical cases is evaluated against the same model
 (`calc def Fib` recursive over `if`, `calc def SumTo` linear-recursive, and
-the literal `2 + 3`) in one process: the pilot via
-`build/pilot-evaluator/eval-sysml --cases <tsv>`, ours via repeated `-e`
-flags on `bin/sysml`. The per-evaluation figure is the marginal cost between
-a 1-case and an N-case invocation of the same process, which cancels JVM or
-process start-up, parsing, and library loading on both sides. Minimum of the
-repetitions taken.
+the literal `2 + 3`) in one process via repeated `-e` flags on `bin/sysml`.
+The per-evaluation figure is the marginal cost between a 1-case and an
+N-case invocation of the same process, which cancels process start-up,
+parsing, and library loading. Minimum of the repetitions taken.
 
 ## Results
 
-| workload | pilot start-up + 1 eval | pilot marginal/eval | ours start-up + 1 eval | ours marginal/eval | per-eval ratio |
-| -------- | ----------------------- | ------------------- | ---------------------- | ------------------ | -------------- |
-| `2 + 3` | 3.10 s | 2.2 ms | 0.11 s | below noise (< 0.1 ms) | ≥ 20× |
-| `Fib(18)` — ~8 400 recursive calc calls | 49.0 s | 45.7 s | 0.13 s | 12.2 ms | ~3 700× |
-| `SumTo(150)` — 150 recursive calc calls | 4.2 s | 1.24 s | 0.11 s | 0.06 ms | ~20 000× |
+| workload | start-up + 1 eval | marginal cost/eval |
+| -------- | ----------------- | ------------------ |
+| `2 + 3` | 0.11 s | below noise (< 0.1 ms) |
+| `Fib(18)` — ~8 400 recursive calc calls | 0.13 s | 12.2 ms |
+| `SumTo(150)` — 150 recursive calc calls | 0.11 s | 0.06 ms |
 
-Per calc invocation that is roughly 5.5 ms for the pilot against ~1.5 µs for
-us. The pilot could not evaluate `SumTo(400)` at all
-(`EXCEPTION: java.lang.StackOverflowError`), while ours evaluates it in the
-same sub-millisecond band; `SumTo(150)` is the depth both sides complete.
-Results agreed on every workload (`Fib(18) = 2584`, `SumTo(150) = 11325`).
-
-Caveats for fairness: the pilot's evaluator is a reference interpreter over
-its full metamodel, not a tuned runtime, and it re-derives typing during
-evaluation; the batches were verified to run inside a single JVM so its
-start-up (~3 s) and library load are excluded from the marginal figures.
-SysIDE is a static checker with no evaluator, so there is nothing to measure
-on that side.
+Per calc invocation that is roughly 1.5 µs. Recursion depth is not a
+practical limit at these scales: `SumTo(400)` evaluates in the same
+sub-millisecond band.
 
 ## Absolute throughput: state machines and instantiation
 
@@ -52,10 +40,6 @@ over an already-loaded model (start-up excluded, medians):
 | state-machine start | 13.6 µs / 9.2 KiB / 120 allocs | 40 µs | 205 µs |
 | calc invocation (`Calc0(2.0, 3.0)`) | 12.6 µs / 4.8 KiB / 70 allocs | 36 µs | 220 µs |
 | instantiate (`Comp0`) | 11.3 µs / 2.9 KiB / 39 allocs | 36 µs | 225 µs |
-
-No independent runtime exists to compare these against — SysIDE does not
-execute, and the pinned pilot artifact evaluates expressions only — so they
-stand as absolute figures.
 
 ## The two optimization gaps the profiles show
 
@@ -82,11 +66,10 @@ fresh map — is the standard fix and would directly lift recursive-calc
 throughput. At ~1.5 µs per invocation this is not currently a user-visible
 problem; it is the first thing to reach for if execution-bound models appear.
 
-## Verdict
+## Assessment
 
-On raw execution of compliant SysML the pilot is three to four orders of
-magnitude slower per evaluation than this implementation and fails outright
-at modest recursion depth, so the runtime-speed claim finds no support on
-the execution side either. Our own gaps are real but internal: an O(model)
+Execution is fast in absolute terms — microseconds per calc invocation or
+state-machine start, sub-millisecond for deep recursive calculations — and
+the two gaps the profiles show are internal and localized: an O(model)
 per-run name lookup in the REPL session layer, and per-invocation allocation
-in the calc evaluator — both fixable without architectural change.
+in the calc evaluator. Both are fixable without architectural change.
