@@ -2,6 +2,7 @@ package solve
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 	"testing"
 )
@@ -69,6 +70,8 @@ func TestSolvedWitnessRejectedByEvaluatorIsUndecided(t *testing.T) {
 			assert constraint { x == 0.1 }
 			assert constraint { y == 0.2 }
 			assert constraint { x + y == 0.3 }`,
+		// No variables at all: the empty witness is still replayed.
+		"constants": `assert constraint { 0.1 + 0.2 == 0.3 }`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -126,5 +129,11 @@ func TestRoundedMarksFloatComputingQueries(t *testing.T) {
 		}`, "test::C")
 	if exact.Rounded() {
 		t.Error("an integer-only query is marked rounded")
+	}
+	objective := &Query{Objectives: []Objective{{
+		Term: Binary(OpAdd, Real, RealTerm(big.NewRat(1, 10)), RealTerm(big.NewRat(1, 5))),
+	}}}
+	if !objective.Rounded() {
+		t.Error("a query optimizing a real sum is not marked rounded")
 	}
 }

@@ -128,6 +128,30 @@ func TestOptimizeReportsTheLeastValue(t *testing.T) {
 	}
 }
 
+// An objective the evaluator computes in float64 asks for an exact-real optimum
+// the evaluator's arithmetic need not attain: none is reported.
+func TestOptimizeDeclinesARoundedObjective(t *testing.T) {
+	requireSolver(t)
+	s := checkSession(t, `
+		package Trade {
+			private import ScalarValues::*;
+			private import TradeStudies::*;
+			analysis def Rounded {
+				attribute margin : Real;
+				assert constraint { margin >= 0.0 }
+				assert constraint { margin <= 10.0 }
+				objective widest : MaximizeObjective { attribute :>> best = margin * 3.0; }
+			}
+		}`)
+	got, report := optimized(t, s, "Rounded")
+	wants(t, got, "? Analysis Rounded is undecided, so no optimum was reported",
+		"round in floating point")
+	rejects(t, got, "optimized", "error:")
+	if report.Status != SolveUnknown {
+		t.Errorf("status is %s, want unknown", report.Status)
+	}
+}
+
 // The objective's own condition bounds it from below, and the case's assumption
 // from above, so the greatest value comes from both together.
 func TestOptimizeReportsTheGreatestValue(t *testing.T) {

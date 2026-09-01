@@ -241,7 +241,7 @@ func (s *Solver) Solve(ctx context.Context, q *Query) (*Result, error) {
 	// A witness only stands where the evaluator, the normative arithmetic,
 	// confirms it; one it rejects — rounding differently, holding no such
 	// value — leaves the question undecided rather than answered.
-	if result.Status == StatusSat && len(result.Model) > 0 {
+	if result.Status == StatusSat {
 		if ok, reason := replayWitness(q, result.Model); !ok {
 			result.Status = StatusUnknown
 			result.Reason = reason

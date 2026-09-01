@@ -11,12 +11,31 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
-// Rounded reports whether the query asserts a value the evaluator computes in
-// float64 — a real operation, a widened integer, or a real literal with no
-// exact float64 — whose rounding the exact-real encoding does not model.
+// Rounded reports whether the query asserts or optimizes a value the evaluator
+// computes in float64 — a real operation, a widened integer, or a real literal
+// with no exact float64 — whose rounding the exact-real encoding does not model.
 func (q *Query) Rounded() bool {
 	for _, a := range q.Assertions {
 		if roundedTerm(a.Term) {
+			return true
+		}
+	}
+	for _, o := range q.Objectives {
+		if roundedTerm(o.Term) {
+			return true
+		}
+	}
+	return false
+}
+
+// Rounded reports whether the conflict rests on a condition the evaluator
+// computes in float64; a conflict with no members to inspect counts.
+func (c *Core) Rounded() bool {
+	if c == nil || len(c.Members) == 0 {
+		return true
+	}
+	for _, m := range c.Members {
+		if roundedTerm(m.Term) {
 			return true
 		}
 	}
