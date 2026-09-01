@@ -118,3 +118,152 @@ func TestNestedProjectRefScopesResolveToTheNearest(t *testing.T) {
 		t.Fatal("distinct projects must have distinct scope keys")
 	}
 }
+
+func TestAboutFormElementIdCarriesItsDeclaredID(t *testing.T) {
+	table, idx := buildTable(t, `package Vehicles {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def Vehicle;
+	metadata vid : IdentityMetadata::ElementId about Vehicle {
+		id = "8f3a41d0";
+	}
+}
+`)
+	info := infoOf(t, table, idx, "Vehicles::Vehicle")
+	if !info.Annotated || info.DeclaredID != "8f3a41d0" || info.EffectiveID != "8f3a41d0" {
+		t.Fatalf("annotated=%v declared=%q effective=%q, want the about-form id 8f3a41d0",
+			info.Annotated, info.DeclaredID, info.EffectiveID)
+	}
+	if len(info.Declarations) != 1 || !info.Declarations[0].About {
+		t.Fatalf("declarations = %+v, want one about-form declaration", info.Declarations)
+	}
+}
+
+func TestAboutFormProjectRefBindsTheScope(t *testing.T) {
+	table, idx := buildTable(t, `package Vehicles {
+	part def Vehicle;
+}
+package Meta {
+	metadata pref : IdentityMetadata::ProjectRef about Vehicles {
+		projectId = "proj-1";
+		org = "org-a";
+	}
+}
+`)
+	info := infoOf(t, table, idx, "Vehicles::Vehicle")
+	if info.Scope == nil || info.Scope.ProjectID != "proj-1" || info.Scope.Org != "org-a" {
+		t.Fatalf("scope = %+v, want proj-1/org-a from the about-form ProjectRef", info.Scope)
+	}
+}
+
+func TestUnnamedAboutFormElementIdCarriesItsDeclaredID(t *testing.T) {
+	table, idx := buildTable(t, `package Vehicles {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def Vehicle;
+	metadata : IdentityMetadata::ElementId about Vehicle {
+		id = "8f3a41d0";
+	}
+}
+`)
+	info := infoOf(t, table, idx, "Vehicles::Vehicle")
+	if !info.Annotated || info.DeclaredID != "8f3a41d0" || info.EffectiveID != "8f3a41d0" {
+		t.Fatalf("annotated=%v declared=%q effective=%q, want the unnamed about-form id 8f3a41d0",
+			info.Annotated, info.DeclaredID, info.EffectiveID)
+	}
+	if len(info.Declarations) != 1 || !info.Declarations[0].About {
+		t.Fatalf("declarations = %+v, want one about-form declaration", info.Declarations)
+	}
+}
+
+func TestUnnamedAboutFormProjectRefBindsTheScope(t *testing.T) {
+	table, idx := buildTable(t, `package Vehicles {
+	part def Vehicle;
+}
+package Meta {
+	metadata : IdentityMetadata::ProjectRef about Vehicles {
+		projectId = "proj-1";
+		org = "org-a";
+	}
+}
+`)
+	info := infoOf(t, table, idx, "Vehicles::Vehicle")
+	if info.Scope == nil || info.Scope.ProjectID != "proj-1" || info.Scope.Org != "org-a" {
+		t.Fatalf("scope = %+v, want proj-1/org-a from the unnamed about-form ProjectRef", info.Scope)
+	}
+}
+
+func TestInlineAndAboutFormDeclarationsAreBothRecorded(t *testing.T) {
+	table, idx := buildTable(t, `package Vehicles {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def Vehicle {
+		@IdentityMetadata::ElementId { id = "inline-id"; }
+	}
+	metadata vid : IdentityMetadata::ElementId about Vehicle {
+		id = "about-id";
+	}
+}
+`)
+	info := infoOf(t, table, idx, "Vehicles::Vehicle")
+	if len(info.Declarations) != 2 {
+		t.Fatalf("declarations = %+v, want the inline and the about-form one", info.Declarations)
+	}
+	if info.Declarations[0].About || info.Declarations[0].ID != "inline-id" {
+		t.Fatalf("first declaration = %+v, want the inline id", info.Declarations[0])
+	}
+	if !info.Declarations[1].About || info.Declarations[1].ID != "about-id" {
+		t.Fatalf("second declaration = %+v, want the about-form id", info.Declarations[1])
+	}
+	if info.EffectiveID != "inline-id" {
+		t.Fatalf("effective = %q, want the inline id first", info.EffectiveID)
+	}
+}
+
+func TestAboutFormAnnotationTargetingLibraryElementIsTabled(t *testing.T) {
+	table, idx := buildTable(t, `package Meta {
+	metadata sid : IdentityMetadata::ElementId about ScalarValues::Boolean {
+		id = "bool-id";
+	}
+}
+`)
+	info := infoOf(t, table, idx, "ScalarValues::Boolean")
+	if !info.Annotated || info.DeclaredID != "bool-id" || info.EffectiveID != "bool-id" {
+		t.Fatalf("annotated=%v declared=%q effective=%q, want the about-form id bool-id on the library element",
+			info.Annotated, info.DeclaredID, info.EffectiveID)
+	}
+}
+
+func TestLibraryDocumentAboutFormAnnotationsAreIndexed(t *testing.T) {
+	lib := `package LibMeta {
+	metadata pref : IdentityMetadata::ProjectRef about Vehicles {
+		projectId = "proj-lib";
+		org = "org-lib";
+	}
+}
+`
+	p := parser.New(source.New("<lib>", []byte(lib)))
+	libRoot := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	src := `package Vehicles {
+	part def Vehicle;
+}
+`
+	q := parser.New(source.New("<t>", []byte(src)))
+	root := q.ParseFile()
+	if len(q.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", q.Diagnostics)
+	}
+	idx := libs.NewModelIndex()
+	idx.AddDocument("<lib>", libRoot)
+	idx.MarkLibrary("<lib>")
+	idx.AddDocument("<t>", root)
+	idx.ExpandWildcardImports()
+	res := resolve.New(idx)
+	model := semantics.NewModel(res)
+	res.SetModel(model)
+	table := identity.Build(model, res, idx.DocumentRoot("<t>"))
+	info := infoOf(t, table, idx, "Vehicles::Vehicle")
+	if info.Scope == nil || info.Scope.ProjectID != "proj-lib" || info.Scope.Org != "org-lib" {
+		t.Fatalf("scope = %+v, want proj-lib/org-lib from the library document's about-form ProjectRef", info.Scope)
+	}
+}

@@ -620,10 +620,14 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		if !isCompatibleTyping(useKind, direction, target, decl.isOccurrenceUsage()) {
 			return fmt.Sprintf("%s cannot be typed by %s (kind mismatch)", useKind, target)
 		}
-	case ast.RelReferences, ast.RelCrosses, ast.RelVia, ast.RelAnnotates, ast.RelSubject:
+	case ast.RelReferences, ast.RelCrosses, ast.RelVia, ast.RelSubject:
 		if !isDef && !isUsageKind(target) {
 			return fmt.Sprintf("%s target must be a usage, found %s", rel, target)
 		}
+	case ast.RelAnnotates:
+		// An Annotation's annotatedElement is any Element (SysML v2 §7.9):
+		// definitions, packages and usages are all legal `about` targets.
+		return ""
 	}
 	return ""
 }
