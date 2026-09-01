@@ -121,9 +121,14 @@ so they inherit annotated stability with no further mechanism.
 ### Validation (a constraint-tier pass)
 
 - Duplicate effective ids **within one project scope**: error on both elements, naming
-  each. Identity is a pair — the enclosing `ProjectRef` (or the absent scope, for
-  unbound documents) plus the effective id — so the same id under two different
-  `ProjectRef`s is legal; it names two different repository elements.
+  each. Identity is a pair — the enclosing scope's **`projectId`** (or the absent
+  scope, for unbound documents) plus the effective id — so the same id under two
+  different projects is legal; it names two different repository elements. The
+  `branch` plays no part in scope equality: a branch selects a version of one element,
+  not another identity, so two `ProjectRef`s naming one `projectId` on different
+  branches are one scope for duplicate validation, for mixed-graph refusal, and for
+  the sync diff — where they are instead an error, since one document cannot sync one
+  element against two branches at once.
 - The check runs over the whole generated id space of the scope, not the element ids
   alone: an annotated id that collides with a **derived** id — another element's encoded
   name, a membership id (`…_om`), an encoded expression-node id — is an error naming
