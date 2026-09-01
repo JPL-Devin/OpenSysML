@@ -227,7 +227,9 @@ func (idx *Index) FrozenAboutUsages(name string) ([]*Symbol, bool) {
 		return idx.aboutUsages[name], true
 	}
 	if idx.base != nil && !idx.docRoots.owns(name) {
-		return idx.base.aboutUsages[name], true
+		if _, visible := idx.docRoots.get(name); visible {
+			return idx.base.aboutUsages[name], true
+		}
 	}
 	return nil, false
 }

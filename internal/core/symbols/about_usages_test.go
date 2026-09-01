@@ -46,6 +46,16 @@ func TestFrozenAboutUsagesOverAnOverlay(t *testing.T) {
 	}
 }
 
+func TestFrozenAboutUsagesOfARemovedBaseDocument(t *testing.T) {
+	base := frozenBase(t, map[string]string{"about.sysml": aboutDoc})
+	over := overlayOver(t, base, nil)
+
+	over.RemoveDocument("about.sysml")
+	if usages, cached := over.FrozenAboutUsages("about.sysml"); cached || len(usages) != 0 {
+		t.Fatalf("a removed base document must not answer from the cache; got %v, %v", usages, cached)
+	}
+}
+
 func TestFrozenAboutUsagesOnAWritableIndex(t *testing.T) {
 	idx := buildIndex(t, map[string]string{"about.sysml": aboutDoc})
 	if _, cached := idx.FrozenAboutUsages("about.sysml"); cached {
