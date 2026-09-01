@@ -21,9 +21,9 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
 - The pin `cmd/pilot-diff` reports comes from `build/pilot-sysml-validator/pilot-pin.txt`
   (written by the new script), not from the DeciSym `pom.xml`.
 - `-validator /nonexistent` now says `run ./scripts/download-pilot-sysml-validator.sh`.
-- Measured after the architecture self-model round, with a fresh library cache: `366 file(s), 335 fully agreeing; 34 agreed,
-  20 only ours, 242 only the pilot's`, JSON totals `openSysMLDiagnostics 56 / pilotDiagnostics
-  278 / severityMismatch 2`; ~70 s wall, byte-identical across runs *and* after a from-scratch
+- Measured after the self-model accuracy round, with a fresh library cache: `366 file(s), 334 fully agreeing; 34 agreed,
+  20 only ours, 310 only the pilot's`, JSON totals `openSysMLDiagnostics 56 / pilotDiagnostics
+  346 / severityMismatch 2`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
 - **`cmd/pilot-diff` has no `-jobs` flag.** Its full flag set is
@@ -134,10 +134,10 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 (via two pinned plain-Java bridges over the pilot's own validators) over four corpus roots and writes
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
-but only while the baseline is current. Check that first. As of the rebaseline that came with the architecture self-model it **is**
-current: a live run gives `366 file(s), 335 fully agreeing; 34 agreed, 20 only ours, 242 only the
+but only while the baseline is current. Check that first. As of the rebaseline that came with the self-model accuracy round it **is**
+current: a live run gives `366 file(s), 334 fully agreeing; 34 agreed, 20 only ours, 310 only the
 pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
-"Results" table matches. That rebaseline covers two rounds, because the succession-shorthand
+"Results" table matches. The rebaseline before it, at the architecture self-model's landing, covered two rounds, because the succession-shorthand
 removal before it landed without refreshing the baseline; a control run of its merge commit gives
 `32 agreed, 54 only ours, 79 only the pilot's`. When it is stale (it was at `ac4ac4fb`, and again while the F60–F69 fix
 PRs were in flight), a non-empty `jq -S` baseline diff is *not* by itself evidence of a
