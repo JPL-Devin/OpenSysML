@@ -135,7 +135,7 @@ nav:
       - guide/06-behavior.md
       - guide/07-saving-and-rdf.md
       - guide/08-editors.md
-      - From your own program: guide/09-python.md
+      - guide/09-python.md
       - guide/10-troubleshooting.md
   - Document generation:
       - manual/README.md
