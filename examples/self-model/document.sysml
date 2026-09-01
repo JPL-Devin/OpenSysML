@@ -9,6 +9,8 @@ package OpenSysMLDocument {
     // containers it tabulates are named here as usages.
     part analysisPipeline : OpenSysMLPipeline::AnalysisPipeline;
     part passRegistry : OpenSysMLPipeline::PassRegistry;
+    part runtime : OpenSysMLPipeline::Runtime;
+    part viewEngine : OpenSysMLSurfaces::ViewEngine;
 
     // --- Queries the document runs over this model -----------------------
 
@@ -50,6 +52,36 @@ package OpenSysMLDocument {
                 type = "PartUsage"
             ),
             properties = ("name", "level", "elementScoped")
+        )
+    }
+
+    // The runtime's budgets: the executors it also declares carry no envVar
+    // and drop out here.
+    calc def BudgetsWithBounds :> Query {
+        in root : Element;
+        Project(
+            source = WhereFeature(
+                source = WhereType(
+                    source = OwnedElements(source = DefinitionOf(root = root)),
+                    type = "PartUsage"
+                ),
+                'feature' = "envVar",
+                operator = "!=",
+                value = ""
+            ),
+            properties = ("name", "counts", "envVar", "defaultBound", "exhaustion")
+        )
+    }
+
+    // Every rendering kind the view engine recognizes, and whether it draws it.
+    calc def RenderingKinds :> Query {
+        in root : Element;
+        Project(
+            source = WhereType(
+                source = OwnedElements(source = DefinitionOf(root = root)),
+                type = "PartUsage"
+            ),
+            properties = ("kind", "supported")
         )
     }
 
@@ -121,7 +153,7 @@ package OpenSysMLDocument {
             attribute redefines title = "Validation and execution";
 
             part tiers : Paragraph {
-                attribute redefines text = "Validation is a ladder: syntax, name resolution, type, then constraint. A tier runs only where the tier below it is clean, per element rather than per file, so one broken declaration does not silence the rest of the document.";
+                attribute redefines text = "Validation is a ladder: syntax, name resolution, type, then constraint. A blocking finding skips the document-scoped passes of the tiers above it, while a pass that names its subject still runs for the elements not downstream of the failure, so one broken declaration does not silence the rest of the document.";
             }
 
             part tierStates : Diagram {
@@ -131,14 +163,27 @@ package OpenSysMLDocument {
             }
 
             part passes : Table {
-                attribute redefines caption = "The validation passes, their tiers, and which one gates itself per element";
+                attribute redefines caption = "Every registered validation pass, its tier, and which ones gate themselves per element";
                 calc rows : PassesWithTiers {
                     in redefines root = passRegistry;
                 }
             }
 
             part executing : Paragraph {
-                attribute redefines text = "What runs is the lowered graph, never the syntax tree: actions execute as Petri-net token flow and states as run-to-completion event dispatch, both under a step budget, so a model that cannot finish reports budget exhaustion rather than hanging the tool.";
+                attribute redefines text = "What runs is the lowered graph, never the syntax tree: actions execute as Petri-net token flow and states as run-to-completion event dispatch. Each kind of work has its own budget, so a model that cannot finish reports which budget it exhausted rather than hanging the tool.";
+            }
+
+            part budgets : Table {
+                attribute redefines caption = "The runtime budgets, their defaults, and the error each reports when exhausted";
+                calc rows : BudgetsWithBounds {
+                    in redefines root = runtime;
+                }
+            }
+
+            part exhaustion : Diagram {
+                attribute redefines caption = "Six budgets, six ways a run ends early";
+                attribute redefines direction = "TB";
+                ref redefines source = OpenSysMLViews::budgetExhaustion;
             }
 
             part analysed : Diagram {
@@ -152,13 +197,23 @@ package OpenSysMLDocument {
             attribute redefines title = "Surfaces over one pipeline";
 
             part intro : Paragraph {
-                attribute redefines text = "The REPL, the language server, the gRPC service and the command line are four surfaces over one analysis pipeline, and the generated Python, Node, Rust and Java clients speak to the service rather than to the engine, so a rule fixed in the engine is fixed everywhere at once.";
+                attribute redefines text = "The REPL, the language server, the gRPC service and the command line are four surfaces over one analysis pipeline. The service speaks gRPC and Connect from one protobuf schema, and the Go, Python, Node, Rust and Java clients are hand-written over stubs generated from that schema, so a rule fixed in the engine is fixed everywhere at once.";
             }
 
             part toolchain : Diagram {
                 attribute redefines caption = "The whole toolchain";
                 attribute redefines direction = "LR";
                 ref redefines source = OpenSysMLViews::toolchainStructure;
+            }
+
+            part editing : Paragraph {
+                attribute redefines text = "An editor reaches more than diagnostics: semantic tokens, quick fixes carrying their edits, suggestions for a name that did not resolve, and span-based edits whose result is re-parsed and re-analysed before it is accepted.";
+            }
+
+            part editor : Diagram {
+                attribute redefines caption = "The editor pipeline";
+                attribute redefines direction = "LR";
+                ref redefines source = OpenSysMLViews::editorPipeline;
             }
         }
 
@@ -179,6 +234,13 @@ package OpenSysMLDocument {
                 attribute redefines caption = "The two branches in rendering a document";
                 attribute redefines direction = "TB";
                 ref redefines source = OpenSysMLViews::documentFlow;
+            }
+
+            part kinds : Table {
+                attribute redefines caption = "The rendering kinds a view can state, and which ones are produced";
+                calc rows : RenderingKinds {
+                    in redefines root = viewEngine;
+                }
             }
         }
 
@@ -201,8 +263,14 @@ package OpenSysMLDocument {
                 ref redefines source = OpenSysMLViews::identityRoundTrip;
             }
 
-            part unbuilt : Paragraph {
-                attribute redefines text = "Repository synchronisation is modelled and not implemented; the model says so, so this document cannot claim otherwise.";
+            part sync : Paragraph {
+                attribute redefines text = "Repository synchronisation diffs a local model against its repository graph keyed by effective id, so a rename is an update rather than a delete and a create. Ids are minted and deletes confirmed only on request, and a conflict is reported in the exit status rather than resolved. The one phase of the identity design not built is the notation extension submitted to OMG.";
+            }
+
+            part syncing : Diagram {
+                attribute redefines caption = "Diffing a local model against its repository";
+                attribute redefines direction = "TB";
+                ref redefines source = OpenSysMLViews::syncFlow;
             }
         }
 

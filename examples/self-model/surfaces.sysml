@@ -19,19 +19,60 @@ package OpenSysMLSurfaces {
         attribute adoptsInstancesOnReanalysis : Boolean = true;
     }
 
+    // Every capability the server announces in its initialize result; the
+    // rendering requests are the experimental extension the VS Code client uses.
     #Surface part def LanguageServer :> Interface {
         attribute :>> goPackage = "internal/lsp";
         attribute :>> entrypoint = "cmd/sysml-lsp";
         attribute :>> protocol = "lsp-stdio";
         attribute incrementalSync : Boolean = true;
         attribute publishesQuickFixes : Boolean = true;
+        attribute hover : Boolean = true;
+        attribute definition : Boolean = true;
+        attribute findReferences : Boolean = true;
+        attribute documentSymbols : Boolean = true;
+        attribute workspaceSymbols : Boolean = true;
+        attribute completion : Boolean = true;
+        attribute formatting : Boolean = true;
+        attribute rename : Boolean = true;
+        attribute semanticTokens : Boolean = true;
+        attribute experimentalRendering : Boolean = true;
+        in item findings : Diagnostic;
+        out item tokens : SemanticToken;
+        out item fixes : QuickFix;
     }
 
+    // The schema every transport and every client is generated from. Only the
+    // Go stubs are checked in beside it; the other stubs live with their clients.
+    part def ApiSchema :> CodeUnit {
+        attribute :>> goPackage = "api/proto";
+        attribute schemaFile : String = "api/proto/sysml.proto";
+        attribute service : String = "SysMLService";
+        attribute rpcCount : Integer = 18;
+        attribute rpcs : String = "GetServerInfo, ParseFile, ParseSources, GetSymbol, GetDiagnostics, Evaluate, Instantiate, ExecuteAction, ExecuteState, Convert, ApplyEdits, VerifyConstraint, VerifyRequirement, VerifySatisfaction, EvaluateCalc, Query, RunDocumentQuery, RenderDocument";
+        attribute generatedGo : String = "api/proto/sysml.pb.go, api/proto/sysml_grpc.pb.go, api/proto/protoconnect/sysml.connect.go";
+        attribute generator : String = "buf";
+    }
+
+    // One hand-written service behind two generated transports: gRPC over
+    // HTTP/2 with reflection, and Connect over plain HTTP for browsers.
     #Surface part def ModelService :> Interface {
         attribute :>> goPackage = "internal/grpc";
         attribute :>> entrypoint = "cmd/sysml-grpc";
         attribute :>> protocol = "grpc, connect";
         attribute reflectionEnabled : Boolean = true;
+        attribute handWrittenService : Boolean = true;
+        attribute connectAdapter : String = "internal/grpc/connect.go";
+        attribute stdioTransport : String = "internal/stdiorpc";
+        part schema : ApiSchema;
+    }
+
+    // The same service over a pipe: a process that embeds the binary talks to
+    // it without a network listener.
+    #Surface part def StdioService :> Interface {
+        attribute :>> goPackage = "internal/stdiorpc";
+        attribute :>> entrypoint = "cmd/sysml-grpc";
+        attribute :>> protocol = "stdio";
     }
 
     // The non-interactive side of the REPL binary: convert, query, render.
@@ -42,31 +83,46 @@ package OpenSysMLSurfaces {
         attribute exitStatusIsContract : Boolean = true;
     }
 
-    // Client libraries generated from the same protobuf schema.
+    // A client library: hand-written idiomatic code over stubs generated from
+    // the schema, the stubs checked in at generatedStubs.
     abstract part def Client :> CodeUnit {
         attribute implementationLanguage : String;
         attribute generatedFrom : String = "api/proto";
+        attribute generatedStubs : String;
         port service : RequestPort;
     }
 
     part def PythonClient :> Client {
         attribute :>> goPackage = "clients/python";
         attribute :>> implementationLanguage = "python";
+        attribute :>> generatedStubs = "clients/python/opensysml/proto";
     }
 
     part def NodeClient :> Client {
         attribute :>> goPackage = "clients/node";
         attribute :>> implementationLanguage = "typescript";
+        attribute :>> generatedStubs = "clients/node/src/generated";
     }
 
     part def RustClient :> Client {
         attribute :>> goPackage = "clients/rust";
         attribute :>> implementationLanguage = "rust";
+        attribute :>> generatedStubs = "clients/rust/opensysml/src/proto";
     }
 
     part def JavaClient :> Client {
         attribute :>> goPackage = "clients/java";
         attribute :>> implementationLanguage = "java";
+        attribute :>> generatedStubs = "clients/java/opensysml-client/src/main/java/org/openmbee/opensysml/proto";
+    }
+
+    // In the same process by default, over the wire on request: the Go client
+    // wraps the generated Go stubs rather than being generated itself.
+    part def GoClient :> Client {
+        attribute :>> goPackage = "client/opensysml";
+        attribute :>> implementationLanguage = "go";
+        attribute :>> generatedStubs = "api/proto";
+        attribute inProcess : Boolean = true;
     }
 
     part def VsCodeExtension :> CodeUnit {
@@ -75,13 +131,104 @@ package OpenSysMLSurfaces {
         port languageClient : RequestPort;
     }
 
+    // --- What an editor reaches ------------------------------------------
+
+    // Semantic-token classes, in the order the LSP legend lists them.
+    part def Highlighter :> CodeUnit {
+        attribute :>> goPackage = "internal/core/highlight";
+        attribute tokenClasses : Integer = 15;
+        in item tree : SyntaxTree;
+        out item tokens : SemanticToken;
+    }
+
+    // A fix carries the edit that applies it and points at the diagnostic it
+    // answers; a diagnostic with no unambiguous repair offers none.
+    part def QuickFixer :> CodeUnit {
+        attribute :>> goPackage = "internal/core/quickfix";
+        attribute editsAttached : Boolean = true;
+        in item findings : Diagnostic;
+        out item fixes : QuickFix;
+    }
+
+    // The nearest declared names for one that did not resolve.
+    part def Suggester :> CodeUnit {
+        attribute :>> goPackage = "internal/core/suggest";
+        attribute rankedByDistance : Boolean = true;
+        in item findings : Diagnostic;
+    }
+
+    // Span-based rewriting of source text. The result is re-parsed and
+    // re-analysed, and an edit that would leave the model unreadable is refused.
+    part def SourceEditor :> CodeUnit {
+        attribute :>> goPackage = "internal/core/edit";
+        attribute operations : String = "set value, rename, add member, delete";
+        attribute preservesUntouchedText : Boolean = true;
+        attribute reanalysesResult : Boolean = true;
+        in item text : SourceText;
+        out item edits : SourceEdit;
+    }
+
+    // Re-indents the token stream, so comments and error nodes survive a save.
+    part def Formatter :> CodeUnit {
+        attribute :>> goPackage = "internal/core/format";
+        attribute worksOnTokens : Boolean = true;
+        in item text : SourceText;
+    }
+
+    // A document name and a span, carried from a declaration to whatever is
+    // derived from it; a synthetic artifact carries the unlocated origin.
+    part def Provenance :> CodeUnit {
+        attribute :>> goPackage = "internal/core/provenance";
+        attribute keyedByDocumentAndSpan : Boolean = true;
+        attribute consumers : String = "internal/core/docir, internal/core/view, internal/core/queryplan";
+        out item origins : SourceSpan;
+    }
+
+    // Diagnostics feed fixes and suggestions; edits go back in as source text.
+    part def EditorPipeline {
+        part highlighter : Highlighter;
+        part fixes : QuickFixer;
+        part suggestions : Suggester;
+        part editor : SourceEditor;
+        part formatter : Formatter;
+
+        port findingsIn : DiagnosticPort;
+        port textOut : ArtifactPort;
+
+        flow of Diagnostic from fixes.findings to suggestions.findings;
+        flow of SourceEdit from editor.edits to formatter.text;
+    }
+
     // --- What the tool writes out ----------------------------------------
 
-    // Views render as trees, interconnection, state, action and table forms.
+    // A rendering kind the standard view definitions name.
+    part def RenderingKind {
+        attribute kind : String;
+        attribute supported : Boolean = true;
+    }
+
+    // Every kind in StandardViewDefinitions is recognized, so a view stating
+    // one that is not produced is told so rather than rendered as another.
     part def ViewEngine :> CodeUnit {
         attribute :>> goPackage = "internal/core/view";
-        attribute renderingKinds : Integer = 5;
+        attribute recognizedKinds : Integer = 8;
+        attribute supportedKinds : Integer = 6;
+        part tree : RenderingKind { attribute :>> kind = "tree"; }
+        part interconnection : RenderingKind { attribute :>> kind = "interconnection"; }
+        part stateDiagram : RenderingKind { attribute :>> kind = "state"; }
+        part actionDiagram : RenderingKind { attribute :>> kind = "action"; }
+        part textual : RenderingKind {
+            attribute :>> kind = "textual";
+            attribute :>> supported = false;
+        }
+        part table : RenderingKind { attribute :>> kind = "table"; }
+        part sequence : RenderingKind { attribute :>> kind = "sequence"; }
+        part geometry : RenderingKind {
+            attribute :>> kind = "geometry";
+            attribute :>> supported = false;
+        }
         in item types : TypeTable;
+        in item origins : SourceSpan;
         out item diagram : DocumentTree;
     }
 
@@ -117,6 +264,7 @@ package OpenSysMLSurfaces {
         attribute provenancePerNode : Boolean = true;
         attribute resolvesCrossDocumentRefs : Boolean = true;
         in item plan : DocumentPlan;
+        in item origins : SourceSpan;
         out item tree : DocumentTree;
     }
 
@@ -139,10 +287,12 @@ package OpenSysMLSurfaces {
         in item tree : DocumentTree;
     }
 
-    // Textual notation both ways, plus experimental RDF.
+    // Textual notation both ways, plus experimental RDF. Two formats, six
+    // names: kerml and text are the notation, turtle and rdf are Turtle.
     part def Exporter :> CodeUnit {
         attribute :>> goPackage = "internal/core/export";
-        attribute formats : String = "sysml, kerml, ttl";
+        attribute formats : String = "sysml, ttl";
+        attribute formatNames : String = "kerml, rdf, sysml, text, ttl, turtle";
         attribute roundTrips : Boolean = true;
         out item graph : RdfGraph;
     }
@@ -156,6 +306,7 @@ package OpenSysMLSurfaces {
     // One plan, one tree, two backends: the form is chosen at the end, so
     // Markdown and PDF cannot disagree about the document's content.
     part def DocumentPipeline {
+        part provenance : Provenance;
         part views : ViewEngine;
         part queries : QueryCompiler;
         part rows : QueryExecutor;
@@ -167,6 +318,8 @@ package OpenSysMLSurfaces {
         port modelIn : ArtifactPort;
         port artifactOut : ArtifactPort;
 
+        flow of SourceSpan from provenance.origins to views.origins;
+        flow of SourceSpan from provenance.origins to ir.origins;
         flow of QueryRows from rows.rows to plans.rows;
         flow of DocumentPlan from plans.plan to ir.plan;
         flow of DocumentTree from ir.tree to markdown.tree;
@@ -221,11 +374,13 @@ package OpenSysMLSurfaces {
 
     // --- Conformance oracles ---------------------------------------------
 
-    // Advisory harnesses that referee this implementation against the OMG
-    // pilot; each holds a committed baseline that must move deliberately.
+    // Harnesses that referee this implementation against a reference; each
+    // holds a committed baseline that must move deliberately. An advisory
+    // oracle reports drift; a gating one fails the build on it.
     abstract part def ConformanceOracle :> CodeUnit {
         attribute reference : String;
         attribute baseline : String;
+        attribute gating : Boolean = false;
     }
 
     #Oracle part def RejectionOracle :> ConformanceOracle {
@@ -264,17 +419,53 @@ package OpenSysMLSurfaces {
         attribute :>> baseline = "docs/project/spec-compliance.md";
     }
 
+    // The bundled standard library must parse clean; the gate is in the suite.
+    #Oracle part def StdlibConformanceGate :> ConformanceOracle {
+        attribute :>> goPackage = "internal/core/libs";
+        attribute :>> reference = "OMG standard library release";
+        attribute :>> baseline = "internal/core/libs/stdlib";
+        attribute :>> gating = true;
+    }
+
+    // What the oracles lean on: a pinned reference, an errata overlay for the
+    // defects in OMG-published material, and the census the status page reads.
+    part def OraclePin :> CodeUnit {
+        attribute :>> goPackage = "internal/baseline";
+        attribute recordsPin : Boolean = true;
+        attribute recordsBridgeSource : Boolean = true;
+        attribute recordsCorpusProvenance : Boolean = true;
+    }
+
+    part def Errata :> CodeUnit {
+        attribute :>> goPackage = "internal/errata";
+        attribute overlaysPublishedMaterial : Boolean = true;
+    }
+
+    part def StatusCensus :> CodeUnit {
+        attribute :>> goPackage = "internal/doccounts";
+        attribute countsStatusMarkers : Boolean = true;
+    }
+
+    part def ConformanceInfrastructure {
+        part pins : OraclePin;
+        part errata : Errata;
+        part census : StatusCensus;
+    }
+
     // --- The whole tool ---------------------------------------------------
 
     part def Toolchain {
         part pipeline : AnalysisPipeline;
         part documents : DocumentPipeline;
+        part editing : EditorPipeline;
 
         part repl : Repl;
         part lsp : LanguageServer;
         part service : ModelService;
+        part stdio : StdioService;
         part cli : CommandLine;
 
+        part goClient : GoClient;
         part python : PythonClient;
         part node : NodeClient;
         part rust : RustClient;
@@ -290,12 +481,15 @@ package OpenSysMLSurfaces {
         part execution : ExecutionReferee;
         part grammar : GrammarCoverage;
         part counts : DocCounts;
+        part stdlib : StdlibConformanceGate;
+        part conformance : ConformanceInfrastructure;
 
         connection replDrives : ArtifactChannel connect repl.pipeline to pipeline.textIn;
         connection lspDrives : ArtifactChannel connect lsp.pipeline to pipeline.textIn;
         connection serviceDrives : ArtifactChannel connect service.pipeline to pipeline.textIn;
         connection cliDrives : ArtifactChannel connect cli.pipeline to pipeline.textIn;
 
+        connection goCalls : ArtifactChannel connect goClient.service to service.pipeline;
         connection pythonCalls : ArtifactChannel connect python.service to service.pipeline;
         connection nodeCalls : ArtifactChannel connect node.service to service.pipeline;
         connection rustCalls : ArtifactChannel connect rust.service to service.pipeline;
@@ -303,11 +497,28 @@ package OpenSysMLSurfaces {
         connection editorSpeaksLsp : ArtifactChannel connect vscode.languageClient to lsp.pipeline;
 
         connection documentsRead : ArtifactChannel connect pipeline.textIn to documents.modelIn;
+        connection findingsToEditors : DiagnosticChannel connect pipeline.diagnosticsOut to editing.findingsIn;
+        connection editsBack : ArtifactChannel connect editing.textOut to pipeline.textIn;
     }
 
     part opensysml : Toolchain;
 
     requirement documentsAreTraceable : DocumentsCarryTheirProvenance {
         subject documents = opensysml.documents;
+    }
+
+    requirement def ViewsSayWhatTheyCannotRender {
+        doc /* Every standard rendering kind is recognized, and the ones not
+             * produced say so instead of being drawn as something else. */
+        subject views : ViewEngine;
+        require constraint {
+            views.recognizedKinds == 8 and views.supportedKinds == 6
+                and not views.textual.supported and not views.geometry.supported
+                and views.sequence.supported
+        }
+    }
+
+    requirement viewsAreHonest : ViewsSayWhatTheyCannotRender {
+        subject views = opensysml.documents.views;
     }
 }

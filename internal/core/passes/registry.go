@@ -22,6 +22,11 @@ func (r *Registry) Register(p Pass) {
 	r.passes = append(r.passes, p)
 }
 
+// Passes returns the registered passes in registration order.
+func (r *Registry) Passes() []Pass {
+	return append([]Pass(nil), r.passes...)
+}
+
 // ElementScoped marks a pass whose subject is a single element rather than the
 // document, so a failure on another element does not skip it. Such a pass names
 // its subject in code and asks Context.DownstreamOfFailure about the references
