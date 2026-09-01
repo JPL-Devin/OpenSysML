@@ -520,3 +520,18 @@ func TestIdentityCrossDocumentProjectConflictErrorsInEachDeclaringDocument(t *te
 		t.Fatalf("got line %d in the annotating document, want 2", line)
 	}
 }
+
+func TestIdentityAboutFormOnLibraryElementValidatesInTheAnnotatingDocument(t *testing.T) {
+	src := `package Meta {
+	metadata sid : IdentityMetadata::ElementId about ScalarValues::Boolean {
+		id = "bad id";
+	}
+}
+`
+	diags := only(w8dDiags(t, src), "identity-id-shape")
+	if len(diags) != 1 || !strings.Contains(diags[0].Message, "ScalarValues::Boolean") {
+		t.Fatalf("got %v, want one shape error naming the library element", diags)
+	}
+	w8dWantLines(t, src, "identity-id-shape", 2)
+	w8dWantLines(t, src, "identity-unscoped-id", 2)
+}

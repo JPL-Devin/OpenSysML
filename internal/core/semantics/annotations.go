@@ -279,6 +279,14 @@ func (m *Model) aboutAnnotations(sym *symbols.Symbol) []annotation {
 	return m.annotationsAbout()[sym]
 }
 
+// AboutAnnotatedSymbols returns every element an `about` metadata usage
+// annotates, in the deterministic order the index is built in — bundled
+// library elements a workspace annotation targets included.
+func (m *Model) AboutAnnotatedSymbols() []*symbols.Symbol {
+	m.annotationsAbout()
+	return m.aboutOrder
+}
+
 // annotationsAbout indexes every `about` metadata usage in the workspace by the
 // element it annotates. It is built once: an `about` annotation is stated away
 // from the element it applies to, so there is no way to it from the element
@@ -316,6 +324,9 @@ func (m *Model) collectAboutAnnotations(scope *symbols.Scope, seen map[*symbols.
 				if a, ok := m.usageAnnotation(sym.OwnerScope, usage); ok {
 					a.about = true
 					for _, target := range m.annotatedElements(sym.OwnerScope, usage) {
+						if _, known := m.aboutAnnots[target]; !known {
+							m.aboutOrder = append(m.aboutOrder, target)
+						}
 						m.aboutAnnots[target] = append(m.aboutAnnots[target], a)
 					}
 				}

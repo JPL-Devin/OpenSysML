@@ -125,7 +125,12 @@ func Build(model *semantics.Model, res *resolve.Resolver, roots ...*symbols.Scop
 		known:  make(map[*symbols.Symbol]bool),
 	}
 	t := &Table{infos: make(map[*symbols.Symbol]*Info)}
-	for _, sym := range collectSymbols(roots) {
+	syms := collectSymbols(roots)
+	// `about` annotations may target elements outside the roots — bundled
+	// library ones included — and those targets still carry the identity
+	// their annotations declare.
+	syms = append(syms, model.AboutAnnotatedSymbols()...)
+	for _, sym := range syms {
 		if _, ok := t.infos[sym]; ok {
 			continue
 		}

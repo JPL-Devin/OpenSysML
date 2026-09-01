@@ -217,6 +217,20 @@ func TestInlineAndAboutFormDeclarationsAreBothRecorded(t *testing.T) {
 	}
 }
 
+func TestAboutFormAnnotationTargetingLibraryElementIsTabled(t *testing.T) {
+	table, idx := buildTable(t, `package Meta {
+	metadata sid : IdentityMetadata::ElementId about ScalarValues::Boolean {
+		id = "bool-id";
+	}
+}
+`)
+	info := infoOf(t, table, idx, "ScalarValues::Boolean")
+	if !info.Annotated || info.DeclaredID != "bool-id" || info.EffectiveID != "bool-id" {
+		t.Fatalf("annotated=%v declared=%q effective=%q, want the about-form id bool-id on the library element",
+			info.Annotated, info.DeclaredID, info.EffectiveID)
+	}
+}
+
 func TestLibraryDocumentAboutFormAnnotationsAreIndexed(t *testing.T) {
 	lib := `package LibMeta {
 	metadata pref : IdentityMetadata::ProjectRef about Vehicles {
