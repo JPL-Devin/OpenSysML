@@ -123,6 +123,11 @@ Decisions, each with its reason:
   system. Ids are UUIDs when minted by OpenSysML, but the pass accepts anything matching
   `[a-zA-Z0-9_-]+` (Flexo's `requireValidId`), so hand-authored and foreign ids pass.
 
+The same path — library, encoder, side table, validation pass, writer, reader, harness and
+the unbuilt sync diff — is modelled in SysML v2 in
+[examples/self-model/identity.sysml](../../examples/self-model/identity.sysml), whose views
+render it as a diagram.
+
 ## Semantics
 
 ### Identity resolution

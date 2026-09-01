@@ -32,6 +32,7 @@ Each of these is a model and a walkthrough of the commands that exercise it.
 | [solver-demo.sysml](solver-demo.sysml) | [SOLVER-DEMO.md](SOLVER-DEMO.md) | `%check`, `%explain`, `%solve`, `%configure` and `%optimize` — what conditions *can* hold, which conflict, what satisfies them, which variants are permitted, what is best (needs z3 or cvc5) |
 | [views-demo.sysml](views-demo.sysml) | [VIEWS-DEMO.md](VIEWS-DEMO.md) | `%view` and `%render` — the five rendering kinds, the text/Mermaid/Markdown forms, viewpoint conformance and filtered exposure |
 | [action-executor-demo.sysml](action-executor-demo.sysml) | [ACTION-EXECUTOR-DEMO.md](ACTION-EXECUTOR-DEMO.md) | executing actions, and stepping one in the REPL |
+| [self-model/](self-model/) | [self-model/README.md](self-model/README.md) | OpenSysML's own architecture in SysML v2: the analysis pipeline as parts, ports and item flows onto the Go packages that implement it, the validation tiers and the two execution engines as state machines, the [AGENTS.md](../AGENTS.md) architecture invariants as requirements the tool evaluates, and the views `make self-model` renders the architecture diagrams from |
 | `parser_features_demo_*.sysml`/`.kerml` | [PARSER_FEATURES_DEMOS.md](PARSER_FEATURES_DEMOS.md) | the notation the parser accepts, feature by feature |
 
 ## Other Examples

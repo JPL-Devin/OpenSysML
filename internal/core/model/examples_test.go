@@ -28,13 +28,16 @@ func TestExamplesAnalyseCleanly(t *testing.T) {
 
 	for _, rel := range files {
 		t.Run(rel, func(t *testing.T) {
-			content, err := os.ReadFile(filepath.Join(examplesDir, rel))
-			if err != nil {
-				t.Fatalf("read %s: %v", rel, err)
-			}
-
+			// An example in its own directory is one model, whose files may
+			// import across each other, so its siblings are opened with it.
 			ws := NewWorkspace()
-			ws.Open(rel, content, 1)
+			for _, sibling := range siblings(t, rel) {
+				content, err := os.ReadFile(filepath.Join(examplesDir, sibling))
+				if err != nil {
+					t.Fatalf("read %s: %v", sibling, err)
+				}
+				ws.Open(sibling, content, 1)
+			}
 
 			var errs []string
 			for _, d := range ws.Diagnostics(rel) {
@@ -54,6 +57,25 @@ func TestExamplesAnalyseCleanly(t *testing.T) {
 			}
 		})
 	}
+}
+
+// siblings returns the files analysed together with one example: the other
+// models in its directory, or the file alone when it sits at the top level.
+func siblings(t *testing.T, rel string) []string {
+	t.Helper()
+
+	dir := filepath.ToSlash(filepath.Dir(rel))
+	if dir == "." {
+		return []string{rel}
+	}
+
+	var group []string
+	for _, candidate := range exampleFiles(t) {
+		if filepath.ToSlash(filepath.Dir(candidate)) == dir {
+			group = append(group, candidate)
+		}
+	}
+	return group
 }
 
 // exampleFiles are the example models, the downloaded OMG corpora aside: the

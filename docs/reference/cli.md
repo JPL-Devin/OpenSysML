@@ -298,6 +298,13 @@ A single `-render-document` of a document with cross-document references still s
 point at the targets' expected file names and dangle until those documents are rendered into the
 same directory.
 
+`-render-document` takes as many model files as the document needs, loaded as one model, so a
+document may query elements its siblings declare:
+
+```bash
+sysml model/*.sysml -render-document Reports::MassReport -o report.md
+```
+
 ## Rendering a document as PDF
 
 `-render-document <name> -doc-form pdf -o report.pdf` converts the rendered Markdown to PDF. The

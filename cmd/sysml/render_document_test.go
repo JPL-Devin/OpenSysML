@@ -128,6 +128,37 @@ func TestRenderDocumentOutputFile(t *testing.T) {
 	}
 }
 
+// TestRenderDocumentSeveralFiles checks that a document declared in one file
+// renders against the elements its sibling files declare, loaded as one model.
+func TestRenderDocumentSeveralFiles(t *testing.T) {
+	binary := buildCLI(t)
+	dir := t.TempDir()
+	subject := filepath.Join(dir, "subject.sysml")
+	report := filepath.Join(dir, "report.sysml")
+	if err := os.WriteFile(subject, []byte(queryModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	document := strings.TrimPrefix(documentModel, queryModel)
+	if err := os.WriteFile(report, []byte(document), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "report.md")
+
+	cmd := exec.Command(binary, subject, report, "-render-document", "Reports::MassReport", "-o", out)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("render: %v\n%s", err, output)
+	}
+	written, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"# Telescope Mass Report", "| mount | 15 |"} {
+		if !strings.Contains(string(written), want) {
+			t.Errorf("the rendered document does not contain %q:\n%s", want, written)
+		}
+	}
+}
+
 // TestRenderDocumentFlagConflicts checks that -render-document refuses runs
 // asking for something else too.
 func TestRenderDocumentFlagConflicts(t *testing.T) {
