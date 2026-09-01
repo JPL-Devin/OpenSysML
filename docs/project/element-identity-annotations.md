@@ -62,6 +62,7 @@ standard library package IdentityMetadata {
              * resolve against this project and branch. */
         attribute projectId : ScalarValues::String;
         attribute branch : ScalarValues::String[0..1];
+        attribute org : ScalarValues::String[0..1];
     }
 }
 ```
@@ -100,6 +101,13 @@ Decisions, each with its reason:
 - **Branch, never commit.** A ref names "latest on that branch", matching the default
   semantics; a commit id in source text goes stale on every sync. Which commit a sync
   last saw is working state of the sync tooling, not a property of the model.
+- **Org is location, not identity — same principle.** In the OMG API a project is a
+  top-level UUID resource, so `projectId` alone addresses it. Flexo puts org/repo in
+  the request path, but that names *where* the project lives: moving a project between
+  orgs must not dirty every model file that references it, so the org — like the
+  server URL — belongs to the sync tooling's endpoint configuration. The optional
+  `org` attribute exists only for Flexo deployments where a repo id is ambiguous
+  without it; it never enters scope equality, which is `projectId` alone.
 - **String-typed ids, validated separately.** The attribute type is `String` so the
   notation stays plain; a validation pass enforces the id shape rather than the type
   system. Ids are UUIDs when minted by OpenSysML, but the pass accepts anything matching
