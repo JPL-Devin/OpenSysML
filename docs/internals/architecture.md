@@ -22,6 +22,11 @@ A SysML v2 and KerML 1.1 implementation delivering the integrated tooling experi
 - **Incremental and lazy:** parse immediately and resolve semantics on demand, following the precedent set by gopls and rust-analyzer
 - **Immutable AST:** all semantic state resides in side tables keyed by node or symbol
 
+This architecture is also written as a SysML v2 model of itself in
+[examples/self-model/](../../examples/self-model/README.md), where the stages carry the Go
+packages that implement them, the invariants below are requirements the tool evaluates, and
+`make self-model` renders the diagrams.
+
 ---
 
 ## Architecture Layers

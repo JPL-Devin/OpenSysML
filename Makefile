@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check
+.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check self-model
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -32,6 +32,9 @@ PYTHON ?= python3
 # buf.gen.python.yaml starts the interpreter this names.
 export PYTHON
 SITE_DIR := site
+# Where make self-model writes the architecture self-model's rendered views.
+SELF_MODEL_DIR := examples/self-model
+SELF_MODEL_OUT ?= build/self-model
 
 all: build test python-test ## Build and test everything
 
@@ -193,6 +196,12 @@ vscode-package: ## Package the VS Code extension as a .vsix for side-loading
 	@echo "Packaging the VS Code extension..."
 	cd $(VSCODE_DIR) && npm ci && npm run package
 	@echo "✓ Packaged $(VSCODE_DIR)/opensysml-sysml.vsix"
+
+self-model: build-sysml ## Render the architecture self-model's views (see examples/self-model/README.md)
+	@echo "Rendering the architecture self-model..."
+	@mkdir -p $(SELF_MODEL_OUT)
+	$(BIN_DIR)/sysml $(SELF_MODEL_DIR)/*.sysml -render-all $(SELF_MODEL_OUT)
+	@echo "✓ Rendered the self-model's views into $(SELF_MODEL_OUT)/"
 
 docs-counts: ## Regenerate and verify all derived documentation counts
 	@echo "Regenerating the documentation count lines and refereed figures..."
