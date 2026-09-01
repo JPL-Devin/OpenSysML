@@ -69,7 +69,7 @@ package OpenSysMLPipeline {
 
     #Frontend part def Lexer :> Stage {
         attribute :>> goPackage = "internal/core/lexer";
-        attribute keywordCount : Integer = 200;
+        attribute keywordCount : Integer = 172;
         attribute tracksTrivia : Boolean = true;
         in item text : SourceText;
         out item tokens : TokenStream;

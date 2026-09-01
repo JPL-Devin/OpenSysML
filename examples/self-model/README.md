@@ -141,11 +141,21 @@ npx -y @mermaid-js/mermaid-cli -i build/self-model/OpenSysMLViews.pipelineStruct
 
 ## Keeping it honest
 
-The model describes this implementation, so it goes stale the way documentation does. Two
-things push back: the invariant requirements are evaluated by
-[`../self_model_test.go`](../self_model_test.go), and everything else is one file to edit
-next to the code it describes. When a stage moves, a pass is added or a client lands, the
-model is the place the change is recorded once and every diagram picks it up.
+The model describes this implementation, so it goes stale the way documentation does. Three
+things push back, all in [`../self_model_test.go`](../self_model_test.go): the model must
+analyse clean, its invariant requirements must evaluate true, and the figures and package
+names it declares are compared against the implementation — the keyword count against
+`lexer.Keywords()`, the bundled library count against `libs.DefaultSource()`, the tier count
+against `passes.PassLevel`, and every `goPackage` against the directory it names.
+
+What that cannot do is re-verify behaviour: the invariants are conditions over the model's
+own attributes, so they catch a claim edited out of agreement with itself or with those
+figures, not a regression inside the parser. The `verification def`s in
+[quality.sysml](quality.sysml) name the gates that do that — `TestGolden`/`TestNegative`,
+`TestStdlibConformance`, `TestExecutionConformance`/`TestRobustness` and the export tests.
+
+When a stage moves, a pass is added or a client lands, the model is the place the change is
+recorded once and every diagram picks it up.
 
 The authoritative prose account of the same architecture is
 [docs/internals/architecture.md](../../docs/internals/architecture.md); this model is the

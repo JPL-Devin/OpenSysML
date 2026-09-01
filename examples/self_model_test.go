@@ -3,12 +3,17 @@ package examples
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -115,6 +120,70 @@ func TestSelfModelInvariantsHold(t *testing.T) {
 			t.Errorf("%s does not hold: the model states an invariant this implementation no longer satisfies", name)
 		}
 	}
+}
+
+// TestSelfModelFiguresMatchImplementation reads the figures and package names
+// the model declares and compares them against this implementation, so the
+// model's numbers cannot quietly drift from the code they describe.
+func TestSelfModelFiguresMatchImplementation(t *testing.T) {
+	pipeline := readModelFile(t, "pipeline.sysml")
+
+	figures := []struct {
+		attribute string
+		actual    int
+	}{
+		{"keywordCount", len(lexer.Keywords())},
+		{"bundledFileCount", len(libs.DefaultSource().List())},
+		{"tierCount", int(passes.LevelConstraint) + 1},
+	}
+	for _, figure := range figures {
+		declared, ok := declaredInteger(pipeline, figure.attribute)
+		if !ok {
+			t.Errorf("pipeline.sysml declares no integer %s", figure.attribute)
+			continue
+		}
+		if declared != figure.actual {
+			t.Errorf("pipeline.sysml says %s = %d, the implementation has %d",
+				figure.attribute, declared, figure.actual)
+		}
+	}
+
+	// Every modelled unit names the directory that implements it.
+	for _, file := range []string{"pipeline.sysml", "surfaces.sysml"} {
+		matches := goPackagePattern.FindAllStringSubmatch(readModelFile(t, file), -1)
+		if len(matches) == 0 {
+			t.Errorf("%s names no implementing package", file)
+			continue
+		}
+		for _, match := range matches {
+			if _, err := os.Stat(filepath.Join("..", match[1])); err != nil {
+				t.Errorf("%s points a unit at %s, which does not exist", file, match[1])
+			}
+		}
+	}
+}
+
+var goPackagePattern = regexp.MustCompile(`goPackage = "([^"]+)"`)
+
+// readModelFile returns the text of one file of the self-model.
+func readModelFile(t *testing.T, name string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(filepath.Join(selfModelDir, name))
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	return string(content)
+}
+
+// declaredInteger returns the value the model text assigns to an integer attribute.
+func declaredInteger(text, attribute string) (int, bool) {
+	match := regexp.MustCompile(attribute + ` : Integer = (\d+);`).FindStringSubmatch(text)
+	if match == nil {
+		return 0, false
+	}
+	value, err := strconv.Atoi(match[1])
+	return value, err == nil
 }
 
 // packageScope returns the scope of a top-level package of one document.

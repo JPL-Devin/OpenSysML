@@ -110,6 +110,8 @@ clean: ## Remove build artifacts
 	rm -f coverage.txt coverage-python.xml coverage-node.lcov
 	rm -f sysml sysml-lsp sysml-grpc
 	rm -rf $(SITE_DIR)
+	@# Only the default destination; an overridden SELF_MODEL_OUT is the caller's.
+	rm -rf build/self-model
 	@echo "✓ Cleaned"
 
 install: build ## Install binaries to $GOPATH/bin
@@ -200,6 +202,8 @@ vscode-package: ## Package the VS Code extension as a .vsix for side-loading
 self-model: build-sysml ## Render the architecture self-model's views (see examples/self-model/README.md)
 	@echo "Rendering the architecture self-model..."
 	@mkdir -p $(SELF_MODEL_OUT)
+	@# A renamed or deleted view must not leave its old rendering behind.
+	@rm -f $(SELF_MODEL_OUT)/OpenSysMLViews.*.mmd $(SELF_MODEL_OUT)/OpenSysMLViews.*.md
 	$(BIN_DIR)/sysml $(SELF_MODEL_DIR)/*.sysml -render-all $(SELF_MODEL_OUT)
 	@echo "✓ Rendered the self-model's views into $(SELF_MODEL_OUT)/"
 
