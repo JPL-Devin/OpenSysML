@@ -51,12 +51,37 @@ func ElementIRI(qualifiedName string) Term {
 	return IRI(Element + EncodeElementID(qualifiedName))
 }
 
+// ElementIRIForID returns the element IRI carrying an effective id directly:
+// an annotated id when the element declares one, an encoded name otherwise.
+func ElementIRIForID(id string) Term {
+	return IRI(Element + id)
+}
+
+// ScopedElementIRIForID qualifies an element IRI with its project scope, for
+// a graph carrying more than one scope, whose ids may legitimately repeat
+// across scopes. The id still follows the last ':', so LocalName returns it.
+func ScopedElementIRIForID(qualifier, id string) Term {
+	return IRI(Element + qualifier + ":" + id)
+}
+
+// ScopeQualifier encodes a project scope as an IRI-safe qualifier. '.' never
+// appears in an encoded id, so distinct scopes give distinct qualifiers.
+func ScopeQualifier(org, projectID string) string {
+	return EncodeElementID(org) + "." + EncodeElementID(projectID)
+}
+
 // OwningMembershipIRI returns the IRI of the OwningMembership through which a
 // namespace owns the member named by qualifiedName. It is in the element
 // namespace, since a membership is an element of the abstract syntax in its own
 // right, and its id can never collide with an element's.
 func OwningMembershipIRI(qualifiedName string) Term {
 	return IRI(Element + OwningMembershipID(qualifiedName))
+}
+
+// OwningMembershipIRIOf derives the membership IRI from the member's own
+// subject IRI, so it inherits the member's effective id and scope qualifier.
+func OwningMembershipIRIOf(member Term) Term {
+	return IRI(member.Value + owningMembershipSuffix)
 }
 
 // ExpressionPrefix is the prefix label bound to the expression namespace. It is
@@ -68,7 +93,19 @@ const ExpressionPrefix = "expr"
 // position it holds, so its identity comes from where it sits in the model
 // rather than being minted, and its id is valid where an element id is.
 func ExpressionIRI(owner Term, path string) Term {
-	return IRI(Expression + ExpressionNodeID(LocalName(owner.Value), path))
+	return IRI(Expression + ExpressionNodeID(ownerID(owner.Value), path))
+}
+
+// ownerID is the id part of an element or expression IRI, scope qualifier
+// included, so a node under a scoped element stays in that scope's id space.
+func ownerID(iri string) string {
+	if id, ok := strings.CutPrefix(iri, Element); ok {
+		return id
+	}
+	if id, ok := strings.CutPrefix(iri, Expression); ok {
+		return id
+	}
+	return LocalName(iri)
 }
 
 // SysMLTerm returns the IRI of a name in the SysML vocabulary, used for both

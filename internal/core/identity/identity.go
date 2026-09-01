@@ -6,6 +6,7 @@
 package identity
 
 import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -28,6 +29,9 @@ type Scope struct {
 	Org       string
 	// Symbol is the namespace carrying the ProjectRef annotation.
 	Symbol *symbols.Symbol
+	// Node is the ProjectRef annotation itself, so a consumer that absorbs
+	// the annotation into provenance can identify it in the tree.
+	Node *ast.PrefixMetadata
 }
 
 // Key names the project a scope binds to, for scope-equality grouping.
@@ -55,6 +59,9 @@ type Info struct {
 	DeclaredID string
 	// AnnotationSpan locates the ElementId annotation, for diagnostics.
 	AnnotationSpan source.Span
+	// AnnotationNode is the ElementId annotation itself, so a consumer that
+	// absorbs the annotation into identity can identify it in the tree.
+	AnnotationNode *ast.PrefixMetadata
 	// Scope is the nearest enclosing ProjectRef binding; nil when unbound.
 	Scope *Scope
 }
@@ -118,9 +125,10 @@ func (b *builder) infoOf(sym *symbols.Symbol) *Info {
 		return nil
 	}
 	info := &Info{Symbol: sym, FQN: fqn, EffectiveID: rdf.EncodeElementID(fqn)}
-	if span, ok := b.annotationSpan(sym, ElementIdFQN); ok {
+	if node, ok := b.annotation(sym, ElementIdFQN); ok {
 		info.Annotated = true
-		info.AnnotationSpan = span
+		info.AnnotationSpan = node.Span()
+		info.AnnotationNode = node
 		if id, ok := b.stringFact(sym, ElementIdFQN, "id"); ok {
 			info.Declared = true
 			info.DeclaredID = id
@@ -143,8 +151,8 @@ func (b *builder) scopeOf(sym *symbols.Symbol) *Scope {
 		return b.scopes[sym]
 	}
 	b.known[sym] = true
-	if _, ok := b.annotationSpan(sym, ProjectRefFQN); ok {
-		s := &Scope{Symbol: sym}
+	if node, ok := b.annotation(sym, ProjectRefFQN); ok {
+		s := &Scope{Symbol: sym, Node: node}
 		s.ProjectID, _ = b.stringFact(sym, ProjectRefFQN, "projectId")
 		s.Branch, _ = b.stringFact(sym, ProjectRefFQN, "branch")
 		s.Org, _ = b.stringFact(sym, ProjectRefFQN, "org")
@@ -166,9 +174,9 @@ func enclosingSymbol(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// annotationSpan reports whether sym's declaration carries an annotation of
-// the given metadata type, and where it is written.
-func (b *builder) annotationSpan(sym *symbols.Symbol, typeFQN string) (source.Span, bool) {
+// annotation reports whether sym's declaration carries an annotation of the
+// given metadata type, and returns the annotation node itself.
+func (b *builder) annotation(sym *symbols.Symbol, typeFQN string) (*ast.PrefixMetadata, bool) {
 	for _, a := range semantics.MetadataAnnotationsOf(sym.Decl) {
 		if a.Node == nil || a.Node.Type == nil {
 			continue
@@ -185,10 +193,10 @@ func (b *builder) annotationSpan(sym *symbols.Symbol, typeFQN string) (source.Sp
 			typ = resolved
 		}
 		if b.idx.GetFQN(typ) == typeFQN {
-			return a.Node.Span(), true
+			return a.Node, true
 		}
 	}
-	return source.Span{}, false
+	return nil, false
 }
 
 // stringFact is the constant string value an annotation of typeFQN binds to
