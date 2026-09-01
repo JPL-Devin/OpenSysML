@@ -87,6 +87,7 @@ type Session struct {
 	replaced   *runtime.Context
 	idx        *symbols.Index               // index over the session document, shared by lookup and runtime
 	idxVersion int                          // document version idx holds, 0 when it holds none
+	names      *nameTable                   // simple names of the documents, rebuilt when their scope trees change
 	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
 
 	// Active executor sessions for debugging

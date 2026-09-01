@@ -71,6 +71,14 @@ index — or memoizing the tree walk per (document-version, name) — would make
 a run's cost independent of model size. The runtime itself is cheap: the
 size-independent floor is ~1–3 µs.
 
+*Closed.* The session now tabulates the simple names of its documents once per
+scope tree (`repl.nameTable`) and answers lookups from the table, rebuilt only
+when a submission or reset replaces a document. Re-running the benchmark above
+(same machine, `-count 6`, benchstat): state-machine start 6.4 µs, calc
+invocation 4.5 µs, instantiate 3.3 µs — the same at 250, 1 000 and 4 000
+elements, a 97–98% drop at 4 000. `collectInScopeTree` no longer appears in
+the profile; the table's own cost is under 1% of samples.
+
 **The evaluator allocates ~1.7 KiB per calc invocation, and GC eats half the
 CPU.** Profiling 20 × `Fib(20)` (~440 000 calc invocations), 45% of CPU is
 garbage collection, and the allocation profile puts 59% of all bytes in
