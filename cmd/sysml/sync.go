@@ -114,9 +114,8 @@ func loadSyncState(model string, scope reposync.Scope) (*reposync.State, error) 
 	return state, nil
 }
 
-// writeAnnotated appends an about-form ElementId annotation for each minted
-// id to the model's original text, preserving comments and formatting — the
-// explicit opt-in write-back.
+// writeAnnotated appends an about-form ElementId annotation per minted id to
+// the model's original text, preserving comments — the explicit opt-in write-back.
 func writeAnnotated(model string, set *reposync.ChangeSet, path string) error {
 	minted := mintedChanges(set)
 	if len(minted) == 0 {
