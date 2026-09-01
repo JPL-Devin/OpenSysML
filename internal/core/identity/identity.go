@@ -128,8 +128,14 @@ func Build(model *semantics.Model, res *resolve.Resolver, roots ...*symbols.Scop
 	syms := collectSymbols(roots)
 	// `about` annotations may target elements outside the roots — bundled
 	// library ones included — and those targets still carry the identity
-	// their annotations declare.
-	syms = append(syms, model.AboutAnnotatedSymbols()...)
+	// their annotations declare. A ProjectRef binds the target's whole
+	// subtree to a project, so its descendants join the id space too.
+	for _, sym := range model.AboutAnnotatedSymbols() {
+		syms = append(syms, sym)
+		if hasProjectRefSite(model, sym) {
+			syms = append(syms, collectSymbols([]*symbols.Scope{sym.Scope})...)
+		}
+	}
 	for _, sym := range syms {
 		if _, ok := t.infos[sym]; ok {
 			continue
@@ -227,6 +233,16 @@ func (b *builder) scopeOf(sym *symbols.Symbol) *Scope {
 	s := b.scopeOf(enclosingSymbol(sym))
 	b.scopes[sym] = s
 	return s
+}
+
+// hasProjectRefSite reports a ProjectRef annotation among sym's sites.
+func hasProjectRefSite(model *semantics.Model, sym *symbols.Symbol) bool {
+	for _, site := range model.AnnotationSitesOf(sym) {
+		if site.TypeFQN == ProjectRefFQN {
+			return true
+		}
+	}
+	return false
 }
 
 // enclosingSymbol is the declaration sym is nested in, or nil at a root.

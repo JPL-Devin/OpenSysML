@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -534,4 +535,26 @@ func TestIdentityAboutFormOnLibraryElementValidatesInTheAnnotatingDocument(t *te
 	}
 	w8dWantLines(t, src, "identity-id-shape", 2)
 	w8dWantLines(t, src, "identity-unscoped-id", 2)
+}
+
+func TestIdentityCollisionWithLibraryDescendantUnderAboutFormProjectRef(t *testing.T) {
+	derived := rdf.EncodeElementID("ScalarValues::Boolean")
+	src := `package Meta {
+	metadata pref : IdentityMetadata::ProjectRef about ScalarValues { projectId = "proj-1"; }
+}
+package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def A {
+		@IdentityMetadata::ElementId { id = "` + derived + `"; }
+	}
+}
+`
+	diags := only(w8dDiags(t, src), "identity-duplicate-id")
+	if len(diags) != 1 {
+		t.Fatalf("got %d duplicate-id diagnostics, want 1 at the workspace annotation: %v", len(diags), diags)
+	}
+	if !strings.Contains(diags[0].Message, "P::A") || !strings.Contains(diags[0].Message, "ScalarValues::Boolean") {
+		t.Fatalf("diagnostic must name both elements: %q", diags[0].Message)
+	}
+	w8dWantLines(t, src, "identity-duplicate-id", 7)
 }
