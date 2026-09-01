@@ -416,3 +416,68 @@ error and leaves the rest of the file's verdict unchanged.
 
 The pinned pilot validates subsetting conformance nowhere, so it is silent on
 both texts, and the correction changes our verdict and not the pilot's.
+
+---
+
+## Proposed specification issue: identity annotations in the textual notation
+
+**Approved for filing** by the maintainer (in-session, 2026-09-01) against the
+**SysML 2.0** specification (the textual-notation clauses, formal/26-03-02) via the
+[OMG issue reporting form](https://issues.omg.org/issues/create-new-issue). The design
+this draft distills is
+[element-identity-annotations.md](element-identity-annotations.md); the working
+prototype is OpenSysML's `IdentityMetadata` library, its validation pass, and the
+RDF round trip. The body below is the submission text.
+
+````markdown
+**Title:** Textual notation cannot carry element identity, severing round trips
+with the repositories the specification's own API defines
+
+**Nature:** request for enhancement (interchange gap). **Severity:** significant.
+
+The textual notation deliberately omits `Element::elementId`: text is treated as a
+projection, and identity as the repository's concern. But the notation is the form
+engineers version, diff and review, and the Systems Modeling API and Services
+specification addresses every element by that id. The combination severs round
+trips: any tool that serializes a model to text and reads it back has lost the
+correlation with the repository it came from, so a rename — same element, new
+name — is indistinguishable from a delete plus a create. Implementations are
+already inventing workarounds (sidecar mapping files, IRI conventions, comment
+conventions), none of which survive interchange through another conforming tool.
+
+**Proposal:** standardize identity annotations — either a normative metadata
+library, or dedicated surface syntax if the taskforce prefers. A minimal library
+form, implementable today because user-defined metadata is already conforming
+notation:
+
+```sysml
+standard library package IdentityMetadata {
+    metadata def ElementId {
+        attribute id : ScalarValues::String;
+    }
+    metadata def ProjectRef {
+        attribute projectId : ScalarValues::String;
+        attribute branch : ScalarValues::String[0..1];
+        attribute org : ScalarValues::String[0..1];
+    }
+}
+```
+
+Applied opt-in: `@ElementId { id = "8f3a41d0-…"; }` on an element pins its
+repository identity; one `@ProjectRef` on the root namespace binds the document to
+a project (branch selecting a version, never contributing to identity). Elements
+without an annotation keep tool-derived identity, so unannotated models are
+unaffected and annotation cost is paid only where correlation matters.
+
+**Implementation experience:** OpenSysML (github.com/Open-MBEE/OpenSysML)
+implements exactly this shape: the metadata library, a validation pass (duplicate
+and malformed ids, project-scope conflicts), RDF export keyed by the effective id,
+and reader re-materialization closing the notation → RDF → notation round trip
+byte-for-byte — all without any specification change, demonstrating that only the
+*standardization* of the spelling is missing. Round-trip measurements against a
+live Flexo MMS repository are maintained in the project's committed
+interoperability report.
+````
+
+Once posted, this section gains the assigned issue number and a link, following
+the practice of the pilot-implementation section above.
