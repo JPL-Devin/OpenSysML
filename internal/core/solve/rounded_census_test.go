@@ -88,7 +88,8 @@ func corpusFiles(t *testing.T, root string, optional bool) []string {
 	})
 	if err != nil || len(files) == 0 {
 		if optional && os.Getenv(corpusRequiredEnv) == "" {
-			t.Skipf("corpus not at %s (%v)", root, err)
+			t.Logf("skipping corpus at %s (%v)", root, err)
+			return nil
 		}
 		t.Fatalf("no models at %s (%v)", root, err)
 	}
