@@ -69,6 +69,12 @@ func (r SolveReport) Satisfiable() bool { return r.Status == SolveSat }
 // CheckSolve asks a solver whether the named constraint, requirement or
 // satisfaction can be satisfied at all. Experimental: SysML v2 defines no solving.
 func (s *Session) CheckSolve(name string) []SolveReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.checkSolve(name)
+}
+
+func (s *Session) checkSolve(name string) []SolveReport {
 	queries, bad := s.solveQueries(name)
 	if bad != nil {
 		return []SolveReport{*bad}
@@ -282,7 +288,7 @@ func oneQuery(name string, q *solve.Query, unfixed []solve.Unfixed, err error) (
 // doCheck carries out %check.
 func (s *Session) doCheck(name string) ([]string, bool, error) {
 	var out []string
-	for _, r := range s.CheckSolve(name) {
+	for _, r := range s.checkSolve(name) {
 		out = append(out, r.Lines...)
 	}
 	return out, false, nil

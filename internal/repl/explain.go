@@ -12,6 +12,12 @@ import (
 // constraint, requirement or satisfaction. Experimental: SysML v2 defines no
 // solving, and the runtime evaluator remains normative.
 func (s *Session) ExplainSolve(name string) []SolveReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.explainSolve(name)
+}
+
+func (s *Session) explainSolve(name string) []SolveReport {
 	queries, bad := s.solveQueries(name)
 	if bad != nil {
 		return []SolveReport{*bad}
@@ -141,7 +147,7 @@ func conflicting(n int) string {
 // doExplain carries out %explain.
 func (s *Session) doExplain(name string) ([]string, bool, error) {
 	var out []string
-	for _, r := range s.ExplainSolve(name) {
+	for _, r := range s.explainSolve(name) {
 		out = append(out, r.Lines...)
 	}
 	return out, false, nil

@@ -73,7 +73,8 @@ type snippet struct {
 type Session struct {
 	// mu serializes the session's exported entry points, which a frontend may
 	// call from more than one goroutine: readline answers Tab from its own input
-	// goroutine while the loop is still evaluating the previous line.
+	// goroutine while the loop is still evaluating the previous line. Exported
+	// methods take it; lower-case helpers assume the caller holds it.
 	mu sync.Mutex
 
 	ws       *model.Workspace
@@ -221,6 +222,8 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	if err := budgets.Validate(); err != nil {
 		return err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.budgets = budgets
 	// Dropping the context invalidates everything derived from it, instances
 	// included: their IDs restart with the next context. What goes is recorded, so
@@ -235,6 +238,8 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 
 // Budgets returns the bounds this session gives its runtime contexts.
 func (s *Session) Budgets() runtime.Budgets {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.budgets
 }
 

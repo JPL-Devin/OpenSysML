@@ -7,12 +7,18 @@ import (
 )
 
 // ConformanceMode reports the strictness the session judges notation at.
-func (s *Session) ConformanceMode() conformance.Mode { return s.ws.ConformanceMode() }
+func (s *Session) ConformanceMode() conformance.Mode {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ws.ConformanceMode()
+}
 
 // SetConformanceMode switches what the session asks of its model: whether
 // notation no SysML v2 production admits is a warning or an error. It takes
 // effect at once — the buffer is re-analyzed on the next request.
 func (s *Session) SetConformanceMode(mode conformance.Mode) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ws.SetConformanceMode(mode)
 }
 
@@ -20,7 +26,7 @@ func (s *Session) SetConformanceMode(mode conformance.Mode) {
 // like under it: a mode change is asked in order to see its answer.
 func (s *Session) doStrict(args []string) []string {
 	if len(args) == 0 {
-		return []string{fmt.Sprintf("strict: %s", onOff(s.ConformanceMode().IsStrict()))}
+		return []string{fmt.Sprintf("strict: %s", onOff(s.ws.ConformanceMode().IsStrict()))}
 	}
 	var mode conformance.Mode
 	switch args[0] {
@@ -31,7 +37,7 @@ func (s *Session) doStrict(args []string) []string {
 	default:
 		return []string{fmt.Sprintf("error: unknown strict setting %q (want on or off)", args[0])}
 	}
-	s.SetConformanceMode(mode)
+	s.ws.SetConformanceMode(mode)
 	out := []string{fmt.Sprintf("strict: %s", onOff(mode.IsStrict()))}
-	return append(out, s.DiagnosticLines()...)
+	return append(out, s.diagnosticLines()...)
 }

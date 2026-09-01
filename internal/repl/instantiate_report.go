@@ -19,7 +19,9 @@ type InstantiationReport struct {
 // it to whoever reads a feature value next. An object that cannot be created at all is an
 // error; a feature value that cannot be materialized is a finding about the model.
 func (s *Session) InstantiateReport(name string) (InstantiationReport, error) {
-	lines, err := s.InstantiateNamed(name)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	lines, err := s.instantiateLines(name)
 	if err != nil {
 		return InstantiationReport{}, err
 	}
