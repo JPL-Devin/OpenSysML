@@ -73,3 +73,22 @@ state-machine start, sub-millisecond for deep recursive calculations — and
 the two gaps the profiles show are internal and localized: an O(model)
 per-run name lookup in the REPL session layer, and per-invocation allocation
 in the calc evaluator. Both are fixable without architectural change.
+
+## Follow-up: calc invocation frames are reused
+
+Measured on the same machine, same method, after the calc evaluator began
+keeping the frame an invocation runs in — parameter bindings, evaluation
+context, statement engine — on a free list of the `Context` and reusing it for
+the next invocation once the first has returned:
+
+| figure | before | after |
+| ------ | ------ | ----- |
+| marginal cost per `Fib(18)` eval (8 361 calc invocations) | 13.1 ms | 8.9 ms |
+| marginal cost per `Fib(20)` eval (21 891 calc invocations) | 33.1 ms | 24.6 ms |
+| bytes allocated per calc invocation (`Fib(20)` marginal) | ~1.7 KiB | ~130 B |
+| GC share of CPU, 20 × `Fib(20)` | 50% | 17% |
+| GC cycles, 20 × `Fib(20)` | 34 | 11 |
+
+Per calc invocation that is roughly 1.1 µs. `bindCalcParameters` no longer
+appears in the allocation profile; what remains per invocation is the
+positional argument slice of `evalInvocation` and the boxed values themselves.

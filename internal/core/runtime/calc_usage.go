@@ -357,11 +357,10 @@ func (ctx *Context) calcUsageRun(reader *EvalContext, sym *symbols.Symbol) (*cal
 		return nil, err
 	}
 
-	leave, err := ctx.enterCalc(shape.Name)
-	if err != nil {
+	if err := ctx.enterCalc(shape.Name); err != nil {
 		return nil, err
 	}
-	defer leave()
+	defer ctx.leaveCalc()
 
 	// The evaluation is looked up before the inputs are bound, so a usage already
 	// evaluated in this activation is not re-bound: its outputs all answer from
@@ -501,7 +500,9 @@ func (ctx *Context) checkCalcTyping(sym *symbols.Symbol) error {
 func (ctx *Context) runCalcUsage(
 	shape *calcShape, ec, nested *EvalContext, env map[string]Value, reader *EvalContext,
 ) (*calcRun, error) {
-	result, returned, activation, err := ctx.runCalcSteps(shape, env, reader.self)
+	host := &calcStmtHost{ctx: ctx, shape: shape, self: reader.self}
+	engine := newStmtEngine(ctx, host, env)
+	result, returned, err := runCalcSteps(engine, host, shape)
 	if err != nil {
 		if ec.trace != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
@@ -518,7 +519,7 @@ func (ctx *Context) runCalcUsage(
 
 	run := newCalcRun(shape, reader.scope, reader.self, env)
 	run.outer, run.result, run.returned = nested, result, returned
-	run.activation = activation
+	run.activation = engine.activation
 	// A `return` produces the value of the result parameter, so reading that
 	// parameter answers from the run rather than evaluating its binding again.
 	// Any other output states its own value — a declaration binding or a body
@@ -613,12 +614,11 @@ func (run *calcRun) enter(ctx *Context) (func(), error) {
 	if run.onStack {
 		return func() { /* counted already; nothing to take off the stack */ }, nil
 	}
-	leave, err := ctx.enterCalc(run.shape.Name)
-	if err != nil {
+	if err := ctx.enterCalc(run.shape.Name); err != nil {
 		return nil, err
 	}
 	run.onStack = true
-	return func() { run.onStack = false; leave() }, nil
+	return func() { run.onStack = false; ctx.leaveCalc() }, nil
 }
 
 // bindingEnv is the environment one of this run's bindings is evaluated in: the

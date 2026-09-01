@@ -237,6 +237,43 @@ func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope
 	return ctx.invokeCalcShape(shape, args, scope, self)
 }
 
+// invocationFrame is the storage one calc invocation runs in, held off the
+// context's free list until the invocation returns, so no two active ones share it.
+type invocationFrame struct {
+	ec       EvalContext
+	frames   [1]map[string]Value
+	bindings map[string]Value
+	host     calcStmtHost
+	env      stmtEnv
+	engine   stmtEngine
+}
+
+// maxFreeInvocationFrames bounds the frames kept, so one deep recursion does not
+// pin that many for the context's whole life.
+const maxFreeInvocationFrames = 1024
+
+// acquireInvocationFrame takes a frame off the free list, or makes one when it is empty.
+func (ctx *Context) acquireInvocationFrame() *invocationFrame {
+	if n := len(ctx.freeInvocationFrames); n > 0 {
+		frame := ctx.freeInvocationFrames[n-1]
+		ctx.freeInvocationFrames[n-1] = nil
+		ctx.freeInvocationFrames = ctx.freeInvocationFrames[:n-1]
+		return frame
+	}
+	return &invocationFrame{bindings: make(map[string]Value)}
+}
+
+// releaseInvocationFrame empties frame and keeps it for the next invocation; the
+// caller has ended the activation, so nothing memoized still reads the bindings.
+func (ctx *Context) releaseInvocationFrame(frame *invocationFrame) {
+	bindings := frame.bindings
+	clear(bindings)
+	*frame = invocationFrame{bindings: bindings}
+	if len(ctx.freeInvocationFrames) < maxFreeInvocationFrames {
+		ctx.freeInvocationFrames = append(ctx.freeInvocationFrames, frame)
+	}
+}
+
 // invokeCalcShape binds arguments and evaluates the calc body. Binding happens
 // in the calc's own environment: defaults and the result expression see the
 // parameters and the calc's lexical scope, never the caller's frames.
@@ -245,29 +282,41 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		return Value{}, err
 	}
 
-	leave, err := ctx.enterCalc(shape.Name)
-	if err != nil {
+	if err := ctx.enterCalc(shape.Name); err != nil {
 		return Value{}, err
 	}
-	defer leave()
+	defer ctx.leaveCalc()
 
-	ec := NewEvalContextIn(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, callerScope), self)
+	frame := ctx.acquireInvocationFrame()
+	defer ctx.releaseInvocationFrame(frame)
+
+	// The invocation is one activation, defaults included, so a calc usage read while
+	// binding answers this invocation alone and ends with it, before the frame is reused.
+	activation := ctx.newActivation()
+	defer ctx.endActivation(activation)
+
+	ec := &frame.ec
+	*ec = EvalContext{
+		ctx:        ctx,
+		scope:      ctx.calcScope(shape.BodyOwner, shape.Sym, callerScope),
+		self:       self,
+		frames:     append(frame.frames[:0], frame.bindings),
+		trace:      ctx.trace,
+		activation: activation,
+	}
 
 	if ec.trace != nil {
 		ec.trace.RecordCalcEnter(shape.Name)
 	}
 
-	bindings := make(map[string]Value, len(shape.Params))
-	ec.Push(bindings)
-
-	if err := ctx.bindCalcParameters(shape, ec, args, callerScope, bindings, nil); err != nil {
+	if err := ctx.bindCalcParameters(shape, ec, args, callerScope, frame.bindings, nil); err != nil {
 		if ec.trace != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
 		}
 		return Value{}, err
 	}
 
-	result, err := ctx.runCalcBody(shape, bindings, callerScope, self)
+	result, err := ctx.runCalcBody(shape, frame, callerScope, self, activation)
 	if ec.trace != nil {
 		if err != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
@@ -282,16 +331,21 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 }
 
 // enterCalc spends one of the run's calc depth budget, so a recursion evaluates
-// while it terminates within the budget. The returned function takes it back off.
-func (ctx *Context) enterCalc(name string) (func(), error) {
+// while it terminates within the budget. leaveCalc takes it back off.
+func (ctx *Context) enterCalc(name string) error {
 	if int64(ctx.calcDepth) >= ctx.maxCalcDepth {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"%w: calc %s nested %d deep (unbounded recursion?; raise %s to allow more)",
 			ErrCalcRecursionLimit, name, ctx.maxCalcDepth, MaxCalcDepthEnvVar,
 		)
 	}
 	ctx.calcDepth++
-	return func() { ctx.calcDepth-- }, nil
+	return nil
+}
+
+// leaveCalc returns the calc depth enterCalc spent.
+func (ctx *Context) leaveCalc() {
+	ctx.calcDepth--
 }
 
 // bindCalcParameters binds the calc's input parameters into bindings: each
@@ -326,15 +380,16 @@ func (ctx *Context) bindCalcParameters(
 	return nil
 }
 
-// runCalcBody runs the calc's computation in an environment of its own —
-// bindings holds its parameters and its locals — and answers with the one value
+// runCalcBody runs the calc's computation in the invocation's frame — its
+// bindings hold the parameters and the locals — and answers with the one value
 // the invocation yields: what the body returned, or, for a body that returns
-// nothing, the calc's designated output feature.
-func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, callerScope *symbols.Scope, self *Instance) (Value, error) {
-	result, returned, activation, err := ctx.runCalcSteps(shape, bindings, self)
-	// The invocation's activation ends with the value it yields, which is the last
-	// thing evaluated in it.
-	defer ctx.endActivation(activation)
+// nothing, the calc's designated output feature, evaluated in the invocation's
+// activation, which the caller ends after it.
+func (ctx *Context) runCalcBody(shape *calcShape, frame *invocationFrame, callerScope *symbols.Scope, self *Instance, activation int64) (Value, error) {
+	frame.host = calcStmtHost{ctx: ctx, shape: shape, self: self}
+	frame.env = stmtEnv{data: frame.bindings}
+	frame.engine = stmtEngine{ctx: ctx, host: &frame.host, env: &frame.env, activation: activation}
+	result, returned, err := runCalcSteps(&frame.engine, &frame.host, shape)
 	if err != nil {
 		return Value{}, err
 	}
@@ -348,25 +403,22 @@ func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, cal
 	// The designated output's binding may name the calc's other outputs, and one
 	// naming itself is a cycle rather than an evaluation, so it is evaluated
 	// through the same run bookkeeping a calc usage's outputs use.
-	run := newCalcRun(shape, callerScope, self, bindings)
+	run := newCalcRun(shape, callerScope, self, frame.bindings)
 	run.activation = activation
 	// The invocation already holds this evaluation's nesting feature value.
 	run.onStack = true
 	return run.value(ctx, out)
 }
 
-// runCalcSteps runs the calc's lowered computation, reporting whether it
-// returned a value and the activation it ran in. bindings holds the calc's
-// parameters on the way in and its locals on the way out.
-func (ctx *Context) runCalcSteps(shape *calcShape, bindings map[string]Value, self *Instance) (Value, bool, int64, error) {
-	host := &calcStmtHost{ctx: ctx, shape: shape, self: self}
-	engine := newStmtEngine(ctx, host, bindings)
-
+// runCalcSteps runs the calc's lowered computation on engine, whose data holds
+// the calc's parameters on the way in and its locals on the way out, reporting
+// the value host took from a `return` and whether the body returned one.
+func runCalcSteps(engine *stmtEngine, host *calcStmtHost, shape *calcShape) (Value, bool, error) {
 	flow, err := engine.run(shape.Steps)
 	if err != nil {
-		return Value{}, false, engine.activation, err
+		return Value{}, false, err
 	}
-	return host.result, flow == flowReturn, engine.activation, nil
+	return host.result, flow == flowReturn, nil
 }
 
 // checkArgs rejects an argument list that cannot bind to the parameters at all:

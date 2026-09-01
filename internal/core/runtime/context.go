@@ -114,6 +114,10 @@ type Context struct {
 	calcDepth    int
 	maxCalcDepth int64
 
+	// freeInvocationFrames are the frames of returned calc invocations, kept so a
+	// recursion reuses storage rather than allocating per call.
+	freeInvocationFrames []*invocationFrame
+
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int

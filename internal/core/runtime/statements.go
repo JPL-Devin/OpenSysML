@@ -142,6 +142,9 @@ type stmtEngine struct {
 	// activation is the execution the statements now running belong to: the
 	// behavior's own, and a fresh one per block entry and per loop iteration.
 	activation int64
+	// scratch is the context evalIn answers with: statements run one after another
+	// and none keeps it past its own evaluation, so one serves them all.
+	scratch EvalContext
 }
 
 // newStmtEngine returns an engine running statements against data — the
@@ -168,15 +171,19 @@ func (e *stmtEngine) finish() {
 // statement was written in, reading the behavior's data and the frames entered,
 // innermost last so a block-local name shadows an outer one.
 func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
-	ec := NewEvalContextIn(e.ctx, scope, e.host.performer())
-	ec.inBehaviorBody = true
-	ec.activation = e.activation
-	ec.Push(e.env.data)
-	for _, frame := range e.env.outer {
-		ec.Push(frame)
-	}
-	for _, frame := range e.env.frames {
-		ec.Push(frame)
+	frames := make([]map[string]Value, 0, 1+len(e.env.outer)+len(e.env.frames))
+	frames = append(frames, e.env.data)
+	frames = append(frames, e.env.outer...)
+	frames = append(frames, e.env.frames...)
+	ec := &e.scratch
+	*ec = EvalContext{
+		ctx:            e.ctx,
+		scope:          scope,
+		self:           e.host.performer(),
+		frames:         frames,
+		trace:          e.ctx.trace,
+		inBehaviorBody: true,
+		activation:     e.activation,
 	}
 	return ec
 }
