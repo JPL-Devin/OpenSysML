@@ -117,7 +117,7 @@ exit=2
 $ sysml -requirement MyModel::healthy checks.sysml; echo "exit=$?"
 ✓ package MyModel
 ? Requirement MyModel::healthy could not be evaluated
-  Error: requirement healthy: require condition evaluation failed: no value for feature sensor
+  Error: requirement healthy: sensor subject is unbound: bind it (`subject sensor = <element>`), check it on an object, or assert `satisfy healthy by <element>`
 exit=2
 ```
 

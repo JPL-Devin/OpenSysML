@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -655,7 +656,44 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		bindings: reqBindings,
 		negated:  NegatedDecl(sym),
 	}, conds)
+	if err != nil {
+		err = unboundSubjectError(err, "requirement", sym.Name, unboundSubjectNames(members, subject.instance))
+	}
 	return ctx.checkResultOf(holds, subject), err
+}
+
+// unboundSubjectNames are the subjects the members declare that nothing supplies
+// a value for: no binding expression, no object supplied from outside.
+func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]bool {
+	if subject != nil {
+		return nil
+	}
+	names := make(map[string]bool)
+	for _, member := range members {
+		switch rm := member.node.(type) {
+		case *ast.SubjectMember:
+			if rm.BindingExpr == nil && rm.Name != "" {
+				names[rm.Name] = true
+			}
+		case *ast.Usage:
+			if rm.Kind == ast.UsageSubject {
+				if name := effectiveName(rm); name != "" {
+					names[name] = true
+				}
+			}
+		}
+	}
+	return names
+}
+
+// unboundSubjectError reports a condition that read an unbound subject as such,
+// rather than as a feature that happens to carry no value.
+func unboundSubjectError(err error, kind, element string, unbound map[string]bool) error {
+	var noValue *NoValueError
+	if !errors.As(err, &noValue) || !unbound[noValue.Feature] {
+		return err
+	}
+	return &UnboundSubjectError{Kind: kind, Element: element, Subject: noValue.Feature}
 }
 
 // ExecuteAction executes an action definition/usage to completion.

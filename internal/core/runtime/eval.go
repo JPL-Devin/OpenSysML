@@ -301,7 +301,7 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 						}
 						return ec.bindVariationOf(sym, val)
 					}
-					return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
+					return Value{}, &NoValueError{Feature: name}
 				}
 			}
 		}
@@ -403,7 +403,7 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 		// A feature the element declares but nothing gives a value to is
 		// uninitialized rather than unresolved.
 		if declared {
-			return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
+			return Value{}, &NoValueError{Feature: name}
 		}
 		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedReference, name)
 	}

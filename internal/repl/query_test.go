@@ -122,7 +122,8 @@ func TestConditionThatCouldNotBeEvaluated(t *testing.T) {
 	v := s.CheckRequirement("Landing::touchdown")
 	wantVerdict(t, v, VerdictUnresolved,
 		"? Requirement Landing::touchdown could not be evaluated",
-		"no value for feature lander")
+		"lander subject is unbound",
+		"satisfy touchdown by <element>")
 	rejectVerdict(t, v, "Requirement Landing::touchdown failed", "✗")
 }
 
