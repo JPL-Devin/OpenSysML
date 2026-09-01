@@ -17,7 +17,7 @@ A SysML v2 and KerML 1.1 implementation delivering the integrated tooling experi
 ### Design Principles
 
 - **Performance:** sub-millisecond parsing, a single static binary, and no JVM or Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (96 of 96 standard library files parse cleanly: 94 vendored OMG files and 2 OpenSysML extensions)
+- **Completeness:** SysML v2 textual notation support (97 of 97 standard library files parse cleanly: 94 vendored OMG files and 3 OpenSysML extensions)
 - **Executable models:** beyond validation, a runtime that instantiates, evaluates and simulates
 - **Incremental and lazy:** parse immediately and resolve semantics on demand, following the precedent set by gopls and rust-analyzer
 - **Immutable AST:** all semantic state resides in side tables keyed by node or symbol
@@ -482,7 +482,7 @@ See [the guide](../guide/) for VS Code configuration.
 
 | Component | Status |
 |-----------|--------|
-| Lexer/Parser (structural + behavioral) | ✅ Operational (96/96 stdlib clean - see [conformance gate](../../internal/core/libs/stdlib_conformance_test.go)) |
+| Lexer/Parser (structural + behavioral) | ✅ Operational (97/97 stdlib clean - see [conformance gate](../../internal/core/libs/stdlib_conformance_test.go)) |
 | Symbol resolution & type system | ✅ Complete |
 | Validation passes (syntax → constraints) | ✅ Complete |
 | Expression evaluator & instance model (Tiers 1-3) | ✅ Complete |
@@ -496,7 +496,7 @@ See [the guide](../guide/) for VS Code configuration.
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
-**Parser coverage:** 96/96 bundled library files parse cleanly — the 94 official SysML v2 standard library files and two non-normative OpenSysML extensions: `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` and `OpenSysML Libraries/DocumentQueries.sysml`. Conformance verified by [stdlib_conformance_test.go](../../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
+**Parser coverage:** 97/97 bundled library files parse cleanly — the 94 official SysML v2 standard library files and three non-normative OpenSysML extensions: `OpenSysML Libraries/OpenSysMLMathFunctions.kerml`, `OpenSysML Libraries/DocumentQueries.sysml` and `OpenSysML Libraries/IdentityMetadata.sysml`. Conformance verified by [stdlib_conformance_test.go](../../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 
 ---
 
@@ -510,7 +510,7 @@ New grammar features require a **four-layer test contract** to ensure correctnes
 - **Purpose:** Ensure stdlib continues to parse cleanly
 - **Location:** `internal/core/libs/stdlib_conformance_test.go`
 - **Test:** `TestStdlibConformance` loads all 96 bundled library files
-- **Acceptance:** 96/96 files parse without errors
+- **Acceptance:** 97/97 files parse without errors
 - **Allowlist:** `testdata/stdlib_known_failures.txt` (currently empty)
 - **Failure mode:** Regression breaks previously-working stdlib files
 
