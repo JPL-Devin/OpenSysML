@@ -148,3 +148,54 @@ undecided surface without moving the value contract or the pilot agreement, and 
 contained in one function — but it is subtle enough (exactness must hold for a term's
 whole value set, not one witness) that it should wait until the undecided verdicts are
 observed to bite in practice.
+
+## Option (d) measured: the rounded-query census
+
+Whether the narrowing is worth building is an empirical question — how many queries
+does the conservative `Query.Rounded` marker sweep in that are in fact provably exact?
+`TestRoundedCensus` (`internal/core/solve/rounded_census_test.go`) answers it
+reproducibly: it enumerates every constraint, requirement and analysis case in the
+repository's solver-facing corpora, translates each through the same
+`Condition`/`Analysis` path the REPL's `%check`/`%solve`/`%configure all`/`%optimize`
+commands use, and classifies every translated query.
+
+```
+OPENSYSML_SMT=/usr/bin/z3        go test -count=1 -run TestRoundedCensus -v ./internal/core/solve
+OPENSYSML_SMT=/usr/local/bin/cvc5 go test -count=1 -run TestRoundedCensus -v ./internal/core/solve
+```
+
+A marked query is *recoverable* only if every asserted or optimized term is exact over
+its **whole value set**: exact-float64 real literals, and real-valued arithmetic only
+when it folds to a constant whose every intermediate is exactly representable.
+Anything over free variables — real arithmetic, division, integer→real widening —
+stays conservative, because a witness-dependent value set cannot be proven exact
+statically.
+
+Counted (both solvers give identical numbers): the training corpus, the three pilot
+corpora, the runtime conformance fixtures, the repository examples and manual
+examples, the solver test fixtures, and the bundled standard library — 890 files,
+2,170 candidate elements, 415 translated queries. Excluded: elements the translator
+refuses (unsupported operations, unresolved names), which never reach the solver and
+so never see the marker.
+
+| Corpus | Files | Translated queries | Marked rounded | Provably exact |
+|--------|-------|--------------------|----------------|----------------|
+| Training corpus | 100 | 13 | 2 | 0 |
+| Pilot corpora | 212 | 82 | 8 | 0 |
+| Conformance fixtures | 444 | 17 | 0 | 0 |
+| Examples + manual | 27 | 56 | 4 | 0 |
+| Solver fixtures | 10 | 54 | 7 | 0 |
+| Standard library | 97 | 193 | 0 | 0 |
+| **Total** | **890** | **415** | **21** | **0** |
+
+Every one of the 21 marked queries is genuinely inexact: 4 contain a real literal with
+no exact float64 (e.g. a `0.4` efficiency, a degree-unit scale factor), and 17 perform
+real arithmetic, division, or integer widening over free variables — value sets no static
+analysis can prove exact. The false-undecided rate over the real corpus is **zero**.
+
+**Adjudication: option (d) stays unbuilt.** The narrowing would recover no verdict in
+any realistic model in the repository; the recoverable class (constant-folded dyadic
+arithmetic asserted directly) does not occur in practice, because models constrain
+free attributes, not constants. The census harness remains as the reproducible
+instrument: re-run it if future corpora accumulate undecided verdicts, and revisit
+only if it reports a material provably-exact population.
