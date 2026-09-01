@@ -3,7 +3,7 @@
 ; objectives are optimized lexicographically, in the order the analysis declares them:
 ; each is optimized within what the ones before it already settled
 (set-option :opt.priority lex)
-(set-logic QF_NIA)
+(set-logic AUFNIRA)
 ; test::GuardedRatio::parts, declared at objectives.sysml:133:3
 (declare-const |test::GuardedRatio::parts| Int)
 ; test::GuardedRatio::total, declared at objectives.sysml:132:3
@@ -11,7 +11,7 @@
 ; well-definedness: total / parts >= 2 — analysis GuardedRatio, at objectives.sysml:135:4
 (assert (distinct |test::GuardedRatio::parts| 0))
 ; required condition: total / parts >= 2 — analysis GuardedRatio, at objectives.sysml:135:4
-(assert (>= (ite (>= |test::GuardedRatio::total| 0) (div |test::GuardedRatio::total| |test::GuardedRatio::parts|) (- (div (- |test::GuardedRatio::total|) |test::GuardedRatio::parts|))) 2))
+(assert (>= (/ (to_real |test::GuardedRatio::total|) (to_real |test::GuardedRatio::parts|)) 2.0))
 ; required condition: parts >= 1 — analysis GuardedRatio, at objectives.sysml:138:4
 (assert (>= |test::GuardedRatio::parts| 1))
 ; required condition: parts <= 4 — analysis GuardedRatio, at objectives.sysml:141:4

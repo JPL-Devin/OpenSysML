@@ -90,7 +90,7 @@ func portabilityCases() []portabilityCase {
 			return wantSat(solver, q, "test::Descent::rate")
 		},
 	}, {
-		feature: "truncating integer division (div and mod)",
+		feature: "truncating integer remainder (div and mod)",
 		needs:   []Capability{CapModels, CapIntegerDivision},
 		run: func(t *testing.T, solver *Solver) error {
 			q := constraintQuery(t, `
@@ -98,7 +98,7 @@ func portabilityCases() []portabilityCase {
 					private import ScalarValues::*;
 					constraint def Split {
 						in total : Integer;
-						assert constraint { total / 3 == 5 and total % 3 == 1 }
+						assert constraint { total % 5 == -3 and total >= -5 and total <= -1 }
 					}
 				}`, "test::Split")
 			result, err := solver.Solve(context.Background(), q)
@@ -108,11 +108,12 @@ func portabilityCases() []portabilityCase {
 			if result.Status != StatusSat {
 				return fmt.Errorf("answered %s, want sat", result.Status)
 			}
-			// 16 is the only integer whose truncating quotient by 3 is 5 with a
-			// remainder of 1, so the backend agrees with the evaluator or it does not.
+			// -3 is the only integer in [-5, -1] whose truncating remainder by 5
+			// is -3 (its Euclidean remainder is 2), so the backend agrees with
+			// the evaluator or it does not.
 			for _, a := range result.Model {
-				if a.Var.Name == "test::Split::total" && a.Value != "16" {
-					return fmt.Errorf("assigned total = %s, want 16", a.Value)
+				if a.Var.Name == "test::Split::total" && a.Value != "-3" {
+					return fmt.Errorf("assigned total = %s, want -3", a.Value)
 				}
 			}
 			return nil

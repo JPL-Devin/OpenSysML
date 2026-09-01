@@ -1,0 +1,9 @@
+{
+  "type": "calc",
+  "evaluate": "test::natQuotient",
+  "inputs": [
+    {"type": "Integer", "value": 5},
+    {"type": "Integer", "value": 2}
+  ],
+  "result": {"type": "Real", "value": 2.5}
+}

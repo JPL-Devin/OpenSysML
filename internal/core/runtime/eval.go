@@ -1199,9 +1199,9 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		return Value{Kind: ValConst, Const: res}, nil
 	}
 
-	// Integer arithmetic: a result outside the Integer range is reported, as `**`
-	// and the library functions report it, rather than wrapping.
-	if left.Const.Kind == semantics.ValInt && right.Const.Kind == semantics.ValInt {
+	// Integer arithmetic: an out-of-range result is reported, not wrapped.
+	// Division is a Rational, so it is computed as a Real below, never truncated.
+	if left.Const.Kind == semantics.ValInt && right.Const.Kind == semantics.ValInt && n.Operator != ast.OpDiv {
 		var result int64
 		switch n.Operator {
 		case ast.OpAdd, ast.OpSub, ast.OpMul:
@@ -1210,15 +1210,6 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 				return Value{}, fmt.Errorf("%w: %d %s %d exceeds the Integer range",
 					semantics.ErrArithmeticOverflow, left.Const.Int, n.Operator.String(), right.Const.Int)
 			}
-		case ast.OpDiv:
-			if right.Const.Int == 0 {
-				return Value{}, ErrDivisionByZero
-			}
-			if left.Const.Int == math.MinInt64 && right.Const.Int == -1 {
-				return Value{}, fmt.Errorf("%w: %d / -1 exceeds the Integer range",
-					semantics.ErrArithmeticOverflow, left.Const.Int)
-			}
-			result = left.Const.Int / right.Const.Int
 		case ast.OpMod:
 			if right.Const.Int == 0 {
 				return Value{}, ErrDivisionByZero

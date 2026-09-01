@@ -177,7 +177,7 @@ scripts use:
 | Incremental dialogue | more than one `(check-sat)` in a script, for `%configure … all` | yes | yes |
 | Enumerations and variants | `(declare-datatypes …)` with nullary constructors | yes | yes |
 | Strings | the `String` sort, compared for equality | yes | yes |
-| Integer division | `div` and `mod` from the Ints theory | yes | yes |
+| Integer remainder | `div` and `mod` from the Ints theory | yes | yes |
 | Nonlinear arithmetic | a product or quotient of two non-literal terms | yes | yes |
 | Mixed arithmetic | the `AUFLIRA`/`AUFNIRA` logics, for a query over `Int` and `Real` | yes | yes |
 | Non-standard logic | `(set-logic ALL)`, which datatypes and strings need | yes | yes |

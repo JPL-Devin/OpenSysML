@@ -54,8 +54,8 @@ const (
 	OpMul
 	// OpDiv is division of two reals.
 	OpDiv
-	// OpIntDiv is SMT-LIB's Euclidean integer division; TruncDiv builds the
-	// evaluator's truncating division from it.
+	// OpIntDiv is SMT-LIB's Euclidean integer division; TruncRem builds the
+	// evaluator's truncating remainder from it.
 	OpIntDiv
 	// OpNeg is arithmetic negation, one argument.
 	OpNeg
@@ -189,8 +189,8 @@ func ToReal(arg *Term) *Term {
 	return &Term{Op: OpToReal, Sort: Real, Args: []*Term{arg}}
 }
 
-// TruncDiv returns integer division truncating toward zero, as the evaluator
-// divides: `ite(a >= 0, div(a, b), -div(-a, b))`, exact for either sign of b.
+// TruncDiv returns integer division truncating toward zero:
+// `ite(a >= 0, div(a, b), -div(-a, b))`. TruncRem builds the remainder from it.
 func TruncDiv(a, b *Term) *Term {
 	positive := Binary(OpIntDiv, Int, a, b)
 	negative := Unary(OpNeg, Int, Binary(OpIntDiv, Int, Unary(OpNeg, Int, a), b))

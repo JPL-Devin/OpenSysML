@@ -7,26 +7,34 @@ enter calc test::halve
       stmt assign i
           eval feature i -> 9
           eval literal 2 -> 2
-        eval operator / -> 4
-        eval feature i -> 4
+        eval operator / -> 4.5
+        eval feature i -> 4.5
         eval literal 1 -> 1
       eval operator <= -> false
     iteration 2
       stmt assign i
-          eval feature i -> 4
+          eval feature i -> 4.5
           eval literal 2 -> 2
-        eval operator / -> 2
-        eval feature i -> 2
+        eval operator / -> 2.25
+        eval feature i -> 2.25
         eval literal 1 -> 1
       eval operator <= -> false
     iteration 3
       stmt assign i
-          eval feature i -> 2
+          eval feature i -> 2.25
           eval literal 2 -> 2
-        eval operator / -> 1
-        eval feature i -> 1
+        eval operator / -> 1.125
+        eval feature i -> 1.125
+        eval literal 1 -> 1
+      eval operator <= -> false
+    iteration 4
+      stmt assign i
+          eval feature i -> 1.125
+          eval literal 2 -> 2
+        eval operator / -> 0.5625
+        eval feature i -> 0.5625
         eval literal 1 -> 1
       eval operator <= -> true
   stmt return
-    eval feature i -> 1
-exit calc test::halve -> 1
+    eval feature i -> 0.5625
+exit calc test::halve -> 0.5625
