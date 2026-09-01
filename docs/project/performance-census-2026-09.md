@@ -1,11 +1,8 @@
 # Performance census, September 2026
 
 A measurement of where the toolchain stands after the past week of changes:
-week-over-week benchmark movement, whole-binary scaling against the figures
-recorded in `docs/internals/performance.md`, and a cross-implementation
-comparison against the two independent SysML v2 validators the repository
-already pins, prompted by a third-party claim of significantly faster runtime
-on compliant SysML.
+week-over-week benchmark movement, and whole-binary scaling against the
+figures recorded in `docs/internals/performance.md`.
 
 All figures were taken on one machine — `Intel Xeon Platinum 8559C`, 8 CPUs,
 Go 1.25, Linux — the same processor family the figures in
@@ -74,78 +71,30 @@ Both time and memory remain linear in the model. The measured points sit
 same within noise, so the drift against the documented table predates this
 week and is within machine-to-machine variation.
 
-## Cross-implementation comparison
-
-The claim under test was that an independent implementation validates
-compliant SysML significantly faster. The two independent validators the
-repository already pins were measured on the same machine, over the same
-files:
-
-- **SysIDE** (Sensmetry `sysml-2ls` 0.9.1, TypeScript/Node 22), via
-  `scripts/download-syside.sh` and its batch driver. A static checker only,
-  bundling the 2024-12 standard library. Loading that library costs it a
-  fixed ~11 s and ~1.2 GiB per invocation, measured on a one-line file;
-  the figures below include it, since a user validating a file pays it.
-- **The OMG pilot implementation** (jupyter kernel 0.60.1, JVM), via the
-  batch oracle `scripts/download-pilot-sysml-validator.sh` provisions. Its
-  fixed per-invocation cost — JVM start-up plus its own library load,
-  ~2 s on a one-line file — is included and is negligible at these sizes.
-  This implementation's fixed cost on the same one-line file is 0.11 s.
-
-Generated compliant single-file models, wall clock and peak resident size:
-
-| elements | OpenSysML | SysIDE 0.9.1 | pilot 0.60.1 |
-| -------- | --------- | ------------ | ------------ |
-| 3 000    | 0.33 s, 120 MiB | 21.9 s, 2.6 GiB | 75 s, 1.3 GiB |
-| 6 000    | 0.57 s, 180 MiB | 35.3 s, 3.0 GiB | — |
-| 12 000   | 1.05 s, 285 MiB | 72.7 s, 4.1 GiB | 2 305 s, 4.8 GiB |
-
-On large compliant models this implementation is **~65× faster than SysIDE
-and ~2 200× faster than the pilot**, in 11–22× less memory, and is the only
-one of the three whose wall time is linear in the model at these sizes (the
-pilot's grows ~31× for a 4× model).
-
-The OMG training corpus — 100 compliant files, 572 KiB, validated as one
-batch — is the many-small-files shape rather than the one-large-model shape:
-
-| tool | wall | peak RSS |
-| ---- | ---- | -------- |
-| OpenSysML | 6.7 s | 168 MiB |
-| pilot 0.60.1 | 6.6 s | 895 MiB |
-| SysIDE 0.9.1 | 13.0 s | 1.35 GiB, exits reporting findings of its own |
-
-SysIDE's 13.0 s is mostly its fixed ~11 s library load, so its marginal cost
-on the corpus is small; and here our advantage over the pilot disappears
-entirely: it matches us. The census's one
-substantive finding about our own runtime explains why.
-
 ## Batch validation of many files is quadratic
 
-Validating the training corpus's 100 files together costs 6.7 s, but its two
-halves cost 0.6 s and 3.4 s separately — the whole costs far more than its
-parts. Per-file, every file is fast alone (the slowest is 0.33 s). A CPU
-profile of the batch shows where the time goes: the CLI submits files to the
-session one at a time, and every submission reindexes the workspace
+The OMG training corpus — 100 compliant files, 572 KiB — validated as one
+batch is the many-small-files shape rather than the one-large-model shape,
+and it costs 6.7 s at 168 MiB peak, while its two halves cost 0.6 s and
+3.4 s separately — the whole costs far more than its parts. Per-file, every
+file is fast alone (the slowest is 0.33 s). A CPU profile of the batch shows
+where the time goes: the CLI submits files to the session one at a time, and
+every submission reindexes the workspace
 (`model.(*Workspace).setOpenBuffer` → `reindexLocked`, 52% of the profile),
 re-running `symbols.(*Index).ExpandWildcardImports` over every document
 loaded so far — so a batch of *n* files expands wildcard imports *n* times
 over a growing buffer, and the total is quadratic in the file count.
 
-This is not a regression — the seven-day-old binary measures the same — but
-it is the one workload shape where an independent implementation can
-plausibly claim comparable or better runtime today, and the cost is in the
-submission loop rather than in analysis itself. Submitting a `-validate`
-batch as one indexing unit, or expanding wildcard imports incrementally for
-documents the new submission cannot affect, would make the corpus cost what
-its parts cost.
+This is not a regression — the seven-day-old binary measures the same — and
+the cost is in the submission loop rather than in analysis itself.
+Submitting a `-validate` batch as one indexing unit, or expanding wildcard
+imports incrementally for documents the new submission cannot affect, would
+make the corpus cost what its parts cost.
 
-## Verdict on the claim
+## Assessment
 
-For what "runtime for compliant SysML" ordinarily means — the cost of
-parsing, resolving and validating a compliant model — the claim has no
-substance against this implementation: both independent validators are
-between one and three orders of magnitude slower on the same compliant
-models, in multiples of the memory, and neither scales linearly where this
-implementation does. The defensible kernel of such a claim is the many-file
-batch shape above, where our quadratic submission loop gives away most of
-the analysis engine's advantage; that is ours to fix, and cheap to.
+Single-model validation remains linear in both time and memory through
+12 000 elements, loading holds less live heap and allocates a third fewer
+objects than a week ago, and the two costs worth acting on are internal and
+localized: the per-session `about`-metadata walk that grew the empty-session
+floor, and the quadratic submission loop in many-file batch validation.
