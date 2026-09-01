@@ -62,12 +62,13 @@ that satisfies it (needs `z3` or `cvc5` — see
 ✓ Requirement OpenSysMLInvariants::tiersAreGated satisfied
 
 > %check OpenSysMLInvariants::executionIsBounded
-✓ Requirement executionIsBounded is satisfiable (z3, 8ms)
+✓ Requirement executionIsBounded is satisfiable (z3, 7ms)
   OpenSysMLInvariants::executionIsBounded::'runtime.stepBudgeted' = true
 ```
 
-The eight are `treeIsImmutable`, `parserRecovers`, `resolutionIsLazy`, `tiersAreGated`,
-`loweringIsLossless`, `executionIsBounded`, `libraryIsClean` and `exportRoundTrips`.
+The solver timing is whatever your machine reports. The eight are `treeIsImmutable`,
+`parserRecovers`, `resolutionIsLazy`, `tiersAreGated`, `loweringIsLossless`,
+`executionIsBounded`, `libraryIsClean` and `exportRoundTrips`.
 [`../self_model_test.go`](../self_model_test.go) evaluates all eight, so an invariant the
 implementation stops satisfying — the standard library growing past its clean file count,
 say — fails `go test ./examples/`.
@@ -118,7 +119,8 @@ stateDiagram-v2
   n1 --> n8 : [failures #gt; 0]
 ```
 
-The stage table is the model's answer to "which package implements this stage":
+The stage table is the model's answer to "which package implements this stage"; like the
+Mermaid above, its first line is a comment naming the view, elided here:
 
 ```
 > %render OpenSysMLViews::stageTable markdown
