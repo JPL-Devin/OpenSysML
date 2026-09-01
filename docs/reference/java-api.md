@@ -1,6 +1,6 @@
 # The Java client API
 
-What `io.github.open-mbee:opensysml-client` exposes, what it deliberately keeps out
+What `org.openmbee:opensysml-client` exposes, what it deliberately keeps out
 of its public surface, and where its v1 stops. Choosing between the clients is
 [client libraries](clients.md); using one as a task is
 [guide chapter 9](../guide/09-python.md#from-java). The client's own notes on its
@@ -9,7 +9,7 @@ dependency footprint, service ownership and release verification are in
 
 ```xml
 <dependency>
-  <groupId>io.github.open-mbee</groupId>
+  <groupId>org.openmbee</groupId>
   <artifactId>opensysml-client</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>
@@ -176,9 +176,9 @@ Deliberately out of scope, rather than half-implemented: the edit API
 (`VerifyConstraint`, `VerifyRequirement`, `VerifySatisfaction`), behaviour
 execution (`ExecuteAction`, `ExecuteState`), `EvaluateCalc`, `Query`/OSLC, and
 generated model-ergonomics types. The service still serves all of them, but the
-public API offers no generic call: `io.opensysml.proto` carries the request and
+public API offers no generic call: `org.openmbee.opensysml.proto` carries the request and
 response messages, and the transport that would send one is
-`io.opensysml.internal`, which is internal and not a compatibility promise. Reach
+`org.openmbee.opensysml.internal`, which is internal and not a compatibility promise. Reach
 those RPCs from the Go or Python client until a v2 wraps them here.
 
 ## Conformance

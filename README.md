@@ -177,7 +177,7 @@ SysML v2:
 - **Embeddable Go API** — `client/opensysml` is the public Go surface: parse, look up symbols, evaluate expressions and instantiate parts from Go code, answered in process by the engine the calling binary already links (no port, no child process and no serialization round trip), or over the Connect protocol against an externally hosted service. See [client/opensysml/README.md](client/opensysml/README.md).
 - **Python Client Library** — gRPC-based Python bindings for programmatic access: parse models, resolve symbols, evaluate expressions, instantiate parts, execute actions/state machines. Includes IPython display hooks for Jupyter notebooks and pandas DataFrame integration. Constraint, requirement, satisfaction and calc verdicts are available as RPCs (`verify_constraint`, `verify_requirement`, `verify_satisfaction`, `calc`).
 - **Node/TypeScript Client Library** — `@opensysml/client` for Node and the browser, over the Connect protocol with protobuf bodies: parse, evaluate, look up symbols and instantiate, with values as discriminated unions. No native addon and nothing downloaded at install time ([clients/node/README.md](clients/node/README.md)).
-- **Java Client Library** — `io.github.open-mbee:opensysml-client` for a JVM host application it does not own, on the JDK's own `java.net.http.HttpClient`, so no gRPC, Netty or `tcnative` reaches the host ([clients/java/README.md](clients/java/README.md)).
+- **Java Client Library** — `org.openmbee:opensysml-client` for a JVM host application it does not own, on the JDK's own `java.net.http.HttpClient`, so no gRPC, Netty or `tcnative` reaches the host ([clients/java/README.md](clients/java/README.md)).
 - **Rust Client Library** — A blocking client for the local `sysml-grpc` service, with no asynchronous runtime in its default dependency tree, available from the [Rust crate documentation](clients/rust/README.md).
 
 Guidance on selecting a client, the coverage of the four newer clients, and the functionality they intentionally defer to a future version is provided in [docs/reference/clients.md](docs/reference/clients.md).
@@ -297,7 +297,7 @@ github.com/Open-MBEE/OpenSysML
 ├── internal/grpc/          # gRPC service implementation
 ├── internal/repl/          # REPL loop implementation
 ├── client/opensysml/       # The public Go API (in-process and remote)
-├── clients/java/           # Java client (io.github.open-mbee:opensysml-client)
+├── clients/java/           # Java client (org.openmbee:opensysml-client)
 ├── clients/node/           # Node/TypeScript client (@opensysml/client)
 ├── clients/python/         # Python client bindings (opensysml)
 ├── clients/rust/           # Rust client (opensysml) and its conformance runner
@@ -402,7 +402,7 @@ how to choose; [guide chapter 9](docs/guide/09-python.md) works through each one
 | Go, `client/opensysml` | in process, or Connect to a service | with the core (`v*` tags) | [Go packages](docs/reference/api.md) |
 | Python, `opensysml` | gRPC, to a private child service or a named one | PyPI, on `opensysml-v*` tags | [Python API](docs/reference/python-api.md) |
 | Node/TypeScript, `@opensysml/client` | Connect, from Node or a browser page | not yet | [Node API](docs/reference/node-api.md) |
-| Java, `io.github.open-mbee:opensysml-client` | Connect, over the JDK's own HTTP client | not yet | [Java API](docs/reference/java-api.md) |
+| Java, `org.openmbee:opensysml-client` | Connect, over the JDK's own HTTP client | not yet | [Java API](docs/reference/java-api.md) |
 | Rust, `opensysml` | Connect, blocking, no async runtime | not yet | [Rust API](docs/reference/rust-api.md) |
 
 The Go and Python clients cover every RPC the service serves; Node, Java and Rust cover a v1
