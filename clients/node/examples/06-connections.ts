@@ -6,6 +6,7 @@
 
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { connect, formatValue, loads, resolveBinary } from "../src/node/index.js";
 import { ROVER, section, show } from "./model.js";
 
@@ -98,8 +99,13 @@ async function main(): Promise<void> {
       await connection.close();
     }
   } finally {
-    // This program started the service, so this program stops it.
-    service.child.kill("SIGTERM");
+    // This program started the service, so this program stops it, unless it
+    // already exited — then there is no exit left to wait for.
+    if (service.child.exitCode === null && service.child.signalCode === null) {
+      const exited = once(service.child, "exit");
+      service.child.kill("SIGTERM");
+      await exited;
+    }
   }
 
   section("The service is gone");

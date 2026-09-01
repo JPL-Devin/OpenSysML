@@ -1597,7 +1597,10 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		args[i] = val
 	}
 
-	named := make(map[string]Value, len(n.NamedArgs))
+	var named map[string]Value
+	if len(n.NamedArgs) > 0 {
+		named = make(map[string]Value, len(n.NamedArgs))
+	}
 	for _, arg := range n.NamedArgs {
 		if arg.Name == nil || len(arg.Name.Parts) == 0 {
 			return Value{}, fmt.Errorf("unnamed argument in invocation of %s", qualName)
