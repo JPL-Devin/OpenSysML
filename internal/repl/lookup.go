@@ -2,6 +2,7 @@ package repl
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -78,10 +79,7 @@ func (s *Session) lookupSymbolOfKinds(name string, want ...symbols.SymbolKind) (
 		}
 	}
 
-	var matches []*symbols.Symbol
-	for _, scope := range docScopes {
-		matches = append(matches, collectInScopeTree(scope, name)...)
-	}
+	matches := s.nameTable().lookup(name)
 	switch len(matches) {
 	case 0:
 		// A name the session declares nowhere may still be visible where the
@@ -381,19 +379,59 @@ func ambiguousError(name string, matches []*symbols.Symbol, idx *symbols.Index) 
 	return &AmbiguousNameError{Name: notationName(name), FQNs: fqns}
 }
 
-// collectInScopeTree returns every symbol named name in scope or a nested
-// scope. A body-local name is only visible inside its own body and is skipped.
-func collectInScopeTree(scope *symbols.Scope, name string) []*symbols.Symbol {
-	if scope == nil || scope.BodyLocal() {
-		return nil
+// nameTable maps every simple name the session documents declare outside a body
+// to its declarations in scope-tree order, so a lookup costs nothing of the model's size.
+type nameTable struct {
+	scopes []*symbols.Scope // the trees the table was built from
+	byName map[string][]*symbols.Symbol
+}
+
+// nameTable returns the table over the session's current documents, rebuilt
+// when a submission or reset has replaced a scope tree.
+func (s *Session) nameTable() *nameTable {
+	scopes := s.docScopes()
+	if s.names == nil || !slices.Equal(s.names.scopes, scopes) {
+		s.names = buildNameTable(scopes)
 	}
-	var out []*symbols.Symbol
-	if syms := scope.LookupLocalAll(name); len(syms) > 0 {
-		out = append(out, symbols.PreferDeclared(syms)...)
+	return s.names
+}
+
+// buildNameTable tabulates every scope tree in turn, a scope's own members before
+// its children's; a body-local scope is skipped with everything nested in it.
+func buildNameTable(scopes []*symbols.Scope) *nameTable {
+	t := &nameTable{scopes: scopes, byName: make(map[string][]*symbols.Symbol)}
+	for _, scope := range scopes {
+		t.collect(scope)
+	}
+	return t
+}
+
+func (t *nameTable) collect(scope *symbols.Scope) {
+	if scope == nil || scope.BodyLocal() {
+		return
+	}
+	for _, name := range scope.MemberNames() {
+		t.byName[name] = append(t.byName[name], symbols.PreferDeclared(scope.LookupLocalAll(name))...)
 	}
 	for _, child := range scope.Children() {
-		out = append(out, collectInScopeTree(child, name)...)
+		t.collect(child)
 	}
+}
+
+// lookup returns every declaration of name in scope-tree order. The slice is
+// the table's own and must not be modified.
+func (t *nameTable) lookup(name string) []*symbols.Symbol {
+	syms := t.byName[name]
+	return syms[:len(syms):len(syms)]
+}
+
+// sorted returns every declared name, sorted.
+func (t *nameTable) sorted() []string {
+	out := make([]string, 0, len(t.byName))
+	for name := range t.byName {
+		out = append(out, name)
+	}
+	sort.Strings(out)
 	return out
 }
 

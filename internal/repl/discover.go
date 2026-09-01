@@ -146,32 +146,7 @@ func (s *Session) suggestSymbol(name string) []string {
 // declaredSymbolNames returns the names the session documents declare, at every
 // nesting level, sorted.
 func (s *Session) declaredSymbolNames() []string {
-	docScopes := s.docScopes()
-	if len(docScopes) == 0 {
-		return nil
-	}
-	seen := map[string]bool{}
-	var collect func(scope *symbols.Scope)
-	collect = func(scope *symbols.Scope) {
-		if scope == nil || scope.BodyLocal() {
-			return
-		}
-		for _, n := range scope.MemberNames() {
-			seen[n] = true
-		}
-		for _, child := range scope.Children() {
-			collect(child)
-		}
-	}
-	for _, scope := range docScopes {
-		collect(scope)
-	}
-	out := make([]string, 0, len(seen))
-	for n := range seen {
-		out = append(out, n)
-	}
-	sort.Strings(out)
-	return out
+	return s.nameTable().sorted()
 }
 
 // notFoundError reports a name no declaration answers to, offering the
@@ -264,9 +239,7 @@ func (s *Session) candidateHasKind(name string, want []symbols.SymbolKind) bool 
 		matches = idx.LookupQualified(name)
 	}
 	if len(matches) == 0 {
-		for _, scope := range s.docScopes() {
-			matches = append(matches, collectInScopeTree(scope, name)...)
-		}
+		matches = s.nameTable().lookup(name)
 	}
 	for _, sym := range matches {
 		if slices.Contains(want, sym.Kind) {
