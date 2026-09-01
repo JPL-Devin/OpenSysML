@@ -99,10 +99,13 @@ async function main(): Promise<void> {
       await connection.close();
     }
   } finally {
-    // This program started the service, so this program stops it.
-    const exited = once(service.child, "exit");
-    service.child.kill("SIGTERM");
-    await exited;
+    // This program started the service, so this program stops it, unless it
+    // already exited — then there is no exit left to wait for.
+    if (service.child.exitCode === null && service.child.signalCode === null) {
+      const exited = once(service.child, "exit");
+      service.child.kill("SIGTERM");
+      await exited;
+    }
   }
 
   section("The service is gone");
