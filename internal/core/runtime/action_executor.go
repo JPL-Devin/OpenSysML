@@ -600,6 +600,23 @@ func (e *ActionExecutor) declaresParameter(name string) bool {
 	return false
 }
 
+// checkInputNames reports a supplied input naming no feature of the action:
+// binding it would answer with a value the action never declared.
+func (e *ActionExecutor) checkInputNames() error {
+	names := make([]string, 0, len(e.inputs))
+	for name := range e.inputs {
+		if !e.declaresParameter(name) && !e.declaresAttribute(name) {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	sort.Strings(names)
+	return fmt.Errorf("%w: action %s declares no %s",
+		ErrUnknownActionInput, symbolText(e.action), strings.Join(names, ", "))
+}
+
 // initialize spawns initial token at InitialNode.
 func (e *ActionExecutor) initialize() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
@@ -624,6 +641,9 @@ func (e *ActionExecutor) initialize() error {
 	}
 
 	// Apply input parameter bindings, overriding any defaults with the same name.
+	if err := e.checkInputNames(); err != nil {
+		return err
+	}
 	if err := e.setFeatures(e.inputs); err != nil {
 		return err
 	}

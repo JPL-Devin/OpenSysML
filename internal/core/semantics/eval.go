@@ -257,14 +257,16 @@ func evalArithmetic(op ast.OperatorKind, l, r Value) (Value, bool) {
 	return evalRealArith(op, l.asReal(), r.asReal())
 }
 
+// evalIntArith folds Integer arithmetic, declining a result outside the
+// Integer range: the run time reports it, so nothing folds to a wrapped value.
 func evalIntArith(op ast.OperatorKind, a, b int64) (Value, bool) {
 	switch op {
-	case ast.OpAdd:
-		return Value{Kind: ValInt, Int: a + b}, true
-	case ast.OpSub:
-		return Value{Kind: ValInt, Int: a - b}, true
-	case ast.OpMul:
-		return Value{Kind: ValInt, Int: a * b}, true
+	case ast.OpAdd, ast.OpSub, ast.OpMul:
+		res, ok := IntArith(op, a, b)
+		if !ok {
+			return Value{}, false
+		}
+		return Value{Kind: ValInt, Int: res}, true
 	case ast.OpMod:
 		if b == 0 {
 			return Value{}, false
@@ -345,6 +347,22 @@ func intPow(a, n int64) (int64, bool) {
 		}
 	}
 	return res, true
+}
+
+// IntArith is Integer addition, subtraction and multiplication, shared by the
+// folder, the operators and the library functions, reporting ok=false on overflow.
+func IntArith(op ast.OperatorKind, a, b int64) (int64, bool) {
+	switch op {
+	case ast.OpAdd:
+		res := a + b
+		return res, (b <= 0 || res > a) && (b >= 0 || res < a)
+	case ast.OpSub:
+		res := a - b
+		return res, (b >= 0 || res > a) && (b <= 0 || res < a)
+	case ast.OpMul:
+		return mulInt(a, b)
+	}
+	return 0, false
 }
 
 // mulInt multiplies two int64 values, reporting ok=false on overflow.

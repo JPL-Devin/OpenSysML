@@ -210,15 +210,25 @@ func (ctx *Context) EvalWithScopeOn(node ast.Node, scope *symbols.Scope, self *I
 	return NewEvalContextIn(ctx, scope, self).Eval(node)
 }
 
-// evalLiteralInteger evaluates an integer literal.
+// evalLiteralInteger evaluates an integer literal, reporting one outside the
+// Integer range rather than clamping it.
 func (ec *EvalContext) evalLiteralInteger(n *ast.LiteralInteger) (Value, error) {
-	val, _ := strconv.ParseInt(n.Value, 10, 64)
+	val, err := strconv.ParseInt(n.Value, 10, 64)
+	if err != nil {
+		return Value{}, fmt.Errorf("%w: literal %s is outside the Integer range",
+			semantics.ErrArithmeticOverflow, n.Value)
+	}
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: val}}, nil
 }
 
-// evalLiteralReal evaluates a real literal.
+// evalLiteralReal evaluates a real literal, reporting one outside the Real
+// range rather than carrying it as an infinity.
 func (ec *EvalContext) evalLiteralReal(n *ast.LiteralReal) (Value, error) {
-	val, _ := strconv.ParseFloat(n.Value, 64)
+	val, err := strconv.ParseFloat(n.Value, 64)
+	if err != nil {
+		return Value{}, fmt.Errorf("%w: literal %s is outside the Real range",
+			semantics.ErrArithmeticOverflow, n.Value)
+	}
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: val}}, nil
 }
 
@@ -1189,16 +1199,17 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		return Value{Kind: ValConst, Const: res}, nil
 	}
 
-	// Integer arithmetic
+	// Integer arithmetic: a result outside the Integer range is reported, as `**`
+	// and the library functions report it, rather than wrapping.
 	if left.Const.Kind == semantics.ValInt && right.Const.Kind == semantics.ValInt {
 		var result int64
 		switch n.Operator {
-		case ast.OpAdd:
-			result = left.Const.Int + right.Const.Int
-		case ast.OpSub:
-			result = left.Const.Int - right.Const.Int
-		case ast.OpMul:
-			result = left.Const.Int * right.Const.Int
+		case ast.OpAdd, ast.OpSub, ast.OpMul:
+			var ok bool
+			if result, ok = semantics.IntArith(n.Operator, left.Const.Int, right.Const.Int); !ok {
+				return Value{}, fmt.Errorf("%w: %d %s %d exceeds the Integer range",
+					semantics.ErrArithmeticOverflow, left.Const.Int, n.Operator.String(), right.Const.Int)
+			}
 		case ast.OpDiv:
 			if right.Const.Int == 0 {
 				return Value{}, ErrDivisionByZero
@@ -1237,7 +1248,12 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		}
 		result = math.Mod(leftReal, rightReal)
 	}
-	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: result}}, nil
+	// A result that is not a finite Real is reported, not carried as an infinity.
+	res, err := realResult(result)
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValConst, Const: res}, nil
 }
 
 // toReal converts a semantics.Value to float64.
@@ -1442,6 +1458,16 @@ func boolOperand(what string, v Value) (bool, error) {
 func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 1 {
 		return Value{}, fmt.Errorf("unary operator requires 1 operand, got %d", len(n.Operands))
+	}
+
+	// The least Integer is written as a negated literal whose magnitude alone is
+	// outside the range, so the sign is read together with it.
+	if n.Operator == ast.OpNeg {
+		if lit, ok := n.Operands[0].(*ast.LiteralInteger); ok {
+			if val, err := strconv.ParseInt("-"+lit.Value, 10, 64); err == nil {
+				return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: val}}, nil
+			}
+		}
 	}
 
 	operand, err := ec.Eval(n.Operands[0])
