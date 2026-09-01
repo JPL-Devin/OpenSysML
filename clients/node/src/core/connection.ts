@@ -3,9 +3,9 @@
 
 import { Code, ConnectError, createClient, type Client, type Transport } from "@connectrpc/connect";
 import { ServerInfo } from "./capabilities.js";
-import { ClosedConnectionError, ServiceError } from "./errors.js";
+import { ClosedConnectionError } from "./errors.js";
 import { SysMLService } from "../generated/sysml_pb.js";
-import { callRpc } from "./status.js";
+import { callRpc, fromHandshakeError } from "./status.js";
 import { Model } from "./model.js";
 import type { ParseOptions } from "./model.js";
 
@@ -165,8 +165,6 @@ async function handshake(
     if (connectError.code === Code.Unimplemented) {
       return new ServerInfo({ version: "", capabilities: [], answered: false, origin });
     }
-    throw new ServiceError(`the sysml-grpc service at ${origin} did not answer: ${connectError.message}`, {
-      cause: connectError,
-    });
+    throw fromHandshakeError(connectError, origin);
   }
 }

@@ -75,6 +75,16 @@ test("options that are no options are refused before a service is started", asyn
   await assert.rejects(() => connect({ timeoutMs: Number.NaN }), OpenSysMLError);
 });
 
+test("a handshake nothing answers names the service and the status it failed with", async () => {
+  const error = await connect({ address: "127.0.0.1:1", timeoutMs: 2000 }).then(
+    () => undefined,
+    (reason: unknown) => reason,
+  );
+  assert.ok(error instanceof ServiceError);
+  assert.equal(error.code, "UNAVAILABLE");
+  assert.match(error.message, /127\.0\.0\.1:1.* did not answer/);
+});
+
 test("an RPC failure becomes the error its status names, and this client's errors pass through", () => {
   assert.equal(statusName(Code.Unavailable), "UNAVAILABLE");
   const unavailable = fromRpcError(new ConnectError("nothing there", Code.Unavailable));

@@ -59,7 +59,7 @@ export {
   UnsupportedOperationError,
 } from "./errors.js";
 export type { FailureCause, ModelDiagnostic } from "./errors.js";
-export { fromRpcError, statusName } from "./status.js";
+export { fromHandshakeError, fromRpcError, statusName } from "./status.js";
 export type { NotFoundSubject } from "./status.js";
 export { decodeValue, decodeVerdict, formatValue } from "./values.js";
 export type {

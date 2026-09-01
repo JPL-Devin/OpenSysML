@@ -81,6 +81,16 @@ export function fromRpcError(error: unknown, notFound: NotFoundSubject = "model"
   return new cls(described, { cause: connectError, code: status });
 }
 
+/** Translates a failed handshake, which says which service would not answer. */
+export function fromHandshakeError(error: unknown, origin: string): ServiceError {
+  const connectError = ConnectError.from(error);
+  const cls = CODE_ERRORS.get(connectError.code) ?? ServiceError;
+  return new cls(`the sysml-grpc service at ${origin} did not answer: ${connectError.message}`, {
+    cause: connectError,
+    code: statusName(connectError.code),
+  });
+}
+
 /** Awaits a call, translating whatever status it fails with. */
 export async function callRpc<T>(call: Promise<T>, notFound: NotFoundSubject = "model"): Promise<T> {
   try {
