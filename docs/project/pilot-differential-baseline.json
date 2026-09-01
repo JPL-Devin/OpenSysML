@@ -59,8 +59,8 @@
         "name": "examples",
         "dir": "examples",
         "origin": "ours",
-        "files": 25,
-        "digest": "sha256:9041485058af8378777057723f6150ac8325d950875fd199f55e75580460c674"
+        "files": 30,
+        "digest": "sha256:ef64018aac723f6712c3fa78f176ea40cc616a70e1898c6a00527e3d4f465535"
       },
       {
         "name": "probes",
@@ -70,17 +70,17 @@
         "digest": "sha256:b0153c55bbfcdacabab911725dc44e0e7f4d3a501a281b1f3f2a13cda19737c6"
       }
     ],
-    "recorded": "2026-08-31"
+    "recorded": "2026-09-01"
   },
   "totals": {
-    "files": 359,
-    "filesFullyAgreeing": 332,
+    "files": 364,
+    "filesFullyAgreeing": 335,
     "agreement": 34,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
-    "pilotOnly": 53,
+    "pilotOnly": 59,
     "openSysMLDiagnostics": 56,
-    "pilotDiagnostics": 89
+    "pilotDiagnostics": 95
   },
   "roots": [
     {
@@ -733,14 +733,14 @@
       "name": "examples",
       "dir": "examples",
       "totals": {
-        "files": 25,
-        "filesFullyAgreeing": 19,
+        "files": 30,
+        "filesFullyAgreeing": 22,
         "agreement": 0,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
-        "pilotOnly": 27,
+        "pilotOnly": 33,
         "openSysMLDiagnostics": 2,
-        "pilotDiagnostics": 28
+        "pilotDiagnostics": 34
       },
       "files": [
         {
@@ -899,6 +899,58 @@
           ]
         },
         {
+          "path": "self-model/pipeline.sysml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": [
+            {
+              "line": 115,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 116,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 127,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 162,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "path": "self-model/views.sysml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": [
+            {
+              "line": 89,
+              "severity": "error",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 91,
+              "severity": "error",
+              "category": "syntax",
+              "count": 1
+            }
+          ]
+        },
+        {
           "path": "solver-demo.sysml",
           "agreement": [],
           "severityMismatch": [],
@@ -1039,7 +1091,7 @@
     {
       "side": "pilot",
       "message": "Cannot override a binding feature value",
-      "count": 11
+      "count": 15
     },
     {
       "side": "pilot",
@@ -1209,14 +1261,14 @@
       }
     ],
     "totals": {
-      "files": 359,
-      "filesFullyAgreeing": 333,
+      "files": 364,
+      "filesFullyAgreeing": 336,
       "agreement": 34,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
-      "pilotOnly": 53,
+      "pilotOnly": 59,
       "openSysMLDiagnostics": 55,
-      "pilotDiagnostics": 89
+      "pilotDiagnostics": 95
     },
     "findings": [
       {
