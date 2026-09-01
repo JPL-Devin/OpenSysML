@@ -88,6 +88,7 @@ func TestIntegerArithmeticInRangeIsUnchanged(t *testing.T) {
 		{"0 - 9223372036854775807 - 1", -9223372036854775808},
 		{"4611686018427387903 * 2", 9223372036854775806},
 		{"7 % 2", 1},
+		{"(0 - 9223372036854775807 - 1) % (0 - 1)", 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.expr, func(t *testing.T) {
