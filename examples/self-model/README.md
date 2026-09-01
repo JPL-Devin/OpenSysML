@@ -173,9 +173,19 @@ The stage table in it is written nowhere; it is what the query returned:
 | … | |
 
 So moving a stage to another package rewrites that table on the next render, and a stage
-added to the model appears in it without anyone editing the document. `-render-document`
-takes a single file, so a model in several files renders through `-render-documents`; that
-single-file form also takes `-doc-form pdf`, which needs the converters installed.
+added to the model appears in it without anyone editing the document.
+
+The same document renders to PDF, converters installed:
+
+```bash
+./scripts/download-doc-pdf-toolchain.sh   # prints the variables to export
+./bin/sysml examples/self-model/*.sysml \
+    -render-document OpenSysMLDocument::ArchitectureDocument \
+    -doc-form pdf -pdf-title-page -pdf-toc -pdf-number-sections \
+    -o build/self-model/architecture.pdf
+```
+
+That writes nine pages with the views pre-rendered as vector diagrams.
 
 ## Keeping it honest
 

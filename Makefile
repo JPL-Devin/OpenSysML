@@ -202,8 +202,9 @@ vscode-package: ## Package the VS Code extension as a .vsix for side-loading
 self-model: build-sysml ## Render the architecture self-model's views (see examples/self-model/README.md)
 	@echo "Rendering the architecture self-model..."
 	@mkdir -p "$(SELF_MODEL_OUT)"
-	@# A renamed or deleted view must not leave its old rendering behind.
-	@rm -f "$(SELF_MODEL_OUT)"/OpenSysMLViews.*.mmd "$(SELF_MODEL_OUT)"/OpenSysMLViews.*.md
+	@# A renamed or deleted view or document must not leave its old rendering behind.
+	@rm -f "$(SELF_MODEL_OUT)"/OpenSysMLViews.*.mmd "$(SELF_MODEL_OUT)"/OpenSysMLViews.*.md \
+		"$(SELF_MODEL_OUT)"/OpenSysMLDocument-*.md
 	$(BIN_DIR)/sysml $(SELF_MODEL_DIR)/*.sysml -render-all "$(SELF_MODEL_OUT)"
 	@# The architecture document the model declares, rendered by the same model.
 	$(BIN_DIR)/sysml $(SELF_MODEL_DIR)/*.sysml -render-documents "$(SELF_MODEL_OUT)"
