@@ -363,6 +363,42 @@ func TestQualifiedNameKeyedGraphStillLinks(t *testing.T) {
 	}
 }
 
+// TestAboutFormElementIDRoundTrips checks an `about`-form ElementId is
+// consumed into identity like an inline one: the target's subject carries the
+// declared id, and the notation comes back with the annotation inline.
+func TestAboutFormElementIDRoundTrips(t *testing.T) {
+	turtle := idTurtle(t, `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def A;
+	metadata : IdentityMetadata::ElementId about A { id = "stable-a"; }
+}
+`)
+	graph, err := rdf.ParseTurtle(turtle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject := rdf.IRI("urn:sysmlv2:element:stable-a")
+	if got := rdf.LocalName(graph.Type(subject)); got != "PartDefinition" {
+		t.Fatalf("subject stable-a typed %q, want PartDefinition", got)
+	}
+	back := toNotation(t, turtle)
+	if !strings.Contains(back, `@IdentityMetadata::ElementId { id = "stable-a"; }`) {
+		t.Errorf("about-form id was not re-materialized:\n%s", back)
+	}
+	if strings.Contains(back, "about") {
+		t.Errorf("consumed about-form annotation leaked back into the notation:\n%s", back)
+	}
+	// Inlining the annotation gives the element a body, so the notation —
+	// not the first graph — is the fixed point the second hop must reach.
+	second, err := export.Convert("m.sysml", []byte(back), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("second hop to turtle: %v", err)
+	}
+	if again := toNotation(t, second); again != back {
+		t.Errorf("second hop is not idempotent:\n--- first ---\n%s--- second ---\n%s", back, again)
+	}
+}
+
 // TestDeclaredIDCollidingWithMembershipIsRefused declares an id equal to the
 // membership id minted for another element: both live in the element
 // namespace, and merging them would corrupt the graph.

@@ -5,7 +5,7 @@
 **Reference:** [SysML v2 Pilot Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation), release `2026-07` (`jupyter-sysml-kernel` 0.61.0) — the same release the training corpus is pinned to
 **Bridges:** two pinned plain-Java programs over the pilot's own validators — `scripts/pilot-sysml-validator/ValidateSysML.java` and `scripts/pilot-kerml-validator/ValidateKerML.java` — built against the shaded jar the [DeciSym/sysmlv2-validator](https://github.com/DeciSym/sysmlv2-validator) build (commit `0d706e5ba1e9c56730cb8600ee43602906e12058`) provisions
 **Provision:** `./scripts/download-pilot-sysml-validator.sh` and `./scripts/download-pilot-kerml-validator.sh` (each needs Java 21+, and calls `download-pilot-validator.sh` for the pinned jar when it is absent; they write `build/pilot-sysml-validator/` and `build/pilot-kerml-validator/`)
-**Run:** `go run ./cmd/pilot-diff` (writes `build/pilot-diff/pilot-diff.txt` and `build/pilot-diff/pilot-diff.json`)
+**Run:** `go run ./cmd/pilot-diff` (writes `build/pilot-diff/pilot-diff.txt` and `build/pilot-diff/pilot-diff.json`, plus two CI-consumable renderings of the same run: `pilot-diff.xml`, JUnit XML with one suite per corpus root and one case per file that drew a diagnostic, and `pilot-diff.sarif`, SARIF 2.1.0 with one result per disagreeing diagnostic group located on the compared model file)
 **Baseline:** the last committed run is [pilot-differential-baseline.json](pilot-differential-baseline.json), so a later run can be diffed against it
 **Status:** advisory only — nothing here gates CI, and the harness reads the corpora without writing to them
 
@@ -111,8 +111,11 @@ own `.kerml` fixtures out of the comparison (see the known limitation below).
 The OMG corpora are not vendored, for the same licensing reason as the training corpus, and the
 pilot release they are fetched at is pinned once in `scripts/pilot-pin.sh` — the same pin the
 validator build reads, so corpus and reference can never come from different releases. Each
-corpus directory is left alone when it already exists; remove it to re-download. A root whose
-directory is absent is skipped with a warning.
+corpus directory records the repository and tag it was fetched from in a `.pilot-pin` stamp: one
+stamped with the current pin is left alone (remove it to re-download), one stamped with another
+pin is re-downloaded when the script runs again (the stale copy is kept until its replacement
+has been fetched), and one without a stamp is left alone with a warning. A root whose directory
+is absent is skipped with a warning.
 
 ### KerML: how the reference validates it
 

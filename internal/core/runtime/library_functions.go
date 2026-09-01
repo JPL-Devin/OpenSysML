@@ -901,7 +901,7 @@ func checkedNumeric(v semantics.Value) (semantics.Value, error) {
 // a result outside the range of its kind rather than wrapping or infinite.
 func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (semantics.Value, error) {
 	if a.Kind == semantics.ValInt && b.Kind == semantics.ValInt {
-		result, ok := intArith(op, a.Int, b.Int)
+		result, ok := semantics.IntArith(op, a.Int, b.Int)
 		if !ok {
 			return semantics.Value{}, fmt.Errorf(
 				"%w: function %s has a result outside the Integer range",
@@ -910,6 +910,15 @@ func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (seman
 		}
 		return semantics.Value{Kind: semantics.ValInt, Int: result}, nil
 	}
+	if a.IsNumeric() && b.IsNumeric() {
+		res, ok := semantics.RealArith(op, toReal(a), toReal(b))
+		if !ok {
+			return semantics.Value{}, fmt.Errorf(
+				"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
+			)
+		}
+		return realResult(res)
+	}
 	res, ok := semantics.EvalBinary(op, a, b)
 	if !ok {
 		return semantics.Value{}, fmt.Errorf(
@@ -917,26 +926,6 @@ func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (seman
 		)
 	}
 	return checkedNumeric(res)
-}
-
-// intArith is Integer addition, subtraction and multiplication, reporting a
-// result the int64 arithmetic would wrap.
-func intArith(op ast.OperatorKind, a, b int64) (int64, bool) {
-	switch op {
-	case ast.OpAdd:
-		result := a + b
-		return result, (b <= 0 || result > a) && (b >= 0 || result < a)
-	case ast.OpSub:
-		result := a - b
-		return result, (b >= 0 || result > a) && (b <= 0 || result < a)
-	case ast.OpMul:
-		result := a * b
-		if a == 0 {
-			return 0, true
-		}
-		return result, result/a == b && !(a == -1 && b == math.MinInt64)
-	}
-	return 0, false
 }
 
 // realVector builds a vector of Reals, reporting an element that is not a finite

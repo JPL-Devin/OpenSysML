@@ -58,8 +58,8 @@ build-grpc: ## Build sysml-grpc binary
 conformance: ## Run the language-independent conformance suite against sysml-grpc
 	@echo "Running the conformance suite..."
 	@mkdir -p $(BIN_DIR)
-	go run ./cmd/conformance -withhold-capabilities strict_conformance,oslc_query -report $(BIN_DIR)/conformance-report.json
-	@echo "✓ Conformance suite passed ($(BIN_DIR)/conformance-report.json)"
+	go run ./cmd/conformance -withhold-capabilities strict_conformance,oslc_query -report $(BIN_DIR)/conformance-report.json -junit $(BIN_DIR)/conformance-report.xml
+	@echo "✓ Conformance suite passed ($(BIN_DIR)/conformance-report.json, $(BIN_DIR)/conformance-report.xml)"
 
 conformance-rust: ## Run the conformance suite with the blocking Rust client
 	$(MAKE) build

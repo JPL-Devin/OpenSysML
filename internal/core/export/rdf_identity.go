@@ -58,10 +58,14 @@ func documentIdentity(name string, root *ast.RootNamespace) (*identityFacts, err
 			if err := exportableID(info); err != nil {
 				return nil, err
 			}
-			facts.consumed[info.AnnotationNode] = true
+			for _, d := range info.Declarations {
+				facts.consumed[d.Node] = true
+			}
 		}
 		if info.Scope != nil {
-			facts.consumed[info.Scope.Node] = true
+			for _, d := range info.Scope.Declarations {
+				facts.consumed[d.Node] = true
+			}
 			facts.provenance[idx.GetFQN(info.Scope.Symbol)] = info.Scope
 			scopeKeys[info.Scope.Key()] = true
 		}

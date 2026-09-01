@@ -72,6 +72,14 @@ var (
 	// input parameter of the invoked calc.
 	ErrUnknownParameter = errors.New("unknown parameter")
 
+	// ErrUnknownActionInput is returned when a supplied input names no parameter
+	// or attribute of the action performed.
+	ErrUnknownActionInput = errors.New("unknown action input")
+
+	// ErrOutputActionInput is returned when a supplied input names a parameter
+	// the action only writes back (`out`), which a caller does not seed.
+	ErrOutputActionInput = errors.New("output action parameter given as input")
+
 	// ErrNoResultExpression is returned when a calc body declares no return
 	// expression, directly or by inheritance.
 	ErrNoResultExpression = errors.New("no result expression")

@@ -1590,6 +1590,14 @@ func (idx *Index) DocumentRoot(name string) *Scope {
 	return idx.docRoots.at(name)
 }
 
+// Documents returns the names of every document with a root scope, bundled
+// library content included, sorted for deterministic iteration.
+func (idx *Index) Documents() []string {
+	out := append([]string(nil), idx.docRoots.keys()...)
+	sort.Strings(out)
+	return out
+}
+
 // WorkspaceDocuments returns the names of the documents holding workspace
 // content — every document with a root scope that is not marked as bundled
 // library content — sorted for deterministic iteration.

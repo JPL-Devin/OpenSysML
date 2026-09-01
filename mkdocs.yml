@@ -121,6 +121,7 @@ exclude_docs: |
   project/pilot-execution-referee.md
   project/grammar-coverage.md
   project/element-identity-annotations.md
+  project/html-document-backend.md
   project/wave*.md
 
 nav:
@@ -158,6 +159,9 @@ nav:
       - Client libraries: reference/clients.md
       - Go packages: reference/api.md
       - Python API: reference/python-api.md
+      - Node API: reference/node-api.md
+      - Java API: reference/java-api.md
+      - Rust API: reference/rust-api.md
       - Service transports: reference/service-transports.md
       - RDF mapping: reference/rdf-mapping.md
       - Grammar: reference/grammar/README.md

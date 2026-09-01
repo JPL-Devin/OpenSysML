@@ -11,13 +11,13 @@ those preceding it.
 6. [Behavior: actions and state machines](06-behavior.md) — running and debugging behavior
 7. [Saving, and converting to RDF](07-saving-and-rdf.md) — `%save`, `-convert`, round trips
 8. [Editors](08-editors.md) — `sysml-lsp` and the VS Code extension
-9. [From Python](09-python.md) — the `opensysml` client over `sysml-grpc`
+9. [From your own program](09-python.md) — the Go, Python, Node, Java and Rust clients
 10. [Troubleshooting](10-troubleshooting.md) — diagnosing a run that stops short
 
-Python is covered here because it is the oldest and most complete client, not the only one. Go,
-Node/TypeScript, Java and Rust access the same engine;
-[client libraries](../reference/clients.md) describes which to select and what each covers.
+Chapter 9 has a section per client — Go, Python, Node/TypeScript, Java and Rust — and Python's is the
+longest because it is the oldest and most complete, not because it is the intended one.
+[Client libraries](../reference/clients.md) describes which to select and what each covers.
 
 For looking up a specific detail rather than reading through, the [reference](../reference/)
 documents the CLI flags, the REPL commands, the environment variables, the service API, the client
-libraries, the Python API and the RDF mapping.
+libraries, each client's API and the RDF mapping.

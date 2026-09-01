@@ -29,9 +29,30 @@ type Scope struct {
 	Org       string
 	// Symbol is the namespace carrying the ProjectRef annotation.
 	Symbol *symbols.Symbol
-	// Node is the ProjectRef annotation itself, so a consumer that absorbs
-	// the annotation into provenance can identify it in the tree.
-	Node *ast.PrefixMetadata
+	// Declarations lists every ProjectRef annotation of the namespace, inline
+	// ones first, `about`-form ones after. The first supplies the binding.
+	Declarations []ScopeDeclaration
+}
+
+// ScopeDeclaration is one ProjectRef annotation of a namespace, whether
+// written inline or from elsewhere with an `about` clause.
+type ScopeDeclaration struct {
+	ProjectID string
+	Branch    string
+	Org       string
+	// Node is the annotating node itself, so a consumer that absorbs the
+	// annotation into provenance can identify it in the tree.
+	Node ast.Node
+	// Span locates the annotating node, for diagnostics.
+	Span source.Span
+	// Scope is where the annotating node is declared.
+	Scope *symbols.Scope
+}
+
+// Key names the project a declaration binds to; branch selects a version of
+// one project, never another identity, so it plays no part.
+func (d ScopeDeclaration) Key() string {
+	return d.Org + "\x00" + d.ProjectID
 }
 
 // Key names the project a scope binds to, for scope-equality grouping.
@@ -40,6 +61,25 @@ func (s *Scope) Key() string {
 		return ""
 	}
 	return s.Org + "\x00" + s.ProjectID
+}
+
+// Declaration is one ElementId annotation of an element, whether written
+// inline (`@ElementId {...}`) or from elsewhere (`metadata : ElementId about x;`).
+type Declaration struct {
+	// ID is the annotation's evaluated id; meaningful when Declared.
+	ID string
+	// Declared reports the id evaluated to a constant string.
+	Declared bool
+	// About marks an `about`-form annotation stated away from the element.
+	About bool
+	// Node is the annotating node itself, so a consumer that absorbs the
+	// annotation into identity can identify it in the tree.
+	Node ast.Node
+	// Span locates the annotating node, for diagnostics.
+	Span source.Span
+	// Scope is where the annotating node is declared; for an `about`-form
+	// annotation that may be another document than the element's.
+	Scope *symbols.Scope
 }
 
 // Info is one symbol's identity: its effective id, whether an ElementId
@@ -59,9 +99,9 @@ type Info struct {
 	DeclaredID string
 	// AnnotationSpan locates the ElementId annotation, for diagnostics.
 	AnnotationSpan source.Span
-	// AnnotationNode is the ElementId annotation itself, so a consumer that
-	// absorbs the annotation into identity can identify it in the tree.
-	AnnotationNode *ast.PrefixMetadata
+	// Declarations lists every ElementId annotation of the element, inline
+	// ones first, `about`-form ones after.
+	Declarations []Declaration
 	// Scope is the nearest enclosing ProjectRef binding; nil when unbound.
 	Scope *Scope
 }
@@ -92,7 +132,18 @@ func Build(model *semantics.Model, res *resolve.Resolver, roots ...*symbols.Scop
 		known:  make(map[*symbols.Symbol]bool),
 	}
 	t := &Table{infos: make(map[*symbols.Symbol]*Info)}
-	for _, sym := range collectSymbols(roots) {
+	syms := collectSymbols(roots)
+	// `about` annotations may target elements outside the roots — bundled
+	// library ones included — and those targets still carry the identity
+	// their annotations declare. A ProjectRef binds the target's whole
+	// subtree to a project, so its descendants join the id space too.
+	for _, sym := range model.AboutAnnotatedSymbols() {
+		syms = append(syms, sym)
+		if hasProjectRefSite(model, sym) {
+			syms = append(syms, collectSymbols([]*symbols.Scope{sym.Scope})...)
+		}
+	}
+	for _, sym := range syms {
 		if _, ok := t.infos[sym]; ok {
 			continue
 		}
@@ -125,15 +176,27 @@ func (b *builder) infoOf(sym *symbols.Symbol) *Info {
 		return nil
 	}
 	info := &Info{Symbol: sym, FQN: fqn, EffectiveID: rdf.EncodeElementID(fqn)}
-	if node, ok := b.annotation(sym, ElementIdFQN); ok {
+	for _, site := range b.model.AnnotationSitesOf(sym) {
+		if site.TypeFQN != ElementIdFQN {
+			continue
+		}
+		d := Declaration{About: site.About, Node: site.Node, Span: site.Node.Span(), Scope: site.Scope}
+		if id, ok := siteString(site, "id"); ok {
+			d.Declared = true
+			d.ID = id
+		}
+		info.Declarations = append(info.Declarations, d)
+	}
+	if len(info.Declarations) > 0 {
+		first := info.Declarations[0]
 		info.Annotated = true
-		info.AnnotationSpan = node.Span()
-		info.AnnotationNode = node
-		if id, ok := b.stringFact(sym, ElementIdFQN, "id"); ok {
-			info.Declared = true
-			info.DeclaredID = id
-			if id != "" {
-				info.EffectiveID = id
+		info.AnnotationSpan = first.Span
+		info.Declared = first.Declared
+		info.DeclaredID = first.ID
+		for _, d := range info.Declarations {
+			if d.Declared && d.ID != "" {
+				info.EffectiveID = d.ID
+				break
 			}
 		}
 	}
@@ -151,17 +214,42 @@ func (b *builder) scopeOf(sym *symbols.Symbol) *Scope {
 		return b.scopes[sym]
 	}
 	b.known[sym] = true
-	if node, ok := b.annotation(sym, ProjectRefFQN); ok {
-		s := &Scope{Symbol: sym, Node: node}
-		s.ProjectID, _ = b.stringFact(sym, ProjectRefFQN, "projectId")
-		s.Branch, _ = b.stringFact(sym, ProjectRefFQN, "branch")
-		s.Org, _ = b.stringFact(sym, ProjectRefFQN, "org")
+	var decls []ScopeDeclaration
+	for _, site := range b.model.AnnotationSitesOf(sym) {
+		if site.TypeFQN != ProjectRefFQN {
+			continue
+		}
+		d := ScopeDeclaration{Node: site.Node, Span: site.Node.Span(), Scope: site.Scope}
+		d.ProjectID, _ = siteString(site, "projectId")
+		d.Branch, _ = siteString(site, "branch")
+		d.Org, _ = siteString(site, "org")
+		decls = append(decls, d)
+	}
+	if len(decls) > 0 {
+		first := decls[0]
+		s := &Scope{
+			ProjectID:    first.ProjectID,
+			Branch:       first.Branch,
+			Org:          first.Org,
+			Symbol:       sym,
+			Declarations: decls,
+		}
 		b.scopes[sym] = s
 		return s
 	}
 	s := b.scopeOf(enclosingSymbol(sym))
 	b.scopes[sym] = s
 	return s
+}
+
+// hasProjectRefSite reports a ProjectRef annotation among sym's sites.
+func hasProjectRefSite(model *semantics.Model, sym *symbols.Symbol) bool {
+	for _, site := range model.AnnotationSitesOf(sym) {
+		if site.TypeFQN == ProjectRefFQN {
+			return true
+		}
+	}
+	return false
 }
 
 // enclosingSymbol is the declaration sym is nested in, or nil at a root.
@@ -174,42 +262,11 @@ func enclosingSymbol(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// annotation reports whether sym's declaration carries an annotation of the
-// given metadata type, and returns the annotation node itself.
-func (b *builder) annotation(sym *symbols.Symbol, typeFQN string) (*ast.PrefixMetadata, bool) {
-	for _, a := range semantics.MetadataAnnotationsOf(sym.Decl) {
-		if a.Node == nil || a.Node.Type == nil {
-			continue
-		}
-		scope := sym.OwnerScope
-		if !a.Prefix && sym.Scope != nil {
-			scope = sym.Scope
-		}
-		typ, ok := b.res.ResolveQualified(scope, a.Node.Type)
-		if !ok || typ == nil {
-			continue
-		}
-		if resolved, aliasOK := b.res.ResolveAliasTarget(typ); aliasOK {
-			typ = resolved
-		}
-		if b.idx.GetFQN(typ) == typeFQN {
-			return a.Node, true
-		}
-	}
-	return nil, false
-}
-
-// stringFact is the constant string value an annotation of typeFQN binds to
-// feature, evaluated by the model.
-func (b *builder) stringFact(sym *symbols.Symbol, typeFQN, feature string) (string, bool) {
-	for _, facts := range b.model.AnnotationFactsOf(sym) {
-		if facts.TypeFQN != typeFQN {
-			continue
-		}
-		for _, v := range facts.Values {
-			if v.Feature == feature && v.Value.Kind == symbols.FilterValueString {
-				return v.Value.Str, true
-			}
+// siteString is the constant string value one annotation binds to feature.
+func siteString(site semantics.AnnotationSite, feature string) (string, bool) {
+	for _, v := range site.Values {
+		if v.Feature == feature && v.Value.Kind == symbols.FilterValueString {
+			return v.Value.Str, true
 		}
 	}
 	return "", false

@@ -1500,6 +1500,11 @@ func (p *Parser) parseUsageIdentification(kind ast.UsageKind) ast.Identification
 			Name: tok.KeywordID,
 		}
 	}
+	// `about` ends a metadata declaration (SysML.xtext MetadataUsage), so an
+	// unnamed `metadata : M about x;` is not named "about".
+	if kind == ast.UsageMetadata {
+		return p.parseIdentificationStopping("about")
+	}
 	// Default: use standard identification parsing
 	return p.parseIdentification()
 }

@@ -9,8 +9,20 @@ export class OpenSysMLError extends Error {
   }
 }
 
-/** The service could not be reached, started, or answered nothing usable. */
-export class ServiceError extends OpenSysMLError {}
+/**
+ * The service could not be reached, started, or answered nothing usable. Also
+ * what a failed call becomes: the subclasses name the statuses a caller acts on
+ * differently, and the ConnectError behind one is always its `cause`.
+ */
+export class ServiceError extends OpenSysMLError {
+  /** Status the call failed with, when the failure came from a call. */
+  readonly code: string | undefined;
+
+  constructor(message: string, options: { cause?: unknown; code?: string } = {}) {
+    super(message, options.cause === undefined ? {} : { cause: options.cause });
+    this.code = options.code;
+  }
+}
 
 /** A private child service failed to start, or died while it was needed. */
 export class ServiceStartError extends ServiceError {}
@@ -21,6 +33,21 @@ export class ClosedConnectionError extends OpenSysMLError {
     super("this connection is closed; open another with connect()");
   }
 }
+
+/** The service no longer holds the model a call named; load it again. */
+export class ModelNotFoundError extends ServiceError {}
+
+/** The service could not read the source file a call named. */
+export class ModelFileNotFoundError extends ServiceError {}
+
+/** The service rejected the request as malformed or unsupported. */
+export class InvalidRequestError extends ServiceError {}
+
+/** A call exceeded its deadline, or was cancelled. */
+export class ServiceTimeoutError extends ServiceError {}
+
+/** The connected service does not implement the call at all. */
+export class UnsupportedOperationError extends ServiceError {}
 
 /** A release binary could not be downloaded, or could not be installed once it was. */
 export class DownloadError extends ServiceError {}
@@ -64,12 +91,16 @@ export interface ModelDiagnostic {
 
 /** No symbol of that name is declared in the model. */
 export class SymbolNotFoundError extends OpenSysMLError {
-  readonly name_: string;
+  /** Name that was looked up. `name` is the error's class, as on every Error. */
+  readonly symbolName: string;
+  /** Names the model declares that are close enough to be typos of it. */
+  readonly suggestions: readonly string[];
 
   constructor(name: string, near: readonly string[] = []) {
-    const hint = near.length > 0 ? `; the model declares ${near.join(", ")}` : "";
+    const hint = near.length > 0 ? `; did you mean ${near.join(", ")}?` : "";
     super(`the model declares no symbol named ${JSON.stringify(name)}${hint}`);
-    this.name_ = name;
+    this.symbolName = name;
+    this.suggestions = [...near];
   }
 }
 

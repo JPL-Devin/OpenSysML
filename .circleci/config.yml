@@ -297,6 +297,11 @@ jobs:
           destination: conformance-report.json
           when: always
 
+      # The same run as JUnit XML, so the Tests tab shows per-scenario results.
+      - store_test_results:
+          path: bin/conformance-report.xml
+          when: always
+
       # The same suite against the legacy grpc-go transport, so -transport grpc
       # cannot rot untested.
       - run:

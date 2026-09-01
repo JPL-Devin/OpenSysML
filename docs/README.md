@@ -6,7 +6,7 @@
 [your first model](guide/02-first-model.md), [the command line](guide/03-command-line.md),
 [the REPL](guide/04-repl.md), [checks](guide/05-checking.md), [behavior](guide/06-behavior.md),
 [saving and RDF](guide/07-saving-and-rdf.md), [editors](guide/08-editors.md),
-[Python](guide/09-python.md), [troubleshooting](guide/10-troubleshooting.md).
+[from your own program](guide/09-python.md), [troubleshooting](guide/10-troubleshooting.md).
 
 Runnable models are provided in [examples/](../examples/), together with a catalog describing what
 each one demonstrates.

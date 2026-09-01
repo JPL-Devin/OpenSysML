@@ -73,6 +73,24 @@ func TestQuantityEvaluation(t *testing.T) {
 	}
 }
 
+// TestQuantityArithmeticReportsOverflow: a magnitude no Real holds is reported
+// for a quantity as it is for a bare Real, rather than carried as an infinity.
+func TestQuantityArithmeticReportsOverflow(t *testing.T) {
+	ctx, scope := quantityContext(t)
+
+	for _, src := range []string{
+		"1e308 [m] + 1e308 [m]",
+		"1e200 [m] * 1e200 [s]",
+		"1e308 [m] / 1e-308 [s]",
+		"1e308 [m] / 1e-308 [m]",
+	} {
+		got, err := evalIn(t, ctx, scope, src)
+		if !errors.Is(err, semantics.ErrArithmeticOverflow) {
+			t.Errorf("%s = %+v, %v; want ErrArithmeticOverflow", src, got, err)
+		}
+	}
+}
+
 // TestQuantityComparison compares quantities across commensurable units,
 // including at the exact boundary the lunar-lander requirement sits on.
 func TestQuantityComparison(t *testing.T) {
