@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -36,10 +37,26 @@ package test {
 }
 `
 
+// wideCalcModel adds Wide, a recursion binding more names per frame than a free
+// frame keeps storage for.
+func wideCalcModel() string {
+	var params strings.Builder
+	for i := 0; i <= maxPooledBindings; i++ {
+		fmt.Fprintf(&params, "\t\tin p%d : Integer = k;\n", i)
+	}
+	wide := fmt.Sprintf(`
+	calc def Wide {
+		in k : Integer;
+%s		return : Integer = if k <= 0 ? p0 else Wide(k - 1) + p%d;
+	}
+`, params.String(), maxPooledBindings)
+	return strings.Replace(framesModel, "\tcalc def Fail {", wide+"\tcalc def Fail {", 1)
+}
+
 func framesRuntime(t *testing.T) (*symbols.Scope, *Context) {
 	t.Helper()
 
-	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, framesModel))
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, wideCalcModel()))
 	ctx.maxSteps = DefaultMaxSteps
 	return idx.DocumentRoot("<test>"), ctx
 }
@@ -123,6 +140,32 @@ func TestCalcDefaultReadsNestedUsagePerInvocation(t *testing.T) {
 	wantInvokedInt(t, ctx, scope, "F", 7, 3)
 	wantInvokedInt(t, ctx, scope, "F", 11, 5)
 	wantFramesReleased(t, ctx)
+}
+
+// A recursion binding many names per frame gives its frames back without their
+// maps, which clearing would have kept at that width; later invocations bind
+// into fresh ones.
+func TestWideRecursionDropsOversizedBindings(t *testing.T) {
+	scope, ctx := framesRuntime(t)
+	wantInvokedInt(t, ctx, scope, "Wide", 55, 10)
+	wantFramesReleased(t, ctx)
+	if len(ctx.freeInvocationFrames) == 0 {
+		t.Fatal("no frame kept after the recursion returned")
+	}
+	for i, frame := range ctx.freeInvocationFrames {
+		if frame.bindings != nil {
+			t.Errorf("free frame %d keeps a map that bound %d names", i, maxPooledBindings+2)
+		}
+	}
+
+	// Deeper than Wide went, so every kept frame runs a narrow invocation.
+	wantInvokedInt(t, ctx, scope, "Fib", 144, 12)
+	wantFramesReleased(t, ctx)
+	for i, frame := range ctx.freeInvocationFrames {
+		if frame.bindings == nil {
+			t.Errorf("free frame %d has no map after a narrow recursion ran in it", i)
+		}
+	}
 }
 
 // A recursion failing at its deepest frame unwinds every frame above it, and the

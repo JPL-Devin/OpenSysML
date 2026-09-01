@@ -252,12 +252,19 @@ type invocationFrame struct {
 // pin that many for the context's whole life.
 const maxFreeInvocationFrames = 1024
 
+// maxPooledBindings is the widest bindings map a free frame keeps: clearing a map
+// keeps its backing storage, so a wider one is dropped rather than pinned.
+const maxPooledBindings = 32
+
 // acquireInvocationFrame takes a frame off the free list, or makes one when it is empty.
 func (ctx *Context) acquireInvocationFrame() *invocationFrame {
 	if n := len(ctx.freeInvocationFrames); n > 0 {
 		frame := ctx.freeInvocationFrames[n-1]
 		ctx.freeInvocationFrames[n-1] = nil
 		ctx.freeInvocationFrames = ctx.freeInvocationFrames[:n-1]
+		if frame.bindings == nil {
+			frame.bindings = make(map[string]Value)
+		}
 		return frame
 	}
 	return &invocationFrame{bindings: make(map[string]Value)}
@@ -267,7 +274,11 @@ func (ctx *Context) acquireInvocationFrame() *invocationFrame {
 // caller has ended the activation, so nothing memoized still reads the bindings.
 func (ctx *Context) releaseInvocationFrame(frame *invocationFrame) {
 	bindings := frame.bindings
-	clear(bindings)
+	if len(bindings) > maxPooledBindings {
+		bindings = nil
+	} else {
+		clear(bindings)
+	}
 	*frame = invocationFrame{bindings: bindings}
 	if len(ctx.freeInvocationFrames) < maxFreeInvocationFrames {
 		ctx.freeInvocationFrames = append(ctx.freeInvocationFrames, frame)
