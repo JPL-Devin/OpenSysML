@@ -1199,8 +1199,16 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	}
 
 	// Integer arithmetic: an out-of-range result is reported, not wrapped.
-	// Division is a Rational, so it is computed as a Real below, never truncated.
-	if left.Const.Kind == semantics.ValInt && right.Const.Kind == semantics.ValInt && n.Operator != ast.OpDiv {
+	if left.Const.Kind == semantics.ValInt && right.Const.Kind == semantics.ValInt {
+		// A quotient is a Rational: the exact ratio, rounded once to float64 so
+		// operands beyond 2^53 are not rounded before dividing.
+		if n.Operator == ast.OpDiv {
+			q, ok := semantics.IntQuotient(left.Const.Int, right.Const.Int)
+			if !ok {
+				return Value{}, ErrDivisionByZero
+			}
+			return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: q}}, nil
+		}
 		var result int64
 		switch n.Operator {
 		case ast.OpAdd, ast.OpSub, ast.OpMul:

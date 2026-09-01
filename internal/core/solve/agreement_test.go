@@ -120,6 +120,52 @@ func TestSolvedIntegerDivisionAgreesWithEvaluator(t *testing.T) {
 	}
 }
 
+// Beyond 2^53 the encoding divides the exact Int terms and the evaluator rounds
+// the exact ratio once, so the solved quotient still matches the evaluated one.
+func TestSolvedQuotientAgreesBeyondFloatExactRange(t *testing.T) {
+	solver := requireSolver(t)
+	// 2^53+1 over 3 divides exactly; rounding the dividend to float64 first
+	// would move the quotient by a whole unit.
+	wantQ, wantR := evaluatedDivision(t, 9007199254740993, 3)
+	q := constraintQuery(t, `
+		package test {
+			private import ScalarValues::Integer;
+			private import ScalarValues::Rational;
+			constraint def C {
+				in a : Integer; in q : Rational; in r : Integer;
+				assert constraint { a == 9007199254740993 }
+				assert constraint { q == a / 3 }
+				assert constraint { r == a % 3 }
+			}
+		}`, "test::C")
+	values := modelValues(t, solved(t, solver, q, StatusSat))
+	if !sameReal(t, values["test::C::q"], wantQ) || values["test::C::r"] != wantR {
+		t.Errorf("solved 9007199254740993 / 3 = %s remainder %s, evaluator says %s remainder %s",
+			values["test::C::q"], values["test::C::r"], wantQ, wantR)
+	}
+
+	// The exact-quotient condition the evaluator satisfies is satisfiable for
+	// the solver too, and the pre-rounded-operand answer is refused by both.
+	for _, tc := range []struct {
+		quotient string
+		want     Status
+	}{
+		{"3002399751580331.0", StatusSat},
+		{"3002399751580330.5", StatusUnsat},
+	} {
+		cond := constraintQuery(t, fmt.Sprintf(`
+			package test {
+				private import ScalarValues::Integer;
+				constraint def C {
+					in a : Integer;
+					assert constraint { a == 9007199254740993 }
+					assert constraint { a / 3 == %s }
+				}
+			}`, tc.quotient), "test::C")
+		solved(t, solver, cond, tc.want)
+	}
+}
+
 // sameReal compares two rendered numbers by value, so the solver's `0.0` matches
 // the negative zero the evaluator renders for `0 / -3`.
 func sameReal(t *testing.T, got, want string) bool {
