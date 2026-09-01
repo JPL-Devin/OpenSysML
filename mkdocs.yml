@@ -120,6 +120,7 @@ exclude_docs: |
   project/pilot-rejection.md
   project/pilot-execution-referee.md
   project/grammar-coverage.md
+  project/element-identity-annotations.md
   project/wave*.md
 
 nav:
