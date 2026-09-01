@@ -10,17 +10,30 @@ PILOT_ARTIFACT_VERSION="${PILOT_ARTIFACT_VERSION:-0.61.0}"
 
 # pilot_fetch_subtrees copies model roots out of the pinned pilot repository in one
 # sparse clone. Each argument is "<path in the pilot repository>:<destination>";
-# only those paths are checked out and an existing destination is left alone, so
-# the fetch stays as narrow and as pinned as the scripts it replaces.
+# only those paths are checked out. Each destination records the tag it was
+# fetched at in a .pilot-pin stamp: a destination stamped with the current tag is
+# left alone, one stamped with another tag is re-downloaded, and one without a
+# stamp is left alone with a warning, since its pin cannot be verified.
 pilot_fetch_subtrees() {
-	local paths=() targets=() entry source_path target work index count
+	local paths=() targets=() entry source_path target work index count stamp
 	for entry in "$@"; do
 		source_path="${entry%%:*}"
 		target="${entry#*:}"
 		if [[ -d "$target" ]]; then
-			echo "Already present at $target"
-			echo "Remove that directory to re-download."
-			continue
+			stamp="$target/.pilot-pin"
+			if [[ -f "$stamp" ]] && [[ "$(cat "$stamp")" == "$PILOT_TAG" ]]; then
+				echo "Already present at $target (pin $PILOT_TAG)"
+				echo "Remove that directory to re-download."
+				continue
+			fi
+			if [[ -f "$stamp" ]]; then
+				echo "Stale pin at $target: fetched at $(cat "$stamp"), pin is now $PILOT_TAG; re-downloading."
+				rm -rf "$target"
+			else
+				echo "warning: $target exists but records no pin; leaving it alone." >&2
+				echo "warning: remove that directory to re-download at $PILOT_TAG." >&2
+				continue
+			fi
 		fi
 		paths+=("$source_path")
 		targets+=("$target")
@@ -47,6 +60,7 @@ pilot_fetch_subtrees() {
 		fi
 		mkdir -p "$(dirname "$target")"
 		mv "$work/pilot/$source_path" "$target"
+		printf '%s\n' "$PILOT_TAG" >"$target/.pilot-pin"
 		count="$(find "$target" -type f \( -name '*.sysml' -o -name '*.kerml' \) | wc -l | tr -d ' ')"
 		echo "Downloaded $count model file(s) from $source_path to $target"
 	done
