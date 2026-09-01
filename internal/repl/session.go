@@ -706,20 +706,30 @@ func (s *Session) SubmitFiles(files []SourceFile) Result {
 }
 
 func (s *Session) submitFiles(files []SourceFile) Result {
+	res, _, _ := s.submitEach(files)
+	return res
+}
+
+// submitEach is submitFiles with the notices told apart: what accepting each
+// file dropped, in file order, and what the submission did to the session as a whole.
+func (s *Session) submitEach(files []SourceFile) (res Result, byFile [][]string, whole []string) {
 	var (
 		declared []string
 		drops    []dropReport
 	)
 	seen := map[string]bool{}
 	s.version++
-	for _, f := range files {
+	byFile = make([][]string, len(files))
+	for i, f := range files {
 		for _, name := range declaredNames(parser.New(source.New(parseDocName(f.Name), []byte(f.Text))).ParseFile()) {
 			if !seen[name] {
 				seen[name] = true
 				declared = append(declared, name)
 			}
 		}
-		drops = append(drops, s.acceptFrom(f.Name, f.Text)...)
+		fileDrops := s.acceptFrom(f.Name, f.Text)
+		byFile[i] = dropNotices(fileDrops)
+		drops = append(drops, fileDrops...)
 	}
 	joined := s.joined()
 	offset := s.genOffset(joined)
@@ -747,15 +757,15 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	// why it records the version it holds.
 	s.rtCtx = nil
 	gone := goneNames(drops)
-	notices := dropNotices(drops)
-	notices = append(notices, s.carryOverObjects(over)...)
-	notices = append(notices, s.dropStaleDebugSessions(gone, over)...)
+	whole = s.carryOverObjects(over)
+	whole = append(whole, s.dropStaleDebugSessions(gone, over)...)
+	notices := append(dropNotices(drops), whole...)
 	s.rebindRestartedMachine()
 	s.keepIdentitiesOf(over.prev)
 	// The diagnostics already carry their own "did you mean" hints.
 	diags := s.diagnostics()
 	members := s.sessionMembers()
-	res := Result{
+	res = Result{
 		Members:     members,
 		Declared:    declared,
 		Diagnostics: diags,
@@ -769,7 +779,21 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 		Notices: notices,
 	}
 	res.Blocked = s.blockedBy(res)
-	return res
+	return res, byFile, whole
+}
+
+// fileSpan is where the current submission's text from the named file sits in the
+// joined buffer, through the newline closing it, where a parse that ran out of text reports.
+func (s *Session) fileSpan(name string) source.Span {
+	key := fileKeyOf(name)
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.gen == s.version && sn.key == key {
+			return source.Span{Offset: acc, Len: len(sn.src) + 1}
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return source.Span{Offset: acc}
 }
 
 // keepIdentitiesOf hands a replaced context's identity sequence to the context

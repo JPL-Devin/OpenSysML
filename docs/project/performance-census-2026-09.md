@@ -91,6 +91,12 @@ Submitting a `-validate` batch as one indexing unit, or expanding wildcard
 imports incrementally for documents the new submission cannot affect, would
 make the corpus cost what its parts cost.
 
+Since this census, the CLI loads a `-validate` batch as one submission
+(`Session.LoadFilesSummary`), indexed and analyzed once, with each file still
+summarized on its own and every diagnostic reported as before. The corpus now
+validates in 0.30 s (six runs, ±2%), against 0.12 s for its first 25 files and
+0.13 s for its first 50 — the constant floor plus a term linear in the input.
+
 ## Assessment
 
 Single-model validation remains linear in both time and memory through

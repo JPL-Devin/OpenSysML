@@ -504,6 +504,13 @@ func hasError(diags []passes.Diagnostic) bool {
 	return false
 }
 
+// within narrows the result to one span of the submission — one file of a load
+// of several — so what is reported as its own is scoped to that text alone.
+func (r Result) within(span source.Span) Result {
+	r.own = []source.Span{span}
+	return r
+}
+
 // ownMembers returns the top-level members this submission contributed, so a
 // summary does not re-announce everything typed earlier in the session.
 func (r Result) ownMembers() []ast.Node {
