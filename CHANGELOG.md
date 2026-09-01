@@ -4,6 +4,164 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.4.3 — 2026-09-01
+
+Release 0.4.3 is where an element gets an identity the notation can carry. The SysML v2 textual
+notation deliberately records no element identity, so a model saved as `.sysml` and re-parsed had
+fresh ids everywhere and a rename was a delete plus a create. An element may now declare the
+repository element it *is* — standard user-defined metadata (`@ElementId`, with a `ProjectRef`
+binding a document to its repository once, at the root namespace), shipped as an `IdentityMetadata`
+library extension that any conforming tool already parses and preserves. Identity is validated
+(id shape, scope binding, uniqueness), survives `notation → RDF → notation`, and
+`sysml -sync-diff` computes the change set between a model and a repository graph keyed by that
+identity, so a rename or a retype is an update to the same element. The design is
+[a project record](docs/project/element-identity-annotations.md), and the notation has been
+submitted to OMG for standardization
+([the issue text and its status](docs/project/omg-issues.md)).
+
+A solver verdict is now the evaluator's verdict. The SMT translation reasons over exact rationals
+while the evaluator computes in IEEE 754 binary64, and the difference is reachable: the exact
+encoding holds `0.1 + 0.2 == 0.3` sat, which the evaluator rejects. Every `sat` witness is now
+replayed through the evaluator's own arithmetic before it is reported, a query whose conditions the
+evaluator rounds is marked and its exact-real `unsat` reported undecided rather than as an
+evaluator verdict, and a whole-number quotient divides as an exact ratio rounded once — `5 / 2` is
+`2.5`, as the reference evaluates it. The remaining alternative, an exact-rational evaluator value
+representation, was adjudicated against the pinned pilot and the specification text and
+[declined](docs/project/exact-rational-evaluation.md).
+
+The four non-Go clients and the public Go API were each exercised by worked examples over a fully
+capable model — quantities, enumerations, multiplicity, nesting, unvalued features — run by the
+test suites so they cannot drift, and the defects that tour surfaced are the client and runtime
+fixes below. Each client now has a reference page of its own, the Java client's package moves to
+`org.openmbee.opensysml` (the client is unpublished, so no released consumer moves with it), and
+the Python client 0.4.0 was published to PyPI. The conformance suite and the pilot differential
+now also render their runs as JUnit XML — and the differential as SARIF — so CI shows them as test
+results rather than artifacts to download.
+
+No model that validated under 0.4.2 stops validating and no import path moves.
+
+### Added
+
+- **An element declares its repository identity in the notation.** `@ElementId { id = "…"; }`
+  annotates the element it is written about, and `@ProjectRef { projectId = "…"; }` on a root
+  namespace binds the document to its repository, so element-level ids inherit their scope.
+  Identity is opt-in per element: an element without an annotation keeps today's derived,
+  latest-wins identity. The two metadata definitions ship as a non-normative library extension
+  (`IdentityMetadata`, entering the same gates as the vendored files — the bundled-library check
+  now reports 97/97 clean), and a constraint-tier pass validates id shape, scope binding and
+  uniqueness across the workspace, including anonymous about-form usages, annotations declared in
+  libraries, and targets outside the built roots.
+
+- **Identity survives the RDF round trip.** The writer mints subject IRIs from the effective id —
+  the declared one where an annotation exists, the encoded qualified name where none does — marks
+  declared ids, writes `ProjectRef` bindings as provenance triples, and refuses colliding ids
+  across a mixed-scope workspace rather than silently merging two elements. The reader keys
+  subjects on the element id (with the name-encoding fallback for old graphs), reports a dangling
+  id as its own error, and re-materializes the annotations on the way back to notation, so
+  `notation → RDF → notation` preserves which repository element each declaration is.
+
+- **A model diffs against a repository, keyed by identity.** `sysml model.sysml -sync-diff repo.ttl`
+  reports the change set — creates, updates, deletes, and renames seen as updates to the same
+  element — and never writes: applying is a separate step. `-sync-base` names the graph at the
+  last-seen commit, so repository changes since then surface as conflicts rather than silent
+  overwrites; deletes are reported always and confirmed with `-sync-confirm-deletes`;
+  `-sync-mint-ids` mints a UUID for each unannotated element being created and `-sync-annotate`
+  writes the model back out with each minted id declared, preserving the source text and quoting
+  names as the notation requires. The last-seen commit is tool state beside the model
+  (`<model>.sync.json`), never written into the notation.
+
+- **The conformance suite and the pilot differential render as CI test results.** The conformance
+  runner emits JUnit XML (stored even when the gate fails), and `pilot-diff` writes JUnit XML with
+  one suite per corpus root alongside SARIF 2.1.0 with one result per disagreeing diagnostic
+  group, located on the compared model file — the same run, in the renderings CI dashboards and
+  code-scanning consoles read.
+
+- **Worked examples for every client, run by the tests.** Runnable examples drive the Node, Java,
+  Rust and Go clients over one capable model — parsing, diagnostics, symbol navigation, evaluation
+  and instantiation — and each client gains a reference page
+  ([Java](docs/reference/java-api.md), [Node](docs/reference/node-api.md),
+  [Rust](docs/reference/rust-api.md)). The examples were written to find defects and did; the
+  fixes are below.
+
+- **The implementation models itself.** [`examples/self-model`](examples/self-model/README.md) is
+  the analysis pipeline, surfaces, invariants and views of this implementation written as a SysML
+  v2 model across five files whose packages import each other, with a make target rendering its
+  diagrams and documents and a test evaluating its invariants and checking its figures against the
+  implementation they describe.
+
+- **`-render-document` takes a model of several files.** A document may query elements its sibling
+  files declare: `sysml model/*.sysml -render-document Reports::MassReport -o report.md` loads the
+  named files as one model.
+
+- **Two design records.** [Exact-rational evaluation](docs/project/exact-rational-evaluation.md)
+  adjudicates and declines a `big.Rat`-backed evaluator, with the pinned pilot's verbatim binary64
+  answers as evidence and a census showing no marked-rounded query is recoverable by per-term
+  narrowing; [the HTML document backend](docs/project/html-document-backend.md) records the agreed
+  design for rendering documents as semantic, styleable HTML straight from the document IR —
+  proposed, not implemented.
+
+### Changed
+
+- **A `sat` is a witness the evaluator confirms; an `unsat` is claimed only where the arithmetics
+  coincide.** Every satisfying assignment is replayed through the evaluator's float64 arithmetic
+  and reported `unknown` with the reason when the replay rejects it; a query whose conditions the
+  evaluator rounds is marked, `%check` and `%solve` report its exact-real `unsat` as undecided,
+  and `%configure all` and `%optimize` decline the completeness claim outright. Narrower, and
+  sound — what is given up is completeness on rounded queries, and the census over the
+  repository's solver-facing corpora found none of them recoverable.
+
+- **A whole-number quotient is a Rational.** `5 / 2` answers `2.5` for `Natural` and `Integer`
+  operands alike, which is what the reference evaluator answers; the quotient is computed as an
+  exact ratio rounded once to float64, so it agrees with the exact SMT encoding even beyond 2^53,
+  where rounding each operand first moves the answer. The library's declared `Natural` return is
+  recorded as a question for OMG in [omg-issues.md](docs/project/omg-issues.md).
+
+- **The Java client's package is `org.openmbee.opensysml`**, the DNS-verified namespace every
+  future Java artifact belongs under, rather than `io.opensysml`. The client has never been
+  published, so no released consumer moves with it.
+
+- **A pilot corpus records the pin it was fetched at.** Each corpus directory carries a stamp
+  naming the repository and tag it came from: a stale stamp triggers a re-download when the script
+  next runs (keeping the old copy until its replacement has been fetched), a current one is left
+  alone, and a directory without a stamp is left alone with a warning.
+
+### Fixed
+
+- **Arithmetic outside a type's range is reported, not returned.** A wrapped Integer sum, the
+  least Integer's negation and its remainder, an infinite Real from an out-of-range literal, a
+  folded infinity, and a quantity magnitude outside the Real range each answered as if computed;
+  every one is now a typed error naming the range. An ordinary negated literal evaluates rather
+  than being mistaken for a fold, seeded outputs are reported for what they are, and an escaped
+  attribute default is decoded before use.
+
+- **An unbound requirement subject is reported as unbound.** A requirement checked with nothing
+  supplying its subject read as a modelling mistake in the condition (`no value for feature
+  sensor`); the diagnostic now names the subject and the three ways to supply one — bind it, check
+  it on an object, or assert satisfaction by an element.
+
+- **A debounced call a later trigger superseded does not run.** A timer firing as the next trigger
+  arrived ran the work its successor now owned and deleted the successor's entry; a callback now
+  confirms it is still the timer its key waits on.
+
+- **Node client:** a short name is looked up on a model adopted by hash; a missing symbol's error
+  names what was looked for rather than repeating the service's text; an RPC failure surfaces as a
+  typed client error rather than a raw transport error; an impossible encoding or timeout is
+  refused at construction rather than carried into a connection; and a failed handshake carries
+  the status it failed with.
+
+- **Java client:** a call that outlives its request timeout is reported as the timeout it is, not
+  as the service being unavailable, and a value kind the client cannot read is a refusal rather
+  than a value silently dropped from the sequence holding it.
+
+- **Rust client:** an empty `$OPENSYSML_SERVICE` no longer selects an unnamed binary, a response
+  above the transport's 10 MB default is read, a qualified value is read outside its declaring
+  scope, string escapes decode, Integer overflow and non-finite Real folding are reported, and an
+  instance graph iterates in declaration order rather than map order.
+
+- **The toolchain download paths close their quality-gate findings.** The stall watchdog owns a
+  thread rather than an executor, the pandoc fetch refuses a plaintext redirect, and the mermaid
+  install runs no dependency's lifecycle script and finishes before calling itself present.
+
 ## 0.4.2 — 2026-08-31
 
 Release 0.4.2 is where document generation from a model becomes a working pipeline. 0.4.1 shipped the
