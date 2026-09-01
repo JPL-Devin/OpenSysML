@@ -216,3 +216,40 @@ func TestInlineAndAboutFormDeclarationsAreBothRecorded(t *testing.T) {
 		t.Fatalf("effective = %q, want the inline id first", info.EffectiveID)
 	}
 }
+
+func TestLibraryDocumentAboutFormAnnotationsAreIndexed(t *testing.T) {
+	lib := `package LibMeta {
+	metadata pref : IdentityMetadata::ProjectRef about Vehicles {
+		projectId = "proj-lib";
+		org = "org-lib";
+	}
+}
+`
+	p := parser.New(source.New("<lib>", []byte(lib)))
+	libRoot := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	src := `package Vehicles {
+	part def Vehicle;
+}
+`
+	q := parser.New(source.New("<t>", []byte(src)))
+	root := q.ParseFile()
+	if len(q.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", q.Diagnostics)
+	}
+	idx := libs.NewModelIndex()
+	idx.AddDocument("<lib>", libRoot)
+	idx.MarkLibrary("<lib>")
+	idx.AddDocument("<t>", root)
+	idx.ExpandWildcardImports()
+	res := resolve.New(idx)
+	model := semantics.NewModel(res)
+	res.SetModel(model)
+	table := identity.Build(model, res, idx.DocumentRoot("<t>"))
+	info := infoOf(t, table, idx, "Vehicles::Vehicle")
+	if info.Scope == nil || info.Scope.ProjectID != "proj-lib" || info.Scope.Org != "org-lib" {
+		t.Fatalf("scope = %+v, want proj-lib/org-lib from the library document's about-form ProjectRef", info.Scope)
+	}
+}

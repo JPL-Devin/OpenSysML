@@ -293,7 +293,7 @@ func (m *Model) annotationsAbout() map[*symbols.Symbol][]annotation {
 		return m.aboutAnnots
 	}
 	seen := make(map[*symbols.Symbol]bool)
-	for _, doc := range idx.WorkspaceDocuments() {
+	for _, doc := range idx.Documents() {
 		m.collectAboutAnnotations(idx.DocumentRoot(doc), seen)
 	}
 	return m.aboutAnnots

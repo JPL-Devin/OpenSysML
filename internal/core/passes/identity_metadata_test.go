@@ -449,3 +449,74 @@ package Meta {
 		t.Fatalf("distinct about-form projects must keep the ids legal: %v", diags)
 	}
 }
+
+func TestIdentityConflictingProjectRefsErrorAtEachAnnotation(t *testing.T) {
+	src := `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def X;
+	metadata pref : IdentityMetadata::ProjectRef about P { projectId = "proj-2"; }
+}
+`
+	diags := only(w8dDiags(t, src), "identity-conflicting-projects")
+	if len(diags) != 2 {
+		t.Fatalf("got %d conflicting-project diagnostics, want one per annotation: %v", len(diags), diags)
+	}
+	for _, d := range diags {
+		if !strings.Contains(d.Message, `"proj-1"`) || !strings.Contains(d.Message, `"proj-2"`) {
+			t.Fatalf("diagnostic must name both projects: %q", d.Message)
+		}
+	}
+	w8dWantLines(t, src, "identity-conflicting-projects", 2, 4)
+}
+
+func TestIdentityAgreeingProjectRefsShareOneScope(t *testing.T) {
+	src := `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; org = "org-a"; branch = "main"; }
+	part def X;
+	metadata pref : IdentityMetadata::ProjectRef about P { projectId = "proj-1"; org = "org-a"; branch = "dev"; }
+}
+`
+	if diags := only(w8dDiags(t, src), "identity-conflicting-projects"); len(diags) != 0 {
+		t.Fatalf("agreeing projects must not conflict (branch is a version selector): %v", diags)
+	}
+}
+
+func TestIdentityAboutFormProjectRefsConflictingWithEachOther(t *testing.T) {
+	src := `package P {
+	part def X;
+}
+package Meta {
+	metadata pa : IdentityMetadata::ProjectRef about P { projectId = "proj-1"; }
+	metadata pb : IdentityMetadata::ProjectRef about P { projectId = "proj-2"; }
+}
+`
+	diags := only(w8dDiags(t, src), "identity-conflicting-projects")
+	if len(diags) != 2 {
+		t.Fatalf("got %d conflicting-project diagnostics, want one per annotation: %v", len(diags), diags)
+	}
+	w8dWantLines(t, src, "identity-conflicting-projects", 5, 6)
+}
+
+func TestIdentityCrossDocumentProjectConflictErrorsInEachDeclaringDocument(t *testing.T) {
+	srcA := `package PA {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def X;
+}
+`
+	srcB := `package PB {
+	metadata pref : IdentityMetadata::ProjectRef about PA { projectId = "proj-2"; }
+}
+`
+	diagsA, diagsB := identityDiagsAcross(t, srcA, srcB)
+	confA, confB := only(diagsA, "identity-conflicting-projects"), only(diagsB, "identity-conflicting-projects")
+	if len(confA) != 1 || len(confB) != 1 {
+		t.Fatalf("got %d and %d project-conflict diagnostics, want one per declaring document: %v %v",
+			len(confA), len(confB), confA, confB)
+	}
+	if line := w8dLine(srcA, confA[0].Span); line != 2 {
+		t.Fatalf("got line %d in the inline document, want 2", line)
+	}
+	if line := w8dLine(srcB, confB[0].Span); line != 2 {
+		t.Fatalf("got line %d in the annotating document, want 2", line)
+	}
+}

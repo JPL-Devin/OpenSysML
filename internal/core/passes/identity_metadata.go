@@ -91,6 +91,9 @@ func (c *identityChecker) check() {
 				}
 			}
 		}
+		if info.Scope != nil && info.Scope.Symbol == sym {
+			c.checkScopeConflicts(info)
+		}
 		key := scopeKey(info)
 		if _, seen := scopes[key]; !seen {
 			keys = append(keys, key)
@@ -160,6 +163,40 @@ func (c *identityChecker) checkConflicts(info *identity.Info) {
 		c.errorf(d.Span, "identity-conflicting-ids",
 			"conflicting element ids of %s: %s", info.FQN, strings.Join(distinct, " and "))
 	}
+}
+
+// checkScopeConflicts errors on every ProjectRef annotation of a namespace
+// when two of them name distinct projects (org plus projectId; branch selects
+// a version, never another identity), one diagnostic per annotating node.
+func (c *identityChecker) checkScopeConflicts(info *identity.Info) {
+	decls := info.Scope.Declarations
+	projects := make(map[string]string)
+	for _, d := range decls {
+		projects[d.Key()] = projectName(d)
+	}
+	if len(projects) < 2 {
+		return
+	}
+	distinct := make([]string, 0, len(projects))
+	for _, name := range projects {
+		distinct = append(distinct, name)
+	}
+	sort.Strings(distinct)
+	for _, d := range decls {
+		if !c.inDoc(d.Scope) {
+			continue
+		}
+		c.errorf(d.Span, "identity-conflicting-projects",
+			"conflicting project references of %s: %s", info.FQN, strings.Join(distinct, " and "))
+	}
+}
+
+// projectName spells the project one ProjectRef declaration binds to.
+func projectName(d identity.ScopeDeclaration) string {
+	if d.Org == "" {
+		return fmt.Sprintf("project %q", d.ProjectID)
+	}
+	return fmt.Sprintf("project %q of org %q", d.ProjectID, d.Org)
 }
 
 // checkScope validates the generated id space of one project scope: duplicate

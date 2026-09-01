@@ -28,6 +28,27 @@ type Scope struct {
 	Org       string
 	// Symbol is the namespace carrying the ProjectRef annotation.
 	Symbol *symbols.Symbol
+	// Declarations lists every ProjectRef annotation of the namespace, inline
+	// ones first, `about`-form ones after. The first supplies the binding.
+	Declarations []ScopeDeclaration
+}
+
+// ScopeDeclaration is one ProjectRef annotation of a namespace, whether
+// written inline or from elsewhere with an `about` clause.
+type ScopeDeclaration struct {
+	ProjectID string
+	Branch    string
+	Org       string
+	// Span locates the annotating node, for diagnostics.
+	Span source.Span
+	// Scope is where the annotating node is declared.
+	Scope *symbols.Scope
+}
+
+// Key names the project a declaration binds to; branch selects a version of
+// one project, never another identity, so it plays no part.
+func (d ScopeDeclaration) Key() string {
+	return d.Org + "\x00" + d.ProjectID
 }
 
 // Key names the project a scope binds to, for scope-equality grouping.
@@ -175,14 +196,26 @@ func (b *builder) scopeOf(sym *symbols.Symbol) *Scope {
 		return b.scopes[sym]
 	}
 	b.known[sym] = true
+	var decls []ScopeDeclaration
 	for _, site := range b.model.AnnotationSitesOf(sym) {
 		if site.TypeFQN != ProjectRefFQN {
 			continue
 		}
-		s := &Scope{Symbol: sym}
-		s.ProjectID, _ = siteString(site, "projectId")
-		s.Branch, _ = siteString(site, "branch")
-		s.Org, _ = siteString(site, "org")
+		d := ScopeDeclaration{Span: site.Node.Span(), Scope: site.Scope}
+		d.ProjectID, _ = siteString(site, "projectId")
+		d.Branch, _ = siteString(site, "branch")
+		d.Org, _ = siteString(site, "org")
+		decls = append(decls, d)
+	}
+	if len(decls) > 0 {
+		first := decls[0]
+		s := &Scope{
+			ProjectID:    first.ProjectID,
+			Branch:       first.Branch,
+			Org:          first.Org,
+			Symbol:       sym,
+			Declarations: decls,
+		}
 		b.scopes[sym] = s
 		return s
 	}
