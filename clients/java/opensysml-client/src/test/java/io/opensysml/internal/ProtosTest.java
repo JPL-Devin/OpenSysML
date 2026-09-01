@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.opensysml.Instance;
 import io.opensysml.TransportException;
 import io.opensysml.Value;
+import io.opensysml.proto.AttributeInfo;
 import io.opensysml.proto.FeatureValue;
+import io.opensysml.proto.SymbolInfo;
 import io.opensysml.proto.ValueSequence;
 import java.util.List;
 import java.util.Optional;
@@ -53,6 +55,47 @@ class ProtosTest {
                     .build())
             .build();
     assertThrows(TransportException.class, () -> Protos.instance(instance));
+  }
+
+  @Test
+  void aSingularValueOfAKindTheClientCannotReadIsRefusedRatherThanReadAsNoValue() {
+    io.opensysml.proto.Instance instance =
+        io.opensysml.proto.Instance.newBuilder()
+            .setId(1)
+            .setTypeSymbolId("Demo::Vehicle")
+            .putFeatureValues(
+                "mass",
+                FeatureValue.newBuilder()
+                    .setFeatureName("mass")
+                    .setValue(io.opensysml.proto.Value.getDefaultInstance())
+                    .setMaterialized(true)
+                    .build())
+            .build();
+    assertThrows(TransportException.class, () -> Protos.instance(instance));
+
+    SymbolInfo symbol =
+        SymbolInfo.newBuilder()
+            .setId("Demo::Vehicle")
+            .setName("Vehicle")
+            .setKind("partDef")
+            .addAttributes(
+                AttributeInfo.newBuilder()
+                    .setName("mass")
+                    .setValue(io.opensysml.proto.Value.getDefaultInstance()))
+            .build();
+    assertThrows(TransportException.class, () -> Protos.symbol(symbol));
+  }
+
+  @Test
+  void anAttributeThatWasSentNoValueHoldsNone() {
+    SymbolInfo symbol =
+        SymbolInfo.newBuilder()
+            .setId("Demo::Vehicle")
+            .setName("Vehicle")
+            .setKind("partDef")
+            .addAttributes(AttributeInfo.newBuilder().setName("mass").setType("Real"))
+            .build();
+    assertEquals(Optional.empty(), Protos.symbol(symbol).attributes().get(0).value());
   }
 
   @Test

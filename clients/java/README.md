@@ -372,7 +372,7 @@ and `SuiteTest.aCorruptedAnswerIsCaught` asserts each corruption is caught:
 
 ```bash
 make build                                   # bin/sysml-grpc; tests skip without it
-mvn -f clients/java/pom.xml test             # 114 client tests, 27 conformance tests
+mvn -f clients/java/pom.xml test             # 116 client tests, 27 conformance tests
 mvn -f clients/java/pom.xml test -Dopensysml.requireService=true   # CI: absence fails
 ```
 

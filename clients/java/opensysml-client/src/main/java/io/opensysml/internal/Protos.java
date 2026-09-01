@@ -63,8 +63,8 @@ public final class Protos {
   }
 
   /**
-   * A value of a collection the client must read whole: dropping an element it cannot read would
-   * hand back a shorter sequence as if the service had sent one.
+   * A value the client must read rather than drop: answering nothing for a value that was sent
+   * would read as a shorter sequence, or as a feature holding no value at all.
    */
   private static Value readable(io.opensysml.proto.Value value) {
     return value(value)
@@ -150,7 +150,9 @@ public final class Protos {
           new Symbol.Attribute(
               attribute.getName(),
               attribute.getType(),
-              attribute.hasValue() ? value(attribute.getValue()) : Optional.empty(),
+              attribute.hasValue()
+                  ? Optional.of(readable(attribute.getValue()))
+                  : Optional.<Value>empty(),
               present(attribute.getUnit())));
     }
     List<Symbol.Specialization> specializations = new ArrayList<>(symbol.getSpecializationsCount());
@@ -211,7 +213,9 @@ public final class Protos {
           entry.getKey(),
           new Instance.FeatureValue(
               featureValue.getFeatureName(),
-              featureValue.hasValue() ? value(featureValue.getValue()) : Optional.empty(),
+              featureValue.hasValue()
+                  ? Optional.of(readable(featureValue.getValue()))
+                  : Optional.<Value>empty(),
               values,
               featureValue.getMaterialized(),
               present(featureValue.getError())));
