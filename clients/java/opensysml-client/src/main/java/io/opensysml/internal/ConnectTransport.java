@@ -9,8 +9,10 @@ import io.opensysml.TransportException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
@@ -74,7 +76,8 @@ public final class ConnectTransport implements AutoCloseable {
    * @param responseDefault default instance of the response message
    * @return the answer
    * @throws ServiceException if the call was refused
-   * @throws TransportException if the service could not be reached or the answer was unreadable
+   * @throws TransportException if the service could not be reached, the call outlived its timeout,
+   *     or the answer was unreadable
    */
   public <T extends Message> T call(String method, Message request, T responseDefault) {
     Objects.requireNonNull(method, "method");
@@ -96,6 +99,14 @@ public final class ConnectTransport implements AutoCloseable {
     HttpResponse<byte[]> response;
     try {
       response = http.send(httpRequest, HttpResponse.BodyHandlers.ofByteArray());
+    } catch (HttpConnectTimeoutException e) {
+      throw new TransportException(method + " could not be called at " + baseUrl, e);
+    } catch (HttpTimeoutException e) {
+      // The service was reached and may still be running the call, so this is not UNAVAILABLE.
+      throw new TransportException(
+          StatusCode.DEADLINE_EXCEEDED,
+          method + " did not answer within " + requestTimeout + " at " + baseUrl,
+          e);
     } catch (IOException e) {
       throw new TransportException(method + " could not be called at " + baseUrl, e);
     } catch (InterruptedException e) {

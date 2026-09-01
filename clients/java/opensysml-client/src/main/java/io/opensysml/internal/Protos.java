@@ -6,6 +6,7 @@ import io.opensysml.Instance;
 import io.opensysml.Instantiation;
 import io.opensysml.Quantity;
 import io.opensysml.Symbol;
+import io.opensysml.TransportException;
 import io.opensysml.Value;
 import io.opensysml.proto.AttributeInfo;
 import io.opensysml.proto.FeatureValue;
@@ -56,9 +57,21 @@ public final class Protos {
   private static Value sequence(io.opensysml.proto.Value value) {
     List<Value> elements = new ArrayList<>();
     for (io.opensysml.proto.Value element : value.getSequence().getElementsList()) {
-      value(element).ifPresent(elements::add);
+      elements.add(readable(element));
     }
     return new Value.Sequence(elements);
+  }
+
+  /**
+   * A value of a collection the client must read whole: dropping an element it cannot read would
+   * hand back a shorter sequence as if the service had sent one.
+   */
+  private static Value readable(io.opensysml.proto.Value value) {
+    return value(value)
+        .orElseThrow(
+            () ->
+                new TransportException(
+                    "the service answered a value of a kind this client does not know", null));
   }
 
   /**
@@ -192,7 +205,7 @@ public final class Protos {
       FeatureValue featureValue = entry.getValue();
       List<Value> values = new ArrayList<>(featureValue.getValuesCount());
       for (io.opensysml.proto.Value each : featureValue.getValuesList()) {
-        value(each).ifPresent(values::add);
+        values.add(readable(each));
       }
       featureValues.put(
           entry.getKey(),

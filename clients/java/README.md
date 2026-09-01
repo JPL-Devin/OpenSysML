@@ -50,7 +50,7 @@ call, and `AutoCloseable`'s `close()` here throws nothing.
 | ---------------------- | ----------------------------------------------------------------- |
 | `ServiceException`     | the call was refused, with a `StatusCode` (`NOT_FOUND`, …)         |
 | `ModelException`       | the call succeeded and the answer reports a model failure          |
-| `TransportException`   | HTTP or IO failure; the service was not reached or answered        |
+| `TransportException`   | HTTP or IO failure; the service was not reached or answered. `UNAVAILABLE`, except `DEADLINE_EXCEEDED` for a call that outlived its `requestTimeout` |
 | `CapabilityException`  | the service does not advertise a capability the call needs         |
 | `ServiceStartException`| no binary, a digest mismatch, or a child that would not start      |
 | `ChecksumMismatchException` | a binary's bytes are not the digest required of them ([the service binary](#the-service-binary)) |
@@ -372,7 +372,7 @@ and `SuiteTest.aCorruptedAnswerIsCaught` asserts each corruption is caught:
 
 ```bash
 make build                                   # bin/sysml-grpc; tests skip without it
-mvn -f clients/java/pom.xml test             # 44 client tests, 27 conformance tests
+mvn -f clients/java/pom.xml test             # 114 client tests, 27 conformance tests
 mvn -f clients/java/pom.xml test -Dopensysml.requireService=true   # CI: absence fails
 ```
 
