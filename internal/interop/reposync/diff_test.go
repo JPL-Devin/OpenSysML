@@ -227,6 +227,108 @@ func TestRepositoryChangeSinceLastSeenIsAConflict(t *testing.T) {
 	}
 }
 
+// TestRepositoryAdditionSinceLastSeenIsAConflict: an element only the
+// repository has, absent from the last-seen graph, was added there since —
+// deleting it would erase someone else's addition.
+func TestRepositoryAdditionSinceLastSeenIsAConflict(t *testing.T) {
+	base := graphOf(t, scoped(vehicle))
+	repository := graphOf(t, scoped(vehicle+`	part def Wheel;
+`))
+	local := graphOf(t, scoped(vehicle))
+	set, err := reposync.Diff(local, repository, reposync.Options{Base: base, ConfirmDeletes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byKind(set, reposync.KindDelete)) != 0 {
+		t.Errorf("a repository-side addition was classified as a local delete:\n%s", set.Text())
+	}
+	if set.Conflicts() == 0 {
+		t.Errorf("a repository-side addition raised no conflict:\n%s", set.Text())
+	}
+}
+
+// TestRepositoryDeletionSinceLastSeenIsAConflict: an element only the local
+// model has, but present in the last-seen graph, was deleted repository-side —
+// re-creating it would undo that deletion.
+func TestRepositoryDeletionSinceLastSeenIsAConflict(t *testing.T) {
+	base := graphOf(t, scoped(vehicle+`	part def Wheel;
+`))
+	repository := graphOf(t, scoped(vehicle))
+	local := graphOf(t, scoped(vehicle+`	part def Wheel;
+`))
+	set, err := reposync.Diff(local, repository, reposync.Options{Base: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byKind(set, reposync.KindCreate)) != 0 {
+		t.Errorf("a repository-side deletion was classified as a local create:\n%s", set.Text())
+	}
+	if set.Conflicts() == 0 {
+		t.Errorf("a repository-side deletion raised no conflict:\n%s", set.Text())
+	}
+}
+
+// TestScopedAndUnscopedIRIsCorrelateByID: the same effective id under a
+// scope-qualified and a plain element IRI is one element, not create+delete.
+func TestScopedAndUnscopedIRIsCorrelateByID(t *testing.T) {
+	local := rdf.NewGraph()
+	local.Add(rdf.ElementIRIForID("8f3a41d0"), rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"PartDefinition"))
+	local.Add(rdf.ElementIRIForID("8f3a41d0"), rdf.IRI(rdf.SysML+"declaredName"), rdf.String("Car"))
+	repository := rdf.NewGraph()
+	scopedIRI := rdf.ScopedElementIRIForID(rdf.ScopeQualifier("", "proj-1"), "8f3a41d0")
+	repository.Add(scopedIRI, rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"PartDefinition"))
+	repository.Add(scopedIRI, rdf.IRI(rdf.SysML+"declaredName"), rdf.String("Vehicle"))
+	set, err := reposync.Diff(local, repository, reposync.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(byKind(set, reposync.KindCreate)) + len(byKind(set, reposync.KindDelete)); n != 0 {
+		t.Errorf("one effective id under two IRI forms produced %d create/delete entries:\n%s", n, set.Text())
+	}
+	updates := byKind(set, reposync.KindUpdate)
+	if len(updates) != 1 || updates[0].ID != "8f3a41d0" {
+		t.Fatalf("one effective id under two IRI forms must be one update:\n%s", set.Text())
+	}
+}
+
+// TestDuplicateEffectiveIDIsAnError: two subjects carrying one effective id in
+// a single graph cannot be correlated and must be refused, not overwritten.
+func TestDuplicateEffectiveIDIsAnError(t *testing.T) {
+	local := rdf.NewGraph()
+	local.Add(rdf.ElementIRIForID("8f3a41d0"), rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"PartDefinition"))
+	scopedIRI := rdf.ScopedElementIRIForID(rdf.ScopeQualifier("", "proj-1"), "8f3a41d0")
+	local.Add(scopedIRI, rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"PartDefinition"))
+	_, err := reposync.Diff(local, rdf.NewGraph(), reposync.Options{})
+	if err == nil || !strings.Contains(err.Error(), "effective id") {
+		t.Fatalf("a duplicated effective id was not refused: %v", err)
+	}
+}
+
+func TestBaselineScopeMismatchIsAnError(t *testing.T) {
+	local := graphOf(t, scoped(vehicle))
+	repository := graphOf(t, scoped(vehicle))
+	otherProject := graphOf(t, `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-2"; branch = "main"; }
+	part def Vehicle {
+		@IdentityMetadata::ElementId { id = "8f3a41d0"; }
+	}
+}
+`)
+	if _, err := reposync.Diff(local, repository, reposync.Options{Base: otherProject}); err == nil {
+		t.Error("a baseline from another project was not refused")
+	}
+	otherBranch := graphOf(t, `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; branch = "dev"; }
+	part def Vehicle {
+		@IdentityMetadata::ElementId { id = "8f3a41d0"; }
+	}
+}
+`)
+	if _, err := reposync.Diff(local, repository, reposync.Options{Base: otherBranch}); err == nil {
+		t.Error("a baseline from another branch was not refused")
+	}
+}
+
 func TestMintingIsExplicit(t *testing.T) {
 	repository := graphOf(t, scoped(vehicle))
 	local := graphOf(t, scoped(vehicle+`	part def Wheel;

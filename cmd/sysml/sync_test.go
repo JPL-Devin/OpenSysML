@@ -167,6 +167,42 @@ func TestSyncStatePinsTheBranch(t *testing.T) {
 	}
 }
 
+func TestSyncDiffRefusesOtherModes(t *testing.T) {
+	binary := buildCLI(t)
+	model, repo := syncFixtures(t, binary)
+	for _, extra := range [][]string{
+		{"-render-all", t.TempDir()},
+		{"-render-documents", t.TempDir()},
+		{"-output", "out.txt"},
+		{"-from", "sysml"},
+	} {
+		args := append([]string{model, "-sync-diff", repo}, extra...)
+		cmd := exec.Command(binary, args...)
+		out, err := cmd.CombinedOutput()
+		exit, ok := err.(*exec.ExitError)
+		if !ok || exit.ExitCode() != 2 {
+			t.Errorf("-sync-diff with %s must be refused, got %v:\n%s", extra[0], err, out)
+			continue
+		}
+		if !strings.Contains(string(out), "-sync-diff") {
+			t.Errorf("the refusal of %s does not name -sync-diff:\n%s", extra[0], out)
+		}
+	}
+}
+
+func TestSyncDiffRefusesAnEmptyValue(t *testing.T) {
+	binary := buildCLI(t)
+	cmd := exec.Command(binary, "-sync-diff", "")
+	out, err := cmd.CombinedOutput()
+	exit, ok := err.(*exec.ExitError)
+	if !ok || exit.ExitCode() != 2 {
+		t.Fatalf("an empty -sync-diff must be refused, got %v:\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "-sync-diff is empty") {
+		t.Errorf("the refusal does not explain the empty value:\n%s", out)
+	}
+}
+
 func TestSyncFlagsNeedSyncDiff(t *testing.T) {
 	binary := buildCLI(t)
 	cmd := exec.Command(binary, "-sync-mint-ids")

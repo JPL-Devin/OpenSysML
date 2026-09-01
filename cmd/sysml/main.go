@@ -387,6 +387,29 @@ func runCLI() int {
 		return 2
 	}
 
+	if flagGiven("sync-diff") && syncDiffWith == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph to diff against")
+		return 2
+	}
+	if syncDiffWith != "" {
+		switch {
+		case convertFormat != "" || renderView != "" || renderDoc != "" || renderAllDir != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0:
+			fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query or -eval")
+			return 2
+		case outputPath != "" || fromFormat != "" || renderForm != "" || docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering:
+			fmt.Fprintln(os.Stderr, "sysml: -sync-diff reads SysML or Turtle inputs and prints the change set; -output, -from and the render options do not apply")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-sync-diff shows a change set and decides nothing else about the model; check it in its own run")
+		}
+		return runSyncDiff(args)
+	}
+	if syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff; name the repository graph to diff against")
+		return 2
+	}
+
 	if renderDocsDir != "" {
 		switch {
 		case renderDoc != "":
@@ -433,22 +456,6 @@ func runCLI() int {
 			return fail(err)
 		}
 		return exitHolds
-	}
-
-	if syncDiffWith != "" {
-		switch {
-		case convertFormat != "" || renderView != "" || renderDoc != "" || queryText != "" || len(evalExprs) > 0:
-			fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set; it cannot be combined with -convert, -render, -render-document, -query or -eval")
-			return 2
-		case modelChecks.requested():
-			return refuse(modelChecks,
-				"-sync-diff shows a change set and decides nothing else about the model; check it in its own run")
-		}
-		return runSyncDiff(args)
-	}
-	if syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "" {
-		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff; name the repository graph to diff against")
-		return 2
 	}
 
 	if convertFormat != "" {

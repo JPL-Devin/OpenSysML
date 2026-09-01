@@ -106,17 +106,39 @@ func Diff(local, repository *rdf.Graph, opts Options) (*ChangeSet, error) {
 		newID = MintUUID
 	}
 
-	localView := viewOf(local)
-	repoView := viewOf(repository)
+	localView, err := viewOf(local)
+	if err != nil {
+		return nil, err
+	}
+	repoView, err := viewOf(repository)
+	if err != nil {
+		return nil, fmt.Errorf("repository graph: %w", err)
+	}
 	var baseView map[string]*subjectView
 	if opts.Base != nil {
-		baseView = viewOf(opts.Base)
+		baseScope, err := GraphScope(opts.Base)
+		if err != nil {
+			return nil, fmt.Errorf("baseline graph: %w", err)
+		}
+		if !scope.IsZero() && !baseScope.IsZero() {
+			if !scope.sameProject(baseScope) {
+				return nil, fmt.Errorf("the model is scoped to %s but the baseline graph carries %s", scope, baseScope)
+			}
+			if scope.Branch != "" && baseScope.Branch != "" && scope.Branch != baseScope.Branch {
+				return nil, fmt.Errorf("%w: the model names branch %q, the baseline graph branch %q", ErrTwoBranches, scope.Branch, baseScope.Branch)
+			}
+		}
+		baseView, err = viewOf(opts.Base)
+		if err != nil {
+			return nil, fmt.Errorf("baseline graph: %w", err)
+		}
 	}
 
 	set := &ChangeSet{Scope: scope}
-	for _, subject := range sortedSubjects(localView, repoView) {
-		at, inLocal := localView[subject]
-		was, inRepo := repoView[subject]
+	for _, id := range sortedIDs(localView, repoView) {
+		at, inLocal := localView[id]
+		was, inRepo := repoView[id]
+		base, inBase := baseView[id]
 		switch {
 		case inLocal && inRepo:
 			deltas := propertyDeltas(at, was)
@@ -124,19 +146,22 @@ func Diff(local, repository *rdf.Graph, opts Options) (*ChangeSet, error) {
 				continue
 			}
 			change := Change{Kind: KindUpdate, Deltas: deltas}
-			if base, seen := baseView[subject]; seen && len(propertyDeltas(was, base)) > 0 {
+			if inBase && len(propertyDeltas(was, base)) > 0 {
 				change = Change{Kind: KindConflict, Conflict: ConflictRepositoryChanged, Deltas: deltas}
 			}
 			set.add(change, at)
 		case inLocal:
 			change := Change{Kind: KindCreate}
-			if at.declared && len(repoView) > 0 {
+			switch {
+			case inBase:
+				// The last-seen graph had it and the repository dropped it:
+				// re-creating would undo someone else's deletion.
+				change = Change{Kind: KindConflict, Conflict: ConflictRepositoryChanged}
+			case at.declared && len(repoView) > 0 && opts.Base == nil:
 				// A declared id the branch does not have was either dropped
 				// there — a conflict — or never pushed. Only the last-seen
 				// graph can tell the two apart; absent it, never guess.
-				if _, everSeen := baseView[subject]; everSeen || opts.Base == nil {
-					change = Change{Kind: KindConflict, Conflict: ConflictMissingID}
-				}
+				change = Change{Kind: KindConflict, Conflict: ConflictMissingID}
 			}
 			if change.Kind == KindCreate && opts.MintIDs && !at.declared && at.mintable {
 				minted, err := newID()
@@ -148,6 +173,17 @@ func Diff(local, repository *rdf.Graph, opts Options) (*ChangeSet, error) {
 			set.add(change, at)
 		default:
 			change := Change{Kind: KindDelete, RequiresConfirmation: !opts.ConfirmDeletes}
+			if opts.Base != nil {
+				switch {
+				case !inBase:
+					// The repository added it since the last-seen commit:
+					// deleting would erase someone else's addition.
+					change = Change{Kind: KindConflict, Conflict: ConflictRepositoryChanged}
+				case len(propertyDeltas(was, base)) > 0:
+					// The repository changed it since the last-seen commit.
+					change = Change{Kind: KindConflict, Conflict: ConflictRepositoryChanged}
+				}
+			}
 			set.add(change, was)
 		}
 	}
@@ -241,22 +277,27 @@ func identityPredicate(iri string) bool {
 		iri == rdf.OpenSysML+"declaredId"
 }
 
-// viewOf indexes a graph by subject IRI, reducing each subject to the view the
-// comparison works on.
-func viewOf(g *rdf.Graph) map[string]*subjectView {
+// viewOf indexes a graph by effective element id, reducing each subject to the
+// view the comparison works on. The full IRI — scope-qualified or not — only
+// carries the id; two subjects sharing one id in one graph is an error.
+func viewOf(g *rdf.Graph) (map[string]*subjectView, error) {
 	views := map[string]*subjectView{}
 	for _, triple := range g.Triples() {
 		if !triple.Subject.IsIRI() {
 			continue
 		}
-		view := views[triple.Subject.Value]
+		id := rdf.LocalName(triple.Subject.Value)
+		view := views[id]
+		if view != nil && view.subject != triple.Subject.Value {
+			return nil, fmt.Errorf("two subjects carry the effective id %q: %s and %s", id, view.subject, triple.Subject.Value)
+		}
 		if view == nil {
 			view = &subjectView{
 				subject: triple.Subject.Value,
-				id:      rdf.LocalName(triple.Subject.Value),
+				id:      id,
 				props:   map[string][]string{},
 			}
-			views[triple.Subject.Value] = view
+			views[id] = view
 		}
 		if triple.Predicate.Value == rdf.RDFType {
 			view.metaclass = rdf.LocalName(triple.Object.Value)
@@ -278,7 +319,7 @@ func viewOf(g *rdf.Graph) map[string]*subjectView {
 		view.declared = declaredID(g, view)
 		view.mintable = mintable(view)
 	}
-	return views
+	return views, nil
 }
 
 // declaredID mirrors the RDF reader: an explicit declaredId marker, or an id
@@ -354,20 +395,20 @@ func equalValues(a, b []string) bool {
 	return true
 }
 
-// sortedSubjects returns the union of both views' subject IRIs in a stable
-// order, so the change set is deterministic.
-func sortedSubjects(local, repository map[string]*subjectView) []string {
+// sortedIDs returns the union of both views' effective ids in a stable order,
+// so the change set is deterministic.
+func sortedIDs(local, repository map[string]*subjectView) []string {
 	seen := map[string]bool{}
-	for subject := range local {
-		seen[subject] = true
+	for id := range local {
+		seen[id] = true
 	}
-	for subject := range repository {
-		seen[subject] = true
+	for id := range repository {
+		seen[id] = true
 	}
-	subjects := make([]string, 0, len(seen))
-	for subject := range seen {
-		subjects = append(subjects, subject)
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
 	}
-	sort.Strings(subjects)
-	return subjects
+	sort.Strings(ids)
+	return ids
 }
