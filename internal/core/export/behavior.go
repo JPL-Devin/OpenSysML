@@ -365,7 +365,7 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 					Note: fmt.Sprintf("it neither names nor reaches the member it %s, so the order it declares cannot be written back", end.sequence),
 				}
 			}
-			e.graph.Add(subject, e.sysx(end.member), e.ids.subjectFor(fqn))
+			e.graph.Add(subject, e.sysx(end.member), e.ids.subjectForNode(end.end.member, fqn))
 			continue
 		}
 		// The two-name form is read only as basic names, so an end needing quotes

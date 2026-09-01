@@ -396,6 +396,34 @@ func TestUnnamedElementKeepsAnnotatedID(t *testing.T) {
 	}
 }
 
+// TestAnnotatedUnnamedSuccessionEndRoundTrips checks a positional succession
+// end bound to an unnamed annotated member points at the member's declared
+// identity, so the link does not dangle when the graph is read back.
+func TestAnnotatedUnnamedSuccessionEndRoundTrips(t *testing.T) {
+	turtle := idTurtle(t, `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	state def S;
+	state def M {
+		state : S {
+			@IdentityMetadata::ElementId { id = "entry-id"; }
+		}
+		then s1;
+		state s1 : S;
+	}
+}
+`)
+	if !strings.Contains(string(turtle), "sysx:sourceMember elmt:entry-id") {
+		t.Errorf("the positional end does not point at the declared id:\n%s", turtle)
+	}
+	back := toNotation(t, turtle)
+	if !strings.Contains(back, "then s1;") {
+		t.Fatalf("the succession beside the annotated unnamed entry should come back:\n%s", back)
+	}
+	if !strings.Contains(back, `@IdentityMetadata::ElementId { id = "entry-id"; }`) {
+		t.Errorf("the unnamed end's annotated id was not re-materialized:\n%s", back)
+	}
+}
+
 // TestAboutFormElementIDRoundTrips checks an `about`-form ElementId is
 // consumed into identity like an inline one: the target's subject carries the
 // declared id, and the notation comes back with the annotation inline.
