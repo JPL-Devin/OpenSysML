@@ -269,3 +269,114 @@ func TestIdentityLegalAnnotationsStaySilent(t *testing.T) {
 		}
 	}
 }
+
+func TestIdentityConflictingInlineAndAboutIdsErrorOnBoth(t *testing.T) {
+	src := `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def X {
+		@IdentityMetadata::ElementId { id = "inline-id"; }
+	}
+	metadata xid : IdentityMetadata::ElementId about X {
+		id = "about-id";
+	}
+}
+`
+	diags := only(w8dDiags(t, src), "identity-conflicting-ids")
+	if len(diags) != 2 {
+		t.Fatalf("got %d conflicting-ids diagnostics, want one per annotation: %v", len(diags), diags)
+	}
+	for _, d := range diags {
+		if !strings.Contains(d.Message, `"about-id"`) || !strings.Contains(d.Message, `"inline-id"`) {
+			t.Fatalf("diagnostic must name both ids: %q", d.Message)
+		}
+	}
+	w8dWantLines(t, src, "identity-conflicting-ids", 4, 6)
+}
+
+func TestIdentityAgreeingInlineAndAboutIdsStaySilent(t *testing.T) {
+	src := `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def X {
+		@IdentityMetadata::ElementId { id = "one-id"; }
+	}
+	metadata xid : IdentityMetadata::ElementId about X {
+		id = "one-id";
+	}
+}
+`
+	if diags := w8dDiags(t, src); len(only(diags, "identity-conflicting-ids"))+len(only(diags, "identity-duplicate-id")) != 0 {
+		t.Fatalf("agreeing annotations must stay silent: %v", diags)
+	}
+}
+
+func TestIdentityAboutFormDuplicateIdsError(t *testing.T) {
+	src := `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def A;
+	part def B {
+		@IdentityMetadata::ElementId { id = "same-id"; }
+	}
+	metadata aid : IdentityMetadata::ElementId about A {
+		id = "same-id";
+	}
+}
+`
+	diags := only(w8dDiags(t, src), "identity-duplicate-id")
+	if len(diags) != 2 {
+		t.Fatalf("got %d duplicate-id diagnostics, want 2: %v", len(diags), diags)
+	}
+	for _, d := range diags {
+		if !strings.Contains(d.Message, "P::A") || !strings.Contains(d.Message, "P::B") {
+			t.Fatalf("diagnostic must name both elements: %q", d.Message)
+		}
+	}
+}
+
+func TestIdentityAboutFormElementIdWithoutProjectRefErrors(t *testing.T) {
+	src := `package P {
+	part def X;
+	metadata xid : IdentityMetadata::ElementId about X {
+		id = "some-id";
+	}
+}
+`
+	w8dWantLines(t, src, "identity-unscoped-id", 3)
+}
+
+func TestIdentityAboutFormBadIdShapeErrorsAtTheUsage(t *testing.T) {
+	src := `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def X;
+	metadata xid : IdentityMetadata::ElementId about X {
+		id = "bad id";
+	}
+}
+`
+	diags := only(w8dDiags(t, src), "identity-id-shape")
+	if len(diags) != 1 || !strings.Contains(diags[0].Message, "0x20") {
+		t.Fatalf("got %v, want one shape error naming byte 0x20", diags)
+	}
+	w8dWantLines(t, src, "identity-id-shape", 4)
+}
+
+func TestIdentityAboutFormProjectRefScopesTheElements(t *testing.T) {
+	src := `package PA {
+	part def A {
+		@IdentityMetadata::ElementId { id = "same-id"; }
+	}
+}
+package PB {
+	part def B {
+		@IdentityMetadata::ElementId { id = "same-id"; }
+	}
+}
+package Meta {
+	metadata pa : IdentityMetadata::ProjectRef about PA { projectId = "proj-1"; }
+	metadata pb : IdentityMetadata::ProjectRef about PB { projectId = "proj-2"; }
+}
+`
+	diags := w8dDiags(t, src)
+	if n := len(only(diags, "identity-duplicate-id")) + len(only(diags, "identity-unscoped-id")); n != 0 {
+		t.Fatalf("distinct about-form projects must keep the ids legal: %v", diags)
+	}
+}

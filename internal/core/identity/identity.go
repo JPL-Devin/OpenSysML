@@ -38,6 +38,19 @@ func (s *Scope) Key() string {
 	return s.Org + "\x00" + s.ProjectID
 }
 
+// Declaration is one ElementId annotation of an element, whether written
+// inline (`@ElementId {...}`) or from elsewhere (`metadata : ElementId about x;`).
+type Declaration struct {
+	// ID is the annotation's evaluated id; meaningful when Declared.
+	ID string
+	// Declared reports the id evaluated to a constant string.
+	Declared bool
+	// About marks an `about`-form annotation stated away from the element.
+	About bool
+	// Span locates the annotating node, for diagnostics.
+	Span source.Span
+}
+
 // Info is one symbol's identity: its effective id, whether an ElementId
 // annotation declared it, and the project scope it resolves against.
 type Info struct {
@@ -55,6 +68,9 @@ type Info struct {
 	DeclaredID string
 	// AnnotationSpan locates the ElementId annotation, for diagnostics.
 	AnnotationSpan source.Span
+	// Declarations lists every ElementId annotation of the element, inline
+	// ones first, `about`-form ones after.
+	Declarations []Declaration
 	// Scope is the nearest enclosing ProjectRef binding; nil when unbound.
 	Scope *Scope
 }
@@ -118,14 +134,27 @@ func (b *builder) infoOf(sym *symbols.Symbol) *Info {
 		return nil
 	}
 	info := &Info{Symbol: sym, FQN: fqn, EffectiveID: rdf.EncodeElementID(fqn)}
-	if span, ok := b.annotationSpan(sym, ElementIdFQN); ok {
+	for _, site := range b.model.AnnotationSitesOf(sym) {
+		if site.TypeFQN != ElementIdFQN {
+			continue
+		}
+		d := Declaration{About: site.About, Span: site.Node.Span()}
+		if id, ok := siteString(site, "id"); ok {
+			d.Declared = true
+			d.ID = id
+		}
+		info.Declarations = append(info.Declarations, d)
+	}
+	if len(info.Declarations) > 0 {
+		first := info.Declarations[0]
 		info.Annotated = true
-		info.AnnotationSpan = span
-		if id, ok := b.stringFact(sym, ElementIdFQN, "id"); ok {
-			info.Declared = true
-			info.DeclaredID = id
-			if id != "" {
-				info.EffectiveID = id
+		info.AnnotationSpan = first.Span
+		info.Declared = first.Declared
+		info.DeclaredID = first.ID
+		for _, d := range info.Declarations {
+			if d.Declared && d.ID != "" {
+				info.EffectiveID = d.ID
+				break
 			}
 		}
 	}
@@ -143,11 +172,14 @@ func (b *builder) scopeOf(sym *symbols.Symbol) *Scope {
 		return b.scopes[sym]
 	}
 	b.known[sym] = true
-	if _, ok := b.annotationSpan(sym, ProjectRefFQN); ok {
+	for _, site := range b.model.AnnotationSitesOf(sym) {
+		if site.TypeFQN != ProjectRefFQN {
+			continue
+		}
 		s := &Scope{Symbol: sym}
-		s.ProjectID, _ = b.stringFact(sym, ProjectRefFQN, "projectId")
-		s.Branch, _ = b.stringFact(sym, ProjectRefFQN, "branch")
-		s.Org, _ = b.stringFact(sym, ProjectRefFQN, "org")
+		s.ProjectID, _ = siteString(site, "projectId")
+		s.Branch, _ = siteString(site, "branch")
+		s.Org, _ = siteString(site, "org")
 		b.scopes[sym] = s
 		return s
 	}
@@ -166,42 +198,11 @@ func enclosingSymbol(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// annotationSpan reports whether sym's declaration carries an annotation of
-// the given metadata type, and where it is written.
-func (b *builder) annotationSpan(sym *symbols.Symbol, typeFQN string) (source.Span, bool) {
-	for _, a := range semantics.MetadataAnnotationsOf(sym.Decl) {
-		if a.Node == nil || a.Node.Type == nil {
-			continue
-		}
-		scope := sym.OwnerScope
-		if !a.Prefix && sym.Scope != nil {
-			scope = sym.Scope
-		}
-		typ, ok := b.res.ResolveQualified(scope, a.Node.Type)
-		if !ok || typ == nil {
-			continue
-		}
-		if resolved, aliasOK := b.res.ResolveAliasTarget(typ); aliasOK {
-			typ = resolved
-		}
-		if b.idx.GetFQN(typ) == typeFQN {
-			return a.Node.Span(), true
-		}
-	}
-	return source.Span{}, false
-}
-
-// stringFact is the constant string value an annotation of typeFQN binds to
-// feature, evaluated by the model.
-func (b *builder) stringFact(sym *symbols.Symbol, typeFQN, feature string) (string, bool) {
-	for _, facts := range b.model.AnnotationFactsOf(sym) {
-		if facts.TypeFQN != typeFQN {
-			continue
-		}
-		for _, v := range facts.Values {
-			if v.Feature == feature && v.Value.Kind == symbols.FilterValueString {
-				return v.Value.Str, true
-			}
+// siteString is the constant string value one annotation binds to feature.
+func siteString(site semantics.AnnotationSite, feature string) (string, bool) {
+	for _, v := range site.Values {
+		if v.Feature == feature && v.Value.Kind == symbols.FilterValueString {
+			return v.Value.Str, true
 		}
 	}
 	return "", false

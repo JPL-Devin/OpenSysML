@@ -72,6 +72,7 @@ func (c *identityChecker) check() {
 		}
 		if info.Annotated && c.inDocument(info) {
 			c.checkShape(info)
+			c.checkConflicts(info)
 			if info.Scope == nil {
 				c.errorf(info.AnnotationSpan, "identity-unscoped-id",
 					"ElementId on %s has no enclosing ProjectRef to resolve against", info.FQN)
@@ -97,23 +98,54 @@ func scopeKey(info *identity.Info) string {
 	return "bound\x00" + info.Scope.Key()
 }
 
-// checkShape reports the first byte of a declared id outside [a-zA-Z0-9_-],
+// checkShape reports the first byte of each declared id outside [a-zA-Z0-9_-],
 // including the empty id, which has no legal byte at all.
 func (c *identityChecker) checkShape(info *identity.Info) {
-	if info.Declared && info.DeclaredID == "" {
-		c.errorf(info.AnnotationSpan, "identity-id-shape",
-			"element id of %s is empty; an id needs at least one byte of [a-zA-Z0-9_-]", info.FQN)
-		return
-	}
-	for i := 0; i < len(info.DeclaredID); i++ {
-		b := info.DeclaredID[i]
-		if b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '-' {
+	for _, d := range info.Declarations {
+		if !d.Declared {
 			continue
 		}
-		c.errorf(info.AnnotationSpan, "identity-id-shape",
-			"element id %q of %s: byte 0x%02x (%q) at offset %d is outside [a-zA-Z0-9_-]",
-			info.DeclaredID, info.FQN, b, string(rune(b)), i)
+		if d.ID == "" {
+			c.errorf(d.Span, "identity-id-shape",
+				"element id of %s is empty; an id needs at least one byte of [a-zA-Z0-9_-]", info.FQN)
+			continue
+		}
+		for i := 0; i < len(d.ID); i++ {
+			b := d.ID[i]
+			if b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '-' {
+				continue
+			}
+			c.errorf(d.Span, "identity-id-shape",
+				"element id %q of %s: byte 0x%02x (%q) at offset %d is outside [a-zA-Z0-9_-]",
+				d.ID, info.FQN, b, string(rune(b)), i)
+			break
+		}
+	}
+}
+
+// checkConflicts errors on every ElementId annotation of an element when two
+// of them bind distinct constant ids, one diagnostic per annotating node.
+func (c *identityChecker) checkConflicts(info *identity.Info) {
+	ids := make(map[string]bool)
+	for _, d := range info.Declarations {
+		if d.Declared {
+			ids[d.ID] = true
+		}
+	}
+	if len(ids) < 2 {
 		return
+	}
+	distinct := make([]string, 0, len(ids))
+	for id := range ids {
+		distinct = append(distinct, fmt.Sprintf("%q", id))
+	}
+	sort.Strings(distinct)
+	for _, d := range info.Declarations {
+		if !d.Declared {
+			continue
+		}
+		c.errorf(d.Span, "identity-conflicting-ids",
+			"conflicting element ids of %s: %s", info.FQN, strings.Join(distinct, " and "))
 	}
 }
 
@@ -146,21 +178,23 @@ func (c *identityChecker) checkScope(infos []*identity.Info) {
 		}
 	}
 	for _, info := range infos {
-		if info.DeclaredID == "" {
-			continue
-		}
-		if base, ok := strings.CutSuffix(info.DeclaredID, "_om"); ok {
-			c.reportDerivedCollision(info, byID[base], "the owning-membership id")
-		}
-		for i := strings.Index(info.DeclaredID, "_p"); i >= 0; {
-			if expressionPositions(info.DeclaredID[i+2:]) {
-				c.reportDerivedCollision(info, byID[info.DeclaredID[:i]], "an expression-node id")
+		for _, d := range info.Declarations {
+			if !d.Declared || d.ID == "" {
+				continue
 			}
-			next := strings.Index(info.DeclaredID[i+1:], "_p")
-			if next < 0 {
-				break
+			if base, ok := strings.CutSuffix(d.ID, "_om"); ok {
+				c.reportDerivedCollision(info, d, byID[base], "the owning-membership id")
 			}
-			i += 1 + next
+			for i := strings.Index(d.ID, "_p"); i >= 0; {
+				if expressionPositions(d.ID[i+2:]) {
+					c.reportDerivedCollision(info, d, byID[d.ID[:i]], "an expression-node id")
+				}
+				next := strings.Index(d.ID[i+1:], "_p")
+				if next < 0 {
+					break
+				}
+				i += 1 + next
+			}
 		}
 	}
 }
@@ -192,20 +226,20 @@ func anyAnnotated(group []*identity.Info) bool {
 
 // reportDerivedCollision errors on both elements when a declared id lands in
 // the derived id space another element generates.
-func (c *identityChecker) reportDerivedCollision(info *identity.Info, owners []*identity.Info, space string) {
+func (c *identityChecker) reportDerivedCollision(info *identity.Info, d identity.Declaration, owners []*identity.Info, space string) {
 	for _, owner := range owners {
 		if owner == info {
 			continue
 		}
 		if c.inDocument(info) {
-			c.errorf(info.AnnotationSpan, "identity-duplicate-id",
+			c.errorf(d.Span, "identity-duplicate-id",
 				"element id %q of %s collides with %s of %s",
-				info.DeclaredID, info.FQN, space, owner.FQN)
+				d.ID, info.FQN, space, owner.FQN)
 		}
 		if c.inDocument(owner) {
 			c.errorf(c.spanOf(owner), "identity-duplicate-id",
 				"%s of %s collides with element id %q of %s",
-				space, owner.FQN, info.DeclaredID, info.FQN)
+				space, owner.FQN, d.ID, info.FQN)
 		}
 	}
 }

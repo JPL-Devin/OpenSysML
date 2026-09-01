@@ -28,6 +28,10 @@ import (
 type annotation struct {
 	typ    *symbols.Symbol
 	values map[string]symbols.FilterValue
+	// node states the annotation: the prefix-metadata node or metadata usage.
+	node ast.Node
+	// about marks an annotation stated elsewhere with an `about` clause.
+	about bool
 }
 
 // annotationsOf returns the metadata annotating sym, memoized: an element filter
@@ -75,6 +79,41 @@ func (m *Model) AnnotationFactsOf(sym *symbols.Symbol) []symbols.AnnotationFacts
 			})
 		}
 		out = append(out, facts)
+	}
+	return out
+}
+
+// AnnotationSite is one metadata annotation of an element together with the
+// node stating it — a prefix/body annotation of the element itself, or a
+// metadata usage annotating it from elsewhere with an `about` clause.
+type AnnotationSite struct {
+	TypeFQN string
+	Node    ast.Node
+	About   bool
+	Values  []symbols.AnnotationValueFacts
+}
+
+// AnnotationSitesOf returns the metadata annotating sym with the nodes stating
+// it, inline annotations first and `about`-form ones after, each in
+// declaration order.
+func (m *Model) AnnotationSitesOf(sym *symbols.Symbol) []AnnotationSite {
+	var out []AnnotationSite
+	for _, a := range m.annotationsOf(sym) {
+		var typFQN string
+		if a.typ != nil {
+			typFQN = m.fqnOf(a.typ)
+		}
+		if typFQN == "" || a.node == nil {
+			continue
+		}
+		site := AnnotationSite{TypeFQN: typFQN, Node: a.node, About: a.about}
+		for _, feature := range sortedFeatureNames(a.values) {
+			site.Values = append(site.Values, symbols.AnnotationValueFacts{
+				Feature: feature,
+				Value:   a.values[feature],
+			})
+		}
+		out = append(out, site)
 	}
 	return out
 }
@@ -162,7 +201,9 @@ func (m *Model) prefixAnnotation(scope *symbols.Scope, p *ast.PrefixMetadata) (a
 	} else {
 		return annotation{}, false
 	}
-	return m.annotationOfType(typ, scope, p.Body), true
+	a := m.annotationOfType(typ, scope, p.Body)
+	a.node = p
+	return a, true
 }
 
 // usageAnnotation reads one metadata-usage annotation, whose type is what the
@@ -185,7 +226,9 @@ func (m *Model) usageAnnotation(scope *symbols.Scope, u *ast.Usage) (annotation,
 		} else {
 			continue
 		}
-		return m.annotationOfType(typ, bodyScope(u, scope), u.Members), true
+		a := m.annotationOfType(typ, bodyScope(u, scope), u.Members)
+		a.node = u
+		return a, true
 	}
 	return annotation{}, false
 }
@@ -257,6 +300,7 @@ func (m *Model) annotationsAbout() map[*symbols.Symbol][]annotation {
 			if !ok {
 				continue
 			}
+			a.about = true
 			for _, target := range m.annotatedElements(sym.OwnerScope, usage) {
 				m.aboutAnnots[target] = append(m.aboutAnnots[target], a)
 			}
