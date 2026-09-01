@@ -607,9 +607,8 @@ func (t *translator) additive(n *ast.OperatorExpr, scope *symbols.Scope, op Op) 
 	return Binary(op, left.Sort, left, right), nil
 }
 
-// multiplicative translates `*` or `/`. Integer division truncates toward zero as
-// the evaluator's does, and either division asserts its divisor to be non-zero,
-// which the evaluator reports as an error rather than answering.
+// multiplicative translates `*` or `/`. A quotient is a Real whatever its
+// operand sorts, as the evaluator's is, with a non-zero divisor asserted.
 func (t *translator) multiplicative(n *ast.OperatorExpr, scope *symbols.Scope, op Op) (*Term, error) {
 	if op == OpDiv {
 		if folded, ok := t.folded(n); ok {
@@ -623,10 +622,6 @@ func (t *translator) multiplicative(n *ast.OperatorExpr, scope *symbols.Scope, o
 	if op == OpDiv {
 		if err := t.divisor(n, right); err != nil {
 			return nil, err
-		}
-		if left.Sort.Kind == SortInt && right.Sort.Kind == SortInt {
-			t.intDiv = true
-			return TruncDiv(left, right), nil
 		}
 		return Binary(OpDiv, Real, ToReal(left), ToReal(right)), nil
 	}

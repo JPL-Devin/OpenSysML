@@ -104,14 +104,20 @@ func TestExprDivisionOfStringsRejected(t *testing.T) {
 		"operator '/' requires numeric operands")
 }
 
-// The kernel function library declares Natural / Natural -> Natural and
-// Integer / Integer -> Rational, and Integer ** Natural -> Integer, so whole
-// results must remain bindable to whole-number features.
+// The reference implementation evaluates a whole-number quotient — Natural or
+// Integer operands alike — as a Rational, so it binds to a Rational feature and
+// not to a whole-number one. Integer ** Natural stays Integer.
 func TestExprWholeNumberDivisionAndPowerOK(t *testing.T) {
 	wantNoDiags(t, `package P {
-	attribute q : ScalarValues::Natural = 7 / 2;
+	attribute q : ScalarValues::Rational = 7 / 2;
 	attribute p : ScalarValues::Integer = 3 ** 2;
 }`)
+}
+
+func TestExprNaturalDivisionIsRational(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute q : ScalarValues::Natural = 7 / 2; }`,
+		"cannot bind Rational value to a feature typed by Natural")
 }
 
 func TestExprIntegerDivisionIsRational(t *testing.T) {

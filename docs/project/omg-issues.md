@@ -11,6 +11,7 @@ divergence is also a row in [spec-compliance.md](spec-compliance.md).
 
 | Library file | Declaration | What the vendored body says | What we implement | Why |
 |---|---|---|---|---|
+| `Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml` | `function '/'` | `function '/' specializes IntegerFunctions::'/' { in x: Natural[1]; in y: Natural[1]; return : Natural[1]; }` — a Natural quotient, which `7 / 2` cannot inhabit without truncation | the quotient of two whole numbers is a Rational, never normalised back to a whole number even when exact: `divisionResult` types `Natural/Natural` as `Rational`, and the runtime answers a Real (`runtime/eval.go` `evalArithmetic`) | The pilot's evaluator answers `LiteralRational 2.5` for `5 / 2` even when both operands are `Natural`-typed attributes — it dispatches on value kind, and a whole-number value divides through `RationalFunctions::'/'`, which `IntegerFunctions::'/'` specializes with `return : Rational[1]`. The declared `Natural[1]` return is unimplementable without truncating, which the reference does not do; the draft below asks which of the two the specification intends |
 | `Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml` | `function includingAt` | `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))` — the prefix before `index`, then the values, then the tail from `index + 1`, so the element **at** `index` is dropped from the result | insertion: the values are inserted before the 1-based `index`, the tail from that position shifts right, and the result is longer than `seq` by the values inserted. `index == size + 1` appends; any other index outside `1..size + 1` is `ErrIndexOutOfRange` (`runtime.builtinSequenceIncludingAt`) | The body contradicts the declarations around it in the same file. `excludingAt` is the operation that removes at an index, and the behavior pairs are additive/subtractive: `add` calls `including` as `remove` calls `excluding`, and `addAt` calls `includingAt` (`seq->includingAt(values, index)`) as `removeAt` calls `excludingAt`. A removing `includingAt` would leave the library with two ways to delete at an index and none to insert at one, and would make `addAt` remove. The vendored expression is an off-by-one slip in the tail: the insertion body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index))` |
 
 ## `includingAt` — the vendored declaration
@@ -32,6 +33,38 @@ function includingAt{ in seq: Anything[0..*] ordered nonunique; in values: Anyth
 `values` rather than inserting before it. OpenSysML implements insertion
 (maintainer ruling), so `includingAt` is a divergence from the
 vendored body and is recorded here for review against a future OMG release.
+
+## `NaturalFunctions::'/'` — the declared Natural return against the pilot's Rational answer
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml`:
+
+```kerml
+function '/' specializes IntegerFunctions::'/' { in x: Natural[1]; in y: Natural[1]; return : Natural[1]; }
+```
+
+````markdown
+**Question, not a bug report:** `NaturalFunctions::'/'` declares
+`return : Natural[1]`, but the pinned pilot implementation (`2026-05`,
+`jupyter-sysml-kernel` 0.60.1) evaluates `5 / 2` to `LiteralRational 2.5` even
+when both operands are `Natural`-typed attributes
+(`attribute a : ScalarValues::Natural = 5; attribute b : ScalarValues::Natural = 2;`).
+Its evaluator dispatches on the value's kind rather than the declared type, so
+the division runs through `RationalFunctions::'/'` — the function
+`IntegerFunctions::'/'` specializes with `return : Rational[1]` — and no
+truncating Natural division is observable. A `Natural[1]` return would require
+the quotient to be truncated or the call to be rejected, and the pilot does
+neither. Is the declared return type intended to be `Rational[1]` (matching
+`IntegerFunctions::'/'`), or is a conforming evaluator expected to truncate?
+````
+
+OpenSysML follows the pilot's observed behavior: the type checker
+(`passes/typecheck_expr.go` `divisionResult`) types `Natural/Natural` division
+as `Rational`, and the runtime answers a Real, so a whole-number quotient bound
+to a `Natural`-typed feature is reported rather than truncated.
 
 ---
 

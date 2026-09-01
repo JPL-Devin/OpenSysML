@@ -507,13 +507,11 @@ func (ec *exprChecker) checkAddition(scope *symbols.Scope, e *ast.OperatorExpr) 
 	return semantics.PrimUnknown
 }
 
-// divisionResult follows the kernel function library: Natural/Natural stays
-// Natural, Integer/Integer is Rational, wider types divide within themselves.
+// divisionResult types a whole-number quotient as Rational, as the reference
+// evaluates it (see docs/project/omg-issues.md); wider types divide within themselves.
 func divisionResult(lhs, rhs semantics.PrimType) semantics.PrimType {
 	switch widened := semantics.PrimWiden(lhs, rhs); widened {
-	case semantics.PrimNatural:
-		return semantics.PrimNatural
-	case semantics.PrimInteger:
+	case semantics.PrimNatural, semantics.PrimInteger:
 		return semantics.PrimRational
 	default:
 		return widened

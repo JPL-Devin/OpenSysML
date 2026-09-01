@@ -95,20 +95,24 @@ func TestLeastIntegerLiteralIsRead(t *testing.T) {
 }
 
 // TestNegatingTheLeastIntegerIsReported: the least Integer has no negation in
-// range, whether it is divided by -1 or negated after being computed.
+// range. Dividing it by -1 is not an overflow: a quotient is a Rational, so it
+// answers the Real the negated magnitude rounds to.
 func TestNegatingTheLeastIntegerIsReported(t *testing.T) {
 	model, resolver, root := parseAndBuildModel(t, sumModel)
 	ctx := NewContext(model, resolver, 1000)
 	sum := resolveSymbol(t, root, "sum")
 
-	for _, src := range []string{
-		"-9223372036854775808 / -1",
-		"-(-9223372036854775808)",
-	} {
-		got, err := evalLiteral(t, ctx, src)
-		if !errors.Is(err, semantics.ErrArithmeticOverflow) {
-			t.Errorf("%s = %+v, %v; want ErrArithmeticOverflow", src, got, err)
-		}
+	got, err := evalLiteral(t, ctx, "-(-9223372036854775808)")
+	if !errors.Is(err, semantics.ErrArithmeticOverflow) {
+		t.Errorf("-(-9223372036854775808) = %+v, %v; want ErrArithmeticOverflow", got, err)
+	}
+
+	got, err = evalLiteral(t, ctx, "-9223372036854775808 / -1")
+	if err != nil {
+		t.Fatalf("-9223372036854775808 / -1: %v", err)
+	}
+	if got.Const.Kind != semantics.ValReal || got.Const.Real != -float64(math.MinInt64) {
+		t.Errorf("-9223372036854775808 / -1 = %+v, want the Real %v", got.Const, -float64(math.MinInt64))
 	}
 
 	args := []Value{constInt(math.MinInt64), constInt(0)}

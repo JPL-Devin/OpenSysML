@@ -7,7 +7,7 @@
     }
   ],
   "result": {
-    "type": "Integer",
-    "value": 1
+    "type": "Real",
+    "value": 0.5625
   }
 }

@@ -2,7 +2,7 @@
 	"type": "action",
 	"outputs": {
 		"result": {"type": "Integer", "value": 8},
-		"halved": {"type": "Integer", "value": 4},
+		"halved": {"type": "Real", "value": 4.0},
 		"untaken": {"type": "Integer", "value": 0}
 	}
 }
