@@ -69,15 +69,19 @@ action, a state machine or a part usage.
 
 | elements | load wall | allocated | live heap held |
 | -------- | --------- | --------- | -------------- |
-| 0        | 0.16 ms   | 110 KiB   | 32 KiB         |
+| 0        | 1.0 ms    | 695 KiB   | 32 KiB         |
 | 250      | 16 ms     | 10.3 MiB  | 2.1 MiB        |
 | 1 000    | 62 ms     | 40 MiB    | 8.1 MiB        |
 | 4 000    | 260 ms    | 161 MiB   | 32 MiB         |
 
 The `elements=0` row is what a session costs before it holds a model of its own:
-**32 KiB held and 110 KiB allocated**. The standard library is no longer indexed
+**32 KiB held and 695 KiB allocated**. The standard library is no longer indexed
 eagerly per session, so a process serving many sessions (the LSP, a server) no
-longer pays a multi-megabyte floor for each one.
+longer pays a multi-megabyte floor for each one. Most of the current floor is
+the `about`-metadata index (`semantics.Model.annotationsAbout`), whose walk
+visits every document in the index — the bundled standard library included —
+once per session; the walk's visited-symbol set is transient, so the held size
+is unchanged.
 
 Above that baseline a model costs roughly **8 KiB held per element**, and
 allocates roughly **41 KiB per element** while loading, most of it short-lived
@@ -254,6 +258,22 @@ grows: a long-lived session over a large model tunes better with `GOGC` than wit
 a faster executor.
 
 ## Notes for further work
+
+- The `about`-metadata index walks the bundled library's documents once per
+  session, which is most of the empty-session floor above. The library is
+  immutable once its index is built, so whether it declares any `about` usages
+  — and which — is computable once at library-index build time; a session
+  would then walk only workspace documents.
+- Validating many files in one `sysml -validate` invocation is quadratic in
+  the file count: the CLI submits files one at a time and every submission
+  reindexes the workspace, re-running wildcard-import expansion over every
+  document loaded so far. The 100-file OMG training corpus costs 6.7 s as one
+  batch where its two halves cost 0.6 s and 3.4 s separately, and a CPU
+  profile of the batch spends 52% under `model.(*Workspace).setOpenBuffer` →
+  `reindexLocked` with `symbols.(*Index).ExpandWildcardImports` the largest
+  component. Submitting a batch as one indexing unit, or expanding wildcard
+  imports incrementally for documents a new submission cannot affect, would
+  make a batch cost what its parts cost.
 
 - Runs over a large model spend their time in collection, not in the executor
   (above). Reducing what a load leaves behind is the lever, since the live model
