@@ -119,7 +119,7 @@ if [ "$has_library" -eq 0 ]; then
 	set -- --library "$LIBRARY" "$@"
 fi
 
-exec "$JAVA" -cp "$CLASSES:$JAR" org.openmbee.opensysml.pilot.EvalSysML "$@"
+exec "$JAVA" -cp "$CLASSES:$JAR" io.opensysml.pilot.EvalSysML "$@"
 EOF
 sed "s|__PILOT_ARTIFACT_VERSION__|${PILOT_ARTIFACT_VERSION}|g" \
 	"$launcher_tmp" >"${launcher_tmp}.out"
