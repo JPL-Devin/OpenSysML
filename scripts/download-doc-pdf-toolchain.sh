@@ -59,7 +59,9 @@ else
 fi
 
 mermaid="$dest/mermaid"
-if [[ -x "$mermaid/node_modules/.bin/mmdc" ]]; then
+# puppeteer.json is written last, so it is what says the install finished: mmdc
+# exists before the browser it launches has been downloaded.
+if [[ -x "$mermaid/node_modules/.bin/mmdc" && -s "$mermaid/puppeteer.json" ]]; then
 	echo "mermaid-cli already present at $mermaid"
 else
 	echo "Installing @mermaid-js/mermaid-cli $MERMAID_CLI_VERSION ..."
@@ -68,14 +70,23 @@ else
 	# No dependency's lifecycle script runs; the one that is needed, puppeteer's
 	# browser download, is run below on its own, into build/doc-pdf.
 	(cd "$mermaid" && npm install --silent --no-fund --no-audit --ignore-scripts)
-	# The installer answers "chrome@<version> <path to the executable>".
+	# The installer answers "chrome@<version> <path to the executable>"; the path
+	# is the rest of the line, spaces and all.
 	installed="$(PUPPETEER_CACHE_DIR="$mermaid/browsers" \
 		"$mermaid/node_modules/.bin/puppeteer" browsers install chrome)"
-	chrome="${installed##* }"
+	chrome="${installed#* }"
+	if [[ ! -x "$chrome" ]]; then
+		echo "puppeteer installed no executable browser: $installed" >&2
+		exit 1
+	fi
 	# That browser is outside puppeteer's default cache, so name it here.
 	# Sandboxing needs user namespaces, which containers often lack.
-	printf '{"executablePath":"%s","args":["--no-sandbox","--disable-setuid-sandbox"]}' \
-		"$chrome" >"$mermaid/puppeteer.json"
+	CHROME="$chrome" python3 - >"$mermaid/puppeteer.json" <<'PY'
+import json, os
+
+print(json.dumps({"executablePath": os.environ["CHROME"],
+                  "args": ["--no-sandbox", "--disable-setuid-sandbox"]}))
+PY
 fi
 
 echo
