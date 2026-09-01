@@ -116,6 +116,11 @@ type Index struct {
 	// they restrict the memberships that namespace's imports bring in, so they are
 	// read on every expansion of it.
 	nsFilters *layer[string, map[string][]ElementFilter]
+
+	// aboutUsages caches, per document and computed at Freeze, the metadata
+	// usages with an `about` clause the document declares, so a model over a
+	// shared frozen index reads them instead of walking its scope trees.
+	aboutUsages map[string][]*Symbol
 }
 
 // reexportClaim is one document's claim on a re-export: whether its imports
@@ -204,7 +209,65 @@ func (idx *Index) Freeze() {
 		return
 	}
 	idx.ExpandWildcardImports()
+	idx.aboutUsages = make(map[string][]*Symbol)
+	for _, name := range idx.docRoots.keys() {
+		if usages := aboutUsagesIn(idx.docRoots.at(name)); len(usages) > 0 {
+			idx.aboutUsages[name] = usages
+		}
+	}
 	idx.frozen = true
+}
+
+// FrozenAboutUsages returns the `about` metadata usages the named document
+// declares, read from the cache its frozen index built, and whether the cache
+// covers the document: false for one still writable, whose tree the caller
+// must walk instead.
+func (idx *Index) FrozenAboutUsages(name string) ([]*Symbol, bool) {
+	if idx.frozen {
+		return idx.aboutUsages[name], true
+	}
+	if idx.base != nil && !idx.docRoots.owns(name) {
+		return idx.base.aboutUsages[name], true
+	}
+	return nil, false
+}
+
+// aboutUsagesIn walks a scope tree — anonymous members included — collecting
+// every metadata usage that states what it annotates with an `about` clause.
+func aboutUsagesIn(root *Scope) []*Symbol {
+	var out []*Symbol
+	collectAboutUsages(root, make(map[*Symbol]bool), &out)
+	return out
+}
+
+func collectAboutUsages(scope *Scope, seen map[*Symbol]bool, out *[]*Symbol) {
+	if scope == nil {
+		return
+	}
+	scope.ForEachMember(func(sym *Symbol) bool {
+		if sym == nil || seen[sym] {
+			return true
+		}
+		seen[sym] = true
+		if sym.Kind == SymbolMetadataUsage {
+			if usage, ok := sym.Decl.(*ast.Usage); ok && UsageAnnotatesOthers(usage) {
+				*out = append(*out, sym)
+			}
+		}
+		collectAboutUsages(sym.Scope, seen, out)
+		return true
+	})
+}
+
+// UsageAnnotatesOthers reports whether a metadata usage states what it
+// annotates (`metadata m about p;`), rather than annotating its owner.
+func UsageAnnotatesOthers(u *ast.Usage) bool {
+	for _, rel := range u.Relationships {
+		if rel != nil && rel.Kind == ast.RelAnnotates {
+			return true
+		}
+	}
+	return false
 }
 
 // Frozen reports whether the index has been frozen.

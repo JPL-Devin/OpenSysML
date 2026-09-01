@@ -300,8 +300,19 @@ func (m *Model) annotationsAbout() map[*symbols.Symbol][]annotation {
 	if idx == nil {
 		return m.aboutAnnots
 	}
-	seen := make(map[*symbols.Symbol]bool)
+	var seen map[*symbols.Symbol]bool
 	for _, doc := range idx.Documents() {
+		// A frozen document — the shared standard library above all — cached
+		// its `about` usages when it froze, so its tree is not walked here.
+		if usages, cached := idx.FrozenAboutUsages(doc); cached {
+			for _, sym := range usages {
+				m.indexAboutUsage(sym)
+			}
+			continue
+		}
+		if seen == nil {
+			seen = make(map[*symbols.Symbol]bool)
+		}
 		m.collectAboutAnnotations(idx.DocumentRoot(doc), seen)
 	}
 	return m.aboutAnnots
@@ -320,21 +331,31 @@ func (m *Model) collectAboutAnnotations(scope *symbols.Scope, seen map[*symbols.
 		}
 		seen[sym] = true
 		if sym.Kind == symbols.SymbolMetadataUsage {
-			if usage, ok := sym.Decl.(*ast.Usage); ok && annotatesOthers(usage) {
-				if a, ok := m.usageAnnotation(sym.OwnerScope, usage); ok {
-					a.about = true
-					for _, target := range m.annotatedElements(sym.OwnerScope, usage) {
-						if _, known := m.aboutAnnots[target]; !known {
-							m.aboutOrder = append(m.aboutOrder, target)
-						}
-						m.aboutAnnots[target] = append(m.aboutAnnots[target], a)
-					}
-				}
-			}
+			m.indexAboutUsage(sym)
 		}
 		m.collectAboutAnnotations(sym.Scope, seen)
 		return true
 	})
+}
+
+// indexAboutUsage records one `about` metadata usage against every element it
+// annotates.
+func (m *Model) indexAboutUsage(sym *symbols.Symbol) {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || !annotatesOthers(usage) {
+		return
+	}
+	a, ok := m.usageAnnotation(sym.OwnerScope, usage)
+	if !ok {
+		return
+	}
+	a.about = true
+	for _, target := range m.annotatedElements(sym.OwnerScope, usage) {
+		if _, known := m.aboutAnnots[target]; !known {
+			m.aboutOrder = append(m.aboutOrder, target)
+		}
+		m.aboutAnnots[target] = append(m.aboutAnnots[target], a)
+	}
 }
 
 // annotatedElements resolves the elements a metadata usage's `about` clause
@@ -358,14 +379,7 @@ func (m *Model) annotatedElements(scope *symbols.Scope, u *ast.Usage) []*symbols
 
 // annotatesOthers reports whether a metadata usage states what it annotates
 // (`metadata m about p;`), rather than annotating the element owning it.
-func annotatesOthers(u *ast.Usage) bool {
-	for _, rel := range u.Relationships {
-		if rel != nil && rel.Kind == ast.RelAnnotates {
-			return true
-		}
-	}
-	return false
-}
+func annotatesOthers(u *ast.Usage) bool { return symbols.UsageAnnotatesOthers(u) }
 
 // annotationValues reads the feature values an annotation body binds, as in
 // `@Safety{isMandatory = true;}`. A binding whose value is not a constant or an
