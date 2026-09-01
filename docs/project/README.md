@@ -34,6 +34,8 @@ says so at the top.
   it leaves open
 - **[Scope enumeration and visibility decisions](wave12e-decisions.md)** — the visible-name enumeration rule, the two
   resolver defects it closes, and the import-visibility divergence it keeps
+- **[HTML document backend](html-document-backend.md)** — the design for rendering documents as
+  semantic, styleable HTML straight from the document IR
 - **[Roadmap](roadmap.md)** — the known gaps, in the order they should be picked up
 - **[Releasing](releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
 - **[macOS distribution](macos-distribution.md)** — Gatekeeper and the signing decision
