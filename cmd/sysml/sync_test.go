@@ -137,6 +137,36 @@ func TestSyncAnnotateWritesMintedIDs(t *testing.T) {
 	}
 }
 
+func TestSyncAnnotateQuotesUnrestrictedNames(t *testing.T) {
+	binary := buildCLI(t)
+	dir := t.TempDir()
+	model := filepath.Join(dir, "model.sysml")
+	repo := filepath.Join(dir, "repo.ttl")
+	if err := os.WriteFile(model, []byte(`package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; branch = "main"; }
+	part def 'Spare Wheel'; // unrestricted name
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(repo, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	annotated := filepath.Join(dir, "annotated.sysml")
+
+	run(t, binary, model, "-sync-diff", repo, "-sync-mint-ids", "-sync-annotate", annotated)
+	data, err := os.ReadFile(annotated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "IdentityMetadata::ElementId about P::'Spare Wheel'") {
+		t.Errorf("the unrestricted name is not quoted in the annotation:\n%s", data)
+	}
+	if !strings.Contains(string(data), "// unrestricted name") {
+		t.Errorf("the annotated notation lost the model's lexical comment:\n%s", data)
+	}
+}
+
 func TestSyncAnnotateNeedsMinting(t *testing.T) {
 	binary := buildCLI(t)
 	model, repo := syncFixtures(t, binary)

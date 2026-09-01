@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/project"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/interop/reposync"
@@ -135,7 +136,7 @@ func writeAnnotated(model string, set *reposync.ChangeSet, path string) error {
 	}
 	for _, change := range minted {
 		fmt.Fprintf(&out, "metadata : IdentityMetadata::ElementId about %s { id = \"%s\"; }\n",
-			change.QualifiedName, change.MintedID)
+			lexer.QualifiedNameText(change.QualifiedName), change.MintedID)
 	}
 	notation := []byte(out.String())
 	if _, err := export.SysMLToRDF(name, notation); err != nil {
