@@ -111,6 +111,7 @@ exclude_docs: |
   internals/notes/**
   project/*.json
   project/omg-issues.md
+  project/performance-census-2026-09.md
   project/releasing.md
   project/macos-distribution.md
   project/demo.md
