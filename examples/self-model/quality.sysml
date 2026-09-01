@@ -36,7 +36,10 @@ package OpenSysMLInvariants {
              * per subject. */
         subject registry : PassRegistry;
         require constraint {
-            registry.tierCount == 4
+            registry.tierCount == 4 and registry.sortsByLevel
+                and registry.skipsDocumentScopedAboveFailure
+                and registry.notation.level == "syntax"
+                and registry.actionEndpoints.elementScoped
         }
     }
 
@@ -49,10 +52,17 @@ package OpenSysMLInvariants {
     }
 
     #Invariant requirement def BoundedExecution {
-        doc /* Execution is step-budgeted and reports deadlock rather than hanging. */
+        doc /* Every kind of work the runtime does has its own budget, and a run
+             * that exhausts one reports which rather than hanging. */
         subject runtime : Runtime;
         require constraint {
-            runtime.stepBudgeted
+            runtime.stepBudgeted and runtime.budgetCount == 6
+                and runtime.evaluationSteps.defaultBound > 0
+                and runtime.actionSteps.defaultBound > 0
+                and runtime.stateEvents.defaultBound > 0
+                and runtime.doSteps.defaultBound > 0
+                and runtime.elements.defaultBound > 0
+                and runtime.calcDepth.defaultBound > 0
         }
     }
 
@@ -147,7 +157,7 @@ package OpenSysMLGates {
     }
 
     verification def RuntimeGate {
-        doc /* go test -run 'TestExecutionConformance|TestRobustness' ./internal/core/runtime */
+        doc /* go test -run 'TestExecutionConformance|TestRuntimeRobustness' ./internal/core/runtime */
         subject runtime : Runtime;
         objective {
             verify executionIsBounded;

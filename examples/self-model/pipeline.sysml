@@ -5,6 +5,7 @@ package OpenSysMLArtifacts {
 
     // What moves between stages.
     item def SourceText;
+    item def SourceSpan;
     item def TokenStream;
     item def SyntaxTree;
     item def SymbolIndex;
@@ -13,6 +14,8 @@ package OpenSysMLArtifacts {
     item def TypeTable :> SideTable;
     item def Diagnostic;
     item def QuickFix;
+    item def SemanticToken;
+    item def SourceEdit;
     item def ActionGraph;
     item def StateGraph;
     item def ExecutionTrace;
@@ -133,9 +136,12 @@ package OpenSysMLPipeline {
         port typesOut : ArtifactPort;
     }
 
-    // A validation pass, one per tier level.
+    // A validation pass: goType names its Go type in the passes package, level
+    // the tier it runs at. An element-scoped pass gates itself per subject
+    // through DownstreamOfFailure instead of being skipped with its tier.
     abstract part def ValidationPass :> CodeUnit {
         attribute :>> goPackage = "internal/core/passes";
+        attribute goType : String;
         attribute level : String;
         attribute elementScoped : Boolean = false;
         out item findings : Diagnostic;
@@ -146,7 +152,7 @@ package OpenSysMLPipeline {
     }
 
     part def NameResolutionCheck :> ValidationPass {
-        attribute :>> level = "nameResolution";
+        attribute :>> level = "name-resolution";
     }
 
     part def TypeCheck :> ValidationPass {
@@ -157,22 +163,88 @@ package OpenSysMLPipeline {
         attribute :>> level = "constraint";
     }
 
-    // Gates itself per subject through DownstreamOfFailure rather than being
-    // skipped wholesale when a lower tier errors.
-    part def NotationCheck :> ValidationPass {
-        attribute :>> level = "constraint";
-        attribute :>> elementScoped = true;
-    }
-
+    // Every pass DefaultRegistry registers, in registration order. Run sorts
+    // them stably by level; a blocking finding skips the document-scoped passes
+    // of the tiers above it and leaves the element-scoped ones to gate themselves.
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
+        attribute passCount : Integer = 47;
+        attribute sortsByLevel : Boolean = true;
+        attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
-        part syntax : SyntaxCheck;
-        part nameres : NameResolutionCheck;
-        part types : TypeCheck;
-        part constraints : ConstraintCheck;
-        part notation : NotationCheck;
+        part syntax : SyntaxCheck { attribute :>> goType = "SyntaxPass"; }
+        part importVisibility : SyntaxCheck { attribute :>> goType = "ImportVisibilityPass"; }
+        // Non-standard notation is a syntax-level warning, not a constraint.
+        part notation : SyntaxCheck { attribute :>> goType = "NonstandardNotationPass"; }
+        part nameResolution : NameResolutionCheck { attribute :>> goType = "NameResolutionPass"; }
+        part stateTransitions : NameResolutionCheck { attribute :>> goType = "StateTransitionPass"; }
+        part actionEndpoints : NameResolutionCheck {
+            attribute :>> goType = "ActionEndpointPass";
+            attribute :>> elementScoped = true;
+        }
+        part typeCheck : TypeCheck { attribute :>> goType = "TypeCheckPass"; }
+        part transitionGuards : TypeCheck {
+            attribute :>> goType = "TransitionGuardPass";
+            attribute :>> elementScoped = true;
+        }
+        part kermlSubsettingMetaclass : TypeCheck {
+            attribute :>> goType = "KerMLSubsettingMetaclassPass";
+            attribute :>> elementScoped = true;
+        }
+        part redefinitionDirection : TypeCheck { attribute :>> goType = "RedefinitionDirectionPass"; }
+        part elementFilters : TypeCheck {
+            attribute :>> goType = "ElementFilterPass";
+            attribute :>> elementScoped = true;
+        }
+        part constraints : ConstraintCheck { attribute :>> goType = "ConstraintPass"; }
+        part documentQueries : ConstraintCheck {
+            attribute :>> goType = "DocumentQueryPass";
+            attribute :>> elementScoped = true;
+        }
+        part documentPlans : ConstraintCheck {
+            attribute :>> goType = "DocumentPlanPass";
+            attribute :>> elementScoped = true;
+        }
+        part typeRelationships : ConstraintCheck { attribute :>> goType = "TypeRelationshipsPass"; }
+        part conjugatedSpecialization : TypeCheck { attribute :>> goType = "W11EConjugatedSpecializationPass"; }
+        part implicitBase : ConstraintCheck { attribute :>> goType = "ImplicitBasePass"; }
+        part multiplicityBounds : ConstraintCheck { attribute :>> goType = "MultiplicityBoundsPass"; }
+        part referenceSubsetting : ConstraintCheck { attribute :>> goType = "ReferenceSubsettingPass"; }
+        part topLevelImports : ConstraintCheck { attribute :>> goType = "TopLevelImportPass"; }
+        part associationEndTypes : ConstraintCheck { attribute :>> goType = "AssociationEndTypesPass"; }
+        part variableFeatures : ConstraintCheck { attribute :>> goType = "VariableFeaturePass"; }
+        part assignmentReferents : ConstraintCheck {
+            attribute :>> goType = "AssignmentReferentPass";
+            attribute :>> elementScoped = true;
+        }
+        part resultExpressions : ConstraintCheck { attribute :>> goType = "ResultExpressionPass"; }
+        part featureReferences : ConstraintCheck { attribute :>> goType = "FeatureReferencePass"; }
+        part metadataTypes : TypeCheck {
+            attribute :>> goType = "MetadataTypePass";
+            attribute :>> elementScoped = true;
+        }
+        part metadataAnnotations : TypeCheck { attribute :>> goType = "MetadataAnnotationPass"; }
+        part occurrenceTyping : TypeCheck { attribute :>> goType = "W8DOccurrenceTypingPass"; }
+        part connectorFeaturing : ConstraintCheck { attribute :>> goType = "W8DConnectorFeaturingPass"; }
+        part flowEnds : ConstraintCheck { attribute :>> goType = "W8DFlowEndPass"; }
+        part variability : ConstraintCheck { attribute :>> goType = "W8DVariabilityPass"; }
+        part relatedElements : ConstraintCheck { attribute :>> goType = "W10BRelatedElementsPass"; }
+        part individualTyping : TypeCheck { attribute :>> goType = "W10BIndividualTypingPass"; }
+        part endKinds : TypeCheck { attribute :>> goType = "W10BEndKindPass"; }
+        part structuralElements : TypeCheck { attribute :>> goType = "W10BStructuralPass"; }
+        part portionOwners : ConstraintCheck { attribute :>> goType = "W10BPortionOwnerPass"; }
+        part verificationCases : ConstraintCheck { attribute :>> goType = "W8DVerificationPass"; }
+        part viewRenderings : ConstraintCheck { attribute :>> goType = "W8DViewRenderingPass"; }
+        part metadataUsages : ConstraintCheck { attribute :>> goType = "W8DMetadataUsagePass"; }
+        part identityMetadata : ConstraintCheck { attribute :>> goType = "IdentityMetadataPass"; }
+        part redefinitionConformance : ConstraintCheck { attribute :>> goType = "RedefinitionConformancePass"; }
+        part shortNameDistinguishability : NameResolutionCheck { attribute :>> goType = "W9CShortNameDistinguishabilityPass"; }
+        part userStandardLibrary : NameResolutionCheck { attribute :>> goType = "W9CUserStandardLibraryPass"; }
+        part inheritedNameConflicts : TypeCheck { attribute :>> goType = "W9CInheritedNameConflictPass"; }
+        part boundFeatureTypes : TypeCheck { attribute :>> goType = "W9CBoundFeatureTypesPass"; }
+        part usageTyping : TypeCheck { attribute :>> goType = "W11AUsageTypingPass"; }
+        part kermlSpecialization : TypeCheck { attribute :>> goType = "W11AKerMLSpecializationPass"; }
 
         in item typed : TypeTable;
         out item findings : Diagnostic;
@@ -239,14 +311,61 @@ package OpenSysMLPipeline {
         out item instances : InstanceGraph;
     }
 
+    // One bound on one run. Each is exhausted on its own, with a typed error
+    // that names it, and each is overridable through its environment variable.
+    part def Budget {
+        attribute counts : String;
+        attribute envVar : String;
+        attribute defaultBound : Integer;
+        attribute exhaustion : String;
+    }
+
     #Backend part def Runtime :> Stage {
         attribute :>> goPackage = "internal/core/runtime";
         attribute stepBudgeted : Boolean = true;
+        attribute budgetCount : Integer = 6;
 
         part instances : InstanceModel;
         part evaluator : Evaluator;
         part actions : ActionExecutor;
         part states : StateExecutor;
+
+        part evaluationSteps : Budget {
+            attribute :>> counts = "expression evaluation steps";
+            attribute :>> envVar = "OPENSYSML_MAX_STEPS";
+            attribute :>> defaultBound = 10000000;
+            attribute :>> exhaustion = "evaluation step limit exceeded";
+        }
+        part actionSteps : Budget {
+            attribute :>> counts = "action executor steps";
+            attribute :>> envVar = "OPENSYSML_MAX_ACTION_STEPS";
+            attribute :>> defaultBound = 1000000;
+            attribute :>> exhaustion = "action step limit exceeded";
+        }
+        part stateEvents : Budget {
+            attribute :>> counts = "state machine events";
+            attribute :>> envVar = "OPENSYSML_MAX_EVENTS";
+            attribute :>> defaultBound = 1000000;
+            attribute :>> exhaustion = "state event limit exceeded";
+        }
+        part doSteps : Budget {
+            attribute :>> counts = "do-activity steps";
+            attribute :>> envVar = "OPENSYSML_MAX_DO_STEPS";
+            attribute :>> defaultBound = 5000000;
+            attribute :>> exhaustion = "state do-step limit exceeded";
+        }
+        part elements : Budget {
+            attribute :>> counts = "collection elements materialized";
+            attribute :>> envVar = "OPENSYSML_MAX_ELEMENTS";
+            attribute :>> defaultBound = 1000000;
+            attribute :>> exhaustion = "collection element limit exceeded";
+        }
+        part calcDepth : Budget {
+            attribute :>> counts = "nested calculation depth";
+            attribute :>> envVar = "OPENSYSML_MAX_CALC_DEPTH";
+            attribute :>> defaultBound = 10000;
+            attribute :>> exhaustion = "calc recursion limit exceeded";
+        }
 
         in item actionGraph : ActionGraph;
         in item stateGraph : StateGraph;

@@ -91,14 +91,37 @@ package OpenSysMLIdentity {
         attribute measuresRatherThanAsserts : Boolean = true;
     }
 
-    // Not built: a diff keyed by effective id, which is what turns a rename
-    // into an update of the same repository element rather than a delete plus
-    // a create. Ids are minted here, never during parsing or analysis.
+    // A diff keyed by effective id, so a rename is an update of the same
+    // repository element rather than a delete plus a create. Ids are minted
+    // here, never during parsing or analysis, and only when asked.
     #Identity part def RepositorySync :> CodeUnit {
-        attribute :>> goPackage = "internal/interop/flexo";
-        attribute implemented : Boolean = false;
+        attribute :>> goPackage = "internal/interop/reposync";
+        attribute implemented : Boolean = true;
         attribute mintsIds : Boolean = true;
+        attribute mintsOnlyOnRequest : Boolean = true;
         attribute diffsByEffectiveId : Boolean = true;
+        attribute changeKinds : String = "create, update, delete, conflict";
+        attribute conflictKinds : String = "missing-id, repository-changed";
+        attribute deletesNeedConfirmation : Boolean = true;
+        attribute stateFileSuffix : String = ".sync.json";
+        in item graph : RdfGraph;
+        in item repository : RdfGraph;
+    }
+
+    // The command-line side of the sync: one model, one repository graph,
+    // conflicts in the exit status.
+    #Identity part def SyncCommand :> CodeUnit {
+        attribute :>> goPackage = "cmd/sysml";
+        attribute flags : String = "-sync-diff, -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids, -sync-annotate";
+        attribute conflictsFailExit : Boolean = true;
+    }
+
+    // The one phase of the identity design that is not built: the notation
+    // extension submitted to OMG. Everything before it is implemented.
+    #Identity part def IdentityStandardization {
+        attribute designRecord : String = "docs/project/element-identity-annotations.md";
+        attribute implementedPhases : Integer = 5;
+        attribute omgIssueFiled : Boolean = false;
     }
 
     part def IdentityPath {
@@ -110,6 +133,8 @@ package OpenSysMLIdentity {
         part reader : RdfReader;
         part harness : InteropHarness;
         part sync : RepositorySync;
+        part syncCommand : SyncCommand;
+        part standardization : IdentityStandardization;
 
         port notationIn : ArtifactPort;
         port notationOut : ArtifactPort;
@@ -120,6 +145,7 @@ package OpenSysMLIdentity {
         flow of IdentityFacts from facts.facts to writer.facts;
         flow of IdentityFacts from facts.facts to check.facts;
         flow of RdfGraph from writer.graph to reader.graph;
+        flow of RdfGraph from writer.graph to sync.graph;
     }
 
     part identity : IdentityPath;
@@ -182,6 +208,56 @@ package OpenSysMLIdentity {
         }
     }
 
+    requirement def SyncNeverActsSilently {
+        doc /* A sync mints ids and deletes elements only when told to, and
+             * a conflict is reported rather than resolved. */
+        subject path : IdentityPath;
+        require constraint {
+            path.sync.implemented and path.sync.mintsOnlyOnRequest
+                and path.sync.deletesNeedConfirmation and path.syncCommand.conflictsFailExit
+        }
+    }
+
+    // The local model is diffed against the repository, keyed by effective id.
+    // Nothing here writes to the repository; the change set is the result.
+    action def SyncModel {
+        attribute hasBase : Boolean = false;
+        attribute mintIds : Boolean = false;
+
+        in item graph : RdfGraph;
+        in item repository : RdfGraph;
+
+        first start;
+
+        action readScope;
+        action loadState;
+        action diffByEffectiveId;
+        action detectRepositoryChanges;
+        action mintUuids;
+        action writeBack;
+        action reportChangeSet;
+
+        succession first start then readScope;
+        succession first readScope then loadState;
+        succession first loadState then baseGate;
+
+        // Without the last-seen graph a repository-side change cannot be told
+        // from a local one, so it is not called a conflict.
+        decide baseGate;
+        if hasBase then detectRepositoryChanges;
+        else diffByEffectiveId;
+
+        succession first detectRepositoryChanges then diffByEffectiveId;
+        succession first diffByEffectiveId then mintGate;
+
+        decide mintGate;
+        if mintIds then mintUuids;
+        else reportChangeSet;
+
+        succession first mintUuids then writeBack;
+        succession first writeBack then reportChangeSet;
+    }
+
     requirement identityRoundTrips : IdentitySurvivesTheRoundTrip {
         subject path = identity;
     }
@@ -192,6 +268,10 @@ package OpenSysMLIdentity {
 
     requirement identityIsBesideTheTree : IdentityStaysASideTable {
         subject facts = identity.facts;
+    }
+
+    requirement syncIsExplicit : SyncNeverActsSilently {
+        subject path = identity;
     }
 
     verification def IdentityGate {

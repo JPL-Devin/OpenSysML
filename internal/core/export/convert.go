@@ -54,6 +54,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/format"
@@ -88,6 +89,16 @@ var formatNames = map[string]Format{
 	"ttl":    FormatTurtle,
 	"turtle": FormatTurtle,
 	"rdf":    FormatTurtle,
+}
+
+// FormatNames returns every name ParseFormat accepts, sorted.
+func FormatNames() []string {
+	names := make([]string, 0, len(formatNames))
+	for name := range formatNames {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // ParseFormat resolves a format name, as given to `-convert`/`-from`.

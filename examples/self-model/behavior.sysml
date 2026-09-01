@@ -155,10 +155,10 @@ package OpenSysMLBehavior {
     }
 
     // Token flow: a step moves every enabled token, and a round with no
-    // movement is a deadlock rather than a hang.
+    // movement is a deadlock rather than a hang. The budget is the action-step one.
     state def TokenFlow {
         attribute progressed : Boolean = true;
-        attribute budgetLeft : Integer = 10000;
+        attribute budgetLeft : Integer = 1000000;
 
         entry; then idle;
 
@@ -194,7 +194,35 @@ package OpenSysMLBehavior {
         transition first settled then waiting;
     }
 
-    // What a step costs, for the budget the runtime enforces.
+    // Six budgets, each exhausted on its own: the first to run out ends the run
+    // with the error that names it, and the others are not consulted.
+    state def BudgetExhaustion {
+        attribute stepsLeft : Integer = 10000000;
+        attribute actionStepsLeft : Integer = 1000000;
+        attribute stateEventsLeft : Integer = 1000000;
+        attribute doStepsLeft : Integer = 5000000;
+        attribute elementsLeft : Integer = 1000000;
+        attribute calcDepthLeft : Integer = 10000;
+
+        entry; then running;
+
+        state running;
+        state stepLimitExceeded;
+        state actionStepLimitExceeded;
+        state stateEventLimitExceeded;
+        state doStepLimitExceeded;
+        state elementLimitExceeded;
+        state calcRecursionLimitExceeded;
+
+        transition first running if stepsLeft <= 0 then stepLimitExceeded;
+        transition first running if actionStepsLeft <= 0 then actionStepLimitExceeded;
+        transition first running if stateEventsLeft <= 0 then stateEventLimitExceeded;
+        transition first running if doStepsLeft <= 0 then doStepLimitExceeded;
+        transition first running if elementsLeft <= 0 then elementLimitExceeded;
+        transition first running if calcDepthLeft <= 0 then calcRecursionLimitExceeded;
+    }
+
+    // What a step costs, for the action-step budget the runtime enforces.
     calc def StepBudget {
         in attribute rounds : Integer;
         in attribute tokensPerRound : Integer;

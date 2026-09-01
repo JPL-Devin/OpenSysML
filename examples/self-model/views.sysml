@@ -68,6 +68,23 @@ package OpenSysMLViews {
         expose OpenSysMLBehavior::EventDispatch;
     }
 
+    view budgetExhaustion : StateTransitionView {
+        doc /* Six budgets, six ways a run can end early, each naming itself. */
+        expose OpenSysMLBehavior::BudgetExhaustion;
+    }
+
+    view editorPipeline {
+        doc /* What an editor reaches: highlighting, fixes, suggestions, edits. */
+        expose OpenSysMLSurfaces::EditorPipeline;
+        render asInterconnectionDiagram;
+    }
+
+    view renderingKinds {
+        doc /* Every rendering kind the view engine recognizes, and which it produces. */
+        expose OpenSysMLSurfaces::ViewEngine;
+        render asElementTable;
+    }
+
     view identityPath {
         doc /* How an element's repository id reaches RDF and comes back. */
         expose OpenSysMLIdentity::IdentityPath;
@@ -76,6 +93,11 @@ package OpenSysMLViews {
 
     view identityRoundTrip : ActionFlowView {
         expose OpenSysMLIdentity::CarryIdentity;
+    }
+
+    view syncFlow : ActionFlowView {
+        doc /* A local model diffed against its repository, keyed by effective id. */
+        expose OpenSysMLIdentity::SyncModel;
     }
 
     view identityLayer {
