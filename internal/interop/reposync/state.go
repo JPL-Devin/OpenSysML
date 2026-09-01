@@ -23,7 +23,7 @@ func StatePath(modelPath string) string { return modelPath + ".sync.json" }
 // LoadState reads a state file, returning nil without error when the file does
 // not exist yet: a first sync has no last-seen commit.
 func LoadState(path string) (*State, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the user names their own sync state file
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
@@ -43,7 +43,7 @@ func (s *State) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
+	return os.WriteFile(path, append(data, '\n'), 0o600)
 }
 
 // Scope returns the scope the state pins the sync to.
