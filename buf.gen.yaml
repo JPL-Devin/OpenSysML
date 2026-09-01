@@ -17,7 +17,7 @@ managed:
     - file_option: ruby_package
   override:
     - file_option: java_package
-      value: io.opensysml.proto
+      value: org.openmbee.opensysml.proto
     - file_option: java_multiple_files
       value: true
 plugins:

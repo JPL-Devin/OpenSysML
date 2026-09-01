@@ -11,7 +11,7 @@ starts and stops for itself.
 | Go | `github.com/Open-MBEE/OpenSysML/client/opensysml` | in process, or Connect to a service | [Go packages](../reference/api.md) |
 | Python | `opensysml` | gRPC, to a private child service or a named one | [Python API](../reference/python-api.md) |
 | Node/TypeScript | `@opensysml/client` | Connect, from Node or from a browser page | [Node API](../reference/node-api.md) |
-| Java | `io.github.open-mbee:opensysml-client` | Connect, over the JDK's own HTTP client | [Java API](../reference/java-api.md) |
+| Java | `org.openmbee:opensysml-client` | Connect, over the JDK's own HTTP client | [Java API](../reference/java-api.md) |
 | Rust | `opensysml` | Connect, blocking, with no async runtime | [Rust API](../reference/rust-api.md) |
 
 They do not all cover the same ground. Go and Python answer every RPC the service answers; Node,

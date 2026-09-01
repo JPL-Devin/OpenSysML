@@ -1,4 +1,4 @@
-package io.opensysml.pilot;
+package org.openmbee.opensysml.pilot;
 
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
