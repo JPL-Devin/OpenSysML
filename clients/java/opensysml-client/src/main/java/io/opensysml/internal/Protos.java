@@ -6,6 +6,7 @@ import io.opensysml.Instance;
 import io.opensysml.Instantiation;
 import io.opensysml.Quantity;
 import io.opensysml.Symbol;
+import io.opensysml.TransportException;
 import io.opensysml.Value;
 import io.opensysml.proto.AttributeInfo;
 import io.opensysml.proto.FeatureValue;
@@ -56,9 +57,21 @@ public final class Protos {
   private static Value sequence(io.opensysml.proto.Value value) {
     List<Value> elements = new ArrayList<>();
     for (io.opensysml.proto.Value element : value.getSequence().getElementsList()) {
-      value(element).ifPresent(elements::add);
+      elements.add(readable(element));
     }
     return new Value.Sequence(elements);
+  }
+
+  /**
+   * A value the client must read rather than drop: answering nothing for a value that was sent
+   * would read as a shorter sequence, or as a feature holding no value at all.
+   */
+  private static Value readable(io.opensysml.proto.Value value) {
+    return value(value)
+        .orElseThrow(
+            () ->
+                new TransportException(
+                    "the service answered a value of a kind this client does not know", null));
   }
 
   /**
@@ -137,7 +150,9 @@ public final class Protos {
           new Symbol.Attribute(
               attribute.getName(),
               attribute.getType(),
-              attribute.hasValue() ? value(attribute.getValue()) : Optional.empty(),
+              attribute.hasValue()
+                  ? Optional.of(readable(attribute.getValue()))
+                  : Optional.<Value>empty(),
               present(attribute.getUnit())));
     }
     List<Symbol.Specialization> specializations = new ArrayList<>(symbol.getSpecializationsCount());
@@ -192,13 +207,15 @@ public final class Protos {
       FeatureValue featureValue = entry.getValue();
       List<Value> values = new ArrayList<>(featureValue.getValuesCount());
       for (io.opensysml.proto.Value each : featureValue.getValuesList()) {
-        value(each).ifPresent(values::add);
+        values.add(readable(each));
       }
       featureValues.put(
           entry.getKey(),
           new Instance.FeatureValue(
               featureValue.getFeatureName(),
-              featureValue.hasValue() ? value(featureValue.getValue()) : Optional.empty(),
+              featureValue.hasValue()
+                  ? Optional.of(readable(featureValue.getValue()))
+                  : Optional.<Value>empty(),
               values,
               featureValue.getMaterialized(),
               present(featureValue.getError())));
