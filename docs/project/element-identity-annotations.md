@@ -107,7 +107,13 @@ Decisions, each with its reason:
   orgs must not dirty every model file that references it, so the org — like the
   server URL — belongs to the sync tooling's endpoint configuration. The optional
   `org` attribute exists only for Flexo deployments where a repo id is ambiguous
-  without it; it never enters scope equality, which is `projectId` alone.
+  without it — and exactly there it also enters scope equality: unlike `branch`,
+  which selects a version of one project, `org` distinguishes *which* project is
+  named, so two scopes are the same project iff `org` (both absent, or equal) and
+  `projectId` match. A globally unique `projectId` (a UUID, as the OMG API and
+  OpenSysML mint them) makes `org` redundant for identity, and that is the
+  recommended shape; the attribute exists so deployments with non-unique repo ids
+  are still sound rather than falsely colliding.
 - **String-typed ids, validated separately.** The attribute type is `String` so the
   notation stays plain; a validation pass enforces the id shape rather than the type
   system. Ids are UUIDs when minted by OpenSysML, but the pass accepts anything matching
@@ -129,14 +135,14 @@ so they inherit annotated stability with no further mechanism.
 ### Validation (a constraint-tier pass)
 
 - Duplicate effective ids **within one project scope**: error on both elements, naming
-  each. Identity is a pair — the enclosing scope's **`projectId`** (or the absent
-  scope, for unbound documents) plus the effective id — so the same id under two
-  different projects is legal; it names two different repository elements. The
-  `branch` plays no part in scope equality: a branch selects a version of one element,
-  not another identity, so two `ProjectRef`s naming one `projectId` on different
-  branches are one scope for duplicate validation, for mixed-graph refusal, and for
-  the sync diff — where they are instead an error, since one document cannot sync one
-  element against two branches at once.
+  each. Identity is the enclosing scope's **project** — `org` where present plus
+  `projectId` (or the absent scope, for unbound documents) — plus the effective id,
+  so the same id under two different projects is legal; it names two different
+  repository elements. The `branch` plays no part in scope equality: a branch
+  selects a version of one element, not another identity, so two `ProjectRef`s
+  naming one project on different branches are one scope for duplicate validation,
+  for mixed-graph refusal, and for the sync diff — where they are instead an error,
+  since one document cannot sync one element against two branches at once.
 - The check runs over the whole generated id space of the scope, not the element ids
   alone: an annotated id that collides with a **derived** id — another element's encoded
   name, a membership id (`…_om`), an encoded expression-node id — is an error naming
