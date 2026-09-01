@@ -600,21 +600,45 @@ func (e *ActionExecutor) declaresParameter(name string) bool {
 	return false
 }
 
-// checkInputNames reports a supplied input naming no feature of the action:
-// binding it would answer with a value the action never declared.
-func (e *ActionExecutor) checkInputNames() error {
-	names := make([]string, 0, len(e.inputs))
-	for name := range e.inputs {
-		if !e.declaresParameter(name) && !e.declaresAttribute(name) {
-			names = append(names, name)
+// parameterDirection reports the direction of the parameter of this name, and
+// whether the action declares one.
+func (e *ActionExecutor) parameterDirection(name string) (ast.FeatureDirection, bool) {
+	if e.action == nil || e.action.Decl == nil {
+		return ast.DirNone, false
+	}
+	for _, param := range actionParameterDecls(e.action.Decl) {
+		if param.Name == name {
+			return param.Direction, true
 		}
 	}
-	if len(names) == 0 {
+	return ast.DirNone, false
+}
+
+// checkInputNames reports a supplied input the caller cannot write: one naming
+// no feature of the action, or a parameter the action only writes back (`out`).
+func (e *ActionExecutor) checkInputNames() error {
+	var unknown, outputs []string
+	for name := range e.inputs {
+		dir, declared := e.parameterDirection(name)
+		switch {
+		case declared && (dir == ast.DirIn || dir == ast.DirInOut):
+		case dir == ast.DirOut:
+			outputs = append(outputs, name)
+		case !e.declaresAttribute(name):
+			unknown = append(unknown, name)
+		}
+	}
+	if len(outputs) > 0 {
+		sort.Strings(outputs)
+		return fmt.Errorf("%w: action %s writes %s back rather than reading it",
+			ErrOutputActionInput, symbolText(e.action), strings.Join(outputs, ", "))
+	}
+	if len(unknown) == 0 {
 		return nil
 	}
-	sort.Strings(names)
+	sort.Strings(unknown)
 	return fmt.Errorf("%w: action %s declares no %s",
-		ErrUnknownActionInput, symbolText(e.action), strings.Join(names, ", "))
+		ErrUnknownActionInput, symbolText(e.action), strings.Join(unknown, ", "))
 }
 
 // initialize spawns initial token at InitialNode.

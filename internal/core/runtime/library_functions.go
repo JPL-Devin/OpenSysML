@@ -910,6 +910,15 @@ func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (seman
 		}
 		return semantics.Value{Kind: semantics.ValInt, Int: result}, nil
 	}
+	if a.IsNumeric() && b.IsNumeric() {
+		res, ok := semantics.RealArith(op, toReal(a), toReal(b))
+		if !ok {
+			return semantics.Value{}, fmt.Errorf(
+				"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
+			)
+		}
+		return realResult(res)
+	}
 	res, ok := semantics.EvalBinary(op, a, b)
 	if !ok {
 		return semantics.Value{}, fmt.Errorf(

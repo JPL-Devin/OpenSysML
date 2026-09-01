@@ -65,7 +65,13 @@ func TestLiteralOutsideItsRangeIsReported(t *testing.T) {
 	model, resolver, _ := parseAndBuildModel(t, sumModel)
 	ctx := NewContext(model, resolver, 1000)
 
-	for _, src := range []string{"9223372036854775808", "1e400", "1e400 + 1.0"} {
+	for _, src := range []string{
+		"9223372036854775808",
+		"1e400",
+		"1e400 + 1.0",
+		"1e308 + 1e308",
+		"1e200 * 1e200",
+	} {
 		got, err := evalLiteral(t, ctx, src)
 		if !errors.Is(err, semantics.ErrArithmeticOverflow) {
 			t.Fatalf("%s = %+v, %v; want ErrArithmeticOverflow", src, got, err)
@@ -85,6 +91,29 @@ func TestLeastIntegerLiteralIsRead(t *testing.T) {
 	}
 	if got.Const.Kind != semantics.ValInt || got.Const.Int != math.MinInt64 {
 		t.Fatalf("-9223372036854775808 = %+v, want %d", got.Const, int64(math.MinInt64))
+	}
+}
+
+// TestNegatingTheLeastIntegerIsReported: the least Integer has no negation in
+// range, whether it is divided by -1 or negated after being computed.
+func TestNegatingTheLeastIntegerIsReported(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, sumModel)
+	ctx := NewContext(model, resolver, 1000)
+	sum := resolveSymbol(t, root, "sum")
+
+	for _, src := range []string{
+		"-9223372036854775808 / -1",
+		"-(-9223372036854775808)",
+	} {
+		got, err := evalLiteral(t, ctx, src)
+		if !errors.Is(err, semantics.ErrArithmeticOverflow) {
+			t.Errorf("%s = %+v, %v; want ErrArithmeticOverflow", src, got, err)
+		}
+	}
+
+	args := []Value{constInt(math.MinInt64), constInt(0)}
+	if _, err := ctx.InvokeCalc(sum, args, root); err != nil {
+		t.Fatalf("the least Integer is a value the runtime carries: %v", err)
 	}
 }
 

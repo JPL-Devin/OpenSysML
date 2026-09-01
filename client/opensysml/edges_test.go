@@ -109,6 +109,46 @@ func TestExecuteActionReportsAnInputTheActionDoesNotDeclare(t *testing.T) {
 	}
 }
 
+const outputActionSource = `package Demo {
+	action measure {
+		in attribute step = 1;
+		out attribute total;
+		first start;
+		action inner { assign total := step + 1; }
+		done;
+		succession first start then inner;
+		succession first inner then done;
+	}
+}`
+
+// TestExecuteActionReportsSeedingAnOutputParameter: an `out` parameter is what
+// the run answers with, so a caller writing it would read back its own value.
+func TestExecuteActionReportsSeedingAnOutputParameter(t *testing.T) {
+	client := newClient(t)
+	model, err := client.ParseSource(context.Background(), outputActionSource)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	run, err := client.ExecuteAction(context.Background(), model, "Demo::measure",
+		map[string]opensysml.Value{"total": opensysml.Int(99)})
+	if !errors.Is(err, opensysml.ErrFailure) {
+		t.Fatalf("ExecuteAction = %#v, %v; want a failure", run, err)
+	}
+	if !strings.Contains(err.Error(), "total") {
+		t.Errorf("error = %v, want it to name the parameter", err)
+	}
+
+	run, err = client.ExecuteAction(context.Background(), model, "Demo::measure",
+		map[string]opensysml.Value{"step": opensysml.Int(4)})
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if got := run.Outputs["total"]; got != opensysml.Int(5) {
+		t.Errorf("total = %#v, want 5", got)
+	}
+}
+
 const anonymousSatisfySource = `package Demo {
 	part def Truck {
 		attribute payload = 900.0;

@@ -118,6 +118,10 @@ func EvalUnary(op ast.OperatorKind, v Value) (Value, bool) {
 	switch op {
 	case ast.OpNeg:
 		if v.Kind == ValInt {
+			// The least Integer has no negation within the range.
+			if v.Int == math.MinInt64 {
+				return Value{}, false
+			}
 			return Value{Kind: ValInt, Int: -v.Int}, true
 		}
 		if v.Kind == ValReal {
@@ -276,21 +280,33 @@ func evalIntArith(op ast.OperatorKind, a, b int64) (Value, bool) {
 	return Value{}, false
 }
 
+// evalRealArith folds Real arithmetic, declining a result that is not a finite
+// Real so nothing folds to an infinity: the run time reports it.
 func evalRealArith(op ast.OperatorKind, a, b float64) (Value, bool) {
+	res, ok := RealArith(op, a, b)
+	if !ok || math.IsInf(res, 0) || math.IsNaN(res) {
+		return Value{}, false
+	}
+	return Value{Kind: ValReal, Real: res}, true
+}
+
+// RealArith is Real addition, subtraction, multiplication and division,
+// reporting ok=false for an operator it does not define or a division by zero.
+func RealArith(op ast.OperatorKind, a, b float64) (float64, bool) {
 	switch op {
 	case ast.OpAdd:
-		return Value{Kind: ValReal, Real: a + b}, true
+		return a + b, true
 	case ast.OpSub:
-		return Value{Kind: ValReal, Real: a - b}, true
+		return a - b, true
 	case ast.OpMul:
-		return Value{Kind: ValReal, Real: a * b}, true
+		return a * b, true
 	case ast.OpDiv:
 		if b == 0 {
-			return Value{}, false
+			return 0, false
 		}
-		return Value{Kind: ValReal, Real: a / b}, true
+		return a / b, true
 	}
-	return Value{}, false
+	return 0, false
 }
 
 // Pow evaluates l ** r (equivalently l ^ r) — the single implementation the

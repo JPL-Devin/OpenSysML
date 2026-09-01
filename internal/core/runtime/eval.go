@@ -1214,6 +1214,10 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 			if right.Const.Int == 0 {
 				return Value{}, ErrDivisionByZero
 			}
+			if left.Const.Int == math.MinInt64 && right.Const.Int == -1 {
+				return Value{}, fmt.Errorf("%w: %d / -1 exceeds the Integer range",
+					semantics.ErrArithmeticOverflow, left.Const.Int)
+			}
 			result = left.Const.Int / right.Const.Int
 		case ast.OpMod:
 			if right.Const.Int == 0 {
@@ -1492,6 +1496,11 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 		// Arithmetic sign: -number, +number
 		if operand.Kind != ValConst {
 			return Value{}, fmt.Errorf("unary '%s' requires numeric operand, got %v", n.Operator, operand.Kind)
+		}
+		if n.Operator == ast.OpNeg && operand.Const.Kind == semantics.ValInt &&
+			operand.Const.Int == math.MinInt64 {
+			return Value{}, fmt.Errorf("%w: -(%d) exceeds the Integer range",
+				semantics.ErrArithmeticOverflow, operand.Const.Int)
 		}
 		result, ok := semantics.EvalUnary(n.Operator, operand.Const)
 		if !ok {
