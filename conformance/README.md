@@ -6,14 +6,16 @@ programming language, or a client's object model. The reference runner is
 [`cmd/conformance`](../cmd/conformance), which builds and starts the service itself:
 
 ```bash
-make conformance                       # the CI gate; writes bin/conformance-report.json
+make conformance                       # the CI gate; writes bin/conformance-report.json and .xml
 go run ./cmd/conformance -v             # print each scenario's normalized response
 go run ./cmd/conformance -run evaluate  # only the scenarios whose id matches
 go run ./cmd/conformance -binary ./bin/sysml-grpc   # test a binary already built
 go run ./cmd/conformance -protocols grpc,connect,connect-json
 ```
 
-`-report <file>` writes the machine-readable summary (`-` writes it to stdout). The top-level
+`-report <file>` writes the machine-readable summary (`-` writes it to stdout). `-junit <file>`
+additionally writes the same results as JUnit XML — one suite per configuration and protocol, one
+case per scenario — the format CI systems render natively as a test report. The top-level
 object contains aggregate totals and a `protocols` list. Each protocol entry retains the
 capabilities and one result per scenario with its outcome, status, duration and, when it
 disagreed, the list of mismatches. The default protocols are `grpc`, `connect` (protobuf body)

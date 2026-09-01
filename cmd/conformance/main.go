@@ -23,6 +23,8 @@ import (
 	_ "github.com/Open-MBEE/OpenSysML/api/proto" // registers the schema this runner reflects over
 	"google.golang.org/protobuf/reflect/protoregistry"
 
+	"github.com/Open-MBEE/OpenSysML/internal/junit"
+
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -42,6 +44,7 @@ func main() {
 		binary    = flag.String("binary", "", "sysml-grpc binary to test; built from ./cmd/sysml-grpc when empty")
 		repoRoot  = flag.String("repo", ".", "repository root to build the service from")
 		report    = flag.String("report", "", "write the machine-readable summary to this file (- for stdout)")
+		junitOut  = flag.String("junit", "", "also write the results as JUnit XML to this file")
 		run       = flag.String("run", "", "run only the scenarios whose id matches this regular expression")
 		verbose   = flag.Bool("v", false, "print each scenario's normalized response")
 		allowSkip = flag.Bool("allow-skips", false, "treat a scenario skipped for a missing capability as a pass")
@@ -56,6 +59,7 @@ func main() {
 		binary:    *binary,
 		repoRoot:  *repoRoot,
 		report:    *report,
+		junit:     *junitOut,
 		run:       *run,
 		verbose:   *verbose,
 		allowSkip: *allowSkip,
@@ -75,6 +79,7 @@ type options struct {
 	binary    string
 	repoRoot  string
 	report    string
+	junit     string
 	run       string
 	verbose   bool
 	allowSkip bool
@@ -200,6 +205,11 @@ func runSuite(opts options) error {
 	}
 	if err := writeReport(opts.report, reportData); err != nil {
 		return err
+	}
+	if opts.junit != "" {
+		if err := junit.WriteFile(opts.junit, junitReport(reportData)); err != nil {
+			return err
+		}
 	}
 	if reportData.failure {
 		return fmt.Errorf("%d of %d scenarios failed", reportData.Failed+reportData.Errored, reportData.Total)
