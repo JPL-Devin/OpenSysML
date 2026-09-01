@@ -28,6 +28,11 @@ package OpenSysMLViews {
         render asInterconnectionDiagram;
     }
 
+    view documentFlow : ActionFlowView {
+        doc /* One document rendered, and the two branches in it. */
+        expose OpenSysMLSurfaces::RenderDocument;
+    }
+
     view stageTable {
         doc /* Every stage with the Go package that implements it. */
         expose OpenSysMLPipeline::AnalysisPipeline;

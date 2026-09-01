@@ -18,6 +18,8 @@ package OpenSysMLArtifacts {
     item def ExecutionTrace;
     item def InstanceGraph;
     item def RdfGraph;
+    item def QueryRows;
+    item def DocumentPlan;
     item def DocumentTree;
 
     port def ArtifactPort;

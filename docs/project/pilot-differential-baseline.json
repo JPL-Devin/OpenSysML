@@ -60,7 +60,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 31,
-        "digest": "sha256:4b233d5db30913e4b1cc22d22a60903656de73b4a959cb6a87974bc2c1110d82"
+        "digest": "sha256:4d2bcdc301ea447f321d45fee9c0cf163b6ab495f33e80d1ae311fa7b687b1f0"
       },
       {
         "name": "probes",
@@ -919,25 +919,25 @@
           "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 115,
+              "line": 117,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 116,
+              "line": 118,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 127,
+              "line": 129,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 162,
+              "line": 164,
               "severity": "error",
               "category": "unmapped",
               "count": 1
@@ -951,13 +951,13 @@
           "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 103,
+              "line": 108,
               "severity": "error",
               "category": "syntax",
               "count": 1
             },
             {
-              "line": 105,
+              "line": 110,
               "severity": "error",
               "category": "syntax",
               "count": 1

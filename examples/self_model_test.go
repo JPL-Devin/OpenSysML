@@ -20,6 +20,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/docpdf"
 )
 
 const selfModelDir = "self-model"
@@ -109,6 +110,9 @@ func TestSelfModelInvariantsHold(t *testing.T) {
 			"identityRoundTrips",
 			"idsDoNotCollide",
 			"identityIsBesideTheTree",
+		},
+		"surfaces.sysml/OpenSysMLSurfaces": {
+			"documentsAreTraceable",
 		},
 	}
 
@@ -209,6 +213,29 @@ func TestSelfModelIdentityMatchesImplementation(t *testing.T) {
 
 	if level := (passes.IdentityMetadataPass{}).Level(); level != passes.LevelConstraint {
 		t.Errorf("identity.sysml models the identity pass at the constraint tier, the implementation runs it at %v", level)
+	}
+}
+
+// TestSelfModelDocumentPathMatchesImplementation checks the document path
+// against the generator it describes: the PDF converters it lists and the
+// library the document notation comes from.
+func TestSelfModelDocumentPathMatchesImplementation(t *testing.T) {
+	text := readModelFile(t, "surfaces.sysml")
+
+	declared, ok := declaredString(text, "engines")
+	if !ok {
+		t.Fatal("surfaces.sysml lists no PDF engine")
+	}
+	if actual := strings.Join(docpdf.Engines(), ", "); declared != actual {
+		t.Errorf("surfaces.sysml says engines = %q, the implementation has %q", declared, actual)
+	}
+
+	file, ok := declaredString(text, "libraryFile")
+	if !ok {
+		t.Fatal("surfaces.sysml names no document library file")
+	}
+	if _, err := os.Stat(filepath.Join("..", file)); err != nil {
+		t.Errorf("surfaces.sysml points at %s, which does not exist", file)
 	}
 }
 

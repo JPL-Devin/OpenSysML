@@ -93,27 +93,50 @@ package OpenSysMLSurfaces {
     part def QueryExecutor :> CodeUnit {
         attribute :>> goPackage = "internal/core/queryexec";
         attribute orderedRows : Boolean = true;
+        out item rows : QueryRows;
     }
 
+    // A document is written in the notation, not in a template language: the
+    // planner compiles a document definition into an immutable plan holding
+    // compiled query programs.
     part def DocumentPlanner :> CodeUnit {
         attribute :>> goPackage = "internal/core/docplan";
+        attribute libraryFile : String =
+            "internal/core/libs/stdlib/OpenSysML Libraries/DocumentQueries.sysml";
+        attribute immutablePlans : Boolean = true;
+        attribute contentKinds : String = "section, paragraph, table, list, diagram";
+        in item rows : QueryRows;
+        out item plan : DocumentPlan;
     }
 
+    // Evaluating a plan gives one tree, carrying provenance on every node and
+    // knowing nothing about the backend that will write it out.
     part def DocumentIR :> CodeUnit {
         attribute :>> goPackage = "internal/core/docir";
         attribute backendAgnostic : Boolean = true;
+        attribute provenancePerNode : Boolean = true;
+        attribute resolvesCrossDocumentRefs : Boolean = true;
+        in item plan : DocumentPlan;
         out item tree : DocumentTree;
     }
 
     part def MarkdownBackend :> CodeUnit {
         attribute :>> goPackage = "internal/core/docrender";
         attribute form : String = "markdown";
+        attribute needsExternalTool : Boolean = false;
+        in item tree : DocumentTree;
     }
 
+    // The only stage that leaves the process: the tree becomes prepared
+    // Markdown, its diagrams become images, and a converter makes the PDF.
     part def PdfBackend :> CodeUnit {
         attribute :>> goPackage = "internal/docpdf";
         attribute form : String = "pdf";
-        attribute externalEngine : String = "weasyprint, pandoc, prince";
+        attribute engines : String = "weasyprint, pandoc, prince";
+        attribute diagramTool : String = "mmdc";
+        attribute needsExternalTool : Boolean = true;
+        attribute reportsMissingTool : Boolean = true;
+        in item tree : DocumentTree;
     }
 
     // Textual notation both ways, plus experimental RDF.
@@ -130,6 +153,8 @@ package OpenSysMLSurfaces {
     }
 
     // The document path, from a query in the model to a rendered artifact.
+    // One plan, one tree, two backends: the form is chosen at the end, so
+    // Markdown and PDF cannot disagree about the document's content.
     part def DocumentPipeline {
         part views : ViewEngine;
         part queries : QueryCompiler;
@@ -141,6 +166,57 @@ package OpenSysMLSurfaces {
 
         port modelIn : ArtifactPort;
         port artifactOut : ArtifactPort;
+
+        flow of QueryRows from rows.rows to plans.rows;
+        flow of DocumentPlan from plans.plan to ir.plan;
+        flow of DocumentTree from ir.tree to markdown.tree;
+        flow of DocumentTree from ir.tree to pdf.tree;
+        flow of DocumentTree from views.diagram to pdf.tree;
+    }
+
+    // One document rendered, and the one branch in it: the form.
+    action def RenderDocument {
+        attribute form : String = "markdown";
+        attribute toolsPresent : Boolean = true;
+
+        in item model : SourceText;
+        out item artifact : DocumentTree;
+
+        first start;
+
+        action runQueries;
+        action compilePlan;
+        action evaluatePlan;
+        action writeMarkdown;
+        action renderDiagrams;
+        action convertPdf;
+        action reportMissingTool;
+
+        succession first start then runQueries;
+        succession first runQueries then compilePlan;
+        succession first compilePlan then evaluatePlan;
+        succession first evaluatePlan then formGate;
+
+        decide formGate;
+        if form == "markdown" then writeMarkdown;
+        else renderDiagrams;
+
+        // A missing converter is reported, never a half-written document.
+        succession first renderDiagrams then toolGate;
+
+        decide toolGate;
+        if toolsPresent then convertPdf;
+        else reportMissingTool;
+    }
+
+    requirement def DocumentsCarryTheirProvenance {
+        doc /* Every rendered node can be traced back to the element it came from,
+             * and both backends read the same tree. */
+        subject documents : DocumentPipeline;
+        require constraint {
+            documents.ir.provenancePerNode and documents.ir.backendAgnostic
+                and documents.plans.immutablePlans
+        }
     }
 
     // --- Conformance oracles ---------------------------------------------
@@ -230,4 +306,8 @@ package OpenSysMLSurfaces {
     }
 
     part opensysml : Toolchain;
+
+    requirement documentsAreTraceable : DocumentsCarryTheirProvenance {
+        subject documents = opensysml.documents;
+    }
 }
