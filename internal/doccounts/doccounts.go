@@ -582,16 +582,16 @@ const landingBlockTemplateText = `    <!-- doc-counts:begin {{.Name}} -->
         <span class="osml-referee__label">files agree diagnostic-by-diagnostic; {{.OursOnly}} diagnostics are ours alone and {{.PilotOnly}} the reference's alone</span>
       </a>
       <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-xpect.md"}}">
-        <span class="osml-referee__number">{{.Silent}} of {{.DeclaredErrors}}</span>
-        <span class="osml-referee__label">declared diagnostics in the reference's own test suites that we report nothing at all for</span>
+        <span class="osml-referee__number">{{sub .DeclaredErrors .Silent}} of {{.DeclaredErrors}}</span>
+        <span class="osml-referee__label">diagnostics the reference's own test suites declare that we report too; we are silent on {{.Silent}}</span>
       </a>
       <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-xpect.md"}}">
         <span class="osml-referee__number">{{.ScopeExact}} of {{.ScopeTotal}}</span>
         <span class="osml-referee__label">declared name-resolution assertions our scopes match exactly</span>
       </a>
       <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-rejection.md"}}">
-        <span class="osml-referee__number">{{.RejectDefaultPilotOnly}} of {{.RejectCases}}</span>
-        <span class="osml-referee__label">invalid models we wrote ourselves that the reference rejects and we accept by default</span>
+        <span class="osml-referee__number">{{.RejectDefaultBoth}} of {{.RejectCases}}</span>
+        <span class="osml-referee__label">invalid models we wrote ourselves that we reject by default, as the reference does; {{.RejectStrictOnly}} more only when asked strictly, {{.RejectPilotOnly}} not at all</span>
       </a>
     </div>
     <p class="osml-referee__note">
@@ -612,6 +612,9 @@ var blockTemplateFuncs = template.FuncMap{
 	"recordURL": func(prefix, record string) string {
 		return fmt.Sprintf("{{ record('%s%s', base_url) }}", prefix, record)
 	},
+	// The band states every figure so that more is better; a gap counted in the
+	// baseline is the remainder of its total.
+	"sub": func(total, part int) int { return total - part },
 }
 
 // blockTemplates is the one template per generated block name. A block naming no

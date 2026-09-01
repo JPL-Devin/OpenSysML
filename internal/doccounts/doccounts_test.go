@@ -186,7 +186,8 @@ func TestRewriteBlockRendersTheLandingBandFromTheSameCensus(t *testing.T) {
 	}
 	for _, want := range []string{
 		"<code>2026-05</code>", "artifact <code>0.60.1</code>",
-		">1 of 2<", ">1 of 11<", ">7 of 8<", ">3 of 12<",
+		">1 of 2<", ">10 of 11<", ">7 of 8<", ">9 of 12<",
+		"we are silent on 1", "2 more only when asked strictly, 1 not at all",
 		"the 1 behavioral rules",
 		"href=\"{{ record('project/pilot-differential.md', base_url) }}\"",
 		"href=\"{{ record('project/spec-compliance.md', base_url) }}\"",
