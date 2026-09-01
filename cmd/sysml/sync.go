@@ -134,15 +134,15 @@ func writeAnnotated(local *rdf.Graph, model string, set *reposync.ChangeSet, pat
 	if len(data) > 0 && data[len(data)-1] != '\n' {
 		out.WriteByte('\n')
 	}
-	named := namedElements(local)
 	annotated := 0
 	for _, change := range minted {
-		if !addressable(change.QualifiedName, named) {
+		target := annotationPath(local, change.Subject)
+		if target == "" {
 			fmt.Fprintf(os.Stderr, "note: %s (%s) has no name to write an annotation against; its minted id %s stays in the repository only\n", change.ID, change.Metaclass, change.MintedID)
 			continue
 		}
 		fmt.Fprintf(&out, "metadata : IdentityMetadata::ElementId about %s { id = \"%s\"; }\n",
-			lexer.QualifiedNameText(change.QualifiedName), change.MintedID)
+			target, change.MintedID)
 		annotated++
 	}
 	if annotated == 0 {
@@ -164,35 +164,28 @@ func writeAnnotated(local *rdf.Graph, model string, set *reposync.ChangeSet, pat
 	return nil
 }
 
-// namedElements indexes the graph's qualified names that carry a declared
-// name, so a positional address (an unnamed declaration) is told apart from
-// an element genuinely named that way.
-func namedElements(g *rdf.Graph) map[string]bool {
-	named := make(map[string]bool)
-	for _, triple := range g.Triples() {
-		if triple.Predicate.Value != rdf.SysML+"qualifiedName" {
-			continue
+// annotationPath walks a subject's ownership chain, naming each step by its
+// declared name or else its short name; empty when no name reaches the element.
+func annotationPath(g *rdf.Graph, subject string) string {
+	var segments []string
+	seen := make(map[string]bool)
+	for current := subject; current != "" && !seen[current]; {
+		seen[current] = true
+		term := rdf.IRI(current)
+		name, ok := g.Lexical(term, rdf.SysML+"declaredName")
+		if !ok {
+			if name, ok = g.Lexical(term, rdf.SysML+"declaredShortName"); !ok {
+				return ""
+			}
 		}
-		if _, ok := g.Object(triple.Subject, rdf.SysML+"declaredName"); ok {
-			named[triple.Object.Value] = true
+		segments = append([]string{lexer.NameText(name)}, segments...)
+		owner, ok := g.Object(term, rdf.SysML+"owningNamespace")
+		if !ok {
+			break
 		}
+		current = owner.Value
 	}
-	return named
-}
-
-// addressable reports whether a qualified name reaches its element by declared
-// names alone: every segment path must belong to an element that declares one.
-func addressable(fqn string, named map[string]bool) bool {
-	if fqn == "" {
-		return false
-	}
-	segments := strings.Split(fqn, "::")
-	for i := range segments {
-		if !named[strings.Join(segments[:i+1], "::")] {
-			return false
-		}
-	}
-	return true
+	return strings.Join(segments, "::")
 }
 
 // mintedChanges lists the creates that minted an id, in change-set order.

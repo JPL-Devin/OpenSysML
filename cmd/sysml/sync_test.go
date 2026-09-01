@@ -201,6 +201,42 @@ func TestSyncAnnotateSkipsUnnamedElements(t *testing.T) {
 	}
 }
 
+func TestSyncAnnotateAddressesByShortName(t *testing.T) {
+	binary := buildCLI(t)
+	dir := t.TempDir()
+	model := filepath.Join(dir, "model.sysml")
+	repo := filepath.Join(dir, "repo.ttl")
+	if err := os.WriteFile(model, []byte(`package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; branch = "main"; }
+	part def W;
+	part <x> : W {
+		part def Rim;
+	}
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(repo, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	annotated := filepath.Join(dir, "annotated.sysml")
+
+	out := run(t, binary, model, "-sync-diff", repo, "-sync-mint-ids", "-sync-annotate", annotated)
+	if strings.Contains(out, "has no name to write an annotation against") {
+		t.Errorf("a short-named element was skipped:\n%s", out)
+	}
+	data, err := os.ReadFile(annotated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "IdentityMetadata::ElementId about P::x ") {
+		t.Errorf("the short-named element's minted id is not annotated:\n%s", data)
+	}
+	if !strings.Contains(string(data), "IdentityMetadata::ElementId about P::x::Rim") {
+		t.Errorf("the named descendant under the short-named owner is not annotated:\n%s", data)
+	}
+}
+
 func TestSyncAnnotateNeedsMinting(t *testing.T) {
 	binary := buildCLI(t)
 	model, repo := syncFixtures(t, binary)
