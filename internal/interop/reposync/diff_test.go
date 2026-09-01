@@ -304,6 +304,35 @@ func TestDuplicateEffectiveIDIsAnError(t *testing.T) {
 	}
 }
 
+// TestConcurrentAdditionIsAConflict: both sides added the same id since the
+// last-seen graph with differing content; writing over it would lose the
+// repository's addition.
+func TestConcurrentAdditionIsAConflict(t *testing.T) {
+	build := func(name string) *rdf.Graph {
+		g := rdf.NewGraph()
+		subject := rdf.ElementIRIForID("8f3a41d0")
+		g.Add(subject, rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"PartDefinition"))
+		g.Add(subject, rdf.IRI(rdf.SysML+"declaredName"), rdf.String(name))
+		return g
+	}
+	set, err := reposync.Diff(build("Mine"), build("Theirs"), reposync.Options{Base: rdf.NewGraph()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicts := byKind(set, reposync.KindConflict)
+	if len(conflicts) != 1 || conflicts[0].Conflict != reposync.ConflictRepositoryChanged {
+		t.Fatalf("a concurrent addition must be a repository-changed conflict:\n%s", set.Text())
+	}
+	// Agreeing concurrent additions stay a no-op.
+	same, err := reposync.Diff(build("Same"), build("Same"), reposync.Options{Base: rdf.NewGraph()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(same.Changes) != 0 {
+		t.Fatalf("agreeing concurrent additions must not change anything:\n%s", same.Text())
+	}
+}
+
 // TestScopedReferencesAreNotUpdates: a reference compares by its target's
 // effective id, so scoped and unscoped spellings of one link are equal.
 func TestScopedReferencesAreNotUpdates(t *testing.T) {

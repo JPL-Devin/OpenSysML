@@ -152,8 +152,15 @@ func Diff(local, repository *rdf.Graph, opts Options) (*ChangeSet, error) {
 				continue
 			}
 			change := Change{Kind: KindUpdate, Deltas: deltas}
-			if inBase && len(propertyDeltas(was, base)) > 0 {
-				change = Change{Kind: KindConflict, Conflict: ConflictRepositoryChanged, Deltas: deltas}
+			if opts.Base != nil {
+				switch {
+				case !inBase:
+					// Both sides added the id since the last-seen graph:
+					// writing over the repository's copy would lose it.
+					change = Change{Kind: KindConflict, Conflict: ConflictRepositoryChanged, Deltas: deltas}
+				case len(propertyDeltas(was, base)) > 0:
+					change = Change{Kind: KindConflict, Conflict: ConflictRepositoryChanged, Deltas: deltas}
+				}
 			}
 			set.add(change, at)
 		case inLocal:

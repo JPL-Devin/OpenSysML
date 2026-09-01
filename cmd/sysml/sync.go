@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/project"
@@ -62,7 +63,7 @@ func runSyncDiff(files []string) int {
 	}
 
 	if syncAnnotate != "" {
-		if err := writeAnnotated(local, set, syncAnnotate); err != nil {
+		if err := writeAnnotated(model, set, syncAnnotate); err != nil {
 			return fail(err)
 		}
 	}
@@ -113,17 +114,33 @@ func loadSyncState(model string, scope reposync.Scope) (*reposync.State, error) 
 	return state, nil
 }
 
-// writeAnnotated writes the model back as notation with each minted id
-// declared by an @ElementId annotation — the explicit opt-in write-back.
-func writeAnnotated(local *rdf.Graph, set *reposync.ChangeSet, path string) error {
-	mints := set.Mints()
-	if len(mints) == 0 {
+// writeAnnotated appends an about-form ElementId annotation for each minted
+// id to the model's original text, preserving comments and formatting — the
+// explicit opt-in write-back.
+func writeAnnotated(model string, set *reposync.ChangeSet, path string) error {
+	minted := mintedChanges(set)
+	if len(minted) == 0 {
 		return fmt.Errorf("nothing to annotate: no id was minted, so %s would repeat the model unchanged", path)
 	}
-	turtle := rdf.WriteTurtle(reposync.WriteBack(local, mints))
-	notation, err := export.Convert(path, turtle, export.FormatTurtle, export.FormatSysML)
+	if project.IsStdin(model) {
+		return errors.New("-sync-annotate keeps the model's text, so the model must be a file, not stdin")
+	}
+	name, data, err := project.ReadFile(model)
 	if err != nil {
-		return fmt.Errorf("write minted ids back into notation: %w", err)
+		return err
+	}
+	var out strings.Builder
+	out.Write(data)
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		out.WriteByte('\n')
+	}
+	for _, change := range minted {
+		fmt.Fprintf(&out, "metadata : IdentityMetadata::ElementId about %s { id = \"%s\"; }\n",
+			change.QualifiedName, change.MintedID)
+	}
+	notation := []byte(out.String())
+	if _, err := export.SysMLToRDF(name, notation); err != nil {
+		return fmt.Errorf("the annotated notation does not analyze: %w", err)
 	}
 	replaced, err := export.WriteFile(path, notation)
 	if err != nil {
@@ -133,6 +150,17 @@ func writeAnnotated(local *rdf.Graph, set *reposync.ChangeSet, path string) erro
 	if replaced {
 		what = ", replaced the existing file"
 	}
-	fmt.Fprintf(os.Stderr, "wrote %s with %d minted id(s) annotated (%d bytes%s)\n", path, len(mints), len(notation), what)
+	fmt.Fprintf(os.Stderr, "wrote %s with %d minted id(s) annotated (%d bytes%s)\n", path, len(minted), len(notation), what)
 	return nil
+}
+
+// mintedChanges lists the creates that minted an id, in change-set order.
+func mintedChanges(set *reposync.ChangeSet) []reposync.Change {
+	var minted []reposync.Change
+	for _, change := range set.Changes {
+		if change.MintedID != "" {
+			minted = append(minted, change)
+		}
+	}
+	return minted
 }

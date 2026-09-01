@@ -16,12 +16,13 @@ const syncedModel = `package P {
 }
 `
 
-const renamedModel = `package P {
+const renamedModel = `// The fleet's model. Lexical comments must survive annotation write-back.
+package P {
 	@IdentityMetadata::ProjectRef { projectId = "proj-1"; branch = "main"; }
 	part def Car {
 		@IdentityMetadata::ElementId { id = "8f3a41d0"; }
 	}
-	part def Wheel;
+	part def Wheel; /* rolls */
 }
 `
 
@@ -127,9 +128,12 @@ func TestSyncAnnotateWritesMintedIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "@IdentityMetadata::ElementId") ||
-		!strings.Contains(string(data), "Wheel") {
+	if !strings.Contains(string(data), "IdentityMetadata::ElementId about P::Wheel") {
 		t.Errorf("the annotated notation does not declare the minted id:\n%s", data)
+	}
+	if !strings.HasPrefix(string(data), "// The fleet's model.") ||
+		!strings.Contains(string(data), "/* rolls */") {
+		t.Errorf("the annotated notation lost the model's lexical comments:\n%s", data)
 	}
 }
 
