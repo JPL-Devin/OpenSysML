@@ -80,6 +80,12 @@ const (
 	xEndVerb         = "endVerb"
 	xSourceMember    = "sourceMember"
 	xTargetMember    = "targetMember"
+	// The identity properties: whether an element's id came from an explicit
+	// ElementId annotation, and the ProjectRef provenance of a scope root.
+	xDeclaredID = "declaredId"
+	xProjectID  = "projectId"
+	xBranch     = "branch"
+	xOrg        = "org"
 )
 
 // The notations a head that binds ends writes its ends in, stated as
@@ -151,11 +157,17 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 	if file == nil || root == nil {
 		return nil, &UnsupportedError{What: "an empty document", Note: "nothing to convert"}
 	}
+	ids, err := documentIdentity(file.Name(), root)
+	if err != nil {
+		return nil, err
+	}
 	e := &encoder{
 		file:     file,
 		graph:    rdf.NewGraph(),
 		declared: map[string]bool{},
 		fqn:      map[ast.Node]string{},
+		ids:      ids,
+		subjects: map[string]string{},
 	}
 	// The first pass records which qualified names this document declares, so
 	// the second can decide whether a relationship target is a link to an
@@ -165,6 +177,9 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 	}
 	if err := e.encode(root.Members, "", rdf.Term{}); err != nil {
 		return nil, err
+	}
+	if e.idErr != nil {
+		return nil, e.idErr
 	}
 	return e.graph, nil
 }
@@ -176,6 +191,24 @@ type encoder struct {
 	// fqn is the qualified name of each member node, which is how a succession
 	// end the notation leaves unnamed addresses the member it binds.
 	fqn map[ast.Node]string
+	// ids is the document's identity side table: effective ids, declaredness,
+	// scopes, and the annotation nodes consumed into it.
+	ids *identityFacts
+	// subjects maps each minted IRI — element or membership — to what it
+	// stands for, so two ids landing on one IRI are refused rather than merged.
+	subjects map[string]string
+	// idErr holds a collision found where no error can propagate directly.
+	idErr error
+}
+
+// claim reserves an IRI for what it stands for, returning the holder it
+// collides with, if any.
+func (e *encoder) claim(iri, standsFor string) (string, bool) {
+	if prior, taken := e.subjects[iri]; taken && prior != standsFor {
+		return prior, true
+	}
+	e.subjects[iri] = standsFor
+	return "", false
 }
 
 // declaredKeyword records the kind keyword as written when it is a synonym of
@@ -208,11 +241,29 @@ func (e *encoder) declaredKeyword(subject rdf.Term, node ast.Node, written, cano
 	return nil
 }
 
+// provenance emits the ProjectRef binding of a scope root as sysx: triples,
+// so a graph carries the project its ids are stable within.
+func (e *encoder) provenance(subject rdf.Term, node ast.Node) {
+	scope := e.ids.provenance[node]
+	if scope == nil {
+		return
+	}
+	if scope.ProjectID != "" {
+		e.graph.Add(subject, e.sysx(xProjectID), rdf.String(scope.ProjectID))
+	}
+	if scope.Branch != "" {
+		e.graph.Add(subject, e.sysx(xBranch), rdf.String(scope.Branch))
+	}
+	if scope.Org != "" {
+		e.graph.Add(subject, e.sysx(xOrg), rdf.String(scope.Org))
+	}
+}
+
 // collect walks the tree recording every qualified name it declares. A name
 // declared twice in one namespace is reported: the qualified name is an
 // element's identity in the graph, so two such members would merge into one.
 func (e *encoder) collect(members []ast.Node, owner string) error {
-	for i, member := range members {
+	for i, member := range e.kept(members) {
 		node, _ := unwrapMember(member)
 		name, children := declaredNameAndMembers(node)
 		fqn := qualify(owner, name, i)
@@ -236,7 +287,7 @@ func (e *encoder) collect(members []ast.Node, owner string) error {
 
 // encode walks the members of one namespace, emitting the triples for each.
 func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) error {
-	for i, member := range members {
+	for i, member := range e.kept(members) {
 		node, visibility := unwrapMember(member)
 		if node == nil {
 			continue
@@ -248,10 +299,29 @@ func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) e
 	return nil
 }
 
+// kept filters out the identity annotations consumed into the graph's
+// identity, so member positions count only what is actually exported.
+func (e *encoder) kept(members []ast.Node) []ast.Node {
+	out := make([]ast.Node, 0, len(members))
+	for _, member := range members {
+		if node, _ := unwrapMember(member); node != nil && e.ids.skip(node) {
+			continue
+		}
+		out = append(out, member)
+	}
+	return out
+}
+
 func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner string, ownerTerm rdf.Term, index int) error {
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
-	subject := rdf.ElementIRI(fqn)
+	subject := e.ids.subjectForNode(node, fqn)
+	if prior, taken := e.claim(subject.Value, fqn); taken {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the declaration of %s at %s", fqn, e.where(node)),
+			Note: fmt.Sprintf("its id lands on the same IRI as %s, and merging two elements into one subject would be a different model", prior),
+		}
+	}
 
 	// A metaclass name this mapping invents is typed in the OpenSysML namespace,
 	// so a consumer can tell it from the standard OMG vocabulary.
@@ -262,6 +332,10 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		// IRI ends in, so the two cannot disagree.
 		e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
 		e.graph.Add(subject, e.sysx(xMemberIndex), rdf.Int(index))
+		if e.ids.declaredIDAt(node) {
+			e.graph.Add(subject, e.sysx(xDeclaredID), rdf.Bool(true))
+		}
+		e.provenance(subject, node)
 		membership := rdf.Term{}
 		if ownerTerm.Value != "" {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
@@ -582,7 +656,14 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf
 	// A type owns a feature through a FeatureMembership, which is the membership
 	// the API's payloads carry for it; anything else through an OwningMembership.
 	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && ontology.IsAncestorOrSelf(ownerClass, "Type")
-	membership := rdf.OwningMembershipIRI(memberFQN)
+	membership := rdf.OwningMembershipIRIOf(member)
+	// The membership shares the element namespace, so its IRI is reserved too.
+	if prior, taken := e.claim(membership.Value, memberFQN+"'s owning membership"); taken && e.idErr == nil {
+		e.idErr = &UnsupportedError{
+			What: fmt.Sprintf("the owning membership of %s", memberFQN),
+			Note: fmt.Sprintf("its id lands on the same IRI as %s, and merging two elements into one subject would be a different model", prior),
+		}
+	}
 	e.graph.Add(member, e.sysml(pOwner), owner)
 	e.graph.Add(member, e.sysml(pOwningRelationship), membership)
 	e.graph.Add(member, e.sysml(pOwningMembership), membership)
@@ -764,7 +845,7 @@ func isExtensionFlag(name string) bool {
 
 func (e *encoder) prefixes(subject rdf.Term, node ast.Node, prefixes []*ast.PrefixMetadata) error {
 	for _, prefix := range prefixes {
-		if prefix == nil {
+		if prefix == nil || e.ids.skip(prefix) {
 			continue
 		}
 		written, err := e.prefixText(node, prefix)
@@ -934,7 +1015,7 @@ func (e *encoder) reference(owner, name string) rdf.Term {
 			candidate = scope + "::" + name
 		}
 		if e.declared[candidate] {
-			return rdf.ElementIRI(candidate)
+			return e.ids.subjectFor(candidate)
 		}
 		if scope == "" {
 			break

@@ -104,6 +104,55 @@ as before. The id is an address, not the copy of record for the name — the
 name is carried by `sysml:qualifiedName`, which is where reading a graph back
 takes it from.
 
+### Element identity
+
+The encoded qualified name is only the **derived** id — the one an element gets
+when nothing declares one. An `@IdentityMetadata::ElementId` annotation
+declares the id explicitly, and then the element's IRI and `sysml:elementId`
+carry the declared id instead, so a rename keeps the subject:
+
+```
+package Demo {
+    @IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+    part def Vehicle {
+        @IdentityMetadata::ElementId { id = "8f3a41d0"; }
+    }
+}
+```
+
+```turtle
+elmt:8f3a41d0 a sysml:PartDefinition ;
+    sysml:qualifiedName "Demo::Vehicle" ;
+    sysml:elementId "8f3a41d0" ;
+    sysx:declaredId "true"^^xsd:boolean .
+```
+
+The identity annotations are **consumed into identity** rather than exported as
+metadata content, exactly as names are consumed into IRIs. `sysx:declaredId`
+records that the id came from an annotation: explicitness is not recoverable
+from the value, since a declared id may equal the encoding of the current
+qualified name — dropping it would turn the next rename into delete + create.
+A membership's id derives from its member's effective id (`8f3a41d0_om`), and
+an expression node's from its owner's, so both inherit the id's stability.
+
+A `@IdentityMetadata::ProjectRef` annotation on a scope root is written as
+provenance triples on that root: `sysx:projectId`, `sysx:branch`, `sysx:org`.
+
+A document holding **more than one project scope** qualifies each element's IRI
+with its scope's provenance (`elmt:<encoded-org>.<encoded-project>:<id>`), so an
+id repeated across scopes stays two subjects; two scopes whose elements would
+still land on one IRI are refused rather than silently merged.
+
+Reading a graph back keys the subjects on `sysml:elementId` — the qualified
+name is a mutable label. A graph without `sysml:elementId` (from before the
+property, or another tool) falls back to the encoding of its qualified name,
+which is what its IRIs carry. The notation writer re-materializes an
+`@ElementId` annotation wherever the graph marks `sysx:declaredId` true **or**
+the id differs from the encoding of the qualified name, and one `@ProjectRef`
+per root carrying provenance. Subjects are classified by their `rdf:type`,
+never by parsing the id — a declared id may legitimately end in `_om` or embed
+`_p` without being a membership or expression node.
+
 ### What each element carries
 
 - `rdf:type` — the SysML metaclass (`sysml:PartUsage`, `sysml:ActionDefinition`, …).
@@ -154,6 +203,8 @@ The `sysx:` properties:
 | `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member). The end is the element itself rather than a name, since there is none to write. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
+| `sysx:declaredId` | The element's id came from an explicit `@IdentityMetadata::ElementId` annotation, see [Element identity](#element-identity). |
+| `sysx:projectId`, `sysx:branch`, `sysx:org` | The `@IdentityMetadata::ProjectRef` provenance of a scope root, see [Element identity](#element-identity). |
 | `sysx:isKindImplicit` | The declaration wrote no kind keyword (`in x : Real;`), which takes its kind from its owner. Without it the canonical keyword would come back written out, declaring what the author did not. A kind named in a comment in the head (`in /* attribute */ x : Real;`) is trivia, not a keyword the declaration wrote. |
 | the behavioral properties | `sysx:guard`, `sysx:expression`, `sysx:payload`, … — the parts of a behavioral node the vocabulary has no predicate for, listed under [Behavior](#behavior). |
 
@@ -536,9 +587,9 @@ definition (`@Safety part def Car;`), which the parser records on the
 declaration *before* the one it prefixes — writing that back would annotate a
 different element.
 
-**A name declared twice in one namespace is refused.** An element's identity in
-the graph is its qualified name, so `part def A; part def A;` in one container
-would merge into a single subject. The duplicate is reported instead.
+**A name declared twice in one namespace is refused.** An element's derived id
+is the encoding of its qualified name, so `part def A; part def A;` in one
+container would merge into a single subject. The duplicate is reported instead.
 
 A shorthand relationship declares no name: the `result` of `bind result = x;` and
 the `x` of `first x;` name the end the statement relates, so those elements are
@@ -551,6 +602,9 @@ refused as a duplicate.
 - blank nodes and `[ ... ]` — every element must have a stable IRI
 - RDF collections `( ... )` — order is carried by `sysx:memberIndex`
 - an element with no `rdf:type`, or a metaclass outside the mapping
+- a reference whose IRI names no subject of the graph and whose id no subject
+  carries as `sysml:elementId` — a dangling id is reported as such, never left
+  as a silently unresolvable name
 - a referenced element with no `sysml:qualifiedName` — the name is read from
   that property, never recovered from the IRI, so a graph with foreign ids
   (UUIDs, say) converts exactly when it carries the names

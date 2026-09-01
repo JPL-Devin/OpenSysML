@@ -4,7 +4,8 @@
 > name entries of [the roadmap](roadmap.md), where each is stated in full; a reader who only
 > wants the design can ignore them.
 
-Status: **proposed** — nothing in this page is implemented. It records the design agreed for
+Status: **phases 1–5 implemented** — the library, side table, validation pass, and the RDF
+writer/reader identity round trip; repository synchronization (phase 6) is not. It records the design agreed for
 carrying stable element identity in textual notation, how that identity permeates the RDF
 mapping and repository synchronization, and the plan to submit the notation for
 standardization with OMG.

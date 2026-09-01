@@ -6,6 +6,7 @@
 package identity
 
 import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -39,6 +40,9 @@ type ScopeDeclaration struct {
 	ProjectID string
 	Branch    string
 	Org       string
+	// Node is the annotating node itself, so a consumer that absorbs the
+	// annotation into provenance can identify it in the tree.
+	Node ast.Node
 	// Span locates the annotating node, for diagnostics.
 	Span source.Span
 	// Scope is where the annotating node is declared.
@@ -68,6 +72,9 @@ type Declaration struct {
 	Declared bool
 	// About marks an `about`-form annotation stated away from the element.
 	About bool
+	// Node is the annotating node itself, so a consumer that absorbs the
+	// annotation into identity can identify it in the tree.
+	Node ast.Node
 	// Span locates the annotating node, for diagnostics.
 	Span source.Span
 	// Scope is where the annotating node is declared; for an `about`-form
@@ -173,7 +180,7 @@ func (b *builder) infoOf(sym *symbols.Symbol) *Info {
 		if site.TypeFQN != ElementIdFQN {
 			continue
 		}
-		d := Declaration{About: site.About, Span: site.Node.Span(), Scope: site.Scope}
+		d := Declaration{About: site.About, Node: site.Node, Span: site.Node.Span(), Scope: site.Scope}
 		if id, ok := siteString(site, "id"); ok {
 			d.Declared = true
 			d.ID = id
@@ -212,7 +219,7 @@ func (b *builder) scopeOf(sym *symbols.Symbol) *Scope {
 		if site.TypeFQN != ProjectRefFQN {
 			continue
 		}
-		d := ScopeDeclaration{Span: site.Node.Span(), Scope: site.Scope}
+		d := ScopeDeclaration{Node: site.Node, Span: site.Node.Span(), Scope: site.Scope}
 		d.ProjectID, _ = siteString(site, "projectId")
 		d.Branch, _ = siteString(site, "branch")
 		d.Org, _ = siteString(site, "org")
