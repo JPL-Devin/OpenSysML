@@ -421,9 +421,10 @@ both texts, and the correction changes our verdict and not the pilot's.
 
 ## Proposed specification issue: identity annotations in the textual notation
 
-**Approved for filing** by the maintainer (in-session, 2026-09-01) against the
-**SysML 2.0** specification (the textual-notation clauses, formal/26-03-02) via the
-[OMG issue reporting form](https://issues.omg.org/issues/create-new-issue). The design
+**Filed** (maintainer-approved, 2026-09-01) against the **SysML 2.0** specification
+(the textual-notation clauses, formal/26-03-02) as
+[INBOX-2510](https://issues.omg.org/browse/INBOX-2510) — a temporary key that
+redirects to the permanent one once the issue is assigned to a task force. The design
 this draft distills is
 [element-identity-annotations.md](element-identity-annotations.md); the working
 prototype is OpenSysML's `IdentityMetadata` library, its validation pass, and the
@@ -479,5 +480,6 @@ live Flexo MMS repository are maintained in the project's committed
 interoperability report.
 ````
 
-Once posted, this section gains the assigned issue number and a link, following
-the practice of the pilot-implementation section above.
+Submitted 2026-09-01 via the
+[OMG issue reporting form](https://issues.omg.org/issues/create-new-issue); the
+key above updates once a task force takes the issue.
