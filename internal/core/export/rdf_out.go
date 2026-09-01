@@ -243,8 +243,8 @@ func (e *encoder) declaredKeyword(subject rdf.Term, node ast.Node, written, cano
 
 // provenance emits the ProjectRef binding of a scope root as sysx: triples,
 // so a graph carries the project its ids are stable within.
-func (e *encoder) provenance(subject rdf.Term, fqn string) {
-	scope := e.ids.provenance[fqn]
+func (e *encoder) provenance(subject rdf.Term, node ast.Node) {
+	scope := e.ids.provenance[node]
 	if scope == nil {
 		return
 	}
@@ -315,7 +315,7 @@ func (e *encoder) kept(members []ast.Node) []ast.Node {
 func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner string, ownerTerm rdf.Term, index int) error {
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
-	subject := e.ids.subjectFor(fqn)
+	subject := e.ids.subjectForNode(node, fqn)
 	if prior, taken := e.claim(subject.Value, fqn); taken {
 		return &UnsupportedError{
 			What: fmt.Sprintf("the declaration of %s at %s", fqn, e.where(node)),
@@ -332,10 +332,10 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		// IRI ends in, so the two cannot disagree.
 		e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
 		e.graph.Add(subject, e.sysx(xMemberIndex), rdf.Int(index))
-		if e.ids.declaredID(fqn) {
+		if e.ids.declaredIDAt(node) {
 			e.graph.Add(subject, e.sysx(xDeclaredID), rdf.Bool(true))
 		}
-		e.provenance(subject, fqn)
+		e.provenance(subject, node)
 		membership := rdf.Term{}
 		if ownerTerm.Value != "" {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)

@@ -24,9 +24,12 @@ type elementIdentity struct {
 // into identity rather than exported as model content, and each ProjectRef
 // scope keyed by the qualified name of the namespace that declares it.
 type identityFacts struct {
-	byFQN      map[string]elementIdentity
+	byFQN map[string]elementIdentity
+	// byNode keys each identity by its declaration node: an unnamed element's
+	// symbol name and the encoder's positional name cannot join on FQN.
+	byNode     map[ast.Node]elementIdentity
 	consumed   map[ast.Node]bool
-	provenance map[string]*identity.Scope
+	provenance map[ast.Node]*identity.Scope
 	// qualified reports a multi-scope document, whose scoped elements get
 	// IRIs qualified by their scope so ids repeated across scopes stay apart.
 	qualified bool
@@ -45,8 +48,9 @@ func documentIdentity(name string, root *ast.RootNamespace) (*identityFacts, err
 
 	facts := &identityFacts{
 		byFQN:      map[string]elementIdentity{},
+		byNode:     map[ast.Node]elementIdentity{},
 		consumed:   map[ast.Node]bool{},
-		provenance: map[string]*identity.Scope{},
+		provenance: map[ast.Node]*identity.Scope{},
 	}
 	scopeKeys := map[string]bool{}
 	for _, sym := range table.Symbols() {
@@ -66,14 +70,16 @@ func documentIdentity(name string, root *ast.RootNamespace) (*identityFacts, err
 			for _, d := range info.Scope.Declarations {
 				facts.consumed[d.Node] = true
 			}
-			facts.provenance[idx.GetFQN(info.Scope.Symbol)] = info.Scope
+			facts.provenance[info.Scope.Symbol.Decl] = info.Scope
 			scopeKeys[info.Scope.Key()] = true
 		}
-		facts.byFQN[info.FQN] = elementIdentity{
+		el := elementIdentity{
 			id:       info.EffectiveID,
 			declared: info.Declared,
 			scope:    info.Scope,
 		}
+		facts.byFQN[info.FQN] = el
+		facts.byNode[sym.Decl] = el
 	}
 	facts.qualified = len(scopeKeys) > 1
 	return facts, nil
@@ -113,21 +119,37 @@ func idByte(c byte) bool {
 // subjectFor returns the subject IRI of the element with the given qualified
 // name: its effective id, scope-qualified when the document is multi-scope.
 func (f *identityFacts) subjectFor(fqn string) rdf.Term {
-	el, ok := f.byFQN[fqn]
-	if !ok {
-		return rdf.ElementIRI(fqn)
-	}
-	if f.qualified && el.scope != nil {
-		return rdf.ScopedElementIRIForID(rdf.ScopeQualifier(el.scope.Org, el.scope.ProjectID), el.id)
-	}
-	return rdf.ElementIRIForID(el.id)
+	return f.subjectOf(f.byFQN[fqn], fqn)
 }
 
-// declaredID reports whether the element's id came from an explicit
+// subjectForNode returns the subject IRI of the declaration at node, joining
+// on the node itself so an unnamed element keeps its annotated identity.
+func (f *identityFacts) subjectForNode(node ast.Node, fqn string) rdf.Term {
+	el, ok := f.byNode[node]
+	if !ok {
+		return f.subjectFor(fqn)
+	}
+	return f.subjectOf(el, fqn)
+}
+
+// subjectOf builds the IRI of one identity; a derived id is re-encoded from
+// the encoder's name, which positions an unnamed element the table cannot.
+func (f *identityFacts) subjectOf(el elementIdentity, fqn string) rdf.Term {
+	id := el.id
+	if !el.declared || id == "" {
+		id = rdf.EncodeElementID(fqn)
+	}
+	if f.qualified && el.scope != nil {
+		return rdf.ScopedElementIRIForID(rdf.ScopeQualifier(el.scope.Org, el.scope.ProjectID), id)
+	}
+	return rdf.ElementIRIForID(id)
+}
+
+// declaredIDAt reports whether the declaration's id came from an explicit
 // ElementId annotation, which the graph must record: explicitness is not
 // recoverable from the value.
-func (f *identityFacts) declaredID(fqn string) bool {
-	return f.byFQN[fqn].declared
+func (f *identityFacts) declaredIDAt(node ast.Node) bool {
+	return f.byNode[node].declared
 }
 
 // skip reports whether node is an identity annotation consumed into the

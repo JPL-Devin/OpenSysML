@@ -363,6 +363,39 @@ func TestQualifiedNameKeyedGraphStillLinks(t *testing.T) {
 	}
 }
 
+// TestUnnamedElementKeepsAnnotatedID checks an unnamed declaration's
+// annotated identity survives export: the table names it by symbol while the
+// encoder positions it, and the two must still join.
+func TestUnnamedElementKeepsAnnotatedID(t *testing.T) {
+	turtle := idTurtle(t, `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+	part def A;
+	part {
+		@IdentityMetadata::ElementId { id = "anon-id"; }
+	}
+}
+`)
+	graph, err := rdf.ParseTurtle(turtle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject := rdf.IRI("urn:sysmlv2:element:anon-id")
+	if got := rdf.LocalName(graph.Type(subject)); got != "PartUsage" {
+		t.Fatalf("subject anon-id typed %q, want PartUsage", got)
+	}
+	back := toNotation(t, turtle)
+	if !strings.Contains(back, `@IdentityMetadata::ElementId { id = "anon-id"; }`) {
+		t.Errorf("unnamed element's annotated id was not re-materialized:\n%s", back)
+	}
+	second, err := export.Convert("m.sysml", []byte(back), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("second hop to turtle: %v", err)
+	}
+	if string(second) != string(turtle) {
+		t.Errorf("second hop is not idempotent:\n--- first ---\n%s--- second ---\n%s", turtle, second)
+	}
+}
+
 // TestAboutFormElementIDRoundTrips checks an `about`-form ElementId is
 // consumed into identity like an inline one: the target's subject carries the
 // declared id, and the notation comes back with the annotation inline.
