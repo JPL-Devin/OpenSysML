@@ -63,6 +63,20 @@ package OpenSysMLViews {
         expose OpenSysMLBehavior::EventDispatch;
     }
 
+    view identityPath {
+        doc /* How an element's repository id reaches RDF and comes back. */
+        expose OpenSysMLIdentity::IdentityPath;
+        render asInterconnectionDiagram;
+    }
+
+    view identityRoundTrip : ActionFlowView {
+        expose OpenSysMLIdentity::CarryIdentity;
+    }
+
+    view identityLayer {
+        expose OpenSysMLIdentity::**[@OpenSysMLIdentity::Identity];
+    }
+
     // The layer views, each reached by a filtered recursive expose.
     view frontendLayer {
         expose OpenSysMLPipeline::**[@OpenSysMLArtifacts::Frontend];

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/identity"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
@@ -93,31 +94,41 @@ func TestSelfModelInvariantsHold(t *testing.T) {
 	resolver := resolve.New(idx)
 	ctx := runtime.NewContext(semantics.NewModel(resolver), resolver, 100000)
 
-	scope := packageScope(t, idx, "quality.sysml", "OpenSysMLInvariants")
-	requirements := []string{
-		"treeIsImmutable",
-		"parserRecovers",
-		"resolutionIsLazy",
-		"tiersAreGated",
-		"loweringIsLossless",
-		"executionIsBounded",
-		"libraryIsClean",
-		"exportRoundTrips",
+	stated := map[string][]string{
+		"quality.sysml/OpenSysMLInvariants": {
+			"treeIsImmutable",
+			"parserRecovers",
+			"resolutionIsLazy",
+			"tiersAreGated",
+			"loweringIsLossless",
+			"executionIsBounded",
+			"libraryIsClean",
+			"exportRoundTrips",
+		},
+		"identity.sysml/OpenSysMLIdentity": {
+			"identityRoundTrips",
+			"idsDoNotCollide",
+			"identityIsBesideTheTree",
+		},
 	}
 
-	for _, name := range requirements {
-		sym, ok := scope.LookupLocal(name)
-		if !ok {
-			t.Errorf("requirement %s is not declared in OpenSysMLInvariants", name)
-			continue
-		}
-		satisfied, err := ctx.EvaluateRequirement(sym, scope)
-		if err != nil {
-			t.Errorf("evaluate %s: %v", name, err)
-			continue
-		}
-		if !satisfied {
-			t.Errorf("%s does not hold: the model states an invariant this implementation no longer satisfies", name)
+	for where, requirements := range stated {
+		document, pkg, _ := strings.Cut(where, "/")
+		scope := packageScope(t, idx, document, pkg)
+		for _, name := range requirements {
+			sym, ok := scope.LookupLocal(name)
+			if !ok {
+				t.Errorf("requirement %s is not declared in %s", name, pkg)
+				continue
+			}
+			satisfied, err := ctx.EvaluateRequirement(sym, scope)
+			if err != nil {
+				t.Errorf("evaluate %s: %v", name, err)
+				continue
+			}
+			if !satisfied {
+				t.Errorf("%s does not hold: the model states an invariant this implementation no longer satisfies", name)
+			}
 		}
 	}
 }
@@ -149,7 +160,7 @@ func TestSelfModelFiguresMatchImplementation(t *testing.T) {
 	}
 
 	// Every modelled unit names the directory that implements it.
-	for _, file := range []string{"pipeline.sysml", "surfaces.sysml"} {
+	for _, file := range []string{"pipeline.sysml", "surfaces.sysml", "identity.sysml"} {
 		matches := goPackagePattern.FindAllStringSubmatch(readModelFile(t, file), -1)
 		if len(matches) == 0 {
 			t.Errorf("%s names no implementing package", file)
@@ -160,6 +171,44 @@ func TestSelfModelFiguresMatchImplementation(t *testing.T) {
 				t.Errorf("%s points a unit at %s, which does not exist", file, match[1])
 			}
 		}
+	}
+}
+
+// TestSelfModelIdentityMatchesImplementation checks the identity model against
+// the identity implementation it describes: the library file it points at, the
+// metadata definitions it names, and the tier its validation pass runs at.
+func TestSelfModelIdentityMatchesImplementation(t *testing.T) {
+	text := readModelFile(t, "identity.sysml")
+
+	names := []struct {
+		attribute string
+		actual    string
+	}{
+		{"elementIdDefinition", identity.ElementIdFQN},
+		{"projectRefDefinition", identity.ProjectRefFQN},
+	}
+	for _, figure := range names {
+		declared, ok := declaredString(text, figure.attribute)
+		if !ok {
+			t.Errorf("identity.sysml declares no %s", figure.attribute)
+			continue
+		}
+		if declared != figure.actual {
+			t.Errorf("identity.sysml says %s = %q, the implementation has %q",
+				figure.attribute, declared, figure.actual)
+		}
+	}
+
+	file, ok := declaredString(text, "libraryFile")
+	if !ok {
+		t.Fatal("identity.sysml names no identity library file")
+	}
+	if _, err := os.Stat(filepath.Join("..", file)); err != nil {
+		t.Errorf("identity.sysml points at %s, which does not exist", file)
+	}
+
+	if level := (passes.IdentityMetadataPass{}).Level(); level != passes.LevelConstraint {
+		t.Errorf("identity.sysml models the identity pass at the constraint tier, the implementation runs it at %v", level)
 	}
 }
 
@@ -184,6 +233,15 @@ func declaredInteger(text, attribute string) (int, bool) {
 	}
 	value, err := strconv.Atoi(match[1])
 	return value, err == nil
+}
+
+// declaredString returns the value the model text assigns to a string attribute.
+func declaredString(text, attribute string) (string, bool) {
+	match := regexp.MustCompile(attribute + `\s*:\s*String\s*=\s*\n?\s*"([^"]+)";`).FindStringSubmatch(text)
+	if match == nil {
+		return "", false
+	}
+	return match[1], true
 }
 
 // packageScope returns the scope of a top-level package of one document.
