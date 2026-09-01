@@ -8,22 +8,11 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// w8cWalker visits every symbol of a document's scope tree once, deduping by
-// pointer: one declaration may be registered under several keys.
-type w8cWalker struct {
-	ctx  *Context
-	seen map[*symbols.Symbol]bool
-}
-
-func (w *w8cWalker) walk(scope *symbols.Scope, visit func(*symbols.Symbol)) {
-	if w == nil || scope == nil {
-		return
-	}
-	for _, sym := range w8cSymbols(w.ctx, scope) {
-		if sym == nil || w.seen[sym] {
-			continue
-		}
-		w.seen[sym] = true
+// w8cWalkSymbols visits every symbol of a document's scope tree once: the
+// collected slice is already deduped by pointer, as one declaration may be
+// registered under several keys.
+func w8cWalkSymbols(ctx *Context, root *symbols.Scope, visit func(*symbols.Symbol)) {
+	for _, sym := range w8cSymbols(ctx, root) {
 		visit(sym)
 	}
 }

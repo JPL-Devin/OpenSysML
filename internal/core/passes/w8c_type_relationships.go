@@ -35,9 +35,8 @@ func (TypeRelationshipsPass) Run(ctx *Context, name string, root *ast.RootNamesp
 	if rootScope == nil {
 		return nil
 	}
-	w := &w8cWalker{ctx: ctx, seen: make(map[*symbols.Symbol]bool)}
 	c := &typeRelationshipsChecker{resolver: ctx.Resolver()}
-	w.walk(rootScope, c.check)
+	w8cWalkSymbols(ctx, rootScope, c.check)
 	return c.diags
 }
 

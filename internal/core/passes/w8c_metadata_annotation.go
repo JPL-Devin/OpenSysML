@@ -34,8 +34,7 @@ func (MetadataAnnotationPass) Run(ctx *Context, name string, root *ast.RootNames
 	if c.model == nil {
 		return nil
 	}
-	w := &w8cWalker{ctx: ctx, seen: map[*symbols.Symbol]bool{}}
-	w.walk(rootScope, c.checkSymbol)
+	w8cWalkSymbols(ctx, rootScope, c.checkSymbol)
 	return c.diags
 }
 
