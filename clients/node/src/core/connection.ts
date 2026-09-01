@@ -5,6 +5,7 @@ import { Code, ConnectError, createClient, type Client, type Transport } from "@
 import { ServerInfo } from "./capabilities.js";
 import { ClosedConnectionError, ServiceError } from "./errors.js";
 import { SysMLService } from "../generated/sysml_pb.js";
+import { callRpc } from "./status.js";
 import { Model } from "./model.js";
 import type { ParseOptions } from "./model.js";
 
@@ -118,7 +119,7 @@ export class Connection {
 
   /** Asks the service what it is and what it can do, again. */
   async serverInfo(): Promise<ServerInfo> {
-    const response = await this.rpc.getServerInfo({}, this.callOptions());
+    const response = await callRpc(this.rpc.getServerInfo({}, this.callOptions()));
     return new ServerInfo({
       version: response.version,
       capabilities: response.capabilities,

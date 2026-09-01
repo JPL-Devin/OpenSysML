@@ -18,7 +18,39 @@ import type {
   ParseFileRequest,
   SymbolInfo,
 } from "../generated/sysml_pb.js";
+import { callRpc } from "./status.js";
 import { decodeValue, type SysMLValue } from "./values.js";
+
+/** How alike two names must be for one to be suggested for the other. */
+const NEAR_ENOUGH = 0.6;
+
+/** Symbols a search for near names reads before giving up, so a big model is cheap. */
+const NEAR_SEARCH_LIMIT = 500;
+
+/** How alike two names are, from 0 to 1, by edit distance over the longer one. */
+function similarity(left: string, right: string): number {
+  const longest = Math.max(left.length, right.length);
+  if (longest === 0) {
+    return 1;
+  }
+  return 1 - editDistance(left, right) / longest;
+}
+
+/** Levenshtein distance, one row of the matrix at a time. */
+function editDistance(left: string, right: string): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) {
+      const substitution = (previous[column - 1] ?? 0) + (left[row - 1] === right[column - 1] ? 0 : 1);
+      const deletion = (previous[column] ?? 0) + 1;
+      const insertion = (current[column - 1] ?? 0) + 1;
+      current.push(Math.min(substitution, deletion, insertion));
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? 0;
+}
 
 /** How a source is parsed. */
 export interface ParseOptions {
@@ -99,13 +131,16 @@ export class Model {
         upgradeRemedy(CAPABILITY_STRICT_CONFORMANCE),
       );
     }
-    const response = await connection.rpc.parseFile(
-      {
-        source: source.source,
-        ...(options.language === undefined ? {} : { language: options.language }),
-        ...(options.strict === undefined ? {} : { strictConformance: options.strict }),
-      },
-      connection.callOptions(),
+    const response = await callRpc(
+      connection.rpc.parseFile(
+        {
+          source: source.source,
+          ...(options.language === undefined ? {} : { language: options.language }),
+          ...(options.strict === undefined ? {} : { strictConformance: options.strict }),
+        },
+        connection.callOptions(),
+      ),
+      source.source.case === "filePath" ? "file" : "model",
     );
     const diagnostics = response.diagnostics.map(decodeDiagnostic);
     if (response.error !== "") {
@@ -137,14 +172,16 @@ export class Model {
         upgradeRemedy(CAPABILITY_EVALUATE_SUBJECT),
       );
     }
-    const response = await this.connection.rpc.evaluate(
-      {
-        modelHash: this.hash,
-        expression,
-        ...(options.context === undefined ? {} : { contextSymbolId: options.context }),
-        ...(options.subject === undefined ? {} : { subjectSymbolId: options.subject }),
-      },
-      this.connection.callOptions(),
+    const response = await callRpc(
+      this.connection.rpc.evaluate(
+        {
+          modelHash: this.hash,
+          expression,
+          ...(options.context === undefined ? {} : { contextSymbolId: options.context }),
+          ...(options.subject === undefined ? {} : { subjectSymbolId: options.subject }),
+        },
+        this.connection.callOptions(),
+      ),
     );
     if (response.error !== "") {
       throw new EvaluationError(response.error, "unspecified", response.diagnostics.map(decodeDiagnostic));
@@ -157,6 +194,11 @@ export class Model {
     if (this.looksQualified(name)) {
       return this.symbolById(name);
     }
+    // A short name is searched for from the root, which an adopted model has not
+    // got; the service resolves a name the model declares at its top level.
+    if (this.rootSymbol === undefined) {
+      return this.symbolById(name);
+    }
     const found = await this.find(name);
     if (found === undefined) {
       throw new SymbolNotFoundError(name, await this.nearNames(name));
@@ -166,12 +208,14 @@ export class Model {
 
   /** Looks a symbol up by its qualified name, in one call. */
   async symbolById(id: string): Promise<ModelSymbol> {
-    const response = await this.connection.rpc.getSymbol(
-      { modelHash: this.hash, symbolId: id },
-      this.connection.callOptions(),
+    const response = await callRpc(
+      this.connection.rpc.getSymbol(
+        { modelHash: this.hash, symbolId: id },
+        this.connection.callOptions(),
+      ),
     );
     if (response.symbol === undefined) {
-      throw new SymbolNotFoundError(response.error === "" ? id : response.error);
+      throw new SymbolNotFoundError(id);
     }
     return new ModelSymbol(this.connection, this.hash, response.symbol);
   }
@@ -202,9 +246,11 @@ export class Model {
   /** Instantiates a part or usage, by short name, FQN or id. */
   async instantiate(name: string): Promise<InstanceTree> {
     const id = this.looksQualified(name) ? name : (await this.symbol(name)).id;
-    const response = await this.connection.rpc.instantiate(
-      { modelHash: this.hash, symbolId: id },
-      this.connection.callOptions(),
+    const response = await callRpc(
+      this.connection.rpc.instantiate(
+        { modelHash: this.hash, symbolId: id },
+        this.connection.callOptions(),
+      ),
     );
     if (response.error !== "") {
       throw new EvaluationError(response.error, "unspecified", response.diagnostics.map(decodeDiagnostic));
@@ -235,19 +281,26 @@ export class Model {
     return name.includes("::") || name === this.rootSymbol?.id;
   }
 
+  /** The names of the model closest to one it has not got, best first. */
   private async nearNames(name: string): Promise<string[]> {
-    const wanted = name.toLowerCase();
-    const near: string[] = [];
+    const scored: { id: string; score: number }[] = [];
+    let seen = 0;
     for await (const symbol of this.walk()) {
-      const candidate = symbol.name.toLowerCase();
-      if (candidate.includes(wanted) || wanted.includes(candidate)) {
-        near.push(symbol.id);
+      // An unnamed symbol, the root among them, is near nothing.
+      if (symbol.name === "") {
+        continue;
       }
-      if (near.length === 5) {
+      const score = similarity(name.toLowerCase(), symbol.name.toLowerCase());
+      if (score >= NEAR_ENOUGH) {
+        scored.push({ id: symbol.id, score });
+      }
+      seen += 1;
+      if (seen === NEAR_SEARCH_LIMIT) {
         break;
       }
     }
-    return near;
+    scored.sort((left, right) => right.score - left.score);
+    return scored.slice(0, 3).map((one) => one.id);
   }
 }
 
@@ -338,9 +391,11 @@ export class ModelSymbol {
   async children(): Promise<ModelSymbol[]> {
     const children: ModelSymbol[] = [];
     for (const id of this.childIds) {
-      const response = await this.connection.rpc.getSymbol(
-        { modelHash: this.modelHash, symbolId: id },
-        this.connection.callOptions(),
+      const response = await callRpc(
+        this.connection.rpc.getSymbol(
+          { modelHash: this.modelHash, symbolId: id },
+          this.connection.callOptions(),
+        ),
       );
       if (response.symbol !== undefined) {
         children.push(new ModelSymbol(this.connection, this.modelHash, response.symbol));
