@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -255,7 +256,14 @@ func evalArithmetic(op ast.OperatorKind, l, r Value) (Value, bool) {
 	}
 	// Integer arithmetic when both operands are integers (except division,
 	// which may be fractional — keep it real to avoid silent truncation).
-	if l.Kind == ValInt && r.Kind == ValInt && op != ast.OpDiv {
+	if l.Kind == ValInt && r.Kind == ValInt {
+		if op == ast.OpDiv {
+			q, ok := IntQuotient(l.Int, r.Int)
+			if !ok {
+				return Value{}, false
+			}
+			return Value{Kind: ValReal, Real: q}, true
+		}
 		return evalIntArith(op, l.Int, r.Int)
 	}
 	return evalRealArith(op, l.asReal(), r.asReal())
@@ -288,6 +296,18 @@ func evalRealArith(op ast.OperatorKind, a, b float64) (Value, bool) {
 		return Value{}, false
 	}
 	return Value{Kind: ValReal, Real: res}, true
+}
+
+// IntQuotient is the exact rational quotient of two Integers rounded once to
+// the nearest float64, shared by the folder and the runtime; ok=false on a
+// zero divisor. Rounding each operand first would move quotients of operands
+// beyond 2^53, where int64 loses exactness in float64.
+func IntQuotient(a, b int64) (float64, bool) {
+	if b == 0 {
+		return 0, false
+	}
+	q, _ := new(big.Rat).SetFrac64(a, b).Float64()
+	return q, true
 }
 
 // RealArith is Real addition, subtraction, multiplication and division,

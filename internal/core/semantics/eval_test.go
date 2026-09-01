@@ -45,6 +45,15 @@ func TestEvalRealArithmetic(t *testing.T) {
 	}
 }
 
+// A quotient of operands beyond 2^53 folds as the exact ratio rounded once,
+// the same answer the runtime computes.
+func TestEvalFoldsExactQuotientBeyondFloatRange(t *testing.T) {
+	v, ok := evalExpr(t, "9007199254740993 / 3")
+	if !ok || v.Kind != ValReal || v.Real != 3002399751580331 {
+		t.Fatalf("9007199254740993/3 = %+v ok=%v, want real 3002399751580331", v, ok)
+	}
+}
+
 func TestEvalBooleanLogic(t *testing.T) {
 	cases := map[string]bool{
 		"true and false": false,

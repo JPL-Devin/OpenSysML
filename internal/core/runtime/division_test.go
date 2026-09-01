@@ -42,6 +42,34 @@ func TestWholeNumberQuotientIsRational(t *testing.T) {
 	}
 }
 
+// TestQuotientBeyondFloatExactRangeRoundsOnce: operands above 2^53 divide as
+// exact rationals rounded once, not through pre-rounded float64 operands.
+func TestQuotientBeyondFloatExactRangeRoundsOnce(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, quotientModel)
+	ctx := NewContext(model, resolver, 1000)
+	quotient := resolveSymbol(t, root, "quotient")
+
+	cases := []struct {
+		a, b int64
+		want float64
+	}{
+		{9007199254740993, 3, 3002399751580331},         // 2^53+1: rounding a first loses the exact thirds
+		{-9007199254740993, 3, -3002399751580331},       // the sign does not change the rounding
+		{9007199254740993, 1, 9007199254740992},         // 2^53+1 itself is not a float64; ties round to even
+		{9007199254740993, 2, 4503599627370496},         // an inexact half rounds once, to even
+		{-9223372036854775808, -1, 9223372036854775808}, // MinInt64 / -1 is the Real 2^63
+	}
+	for _, tc := range cases {
+		got, err := ctx.InvokeCalc(quotient, []Value{constInt(tc.a), constInt(tc.b)}, root)
+		if err != nil {
+			t.Fatalf("%d / %d: %v", tc.a, tc.b, err)
+		}
+		if got.Const.Kind != semantics.ValReal || got.Const.Real != tc.want {
+			t.Errorf("%d / %d = %+v, want the Real %v", tc.a, tc.b, got.Const, tc.want)
+		}
+	}
+}
+
 // TestWholeNumberDivisionByZeroIsReported: a Rational quotient does not change
 // what a zero divisor is — an error, not an infinity.
 func TestWholeNumberDivisionByZeroIsReported(t *testing.T) {
