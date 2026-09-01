@@ -120,7 +120,17 @@ so they inherit annotated stability with no further mechanism.
 
 ### Validation (a constraint-tier pass)
 
-- Duplicate effective ids within one workspace: error on both elements, naming each.
+- Duplicate effective ids **within one project scope**: error on both elements, naming
+  each. Identity is a pair — the enclosing `ProjectRef` (or the absent scope, for
+  unbound documents) plus the effective id — so the same id under two different
+  `ProjectRef`s is legal; it names two different repository elements.
+- The check runs over the whole generated id space of the scope, not the element ids
+  alone: an annotated id that collides with a **derived** id — another element's encoded
+  name, a membership id (`…_om`), an encoded expression-node id — is an error naming
+  both, since the generators reserve no suffix and `[a-zA-Z0-9_-]+` admits ids that end
+  in `_om` or embed `_p`. Ids OpenSysML mints are UUIDs and cannot collide; the check
+  exists for hand-authored and foreign ids, and the round-trip tests must include such
+  adversarial ids.
 - An `ElementId` whose `id` fails `[a-zA-Z0-9_-]+`: error naming the offending byte.
 - `ElementId` without an enclosing `ProjectRef`: error.
 - Nested `ProjectRef` scopes are permitted — that is the cross-project story: an element
@@ -156,13 +166,25 @@ One seam on each side:
   model content, exactly as the mapping already consumes names into IRIs. A `ProjectRef`
   is optionally emitted as `sysx:` provenance triples on the root for traceability;
   Flexo scopes a graph by the org/repo/branch in the request path, so nothing in-graph
-  depends on it.
+  depends on it. That request-path scoping is also what keeps cross-project id reuse
+  representable: **one graph carries one project scope** — a conversion that targets a
+  repository writes each `ProjectRef` scope as its own graph, destined for its own
+  branch — and a single mixed graph (a plain `-convert ttl` of a multi-scope workspace)
+  qualifies each element's IRI with its scope's provenance, refusing the conversion if
+  two scopes' ids would still land on one IRI, rather than silently merging them. The
+  writer also marks an **annotated** id with a `sysx:` triple (`sysx:declaredId true`),
+  because explicitness is not recoverable from the value: an annotated id can equal the
+  encoding of the element's current qualified name, and dropping the annotation there
+  would turn the next rename back into a delete plus a create.
 - **Reader** (`internal/core/export/rdf_in.go`): identity is read from
   `sysml:qualifiedName` today, IRIs being treated as opaque. The reader additionally
   reads `sysml:elementId`; where an element's id is not the encoding of its qualified
-  name, the writer of the notation re-materializes the `ElementId` annotation (and a
-  root `ProjectRef` from the provenance triples when they are present). That closes the
-  round trip: `notation → RDF → notation` preserves annotated identity byte-for-byte.
+  name **or the graph marks it `sysx:declaredId`**, the writer of the notation
+  re-materializes the `ElementId` annotation (and a root `ProjectRef` from the
+  provenance triples when they are present). That closes the round trip:
+  `notation → RDF → notation` preserves annotated identity byte-for-byte, including the
+  degenerate case where the annotated id happens to equal the derived one — which the
+  planned round-trip tests must cover explicitly.
 
 UUID ids also retire the risk recorded against readable ids: a client that assumes OMG's
 UUID convention accepts an annotated element without special cases.
