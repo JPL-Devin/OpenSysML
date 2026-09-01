@@ -101,19 +101,21 @@ Decisions, each with its reason:
 - **Branch, never commit.** A ref names "latest on that branch", matching the default
   semantics; a commit id in source text goes stale on every sync. Which commit a sync
   last saw is working state of the sync tooling, not a property of the model.
-- **Org is location, not identity — same principle.** In the OMG API a project is a
-  top-level UUID resource, so `projectId` alone addresses it. Flexo puts org/repo in
-  the request path, but that names *where* the project lives: moving a project between
-  orgs must not dirty every model file that references it, so the org — like the
-  server URL — belongs to the sync tooling's endpoint configuration. The optional
-  `org` attribute exists only for Flexo deployments where a repo id is ambiguous
-  without it — and exactly there it also enters scope equality: unlike `branch`,
-  which selects a version of one project, `org` distinguishes *which* project is
-  named, so two scopes are the same project iff `org` (both absent, or equal) and
-  `projectId` match. A globally unique `projectId` (a UUID, as the OMG API and
-  OpenSysML mint them) makes `org` redundant for identity, and that is the
-  recommended shape; the attribute exists so deployments with non-unique repo ids
-  are still sound rather than falsely colliding.
+- **Org names the project only when the project id cannot.** In the OMG API a
+  project is a top-level UUID resource, so `projectId` alone names it, the org —
+  like the server URL — stays in the sync tooling's endpoint configuration, and
+  moving a project between orgs touches no model file. That is the recommended
+  shape, and it is what OpenSysML mints. The optional `org` attribute exists for
+  Flexo deployments whose repo ids are not globally unique: there nothing shorter
+  than the pair distinguishes two same-named repos, so `org`-plus-`projectId` *is*
+  the project for scope equality — unlike `branch`, which selects a version of one
+  project rather than naming another. The relocation cost of that choice is
+  bounded and honest: an org move rewrites the one root `ProjectRef`, never an
+  element — every `ElementId` below it is untouched, so the elements keep their
+  identity at the new location and sync there sees updates, not deletes plus
+  creates. What no design can offer is relocation-proof identity for an id that
+  was never unique without its location; a deployment that wants org moves for
+  free uses UUID project ids and omits `org`.
 - **String-typed ids, validated separately.** The attribute type is `String` so the
   notation stays plain; a validation pass enforces the id shape rather than the type
   system. Ids are UUIDs when minted by OpenSysML, but the pass accepts anything matching
