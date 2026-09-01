@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -350,5 +351,37 @@ package Demo {
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatal("Instantiate did not terminate on mutually recursive parts")
+	}
+}
+
+// TestInstantiate_GraphIsDeterministic instantiates the same model repeatedly:
+// reading a feature materializes the object it holds, so features are read in
+// name order and the same ids arrive in the same order every run.
+func TestInstantiate_GraphIsDeterministic(t *testing.T) {
+	content := `
+package Demo {
+  part def Wheel {}
+  part def Engine {}
+  part def Vehicle {
+    part engine : Engine;
+    part spare : Wheel;
+    part wheels : Wheel[4];
+  }
+}
+`
+	var first string
+	for run := range 12 {
+		resp := instantiate(t, content, "graph-deterministic", "Demo::Vehicle")
+		var got strings.Builder
+		for _, inst := range resp.Instances {
+			got.WriteString(fmt.Sprintf("%d:%s ", inst.Id, inst.TypeSymbolId))
+		}
+		if run == 0 {
+			first = got.String()
+			continue
+		}
+		if got.String() != first {
+			t.Fatalf("run %d serialized %s, run 0 serialized %s", run, got.String(), first)
+		}
 	}
 }

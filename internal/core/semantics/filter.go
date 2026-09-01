@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -1288,10 +1289,8 @@ func isMetadataType(sym *symbols.Symbol) bool {
 	return sym.Kind == symbols.SymbolMetadataDef || sym.Kind == symbols.SymbolMetaclass
 }
 
-// unquote strips the quotes from a string literal's text.
+// unquote reads the text a string literal spells, so a filter constant matches
+// the same string the runtime evaluates the literal to.
 func unquote(s string) string {
-	if len(s) >= 2 && (s[0] == '"' || s[0] == '\'') && s[len(s)-1] == s[0] {
-		return s[1 : len(s)-1]
-	}
-	return s
+	return lexer.StringValue(s)
 }
