@@ -161,7 +161,7 @@ func addQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
 	} else {
 		magnitude -= converted
 	}
-	return quantityValue(magnitude, left.Unit), nil
+	return quantityValue(magnitude, left.Unit)
 }
 
 // scaleQuantities evaluates a product or quotient of quantities, whose unit is
@@ -186,10 +186,13 @@ func scaleQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) 
 	}
 	if unit.Term.Dimensionless() {
 		// A ratio of like quantities is a number, not a quantity of no unit.
-		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal,
-			Real: semantics.ConvertMagnitude(magnitude, unit.Term.Scale, semantics.UnitScale(1))}}, nil
+		num, err := realResult(semantics.ConvertMagnitude(magnitude, unit.Term.Scale, semantics.UnitScale(1)))
+		if err != nil {
+			return Value{}, err
+		}
+		return Value{Kind: ValConst, Const: num}, nil
 	}
-	return quantityValue(magnitude, unit), nil
+	return quantityValue(magnitude, unit)
 }
 
 // powQuantity raises a quantity to a constant exponent, its unit included. The
@@ -276,13 +279,17 @@ func equalQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) 
 }
 
 // negateQuantity negates a quantity's magnitude, keeping its unit.
-func negateQuantity(q *Quantity) Value {
+func negateQuantity(q *Quantity) (Value, error) {
 	return quantityValue(-toReal(q.Num), q.Unit)
 }
 
 // quantityValue builds a quantity value from a computed magnitude, which is
 // real: a conversion factor makes it one even where both operands were whole.
-func quantityValue(magnitude float64, unit Unit) Value {
-	num := semantics.Value{Kind: semantics.ValReal, Real: magnitude}
-	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: num, Unit: unit}}
+// A magnitude no Real holds is reported, as a bare Real result is.
+func quantityValue(magnitude float64, unit Unit) (Value, error) {
+	num, err := realResult(magnitude)
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: num, Unit: unit}}, nil
 }

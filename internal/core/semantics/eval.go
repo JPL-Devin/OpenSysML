@@ -118,6 +118,10 @@ func EvalUnary(op ast.OperatorKind, v Value) (Value, bool) {
 	switch op {
 	case ast.OpNeg:
 		if v.Kind == ValInt {
+			// The least Integer has no negation within the range.
+			if v.Int == math.MinInt64 {
+				return Value{}, false
+			}
 			return Value{Kind: ValInt, Int: -v.Int}, true
 		}
 		if v.Kind == ValReal {
@@ -257,14 +261,16 @@ func evalArithmetic(op ast.OperatorKind, l, r Value) (Value, bool) {
 	return evalRealArith(op, l.asReal(), r.asReal())
 }
 
+// evalIntArith folds Integer arithmetic, declining a result outside the
+// Integer range: the run time reports it, so nothing folds to a wrapped value.
 func evalIntArith(op ast.OperatorKind, a, b int64) (Value, bool) {
 	switch op {
-	case ast.OpAdd:
-		return Value{Kind: ValInt, Int: a + b}, true
-	case ast.OpSub:
-		return Value{Kind: ValInt, Int: a - b}, true
-	case ast.OpMul:
-		return Value{Kind: ValInt, Int: a * b}, true
+	case ast.OpAdd, ast.OpSub, ast.OpMul:
+		res, ok := IntArith(op, a, b)
+		if !ok {
+			return Value{}, false
+		}
+		return Value{Kind: ValInt, Int: res}, true
 	case ast.OpMod:
 		if b == 0 {
 			return Value{}, false
@@ -274,21 +280,33 @@ func evalIntArith(op ast.OperatorKind, a, b int64) (Value, bool) {
 	return Value{}, false
 }
 
+// evalRealArith folds Real arithmetic, declining a result that is not a finite
+// Real so nothing folds to an infinity: the run time reports it.
 func evalRealArith(op ast.OperatorKind, a, b float64) (Value, bool) {
+	res, ok := RealArith(op, a, b)
+	if !ok || math.IsInf(res, 0) || math.IsNaN(res) {
+		return Value{}, false
+	}
+	return Value{Kind: ValReal, Real: res}, true
+}
+
+// RealArith is Real addition, subtraction, multiplication and division,
+// reporting ok=false for an operator it does not define or a division by zero.
+func RealArith(op ast.OperatorKind, a, b float64) (float64, bool) {
 	switch op {
 	case ast.OpAdd:
-		return Value{Kind: ValReal, Real: a + b}, true
+		return a + b, true
 	case ast.OpSub:
-		return Value{Kind: ValReal, Real: a - b}, true
+		return a - b, true
 	case ast.OpMul:
-		return Value{Kind: ValReal, Real: a * b}, true
+		return a * b, true
 	case ast.OpDiv:
 		if b == 0 {
-			return Value{}, false
+			return 0, false
 		}
-		return Value{Kind: ValReal, Real: a / b}, true
+		return a / b, true
 	}
-	return Value{}, false
+	return 0, false
 }
 
 // Pow evaluates l ** r (equivalently l ^ r) — the single implementation the
@@ -345,6 +363,22 @@ func intPow(a, n int64) (int64, bool) {
 		}
 	}
 	return res, true
+}
+
+// IntArith is Integer addition, subtraction and multiplication, shared by the
+// folder, the operators and the library functions, reporting ok=false on overflow.
+func IntArith(op ast.OperatorKind, a, b int64) (int64, bool) {
+	switch op {
+	case ast.OpAdd:
+		res := a + b
+		return res, (b <= 0 || res > a) && (b >= 0 || res < a)
+	case ast.OpSub:
+		res := a - b
+		return res, (b >= 0 || res > a) && (b <= 0 || res < a)
+	case ast.OpMul:
+		return mulInt(a, b)
+	}
+	return 0, false
 }
 
 // mulInt multiplies two int64 values, reporting ok=false on overflow.
