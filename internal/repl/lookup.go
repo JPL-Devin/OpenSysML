@@ -38,7 +38,7 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 func (s *Session) lookupSymbolOfKinds(name string, want ...symbols.SymbolKind) (*symbols.Symbol, string, error) {
 	// A name the notation reads is resolved by the text it names; anything else is
 	// looked up as typed, so the failure reported is about what was typed.
-	if plain, ok := plainName(name); ok {
+	if plain, ok := s.plainName(name); ok {
 		name = plain
 	}
 	docScopes := s.docScopes()

@@ -91,6 +91,11 @@ type Session struct {
 	names      *nameTable                   // simple names of the documents, rebuilt when their scope trees change
 	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
 
+	// argMemo and nameMemo hold what command text parsed to, so a repeated
+	// invocation is evaluated without being parsed again.
+	argMemo  parseMemo[parsedArgs]
+	nameMemo parseMemo[parsedName]
+
 	// Active executor sessions for debugging
 	actionExec *actionSession
 	stateExec  *stateSession
