@@ -1464,12 +1464,15 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, fmt.Errorf("unary operator requires 1 operand, got %d", len(n.Operands))
 	}
 
-	// The least Integer is written as a negated literal whose magnitude alone is
-	// outside the range, so the sign is read together with it.
+	// The least Integer is the one literal whose magnitude alone is outside the
+	// range, so its sign is read together with it; every other operand is
+	// evaluated as usual.
 	if n.Operator == ast.OpNeg {
 		if lit, ok := n.Operands[0].(*ast.LiteralInteger); ok {
-			if val, err := strconv.ParseInt("-"+lit.Value, 10, 64); err == nil {
-				return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: val}}, nil
+			if _, err := strconv.ParseInt(lit.Value, 10, 64); err != nil {
+				if val, err := strconv.ParseInt("-"+lit.Value, 10, 64); err == nil {
+					return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: val}}, nil
+				}
 			}
 		}
 	}
@@ -1491,7 +1494,7 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 			if n.Operator == ast.OpPos {
 				return operand, nil
 			}
-			return negateQuantity(operand.Quantity), nil
+			return negateQuantity(operand.Quantity)
 		}
 		// Arithmetic sign: -number, +number
 		if operand.Kind != ValConst {
