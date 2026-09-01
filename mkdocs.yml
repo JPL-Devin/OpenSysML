@@ -174,5 +174,6 @@ nav:
   - Project:
       - project/README.md
       - Spec compliance: project/spec-compliance.md
+      - Exact-rational evaluation: project/exact-rational-evaluation.md
       - Pilot differential: project/pilot-differential.md
       - Roadmap: project/roadmap.md
