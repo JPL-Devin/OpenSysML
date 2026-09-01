@@ -59,8 +59,8 @@
         "name": "examples",
         "dir": "examples",
         "origin": "ours",
-        "files": 30,
-        "digest": "sha256:ef64018aac723f6712c3fa78f176ea40cc616a70e1898c6a00527e3d4f465535"
+        "files": 31,
+        "digest": "sha256:4b233d5db30913e4b1cc22d22a60903656de73b4a959cb6a87974bc2c1110d82"
       },
       {
         "name": "probes",
@@ -73,14 +73,14 @@
     "recorded": "2026-09-01"
   },
   "totals": {
-    "files": 364,
+    "files": 365,
     "filesFullyAgreeing": 335,
     "agreement": 34,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
-    "pilotOnly": 59,
+    "pilotOnly": 60,
     "openSysMLDiagnostics": 56,
-    "pilotDiagnostics": 95
+    "pilotDiagnostics": 96
   },
   "roots": [
     {
@@ -733,14 +733,14 @@
       "name": "examples",
       "dir": "examples",
       "totals": {
-        "files": 30,
+        "files": 31,
         "filesFullyAgreeing": 22,
         "agreement": 0,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
-        "pilotOnly": 33,
+        "pilotOnly": 34,
         "openSysMLDiagnostics": 2,
-        "pilotDiagnostics": 34
+        "pilotDiagnostics": 35
       },
       "files": [
         {
@@ -899,6 +899,20 @@
           ]
         },
         {
+          "path": "self-model/identity.sysml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": [
+            {
+              "line": 40,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            }
+          ]
+        },
+        {
           "path": "self-model/pipeline.sysml",
           "agreement": [],
           "severityMismatch": [],
@@ -937,13 +951,13 @@
           "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 89,
+              "line": 103,
               "severity": "error",
               "category": "syntax",
               "count": 1
             },
             {
-              "line": 91,
+              "line": 105,
               "severity": "error",
               "category": "syntax",
               "count": 1
@@ -1091,7 +1105,7 @@
     {
       "side": "pilot",
       "message": "Cannot override a binding feature value",
-      "count": 15
+      "count": 16
     },
     {
       "side": "pilot",
@@ -1261,14 +1275,14 @@
       }
     ],
     "totals": {
-      "files": 364,
+      "files": 365,
       "filesFullyAgreeing": 336,
       "agreement": 34,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
-      "pilotOnly": 59,
+      "pilotOnly": 60,
       "openSysMLDiagnostics": 55,
-      "pilotDiagnostics": 95
+      "pilotDiagnostics": 96
     },
     "findings": [
       {
