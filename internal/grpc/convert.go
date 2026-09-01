@@ -3,7 +3,9 @@ package grpc
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -534,8 +536,9 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 			return pbInst
 		}
 
-		for _, fv := range pbInst.FeatureValues {
-			for _, id := range instanceRefs(fv) {
+		// In name order, so the graph is serialized in the same order every run.
+		for _, name := range slices.Sorted(maps.Keys(pbInst.FeatureValues)) {
+			for _, id := range instanceRefs(pbInst.FeatureValues[name]) {
 				child, ok := rt.Instance(id)
 				if !ok || onPath[child.Type] {
 					continue
@@ -592,10 +595,12 @@ func collectionElements(val runtime.Value) []runtime.Value {
 // InstanceToProto converts runtime.Instance to protobuf Instance. Feature values
 // are read through Instance.GetFeatureValue, so a derived default is evaluated against
 // the instance rather than reported as unmaterialized.
+// Features are read in name order, because reading one materializes the object it
+// holds, so map order would decide the ids those objects are given.
 func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
 	pbValues := make(map[string]*pb.FeatureValue)
 
-	for name := range inst.FeatureValues {
+	for _, name := range slices.Sorted(maps.Keys(inst.FeatureValues)) {
 		fv, err := inst.GetFeatureValue(rt, name)
 		if err != nil {
 			pbValues[name] = &pb.FeatureValue{

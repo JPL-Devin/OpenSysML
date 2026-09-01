@@ -897,6 +897,11 @@ func checkedNumeric(v semantics.Value) (semantics.Value, error) {
 	return realResult(v.Real)
 }
 
+// isNumeric reports whether a value is an Integer or a Real.
+func isNumeric(v semantics.Value) bool {
+	return v.Kind == semantics.ValInt || v.Kind == semantics.ValReal
+}
+
 // elementArith applies an arithmetic operator to two numeric elements, reporting
 // a result outside the range of its kind rather than wrapping or infinite.
 func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (semantics.Value, error) {
@@ -921,6 +926,17 @@ func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (seman
 	}
 	res, ok := semantics.EvalBinary(op, a, b)
 	if !ok {
+		// A sum, difference or product of two numbers is declined only for leaving
+		// the Real range; anything else is an operator the arguments do not define.
+		switch op {
+		case ast.OpAdd, ast.OpSub, ast.OpMul:
+			if isNumeric(a) && isNumeric(b) {
+				return semantics.Value{}, fmt.Errorf(
+					"%w: function %s has a result outside the Real range",
+					semantics.ErrArithmeticOverflow, name,
+				)
+			}
+		}
 		return semantics.Value{}, fmt.Errorf(
 			"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
 		)

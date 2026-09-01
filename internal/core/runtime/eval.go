@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -237,14 +238,10 @@ func (ec *EvalContext) evalLiteralBool(n *ast.LiteralBool) (Value, error) {
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: n.Value}}, nil
 }
 
-// evalLiteralString evaluates a string literal.
+// evalLiteralString evaluates a string literal, which spells its text with the
+// quotes and escapes of the notation.
 func (ec *EvalContext) evalLiteralString(n *ast.LiteralString) (Value, error) {
-	// Strip quotes
-	str := n.Value
-	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
-		str = str[1 : len(str)-1]
-	}
-	return Value{Kind: ValString, Str: str}, nil
+	return Value{Kind: ValString, Str: lexer.StringValue(n.Value)}, nil
 }
 
 // evalNull evaluates a null expression.
@@ -476,7 +473,9 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 			return ec.enumLiteralValue(currentSym)
 		}
 		if decl.Value != nil {
-			val, err := ec.Eval(decl.Value)
+			// The value is evaluated in the scope it was declared in, so the units,
+			// enumerations and imports in force there answer the names it uses.
+			val, err := ec.evalIn(currentSym.OwnerScope).Eval(decl.Value)
 			if err != nil {
 				return Value{}, err
 			}
