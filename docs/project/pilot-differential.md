@@ -201,7 +201,7 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-07`, 365 files)
+## Results (pilot `2026-07`, 366 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -210,9 +210,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 31 | 22 | 2 | 35 | 0 | 1 | 1 | 34 |
+| `examples` | 32 | 22 | 2 | 217 | 0 | 1 | 1 | 216 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **365** | **335** | **56** | **96** | **34** | **2** | **20** | **60** |
+| **Total** | **366** | **335** | **56** | **278** | **34** | **2** | **20** | **242** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -338,8 +338,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **60** |
-| pilot diagnostics | 123 | **96** |
+| only pilot | 82 | **242** |
+| pilot diagnostics | 123 | **278** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -543,7 +543,7 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 10 syntax, 18 `unmapped`, 5 `kind-mismatch`, 1 `unresolved-reference` — of which
+`examples` 10 syntax, 26 `unmapped`, 52 `kind-mismatch`, 128 `unresolved-reference` — of which
 `relay-probe-demo/mission.sysml` carries three: two `unmapped` where the pilot rejects a snapshot
 redefining the mass its individual binds (`Cannot override a binding feature value`) and one
 `kind-mismatch` on its send of a `Telemetry` instantiation, the same two rules it already flags on
@@ -556,6 +556,18 @@ carries: five `unmapped` where `pipeline.sysml` and `identity.sysml` redefine an
 attribute's default (`Cannot override a binding feature value`, the rule `solver-demo.sysml` and
 `relay-probe-demo/mission.sysml` already draw) and two syntax rows where `views.sysml` frames a
 concern, which the reference rejects on `views-demo.sysml` the same way.
+
+**`self-model/document.sysml` carries 182 pilot-only rows on its own, and every one of them has a
+single cause: the reference has no `DocumentQueries` library.** The file is the architecture
+document written in the notation, so its first line imports the document and query vocabulary this
+project bundles as an OpenSysML library ([the authoring chapter](../manual/authoring.md)); the
+reference cannot resolve that namespace, and the cascade is 127 `unresolved-reference`, 47
+`kind-mismatch` (`Must invoke a behavior or a behavioral feature`, once per query invocation whose
+calc def did not resolve) and 8 `unmapped`. It is the first file in any root that depends on a
+library the reference does not ship, which is why the `examples` only-pilot column jumps 34 → 216
+without a single one of our own diagnostics moving: only-ours stays at 20 and our diagnostics at 56.
+Read this root's only-pilot total as "one file the reference has no library for, plus the 34 rows
+that were there before", not as a conformance movement.
 
 **`pilot-examples` is the row to read carefully: its total falls 68 → 63 and its mix barely
 resembles the old one.** All 31 syntax rows are gone, and `pilot-validation`'s 7 with them — wave 10D
@@ -595,7 +607,7 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **34** |
+| `examples`: only pilot | **40** | **216** |
 | `examples`: fully agreeing | **15** | **22** |
 | `unmapped`, our side | **20** | **19** |
 

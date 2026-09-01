@@ -239,6 +239,42 @@ func TestSelfModelDocumentPathMatchesImplementation(t *testing.T) {
 	}
 }
 
+// TestSelfModelDocumentRenders renders the architecture document the model
+// declares, so a query that stops binding or an embedded view that is renamed
+// fails here rather than dropping a section from the rendering.
+func TestSelfModelDocumentRenders(t *testing.T) {
+	files := selfModelFiles(t)
+
+	ws := model.NewWorkspace()
+	for _, name := range files {
+		content, err := os.ReadFile(filepath.Join(selfModelDir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		ws.Open(name, content, 1)
+	}
+
+	markdown, err := ws.RenderDocumentMarkdown("OpenSysMLDocument::ArchitectureDocument")
+	if err != nil {
+		t.Fatalf("render the architecture document: %v", err)
+	}
+
+	// The tables come from queries and the diagrams from the views, so an
+	// empty rendering of either would otherwise pass unnoticed.
+	for _, want := range []string{
+		"# OpenSysML Architecture",
+		"| sources | internal/core/source |",
+		"| notation | constraint | true |",
+		"| differential | pilot validator | docs/project/pilot-differential-baseline.json |",
+		"OpenSysMLViews::pipelineStructure",
+		"OpenSysMLViews::identityRoundTrip",
+	} {
+		if !strings.Contains(markdown, want) {
+			t.Errorf("the rendered architecture document does not contain %q", want)
+		}
+	}
+}
+
 var goPackagePattern = regexp.MustCompile(`goPackage = "([^"]+)"`)
 
 // readModelFile returns the text of one file of the self-model.

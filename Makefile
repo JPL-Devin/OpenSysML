@@ -205,7 +205,9 @@ self-model: build-sysml ## Render the architecture self-model's views (see examp
 	@# A renamed or deleted view must not leave its old rendering behind.
 	@rm -f "$(SELF_MODEL_OUT)"/OpenSysMLViews.*.mmd "$(SELF_MODEL_OUT)"/OpenSysMLViews.*.md
 	$(BIN_DIR)/sysml $(SELF_MODEL_DIR)/*.sysml -render-all "$(SELF_MODEL_OUT)"
-	@echo "✓ Rendered the self-model's views into $(SELF_MODEL_OUT)/"
+	@# The architecture document the model declares, rendered by the same model.
+	$(BIN_DIR)/sysml $(SELF_MODEL_DIR)/*.sysml -render-documents "$(SELF_MODEL_OUT)"
+	@echo "✓ Rendered the self-model's views and document into $(SELF_MODEL_OUT)/"
 
 docs-counts: ## Regenerate and verify all derived documentation counts
 	@echo "Regenerating the documentation count lines and refereed figures..."
