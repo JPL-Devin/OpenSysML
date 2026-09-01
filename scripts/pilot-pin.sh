@@ -10,25 +10,26 @@ PILOT_ARTIFACT_VERSION="${PILOT_ARTIFACT_VERSION:-0.61.0}"
 
 # pilot_fetch_subtrees copies model roots out of the pinned pilot repository in one
 # sparse clone. Each argument is "<path in the pilot repository>:<destination>";
-# only those paths are checked out. Each destination records the tag it was
-# fetched at in a .pilot-pin stamp: a destination stamped with the current tag is
-# left alone, one stamped with another tag is re-downloaded, and one without a
+# only those paths are checked out. Each destination records the repository and
+# tag it was fetched from in a .pilot-pin stamp: a destination stamped with the
+# current pin is left alone, one stamped with another pin is re-downloaded (the
+# stale copy is kept until its replacement has been fetched), and one without a
 # stamp is left alone with a warning, since its pin cannot be verified.
 pilot_fetch_subtrees() {
-	local paths=() targets=() entry source_path target work index count stamp
+	local paths=() targets=() entry source_path target work index count stamp pin
+	pin="$PILOT_TAG $PILOT_REPO"
 	for entry in "$@"; do
 		source_path="${entry%%:*}"
 		target="${entry#*:}"
 		if [[ -d "$target" ]]; then
 			stamp="$target/.pilot-pin"
-			if [[ -f "$stamp" ]] && [[ "$(cat "$stamp")" == "$PILOT_TAG" ]]; then
+			if [[ -f "$stamp" ]] && [[ "$(cat "$stamp")" == "$pin" ]]; then
 				echo "Already present at $target (pin $PILOT_TAG)"
 				echo "Remove that directory to re-download."
 				continue
 			fi
 			if [[ -f "$stamp" ]]; then
-				echo "Stale pin at $target: fetched at $(cat "$stamp"), pin is now $PILOT_TAG; re-downloading."
-				rm -rf "$target"
+				echo "Stale pin at $target: fetched from $(cat "$stamp"), pin is now $pin; re-downloading."
 			else
 				echo "warning: $target exists but records no pin; leaving it alone." >&2
 				echo "warning: remove that directory to re-download at $PILOT_TAG." >&2
@@ -59,8 +60,9 @@ pilot_fetch_subtrees() {
 			return 1
 		fi
 		mkdir -p "$(dirname "$target")"
+		rm -rf "$target"
 		mv "$work/pilot/$source_path" "$target"
-		printf '%s\n' "$PILOT_TAG" >"$target/.pilot-pin"
+		printf '%s\n' "$pin" >"$target/.pilot-pin"
 		count="$(find "$target" -type f \( -name '*.sysml' -o -name '*.kerml' \) | wc -l | tr -d ' ')"
 		echo "Downloaded $count model file(s) from $source_path to $target"
 	done

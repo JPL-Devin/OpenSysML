@@ -111,10 +111,11 @@ own `.kerml` fixtures out of the comparison (see the known limitation below).
 The OMG corpora are not vendored, for the same licensing reason as the training corpus, and the
 pilot release they are fetched at is pinned once in `scripts/pilot-pin.sh` — the same pin the
 validator build reads, so corpus and reference can never come from different releases. Each
-corpus directory records the tag it was fetched at in a `.pilot-pin` stamp: one stamped with the
-current tag is left alone (remove it to re-download), one stamped with an older tag is
-re-downloaded when the script runs again, and one without a stamp is left alone with a warning.
-A root whose directory is absent is skipped with a warning.
+corpus directory records the repository and tag it was fetched from in a `.pilot-pin` stamp: one
+stamped with the current pin is left alone (remove it to re-download), one stamped with another
+pin is re-downloaded when the script runs again (the stale copy is kept until its replacement
+has been fetched), and one without a stamp is left alone with a warning. A root whose directory
+is absent is skipped with a warning.
 
 ### KerML: how the reference validates it
 
