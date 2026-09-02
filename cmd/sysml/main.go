@@ -15,6 +15,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/interop/flexo"
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
@@ -125,6 +126,7 @@ var (
 	modelChecks   checks
 
 	syncDiffWith       string
+	syncApplyTo        string
 	syncBase           string
 	syncState          string
 	syncConfirmDeletes bool
@@ -234,18 +236,22 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
 	fmt.Fprintf(w, "Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is\n")
 	fmt.Fprintf(w, "stable.\n")
-	fmt.Fprintf(w, "\nSyncing against a repository (dry run):\n")
+	fmt.Fprintf(w, "\nSyncing against a repository (dry run unless -sync-apply):\n")
 	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl          # Show the change set, keyed by effective id\n")
 	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-base last-seen.ttl\n")
 	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-confirm-deletes\n")
 	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-mint-ids -sync-annotate out.sysml\n")
+	fmt.Fprintf(w, "  sysml model.sysml -sync-diff http://localhost:8083   # Against the live API; no writes\n")
+	fmt.Fprintf(w, "  sysml model.sysml -sync-apply http://localhost:8083  # Write the change set as a commit\n")
 	fmt.Fprintf(w, "\nThe diff correlates elements by their effective id — an @ElementId annotation, or\n")
 	fmt.Fprintf(w, "the encoded qualified name — so a rename, move or retype is an update, never a\n")
 	fmt.Fprintf(w, "delete plus a create. Repository-only elements are reported as deletes but applying\n")
 	fmt.Fprintf(w, "them needs -sync-confirm-deletes; conflicts — a declared id the branch no longer\n")
 	fmt.Fprintf(w, "has, or a repository change since the last-seen commit — exit 1 and are never\n")
 	fmt.Fprintf(w, "resolved silently. The last-seen commit is tool state in <model>.sync.json (or\n")
-	fmt.Fprintf(w, "-sync-state), never written into the notation.\n")
+	fmt.Fprintf(w, "-sync-state), never written into the notation. -sync-apply refuses a change set\n")
+	fmt.Fprintf(w, "the dry run would have flagged, sends each update under its retained id, and\n")
+	fmt.Fprintf(w, "records the resulting commit; the token comes from %s.\n", flexo.EnvToken)
 	fmt.Fprintf(w, "\nRendering a view:\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # ASCII text at a terminal\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form markdown\n")
@@ -313,7 +319,8 @@ func runCLI() int {
 	flag.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
 	flag.BoolVar(&pdfTOC, "pdf-toc", false, "Write a table of contents ahead of the content (-doc-form pdf)")
 	flag.BoolVar(&pdfNumbering, "pdf-number-sections", false, "Number the section headings hierarchically (-doc-form pdf)")
-	flag.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository graph (.ttl), keyed by effective element id, instead of running it")
+	flag.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository — a graph file (.ttl) or a SysML v2 API endpoint URL — keyed by effective element id, instead of running it; never writes")
+	flag.StringVar(&syncApplyTo, "sync-apply", "", "Apply the change set to the model's project branch at this SysML v2 API endpoint URL, then record the commit in the sync state (token from "+flexo.EnvToken+")")
 	flag.StringVar(&syncBase, "sync-base", "", "Repository graph at the last-seen commit; with it, repository changes since then surface as conflicts")
 	flag.StringVar(&syncState, "sync-state", "", "Sync state file recording project, branch and last-seen commit (default: <model>.sync.json beside the model)")
 	flag.BoolVar(&syncConfirmDeletes, "sync-confirm-deletes", false, "Confirm repository-side deletes; without it the diff reports them but applying is refused")
@@ -388,25 +395,40 @@ func runCLI() int {
 	}
 
 	if flagGiven("sync-diff") && syncDiffWith == "" {
-		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph to diff against")
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph or endpoint to diff against")
 		return 2
 	}
-	if syncDiffWith != "" {
+	if flagGiven("sync-apply") && syncApplyTo == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-apply is empty; name the SysML v2 API endpoint to apply to")
+		return 2
+	}
+	if syncDiffWith != "" && syncApplyTo != "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set without writing and -sync-apply writes one; ask for one per run")
+		return 2
+	}
+	if syncDiffWith != "" || syncApplyTo != "" {
+		mode := "-sync-diff"
+		if syncApplyTo != "" {
+			mode = "-sync-apply"
+		}
 		switch {
 		case convertFormat != "" || renderView != "" || renderDoc != "" || renderAllDir != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0:
-			fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query or -eval")
+			fmt.Fprintf(os.Stderr, "sysml: %s syncs a change set; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query or -eval\n", mode)
 			return 2
 		case outputPath != "" || fromFormat != "" || renderForm != "" || docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering:
-			fmt.Fprintln(os.Stderr, "sysml: -sync-diff reads SysML or Turtle inputs and prints the change set; -output, -from and the render options do not apply")
+			fmt.Fprintf(os.Stderr, "sysml: %s reads SysML or Turtle inputs and reports the change set; -output, -from and the render options do not apply\n", mode)
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,
-				"-sync-diff shows a change set and decides nothing else about the model; check it in its own run")
+				mode+" syncs a change set and decides nothing else about the model; check it in its own run")
+		}
+		if syncApplyTo != "" {
+			return runSyncApply(args)
 		}
 		return runSyncDiff(args)
 	}
 	if syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "" {
-		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff; name the repository graph to diff against")
+		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff or -sync-apply; name the repository to sync against")
 		return 2
 	}
 

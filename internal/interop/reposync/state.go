@@ -2,6 +2,7 @@ package reposync
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -44,6 +45,22 @@ func (s *State) Save(path string) error {
 		return err
 	}
 	return os.WriteFile(path, append(data, '\n'), 0o600)
+}
+
+// ErrIncompleteApply refuses to advance the state past an apply that left
+// changes unapplied: no single commit then describes what the branch holds.
+var ErrIncompleteApply = errors.New("the apply did not complete, so the last-seen commit stays where it was")
+
+// Advance records a completed apply's last commit as last seen; an apply that
+// wrote nothing leaves the state as it was.
+func (s *State) Advance(result *Result) error {
+	if !result.Complete() {
+		return ErrIncompleteApply
+	}
+	if commit := result.LastCommit(); commit != "" {
+		s.LastSeenCommit = commit
+	}
+	return nil
 }
 
 // Scope returns the scope the state pins the sync to.
