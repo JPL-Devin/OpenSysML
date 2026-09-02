@@ -89,7 +89,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateBehaviorSpecialization` | KerML | A behavior cannot specialize a structure | internal/core/passes/w11a_kerml_specialization.go:W11AKerMLSpecializationPass.Run | — | none | ✅ faithful |
 | `validateBindingConnectorArgumentTypeConformance` | KerML | A binding connector's output feature conforms to its input feature (`Output feature must conform to input feature`) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateBindingConnectorIsBinary` | KerML | A binding connector is binary | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateBindingConnectorTypeConformance` | KerML | The two bound features of a binding connector have conforming types (warning) | internal/core/passes/w9c_bound_feature_types.go:W9CBoundFeatureTypesPass.Run | same wording; reported for directly named bound features only, binding ends that are feature chains are not checked | none | ⚠️ approximate |
+| `validateBindingConnectorTypeConformance` | KerML | The two bound features of a binding connector have conforming types (warning) | internal/core/passes/w9c_bound_feature_types.go:W9CBoundFeatureTypesPass.Run; internal/core/passes/typecheck_value.go:exprChecker.checkValueConformance | same wording for `bind`/`binding` (feature-chain ends included); the implicit binding of a feature value `part x : D = a.b.c;` is reported as the error `cannot bind a value of type C to a feature typed by D` where the pilot warns | none | ⚠️ approximate |
 | `validateClassSpecialization` | both | A class (KerML) or an occurrence definition (SysML) cannot specialize a data type or association | internal/core/passes/w11a_kerml_specialization.go:W11AKerMLSpecializationPass.Run; internal/core/passes/typecheck.go:compatMessage | KerML: same wording; SysML: `item cannot specialize attributeDef (kind mismatch)` where the pilot says `Cannot specialize attribute definition` | none | ⚠️ approximate |
 | `validateClassifierDefaultSupertype` | KerML | A classifier directly or indirectly specializes its kind's default supertype (`Must directly or indirectly specialize {supertype}`) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateClassifierMultiplicityDomain` | KerML | A classifier's multiplicity has no featuring type | — | — | none | ❔ unknown — no case and no identifiable pass yet |
@@ -303,8 +303,9 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 Rows are recorded as `main` stands at the recording date. Constraints being implemented in
 parallel (`validateFeatureValueOverriding`, the enumeration cases of
 `validateDefinitionVariationSpecialization`, the `validateTriggerInvocationAction*Argument`
-trio, feature-chain ends of `validateBindingConnectorTypeConformance`,
-`validateSendActionUsagePayloadArgument`/`validateSendActionUsageReceiver`, and the
+trio, `validateSendActionUsagePayloadArgument`/`validateSendActionUsageReceiver`, and the
 control-node succession constraints) keep the status the evidence supports today; when their
 passes land, the row's status moves and `-update` is not needed — the baseline's statuses are
-edited by hand, the names are not.
+edited by hand, the names are not. The feature-chain value bindings of
+`validateBindingConnectorTypeConformance` landed on `main` before this recording, so its row
+already describes them.
