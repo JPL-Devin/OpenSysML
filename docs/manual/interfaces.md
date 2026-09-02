@@ -10,19 +10,26 @@ extension. Whichever door you use, a document renders identically.
 $ sysml model.sysml -render-document Observatory::MassReport            # Markdown to stdout
 $ sysml model.sysml -render-document Observatory::MassReport -o report.md
 $ sysml model.sysml -render-document Observatory::MassReport \
-    -doc-form pdf -pdf-engine weasyprint -pdf-title-page -pdf-toc \
-    -pdf-number-sections -o report.pdf
+    -doc-form html -html-css theme.css -o report.html
+$ sysml model.sysml -render-documents site -doc-form html
+$ sysml model.sysml -render-document Observatory::MassReport \
+    -doc-form pdf -pdf-engine weasyprint -doc-title-page -doc-toc \
+    -doc-number-sections -o report.pdf
 $ sysml model.sysml -run-query "Observatory::SubsystemTable root=Observatory::telescope"
 ```
 
 | Flag | Meaning |
 |---|---|
 | `-render-document <name>` | Render the named document definition |
-| `-doc-form <form>` | `markdown` (default) or `pdf` |
+| `-doc-form <form>` | `markdown` (default), `html` or `pdf` |
 | `-pdf-engine <engine>` | `weasyprint` (default), `pandoc` or `prince` |
-| `-pdf-title-page` | Separate title page (PDF only) |
-| `-pdf-toc` | Table of contents (PDF only) |
-| `-pdf-number-sections` | Hierarchical section numbers (PDF only) |
+| `-doc-title-page` | Separate title page (HTML or PDF) |
+| `-doc-toc` | Table of contents (HTML or PDF) |
+| `-doc-number-sections` | Hierarchical section numbers (HTML or PDF) |
+| `-html-css <file\|url>` | Style the HTML with this sheet, after the default one (repeatable) |
+| `-html-no-default-css` | Leave the default stylesheet out |
+| `-html-default-css` | Write the default stylesheet and exit |
+| `-html-fragment` | The document element alone, to embed in your own page |
 | `-run-query "<name> [<p>=<expr> ...]"` | Run one document query directly |
 | `-o <file>` | Output file; required for PDF |
 

@@ -142,6 +142,55 @@ package RT2 {
 }
 ```
 
+## The corpus round-trip ratchet (run it before and after any writer/encoder change)
+
+`TestCorpusRoundTrip` (`internal/core/export/corpus_roundtrip_test.go`) runs the three-hop trip
+over **every** `.sysml`/`.kerml` under `examples/` — the 32 committed models, the 100-file
+training corpus and the three pilot corpora (213 files) — and pins one verdict per file in
+`internal/core/export/testdata/corpus_roundtrip_expected.txt`. It runs in about two seconds.
+Record: `docs/project/rdf-corpus-roundtrip.md`.
+
+```bash
+./scripts/download-training-examples.sh && ./scripts/download-pilot-corpora.sh   # once
+OPENSYSML_REQUIRE_TRAINING_CORPUS=1 OPENSYSML_REQUIRE_PILOT_CORPORA=1 \
+  go test -count=1 -v ./internal/core/export -run TestCorpusRoundTrip
+```
+
+Without the require variables an absent corpus **skips** the gate with a `GATE NOT RUN` banner on
+stderr; CI sets them so absence fails. The `-v` log holds the summary line CI greps for:
+`corpus round trip: 345 files: 166 stable, 71 whitespace-only, 14 graph-diff, 15 unwritable,
+2 unparseable, 77 refused` at the time of writing.
+
+Verdicts, in the order the trip can end: `refused:<class>` (hop 1 refused; the class is the
+construct kind from `UnsupportedError.What` without location or identifiers, e.g.
+`refused:feature-declaration`, `refused:prefix-metadata`, `refused:succession`), `unwritable`
+(Turtle → notation refused), `unparseable` (the written notation no longer converts), then a
+triple-set comparison of hop 1 against hop 2: `stable` (byte-identical), `whitespace-only` (equal
+once whitespace inside `sysx:sourceText` literals is collapsed — the writer re-indented a body),
+`graph-diff` (anything else).
+
+It is a **per-file ratchet**, like the pilot corpora gate: an improvement fails it just as a
+regression does, so every movement is adjudicated. When your change moves files:
+
+1. Run the gate; read the per-file lines it prints (`<path>: <got>, expected <want>`).
+2. Confirm each movement is one your change should cause, in the direction it should go. A file
+   that regresses (`stable` → `graph-diff`, anything → `unwritable`) is a defect to fix, not to
+   record.
+3. Regenerate and commit the expectation file in the same PR:
+   ```bash
+   go test ./internal/core/export -run TestCorpusRoundTrip -update-corpus-roundtrip
+   git diff --stat internal/core/export/testdata/corpus_roundtrip_expected.txt
+   ```
+   Run the update twice and confirm the second run leaves the file unchanged; the run is
+   deterministic (a worker pool, results indexed by sorted path) and a diff between two runs is a
+   nondeterminism bug in the mapping, not something to record.
+4. State the before/after counts by verdict in the PR description.
+
+A `stable` verdict here is **not** proof that the structural predicates carry the round trip:
+every node still has `sysx:sourceText` and the decoder writes from it where it can. Use the
+stripping controls above for that. A `# files: <root> <n>` header that disagrees with the
+checkout is a stale or partial download (re-run the fetch scripts), not a mapping change.
+
 ## Recording
 
 Shell-only; no GUI. No recording needed.

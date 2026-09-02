@@ -11,10 +11,13 @@ import (
 )
 
 // References returns every location naming the symbol under the cursor, in all
-// workspace documents, at whichever segment of a qualified name denotes it.
+// workspace documents, at whichever segment of a qualified name denotes it. The
+// cursor may sit in a bundled library document; the declaration it names is
+// located there when it is a library one. Uses inside the library itself are
+// not enumerated.
 func (s *Server) References(ctx context.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
 	name := uriToName(params.TextDocument.URI)
-	doc := s.ws.Document(name)
+	doc := s.document(name)
 	if doc == nil || doc.Scope == nil {
 		return nil, nil
 	}
@@ -26,7 +29,7 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 	var out []protocol.Location
 	seen := map[protocol.Location]bool{}
 	add := func(docName string, content []byte, span source.Span) {
-		loc := protocol.Location{URI: nameToURI(docName), Range: spanToRange(content, span)}
+		loc := protocol.Location{URI: s.documentURI(docName), Range: spanToRange(content, span)}
 		if seen[loc] {
 			return
 		}

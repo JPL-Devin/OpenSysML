@@ -15,6 +15,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/interop/flexo"
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
@@ -121,10 +122,15 @@ var (
 	pdfTitlePage  bool
 	pdfTOC        bool
 	pdfNumbering  bool
+	htmlCSS       stringSlice
+	htmlNoCSS     bool
+	htmlShowCSS   bool
+	htmlFragment  bool
 	strictMode    bool
 	modelChecks   checks
 
 	syncDiffWith       string
+	syncApplyTo        string
 	syncBase           string
 	syncState          string
 	syncConfirmDeletes bool
@@ -234,18 +240,22 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
 	fmt.Fprintf(w, "Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is\n")
 	fmt.Fprintf(w, "stable.\n")
-	fmt.Fprintf(w, "\nSyncing against a repository (dry run):\n")
+	fmt.Fprintf(w, "\nSyncing against a repository (dry run unless -sync-apply):\n")
 	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl          # Show the change set, keyed by effective id\n")
 	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-base last-seen.ttl\n")
 	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-confirm-deletes\n")
 	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-mint-ids -sync-annotate out.sysml\n")
+	fmt.Fprintf(w, "  sysml model.sysml -sync-diff http://localhost:8083   # Against the live API; no writes\n")
+	fmt.Fprintf(w, "  sysml model.sysml -sync-apply http://localhost:8083  # Write the change set as a commit\n")
 	fmt.Fprintf(w, "\nThe diff correlates elements by their effective id — an @ElementId annotation, or\n")
 	fmt.Fprintf(w, "the encoded qualified name — so a rename, move or retype is an update, never a\n")
 	fmt.Fprintf(w, "delete plus a create. Repository-only elements are reported as deletes but applying\n")
 	fmt.Fprintf(w, "them needs -sync-confirm-deletes; conflicts — a declared id the branch no longer\n")
 	fmt.Fprintf(w, "has, or a repository change since the last-seen commit — exit 1 and are never\n")
 	fmt.Fprintf(w, "resolved silently. The last-seen commit is tool state in <model>.sync.json (or\n")
-	fmt.Fprintf(w, "-sync-state), never written into the notation.\n")
+	fmt.Fprintf(w, "-sync-state), never written into the notation. -sync-apply refuses a change set\n")
+	fmt.Fprintf(w, "the dry run would have flagged, sends each update under its retained id, and\n")
+	fmt.Fprintf(w, "records the resulting commit; the token comes from %s.\n", flexo.EnvToken)
 	fmt.Fprintf(w, "\nRendering a view:\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # ASCII text at a terminal\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form markdown\n")
@@ -255,16 +265,26 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport           # Markdown on stdout\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -o report.md\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form html -o report.html\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-documents rendered                     # every document, linked\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-documents site -doc-form html -html-css theme.css\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf \\\n")
-	fmt.Fprintf(w, "        -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf\n")
+	fmt.Fprintf(w, "        -pdf-engine pandoc -doc-title-page -doc-toc -doc-number-sections -o report.pdf\n")
+	fmt.Fprintf(w, "  sysml -html-default-css -o sysml-document.css                    # the default stylesheet\n")
 	fmt.Fprintf(w, "\nA document is a part def specializing DocumentQueries::Document. Its queries\n")
 	fmt.Fprintf(w, "are bound in the model and run against it, and the result is written as\n")
-	fmt.Fprintf(w, "CommonMark-compatible Markdown. -doc-form pdf converts that Markdown with an\n")
-	fmt.Fprintf(w, "external converter named by -pdf-engine — weasyprint (default), pandoc or\n")
-	fmt.Fprintf(w, "prince — run as a subprocess, never linked in; diagrams are pre-rendered to\n")
-	fmt.Fprintf(w, "SVG with mermaid-cli (mmdc). None of these tools is needed until PDF output\n")
-	fmt.Fprintf(w, "is asked for; scripts/download-doc-pdf-toolchain.sh provisions pinned copies.\n")
+	fmt.Fprintf(w, "CommonMark-compatible Markdown. -doc-form html writes semantic HTML instead,\n")
+	fmt.Fprintf(w, "carrying each element's identity and kind, styled by a stylesheet in a cascade\n")
+	fmt.Fprintf(w, "layer your own CSS overrides without !important. -doc-form pdf converts the\n")
+	fmt.Fprintf(w, "Markdown with an external converter named by -pdf-engine — weasyprint\n")
+	fmt.Fprintf(w, "(default), pandoc or prince — run as a subprocess, never linked in; diagrams\n")
+	fmt.Fprintf(w, "are pre-rendered to SVG with mermaid-cli (mmdc). None of these tools is needed\n")
+	fmt.Fprintf(w, "until PDF output is asked for; scripts/download-doc-pdf-toolchain.sh\n")
+	fmt.Fprintf(w, "provisions pinned copies.\n")
+	fmt.Fprintf(w, "\nHTML output needs nothing external and loads nothing: -html-css adds your own\n")
+	fmt.Fprintf(w, "stylesheets, -html-no-default-css drops the default one, -html-fragment writes\n")
+	fmt.Fprintf(w, "the document element alone to embed in a page of yours, and -html-default-css\n")
+	fmt.Fprintf(w, "writes the default sheet out to start from.\n")
 	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
 	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
 	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
@@ -308,12 +328,20 @@ func runCLI() int {
 	flag.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
 	flag.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
 	flag.StringVar(&renderDocsDir, "render-documents", "", "Render every document definition as linked Markdown into this directory")
-	flag.StringVar(&docForm, "doc-form", "", "Form -render-document writes: markdown (default) or pdf, which drives an external converter")
+	flag.StringVar(&docForm, "doc-form", "", "Form -render-document and -render-documents write: markdown (default), html or pdf, which drives an external converter")
 	flag.StringVar(&pdfEngine, "pdf-engine", "", "Converter -doc-form pdf drives: weasyprint (default), pandoc or prince")
 	flag.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
 	flag.BoolVar(&pdfTOC, "pdf-toc", false, "Write a table of contents ahead of the content (-doc-form pdf)")
 	flag.BoolVar(&pdfNumbering, "pdf-number-sections", false, "Number the section headings hierarchically (-doc-form pdf)")
-	flag.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository graph (.ttl), keyed by effective element id, instead of running it")
+	flag.BoolVar(&pdfTitlePage, "doc-title-page", false, "Put the document title on a page of its own (-doc-form html or pdf)")
+	flag.BoolVar(&pdfTOC, "doc-toc", false, "Write a table of contents ahead of the content (-doc-form html or pdf)")
+	flag.BoolVar(&pdfNumbering, "doc-number-sections", false, "Number the section headings hierarchically (-doc-form html or pdf)")
+	flag.Var(&htmlCSS, "html-css", "Style the HTML with this stylesheet: a file is inlined, a URL is linked (repeatable, applied in order after the default sheet)")
+	flag.BoolVar(&htmlNoCSS, "html-no-default-css", false, "Leave the default stylesheet out, so only -html-css sheets style the document")
+	flag.BoolVar(&htmlShowCSS, "html-default-css", false, "Write the default document stylesheet and exit, as a starting point for your own")
+	flag.BoolVar(&htmlFragment, "html-fragment", false, "Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own")
+	flag.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository — a graph file (.ttl) or a SysML v2 API endpoint URL — keyed by effective element id, instead of running it; never writes")
+	flag.StringVar(&syncApplyTo, "sync-apply", "", "Apply the change set to the model's project branch at this SysML v2 API endpoint URL, then record the commit in the sync state (token from "+flexo.EnvToken+")")
 	flag.StringVar(&syncBase, "sync-base", "", "Repository graph at the last-seen commit; with it, repository changes since then surface as conflicts")
 	flag.StringVar(&syncState, "sync-state", "", "Sync state file recording project, branch and last-seen commit (default: <model>.sync.json beside the model)")
 	flag.BoolVar(&syncConfirmDeletes, "sync-confirm-deletes", false, "Confirm repository-side deletes; without it the diff reports them but applying is refused")
@@ -382,36 +410,83 @@ func runCLI() int {
 		return 2
 	}
 
-	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
-		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
+	// The default stylesheet is asked for on its own; it needs no model, and
+	// writing it is the whole run, so it cannot stand in for another.
+	if htmlShowCSS {
+		switch {
+		case len(args) > 0:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which no model shapes; ask for it without model files")
+			return 2
+		case renderDoc != "" || renderDocsDir != "" || renderView != "" || renderAllDir != "" ||
+			convertFormat != "" || flagGiven("sync-diff") || flagGiven("sync-apply") ||
+			queryText != "" || len(evalExprs) > 0 || modelChecks.requested():
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet and nothing else; ask for it in its own run")
+			return 2
+		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
+			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet itself; the document and stylesheet options shape a rendered document, not the sheet")
+			return 2
+		case fromFormat != "" || strictMode || syncBase != "" || syncState != "" ||
+			syncConfirmDeletes || syncMintIDs || syncAnnotate != "":
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which reads no input; the input and repository options do not apply")
+			return 2
+		}
+		if err := runDefaultStylesheet(); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if renderDoc == "" && renderDocsDir == "" &&
+		(docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
+			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment) {
+		fmt.Fprintln(os.Stderr, "sysml: -doc-form, the document options and the stylesheet options apply to -render-document and -render-documents; name the document to render")
 		return 2
 	}
 
 	if flagGiven("sync-diff") && syncDiffWith == "" {
-		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph to diff against")
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph or endpoint to diff against")
 		return 2
 	}
-	if syncDiffWith != "" {
+	if flagGiven("sync-apply") && syncApplyTo == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-apply is empty; name the SysML v2 API endpoint to apply to")
+		return 2
+	}
+	if syncDiffWith != "" && syncApplyTo != "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set without writing and -sync-apply writes one; ask for one per run")
+		return 2
+	}
+	if syncDiffWith != "" || syncApplyTo != "" {
+		mode := "-sync-diff"
+		if syncApplyTo != "" {
+			mode = "-sync-apply"
+		}
 		switch {
 		case convertFormat != "" || renderView != "" || renderDoc != "" || renderAllDir != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0:
-			fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query or -eval")
+			fmt.Fprintf(os.Stderr, "sysml: %s syncs a change set; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query or -eval\n", mode)
 			return 2
 		case outputPath != "" || fromFormat != "" || renderForm != "" || docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering:
-			fmt.Fprintln(os.Stderr, "sysml: -sync-diff reads SysML or Turtle inputs and prints the change set; -output, -from and the render options do not apply")
+			fmt.Fprintf(os.Stderr, "sysml: %s reads SysML or Turtle inputs and reports the change set; -output, -from and the render options do not apply\n", mode)
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,
-				"-sync-diff shows a change set and decides nothing else about the model; check it in its own run")
+				mode+" syncs a change set and decides nothing else about the model; check it in its own run")
+		}
+		if syncApplyTo != "" {
+			return runSyncApply(args)
 		}
 		return runSyncDiff(args)
 	}
 	if syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "" {
-		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff; name the repository graph to diff against")
+		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff or -sync-apply; name the repository to sync against")
 		return 2
 	}
 
 	if renderDocsDir != "" {
 		switch {
+		case htmlFragment:
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents writes whole pages linking to one another; -html-fragment writes one document element to embed, so it applies to -render-document")
+			return 2
 		case renderDoc != "":
 			fmt.Fprintln(os.Stderr, "sysml: -render-documents renders every document; -render-document renders one; ask for one per run")
 			return 2
