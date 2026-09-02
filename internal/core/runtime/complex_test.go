@@ -104,7 +104,7 @@ func TestComplexEquality(t *testing.T) {
 // Complex once, a Complex and the Real on the real axis it equals once, and two
 // Complex values differing only in imaginary part twice.
 func TestComplexHashing(t *testing.T) {
-	if valueKeyFunc(cx(1, 2)) != valueKeyFunc(cx(1, 2)) {
+	if valueKeyFunc(cx(1, 2)) != valueKeyFunc(NewComplex(complex(0.5+0.5, 4.0/2))) {
 		t.Fatal("equal Complex values have different keys")
 	}
 	if valueKeyFunc(cx(1, 2)) == valueKeyFunc(cx(1, -2)) {

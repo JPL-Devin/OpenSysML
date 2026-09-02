@@ -1472,8 +1472,8 @@ func aggregateComplex(name string, collection Value, operator ast.OperatorKind) 
 	return complexResult(acc)
 }
 
-// complexBinaryOperands reads the two operands of a Complex function that declares both
-// as one value each.
+// complexBinaryOperands reads the two operands of a Complex function that
+// declares both as one value each.
 func complexBinaryOperands(name string, args []Value) (x, y complex128, err error) {
 	if x, err = asComplex(name, "x", args[0]); err != nil {
 		return 0, 0, err
