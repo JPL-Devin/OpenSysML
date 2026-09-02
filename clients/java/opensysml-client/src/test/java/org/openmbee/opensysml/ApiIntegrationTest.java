@@ -114,6 +114,37 @@ class ApiIntegrationTest {
     assertEquals("Demo::Engine", instantiation.resolve(reference).orElseThrow().typeSymbolId());
   }
 
+  private static final String COMPLEX =
+      """
+      package C {
+        private import ScalarValues::*;
+        private import ComplexFunctions::*;
+        part def Signal {
+          attribute z : Complex = rect(1.5, -2.0);
+          attribute zs : Complex[2] = (rect(1.0, 2.0), rect(3.0, 4.0));
+        }
+      }
+      """;
+
+  @Test
+  void aComplexNumberIsOneValueOverProtobufAndJson() {
+    assertTrue(connection.capabilities().has(Capabilities.COMPLEX_VALUES));
+    try (Connection json =
+        Connection.open(ServiceBinary.options().encoding(Encoding.JSON).build())) {
+      for (Connection each : List.of(connection, json)) {
+        Model model = each.parse(COMPLEX);
+        assertEquals(new Value.ComplexValue(1.5, -2.0), model.evalInContext("z", "C::Signal"));
+        Instance signal = model.instantiate("C::Signal").root();
+        assertEquals(
+            Optional.of(new Value.ComplexValue(1.5, -2.0)),
+            signal.featureValues().get("z").value());
+        assertEquals(
+            List.of(new Value.ComplexValue(1.0, 2.0), new Value.ComplexValue(3.0, 4.0)),
+            signal.featureValues().get("zs").values());
+      }
+    }
+  }
+
   @Test
   void aModelTheServiceDoesNotHoldIsRefused() {
     Model absent = connection.model("sha256:0000000000000000");

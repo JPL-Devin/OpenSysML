@@ -333,6 +333,9 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 	// units it is commensurable with instead of arriving as an unusable value.
 	args := make([]runtime.Value, 0, len(req.Arguments))
 	for _, arg := range req.Arguments {
+		if err := s.requireValueCapabilities(arg); err != nil {
+			return nil, err
+		}
 		val, cerr := ProtoToValueIn(arg, v.cached.Index, v.sem)
 		if cerr != nil {
 			return &pb.EvaluateCalcResponse{

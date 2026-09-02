@@ -35,12 +35,12 @@ applies: `+` means a space and percent-encoded sequences are decoded. A bare
 where-clause remains accepted. `oslc.orderBy` accepts `+` and `-` prefixes.
 Selection and ordering are comma-separated.
 
-A parameter this implementation does not read is a typed error rather than an
-omission, because ignoring one answers a different question than the one asked:
+A parameter this implementation does not recognize is a typed error, not something
+to ignore, because ignoring it would answer a different question than the one asked:
 a misspelt `oslc.wheree` would otherwise select the whole model. A parameter
-given twice is refused for the same reason, as is a parameter written with no
-value: `oslc.select=` narrows nothing, so it names what omitting it asks for
-(every property) rather than quietly reporting it.
+given twice is refused for the same reason, and so is a parameter with no
+value: `oslc.select=` narrows nothing, so rather than quietly returning every
+property (which is what omitting it means), it is refused.
 
 ## Prefixes and properties
 
@@ -70,20 +70,19 @@ are limited to the two multiplicity properties; `*` is positive infinity for
 those existing model values and operands. Ordered comparisons require exactly
 one operand.
 
-Results retain declaration order, with parents before their children, unless
-`oslc.orderBy` is supplied. `oslc.select` controls the reported property
-projection; identity and metamodel type remain present on every result.
+Results keep declaration order, with parents before their children, unless
+`oslc.orderBy` is supplied. `oslc.select` controls which properties are reported;
+identity and metamodel type are always present on every result.
 `oslc.orderBy` compares multiplicity properties numerically, with `*` as
-positive infinity, and compares other properties lexically. Missing values
-retain the existing ordering behavior.
-For ordered multiplicity comparisons, `*` is positive infinity, and the two
-multiplicity properties also compare it as a value: `sysml:multiplicityUpper=*`
-identifies the unbounded usages. On every other property a `*` value is a
-wildcard this implementation does not evaluate, so it is refused rather than
-compared lexically into a no-match.
+positive infinity, and compares other properties lexically. Elements missing the
+property keep their existing order.
+The two multiplicity properties also accept `*` as a value in equality comparisons:
+`sysml:multiplicityUpper=*` identifies the unbounded usages. On every other property
+a `*` value would be a wildcard, which this implementation does not evaluate, so it
+is refused rather than compared lexically and silently matching nothing.
 
 OSLC compound terms have no `or`, so OSLC text and the structured API Query
-surface are deliberately not interchangeable: structured queries retain their
+are deliberately not interchangeable: structured queries keep their
 `and`/`or` constraint tree, while OSLC text provides the OSLC grammar and
 operators.
 
@@ -109,8 +108,8 @@ exclusive with the structured `query` field. The service advertises the
 The REPL accepts `%query <oslc-query>`. The `sysml` command accepts
 `-query <oslc-query>` alongside the other model modes. Both print one matched
 element per line as qualified name and metamodel type, followed by selected
-properties. A query that matches nothing says so — the REPL prints `no
+properties. A query that matches nothing says so: the REPL prints `no
 elements matched`, and the command reports it on standard error, so the result
-rows on standard output remain one line per match. `-query` with empty text is a
-misuse rather than an absent flag: it is refused instead of starting the
-interactive REPL.
+rows on standard output stay one line per match. `-query` with empty text is
+treated as a mistake rather than as an absent flag: it is refused instead of
+starting the interactive REPL.

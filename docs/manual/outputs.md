@@ -44,12 +44,12 @@ declares into the directory, one Markdown file per document:
 $ sysml reports.sysml -render-documents rendered
 ```
 
-File names are deterministic — the document's fully qualified name with `::`
-replaced by `-` and any byte outside ASCII letters, digits and `_` escaped as
-`.XX` (uppercase hex), plus `.md` — so cross-document references (see
-[the authoring chapter](authoring.md)) resolve as relative links between the
-written files, and repeated runs write identical bytes. A single-document
-render of a cross-referencing document still succeeds; its external links
+File names are deterministic: the document's fully qualified name with `::`
+replaced by `-`, any byte outside ASCII letters, digits and `_` escaped as
+`.XX` (uppercase hex), plus `.md`. Cross-document references (see
+[the authoring chapter](authoring.md)) therefore resolve as relative links
+between the written files, and repeated runs write identical bytes. Rendering
+a cross-referencing document on its own still succeeds; its external links
 point at the targets' expected file names and dangle until those documents
 are rendered into the same directory.
 
@@ -98,11 +98,11 @@ All three are off by default and only valid with `-doc-form pdf`.
 
 ### PDF rendering of inline runs and anchors
 
-Inline runs and cross-reference anchors render semantically in PDF. A
+Inline runs and cross-reference anchors keep their meaning in PDF. A
 paragraph built from `Span`/`Link`/`Ref` runs renders with emphasis, strong
 and code styling and working links; a `Ref` anchor becomes an invisible
 PDF-native anchor, so an in-document `Ref` is a clickable internal link; and
-a grouped table's group key renders in strong type above each subtable. All
+a grouped table's group key renders in bold above each subtable. All
 three engines support internal links: `weasyprint` and `prince` from the
 prepared HTML's element ids and fragment hrefs, and `pandoc` from the
 Markdown itself, whose CommonMark reader keeps the anchor's raw HTML.
@@ -114,9 +114,9 @@ model and binary. Query results preserve declaration order unless ordered
 explicitly, ordering policies are explicit parameters, and rendering
 introduces no timestamps, random identifiers or map-order dependence.
 
-**PDF** is deterministic *against a pinned toolchain*. The engine does its
-part — it invokes converters with `SOURCE_DATE_EPOCH=0` so they embed a fixed
-creation date — but the bytes also depend on the converter version and the
+**PDF** is deterministic *for a pinned toolchain*. The engine does its
+part (it invokes converters with `SOURCE_DATE_EPOCH=0` so they embed a fixed
+creation date), but the bytes also depend on the converter version and the
 fonts installed on the machine. Two runs on the same machine with the same
 toolchain produce identical PDFs; two machines with different WeasyPrint
 versions or fonts generally do not. For reproducible PDFs, pin the toolchain

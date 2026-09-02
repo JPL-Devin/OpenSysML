@@ -35,6 +35,9 @@ public final class Capabilities {
   /** A valueless feature of a value type is reported as unset. */
   public static final String UNSET_VALUE = "unset_value";
 
+  /** A complex number travels as itself rather than as an unsupported null. */
+  public static final String COMPLEX_VALUES = "complex_values";
+
   /** The {@code ApplyEdits} RPC edits a parsed model's own source. */
   public static final String APPLY_EDITS = "apply_edits";
 

@@ -35,14 +35,6 @@ Nothing else on this line's neighbours moves.
 		`"errata":{"registryEntries":2,"corrections":1,"documentedWithoutCorrection":1,"totals":{"files":2,"filesFullyAgreeing":2,"openSysMLOnly":2,"pilotOnly":4}}}`
 	fixtureXpectBaseline = `{"kinds":[{"kind":"errors","assertions":2,"rows":2,"agree":2,"wordingOnly":1,"sameLocation":0,"sameLine":0,"severityDiffers":0,"elsewhereInFile":0},{"kind":"scope","assertions":3,"agree":2}],` +
 		`"errata":{"kinds":[{"kind":"errors","assertions":2,"rows":2,"agree":2,"wordingOnly":1}]}}`
-	fixtureLanding = `<section class="osml-referee">
-  <div class="osml-referee__inner">
-    <!-- doc-counts:begin landing-figures -->
-    old generated band
-    <!-- doc-counts:end landing-figures -->
-  </div>
-</section>
-`
 	fixtureRejectionBaseline = `{"totals":{"cases":2,"bothReject":2,"pilotOnlyRejects":0},"strictOnlyAgreements":[],` +
 		`"errata":{"totals":{"cases":2,"bothReject":2,"pilotOnlyRejects":0}}}`
 )
@@ -56,11 +48,11 @@ func TestRunRewritesEveryDerivedLineAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first run: %v", err)
 	}
-	if rewritten != 4 {
-		t.Fatalf("first run rewrote %d files, want 4", rewritten)
+	if rewritten != 3 {
+		t.Fatalf("first run rewrote %d files, want 3", rewritten)
 	}
 	first := map[string]string{}
-	for _, path := range []string{doccounts.SpecCompliancePath, doccounts.ReadmePath, doccounts.ArchitecturePath, doccounts.LandingPath} {
+	for _, path := range []string{doccounts.SpecCompliancePath, doccounts.ReadmePath, doccounts.ArchitecturePath} {
 		first[path] = read(t, root, path)
 	}
 	if want := "The map below tracks 2 semantic rules: **1 ✅ faithful, 1 ⚠️ approximate, 0 ❌ not implemented, 0 ⛔ deliberate divergence.**"; !strings.Contains(first[doccounts.SpecCompliancePath], want) {
@@ -73,13 +65,6 @@ func TestRunRewritesEveryDerivedLineAndIsIdempotent(t *testing.T) {
 		if !strings.Contains(first[path], "Nothing else on this line's neighbours moves.") {
 			t.Fatalf("%s lost a neighbouring line", path)
 		}
-	}
-
-	if want := ">1 of 2<"; !strings.Contains(first[doccounts.LandingPath], want) {
-		t.Fatalf("landing band does not state the corpus agreement %s:\n%s", want, first[doccounts.LandingPath])
-	}
-	if !strings.Contains(first[doccounts.LandingPath], "</section>") {
-		t.Fatal("the landing band rewrite lost the markup around it")
 	}
 
 	rewritten, err = run(root, io.Discard)
@@ -143,8 +128,8 @@ func TestCheckReportsStaleFilesWithoutWriting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if stale != 4 {
-		t.Fatalf("check reported %d stale files, want 4", stale)
+	if stale != 3 {
+		t.Fatalf("check reported %d stale files, want 3", stale)
 	}
 	if !strings.Contains(output.String(), "README.md is stale") {
 		t.Fatalf("check report does not name README.md:\n%s", output.String())
@@ -171,7 +156,6 @@ func writeFixture(t *testing.T) string {
 	writeAt(t, root, doccounts.SpecCompliancePath, fixtureCompliance)
 	writeAt(t, root, doccounts.ReadmePath, fixtureBookkeeping)
 	writeAt(t, root, doccounts.ArchitecturePath, fixtureBookkeeping)
-	writeAt(t, root, doccounts.LandingPath, fixtureLanding)
 	writeAt(t, root, "docs/project/pilot-differential-baseline.json", fixtureDifferentialBaseline)
 	writeAt(t, root, "docs/project/pilot-xpect-baseline.json", fixtureXpectBaseline)
 	writeAt(t, root, "docs/project/pilot-rejection-baseline.json", fixtureRejectionBaseline)

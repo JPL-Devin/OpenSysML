@@ -44,6 +44,26 @@ class PublicTypesTest {
   }
 
   @Test
+  void aComplexValueIsOneNumberWithBothParts() {
+    Value.ComplexValue z = new Value.ComplexValue(1.5, -2.0);
+    assertEquals(new Value.ComplexValue(1.5, -2.0), z);
+    assertEquals(new Value.ComplexValue(1.5, -2.0).hashCode(), z.hashCode());
+    assertNotEquals(new Value.ComplexValue(1.5, 2.0), z);
+    assertNotEquals(new Value.RealValue(1.5), new Value.ComplexValue(1.5, 0.0));
+    assertNotEquals(
+        new Value.Sequence(List.of(new Value.RealValue(1.5), new Value.RealValue(-2.0))), z);
+
+    assertEquals("1.5 - 2.0i", z.format());
+    assertEquals("1.0 + 2.0i", new Value.ComplexValue(1.0, 2.0).format());
+    assertEquals("0.0 + 0.0i", new Value.ComplexValue(0.0, 0.0).format());
+    assertEquals("-3.25 - 0.0i", new Value.ComplexValue(-3.25, -0.0).format());
+
+    // A complex number has no single real magnitude, so it is not narrowed to one.
+    assertThrows(IllegalStateException.class, z::asDouble);
+    assertThrows(IllegalStateException.class, z::asLong);
+  }
+
+  @Test
   void anUnsetValueIsNotTheModelsNull() {
     Value unset = new Value.UnsetValue();
     Value modelsNull = new Value.NullValue();

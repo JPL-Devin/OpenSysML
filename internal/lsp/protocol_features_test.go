@@ -112,8 +112,8 @@ func TestRunServesSemanticTokensAndCodeAction(t *testing.T) {
 	if !ok {
 		t.Fatalf("no codeActionProvider in %v", caps)
 	}
-	if kinds := action["codeActionKinds"]; !reflect.DeepEqual(kinds, []any{"quickfix"}) {
-		t.Errorf("codeActionKinds = %v, want [quickfix]", kinds)
+	if kinds := action["codeActionKinds"]; !reflect.DeepEqual(kinds, []any{"quickfix", "refactor.rewrite"}) {
+		t.Errorf("codeActionKinds = %v, want [quickfix refactor.rewrite]", kinds)
 	}
 
 	for _, id := range []int{2, 3} {

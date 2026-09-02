@@ -1,8 +1,9 @@
 # LSP extensions
 
 `sysml-lsp` speaks the Language Server Protocol, plus the methods on this
-page. They are not in the protocol, so a client must ask for them by name; the
-server says it serves them by advertising, in the `initialize` result:
+page. They are not part of the protocol, so a client must ask for them by name,
+and the server announces that it serves them by advertising, in the `initialize`
+result:
 
 ```json
 { "capabilities": { "experimental": { "openSysmlRender": true, "openSysmlRenderDocument": true } } }
@@ -11,20 +12,20 @@ server says it serves them by advertising, in the `initialize` result:
 `openSysmlRender` covers the view-rendering methods, `openSysmlRenderDocument`
 the document-rendering ones.
 
-A client that does not see that capability must not send these methods — that is
+A client that does not see that capability must not send these methods. That is
 how a new client and an older server stay compatible.
 
-Everything here is read-only: it renders what a document says, and never writes
-it. The renderings are the ones [`%view`](repl-commands.md) and `sysml -view`
+Everything here is read-only: it renders what a document says and never writes
+to it. The renderings are the same ones [`%view`](repl-commands.md) and `sysml -view`
 produce, from the same renderer.
 
 ## Strict conformance (setting)
 
-Whether the server judges a document as conforming SysML v2 — reporting notation
-only OpenSysML accepts as an error instead of a warning — is a boolean setting,
-`strictConformance`. It is read from `initialize`'s `initializationOptions` and
-from `workspace/didChangeConfiguration`, in any of the three shapes clients nest
-settings in:
+Whether the server judges a document as conforming SysML v2 (reporting notation
+only OpenSysML accepts as an error instead of a warning) is controlled by a boolean
+setting, `strictConformance`. It is read from `initialize`'s `initializationOptions`
+and from `workspace/didChangeConfiguration`, in any of the three shapes clients
+nest settings in:
 
 ```json
 { "strictConformance": true }
@@ -36,8 +37,8 @@ A payload that does not mention it leaves the mode alone, and a value that is no
 a boolean is ignored rather than read as either answer. Changing it republishes
 the diagnostics of every open document, so the editor never keeps the other
 mode's verdict. A client that cannot send settings can start the server with
-`-strict` instead; both are the CLI's `-strict` and the REPL's `%strict`, and
-[the guide](../guide/03-command-line.md#strict-conformance) says what the mode
+`-strict` instead. Both correspond to the CLI's `-strict` and the REPL's `%strict`;
+[the guide](../guide/03-command-line.md#strict-conformance) explains what the mode
 changes.
 
 ## `opensysml/render` (request)
@@ -58,17 +59,17 @@ Renders one view of a document.
 | `view` | The qualified name of a view the document declares, a pseudo-view (below), or omitted. |
 | `form` | `mermaid`, `text` or `markdown`. Omitted writes the machine form of the rendering's kind: `markdown` for a table, `mermaid` for every other kind. |
 
-Omitting `view` renders the view the document declares. A document declaring
-several is ambiguous, and the request fails naming them
+Omitting `view` renders the view the document declares. If the document declares
+several, the request is ambiguous and fails, naming them
 (`declares 6 views (KitViews::widgetActions, …); name the one to render`) rather
-than picking one; a document declaring none fails pointing at the pseudo-views.
+than picking one. If it declares none, the request fails and points at the pseudo-views.
 
-A `form` a rendering is not written in — Mermaid for a table, Markdown for a
-diagram — is refused with the form the kind is written in instead, and a form
-that is no form at all is refused naming the three.
+A `form` the rendering kind cannot be written in (Mermaid for a table, Markdown for a
+diagram) is refused, and the reply names the form the kind does use. A `form` that is
+not one of the three is refused, and the reply names all three.
 
-**Pseudo-views.** A document being written usually declares no `view`, so a
-rendering can be asked for as if one had been declared:
+**Pseudo-views.** A document that is still being written usually declares no `view`,
+so a rendering can be requested as if one had been declared:
 
 | `view` | Renders |
 | --- | --- |
@@ -81,7 +82,7 @@ rendering can be asked for as if one had been declared:
 | `#state:Kit::WidgetStates` | One element the document declares, here as a state diagram |
 
 A pseudo-view adds nothing to the model and nothing to the symbol index: the
-exposed set is passed to the renderer directly, and the result reports it in
+exposed set is passed to the renderer directly, and the result says so in
 `stated`, as `no view declared; rendering Kit::WidgetStates directly`.
 
 The result, for `{"view": "KitViews::widgetTree"}` over a document declaring
@@ -133,8 +134,8 @@ The result, for `{"view": "KitViews::widgetTree"}` over a document declaring
 | `notices` | What the rendering could not represent, as the text form reports it. |
 | `version` | The version of the document the rendering was made from, so a client can tell a rendering of the text it is showing from a stale one. |
 
-A view stating a rendering this implementation does not produce — `geometry`,
-`textual` — fails with the reason, e.g.
+A view that asks for a rendering this implementation does not produce (`geometry`,
+`textual`) fails with the reason, e.g.
 `KitViews::widgetGeometry: geometry rendering (view def GeometryView) is not supported`.
 
 ## `opensysml/views` (request)
@@ -162,16 +163,16 @@ picker.
 }
 ```
 
-Views come in qualified-name order. An unsupported one stays in the listing,
+Views are listed in qualified-name order. An unsupported one stays in the listing,
 with `supported: false` and the reason, so a client can say why it cannot be
 drawn instead of hiding it. `pseudoViews` lists the supported `#<kind>` specs
 in sorted order; a client can use it to offer pseudo-views without duplicating
-the server's supported-kind list.
+the server's list of supported kinds.
 
 ## `opensysml/documents` (request)
 
-Lists the document definitions the workspace holds — the `part def`s
-specializing `DocumentQueries::Document` — which is what fills a Render
+Lists the document definitions the workspace holds (the `part def`s
+specializing `DocumentQueries::Document`), which is what fills a Render
 Document command's picker. It takes no parameters.
 
 ```json
@@ -182,16 +183,16 @@ Document command's picker. It takes no parameters.
 }
 ```
 
-Documents come in qualified-name order; `uri` is the file declaring one.
-Standard-library documents are not listed: the listing is of what the
+Documents are listed in qualified-name order; `uri` is the file that declares each
+one. Standard-library documents are not listed: the listing covers what the
 workspace's own files declare.
 
 ## `opensysml/renderDocument` (request)
 
 Renders one document definition to Markdown: the document is compiled to a plan,
 its queries are executed against the workspace model, and the result is written
-the way the REPL's `%render-document` and `sysml -render-document` write it —
-the same pipeline, from the same workspace the diagnostics are computed from.
+the way the REPL's `%render-document` and `sysml -render-document` write it. It is
+the same pipeline, run against the same workspace the diagnostics are computed from.
 
 ```json
 { "name": "Observatory::MassReport" }
@@ -202,11 +203,11 @@ the same pipeline, from the same workspace the diagnostics are computed from.
 ```
 
 `name` is the qualified name of a document definition, as `opensysml/documents`
-lists it. A name that resolves to nothing, names an element that is not a
-document, or names a document whose plan or query execution fails, fails the
-request with the typed error's message — `Observatory::Subsystem is not a
-document: one is a part def specializing DocumentQueries::Document` — rather
-than crashing or answering with partial output.
+lists it. If the name resolves to nothing, names an element that is not a
+document, or names a document whose planning or query execution fails, the
+request fails with the typed error's message (for example `Observatory::Subsystem
+is not a document: one is a part def specializing DocumentQueries::Document`)
+rather than crashing or answering with partial output.
 
 ## `opensysml/renderChanged` (notification, server → client)
 
@@ -216,17 +217,17 @@ than crashing or answering with partial output.
 
 Sent after the analysis that publishes the document's diagnostics, so a client
 sees the diagnostics of a version before the notification for it. It is
-debounced on the window the cross-document diagnostics sweep uses, so a burst of
-keystrokes costs one notification rather than one per keystroke.
+debounced on the same window the cross-document diagnostics sweep uses, so a burst
+of keystrokes costs one notification rather than one per keystroke.
 
-It carries no artifact: the client answers with a fresh `opensysml/render` if it
-is showing the document, and does nothing if it is not — which keeps a large
+It carries no rendering: the client responds with a fresh `opensysml/render` if it
+is showing the document, and does nothing if it is not. This keeps a large
 diagram off the wire for a panel nobody is looking at.
 
 ## Trying it by hand
 
 The protocol is JSON-RPC over stdio, so the methods can be driven without an
-editor — `initialize`, `textDocument/didOpen`, then:
+editor: send `initialize`, then `textDocument/didOpen`, then:
 
 ```
 → opensysml/render  { "textDocument": { "uri": "file:///tmp/kit.sysml" }, "view": "#tree" }
@@ -237,5 +238,5 @@ editor — `initialize`, `textDocument/didOpen`, then:
     "nodes": [ … ], "edges": [ … ], "notices": [], "version": 1 }
 ```
 
-The VS Code extension's diagram panel is the reference client — see
+The VS Code extension's diagram panel is the reference client; see
 [the editors guide](../guide/08-editors.md#the-diagram-panel).

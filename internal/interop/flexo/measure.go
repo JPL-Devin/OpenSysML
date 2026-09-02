@@ -104,7 +104,7 @@ func Measure(ctx context.Context, c *Client, fixture string, model, reference []
 		return report, err
 	}
 	report.Reference, err = c.measureSide(ctx, "json-commit", referenceProject, referenceWritten,
-		func(project string) error { return c.PostChanges(ctx, project, changes) })
+		func(project string) error { _, err := c.PostChanges(ctx, project, "", changes); return err })
 	if err != nil {
 		return report, err
 	}

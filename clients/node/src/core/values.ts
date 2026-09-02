@@ -27,6 +27,12 @@ export interface UnitFactorization {
   factors: UnitFactor[];
 }
 
+/** A complex number in rectangular form: one value, never a sequence of two reals. */
+export interface ComplexValue {
+  real: number;
+  imaginary: number;
+}
+
 /** An enumeration literal, identified by the enumeration that declares it. */
 export interface EnumValue {
   name: string;
@@ -41,6 +47,7 @@ export interface EnumValue {
 export type SysMLValue =
   | { kind: "int"; value: bigint }
   | { kind: "real"; value: number }
+  | { kind: "complex"; value: ComplexValue }
   | { kind: "boolean"; value: boolean }
   | { kind: "string"; value: string }
   | { kind: "instance"; id: bigint }
@@ -84,6 +91,8 @@ export function decodeValue(value: Value | undefined): SysMLValue {
       return { kind: "int", value: kind.value };
     case "realValue":
       return { kind: "real", value: kind.value };
+    case "complex":
+      return { kind: "complex", value: { real: kind.value.real, imaginary: kind.value.imaginary } };
     case "boolValue":
       return { kind: "boolean", value: kind.value };
     case "stringValue":
@@ -148,6 +157,8 @@ export function formatValue(value: SysMLValue): string {
       return value.value.toString();
     case "real":
       return formatReal(value.value);
+    case "complex":
+      return formatComplex(value.value);
     case "boolean":
       return value.value ? "true" : "false";
     case "string":
@@ -176,6 +187,12 @@ export function formatValue(value: SysMLValue): string {
 
 function formatReal(value: number): string {
   return Number.isInteger(value) ? value.toFixed(1) : value.toString();
+}
+
+/** `1.5 - 2.0i`, as the REPL prints a Complex; the sign is the imaginary part's. */
+function formatComplex(value: ComplexValue): string {
+  const sign = value.imaginary < 0 || Object.is(value.imaginary, -0) ? "-" : "+";
+  return `${formatReal(value.real)} ${sign} ${formatReal(Math.abs(value.imaginary))}i`;
 }
 
 function decodeQuantity(quantity: Quantity): SysMLValue {
