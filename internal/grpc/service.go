@@ -239,6 +239,15 @@ func (s *Service) requireCapability(capability string) error {
 	return statusErrorf(connect.CodeUnimplemented, "capability %q is unavailable", capability)
 }
 
+// requireValueCapabilities refuses a supplied value of a kind whose capability
+// is unavailable, rather than reading it as something else.
+func (s *Service) requireValueCapabilities(pv *pb.Value) error {
+	if ValueCarriesComplex(pv) {
+		return s.requireCapability(CapabilityComplexValues)
+	}
+	return nil
+}
+
 // newRuntime returns a runtime context under the service's budgets.
 func (s *Service) newRuntime(semModel *semantics.Model, resolver *resolve.Resolver) *runtime.Context {
 	ctx := runtime.NewContext(semModel, resolver, s.budgets.MaxSteps)
@@ -681,6 +690,9 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	if len(req.Inputs) > 0 {
 		inputs = make(map[string]runtime.Value, len(req.Inputs))
 		for name, pv := range req.Inputs {
+			if err := s.requireValueCapabilities(pv); err != nil {
+				return nil, err
+			}
 			val, cerr := ProtoToValueIn(pv, cached.Index, semModel)
 			if cerr != nil {
 				return &pb.ExecuteActionResponse{

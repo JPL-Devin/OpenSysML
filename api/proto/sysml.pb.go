@@ -4374,7 +4374,10 @@ type ServerInfoResponse struct {
 	//	               Value.unset, rather than as the empty object it
 	//	               materializes.
 	//	"complex_values" - a Value carries a complex number as complex, rather
-	//	               than reporting it as an unsupported null.
+	//	               than reporting it as an unsupported null, and a complex
+	//	               action input or calc argument is accepted; without it,
+	//	               one is refused with UNIMPLEMENTED rather than read as
+	//	               another value.
 	//	"apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
 	//	               preserving everything the edit did not touch.
 	//	"document_query" - the RunDocumentQuery RPC runs a named document query

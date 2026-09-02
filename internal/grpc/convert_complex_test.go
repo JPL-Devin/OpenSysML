@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
+
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -27,6 +29,8 @@ package C {
     succession first start then inner;
     succession first inner then done;
   }
+  calc def Echo { in z : Complex; return : Complex = z; }
+  calc echo : Echo;
 }
 `
 
@@ -167,5 +171,77 @@ func TestComplexCrossesEveryValueSurface(t *testing.T) {
 	}
 	if !strings.Contains(evalW.Result.GetNull(), "complex number 1.5 - 2.0i") {
 		t.Errorf("Evaluate without complex_values = %v, want an unsupported null naming the value", evalW.Result)
+	}
+}
+
+func TestValueCarriesComplex(t *testing.T) {
+	z := &pb.Value{Kind: &pb.Value_Complex{Complex: ComplexToProto(complex(1, 2))}}
+	one := &pb.Value{Kind: &pb.Value_IntValue{IntValue: 1}}
+	sequence := func(elements ...*pb.Value) *pb.Value {
+		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: elements}}}
+	}
+	for _, testcase := range []struct {
+		name  string
+		value *pb.Value
+		want  bool
+	}{
+		{"nil", nil, false},
+		{"int", one, false},
+		{"complex", z, true},
+		{"sequence of ints", sequence(one, one), false},
+		{"sequence with a complex", sequence(one, z), true},
+		{"nested sequence with a complex", sequence(one, sequence(sequence(z))), true},
+		{"empty sequence", sequence(), false},
+	} {
+		if got := ValueCarriesComplex(testcase.value); got != testcase.want {
+			t.Errorf("ValueCarriesComplex(%s) = %v, want %v", testcase.name, got, testcase.want)
+		}
+	}
+}
+
+// A service without complex_values refuses a Complex input outright, however
+// deeply a sequence nests it, rather than reading it as another value.
+func TestComplexInputNeedsComplexValues(t *testing.T) {
+	ctx := context.Background()
+	withheld := mustNewServiceWithout(t, CapabilityComplexValues)
+	parsed, err := withheld.ParseFile(ctx, &pb.ParseFileRequest{Source: &pb.ParseFileRequest_Content{Content: complexWireModel}})
+	if err != nil {
+		t.Fatalf("ParseFile: %v", err)
+	}
+	z := &pb.Value{Kind: &pb.Value_Complex{Complex: ComplexToProto(complex(2, 5))}}
+	nested := &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: []*pb.Value{
+		{Kind: &pb.Value_IntValue{IntValue: 1}},
+		{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: []*pb.Value{z}}}},
+	}}}}
+	for name, input := range map[string]*pb.Value{"complex": z, "nested": nested} {
+		_, err := withheld.ExecuteAction(ctx, &pb.ExecuteActionRequest{
+			ModelHash:      parsed.ModelHash,
+			ActionSymbolId: "C::conj",
+			Inputs:         map[string]*pb.Value{"z": input},
+		})
+		if connect.CodeOf(err) != connect.CodeUnimplemented || !strings.Contains(err.Error(), CapabilityComplexValues) {
+			t.Errorf("ExecuteAction with %s input without complex_values: err = %v, want UNIMPLEMENTED naming the capability", name, err)
+		}
+		_, err = withheld.EvaluateCalc(ctx, &pb.EvaluateCalcRequest{
+			ModelHash: parsed.ModelHash,
+			SymbolId:  "C::echo",
+			Arguments: []*pb.Value{input},
+		})
+		if connect.CodeOf(err) != connect.CodeUnimplemented || !strings.Contains(err.Error(), CapabilityComplexValues) {
+			t.Errorf("EvaluateCalc with %s argument without complex_values: err = %v, want UNIMPLEMENTED naming the capability", name, err)
+		}
+	}
+
+	served := mustNewService(t, 4)
+	parsedS, err := served.ParseFile(ctx, &pb.ParseFileRequest{Source: &pb.ParseFileRequest_Content{Content: complexWireModel}})
+	if err != nil {
+		t.Fatalf("ParseFile: %v", err)
+	}
+	calc, err := served.EvaluateCalc(ctx, &pb.EvaluateCalcRequest{ModelHash: parsedS.ModelHash, SymbolId: "C::echo", Arguments: []*pb.Value{z}})
+	if err != nil || calc.Error != "" {
+		t.Fatalf("EvaluateCalc: err = %v, error = %q", err, calc.GetError())
+	}
+	if calc.Result.GetComplex() == nil || ProtoToComplex(calc.Result.GetComplex()) != complex(2, 5) {
+		t.Errorf("echo(2 + 5i) = %v, want the complex back", calc.Result)
 	}
 }

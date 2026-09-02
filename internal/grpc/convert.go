@@ -376,6 +376,22 @@ var (
 	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
 )
 
+// ValueCarriesComplex reports whether a value, or any element of a sequence,
+// is a Complex: the kind the complex_values capability governs.
+func ValueCarriesComplex(pv *pb.Value) bool {
+	switch k := pv.GetKind().(type) {
+	case *pb.Value_Complex:
+		return true
+	case *pb.Value_Sequence:
+		for _, elem := range k.Sequence.GetElements() {
+			if ValueCarriesComplex(elem) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ProtoToValueIn converts a protobuf Value to a runtime.Value in the model idx
 // and sem describe, resolving a quantity's base units against them. Inverse of
 // ValueToProto.

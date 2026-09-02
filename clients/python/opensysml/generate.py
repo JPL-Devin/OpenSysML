@@ -32,7 +32,7 @@ _OBJECT_DECODER = "_t.as_object"
 
 # Emission schema, bumped when this generator's output changes for an unchanged
 # model. Not the opensysml release version, which would churn every module.
-GENERATOR_VERSION = "3"
+GENERATOR_VERSION = "4"
 
 # The stamp hashes the model source client-side. A path, a timestamp or the
 # service version would churn without the module's content changing.

@@ -5,10 +5,17 @@ part, so it must arrive as one Python ``complex`` — not as two floats, and not
 as the unsupported null a service without the capability sends.
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
 
 from opensysml import typed as _t
-from opensysml.capabilities import CAPABILITY_COMPLEX_VALUES
+from opensysml.capabilities import (
+    CAPABILITY_COMPLEX_VALUES,
+    CAPABILITY_FEATURE_VALUES,
+    CAPABILITY_VERIFICATION,
+    MissingCapabilityError,
+)
 from opensysml.connection import Connection
 from opensysml.errors import FeatureValueError, TypeMismatchError, UnsupportedValueError
 from opensysml.proto import sysml_pb2
@@ -19,6 +26,22 @@ from tests.service_gate import skip_or_fail_without_service
 
 def pb_complex(real, imaginary):
     return sysml_pb2.Value(complex=sysml_pb2.Complex(real=real, imaginary=imaginary))
+
+
+def make_connection(stub, capabilities):
+    """Build a Connection over a mock stub reporting ``capabilities``."""
+    stub.GetServerInfo.return_value = sysml_pb2.ServerInfoResponse(
+        version="test", capabilities=list(capabilities)
+    )
+    with patch("grpc.insecure_channel"):
+        with patch(
+            "opensysml.proto.sysml_pb2_grpc.SysMLServiceStub", return_value=stub
+        ):
+            return Connection(auto_start=False)
+
+
+CURRENT = (CAPABILITY_COMPLEX_VALUES, CAPABILITY_FEATURE_VALUES, CAPABILITY_VERIFICATION)
+OLD = (CAPABILITY_FEATURE_VALUES, CAPABILITY_VERIFICATION)
 
 
 def test_value_to_python_returns_one_complex():
@@ -85,17 +108,48 @@ def test_a_complex_slot_reads_as_a_complex():
 
 def test_a_complex_is_sent_as_a_complex():
     """Round trip: what the client sends is what it reads back."""
-    # _python_to_value uses no connection state, so no service is needed.
-    pb_value = Connection._python_to_value(None, 1.5 - 2j)
+    conn = make_connection(Mock(), CURRENT)
+    pb_value = conn._python_to_value(1.5 - 2j)
 
     assert pb_value.WhichOneof("kind") == "complex"
     assert pb_value.complex.real == 1.5
     assert pb_value.complex.imaginary == -2.0
     assert value_to_python(pb_value) == 1.5 - 2j
 
-    # A sequence recurses through the method, so it needs an unconnected instance.
-    nested = Connection.__new__(Connection)._python_to_value([1 + 2j, [3 - 4j]])
+    nested = conn._python_to_value([1 + 2j, [3 - 4j]])
     assert value_to_python(nested) == [1 + 2j, [3 - 4j]]
+
+
+def test_a_complex_is_not_sent_to_a_service_without_the_capability():
+    """An older service would read the unknown arm as null, so nothing is sent."""
+    stub = Mock()
+    conn = make_connection(stub, OLD)
+
+    for value in (1 + 2j, [1, [1 + 2j]]):
+        with pytest.raises(MissingCapabilityError) as excinfo:
+            conn.execute_action("C::conj", "hash", inputs={"z": value})
+        assert excinfo.value.capability == CAPABILITY_COMPLEX_VALUES
+        with pytest.raises(MissingCapabilityError) as excinfo:
+            conn.calc("C::echo", "hash", arguments=[1, value])
+        assert excinfo.value.capability == CAPABILITY_COMPLEX_VALUES
+    stub.ExecuteAction.assert_not_called()
+    stub.EvaluateCalc.assert_not_called()
+
+    stub.ExecuteAction.return_value = sysml_pb2.ExecuteActionResponse()
+    assert conn.execute_action("C::conj", "hash", inputs={"z": [1, 2.5]}) == {}
+    stub.ExecuteAction.assert_called_once()
+
+
+def test_a_complex_is_sent_to_a_service_with_the_capability():
+    stub = Mock()
+    stub.EvaluateCalc.return_value = sysml_pb2.EvaluateCalcResponse(
+        result=pb_complex(1.5, -2.0)
+    )
+    conn = make_connection(stub, CURRENT)
+
+    assert conn.calc("C::echo", "hash", arguments=[[1.5 - 2j]]).value == 1.5 - 2j
+    request = stub.EvaluateCalc.call_args.args[0]
+    assert request.arguments[0].sequence.elements[0].WhichOneof("kind") == "complex"
 
 
 def test_a_complex_survives_the_wire_bytes():

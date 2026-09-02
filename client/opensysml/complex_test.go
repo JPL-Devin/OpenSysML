@@ -2,10 +2,16 @@ package opensysml_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/api/proto/protoconnect"
 	"github.com/Open-MBEE/OpenSysML/client/opensysml"
+	sysmlgrpc "github.com/Open-MBEE/OpenSysML/internal/grpc"
 )
 
 const complexSource = `package C {
@@ -24,6 +30,8 @@ const complexSource = `package C {
 		succession first start then inner;
 		succession first inner then done;
 	}
+	calc def Echo { in z : Complex; return : Complex = z; }
+	calc echo : Echo;
 }`
 
 // A Complex is one value of its own type in every direction, over every
@@ -75,7 +83,65 @@ func TestComplexIsOneValueOverEveryTransport(t *testing.T) {
 			if got := run.Outputs["w"]; got != opensysml.Complex(complex(2, -5)) {
 				t.Errorf("w = %#v, want Complex(2.0 - 5.0i)", got)
 			}
+
+			calc, err := client.EvaluateCalc(ctx, model, "C::echo", opensysml.Complex(complex(1.5, -2)))
+			if err != nil {
+				t.Fatalf("EvaluateCalc: %v", err)
+			}
+			if calc.Result != opensysml.Complex(complex(1.5, -2)) {
+				t.Errorf("echo(1.5 - 2.0i) = %#v, want the Complex back", calc.Result)
+			}
 		})
+	}
+}
+
+// A service without complex_values would read a Complex input as null, so the
+// client refuses to send one, however deeply a sequence nests it, over either
+// body encoding.
+func TestComplexInputNeedsComplexValues(t *testing.T) {
+	svc, err := sysmlgrpc.NewServiceWithUnavailableCapabilitiesForTesting(16, "test", []string{opensysml.CapabilityComplexValues})
+	if err != nil {
+		t.Fatalf("NewServiceWithUnavailableCapabilitiesForTesting: %v", err)
+	}
+	t.Cleanup(svc.Close)
+	mux := http.NewServeMux()
+	mux.Handle(protoconnect.NewSysMLServiceHandler(sysmlgrpc.NewConnectAdapter(svc)))
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	for name, client := range map[string]opensysml.Client{
+		"connect-proto": dialClient(t, server.URL),
+		"connect-json":  dialClient(t, server.URL, opensysml.WithJSONBody()),
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			model := parse(t, client, complexSource)
+			for label, input := range map[string]opensysml.Value{
+				"complex": opensysml.Complex(complex(2, 5)),
+				"nested":  opensysml.Sequence{opensysml.Int(1), opensysml.Sequence{opensysml.Complex(complex(2, 5))}},
+			} {
+				_, err := client.ExecuteAction(ctx, model, "C::conj", map[string]opensysml.Value{"z": input})
+				wantComplexValuesRefusal(t, "ExecuteAction "+label, err)
+				_, err = client.EvaluateCalc(ctx, model, "C::echo", input)
+				wantComplexValuesRefusal(t, "EvaluateCalc "+label, err)
+			}
+
+			run, err := client.ExecuteAction(ctx, model, "C::conj", map[string]opensysml.Value{"z": opensysml.Real(2)})
+			if err != nil {
+				t.Fatalf("ExecuteAction with a Real: %v", err)
+			}
+			if got, ok := run.Outputs["w"].(opensysml.Null); !ok || !strings.Contains(string(got), "complex number") {
+				t.Errorf("w = %#v, want the unsupported null the withheld capability reports", run.Outputs["w"])
+			}
+		})
+	}
+}
+
+func wantComplexValuesRefusal(t *testing.T, op string, err error) {
+	t.Helper()
+	var status *opensysml.StatusError
+	if !errors.As(err, &status) || status.Code != opensysml.CodeUnimplemented || !strings.Contains(status.Message, opensysml.CapabilityComplexValues) {
+		t.Errorf("%s: err = %v, want CodeUnimplemented naming %s", op, err, opensysml.CapabilityComplexValues)
 	}
 }
 
