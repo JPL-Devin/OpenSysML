@@ -26,6 +26,10 @@ package Results {
         in x : Real;
         { in y : Real; Double(x = { in z : Real; z + y }) }
     }
+    calc def Documented {
+        in x : Real;
+        { doc /* the parameter, unchanged */ in y : Real; y }
+    }
     calc def Passes {
         in ok : Boolean;
         ok

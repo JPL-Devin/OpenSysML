@@ -115,6 +115,7 @@ const (
 	// the expression as sysml:ownedResultExpression.
 	mResultExpressionMembership = "ResultExpressionMembership"
 	pOwnedResultExpression      = "ownedResultExpression"
+	mDocumentation              = "Documentation"
 )
 
 // Metaclass names for the constructs that have no SysML metaclass of their own
@@ -549,12 +550,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return nil
 
 	case *ast.Documentation:
-		head(rdf.SysMLTerm("Documentation"))
-		e.ident(subject, n.Ident)
-		if n.Locale != "" {
-			e.graph.Add(subject, e.sysml(pLocale), rdf.String(unquote(n.Locale)))
-		}
-		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.file.Text(n.BodySpan))))
+		head(rdf.SysMLTerm(mDocumentation))
+		e.documentation(subject, n)
 		return nil
 
 	case *ast.TextualRepresentation:
@@ -829,6 +826,15 @@ func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, ro
 
 func (e *encoder) sysml(name string) rdf.Term { return rdf.SysMLTerm(name) }
 func (e *encoder) sysx(name string) rdf.Term  { return rdf.OpenSysMLTerm(name) }
+
+// documentation emits what a `doc` states: its identification, locale and body.
+func (e *encoder) documentation(subject rdf.Term, n *ast.Documentation) {
+	e.ident(subject, n.Ident)
+	if n.Locale != "" {
+		e.graph.Add(subject, e.sysml(pLocale), rdf.String(unquote(n.Locale)))
+	}
+	e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.file.Text(n.BodySpan))))
+}
 
 func (e *encoder) ident(subject rdf.Term, ident ast.Identification) {
 	if ident.Name != "" {

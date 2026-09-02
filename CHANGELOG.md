@@ -29,7 +29,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   expression tree as `sysml:ownedResultExpression`, so a graph without `sysx:sourceText` still
   writes the notation back. Expression bodies — `{ in y : Real; y + x }` as a result, nested, or
   as the body of an `in expr` parameter — carry their parameters and result structurally as
-  `sysx:bodyParameter` and `sysx:resultExpression`; a declaration inside one stays a
+  `sysx:bodyParameter` and `sysx:resultExpression`, and a `doc` opening one as a
+  `sysml:Documentation` node (the parser now keeps it); any other declaration inside one stays a
   `sysx:BodyMember` with its text, and is refused by name when the text is absent. Across the 345
   example files, none of the 13 refused for this reason is any longer: 12 convert, 11 of them to
   a graph that round-trips equal, and the 13th is refused for an unrelated `feature` declaration;

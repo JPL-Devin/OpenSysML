@@ -119,7 +119,7 @@ expr:Bodies__Scaled___401_presultExpression
     sysx:sourceText "{ in y : Real; private attribute k : Real = 2; y * k + x }" ;
     sysml:elementId "Bodies__Scaled___401_presultExpression" ;
     sysx:bodyParameter expr:Bodies__Scaled___401_presultExpression_pin0 ;
-    sysx:bodyMember expr:Bodies__Scaled___401_presultExpression_pm0 ;
+    sysx:bodyMember expr:Bodies__Scaled___401_presultExpression_pm1 ;
     sysx:resultExpression expr:Bodies__Scaled___401_presultExpression_presult .
 
 expr:Bodies__Scaled___401_presultExpression_pin0
@@ -130,10 +130,10 @@ expr:Bodies__Scaled___401_presultExpression_pin0
     sysml:declaredName "y" ;
     sysml:type elmt:Bodies__Real .
 
-expr:Bodies__Scaled___401_presultExpression_pm0
+expr:Bodies__Scaled___401_presultExpression_pm1
     a sysx:BodyMember ;
-    sysml:elementId "Bodies__Scaled___401_presultExpression_pm0" ;
-    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:elementId "Bodies__Scaled___401_presultExpression_pm1" ;
+    sysx:memberIndex "1"^^xsd:integer ;
     sysx:sourceText "private attribute k : Real = 2;" .
 
 expr:Bodies__Scaled___401_presultExpression_presult

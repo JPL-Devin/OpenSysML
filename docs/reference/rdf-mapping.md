@@ -212,7 +212,7 @@ The `sysx:` properties:
 | `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member). The end is the element itself rather than a name, since there is none to write. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:resultExpression` | The expression a body ends in: on a `sysx:ResultExpressionMember`, the bare expression a calculation or case body computes; on an expression body (`{ in y : Real; y + x }`), the expression after its parameters. See [Result expressions](#result-expressions). |
-| `sysx:bodyParameter`, `sysx:bodyMember` | The `in` parameters an expression body declares, each a node carrying its name, type, bounds and value, and the other declarations it makes between them and its result, carried as notation. Both are ordered by `sysx:memberIndex`. |
+| `sysx:bodyParameter`, `sysx:bodyMember` | The `in` parameters an expression body declares, each a node carrying its name, type, bounds and value, and the other declarations it makes ahead of its result: a `doc` as a `sysml:Documentation` node, anything else as notation. Both share one `sysx:memberIndex` sequence, the order they were written in. |
 | `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
 | `sysx:declaredId` | The element's id came from an explicit `@IdentityMetadata::ElementId` annotation, see [Element identity](#element-identity). |
 | `sysx:projectId`, `sysx:branch`, `sysx:org` | The `@IdentityMetadata::ProjectRef` provenance of a scope root, see [Element identity](#element-identity). |
@@ -380,11 +380,13 @@ The rules the tree follows:
   `sysx:resultExpression` is the tree of the expression after them, so a nested
   body (`{ in y : Real; f(x = { in z : Real; z + y }) }`) and an `in expr`
   parameter's body (`in expr keep : Boolean { in v : Real; v > x }`) rebuild from
-  the graph alone. A declaration a body makes between its parameters and its
-  result (`{ in y : Real; private attribute k : Real = 2; y * k }`) is a
-  `sysx:BodyMember` carrying its notation; a graph that states one without its
+  the graph alone. Documentation opening a body (`{ doc /* … */ in y : Real; y }`)
+  is a `sysml:Documentation` node with its `sysml:body`. Any other declaration a
+  body makes ahead of its result (`{ in y : Real; private attribute k : Real = 2; y * k }`)
+  is a `sysx:BodyMember` carrying its notation; a graph that states one without its
   `sysx:sourceText` is reported, naming the member, as is a parameter with no
-  `sysml:declaredName`.
+  `sysml:declaredName`. Parameters and declarations share one `sysx:memberIndex`
+  sequence, so a parameter written after a declaration comes back after it.
 - **Older graphs still read.** A position holding a plain literal
   (`sysml:value "1200.0"`), which is what releases before this wrote, is read as
   that notation, and a `sysx:bodyParameter` holding a bare name literal is read

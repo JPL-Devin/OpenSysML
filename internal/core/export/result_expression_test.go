@@ -97,6 +97,7 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 		"{ in y : Real; (y + x) }",
 		"{ in 'the input' : Real; ('the input' + x) }",
 		"{ in y : Real; Double(x = { in z : Real; (z + y) }) }",
+		"{ doc /* the parameter, unchanged */ in y : Real; y }",
 		"in expr keep : Boolean {\n            in v : Real;\n            (v > x)\n        }",
 		"Double(x = Double(x)).result",
 		"if (x > 0) ? x else (- x)",
@@ -167,8 +168,33 @@ func TestExpressionBodyDeclarationNeedsItsText(t *testing.T) {
 	if !errors.As(err, &unsupported) {
 		t.Fatalf("want an UnsupportedError for a body member without its text, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "the body member <urn:opensysml:expr:Bodies__Scaled___401_presultExpression_pm0>") {
+	if !strings.Contains(err.Error(), "the body member <urn:opensysml:expr:Bodies__Scaled___401_presultExpression_pm1>") {
 		t.Errorf("the refusal should name the body member: %v", err)
+	}
+}
+
+// Parameters and declarations share one index, so a body written as parameter,
+// declaration, parameter comes back in that order when the graph alone orders
+// it — only the declarations keep their text; a body of declarations alone is
+// written too.
+func TestExpressionBodyKeepsTheOrderOfItsDeclarations(t *testing.T) {
+	turtle := string(withoutTriples(t, convertFixture(t, "expression_body_order"), "sysx:sourceText"))
+	const member = "    a sysx:BodyMember ;\n"
+	if strings.Count(turtle, member) != 2 {
+		t.Fatalf("expected the declaration of two bodies in the graph:\n%s", turtle)
+	}
+	turtle = strings.ReplaceAll(turtle, member, member+`    sysx:sourceText "private attribute k : Real = 1;" ;`+"\n")
+	back, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the body's structure: %v", err)
+	}
+	for _, want := range []string{
+		"{ in a : Real; private attribute k : Real = 1; in b : Real; ((a + b) + (k * x)) }",
+		"{ private attribute k : Real = 1; }",
+	} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, back)
+		}
 	}
 }
 
@@ -177,8 +203,8 @@ func TestExpressionBodyDeclarationNeedsItsText(t *testing.T) {
 func TestExpressionBodyParameterNeedsItsName(t *testing.T) {
 	stripped := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
 	const name = "    sysml:declaredName \"y\" ;\n"
-	if strings.Count(stripped, name) != 3 {
-		t.Fatalf("expected the parameter y of three bodies in the graph:\n%s", stripped)
+	if strings.Count(stripped, name) != 4 {
+		t.Fatalf("expected the parameter y of four bodies in the graph:\n%s", stripped)
 	}
 	stripped = strings.ReplaceAll(stripped, name, "")
 	_, err := export.Convert("m.ttl", []byte(stripped), export.FormatTurtle, export.FormatSysML)
