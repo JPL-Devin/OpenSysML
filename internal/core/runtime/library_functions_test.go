@@ -228,7 +228,7 @@ func TestOpenSysMLMathFunctionsMatchTheShippedDeclarations(t *testing.T) {
 			continue
 		}
 		var params []string
-		for _, param := range calcParameters(ctx.calcChain(sym)) {
+		for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
 			params = append(params, param.Name)
 		}
 		if len(params) != len(fn.params) {
@@ -1012,7 +1012,7 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 					continue
 				}
 				var params []string
-				for _, param := range calcParameters(ctx.calcChain(sym)) {
+				for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
 					params = append(params, param.Name)
 				}
 				if len(params) != len(fn.params) {

@@ -34,13 +34,14 @@ type calcOutput struct {
 	// IsInOut marks an `inout` parameter: an output feature (KerML 7.4.9) bound by
 	// the invocation rather than by a declaration or an assignment.
 	IsInOut bool
+	Decl    calcMemberDecl // the declaration, closest to the invoked calc, the output's value answers to
 }
 
 // calcOutputs flattens the output features declared along chain (most general
 // first). An output redeclared closer to the invoked calc keeps its inherited
 // position and its inherited binding unless it binds a new one, as an input
 // parameter does.
-func calcOutputs(chain []*symbols.Symbol) []calcOutput {
+func (ctx *Context) calcOutputs(chain []*symbols.Symbol) []calcOutput {
 	var outs []calcOutput
 	index := make(map[string]int)
 
@@ -55,7 +56,8 @@ func calcOutputs(chain []*symbols.Symbol) []calcOutput {
 			}
 			// An output written as a redefinition names the one it overrides.
 			name, _ := ast.EffectiveName(usage)
-			out := calcOutput{Name: name, Value: usage.Value, Owner: link, IsResult: usage.IsResult}
+			out := calcOutput{Name: name, Value: usage.Value, Owner: link, IsResult: usage.IsResult,
+				Decl: ctx.calcMemberDeclOf(link, usage, name)}
 			if usage.Direction == ast.DirInOut {
 				// The value an `inout` declares is the default of the parameter, not a
 				// binding of the output: the invocation binds it either way.
@@ -76,6 +78,9 @@ func calcOutputs(chain []*symbols.Symbol) []calcOutput {
 					out.Value = outs[at].Value
 					out.Owner = outs[at].Owner
 				}
+				if out.Decl.Target == nil {
+					out.Decl = outs[at].Decl
+				}
 				outs[at] = out
 				continue
 			}
@@ -86,6 +91,16 @@ func calcOutputs(chain []*symbols.Symbol) []calcOutput {
 		}
 	}
 	return outs
+}
+
+// resultOutput returns the result parameter a `return` declares, if the calc has one.
+func (shape *calcShape) resultOutput() (calcOutput, bool) {
+	for _, out := range shape.Outputs {
+		if out.IsResult {
+			return out, true
+		}
+	}
+	return calcOutput{}, false
 }
 
 // indexOfAnonymousResult finds the unnamed result parameter among outs, which is
@@ -598,7 +613,7 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 	// A binding gives the output its value as a write does, so it answers to the
 	// output's declared type and multiplicity the same way.
 	what := fmt.Sprintf("calc %s: output %s", run.shape.Name, run.outputDescription(out))
-	if err := ctx.checkBoundName(declScope(out.Owner), what, out.Name, value); err != nil {
+	if err := out.Decl.checkBound(ctx, what, value); err != nil {
 		return Value{}, err
 	}
 	if out.Name != "" {
@@ -766,7 +781,7 @@ func (ec *EvalContext) calcUsageMemberValue(sym *symbols.Symbol, self *Instance,
 // about reading the usage itself rather than one of its outputs.
 func (ctx *Context) calcUsageOutputSummary(sym *symbols.Symbol) string {
 	names := make([]string, 0)
-	for _, out := range calcOutputs(ctx.calcChain(sym)) {
+	for _, out := range ctx.calcOutputs(ctx.calcChain(sym)) {
 		if out.Name != "" {
 			names = append(names, out.Name)
 		}

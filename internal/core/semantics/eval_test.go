@@ -1,6 +1,7 @@
 package semantics
 
 import (
+	"math"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -98,5 +99,46 @@ func TestEvalNonEvaluableReference(t *testing.T) {
 func TestEvalDivByZeroNotEvaluable(t *testing.T) {
 	if _, ok := evalExpr(t, "1 / 0"); ok {
 		t.Fatalf("division by zero should be non-evaluable")
+	}
+}
+
+// A constant is a value of the narrowest scalar type that holds it, whatever
+// kind computed it: 4 / 2 is a Natural, 7 / 2 a Rational, -2.0 an Integer. A
+// real that is no whole number in the Integer range is never one.
+func TestPrimTypeOfValueClassifiesByTheValue(t *testing.T) {
+	for _, tc := range []struct {
+		v    Value
+		want PrimType
+	}{
+		{Value{Kind: ValInt, Int: 3}, PrimNatural},
+		{Value{Kind: ValInt, Int: -3}, PrimInteger},
+		{Value{Kind: ValReal, Real: 2.0}, PrimNatural},
+		{Value{Kind: ValReal, Real: -2.0}, PrimInteger},
+		{Value{Kind: ValReal, Real: 3.5}, PrimRational},
+		{Value{Kind: ValReal, Real: math.Inf(1)}, PrimReal},
+		{Value{Kind: ValReal, Real: math.NaN()}, PrimUnknown},
+		{Value{Kind: ValReal, Real: 1e300}, PrimRational},
+		{Value{Kind: ValReal, Real: -9223372036854775808.0}, PrimInteger},
+		{Value{Kind: ValReal, Real: 9223372036854775808.0}, PrimRational},
+		{Value{Kind: ValBool, Bool: true}, PrimBoolean},
+	} {
+		if got := PrimTypeOfValue(tc.v); got != tc.want {
+			t.Errorf("PrimTypeOfValue(%v) = %s, want %s", tc.v, got, tc.want)
+		}
+	}
+}
+
+// WholeNumber converts a whole-valued finite real exactly and refuses the rest.
+func TestWholeNumberRefusesFractionsAndNonFinite(t *testing.T) {
+	if n, ok := (Value{Kind: ValReal, Real: 2.0}).WholeNumber(); !ok || n != 2 {
+		t.Errorf("2.0 = %d, %v; want 2, true", n, ok)
+	}
+	for _, r := range []float64{1.5, math.NaN(), math.Inf(1), math.Inf(-1), 1e19, -1e19} {
+		if n, ok := (Value{Kind: ValReal, Real: r}).WholeNumber(); ok {
+			t.Errorf("%v: WholeNumber = %d, true; want false", r, n)
+		}
+	}
+	if _, ok := (Value{Kind: ValBool, Bool: true}).WholeNumber(); ok {
+		t.Error("a Boolean is no whole number")
 	}
 }

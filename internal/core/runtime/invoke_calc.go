@@ -14,6 +14,38 @@ type calcParameter struct {
 	Name    string          // parameter name arguments bind to
 	Default ast.Node        // value-binding expression used when no argument is passed (nil if none)
 	Owner   *symbols.Symbol // the calc that declares the default (a supertype for an inherited one)
+	Decl    calcMemberDecl  // the declaration, closest to the invoked calc, a bound value answers to
+}
+
+// calcMemberDecl is the type and multiplicity a calc's parameter or output
+// declares, and the calc whose declaration states them.
+type calcMemberDecl struct {
+	Target *writeTarget
+	Owner  *symbols.Symbol
+}
+
+// checkType reports a value outside the declared type; a member the symbol
+// table does not know is not judged.
+func (d calcMemberDecl) checkType(ctx *Context, what string, value Value) error {
+	if d.Target == nil {
+		return nil
+	}
+	return ctx.checkWriteType(declScope(d.Owner), what, d.Target.typ, value)
+}
+
+// checkBound reports a value outside the declared type or multiplicity.
+func (d calcMemberDecl) checkBound(ctx *Context, what string, value Value) error {
+	return ctx.checkWrite(declScope(d.Owner), what, d.Target, value)
+}
+
+// calcMemberDeclOf resolves what a member of link declares for a value bound to it.
+func (ctx *Context) calcMemberDeclOf(link *symbols.Symbol, usage *ast.Usage, name string) calcMemberDecl {
+	sym := memberSymbol(declScope(link), usage)
+	if sym == nil {
+		return calcMemberDecl{}
+	}
+	mult, _ := ctx.extractMultiplicity(sym)
+	return calcMemberDecl{Target: &writeTarget{name: name, typ: ctx.extractType(sym), mult: mult}, Owner: link}
 }
 
 // calcShape is a calc's invocation interface: the input parameters it binds, in
@@ -66,8 +98,8 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	shape := &calcShape{
 		Sym:       sym,
 		Name:      name,
-		Params:    calcParameters(chain),
-		Outputs:   calcOutputs(chain),
+		Params:    ctx.calcParameters(chain),
+		Outputs:   ctx.calcOutputs(chain),
 		Body:      body,
 		BodyOwner: bodyOwner,
 		Steps:     calcSteps(body),
@@ -130,7 +162,7 @@ func (ctx *Context) calcChain(sym *symbols.Symbol) []*symbols.Symbol {
 // calcParameters flattens the input parameters declared along chain (most
 // general first). A parameter redeclared closer to the invoked calc keeps its
 // inherited position and its inherited default unless it binds a new one.
-func calcParameters(chain []*symbols.Symbol) []calcParameter {
+func (ctx *Context) calcParameters(chain []*symbols.Symbol) []calcParameter {
 	var params []calcParameter
 	index := make(map[string]int)
 
@@ -148,13 +180,16 @@ func calcParameters(chain []*symbols.Symbol) []calcParameter {
 			if usage.Direction != ast.DirIn && usage.Direction != ast.DirInOut {
 				continue
 			}
-			param := calcParameter{Name: name, Default: usage.Value, Owner: link}
+			param := calcParameter{Name: name, Default: usage.Value, Owner: link, Decl: ctx.calcMemberDeclOf(link, usage, name)}
 			if at, seen := index[param.Name]; seen {
 				// A redeclaration binding no value keeps the inherited default,
 				// which is written in the scope of the calc that stated it.
 				if param.Default == nil {
 					param.Default = params[at].Default
 					param.Owner = params[at].Owner
+				}
+				if param.Decl.Target == nil {
+					param.Decl = params[at].Decl
 				}
 				params[at] = param
 				continue
@@ -383,6 +418,12 @@ func (ctx *Context) bindCalcParameters(
 		if err != nil {
 			return err
 		}
+		// The parameter holds the value bound to it, so that value answers to the
+		// parameter's declaration as a written one does.
+		what := fmt.Sprintf("calc %s: %s for parameter %q", shape.Name, source, param.Name)
+		if err := param.Decl.checkType(ctx, what, value); err != nil {
+			return err
+		}
 		bindings[param.Name] = value
 		if ec.trace != nil {
 			ec.trace.RecordCalcBind(param.Name, value, source)
@@ -525,7 +566,7 @@ func (ctx *Context) hasCalcBody(sym *symbols.Symbol) bool {
 	if lower.Returns(body) {
 		return true
 	}
-	return len(assignedOutputs(calcSteps(body), calcOutputs(chain))) > 0
+	return len(assignedOutputs(calcSteps(body), ctx.calcOutputs(chain))) > 0
 }
 
 // isCalcDecl reports whether a declaration is a calc definition or calc usage.

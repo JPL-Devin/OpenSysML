@@ -63,7 +63,14 @@ func (h *calcStmtHost) assignChain(_ *EvalContext, s lower.Assign, _ Value) erro
 	return fmt.Errorf("%w: %s writes a feature of another object", ErrCalcExternalAssignment, s.Chain.Text)
 }
 
+// acceptReturn takes the value a `return` yields, which the result parameter
+// then holds, so it answers to that parameter's declaration.
 func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
+	if out, ok := h.shape.resultOutput(); ok {
+		if err := out.Decl.checkType(h.ctx, "result", value); err != nil {
+			return err
+		}
+	}
 	h.result = value
 	return nil
 }

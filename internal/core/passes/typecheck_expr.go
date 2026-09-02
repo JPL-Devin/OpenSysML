@@ -222,10 +222,11 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 		return semantics.PrimUnknown
 	}
 
-	// `SequenceFunctions::'#'` declares `in index: Positive[1]`, so a Boolean, a String or
-	// a decimal literal names no position; whether a number does is checked at evaluation.
+	// `SequenceFunctions::'#'` declares `in index: Positive[1]`, so a Real, a
+	// Boolean or a String names no position. Whether a whole number names one is
+	// known from the value, so an Integer index is checked at evaluation.
 	index := ec.infer(scope, e.Index)
-	if !bindable(e.Index, index, semantics.PrimInteger) && e.Index != nil {
+	if !semantics.PrimConforms(index, semantics.PrimInteger) && e.Index != nil {
 		ec.errorf(e.Index.Span(), "sequence index must be an Integer, found %s", index)
 	}
 

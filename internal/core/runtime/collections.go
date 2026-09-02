@@ -71,15 +71,15 @@ func integerValue(n int64) Value {
 // head, last and `#` of a sequence that has no such element.
 func nullValue() Value { return Value{Kind: ValNull} }
 
-// indexOf reads a sequence index: SequenceFunctions::'#' declares
-// `in index: Positive[1]`, so the index is one whole number, counting from 1. A
-// Real, a Boolean, a string or a collection is not an index and is reported
-// rather than truncated or read as a position.
+// indexOf reads a sequence index (`in index: Positive[1]`): one whole number, counting
+// from 1, so 4 / 2 indexes while a fractional Real is reported rather than truncated.
 func indexOf(op string, val Value) (int64, error) {
-	if val.Kind != ValConst || val.Const.Kind != semantics.ValInt {
-		return 0, fmt.Errorf("%w: %s requires an Integer index, got %s", ErrTypeMismatch, op, describeValue(val))
+	if val.Kind == ValConst {
+		if index, ok := val.Const.WholeNumber(); ok {
+			return index, nil
+		}
 	}
-	return val.Const.Int, nil
+	return 0, fmt.Errorf("%w: %s requires an Integer index, got %s", ErrTypeMismatch, op, describeValue(val))
 }
 
 // describeValue names a value's kind for a diagnostic, distinguishing the

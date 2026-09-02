@@ -215,8 +215,8 @@ prints the current ones. State of the 94 committed cases, the original 32 plus t
 expression round added:
 
 ```
-agree: 56 · kind-only: 1 · order-only: 0 · disagree: 1
-pilot-unevaluated: 21 · pilot-silent: 4 · pilot-error: 2 · ours-error: 1 · both-error: 8
+agree: 55 · kind-only: 1 · order-only: 0 · disagree: 1
+pilot-unevaluated: 21 · pilot-silent: 4 · pilot-error: 2 · ours-error: 2 · both-error: 8
 nondeterministic: 0
 ```
 
@@ -237,10 +237,34 @@ as `Rational` because that is what the reference evaluates it to (see
 is whole. The fix is in the checker, not the cases: a binding is now refused only when the value's
 type and the feature's are disjoint (`String` to `Integer`, `Boolean` to `Real`) or when the value
 is a literal, signed or not, whose type is exact (`2.5` or `-3` to `Natural`). A quotient, a call or
-a `Real` feature bound to an `Integer` is left to evaluation, which still checks the value it turns
-out to be. `divisionResult` still types integer division as `Rational`, so `constraint def c { 7 / 2
-}` is still reported as not Boolean. The counts above are as remeasured after that fix; each of the
-20 returned to the bucket it held before.
+a `Real` feature bound to an `Integer` is left to evaluation. `divisionResult` still types integer
+division as `Rational`, so `constraint def c { 7 / 2 }` is still reported as not Boolean. After that
+fix the count read `agree: 56 · ours-error: 1`; each of the 20 returned to the bucket it held before.
+
+Deferring to evaluation is only honest if evaluation judges. A feature value and a calculation
+argument are bindings (KerML 1.0 §7.4.9: a `BindingConnector` requires the same values at both
+ends, and a feature's values are instances of its types), and until this round the run time checked
+neither — an `Integer` feature materialized its default as `3.5` and a calc took `1.5` for an
+`Integer` parameter, with no diagnostic from either tier. Now a default a declaration binds, whether
+folded ahead of time or evaluated on first read, an argument or default bound to a calc parameter,
+including one inherited or redefined, and a calc's result, are checked against the declaration
+before the value is held (`runtime/write_conformance.go`, `runtime/instance.go`,
+`runtime/invoke_calc.go`, `runtime/calc_statements.go`). The judgement is by value: a constant is
+an instance of the narrowest scalar type that holds it (`semantics.PrimTypeOfValue`), so `4 / 2`,
+which evaluates to the real `2.0`, is an `Integer` and a `Natural`, `-4 / 2` an `Integer` only, and
+`7 / 2` a `Rational` that no `Integer` feature holds. Nothing is truncated: a sequence index that
+evaluates to `2.0` names the second element and one that evaluates to `1.5` names none, as before.
+The static rule for an index is unchanged, so `xs#(4 / 2)` is still reported where it is written;
+the run-time acceptance matters for an index that reaches evaluation untyped.
+
+That moves `intdiv` — `Probe::IntDiv()`, the very declaration above — from `agree` to `ours-error`:
+we now report `calc Probe::IntDiv: result: type mismatch: cannot write 3.5 (a Real) to a feature
+typed by Integer` where the pilot answers `3.5`. The counts above are as remeasured after both
+fixes, `agree: 55 · ours-error: 2`, and the second `ours-error` is adjudicated in the table below.
+The pilot's answer is not a reading of the specification we differ on: its evaluator computes the
+result expression and does not check what the result parameter is typed by, so it would answer
+`3.5` for `return : String = 7 / 2` too. Reporting the binding is stricter than the reference, not
+different from it, and the case stays as written because it probes exactly that.
 
 The one `kind-only` is `2 ** 40` (above). The `pilot-error`, `pilot-unevaluated` and `pilot-silent`
 buckets — 26 cases, more than a quarter of the corpus — are the pilot's limits rather than
@@ -253,11 +277,12 @@ us — the pilot's `re`/`im` have no evaluable body, and the same run answers `f
 zero. Read it as unrefereeable, and see the `ComplexFunctions` row of
 [spec-compliance.md](spec-compliance.md) for the adjudication.
 
-The one remaining `ours-error` case is an adjudicated divergence:
+The two remaining `ours-error` cases are adjudicated divergences:
 
 | Case | Ours | Read |
 |---|---|---|
 | `w6d:held-undeclared-multi` | `multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1` | **Deliberately ours.** `attribute xs = (1.0, 2.0)` declares no multiplicity, so the assumed `1..1` makes the default a violation (KerML 1.0 §7.4.5, and the multiplicity row of [spec-compliance.md](spec-compliance.md)); the pilot returns both values. An adjudicated divergence, not a defect |
+| `intdiv` | `calc Probe::IntDiv: result: type mismatch: cannot write 3.5 (a Real) to a feature typed by Integer` | **Deliberately ours.** `calc def IntDiv { return : Integer = 7 / 2; }` binds a value that is no `Integer` to its result parameter; the type checker lets it through, since a quotient may be whole, and evaluation finds that this one is not (KerML 1.0 §7.4.9, and the feature-write conformance row of [spec-compliance.md](spec-compliance.md)). The pilot answers `3.5`, checking nothing against the parameter's type. Stricter than the reference, not a defect in either |
 
 The cases that were `ours-error` before that round, and what closed them:
 
