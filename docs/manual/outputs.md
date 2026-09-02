@@ -53,6 +53,78 @@ a cross-referencing document on its own still succeeds; its external links
 point at the targets' expected file names and dangle until those documents
 are rendered into the same directory.
 
+## HTML
+
+`-doc-form html` renders the same document tree as HTML. Nothing is
+converted from the Markdown: the renderer reads the compiled document tree,
+so the model facts Markdown cannot carry reach the markup.
+
+```console
+$ sysml report.sysml -render-document Observatory::MassReport \
+    -doc-form html -o report.html
+```
+
+The structure is ordinary semantic HTML — `<article>`, nested `<section>`
+whose heading levels follow the nesting, `<p>`, `<table>` with `<caption>`,
+`<thead>` and `<th scope="col">`, `<ul>`/`<ol>`, `<figure>` with
+`<figcaption>`, `<nav>` for the contents, and `<em>`, `<strong>`, `<code>`,
+`<a>` inline — so a reader, a screen reader and a static-site generator all
+see a document rather than a grid of `<div>`s.
+
+The model rides alongside the structure. A small `sysml-` class vocabulary
+names each part of the document (`sysml-document`, `sysml-section`,
+`sysml-table`, `sysml-row`, `sysml-cell`, `sysml-value`, `sysml-list`,
+`sysml-item`, `sysml-diagram`, `sysml-caption`, `sysml-link`, `sysml-ref`
+and their kin), and `data-` attributes carry the facts behind it: the
+content kind and name, the query behind a table or list, the group-by
+column, each row's or item's selected element with its element kind
+(`partUsage`, `requirementDef`, …), each cell's projected column and value
+kind, and a diagram's view, kind and flow direction.
+
+```html
+<tr class="sysml-row" data-element="Observatory::telescope::mount"
+    data-element-kind="partUsage">
+<td class="sysml-cell" data-column="mass" data-value-kind="real">
+<span class="sysml-value" data-value-kind="real">15</span></td>
+</tr>
+```
+
+Identifiers are the same anchors the Markdown writes, so a `Ref` resolves
+within the page; in a `-render-documents` set it resolves across pages, whose
+file names are the Markdown names with `.html` instead of `.md`. Diagram
+blocks embed their Mermaid source in `<pre class="mermaid">`, which a page
+that loads Mermaid renders as a diagram and any other page shows as source.
+The output loads nothing over the network, runs no JavaScript of its own,
+and is byte-identical between runs.
+
+### Styling it
+
+The default stylesheet is inlined in a standalone page and declared in a
+cascade layer:
+
+```css
+@layer opensysml;
+@layer opensysml { /* the defaults */ }
+```
+
+Your own CSS is unlayered, so it wins on cascade origin rather than
+specificity — overriding a default needs neither `!important` nor a matching
+selector. Every default value comes from a `--sysml-*` custom property on
+`.sysml-document`, so retheming can be a handful of properties, and the
+renderer emits no `style` attributes to compete with.
+
+| Flag | Effect |
+|---|---|
+| `-html-default-css` | Write the default sheet and exit, to copy from |
+| `-html-css <file\|url>` | Add a sheet after the default one: a file is inlined, a URL is linked (repeatable, applied in order) |
+| `-html-no-default-css` | Leave the default sheet out |
+| `-html-fragment` | Write the `<article>` alone, with no page shell and no stylesheet |
+
+A `-render-documents -doc-form html` set writes its stylesheets as files
+beside the pages — `sysml-document.css` and each `-html-css` file, under its
+own base name — and every page links them in order, so the styling of a whole
+set is edited in one place. A `-html-css` URL stays a link.
+
 ## PDF
 
 `-doc-form pdf` renders the same document tree to PDF. It requires `-o`
@@ -90,11 +162,12 @@ and Mermaid CLI and prints the exports to use them.
 
 | Flag | Effect |
 |---|---|
-| `-pdf-title-page` | A separate title page before the content |
-| `-pdf-toc` | A table of contents built from the section headings |
-| `-pdf-number-sections` | Hierarchical section numbers (1, 1.1, ...) |
+| `-doc-title-page` | A separate title page before the content |
+| `-doc-toc` | A table of contents built from the section headings |
+| `-doc-number-sections` | Hierarchical section numbers (1, 1.1, ...) |
 
-All three are off by default and only valid with `-doc-form pdf`.
+All three are off by default and shape HTML and PDF alike; `-pdf-title-page`,
+`-pdf-toc` and `-pdf-number-sections` are aliases of them.
 
 ### PDF rendering of inline runs and anchors
 

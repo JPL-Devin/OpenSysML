@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -242,8 +243,9 @@ func constNode(v scalar) *cnode {
 	return n
 }
 
-// paramNode reads the parameter bound in slot i.
-func paramNode(i int) *cnode {
+// slotNode reads frame slot i: a parameter, or a body local its declaration
+// has bound by the time the read runs.
+func slotNode(i int) *cnode {
 	n := &cnode{prefix: 1, infallible: true, leaf: true, slot: i}
 	n.emit = func(precharged bool) compiledExpr {
 		if precharged {
@@ -474,64 +476,206 @@ func conditionalNode(_ ast.OperatorKind, kids []*cnode) *cnode {
 	return n
 }
 
-// invocationNode calls a compiled calc with its arguments evaluated in source
-// order onto the scalar stack.
-func invocationNode(callee *compiledCalc, args []*cnode) *cnode {
-	n := &cnode{prefix: 1}
-	// An argument's steps fold into the prefix while every argument before it
-	// is infallible; the first fallible one ends the run.
-	precharged := make([]bool, len(args))
+// argumentPrefix folds the steps of the leading infallible arguments into one
+// charge and says, per argument, whether its own steps are in it.
+func argumentPrefix(args []*cnode) (prefix int64, precharged []bool) {
+	prefix = 1
+	precharged = make([]bool, len(args))
 	fused := true
 	for i, arg := range args {
 		precharged[i] = fused
 		if fused {
-			n.prefix += arg.prefix
+			prefix += arg.prefix
 		}
 		fused = fused && arg.infallible
+	}
+	return prefix, precharged
+}
+
+// emitArguments emits the argument closures, each charging its own steps
+// unless the call's prefix already did.
+func emitArguments(args []*cnode, precharged []bool) []compiledExpr {
+	exprs := make([]compiledExpr, len(args))
+	for i, arg := range args {
+		exprs[i] = arg.emit(precharged[i])
+	}
+	return exprs
+}
+
+// callNode calls a compiled calc, evaluating args in source order into the
+// slots they bind; bound marks the bound parameters, the callee defaults the rest.
+func callNode(callee *compiledCalc, args []*cnode, slots []int, bound paramSet) *cnode {
+	n := &cnode{}
+	var precharged []bool
+	n.prefix, precharged = argumentPrefix(args)
+	positional := true
+	for i, slot := range slots {
+		positional = positional && slot == i
 	}
 	n.emit = func(precharged0 bool) compiledExpr {
 		var pre int64
 		if !precharged0 {
 			pre = n.prefix
 		}
-		exprs := make([]compiledExpr, len(args))
-		for i, arg := range args {
-			exprs[i] = arg.emit(precharged[i])
-		}
-		if len(exprs) == 1 {
+		exprs := emitArguments(args, precharged)
+		if positional && len(exprs) == 1 {
 			arg := exprs[0]
-			return func(ctx *Context, args []scalar) (scalar, error) {
+			return func(ctx *Context, frame []scalar) (scalar, error) {
 				if err := ctx.chargeSteps(pre); err != nil {
 					return scalar{}, err
 				}
-				v, err := arg(ctx, args)
+				v, err := arg(ctx, frame)
 				if err != nil {
 					return scalar{}, err
 				}
 				base := len(ctx.scalarStack)
 				ctx.scalarStack = append(ctx.scalarStack, v)
-				res, err := callee.invoke(ctx, base)
+				res, err := callee.invoke(ctx, base, bound)
 				ctx.scalarStack = ctx.scalarStack[:base]
 				return res, err
 			}
 		}
-		return func(ctx *Context, args []scalar) (scalar, error) {
+		if positional {
+			return func(ctx *Context, frame []scalar) (scalar, error) {
+				if err := ctx.chargeSteps(pre); err != nil {
+					return scalar{}, err
+				}
+				base := len(ctx.scalarStack)
+				for _, arg := range exprs {
+					v, err := arg(ctx, frame)
+					if err != nil {
+						ctx.scalarStack = ctx.scalarStack[:base]
+						return scalar{}, err
+					}
+					ctx.scalarStack = append(ctx.scalarStack, v)
+				}
+				res, err := callee.invoke(ctx, base, bound)
+				ctx.scalarStack = ctx.scalarStack[:base]
+				return res, err
+			}
+		}
+		// Named arguments land in their slots as they are evaluated, so the
+		// parameters' slots are reserved before the first one runs.
+		nParams := len(callee.params)
+		return func(ctx *Context, frame []scalar) (scalar, error) {
 			if err := ctx.chargeSteps(pre); err != nil {
 				return scalar{}, err
 			}
-			base := len(ctx.scalarStack)
-			for _, arg := range exprs {
-				v, err := arg(ctx, args)
+			base := ctx.reserveScalars(nParams)
+			for i, arg := range exprs {
+				v, err := arg(ctx, frame)
 				if err != nil {
 					ctx.scalarStack = ctx.scalarStack[:base]
 					return scalar{}, err
 				}
-				ctx.scalarStack = append(ctx.scalarStack, v)
+				ctx.scalarStack[base+slots[i]] = v
 			}
-			res, err := callee.invoke(ctx, base)
+			res, err := callee.invoke(ctx, base, bound)
 			ctx.scalarStack = ctx.scalarStack[:base]
 			return res, err
 		}
 	}
 	return n
+}
+
+// reserveScalars pushes n slots on the scalar stack, to be written by slot,
+// and answers the index of the first.
+func (ctx *Context) reserveScalars(n int) int {
+	base := len(ctx.scalarStack)
+	ctx.scalarStack = slices.Grow(ctx.scalarStack, n)[:base+n]
+	return base
+}
+
+// libraryArity bounds the parameters of a scalar library function the tier
+// calls, so a call's arguments fit a fixed buffer.
+const libraryArity = 4
+
+// libraryCallNode calls a scalar library function: args evaluated in source
+// order into slots, boxed for the very function the evaluator applies, unboxed back.
+func libraryCallNode(fn *libraryFunction, args []*cnode, slots []int) *cnode {
+	n := &cnode{}
+	var precharged []bool
+	n.prefix, precharged = argumentPrefix(args)
+	nParams := len(fn.params)
+	n.emit = func(precharged0 bool) compiledExpr {
+		var pre int64
+		if !precharged0 {
+			pre = n.prefix
+		}
+		exprs := emitArguments(args, precharged)
+		return func(ctx *Context, frame []scalar) (scalar, error) {
+			if err := ctx.chargeSteps(pre); err != nil {
+				return scalar{}, err
+			}
+			var got [libraryArity]scalar
+			for i, arg := range exprs {
+				v, err := arg(ctx, frame)
+				if err != nil {
+					return scalar{}, err
+				}
+				got[slots[i]] = v
+			}
+			values := ctx.libraryArgs(nParams)
+			for i := range values {
+				values[i] = got[i].boxed()
+			}
+			res, err := fn.apply(fn.name, ctx, values)
+			if err != nil {
+				return scalar{}, err
+			}
+			return scalarOfResult(fn.name, res)
+		}
+	}
+	return n
+}
+
+// aggregateNode calls a collection builtin over its one scalar argument, which
+// the builtin reads as the one-element sequence the evaluator makes of it.
+func aggregateNode(name string, fn func(*EvalContext, []Value) (Value, error), arg *cnode) *cnode {
+	n := &cnode{prefix: 1 + arg.prefix}
+	n.emit = func(precharged bool) compiledExpr {
+		var pre int64
+		if !precharged {
+			pre = n.prefix
+		}
+		arg := arg.emit(true)
+		return func(ctx *Context, frame []scalar) (scalar, error) {
+			if err := ctx.chargeSteps(pre); err != nil {
+				return scalar{}, err
+			}
+			v, err := arg(ctx, frame)
+			if err != nil {
+				return scalar{}, err
+			}
+			values := ctx.libraryArgs(1)
+			values[0] = v.boxed()
+			ec := &ctx.libraryEval
+			*ec = EvalContext{ctx: ctx}
+			res, err := fn(ec, values)
+			if err != nil {
+				return scalar{}, err
+			}
+			return scalarOfResult(name, res)
+		}
+	}
+	return n
+}
+
+// libraryArgs is the shared buffer of one library call's boxed arguments, filled
+// only after the arguments are evaluated and free again once the call returns.
+func (ctx *Context) libraryArgs(n int) []Value {
+	if cap(ctx.libraryArgBuf) < n {
+		ctx.libraryArgBuf = make([]Value, n)
+	}
+	return ctx.libraryArgBuf[:n]
+}
+
+// scalarOfResult unboxes a library function's result, which a function the
+// tier calls keeps on the scalar lattice.
+func scalarOfResult(name string, res Value) (scalar, error) {
+	out, ok := scalarOf(res)
+	if !ok {
+		return scalar{}, fmt.Errorf("compiled call of %s produced a non-scalar %s", name, describeValue(res))
+	}
+	return out, nil
 }
