@@ -173,6 +173,29 @@ source → lexer → parser → AST → symbol index → resolve → passes
 - **Document:** `{source, AST, scope, version}`
 - **One Workspace per session** (LSP/REPL)
 
+### 8. Standard library (`internal/core/libs`)
+
+- **Source of truth:** the 97 OMG library files under `internal/core/libs/stdlib/`, embedded in
+  the binary; `OPENSYSML_LIBRARY_PATH` substitutes a directory of files for them.
+- **Shared base:** `libs.SharedBase()` builds one frozen `symbols.Index` of the library per
+  process; every model is an overlay over it (`NewOverlay`), reading the library without copying
+  it.
+- **Snapshot:** `internal/core/libs/stdlib.snapshot` is that frozen index — syntax trees, scopes,
+  symbols, wildcard-import expansion, facts — serialized at generation time
+  (`go generate ./internal/core/libs`, `make stdlib-snapshot`) and embedded. A process decodes it
+  instead of parsing, when its recorded digest of the library files and its format version match
+  the files in hand and its CRC-32C over the stream holds; otherwise (an edited file, a
+  library-path override, a stale or damaged blob) it parses the files as before. The snapshot is
+  a derived artifact: never edit it, regenerate it, and `TestEmbeddedSnapshotIsCurrent` plus
+  `make stdlib-snapshot-check` in CI fail when it lags the files.
+- **Encoding:** `internal/core/pack` (varint scalars over a string table) and
+  `internal/core/ast/astcodec` (a node table, every node type, index references in place of
+  pointers); `symbols.WriteSnapshot`/`ReadSnapshot` number scopes and symbols the same way. No
+  reflection or `encoding/gob`. Decoding reproduces the object graph a fresh load builds, sharing
+  and all, which `TestSnapshotIndexMatchesFreshLoad` checks structurally.
+- **Facts cache:** `$XDG_CACHE_HOME/sysml-ls/libs` still holds derived facts for library sets
+  the snapshot does not cover, keyed by content digest and build.
+
 ---
 
 ## Execution Runtime Architecture

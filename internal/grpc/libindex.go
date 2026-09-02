@@ -26,9 +26,13 @@ const DefaultIndexPrewarm = 4
 // service does, and stand in a library of its own.
 type libraryBuilder func() *symbols.Index
 
-// buildLibraryIndex loads every standard library file into an index and freezes
-// it, caching the records of whatever had to be parsed.
+// buildLibraryIndex decodes the embedded library snapshot when it matches the
+// library files; otherwise it loads every file into an index and freezes it,
+// caching the records of whatever had to be parsed.
 func buildLibraryIndex() *symbols.Index {
+	if idx, err := libs.SnapshotIndex(); err == nil {
+		return idx
+	}
 	idx := symbols.NewIndex()
 	src := libs.DefaultSource()
 	cache, _ := libs.NewCache()                 // a cache failure only costs speed

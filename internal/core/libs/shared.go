@@ -1,6 +1,8 @@
 package libs
 
 import (
+	"errors"
+	"log/slog"
 	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/envvar"
@@ -26,13 +28,29 @@ func SharedBase() *symbols.Index {
 	if idx, ok := shared.base[key]; ok {
 		return idx
 	}
-	idx := symbols.NewIndex()
-	LoadInto(idx)
-	idx.Freeze()
+	idx := FrozenLibrary()
 	if shared.base == nil {
 		shared.base = map[string]*symbols.Index{}
 	}
 	shared.base[key] = idx
+	return idx
+}
+
+// FrozenLibrary returns a frozen index holding the standard library: the
+// embedded snapshot decoded when it matches the library files, else the files
+// loaded and frozen. A snapshot that fails to decode is logged, since only a
+// build defect makes one.
+func FrozenLibrary() *symbols.Index {
+	idx, err := SnapshotIndex()
+	if err == nil {
+		return idx
+	}
+	if !errors.Is(err, ErrSnapshotStale) {
+		slog.Warn("stdlib snapshot unreadable, loading the library files", "error", err)
+	}
+	idx = symbols.NewIndex()
+	LoadInto(idx)
+	idx.Freeze()
 	return idx
 }
 
