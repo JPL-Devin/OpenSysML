@@ -46,12 +46,13 @@ A calc compiles when everything it reaches is in this subset:
 | `if` / `else`, `while … [until]`, `loop { … } until` | control flow |
 | Invocation of another compilable calc, positional or named; direct and mutual recursion | native call |
 | `calc c : D;`, `calc def E :> D;` adding no member of its own | compiles as `D` |
+| Scalar library functions: `RealFunctions`/`RationalFunctions`/`NumericalFunctions` `sqrt floor round abs max min isZero isUnit`, `IntegerFunctions`/`NaturalFunctions` `abs max min`, `TrigFunctions` (`sin cos tan cot arcsin arccos arctan deg rad pi`), `OpenSysMLMathFunctions` (`exp ln log atan2`) | `libm` / Go `math` with the interpreter's domain, overflow and `Natural` errors |
 
 Everything else refuses: String, sequence or structured parameters/results, parameter defaults,
 body-local attributes without a value (the interpreter holds null there, which no compiled type can),
 multiplicity other than `[1]`, a calc that `:>`/`:>>`/`redefines` another *and* declares members
-(redefining inherited parameters or body is not compiled), library-function invocations (`ScalarFunctions::sqrt` and the like), `for` and
-collection operations, quantities and units, and `Integer ** <non-literal Integer>` (whether the
+(redefining inherited parameters or body is not compiled), library functions over sequences or
+strings (`SequenceFunctions::size`, `RealFunctions::sum`, …), `for` and collection operations, quantities and units, and `Integer ** <non-literal Integer>` (whether the
 result is an Integer depends on the exponent's sign at run time, which a static type cannot
 express; write the exponent as a literal or make the base Real). The refusal names the calc and
 the construct (`codegen.UnsupportedError`, `errors.Is(err, codegen.ErrUnsupported)`).
@@ -87,6 +88,11 @@ arithmetic rather than the host language's:
   `X__Y`, the unrestricted name `'X::Y'` and a Unicode name never share a function.
 - **Recursion** is bounded by the same depth as the interpreter's default
   (`runtime.DefaultMaxCalcDepth`), reported as the interpreter reports it.
+- **Library functions** dispatch as the interpreter does: `NumericalFunctions::max(a, b)` keeps
+  Integer operands Integer, `RealFunctions::floor` returns an Integer and fails when the value
+  exceeds `int64`, `IntegerFunctions`/`NaturalFunctions` refuse Real operands at compile time and
+  report negative Naturals at run time, `ln`/`log`/`sqrt`/`arcsin` report the interpreter's domain
+  errors. Named and positional arguments bind and evaluate as for model calcs.
 - **Output** uses the interpreter's `FormatReal` convention: positional notation with a `.0` on
   whole values, exponent notation below `1e-4` and from `1e21`, `-0.0` preserved.
 
@@ -103,6 +109,11 @@ the refusals.
   a `while` that never terminates runs forever, and a long loop the interpreter would cut short
   runs to completion. The differential test lifts the interpreter's budget for this reason. This
   is the one bound the interpreter has that compiled code lacks; a compiled program is a program.
+- **Transcendental last bits.** `sin`, `cos`, `tan`, `exp`, `ln`, `log`, `atan2` and the inverse
+  trigonometric functions come from glibc's `libm` in C and Go's `math` in Go and the interpreter;
+  the two libraries agree to within an ulp but not bit-for-bit (Go's own `Exp` differs between
+  amd64 and arm64). The differential test allows the C target 2 ulps on these calcs and requires
+  everything else — `sqrt`, `floor`, `round`, `abs`, `max`, `min`, `deg`, `rad` — to be exact.
 - **No evaluation trace.** There is nothing to `%trace`; the result is all the program produces.
 - **GNU C.** The C backend uses `__int128`, `__builtin_*_overflow` and `setjmp`/`longjmp`, so it
   needs GCC or Clang, not an arbitrary ISO C compiler. Tested with GCC 11.4.

@@ -115,6 +115,67 @@ static inline sysml_real sysml_finite(sysml_real r) {
 	return r;
 }
 
+/* Library functions: a NaN result is a domain error, an infinity an overflow. */
+#define SYSML_PI 3.141592653589793
+
+static inline sysml_real sysml_lib_real(sysml_real r) {
+	if (__builtin_expect(isnan(r), 0)) sysml_fail("arithmetic domain error: argument outside the function's domain");
+	if (__builtin_expect(isinf(r), 0)) sysml_fail("arithmetic overflow: result is not a finite Real");
+	return r;
+}
+
+static inline sysml_int sysml_lib_int(sysml_real x) {
+	if (__builtin_expect(isnan(x), 0)) sysml_fail("arithmetic domain error: argument outside the function's domain");
+	if (__builtin_expect(!(x < 9223372036854775808.0 && x >= -9223372036854775808.0), 0)) sysml_fail("arithmetic overflow: result exceeds the Integer range");
+	return (sysml_int)x;
+}
+
+static inline sysml_int sysml_iabs(sysml_int a) {
+	if (__builtin_expect(a == INT64_MIN, 0)) sysml_fail("arithmetic overflow: abs exceeds the Integer range");
+	return a < 0 ? -a : a;
+}
+
+static inline sysml_int sysml_imax(sysml_int a, sysml_int b) { return a > b ? a : b; }
+static inline sysml_int sysml_imin(sysml_int a, sysml_int b) { return a < b ? a : b; }
+
+static inline sysml_int sysml_natural_arg(sysml_int v) {
+	if (__builtin_expect(v < 0, 0)) sysml_fail("type mismatch: requires Natural arguments");
+	return v;
+}
+
+/* Zero signs follow Go's math.Max/Min: max prefers +0, min prefers -0. */
+static inline sysml_real sysml_rmax(sysml_real a, sysml_real b) {
+	if (a == 0 && b == 0) return signbit(a) ? b : a;
+	return a > b ? a : b;
+}
+
+static inline sysml_real sysml_rmin(sysml_real a, sysml_real b) {
+	if (a == 0 && b == 0) return signbit(a) ? a : b;
+	return a < b ? a : b;
+}
+
+static inline sysml_real sysml_tan(sysml_real t) { return sysml_lib_real(sin(t) / cos(t)); }
+static inline sysml_real sysml_cot(sysml_real t) { return sysml_lib_real(cos(t) / sin(t)); }
+
+static inline sysml_real sysml_ln(sysml_real x) {
+	if (__builtin_expect(x <= 0, 0)) sysml_fail("arithmetic domain error: the logarithm of a non-positive argument is not a Real (requires x > 0.0)");
+	return sysml_lib_real(log(x));
+}
+
+static inline sysml_real sysml_log(sysml_real x, sysml_real base) {
+	if (__builtin_expect(x <= 0, 0)) sysml_fail("arithmetic domain error: the logarithm of a non-positive argument is not a Real (requires x > 0.0)");
+	if (__builtin_expect(base <= 0, 0)) sysml_fail("arithmetic domain error: a non-positive base has no logarithm (requires base > 0.0)");
+	if (__builtin_expect(base == 1, 0)) sysml_fail("arithmetic domain error: base 1.0 has no logarithm");
+	if (base == 10) return sysml_lib_real(log10(x));
+	if (base == 2) return sysml_lib_real(log2(x));
+	return sysml_lib_real(log(x) / log(base));
+}
+
+static inline sysml_real sysml_atan2(sysml_real y, sysml_real x) {
+	if (__builtin_expect(y == 0 && x == 0, 0)) sysml_fail("arithmetic domain error: atan2(0.0, 0.0) has no angle");
+	return sysml_lib_real(atan2(y, x));
+}
+
 static inline sysml_real sysml_rdiv(sysml_real a, sysml_real b) {
 	if (__builtin_expect(b == 0, 0)) sysml_fail("division by zero");
 	return sysml_finite(a / b);
@@ -431,22 +492,31 @@ func (e *cEmitter) expr(x Expr) string {
 	case Cond:
 		return fmt.Sprintf("(%s ? %s : %s)", e.expr(x.C), e.expr(x.Then), e.expr(x.Else))
 	case Call:
-		values := make([]Expr, len(x.Args))
-		for i, a := range x.Args {
-			values[i] = a.Value
-		}
-		return e.sequenced(values, func(names []string) string {
-			return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(callOperands(x, names), ", "))
+		return e.sequenced(argValues(x.Args), func(names []string) string {
+			return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(callOperands(x.Args, len(x.Fn.Params), names), ", "))
+		})
+	case LibCall:
+		return e.sequenced(argValues(x.Args), func(names []string) string {
+			return x.Op.cExpr(callOperands(x.Args, len(x.Op.Operands()), names))
 		})
 	}
 	e.err = fmt.Errorf("codegen: C emitter has no case for %T", x)
 	return "0"
 }
 
+// argValues is the arguments' expressions, in source order.
+func argValues(args []Arg) []Expr {
+	values := make([]Expr, len(args))
+	for i, a := range args {
+		values[i] = a.Value
+	}
+	return values
+}
+
 // callOperands picks, per parameter, the name of the last argument bound to it.
-func callOperands(x Call, names []string) []string {
-	operands := make([]string, len(x.Fn.Params))
-	for i, a := range x.Args {
+func callOperands(args []Arg, nParams int, names []string) []string {
+	operands := make([]string, nParams)
+	for i, a := range args {
 		operands[a.Param] = names[i]
 	}
 	return operands
@@ -454,11 +524,11 @@ func callOperands(x Call, names []string) []string {
 
 // inParamOrder reports whether a call's arguments are its parameters once each,
 // in order, so evaluating the call's operands in place is source order.
-func inParamOrder(x Call) bool {
-	if len(x.Args) != len(x.Fn.Params) {
+func inParamOrder(args []Arg, nParams int) bool {
+	if len(args) != nParams {
 		return false
 	}
-	for i, a := range x.Args {
+	for i, a := range args {
 		if a.Param != i {
 			return false
 		}

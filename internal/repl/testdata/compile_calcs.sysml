@@ -243,6 +243,31 @@ package Compiled {
 		in n : Integer;
 		return : Integer = X::Y(n) * 1000 + 'X::Y'(n) * 100 + 'Größe'(n) * 10 + 'Gr_f6__df_e'(n);
 	}
+
+	// Library functions: qualified and imported names, kind-preserving
+	// max/min/abs, Natural parameters, and the extension library's domain errors.
+	package Lib {
+		private import RealFunctions::floor;
+		private import RealFunctions::round;
+		private import TrigFunctions::*;
+		private import OpenSysMLMathFunctions::*;
+
+		calc def Sqrt { in a : Real; return : Real = RealFunctions::sqrt(a); }
+		calc def Floor { in a : Real; return : Integer = floor(a) + round(a); }
+		calc def RealExt { in a : Real; in b : Real; return : Real = RealFunctions::max(a, b) - RealFunctions::min(a, b) + RealFunctions::abs(a); }
+		calc def IntExt { in a : Integer; in b : Integer; return : Integer = NumericalFunctions::max(a, b) - NumericalFunctions::min(a, b) + NumericalFunctions::abs(a); }
+		calc def MixedExt { in a : Integer; in b : Real; return : Real = NumericalFunctions::max(a, b) + RationalFunctions::min(a, b); }
+		calc def IntAbs { in a : Integer; return : Integer = IntegerFunctions::abs(a); }
+		calc def NatMax { in a : Integer; in b : Integer; return : Integer = NaturalFunctions::max(a, b) + NaturalFunctions::min(b, a); }
+		calc def Zero { in a : Real; return : Boolean = NumericalFunctions::isZero(a) or NumericalFunctions::isUnit(a); }
+		calc def Trig { in t : Real; return : Real = sin(t) + cos(t) + tan(t) + cot(t); }
+		calc def Arc { in x : Real; return : Real = arcsin(x) + arccos(x) + arctan(x); }
+		calc def Deg { in t : Real; return : Real = deg(t) + rad(t) + pi; }
+		calc def Exp { in x : Real; return : Real = exp(x) + ln(x); }
+		calc def Log { in x : Real; in base : Real; return : Real = log(x, base); }
+		calc def Atan2 { in y : Real; in x : Real; return : Real = atan2(y, x); }
+		calc def NamedLib { in y : Real; in x : Real; return : Real = atan2(x = x, y = y); }
+	}
 }
 
 // Calculations outside the subset, each refused for the reason its name states.
@@ -271,7 +296,12 @@ package Refused {
 
 	calc def Library {
 		in a : Real;
-		return : Real = RealFunctions::sqrt(a);
+		return : Real = RealFunctions::sum(a);
+	}
+
+	calc def RealToNatural {
+		in a : Real;
+		return : Integer = NaturalFunctions::max(a, 1);
 	}
 
 	// Members of its own would redefine what it inherits; that is not compiled.

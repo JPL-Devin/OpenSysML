@@ -9,6 +9,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -537,14 +538,20 @@ func unwrap(n ast.Node) ast.Node {
 }
 
 func (fc *funcCompiler) compileName(qn *ast.QualifiedName) (Expr, error) {
-	if qn == nil || len(qn.Parts) != 1 {
-		return nil, fc.unsupported(fmt.Sprintf("reference to %s, which is not a parameter or body-local attribute", qnText(qn)))
+	if qn != nil && len(qn.Parts) == 1 {
+		if b, ok := fc.env.lookup(qn.Parts[0].Text); ok {
+			return Var{Name: qn.Parts[0].Text, T: b.t}, nil
+		}
 	}
-	name := qn.Parts[0].Text
-	if b, ok := fc.env.lookup(name); ok {
-		return Var{Name: name, T: b.t}, nil
+	// A library constant reads as its value, as the interpreter's feature seam gives it.
+	if qn != nil {
+		if sym, ok := fc.c.resolver.ResolveQualified(fc.scope, qn); ok && fc.c.resolver.Index().Library(sym) {
+			if v, ok := libFeatureValue(fc.c.name(sym)); ok {
+				return v, nil
+			}
+		}
 	}
-	return nil, fc.unsupported(fmt.Sprintf("reference to %s, which is not a parameter or body-local attribute", name))
+	return nil, fc.unsupported(fmt.Sprintf("reference to %s, which is not a parameter, body-local attribute or compiled library constant", qnText(qn)))
 }
 
 func (fc *funcCompiler) compileOperator(n *ast.OperatorExpr) (Expr, error) {
@@ -706,46 +713,38 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 	}
 	sym, ok := fc.c.resolver.ResolveQualified(fc.scope, n.Type)
 	if !ok {
-		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which does not resolve", qnText(n.Type)))
+		written := qnText(n.Type)
+		fqn, err := runtime.UnresolvedLibraryFunction(n.Type, written)
+		if err != nil {
+			return nil, fc.unsupported(err.Error())
+		}
+		if fqn == "" {
+			return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which does not resolve", written))
+		}
+		return fc.compileLibCall(n, fqn)
 	}
-	if !isCalc(sym.Decl) || fc.c.resolver.Index().Library(sym) {
-		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which is not a calc of the model (library functions are not compiled)", fc.c.name(sym)))
+	if !isCalc(sym.Decl) {
+		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which is not a calc", fc.c.name(sym)))
+	}
+	if fc.c.resolver.Index().Library(sym) {
+		return fc.compileLibCall(n, fc.c.name(sym))
 	}
 	callee, err := fc.c.compileCalc(sym)
 	if err != nil {
 		return nil, err
 	}
-	var args []Arg
-	bound := make([]bool, len(callee.Params))
-	if len(n.NamedArgs) > 0 {
-		for _, na := range n.NamedArgs {
-			i := paramIndex(callee, na.Name)
-			if i < 0 {
-				return nil, fc.unsupported(fmt.Sprintf("%s has no parameter %s", callee.Name, qnText(na.Name)))
-			}
-			v, err := fc.compileArg(na.Value, callee.Params[i], callee)
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, Arg{Param: i, Value: v})
-			bound[i] = true
-		}
-	} else {
-		if len(n.Args) != len(callee.Params) {
-			return nil, fc.unsupported(fmt.Sprintf("%s takes %d arguments, %d given", callee.Name, len(callee.Params), len(n.Args)))
-		}
-		for i, a := range n.Args {
-			v, err := fc.compileArg(a, callee.Params[i], callee)
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, Arg{Param: i, Value: v})
-			bound[i] = true
-		}
+	params := make([]string, len(callee.Params))
+	for i, p := range callee.Params {
+		params[i] = p.Name
 	}
-	for i, b := range bound {
-		if !b {
-			return nil, fc.unsupported(fmt.Sprintf("%s: parameter %s is not bound", callee.Name, callee.Params[i].Name))
+	args, err := fc.bindArgs(n, callee.Name, params)
+	if err != nil {
+		return nil, err
+	}
+	for i, a := range args {
+		p := callee.Params[a.Param]
+		if args[i].Value, err = fc.coerce(a.Value, p.Type, fmt.Sprintf("argument for %s of %s", p.Name, callee.Name)); err != nil {
+			return nil, err
 		}
 	}
 	if callee.Result == TypeInvalid {
@@ -758,20 +757,78 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 	return Call{Fn: callee, Args: args}, nil
 }
 
-func (fc *funcCompiler) compileArg(n ast.Node, p Param, callee *Func) (Expr, error) {
-	v, err := fc.compileExpr(n)
+// compileLibCall compiles a call of the library function fqn; the operation is
+// chosen from the operand types, as the interpreter's kind-preserving functions are.
+func (fc *funcCompiler) compileLibCall(n *ast.InvocationExpr, fqn string) (Expr, error) {
+	params, ok := runtime.LibraryFunctionParams(fqn)
+	if !ok {
+		return nil, fc.unsupported(fmt.Sprintf("library function %s is not compiled", fqn))
+	}
+	args, err := fc.bindArgs(n, fqn, params)
 	if err != nil {
 		return nil, err
 	}
-	return fc.coerce(v, p.Type, fmt.Sprintf("argument for %s of %s", p.Name, callee.Name))
+	types := make([]Type, len(params))
+	for _, a := range args {
+		types[a.Param] = a.Value.Type()
+	}
+	op, why := libOpFor(fqn, types)
+	if why != "" {
+		return nil, fc.unsupported(why)
+	}
+	for i, a := range args {
+		if args[i].Value, err = fc.coerce(a.Value, op.Operands()[a.Param], fmt.Sprintf("argument for %s of %s", params[a.Param], fqn)); err != nil {
+			return nil, err
+		}
+	}
+	return LibCall{Op: op, Args: args}, nil
 }
 
-func paramIndex(fn *Func, name *ast.QualifiedName) int {
+// bindArgs compiles n's arguments in source order, each bound to one of params;
+// every parameter must be bound, by position or by name.
+func (fc *funcCompiler) bindArgs(n *ast.InvocationExpr, callee string, params []string) ([]Arg, error) {
+	var args []Arg
+	bound := make([]bool, len(params))
+	if len(n.NamedArgs) > 0 {
+		for _, na := range n.NamedArgs {
+			i := paramIndex(params, na.Name)
+			if i < 0 {
+				return nil, fc.unsupported(fmt.Sprintf("%s has no parameter %s", callee, qnText(na.Name)))
+			}
+			v, err := fc.compileExpr(na.Value)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, Arg{Param: i, Value: v})
+			bound[i] = true
+		}
+	} else {
+		if len(n.Args) != len(params) {
+			return nil, fc.unsupported(fmt.Sprintf("%s takes %d arguments, %d given", callee, len(params), len(n.Args)))
+		}
+		for i, a := range n.Args {
+			v, err := fc.compileExpr(a)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, Arg{Param: i, Value: v})
+			bound[i] = true
+		}
+	}
+	for i, b := range bound {
+		if !b {
+			return nil, fc.unsupported(fmt.Sprintf("%s: parameter %s is not bound", callee, params[i]))
+		}
+	}
+	return args, nil
+}
+
+func paramIndex(params []string, name *ast.QualifiedName) int {
 	if name == nil || len(name.Parts) != 1 {
 		return -1
 	}
-	for i, p := range fn.Params {
-		if p.Name == name.Parts[0].Text {
+	for i, p := range params {
+		if p == name.Parts[0].Text {
 			return i
 		}
 	}

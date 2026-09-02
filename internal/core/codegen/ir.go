@@ -123,18 +123,26 @@ type Arg struct {
 	Value Expr
 }
 
+// LibCall applies a library function operation (library.go); Args bind its
+// operands as a Call's do, each coerced to the operand's type.
+type LibCall struct {
+	Op   LibOp
+	Args []Arg
+}
+
 // ToReal widens an Integer to a Real.
 type ToReal struct{ X Expr }
 
-func (IntLit) Type() Type   { return TypeInt }
-func (RealLit) Type() Type  { return TypeReal }
-func (BoolLit) Type() Type  { return TypeBool }
-func (v Var) Type() Type    { return v.T }
-func (b Binary) Type() Type { return b.T }
-func (u Unary) Type() Type  { return u.T }
-func (c Cond) Type() Type   { return c.T }
-func (c Call) Type() Type   { return c.Fn.Result }
-func (ToReal) Type() Type   { return TypeReal }
+func (IntLit) Type() Type    { return TypeInt }
+func (RealLit) Type() Type   { return TypeReal }
+func (BoolLit) Type() Type   { return TypeBool }
+func (v Var) Type() Type     { return v.T }
+func (b Binary) Type() Type  { return b.T }
+func (u Unary) Type() Type   { return u.T }
+func (c Cond) Type() Type    { return c.T }
+func (c Call) Type() Type    { return c.Fn.Result }
+func (l LibCall) Type() Type { return l.Op.Result() }
+func (ToReal) Type() Type    { return TypeReal }
 
 // Stmt is a statement of a function body.
 type Stmt interface{ stmt() }

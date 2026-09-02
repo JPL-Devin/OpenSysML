@@ -113,6 +113,91 @@ func sysmlFinite(r float64) float64 {
 	return r
 }
 
+// Library functions: a NaN result is a domain error, an infinity an overflow.
+func sysmlLibReal(r float64) float64 {
+	if math.IsNaN(r) {
+		sysmlFail("arithmetic domain error: argument outside the function's domain")
+	}
+	if math.IsInf(r, 0) {
+		sysmlFail("arithmetic overflow: result is not a finite Real")
+	}
+	return r
+}
+
+func sysmlLibInt(x float64) int64 {
+	if math.IsNaN(x) {
+		sysmlFail("arithmetic domain error: argument outside the function's domain")
+	}
+	if !(x < 9223372036854775808.0 && x >= -9223372036854775808.0) {
+		sysmlFail("arithmetic overflow: result exceeds the Integer range")
+	}
+	return int64(x)
+}
+
+func sysmlIAbs(a int64) int64 {
+	if a == math.MinInt64 {
+		sysmlFail("arithmetic overflow: abs exceeds the Integer range")
+	}
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+func sysmlIMax(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func sysmlIMin(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func sysmlNaturalArg(v int64) int64 {
+	if v < 0 {
+		sysmlFail("type mismatch: requires Natural arguments")
+	}
+	return v
+}
+
+func sysmlTan(t float64) float64 { return sysmlLibReal(math.Sin(t) / math.Cos(t)) }
+func sysmlCot(t float64) float64 { return sysmlLibReal(math.Cos(t) / math.Sin(t)) }
+
+func sysmlLn(x float64) float64 {
+	if x <= 0 {
+		sysmlFail("arithmetic domain error: the logarithm of a non-positive argument is not a Real (requires x > 0.0)")
+	}
+	return sysmlLibReal(math.Log(x))
+}
+
+func sysmlLog(x, base float64) float64 {
+	switch {
+	case x <= 0:
+		sysmlFail("arithmetic domain error: the logarithm of a non-positive argument is not a Real (requires x > 0.0)")
+	case base <= 0:
+		sysmlFail("arithmetic domain error: a non-positive base has no logarithm (requires base > 0.0)")
+	case base == 1:
+		sysmlFail("arithmetic domain error: base 1.0 has no logarithm")
+	case base == 10:
+		return sysmlLibReal(math.Log10(x))
+	case base == 2:
+		return sysmlLibReal(math.Log2(x))
+	}
+	return sysmlLibReal(math.Log(x) / math.Log(base))
+}
+
+func sysmlAtan2(y, x float64) float64 {
+	if y == 0 && x == 0 {
+		sysmlFail("arithmetic domain error: atan2(0.0, 0.0) has no angle")
+	}
+	return sysmlLibReal(math.Atan2(y, x))
+}
+
 func sysmlRDiv(a, b float64) float64 {
 	if b == 0 {
 		sysmlFail("division by zero")
@@ -375,7 +460,11 @@ func (e *goEmitter) expr(x Expr) string {
 	case Cond:
 		return fmt.Sprintf("func() %s { if %s { return %s }; return %s }()", goType(x.T), e.expr(x.C), e.expr(x.Then), e.expr(x.Else))
 	case Call:
-		return e.call(x)
+		return e.call(x.Args, len(x.Fn.Params), goType(x.Fn.Result), func(operands []string) string {
+			return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(operands, ", "))
+		})
+	case LibCall:
+		return e.call(x.Args, len(x.Op.Operands()), goType(x.Op.Result()), x.Op.goExpr)
 	}
 	e.err = fmt.Errorf("codegen: Go emitter has no case for %T", x)
 	return "0"
@@ -383,21 +472,21 @@ func (e *goEmitter) expr(x Expr) string {
 
 // call emits a call; Go evaluates operands left to right, so only arguments
 // written out of parameter order need temporaries to keep source order.
-func (e *goEmitter) call(x Call) string {
-	names := make([]string, len(x.Args))
-	for i, a := range x.Args {
+func (e *goEmitter) call(args []Arg, nParams int, result string, apply func(operands []string) string) string {
+	names := make([]string, len(args))
+	for i, a := range args {
 		names[i] = e.expr(a.Value)
 	}
-	if inParamOrder(x) {
-		return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(names, ", "))
+	if inParamOrder(args, nParams) {
+		return apply(names)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "func() %s { ", goType(x.Fn.Result))
-	for i := range x.Args {
+	fmt.Fprintf(&b, "func() %s { ", result)
+	for i := range args {
 		fmt.Fprintf(&b, "t%d := %s; _ = t%d; ", i, names[i], i)
 		names[i] = fmt.Sprintf("t%d", i)
 	}
-	fmt.Fprintf(&b, "return %s(%s) }()", x.Fn.Ident, strings.Join(callOperands(x, names), ", "))
+	fmt.Fprintf(&b, "return %s }()", apply(callOperands(args, nParams, names)))
 	return b.String()
 }
 

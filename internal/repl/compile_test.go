@@ -2,9 +2,11 @@ package repl
 
 import (
 	"errors"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -58,11 +60,47 @@ var compiledCases = []compiledCase{
 	{"Pos", []string{"2"}}, {"Pos", []string{"1"}}, {"Pos", []string{"0"}},
 	{"One", []string{"21"}},
 	{"Collide", []string{"1"}},
+	{"Lib::Sqrt", []string{"2.0"}}, {"Lib::Sqrt", []string{"0.0"}}, {"Lib::Sqrt", []string{"-1.0"}},
+	{"Lib::Floor", []string{"2.5"}}, {"Lib::Floor", []string{"-2.5"}}, {"Lib::Floor", []string{"1e300"}}, {"Lib::Floor", []string{"9.3e18"}},
+	{"Lib::RealExt", []string{"-1.5", "2.0"}}, {"Lib::RealExt", []string{"0.0", "-0.0"}},
+	{"Lib::IntExt", []string{"-7", "3"}}, {"Lib::IntExt", []string{"-9223372036854775808", "0"}},
+	{"Lib::MixedExt", []string{"2", "2.5"}}, {"Lib::MixedExt", []string{"3", "-0.5"}},
+	{"Lib::IntAbs", []string{"-4"}}, {"Lib::IntAbs", []string{"-9223372036854775808"}},
+	{"Lib::NatMax", []string{"3", "5"}}, {"Lib::NatMax", []string{"3", "-1"}},
+	{"Lib::Zero", []string{"0.0"}}, {"Lib::Zero", []string{"1.0"}}, {"Lib::Zero", []string{"0.5"}},
+	{"Lib::Trig", []string{"0.5"}}, {"Lib::Trig", []string{"0.0"}}, {"Lib::Trig", []string{"1e308"}},
+	{"Lib::Arc", []string{"0.5"}}, {"Lib::Arc", []string{"2.0"}},
+	{"Lib::Deg", []string{"1.0"}}, {"Lib::Deg", []string{"1e308"}},
+	{"Lib::Exp", []string{"1.0"}}, {"Lib::Exp", []string{"0.0"}}, {"Lib::Exp", []string{"710.0"}},
+	{"Lib::Log", []string{"1000.0", "10.0"}}, {"Lib::Log", []string{"8.0", "2.0"}}, {"Lib::Log", []string{"9.0", "3.0"}},
+	{"Lib::Log", []string{"9.0", "1.0"}}, {"Lib::Log", []string{"9.0", "0.0"}}, {"Lib::Log", []string{"-9.0", "3.0"}},
+	{"Lib::Atan2", []string{"1.0", "1.0"}}, {"Lib::Atan2", []string{"0.0", "0.0"}}, {"Lib::Atan2", []string{"0.0", "-1.0"}},
+	{"Lib::NamedLib", []string{"1.0", "-1.0"}},
+}
+
+// transcendental calcs call libm functions whose last bit is the library's, so the
+// C target may differ from Go's math by an ulp; every other value must agree exactly.
+var transcendental = map[string]bool{
+	"Lib::Trig": true, "Lib::Arc": true, "Lib::Exp": true, "Lib::Log": true, "Lib::Atan2": true, "Lib::NamedLib": true,
+}
+
+// withinUlps reports whether two printed Reals are at most n float64 steps apart.
+func withinUlps(a, b string, n uint64) bool {
+	x, err1 := strconv.ParseFloat(a, 64)
+	y, err2 := strconv.ParseFloat(b, 64)
+	if err1 != nil || err2 != nil || (x < 0) != (y < 0) {
+		return false
+	}
+	bx, by := math.Float64bits(math.Abs(x)), math.Float64bits(math.Abs(y))
+	if bx < by {
+		bx, by = by, bx
+	}
+	return bx-by <= n
 }
 
 // failureClass is the part of a failure both surfaces spell the same way.
 func failureClass(msg string) string {
-	for _, class := range []string{"arithmetic overflow", "arithmetic domain", "division by zero", "calc recursion limit exceeded", "typed by Natural", "typed by Positive"} {
+	for _, class := range []string{"arithmetic overflow", "arithmetic domain", "division by zero", "calc recursion limit exceeded", "typed by Natural", "typed by Positive", "requires Natural"} {
 		if strings.Contains(msg, class) {
 			return class
 		}
@@ -148,6 +186,9 @@ func TestCompiledCalcsAgreeWithInterpreter(t *testing.T) {
 				}
 				wantValue, wantFailure := interpreted(t, s, c)
 				gotValue, gotFailure := compiledRun(t, exe, c)
+				if gotFailure == wantFailure && gotValue != wantValue && target == codegen.TargetC && transcendental[c.calc] && withinUlps(gotValue, wantValue, 2) {
+					continue
+				}
 				if gotValue != wantValue || gotFailure != wantFailure {
 					t.Errorf("%s(%s): compiled = (%q, %q), interpreted = (%q, %q)",
 						c.calc, strings.Join(c.args, ", "), gotValue, gotFailure, wantValue, wantFailure)
@@ -172,10 +213,11 @@ func TestCompileRefusesWhatItCannotCompile(t *testing.T) {
 	s := loadCompileFixture(t)
 	for _, tc := range []struct{ calc, reason string }{
 		{"StringResult", "String"},
-		{"Sequence", "library functions"},
+		{"Sequence", "SequenceFunctions::size is not compiled"},
 		{"Defaulted", "default value"},
 		{"OutOnly", "`out`"},
-		{"Library", "library functions"},
+		{"Library", "RealFunctions::sum is not compiled"},
+		{"RealToNatural", "requires Integer arguments"},
 		{"Refined", "members of its own"},
 		{"DynamicIntPow", "non-literal Integer exponent"},
 		{"Narrowed", "Real assigned to x"},
