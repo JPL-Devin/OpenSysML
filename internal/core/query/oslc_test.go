@@ -312,6 +312,21 @@ func TestParseParametersPreservesEncodedSemicolonAndDecodesValues(t *testing.T) 
 	}
 }
 
+func TestParseOSLCReadsKeywordsAcrossNonASCIISpace(t *testing.T) {
+	// A space the scanner skips must also end a keyword, whatever its width.
+	const nbsp = "\u00a0"
+	for _, space := range []string{" ", nbsp} {
+		q, err := ParseOSLC(`sysml:name="battery"` + space + `and` + space + `rdf:type=sysml:PartUsage`)
+		if err != nil || len(q.Where) != 2 {
+			t.Errorf("%q separated conjunction = %#v, error = %v, want two terms", space, q, err)
+		}
+		q, err = ParseOSLC(`sysml:name` + space + `in` + space + `["battery","gripper"]`)
+		if err != nil || len(q.Where) != 1 || len(q.Where[0].Values) != 2 {
+			t.Errorf("%q separated in term = %#v, error = %v, want two values", space, q, err)
+		}
+	}
+}
+
 func TestParseOSLCMalformedNeverPanics(t *testing.T) {
 	inputs := []string{"", `sysml:name=`, `sysml:name="`, `sysml:name in [`, `sysml:name="x" or sysml:type="y"`, `sysml:name="spare" and`, `oslc.select=sysml:name,`}
 	for _, input := range inputs {

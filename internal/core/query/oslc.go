@@ -471,8 +471,10 @@ func (p *oslcParser) consumeWord(word string) bool {
 		return false
 	}
 	end := p.pos + len(word)
-	if end < len(p.s) && !unicode.IsSpace(rune(p.s[end])) {
-		return false
+	if end < len(p.s) {
+		if r, _ := utf8.DecodeRuneInString(p.s[end:]); !unicode.IsSpace(r) {
+			return false
+		}
 	}
 	p.pos = end
 	return true
