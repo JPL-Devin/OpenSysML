@@ -61,7 +61,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 32,
-        "digest": "sha256:3d441910f351e067ec2915a73b439c8fef24a89525574b6d652e5165f19523e6"
+        "digest": "sha256:b9668b3898c4b535466abd1b7450fb5f6b324ef200bd8b2c3eac65bb3990da81"
       },
       {
         "name": "probes",
@@ -75,13 +75,13 @@
   },
   "totals": {
     "files": 366,
-    "filesFullyAgreeing": 334,
-    "agreement": 34,
+    "filesFullyAgreeing": 337,
+    "agreement": 43,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
-    "pilotOnly": 332,
-    "openSysMLDiagnostics": 56,
-    "pilotDiagnostics": 368
+    "pilotOnly": 303,
+    "openSysMLDiagnostics": 65,
+    "pilotDiagnostics": 348
   },
   "roots": [
     {
@@ -735,21 +735,18 @@
       "dir": "examples",
       "totals": {
         "files": 32,
-        "filesFullyAgreeing": 21,
-        "agreement": 0,
+        "filesFullyAgreeing": 24,
+        "agreement": 9,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
-        "pilotOnly": 306,
-        "openSysMLDiagnostics": 2,
-        "pilotDiagnostics": 307
+        "pilotOnly": 277,
+        "openSysMLDiagnostics": 11,
+        "pilotDiagnostics": 287
       },
       "files": [
         {
           "path": "disposal-robot-demo/robot.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
+          "agreement": [
             {
               "line": 514,
               "severity": "error",
@@ -769,13 +766,17 @@
               "count": 1
             },
             {
-              "line": 564,
+              "line": 566,
               "severity": "error",
               "category": "unmapped",
               "count": 1
-            },
+            }
+          ],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": [
             {
-              "line": 566,
+              "line": 564,
               "severity": "error",
               "category": "unmapped",
               "count": 1
@@ -796,7 +797,14 @@
         },
         {
           "path": "disposal-team-demo/team.sysml",
-          "agreement": [],
+          "agreement": [
+            {
+              "line": 271,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            }
+          ],
           "severityMismatch": [],
           "openSysMLOnly": [],
           "pilotOnly": [
@@ -816,12 +824,6 @@
               "line": 117,
               "severity": "warning",
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 271,
-              "severity": "error",
-              "category": "unmapped",
               "count": 1
             }
           ]
@@ -879,18 +881,6 @@
           "severityMismatch": [],
           "openSysMLOnly": [],
           "pilotOnly": [
-            {
-              "line": 44,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 47,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
             {
               "line": 133,
               "severity": "error",
@@ -2282,138 +2272,6 @@
           ]
         },
         {
-          "path": "self-model/identity.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 40,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "self-model/pipeline.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 121,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 122,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 133,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 185,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 190,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 194,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 199,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 204,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 208,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 220,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 226,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 339,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 348,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "self-model/surfaces.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 222,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 228,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 427,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 435,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            }
-          ]
-        },
-        {
           "path": "self-model/views.sysml",
           "agreement": [],
           "severityMismatch": [],
@@ -2435,10 +2293,7 @@
         },
         {
           "path": "solver-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
+          "agreement": [
             {
               "line": 133,
               "severity": "error",
@@ -2458,13 +2313,17 @@
               "count": 1
             },
             {
-              "line": 183,
+              "line": 185,
               "severity": "error",
               "category": "unmapped",
               "count": 1
-            },
+            }
+          ],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": [
             {
-              "line": 185,
+              "line": 183,
               "severity": "error",
               "category": "unmapped",
               "count": 1
@@ -2574,12 +2433,22 @@
     {
       "side": "pilot",
       "message": "Cannot override a binding feature value",
-      "count": 29
+      "count": 9
+    },
+    {
+      "side": "opensysml",
+      "message": "cannot override the binding value of TradeStudies::MaximizeObjective::best: a value written with `=` is fixed for every feature redefining it; write it as `default =` on TradeStudies::MaximizeObjective::best to allow overriding, or remove this value",
+      "count": 6
     },
     {
       "side": "pilot",
       "message": "Duplicate of other owned member name",
       "count": 5
+    },
+    {
+      "side": "opensysml",
+      "message": "cannot override the binding value of TradeStudies::MinimizeObjective::best: a value written with `=` is fixed for every feature redefining it; write it as `default =` on TradeStudies::MinimizeObjective::best to allow overriding, or remove this value",
+      "count": 3
     },
     {
       "side": "opensysml",
@@ -2810,13 +2679,13 @@
     ],
     "totals": {
       "files": 366,
-      "filesFullyAgreeing": 335,
-      "agreement": 34,
+      "filesFullyAgreeing": 338,
+      "agreement": 43,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
-      "pilotOnly": 332,
-      "openSysMLDiagnostics": 55,
-      "pilotDiagnostics": 368
+      "pilotOnly": 303,
+      "openSysMLDiagnostics": 64,
+      "pilotDiagnostics": 348
     },
     "findings": [
       {

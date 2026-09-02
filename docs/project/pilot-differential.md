@@ -218,9 +218,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 32 | 21 | 2 | 307 | 0 | 1 | 1 | 306 |
+| `examples` | 32 | 24 | 11 | 287 | 9 | 1 | 1 | 277 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **366** | **334** | **56** | **368** | **34** | **2** | **20** | **332** |
+| **Total** | **366** | **337** | **65** | **348** | **43** | **2** | **20** | **303** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -289,8 +289,9 @@ What remains is adjudicated as extension notation this project supports delibera
   `robot.sysml`, `disposal-team-demo/team.sysml`) — the trade-study contract this project reads
   (`internal/core/solve/doc.go`). The
   library binds `best`, so the reference reports `Cannot override a binding feature value` for the
-  expression to improve, and it admits one objective per analysis case where we improve several
-  lexicographically: 8 + 2 + 1 `unmapped` rows.
+  expression to improve — since the feature-value overriding round below we report it too, so
+  those nine rows are agreement, not divergence — and it admits one objective per analysis case
+  where we improve several lexicographically: 1 + 1 `unmapped` rows that stay the reference's.
 - **`frame concern` in a view usage** (`views-demo.sysml`, `robot.sysml`) — `FramedConcernMember` is
   a requirement-body member in the pilot grammar, not a view-body one, and the demos frame a concern
   in the view because that is what `%view` evaluates the exposed elements against. Declaring the
@@ -304,14 +305,14 @@ adjudicated where they are rather than rewritten away.
 ### The team demo
 
 `examples/disposal-team-demo/team.sysml` was written to exercise notation the robot demo does not
-reach, and validates clean here. The reference reports four rows on it, none of them a rule of ours
-that is missing:
+reach. The reference reports four rows on it; since the feature-value overriding round we report
+the `best` one too, and none of the other three is a rule of ours that is missing:
 
 | Row | The reference's reading | Verdict |
 |---|---|---|
 | `:29` (2 `warning: Bound features should have conforming types`) | `attribute payload : MassValue = sum(robots.mass) + sum(cradles.mass);` — the value is an operator expression, and the reference compares the argument types of the implicit binding | Same family as `BindingConnector_Invalid2.sysml.xt:42`: our `W9CBoundFeatureTypesPass` checks feature endpoints, and no numbered constraint was found for argument-level conformance on an expression |
 | `:117` (`error: Referent must be time varying.` + the same warning) | `assign accepted := accepted + 1;` in a state's entry action, where `accepted` is an attribute of the enclosing `part def` | Reference-side asymmetry: the identical assignment written in an `action` of the same part def, nested or not, is clean on both sides, so the referent's `mayTimeVary` is not what the two implementations read differently — the state's entry action is |
-| `:259` (`error`, `unmapped`) | `attribute :>> best = robotMass;` in the analysis objective | The trade-study notation adjudicated in the bullet above |
+| `:271` (`error`, `unmapped`) | `attribute :>> best = robotMass;` in the analysis objective | The trade-study notation adjudicated in the bullet above; now reported by both sides |
 
 ### Package-keyword round
 
@@ -346,8 +347,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **332** |
-| pilot diagnostics | 123 | **368** |
+| only pilot | 82 | **303** |
+| pilot diagnostics | 123 | **348** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -551,25 +552,18 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 10 syntax, 44 `unmapped`, 71 `kind-mismatch`, 181 `unresolved-reference` — of which
-`relay-probe-demo/mission.sysml` carries three: two `unmapped` where the pilot rejects a snapshot
-redefining the mass its individual binds (`Cannot override a binding feature value`) and one
-`kind-mismatch` on its send of a `Telemetry` instantiation, the same two rules it already flags on
-`solver-demo.sysml` and the send-statement demos — all of them
+`examples` 10 syntax, 15 `unmapped`, 71 `kind-mismatch`, 181 `unresolved-reference` — of which
+`relay-probe-demo/mission.sysml` carries one, a `kind-mismatch` on its send of a `Telemetry`
+instantiation, the same rule the reference flags on the send-statement demos — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
-The architecture self-model under `examples/self-model` adds twenty of the shapes this root
-already carries: eighteen `unmapped` where `pipeline.sysml`, `surfaces.sysml` and `identity.sysml`
-redefine an inherited attribute's default (`Cannot override a binding feature value`, the rule
-`solver-demo.sysml` and `relay-probe-demo/mission.sysml` already draw — the self-model draws it once
-per validation pass it marks element-scoped, per rendering kind it marks unsupported, per budget
-default it restates, per unit it marks memoized and per oracle it marks gating) and two syntax rows
-where `views.sysml` frames a concern, which the reference rejects on `views-demo.sysml` the same
-way. The accuracy round that modelled the pass registry, the six runtime budgets and the rendering
-kinds took the `unmapped` count from five to fifteen without adding a shape; modelling the library
-snapshot, its gating check and the evaluator's memoization took it to seventeen the same way, and
-the compiled calc tier, memoized like the evaluator it sits beside, to eighteen.
+The architecture self-model under `examples/self-model` adds two of the shapes this root already
+carries, the syntax rows where `views.sysml` frames a concern, which the reference rejects on
+`views-demo.sysml` the same way. It used to add eighteen `unmapped` as well, where `pipeline.sysml`,
+`surfaces.sysml` and `identity.sysml` redefined an inherited attribute's default that was written as
+a binding; the feature-value overriding round above wrote those bases as `default =`, and with them
+the two rows `relay-probe-demo/mission.sysml` drew from the same rule.
 
 **`self-model/document.sysml` carries 259 pilot-only rows on its own, and every one of them has a
 single cause: the reference has no `DocumentQueries` library.** The file is the architecture
@@ -621,13 +615,13 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **334 / 20 / 56** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **337 / 20 / 65** |
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **306** |
-| `examples`: fully agreeing | **15** | **21** |
-| `unmapped`, our side | **20** | **19** |
+| `examples`: only pilot | **40** | **277** |
+| `examples`: fully agreeing | **15** | **24** |
+| `unmapped`, our side | **20** | **28** |
 
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from
 our own demos, in two rounds, and it lands entirely on the `examples` root. The succession
@@ -686,6 +680,39 @@ root causes, adjudicated next. The 314 that F34 surfaced on the 10 `.kerml` demo
 gone: F96 made those fixtures honest, and none of them is a `.kerml` diagnostic any more.
 
 ---
+
+### Feature-value overriding round
+
+`validateFeatureValueOverriding` (KerML 8.3.4.10.2) is now a constraint-tier rule of ours
+(`passes/feature_value_overriding.go`): a feature bound with `=` may not be given another value by
+a feature that redefines it, directly or through further redefinitions; only a `default =` value
+may be overridden, and an initial value (`:=`) is a different constraint. The rule reaches no row
+of the reference corpora — the four OMG roots are unmoved — and moves only our own `examples`:
+
+| Count | Before | Now |
+|---|---:|---:|
+| overall: fully agreeing | 334 | **337** |
+| overall: agreed diagnostics | 34 | **43** |
+| overall: our diagnostics | 56 | **65** |
+| overall: pilot diagnostics | 368 | **348** |
+| overall: only pilot | 332 | **303** |
+| `examples`: fully agreeing | 21 | **24** |
+| `examples`: only pilot | 306 | **277** |
+
+Two movements, both in `examples/`:
+
+- **Nine rows move from only-pilot to agreement.** Every `attribute :>> best = <expression>` in
+  `solver-demo.sysml` (4), `disposal-robot-demo/robot.sysml` (4) and `disposal-team-demo/team.sysml`
+  (1) restates `TradeStudies::MinimizeObjective::best` / `MaximizeObjective::best`, which the
+  library binds, and both implementations now say so. The solver's objective contract still reads
+  that notation and `%optimize` still answers, so the demos and their tests carry the diagnostic
+  as a known gap (`internal/core/model/examples_test.go`) until the contract is restated as the
+  library intends; that is a separate change, not a rule to weaken.
+- **Twenty only-pilot rows retire.** The demos that overrode an inherited attribute's *default*
+  wrote the base value with `=` — `relay-probe-demo/mission.sysml` (2), `self-model/pipeline.sysml`
+  (13), `self-model/surfaces.sysml` (4) and, through them, `self-model/identity.sysml` (1). Those
+  bases now say `default =`, which is what a value meant to be overridden is, so neither side
+  reports the override; every `%`-command transcript in the docs is unchanged.
 
 ## Adjudications
 
