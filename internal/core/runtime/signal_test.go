@@ -1519,3 +1519,66 @@ func TestSendInvocationIsACallOnlyWhereItResolvesToACalc(t *testing.T) {
 		}
 	}
 }
+
+// A send classifies its invocation in the scope it is declared in: a library
+// function imported only by the nested action that sends is a call there, so
+// the value it computes is what travels, not a message named after it.
+func TestActionSendCallsFunctionImportedByNestedAction(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender {
+				private import SequenceFunctions::*;
+				send size((1, 2, 3)) to reader;
+			}
+			action reader accept n : Integer;
+			action recorder { assign got := n; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 3)
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("expected no message left in flight, got %v", pending)
+	}
+}
+
+// The same holds for a state's entry: a function imported by the state alone is
+// called and its value sent, so the transition on the value's type fires.
+func TestStateSendCallsFunctionImportedByNestedBlock(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		state Driver {
+			entry; then start;
+			state start;
+			state waiting {
+				private import SequenceFunctions::*;
+				entry send size((1, 2, 3)) to Driver;
+			}
+			succession first start then waiting;
+			transition first waiting accept n : Integer then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Driver", ast.DefState)
+	if sym == nil {
+		t.Fatal("state Driver not found")
+	}
+	_, visits, err := ctx.ExecuteStateWithEvents(sym, nil)
+	if err != nil {
+		t.Fatalf("execute state machine: %v", err)
+	}
+	assertVisits(t, visits, "start", "waiting", "done")
+}

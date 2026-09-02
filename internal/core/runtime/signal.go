@@ -680,7 +680,13 @@ func (ctx *Context) messageMatches(m Message, want *ast.QualifiedName, scope *sy
 //
 // A via send keeps a receiver target when one was stated; postVia fills in the
 // reached port and final delivery kind.
+//
+// Names resolve in the send's declaring scope, which sees what a nested block
+// imports; scope is the fallback where the lowered send records none.
 func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Message, error) {
+	if send.Scope != nil {
+		scope = send.Scope
+	}
 	target := send.Target
 	if send.IsVia {
 		target = send.Receiver
