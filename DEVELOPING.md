@@ -566,6 +566,22 @@ Library indexes can be frozen with `Freeze`. A workspace can create an overlay
 with `NewOverlay`, sharing the immutable library base while keeping project
 writes separate.
 
+The bundled standard library's frozen index is not built at start-up but decoded
+from `internal/core/libs/stdlib.snapshot`, a generated artifact embedded in the
+binary (`symbols.WriteSnapshot`/`ReadSnapshot` over `internal/core/pack` and
+`internal/core/ast/astcodec`). The OMG files under `internal/core/libs/stdlib/`
+remain the source of truth: a process falls back to parsing them whenever their
+digest or the snapshot's format version differs from what the snapshot records.
+After editing a bundled library file, the snapshot's format, or anything the
+frozen index holds, regenerate and commit it:
+
+```bash
+make stdlib-snapshot          # go generate ./internal/core/libs
+make stdlib-snapshot-check    # what CI runs; TestEmbeddedSnapshotIsCurrent fails too
+```
+
+Never edit the snapshot by hand.
+
 ### Adding a new declaration kind
 
 If parser output contains a new declaration that users can name or reference:

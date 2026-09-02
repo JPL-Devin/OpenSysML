@@ -230,6 +230,61 @@ so the win is collector pressure rather than bytes:
 Diagnostics and exit status were verified byte-identical against the previous
 binary over the same models.
 
+## What a process pays before the model
+
+Every `sysml`, `sysml-lsp` and `sysml-grpc` start, and every test that builds a
+model, first builds the standard library's index: `libs.SharedBase()` parsed the
+97 bundled OMG files (1.7 MB), indexed them, expanded their wildcard imports and
+installed derived facts. On the census machine that was the whole cost of
+`bin/sysml -memstats -e "2+3" model.sysml` over a one-part model — about 100 ms,
+of which a CPU profile put 40 ms in lexing and parsing, 40 ms in
+`symbols.(*Index).ExpandWildcardImports` and 10 ms in facts and collection.
+Three changes took it to under 20 ms, each measured over the same command
+(external wall time is the shell's, around the process; the internal figures are
+`-memstats`; five or more runs each, all shown):
+
+| state | wall (external) | wall (`-memstats`) | allocated | allocations |
+|---|---|---|---|---|
+| before | 95–102 ms | — | 53.3 MiB | 466.9k |
+| library files parsed concurrently | 69–72 ms | — | 51.9 MiB | 466.4k |
+| plus cheaper wildcard expansion | 66–72 ms | — | 50.6 MiB | 452.5k |
+| plus the embedded snapshot | 17–23 ms | 13–17 ms | 32.4 MiB | 67.1k |
+
+- **Concurrent parsing.** `Loader.LoadAll` reads the files in order, hashes and
+  parses them on `GOMAXPROCS` goroutines, then adds them to the index in the
+  same order as before, so the index is what a serial load builds
+  (`TestLoadAllMatchesSerialLoad` compares the two). The content digest the
+  facts cache keys on is folded into the same pass.
+- **Wildcard expansion.** A namespace's direct children are kept as a sorted
+  slice rather than sorted out of a map on every enumeration, a claim is
+  returned from the re-export step instead of looked up again, children a
+  target declares itself skip the source-key lookup, an import's children share
+  one direct-route slice, and subsumed routes are filtered in place.
+  `BenchmarkExpandWildcardImports` over the library alone went from
+  33.1–34.4 ms, 15.8 MB and 137k allocations per expansion to 30.5–31.9 ms,
+  15.0 MB and 123k. The expansion stays inherently iterative — most of its cost
+  is the re-export closure itself — which is what the snapshot removes.
+- **The snapshot.** The library's frozen index is serialized at generation time
+  into `internal/core/libs/stdlib.snapshot` (3.4 MB, embedded; the `sysml`
+  binary grows from 16.9 to 20.5 MB) and decoded at start-up, so neither the
+  parser nor the expansion runs for the library at all. The format is
+  hand-rolled (`internal/core/pack`, `internal/core/ast/astcodec`,
+  `symbols.WriteSnapshot`): varints over one string table, a node table per
+  syntax-node type so each type's nodes are allocated in one block, and index
+  references in place of pointers, so the decoded graph shares what the parsed
+  one shares. Decoding (`BenchmarkDecodeSnapshot`) costs 7.8 ms, 32 MB and 64k
+  allocations, most of it in reading node fields; the syntax trees, scopes,
+  symbols and tables are separate sections decoded on separate goroutines, and
+  the collector is paused for the decode, since everything it would mark is live
+  for the whole process. Checking that the embedded files still match the
+  snapshot's digest (`BenchmarkSetDigest`, SHA-256 over 1.7 MB) is 0.9 ms of the
+  remainder.
+
+The snapshot changes nothing observable: `TestSnapshotIndexMatchesFreshLoad`
+compares the decoded index with a fresh load structurally — every field, every
+pointer, the same sharing between them — and the resolution, completion, REPL
+and execution suites run over the decoded library.
+
 ## What running a model costs
 
 Runs are measured against an already-loaded model, with the session's runtime
