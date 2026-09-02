@@ -78,9 +78,7 @@ func (ctx *Context) calcOutputs(chain []*symbols.Symbol) []calcOutput {
 					out.Value = outs[at].Value
 					out.Owner = outs[at].Owner
 				}
-				if out.Decl.Target == nil {
-					out.Decl = outs[at].Decl
-				}
+				out.Decl = out.Decl.redeclaring(outs[at].Decl)
 				outs[at] = out
 				continue
 			}
@@ -209,7 +207,12 @@ func (shape *calcShape) outputNames() string {
 // being narrowed to whichever output comes first.
 func (shape *calcShape) designatedOutput() (calcOutput, error) {
 	if shape.ResultExpr != nil {
-		return calcOutput{Name: "result", Value: shape.ResultExpr, Owner: shape.Sym, IsResult: true}, nil
+		// The bound value is the declared result's, so it answers to that declaration.
+		out := calcOutput{Name: "result", Value: shape.ResultExpr, Owner: shape.Sym, IsResult: true}
+		if declared := shape.resultOutput(); declared != nil {
+			out.Decl = declared.Decl
+		}
+		return out, nil
 	}
 	var valued []calcOutput
 	for _, out := range shape.Outputs {
@@ -612,8 +615,9 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 	}
 	// A binding gives the output its value as a write does, so it answers to the
 	// output's declared type and multiplicity the same way.
-	what := fmt.Sprintf("calc %s: output %s", run.shape.Name, run.outputDescription(out))
-	if err := out.Decl.checkBound(ctx, what, value); err != nil {
+	if err := out.Decl.check(ctx, &value, func() string {
+		return fmt.Sprintf("calc %s: output %s", run.shape.Name, run.outputDescription(out))
+	}); err != nil {
 		return Value{}, err
 	}
 	if out.Name != "" {

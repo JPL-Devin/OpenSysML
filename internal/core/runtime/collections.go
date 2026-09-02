@@ -42,6 +42,27 @@ func elementsOf(val Value) []Value {
 	}
 }
 
+// elementCount is len(elementsOf(val)) without materializing a scalar's
+// one-element sequence.
+func elementCount(val *Value) int64 {
+	switch val.Kind {
+	case ValSequence:
+		if val.Sequence == nil {
+			return 0
+		}
+		return int64(val.Sequence.Size())
+	case ValSet:
+		if val.Set == nil {
+			return 0
+		}
+		return int64(val.Set.Size())
+	case ValNull, ValInvalid:
+		return 0
+	default:
+		return 1
+	}
+}
+
 // sequenceOf builds a sequence value from elements.
 func sequenceOf(elements []Value) Value {
 	seq := NewSequence()
