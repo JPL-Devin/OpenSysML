@@ -63,8 +63,9 @@ REPL's `%view` command prints, using Mermaid, and redraws as you edit the model.
   table. A view whose rendering is unsupported (`geometry`, `textual`) stays in the picker and
   explains why it cannot be drawn.
 - **Navigation.** Clicking a node jumps to the declaration it was built from, and moving the
-  cursor in the editor highlights the node that contains it. A node with no locatable declaration,
-  such as a standard library symbol, is not clickable.
+  cursor in the editor highlights the node that contains it. A node built from a standard
+  library declaration opens the library file it was declared in, read-only (see
+  [the standard library in the editor](#the-standard-library-in-the-editor)).
 - **Behavior while editing.** A keystroke that leaves the model unparseable dims the last valid
   diagram and reports the error in the status line beneath it; the panel is never blanked.
   Anything the rendering could not represent is listed below the diagram.
@@ -75,6 +76,30 @@ REPL's `%view` command prints, using Mermaid, and redraws as you edit the model.
 The panel is read-only: it renders the model, and editing the diagram does not change the model.
 It is only available when the connected server provides the render methods
 ([LSP extensions](../reference/lsp.md)), so an older `sysml-lsp` does not offer the command.
+
+### The standard library in the editor
+
+The server bundles the standard library, so a name like `ScalarValues::Integer` resolves
+without a copy of the library on disk — and go-to-definition, find-references (with the
+declaration included), hover and the diagram panel can all land in it. Such a location is
+reported under the `sysml-stdlib:` scheme, whose path is the file's path within the library:
+
+```
+sysml-stdlib:///Kernel%20Libraries/Kernel%20Data%20Type%20Library/ScalarValues.kerml
+```
+
+In VS Code, <kbd>Ctrl</kbd>+click on a library name opens that file in a read-only editor
+showing the bundled text, positioned on the declaring line. The library file is a document like
+any other: hover, go-to-definition, the outline and semantic highlighting work inside it, so
+navigation continues from one library file to the next (from `Occurrences.kerml` to `Base.kerml`,
+say). The editor is read-only and the server refuses an edit to it — the library is what the
+server validates the model against, and changing it would change what every diagnostic means.
+
+Other clients get the locations too, but need to know how to show the file behind the URI: the
+server serves its text through the `opensysml/stdlibContent` request, and a client registers a
+content provider for the `sysml-stdlib` scheme that calls it — see
+[LSP extensions](../reference/lsp.md#opensysmlstdlibcontent-request) for the request and the
+capability that announces it.
 
 After rebuilding the binary, run `SysML: Restart Language Server` from the command palette.
 `editors/vscode/README.md` documents every setting, the grammar generator (keywords are taken
@@ -89,7 +114,8 @@ LSP client; only the syntax highlighting is specific to VS Code.
 - ✅ Document synchronization, incremental (`textDocumentSync.change: 2`)
 - ✅ Diagnostics (syntax + semantic errors, published on open and on change)
 - ✅ Hover (symbol info, type, multiplicity)
-- ✅ Go-to-definition (cross-document navigation)
+- ✅ Go-to-definition (cross-document navigation, into the bundled standard library as
+  `sysml-stdlib:` documents)
 - ✅ Find references (workspace-wide search)
 - ✅ Completion (trigger characters `:` and `.`; typed kinds and details, `v.` offers members of `v`'s type, `Pkg::` offers that namespace's members, library names included)
 - ✅ Document symbols (outline view)
@@ -105,6 +131,9 @@ LSP client; only the syntax highlighting is specific to VS Code.
   and the `opensysml/renderChanged` notification, announced as
   `experimental: { openSysmlRender: true }` — what the diagram panel is built on,
   documented in [LSP extensions](../reference/lsp.md)
+- ✅ Standard library documents, as the custom `opensysml/stdlibContent` request,
+  announced as `experimental: { openSysmlStdlibContent: true }` — what opens a
+  `sysml-stdlib:` location, documented in [LSP extensions](../reference/lsp.md)
 - ✅ Code actions (`textDocument/codeAction`): quick fixes for the spelling of an
   unresolved name, importing the namespace that declares it, inserting a missing
   semicolon the parser located exactly; and the `refactor.rewrite` actions on a

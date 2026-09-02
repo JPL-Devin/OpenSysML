@@ -8,6 +8,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **The bundled standard library opens in the editor.** Go-to-definition, find-references
+  and the diagram panel used to report a standard library declaration at a path no editor
+  could open, so a click on `ScalarValues::Integer` went nowhere. `sysml-lsp` now reports
+  such a location under the `sysml-stdlib:` scheme — the file's path within the library —
+  with its line and column computed from the bundled text, and serves that text through the
+  `opensysml/stdlibContent` request, announced as `openSysmlStdlibContent` in the
+  `initialize` result. The VS Code extension registers a provider for the scheme, so
+  <kbd>Ctrl</kbd>+click on a library name opens the bundled file in a read-only editor on the
+  declaring line; hover, go-to-definition, the outline and semantic highlighting work inside
+  it, so navigation continues from one library file into the next. Opening or closing such a
+  document changes nothing, and an edit to one is refused with an error rather than applied:
+  the library is what every diagnostic is judged against. Other LSP clients get the same by
+  registering a content provider for the scheme that calls the request.
+
 - **A model's change set applies to a live repository, keyed by identity.**
   `sysml model.sysml -sync-apply http://localhost:8083` diffs the model against its project
   branch on a running SysML v2 API (Flexo MMS) and writes the change set as one commit through
@@ -36,6 +50,17 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the apply against the real stack — an initial load, a revision with a retained-id rename and
   gated deletes, a conflict staged behind the sync's back — and records what read back at the
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+- **The RDF round trip is measured over every example, and pinned per file.** `TestCorpusRoundTrip`
+  converts each of the 345 models under `examples/` — the committed models, the OMG training
+  corpus and the three pilot corpora — notation → Turtle → notation → Turtle and compares the two
+  graphs as triple sets, so a writer or encoder change that moves any file's verdict in either
+  direction fails the suite and is adjudicated, as the pilot corpora gate already does for
+  diagnostics. The baseline records 166 files stable, 71 stable up to the whitespace inside
+  `sysx:sourceText`, 14 that come back as a different graph, 15 that cannot be written back,
+  2 whose written notation no longer converts and 77 refused on the first hop, each refusal
+  classed by the construct it names. The mapping's reference now states that measurement in place
+  of the claim that a second conversion yields the same graph, which held for the fixtures alone
+  ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
 
 ### Performance
 
