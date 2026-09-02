@@ -420,3 +420,66 @@ func TestCompletionMaterializesNothing(t *testing.T) {
 	wants(t, run(t, s, "%features car.wheels[2].hub"), "bolts = 5")
 	rejects(t, run(t, s, "%features car.wheels[3]"), "bolts")
 }
+
+// A materialized state machine exhibits none, so a reference to it — by id or by
+// path — debugs a run of its machine, as its declared name always has.
+func TestStateMachineObjectsByReference(t *testing.T) {
+	s := submitted(t, `package Plant {
+	state def Modes {
+		entry; then off;
+		state off {
+			accept after 2 then on;
+		}
+		state on;
+	}
+	part def Monitor {
+		state modes : Modes;
+	}
+	part monitor : Monitor;
+}`)
+	id := objectIDIn(t, run(t, s, "%instantiate Plant::Modes"))
+	wants(t, run(t, s, "%state Plant::Modes"), "Started state machine executor", "Current state: off")
+	wants(t, run(t, s, "%state #"+id), "Started state machine executor", "Current state: off")
+	wants(t, run(t, s, "%advance 2"), "Current state: on")
+	run(t, s, "%instantiate monitor")
+	wants(t, run(t, s, "%state monitor.modes"), "Started state machine executor", "Current state: off")
+	wants(t, run(t, s, "%advance 2"), "Current state: on")
+	wants(t, run(t, s, "%state monitor.nope"), "error:", `Plant::monitor has no feature "nope"`)
+}
+
+// An object displaced from its name still carries its type's conditions, so an
+// unpinned check or evaluation names it as one of the objects it could be about
+// instead of quietly answering about the currently named one.
+func TestDisplacedObjectsCarryImplicitSubjects(t *testing.T) {
+	const lab = `package Lab {
+	part def Sensor {
+		attribute reading : ScalarValues::Real = 1.0;
+		constraint inRange { reading < 5.0 }
+	}
+	part def Rack { part gauge : Sensor; }
+	part sensor : Sensor;
+	part rack : Rack;
+}`
+	t.Run("displaced object", func(t *testing.T) {
+		s := submitted(t, lab)
+		first := objectIDIn(t, run(t, s, "%instantiate sensor"))
+		wants(t, run(t, s, "%constraint Lab::Sensor::inRange"), "passed (on Lab::sensor ID: "+first+")")
+		second := objectIDIn(t, run(t, s, "%instantiate sensor"))
+		if first == second {
+			t.Fatalf("a second %%instantiate reused id #%s", first)
+		}
+		both := "carried by more than one object of this session (Lab::sensor, #" + first + ")"
+		wants(t, run(t, s, "%constraint Lab::Sensor::inRange"), "error:", both)
+		wants(t, run(t, s, "%eval Lab::Sensor::reading"), "error:", both)
+		// Naming the object settles the question.
+		wants(t, run(t, s, "%eval in #"+first+" : reading"), "1.0")
+	})
+
+	t.Run("part of a displaced object", func(t *testing.T) {
+		s := submitted(t, lab)
+		rack := objectIDIn(t, run(t, s, "%instantiate rack"))
+		run(t, s, "%instantiate rack")
+		wants(t, run(t, s, "%eval Lab::Sensor::reading"),
+			"carried by more than one object of this session (Lab::rack::gauge, #"+rack+"::gauge)")
+	})
+}

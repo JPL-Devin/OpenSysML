@@ -291,8 +291,8 @@ func (s *Session) reportedSubject(result runtime.CheckResult, inst *runtime.Inst
 	return result.Subject, root + "::" + result.SubjectPath
 }
 
-// instanceName is the name the session holds inst under, empty for an object it
-// did not create.
+// instanceName is the name the session holds inst under — `#<id>` for one
+// displaced from its name — and empty for an object it did not create.
 func (s *Session) instanceName(inst *runtime.Instance) string {
 	if inst == nil {
 		return ""
@@ -300,6 +300,11 @@ func (s *Session) instanceName(inst *runtime.Instance) string {
 	for name, held := range s.instances {
 		if held == inst {
 			return name
+		}
+	}
+	for _, u := range s.unnamed {
+		if u.obj == inst {
+			return fmt.Sprintf("#%d", inst.ID)
 		}
 	}
 	return ""

@@ -45,7 +45,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   (`car.wheels[2]`). In a path `.` and `::` mean the same thing. The id is the object's identity
   for the session: it survives the carry-over an unrelated declaration triggers, and a second
   `%instantiate` of the same name, which re-points the name and now says how the first object is
-  still reached; `%instances` lists such an object as `#3 (ID: 3, formerly Demo::car)`. A bad
+  still reached; `%instances` lists such an object as `#3 (ID: 3, formerly Demo::car)`. The old
+  object still counts: a `%constraint`, `%requirement` or `%eval` that names no object and whose
+  condition both carry says so and names both (`Demo::car, #3`) rather than answering about the
+  new one, and `%state #3` debugs a state machine the session holds by id or path as it does by
+  name. A bad
   reference is reported in the same words by every command: an unknown id lists the ids there
   are, a segment that is no feature names the object and its features, an attribute at the end
   of a path says it holds a value, and a multi-valued part with no index says how many objects it

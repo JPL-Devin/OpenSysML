@@ -208,13 +208,15 @@ func carriesDeclaration(model *semantics.Model, typ *symbols.Symbol, decl ast.No
 // sorted: an object of `part hot : Sensor` carries `Sensor::inRange`. Nested
 // objects carry the features of their own type too, so `Spec::c` is carried by
 // the `o::inner::b` a redefinition gave a value on, not only by a top-level
-// object.
+// object. An object displaced from its name carries under its id, after the
+// named ones, so an object two closures share is named the way it is still
+// addressed by name.
 func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	if sym == nil || sym.OwnerScope == nil {
 		return nil
 	}
 	declaring := sym.OwnerScope.Owner()
-	if declaring == nil || declaring.Decl == nil || len(s.instances) == 0 {
+	if declaring == nil || declaring.Decl == nil || s.heldObjects() == 0 {
 		return nil
 	}
 	ctx, err := s.getOrCreateRuntime()
@@ -223,14 +225,8 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	}
 	model := ctx.Model()
 	var names []string
-	seen := make(map[int64]bool, len(s.instances))
-	queue := make([]carrier, 0, len(s.instances))
-	for name, inst := range s.instances {
-		if inst != nil {
-			queue = append(queue, carrier{name: name, inst: inst})
-		}
-	}
-	sort.Slice(queue, func(i, j int) bool { return queue[i].name < queue[j].name })
+	seen := make(map[int64]bool, s.heldObjects())
+	queue := s.rootCarriers()
 	for visited := 0; len(queue) > 0 && visited < carrierLimit; visited++ {
 		cur := queue[0]
 		queue = queue[1:]
@@ -246,7 +242,7 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 		}
 		queue = append(queue, nestedObjects(ctx, cur)...)
 	}
-	sort.Strings(names)
+	sort.SliceStable(names, func(i, j int) bool { return carrierLess(names[i], names[j]) })
 	return names
 }
 
@@ -255,6 +251,61 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 type carrier struct {
 	name string
 	inst *runtime.Instance
+}
+
+// rootCarriers is every object the session holds: the named ones by name, then
+// the displaced ones as `#<id>`, in carrierLess order.
+func (s *Session) rootCarriers() []carrier {
+	roots := make([]carrier, 0, s.heldObjects())
+	for name, inst := range s.instances {
+		if inst != nil {
+			roots = append(roots, carrier{name: name, inst: inst})
+		}
+	}
+	for _, u := range s.unnamed {
+		if u.obj != nil {
+			roots = append(roots, carrier{name: fmt.Sprintf("#%d", u.obj.ID), inst: u.obj})
+		}
+	}
+	sort.Slice(roots, func(i, j int) bool { return carrierLess(roots[i].name, roots[j].name) })
+	return roots
+}
+
+// carrierLess orders carrier labels: named objects alphabetically before
+// displaced ones, which go by id.
+func carrierLess(a, b string) bool {
+	aID, aOK := labelRootID(a)
+	bID, bOK := labelRootID(b)
+	switch {
+	case aOK != bOK:
+		return !aOK
+	case aOK && aID != bID:
+		return aID < bID
+	}
+	return a < b
+}
+
+// labelRootID is the id a carrier label is rooted at, if it is rooted at one.
+func labelRootID(label string) (int64, bool) {
+	root, _, _ := strings.Cut(label, "::")
+	if !isObjectID(root) {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(root[1:], 10, 64)
+	return id, err == nil
+}
+
+// carrierObject is the object a carrier label denotes: reached by name, or from
+// the id a displaced one is rooted at.
+func (s *Session) carrierObject(label string) (*runtime.Instance, string) {
+	if _, byID := labelRootID(label); !byID {
+		return s.objectNamed(label)
+	}
+	inst, owner, err := s.resolveObject(objectText(label))
+	if err != nil {
+		return nil, ""
+	}
+	return inst, owner
 }
 
 // nestedObjects returns the objects held in an object's feature values, in feature-value-name
@@ -311,7 +362,7 @@ func (s *Session) subjectFor(name, fqn string, sym *symbols.Symbol) (*runtime.In
 		return nil, "", nil
 	case 1:
 		// A carrier may be nested, so it is reached the way any object name is.
-		inst, owner := s.objectNamed(carriers[0])
+		inst, owner := s.carrierObject(carriers[0])
 		if inst == nil {
 			return nil, "", nil
 		}

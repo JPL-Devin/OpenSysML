@@ -2139,24 +2139,30 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	// A reference to an object the session holds denotes that object, whose
 	// exhibited machine is already running: the debugger drives that machine
 	// rather than a detached run of the shared usage. A materialized state
-	// machine exhibits none, so it stays debuggable — including as a machine
-	// another object performs.
+	// machine exhibits none, so a reference to it runs its machine afresh —
+	// including as a machine another object performs.
 	inst, label, rerr := s.resolveObject(name)
-	if inst != nil {
+	var (
+		sym *symbols.Symbol
+		fqn string
+	)
+	switch {
+	case inst != nil:
 		if _, exhibits := inst.ExhibitedState(); exhibits || !isMachineSymbol(inst.Type) {
 			return s.debugExhibitedMachine(ctx, name, label, inst, performer)
 		}
-	} else if looksLikeObjectPath(name) {
+		sym, fqn = inst.Type, symbols.FQNOf(inst.Type)
+	case looksLikeObjectPath(name):
 		return nil, rerr
-	}
-
-	sym, fqn, lerr := s.lookupSymbolOfKinds(name, symbols.SymbolStateDef, symbols.SymbolStateUsage)
-	if lerr != nil {
-		return nil, lerr
-	}
-
-	if !isMachineSymbol(sym) {
-		return nil, fmt.Errorf("%q is not a state machine", name)
+	default:
+		var lerr error
+		sym, fqn, lerr = s.lookupSymbolOfKinds(name, symbols.SymbolStateDef, symbols.SymbolStateUsage)
+		if lerr != nil {
+			return nil, lerr
+		}
+		if !isMachineSymbol(sym) {
+			return nil, fmt.Errorf("%q is not a state machine", name)
+		}
 	}
 
 	self, selfFQN, perr := s.performingObject(performer)

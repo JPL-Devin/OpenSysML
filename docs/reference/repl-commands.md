@@ -58,7 +58,7 @@ into the parts it holds (`car.fl.hub`, `#3.fl`, `car.wheels[2]`).
 | `%break <node>` | Set a breakpoint at a node |
 | `%stop` | Stop the current debugging session |
 | **State machine debugging** ([guide chapter 6](../guide/06-behavior.md)) | |
-| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <object>` after `%instantiate` attaches to that object's own running machine, whether the object is named, `#3`, or `car.controller`), or start a state machine, optionally performed by an instantiated object. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
+| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <object>` after `%instantiate` attaches to that object's own running machine, whether the object is named, `#3`, or `car.controller`), or start a state machine — named, or the object of one the session holds (`%state #2`, `%state monitor.modes`), which exhibits none and so runs afresh — optionally performed by an instantiated object. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
 | `%events` | Show the event queue |
 | `%current` | Show the current state and configuration |
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |
