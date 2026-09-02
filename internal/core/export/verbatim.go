@@ -112,11 +112,16 @@ func (d *decoder) demoteAll() {
 }
 
 // disagreeingTriples lists the structural triples only one of the two graphs
-// states; source text differs from canonical notation by design and is skipped.
+// states. Source text differs from canonical notation by design, and a member
+// index states an order the notation keeps whatever the numbers, so both skip.
 func disagreeingTriples(graph, check *rdf.Graph) []rdf.Triple {
 	var out []rdf.Triple
 	structural := func(t rdf.Triple) bool {
-		return t.Predicate.Value != rdf.OpenSysML+xSourceText && t.Predicate.Value != rdf.OpenSysML+xSourceTail
+		switch t.Predicate.Value {
+		case rdf.OpenSysML + xSourceText, rdf.OpenSysML + xSourceTail, rdf.OpenSysML + xMemberIndex:
+			return false
+		}
+		return true
 	}
 	for _, t := range graph.Triples() {
 		if structural(t) && !check.Has(t) {
@@ -148,7 +153,7 @@ func (d *decoder) blame(iri string, check *rdf.Graph) (*element, string) {
 		if holder == "" {
 			holder = holderOf(check, iri)
 			if owner, ok := d.byIRI[holder]; ok && check.HasProperty(rdf.IRI(iri), rdf.SysML+pQualifiedName) {
-				return d.verbatimMemberAt(owner, intOf(check, rdf.IRI(iri), rdf.OpenSysML+xMemberIndex)), ""
+				return d.verbatimMemberAt(owner, memberRank(check, holder, iri)), ""
 			}
 		}
 		iri = holder
@@ -168,15 +173,30 @@ func (d *decoder) nearestVerbatim(el *element) *element {
 	return nil
 }
 
-// verbatimMemberAt returns the verbatim member of owner at index, or else the
-// nearest verbatim owner.
-func (d *decoder) verbatimMemberAt(owner *element, index int) *element {
-	for _, child := range owner.children {
-		if child.memberIndex == index && (d.printed[child] || d.rebuilt[child]) {
+// verbatimMemberAt returns the member written at rank among owner's, which is
+// the one whose notation the candidate's member of that rank came from, or
+// else the nearest verbatim owner.
+func (d *decoder) verbatimMemberAt(owner *element, rank int) *element {
+	if rank >= 0 && rank < len(owner.children) {
+		if child := owner.children[rank]; d.printed[child] || d.rebuilt[child] {
 			return child
 		}
 	}
 	return d.nearestVerbatim(owner)
+}
+
+// memberRank returns the place of iri among the members of owner in g, in
+// index order; the numbers themselves need not run on from zero.
+func memberRank(g *rdf.Graph, owner, iri string) int {
+	index := intOf(g, rdf.IRI(iri), rdf.OpenSysML+xMemberIndex)
+	rank := 0
+	for _, t := range g.Triples() {
+		if t.Predicate.Value == rdf.SysML+pOwningNamespace && t.Object.Value == owner && t.Subject.Value != iri &&
+			intOf(g, t.Subject, rdf.OpenSysML+xMemberIndex) < index {
+			rank++
+		}
+	}
+	return rank
 }
 
 // holderOf returns the subject a node hangs off: the namespace owning an

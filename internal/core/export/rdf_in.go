@@ -396,10 +396,7 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
 	lead := indent + el.prefix
 	if text, ok := d.verbatim(el); ok {
-		// The member's lines as written, members and notes included.
-		if el.prefix != "" {
-			text = lead + strings.TrimLeft(text, " \t")
-		}
+		// The member's lines as written, members, notes and prefix included.
 		b.WriteString(text)
 		d.printed[el] = true
 		// The members carry their own text; the tail closes the body after them.

@@ -78,7 +78,8 @@ func TestStrippedGraphPrintsCanonically(t *testing.T) {
 }
 
 // An edit after export wins over the stale text of the member it touched, and
-// only that member's lines are replaced with canonical notation.
+// only that member's lines are replaced with canonical notation; the blank line
+// ahead of the next member is that member's own.
 func TestEditedGraphDoesNotResurrectStaleText(t *testing.T) {
 	turtle := editTurtle(t, commentedTurtle(t),
 		"    sysml:declaredName \"Hub\" ;\n",
@@ -89,6 +90,7 @@ package Rover {
     /* Definitions come first. */
     part def Wheel :> Part; // a synonym the printer would spell out
     abstract part def Hub;
+
     part def Vehicle {
         doc /* what a vehicle is for */
         part wheels : Wheel[4]; // four of them
@@ -117,20 +119,131 @@ func TestRemovedMemberIsNotResurrected(t *testing.T) {
     part def B; // the second
 }
 `)
-	var kept []string
-	for _, line := range strings.Split(string(turtle), "\n") {
-		if strings.Contains(line, "P__B") && !strings.HasPrefix(line, "elmt:P__B") {
-			line = strings.ReplaceAll(line, ", elmt:P__B_om", "")
-			line = strings.ReplaceAll(line, ", elmt:P__B", "")
-		}
-		kept = append(kept, line)
-	}
-	turtle = withoutSubjects(t, []byte(strings.Join(kept, "\n")), "elmt:P__B", "elmt:P__B_om")
-	back := toNotation(t, turtle)
+	back := toNotation(t, withoutMember(t, turtle, "elmt:P__B"))
 	want := "package P {\n    part def A; // the first\n}\n"
 	if back != want {
 		t.Errorf("the removed member came back:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
+}
+
+// Removing a member from the middle of a body leaves the members after it
+// numbered as they were; their text, comments and spacing still stand.
+func TestMembersAfterARemovedOneKeepTheirText(t *testing.T) {
+	turtle := idTurtle(t, `package P {
+    part def A; // the first
+    part def B; // the second
+    /* about C */
+    part def C {
+        part x : A; // inside
+    }
+
+    part def D; // the fourth
+}
+`)
+	turtle = withoutMember(t, turtle, "elmt:P__B")
+	back := toNotation(t, turtle)
+	want := `package P {
+    part def A; // the first
+    /* about C */
+    part def C {
+        part x : A; // inside
+    }
+
+    part def D; // the fourth
+}
+`
+	if back != want {
+		t.Errorf("members after the removed one lost their text:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	// The members after the removed one are renumbered on the way back, but
+	// otherwise the notation states exactly what the graph states.
+	renumbered := func(turtle []byte) string {
+		return string(withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:memberIndex"))
+	}
+	if got, want := renumbered(idTurtle(t, back)), renumbered(turtle); got != want {
+		t.Errorf("the notation does not state the edited graph:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+}
+
+// The blank line ahead of a member is its own: it stays when the member before
+// it is rebuilt or removed, and an edit is blamed on the member it was made to.
+func TestBlankLinesStayWithTheMemberAfterThem(t *testing.T) {
+	notation := `package P {
+    part def A;
+
+    // about B
+    part def B;
+
+    part def C; // the third
+}
+`
+	edited := editTurtle(t, idTurtle(t, notation),
+		"    sysml:declaredName \"A\" ;\n",
+		"    sysml:declaredName \"A\" ;\n    sysml:isAbstract \"true\"^^xsd:boolean ;\n")
+	back := toNotation(t, edited)
+	want := `package P {
+    abstract part def A;
+
+    // about B
+    part def B;
+
+    part def C; // the third
+}
+`
+	if back != want {
+		t.Errorf("rebuilding a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	back = toNotation(t, withoutMember(t, idTurtle(t, notation), "elmt:P__B"))
+	want = `package P {
+    part def A;
+
+    part def C; // the third
+}
+`
+	if back != want {
+		t.Errorf("removing a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
+// A member introduced by `then` carries the word in its own text, whether its
+// owner is written as it was or rebuilt around it.
+func TestThenIsNotWrittenTwice(t *testing.T) {
+	notation := `package P {
+    action def Q {
+        action a;
+        // then b
+        then action b;
+    }
+}
+`
+	turtle := idTurtle(t, notation)
+	if back := toNotation(t, turtle); back != notation {
+		t.Errorf("the notation changed:\n--- want ---\n%s--- got ---\n%s", notation, back)
+	}
+	edited := editTurtle(t, turtle,
+		"    sysml:declaredName \"Q\" ;\n",
+		"    sysml:declaredName \"Q\" ;\n    sysml:isAbstract \"true\"^^xsd:boolean ;\n")
+	want := strings.Replace(notation, "    action def Q", "    abstract action def Q", 1)
+	if back := toNotation(t, edited); back != want {
+		t.Errorf("rebuilding the owner lost the members' text:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
+// withoutMember drops the given member of P from a Turtle document, as an edit
+// to the graph after export would, leaving the other members numbered as before.
+func withoutMember(t *testing.T, turtle []byte, member string) []byte {
+	t.Helper()
+	var kept []string
+	for _, line := range strings.Split(string(turtle), "\n") {
+		if strings.Contains(line, member) && !strings.HasPrefix(line, member) {
+			for _, ref := range []string{member + "_om", member} {
+				line = strings.ReplaceAll(line, ", "+ref, "")
+				line = strings.ReplaceAll(line, ref+", ", "")
+			}
+		}
+		kept = append(kept, line)
+	}
+	return withoutSubjects(t, []byte(strings.Join(kept, "\n")), member, member+"_om")
 }
 
 // withoutSubjects drops every block of a Turtle document describing one of the

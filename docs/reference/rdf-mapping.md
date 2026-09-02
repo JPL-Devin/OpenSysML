@@ -249,7 +249,10 @@ written.
 **The graph is authoritative.** The text is a rendering of the structural
 triples, not a second copy of the model, and the decoder checks it before
 trusting it: the candidate notation is converted back to RDF and compared with
-the graph being read, source text aside. Each triple the two disagree on is
+the graph being read, source text aside. `sysx:memberIndex` is set aside too:
+the notation lists members in index order whatever the numbers, so a member
+removed from the middle of a body leaves those after it standing as written,
+their indices no longer running on from zero. Each triple the two disagree on is
 charged to the nearest element whose text it falls under — or to the outermost
 expression node written from its text — which is then written in canonical
 notation instead, and the notation is built and checked again until the two
@@ -263,6 +266,7 @@ package Rover {
     /* Definitions come first. */
     part def Wheel :> Part; // a synonym the printer would spell out
     abstract part def Hub;
+
     part def Vehicle {
         doc /* what a vehicle is for */
         part wheels : Wheel[4]; // four of them
@@ -272,8 +276,9 @@ package Rover {
 
 Here `sysml:isAbstract` was added to `Hub` after the export: its line — and the
 note that was written above it — is rebuilt from the graph, and every other
-line is kept. Text that no longer parses, or whose disagreement cannot be placed
-on one element, demotes every element to canonical notation rather than writing
+line is kept, the blank line after it included, since that belongs to
+`Vehicle`. Text that no longer parses, or whose disagreement cannot be placed on
+one element, demotes every element to canonical notation rather than writing
 an invalid or contradictory file; one that lands on notation already rebuilt is
 the graph's own (a `declaredName` edited without its `qualifiedName`) and
 demotes nothing further. Identity annotations follow the same rule:

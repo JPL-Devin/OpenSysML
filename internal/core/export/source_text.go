@@ -99,6 +99,10 @@ func (s *formattedSource) tile(spans []source.Span) []region {
 		if next < len(s.kinds) {
 			end = s.lineStart(s.fmtd[next].Offset)
 		}
+		// Blank lines ahead of the next member are its own, so they outlive this one.
+		for end >= 2 && s.text[end-1] == '\n' && s.text[end-2] == '\n' {
+			end--
+		}
 		var start int
 		if i > 0 {
 			start = out[i-1].end
