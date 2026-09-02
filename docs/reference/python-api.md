@@ -1,7 +1,7 @@
 # The Python client API
 
-What `opensysml` costs, the typed classes it can generate for a model, and the modules behind
-them. Using the client as a task is [guide chapter 9](../guide/09-python.md).
+This page covers what `opensysml` costs, the typed classes it can generate for a model, and the
+modules behind them. For a task-oriented walkthrough, see [guide chapter 9](../guide/09-python.md).
 
 ## Latency
 
@@ -24,20 +24,20 @@ Reproduce with `make build-grpc && bin/sysml-grpc` and
 The shape matters more than the absolute numbers: a parse costs two orders of
 magnitude more than a query on the parsed result, because it loads the standard
 library into a fresh symbol index and runs the semantic passes. Everything else
-here is around a millisecond, of which the RPC itself — protobuf encode/decode
-plus loopback — is a few hundred microseconds.
+here takes around a millisecond, of which the RPC itself (protobuf encode/decode
+plus loopback) is a few hundred microseconds.
 
 ### Starting the service
 
 A `Connection` that names no address starts a private `sysml-grpc` child, which
 binds the port the kernel gives it and reports the address on stdout. There is no
 readiness backoff to tune: the client waits for that one line, and the first
-`GetServerInfo` — which it makes anyway, to check the release — is the readiness
-check, since the address is reported only once the listener is bound. The wait
-for the line is bounded by `opensysml.connection.START_TIMEOUT` (2.5 s), after
-which `ConnectionError` is raised naming the last lines the child logged; a child
-that exits instead of reporting closes stdout, and is reported at its exit rather
-than at the timeout. Starting and reaching one costs ~7.0 ms p50 / ~9.1 ms p95 on
+`GetServerInfo` (which it makes anyway, to check the release) doubles as the
+readiness check, since the address is reported only once the listener is bound.
+The wait for the line is bounded by `opensysml.connection.START_TIMEOUT` (2.5 s),
+after which `ConnectionError` is raised quoting the last lines the child logged. A
+child that exits instead of reporting closes stdout, and is reported when it exits
+rather than at the timeout. Starting and reaching one costs ~7.0 ms p50 / ~9.1 ms p95 on
 the machine above, and a second connection in the same interpreter joins that
 child for ~0.6 ms. `Connection(auto_start=False)` costs ~0.3 ms and the first RPC
 on it ~1 ms; `import opensysml` is ~120 ms, mostly `grpc` (~48 ms) and the
@@ -47,9 +47,9 @@ generated protobuf modules.
 
 This is a request/response service over gRPC, not a hard real-time engine. It
 gives no deadline guarantee, and nothing in it is scheduled: the runtime's step
-and time budgets bound how long an execution may run, which caps a worst case
-rather than promising one. Tails come from the Go garbage collector, the
-scheduler, TCP, and — for a cache miss — a parse whose cost scales with the
+and time budgets bound how long an execution may run, which caps the worst case
+rather than promising one. Latency tails come from the Go garbage collector, the
+scheduler, TCP, and, on a cache miss, a parse whose cost scales with the
 document. Treat the p99 above as a soft budget, and measure the p99 for the
 relevant model sizes, cache state and concurrency before relying on it.
 
@@ -67,8 +67,8 @@ What that means in practice:
   per second per connection.
 - **Keep the hot loop local.** Filtering, thresholding and windowing over a
   telemetry stream belong in NumPy in the calling process. Use the service for the
-  coarse-grained step — resolving a model question, instantiating, running an
-  action or state machine, converting a model — not for every sample.
+  coarse-grained steps (resolving a model question, instantiating, running an
+  action or state machine, converting a model), not for every sample.
 - **Convert off the hot path.** Conversion re-parses its input on every call; it
   is not cached by content the way `load` is.
 
@@ -111,9 +111,9 @@ is the explicit escape hatch for a deliberately unchecked view.
 
 ### Keeping a generated module honest
 
-A generated module records what it came from, so a stale one can be detected
-rather than discovered at attribute access (or never, when a removed feature keeps
-type-checking):
+A generated module records what it was generated from, so a stale one can be
+detected up front rather than discovered at attribute access (or never, when a
+removed feature still type-checks):
 
 ```python
 SYSML_GENERATOR_VERSION = "1"   # emission schema of this generator
@@ -132,22 +132,22 @@ that regenerates it, which makes it usable as a CI or pre-commit gate.
 Generation requires a service that reports the `type_facts` capability, which it
 asks for over `GetServerInfo`. A service too old to answer that RPC, or one that
 answers without the capability, does not populate `SymbolInfo.type_info`, and
-generating against it would type every feature `object` — indistinguishable from a
-feature that is genuinely untyped. Generation therefore fails, naming the service
+generating against it would type every feature as `object`, indistinguishable from
+a feature that is genuinely untyped. Generation therefore fails, naming the service
 in use, where it came from, and how to replace it, rather than emitting a silently
 useless module.
 
 The generator emits a **runtime `.py`**, not a `.py` + `.pyi` pair: each feature is
 a property that carries the annotation and performs the delegation, so the types
 and the code that implements them cannot drift apart, and there is one artifact to
-commit. Output is deterministic — definitions ordered by fully-qualified name (base
-classes first), nothing environment-dependent written — so it can be committed and
-diffed; `clients/python/tests/golden/vehicle_types.py` is exactly that.
+commit. Output is deterministic (definitions ordered by fully-qualified name, base
+classes first, and nothing environment-dependent written), so it can be committed
+and diffed; `clients/python/tests/golden/vehicle_types.py` is exactly that.
 
 Generated classes are views, not copies: attribute access goes to the underlying
 feature value on every read, and Tier 1 behaviour is preserved. A feature value that
-failed to evaluate raises `FeatureValueError`; one holding a value of another type than the model
-declared raises `TypeMismatchError` rather than returning a wrongly typed value. A feature holding
+failed to evaluate raises `FeatureValueError`; one holding a value of a different type than the
+model declared raises `TypeMismatchError` rather than returning a wrongly typed value. A feature holding
 no value (Tier 1 `UNSET`) reads as `None` for a `0..1` property and as the empty list for a
 collection property.
 
@@ -203,18 +203,18 @@ dodge one.
 `opensysml.connect(host, port, auto_start=True)` returns a caller-owned
 `Connection`; the module-level functions share a lazily created singleton
 connection instead. Naming a host and port, writing `host:port` as the host, or setting
-`$OPENSYSML_SERVICE=host:port`, is the opt-in to a service this client does not
-manage; with none of them the connection reaches a private child of this
-interpreter. A `host:port` address written as the host is read as one —
-`connect("localhost:50123")` reaches port 50123 — and a port named twice with
-two values raises `ValueError` naming the disagreement rather
+`$OPENSYSML_SERVICE=host:port` opts in to a service this client does not
+manage; with none of them, the connection reaches a private child of this
+interpreter. A `host:port` address written as the host is read as one
+(`connect("localhost:50123")` reaches port 50123), and a port named twice with
+two different values raises `ValueError` naming the disagreement rather
 than timing out against an address nobody asked for. The helpers taking
 `host`/`port` (`load`, `evaluate`, `convert`, `instantiate`) read it the same way.
 
 `opensysml` never stops a service it did not start, and never uses one it was not
 pointed at. A private child is reference-counted within the interpreter that
-started it — one child per release requirement, shared by that interpreter's
-connections, stopped when the last is closed or the interpreter exits — and
+started it (one child per release requirement, shared by that interpreter's
+connections, stopped when the last is closed or the interpreter exits) and
 dies with that interpreter however it dies, because it exits at end of file on a
 stdin pipe only that process holds. Nothing about it is written to disk, so there
 is no record to authenticate, no pid outside its own `Popen` to signal, and no
