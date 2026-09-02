@@ -407,6 +407,32 @@ func runCLI() int {
 		return 2
 	}
 
+	if flagGiven("compile") && compileCalc == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -compile is empty; name the calc def to compile, as -compile Pkg::Fib")
+		return 2
+	}
+	if compileCalc == "" && (flagGiven("target") || compileSource) {
+		fmt.Fprintln(os.Stderr, "sysml: -target and -source apply to -compile; name the calc def to compile")
+		return 2
+	}
+	if compileCalc != "" {
+		switch {
+		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "" || syncDiffWith != "" || syncApplyTo != "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile builds an executable; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query, -eval, -from, -sync-diff or -sync-apply")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-compile builds an executable and decides nothing about the model; check it in its own run")
+		case outputPath == "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile needs -o to name the executable (or the source file, with -source)")
+			return 2
+		}
+		if err := runCompile(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
 	if flagGiven("sync-diff") && syncDiffWith == "" {
 		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph or endpoint to diff against")
 		return 2
@@ -488,32 +514,6 @@ func runCLI() int {
 				"-render-all writes views out and decides nothing about the model; check it in its own run")
 		}
 		if err := runRenderAll(args); err != nil {
-			return fail(err)
-		}
-		return exitHolds
-	}
-
-	if flagGiven("compile") && compileCalc == "" {
-		fmt.Fprintln(os.Stderr, "sysml: -compile is empty; name the calc def to compile, as -compile Pkg::Fib")
-		return 2
-	}
-	if compileCalc == "" && (flagGiven("target") || compileSource) {
-		fmt.Fprintln(os.Stderr, "sysml: -target and -source apply to -compile; name the calc def to compile")
-		return 2
-	}
-	if compileCalc != "" {
-		switch {
-		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "":
-			fmt.Fprintln(os.Stderr, "sysml: -compile builds an executable; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query, -eval or -from")
-			return 2
-		case modelChecks.requested():
-			return refuse(modelChecks,
-				"-compile builds an executable and decides nothing about the model; check it in its own run")
-		case outputPath == "":
-			fmt.Fprintln(os.Stderr, "sysml: -compile needs -o to name the executable (or the source file, with -source)")
-			return 2
-		}
-		if err := runCompile(args); err != nil {
 			return fail(err)
 		}
 		return exitHolds
