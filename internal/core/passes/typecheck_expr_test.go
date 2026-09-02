@@ -63,11 +63,23 @@ func TestExprBindIntegerToRealAttributeOK(t *testing.T) {
 	wantNoDiags(t, `package P { attribute x : ScalarValues::Real = 5; }`)
 }
 
+// A feature reference is typed by the feature's declaration, not by the value
+// it happens to hold: `w` is a Real here, whatever the 3 it was given is.
 func TestExprBindFeatureReferenceRespectsDeclaredType(t *testing.T) {
 	wantOneDiag(t, `package P {
+		attribute w : ScalarValues::Real = 3;
+		attribute x : ScalarValues::String = w;
+	}`, "cannot bind Real value to a feature typed by String")
+}
+
+// A type only bounds the values an expression may yield, so a feature typed
+// narrower than the expression is not refused: the Real `w` may hold a whole
+// number, and whether it does is known when the value is bound.
+func TestExprBindWiderTypedReferenceToNarrowerFeatureOK(t *testing.T) {
+	wantNoDiags(t, `package P {
 		attribute w : ScalarValues::Real = 1.5;
 		attribute x : ScalarValues::Integer = w;
-	}`, "cannot bind Real value to a feature typed by Integer")
+	}`)
 }
 
 func TestExprBindNestedUsageValue(t *testing.T) {
@@ -105,8 +117,8 @@ func TestExprDivisionOfStringsRejected(t *testing.T) {
 }
 
 // The reference implementation evaluates a whole-number quotient — Natural or
-// Integer operands alike — as a Rational, so it binds to a Rational feature and
-// not to a whole-number one. Integer ** Natural stays Integer.
+// Integer operands alike — as a Rational, so it binds to a Rational feature.
+// Integer ** Natural stays Integer.
 func TestExprWholeNumberDivisionAndPowerOK(t *testing.T) {
 	wantNoDiags(t, `package P {
 	attribute q : ScalarValues::Rational = 7 / 2;
@@ -114,25 +126,45 @@ func TestExprWholeNumberDivisionAndPowerOK(t *testing.T) {
 }`)
 }
 
-func TestExprNaturalDivisionIsRational(t *testing.T) {
-	wantOneDiag(t,
-		`package P { attribute q : ScalarValues::Natural = 7 / 2; }`,
-		"cannot bind Rational value to a feature typed by Natural")
+// A quotient is typed Rational, but a Rational may be whole, so a whole-number
+// feature does not refuse it: which values the quotient takes is known when it
+// is evaluated, not from its type. A quotient of decimals is no different.
+func TestExprQuotientMayBindToWholeNumberFeature(t *testing.T) {
+	wantNoDiags(t, `package P {
+	attribute i : ScalarValues::Integer = -7;
+	attribute q : ScalarValues::Natural = 7 / 2;
+	attribute r : ScalarValues::Natural = i / 2;
+	attribute s : ScalarValues::Integer = 1.5 / 2;
+	calc def IntDiv { return : ScalarValues::Integer = 7 / 2; }
+}`)
 }
 
-func TestExprIntegerDivisionIsRational(t *testing.T) {
+// The quotient's type is still Rational, whatever the operands: it is observable
+// where a Boolean is required, and where a disjoint type is.
+func TestExprDivisionIsRational(t *testing.T) {
+	wantOneDiag(t,
+		`package P { constraint def c { 7 / 2 } }`,
+		"constraint expression must be Boolean, found Rational")
 	wantOneDiag(t,
 		`package P {
 	attribute i : ScalarValues::Integer = -7;
-	attribute q : ScalarValues::Natural = i / 2;
+	constraint def c { i / 2 }
 }`,
-		"cannot bind Rational value to a feature typed by Natural")
+		"constraint expression must be Boolean, found Rational")
+	wantOneDiag(t,
+		`package P { constraint def c { 1.5 / 2 } }`,
+		"constraint expression must be Boolean, found Rational")
+	wantOneDiag(t,
+		`package P { attribute s : ScalarValues::String = 7 / 2; }`,
+		"cannot bind Rational value to a feature typed by String")
 }
 
-func TestExprRealDivisionStaysReal(t *testing.T) {
+// A literal's type is exact, so a decimal that reads as no whole number is
+// refused by a whole-number feature.
+func TestExprBindDecimalLiteralToNaturalRejected(t *testing.T) {
 	wantOneDiag(t,
-		`package P { attribute q : ScalarValues::Integer = 1.5 / 2; }`,
-		"cannot bind Rational value to a feature typed by Integer")
+		`package P { attribute n : ScalarValues::Natural = 2.5; }`,
+		"cannot bind Rational value to a feature typed by Natural")
 }
 
 func TestExprNotOnIntegerRejected(t *testing.T) {
@@ -320,6 +352,19 @@ func TestExprInvocationArgumentTypeMismatch(t *testing.T) {
 		`argument 2 of add expects Integer, found String`)
 }
 
+// An argument binds to its parameter as a value binds to a feature: a decimal
+// literal is no Integer, a quotient or a Real feature's value may be one.
+func TestExprInvocationArgumentNarrowerThanExpression(t *testing.T) {
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { add(1, 2.5) } }`,
+		`argument 2 of add expects Integer, found Rational`)
+	wantNoDiags(t, `package P {
+		`+calcAdd+`
+		attribute w : ScalarValues::Real = 1.5;
+		calc c { add(7 / 2, w) }
+	}`)
+}
+
 func TestExprInvocationDefaultedParameterOptional(t *testing.T) {
 	wantNoDiags(t, `package P {
 		calc def scale {
@@ -356,10 +401,16 @@ func TestExprLiteralConformsToNatural(t *testing.T) {
 	}`)
 }
 
+// A signed literal spells its value out, so `-3` is refused by a Natural feature
+// as a decimal literal is; a negated Integer feature may be a Natural.
 func TestExprNegatedLiteralIsNotNatural(t *testing.T) {
 	wantOneDiag(t,
 		`package P { attribute n : ScalarValues::Natural = -3; }`,
 		"cannot bind Integer value to a feature typed by Natural")
+	wantNoDiags(t, `package P {
+		attribute i : ScalarValues::Integer = -3;
+		attribute n : ScalarValues::Natural = -i;
+	}`)
 }
 
 func TestExprArrowFormReceiverCountsAsFirstArgument(t *testing.T) {
