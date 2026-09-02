@@ -49,6 +49,23 @@ Pass fully-prefixed predicate names — `strip("hop1.ttl", ["sysx:sourceText"], 
 since not every load-bearing predicate lives in the `sysx:` namespace (the `sysml:isVariant` /
 `sysml:includes` controls below use the `sysml:` prefix).
 
+**Multi-line literals break the line filter.** A `sysx:sourceText` whose text spans lines (a
+multi-line string-concatenation expression in a metadata body, e.g. the pilot
+`IssueMetadataExample.sysml`) is written as a `"""..."""` literal over several lines. Dropping only
+the first line leaves the tail behind and the decoder reports `turtle: line N: unrecognized term` —
+that is a broken *test harness*, not a mapping defect. When the dropped line contains a single
+`"""`, keep skipping until the line that closes it (and apply the same `;` → ` .` fix-up there).
+
+**Compare triple sets, not bytes, for the corpus files.** Two hops can be byte-different yet
+equal as graphs (the writer may reorder a `sysml:subsets` line, as `Metadata Example-1.sysml`
+showed). `pip install rdflib` (into the active venv; `--user` is refused there) and compare
+`set(Graph().parse(a)) == set(Graph().parse(b))`; print the symmetric difference so a residual
+`sysx:sourceText`-only difference (expression re-spacing/parenthesization: `(test,demo)` →
+`(test, demo)`, `@Safety or @Security` → `(@ Safety) or (@ Security)`, `x meta T` →
+`(x meta T)`) is visibly distinct from a structural one. Those expression-text drifts are what the
+ratchet records as `whitespace-only`, and they are also the only reason a source-text-free
+back-conversion differs from the source-text-backed one on the corpus files.
+
 Pass criterion: the source-text-free back-conversion is **byte-identical** to the source-text-backed
 one, and re-encoding it gives a `.ttl` byte-identical to `hop1.ttl`.
 
@@ -134,6 +151,35 @@ package RT2 {
   part def Sys { include U; }
 }
 ```
+
+## Metadata annotations
+
+Every `@M;`, `@M { … }`, `metadata m : M about a, b;` and `#M part def P;` is a
+`sysml:MetadataUsage` with `sysml:type`, one `sysml:annotatedElement` per `about` target,
+`sysx:hasBody`, `sysx:declaredKeyword` `"@"`/`"#"` (absent for the `metadata` keyword) and body
+members as owned members ordered by `sysx:memberIndex`. Fixtures:
+`internal/core/export/testdata/convert/metadata_bodies.sysml` and `metadata_prefixes.sysml`
+(neither validates clean on its own — unqualified `Integer`/`Real` and a `variant` outside a
+`variation` — so judge semantic equality by identical `-validate` diagnostics, or add
+`private import ScalarValues::*;` to a copy). Hand-edit the stripped `.ttl` for the controls:
+
+| Edit | Working mapping |
+|---|---|
+| drop one IRI from `sysml:annotatedElement a, b` | `about a, b` → `about a` (exit 0) |
+| `sysx:declaredKeyword "#"` → `"@"` on a prefix | `#M part def P;` → `part def P { @M; }` |
+| `"@"` → `"#"` on a bodiless member `@M;` | it moves into the owner's head: `#M part car : Car {` |
+| swap two body members' `sysx:memberIndex` | the body lines swap order |
+| give a `"#"` annotation an `about`, a body or a `declaredName` | refused: `cannot convert the prefix annotation <urn:sysmlv2:element:…>: a prefix names only its metadata definition; …` — no file written |
+
+In notation, `@M part def Q;` is a parse error (`expected ';' or '{' after a metadata usage`),
+an annotation whose type does not resolve is still converted with `sysml:type "M"` as a literal,
+and `@IdentityMetadata::ElementId { id = "…"; }` must **not** appear as a `sysml:MetadataUsage`
+(it becomes the element's IRI/`sysml:elementId`). Unnamed `metadata M about x;` and
+`metadata $::P::M about x;` come back spelled as written, typing bare.
+
+The pilot validation files live in numbered subdirectories
+(`examples/pilot-corpora/sysml-validation/13-Model Containment/13b-*.sysml`); a glob on the parent
+directory alone matches nothing and `sysml` then complains about a missing extension.
 
 ## The corpus round-trip ratchet (run it before and after any writer/encoder change)
 

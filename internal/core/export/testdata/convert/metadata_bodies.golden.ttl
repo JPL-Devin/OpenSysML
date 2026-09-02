@@ -12,9 +12,9 @@ elmt:Annotated
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Annotated" ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysml:ownedMember elmt:Annotated__Safety, elmt:Annotated__Car, elmt:Annotated__car, elmt:Annotated___403, elmt:Annotated__tagged ;
-    sysml:ownedMembership elmt:Annotated__Safety_om, elmt:Annotated__Car_om, elmt:Annotated__car_om, elmt:Annotated___403_om, elmt:Annotated__tagged_om ;
-    sysml:ownedRelationship elmt:Annotated__Safety_om, elmt:Annotated__Car_om, elmt:Annotated__car_om, elmt:Annotated___403_om, elmt:Annotated__tagged_om .
+    sysml:ownedMember elmt:Annotated__Safety, elmt:Annotated__Car, elmt:Annotated__car, elmt:Annotated___403, elmt:Annotated__tagged, elmt:Annotated___405, elmt:Annotated___406 ;
+    sysml:ownedMembership elmt:Annotated__Safety_om, elmt:Annotated__Car_om, elmt:Annotated__car_om, elmt:Annotated___403_om, elmt:Annotated__tagged_om, elmt:Annotated___405_om, elmt:Annotated___406_om ;
+    sysml:ownedRelationship elmt:Annotated__Safety_om, elmt:Annotated__Car_om, elmt:Annotated__car_om, elmt:Annotated___403_om, elmt:Annotated__tagged_om, elmt:Annotated___405_om, elmt:Annotated___406_om .
 
 elmt:Annotated__Safety
     a sysml:MetadataDefinition ;
@@ -701,3 +701,86 @@ elmt:Annotated__tagged_om
     sysml:ownedRelatedElement elmt:Annotated__tagged ;
     sysml:owningRelatedElement elmt:Annotated ;
     sysml:membershipOwningNamespace elmt:Annotated .
+
+elmt:Annotated___405
+    a sysml:MetadataUsage ;
+    sysml:qualifiedName "Annotated::@5" ;
+    sysml:elementId "Annotated___405" ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:owningNamespace elmt:Annotated ;
+    sysml:owner elmt:Annotated ;
+    sysml:owningRelationship elmt:Annotated___405_om ;
+    sysml:owningMembership elmt:Annotated___405_om ;
+    sysml:type elmt:Annotated__Safety ;
+    sysml:annotatedElement elmt:Annotated__car ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Annotated___405_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Annotated___405_om" ;
+    sysml:owner elmt:Annotated ;
+    sysml:memberElement elmt:Annotated___405 ;
+    sysml:ownedMemberElement elmt:Annotated___405 ;
+    sysml:ownedRelatedElement elmt:Annotated___405 ;
+    sysml:owningRelatedElement elmt:Annotated ;
+    sysml:membershipOwningNamespace elmt:Annotated .
+
+elmt:Annotated___406
+    a sysml:MetadataUsage ;
+    sysml:qualifiedName "Annotated::@6" ;
+    sysml:elementId "Annotated___406" ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:owningNamespace elmt:Annotated ;
+    sysml:owner elmt:Annotated ;
+    sysml:owningRelationship elmt:Annotated___406_om ;
+    sysml:owningMembership elmt:Annotated___406_om ;
+    sysml:type "$::Annotated::Safety" ;
+    sysml:annotatedElement elmt:Annotated__Car ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Annotated___406__level ;
+    sysml:ownedMembership elmt:Annotated___406__level_om ;
+    sysml:ownedRelationship elmt:Annotated___406__level_om ;
+    sysml:ownedFeature elmt:Annotated___406__level ;
+    sysml:ownedFeatureMembership elmt:Annotated___406__level_om .
+
+elmt:Annotated___406_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Annotated___406_om" ;
+    sysml:owner elmt:Annotated ;
+    sysml:memberElement elmt:Annotated___406 ;
+    sysml:ownedMemberElement elmt:Annotated___406 ;
+    sysml:ownedRelatedElement elmt:Annotated___406 ;
+    sysml:owningRelatedElement elmt:Annotated ;
+    sysml:membershipOwningNamespace elmt:Annotated .
+
+elmt:Annotated___406__level
+    a sysml:ReferenceUsage ;
+    sysml:qualifiedName "Annotated::@6::level" ;
+    sysml:elementId "Annotated___406__level" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Annotated___406 ;
+    sysml:owner elmt:Annotated___406 ;
+    sysml:owningRelationship elmt:Annotated___406__level_om ;
+    sysml:owningMembership elmt:Annotated___406__level_om ;
+    sysml:declaredName "level" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
+    sysml:value expr:Annotated___406__level_pvalue ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Annotated___406__level_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Annotated___406__level_om" ;
+    sysml:owner elmt:Annotated___406 ;
+    sysml:memberElement elmt:Annotated___406__level ;
+    sysml:ownedMemberElement elmt:Annotated___406__level ;
+    sysml:ownedRelatedElement elmt:Annotated___406__level ;
+    sysml:owningRelatedElement elmt:Annotated___406 ;
+    sysml:membershipOwningNamespace elmt:Annotated___406 ;
+    sysml:ownedMemberFeature elmt:Annotated___406__level ;
+    sysml:owningType elmt:Annotated___406 .
+
+expr:Annotated___406__level_pvalue
+    a sysml:LiteralInteger ;
+    sysx:sourceText "4" ;
+    sysml:elementId "Annotated___406__level_pvalue" ;
+    sysml:value "4"^^xsd:integer .

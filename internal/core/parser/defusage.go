@@ -1930,7 +1930,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		(kind == ast.UsageConnector && (p.atKeyword("from") || p.atConnectorChainFirstEnd())) ||
 		((kind == ast.UsageConnection || kind == ast.UsageInterface) &&
 			(keyword == "connect" || p.atConnectorShorthandEnds()))
-	if kind == ast.UsageMetadata && !skipIdentification && p.atName() && !p.atMetadataIdentification() {
+	atGlobalName := p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon
+	if kind == ast.UsageMetadata && !skipIdentification && (atGlobalName || p.atName() && !p.atMetadataIdentification()) {
 		// `metadata M about x;` states the typing M and no name of its own
 		// (SysML.xtext MetadataUsageDeclaration).
 		skipIdentification = true

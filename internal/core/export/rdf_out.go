@@ -490,7 +490,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			return nil
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
-		if inBody {
+		if inBody || n.Kind == ast.UsageMetadata {
 			e.bodies[fqn] = true
 		}
 		return e.encode(n.Members, fqn, subject)

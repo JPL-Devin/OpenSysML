@@ -7,4 +7,8 @@ package P {
 		id = "a";
 	}
 	metadata m : M about X;
+	metadata $::P::M about X;
+	metadata $::P::M about X {
+		id = "b";
+	}
 }

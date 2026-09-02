@@ -509,6 +509,8 @@ func TestMetadataMembersComeBackFromTheGraphAlone(t *testing.T) {
 		"@Safety about Car, Vehicle;",
 		"@Safety about Car {\n            level = mass;\n            reviewer = Car::name;\n        }",
 		"metadata tagged : Safety about Car;",
+		"metadata Safety about Car;",
+		"metadata $::P::Safety about Car {\n            level = 4;\n        }",
 	}
 	for _, member := range members {
 		t.Run(member, func(t *testing.T) {
@@ -596,6 +598,39 @@ func TestPrefixOnAnUnprefixableHeadIsReported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "whose notation takes no prefix annotation") {
 		t.Errorf("unexpected error: %s", err.Error())
+	}
+}
+
+// A head kept as source text writes its prefix annotations in that text; when
+// the text and the graph disagree, the annotation is refused rather than lost.
+func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\tpart def A {\n\t\tport x;\n\t\tport y;\n\t}\n\tpart a : A {\n\t\t#Safety connect x to y;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, graph := range [][]byte{turtle, withoutTriples(t, turtle, "sysx:sourceText")} {
+		back, err := export.Convert("m.ttl", graph, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("back to notation: %v", err)
+		}
+		if !strings.Contains(string(back), "#Safety connect x to y;") {
+			t.Errorf("the prefixed head should come back as written:\n%s", back)
+		}
+	}
+	omitted := strings.Replace(string(turtle), `sysx:sourceText "#Safety connect x to y;"`, `sysx:sourceText "connect x to y;"`, 1)
+	if omitted == string(turtle) {
+		t.Fatalf("the verbatim head was not found in the graph:\n%s", turtle)
+	}
+	_, err = export.Convert("m.ttl", []byte(omitted), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("expected an unsupported error, got %v", err)
+	}
+	for _, want := range []string{"the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error:\n%s", want, err.Error())
+		}
 	}
 }
 

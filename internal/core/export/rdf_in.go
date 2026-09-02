@@ -393,7 +393,19 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
 	lead := indent + el.prefix
 	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok {
-		// A declaration whose head this mapping keeps verbatim.
+		// A declaration whose head this mapping keeps verbatim, prefixes included.
+		prefixes, err := d.prefixWords(el)
+		if err != nil {
+			return err
+		}
+		for _, prefix := range prefixes {
+			if !strings.Contains(text, prefix) {
+				return &UnsupportedError{
+					What: fmt.Sprintf("the prefix annotation %s on <%s>", prefix, el.iri),
+					Note: "the head is kept as the text it was written as, and that text does not write the annotation",
+				}
+			}
+		}
 		b.WriteString(lead + strings.TrimSpace(text) + "\n")
 		return nil
 	}
@@ -811,6 +823,12 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	typedPart := ""
 	if len(typed) > 0 {
 		typedPart, multPart = multPart, ""
+	}
+	// `metadata M about x;` writes its typing bare (SysML.xtext MetadataUsageDeclaration).
+	if kind == ast.UsageMetadata && len(identWords) == 0 && len(typed) == 1 {
+		words = append(words, typed[0]+typedPart)
+		typedPart = ""
+		skip = append(skip, ast.RelTyping)
 	}
 	relationships, err := d.relationshipWords(el, typedPart, skip...)
 	if err != nil {

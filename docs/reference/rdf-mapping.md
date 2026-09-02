@@ -609,12 +609,13 @@ was written with.
 each element carries](#what-each-element-carries): its type, its `about`
 targets, the sigil it was written with and its body's members as owned members
 with their `sysml:value` expression trees, so `@Safety { level = 2; }` and
-`#Safety part def Car;` come back from the graph alone. Two shapes are reported
+`#Safety part def Car;` come back from the graph alone. Three shapes are reported
 rather than written, and only a graph from another tool can state them: a `#`
 prefix carrying a name, an `about` clause or a body (the grammar's
-`PrefixMetadataUsage` is the type alone, so the parser never produces one), and
-a `#` prefix owned by an element whose head has no prefix position (a state's
-`entry` action, say). `@Safety part def Car;` is not a prefix in the grammar —
+`PrefixMetadataUsage` is the type alone, so the parser never produces one), a
+`#` prefix owned by an element whose head has no prefix position (a state's
+`entry` action, say), and a `#` prefix on a head kept as `sysx:sourceText`
+(`#Safety connect x to y;`) whose text does not write it. `@Safety part def Car;` is not a prefix in the grammar —
 `@` introduces a member of its own, so the parser reports the missing `;` or
 `{` after `@Safety` — and it is refused at the parser, before conversion.
 

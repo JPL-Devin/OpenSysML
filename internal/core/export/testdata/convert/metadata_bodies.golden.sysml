@@ -31,4 +31,8 @@ package Annotated {
         reviewer = Car::mass;
     }
     metadata tagged : Safety about Car;
+    metadata Safety about car;
+    metadata $::Annotated::Safety about Car {
+        level = 4;
+    }
 }

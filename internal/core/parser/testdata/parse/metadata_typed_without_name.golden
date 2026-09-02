@@ -29,4 +29,19 @@
           (Relationship kind="typing" target=M
             (*ast.QualifiedName))
           (Relationship kind="about" target=X
-            (*ast.QualifiedName)))))))
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=$::P::M
+            (*ast.QualifiedName))
+          (Relationship kind="about" target=X
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=$::P::M
+            (*ast.QualifiedName))
+          (Relationship kind="about" target=X
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="enum" name="id" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralString value="\"b\""))))))))
