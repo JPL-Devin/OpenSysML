@@ -1160,6 +1160,12 @@ left for PGO to find there. Net: a modest, real win on execution-heavy paths
 for +0.8–1.0 MB per binary, and no semantic exposure. Refresh the profile
 when a hot path changes shape.
 
+One toolchain caveat: a coverage-instrumented `go test ./...` that includes a
+main package carrying a `default.pgo` fails to link that package's test binary
+(`link: fingerprint mismatch`, golang/go#80891, open as of Go 1.25). `make test`
+and `make coverage` therefore pass `-pgo=off`; tests run against the same code
+either way, minus the profile-driven inlining.
+
 ## What was not measured
 
 - Calc expression evaluation and standard-library start-up, by design.
