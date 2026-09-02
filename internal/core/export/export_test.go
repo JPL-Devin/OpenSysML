@@ -604,32 +604,53 @@ func TestPrefixOnAnUnprefixableHeadIsReported(t *testing.T) {
 // A head kept as source text writes its prefix annotations in that text; when
 // the text and the graph disagree, the annotation is refused rather than lost.
 func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
-	src := "package P {\n\tmetadata def Safety;\n\tpart def A {\n\t\tport x;\n\t\tport y;\n\t}\n\tpart a : A {\n\t\t#Safety connect x to y;\n\t}\n}"
+	// The text may space or qualify a prefix in ways the graph's rendering does not.
+	heads := []string{"#Safety connect x to y;", "# Safety connect x to y;", "#P::Safety #Audit connect x to y;", "#$::P::Safety connect x to y;"}
+	for _, head := range heads {
+		src := "package P {\n\tmetadata def Safety;\n\tmetadata def Audit;\n\tpart def A {\n\t\tport x;\n\t\tport y;\n\t}\n\tpart a : A {\n\t\t" + head + "\n\t}\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", head, err)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", head, err)
+		}
+		if !strings.Contains(string(back), head) {
+			t.Errorf("%s: the prefixed head should come back as written:\n%s", head, back)
+		}
+	}
+	src := "package P {\n\tmetadata def Safety;\n\tmetadata def Audit;\n\tpart def A {\n\t\tport x;\n\t\tport y;\n\t}\n\tpart a : A {\n\t\t#Safety connect x to y;\n\t}\n}"
 	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
 	}
-	for _, graph := range [][]byte{turtle, withoutTriples(t, turtle, "sysx:sourceText")} {
-		back, err := export.Convert("m.ttl", graph, export.FormatTurtle, export.FormatSysML)
-		if err != nil {
-			t.Fatalf("back to notation: %v", err)
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation without source text: %v", err)
+	}
+	if !strings.Contains(string(back), "#Safety connect x to y;") {
+		t.Errorf("the prefixed head should come back from the graph alone:\n%s", back)
+	}
+	cases := []struct{ text, what, note string }{
+		{`"connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"},
+		{`"#Audit connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"},
+		{`"#Safety #Safety connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "writes an annotation the graph does not state"},
+	}
+	for _, tc := range cases {
+		edited := strings.Replace(string(turtle), `sysx:sourceText "#Safety connect x to y;"`, `sysx:sourceText `+tc.text, 1)
+		if edited == string(turtle) {
+			t.Fatalf("the verbatim head was not found in the graph:\n%s", turtle)
 		}
-		if !strings.Contains(string(back), "#Safety connect x to y;") {
-			t.Errorf("the prefixed head should come back as written:\n%s", back)
+		_, err = export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("%s: expected an unsupported error, got %v", tc.text, err)
 		}
-	}
-	omitted := strings.Replace(string(turtle), `sysx:sourceText "#Safety connect x to y;"`, `sysx:sourceText "connect x to y;"`, 1)
-	if omitted == string(turtle) {
-		t.Fatalf("the verbatim head was not found in the graph:\n%s", turtle)
-	}
-	_, err = export.Convert("m.ttl", []byte(omitted), export.FormatTurtle, export.FormatSysML)
-	var unsupported *export.UnsupportedError
-	if !errors.As(err, &unsupported) {
-		t.Fatalf("expected an unsupported error, got %v", err)
-	}
-	for _, want := range []string{"the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("expected %q in error:\n%s", want, err.Error())
+		for _, want := range []string{tc.what, tc.note} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: expected %q in error:\n%s", tc.text, want, err.Error())
+			}
 		}
 	}
 }

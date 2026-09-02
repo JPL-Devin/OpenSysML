@@ -12,6 +12,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // sysmlPrefix qualifies a SysML vocabulary property as a diagnostic names it.
@@ -398,13 +399,8 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		if err != nil {
 			return err
 		}
-		for _, prefix := range prefixes {
-			if !strings.Contains(text, prefix) {
-				return &UnsupportedError{
-					What: fmt.Sprintf("the prefix annotation %s on <%s>", prefix, el.iri),
-					Note: "the head is kept as the text it was written as, and that text does not write the annotation",
-				}
-			}
+		if err := checkWrittenPrefixes(el, text, prefixes); err != nil {
+			return err
 		}
 		b.WriteString(lead + strings.TrimSpace(text) + "\n")
 		return nil
@@ -1236,6 +1232,85 @@ func (d *decoder) prefixWords(el *element) ([]string, error) {
 		words = append(words, "#"+typed[0])
 	}
 	return words, nil
+}
+
+// checkWrittenPrefixes reports a verbatim head whose `#` prefixes are not the
+// ones the graph states — in number, order or name — so none is dropped or
+// invented. Names match on their written segments, since the text may qualify
+// a name more or less than the scope-relative name the graph renders.
+func checkWrittenPrefixes(el *element, text string, prefixes []string) error {
+	written := writtenPrefixes(text)
+	for i, prefix := range prefixes {
+		if i >= len(written) || !sameNameTail(written[i], prefix) {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the prefix annotation %s on <%s>", prefix, el.iri),
+				Note: "the head is kept as the text it was written as, and that text does not write the annotation",
+			}
+		}
+	}
+	if len(written) > len(prefixes) {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the prefix annotation %s on <%s>", written[len(prefixes)], el.iri),
+			Note: "the head is kept as the text it was written as, and that text writes an annotation the graph does not state",
+		}
+	}
+	return nil
+}
+
+// writtenPrefixes lexes a head and returns each `#` annotation it writes as
+// `#` plus its qualified name, without the trivia between tokens.
+func writtenPrefixes(text string) []string {
+	var tokens []lexer.Token
+	lx := lexer.New(source.New("head.sysml", []byte(text)))
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if !tok.IsTrivia() && tok.Kind != lexer.RegularComment {
+			tokens = append(tokens, tok)
+		}
+	}
+	lexeme := func(tok lexer.Token) string { return text[tok.Span.Offset:tok.Span.End()] }
+	isName := func(i int) bool {
+		if i >= len(tokens) {
+			return false
+		}
+		switch tokens[i].Kind {
+		case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+			return true
+		}
+		return false
+	}
+	var out []string
+	for i := 0; i < len(tokens); i++ {
+		if tokens[i].Kind != lexer.Hash {
+			continue
+		}
+		name := "#"
+		j := i + 1
+		if j+1 < len(tokens) && tokens[j].Kind == lexer.Dollar && tokens[j+1].Kind == lexer.ColonColon {
+			name += "$::"
+			j += 2
+		}
+		for isName(j) {
+			name += lexeme(tokens[j])
+			j++
+			if j < len(tokens) && tokens[j].Kind == lexer.ColonColon && isName(j+1) {
+				name += "::"
+				j++
+				continue
+			}
+			break
+		}
+		out = append(out, name)
+		i = j - 1
+	}
+	return out
+}
+
+// sameNameTail reports whether two `#`-prefixed names agree as far as their
+// written segments go: equal, or one the tail of the other.
+func sameNameTail(a, b string) bool {
+	a = strings.TrimPrefix(strings.TrimPrefix(a, "#"), "$::")
+	b = strings.TrimPrefix(strings.TrimPrefix(b, "#"), "$::")
+	return a == b || strings.HasSuffix(a, "::"+b) || strings.HasSuffix(b, "::"+a)
 }
 
 // unwrittenPrefix reports a `#M` annotation on an element whose head has no
