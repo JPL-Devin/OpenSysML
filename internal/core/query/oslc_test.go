@@ -1,8 +1,11 @@
 package query
 
 import (
+	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
 func TestParseOSLCOperatorsAndValues(t *testing.T) {
@@ -176,6 +179,115 @@ func TestParseOSLCRefusesQualifiedNameValueUnquoted(t *testing.T) {
 	}
 }
 
+func TestParseOSLCPropertyDiagnosticsNameOSLCSpellings(t *testing.T) {
+	// The list an unknown property is answered with must be writable as it reads.
+	_, err := ParseOSLC(`sysml:id="x"`)
+	got, ok := err.(*Error)
+	if !ok || got.Kind != ErrUnknownProperty {
+		t.Fatalf("error = %#v, want ErrUnknownProperty", err)
+	}
+	names, unbound := PrefixedPropertyNames(DefaultPrefixes)
+	if len(unbound) != 0 {
+		t.Errorf("default prefixes leave %v unnamed", unbound)
+	}
+	for _, name := range names {
+		if !strings.Contains(got.Message, name) {
+			t.Errorf("error message = %q, want it to name %q", got.Message, name)
+		}
+		if _, err := ParseOSLC(name + `="x"`); err != nil {
+			t.Errorf("listed property %q: %v", name, err)
+		}
+	}
+	for _, name := range []string{PropertyID, PropertyType} {
+		if strings.Contains(got.Message, name) {
+			t.Errorf("error message = %q, want it to omit the Go API name %q", got.Message, name)
+		}
+	}
+
+	// "@type" and "@id" name themselves in the Go API; OSLC query text cannot.
+	for _, text := range []string{
+		`@type=sysml:PartUsage`,
+		`@id="x"`,
+		`oslc.where=sysml:name%3D%22x%22&oslc.select=@id`,
+		`oslc.where=sysml:name%3D%22x%22&oslc.orderBy=@type`,
+	} {
+		q, err := ParseOSLC(text)
+		got, ok := err.(*Error)
+		if !ok || got.Kind != ErrMalformed {
+			t.Errorf("%q parsed as %#v, error = %#v, want ErrMalformed", text, q, err)
+			continue
+		}
+		if !strings.Contains(got.Message, "rdf:type") && !strings.Contains(got.Message, "reported for every result") {
+			t.Errorf("%q error message = %q, want it to name the OSLC spelling", text, got.Message)
+		}
+	}
+}
+
+func TestParseOSLCPropertyDiagnosticsFollowTheActiveBindings(t *testing.T) {
+	// An alias bound to the SysML namespace is what the query must be written with.
+	const aliased = `oslc.prefix=s%3D%3Chttps://www.omg.org/spec/SysML%23%3E,sysml%3D%3Curn:example:other%23%3E`
+	_, err := ParseParameters(aliased + `&oslc.where=s:id%3D%22x%22`)
+	got, ok := err.(*Error)
+	if !ok || got.Kind != ErrUnknownProperty {
+		t.Fatalf("error = %#v, want ErrUnknownProperty", err)
+	}
+	for _, name := range []string{"s:name", "s:qualifiedName", "rdf:type"} {
+		if !strings.Contains(got.Message, name) {
+			t.Errorf("error message = %q, want it to name %q", got.Message, name)
+		}
+		if _, err := ParseParameters(aliased + `&oslc.where=` + url.QueryEscape(name+`="x"`)); err != nil {
+			t.Errorf("listed property %q: %v", name, err)
+		}
+	}
+	if strings.Contains(got.Message, "sysml:name") {
+		t.Errorf("error message = %q, want it to omit the rebound spelling \"sysml:name\"", got.Message)
+	}
+
+	// A namespace no binding names cannot be offered as a prefixed name at all.
+	_, err = ParseParameters(`oslc.prefix=sysml%3D%3Curn:example:other%23%3E&oslc.where=sysml:id%3D%22x%22`)
+	got, ok = err.(*Error)
+	if !ok || got.Kind != ErrUnknownProperty {
+		t.Fatalf("error = %#v, want ErrUnknownProperty", err)
+	}
+	if strings.Contains(got.Message, "sysml:name") || !strings.Contains(got.Message, "which no oslc.prefix binding names") {
+		t.Errorf("error message = %q, want it to report the SysML namespace as unnamed", got.Message)
+	}
+	// A prefix no prefixed name can be written with is refused at its binding,
+	// so it can never be the spelling a diagnostic offers.
+	_, err = ParseParameters(`oslc.prefix=%21s%3D%3Chttps://www.omg.org/spec/SysML%23%3E&oslc.where=sysml:name%3D%22x%22`)
+	got, ok = err.(*Error)
+	if !ok || got.Kind != ErrMalformed || !strings.Contains(got.Message, "!s") {
+		t.Errorf("error = %#v, want ErrMalformed naming the unusable prefix", err)
+	}
+
+	// A prefix of multi-byte letters binds and is written as it reads, so the
+	// spellings a diagnostic offers under it are parseable too.
+	const unicodePrefix = "sÿsml"
+	bound := `oslc.prefix=` + url.QueryEscape(unicodePrefix+"=<"+rdf.SysML+">,sysml=<urn:example:other#>")
+	_, err = ParseParameters(bound + `&oslc.where=` + url.QueryEscape(unicodePrefix+`:id="x"`))
+	got, ok = err.(*Error)
+	if !ok || got.Kind != ErrUnknownProperty || !strings.Contains(got.Message, unicodePrefix+":name") {
+		t.Fatalf("error = %#v, want ErrUnknownProperty naming %q", err, unicodePrefix+":name")
+	}
+	for _, parameter := range []string{
+		`oslc.where=` + url.QueryEscape(unicodePrefix+`:name="battery"`),
+		`oslc.where=` + url.QueryEscape(unicodePrefix+`:name="battery"`) + `&oslc.select=` + url.QueryEscape(unicodePrefix+":name"),
+		`oslc.where=` + url.QueryEscape(unicodePrefix+`:name="battery"`) + `&oslc.orderBy=` + url.QueryEscape("-"+unicodePrefix+":name"),
+	} {
+		if _, err := ParseParameters(bound + "&" + parameter); err != nil {
+			t.Errorf("%s: %v", parameter, err)
+		}
+	}
+
+	names, unbound := PrefixedPropertyNames(map[string]string{"rdf": rdf.RDFNS})
+	if len(names) != 1 || names[0] != "rdf:type" {
+		t.Errorf("names = %#v, want [rdf:type]", names)
+	}
+	if locals := unbound[rdf.SysML]; len(locals) == 0 || locals[0] != "declaredName" {
+		t.Errorf("unbound[SysML] = %#v, want the SysML local names", locals)
+	}
+}
+
 func TestParseParametersPreservesEncodedSemicolonAndDecodesValues(t *testing.T) {
 	q, err := ParseParameters(`oslc.where=sysml%3Aname%3D%22a%253Bb%2Bc%22`)
 	if err != nil {
@@ -197,6 +309,21 @@ func TestParseParametersPreservesEncodedSemicolonAndDecodesValues(t *testing.T) 
 	}
 	if got := q.Where[0].Values[0]; got != "a b" {
 		t.Fatalf("value = %q, want plus decoded as space", got)
+	}
+}
+
+func TestParseOSLCReadsKeywordsAcrossNonASCIISpace(t *testing.T) {
+	// A space the scanner skips must also end a keyword, whatever its width.
+	const nbsp = "\u00a0"
+	for _, space := range []string{" ", nbsp} {
+		q, err := ParseOSLC(`sysml:name="battery"` + space + `and` + space + `rdf:type=sysml:PartUsage`)
+		if err != nil || len(q.Where) != 2 {
+			t.Errorf("%q separated conjunction = %#v, error = %v, want two terms", space, q, err)
+		}
+		q, err = ParseOSLC(`sysml:name` + space + `in` + space + `["battery","gripper"]`)
+		if err != nil || len(q.Where) != 1 || len(q.Where[0].Values) != 2 {
+			t.Errorf("%q separated in term = %#v, error = %v, want two values", space, q, err)
+		}
 	}
 }
 
