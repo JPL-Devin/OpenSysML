@@ -184,6 +184,15 @@ func TestIdentityActionOfferedOnSelectedHeader(t *testing.T) {
 			t.Errorf("selection %q..%q: actions = %+v, want none", tc.from, tc.to, acts)
 		}
 	}
+	// Blank and note lines of the body name no other declaration, so a selection
+	// running through them still means the header; the first member ends that.
+	const noted = "package P {\n    @IdentityMetadata::ProjectRef { projectId = \"p\"; }\n    part def Frame {\n\n        // weight\n        //* rough */\n        attribute w;\n    }\n}\n"
+	if act := mintAction(t, file, noted, selection(t, noted, "part def Frame", "rough */\n")); act.Title != "Annotate 'Frame' with a minted element id" {
+		t.Errorf("selection through body notes: title = %q", act.Title)
+	}
+	if acts := identityActionsFor(t, file, noted, selection(t, noted, "part def Frame", "attribute")); len(acts) != 0 {
+		t.Errorf("selection through to the first member: actions = %+v, want none", acts)
+	}
 }
 
 func TestIdentityActionNotOfferedOnAnnotatedDeclaration(t *testing.T) {
