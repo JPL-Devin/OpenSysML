@@ -523,7 +523,11 @@ func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName) error {
 		}
 		break
 	}
-	return fmt.Errorf("%w: %s", ErrUnresolvedReference, qualifiedNameToString(qn))
+	written := qualifiedNameToString(qn)
+	if qn.Global {
+		written = "$::" + written
+	}
+	return fmt.Errorf("%w: %s", ErrUnresolvedReference, written)
 }
 
 // declaredValue evaluates the value a declaration binds in the scope it was written

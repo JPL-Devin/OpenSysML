@@ -177,6 +177,28 @@ func TestQualifiedNameThroughImportRejectedAsChecked(t *testing.T) {
 	}
 }
 
+// TestGlobalQualifiedNameThroughImport reaches an import through a name rooted
+// at the global namespace and reports a missing one with the `$::` the checker
+// writes. The expression parser does not yet read `$::`, so the name is built.
+func TestGlobalQualifiedNameThroughImport(t *testing.T) {
+	ctx, root, _ := qualifiedImportRuntime(t)
+	globalName := func(parts ...string) *ast.FeatureReference {
+		qn := &ast.QualifiedName{Global: true}
+		for _, p := range parts {
+			qn.Parts = append(qn.Parts, ast.NameSegment{Text: p})
+		}
+		return &ast.FeatureReference{Name: qn}
+	}
+	val, err := ctx.EvalWithScope(globalName("Wild", "x"), root)
+	if err != nil || FormatValue(val) != "1" {
+		t.Errorf("$::Wild::x = (%v, %v), want 1", val, err)
+	}
+	_, err = ctx.EvalWithScope(globalName("Wild", "nope"), root)
+	if !errors.Is(err, ErrUnresolvedReference) || err.Error() != "unresolved reference: $::Wild::nope" {
+		t.Errorf("$::Wild::nope: err = %v, want unresolved reference: $::Wild::nope", err)
+	}
+}
+
 // TestQualifiedNameThroughImportKeepsTypedErrors keeps the typed errors a
 // variation and an enumeration report for a name that is no variant or literal,
 // whether reached through an import or directly, and a calc usage's outputs
