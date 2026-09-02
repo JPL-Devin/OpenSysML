@@ -47,15 +47,15 @@ func elementsOf(val Value) []Value {
 func elementCount(val *Value) int64 {
 	switch val.Kind {
 	case ValSequence:
-		if val.Sequence == nil {
-			return 0
+		if seq := val.Sequence(); seq != nil {
+			return int64(seq.Size())
 		}
-		return int64(val.Sequence.Size())
+		return 0
 	case ValSet:
-		if val.Set == nil {
-			return 0
+		if set := val.Set(); set != nil {
+			return int64(set.Size())
 		}
-		return int64(val.Set.Size())
+		return 0
 	case ValNull, ValInvalid:
 		return 0
 	default:
