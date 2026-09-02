@@ -1,0 +1,207 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Root/Annotations>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Root/Annotations" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:AnnotatingElement
+    a owl:Class ;
+    rdfs:subClassOf sysml:Element ;
+    rdfs:label "AnnotatingElement" ;
+    rdfs:comment """<p>An <code>AnnotatingElement</code> is an <code>Element</code> that provides additional description of or metadata on some other <code>Element</code>. An <code>AnnotatingElement</code> is either attached to its <code>annotatedElements</code> by <code>Annotation</code> <code>Relationships</code>, or it implicitly annotates its <code>owningNamespace</code>.</p>
+	
+	annotatedElement =
+	if annotation->notEmpty() then annotation.annotatedElement
+	else Sequence{owningNamespace} endif
+	ownedAnnotatingRelationship = ownedRelationship->
+	selectByKind(Annotation)->
+	select(a | a.annotatingElement = self)""" .
+
+sysml:AnnotatingElement_annotatedElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:AnnotatingElement ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "annotatedElement" ;
+    rdfs:comment "<p>The <code>Elements</code> that are annotated by this <code>AnnotatingElement</code>. If <code>annotation</code> is not empty, these are the <code>annotatedElements</code> of the <code>annotations</code>. If <code>annotation</code> is empty, then it is the <code>owningNamespace</code> of the <code>AnnotatingElement</code>.</p>" .
+
+sysml:AnnotatingElement_annotation
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Annotation_annotatingElement ;
+    rdfs:domain sysml:AnnotatingElement ;
+    rdfs:range sysml:Annotation ;
+    rdfs:label "annotation" ;
+    rdfs:comment "<p>The <code>Annotations</code> that relate this <code>AnnotatingElement</code> to its <code>annotatedElements</code>.</p>" .
+
+sysml:AnnotatingElement_ownedAnnotatingRelationship
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Annotation_owningAnnotatingElement ;
+    rdfs:domain sysml:AnnotatingElement ;
+    rdfs:range sysml:Annotation ;
+    rdfs:label "ownedAnnotatingRelationship" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>AnnotatingElement</code> that are <code>Annotations</code>, for which this <code>AnnotatingElement</code> is the <code>annotatingElement</code>.</p>" .
+
+sysml:Annotation
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Annotation_annotatedElement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Annotation_annotatingElement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Annotation" ;
+    rdfs:comment "<p>An <code>Annotation</code> is a Relationship between an <code>AnnotatingElement</code> and the <code>Element</code> that is annotated by that <code>AnnotatingElement</code>.</p>" .
+
+sysml:Annotation_annotatedElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:Annotation ;
+    rdfs:range sysml:Element ;
+    rdfs:label "annotatedElement" ;
+    rdfs:comment "<p>The <code>Element</code> that is annotated by the <code>annotatingElement</code> of this Annotation.</p>" .
+
+sysml:Annotation_annotatingElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_source ;
+    rdfs:domain sysml:Annotation ;
+    rdfs:range sysml:AnnotatingElement ;
+    rdfs:label "annotatingElement" ;
+    rdfs:comment "<p>The <code>AnnotatingElement</code> that annotates the <code>annotatedElement</code> of this <code>Annotation</code>.</p>" .
+
+sysml:Annotation_owningAnnotatedElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Annotation_annotatedElement, sysml:Relationship_owningRelatedElement ;
+    rdfs:domain sysml:Annotation ;
+    rdfs:range sysml:Element ;
+    rdfs:label "owningAnnotatedElement" ;
+    rdfs:comment "<p>The <code>annotatedElement</code> of this <code>Annotation</code>, when it is also its <code>owningRelatedElement</code>.</p>" .
+
+sysml:Annotation_owningAnnotatingElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Annotation_annotatingElement, sysml:Relationship_owningRelatedElement ;
+    rdfs:domain sysml:Annotation ;
+    rdfs:range sysml:AnnotatingElement ;
+    rdfs:label "owningAnnotatingElement" ;
+    rdfs:comment "<p>The <code>annotatingElement</code> of this <code>Annotation</code>, when it is also its <code>owningRelatedElement</code>.</p>" .
+
+sysml:Comment
+    a owl:Class ;
+    rdfs:subClassOf sysml:AnnotatingElement, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Comment_body ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Comment" ;
+    rdfs:comment "<p>A <code>Comment</code> is an <code>AnnotatingElement</code> whose <code>body</code> in some way describes its <code>annotatedElements</code>.</p>" .
+
+sysml:Comment_body
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Comment ;
+    rdfs:range xsd:string ;
+    rdfs:label "body" ;
+    rdfs:comment "<p>The annotation text for the <code>Comment</code>.</p>" .
+
+sysml:Comment_locale
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Comment ;
+    rdfs:range xsd:string ;
+    rdfs:label "locale" ;
+    rdfs:comment "<p>Identification of the language of the <code>body</code> text and, optionally, the region and/or encoding. The format shall be a POSIX locale conformant to ISO/IEC 15897, with the format <code>[language[_territory][.codeset][@modifier]]</code>.</p>" .
+
+sysml:Documentation
+    a owl:Class ;
+    rdfs:subClassOf sysml:Comment, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Documentation_documentedElement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Documentation" ;
+    rdfs:comment "<p><code>Documentation</code> is a <code>Comment</code> that specifically documents a <code>documentedElement</code>, which must be its <code>owner</code>.</p>" .
+
+sysml:Documentation_documentedElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:AnnotatingElement_annotatedElement ;
+    owl:inverseOf sysml:Element_documentation ;
+    rdfs:domain sysml:Documentation ;
+    rdfs:range sysml:Element ;
+    rdfs:label "documentedElement" ;
+    rdfs:comment "<p>The <code>Element</code> that is documented by this <code>Documentation</code>.</p>" .
+
+sysml:TextualRepresentation
+    a owl:Class ;
+    rdfs:subClassOf sysml:AnnotatingElement, [
+        a owl:Restriction ;
+        owl:onProperty sysml:TextualRepresentation_representedElement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:TextualRepresentation_body ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:TextualRepresentation_language ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "TextualRepresentation" ;
+    rdfs:comment """<p>A <code>TextualRepresentation</code> is an <code>AnnotatingElement</code> whose <code>body</code> represents the <code>representedElement</code> in a given <code>language</code>. The <code>representedElement</code> must be the <code>owner</code> of the <code>TextualRepresentation</code>. The named <code>language</code> can be a natural language, in which case the <code>body</code> is an informal representation, or an artificial language, in which case the <code>body</code> is expected to be a formal, machine-parsable representation.</p>
+	
+	<p>If the named <code>language</code> of a <code>TextualRepresentation</code> is machine-parsable, then the <code>body</code> text should be legal input text as defined for that <code>language</code>. The interpretation of the named language string shall be case insensitive. The following <code>language</code> names are defined to correspond to the given standard languages:</p>
+	
+	<table border="1" cellpadding="1" cellspacing="1" width="498">
+	<thead>
+	</thead>
+	<tbody>
+	<tr>
+	<td style="text-align: center; width: 154px;"><code>kerml</code></td>
+	<td style="width: 332px;">Kernel Modeling Language</td>
+	</tr>
+	<tr>
+	<td style="text-align: center; width: 154px;"><code>ocl</code></td>
+	<td style="width: 332px;">Object Constraint Language</td>
+	</tr>
+	<tr>
+	<td style="text-align: center; width: 154px;"><code>alf</code></td>
+	<td style="width: 332px;">Action Language for fUML</td>
+	</tr>
+	</tbody>
+	</table>
+	
+	<p>Other specifications may define specific <code>language</code> strings, other than those shown above, to be used to indicate the use of languages from those specifications in KerML <code>TextualRepresentation</code>.</p>
+	
+	<p>If the <code>language</code> of a <code>TextualRepresentation</code> is &quot;<code>kerml</code>&quot;, then the <code>body</code> text shall be a legal representation of the <code>representedElement</code> in the KerML textual concrete syntax. A conforming tool can use such a <code>TextualRepresentation</code> <code>Annotation</code> to record the original KerML concrete syntax text from which an <code>Element</code> was parsed. In this case, it is a tool responsibility to ensure that the <code>body</code> of the <code>TextualRepresentation</code> remains correct (or the Annotation is removed) if the annotated <code>Element</code> changes other than by re-parsing the <code>body</code> text.</p>
+	
+	<p>An <code>Element</code> with a <code>TextualRepresentation</code> in a language other than KerML is essentially a semantically &quot;opaque&quot; <code>Element</code> specified in the other language. However, a conforming KerML tool may interpret such an element consistently with the specification of the named language.</p>""" .
+
+sysml:TextualRepresentation_body
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:TextualRepresentation ;
+    rdfs:range xsd:string ;
+    rdfs:label "body" ;
+    rdfs:comment "<p>The textual representation of the <code>representedElement</code> in the given <code>language</code>.</p>" .
+
+sysml:TextualRepresentation_language
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:TextualRepresentation ;
+    rdfs:range xsd:string ;
+    rdfs:label "language" ;
+    rdfs:comment "<p>The natural or artifical language in which the <code>body</code> text is written.</p>" .
+
+sysml:TextualRepresentation_representedElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:AnnotatingElement_annotatedElement ;
+    owl:inverseOf sysml:Element_textualRepresentation ;
+    rdfs:domain sysml:TextualRepresentation ;
+    rdfs:range sysml:Element ;
+    rdfs:label "representedElement" ;
+    rdfs:comment "<p>The <code>Element</code> that is represented by this <code>TextualRepresentation</code>.</p>" .

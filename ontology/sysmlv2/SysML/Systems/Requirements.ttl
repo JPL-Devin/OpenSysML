@@ -1,0 +1,486 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Requirements>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Behaviors>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Constraints>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Parts> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Requirements" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:ActorMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:ParameterMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ActorMembership_ownedActorParameter ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ActorMembership" ;
+    rdfs:comment """<p>An <code>ActorMembership</code> is a <code>ParameterMembership</code> that identifies a <code>PartUsage</code> as an <em>actor</em> <code>parameter</code>, which specifies a role played by an external entity in interaction with the <code>owningType</code> of the <code>ActorMembership</code>.</p>
+	owningType.oclIsKindOf(RequirementUsage) or
+	owningType.oclIsKindOf(RequirementDefinition) or
+	owningType.oclIsKindOf(CaseDefinition) or
+	owningType.oclIsKindOf(CaseUsage)""" .
+
+sysml:ActorMembership_ownedActorParameter
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ParameterMembership_ownedMemberParameter ;
+    rdfs:domain sysml:ActorMembership ;
+    rdfs:range sysml:PartUsage ;
+    rdfs:label "ownedActorParameter" ;
+    rdfs:comment "<p>The <code>PartUsage</code> specifying the actor.</p>" .
+
+sysml:ConcernDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:RequirementDefinition ;
+    rdfs:label "ConcernDefinition" ;
+    rdfs:comment """<p>A <code>ConcernDefinition</code> is a <code>RequirementDefinition</code> that one or more stakeholders may be interested in having addressed. These stakeholders are identified by the <code>ownedStakeholders</code>of the <code>ConcernDefinition</code>.</p>
+	
+	specializesFromLibrary('Requirements::ConcernCheck')""" .
+
+sysml:ConcernUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:RequirementUsage ;
+    rdfs:label "ConcernUsage" ;
+    rdfs:comment """<p>A <code>ConcernUsage</code> is a <code>Usage</code> of a <code>ConcernDefinition</code>.</p>
+	
+	The <code>ownedStakeholder</code> features of the ConcernUsage shall all subset the <em><code>ConcernCheck::concernedStakeholders</code> </em>feature. If the ConcernUsage is an <code>ownedFeature</code> of a StakeholderDefinition or StakeholderUsage, then the ConcernUsage shall have an <code>ownedStakeholder</code> feature that is bound to the <em><code>self</code></em> feature of its owner.</p>
+	
+	specializesFromLibrary('Requirements::concernChecks')
+	owningFeatureMembership <> null and
+	owningFeatureMembership.oclIsKindOf(FramedConcernMembership) implies
+	specializesFromLibrary('Requirements::RequirementCheck::concerns')""" .
+
+sysml:ConcernUsage_concernDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:RequirementUsage_requirementDefinition ;
+    rdfs:domain sysml:ConcernUsage ;
+    rdfs:range sysml:ConcernDefinition ;
+    rdfs:label "concernDefinition" ;
+    rdfs:comment "<p>The ConcernDefinition that is the single type of this ConcernUsage.</p>" .
+
+sysml:FramedConcernMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:RequirementConstraintMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:FramedConcernMembership_ownedConcern ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:FramedConcernMembership_referencedConcern ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "FramedConcernMembership" ;
+    rdfs:comment """<p>A <code>FramedConcernMembership</code> is a <code>RequirementConstraintMembership</code> for a framed <code>ConcernUsage</code> of a <code>RequirementDefinition</code> or <code>RequirementUsage</code>.</p>
+	kind = RequirementConstraintKind::requirement""" .
+
+sysml:FramedConcernMembership_ownedConcern
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:RequirementConstraintMembership_ownedConstraint ;
+    rdfs:domain sysml:FramedConcernMembership ;
+    rdfs:range sysml:ConcernUsage ;
+    rdfs:label "ownedConcern" ;
+    rdfs:comment "<p>The <code>ConcernUsage</code> that is the <code>ownedConstraint</code> of this <code>FramedConcernMembership</code>.</p>" .
+
+sysml:FramedConcernMembership_referencedConcern
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:RequirementConstraintMembership_referencedConstraint ;
+    rdfs:domain sysml:FramedConcernMembership ;
+    rdfs:range sysml:ConcernUsage ;
+    rdfs:label "referencedConcern" ;
+    rdfs:comment "<p> The <code>ConcernUsage</code> that is referenced through this <code>FramedConcernMembership</code>. It is the <code>referencedConstraint</code> of the <code>FramedConcernMembership</code> considered as a <code>RequirementConstraintMembership</code>, which must be a <code>ConcernUsage</code>.</p>" .
+
+sysml:RequirementConstraintKind
+    a rdfs:Datatype ;
+    owl:equivalentClass [
+        a rdfs:Datatype ;
+        owl:oneOf [
+            a rdf:List ;
+            rdf:first "assumption" ;
+            rdf:rest [
+                a rdf:List ;
+                rdf:first "requirement" ;
+                rdf:rest rdf:nil
+            ]
+        ]
+    ] ;
+    rdfs:label "RequirementConstraintKind" ;
+    rdfs:comment "<p>A <code>RequirementConstraintKind</code> indicates whether a <code>ConstraintUsage</code> is an assumption or a requirement in a <code>RequirementDefinition</code> or <code>RequirementUsage</code>.</p>" .
+
+sysml:RequirementConstraintMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:FeatureMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:RequirementConstraintMembership_ownedConstraint ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:RequirementConstraintMembership_referencedConstraint ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:RequirementConstraintMembership_kind ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "RequirementConstraintMembership" ;
+    rdfs:comment """<p>A <code>RequirementConstraintMembership</code> is a <code>FeatureMembership</code> for an assumed or required <code>ConstraintUsage</code> of a <code>RequirementDefinition</code> or <code>RequirementUsage<code>.</p>
+	referencedConstraint =
+	let reference : ReferenceSubsetting =
+	ownedConstraint.ownedReferenceSubsetting in
+	if reference = null then ownedConstraint
+	else if not reference.referencedFeature.oclIsKindOf(ConstraintUsage) then null
+	else reference.referencedFeature.oclAsType(ConstraintUsage)
+	endif endif
+	owningType.oclIsKindOf(RequirementDefinition) or
+	owningType.oclIsKindOf(RequirementUsage)
+	ownedConstraint.isComposite""" .
+
+sysml:RequirementConstraintMembership_kind
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:RequirementConstraintMembership ;
+    rdfs:range sysml:RequirementConstraintKind ;
+    rdfs:label "kind" ;
+    rdfs:comment "<p>Whether the <code>RequirementConstraintMembership</code> is for an assumed or required <code>ConstraintUsage</code>.</p>" .
+
+sysml:RequirementConstraintMembership_ownedConstraint
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureMembership_ownedMemberFeature ;
+    rdfs:domain sysml:RequirementConstraintMembership ;
+    rdfs:range sysml:ConstraintUsage ;
+    rdfs:label "ownedConstraint" ;
+    rdfs:comment "<p>The <code>ConstraintUsage</code> that is the <code>ownedMemberFeature</code> of this <code>RequirementConstraintMembership</code>.</p>" .
+
+sysml:RequirementConstraintMembership_referencedConstraint
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:RequirementConstraintMembership ;
+    rdfs:range sysml:ConstraintUsage ;
+    rdfs:label "referencedConstraint" ;
+    rdfs:comment "<p> The <code>ConstraintUsage</code> that is referenced through this <code>RequirementConstraintMembership</code>. It is the <code>referencedFeature</code> of the <code>ownedReferenceSubsetting</code> of the <code>ownedConstraint</code>, if there is one, and, otherwise, the <code>ownedConstraint</code> itself.</p>" .
+
+sysml:RequirementDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:ConstraintDefinition, [
+        a owl:Restriction ;
+        owl:onProperty sysml:RequirementDefinition_subjectParameter ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "RequirementDefinition" ;
+    rdfs:comment """<p>A <code>RequirementDefinition</code> is a <code>ConstraintDefinition</code> that defines a requirement used in the context of a specification as a constraint that a valid solution must satisfy. The specification is relative to a specified subject, possibly in collaboration with one or more external actors.</p>
+	text = documentation.body
+	assumedConstraint = ownedFeatureMembership->
+	selectByKind(RequirementConstraintMembership)->
+	select(kind = RequirementConstraintKind::assumption).
+	ownedConstraint
+	requiredConstraint = ownedFeatureMembership->
+	selectByKind(RequirementConstraintMembership)->
+	select(kind = RequirementConstraintKind::requirement).
+	ownedConstraint
+	subjectParameter =
+	let subjects : OrderedSet(SubjectMembership) =
+	featureMembership->selectByKind(SubjectMembership) in
+	if subjects->isEmpty() then null
+	else subjects->first().ownedSubjectParameter
+	endif
+	framedConcern = featureMembership->
+	selectByKind(FramedConcernMembership).
+	ownedConcern
+	actorParameter = featureMembership->
+	selectByKind(ActorMembership).
+	ownedActorParameter
+	stakeholderParameter = featureMembership->
+	selectByKind(StakholderMembership).
+	ownedStakeholderParameter
+	featureMembership->
+	selectByKind(SubjectMembership)->
+	size() <= 1
+	input->notEmpty() and input->first() = subjectParameter
+	specializesFromLibrary('Requirements::RequirementCheck')""" .
+
+sysml:RequirementDefinition_actorParameter
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Behavior_parameter, sysml:Definition_usage ;
+    rdfs:domain sysml:RequirementDefinition ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "actorParameter" ;
+    rdfs:comment "<p>The <code>parameters</code> of this <code>RequirementDefinition</code> that represent actors involved in the requirement.</p>" .
+
+sysml:RequirementDefinition_assumedConstraint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:RequirementDefinition ;
+    rdfs:range sysml:ConstraintUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "assumedConstraint" ;
+    rdfs:comment "<p>The owned <code>ConstraintUsages</code> that represent assumptions of this <code>RequirementDefinition</code>, which are the <code>ownedConstraints</code> of the <code>RequirementConstraintMemberships</code> of the <code>RequirementDefinition</code> with <code>kind = assumption</code>.</p>" .
+
+sysml:RequirementDefinition_framedConcern
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:RequirementDefinition_requiredConstraint ;
+    rdfs:domain sysml:RequirementDefinition ;
+    rdfs:range sysml:ConcernUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "framedConcern" ;
+    rdfs:comment "<p>The <code>ConcernUsages</code> framed by this <code>RequirementDefinition</code>, which are the <code>ownedConcerns</code> of all <code>FramedConcernMemberships</code> of the <code>RequirementDefinition</code>.</p>" .
+
+sysml:RequirementDefinition_reqId
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:subPropertyOf sysml:Element_declaredShortName ;
+    rdfs:domain sysml:RequirementDefinition ;
+    rdfs:range xsd:string ;
+    rdfs:label "reqId" ;
+    rdfs:comment "<p>An optional modeler-specified identifier for this <code>RequirementDefinition</code> (used, e.g., to link it to an original requirement text in some source document), which is the <code>declaredShortName</code> for the <code>RequirementDefinition</code>.</p>" .
+
+sysml:RequirementDefinition_requiredConstraint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:RequirementDefinition ;
+    rdfs:range sysml:ConstraintUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "requiredConstraint" ;
+    rdfs:comment "<p>The owned <code>ConstraintUsages</code> that represent requirements of this <code>RequirementDefinition</code>, derived as the <code>ownedConstraints</code> of the <code>RequirementConstraintMemberships</code> of the <code>RequirementDefinition</code> with <code>kind</code> = <code>requirement</code>.</p>" .
+
+sysml:RequirementDefinition_stakeholderParameter
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Behavior_parameter, sysml:Definition_usage ;
+    rdfs:domain sysml:RequirementDefinition ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "stakeholderParameter" ;
+    rdfs:comment "<p>The <code>parameters</code> of this <code>RequirementDefinition</code> that represent stakeholders for th requirement.</p>" .
+
+sysml:RequirementDefinition_subjectParameter
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Behavior_parameter, sysml:Definition_usage ;
+    rdfs:domain sysml:RequirementDefinition ;
+    rdfs:range sysml:Usage ;
+    rdfs:label "subjectParameter" ;
+    rdfs:comment "<p>The <code>parameter</code> of this <code>RequirementDefinition</code> that represents its subject.</p>" .
+
+sysml:RequirementDefinition_text
+    a owl:DatatypeProperty ;
+    rdfs:domain sysml:RequirementDefinition ;
+    rdfs:range xsd:string ;
+    rdfs:label "text" ;
+    rdfs:comment "<p>An optional textual statement of the requirement represented by this <code>RequirementDefinition</code>, derived from the <code>bodies</code> of the <code>documentation</code> of the <code>RequirementDefinition</code>.</p>" .
+
+sysml:RequirementUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ConstraintUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:RequirementUsage_subjectParameter ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "RequirementUsage" ;
+    rdfs:comment """<p>A <code>RequirementUsage</code> is a <code>Usage</code> of a <code>RequirementDefinition</code>.</p>
+	actorParameter = featureMembership->
+	selectByKind(ActorMembership).
+	ownedActorParameter
+	assumedConstraint = ownedFeatureMembership->
+	selectByKind(RequirementConstraintMembership)->
+	select(kind = RequirementConstraintKind::assumption).
+	ownedConstraint
+	framedConcern = featureMembership->
+	selectByKind(FramedConcernMembership).
+	ownedConcern
+	requiredConstraint = ownedFeatureMembership->
+	selectByKind(RequirementConstraintMembership)->
+	select(kind = RequirementConstraintKind::requirement).
+	ownedConstraint
+	stakeholderParameter = featureMembership->
+	selectByKind(AStakholderMembership).
+	ownedStakeholderParameter
+	subjectParameter =
+	let subjects : OrderedSet(SubjectMembership) =
+	featureMembership->selectByKind(SubjectMembership) in
+	if subjects->isEmpty() then null
+	else subjects->first().ownedSubjectParameter
+	endif
+	text = documentation.body
+	featureMembership->
+	selectByKind(SubjectMembership)->
+	size() <= 1
+	input->notEmpty() and input->first() = subjectParameter
+	specializesFromLibrary('Requirements::requirementChecks')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(RequirementDefinition) or
+	owningType.oclIsKindOf(RequirementUsage)) implies
+	specializesFromLibrary('Requirements::RequirementCheck::subrequirements')
+	owningfeatureMembership <> null and
+	owningfeatureMembership.oclIsKindOf(ObjectiveMembership) implies
+	owningType.ownedSpecialization.general->forAll(gen |
+	(gen.oclIsKindOf(CaseDefinition) implies
+	redefines(gen.oclAsType(CaseDefinition).objectiveRequirement)) and
+	(gen.oclIsKindOf(CaseUsage) implies
+	redefines(gen.oclAsType(CaseUsage).objectiveRequirement))
+	owningFeatureMembership <> null and
+	owningFeatureMembership.oclIsKindOf(RequirementVerificationMembership) implies
+	specializesFromLibrary('VerificationCases::VerificationCase::obj::requirementVerifications')""" .
+
+sysml:RequirementUsage_actorParameter
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Step_parameter, sysml:Usage_usage ;
+    rdfs:domain sysml:RequirementUsage ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "actorParameter" ;
+    rdfs:comment "<p>The <code>parameters</code> of this <code>RequirementUsage</code> that represent actors involved in the requirement.</p>" .
+
+sysml:RequirementUsage_assumedConstraint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:RequirementUsage ;
+    rdfs:range sysml:ConstraintUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "assumedConstraint" ;
+    rdfs:comment "<p>The owned <code>ConstraintUsages</code> that represent assumptions of this <code>RequirementUsage</code>, derived as the <code>ownedConstraints</code> of the <code>RequirementConstraintMemberships</code> of the <code>RequirementUsage</code> with <code>kind</code> = <code>assumption</code>.</p>" .
+
+sysml:RequirementUsage_framedConcern
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:RequirementUsage_requiredConstraint ;
+    rdfs:domain sysml:RequirementUsage ;
+    rdfs:range sysml:ConcernUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "framedConcern" ;
+    rdfs:comment "<p>The <code>ConcernUsages</code> framed by this <code>RequirementUsage</code>, which are the <code>ownedConcerns</code> of all <code>FramedConcernMemberships</code> of the <code>RequirementUsage</code>.</p>" .
+
+sysml:RequirementUsage_reqId
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:subPropertyOf sysml:Element_declaredShortName ;
+    rdfs:domain sysml:RequirementUsage ;
+    rdfs:range xsd:string ;
+    rdfs:label "reqId" ;
+    rdfs:comment "<p>An optional modeler-specified identifier for this <code>RequirementUsage</code> (used, e.g., to link it to an original requirement text in some source document), which is the <code>declaredShortName</code> for the <code>RequirementUsage</code>.</p>" .
+
+sysml:RequirementUsage_requiredConstraint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:RequirementUsage ;
+    rdfs:range sysml:ConstraintUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "requiredConstraint" ;
+    rdfs:comment "<p>The owned <code>ConstraintUsages</code> that represent requirements of this <code>RequirementUsage</code>, which are the <code>ownedConstraints</code> of the <code>RequirementConstraintMemberships</code> of the <code>RequirementUsage</code> with <code>kind</code> = <code>requirement</code>.</p>" .
+
+sysml:RequirementUsage_requirementDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ConstraintUsage_constraintDefinition ;
+    rdfs:domain sysml:RequirementUsage ;
+    rdfs:range sysml:RequirementDefinition ;
+    rdfs:label "requirementDefinition" ;
+    rdfs:comment "<p>The <code>RequirementDefinition</code> that is the single <code>definition</code> of this <code>RequirementUsage</code>.</p>" .
+
+sysml:RequirementUsage_stakeholderParameter
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Step_parameter, sysml:Usage_usage ;
+    rdfs:domain sysml:RequirementUsage ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "stakeholderParameter" ;
+    rdfs:comment "<p>The <code>parameters</code> of this <code>RequirementUsage</code> that represent stakeholders for the requirement.</p>" .
+
+sysml:RequirementUsage_subjectParameter
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Step_parameter, sysml:Usage_usage ;
+    rdfs:domain sysml:RequirementUsage ;
+    rdfs:range sysml:Usage ;
+    rdfs:label "subjectParameter" ;
+    rdfs:comment "<p>The <code>parameter</code> of this <code>RequirementUsage</code> that represents its subject.</p>" .
+
+sysml:RequirementUsage_text
+    a owl:DatatypeProperty ;
+    rdfs:domain sysml:RequirementUsage ;
+    rdfs:range xsd:string ;
+    rdfs:label "text" ;
+    rdfs:comment "<p>An optional textual statement of the requirement represented by this <code>RequirementUsage</code>, derived from the <code>bodies<code> of the <code>documentation</code> of the <code>RequirementUsage</code>.</p>" .
+
+sysml:SatisfyRequirementUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:AssertConstraintUsage, sysml:RequirementUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:SatisfyRequirementUsage_satisfiedRequirement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:SatisfyRequirementUsage_satisfyingFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "SatisfyRequirementUsage" ;
+    rdfs:comment """<p>A <code>SatisfyRequirementUsage</code> is an <code>AssertConstraintUsage</code> that asserts, by default, that a satisfied <code>RequirementUsage</code> is true for a specific <code>satisfyingFeature</code>, or, if <code>isNegated = true</code>, that the <code>RequirementUsage</code> is false. The satisfied <code>RequirementUsage</code> is related to the <code>SatisfyRequirementUsage</code> by a <code>ReferenceSubsetting</code> <code>Relationship</code>.</p>
+	satisfyingFeature =
+	let bindings: BindingConnector = ownedMember->
+	selectByKind(BindingConnector)->
+	select(b | b.relatedElement->includes(subjectParameter)) in
+	if bindings->isEmpty() or
+	bindings->first().relatedElement->exits(r | r <> subjectParameter)
+	then null
+	else bindings->first().relatedElement->any(r | r <> subjectParameter)
+	endif
+	ownedMember->selectByKind(BindingConnector)->
+	select(b |
+	b.relatedElement->includes(subjectParameter) and
+	b.relatedElement->exists(r | r <> subjectParameter))->
+	size() = 1
+	ownedReferenceSubsetting <> null implies
+	ownedReferenceSubsetting.referencedFeature.oclIsKindOf(RequirementUsage)""" .
+
+sysml:SatisfyRequirementUsage_satisfiedRequirement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:AssertConstraintUsage_assertedConstraint ;
+    rdfs:domain sysml:SatisfyRequirementUsage ;
+    rdfs:range sysml:RequirementUsage ;
+    rdfs:label "satisfiedRequirement" ;
+    rdfs:comment "<p>The <code>RequirementUsage</code> that is satisfied by the <code>satisfyingSubject</code> of this <code>SatisfyRequirementUsage</code>. It is the <code>assertedConstraint</code> of the <code>SatisfyRequirementUsage</code> considered as an <code>AssertConstraintUsage</code>, which must be a <code>RequirementUsage</code>.</p>" .
+
+sysml:SatisfyRequirementUsage_satisfyingFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:SatisfyRequirementUsage ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "satisfyingFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that represents the actual subject that is asserted to satisfy the <code>satisfiedRequirement</code>. The <code>satisfyingFeature</code> is bound to the <code>subjectParameter</code> of the <code>SatisfyRequirementUsage</code>.</p>" .
+
+sysml:StakeholderMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:ParameterMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:StakeholderMembership_ownedStakeholderParameter ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "StakeholderMembership" ;
+    rdfs:comment """<p>A <code>StakeholderMembership</code> is a <code>ParameterMembership</code> that identifies a <code>PartUsage</code> as a <code>stakeholderParameter</code> of a <code>RequirementDefinition</code> or <code>RequirementUsage</code>, which specifies a role played by an entity with concerns framed by the <code>owningType</code>.</p>
+	owningType.oclIsKindOf(RequirementUsage) or
+	owningType.oclIsKindOf(RequirementDefinition)""" .
+
+sysml:StakeholderMembership_ownedStakeholderParameter
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ParameterMembership_ownedMemberParameter ;
+    rdfs:domain sysml:StakeholderMembership ;
+    rdfs:range sysml:PartUsage ;
+    rdfs:label "ownedStakeholderParameter" ;
+    rdfs:comment "<p>The <code>PartUsage</code> specifying the stakeholder.</p>" .
+
+sysml:SubjectMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:ParameterMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:SubjectMembership_ownedSubjectParameter ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "SubjectMembership" ;
+    rdfs:comment """<p>A <code>SubjectMembership</code> is a <code>ParameterMembership</code> that indicates that its <code>ownedSubjectParameter</code> is the subject of its <code>owningType</code>. The <code>owningType</code> of a <code>SubjectMembership</code> must be a <code>RequirementDefinition</code>, <code>RequirementUsage</code>, <code>CaseDefinition</code>, or <code>CaseUsage</code>.</p>
+	owningType.oclIsType(RequirementDefinition) or
+	owningType.oclIsType(RequiremenCaseRequirementDefinition) or
+	owningType.oclIsType(CaseDefinition) or
+	owningType.oclIsType(CaseUsage)""" .
+
+sysml:SubjectMembership_ownedSubjectParameter
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ParameterMembership_ownedMemberParameter ;
+    rdfs:domain sysml:SubjectMembership ;
+    rdfs:range sysml:Usage ;
+    rdfs:label "ownedSubjectParameter" ;
+    rdfs:comment "<p>The <code>Usage</code< that is the <code>ownedMemberParameter</code> of this <code>SubjectMembership</code>.</p>" .

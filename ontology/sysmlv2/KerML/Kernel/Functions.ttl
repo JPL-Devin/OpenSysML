@@ -1,0 +1,215 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>
+    a owl:Ontology ;
+    owl:imports <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Behaviors> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel/Functions" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:BooleanExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:Expression ;
+    rdfs:label "BooleanExpression" ;
+    rdfs:comment """<p>A <code>BooleanExpression</code> is a <em><code>Boolean</code></em>-valued <code>Expression</code> whose type is a <code>Predicate</code>. It represents a logical condition resulting from the evaluation of the <code>Predicate</code>.</p>
+	
+	specializesFromLibrary('Performances::booleanEvaluations')""" .
+
+sysml:BooleanExpression_predicate
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Expression_function ;
+    rdfs:domain sysml:BooleanExpression ;
+    rdfs:range sysml:Predicate ;
+    rdfs:label "predicate" ;
+    rdfs:comment """<p>The <code>Predicate</code> that types this <code>BooleanExpression</code>.</p>
+	<p>The Predicate that types the Expression.</p>""" .
+
+sysml:Expression
+    a owl:Class ;
+    rdfs:subClassOf sysml:Step, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Expression_result ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Expression_isModelLevelEvaluable ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Expression" ;
+    rdfs:comment """<p>An <code>Expression</code> is a <code>Step</code> that is typed by a <code>Function</code>. An <code>Expression</code> that also has a <code>Function</code> as its <code>featuringType</code> is a computational step within that <code>Function</code>. An <code>Expression</code> always has a single <code>result</code> parameter, which redefines the <code>result</code> parameter of its defining <code>function</code>. This allows <code>Expressions</code> to be interconnected in tree structures, in which inputs to each <code>Expression</code> in the tree are determined as the results of other <code>Expression</code> in the tree.</p>
+	
+	isModelLevelEvaluable = modelLevelEvaluable(Set(Element){})
+	specializesFromLibrary('Performances::evaluations')
+	owningMembership <> null and
+	owningMembership.oclIsKindOf(FeatureValue) implies
+	let featureWithValue : Feature =
+	owningMembership.oclAsType(FeatureValue).featureWithValue in
+	featuringType = featureWithValue.featuringType
+	ownedMembership.selectByKind(ResultExpressionMembership)->
+	forAll(mem | ownedFeature.selectByKind(BindingConnector)->
+	exists(binding |
+	binding.relatedFeature->includes(result) and
+	binding.relatedFeature->includes(mem.ownedResultExpression.result)))
+	result =
+	let resultParams : Sequence(Feature) =
+	ownedFeatureMemberships->
+	selectByKind(ReturnParameterMembership).
+	ownedParameterMember in
+	if resultParams->notEmpty() then resultParams->first()
+	else if function <> null then function.result
+	else null
+	endif endif
+	ownedFeatureMembership->
+	selectByKind(ReturnParameterMembership)->
+	size() <= 1
+	membership->selectByKind(ResultExpressionMembership)->size() <= 1""" .
+
+sysml:Expression_function
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Step_behavior ;
+    rdfs:domain sysml:Expression ;
+    rdfs:range sysml:Function ;
+    rdfs:label "function" ;
+    rdfs:comment """<p>The <code>Function</code> that types this <code>Expression</code>.</p>
+	
+	<p>This is the Function that types the Expression.</p>""" .
+
+sysml:Expression_isModelLevelEvaluable
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Expression ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isModelLevelEvaluable" ;
+    rdfs:comment "<p>Whether this <code>Expression</code> meets the constraints necessary to be evaluated at <em>model level</em>, that is, using metadata within the model.</p>" .
+
+sysml:Expression_result
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Step_parameter, sysml:Type_output ;
+    rdfs:domain sysml:Expression ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "result" ;
+    rdfs:comment "<p><p>An <code>output</code> <code>parameter</code> of the <code>Expression</code> whose value is the result of the <code>Expression</code>. The result of an <code>Expression</code> is either inherited from its <code>function</code> or it is related to the <code>Expression</code> via a <code>ReturnParameterMembership</code>, in which case it redefines the <code>result</code> <code>parameter</code> of its <code>function</code>.</p>" .
+
+sysml:Function
+    a owl:Class ;
+    rdfs:subClassOf sysml:Behavior, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Function_result ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Function_isModelLevelEvaluable ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Function" ;
+    rdfs:comment """<p>A <code>Function</code> is a <code>Behavior</code> that has an <code>out</code> <code>parameter</code> that is identified as its <code>result</code>. A <code>Function</code> represents the performance of a calculation that produces the values of its <code>result</code> <code>parameter</code>. This calculation may be decomposed into <code>Expressions</code> that are <code>steps</code> of the <code>Function</code>.</p>
+	
+	ownedMembership.selectByKind(ResultExpressionMembership)->
+	forAll(mem | ownedFeature.selectByKind(BindingConnector)->
+	exists(binding |
+	binding.relatedFeature->includes(result) and
+	binding.relatedFeature->includes(mem.ownedResultExpression.result)))
+	specializesFromLibrary('Performances::Evaluation')
+	result =
+	let resultParams : Sequence(Feature) =
+	ownedFeatureMemberships->
+	selectByKind(ReturnParameterMembership).
+	ownedParameterMember in
+	if resultParams->notEmpty() then resultParams->first()
+	else null
+	endif
+	ownedFeatureMembership->
+	selectByKind(ReturnParameterMembership)->
+	size() <= 1
+	membership->selectByKind(ResultExpressionMembership)->size() <= 1""" .
+
+sysml:Function_expression
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Behavior_step ;
+    rdfs:domain sysml:Function ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "expression" ;
+    rdfs:comment """<p>The <code>Expressions</code> that are <code>steps</code> in the calculation of the <code>result</code> of this <code>Function</code>.</p>
+	
+	<p>The set of expressions that represent computational steps or parts of a system of equations within the Function.</p>""" .
+
+sysml:Function_isModelLevelEvaluable
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Function ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isModelLevelEvaluable" ;
+    rdfs:comment """<p>Whether this <code>Function</code> can be used as the <code>function</code> of a model-level evaluable <code>InvocationExpression</code>. Certain <code>Functions</code> from the Kernel Functions Library are considered to have <code>isModelLevelEvaluable = true</code>. For all other <code>Functions</code> it is <code>false</code>.</p>
+	
+	<p><strong>Note:</strong> See the specification of the KerML concrete syntax notation for <code>Expressions</code> for an identification of which library <code>Functions</code> are model-level evaluable.</p>""" .
+
+sysml:Function_result
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Behavior_parameter, sysml:Type_output ;
+    rdfs:domain sysml:Function ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "result" ;
+    rdfs:comment """<p>The <code>result</code> <code>parameter</code> of the <code>Function</code>, which is owned by the <code>Function</code> via a <code>ReturnParameterMembership</code>.</p>
+	
+	<p>The object or value that is the result of evaluating the Function.</p>""" .
+
+sysml:Invariant
+    a owl:Class ;
+    rdfs:subClassOf sysml:BooleanExpression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Invariant_isNegated ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Invariant" ;
+    rdfs:comment """<p>An <code>Invariant</code> is a <code>BooleanExpression</code> that is asserted to have a specific <code><em>Boolean</em></code> result value. If <code>isNegated = false</code>, then the result is asserted to be true. If <code>isNegated = true</code>, then the result is asserted to be false.</p>
+	
+	if isNegated then
+	specializesFromLibrary('Performances::falseEvaluations')
+	else
+	specializesFromLibrary('Performances::trueEvaluations')
+	endif""" .
+
+sysml:Invariant_isNegated
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Invariant ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isNegated" ;
+    rdfs:comment "<p>Whether this <code>Invariant</code> is asserted to be false rather than true.</p>" .
+
+sysml:Predicate
+    a owl:Class ;
+    rdfs:subClassOf sysml:Function ;
+    rdfs:label "Predicate" ;
+    rdfs:comment """<p>A <code>Predicate</code> is a <code>Function</code> whose <code>result</code> <code>parameter</code> has type <code><em>Boolean</em></code> and multiplicity <code>1..1</code>.</p>
+	
+	specializesFromLibrary('Performances::BooleanEvaluation')""" .
+
+sysml:ResultExpressionMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:FeatureMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ResultExpressionMembership_ownedResultExpression ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ResultExpressionMembership" ;
+    rdfs:comment """<p>A <code>ResultExpressionMembership</code> is a <code>FeatureMembership</code> that indicates that the <code>ownedResultExpression</code> provides the result values for the <code>Function</code> or <code>Expression</code> that owns it. The owning <code>Function</code> or <code>Expression</code> must contain a <code>BindingConnector</code> between the <code>result</code> <code>parameter</code> of the <code>ownedResultExpression</code> and the <code>result</code> <code>parameter</code> of the owning <code>Function</code> or <code>Expression</code>.</p>
+	
+	owningType.oclIsKindOf(Function) or owningType.oclIsKindOf(Expression)""" .
+
+sysml:ResultExpressionMembership_ownedResultExpression
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureMembership_ownedMemberFeature ;
+    rdfs:domain sysml:ResultExpressionMembership ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "ownedResultExpression" ;
+    rdfs:comment "<p>The <code>Expression</code> that provides the result for the owner of the <code>ResultExpressionMembership</code>.</p>" .
+
+sysml:ReturnParameterMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:ParameterMembership ;
+    rdfs:label "ReturnParameterMembership" ;
+    rdfs:comment """<p>A <code>ReturnParameterMembership</code> is a <code>ParameterMembership</code> that indicates that the <code>ownedMemberParameter</code> is the <code>result</code> <code>parameter</code> of a <code>Function</code> or <code>Expression</code>. The <code>direction</code> of the <code>ownedMemberParameter</code> must be <code>out</code>.</p>
+	
+	owningType.oclIsKindOf(Function) or owningType.oclIsKindOf(Expression)""" .

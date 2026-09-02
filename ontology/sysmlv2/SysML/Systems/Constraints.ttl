@@ -1,0 +1,76 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Constraints>
+    a owl:Ontology ;
+    owl:imports <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Occurrences> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Constraints" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:AssertConstraintUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ConstraintUsage, sysml:Invariant, [
+        a owl:Restriction ;
+        owl:onProperty sysml:AssertConstraintUsage_assertedConstraint ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "AssertConstraintUsage" ;
+    rdfs:comment """<p>An <code>AssertConstraintUsage</code> is a <code>ConstraintUsage</code> that is also an <code>Invariant</code> and, so, is asserted to be true (by default). Unless it is the <code>AssertConstraintUsage</code> itself, the asserted <code>ConstraintUsage</code> is related to the <code>AssertConstraintUsage</code> by a ReferenceSubsetting <code>Relationship</code>.</p>
+	assertedConstraint =
+	if ownedReferenceSubsetting = null then self
+	else ownedReferenceSubsetting.referencedFeature.oclAsType(ConstraintUsage)
+	endif
+	if isNegated then
+	specializesFromLibrary('Constraints::negatedConstraints')
+	else
+	specializesFromLibrary('Constraints::assertedConstraints')
+	endif
+	ownedReferenceSubsetting <> null implies
+	ownedReferenceSubsetting.referencedFeature.oclIsKindOf(ConstraintUsage)""" .
+
+sysml:AssertConstraintUsage_assertedConstraint
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:AssertConstraintUsage ;
+    rdfs:range sysml:ConstraintUsage ;
+    rdfs:label "assertedConstraint" ;
+    rdfs:comment "<p>The <code>ConstraintUsage</code> to be performed by the <code>AssertConstraintUsage</code>. It is the <code>referenceFeature</code> of the <code>ownedReferenceSubsetting</code> for the <code>AssertConstraintUsage</code>, if there is one, and, otherwise, the <code>AssertConstraintUsage</code> itself.</p>" .
+
+sysml:ConstraintDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:OccurrenceDefinition, sysml:Predicate ;
+    rdfs:label "ConstraintDefinition" ;
+    rdfs:comment """<p>A <code>ConstraintDefinition</code> is an <code>OccurrenceDefinition</code> that is also a <code>Predicate</code> that defines a constraint that may be asserted to hold on a system or part of a system.</p>
+	
+	
+	specializesFromLibrary('Constraints::ConstraintCheck')""" .
+
+sysml:ConstraintUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:BooleanExpression, sysml:OccurrenceUsage ;
+    rdfs:label "ConstraintUsage" ;
+    rdfs:comment """<p>A <code>ConstraintUsage</code> is an <code>OccurrenceUsage</code> that is also a <code>BooleanExpression</code>, and, so, is typed by a <code>Predicate</code>. Nominally, if the type is a <code>ConstraintDefinition</code>, a <code>ConstraintUsage</code> is a <code>Usage</code> of that <code>ConstraintDefinition</code>. However, other kinds of kernel <code>Predicates</code> are also allowed, to permit use of <code>Predicates</code> from the Kernel Model Libraries.</p>
+	owningFeatureMembership <> null and
+	owningFeatureMembership.oclIsKindOf(RequirementConstraintMembership) implies
+	if owningFeatureMembership.oclAsType(RequirementConstraintMembership).kind =
+	RequirementConstraintKind::assumption then
+	specializesFromLibrary('Requirements::RequirementCheck::assumptions')
+	else
+	specializesFromLibrary('Requirements::RequirementCheck::constraints')
+	endif
+	specializesFromLibrary('Constraints::constraintChecks')
+	owningType <> null and
+	(owningType.oclIsKindOf(ItemDefinition) or
+	owningType.oclIsKindOf(ItemUsage)) implies
+	specializesFromLibrary('Items::Item::checkedConstraints')""" .
+
+sysml:ConstraintUsage_constraintDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:BooleanExpression_predicate ;
+    rdfs:domain sysml:ConstraintUsage ;
+    rdfs:range sysml:Predicate ;
+    rdfs:label "constraintDefinition" ;
+    rdfs:comment "<p>The (single) <code>Predicate</code> that is the type of this <code>ConstraintUsage</code>. Nominally, this will be a <code>ConstraintDefinition</code>, but other kinds of <code>Predicates</code> are also allowed, to permit use of <code>Predicates</code> from the Kernel Model Libraries.</p>" .

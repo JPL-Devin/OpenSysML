@@ -1,0 +1,45 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Allocations>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Connections>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Allocations" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:AllocationDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:ConnectionDefinition ;
+    rdfs:label "AllocationDefinition" ;
+    rdfs:comment """<p>An <code>AllocationDefinition</code> is a <code>ConnectionDefinition</code> that specifies that some or all of the responsibility to realize the intent of the <code>source</code> is allocated to the <code>target</code> instances. Such allocations define mappings across the various structures and hierarchies of a system model, perhaps as a precursor to more rigorous specifications and implementations. An <code>AllocationDefinition</code> can itself be refined using nested <code>allocations</code> that give a finer-grained decomposition of the containing allocation mapping.</p>
+	allocation = usage->selectAsKind(AllocationUsage)
+	specializesFromLibrary('Allocations::Allocation')""" .
+
+sysml:AllocationDefinition_allocation
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_usage ;
+    rdfs:domain sysml:AllocationDefinition ;
+    rdfs:range sysml:AllocationUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "allocation" ;
+    rdfs:comment "<p>The <code>AllocationUsages</code> that refine the allocation mapping defined by this <code>AllocationDefinition</code>.</p>" .
+
+sysml:AllocationUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ConnectionUsage ;
+    rdfs:label "AllocationUsage" ;
+    rdfs:comment """<p>An <code>AllocationUsage</code> is a usage of an <code>AllocationDefinition</code> asserting the allocation of the <code>source</code> feature to the <code>target</code> feature.</p>
+	specializesFromLibrary('Allocations::allocations')""" .
+
+sysml:AllocationUsage_allocationDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ConnectionUsage_connectionDefinition ;
+    rdfs:domain sysml:AllocationUsage ;
+    rdfs:range sysml:AllocationDefinition ;
+    ecore:isOrdered true ;
+    rdfs:label "allocationDefinition" ;
+    rdfs:comment "<p>The <code>AllocationDefinitions</code> that are the types of this <code>AllocationUsage</code>.</p>" .

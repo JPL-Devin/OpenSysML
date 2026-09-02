@@ -1,0 +1,102 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel/Behaviors>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Classes> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel/Behaviors" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Behavior
+    a owl:Class ;
+    rdfs:subClassOf sysml:Class ;
+    rdfs:label "Behavior" ;
+    rdfs:comment """<p>A <code>Behavior </code>coordinates occurrences of other <code>Behaviors</code>, as well as changes in objects. <code>Behaviors</code> can be decomposed into <code>Steps</code> and be characterized by <code>parameters</code>.</p>
+	
+	specializesFromLibrary('Performances::Performance')
+	step = feature->selectByKind(Step)
+	ownedSpecialization.general->forAll(not oclIsKindOf(Structure))""" .
+
+sysml:Behavior_parameter
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_directedFeature ;
+    rdfs:domain sysml:Behavior ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "parameter" ;
+    rdfs:comment "<p>The parameters of this <code>Behavior</code>, which are defined as its <code>directedFeatures</code>, whose values are passed into and/or out of a performance of the <code>Behavior</code>.</p>" .
+
+sysml:Behavior_step
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_feature ;
+    rdfs:domain sysml:Behavior ;
+    rdfs:range sysml:Step ;
+    rdfs:label "step" ;
+    rdfs:comment "<p>The <code>Steps</code> that make up this <code>Behavior</code>.</p>" .
+
+sysml:ParameterMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:FeatureMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ParameterMembership_ownedMemberParameter ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ParameterMembership" ;
+    rdfs:comment """<p>A <code>ParameterMembership</code> is a <code>FeatureMembership</code> that identifies its <code>memberFeature</code> as a parameter, which is always owned, and must have a <code>direction</code>. A <code>ParameterMembership</code> must be owned by a <code>Behavior</code> or a <code>Step</code>.</p>
+	ownedMemberParameter.direction = parameterDirection()
+	owningType.oclIsKindOf(Behavior) or owningType.oclIsKindOf(Step)""" .
+
+sysml:ParameterMembership_ownedMemberParameter
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureMembership_ownedMemberFeature ;
+    rdfs:domain sysml:ParameterMembership ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "ownedMemberParameter" ;
+    rdfs:comment "<p>The <code>Feature</code> that is identified as a <code>parameter</code> by this <code>ParameterMembership</code>.</p>" .
+
+sysml:Step
+    a owl:Class ;
+    rdfs:subClassOf sysml:Feature ;
+    rdfs:label "Step" ;
+    rdfs:comment """<p>A <code>Step</code> is a <code>Feature</code> that is typed by one or more <code>Behaviors</code>. <code>Steps</code> may be used by one <code>Behavior</code> to coordinate the performance of other <code>Behaviors</code>, supporting a steady refinement of behavioral descriptions. <code>Steps</code> can be ordered in time and can be connected using <code>ItemFlows</code> to specify things flowing between their <code>parameters</code>.</p>
+	
+	specializesFromLibrary('Performances::performances')
+	owningType <> null and
+	(owningType.oclIsKindOf(Behavior) or
+	owningType.oclIsKindOf(Step)) implies
+	specializesFromLibrary('Performances::Performance::enclosedPerformance')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(Structure) or
+	owningType.oclIsKindOf(Feature) and
+	owningType.oclAsType(Feature).type->
+	exists(oclIsKindOf(Structure)) implies
+	specializesFromLibrary('Objects::Object::ownedPerformance')
+	owningType <> null and
+	(owningType.oclIsKindOf(Behavior) or
+	owningType.oclIsKindOf(Step)) and
+	self.isComposite implies
+	specializesFromLibrary('Performances::Performance::subperformance')
+	behavior = type->selectByKind(Behavior)""" .
+
+sysml:Step_behavior
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Feature_type ;
+    rdfs:domain sysml:Step ;
+    rdfs:range sysml:Behavior ;
+    ecore:isOrdered true ;
+    rdfs:label "behavior" ;
+    rdfs:comment "<p>The <code>Behaviors</code> that type this <code>Step</code>.</p>" .
+
+sysml:Step_parameter
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_directedFeature ;
+    rdfs:domain sysml:Step ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "parameter" ;
+    rdfs:comment "<p>The <code>parameters</code> of this <code>Step</code>, which are defined as its <code>directedFeatures</code>, whose values are passed into and/or out of a performance of the <code>Step</code>.</p>" .

@@ -1,0 +1,49 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Calculations>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Actions> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Calculations" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:CalculationDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionDefinition, sysml:Function ;
+    rdfs:label "CalculationDefinition" ;
+    rdfs:comment """<p>A <code>CalculationDefinition</code> is an <coed>ActionDefinition</code> that also defines a <code>Function</code> producing a <code>result</code>.</p>
+	specializesFromLibrary('Calculations::Calculation')
+	calculation = action->selectByKind(CalculationUsage)""" .
+
+sysml:CalculationDefinition_calculation
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ActionDefinition_action, sysml:Function_expression ;
+    rdfs:domain sysml:CalculationDefinition ;
+    rdfs:range sysml:CalculationUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "calculation" ;
+    rdfs:comment "<p>The <code>actions</code> of this <code>CalculationDefinition</code> that are <code>CalculationUsages</code>.</p>" .
+
+sysml:CalculationUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, sysml:Expression ;
+    rdfs:label "CalculationUsage" ;
+    rdfs:comment """<p>A <code>CalculationUsage</code> is an <code>ActionUsage</code> that is also an <code>Expression</code>, and, so, is typed by a <code>Function</code>. Nominally, if the <code>type</code> is a <code>CalculationDefinition</code>, a <code>CalculationUsage</code> is a <code>Usage</code> of that <code>CalculationDefinition</code> within a system. However, other kinds of kernel <code>Functions</code> are also allowed, to permit use of <code>Functions</code> from the Kernel Model Libraries.</p>
+	specializesFromLibrary('Calculations::calculations')
+	owningType <> null and
+	(owningType.oclIsKindOf(CalculationDefinition) or
+	owningType.oclIsKindOf(CalculationUsage)) implies
+	specializesFromLibrary('Calculations::Calculation::subcalculations')""" .
+
+sysml:CalculationUsage_calculationDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ActionUsage_actionDefinition, sysml:Expression_function ;
+    rdfs:domain sysml:CalculationUsage ;
+    rdfs:range sysml:Function ;
+    ecore:isOrdered true ;
+    rdfs:label "calculationDefinition" ;
+    rdfs:comment "<p>The <ode>Function</code> that is the <code>type</code> of this <code>CalculationUsage</code>. Nominally, this would be a <code>CalculationDefinition</code>, but a kernel <code>Function</code> is also allowed, to permit use of <code>Functions</code> from the Kernel Model Libraries.</p>" .

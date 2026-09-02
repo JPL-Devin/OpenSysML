@@ -1,0 +1,556 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Actions>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Behaviors>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Expressions>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Occurrences> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Actions" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:AcceptActionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:AcceptActionUsage_payloadParameter ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "AcceptActionUsage" ;
+    rdfs:comment """<p>An <code>AcceptActionUsage</code> is an <code>ActionUsage</code> that specifies the acceptance of an <em><code>incomingTransfer</code></em> from the <code><em>Occurrence</em></code> given by the result of its <code>receiverArgument</code> Expression. (If no <code>receiverArgument</code> is provided, the default is the <em><code>this</code></em> context of the AcceptActionUsage.) The payload of the accepted <em><code>Transfer</em></code> is output on its <code>payloadParameter</code>. Which <em><code>Transfers</em></code> may be accepted is determined by conformance to the typing and (potentially) binding of the <code>payloadParameter</code>.</p>
+	
+	inputParameters()->size() >= 2
+	receiverArgument = argument(2)
+	payloadArgument = argument(1)
+	payloadParameter =
+	if parameter->isEmpty() then null
+	else parameter->first() endif
+	not isTriggerAction() implies
+	specializesFromLibrary('Actions::acceptActions')
+	isSubactionUsage() and not isTriggerAction() implies
+	specializesFromLibrary('Actions::Action::acceptSubactions')
+	isTriggerAction() implies
+	specializesFromLibrary('Actions::TransitionAction::accepter')
+	payloadArgument <> null and
+	payloadArgument.oclIsKindOf(TriggerInvocationExpression) implies
+	let invocation : Expression =
+	payloadArgument.oclAsType(Expression) in
+	parameter->size() >= 2 and
+	invocation.parameter->size() >= 2 and
+	ownedFeature->selectByKind(BindingConnector)->exists(b |
+	b.relatedFeatures->includes(parameter->at(2)) and
+	b.relatedFeatures->includes(invocation.parameter->at(2)))""" .
+
+sysml:AcceptActionUsage_payloadArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:AcceptActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "payloadArgument" ;
+    rdfs:comment "<p>An <code>Expression</code> whose <code>result</code> is bound to the <code><em>payload</em></code> <code>parameter</code> of this <code>AcceptActionUsage</code>. If provided, the <code>AcceptActionUsage</code> will only accept a <code><em>Transfer</em></code> with exactly this <code><em>payload</em></code>.</p>" .
+
+sysml:AcceptActionUsage_payloadParameter
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Step_parameter, sysml:Usage_nestedReference ;
+    rdfs:domain sysml:AcceptActionUsage ;
+    rdfs:range sysml:ReferenceUsage ;
+    rdfs:label "payloadParameter" ;
+    rdfs:comment "<p>The <code>nestedReference</code> of this <code>AcceptActionUsage</code> that redefines the <code>payload</code> output <code>parameter</code> of the base <code>AcceptActionUsage</code> <em><code>AcceptAction</code></em> from the Systems Model Library.</p>" .
+
+sysml:AcceptActionUsage_receiverArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:AcceptActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "receiverArgument" ;
+    rdfs:comment "<p>An <code>Expression</code> whose <code>result</code> is bound to the <em><code>receiver</code></em> input <code>parameter</code> of this <code>AcceptActionUsage</code>.</p>" .
+
+sysml:ActionDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:Behavior, sysml:OccurrenceDefinition ;
+    rdfs:label "ActionDefinition" ;
+    rdfs:comment """<p>An <code>ActionDefinition</code> is a <code>Definition</code> that is also a <code>Behavior</code> that defines an <em><code>Action</code></em> performed by a system or part of a system.</p>
+	specializesFromLibrary('Actions::Action')
+	action = usage->selectByKind(ActionUsage)""" .
+
+sysml:ActionDefinition_action
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Behavior_step, sysml:Definition_usage ;
+    rdfs:domain sysml:ActionDefinition ;
+    rdfs:range sysml:ActionUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "action" ;
+    rdfs:comment "<p>The <code>ActionUsages</code> that are <code>steps</code> in this <code>ActionDefinition</code>, which define the actions that specify the behavior of the <code>ActionDefinition</code>.</p>" .
+
+sysml:ActionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:OccurrenceUsage, sysml:Step ;
+    rdfs:label "ActionUsage" ;
+    rdfs:comment """<p>An <code>ActionUsage</code> is a <code>Usage</code> that is also a <code>Step</code>, and, so, is typed by a <code>Behavior</code>. Nominally, if the type is an <code>ActionDefinition</code>, an <code>ActionUsage</code> is a <code>Usage</code> of that <code>ActionDefinition</code> within a system. However, other kinds of kernel <code>Behaviors</code> are also allowed, to permit use of <code>Behaviors</code> from the Kernel Model Libraries.</p>
+	
+	isSubactionUsage() implies
+	specializesFromLibrary('Actions::Action::subactions')
+	specializesFromLibrary('Actions::actions')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(PartDefinition) or
+	owningType.oclIsKindOf(PartUsage)) implies
+	specializesFromLibrary('Parts::Part::ownedActions')
+	owningFeatureMembership <> null and
+	owningFeatureMembership.oclIsKindOf(StateSubactionMembership) implies
+	let kind : StateSubactionKind =
+	owningFeatureMembership.oclAsType(StateSubactionMembership).kind in
+	if kind = StateSubactionKind::entry then
+	redefinesFromLibrary('States::StateAction::entryAction')
+	else if kind = StateSubactionKind::do then
+	redefinesFromLibrary('States::StateAction::doAction')
+	else
+	redefinesFromLibrary('States::StateAction::exitAction')
+	endif endif""" .
+
+sysml:ActionUsage_actionDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:OccurrenceUsage_occurrenceDefinition, sysml:Step_behavior ;
+    rdfs:domain sysml:ActionUsage ;
+    rdfs:range sysml:Behavior ;
+    ecore:isOrdered true ;
+    rdfs:label "actionDefinition" ;
+    rdfs:comment "<p>The <code>Behaviors</code> that are the <code>types</code> of this <code>ActionUsage</code>. Nominally, these would be <code>ActionDefinitions</code>, but other kinds of Kernel <code>Behaviors</code> are also allowed, to permit use of <code>Behaviors</code> from the Kernel Model Libraries.</p>" .
+
+sysml:AssignmentActionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:AssignmentActionUsage_referent ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "AssignmentActionUsage" ;
+    rdfs:comment """<p>An <code>AssignmentActionUsage</code> is an <code>ActionUsage</code> that is defined, directly or indirectly, by the <code>ActionDefinition</code> <em><code>AssignmentAction</code></em> from the Systems Model Library. It specifies that the value of the <code>referent</code> <code>Feature</code>, relative to the target given by the result of the <code>targetArgument</code> <code>Expression</code>, should be set to the result of the <code>valueExpression</code>.</p>
+	
+	specializesFromLibrary('Actions::assignmentActions')
+	let targetParameter : Feature = inputParameter(1) in
+	targetParameter <> null and
+	targetParameter.ownedFeature->notEmpty() and
+	targetParameter.ownedFeature->first().
+	redefines('AssignmentAction::target::startingAt')
+	valueExpression = argument(2)
+	targetArgument = argument(1)
+	isSubactionUsage() implies
+	specializesFromLibrary('Actions::Action::assignments')
+	let targetParameter : Feature = inputParameter(1) in
+	targetParameter <> null and
+	targetParameter.ownedFeature->notEmpty() and
+	targetParameter->first().ownedFeature->notEmpty() and
+	targetParameter->first().ownedFeature->first().
+	redefines('AssigmentAction::target::startingAt::accessedFeature')
+	let targetParameter : Feature = inputParameter(1) in
+	targetParameter <> null and
+	targetParameter.ownedFeature->notEmpty() and
+	targetParameter->first().ownedFeature->notEmpty() and
+	targetParameter->first().ownedFeature->first().redefines(referent)
+	referent =
+	let unownedFeatures : Sequence(Feature) = ownedMembership->
+	reject(oclIsKindOf(FeatureMembership)).memberElement->
+	selectByKind(Feature) in
+	if unownedFeatures->isEmpty() then null
+	else unownedFeatures->first().oclAsType(Feature)
+	endif
+	ownedMembership->exists(
+	not oclIsKindOf(OwningMembership) and
+	memberElement.oclIsKindOf(Feature))""" .
+
+sysml:AssignmentActionUsage_referent
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_member ;
+    rdfs:domain sysml:AssignmentActionUsage ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "referent" ;
+    rdfs:comment "<p>The <code>Feature</code> whose value is to be set.</p>" .
+
+sysml:AssignmentActionUsage_targetArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:AssignmentActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "targetArgument" ;
+    rdfs:comment "<p>The <code>Expression</code> whose value is an occurrence in the domain of the <code>referent</code> <code>Feature</code>, for which the value of the <code>referent</code> will be set to the result of the <code>valueExpression</code> by this <code>AssignmentActionUsage</code>.</p>" .
+
+sysml:AssignmentActionUsage_valueExpression
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:AssignmentActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "valueExpression" ;
+    rdfs:comment "<p>The <code>Expression</code> whose result is to be assigned to the <code>referent</code> <code>Feature</code>.</p>" .
+
+sysml:ControlNode
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage ;
+    rdfs:label "ControlNode" ;
+    rdfs:comment """<p>A <code>ControlNode</code> is an <code>ActionUsage</code> that does not have any inherent behavior but provides constraints on incoming and outgoing <code>Successions</code> that are used to control other <code>Actions</code>. A <code>ControlNode</code> must be a composite owned <code>usage</code> of an <code>ActionDefinition</code> or <code>ActionUsage</code>.</p>
+	
+	sourceConnector->selectByKind(Succession)->
+	collect(connectorEnd->at(1).multiplicity)->
+	forAll(sourceMult |
+	multiplicityHasBounds(sourceMult, 1, 1))
+	owningType <> null and
+	(owningType.oclIsKindOf(ActionDefinition) or
+	owningType.oclIsKindOf(ActionUsage))
+	targetConnector->selectByKind(Succession)->
+	collect(connectorEnd->at(2).multiplicity)->
+	forAll(targetMult |
+	multiplicityHasBounds(targetMult, 1, 1))
+	specializesFromLibrary('Action::Action::controls')""" .
+
+sysml:DecisionNode
+    a owl:Class ;
+    rdfs:subClassOf sysml:ControlNode ;
+    rdfs:label "DecisionNode" ;
+    rdfs:comment """<p>A <code>DecisionNode</code> is a <code>ControlNode</code> that makes a selection from its outgoing <code>Successions</code>.</p>
+	targetConnector->selectByKind(Succession)->size() <= 1
+	sourceConnector->selectAsKind(Succession)->
+	collect(connectorEnd->at(2))->
+	forAll(targetMult |
+	multiplicityHasBounds(targetMult, 0, 1))
+	specializesFromLibrary('Actions::Action::decisions')
+	sourceConnector->selectByKind(Succession)->
+	forAll(subsetsChain(self,
+	resolveGlobal('ControlPerformances::MergePerformance::outgoingHBLink')))""" .
+
+sysml:ForLoopActionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:LoopActionUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ForLoopActionUsage_loopVariable ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:ForLoopActionUsage_seqArgument ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ForLoopActionUsage" ;
+    rdfs:comment """<p>A <code>ForLoopActionUsage</code> is a <code>LoopActionUsage</code> that specifies that its <code>bodyAction</code> <code>ActionUsage</code> should be performed once for each value, in order, from the sequence of values obtained as the result of the <code>seqArgument</code> <code>Expression</code>, with the <code>loopVariable</code> set to the value for each iteration.</p>
+	seqArgument = argument(1)
+	
+	isSubactionUsage() implies
+	specializesFromLibrary('Actions::Action::forLoops')
+	loopVariable <> null and
+	loopVariable.redefinesFromLibrary('Actions::ForLoopAction::var')
+	specializesFromLibrary('Actions::forLoopActions')
+	loopVariable =
+	if ownedFeature->isEmpty() or
+	not ownedFeature->first().oclIsKindOf(ReferenceUsage) then
+	null
+	else
+	ownedFeature->first().oclAsType(ReferenceUsage)
+	endif
+	ownedFeature->notEmpty() and
+	ownedFeature->at(1).oclIsKindOf(ReferenceUsage)
+	
+	inputParameters()->size() = 2""" .
+
+sysml:ForLoopActionUsage_loopVariable
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:ForLoopActionUsage ;
+    rdfs:range sysml:ReferenceUsage ;
+    rdfs:label "loopVariable" ;
+    rdfs:comment "<p>The <code>ownedFeature</code> of this <co>ForLoopActionUsage</code> that acts as the loop variable, which is assigned the successive values of the input sequence on each iteration. It is the <code>ownedFeature</code> that redefines <em><code>ForLoopAction::var</code></em>.</p>" .
+
+sysml:ForLoopActionUsage_seqArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:ForLoopActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "seqArgument" ;
+    rdfs:comment "<p>The <code>Expression</code> whose result provides the sequence of values to which the <code>loopVariable</code> is set for each iterative performance of the <code>bodyAction</code>. It is the <code>Expression</code> whose <code>result</code> is bound to the <em><code>seq</code></em> <code>input</code> <code>parameter</code> of this <code>ForLoopActionUsage</code>.</p>" .
+
+sysml:ForkNode
+    a owl:Class ;
+    rdfs:subClassOf sysml:ControlNode ;
+    rdfs:label "ForkNode" ;
+    rdfs:comment """<p>A <code>ForkNode</code> is a <code>ControlNode</code> that must be followed by successor <code>Actions</code> as given by all its outgoing <code>Successions</code>.</p>
+	targetConnector->selectByKind(Succession)->size() <= 1
+	specializesFromLibrary('Actions::Action::forks')""" .
+
+sysml:IfActionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:IfActionUsage_ifArgument ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:IfActionUsage_thenAction ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "IfActionUsage" ;
+    rdfs:comment """<p>An <code>IfActionUsage</code> is an <code>ActionUsage</code> that specifies that the <code>thenAction</code> <code>ActionUsage</code> should be performed if the result of the <code>ifArgument</code> <code>Expression</code> is true. It may also optionally specify an <code>elseAction</code> <code>ActionUsage</code> that is performed if the result of the <code>ifArgument</code> is false.</p>
+	thenAction =
+	let parameter : Feature = inputParameter(2) in
+	if parameter <> null and parameter.oclIsKindOf(ActionUsage) then
+	parameter.oclAsType(ActionUsage)
+	else
+	null
+	endif
+	isSubactionUsage() implies
+	specializesFromLibrary('Actions::Action::ifSubactions')
+	if elseAction = null then
+	specializesFromLibrary('Actions::ifThenActions')
+	else
+	specializesFromLibrary('Actions::ifThenElseActions')
+	endif
+	ifArgument =
+	let parameter : Feature = inputParameter(1) in
+	if parameter <> null and parameter.oclIsKindOf(Expression) then
+	parameter.oclAsType(Expression)
+	else
+	null
+	endif
+	elseAction =
+	let parameter : Feature = inputParameter(3) in
+	if parameter <> null and parameter.oclIsKindOf(ActionUsage) then
+	parameter.oclAsType(ActionUsage)
+	else
+	null
+	endif
+	inputParameters()->size() >= 2""" .
+
+sysml:IfActionUsage_elseAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:IfActionUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "elseAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> that is to be performed if the result of the <code>ifArgument</code> is false. It is the (optional) third <code>parameter</code> of the <code>IfActionUsage</code>.</p>" .
+
+sysml:IfActionUsage_ifArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:IfActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "ifArgument" ;
+    rdfs:comment "<p>The <code>Expression</code> whose result determines whether the <code>thenAction</code> or (optionally) the <code>elseAction</code> is performed. It is the first <code>parameter<code> of the <code>IfActionUsage</code>.</p>" .
+
+sysml:IfActionUsage_thenAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:IfActionUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "thenAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> that is to be performed if the result of the <code>ifArgument</code> is true. It is the second <code>parameter<code> of the <code>IfActionUsage</code>.</p>" .
+
+sysml:JoinNode
+    a owl:Class ;
+    rdfs:subClassOf sysml:ControlNode ;
+    rdfs:label "JoinNode" ;
+    rdfs:comment """<p>A <code>JoinNode</code> is a <code>ControlNode</code> that waits for the completion of all the predecessor <code>Actions</code> given by incoming <code>Successions</code>.</p>
+	sourceConnector->selectByKind(Succession)->size() <= 1
+	specializesFromLibrary('Actions::Action::join')""" .
+
+sysml:LoopActionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:LoopActionUsage_bodyAction ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "LoopActionUsage" ;
+    rdfs:comment """<p>A <code>LoopActionUsage</code> is an <code>ActionUsage</code> that specifies that its <code>bodyAction</code> should be performed repeatedly. Its subclasses <code>WhileLoopActionUsage</code> and <code>ForLoopActionUsage</code> provide different ways to determine how many times the <code>bodyAction</code> should be performed.</p>
+	bodyAction =
+	let parameter : Feature = inputParameter(2) in
+	if parameter <> null and parameter.oclIsKindOf(Action) then
+	parameter.oclAsType(Action)
+	else
+	null
+	endif""" .
+
+sysml:LoopActionUsage_bodyAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:LoopActionUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "bodyAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> to be performed repeatedly by the <code>LoopActionUsage</code>. It is the second <code>parameter</code> of the <code>LoopActionUsage</code>.</p>" .
+
+sysml:MergeNode
+    a owl:Class ;
+    rdfs:subClassOf sysml:ControlNode ;
+    rdfs:label "MergeNode" ;
+    rdfs:comment """<p>A <code>MergeNode</code> is a <code>ControlNode</code> that asserts the merging of its incoming <code>Successions</code>. A <code>MergeNode</code> may have at most one outgoing <code>Successions</code>.</p>
+	sourceConnector->selectAsKind(Succession)->size() <= 1
+	targetConnector->selectByKind(Succession)->
+	collect(connectorEnd->at(1))->
+	forAll(sourceMult |
+	multiplicityHasBounds(sourceMult, 0, 1))
+	targetConnector->selectByKind(Succession)->
+	forAll(subsetsChain(self,
+	resolveGlobal('ControlPerformances::MergePerformance::incomingHBLink')))
+	specializesFromLibrary('Actions::Action::merges')""" .
+
+sysml:PerformActionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, sysml:EventOccurrenceUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:PerformActionUsage_performedAction ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "PerformActionUsage" ;
+    rdfs:comment """<p>A <code>PerformActionUsage</code> is an <code>ActionUsage</code> that represents the performance of an <code>ActionUsage</code>. Unless it is the <code>PerformActionUsage</code> itself, the <code>ActionUsage</code> to be performed is related to the <code>PerformActionUsage</code> by a <code>ReferenceSubsetting</code> relationship. A <code>PerformActionUsage</code> is also an <code>EventOccurrenceUsage</code>, with its <code>performedAction</code> as the <code>eventOccurrence</code>.</p>
+	ownedReferenceSubsetting <> null implies
+	ownedReferenceSubsetting.referencedFeature.oclIsKindOf(ActionUsage)
+	owningType <> null and
+	(owningType.oclIsKindOf(PartDefinition) or
+	owningType.oclIsKindOf(PartUsage)) implies
+	specializesFromLibrary('Parts::Part::performedActions')""" .
+
+sysml:PerformActionUsage_performedAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:EventOccurrenceUsage_eventOccurrence ;
+    rdfs:domain sysml:PerformActionUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "performedAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> to be performed by this <code>PerformedActionUsage</code>. It is the <code>eventOccurrence</code> of the <code>PerformActionUsage</code> considered as an <code>EventOccurrenceUsage</code>, which must be an <code>ActionUsage</code>.</p>" .
+
+sysml:SendActionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:SendActionUsage_payloadArgument ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "SendActionUsage" ;
+    rdfs:comment """<p>A <code>SendActionUsage</code> is an <code>ActionUsage</code> that specifies the sending of a payload given by the result of its <code>payloadArgument</code> <code>Expression</code> via a <em><code>MessageTransfer</code></em> whose <em><code>source</code></em> is given by the result of the <code>senderArgument</code> <code>Expression</code> and whose <code>target</code> is given by the result of the <code>receiverArgument</code> <code>Expression</code>. If no <code>senderArgument</code> is provided, the default is the <em><code>this</code></em> context for the action. If no <code>receiverArgument</code> is given, then the receiver is to be determined by, e.g., outgoing <em><code>Connections</code></em> from the sender.</p> 
+	
+	senderArgument = argument(2)
+	payloadArgument = argument(1)
+	inputParameters()->size() >= 3
+	receiverArgument = argument(3)
+	isSubactionUsage() implies
+	specializesFromLibrary('Actions::Action::acceptSubactions')
+	specializesFromLibrary('Actions::sendActions')""" .
+
+sysml:SendActionUsage_payloadArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:SendActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "payloadArgument" ;
+    rdfs:comment "<p>An <code>Expression</code> whose result is bound to the <code><em>payload</em></code> input parameter of this <code>SendActionUsage</code>.</p>" .
+
+sysml:SendActionUsage_receiverArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:SendActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "receiverArgument" ;
+    rdfs:comment "<p>An <code>Expression</code> whose result is bound to the <em><code>receiver</code></em> input parameter of this <code>SendActionUsage</code>.</p>" .
+
+sysml:SendActionUsage_senderArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:SendActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "senderArgument" ;
+    rdfs:comment "<p>An <code>Expression</code> whose result is bound to the <em><code>sender</code></em> input parameter of this <code>SendActionUsage</code>.</p>" .
+
+sysml:TriggerInvocationExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:InvocationExpression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:TriggerInvocationExpression_kind ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "TriggerInvocationExpression" ;
+    rdfs:comment """<p>A <code>TriggerInvocationExpression</code> is an <code>InvocationExpression</code> that invokes one of the trigger <code>Functions</code> from the Kernel Semantic Library <code><em>Triggers<em></code> package, as indicated by its <code>kind</code>.</p>
+	specializesFromLibrary(
+	if kind = TriggerKind::when then
+	'Triggers::TriggerWhen'
+	else if kind = TriggerKind::at then
+	'Triggers::TriggerAt'
+	else
+	'Triggers::TriggerAfter'
+	endif endif
+	)
+	kind = TriggerKind::after implies
+	argument->notEmpty() and
+	argument->at(1).result.specializesFromLibrary('Quantities::ScalarQuantityValue') and
+	let mRef : Element =
+	resolveGlobal('Quantities::TensorQuantityValue::mRef').ownedMemberElement in
+	argument->at(1).result.feature->
+	select(ownedRedefinition.redefinedFeature->
+	closure(ownedRedefinition.redefinedFeature)->
+	includes(mRef))->
+	exists(specializesFromLibrary('ISQBase::DurationUnit'))
+	kind = TriggerKind::at implies
+	argument->notEmpty() and
+	argument->at(1).result.specializesFromLibrary('Time::TimeInstantValue')
+	kind = TriggerKind::when implies
+	argument->notEmpty() and
+	argument->at(1).oclIsKindOf(FeatureReferenceExpression) and
+	let referent : Feature =
+	argument->at(1).oclAsType(FeatureReferenceExpression).referent in
+	referent.oclIsKindOf(Expression) and
+	referent.oclAsType(Expression).result.specializesFromLibrary('ScalarValues::Boolean')""" .
+
+sysml:TriggerInvocationExpression_kind
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:TriggerInvocationExpression ;
+    rdfs:range sysml:TriggerKind ;
+    rdfs:label "kind" ;
+    rdfs:comment "<p>Indicates which of the <code>Functions</code> from the <code><em>Triggers</em></code> model in the Kernel Semantic Library is to be invoked by this <code>TriggerInvocationExpression</code>.</p>" .
+
+sysml:TriggerKind
+    a rdfs:Datatype ;
+    owl:equivalentClass [
+        a rdfs:Datatype ;
+        owl:oneOf [
+            a rdf:List ;
+            rdf:first "after" ;
+            rdf:rest [
+                a rdf:List ;
+                rdf:first "at" ;
+                rdf:rest [
+                    a rdf:List ;
+                    rdf:first "when" ;
+                    rdf:rest rdf:nil
+                ]
+            ]
+        ]
+    ] ;
+    rdfs:label "TriggerKind" ;
+    rdfs:comment "<p><code>TriggerKind</code> enumerates the kinds of triggers that can be represented by a <code>TriggerInvocationExpression</code>.</p>" .
+
+sysml:WhileLoopActionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:LoopActionUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:WhileLoopActionUsage_whileArgument ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "WhileLoopActionUsage" ;
+    rdfs:comment """<p>A <code>WhileLoopActionUsage</code> is a <code>LoopActionUsage</code> that specifies that the <code>bodyAction</code> <code>ActionUsage</code> should be performed repeatedly while the result of the <code>whileArgument</code> <code>Expression</code> is true or until the result of the <code>untilArgument</code> <code>Expression</code> (if provided) is true. The <code>whileArgument</code> <code>Expression</code> is evaluated before each (possible) performance of the <code>bodyAction</code>, and the <code>untilArgument</code> <code>Expression</code> is evaluated after each performance of the <code>bodyAction</code>.</p>
+	isSubactionUsage() implies
+	specializesFromLibrary('Actions::Action::whileLoops')
+	untilArgument =
+	let parameter : Feature = inputParameter(3) in
+	if parameter <> null and parameter.oclIsKindOf(Expression) then
+	parameter.oclAsType(Expression)
+	else
+	null
+	endif
+	
+	specializesFromLibrary('Actions::whileLoopActions')
+	whileArgument =
+	let parameter : Feature = inputParameter(1) in
+	if parameter <> null and parameter.oclIsKindOf(Expression) then
+	parameter.oclAsType(Expression)
+	else
+	null
+	endif
+	
+	inputParameters()->size() >= 2""" .
+
+sysml:WhileLoopActionUsage_untilArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:WhileLoopActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "untilArgument" ;
+    rdfs:comment "<p>The <code>Expression</code> whose result, if false, determines that the <code>bodyAction</code> should continue to be performed. It is the (optional) third owned <code>parameter</code> of the <code>WhileLoopActionUsage</code>.</p>" .
+
+sysml:WhileLoopActionUsage_whileArgument
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:WhileLoopActionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "whileArgument" ;
+    rdfs:comment "<p>The <code>Expression</code> whose result, if true, determines that the <code>bodyAction</code> should continue to be performed. It is the first owned <code>parameter</code> of the <code>WhileLoopActionUsage</code>.</p>" .

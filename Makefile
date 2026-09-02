@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check self-model
+.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check self-model ontology-modules ontology-modules-check
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -209,6 +209,16 @@ self-model: build-sysml ## Render the architecture self-model's views (see examp
 	@# The architecture document the model declares, rendered by the same model.
 	$(BIN_DIR)/sysml $(SELF_MODEL_DIR)/*.sysml -render-documents "$(SELF_MODEL_OUT)"
 	@echo "✓ Rendered the self-model's views and document into $(SELF_MODEL_OUT)/"
+
+ontology-modules: ## Regenerate ontology/sysmlv2 from the pinned Open-MBEE ontology and OMG XMI
+	./scripts/download-ontology-sources.sh
+	go run ./cmd/ontology-modules
+	go run ./cmd/ontology-modules -check
+	@echo "✓ ontology/sysmlv2 regenerated"
+
+ontology-modules-check: ## Verify ontology/sysmlv2 matches its pinned sources, as CI does
+	./scripts/download-ontology-sources.sh
+	go run ./cmd/ontology-modules -check
 
 docs-counts: ## Regenerate and verify all derived documentation counts
 	@echo "Regenerating the documentation count lines and refereed figures..."

@@ -433,6 +433,18 @@ declares, each either a relationship the metamodel reifies as an element (`speci
 (`isAccept`, `isResult`, `isSnapshot`, `isTimeslice`, `isChain`) — arguably those belong in `sysx:`
 regardless of this item.
 
+**The ontology is also shipped modularized.** `ontology/sysmlv2/` holds `SysML.owl` split into one
+Turtle module per package of the normative KerML/SysML XMI (release `20240201`, whose class set is
+exactly the ontology's 172): 41 leaf modules (`KerML/Root/Elements`, `SysML/Systems/Requirements`,
+…) under 6 layer ontologies that import their children (`KerML`, `KerML/Core`, `SysML/Systems`, …),
+a `catalog.tsv` from every term to its module, and a `VERSION` file naming the pinned sources. A
+class goes to the package that owns it, a property to the package of its `rdfs:domain`, blank-node
+content with its subject, and the union of the modules is isomorphic to the source graph. Each
+module imports whatever declares the terms it mentions, so an import closure is always complete.
+`cmd/ontology-modules` generates them from sources `scripts/download-ontology-sources.sh` pins by
+commit and SHA-256 (`make ontology-modules`), and CI runs its `-check` so a hand-edited or stale
+module fails the build. `ontology/sysmlv2/README.md` is the consumer's guide.
+
 Scope: the profile plumbing is the remainder, and is about one session's work now that the table and
 the gate exist; conformance beyond that is gated on D2 and D1 rather than on this item.
 

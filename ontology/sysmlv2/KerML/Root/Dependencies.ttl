@@ -1,0 +1,47 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Root/Dependencies>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Root/Dependencies" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Dependency
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Dependency_client ;
+        owl:minCardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Dependency_supplier ;
+        owl:minCardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Dependency" ;
+    rdfs:comment """<p>A <code>Dependency</code> is a <code>Relationship</code> that indicates that one or more <code>client</code> <code>Elements</code> require one more <code>supplier</code> <code>Elements</code> for their complete specification. In general, this means that a change to one of the <code>supplier</code> <code>Elements</code> may necessitate a change to, or re-specification of, the <code>client</code> <code>Elements</code>.</p>
+	
+	<p>Note that a <code>Dependency</code> is entirely a model-level <code>Relationship</code>, without instance-level semantics.</p>""" .
+
+sysml:Dependency_client
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_source ;
+    rdfs:domain sysml:Dependency ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "client" ;
+    rdfs:comment "<p>The <code>Element</code> or <code>Elements</code> dependent on the <code>supplier</code> <code>Elements</code>.</p>" .
+
+sysml:Dependency_supplier
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:Dependency ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "supplier" ;
+    rdfs:comment "<p>The <code>Element</code> or <code>Elements</code> on which the <code>client</code> <code>Elements</code> depend in some respect.</p>" .

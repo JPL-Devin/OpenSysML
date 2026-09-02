@@ -1,0 +1,752 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Classifiers>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Actions>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Allocations>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/AnalysisCases>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Attributes>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Calculations>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Cases>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Connections>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Constraints>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Enumerations>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Interfaces>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Items>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Metadata>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Occurrences>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Parts>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Ports>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Requirements>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/States>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/UseCases>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/VerificationCases>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Views> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/DefinitionAndUsage" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Definition
+    a owl:Class ;
+    rdfs:subClassOf sysml:Classifier, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Definition_isVariation ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Definition" ;
+    rdfs:comment """<p>A <code>Definition</code> is a <code>Classifier</code> of <code>Usages</code>. The actual kinds of <code>Definition</code> that may appear in a model are given by the subclasses of <code>Definition</code> (possibly as extended with user-defined <em><code>SemanticMetadata</code></em>).</p>
+	
+	<p>Normally, a <code>Definition</code> has owned Usages that model <code>features</code> of the thing being defined. A <code>Definition</code> may also have other <code>Definitions</code> nested in it, but this has no semantic significance, other than the nested scoping resulting from the <code>Definition</code> being considered as a <code>Namespace</code> for any nested <code>Definitions</code>.</p>
+	
+	<p>However, if a <code>Definition</code> has <code>isVariation</code> = <code>true</code>, then it represents a <em>variation point</em> <code>Definition</code>. In this case, all of its <code>members</code> must be <code>variant</code> <code>Usages</code>, related to the <code>Definition</code> by <code>VariantMembership</code> <code>Relationships</code>. Rather than being <code>features</code> of the <code>Definition</code>, <code>variant</code> <code>Usages</code> model different concrete alternatives that can be chosen to fill in for an abstract <code>Usage</code> of the variation point <code>Definition</code>.</p>
+	
+	isVariation implies ownedFeatureMembership->isEmpty()
+	variant = variantMembership.ownedVariantUsage
+	variantMembership = ownedMembership->selectByKind(VariantMembership)
+	isVariation implies
+	not ownedSpecialization.specific->exists(
+	oclIsKindOf(Definition) and
+	oclAsType(Definition).isVariation)
+	usage = feature->selectByKind(Usage)
+	directedUsage = directedFeature->selectByKind(Usage)
+	ownedUsage = ownedFeature->selectByKind(Usage)
+	ownedAttribute = ownedUsage->selectByKind(AttributeUsage)
+	ownedReference = ownedUsage->selectByKind(ReferenceUsage)
+	ownedEnumeration = ownedUsage->selectByKind(EnumerationUsage)
+	ownedOccurrence = ownedUsage->selectByKind(OccurrenceUsage)
+	ownedItem = ownedUsage->selectByKind(ItemUsage)
+	ownedPart = ownedUsage->selectByKind(PartUsage)
+	ownedPort = ownedUsage->selectByKind(PortUsage)
+	ownedConnection = ownedUsage->selectByKind(ConnectorAsUsage)
+	ownedFlow = ownedUsage->selectByKind(FlowConnectionUsage)
+	ownedInterface = ownedUsage->selectByKind(ReferenceUsage)
+	ownedAllocation = ownedUsage->selectByKind(AllocationUsage)
+	ownedAction = ownedUsage->selectByKind(ActionUsage)
+	ownedState = ownedUsage->selectByKind(StateUsage)
+	ownedTransition = ownedUsage->selectByKind(TransitionUsage)
+	ownedCalculation = ownedUsage->selectByKind(CalculationUsage)
+	ownedConstraint = ownedUsage->selectByKind(ConstraintUsage)
+	ownedRequirement = ownedUsage->selectByKind(RequirementUsage)
+	ownedConcern = ownedUsage->selectByKind(ConcernUsage)
+	ownedCase = ownedUsage->selectByKind(CaseUsage)
+	ownedAnalysisCase = ownedUsage->selectByKind(AnalysisCaseUsage)
+	ownedVerificationCase = ownedUsage->selectByKind(VerificationCaseUsage)
+	ownedUseCase = ownedUsage->selectByKind(UseCaseUsage)
+	ownedView = ownedUsage->selectByKind(ViewUsage)
+	ownedViewpoint = ownedUsage->selectByKind(ViewpointUsage)
+	ownedRendering = ownedUsage->selectByKind(RenderingUsage)
+	ownedMetadata = ownedUsage->selectByKind(MetadataUsage)
+	isVariation implies isAbstract""" .
+
+sysml:Definition_directedUsage
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_usage, sysml:Type_directedFeature ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:Usage ;
+    ecore:isOrdered true ;
+    rdfs:label "directedUsage" ;
+    rdfs:comment "<p>The <code>usages</code> of this <code>Definition</code> that are <code>directedFeatures</code>.</p>" .
+
+sysml:Definition_isVariation
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isVariation" ;
+    rdfs:comment "<p>Whether this <code>Definition</code> is for a variation point or not. If true, then all the <code>memberships</code> of the <code>Definition</code> must be <code>VariantMemberships</code>.</p>" .
+
+sysml:Definition_ownedAction
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedOccurrence ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:ActionUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedAction" ;
+    rdfs:comment "<p>The <code>ActionUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedAllocation
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedConnection ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:AllocationUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedAllocation" ;
+    rdfs:comment "<p>The <code>AllocationUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedAnalysisCase
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedCase ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:AnalysisCaseUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedAnalysisCase" ;
+    rdfs:comment "<p>The <code>AnalysisCaseUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedAttribute
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedUsage ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:AttributeUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedAttribute" ;
+    rdfs:comment "<p>The <code>AttributeUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.<p>" .
+
+sysml:Definition_ownedCalculation
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedAction ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:CalculationUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedCalculation" ;
+    rdfs:comment "<p>The <code>CalculationUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedCase
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedCalculation ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:CaseUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedCase" ;
+    rdfs:comment "<p>The code>CaseUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedConcern
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedRequirement ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:ConcernUsage ;
+    rdfs:label "ownedConcern" ;
+    rdfs:comment "<p>The <code>ConcernUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedConnection
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedPart ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:ConnectorAsUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedConnection" ;
+    rdfs:comment "<p>The <code>ConnectorAsUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>. Note that this list includes <code>BindingConnectorAsUsages</code> and <code>SuccessionAsUsages</code>, even though these are <code>ConnectorAsUsages</code> but not <code>ConnectionUsages</code>.</p>" .
+
+sysml:Definition_ownedConstraint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedOccurrence ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:ConstraintUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedConstraint" ;
+    rdfs:comment "<p>The <code>ConstraintUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedEnumeration
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedAttribute ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:EnumerationUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedEnumeration" ;
+    rdfs:comment "<p>The <code>EnumerationUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.<p>" .
+
+sysml:Definition_ownedFlow
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedConnection ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:FlowConnectionUsage ;
+    rdfs:label "ownedFlow" ;
+    rdfs:comment "<p>The <code>FlowConnectionUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedInterface
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedConnection ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:InterfaceUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedInterface" ;
+    rdfs:comment "<p>The <code>InterfaceUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedItem
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedOccurrence ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:ItemUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedItem" ;
+    rdfs:comment "<p>The <code>ItemUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedMetadata
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedItem ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:MetadataUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedMetadata" ;
+    rdfs:comment "<p>The <code>MetadataUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedOccurrence
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedUsage ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:OccurrenceUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedOccurrence" ;
+    rdfs:comment "<p>The <code>OccurrenceUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedPart
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedItem ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedPart" ;
+    rdfs:comment "<p>The <code>PartUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedPort
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedUsage ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:PortUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedPort" ;
+    rdfs:comment "<p>The <code>PortUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedReference
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedUsage ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:ReferenceUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedReference" ;
+    rdfs:comment "<p>The <code>ReferenceUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedRendering
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedPart ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:RenderingUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedRendering" ;
+    rdfs:comment "<p>The <code>RenderingUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedRequirement
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedConstraint ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:RequirementUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedRequirement" ;
+    rdfs:comment "<p>The <code>RequirementUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedState
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedAction ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:StateUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedState" ;
+    rdfs:comment "<p>The <code>StateUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedTransition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedUsage ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:TransitionUsage ;
+    rdfs:label "ownedTransition" ;
+    rdfs:comment "<p>The <code>TransitionUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedUsage
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_usage, sysml:Type_ownedFeature ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:Usage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedUsage" ;
+    rdfs:comment "<p>The <code>Usages</code> that are <code>ownedFeatures</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedUseCase
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedCase ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:UseCaseUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedUseCase" ;
+    rdfs:comment "<p>The <code>UseCaseUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedVerificationCase
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedCase ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:VerificationCaseUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedVerificationCase" ;
+    rdfs:comment "<p>The <code>VerificationCaseUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedView
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedPart ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:ViewUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedView" ;
+    rdfs:comment "<p>The <code>ViewUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_ownedViewpoint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedRequirement ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:ViewpointUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedViewpoint" ;
+    rdfs:comment "<p>The <code>ViewpointUsages</code> that are <code>ownedUsages</code> of this <code>Definition</code>.</p>" .
+
+sysml:Definition_usage
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_feature ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:Usage ;
+    ecore:isOrdered true ;
+    rdfs:label "usage" ;
+    rdfs:comment "<p>The <code>Usages</code> that are <code>features</code> of this <code>Definition</code> (not necessarily owned).</p>" .
+
+sysml:Definition_variant
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:Usage ;
+    rdfs:label "variant" ;
+    rdfs:comment "<p>The <code>Usages</code> which represent the variants of this <code>Definition</code> as a variation point <code>Definition</code>, if <code>isVariation</code> = true. If <code>isVariation = false</code>, the there must be no <code>variants</code>.</p>" .
+
+sysml:Definition_variantMembership
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMembership ;
+    rdfs:domain sysml:Definition ;
+    rdfs:range sysml:VariantMembership ;
+    rdfs:label "variantMembership" ;
+    rdfs:comment "<p>The <code>ownedMemberships</code> of this <code>Definition</code> that are <code>VariantMemberships</code>. If <code>isVariation</code> = true, then this must be all <code>ownedMemberships</code> of the <code>Definition</code>. If <code>isVariation</code> = false, then <code>variantMembership</code>must be empty.</p>" .
+
+sysml:ReferenceUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:Usage ;
+    rdfs:label "ReferenceUsage" ;
+    rdfs:comment """<p>A <code>ReferenceUsage</code> is a <code>Usage</code> that specifies a non-compositional (<code>isComposite = false</code>) reference to something. The <code>definition</code> of a <code>ReferenceUsage</code> can be any kind of <code>Classifier</code>, with the default being the top-level <code>Classifier</code> <code><em>Base::Anything</em></code> from the Kernel Semantic Library. This allows the specification of a generic reference without distinguishing if the thing referenced is an attribute value, item, action, etc.</p>
+	isReference""" .
+
+sysml:Usage
+    a owl:Class ;
+    rdfs:subClassOf sysml:Feature, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Usage_isReference ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Usage_isVariation ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Usage" ;
+    rdfs:comment """<p>A <code>Usage</code> is a usage of a <code>Definition</code>. A <code>Usage</code> may only be an <code>ownedFeature</code> of a <code>Definition</code> or another <code>Usage</code>.</p>
+	
+	<p>A <code>Usage</code> may have <code>nestedUsages</code> that model <code>features</code> that apply in the context of the <code>owningUsage</code>. A <code>Usage</code> may also have <code>Definitions</code> nested in it, but this has no semantic significance, other than the nested scoping resulting from the <code>Usage</code> being considered as a <code>Namespace</code> for any nested <code>Definitions</code>.</p>
+	
+	<p>However, if a <code>Usage</code> has <code>isVariation = true</code>, then it represents a <em>variation point</em> <code>Usage</code>. In this case, all of its <code>members</code> must be <code>variant</code> <code>Usages</code>, related to the <code>Usage</code> by <code>VariantMembership</code> <code>Relationships</code>. Rather than being <code>features</code> of the <code>Usage</code>, <code>variant</code> <code>Usages</code> model different concrete alternatives that can be chosen to fill in for the variation point <code>Usage</code>.</p>
+	variant = variantMembership.ownedVariantUsage
+	variantMembership = ownedMembership->selectByKind(VariantMembership)
+	isVariation implies ownedFeatureMembership->isEmpty()
+	isReference = not isComposite
+	owningVariationUsage <> null implies
+	specializes(owningVariationUsage)
+	isVariation implies
+	not ownedSpecialization.specific->exists(
+	oclIsKindOf(Definition) and
+	oclAsType(Definition).isVariation or
+	oclIsKindOf(Usage) and
+	oclAsType(Usage).isVariation)
+	owningVariationDefinition <> null implies
+	specializes(owningVariationDefinition)
+	directedUsage = directedFeature->selectByKind(Usage)
+	nestedAction = nestedUsage->selectByKind(ActionUsage)
+	nestedAllocation = nestedUsage->selectByKind(AllocationUsage)
+	nestedAnalysisCase = nestedUsage->selectByKind(AnalysisCaseUsage)
+	nestedAttribute = nestedUsage->selectByKind(AttributeUsage)
+	nestedCalculation = nestedUsage->selectByKind(CalculationUsage)
+	nestedCase = nestedUsage->selectByKind(CaseUsage)
+	nestedConcern = nestedUsage->selectByKind(ConcernUsage)
+	nestedConnection = nestedUsage->selectByKind(ConnectorAsUsage)
+	nestedConstraint = nestedUsage->selectByKind(ConstraintUsage)
+	ownedNested = nestedUsage->selectByKind(EnumerationUsage)
+	nestedFlow = nestedUsage->selectByKind(FlowConnectionUsage)
+	nestedInterface = nestedUsage->selectByKind(ReferenceUsage)
+	nestedItem = nestedUsage->selectByKind(ItemUsage)
+	nestedMetadata = nestedUsage->selectByKind(MetadataUsage)
+	nestedOccurrence = nestedUsage->selectByKind(OccurrenceUsage)
+	nestedPart = nestedUsage->selectByKind(PartUsage)
+	nestedPort = nestedUsage->selectByKind(PortUsage)
+	nestedReference = nestedUsage->selectByKind(ReferenceUsage)
+	nestedRendering = nestedUsage->selectByKind(RenderingUsage)
+	nestedRequirement = nestedUsage->selectByKind(RequirementUsage)
+	nestedState = nestedUsage->selectByKind(StateUsage)
+	nestedTransition = nestedUsage->selectByKind(TransitionUsage)
+	nestedUsage = ownedFeature->selectByKind(Usage)
+	nestedUseCase = nestedUsage->selectByKind(UseCaseUsage)
+	nestedVerificationCase = nestedUsage->selectByKind(VerificationCaseUsage)
+	nestedView = nestedUsage->selectByKind(ViewUsage)
+	nestedViewpoint = nestedUsage->selectByKind(ViewpointUsage)
+	usage = feature->selectByKind(Usage)
+	direction <> null or isEnd or featuringType->isEmpty() implies
+	isReference
+	isVariation implies isAbstract""" .
+
+sysml:Usage_definition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Feature_type ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:Classifier ;
+    ecore:isOrdered true ;
+    rdfs:label "definition" ;
+    rdfs:comment "<p>The <code>Classifiers</code> that are the types of this <code>Usage</code>. Nominally, these are <code>Definitions</code>, but other kinds of Kernel <code>Classifiers</code> are also allowed, to permit use of <code>Classifiers</code> from the Kernel Model Libraries.</p>" .
+
+sysml:Usage_directedUsage
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_directedFeature, sysml:Usage_usage ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:Usage ;
+    ecore:isOrdered true ;
+    rdfs:label "directedUsage" ;
+    rdfs:comment "<p>The <code>usages</code> of this <code>Usage</code> that are <code>directedFeatures</code>.</p>" .
+
+sysml:Usage_isReference
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isReference" ;
+    rdfs:comment "<p>Whether this <code>Usage</code> is a referential <code>Usage</code>, that is, it has <code>isComposite = false</code>.<p>" .
+
+sysml:Usage_isVariation
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isVariation" ;
+    rdfs:comment "<p>Whether this <code>Usage</code> is for a variation point or not. If true, then all the <code>memberships</code> of the <code>Usage</code> must be <code>VariantMemberships</code>.</p>" .
+
+sysml:Usage_nestedAction
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedOccurrence ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:ActionUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedAction" ;
+    rdfs:comment "<p>The <code>ActionUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedAllocation
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedConnection ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:AllocationUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedAllocation" ;
+    rdfs:comment "<p>The <code>AllocationUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedAnalysisCase
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedCase ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:AnalysisCaseUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedAnalysisCase" ;
+    rdfs:comment "<p>The <code>AnalysisCaseUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedAttribute
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedUsage ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:AttributeUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedAttribute" ;
+    rdfs:comment "<p>The code>AttributeUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedCalculation
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedAction ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:CalculationUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedCalculation" ;
+    rdfs:comment "<p>The <code>CalculationUsage</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedCase
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedCalculation ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:CaseUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedCase" ;
+    rdfs:comment "<p>The <code>CaseUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedConcern
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedRequirement ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:ConcernUsage ;
+    rdfs:label "nestedConcern" ;
+    rdfs:comment "<p>The <code>ConcernUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedConnection
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedPart ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:ConnectorAsUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedConnection" ;
+    rdfs:comment "<p>The <code>ConnectorAsUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>. Note that this list includes <code>BindingConnectorAsUsages</code> and <code>SuccessionAsUsages</code>, even though these are <code>ConnectorAsUsages</code> but not <code>ConnectionUsages</code>.</p>" .
+
+sysml:Usage_nestedConstraint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedOccurrence ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:ConstraintUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedConstraint" ;
+    rdfs:comment "<p>The <code>ConstraintUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedEnumeration
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedAttribute ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:EnumerationUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedEnumeration" ;
+    rdfs:comment "<p>The code>EnumerationUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.<p>" .
+
+sysml:Usage_nestedFlow
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedConnection ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:FlowConnectionUsage ;
+    rdfs:label "nestedFlow" ;
+    rdfs:comment "<p>The code>FlowConnectionUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedInterface
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedConnection ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:InterfaceUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedInterface" ;
+    rdfs:comment "<p>The <code>InterfaceUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedItem
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedOccurrence ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:ItemUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedItem" ;
+    rdfs:comment "<p>The <code>ItemUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedMetadata
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedItem ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:MetadataUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedMetadata" ;
+    rdfs:comment "<p>The <code>MetadataUsages</code> that are <code>nestedUsages</code> of this of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedOccurrence
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedUsage ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:OccurrenceUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedOccurrence" ;
+    rdfs:comment "<p>The <code>OccurrenceUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedPart
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedItem ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedPart" ;
+    rdfs:comment "<p>The <code>PartUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedPort
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedUsage ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:PortUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedPort" ;
+    rdfs:comment "<p>The <code>PortUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedReference
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedUsage ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:ReferenceUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedReference" ;
+    rdfs:comment "<p>The <code>ReferenceUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedRendering
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedPart ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:RenderingUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedRendering" ;
+    rdfs:comment "<p>The <code>RenderingUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedRequirement
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedConstraint ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:RequirementUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedRequirement" ;
+    rdfs:comment "<p>The <code>RequirementUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedState
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedAction ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:StateUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedState" ;
+    rdfs:comment "<p>The <code>StateUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedTransition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedUsage ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:TransitionUsage ;
+    rdfs:label "nestedTransition" ;
+    rdfs:comment "<p>The <code>TransitionUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedUsage
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature, sysml:Usage_usage ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:Usage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedUsage" ;
+    rdfs:comment "<p>The <code>Usages</code> that are <code>ownedFeatures</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedUseCase
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedCase ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:UseCaseUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedUseCase" ;
+    rdfs:comment "<p>The <code>UseCaseUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedVerificationCase
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedCase ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:VerificationCaseUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedVerificationCase" ;
+    rdfs:comment "<p>The <code>VerificationCaseUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedView
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedPart ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:ViewUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedView" ;
+    rdfs:comment "<p>The <code>ViewUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_nestedViewpoint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedRequirement ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:ViewpointUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "nestedViewpoint" ;
+    rdfs:comment "<p>The <code>ViewpointUsages</code> that are <code>nestedUsages</code> of this <code>Usage</code>.</p>" .
+
+sysml:Usage_owningDefinition
+    a owl:ObjectProperty ;
+    owl:inverseOf sysml:Definition_ownedUsage ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:Definition ;
+    rdfs:label "owningDefinition" ;
+    rdfs:comment "<p>The <code>Definition</code> that owns this <code>Usage</code> (if any).</p>" .
+
+sysml:Usage_owningUsage
+    a owl:ObjectProperty ;
+    owl:inverseOf sysml:Usage_nestedUsage ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:Usage ;
+    rdfs:label "owningUsage" ;
+    rdfs:comment "<p>The <code>Usage</code> in which this <code>Usage</code> is nested (if any).</p>" .
+
+sysml:Usage_usage
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_feature ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:Usage ;
+    ecore:isOrdered true ;
+    rdfs:label "usage" ;
+    rdfs:comment "<p>The <code>Usages</code> that are <code>features</code> of this <code>Usage</code> (not necessarily owned).</p>" .
+
+sysml:Usage_variant
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:Usage ;
+    rdfs:label "variant" ;
+    rdfs:comment "<p>The <code>Usages</code> which represent the variants of this <code>Usage</code> as a variation point <code>Usage</code>, if <code>isVariation = true</code>. If <code>isVariation = false</code>, then there must be no <code>variants</code>.</p>" .
+
+sysml:Usage_variantMembership
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMembership ;
+    rdfs:domain sysml:Usage ;
+    rdfs:range sysml:VariantMembership ;
+    rdfs:label "variantMembership" ;
+    rdfs:comment "<p>The <code>ownedMemberships</code> of this <code>Usage</code> that are <code>VariantMemberships</code>. If <code>isVariation = true</code>, then this must be all <code>memberships</code> of the <code>Usage</code>. If <code>isVariation = false</code>, then <code>variantMembership</code>must be empty.</p>" .
+
+sysml:VariantMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:OwningMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:VariantMembership_ownedVariantUsage ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "VariantMembership" ;
+    rdfs:comment """<p>A <code>VariantMembership</code> is a <code>Membership</code> between a variation point <code>Definition</code> or <code>Usage</code> and a <code>Usage</code> that represents a variant in the context of that variation. The <code>membershipOwningNamespace</code> for the <code>VariantMembership</code> must be either a Definition or a <code>Usage</code> with <code>isVariation = true</code>.</p>
+	membershipOwningNamespace.oclIsKindOf(Definition) and
+	membershipOwningNamespace.oclAsType(Definition).isVariation or
+	membershipOwningNamespace.oclIsKindOf(Usage) and
+	membershipOwningNamespace.oclAsType(Usage).isVariation""" .
+
+sysml:VariantMembership_ownedVariantUsage
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:OwningMembership_ownedMemberElement ;
+    rdfs:domain sysml:VariantMembership ;
+    rdfs:range sysml:Usage ;
+    rdfs:label "ownedVariantUsage" ;
+    rdfs:comment "<p>The <code>Usage</code> that represents a variant in the context of the <code>owningVariationDefinition</code> or <code>owningVariationUsage</code>.</p>" .

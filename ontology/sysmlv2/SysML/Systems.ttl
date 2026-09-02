@@ -1,0 +1,9 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems>
+    a owl:Ontology ;
+    owl:imports <https://www.omg.org/spec/SysML/modules/SysML/Systems/Actions>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Allocations>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/AnalysisCases>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Attributes>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Calculations>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Cases>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Connections>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Constraints>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Enumerations>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Interfaces>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Items>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Metadata>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Occurrences>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Parts>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Ports>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Requirements>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/States>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/UseCases>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/VerificationCases>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Views> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .

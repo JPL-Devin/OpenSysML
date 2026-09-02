@@ -60,3 +60,11 @@ Review the diff, then run
 `go test ./internal/core/rdf/ontology/... ./internal/core/export/...` — the
 export gate compares the golden graphs against the new table and will report
 anything the ontology bump changed.
+
+## The modularized ontology
+
+`modules/` is a separate generator over the same `SysML.owl`: it splits the
+ontology into one Turtle module per package of the normative KerML/SysML XMI and
+writes them to `ontology/sysmlv2/` at the repository root (`make ontology-modules`,
+pinned sources via `scripts/download-ontology-sources.sh`). Its README there
+documents the layout. Bump both generators together when the ontology moves.

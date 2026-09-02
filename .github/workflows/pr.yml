@@ -259,6 +259,17 @@ jobs:
       - name: Check grpc-go stays out of production code
         run: ./scripts/check-grpc-imports.sh
 
+      # The committed ontology modules are generated from pinned upstream
+      # sources; a module edited by hand or left behind by a pin change fails here.
+      - name: Cache the ontology sources
+        uses: actions/cache@v4
+        with:
+          path: build/ontology-sources
+          key: ontology-sources-${{ hashFiles('scripts/download-ontology-sources.sh') }}
+
+      - name: Check the ontology modules are current
+        run: make ontology-modules-check
+
       # Re-run the corpus gate on its own so its verdict is legible in the log
       # and a skip is impossible to miss. TestCorpusGates is the shared
       # cache-independence case over all four OMG roots, which skips with them.

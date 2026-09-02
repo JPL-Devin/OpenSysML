@@ -1,0 +1,10 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel>
+    a owl:Ontology ;
+    owl:imports <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Associations>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Behaviors>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Classes>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Connectors>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/DataTypes>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Expressions>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/FeatureValues>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Interactions>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Metadata>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Multiplicities>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Packages>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Structures> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel" ;
+    dc:description "The Kernel layer completes the KerML metamodel." ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .

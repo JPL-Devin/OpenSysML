@@ -627,7 +627,16 @@ element it cannot place, rather than emitting a model with elements missing.
 | `internal/core/export` | `ToRDF` (AST → graph), `ToSysML` (graph → notation), and the `Convert` entry point |
 | `internal/repl` | `%save` |
 | `cmd/sysml` | `-convert`, `-from`, `-o` |
+| `internal/core/rdf/ontology` | The SysML v2 OWL ontology's term table, generated from upstream, and the domain/range gate |
+| `internal/core/rdf/ontology/modules`, `cmd/ontology-modules` | The ontology split into one Turtle module per metamodel package, committed under `ontology/sysmlv2/` |
 
 The RDF layer is hand-written against the Turtle grammar rather than pulled in
 as a dependency: the subset needed here is small, and the parser rejects what it
 does not support instead of accepting it and dropping data.
+
+The ontology the gate checks against is also shipped in consumable pieces:
+`ontology/sysmlv2/` holds the Open-MBEE SysML v2 OWL ontology as one module per
+package of the normative KerML/SysML metamodel (`KerML/Root/Elements.ttl`,
+`SysML/Systems/Requirements.ttl`, …), with layer ontologies importing their
+children, a term catalog, and the pinned upstream sources recorded. Its
+`README.md` describes the layout, the placement rules, and regeneration.

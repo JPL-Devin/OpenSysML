@@ -1,0 +1,286 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel/Expressions>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel/Expressions" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:CollectExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:OperatorExpression ;
+    rdfs:label "CollectExpression" ;
+    rdfs:comment """<p>A <code>CollectExpression</code> is an <code>OperatorExpression</code> whose <code>operator</code> is <code>"collect"</code>, which resolves to the <code>Function</code> <em><code>ControlFunctions::collect</code></em> from the Kernel Functions Library.</p>
+	operator = "collect\"""" .
+
+sysml:FeatureChainExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:OperatorExpression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureChainExpression_targetFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "FeatureChainExpression" ;
+    rdfs:comment """<p>A <code>FeatureChainExpression</code> is an <code>OperatorExpression</code> whose operator is <code>"."</code>, which resolves to the <code>Function</code> <em><code>ControlFunctions::'.'</code></em> from the Kernel Functions Library. It evaluates to the result of chaining the <code>result</code> <code>Feature</code> of its single <code>argument</code> <code>Expression</code> with its <code>targetFeature</code>.</p>
+	let sourceParameter : Feature = sourceTargetFeature() in
+	sourceTargetFeature <> null and
+	sourceTargetFeature.redefinesFromLibrary('ControlFunctions::\\'.\\'::source::target')
+	let sourceParameter : Feature = sourceTargetFeature() in
+	sourceTargetFeature <> null and
+	sourceTargetFeature.redefines(targetFeature)
+	targetFeature =
+	let nonParameterMemberships : Sequence(Membership) = ownedMembership->
+	reject(oclIsKindOf(ParameterMembership)) in
+	if nonParameterMemberships->isEmpty() or
+	not nonParameterMemberships->first().memberElement.oclIsKindOf(Feature)
+	then null
+	else nonParameterMemberships->first().memberElement.oclAsType(Feature)
+	endif
+	argument->notEmpty() implies
+	targetFeature.featuringType->forAll(t |
+	t.specializes(argument->at(1).result))""" .
+
+sysml:FeatureChainExpression_targetFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_member ;
+    rdfs:domain sysml:FeatureChainExpression ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "targetFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that is accessed by this <code>FeatureChainExpression<code>, which is its first non-<code>parameter</code> <code>member</code>.<p>" .
+
+sysml:FeatureReferenceExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:Expression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureReferenceExpression_referent ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "FeatureReferenceExpression" ;
+    rdfs:comment """<p>A <code>FeatureReferenceExpression</code> is an <code>Expression</code> whose <code>result</code> is bound to a <code>referent</code> <code>Feature</code>.</p>
+	referent =
+	let nonParameterMemberships : Sequence(Membership) = ownedMembership->
+	reject(oclIsKindOf(ParameterMembership)) in
+	if nonParameterMemberships->isEmpty() or
+	not nonParameterMemberships->first().memberElement.oclIsKindOf(Feature)
+	then null
+	else nonParameterMemberships->first().memberElement.oclAsType(Feature)
+	endif
+	ownedMember->selectByKind(BindingConnector)->exists(b |
+	b.relatedFeatures->includes(targetFeature) and
+	b.relatedFeatures->includes(result))
+	let membership : Membership =
+	ownedMembership->reject(m | m.oclIsKindOf(ParameterMembership)) in
+	membership->notEmpty() and
+	membership->at(1).memberElement.oclIsKindOf(Feature)""" .
+
+sysml:FeatureReferenceExpression_referent
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_member ;
+    rdfs:domain sysml:FeatureReferenceExpression ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "referent" ;
+    rdfs:comment "<p>The <code>Feature</code> that is referenced by this <code>FeatureReferenceExpression</code>, which is its first non-<code>parameter</code> <code>member</code>.<p>" .
+
+sysml:InvocationExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:Expression ;
+    rdfs:label "InvocationExpression" ;
+    rdfs:comment """<p>An <code>InvocationExpression</code> is an <code>Expression</code> each of whose input <code>parameters</code> are bound to the <code>result</code> of an <code>argument</code> Expression.</p>
+	
+	not ownedTyping->exists(oclIsKindOf(Function)) and
+	not ownedSubsetting->reject(isImplied).subsettedFeature.type->
+	exists(oclIsKindOf(Function)) implies
+	ownedFeature.selectByKind(BindingConnector)->exists(
+	relatedFeature->includes(self) and
+	relatedFeature->includes(result))
+	
+	TBD
+	ownedFeature->
+	select(direction = _'in').valuation->
+	select(v | v <> null).value
+	let features : Set(Feature) = type.feature->asSet() in
+	input->forAll(inp |
+	inp.ownedRedefinition.redefinedFeature->
+	intersection(features)->size() = 1)
+	let features : Set(Feature) = type.feature->asSet() in
+	input->forAll(inp1 | input->forAll(inp2 |
+	inp1 <> inp2 implies
+	inp1.ownedRedefinition.redefinedFeature->
+	intersection(inp2.ownedRedefinition.redefinedFeature)->
+	intersection(features)->isEmpty()))""" .
+
+sysml:InvocationExpression_argument
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:InvocationExpression ;
+    rdfs:range sysml:Expression ;
+    ecore:isOrdered true ;
+    rdfs:label "argument" ;
+    rdfs:comment "<p>The <code>value</code> <code>Expressions</code> of the <code>FeatureValues</code> of the owned input <code>parameters</code> of the <code>InvocationExpression</code>." .
+
+sysml:InvocationExpression_operand
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:InvocationExpression ;
+    rdfs:range sysml:Expression ;
+    ecore:isOrdered true ;
+    rdfs:label "operand" .
+
+sysml:LiteralBoolean
+    a owl:Class ;
+    rdfs:subClassOf sysml:LiteralExpression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:LiteralBoolean_value ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "LiteralBoolean" ;
+    rdfs:comment """<p><code>LiteralBoolean</code> is a <code>LiteralExpression</code> that provides a <code><em>Boolean</em></code> value as a result. Its <code>result</code> <code>parameter</code> must have type <code><em>Boolean</em></code>.</p>
+	
+	specializesFromLibrary('Performances::literalBooleanEvaluations')""" .
+
+sysml:LiteralBoolean_value
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:LiteralBoolean ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "value" ;
+    rdfs:comment """<p>The <code><em>Boolean</em></code> value that is the result of evaluating this <code>LiteralBoolean</code>.</p>
+	<p>The Boolean value that is the result of evaluating this Expression.</p>""" .
+
+sysml:LiteralExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:Expression ;
+    rdfs:label "LiteralExpression" ;
+    rdfs:comment """<p>A <code>LiteralExpression</code> is an <code>Expression</code> that provides a basic <code><em>DataValue</em></code> as a result.</p>
+	
+	isModelLevelEvaluable = true
+	specializesFromLibrary('Performances::literalEvaluations')""" .
+
+sysml:LiteralInfinity
+    a owl:Class ;
+    rdfs:subClassOf sysml:LiteralExpression ;
+    rdfs:label "LiteralInfinity" ;
+    rdfs:comment """<p>A <code>LiteralInfinity</code> is a <code>LiteralExpression</code> that provides the positive infinity value (<code>*</code>). It's <code>result</code> must have the type <code><em>Positive</em></code>.</p>
+	
+	specializesFromLibrary('Performances::literalIntegerEvaluations')""" .
+
+sysml:LiteralInteger
+    a owl:Class ;
+    rdfs:subClassOf sysml:LiteralExpression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:LiteralInteger_value ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "LiteralInteger" ;
+    rdfs:comment """<p>A <code>LiteralInteger</code> is a <code>LiteralExpression</code> that provides an <code><em>Integer</em></code> value as a result. Its <code>result</code> <code>parameter</code> must have the type <code><em>Integer</em></code>.</p>
+	
+	specializesFromLibrary('Performances::literalIntegerEvaluations')""" .
+
+sysml:LiteralInteger_value
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:LiteralInteger ;
+    rdfs:range xsd:int ;
+    rdfs:label "value" ;
+    rdfs:comment """<p>The <code><em>Integer</em></code> value that is the result of evaluating this <code>LiteralInteger</code>.</p>
+	<p>The Integer value that is the result of evaluating this Expression.</p>""" .
+
+sysml:LiteralRational
+    a owl:Class ;
+    rdfs:subClassOf sysml:LiteralExpression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:LiteralRational_value ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "LiteralRational" ;
+    rdfs:comment """<p>A <code>LiteralRational</code> is a <code>LiteralExpression</code> that provides a <code><em>Rational</em></code> value as a result. Its <code>result</code> <code>parameter</code> must have the type <code><em>Rational</em></code>.</p>
+	
+	specializesFromLibrary('Performances::literalRationalEvaluations')""" .
+
+sysml:LiteralRational_value
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:LiteralRational ;
+    rdfs:range owl:real ;
+    rdfs:label "value" ;
+    rdfs:comment """<p>The value whose rational approximation is the result of evaluating this <code>LiteralRational</code>.</p>
+	
+	<p>The Real value that is the result of evaluating this Expression.</p>""" .
+
+sysml:LiteralString
+    a owl:Class ;
+    rdfs:subClassOf sysml:LiteralExpression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:LiteralString_value ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "LiteralString" ;
+    rdfs:comment """<p>A <code>LiteralString</code> is a <code>LiteralExpression</code> that provides a <code><em>String</em></code> value as a result. Its <code>result</code> <code>parameter</code> must have the type <code><em>String</em></code>.</p>
+	
+	specializesFromLibrary('Performances::literalStringEvaluations')""" .
+
+sysml:LiteralString_value
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:LiteralString ;
+    rdfs:range xsd:string ;
+    rdfs:label "value" ;
+    rdfs:comment """<p>The <code><em>String</em></code> value that is the result of evaluating this <code>LiteralString</code>.</p>
+	
+	<p>The String value that is the result of evaluating this Expression.</p>""" .
+
+sysml:MetadataAccessExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:Expression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:MetadataAccessExpression_referencedElement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "MetadataAccessExpression" ;
+    rdfs:comment """<p>A <code>MetadataAccessExpression</code> is an <code>Expression</code> whose <code>result</code> is a sequence of instances of <code>Metaclasses</code> representing all the <code>MetadataFeature</code> annotations of the <code>referencedElement</code>. In addition, the sequence includes an instance of the reflective <code>Metaclass</code> corresponding to the MOF class of the <code>referencedElement</code>, with values for all the abstract syntax properties of the <code>referencedElement</code>.</p>
+	specializesFromLibrary('Performances::metadataAccessEvaluations')""" .
+
+sysml:MetadataAccessExpression_referencedElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:MetadataAccessExpression ;
+    rdfs:range sysml:Element ;
+    rdfs:label "referencedElement" ;
+    rdfs:comment "<p> The <code>Element</code> whose metadata is being accessed.</p>" .
+
+sysml:NullExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:Expression ;
+    rdfs:label "NullExpression" ;
+    rdfs:comment """<p>A <code>NullExpression</code> is an <code>Expression</code> that results in a null value.</p>
+	
+	specializesFromLibrary('Performances::nullEvaluations')""" .
+
+sysml:OperatorExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:InvocationExpression, [
+        a owl:Restriction ;
+        owl:onProperty sysml:OperatorExpression_operator ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "OperatorExpression" ;
+    rdfs:comment """<p>An <code>OperatorExpression</code> is an <code>InvocationExpression</code> whose <code>function</code> is determined by resolving its <code>operator</code> in the context of one of the standard packages from the Kernel Function Library.</p>
+	let libFunctions : Sequence(Element) =
+	Sequence{'BaseFunctions', 'DataFunctions', 'ControlFunctions'}->
+	collect(ns | resolveGlobal(ns + "::'" + operator + "'").
+	memberElement) in
+	libFunctions->includes(function)""" .
+
+sysml:OperatorExpression_operator
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:OperatorExpression ;
+    rdfs:range xsd:string ;
+    rdfs:label "operator" ;
+    rdfs:comment "<p>An <code>operator</code> symbol that names a corresponding <code>Function</code> from one of the standard packages from the Kernel Function Library .</p>" .
+
+sysml:SelectExpression
+    a owl:Class ;
+    rdfs:subClassOf sysml:OperatorExpression ;
+    rdfs:label "SelectExpression" ;
+    rdfs:comment """<p>A <code>SelectExpression</code> is an <code>OperatorExpression</code> whose operator is <code>"select"</code>, which resolves to the <code>Function</code> <em><code>ControlFunctions::select</code></em> from the Kernel Functions Library.</p>
+	operator = 'select'""" .

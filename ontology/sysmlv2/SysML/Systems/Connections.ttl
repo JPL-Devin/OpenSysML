@@ -1,0 +1,100 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Connections>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Associations>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Connectors>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Interactions>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Actions>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Items>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Parts> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Connections" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:BindingConnectorAsUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:BindingConnector, sysml:ConnectorAsUsage ;
+    rdfs:label "BindingConnectorAsUsage" ;
+    rdfs:comment "<p>A <code>BindingConnectorAsUsage</code> is both a <code>BindingConnector</code> and a <code>ConnectorAsUsage</code>.</p>" .
+
+sysml:ConnectionDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:AssociationStructure, sysml:PartDefinition ;
+    rdfs:label "ConnectionDefinition" ;
+    rdfs:comment """<p>A <code>ConnectionDefinition</code> is a <code>PartDefinition</code> that is also an <code>AssociationStructure</code>. The end <code>Features</code> of a <code>ConnectionDefinition</code> must be <code>Usages</code>.</p>
+	specializesFromLibrary('Connections::Connection')
+	ownedEndFeature->size() = 2 implies
+	specializesFromLibrary('Connections::BinaryConnections')""" .
+
+sysml:ConnectionDefinition_connectionEnd
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Association_associationEnd ;
+    rdfs:domain sysml:ConnectionDefinition ;
+    rdfs:range sysml:Usage ;
+    ecore:isOrdered true ;
+    rdfs:label "connectionEnd" ;
+    rdfs:comment "<p>The <code>Usages</code> that define the things related by the <code>ConnectionDefinition</code>.</p>" .
+
+sysml:ConnectionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ConnectorAsUsage, sysml:PartUsage ;
+    rdfs:label "ConnectionUsage" ;
+    rdfs:comment """<p>A <code>ConnectionUsage</code> is a <code>ConnectorAsUsage</code> that is also a <code>PartUsage</code>. Nominally, if its type is a <code>ConnectionDefinition</code>, then a <code>ConnectionUsage</code> is a Usage of that <code>ConnectionDefinition</code>, representing a connection between parts of a system. However, other kinds of kernel <code>AssociationStructures</code> are also allowed, to permit use of <code>AssociationStructures</code> from the Kernel Model Libraries.</p>
+	specializesFromLibrary('Connections::connections')
+	ownedEndFeature->size() = 2 implies
+	specializesFromLibrary('Connections::binaryConnections')""" .
+
+sysml:ConnectionUsage_connectionDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Connector_association, sysml:ItemUsage_itemDefinition ;
+    rdfs:domain sysml:ConnectionUsage ;
+    rdfs:range sysml:AssociationStructure ;
+    ecore:isOrdered true ;
+    rdfs:label "connectionDefinition" ;
+    rdfs:comment "<p>The <code>AssociationStructures</code> that are the types of this <code>ConnectionUsage</code>. Nominally, these are , but other kinds of Kernel <code>AssociationStructures</code> are also allowed, to permit use of <code>AssociationStructures</code> from the Kernel Model Libraries</p>" .
+
+sysml:ConnectorAsUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:Connector, sysml:Usage ;
+    rdfs:label "ConnectorAsUsage" ;
+    rdfs:comment "<p>A <code>ConnectorAsUsage</code> is both a <code>Connector</code> and a <code>Usage</code>. <code>ConnectorAsUsage</code> cannot itself be instantiated in a SysML model, but it is the base class for the concrete classes <code>BindingConnectorAsUsage</code>, <code>SuccessionAsUsage</code> and <code>ConnectionUsage</code>.</p>" .
+
+sysml:FlowConnectionDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionDefinition, sysml:ConnectionDefinition, sysml:Interaction ;
+    rdfs:label "FlowConnectionDefinition" ;
+    rdfs:comment """<p>A <code>FlowConnectionDefinition</code> is a <code>ConnectionDefinition</code> and <code>ActionDefinition</code> that is also an <code>Interaction</code> representing flows between <code>Usages</code>.</p>
+	specializesFromLibrary('Connections::MessageConnection')""" .
+
+sysml:FlowConnectionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, sysml:ConnectionUsage, sysml:ItemFlow ;
+    rdfs:label "FlowConnectionUsage" ;
+    rdfs:comment """<p>A <code>FlowConnectionUsage</code> is a <code>ConnectionUsage</code> that is also an <code>ItemFlow</code>.</p>
+	if ownedEndFeatures->isEmpty() then
+	specializesFromLibrary('Connections::messageConnections')
+	else
+	specializesFromLibrary('Connections::flowConnections')
+	endif""" .
+
+sysml:FlowConnectionUsage_flowConnectionDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ActionUsage_actionDefinition, sysml:ConnectionUsage_connectionDefinition, sysml:ItemFlow_interaction ;
+    rdfs:domain sysml:FlowConnectionUsage ;
+    rdfs:range sysml:Interaction ;
+    ecore:isOrdered true ;
+    rdfs:label "flowConnectionDefinition" ;
+    rdfs:comment "<p>The <code>Interactions</code> that are the <code>types</code> of this <code>FlowConnectionUsage</code>. Nominally, these are <code>FlowConnectionDefinitions</code>, but other kinds of Kernel <code>Interactions</code> are also allowed, to permit use of Interactions from the Kernel Model Libraries.</p>" .
+
+sysml:SuccessionAsUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ConnectorAsUsage, sysml:Succession ;
+    rdfs:label "SuccessionAsUsage" ;
+    rdfs:comment "<p>A <code>SuccessionAsUsage</code> is both a <code>ConnectorAsUsage</code> and a <code>Succession</code>.<p>" .
+
+sysml:SuccessionFlowConnectionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:FlowConnectionUsage, sysml:SuccessionItemFlow ;
+    rdfs:label "SuccessionFlowConnectionUsage" ;
+    rdfs:comment """<p>A <code>SuccessionFlowConnectionUsage</code> is a <code>FlowConnectionUsage</code> that is also a <code>SuccessionItemFlow</code>.</p>
+	specializesFromLibrary('Connections::successionFlowConnections')""" .

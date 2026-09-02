@@ -1,0 +1,41 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Attributes>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/DataTypes>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Attributes" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:AttributeDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:DataType, sysml:Definition ;
+    rdfs:label "AttributeDefinition" ;
+    rdfs:comment """<p>An <code>AttributeDefinition</code> is a <code>Definition</code> and a <code>DataType</code> of information about a quality or characteristic of a system or part of a system that has no independent identity other than its value. All <code>features</code> of an <code>AttributeDefinition</code> must be referential (non-composite).</p>
+	
+	<p>As a <code>DataType</code>, an <code>AttributeDefinition</code> must specialize, directly or indirectly, the base <code>DataType</code> <code><em>Base::DataValue</em></code> from the Kernel Semantic Library.</p>
+	feature->forAll(not isComposite)""" .
+
+sysml:AttributeUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:Usage ;
+    rdfs:label "AttributeUsage" ;
+    rdfs:comment """<p>An <code>AttributeUsage</code> is a <code>Usage</code> whose type is a <code>DataType</code>. Nominally, if the type is an <code>AttributeDefinition</code>, an <code>AttributeUsage</code> is a usage of a <code>AttributeDefinition</code> to represent the value of some system quality or characteristic. However, other kinds of kernel <code>DataTypes</code> are also allowed, to permit use of <code>DataTypes</code> from the Kernel Model Libraries. An <code>AttributeUsage</code> itself as well as all its nested <code>features</code> must be referential (non-composite).</p>
+	
+	<p>An <code>AttributeUsage</code> must specialize, directly or indirectly, the base <code>Feature</code> <code><em>Base::dataValues</em></code> from the Kernel Semantic Library.</p>
+	isReference
+	feature->forAll(not isComposite)
+	specializesFromLibrary('Base::dataValues')""" .
+
+sysml:AttributeUsage_attributeDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_definition ;
+    rdfs:domain sysml:AttributeUsage ;
+    rdfs:range sysml:DataType ;
+    ecore:isOrdered true ;
+    rdfs:label "attributeDefinition" ;
+    rdfs:comment "<p>The <code>DataTypes</code> that are the types of this <code>AttributeUsage</code>. Nominally, these are <code>AttributeDefinitions</code>, but other kinds of kernel <code>DataTypes</code> are also allowed, to permit use of <code>DataTypes</code> from the Kernel Model Libraries.</p>" .

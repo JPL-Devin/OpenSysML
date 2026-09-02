@@ -1,0 +1,163 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Ports>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Structures>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Occurrences> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Ports" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:ConjugatedPortDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:PortDefinition, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ConjugatedPortDefinition_originalPortDefinition ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:ConjugatedPortDefinition_ownedPortConjugator ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ConjugatedPortDefinition" ;
+    rdfs:comment """<p>A <code>ConjugatedPortDefinition</code> is a <code>PortDefinition</code> that is a <code>PortDefinition</code> of its original <code>PortDefinition</code>. That is, a <code>ConjugatedPortDefinition</code> inherits all the <code>features</code> of the original <code>PortDefinition</code>, but input <code>flows</code> of the original <code>PortDefinition</code> become outputs on the <code>ConjugatedPortDefinition</code> and output <code>flows</code> of the original <code>PortDefinition</code> become inputs on the <code>ConjugatedPortDefinition</code>. Every <code>PortDefinition</code> (that is not itself a <code><code>ConjugatedPortDefinition</code></code>) has exactly one corresponding <code>ConjugatedPortDefinition</code>, whose effective name is the name of the <code>originalPortDefinition</code>, with the character <code>~</code> prepended.</p>
+	ownedPortConjugator.originalPortDefinition = originalPortDefinition
+	conjugatedPortDefinition = null""" .
+
+sysml:ConjugatedPortDefinition_originalPortDefinition
+    a owl:FunctionalProperty, owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:PortDefinition_conjugatedPortDefinition ;
+    rdfs:domain sysml:ConjugatedPortDefinition ;
+    rdfs:range sysml:PortDefinition ;
+    rdfs:label "originalPortDefinition" ;
+    rdfs:comment "<p>The original <code>PortDefinition</code> for this <code>ConjugatedPortDefinition</code>, which is the <code>owningNamespace</code> of the <code>ConjugatedPortDefinition</code>.</p>" .
+
+sysml:ConjugatedPortDefinition_ownedPortConjugator
+    a owl:FunctionalProperty, owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:PortConjugation_conjugatedPortDefinition ;
+    rdfs:domain sysml:ConjugatedPortDefinition ;
+    rdfs:range sysml:PortConjugation ;
+    rdfs:label "ownedPortConjugator" ;
+    rdfs:comment "<p>The <code>PortConjugation</code> that is the <code>ownedConjugator</code> of this <code>ConjugatedPortDefinition</code>, linking it to its <code>originalPortDefinition</code>.</p>" .
+
+sysml:ConjugatedPortTyping
+    a owl:Class ;
+    rdfs:subClassOf sysml:FeatureTyping, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ConjugatedPortTyping_conjugatedPortDefinition ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:ConjugatedPortTyping_portDefinition ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ConjugatedPortTyping" ;
+    rdfs:comment """<p>A <code>ConjugatedPortTyping</code> is a <code>FeatureTyping</code> whose <code>type</code> is a <code>ConjugatedPortDefinition</code>. (This relationship is intended to be an abstract-syntax marker for a special surface notation for conjugated typing of ports.)</p>
+	portDefinition = conjugatedPortDefinition.originalPortDefinition""" .
+
+sysml:ConjugatedPortTyping_conjugatedPortDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureTyping_type ;
+    rdfs:domain sysml:ConjugatedPortTyping ;
+    rdfs:range sysml:ConjugatedPortDefinition ;
+    rdfs:label "conjugatedPortDefinition" ;
+    rdfs:comment "<p>The <code>type</code> of this <code>ConjugatedPortTyping</code> considered as a <code>FeatureTyping</code>, which must be a <code>ConjugatedPortDefinition</code>.</p>" .
+
+sysml:ConjugatedPortTyping_portDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:ConjugatedPortTyping ;
+    rdfs:range sysml:PortDefinition ;
+    rdfs:label "portDefinition" ;
+    rdfs:comment "<p>The <code>originalPortDefinition</code> of the <code>conjugatedPortDefinition</code> of this <code>ConjugatedPortTyping</code>.</p>" .
+
+sysml:PortConjugation
+    a owl:Class ;
+    rdfs:subClassOf sysml:Conjugation, [
+        a owl:Restriction ;
+        owl:onProperty sysml:PortConjugation_conjugatedPortDefinition ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:PortConjugation_originalPortDefinition ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "PortConjugation" ;
+    rdfs:comment "<p>A <code>PortConjugation</code> is a <code>Conjugation</code> <code>Relationship</code> between a <code>PortDefinition</code> and its corresponding <code>ConjugatedPortDefinition</code>. As a result of this <code>Relationship</code>, the <code>ConjugatedPortDefinition</code> inherits all the <code>features</code> of the original <code>PortDefinition</code>, but input <code>flows</code> of the original <code>PortDefinition</code> become outputs on the <code>ConjugatedPortDefinition</code> and output <code>flows</code> of the original <code>PortDefinition</code> become inputs on the <code>ConjugatedPortDefinition</code>.</code></p>" .
+
+sysml:PortConjugation_conjugatedPortDefinition
+    a owl:FunctionalProperty, owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Conjugation_owningType ;
+    rdfs:domain sysml:PortConjugation ;
+    rdfs:range sysml:ConjugatedPortDefinition ;
+    rdfs:label "conjugatedPortDefinition" ;
+    rdfs:comment "<p>The <code>ConjugatedPortDefinition</code> that is conjugate to the <code>originalPortDefinition</code>.</p>" .
+
+sysml:PortConjugation_originalPortDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Conjugation_originalType ;
+    rdfs:domain sysml:PortConjugation ;
+    rdfs:range sysml:PortDefinition ;
+    rdfs:label "originalPortDefinition" ;
+    rdfs:comment "<p>The <code>PortDefinition</code> being conjugated.</p>" .
+
+sysml:PortDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:OccurrenceDefinition, sysml:Structure ;
+    rdfs:label "PortDefinition" ;
+    rdfs:comment """<p>A <code>PortDefinition</code> defines a point at which external entities can connect to and interact with a system or part of a system. Any <code>ownedUsages</code> of a <code>PortDefinition</code>, other than <code>PortUsages</code>, must not be composite.</p>
+	
+	
+	
+	conjugatedPortDefinition =
+	let conjugatedPortDefinitions : OrderedSet(ConjugatedPortDefinition) =
+	ownedMember->selectByKind(ConjugatedPortDefinition) in
+	if conjugatedPortDefinitions->isEmpty() then null
+	else conjugatedPortDefinitions->first()
+	endif
+	ownedUsage->
+	reject(oclIsKindOf(PortUsage))->
+	forAll(not isComposite)
+	not oclIsKindOf(ConjugatedPortDefinition) implies
+	ownedMember->
+	selectByKind(ConjugatedPortDefinition)->
+	size() = 1
+	specializesFromLibrary('Ports::Port')""" .
+
+sysml:PortDefinition_conjugatedPortDefinition
+    a owl:FunctionalProperty, owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:PortDefinition ;
+    rdfs:range sysml:ConjugatedPortDefinition ;
+    rdfs:label "conjugatedPortDefinition" ;
+    rdfs:comment "<p>The <codeConjugatedPortDefinition</code> that is conjugate to this <code>PortDefinition</code>.</p>" .
+
+sysml:PortUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:OccurrenceUsage ;
+    rdfs:label "PortUsage" ;
+    rdfs:comment """<p>A <code>PortUsage</code> is a usage of a <code>PortDefinition</code>. A <code>PortUsage</code> itself as well as all its <code>nestedUsages</code> must be referential (non-composite).</p>
+	nestedUsage->
+	reject(oclIsKindOf(PortUsage))->
+	forAll(not isComposite)
+	specializesFromLibrary('Ports::ports')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(PortDefinition) or
+	owningType.oclIsKindOf(PortUsage)) implies
+	specializesFromLibrary('Ports::Port::subports')
+	owningType = null or
+	not owningType.oclIsKindOf(PortDefinition) and
+	not owningType.oclIsKindOf(PortUsage) implies
+	isReference""" .
+
+sysml:PortUsage_portDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:OccurrenceUsage_occurrenceDefinition ;
+    rdfs:domain sysml:PortUsage ;
+    rdfs:range sysml:PortDefinition ;
+    ecore:isOrdered true ;
+    rdfs:label "portDefinition" ;
+    rdfs:comment "<p>The <code>occurrenceDefinitions</code> of this <code>PortUsage</code>, which must all be <code>PortDefinitions<code>.</p>" .
