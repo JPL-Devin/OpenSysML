@@ -78,6 +78,72 @@ func TestInvokeAddressesANestedPartByPathAndById(t *testing.T) {
 	wants(t, run(t, s, "%features Fleet::driver"), "level = 12")
 }
 
+// A qualified path through a usage (Fleet::driver::r) resolves to the feature's
+// declaration (Fleet::Driver::r); with the definition instantiated too, the path
+// still denotes the usage's part, on every command taking an object.
+func TestQualifiedPathDenotesTheUsageTypedNotItsDefinition(t *testing.T) {
+	s := loadFixture(t, "testdata/nested_machine.sysml")
+	run(t, s, "%instantiate Fleet::Driver")
+	run(t, s, "%instantiate Fleet::driver")
+	defR := objectIDIn(t, run(t, s, "%features Fleet::Driver.r"))
+	usageR := objectIDIn(t, run(t, s, "%features Fleet::driver.r"))
+	if defR == usageR {
+		t.Fatalf("the definition's and the usage's parts are one object #%s", defR)
+	}
+
+	wants(t, run(t, s, "%features Fleet::driver::r"), "ID: "+usageR, `Instance: Fleet::driver::r`)
+	wants(t, run(t, s, "%features Fleet::Driver::r"), "ID: "+defR, `Instance: Fleet::Driver::r`)
+
+	wants(t, run(t, s, "%invoke Fleet::driver::r bump"), "on object #"+usageR+` of "Fleet::driver::r"`)
+	wants(t, run(t, s, "%features Fleet::driver"), "level = 11")
+	wants(t, run(t, s, "%features Fleet::Driver"), "level = 10")
+
+	wants(t, run(t, s, "%state Fleet::driver::r"), `exhibited by object #`+usageR+` of "Fleet::driver::r"`)
+	wants(t, run(t, s, "%state Fleet::Rover::modes Fleet::driver::r"), `exhibited by object #`+usageR, "note:")
+	wants(t, run(t, s, "%state Fleet::Driver::r"), `exhibited by object #`+defR+` of "Fleet::Driver::r"`)
+}
+
+// A member of a multi-valued part is reached by no path, since the owner's
+// feature holds it among others: the prompt names it by identity, and a session
+// attached to it by identity survives an unrelated declaration.
+func TestCollectionMemberIsNamedByIdentity(t *testing.T) {
+	s := loadFixture(t, "testdata/collection_machine.sysml")
+	run(t, s, "%instantiate Depot::garage")
+	listing := run(t, s, "%features Depot::garage")
+	bays := listing[strings.Index(listing, "bays = [Instance(ID: "):]
+	bays = bays[:strings.Index(bays, "]")]
+	id := objectIDIn(t, bays[strings.LastIndex(bays, "Instance(ID: "):])
+
+	features := run(t, s, "%features #"+id)
+	wants(t, features, "Instance: #"+id+" (ID: "+id+")", "level = 10")
+	if strings.Contains(features, "Depot::garage::bays") {
+		t.Errorf("a member of bays was named as the whole collection:\n%s", features)
+	}
+	if _, _, err := s.objectRef("Depot::garage::bays"); err == nil {
+		t.Error("the collection's path reached an object")
+	}
+
+	got := run(t, s, "%state #"+id)
+	wants(t, got, `Debugging state machine "modes" exhibited by object #`+id, "Current state: waiting")
+	if strings.Contains(got, "Depot::garage::bays") {
+		t.Errorf("the member's machine was reported under the collection's name:\n%s", got)
+	}
+	if s.stateExec.selfFQN != "#"+id {
+		t.Errorf("the session holds the member as %q, want #%s", s.stateExec.selfFQN, id)
+	}
+
+	res := s.Submit("package Other { part def Unrelated; }")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("unrelated declaration has diagnostics: %v", res.Diagnostics)
+	}
+	if hasNotice(res, "debugging session") {
+		t.Errorf("the session over the member's machine was ended:\n%s", strings.Join(res.Notices, "\n"))
+	}
+	wants(t, run(t, s, "%current"), "waiting")
+	wants(t, run(t, s, "%advance 5"), "Current state: moving")
+	wants(t, run(t, s, "%features #"+id), "moving")
+}
+
 // A path that stops short of an object is a typed error naming the segment that
 // reached none and why, on every command taking an object.
 func TestObjectPathErrorsNameTheSegment(t *testing.T) {

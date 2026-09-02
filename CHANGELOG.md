@@ -145,7 +145,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   A segment whose feature value the runtime could not materialize keeps the runtime's reason
   (`… at "spare": feature "spare" of object #1 could not be materialized: … multiplicity
   violation …`) rather than being reported as a missing feature, and reaches the session status
-  as a failed `%features` would.
+  as a failed `%features` would. A qualified path is read as typed — `Fleet::driver::r` is the
+  usage's part even with `Fleet::Driver`, where `r` is declared, instantiated too — and a member
+  of a multi-valued part, which no path reaches, is named by its id alone, so a session attached
+  to it by id survives an unrelated declaration.
 - **An object of the wrong kind is named when a usage is not instantiated.** `-state
   "Rover::modes rover"` after `-instantiate Rover` (the definition, not the usage) reported only
   `no instance of "rover" (use %instantiate first)`. The REPL and the CLI now say that an object

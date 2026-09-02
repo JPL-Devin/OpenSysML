@@ -71,6 +71,12 @@ ways:
   `driver.r.motor`, or `Fleet::driver::r`);
 - the identity the prompt prints for it (`#3`, from `ID: 3` or `object #3`).
 
+A qualified path is read as typed: with both `Fleet::Driver` and `Fleet::driver` instantiated,
+`Fleet::driver::r` is the usage's part, not the definition's, although the feature `r` is
+declared in `Fleet::Driver`. A member of a multi-valued part (`part bays : Rover[2]`) is reached
+by no path, since `garage.bays` holds all of them: the prompt names such an object by its
+identity alone, and `%state #3` debugs its machine.
+
 A path that stops short of an object is an error naming the segment that reached none and
 why: `Fleet::driver.x reaches no object at "x": object #1 of "Fleet::driver" has no feature
 "x"`, or `… at "level": feature "level" of object #2 holds 10, which is not an object`. A

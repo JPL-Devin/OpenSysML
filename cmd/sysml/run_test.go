@@ -271,6 +271,22 @@ func TestStateAddressesANestedPart(t *testing.T) {
 		2, "no object #99 in this session")
 }
 
+// TestStateQualifiedPathDenotesTheUsageTyped checks that with both a definition and
+// its usage instantiated, -state over the usage's qualified path reaches the usage's
+// part, not the definition's, which the path's feature resolves to.
+func TestStateQualifiedPathDenotesTheUsageTyped(t *testing.T) {
+	binary := buildCLI(t)
+	both := []string{"-instantiate", "Fleet::Driver", "-instantiate", "Fleet::driver"}
+
+	usage := check(t, binary, fleetModel, append(both, "-state", "Fleet::driver::r")...)
+	wantReport(t, usage, 0, `exhibited by object #`, `of "Fleet::driver::r"`)
+	definition := check(t, binary, fleetModel, append(both, "-state", "Fleet::Driver::r")...)
+	wantReport(t, definition, 0, `exhibited by object #`, `of "Fleet::Driver::r"`)
+	if strings.Contains(usage.stdout, `of "Fleet::Driver::r"`) {
+		t.Errorf("the usage's path reached the definition's part:\n%s", usage.output())
+	}
+}
+
 // TestStateNamesTheUsageToInstantiate checks that -state asked about a usage whose
 // definition alone was instantiated says so, naming the usage to instantiate, in
 // the words the prompt uses for it.

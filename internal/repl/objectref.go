@@ -131,17 +131,16 @@ func (s *Session) objectRef(arg string) (*runtime.Instance, string, error) {
 
 // objectDenoted is objectAt for a name that resolved to fqn: a chain through a
 // feature (S1::driver::r) resolves to where the feature is declared
-// (S1::Driver::r), so the name as typed is walked when the resolved one holds
-// nothing.
+// (S1::Driver::r), so the name as typed is walked first, and the resolved one
+// only when what was typed reaches nothing.
 func (s *Session) objectDenoted(typed, fqn string) (*runtime.Instance, string, error) {
-	inst, name, err := s.objectAt(fqn)
-	if err != nil || inst != nil {
-		return inst, name, err
-	}
 	if plain, ok := s.plainName(typed); ok && plain != fqn {
-		return s.objectAt(plain)
+		inst, name, err := s.objectAt(plain)
+		if err != nil || inst != nil {
+			return inst, name, err
+		}
 	}
-	return nil, "", nil
+	return s.objectAt(fqn)
 }
 
 // heldObject returns the object the session holds under a name objectRef
@@ -232,8 +231,9 @@ func (s *Session) objectByID(id int64) (*runtime.Instance, string, error) {
 }
 
 // nameOf is the qualified name the session reaches an object by: the name it is
-// materialized under, or the owner's name and the feature holding it. An object
-// no session object holds has none.
+// materialized under, or the owner's name and the feature holding it alone. An
+// object no session object holds, or one held among others of a multi-valued
+// feature, has none.
 func (s *Session) nameOf(inst *runtime.Instance) string {
 	var path []string
 	for depth := 0; inst != nil && depth <= maxFeatureValueDepth; depth++ {
@@ -241,13 +241,24 @@ func (s *Session) nameOf(inst *runtime.Instance) string {
 			return strings.Join(append([]string{name}, path...), "::")
 		}
 		owner, feature := inst.Owner()
-		if owner == nil || feature == "" {
+		if owner == nil || feature == "" || !holdsAlone(owner, feature, inst.ID) {
 			return ""
 		}
 		path = append([]string{feature}, path...)
 		inst = owner
 	}
 	return ""
+}
+
+// holdsAlone reports whether owner's feature holds the object id as its one value,
+// so owner's name and the feature reach that object and no other.
+func holdsAlone(owner *runtime.Instance, feature string, id int64) bool {
+	fv := owner.FeatureValues[feature]
+	if fv == nil || fv.Values.Kind != runtime.ValInvalid {
+		return false
+	}
+	held, ok := fv.Value.Object()
+	return ok && held == id
 }
 
 // objectAt is objectNamed with the reason a name reaches no object: nil with no
