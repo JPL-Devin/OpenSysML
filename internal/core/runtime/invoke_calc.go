@@ -3,8 +3,10 @@ package runtime
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -273,9 +275,10 @@ func unboundResultHint(chain []*symbols.Symbol) string {
 		who, trailing, expr := "the result parameter", "of the body", "<expr>"
 		typ := usageTypeText(result)
 		if name != "" {
-			who = "result parameter " + name
+			spelled := lexer.NameText(name)
+			who = "result parameter " + spelled
 			if sibling := bodyMemberNamed(members, name, result); sibling != nil {
-				trailing, expr = "'"+name+"'", name
+				trailing, expr = "`"+spelled+"`", spelled
 				if typ == "" {
 					typ = usageTypeText(sibling)
 				}
@@ -284,7 +287,7 @@ func unboundResultHint(chain []*symbols.Symbol) string {
 		if typ == "" {
 			typ = "<type>"
 		}
-		return fmt.Sprintf(": %s binds no value; write the result as the trailing expression %s, or bind it with 'return : %s = %s;'",
+		return fmt.Sprintf(": %s binds no value; write the result as the trailing expression %s, or bind it with `return : %s = %s;`",
 			who, trailing, typ, expr)
 	}
 	return ""
@@ -314,15 +317,26 @@ func bodyMemberNamed(members []ast.Node, name string, except *ast.Usage) *ast.Us
 	return nil
 }
 
-// usageTypeText renders the type a usage declares with `:`, or "" without one.
+// usageTypeText spells the type a usage declares with `:` as the notation
+// writes it (each segment quoted when it must be), or "" without one.
 func usageTypeText(u *ast.Usage) string {
 	for _, rel := range u.Relationships {
 		if rel == nil || rel.Kind != ast.RelTyping {
 			continue
 		}
-		if qn, ok := rel.Target.(*ast.QualifiedName); ok {
-			return qualifiedNameText(qn)
+		qn, ok := rel.Target.(*ast.QualifiedName)
+		if !ok || len(qn.Parts) == 0 {
+			continue
 		}
+		segments := make([]string, 0, len(qn.Parts))
+		for _, part := range qn.Parts {
+			segments = append(segments, lexer.NameText(part.Text))
+		}
+		text := strings.Join(segments, "::")
+		if qn.Global {
+			text = "$::" + text
+		}
+		return text
 	}
 	return ""
 }
