@@ -115,7 +115,7 @@ func ParseParameters(text string) (Query, error) {
 	if err != nil {
 		return Query{}, err
 	}
-	q := Query{Select: selectTerms}
+	q := Query{}
 	if order := values.Get(paramOrderBy); order != "" {
 		terms, err := parseOrder(order, prefixes)
 		if err != nil {
@@ -131,7 +131,8 @@ func ParseParameters(text string) (Query, error) {
 		}
 		q.Where = parsed.Where
 	}
-	for _, name := range q.Select {
+	var selected []string
+	for _, name := range selectTerms {
 		if name == "*" {
 			return Query{}, wildcardError(paramSelect)
 		}
@@ -142,8 +143,22 @@ func ParseParameters(text string) (Query, error) {
 		if err != nil {
 			return Query{}, err
 		}
-		q.Select = replace(q.Select, name, resolved)
+		// A property selected twice can only be reported once, so naming it
+		// under two spellings is a misuse rather than two columns.
+		if first, repeated := q.Spelling[resolved]; repeated {
+			if first == name {
+				return Query{}, errorf(ErrMalformed, "%s names %q twice", paramSelect, name)
+			}
+			return Query{}, errorf(ErrMalformed, "%s names one property twice: %q and %q are the same property",
+				paramSelect, first, name)
+		}
+		if q.Spelling == nil {
+			q.Spelling = make(map[string]string)
+		}
+		q.Spelling[resolved] = name
+		selected = append(selected, resolved)
 	}
+	q.Select = selected
 	return q, nil
 }
 
@@ -443,7 +458,12 @@ func (p *oslcParser) value() (string, error) {
 	if strings.Contains(raw, ":") {
 		return resolveValue(raw, p.prefixes)
 	}
-	return "", errorf(ErrMalformed, "invalid OSLC value %q", raw)
+	if raw == "" {
+		return "", errorf(ErrMalformed, "OSLC comparison has no value")
+	}
+	// A bare name is the answer's own spelling of a value, so say what quoting it takes.
+	return "", errorf(ErrMalformed,
+		"invalid OSLC value %q: write a name as a quoted literal %s", raw, strconv.Quote(raw))
 }
 
 func (p *oslcParser) skipSpace() {
@@ -629,16 +649,6 @@ func splitCommaStrict(text, parameter string) ([]string, error) {
 		out = append(out, part)
 	}
 	return out, nil
-}
-
-func replace(values []string, old, new string) []string {
-	out := append([]string(nil), values...)
-	for i, value := range out {
-		if value == old {
-			out[i] = new
-		}
-	}
-	return out
 }
 
 func scopedError() *Error {

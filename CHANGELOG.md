@@ -144,6 +144,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Changed
 
+- **An OSLC query reports a selected property under the name it was asked for.** `sysml
+  -query 'oslc.where=rdf:type="PartUsage"&oslc.select=rdf:type'` and the REPL's `%query`
+  used to report the property as `@type=PartUsage`, a Go API name that the query text
+  refuses, so a reported row could not be written back into a query; the rows now read
+  `rdf:type=PartUsage`, `sysml:name=battery`, `sysml:owner=Robot::Platform`, and a prefix
+  rebound by `oslc.prefix` renames the property in the answer as well. The gRPC response
+  still keys properties by the query property names the structured `query` field uses.
+  A reported value is a bare name, which the grammar wants quoted, so refusing one now
+  names the form to write: `sysml:name=battery` answers with `write a name as a quoted
+  literal "battery"` instead of only `invalid OSLC value "battery"`. Since a property is
+  reported under one name, `oslc.select` naming the same property twice — as
+  `sysml:name,sysml:name`, or as two prefixes bound to the SysML namespace — is now refused
+  rather than reported twice under whichever name came last.
 - **The documentation site's landing page describes the four oracles instead of quoting their
   totals.** The band below the hero used to state the differential's agreeing-file count, the Xpect
   suites' declared-diagnostic and scope tallies, the rejection corpus's size and the pilot pin, all
