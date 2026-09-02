@@ -411,22 +411,31 @@ func unnamedEdgeSource(m ast.Node) **ast.QualifiedName {
 }
 
 // isEdgeMember reports whether a member is an edge between other members, which
-// declares no name of its own for a succession to reference.
+// a `then` sequences past; the RDF writer folds `then` back by the same UsageKind.IsEdge.
 func isEdgeMember(m ast.Node) bool {
+	kind, ok := memberUsageKind(m)
+	return ok && kind.IsEdge()
+}
+
+// memberUsageKind gives the usage kind a member is an instance of: the dedicated
+// edge nodes stand for the succession, flow and transition kinds.
+func memberUsageKind(m ast.Node) (ast.UsageKind, bool) {
 	switch n := m.(type) {
 	case *ast.Membership:
-		return n.Member != nil && isEdgeMember(n.Member)
-	case *ast.SuccessionEdge, *ast.ControlFlowEdge, *ast.ObjectFlowEdge, *ast.TransitionMember:
-		return true
-	case *ast.Usage:
-		// `succession first a then b;` and the connector forms are usages of an edge kind.
-		switch n.Kind {
-		case ast.UsageSuccession, ast.UsageTransition, ast.UsageConnector,
-			ast.UsageFlow, ast.UsageBinding:
-			return true
+		if n.Member == nil {
+			return 0, false
 		}
+		return memberUsageKind(n.Member)
+	case *ast.SuccessionEdge, *ast.ControlFlowEdge:
+		return ast.UsageSuccession, true
+	case *ast.ObjectFlowEdge:
+		return ast.UsageFlow, true
+	case *ast.TransitionMember:
+		return ast.UsageTransition, true
+	case *ast.Usage:
+		return n.Kind, true
 	}
-	return false
+	return 0, false
 }
 
 // finish returns the body's members, reporting a `then` that no member follows.
