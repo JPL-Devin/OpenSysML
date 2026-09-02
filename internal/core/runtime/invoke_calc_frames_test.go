@@ -58,6 +58,8 @@ func framesRuntime(t *testing.T) (*symbols.Scope, *Context) {
 
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, wideCalcModel()))
 	ctx.maxSteps = DefaultMaxSteps
+	// The frames under test are the evaluator's; a compiled body runs in none.
+	ctx.SetCalcCompile(false)
 	return idx.DocumentRoot("<test>"), ctx
 }
 

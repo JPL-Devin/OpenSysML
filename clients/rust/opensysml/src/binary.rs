@@ -242,7 +242,7 @@ fn warn_on_stderr(message: &str) {
 /// One lock per cache, because a POSIX file lock belongs to the process rather
 /// than to the thread that took it.
 fn process_lock(cache_dir: &Path) -> &'static Mutex<()> {
-    static LOCKS: OnceLock<Mutex<BTreeMap<PathBuf, &'static Mutex<()>>>> = OnceLock::new();
+    static LOCKS: OnceLock<Mutex<BTreeMap<PathBuf, &Mutex<()>>>> = OnceLock::new();
     let mut locks = LOCKS
         .get_or_init(|| Mutex::new(BTreeMap::new()))
         .lock()

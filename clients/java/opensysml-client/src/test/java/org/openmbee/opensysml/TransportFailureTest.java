@@ -15,6 +15,8 @@ import java.net.InetSocketAddress;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 /** What a caller is told when the answer is not the service's: a stall, a refusal, or a body. */
@@ -28,7 +30,7 @@ class TransportFailureTest {
         Stub.serving(
             exchange -> {
               drain(exchange);
-              sleep(Duration.ofSeconds(30));
+              stall(Duration.ofSeconds(30));
             })) {
       ConnectionOptions options =
           ConnectionOptions.builder()
@@ -96,9 +98,10 @@ class TransportFailureTest {
     }
   }
 
-  private static void sleep(Duration duration) {
+  /** Holds the exchange open without answering, as a hung service does. */
+  private static void stall(Duration duration) {
     try {
-      Thread.sleep(duration.toMillis());
+      new CountDownLatch(1).await(duration.toMillis(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }

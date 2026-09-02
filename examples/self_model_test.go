@@ -14,6 +14,7 @@ import (
 	"go.lsp.dev/protocol"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/edit"
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/highlight"
@@ -103,6 +104,8 @@ func TestSelfModelInvariantsHold(t *testing.T) {
 			"loweringIsLossless",
 			"executionIsBounded",
 			"libraryIsClean",
+			"snapshotIsDerived",
+			"evaluatorIsReference",
 			"exportRoundTrips",
 		},
 		"identity.sysml/OpenSysMLIdentity": {
@@ -281,6 +284,157 @@ func TestSelfModelBudgetsMatchImplementation(t *testing.T) {
 		if got != want {
 			t.Errorf("Runtime models %s as %+v, the implementation has %+v", envVar, got, want)
 		}
+	}
+}
+
+// TestSelfModelLibraryMatchesImplementation compares the modelled library with libs:
+// the override variable, the snapshot decoding, its Make targets and the CI check.
+func TestSelfModelLibraryMatchesImplementation(t *testing.T) {
+	idx, ctx := analyseSelfModel(t)
+	stdlib := instantiateSelfModel(t, idx, ctx, "pipeline.sysml", "OpenSysMLPipeline", "StandardLibrary")
+
+	if got, want := stdlib.str("overrideEnvVar"), libs.LibraryPathEnvVar; got != want {
+		t.Errorf("pipeline.sysml says the library is overridden by %s, libs reads %s", got, want)
+	}
+
+	snapshotIdx, err := libs.SnapshotIndex()
+	if decodes := err == nil && snapshotIdx != nil; decodes != stdlib.boolean("snapshotEmbedded") {
+		t.Errorf("pipeline.sysml says snapshotEmbedded = %t, libs.SnapshotIndex() returned (%v, %v)",
+			stdlib.boolean("snapshotEmbedded"), snapshotIdx != nil, err)
+	}
+
+	generator, ok := stdlib.parts()["generator"]
+	if !ok {
+		t.Fatal("StandardLibrary declares no generator part")
+	}
+	makefile, err := os.ReadFile(filepath.Join("..", "Makefile"))
+	if err != nil {
+		t.Fatalf("read the Makefile: %v", err)
+	}
+	targets := map[string]bool{}
+	for _, match := range makeTargetPattern.FindAllStringSubmatch(string(makefile), -1) {
+		targets[match[1]] = true
+	}
+	for _, attribute := range []string{"makeTarget", "checkTarget"} {
+		if target := generator.str(attribute); !targets[target] {
+			t.Errorf("pipeline.sysml says %s = %q, which the Makefile does not define", attribute, target)
+		}
+	}
+
+	workflow, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "pr.yml"))
+	if err != nil {
+		t.Fatalf("read the pull request workflow: %v", err)
+	}
+	gate := instantiateSelfModel(t, idx, ctx, "surfaces.sysml", "OpenSysMLSurfaces", "StdlibSnapshotGate")
+	if gate.str("baseline") != stdlib.str("snapshotFile") {
+		t.Errorf("surfaces.sysml gates %s, pipeline.sysml embeds %s", gate.str("baseline"), stdlib.str("snapshotFile"))
+	}
+	if runs := strings.Contains(string(workflow), "make "+generator.str("checkTarget")); runs != gate.boolean("gating") {
+		t.Errorf("surfaces.sysml says the snapshot gate is gating = %t, the pull request workflow runs make %s: %t",
+			gate.boolean("gating"), generator.str("checkTarget"), runs)
+	}
+}
+
+// TestSelfModelEvaluatorMatchesImplementation checks the evaluator's memoization
+// claim against runtime.Context, which must key a side table by syntax node.
+func TestSelfModelEvaluatorMatchesImplementation(t *testing.T) {
+	idx, ctx := analyseSelfModel(t)
+	evaluator := instantiateSelfModel(t, idx, ctx, "pipeline.sysml", "OpenSysMLPipeline", "Evaluator")
+
+	node := reflect.TypeOf((*ast.Node)(nil)).Elem()
+	keyedByNode := false
+	contextType := reflect.TypeOf(runtime.Context{})
+	for i := 0; i < contextType.NumField(); i++ {
+		field := contextType.Field(i).Type
+		if field.Kind() == reflect.Map && field.Key().Implements(node) {
+			keyedByNode = true
+		}
+	}
+	if keyedByNode != evaluator.boolean("memoized") {
+		t.Errorf("pipeline.sysml says the evaluator is memoized = %t, runtime.Context keyed a side table by syntax node: %t",
+			evaluator.boolean("memoized"), keyedByNode)
+	}
+}
+
+// TestSelfModelCalcCompilerMatchesImplementation checks the compiled calc tier's
+// switch and its fallback against the runtime, invoking the self-model's own
+// StepBudget calc through both tiers.
+func TestSelfModelCalcCompilerMatchesImplementation(t *testing.T) {
+	idx, ctx := analyseSelfModel(t)
+	evaluator := instantiateSelfModel(t, idx, ctx, "pipeline.sysml", "OpenSysMLPipeline", "Evaluator")
+	compiled, ok := evaluator.parts()["compiled"]
+	if !ok {
+		t.Fatal("Evaluator declares no compiled part")
+	}
+
+	envVar := compiled.str("overrideEnvVar")
+	if envVar != runtime.CalcCompileEnvVar {
+		t.Errorf("pipeline.sysml says the compiled tier is switched by %s, runtime reads %s", envVar, runtime.CalcCompileEnvVar)
+	}
+	reference, err := os.ReadFile(filepath.Join("..", "docs", "reference", "environment.md"))
+	if err != nil {
+		t.Fatalf("read the environment reference: %v", err)
+	}
+	if !strings.Contains(string(reference), "`"+envVar+"`") {
+		t.Errorf("docs/reference/environment.md does not document %s", envVar)
+	}
+
+	t.Setenv(runtime.CalcCompileEnvVar, "")
+	_, onByDefault := analyseSelfModel(t)
+	if onByDefault.CalcCompile() != evaluator.boolean("compilesPureCalcs") {
+		t.Errorf("pipeline.sysml says compilesPureCalcs = %t, a fresh runtime.Context compiles calcs: %t",
+			evaluator.boolean("compilesPureCalcs"), onByDefault.CalcCompile())
+	}
+	t.Setenv(runtime.CalcCompileEnvVar, "0")
+	_, switchedOff := analyseSelfModel(t)
+	if switchedOff.CalcCompile() {
+		t.Errorf("%s=0 left a fresh runtime.Context compiling calcs", runtime.CalcCompileEnvVar)
+	}
+	t.Setenv(runtime.CalcCompileEnvVar, "")
+
+	// The same invocation through both tiers, plain and traced: same value, and
+	// a traced run records the evaluator's sub-expressions whichever tier is on.
+	integer := func(i int64) runtime.Value {
+		return runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: i}}
+	}
+	var values, traces [2]string
+	for i, compile := range []bool{true, false} {
+		for _, traced := range []bool{false, true} {
+			tierIdx, tierCtx := analyseSelfModel(t)
+			tierCtx.SetCalcCompile(compile)
+			scope := packageScope(t, tierIdx, "behavior.sysml", "OpenSysMLBehavior")
+			sym, ok := scope.LookupLocal("StepBudget")
+			if !ok {
+				t.Fatal("OpenSysMLBehavior declares no StepBudget")
+			}
+			var tr *runtime.TraceRecorder
+			if traced {
+				tr = runtime.NewTraceRecorder()
+				tierCtx.SetTrace(tr)
+			}
+			got, err := tierCtx.InvokeCalc(sym, []runtime.Value{integer(6), integer(7)}, scope)
+			if err != nil {
+				t.Fatalf("compile=%t traced=%t: StepBudget(6, 7): %v", compile, traced, err)
+			}
+			if got.Kind != runtime.ValConst || got.Const.Int != 42 {
+				t.Errorf("compile=%t traced=%t: StepBudget(6, 7) = %s", compile, traced, runtime.FormatTraceValue(got))
+			}
+			if traced {
+				traces[i] = tr.String()
+			} else {
+				values[i] = runtime.FormatTraceValue(got)
+			}
+		}
+	}
+	if values[0] != values[1] {
+		t.Errorf("the compiled tier and the evaluator disagree on StepBudget(6, 7): %s vs %s", values[0], values[1])
+	}
+	if !strings.Contains(traces[1], "eval operator *") {
+		t.Fatalf("the evaluator's trace records no sub-expression:\n%s", traces[1])
+	}
+	if fellBack := traces[0] == traces[1]; fellBack != compiled.boolean("fallsBackToEvaluator") {
+		t.Errorf("pipeline.sysml says fallsBackToEvaluator = %t, a traced run under the compiled tier matched the evaluator's trace: %t\n%s\n---\n%s",
+			compiled.boolean("fallsBackToEvaluator"), fellBack, traces[0], traces[1])
 	}
 }
 
@@ -596,7 +750,10 @@ func TestSelfModelDocumentRenders(t *testing.T) {
 		"| sequence | true |",
 		"| geometry | false |",
 		"| differential | pilot validator | docs/project/pilot-differential-baseline.json |",
+		"| snapshotGate | the bundled library files | internal/core/libs/stdlib.snapshot |",
 		"OpenSysMLViews::pipelineStructure",
+		"OpenSysMLViews::libraryLoadFlow",
+		"[snapshotCurrent]",
 		"OpenSysMLViews::budgetExhaustion",
 		"OpenSysMLViews::editorPipeline",
 		"OpenSysMLViews::identityRoundTrip",
@@ -611,7 +768,10 @@ func TestSelfModelDocumentRenders(t *testing.T) {
 // repositoryPathPattern matches the attributes whose values are paths in this
 // repository, singly or as a comma-separated list.
 var repositoryPathPattern = regexp.MustCompile(
-	`(goPackage|generatedStubs|schemaFile|generatedGo|connectAdapter|stdioTransport|consumers|designRecord) = "([^"]+)"`)
+	`(goPackage|generatedStubs|schemaFile|generatedGo|connectAdapter|stdioTransport|consumers|designRecord|snapshotFile) = "([^"]+)"`)
+
+// makeTargetPattern matches the definition of one target in the Makefile.
+var makeTargetPattern = regexp.MustCompile(`(?m)^([a-z-]+):`)
 
 // syncFlagPattern matches the definition of one -sync-* flag in cmd/sysml.
 var syncFlagPattern = regexp.MustCompile(`flag\.\w+Var\(&\w+, "(sync-[a-z-]+)"`)

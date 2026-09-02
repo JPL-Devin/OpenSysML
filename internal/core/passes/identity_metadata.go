@@ -18,6 +18,9 @@ import (
 // project scope (element ids, `_om` membership ids, `_p` expression-node ids).
 type IdentityMetadataPass struct{}
 
+// duplicateIDCode is the diagnostic code for an effective id two elements share.
+const duplicateIDCode = "identity-duplicate-id"
+
 func (IdentityMetadataPass) Level() PassLevel { return LevelConstraint }
 
 func (IdentityMetadataPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
@@ -220,7 +223,7 @@ func (c *identityChecker) checkScope(infos []*identity.Info) {
 		sort.Strings(names)
 		for _, info := range group {
 			if span, ok := c.reportSite(info); ok {
-				c.errorf(span, "identity-duplicate-id",
+				c.errorf(span, duplicateIDCode,
 					"duplicate element id %q in one project scope: %s",
 					info.EffectiveID, strings.Join(names, " and "))
 			}
@@ -281,12 +284,12 @@ func (c *identityChecker) reportDerivedCollision(info *identity.Info, d identity
 			continue
 		}
 		if c.declInDocument(d) {
-			c.errorf(d.Span, "identity-duplicate-id",
+			c.errorf(d.Span, duplicateIDCode,
 				"element id %q of %s collides with %s of %s",
 				d.ID, info.FQN, space, owner.FQN)
 		}
 		if span, ok := c.reportSite(owner); ok {
-			c.errorf(span, "identity-duplicate-id",
+			c.errorf(span, duplicateIDCode,
 				"%s of %s collides with element id %q of %s",
 				space, owner.FQN, d.ID, info.FQN)
 		}

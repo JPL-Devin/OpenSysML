@@ -698,7 +698,7 @@ func TestLibraryFunctionOptionalOperand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("-(1.0 + 2.0i) = error %v", err)
 	}
-	if z := complexValue(t, got); z != complex(-1, -2) {
+	if complexValue(t, got) != complex(-1, -2) {
 		t.Fatalf("-(1.0 + 2.0i) = %v, want -1.0 - 2.0i", got)
 	}
 
@@ -731,7 +731,7 @@ func TestLibraryFunctionEmptyOptionalOperand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("+(1.0 + 2.0i, ()) = error %v", err)
 	}
-	if z := complexValue(t, got); z != complex(1, 2) {
+	if complexValue(t, got) != complex(1, 2) {
 		t.Fatalf("+(1.0 + 2.0i, ()) = %v, want 1.0 + 2.0i", got)
 	}
 
@@ -767,7 +767,7 @@ func TestVectorAndComplexNamedArguments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rect(im = 2.0, re = 1.0) = error %v", err)
 	}
-	if z := complexValue(t, got); z != complex(1, 2) {
+	if complexValue(t, got) != complex(1, 2) {
 		t.Fatalf("rect(im = 2.0, re = 1.0) = %v, want 1.0 + 2.0i", got)
 	}
 
@@ -1213,7 +1213,7 @@ func TestLibraryFeatureImaginaryUnit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComplexFunctions::i = error %v", err)
 	}
-	if z := complexValue(t, got); z != complex(0, 1) {
+	if complexValue(t, got) != complex(0, 1) {
 		t.Fatalf("ComplexFunctions::i = %v, want 0.0 + 1.0i", got)
 	}
 }

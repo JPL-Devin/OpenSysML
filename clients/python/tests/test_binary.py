@@ -719,8 +719,9 @@ def test_a_cache_survives_a_replacement_that_cannot_be_downloaded(cache):
     with patch('opensysml.binary.download_binary',
                side_effect=OpenSysMLConnectionError('404 Not Found')):
         with pytest.warns(UserWarning, match='Keeping the cached sysml-grpc'):
-            assert ensure_binary(version='v0.0.7') == linked()
+            kept = ensure_binary(version='v0.0.7')
 
+    assert kept == linked()
     assert cached_release() == 'v0.0.5'
 
 
@@ -868,8 +869,9 @@ class TestPinnedDigests:
         with patch('opensysml.binary.download_binary',
                    side_effect=UnpinnedReleaseError('pins no SHA-256 digest')):
             with pytest.warns(UserWarning, match='Keeping the cached sysml-grpc'):
-                assert ensure_binary(version='v9.9.9') == linked()
+                kept = ensure_binary(version='v9.9.9')
 
+        assert kept == linked()
         assert cached_release() == 'v0.0.5'
 
     def test_an_unpinned_release_with_no_cache_is_still_refused(self, cache):

@@ -15,7 +15,7 @@ async function main(): Promise<void> {
   try {
     show("origin", connection.info.origin);
     show("version", connection.info.version);
-    show("capabilities", [...connection.info.capabilities].sort().join(" "));
+    show("capabilities", [...connection.info.capabilities].sort((a, b) => a.localeCompare(b)).join(" "));
     assert.ok(connection.info.has(CAPABILITY_TYPE_FACTS));
 
     section("A parsed model");

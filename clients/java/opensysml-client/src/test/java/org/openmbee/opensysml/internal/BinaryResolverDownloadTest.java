@@ -98,9 +98,9 @@ class BinaryResolverDownloadTest {
   @Test
   void refusesToStartWithoutABinaryWhenNoReleaseIsAskedFor() {
     ConnectionOptions options = ConnectionOptions.builder().binaryPath(cache()).build();
+    BinaryDownloader downloader = downloader();
     ServiceStartException refused =
-        assertThrows(ServiceStartException.class, () -> BinaryResolver.resolve(options,
-            downloader()));
+        assertThrows(ServiceStartException.class, () -> BinaryResolver.resolve(options, downloader));
     assertTrue(refused.getMessage().contains("no executable sysml-grpc"), refused.getMessage());
   }
 
@@ -113,8 +113,9 @@ class BinaryResolverDownloadTest {
             .expectedBinarySha256("ab".repeat(32))
             .build();
 
+    BinaryDownloader downloader = downloader();
     assertThrows(
-        ChecksumMismatchException.class, () -> BinaryResolver.resolve(options, downloader()));
+        ChecksumMismatchException.class, () -> BinaryResolver.resolve(options, downloader));
   }
 
   @Test
@@ -138,8 +139,9 @@ class BinaryResolverDownloadTest {
     ConnectionOptions options = ConnectionOptions.builder().downloadVersion(VERSION).build();
 
     // A download contradicting a pin is evidence, so it is not answered from the cache.
+    BinaryDownloader downloader = downloader();
     assertThrows(
-        ChecksumMismatchException.class, () -> BinaryResolver.resolve(options, downloader()));
+        ChecksumMismatchException.class, () -> BinaryResolver.resolve(options, downloader));
     assertEquals("installed by hand", Files.readString(cache()));
     try (var entries = Files.list(cache().getParent())) {
       assertEquals(

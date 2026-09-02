@@ -26,6 +26,9 @@ public final class SignedManifest {
   public static final String BUNDLE_ASSET = MANIFEST_ASSET + ".bundle";
 
   private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
+  private static final Pattern LINE = Pattern.compile("\\R");
+  private static final Pattern FIELD = Pattern.compile("\\s+");
+  private static final Pattern BINARY_MARK = Pattern.compile("^\\*+");
 
   /**
    * A CircleCI signing certificate's subject names the pipeline definition that produced it, whose
@@ -65,17 +68,13 @@ public final class SignedManifest {
    * @return the hex digest, or empty when the manifest lists no well-formed digest for it
    */
   public static Optional<String> digestFor(byte[] manifest, String asset) {
-    for (String line : new String(manifest, StandardCharsets.UTF_8).split("\\R")) {
-      String[] fields = line.trim().split("\\s+");
-      if (fields.length != 2) {
-        continue;
-      }
+    for (String line : LINE.split(new String(manifest, StandardCharsets.UTF_8))) {
+      String[] fields = FIELD.split(line.trim());
       // sha256sum marks a file it read in binary mode with a leading '*'.
-      if (!fields[1].replaceFirst("^\\*+", "").equals(asset)) {
-        continue;
+      if (fields.length == 2 && BINARY_MARK.matcher(fields[1]).replaceFirst("").equals(asset)) {
+        String digest = fields[0].toLowerCase(Locale.ROOT);
+        return SHA256.matcher(digest).matches() ? Optional.of(digest) : Optional.empty();
       }
-      String digest = fields[0].toLowerCase(Locale.ROOT);
-      return SHA256.matcher(digest).matches() ? Optional.of(digest) : Optional.empty();
     }
     return Optional.empty();
   }
