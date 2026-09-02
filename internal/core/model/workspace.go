@@ -42,7 +42,8 @@ func WithConformanceMode(mode conformance.Mode) Option {
 }
 
 // WithLibrarySource names the source the index's library documents were read
-// from, so LibraryDocument can serve their text.
+// from, so LibraryDocument can serve their text. It must serve the bytes the
+// index was built from, or the index's spans address the wrong text.
 func WithLibrarySource(src libs.Source) Option {
 	return func(w *Workspace) { w.libSource = src }
 }
@@ -51,8 +52,9 @@ func WithLibrarySource(src libs.Source) Option {
 // Stdlib files are loaded from embedded sources (or OPENSYSML_LIBRARY_PATH if set).
 // Without options it analyzes in the default conformance mode.
 func NewWorkspace(opts ...Option) *Workspace {
-	opts = append([]Option{WithLibrarySource(libs.DefaultSource())}, opts...)
-	return NewWorkspaceWithIndex(libs.NewModelIndex(), opts...)
+	base, src := libs.SharedLibrary()
+	opts = append([]Option{WithLibrarySource(src)}, opts...)
+	return NewWorkspaceWithIndex(symbols.NewOverlay(base), opts...)
 }
 
 // NewWorkspaceWithIndex returns a workspace over a caller-built index, for a
