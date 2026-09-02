@@ -64,7 +64,10 @@ Unknown properties fail the query instead of silently returning no matches, and
 the diagnostic lists the OSLC predicates of the left column, since the query
 property names of the right column are the Go API's. `@type` and `@id` are not
 OSLC query text: the first is written `rdf:type`, and identity is reported for
-every result rather than asked for.
+every result rather than asked for. The listed predicates follow the query's own
+`oslc.prefix` bindings, so they are always writable as they read: rebinding
+`sysml` to another namespace lists the properties under whichever prefix names
+the SysML namespace, or reports them as unnamed if none does.
 
 ## Semantics and choices
 

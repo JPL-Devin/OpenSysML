@@ -1,6 +1,7 @@
 package query
 
 import (
+	"fmt"
 	"net/url"
 	"sort"
 	"strconv"
@@ -462,28 +463,76 @@ func resolveProperty(name string, prefixes map[string]string) (string, error) {
 	if property, ok := oslcPropertyMappings[iri]; ok {
 		return property, nil
 	}
-	return "", unknownOSLCProperty(name)
+	return "", unknownOSLCProperty(name, prefixes)
 }
 
-// PrefixedPropertyNames returns the prefixed names OSLC query text spells, in
-// stable order. It is derived from the mapping the parser reads.
-func PrefixedPropertyNames() []string {
-	out := make([]string, 0, len(oslcPropertyMappings))
+// propertyNamespaces are the namespaces the OSLC property mapping spells its
+// properties in.
+var propertyNamespaces = []string{rdf.RDFNS, rdf.SysML}
+
+// PrefixedPropertyNames returns the property names OSLC query text spells
+// under prefixes, in stable order, along with the local names of every
+// namespace those bindings leave unnamed, keyed by namespace. An oslc.prefix
+// binding decides what the parser accepts, so a diagnostic reads the same map.
+func PrefixedPropertyNames(prefixes map[string]string) (names []string, unbound map[string][]string) {
+	unbound = make(map[string][]string)
 	for iri := range oslcPropertyMappings {
-		for prefix, namespace := range DefaultPrefixes {
-			if strings.HasPrefix(iri, namespace) {
-				out = append(out, prefix+":"+strings.TrimPrefix(iri, namespace))
-				break
-			}
+		namespace, local := splitPropertyIRI(iri)
+		if prefix, bound := namingPrefix(prefixes, namespace); bound {
+			names = append(names, prefix+":"+local)
+			continue
+		}
+		unbound[namespace] = append(unbound[namespace], local)
+	}
+	sort.Strings(names)
+	for _, locals := range unbound {
+		sort.Strings(locals)
+	}
+	return names, unbound
+}
+
+func splitPropertyIRI(iri string) (namespace, local string) {
+	for _, namespace := range propertyNamespaces {
+		if strings.HasPrefix(iri, namespace) {
+			return namespace, strings.TrimPrefix(iri, namespace)
 		}
 	}
-	sort.Strings(out)
-	return out
+	return "", iri
 }
 
-func unknownOSLCProperty(name string) *Error {
-	return errorf(ErrUnknownProperty, "unknown OSLC query property %q; this implementation reads %s",
-		name, strings.Join(PrefixedPropertyNames(), ", "))
+// namingPrefix returns the alphabetically first prefix bound to namespace, so
+// one namespace is always offered under one spelling.
+func namingPrefix(prefixes map[string]string, namespace string) (string, bool) {
+	bound := make([]string, 0, len(prefixes))
+	for prefix, iri := range prefixes {
+		if iri == namespace {
+			bound = append(bound, prefix)
+		}
+	}
+	if len(bound) == 0 {
+		return "", false
+	}
+	sort.Strings(bound)
+	return bound[0], true
+}
+
+func unknownOSLCProperty(name string, prefixes map[string]string) *Error {
+	names, unbound := PrefixedPropertyNames(prefixes)
+	var b strings.Builder
+	fmt.Fprintf(&b, "unknown OSLC query property %q", name)
+	if len(names) > 0 {
+		fmt.Fprintf(&b, "; this implementation reads %s", strings.Join(names, ", "))
+	}
+	namespaces := make([]string, 0, len(unbound))
+	for namespace := range unbound {
+		namespaces = append(namespaces, namespace)
+	}
+	sort.Strings(namespaces)
+	for _, namespace := range namespaces {
+		fmt.Fprintf(&b, "; it also reads %s of <%s>, which no %s binding names",
+			strings.Join(unbound[namespace], ", "), namespace, paramPrefix)
+	}
+	return errorf(ErrUnknownProperty, "%s", b.String())
 }
 
 func resolveValue(name string, prefixes map[string]string) (string, error) {

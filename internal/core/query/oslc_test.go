@@ -1,8 +1,11 @@
 package query
 
 import (
+	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
 func TestParseOSLCOperatorsAndValues(t *testing.T) {
@@ -183,7 +186,11 @@ func TestParseOSLCPropertyDiagnosticsNameOSLCSpellings(t *testing.T) {
 	if !ok || got.Kind != ErrUnknownProperty {
 		t.Fatalf("error = %#v, want ErrUnknownProperty", err)
 	}
-	for _, name := range PrefixedPropertyNames() {
+	names, unbound := PrefixedPropertyNames(DefaultPrefixes)
+	if len(unbound) != 0 {
+		t.Errorf("default prefixes leave %v unnamed", unbound)
+	}
+	for _, name := range names {
 		if !strings.Contains(got.Message, name) {
 			t.Errorf("error message = %q, want it to name %q", got.Message, name)
 		}
@@ -213,6 +220,44 @@ func TestParseOSLCPropertyDiagnosticsNameOSLCSpellings(t *testing.T) {
 		if !strings.Contains(got.Message, "rdf:type") && !strings.Contains(got.Message, "reported for every result") {
 			t.Errorf("%q error message = %q, want it to name the OSLC spelling", text, got.Message)
 		}
+	}
+}
+
+func TestParseOSLCPropertyDiagnosticsFollowTheActiveBindings(t *testing.T) {
+	// An alias bound to the SysML namespace is what the query must be written with.
+	const aliased = `oslc.prefix=s%3D%3Chttps://www.omg.org/spec/SysML%23%3E,sysml%3D%3Curn:example:other%23%3E`
+	_, err := ParseParameters(aliased + `&oslc.where=s:id%3D%22x%22`)
+	got, ok := err.(*Error)
+	if !ok || got.Kind != ErrUnknownProperty {
+		t.Fatalf("error = %#v, want ErrUnknownProperty", err)
+	}
+	for _, name := range []string{"s:name", "s:qualifiedName", "rdf:type"} {
+		if !strings.Contains(got.Message, name) {
+			t.Errorf("error message = %q, want it to name %q", got.Message, name)
+		}
+		if _, err := ParseParameters(aliased + `&oslc.where=` + url.QueryEscape(name+`="x"`)); err != nil {
+			t.Errorf("listed property %q: %v", name, err)
+		}
+	}
+	if strings.Contains(got.Message, "sysml:name") {
+		t.Errorf("error message = %q, want it to omit the rebound spelling \"sysml:name\"", got.Message)
+	}
+
+	// A namespace no binding names cannot be offered as a prefixed name at all.
+	_, err = ParseParameters(`oslc.prefix=sysml%3D%3Curn:example:other%23%3E&oslc.where=sysml:id%3D%22x%22`)
+	got, ok = err.(*Error)
+	if !ok || got.Kind != ErrUnknownProperty {
+		t.Fatalf("error = %#v, want ErrUnknownProperty", err)
+	}
+	if strings.Contains(got.Message, "sysml:name") || !strings.Contains(got.Message, "which no oslc.prefix binding names") {
+		t.Errorf("error message = %q, want it to report the SysML namespace as unnamed", got.Message)
+	}
+	names, unbound := PrefixedPropertyNames(map[string]string{"rdf": rdf.RDFNS})
+	if len(names) != 1 || names[0] != "rdf:type" {
+		t.Errorf("names = %#v, want [rdf:type]", names)
+	}
+	if locals := unbound[rdf.SysML]; len(locals) == 0 || locals[0] != "declaredName" {
+		t.Errorf("unbound[SysML] = %#v, want the SysML local names", locals)
 	}
 }
 
