@@ -128,7 +128,7 @@ func identityAfter(t *testing.T, file, src, fqn string) *identity.Info {
 	return info
 }
 
-const scopedSrc = "package Vehicles {\n    @IdentityMetadata::ProjectRef { projectId = \"p-1\"; }\n\n    // the chassis\n    part def Chassis {\n        attribute mass : ScalarValues::Real;\n    }\n    part def Wheel {\n        @IdentityMetadata::ElementId { id = \"wheel-id\"; }\n    }\n    part def Axle;\n    part front : Wheel;\n}\n"
+const scopedSrc = "package Vehicles {\n    @IdentityMetadata::ProjectRef { projectId = \"p-1\"; }\n\n    // the chassis\n    part def Chassis {\n        attribute mass : ScalarValues::Real;\n    }\n    part def Wheel {\n        @IdentityMetadata::ElementId { id = \"wheel-id\"; }\n    }\n    /* two per vehicle */ part def Axle;\n    part front : Wheel;\n}\n"
 
 func TestIdentityActionOfferedOnUnannotatedDeclaration(t *testing.T) {
 	const file = "/tmp/identity_offered.sysml"
@@ -167,7 +167,7 @@ func TestIdentityActionOfferedOnSelectedHeader(t *testing.T) {
 	for _, tc := range []struct{ from, to, name string }{
 		{"part def Chassis", "Chassis {", "Chassis"},
 		{"// the chassis", "def Chassis", "Chassis"},
-		{"part def Axle", "Axle;", "Axle"},
+		{"/* two per vehicle */", "Axle;", "Axle"},
 	} {
 		act := mintAction(t, file, scopedSrc, selection(t, scopedSrc, tc.from, tc.to))
 		if want := "Annotate '" + tc.name + "' with a minted element id"; act.Title != want {
