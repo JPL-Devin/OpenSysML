@@ -92,8 +92,9 @@ Copy **all** `build/pilot-*` dirs together: the validator launchers resolve the 
   `/tmp/site/index.html` and check each one — a site-relative target must exist under
   `/tmp/site`, a repository target must exist under `docs/` — then click them in a browser
   against a served copy (`python3 -m http.server -d /tmp/site`; `file://` breaks directory
-  URLs). Prove the guard is live both ways: point a link at a page that does not exist and
-  at an excluded page, and `--strict` must abort in each case.
+  URLs). Prove the guard is live: a `record()` link to a page that does not exist must abort
+  `--strict`; a `record()` link to an excluded page builds clean by design (it resolves to the
+  GitHub blob URL) — only a `{{ '…'|url }}` link to an excluded page aborts.
 - **The landing band quotes no figure:** `grep -E '[0-9]+ of [0-9]+' overrides/home.html` must
   match nothing, and the rendered `site/index.html` must carry no literal `{{ … }}` from a Jinja
   mistake in the band's record links.
