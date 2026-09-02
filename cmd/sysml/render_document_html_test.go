@@ -101,6 +101,8 @@ func TestRenderDocumentHTMLStylesheets(t *testing.T) {
 		2, "not the sheet")
 	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-sync-diff", "repo.ttl")),
 		2, "ask for it in its own run")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-sync-apply", "https://example.test/api")),
+		2, "ask for it in its own run")
 	for _, unrelated := range [][]string{
 		{"-from", "kerml"},
 		{"-strict"},

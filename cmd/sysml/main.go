@@ -418,8 +418,8 @@ func runCLI() int {
 			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which no model shapes; ask for it without model files")
 			return 2
 		case renderDoc != "" || renderDocsDir != "" || renderView != "" || renderAllDir != "" ||
-			convertFormat != "" || flagGiven("sync-diff") || queryText != "" || len(evalExprs) > 0 ||
-			modelChecks.requested():
+			convertFormat != "" || flagGiven("sync-diff") || flagGiven("sync-apply") ||
+			queryText != "" || len(evalExprs) > 0 || modelChecks.requested():
 			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet and nothing else; ask for it in its own run")
 			return 2
 		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
