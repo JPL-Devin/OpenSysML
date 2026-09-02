@@ -71,35 +71,39 @@ func FormatValue(v Value) string {
 	case ValNull:
 		return "null"
 	case ValString:
-		return strconv.Quote(v.Str)
+		return strconv.Quote(v.Str())
 	case ValInstance:
 		return fmt.Sprintf("instance(%d)", v.Instance)
 	case ValSequence:
-		if v.Sequence == nil {
+		seq := v.Sequence()
+		if seq == nil {
 			return "[]"
 		}
-		return "[" + strings.Join(formatValueElements(v.Sequence.Elements()), ", ") + "]"
+		return "[" + strings.Join(formatValueElements(seq.Elements()), ", ") + "]"
 	case ValSet:
-		if v.Set == nil {
+		set := v.Set()
+		if set == nil {
 			return "Set{}"
 		}
-		parts := formatValueElements(v.Set.Elements())
+		parts := formatValueElements(set.Elements())
 		return "Set{" + strings.Join(parts, ", ") + "}"
 	case ValVariant:
-		if v.Variant == nil {
+		variant := v.Variant()
+		if variant == nil {
 			return "<unknown variant>"
 		}
 		if v.Instance != 0 {
-			return fmt.Sprintf("%s (Instance ID: %d)", v.Variant.Name, v.Instance)
+			return fmt.Sprintf("%s (Instance ID: %d)", variant.Name, v.Instance)
 		}
-		return v.Variant.Name
+		return variant.Name
 	case ValEnumLiteral:
 		return v.LiteralText()
 	case ValQuantity:
-		if v.Quantity == nil {
+		q := v.Quantity()
+		if q == nil {
 			return "<unknown>"
 		}
-		return v.Quantity.TextWithMagnitude(FormatConst(v.Quantity.Num))
+		return q.TextWithMagnitude(FormatConst(q.Num))
 	default:
 		return "<unknown>"
 	}
@@ -141,41 +145,132 @@ func (k ValueKind) String() string {
 	}
 }
 
-// Value is a runtime-evaluable value.
+// Value is a runtime-evaluable value. The scalar payload stays inline because
+// arithmetic copies values through every evaluator frame; the rarer payloads
+// share one slot so the struct stays at 64 bytes.
 type Value struct {
 	Kind     ValueKind
 	Const    semantics.Value // ValConst: reuse static evaluator
-	Str      string          // ValString
-	Instance int64           // ValInstance: instance ID
-	Sequence *Sequence       // ValSequence
-	Set      *Set            // ValSet
-	Expr     ast.Node        // ValExpr: unevaluated AST for delayed evaluation
-	Quantity *Quantity       // ValQuantity: magnitude and measurement unit
-	// Variant is the variant a variation was bound to (ValVariant). Instance
-	// holds the object materialized for it, 0 when it materializes none.
-	Variant *symbols.Symbol
-	// Literal is the enumeration literal the value is (ValEnumLiteral). A literal
-	// is its own identity: two values are the same literal exactly when they name
-	// the same declaration.
-	Literal *symbols.Symbol
+	Instance int64           // ValInstance: instance ID; ValVariant: materialized object, 0 for none
+	// ref holds the kind-specific payload of the remaining kinds: a string
+	// (ValString), *Sequence, *Set, ast.Node (ValExpr), *Quantity, or the
+	// *symbols.Symbol of a variant (ValVariant) or enumeration literal (ValEnumLiteral).
+	ref any
+}
+
+// NewStringValue is the value of a string.
+func NewStringValue(s string) Value {
+	return Value{Kind: ValString, ref: s}
+}
+
+// NewSequenceValue wraps an ordered collection. A nil sequence is the empty one.
+func NewSequenceValue(seq *Sequence) Value {
+	return Value{Kind: ValSequence, ref: seq}
+}
+
+// NewSetValue wraps a unique collection. A nil set is the empty one.
+func NewSetValue(set *Set) Value {
+	return Value{Kind: ValSet, ref: set}
+}
+
+// NewExprValue defers evaluation of an expression body.
+func NewExprValue(node ast.Node) Value {
+	return Value{Kind: ValExpr, ref: node}
+}
+
+// NewQuantityValue wraps a magnitude expressed in a measurement unit.
+func NewQuantityValue(q *Quantity) Value {
+	return Value{Kind: ValQuantity, ref: q}
+}
+
+// NewVariantValue is the variant a variation was bound to, with the object it
+// materialized (0 when it materializes none).
+func NewVariantValue(variant *symbols.Symbol, instance int64) Value {
+	return Value{Kind: ValVariant, ref: variant, Instance: instance}
 }
 
 // NewEnumLiteral is the value an enumeration literal that declares no value of
 // its own evaluates to: the identity of that literal.
 func NewEnumLiteral(sym *symbols.Symbol) Value {
-	return Value{Kind: ValEnumLiteral, Literal: sym}
+	return Value{Kind: ValEnumLiteral, ref: sym}
+}
+
+// Str is the text of a ValString; "" for every other kind.
+func (v Value) Str() string {
+	if v.Kind != ValString {
+		return ""
+	}
+	s, _ := v.ref.(string)
+	return s
+}
+
+// Sequence is the collection of a ValSequence; nil for every other kind.
+func (v Value) Sequence() *Sequence {
+	if v.Kind != ValSequence {
+		return nil
+	}
+	seq, _ := v.ref.(*Sequence)
+	return seq
+}
+
+// Set is the collection of a ValSet; nil for every other kind.
+func (v Value) Set() *Set {
+	if v.Kind != ValSet {
+		return nil
+	}
+	set, _ := v.ref.(*Set)
+	return set
+}
+
+// Expr is the deferred expression of a ValExpr; nil for every other kind.
+func (v Value) Expr() ast.Node {
+	if v.Kind != ValExpr {
+		return nil
+	}
+	node, _ := v.ref.(ast.Node)
+	return node
+}
+
+// Quantity is the payload of a ValQuantity; nil for every other kind.
+func (v Value) Quantity() *Quantity {
+	if v.Kind != ValQuantity {
+		return nil
+	}
+	q, _ := v.ref.(*Quantity)
+	return q
+}
+
+// Variant is the variant a ValVariant was bound to; nil for every other kind.
+func (v Value) Variant() *symbols.Symbol {
+	if v.Kind != ValVariant {
+		return nil
+	}
+	sym, _ := v.ref.(*symbols.Symbol)
+	return sym
+}
+
+// Literal is the enumeration literal a ValEnumLiteral is: a literal is its own
+// identity, so two values are the same literal exactly when they name the same
+// declaration. Nil for every other kind.
+func (v Value) Literal() *symbols.Symbol {
+	if v.Kind != ValEnumLiteral {
+		return nil
+	}
+	sym, _ := v.ref.(*symbols.Symbol)
+	return sym
 }
 
 // LiteralText renders an enumeration literal as it is written, qualified by the
 // enumeration it is a literal of: `Color::red`.
 func (v Value) LiteralText() string {
-	if v.Literal == nil {
+	lit := v.Literal()
+	if lit == nil {
 		return "<unknown enumeration literal>"
 	}
-	if enum := semantics.EnumerationOwning(v.Literal); enum != nil {
-		return enum.Name + "::" + v.Literal.Name
+	if enum := semantics.EnumerationOwning(lit); enum != nil {
+		return enum.Name + "::" + lit.Name
 	}
-	return v.Literal.Name
+	return lit.Name
 }
 
 // Object returns the object a value denotes: an instance, or the object a

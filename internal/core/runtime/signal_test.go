@@ -653,7 +653,7 @@ func TestParkedAcceptTakesOnlyItsOwnMessage(t *testing.T) {
 
 	// A String arrives first and must be left in flight; the Integer resumes it.
 	ctx.PostMessage(Message{SignalType: "String", Target: "reader", Payload: map[string]Value{
-		"value": {Kind: ValString, Str: "not for you"},
+		"value": NewStringValue("not for you"),
 	}})
 	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Payload: map[string]Value{
 		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}},

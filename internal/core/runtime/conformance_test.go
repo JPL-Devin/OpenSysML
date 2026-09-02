@@ -1215,7 +1215,7 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		t.Fatalf("invalid Boolean value type: %T", ev.Value)
 	case "String":
 		if v, ok := ev.Value.(string); ok {
-			return Value{Kind: ValString, Str: v}
+			return NewStringValue(v)
 		}
 		t.Fatalf("invalid String value type: %T", ev.Value)
 	case "Null":
@@ -1229,10 +1229,10 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		if !ok {
 			t.Fatalf("invalid Quantity value type: %T", ev.Value)
 		}
-		return Value{Kind: ValQuantity, Quantity: &Quantity{
+		return NewQuantityValue(&Quantity{
 			Num:  semantics.Value{Kind: semantics.ValReal, Real: v},
 			Unit: Unit{Text: ev.Unit},
-		}}
+		})
 	default:
 		t.Fatalf("unknown type: %s", ev.Type)
 	}
@@ -1300,20 +1300,20 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 			return
 		}
 		want := expected.Value.(string)
-		if actual.Str != want {
-			t.Errorf("%s: value = %q, want %q", name, actual.Str, want)
+		if actual.Str() != want {
+			t.Errorf("%s: value = %q, want %q", name, actual.Str(), want)
 		}
 	case "Variant":
-		if actual.Kind != ValVariant || actual.Variant == nil {
+		if actual.Kind != ValVariant || actual.Variant() == nil {
 			t.Errorf("%s: type = %v, want Variant", name, actual.Kind)
 			return
 		}
 		want := expected.Value.(string)
-		if actual.Variant.Name != want {
-			t.Errorf("%s: variant = %q, want %q", name, actual.Variant.Name, want)
+		if actual.Variant().Name != want {
+			t.Errorf("%s: variant = %q, want %q", name, actual.Variant().Name, want)
 		}
 	case "EnumLiteral":
-		if actual.Kind != ValEnumLiteral || actual.Literal == nil {
+		if actual.Kind != ValEnumLiteral || actual.Literal() == nil {
 			t.Errorf("%s: type = %v, want EnumLiteral", name, actual.Kind)
 			return
 		}
@@ -1322,15 +1322,15 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 			t.Errorf("%s: literal = %q, want %q", name, got, want)
 		}
 	case "Quantity":
-		if actual.Kind != ValQuantity || actual.Quantity == nil {
+		if actual.Kind != ValQuantity || actual.Quantity() == nil {
 			t.Errorf("%s: type = %v, want Quantity", name, actual.Kind)
 			return
 		}
-		if got := actual.Quantity.Unit.String(); got != expected.Unit {
+		if got := actual.Quantity().Unit.String(); got != expected.Unit {
 			t.Errorf("%s: unit = %q, want %q", name, got, expected.Unit)
 		}
 		want := expected.Value.(float64)
-		got := actual.Quantity.Num
+		got := actual.Quantity().Num
 		switch got.Kind {
 		case semantics.ValReal:
 			// A magnitude computed by repeated arithmetic is compared within a

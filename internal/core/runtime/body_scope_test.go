@@ -48,23 +48,23 @@ func TestBodyScopeImportSpellings(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s import: no output for t: %v", visibility, out)
 		}
-		if val.Kind != ValQuantity || val.Quantity == nil {
+		if val.Kind != ValQuantity || val.Quantity() == nil {
 			t.Fatalf("%s import: t = %v; want a quantity", visibility, val)
 		}
-		if got, want := val.Quantity.Unit.String(), "s"; got != want {
+		if got, want := val.Quantity().Unit.String(), "s"; got != want {
 			t.Errorf("%s import: unit of t = %q, want %q", visibility, got, want)
 		}
-		if got, want := val.Quantity.Num.Real, 0.5; got != want {
+		if got, want := val.Quantity().Num.Real, 0.5; got != want {
 			t.Errorf("%s import: magnitude of t = %v, want %v", visibility, got, want)
 		}
 		outputs[visibility] = val
 	}
 
 	private, public := outputs["private"], outputs["public"]
-	if private.Quantity.Num.Real != public.Quantity.Num.Real ||
-		private.Quantity.Unit.String() != public.Quantity.Unit.String() {
+	if private.Quantity().Num.Real != public.Quantity().Num.Real ||
+		private.Quantity().Unit.String() != public.Quantity().Unit.String() {
 		t.Errorf("private import gave %v %s, public import gave %v %s; want the same",
-			private.Quantity.Num.Real, private.Quantity.Unit,
-			public.Quantity.Num.Real, public.Quantity.Unit)
+			private.Quantity().Num.Real, private.Quantity().Unit,
+			public.Quantity().Num.Real, public.Quantity().Unit)
 	}
 }

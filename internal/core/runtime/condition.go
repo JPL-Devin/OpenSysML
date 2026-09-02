@@ -503,10 +503,10 @@ func heldObjects(val Value) []int64 {
 	}
 	var elements []Value
 	switch {
-	case val.Kind == ValSequence && val.Sequence != nil:
-		elements = val.Sequence.Elements()
-	case val.Kind == ValSet && val.Set != nil:
-		elements = val.Set.Elements()
+	case val.Kind == ValSequence && val.Sequence() != nil:
+		elements = val.Sequence().Elements()
+	case val.Kind == ValSet && val.Set() != nil:
+		elements = val.Set().Elements()
 	}
 	var out []int64
 	for _, element := range elements {

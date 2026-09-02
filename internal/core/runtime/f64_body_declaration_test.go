@@ -31,7 +31,7 @@ func TestF64BodyWithoutDeclarationStillEvaluates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.Sequence == nil || len(got.Sequence.Elements()) != 2 {
+	if got.Sequence() == nil || len(got.Sequence().Elements()) != 2 {
 		t.Errorf("result = %v, want the two elements above 1", got)
 	}
 }

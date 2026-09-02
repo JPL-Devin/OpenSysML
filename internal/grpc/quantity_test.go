@@ -146,11 +146,11 @@ func TestQuantityRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ProtoToValueIn: %v", err)
 			}
-			if val.Kind != runtime.ValQuantity || val.Quantity == nil {
+			if val.Kind != runtime.ValQuantity || val.Quantity() == nil {
 				t.Fatalf("kind = %v, want a quantity", val.Kind)
 			}
 
-			back := QuantityToProto(val.Quantity)
+			back := QuantityToProto(val.Quantity())
 			if back.GetUnit() != sent.GetUnit() {
 				t.Errorf("unit = %q, want %q", back.GetUnit(), sent.GetUnit())
 			}
@@ -161,7 +161,7 @@ func TestQuantityRoundTrip(t *testing.T) {
 				t.Errorf("reduction = %q, want %q",
 					describeUnitTerm(back.GetUnitTerm()), describeUnitTerm(sent.GetUnitTerm()))
 			}
-			if !val.Quantity.Unit.Term.Commensurable(mustUnitTerm(t, sent, idx, sem)) {
+			if !val.Quantity().Unit.Term.Commensurable(mustUnitTerm(t, sent, idx, sem)) {
 				t.Error("round-tripped quantity is not commensurable with the one sent")
 			}
 		})
@@ -177,7 +177,7 @@ func mustUnitTerm(t *testing.T, sent *pb.Quantity, idx *symbols.Index, sem *sema
 	if err != nil {
 		t.Fatalf("ProtoToQuantity: %v", err)
 	}
-	return val.Quantity.Unit.Term
+	return val.Quantity().Unit.Term
 }
 
 // TestQuantityFromWireIsNormalized pins that a hand-built reduction — factors in
@@ -202,9 +202,9 @@ func TestQuantityFromWireIsNormalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProtoToQuantity: %v", err)
 	}
-	if !val.Quantity.Unit.Term.Commensurable(mustUnitTerm(t, derived, idx, sem)) {
+	if !val.Quantity().Unit.Term.Commensurable(mustUnitTerm(t, derived, idx, sem)) {
 		t.Errorf("reduction = %s, want it commensurable with %s",
-			val.Quantity.Unit.Term, describeUnitTerm(derived.GetUnitTerm()))
+			val.Quantity().Unit.Term, describeUnitTerm(derived.GetUnitTerm()))
 	}
 }
 
@@ -351,8 +351,8 @@ func TestQuantityWithoutItsReduction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProtoToQuantity: %v", err)
 	}
-	if len(val.Quantity.Unit.Term.Factors) != 0 {
-		t.Errorf("factors = %v, want none", val.Quantity.Unit.Term.Factors)
+	if len(val.Quantity().Unit.Term.Factors) != 0 {
+		t.Errorf("factors = %v, want none", val.Quantity().Unit.Term.Factors)
 	}
 }
 

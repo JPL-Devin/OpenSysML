@@ -100,3 +100,54 @@ the next invocation once the first has returned:
 Per calc invocation that is roughly 1.1 µs. `bindCalcParameters` no longer
 appears in the allocation profile; what remains per invocation is the
 positional argument slice of `evalInvocation` and the boxed values themselves.
+
+## Follow-up (2026-09-02): the evaluator's per-invocation overhead
+
+Measured on the same machine, same method, at revision `d14896bc` before and
+after four changes to the calc evaluator, made one at a time and measured
+after each: `runtime.Value` shrank from 120 to 64 bytes (the scalar stays
+inline; string, sequence, set, expression, quantity and symbol payloads share
+one slot); parsed literals and resolved invocation targets are memoized per
+`Context` keyed by the AST node, which a REPL or LSP edit replaces along with
+the context; a calc's parameters bind into slot-indexed frames resolved once
+per calc shape, and a bare name outside a body-local scope is answered from
+the frames before the general resolution chain runs; and the positional
+argument slice and the statement engine's frame stack are borrowed from
+per-context storage instead of allocated per call. The benchmark is `Fib(25)`
+(242 785 calc invocations), marginal between a 1- and a 6-case run.
+
+| figure | before | after |
+| ------ | ------ | ----- |
+| marginal cost per `Fib(25)` eval | 246 ms | 158 ms |
+| per calc invocation | 1.01 µs | 0.65 µs |
+| allocations per `Fib(25)` eval (`-memstats` marginal) | 971 000 (4.0 per invocation) | ~160 (< 0.001 per invocation) |
+| bytes allocated per `Fib(25)` eval | 38.9 MiB (168 B per invocation) | ~0.1 MiB |
+| `BenchmarkRunCalc` (`-count 6`, geomean) | 2.15 µs / 888 B / 26 allocs | 1.88 µs / 768 B / 25 allocs |
+
+Stage by stage, per calc invocation: 1.01 µs → 0.83 µs (smaller `Value`) →
+0.65 µs (memoized literals and targets) → 0.65 µs (slot frames; the map
+lookups it removed were already cheap once the target was memoized) →
+0.65 µs (allocation trimming; the young garbage it removed was cheap to
+collect). Every result, error message, trace and step count is unchanged; the
+execution-trace goldens and the pilot differential's bucket counts are as
+committed.
+
+The profile of 3 × `Fib(27)` is now flat. Before, 26% of CPU was `duffcopy`
+and 7% `duffzero` (the 120-byte `Value` returned through ten frames per
+operation), 12% garbage collection and 7% string-keyed map access. After, no
+function exceeds 12% flat: `EvalContext.Eval` 12%, `eval` 9%,
+`evalFeatureReference` 7%, `evalOperator` 6%, `evalArithmetic` 5%,
+`evalName` 5%, `duffcopy` 4%, `runCalcBody` 4%, `incrementStep` 3%,
+garbage collection 2%. What remains is the tree walk itself: about twelve
+`Eval` dispatches per `Fib` invocation, each returning a 64-byte `Value` and
+an error through three or four frames, plus the invocation's own bookkeeping
+(frame acquisition, activation, parameter binding and type checking) at
+roughly 15% of the total.
+
+That is a 1.55× improvement per invocation against the 2× this pass aimed for.
+Closing the rest within the tree walk would mean flattening the
+`(Value, error)` return chain into an out-parameter across every `eval*`
+function and shrinking `semantics.Value` — a wide, mechanical change — and
+the calc *usage* environment (`bindCalcUsage`) still binds into a map, as its
+statements read and write outputs by name. The larger step, a compiled fast
+path for pure calc bodies, is the planned follow-up and is out of scope here.
