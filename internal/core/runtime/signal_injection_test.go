@@ -306,6 +306,90 @@ func TestSignalIdentityCrossesScopeTrees(t *testing.T) {
 	}
 }
 
+// A message on the bus that the active configuration defers, accepting it
+// nowhere, is the machine's to take: Decide reports it deferred, the step
+// dispatching it holds it, and it fires once a state accepting it is reached.
+// One neither accepted nor deferred is left on the bus.
+func TestPostedMessageTheActiveStateDefersIsHeld(t *testing.T) {
+	src := `
+		attribute def Ping;
+		attribute def Go;
+		attribute def Noise;
+		state def Worker {
+			entry; then busy;
+			state busy { defer Ping; }
+			transition first busy accept Go then ready;
+			state ready;
+			transition first ready accept Ping then finished;
+			state finished;
+		}
+		part def Server { exhibit state worker : Worker; }
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "worker.sysml", parseAndBuild(t, src))
+	root := idx.DocumentRoot("worker.sysml")
+	server, err := ctx.Instantiate(resolveSymbol(t, root, "Server"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	exec := server.behaviors[0].State
+
+	noise, err := ctx.SignalMessage(resolveSymbol(t, root, "Noise"), nil, server)
+	if err != nil {
+		t.Fatalf("SignalMessage(Noise): %v", err)
+	}
+	if exec.AcceptsMessage(noise) {
+		t.Error("Noise, neither accepted nor deferred in busy, is accepted")
+	}
+
+	ping, err := ctx.SignalMessage(resolveSymbol(t, root, "Ping"), nil, server)
+	if err != nil {
+		t.Fatalf("SignalMessage(Ping): %v", err)
+	}
+	if !exec.AcceptsMessage(ping) {
+		t.Fatal("Ping, deferred in busy, is not taken")
+	}
+	if d, err := exec.Decide(ping); err != nil || !d.Deferred || len(d.Fires) != 0 {
+		t.Errorf("Decide(Ping) = %+v, %v; want deferred and nothing firing", d, err)
+	}
+	ctx.PostMessage(ping)
+	if !exec.HasPendingSignal() {
+		t.Fatal("the posted Ping is not pending")
+	}
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Ping): %v", err)
+	}
+	if got := activeLeaf(exec); got != "busy" {
+		t.Fatalf("state after a deferred Ping = %s, want busy", got)
+	}
+	if d, ok := exec.LastDispatch(); !ok || d.Fired || !d.Deferred {
+		t.Errorf("LastDispatch after Ping = %+v, %v; want deferred", d, ok)
+	}
+	if held := exec.DeferredEvents(); len(held) != 1 || len(ctx.PendingMessages()) != 0 {
+		t.Fatalf("Ping held = %d, on the bus = %d; want held once and off the bus", len(held), len(ctx.PendingMessages()))
+	}
+
+	goMsg, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, server)
+	if err != nil {
+		t.Fatalf("SignalMessage(Go): %v", err)
+	}
+	ctx.PostMessage(goMsg)
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Go): %v", err)
+	}
+	if got := activeLeaf(exec); got != "ready" {
+		t.Fatalf("state after Go = %s, want ready", got)
+	}
+	if held := exec.DeferredEvents(); len(held) != 0 || exec.EventQueue().Len() != 1 {
+		t.Fatalf("after leaving busy: held = %d, queued = %d; want Ping recalled to the queue", len(held), exec.EventQueue().Len())
+	}
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(recalled Ping): %v", err)
+	}
+	if got := activeLeaf(exec); got != "finished" {
+		t.Fatalf("state after the recalled Ping = %s, want finished", got)
+	}
+}
+
 // ExhibitedMachineOf finds the machine an object runs by its definition or its
 // usage, and none on an object exhibiting no such machine.
 func TestExhibitedMachineOf(t *testing.T) {

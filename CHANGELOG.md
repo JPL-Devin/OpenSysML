@@ -74,7 +74,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   machine's current state accepts is refused up front with the state named, never queued to be
   dropped in silence — and so is one whose every triggered transition is held back by its guard,
   decided as the dispatch would decide it with the payload bound; a guard that cannot be evaluated
-  is an error. A signal in flight is due now, so a single step dispatches it ahead of a timer set
+  is an error. A signal the current state defers rather than accepts is sent and said to be
+  deferred: the step dispatching it holds it, `%events` lists it as held, and it is recalled to
+  fire once the machine reaches a state that accepts it — as a machine now holds any message
+  addressed to it that its active state defers, instead of leaving it on the bus. A signal in
+  flight is due now, so a single step dispatches it ahead of a timer set
   for later, as a run holding time where it is would; a step that dispatches a signal no transition
   fires on, because the state or the data its guards read changed since it was sent, says so.
 - **`%state <machine> <object>` attaches to the machine the object already runs.** Naming a

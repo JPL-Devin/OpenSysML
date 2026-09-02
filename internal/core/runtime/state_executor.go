@@ -1941,14 +1941,24 @@ func (e *StateExecutor) deliverPendingSignal() bool {
 }
 
 // acceptableMessage reports whether a message in flight is one this machine can
-// react to now. A message routed to a port is for this machine only if a
-// transition out of the active configuration accepts it `via` that port; one
-// routed to no port must also be addressed to the machine.
+// react to now: a transition out of the active configuration accepts it, or a
+// state of the configuration defers it, to be held until one does. A message
+// routed to a port is for this machine only if a transition accepts it `via`
+// that port; one routed to no port must also be addressed to the machine.
 func (e *StateExecutor) acceptableMessage(m Message) bool {
 	if m.Port != "" {
 		return e.acceptsSignal(m)
 	}
-	return m.reaches(e.stateMachine.Name, "", objectID(e.self)) && e.acceptsSignal(m)
+	if !m.reaches(e.stateMachine.Name, "", objectID(e.self)) {
+		return false
+	}
+	return e.acceptsSignal(m) || e.defersMessage(m)
+}
+
+// defersMessage reports whether the active configuration defers a message.
+func (e *StateExecutor) defersMessage(m Message) bool {
+	event := Event{Type: EventAccept, Timestamp: e.currentTime, Payload: m}
+	return e.defersEvent(&event)
 }
 
 // HasPendingSignal reports whether a signal this machine accepts is in flight.
@@ -1959,8 +1969,9 @@ func (e *StateExecutor) HasPendingSignal() bool {
 }
 
 // AcceptsMessage reports whether the active configuration would take a message in
-// flight: it reaches this machine and triggers a transition out of an active state.
-// Whether that transition fires is decided by its guard; see Decide.
+// flight: it reaches this machine and triggers a transition out of an active
+// state, or is deferred by one. Whether a transition fires is decided by its
+// guard; see Decide.
 func (e *StateExecutor) AcceptsMessage(m Message) bool {
 	return e.acceptableMessage(m)
 }
@@ -2505,6 +2516,13 @@ func (e *StateExecutor) SetTrace(trace *TraceRecorder) {
 // EventQueue returns the event queue (not copied - read-only access).
 func (e *StateExecutor) EventQueue() *EventQueue {
 	return e.eventQueue
+}
+
+// DeferredEvents returns the events the active configuration holds deferred, in
+// the order they were deferred; they return to the queue once no active state
+// defers them.
+func (e *StateExecutor) DeferredEvents() []Event {
+	return append([]Event(nil), e.deferred...)
 }
 
 // CurrentTime returns the current simulation time.
