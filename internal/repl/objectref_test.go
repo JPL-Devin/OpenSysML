@@ -112,7 +112,11 @@ func TestCollectionMemberIsNamedByIdentity(t *testing.T) {
 	listing := run(t, s, "%features Depot::garage")
 	bays := listing[strings.Index(listing, "bays = [Instance(ID: "):]
 	bays = bays[:strings.Index(bays, "]")]
+	first := objectIDIn(t, bays)
 	id := objectIDIn(t, bays[strings.LastIndex(bays, "Instance(ID: "):])
+	if first == id {
+		t.Fatalf("bays holds one member #%s, want two", id)
+	}
 
 	features := run(t, s, "%features #"+id)
 	wants(t, features, "Instance: #"+id+" (ID: "+id+")", "level = 10")
@@ -141,7 +145,10 @@ func TestCollectionMemberIsNamedByIdentity(t *testing.T) {
 	}
 	wants(t, run(t, s, "%current"), "waiting")
 	wants(t, run(t, s, "%advance 5"), "Current state: moving")
-	wants(t, run(t, s, "%features #"+id), "moving")
+
+	// The advance drove that member alone: the other is where it started.
+	wants(t, run(t, s, "%state #"+first), `exhibited by object #`+first, "Current state: waiting")
+	wants(t, run(t, s, "%state #"+id), `exhibited by object #`+id, "Current state: moving")
 }
 
 // A path that stops short of an object is a typed error naming the segment that
