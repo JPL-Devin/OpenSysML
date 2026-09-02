@@ -277,10 +277,8 @@ func materializedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
 	}
 }
 
-// nestedObjects returns the objects held in the feature values read yields for
-// an object, in feature-value-name order, each under the name it is reached by:
-// the path through a feature holding it alone, else its `#<n>` identity, which
-// is what nameOf reports for a member of a multi-valued feature.
+// nestedObjects returns the objects held in the feature values read yields, each once, in
+// feature-value-name order, under the first path holding it alone, else its `#<n>` identity.
 func nestedObjects(ctx *runtime.Context, of carrier, read func(string) (*runtime.FeatureValue, bool)) []carrier {
 	fvs := make([]string, 0, len(of.inst.FeatureValues))
 	for name := range of.inst.FeatureValues {
@@ -288,7 +286,23 @@ func nestedObjects(ctx *runtime.Context, of carrier, read func(string) (*runtime
 	}
 	sort.Strings(fvs)
 	_, byIdentity := objectID(of.name)
-	out := make([]carrier, 0, len(fvs))
+	type held struct {
+		child *runtime.Instance
+		alone string
+	}
+	var order []int64
+	reached := make(map[int64]*held)
+	reach := func(child *runtime.Instance, alone string) {
+		h := reached[child.ID]
+		if h == nil {
+			h = &held{child: child}
+			reached[child.ID] = h
+			order = append(order, child.ID)
+		}
+		if h.alone == "" {
+			h.alone = alone
+		}
+	}
 	for _, name := range fvs {
 		fv, ok := read(name)
 		if !ok {
@@ -296,19 +310,24 @@ func nestedObjects(ctx *runtime.Context, of carrier, read func(string) (*runtime
 		}
 		if fv.Values.Kind == runtime.ValInvalid {
 			if child, ok := heldInstance(ctx, fv.Value); ok {
-				if byIdentity {
-					out = append(out, carrier{name: fmt.Sprintf("#%d", child.ID), inst: child})
-				} else {
-					out = append(out, carrier{name: of.name + "::" + name, inst: child})
-				}
+				reach(child, name)
 			}
 			continue
 		}
 		for _, member := range collectionElements(fv.Values) {
 			if child, ok := heldInstance(ctx, member); ok {
-				out = append(out, carrier{name: fmt.Sprintf("#%d", child.ID), inst: child})
+				reach(child, "")
 			}
 		}
+	}
+	out := make([]carrier, 0, len(order))
+	for _, id := range order {
+		h := reached[id]
+		name := fmt.Sprintf("#%d", id)
+		if h.alone != "" && !byIdentity {
+			name = of.name + "::" + h.alone
+		}
+		out = append(out, carrier{name: name, inst: h.child})
 	}
 	return out
 }

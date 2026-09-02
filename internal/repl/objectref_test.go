@@ -387,3 +387,31 @@ func TestNotInstantiatedNamesCollectionMembersByIdentity(t *testing.T) {
 
 	wants(t, run(t, s, "%eval Depot::Rover::level"), "error:", "carried by more than one object of this session (#"+first+", #"+second+")")
 }
+
+// A member of a multi-valued part that a single-valued part of the same owner
+// also holds is reached by that part's path, not its identity — whichever of the
+// owner's feature values is read first — and named so by every surface.
+func TestCollectionMemberHeldAloneElsewhereKeepsItsPath(t *testing.T) {
+	s := loadFixture(t, "testdata/shared_member.sysml")
+	run(t, s, "%instantiate Depot::garage")
+	listing := run(t, s, "%features Depot::garage")
+	bays := listing[strings.Index(listing, "bays = [Instance(ID: "):]
+	bays = bays[:strings.Index(bays, "]")]
+	front := objectIDIn(t, bays)
+	other := objectIDIn(t, bays[strings.LastIndex(bays, "Instance(ID: "):])
+	wants(t, listing, "front = Instance(ID: "+front+")", "lead = Instance(ID: "+front+")")
+
+	got := run(t, s, "%state Depot::Rover::modes Depot::Rover")
+	wants(t, got, `objects #`+front+` of "Depot::garage::front", #`+other+` are typed by it`,
+		"name Depot::garage::front or #"+other+" to address one of them")
+	_, _, err := s.objectRef("Depot::Rover")
+	var nerr *NotInstantiatedError
+	if !errors.As(err, &nerr) || len(nerr.Objects) != 2 || nerr.Objects[0].Name != "Depot::garage::front" || nerr.Objects[1].Name != "" {
+		t.Errorf("got %v (%+v), want the shared member under front's path and the other by identity", err, nerr)
+	}
+
+	wants(t, run(t, s, "%eval Depot::Rover::level"), "carried by more than one object of this session (#"+other+", Depot::garage::front)")
+	wants(t, run(t, s, "%state #"+front), `exhibited by object #`+front+` of "Depot::garage::front"`)
+	wants(t, run(t, s, "%features #"+front), "Instance: Depot::garage::front (ID: "+front+")")
+	wants(t, run(t, s, "%state #"+other), `exhibited by object #`+other+"\n")
+}

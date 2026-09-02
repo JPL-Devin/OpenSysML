@@ -237,16 +237,20 @@ func (s *Session) objectByID(id int64) (*runtime.Instance, string, error) {
 
 // nameOf is the qualified name the session reaches an object by: the name it is
 // materialized under, or the owner's name and the feature holding it alone. An
-// object no session object holds, or one held among others of a multi-valued
-// feature, has none.
+// object no session object holds, or one held only among others of a
+// multi-valued feature, has none.
 func (s *Session) nameOf(inst *runtime.Instance) string {
 	var path []string
 	for depth := 0; inst != nil && depth <= maxFeatureValueDepth; depth++ {
 		if name := s.instanceName(inst); name != "" {
 			return strings.Join(append([]string{name}, path...), "::")
 		}
-		owner, feature := inst.Owner()
-		if owner == nil || feature == "" || !holdsAlone(owner, feature, inst.ID) {
+		owner, _ := inst.Owner()
+		if owner == nil {
+			return ""
+		}
+		feature := holdingAlone(owner, inst.ID)
+		if feature == "" {
 			return ""
 		}
 		path = append([]string{feature}, path...)
@@ -255,15 +259,20 @@ func (s *Session) nameOf(inst *runtime.Instance) string {
 	return ""
 }
 
-// holdsAlone reports whether owner's feature holds the object id as its one value,
-// so owner's name and the feature reach that object and no other.
-func holdsAlone(owner *runtime.Instance, feature string, id int64) bool {
-	fv := owner.FeatureValues[feature]
-	if fv == nil || fv.Values.Kind != runtime.ValInvalid {
-		return false
+// holdingAlone is the first feature of owner, by name, holding the object id as
+// its one value, so owner's name and the feature reach that object and no
+// other; "" when only a multi-valued feature holds it.
+func holdingAlone(owner *runtime.Instance, id int64) string {
+	feature := ""
+	for name, fv := range owner.FeatureValues {
+		if fv == nil || fv.Values.Kind != runtime.ValInvalid || (feature != "" && name > feature) {
+			continue
+		}
+		if held, ok := fv.Value.Object(); ok && held == id {
+			feature = name
+		}
 	}
-	held, ok := fv.Value.Object()
-	return ok && held == id
+	return feature
 }
 
 // objectAt is objectNamed with the reason a name reaches no object: nil with no
