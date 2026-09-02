@@ -136,9 +136,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `String[3]` attribute — reported `unresolved reference`, though the name resolved perfectly well
   and its single-valued neighbours evaluated. A feature the declarations give no value to now reads
   `= <unset>`, as it does on an object; `unresolved reference` is reserved for a name nothing
-  declares. The same distinction holds throughout the evaluator: a declared name with no value is
-  a typed no-value error carrying the name, never an unresolved reference, so a qualified
-  `car::wheels` reports that it has no value to evaluate.
+  declares. Only a bare read of the feature is unset: an expression over one (`unsetMass + 1`) or a
+  feature whose value depends on one still fails, naming the feature that has no value. The same
+  distinction holds throughout the evaluator: a declared name with no value is a typed no-value
+  error carrying the name, never an unresolved reference, so a qualified `car::wheels` reports that
+  it has no value to evaluate.
 
 ## 0.4.3 — 2026-09-01
 

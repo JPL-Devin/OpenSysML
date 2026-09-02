@@ -141,6 +141,7 @@ part def Wheel { attribute radius : Real = 0.3; }
 part def Car {
 	attribute mass : Real = 1500.0;
 	attribute unsetMass : Real;
+	attribute doubled : Real = unsetMass * 2.0;
 	attribute tags : String[3];
 	part w2 : Wheel;
 	part wheels : Wheel[4];
@@ -168,6 +169,25 @@ func TestEvalInDeclarationScopeReadsValuelessFeaturesAsUnset(t *testing.T) {
 	wants(t, run(t, s, "%eval in Car : wheels"), "= "+runtime.UnsetText)
 	// A name nothing declares is still the unresolved name it is.
 	wants(t, run(t, s, "%eval in car : nonexistent"), "unresolved reference: nonexistent")
+}
+
+// Only a bare read of a valueless feature is unset. An operation over one has no
+// result, and a feature whose value depends on one cannot be computed: both are
+// the evaluation failures they are, naming the feature that has no value.
+func TestEvalInDeclarationScopeDoesNotReadCompoundFailuresAsUnset(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	for _, expr := range []string{"unsetMass + 1.0", "mass + unsetMass", "wheels.radius * 2.0", "doubled", "-unsetMass"} {
+		got := run(t, s, "%eval in car : "+expr)
+		wants(t, got, "error", "no value for feature")
+		rejects(t, got, "✓", "= "+runtime.UnsetText, "unresolved reference")
+	}
+	for _, expr := range []string{"car::unsetMass + 1.0", "car::doubled"} {
+		got := run(t, s, "%eval "+expr)
+		rejects(t, got, "✓", "= "+runtime.UnsetText, "has no value to evaluate")
+	}
 }
 
 // Once the object exists, the same features read the values it holds.

@@ -600,9 +600,10 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	val, err := ctx.EvalWithScope(node, scope)
 	if err != nil {
 		// A feature the declarations give no value to reads as unset, as it does
-		// on an object; only a name nothing declares is an error.
+		// on an object; an operation over one fails, and a name nothing declares
+		// is an error.
 		var noValue *runtime.NoValueError
-		if !errors.As(err, &noValue) {
+		if !errors.As(err, &noValue) || !readsFeature(node, noValue.Feature) {
 			return nil, evalError(expr, err, len(exprPrefix))
 		}
 		return []string{
@@ -800,7 +801,7 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		// all; finding no value there is not the unresolved name the lookup saw.
 		var noValue *runtime.NoValueError
 		if lookupErr != nil {
-			if errors.As(err, &noValue) {
+			if errors.As(err, &noValue) && readsFeature(evalUsage.Value, noValue.Feature) {
 				return nil, fmt.Errorf("%q has no value to evaluate", expr)
 			}
 			return nil, lookupErr
@@ -812,6 +813,26 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, nil
+}
+
+// readsFeature reports whether an expression is a bare read — a name, or a
+// chain of names — with feature as one of its links, so that feature having no
+// value is the read's own verdict rather than a failure inside an operation or
+// inside some other feature's default.
+func readsFeature(node ast.Node, feature string) bool {
+	switch n := node.(type) {
+	case *ast.FeatureReference:
+		return readNames(n.Name, feature)
+	case *ast.FeatureChainExpr:
+		return readNames(n.Member, feature) || readsFeature(n.Operand, feature)
+	default:
+		return false
+	}
+}
+
+func readNames(qn *ast.QualifiedName, feature string) bool {
+	return qn != nil && len(qn.Parts) > 0 &&
+		(qnString(qn) == feature || qn.Parts[len(qn.Parts)-1].Text == feature)
 }
 
 // exprPrefix wraps an expression as a declaration of its own, so parsing it
