@@ -15,9 +15,9 @@ pub mod wire {
 
 pub use connection::Connection;
 pub use domain::{
-    Capabilities, Diagnostic, EnumLiteral, EvalOptions, Evaluation, FeatureValue, Instance,
-    Instantiation, Language, Magnitude, Model, ParseOptions, Quantity, ServerInfo, Span, Symbol,
-    UnitFactor, UnitTerm, Value,
+    Capabilities, Complex, Diagnostic, EnumLiteral, EvalOptions, Evaluation, FeatureValue,
+    Instance, Instantiation, Language, Magnitude, Model, ParseOptions, Quantity, ServerInfo, Span,
+    Symbol, UnitFactor, UnitTerm, Value,
 };
 pub use error::{Error, Status};
 

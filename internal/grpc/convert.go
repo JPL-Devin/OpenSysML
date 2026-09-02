@@ -287,9 +287,7 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 		}
 		return &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: lit}}
 	case runtime.ValComplex:
-		// The wire Value has no Complex arm, so a Complex is named unsupported
-		// rather than split into two Reals.
-		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: complex number " + runtime.FormatComplex(val.Complex())}}
+		return &pb.Value{Kind: &pb.Value_Complex{Complex: ComplexToProto(val.Complex())}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}
@@ -309,6 +307,17 @@ func enumLiteralToProto(val runtime.Value, idx *symbols.Index) *pb.EnumLiteral {
 		lit.EnumerationId = idx.GetFQN(enum)
 	}
 	return lit
+}
+
+// ComplexToProto marshals a complex number as its rectangular parts.
+func ComplexToProto(z complex128) *pb.Complex {
+	return &pb.Complex{Real: real(z), Imaginary: imag(z)}
+}
+
+// ProtoToComplex is the complex number a Complex message carries; an empty
+// message is zero, as every proto3 default is.
+func ProtoToComplex(pc *pb.Complex) complex128 {
+	return complex(pc.GetReal(), pc.GetImaginary())
 }
 
 // QuantityToProto marshals a quantity: the magnitude in the unit written, plus
@@ -497,6 +506,8 @@ func protoToScalar(pv *pb.Value) runtime.Value {
 		return runtime.Value{Kind: runtime.ValInstance, Instance: k.InstanceId}
 	case *pb.Value_Null:
 		return runtime.Value{Kind: runtime.ValNull}
+	case *pb.Value_Complex:
+		return runtime.NewComplex(ProtoToComplex(k.Complex))
 	default:
 		return runtime.Value{Kind: runtime.ValNull}
 	}

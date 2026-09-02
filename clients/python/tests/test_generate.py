@@ -151,11 +151,18 @@ def test_element_type_valued_enumeration_maps_to_its_scalar():
     assert mapped.decoder == "_t.as_int"
 
 
-def test_element_type_unmapped_primitive_is_object():
-    """Complex and Number have no sound Python type and say so."""
+def test_element_type_complex_is_a_python_complex():
+    """A Complex slot holds one complex number, never two floats."""
     mapped = element_type(TypeFacts(primitive="Complex"), {})
+    assert mapped.annotation == "complex"
+    assert mapped.decoder == "_t.as_complex"
+
+
+def test_element_type_unmapped_primitive_is_object():
+    """Number has no sound Python type and says so."""
+    mapped = element_type(TypeFacts(primitive="Number"), {})
     assert mapped.annotation == "object"
-    assert "Complex" in mapped.comment
+    assert "Number" in mapped.comment
 
 
 def test_element_type_quantity_is_a_quantity_naming_its_unit():

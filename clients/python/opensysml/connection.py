@@ -1410,6 +1410,10 @@ class Connection:
             return sysml_pb2.Value(int_value=py_value)
         elif isinstance(py_value, float):
             return sysml_pb2.Value(real_value=py_value)
+        elif isinstance(py_value, complex):
+            return sysml_pb2.Value(complex=sysml_pb2.Complex(
+                real=py_value.real, imaginary=py_value.imag,
+            ))
         elif isinstance(py_value, str):
             return sysml_pb2.Value(string_value=py_value)
         elif py_value is None:

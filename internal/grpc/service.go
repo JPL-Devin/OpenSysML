@@ -90,6 +90,10 @@ const CapabilityFeatureValues = "feature_values"
 // documents as one model so a name one declares resolves in another.
 const CapabilityParseSources = "parse_sources"
 
+// CapabilityComplexValues names the capability of carrying a complex number as
+// Value.complex, rather than reporting it as an unsupported null.
+const CapabilityComplexValues = "complex_values"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
@@ -98,7 +102,7 @@ var capabilities = []string{
 	CapabilitySymbolAttributes, CapabilityUnsetValue, CapabilityFeatureValues,
 	CapabilityApplyEdits, CapabilityAuthoring, CapabilityInlineLanguage,
 	CapabilityStrictConformance, CapabilityDocumentQuery, CapabilityRenderDocument,
-	CapabilityParseSources,
+	CapabilityParseSources, CapabilityComplexValues,
 }
 
 type capabilityAvailability struct {

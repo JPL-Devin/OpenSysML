@@ -728,7 +728,7 @@ pub struct AttributeInfo {
 /// Value represents a runtime-evaluable value
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Value {
-    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10")]
+    #[prost(oneof="value::Kind", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11")]
     pub kind: ::core::option::Option<value::Kind>,
 }
 /// Nested message and enum types in `Value`.
@@ -760,7 +760,19 @@ pub mod value {
         /// Always true when set; a value the server sends, never one it accepts.
         #[prost(bool, tag="10")]
         Unset(bool),
+        /// one complex number, never two Reals
+        #[prost(message, tag="11")]
+        Complex(super::Complex),
     }
+}
+/// Complex is one complex number in rectangular form. It crosses as one value
+/// so `1.0 + 2.0i` cannot be mistaken for a sequence of two Reals.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct Complex {
+    #[prost(double, tag="1")]
+    pub real: f64,
+    #[prost(double, tag="2")]
+    pub imaginary: f64,
 }
 /// EnumLiteral is one literal of an enumeration definition. A literal is its own
 /// identity, so it travels as the declaration it names rather than as a number
@@ -889,6 +901,8 @@ pub struct ServerInfoResponse {
     ///    "unset_value" - a valueless feature of a value type is reported as
     ///                   Value.unset, rather than as the empty object it
     ///                   materializes.
+    ///    "complex_values" - a Value carries a complex number as complex, rather
+    ///                   than reporting it as an unsupported null.
     ///    "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
     ///                   preserving everything the edit did not touch.
     ///    "document_query" - the RunDocumentQuery RPC runs a named document query
