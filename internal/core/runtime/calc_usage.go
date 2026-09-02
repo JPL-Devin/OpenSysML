@@ -612,8 +612,9 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 	}
 	// A binding gives the output its value as a write does, so it answers to the
 	// output's declared type and multiplicity the same way.
-	what := fmt.Sprintf("calc %s: output %s", run.shape.Name, run.outputDescription(out))
-	if err := out.Decl.checkBound(ctx, what, value); err != nil {
+	if err := out.Decl.check(ctx, &value, func() string {
+		return fmt.Sprintf("calc %s: output %s", run.shape.Name, run.outputDescription(out))
+	}); err != nil {
 		return Value{}, err
 	}
 	if out.Name != "" {

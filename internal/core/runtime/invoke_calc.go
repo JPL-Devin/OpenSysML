@@ -24,21 +24,19 @@ type calcMemberDecl struct {
 	Owner  *symbols.Symbol
 }
 
-// checkType reports a value outside the declared type, described by what (asked
-// only on refusal, a binding being the hot path); an unknown member is not judged.
-func (d *calcMemberDecl) checkType(ctx *Context, value *Value, what func() string) error {
+// check reports a value outside the declared multiplicity or type, described by
+// what (asked only on refusal, a binding being the hot path); unknown: not judged.
+func (d *calcMemberDecl) check(ctx *Context, value *Value, what func() string) error {
 	if d.Target == nil {
 		return nil
+	}
+	if msg := ctx.writeCountRefusal(d.Target, value); msg != "" {
+		return fmt.Errorf("%s: %w: %s", what(), ErrMultiplicityViolation, msg)
 	}
 	if refusal, refused := ctx.writeTypeRefusal(declScope(d.Owner), d.Target.typ, value); refused {
 		return fmt.Errorf("%s: %w: %s", what(), ErrTypeMismatch, refusal)
 	}
 	return nil
-}
-
-// checkBound reports a value outside the declared type or multiplicity.
-func (d *calcMemberDecl) checkBound(ctx *Context, what string, value Value) error {
-	return ctx.checkWrite(declScope(d.Owner), what, d.Target, value)
 }
 
 // calcMemberDeclOf resolves what a member of link declares for a value bound to it.
@@ -424,7 +422,7 @@ func (ctx *Context) bindCalcParameters(
 		}
 		// The parameter holds the value bound to it, so that value answers to the
 		// parameter's declaration as a written one does.
-		if err := param.Decl.checkType(ctx, &value, func() string {
+		if err := param.Decl.check(ctx, &value, func() string {
 			return fmt.Sprintf("calc %s: %s for parameter %q", shape.Name, source, param.Name)
 		}); err != nil {
 			return err
