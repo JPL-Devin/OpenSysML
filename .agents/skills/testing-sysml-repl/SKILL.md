@@ -5437,3 +5437,32 @@ The committed walkthroughs to diff a demo run against are
 `examples/disposal-robot-demo/README.md` and — for `action-executor-demo.sysml`, whose own
 `examples/ACTION-EXECUTOR-DEMO.md` is only a pointer — `docs/guide/06-behavior.md`
 ("Token-flow patterns").
+
+## Parse-memoization / "reuse across invocations" refactors in `internal/repl`
+
+When a PR caches what command text parsed to (argument lists for `%calc`, the name a run
+target is looked up by for `%calc`/`%action`/`%state`/`%instantiate`), repeated successful calls
+prove almost nothing — a cache that wrongly held *evaluated values* would print the same `= 8`.
+The shape that actually distinguishes working from broken:
+
+- **Identical text, changed state.** `attribute k = 2;` → `%calc add k 1` → `= 3`; then type
+  `attribute k = 10;` at the prompt (this *replaces* the member, `note: replaced attribute k`, no
+  `%clear` needed) and re-run the byte-identical `%calc add k 1` → must be `= 11`. Then `%clear`,
+  redeclare only the calc, and the same text must fail with
+  `error: evaluation of argument "k" failed: unresolved reference: k`; declare `k` again and it
+  works. A `= 3` after the redeclaration is the stale-cache signature.
+- **Re-submit the target's definition** (`package 'My Pkg' { calc def add { … x * y … } }` →
+  `note: added to the existing package 'My Pkg', replacing calc def add`) and re-run the
+  identical `%calc 'My Pkg'::add 1 2` — the cached *name* must still resolve to the new symbol.
+- **Spacing variants are distinct keys**: run `%calc add 5 3` and `%calc add 5  3` both; the echo
+  line normalizes to `add(5, 3)` for both, so the check is only that the value is right.
+- **Malformed input twice**, comparing each pair byte for byte: `%calc add (5 3` →
+  `error: failed to parse argument "(5 3"`; `%calc add a=1 2` →
+  `error: named arguments are not supported here; pass arguments positionally`; `%calc add 5` →
+  `error: calc invocation failed: unbound parameter: calc add parameter "y" has no argument and no default`.
+  A cached parse error must be reported identically, and `%eval 1 + 1` → `= 2` afterwards shows
+  the session survived.
+- **Pipe the whole script through the parent-commit binary too** (contrast recipe above) and
+  `diff` the outputs — an empty diff over ~150 lines is the strongest "behavior unchanged"
+  evidence and takes seconds. Fixture scripts used for this live under `~/fixtures/pr765/` when
+  that session's box is still around; otherwise rebuild from the bullets above.
