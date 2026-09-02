@@ -326,7 +326,10 @@ func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) e
 		spans[i] = member.Span()
 	}
 	regions := e.src.tile(spans)
-	if len(regions) > 0 && ownerTerm.Value != "" {
+	// Members written on their owner's own lines, such as an accept's payload,
+	// are part of its text: the owner is written whole or rebuilt whole.
+	inline := !e.src.wholeLines(regions)
+	if !inline && len(regions) > 0 && ownerTerm.Value != "" {
 		body := region{regions[0].start, regions[len(regions)-1].end}
 		if prior, ok := e.bodies[ownerTerm]; ok {
 			body = region{min(prior.start, body.start), max(prior.end, body.end)}
@@ -338,7 +341,7 @@ func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) e
 		if node == nil {
 			continue
 		}
-		if err := e.encodeMember(node, visibility, regions[i], owner, ownerTerm, i); err != nil {
+		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i); err != nil {
 			return err
 		}
 	}
@@ -359,8 +362,8 @@ func (e *encoder) kept(members []ast.Node) []ast.Node {
 }
 
 // encodeMember maps one member: node is the declaration inside its membership
-// wrapper, and lines the text of the member, wrapper and all.
-func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines region, owner string, ownerTerm rdf.Term, index int) error {
+// wrapper, and lines the text of the member, wrapper and all, unless inline.
+func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines region, inline bool, owner string, ownerTerm rdf.Term, index int) error {
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
 	subject := e.ids.subjectForNode(node, fqn)
@@ -380,7 +383,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		// IRI ends in, so the two cannot disagree.
 		e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
 		e.graph.Add(subject, e.sysx(xMemberIndex), rdf.Int(index))
-		e.regions[subject] = lines
+		if !inline {
+			e.regions[subject] = lines
+		}
 		if e.ids.declaredIDAt(node) {
 			e.graph.Add(subject, e.sysx(xDeclaredID), rdf.Bool(true))
 		}
@@ -584,7 +589,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			e.graph.Add(subject, e.sysml(pAnnotatedElement), e.reference(owner, qualifiedText(about)))
 		}
 		if n.Locale != "" {
-			e.graph.Add(subject, e.sysml(pLocale), rdf.String(unquote(n.Locale)))
+			e.graph.Add(subject, e.sysml(pLocale), rdf.String(lexer.StringValue(n.Locale)))
 		}
 		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.src.slice(n.BodySpan))))
 		return nil
@@ -593,7 +598,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		head(rdf.SysMLTerm("Documentation"))
 		e.ident(subject, n.Ident)
 		if n.Locale != "" {
-			e.graph.Add(subject, e.sysml(pLocale), rdf.String(unquote(n.Locale)))
+			e.graph.Add(subject, e.sysml(pLocale), rdf.String(lexer.StringValue(n.Locale)))
 		}
 		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.src.slice(n.BodySpan))))
 		return nil
@@ -601,7 +606,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 	case *ast.TextualRepresentation:
 		head(rdf.SysMLTerm("TextualRepresentation"))
 		e.ident(subject, n.Ident)
-		e.graph.Add(subject, e.sysml(pLanguage), rdf.String(unquote(n.Language)))
+		e.graph.Add(subject, e.sysml(pLanguage), rdf.String(lexer.StringValue(n.Language)))
 		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.src.slice(n.BodySpan))))
 		return nil
 

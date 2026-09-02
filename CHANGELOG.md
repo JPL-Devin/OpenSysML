@@ -63,7 +63,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   each element whose text no longer states its triples — a flag set, a value changed, a member
   removed or an identity annotation dropped after the export — is written canonically instead,
   with `@IdentityMetadata::ElementId` and `ProjectRef` materialized exactly as for a graph without
-  text; text that no longer parses demotes the whole file. A graph without `sysx:sourceText` — from
+  text; text that no longer parses demotes the whole file. A member written on its owner's lines,
+  such as an accept's payload, carries no text of its own, so an edit to it rebuilds the owner
+  whole rather than splicing a line into it. A `LiteralString` node's `sysml:value` is now the value
+  the notation's escapes read to rather than the text between the quotes, and a value edited in the
+  graph is written back as a literal that reads to it, whatever characters it holds. A graph without `sysx:sourceText` — from
   another tool, or stripped — converts as before, and the round-trip tests keep stripping it to
   prove the structural predicates carry the model; each fixture under
   `internal/core/export/testdata/convert` now locks both notations. The

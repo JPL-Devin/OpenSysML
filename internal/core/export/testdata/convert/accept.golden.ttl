@@ -108,8 +108,7 @@ elmt:Accepts__Observe__trigger
     sysml:ownedRelationship elmt:Accepts__Observe__trigger__scene_om ;
     sysml:ownedFeature elmt:Accepts__Observe__trigger__scene ;
     sysml:ownedFeatureMembership elmt:Accepts__Observe__trigger__scene_om ;
-    sysx:sourceText "        action trigger accept" ;
-    sysx:sourceTail ";\n" .
+    sysx:sourceText "        action trigger accept scene : Scene;\n" .
 
 elmt:Accepts__Observe__trigger_om
     a sysml:FeatureMembership ;
@@ -138,8 +137,7 @@ elmt:Accepts__Observe__trigger__scene
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:type elmt:Accepts__Scene ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " scene : Scene" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Accepts__Observe__trigger__scene_om
     a sysml:FeatureMembership ;
@@ -225,8 +223,7 @@ elmt:Accepts__Watch__framed
     sysml:ownedRelationship elmt:Accepts__Watch__framed__scene_om ;
     sysml:ownedFeature elmt:Accepts__Watch__framed__scene ;
     sysml:ownedFeatureMembership elmt:Accepts__Watch__framed__scene_om ;
-    sysx:sourceText "        action framed accept" ;
-    sysx:sourceTail " via lens;\n" .
+    sysx:sourceText "        action framed accept scene : Scene via lens;\n" .
 
 elmt:Accepts__Watch__framed_om
     a sysml:FeatureMembership ;
@@ -255,8 +252,7 @@ elmt:Accepts__Watch__framed__scene
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:type elmt:Accepts__Scene ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " scene : Scene" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Accepts__Watch__framed__scene_om
     a sysml:FeatureMembership ;

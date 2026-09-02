@@ -169,8 +169,7 @@ elmt:StateMachine__VehicleStates__off___400
     sysml:memberElement elmt:StateMachine__VehicleStates__off___400___400 ;
     sysml:ownedMemberElement elmt:StateMachine__VehicleStates__off___400___400 ;
     sysml:ownedMemberFeature elmt:StateMachine__VehicleStates__off___400___400 ;
-    sysx:sourceText "            entry" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "            entry perform Warm;\n" .
 
 elmt:StateMachine__VehicleStates__off___400___400
     a sysml:ActionUsage ;
@@ -183,8 +182,7 @@ elmt:StateMachine__VehicleStates__off___400___400
     sysml:owningMembership elmt:StateMachine__VehicleStates__off___400 ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:StateMachine__Warm ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " perform Warm;\n" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__VehicleStates__starting
     a sysml:StateUsage ;
@@ -227,8 +225,7 @@ elmt:StateMachine__VehicleStates__starting___400
     sysml:memberElement elmt:StateMachine__VehicleStates__starting___400__ready ;
     sysml:ownedMemberElement elmt:StateMachine__VehicleStates__starting___400__ready ;
     sysml:ownedMemberFeature elmt:StateMachine__VehicleStates__starting___400__ready ;
-    sysx:sourceText "            entry" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "            entry action ready : Warm;\n" .
 
 elmt:StateMachine__VehicleStates__starting___400__ready
     a sysml:ActionUsage ;
@@ -241,8 +238,7 @@ elmt:StateMachine__VehicleStates__starting___400__ready
     sysml:owningMembership elmt:StateMachine__VehicleStates__starting___400 ;
     sysml:declaredName "ready" ;
     sysml:type elmt:StateMachine__Warm ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " action ready : Warm;\n" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__VehicleStates__starting___401
     a sysml:StateSubactionMembership ;
@@ -258,8 +254,7 @@ elmt:StateMachine__VehicleStates__starting___401
     sysml:memberElement elmt:StateMachine__VehicleStates__starting___401__running ;
     sysml:ownedMemberElement elmt:StateMachine__VehicleStates__starting___401__running ;
     sysml:ownedMemberFeature elmt:StateMachine__VehicleStates__starting___401__running ;
-    sysx:sourceText "            do" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "            do action running : Warm;\n" .
 
 elmt:StateMachine__VehicleStates__starting___401__running
     a sysml:ActionUsage ;
@@ -272,8 +267,7 @@ elmt:StateMachine__VehicleStates__starting___401__running
     sysml:owningMembership elmt:StateMachine__VehicleStates__starting___401 ;
     sysml:declaredName "running" ;
     sysml:type elmt:StateMachine__Warm ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " action running : Warm;\n" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__VehicleStates__starting___402
     a sysml:StateSubactionMembership ;
@@ -289,8 +283,7 @@ elmt:StateMachine__VehicleStates__starting___402
     sysml:memberElement elmt:StateMachine__VehicleStates__starting___402___400 ;
     sysml:ownedMemberElement elmt:StateMachine__VehicleStates__starting___402___400 ;
     sysml:ownedMemberFeature elmt:StateMachine__VehicleStates__starting___402___400 ;
-    sysx:sourceText "            exit" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "            exit perform Warm;\n" .
 
 elmt:StateMachine__VehicleStates__starting___402___400
     a sysml:ActionUsage ;
@@ -303,8 +296,7 @@ elmt:StateMachine__VehicleStates__starting___402___400
     sysml:owningMembership elmt:StateMachine__VehicleStates__starting___402 ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:StateMachine__Warm ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " perform Warm;\n" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__VehicleStates__active
     a sysml:StateUsage ;
@@ -351,8 +343,7 @@ elmt:StateMachine__VehicleStates__active___400
     sysml:memberElement elmt:StateMachine__VehicleStates__active___400__monitor ;
     sysml:ownedMemberElement elmt:StateMachine__VehicleStates__active___400__monitor ;
     sysml:ownedMemberFeature elmt:StateMachine__VehicleStates__active___400__monitor ;
-    sysx:sourceText "            do" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "            do action monitor : Warm;\n" .
 
 elmt:StateMachine__VehicleStates__active___400__monitor
     a sysml:ActionUsage ;
@@ -365,8 +356,7 @@ elmt:StateMachine__VehicleStates__active___400__monitor
     sysml:owningMembership elmt:StateMachine__VehicleStates__active___400 ;
     sysml:declaredName "monitor" ;
     sysml:type elmt:StateMachine__Warm ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " action monitor : Warm;\n" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__VehicleStates__active___401
     a sysml:TransitionUsage ;
@@ -480,8 +470,7 @@ elmt:StateMachine__VehicleStates__active_5fto_5foff
     sysml:ownedRelationship elmt:StateMachine__VehicleStates__active_5fto_5foff__stop_om ;
     sysml:ownedFeature elmt:StateMachine__VehicleStates__active_5fto_5foff__stop ;
     sysml:ownedFeatureMembership elmt:StateMachine__VehicleStates__active_5fto_5foff__stop_om ;
-    sysx:sourceText "        transition active_to_off first active accept sig : Signal via lane if monitor do" ;
-    sysx:sourceTail " then off;\n" .
+    sysx:sourceText "        transition active_to_off first active accept sig : Signal via lane if monitor do action stop : Warm then off;\n" .
 
 elmt:StateMachine__VehicleStates__active_5fto_5foff_om
     a sysml:FeatureMembership ;
@@ -512,8 +501,7 @@ elmt:StateMachine__VehicleStates__active_5fto_5foff__stop
     sysml:owningMembership elmt:StateMachine__VehicleStates__active_5fto_5foff__stop_om ;
     sysml:declaredName "stop" ;
     sysml:type elmt:StateMachine__Warm ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " action stop : Warm" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__VehicleStates__active_5fto_5foff__stop_om
     a sysml:FeatureMembership ;
@@ -654,8 +642,7 @@ elmt:StateMachine__Nested__idle__substate___400
     sysml:memberElement elmt:StateMachine__Nested__idle__substate___400___400 ;
     sysml:ownedMemberElement elmt:StateMachine__Nested__idle__substate___400___400 ;
     sysml:ownedMemberFeature elmt:StateMachine__Nested__idle__substate___400___400 ;
-    sysx:sourceText "                entry" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "                entry perform Warm;\n" .
 
 elmt:StateMachine__Nested__idle__substate___400___400
     a sysml:ActionUsage ;
@@ -668,8 +655,7 @@ elmt:StateMachine__Nested__idle__substate___400___400
     sysml:owningMembership elmt:StateMachine__Nested__idle__substate___400 ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:StateMachine__Warm ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " perform Warm;\n" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:StateMachine__Composite
     a sysml:StateDefinition ;
@@ -801,8 +787,7 @@ elmt:StateMachine__Composite___404
     sysml:memberElement elmt:StateMachine__Composite___404___400 ;
     sysml:ownedMemberElement elmt:StateMachine__Composite___404___400 ;
     sysml:ownedMemberFeature elmt:StateMachine__Composite___404___400 ;
-    sysx:sourceText "        entry" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "        entry action {\n            perform Warm;\n        }\n" .
 
 elmt:StateMachine__Composite___404___400
     a sysml:ActionUsage ;
@@ -818,9 +803,7 @@ elmt:StateMachine__Composite___404___400
     sysml:ownedMembership elmt:StateMachine__Composite___404___400___400_om ;
     sysml:ownedRelationship elmt:StateMachine__Composite___404___400___400_om ;
     sysml:ownedFeature elmt:StateMachine__Composite___404___400___400 ;
-    sysml:ownedFeatureMembership elmt:StateMachine__Composite___404___400___400_om ;
-    sysx:sourceText " action {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysml:ownedFeatureMembership elmt:StateMachine__Composite___404___400___400_om .
 
 elmt:StateMachine__Composite___404___400___400
     a sysml:ActionUsage ;

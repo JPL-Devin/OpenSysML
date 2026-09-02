@@ -201,6 +201,85 @@ func TestEditedExpressionDoesNotResurrectStaleText(t *testing.T) {
 	}
 }
 
+// A string edited in the graph comes back as the literal the lexer reads to
+// that value, whatever characters it holds.
+func TestEditedStringValueIsWrittenAsALiteral(t *testing.T) {
+	turtle := idTurtle(t, `package P {
+    attribute label : String = "plain"; // the label
+    attribute count : Integer = 2; // and the count
+}
+`)
+	const value = "say \"hi\"\\\n\t\r\b\f"
+	turtle = editTurtle(t, turtle, `sysml:value "plain"`, "sysml:value "+quoteLiteral(value))
+	back := toNotation(t, turtle)
+	want := `package P {
+    attribute label : String = "say \"hi\"\\\n\t\r\b\f";
+    attribute count : Integer = 2; // and the count
+}
+`
+	if back != want {
+		t.Errorf("the edited string did not win:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	again := idTurtle(t, back)
+	if !strings.Contains(string(again), quoteLiteral(value)) {
+		t.Errorf("the notation does not state the edited value %q:\n%s", value, again)
+	}
+	if got, want := structural(t, again), structural(t, turtle); got != want {
+		t.Errorf("the notation does not state the edited graph:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+}
+
+// quoteLiteral writes a value as the Turtle literal the writer emits.
+func quoteLiteral(value string) string {
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\r", `\r`, "\t", `\t`)
+	return `"` + r.Replace(value) + `"`
+}
+
+// structural is a Turtle document without its source text.
+func structural(t *testing.T, turtle []byte) string {
+	t.Helper()
+	return string(withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:sourceTail"))
+}
+
+// A member written on its owner's lines, such as an accept's payload, has no
+// text of its own: an edit to it rebuilds the whole construct, and only that.
+func TestEditedInlineMemberRebuildsItsConstruct(t *testing.T) {
+	turtle := idTurtle(t, `// The drive, as modelled.
+package Accepts {
+    attribute def Cmd;
+    attribute def Other;
+    action def Drive {
+        // waits for a command
+        accept sig : Cmd;
+        // then goes
+        action go;
+    }
+}
+`)
+	if strings.Contains(string(turtle), `sysx:sourceText "        accept`) || strings.Contains(string(turtle), `sysx:sourceTail ";`) {
+		t.Fatalf("the accept is split across its payload:\n%s", turtle)
+	}
+	turtle = editTurtle(t, turtle, "sysml:type elmt:Accepts__Cmd ;", "sysml:type elmt:Accepts__Other ;")
+	back := toNotation(t, turtle)
+	want := `// The drive, as modelled.
+package Accepts {
+    attribute def Cmd;
+    attribute def Other;
+    action def Drive {
+        accept sig : Other;
+        // then goes
+        action go;
+    }
+}
+`
+	if back != want {
+		t.Errorf("the edited payload did not rebuild its accept alone:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	if got, want := structural(t, idTurtle(t, back)), structural(t, turtle); got != want {
+		t.Errorf("the notation does not state the edited graph:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+}
+
 // A syntax error cannot be checked against the graph or pinned on one element,
 // so the whole document falls back to canonical notation.
 func TestUnparsableSourceTextIsIgnored(t *testing.T) {

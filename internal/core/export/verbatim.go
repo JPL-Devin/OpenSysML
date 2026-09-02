@@ -16,6 +16,7 @@ import (
 func (d *decoder) render(roots []*element) (string, error) {
 	for {
 		d.printed = map[*element]bool{}
+		d.rebuilt = map[*element]bool{}
 		d.usedExpr = map[string]bool{}
 		if err := d.resolveExpressions(); err != nil {
 			return "", err
@@ -88,12 +89,13 @@ func (d *decoder) demoteStale(notation string) {
 		if el == nil && expr == "" && t.Object.IsIRI() {
 			el, expr = d.blame(t.Object.Value, check)
 		}
+		// One landing on notation already rebuilt is the graph's own, not its text's.
 		switch {
-		case el != nil:
+		case el != nil && d.printed[el]:
 			d.demoted[el] = true
 		case expr != "":
 			d.demotedExpr[expr] = true
-		default:
+		case el == nil:
 			d.demoteAll()
 			return
 		}
@@ -154,11 +156,12 @@ func (d *decoder) blame(iri string, check *rdf.Graph) (*element, string) {
 	return nil, expr
 }
 
-// nearestVerbatim returns the element itself if it is written as its text, or
-// else the nearest owner that is.
+// nearestVerbatim returns the element whose notation a disagreement over el
+// falls in: the nearest of el and its owners that was written at all. One
+// already rebuilt canonically is returned as is, so the blame stops there.
 func (d *decoder) nearestVerbatim(el *element) *element {
 	for x := el; x != nil; x = x.owner {
-		if d.printed[x] {
+		if d.printed[x] || d.rebuilt[x] {
 			return x
 		}
 	}
@@ -169,7 +172,7 @@ func (d *decoder) nearestVerbatim(el *element) *element {
 // nearest verbatim owner.
 func (d *decoder) verbatimMemberAt(owner *element, index int) *element {
 	for _, child := range owner.children {
-		if child.memberIndex == index && d.printed[child] {
+		if child.memberIndex == index && (d.printed[child] || d.rebuilt[child]) {
 			return child
 		}
 	}

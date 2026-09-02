@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
@@ -87,7 +88,7 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 
 	case *ast.LiteralString:
 		e.typed(subject, mLiteralString)
-		e.graph.Add(subject, e.sysml(pValue), rdf.String(unquote(n.Value)))
+		e.graph.Add(subject, e.sysml(pValue), rdf.String(lexer.StringValue(n.Value)))
 
 	case *ast.LiteralInteger:
 		e.typed(subject, mLiteralInteger)
@@ -300,7 +301,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 		if !ok {
 			return "", unsupported("a literal expression states the value it evaluates to")
 		}
-		return `"` + value + `"`, nil
+		return lexer.StringText(value), nil
 	case mLiteralInfinity:
 		return "*", nil
 	case mNullExpression:

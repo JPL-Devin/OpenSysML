@@ -540,8 +540,7 @@ elmt:ActionNodes__Drive___4015
     sysml:ownedRelationship elmt:ActionNodes__Drive___4015___400_om ;
     sysml:ownedFeature elmt:ActionNodes__Drive___4015___400 ;
     sysml:ownedFeatureMembership elmt:ActionNodes__Drive___4015___400_om ;
-    sysx:sourceText "        accept" ;
-    sysx:sourceTail ";\n" .
+    sysx:sourceText "        accept when speed > 0;\n" .
 
 elmt:ActionNodes__Drive___4015_om
     a sysml:FeatureMembership ;
@@ -569,8 +568,7 @@ elmt:ActionNodes__Drive___4015___400
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:value expr:ActionNodes__Drive___4015___400_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText " when speed > 0" .
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:ActionNodes__Drive___4015___400_om
     a sysml:FeatureMembership ;

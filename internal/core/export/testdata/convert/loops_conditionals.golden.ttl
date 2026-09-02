@@ -505,8 +505,7 @@ elmt:LoopsAndConditionals__Control___407
     sysml:ownedMember elmt:LoopsAndConditionals__Control___407___400 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___407___400_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control___407___400_om ;
-    sysx:sourceText "        if count > 0" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "        if count > 0 {\n            perform tick;\n        }\n" .
 
 elmt:LoopsAndConditionals__Control___407_om
     a sysml:FeatureMembership ;
@@ -554,9 +553,7 @@ elmt:LoopsAndConditionals__Control___407___400
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___407___400___400 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___407___400___400_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___407___400___400_om ;
-    sysx:sourceText " {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___407___400___400_om .
 
 elmt:LoopsAndConditionals__Control___407___400_om
     a sysml:OwningMembership ;
@@ -605,8 +602,7 @@ elmt:LoopsAndConditionals__Control___408
     sysml:ownedMember elmt:LoopsAndConditionals__Control___408___400, elmt:LoopsAndConditionals__Control___408___401 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___408___400_om, elmt:LoopsAndConditionals__Control___408___401_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___400_om, elmt:LoopsAndConditionals__Control___408___401_om ;
-    sysx:sourceText "        if count > 0" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "        if count > 0 {\n            perform tick;\n        } else {\n            assign total := 0;\n        }\n" .
 
 elmt:LoopsAndConditionals__Control___408_om
     a sysml:FeatureMembership ;
@@ -654,9 +650,7 @@ elmt:LoopsAndConditionals__Control___408___400
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___408___400___400 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___408___400___400_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___400___400_om ;
-    sysx:sourceText " {\n" ;
-    sysx:sourceTail "        }" .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___400___400_om .
 
 elmt:LoopsAndConditionals__Control___408___400_om
     a sysml:OwningMembership ;
@@ -705,9 +699,7 @@ elmt:LoopsAndConditionals__Control___408___401
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___408___401___400 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___408___401___400_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___401___400_om ;
-    sysx:sourceText " else {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___401___400_om .
 
 elmt:LoopsAndConditionals__Control___408___401_om
     a sysml:OwningMembership ;
@@ -768,8 +760,7 @@ elmt:LoopsAndConditionals__Control___409
     sysml:ownedMember elmt:LoopsAndConditionals__Control___409___400, elmt:LoopsAndConditionals__Control___409___401 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___400_om, elmt:LoopsAndConditionals__Control___409___401_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___400_om, elmt:LoopsAndConditionals__Control___409___401_om ;
-    sysx:sourceText "        if count > 0" ;
-    sysx:sourceTail "" .
+    sysx:sourceText "        if count > 0 {\n            perform tick;\n        } else if total > 0 {\n            assign total := 0;\n        }\n" .
 
 elmt:LoopsAndConditionals__Control___409_om
     a sysml:FeatureMembership ;
@@ -817,9 +808,7 @@ elmt:LoopsAndConditionals__Control___409___400
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___409___400___400 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___400___400_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___400___400_om ;
-    sysx:sourceText " {\n" ;
-    sysx:sourceTail "        }" .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___400___400_om .
 
 elmt:LoopsAndConditionals__Control___409___400_om
     a sysml:OwningMembership ;
@@ -868,9 +857,7 @@ elmt:LoopsAndConditionals__Control___409___401
     sysx:hasBody "false"^^xsd:boolean ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___409___401___400 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___401___400_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___401___400_om ;
-    sysx:sourceText " else" ;
-    sysx:sourceTail "" .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___401___400_om .
 
 elmt:LoopsAndConditionals__Control___409___401_om
     a sysml:OwningMembership ;
@@ -894,9 +881,7 @@ elmt:LoopsAndConditionals__Control___409___401___400
     sysx:condition expr:LoopsAndConditionals__Control___409___401___400_pcondition ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___409___401___400___400 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___401___400___400_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___401___400___400_om ;
-    sysx:sourceText " if total > 0" ;
-    sysx:sourceTail "" .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___401___400___400_om .
 
 elmt:LoopsAndConditionals__Control___409___401___400_om
     a sysml:OwningMembership ;
@@ -942,9 +927,7 @@ elmt:LoopsAndConditionals__Control___409___401___400___400
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___409___401___400___400___400 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___401___400___400___400_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___401___400___400___400_om ;
-    sysx:sourceText " {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___401___400___400___400_om .
 
 elmt:LoopsAndConditionals__Control___409___401___400___400_om
     a sysml:OwningMembership ;

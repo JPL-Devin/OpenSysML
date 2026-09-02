@@ -113,6 +113,20 @@ func (s *formattedSource) tile(spans []source.Span) []region {
 	return out
 }
 
+// wholeLines reports whether every region starts and ends on a line boundary,
+// so each can be written or replaced on its own.
+func (s *formattedSource) wholeLines(regions []region) bool {
+	for _, r := range regions {
+		if r.start > 0 && s.text[r.start-1] != '\n' {
+			return false
+		}
+		if r.end < len(s.text) && r.end > 0 && s.text[r.end-1] != '\n' {
+			return false
+		}
+	}
+	return true
+}
+
 // split returns the text of an element apart from its members: the lines up to
 // the first member, and those after the last.
 func (s *formattedSource) split(own, members region) (head, tail string) {

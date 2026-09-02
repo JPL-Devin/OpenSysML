@@ -631,8 +631,7 @@ elmt:FlowsAndViews__vehicleView
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:FlowsAndViews__vehicleView___400 ;
     sysml:ownedImport elmt:FlowsAndViews__vehicleView___400 ;
-    sysx:sourceText "    view vehicleView : StructureView {\n" ;
-    sysx:sourceTail ";\n    }\n" .
+    sysx:sourceText "    view vehicleView : StructureView {\n        expose vehicle::**;\n    }\n" .
 
 elmt:FlowsAndViews__vehicleView_om
     a sysml:OwningMembership ;
@@ -658,5 +657,4 @@ elmt:FlowsAndViews__vehicleView___400
     sysml:isImportAll "true"^^xsd:boolean ;
     sysx:isRecursive "true"^^xsd:boolean ;
     sysx:isExpose "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText "        expose vehicle::**" .
+    sysx:hasBody "false"^^xsd:boolean .

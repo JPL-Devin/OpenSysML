@@ -231,8 +231,11 @@ blank lines ahead of a member belong to it, and a comment on its last line too.
 An element with members carries the lines ahead of its first member as
 `sysx:sourceText` and those after its last as `sysx:sourceTail`, since the
 members carry their own; a `package P { … }` is written as its head, its
-members in `sysx:memberIndex` order, and its `}`. Expression nodes carry
-`sysx:sourceText` too, as described under [Expressions](#expressions).
+members in `sysx:memberIndex` order, and its `}`. A member written on its
+owner's own lines — an accept's payload (`accept sig : Cmd;`), the branches of
+an `if` — carries no text of its own: it is part of its owner's text, and an
+edit to it rebuilds the owner whole rather than splicing one line. Expression
+nodes carry `sysx:sourceText` too, as described under [Expressions](#expressions).
 
 The text is the notation **as the formatter writes it**: the encoder formats the
 file before slicing it, and the decoder formats what it writes back, so a
@@ -271,7 +274,9 @@ Here `sysml:isAbstract` was added to `Hub` after the export: its line — and th
 note that was written above it — is rebuilt from the graph, and every other
 line is kept. Text that no longer parses, or whose disagreement cannot be placed
 on one element, demotes every element to canonical notation rather than writing
-an invalid or contradictory file. Identity annotations follow the same rule:
+an invalid or contradictory file; one that lands on notation already rebuilt is
+the graph's own (a `declaredName` edited without its `qualifiedName`) and
+demotes nothing further. Identity annotations follow the same rule:
 text that still carries its `@IdentityMetadata::ElementId` or `ProjectRef` is
 kept as written, and text that has lost one is rebuilt with the annotation the
 graph states, exactly as a graph without text is written
@@ -284,8 +289,9 @@ spelled canonically. That path is what the round-trip tests exercise — see
 [Limitations](#limitations) — and this one adds to it rather than replacing it.
 
 Tests: `verbatim_test.go` (byte-for-byte return, the stripped graph's canonical
-notation, an edited flag, an edited expression, a removed member, dropped
-identity annotations, text that does not parse) and `export_test.go`
+notation, an edited flag, an edited expression, an edited string, an edited
+accept payload, a removed member, dropped identity annotations, text that does
+not parse) and `export_test.go`
 (`TestGoldenConversions` locks both notations for every fixture).
 
 ### Ownership
@@ -419,6 +425,9 @@ The rules the tree follows:
   `MetadataAccessExpression`, `Expression` for a body. `sysx:operator`,
   `sysx:argumentIndex` and `sysx:sourceText` are the properties the metamodel
   does not define.
+- **A `LiteralString` carries its value**, the escapes of the notation read: a
+  `"say \"hi\""` in the file is `sysml:value "say \"hi\""` in Turtle, and a
+  value edited in the graph is written back as the literal that reads to it.
 - **A feature reference links to the element** it names (`sysml:referent`) when
   that element is in the graph, and carries its name as a literal when it
   resolves outside it, the same rule the declaration-head relationships follow.

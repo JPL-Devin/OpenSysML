@@ -141,9 +141,10 @@ type decoder struct {
 	// the member each one owns.
 	memberships      map[string]membership
 	owningMembership map[string]membership
-	// printed and usedExpr are written as source text in this pass; demoted
-	// and demotedExpr had their text proved stale in an earlier one.
+	// printed and usedExpr are written as source text in this pass and rebuilt
+	// canonically; demoted and demotedExpr had their text proved stale earlier.
 	printed     map[*element]bool
+	rebuilt     map[*element]bool
 	demoted     map[*element]bool
 	usedExpr    map[string]bool
 	demotedExpr map[string]bool
@@ -412,6 +413,7 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		}
 		return nil
 	}
+	d.rebuilt[el] = true
 	if handled, err := d.printBehavior(b, el, lead, depth); handled {
 		return err
 	}
@@ -479,13 +481,13 @@ func identityAnnotations(el *element) []string {
 			{"projectId", el.projectID}, {"branch", el.branch}, {"org", el.org},
 		} {
 			if f.value != "" {
-				fields = append(fields, fmt.Sprintf("%s = %s;", f.name, strconv.Quote(f.value)))
+				fields = append(fields, fmt.Sprintf("%s = %s;", f.name, lexer.StringText(f.value)))
 			}
 		}
 		out = append(out, "@IdentityMetadata::ProjectRef { "+strings.Join(fields, " ")+" }")
 	}
 	if el.declaredID || (el.elementID != "" && el.elementID != rdf.EncodeElementID(el.qname)) {
-		out = append(out, fmt.Sprintf("@IdentityMetadata::ElementId { id = %s; }", strconv.Quote(el.elementID)))
+		out = append(out, fmt.Sprintf("@IdentityMetadata::ElementId { id = %s; }", lexer.StringText(el.elementID)))
 	}
 	return out
 }
@@ -1039,7 +1041,7 @@ func (d *decoder) representationHead(el *element) (string, error) {
 		return "", d.missing(el, sysmlPrefix+pLanguage, "a textual representation states the language it is written in")
 	}
 	body, _ := d.stringOf(el, rdf.SysML+pBody)
-	words = append(words, "language", strconv.Quote(language))
+	words = append(words, "language", lexer.StringText(language))
 	return strings.Join(words, " ") + " /*" + body + "*/", nil
 }
 
@@ -1067,7 +1069,7 @@ func (d *decoder) localeWords(el *element) []string {
 	if !ok {
 		return nil
 	}
-	return []string{"locale", strconv.Quote(locale)}
+	return []string{"locale", lexer.StringText(locale)}
 }
 
 // keywordOr returns the kind keyword the author wrote, falling back to the
