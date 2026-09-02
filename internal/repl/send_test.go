@@ -301,6 +301,36 @@ func TestStateOnAnObjectAttachesToItsRunningMachine(t *testing.T) {
 	wants(t, run(t, s, "%state Lamps::Bulb::lamp bulb"), `✓ Debugging state machine "lamp" exhibited by object #1`, "Attached to the machine already running")
 }
 
+// TestStateOnASecondMachineFollowsItOverARestart: a session attached to the
+// second of an object's machines stays on that machine when an unrelated
+// declaration restarts the object's machines, rather than falling back to the
+// first.
+func TestStateOnASecondMachineFollowsItOverARestart(t *testing.T) {
+	s := loadFixture(t, "testdata/two_machines.sysml")
+	run(t, s, "%instantiate Twins::unit")
+	wants(t, run(t, s, "%state Twins::Fan Twins::unit"),
+		`✓ Debugging state machine "fan" exhibited by object #1 of "Twins::unit"`,
+		"Attached to the machine already running", "Current state: still")
+	run(t, s, "%send spin")
+	wants(t, run(t, s, "%advance 1"), "Current state: spinning")
+
+	res := s.Submit("package Other { part def Unrelated; }")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("unrelated declaration has diagnostics: %v", res.Diagnostics)
+	}
+	wants(t, strings.Join(res.Notices, "\n"), "2 behaviors of carried-over objects were restarted")
+
+	// The restarted fan, not the restarted heater: it is still, and takes spin.
+	wants(t, run(t, s, "%current"), "Current state: still")
+	wants(t, run(t, s, "%send spin"), `Accepted by state machine "Fan" in state still`)
+	wants(t, run(t, s, "%advance 1"), "Current state: spinning")
+	wants(t, run(t, s, "%send heat"), `accepts no signal heat now: state machine "Fan" in state spinning`)
+
+	// The heater was restarted beside it, and is found by its definition.
+	run(t, s, "%stop")
+	wants(t, run(t, s, "%state Twins::Heater Twins::unit"), `Debugging state machine "heater"`, "Attached to the machine already running", "Current state: cold")
+}
+
 // TestStateOnAnObjectStartsWhatItDoesNotRun: an object exhibiting no machine of
 // the definition gets a fresh executor performed on its behalf, and says so.
 func TestStateOnAnObjectStartsWhatItDoesNotRun(t *testing.T) {

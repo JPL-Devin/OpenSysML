@@ -1979,12 +1979,14 @@ func (d Decision) Enabled() bool {
 
 // Decide decides a message as the step dispatching it would — the payload bound,
 // the guards evaluated against the data as it stands — without taking it. The
-// machine, its data and the message are left as they were found; an occurrence
-// built to bind the payload is discarded. A payload or guard error is returned.
+// machine, its data, its budget and the message are left as they were found; an
+// occurrence built to bind the payload is discarded. A payload or guard error is
+// returned.
 func (e *StateExecutor) Decide(m Message) (Decision, error) {
 	if !e.acceptableMessage(m) {
 		return Decision{}, nil
 	}
+	defer e.ctx.beginProbe()()
 	mark := len(e.ctx.created)
 	defer e.ctx.abandonInstancesSince(mark)
 	probe := m

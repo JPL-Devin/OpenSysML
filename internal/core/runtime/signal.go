@@ -732,7 +732,7 @@ func (ctx *Context) messageMatches(m Message, want *ast.QualifiedName, scope *sy
 	}
 	if m.Signal != nil && ctx.model != nil {
 		if wantSym := ctx.resolveTypeRef(scope, want); wantSym != nil {
-			return ctx.model.Conforms(m.Signal, wantSym)
+			return ctx.conforms(m.Signal, wantSym)
 		}
 	}
 	return m.carriesSignal(want.Parts[len(want.Parts)-1].Text)

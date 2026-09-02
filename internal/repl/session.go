@@ -179,6 +179,9 @@ type stateSession struct {
 	selfFQN  string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
+	// exhibited is the object's own machine the session drives, nil when it
+	// drives an execution of its own.
+	exhibited *runtime.ObjectBehavior
 	// rtCtx is the context the executor runs in; see actionSession.rtCtx.
 	rtCtx *runtime.Context
 	// now is the debugger's clock. The executor's own clock only moves when an
@@ -824,20 +827,23 @@ func (s *Session) rebindRestartedMachine() {
 	// Only a session over an object's own exhibited machine follows the restart:
 	// a machine the object merely performs is the debugger's own execution, which
 	// no restart replaced.
-	if s.stateExec == nil || s.stateExec.selfFQN == "" || s.stateExec.fqn != s.stateExec.selfFQN {
+	if s.stateExec == nil || s.stateExec.exhibited == nil {
 		return
 	}
 	inst, ok := s.instances[s.stateExec.selfFQN]
 	if !ok {
 		return
 	}
-	behavior, ok := inst.ExhibitedState()
+	// The restart put a machine under the same binding, so a session over the
+	// second of an object's machines stays on the second.
+	behavior, ok := inst.ExhibitedMachineLike(s.stateExec.exhibited)
 	if !ok || behavior.State == s.stateExec.executor {
 		return
 	}
 	behavior.State.SetTrace(s.trace)
 	s.stateExec.symbol = behavior.Symbol
 	s.stateExec.executor = behavior.State
+	s.stateExec.exhibited = behavior
 	s.stateExec.rtCtx = s.rtCtx
 	s.stateExec.now = behavior.State.CurrentTime()
 }

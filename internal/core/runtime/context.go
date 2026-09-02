@@ -283,6 +283,27 @@ func (ctx *Context) Model() *semantics.Model {
 	return ctx.model
 }
 
+// conforms is the model's conformance across scope trees: the index and a
+// document each build a symbol of their own for one declaration, so a symbol
+// conforms to another declared by the same node as it or one of its supertypes.
+func (ctx *Context) conforms(a, b *symbols.Symbol) bool {
+	if ctx.model.Conforms(a, b) {
+		return true
+	}
+	if a == nil || b == nil || b.Decl == nil {
+		return false
+	}
+	if a.Decl == b.Decl {
+		return true
+	}
+	for _, sup := range ctx.model.AllSupertypes(a) {
+		if sup != nil && sup.Decl == b.Decl {
+			return true
+		}
+	}
+	return false
+}
+
 // Resolver returns the name resolver this context resolves references with.
 func (ctx *Context) Resolver() *resolve.Resolver {
 	return ctx.resolver
@@ -346,6 +367,17 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 	*started = true
 	ctx.runDepth++
 	return func() { ctx.runDepth-- }
+}
+
+// beginProbe brackets an evaluation previewing what a run would do: it spends the
+// run's budget while it lasts, so a runaway stays bounded, and refunds it after.
+func (ctx *Context) beginProbe() func() {
+	steps, elements := ctx.steps, ctx.elements
+	ctx.runDepth++
+	return func() {
+		ctx.runDepth--
+		ctx.steps, ctx.elements = steps, elements
+	}
 }
 
 // newActivation begins one activation: the identity of a single execution of a

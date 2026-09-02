@@ -28,6 +28,9 @@ type ObjectBehavior struct {
 	// member is the declaration binding the behavior to the object's type, which
 	// tells two behaviors apart even when neither is named.
 	member *symbols.Symbol
+	// binding is member's position among the type's behavior bindings, which
+	// outlives the symbols and so tells the behavior a restart puts in its place.
+	binding int
 	// State is the machine the object exhibits, nil for a performed action.
 	State *StateExecutor
 	// Action is the action the object performs, nil for an exhibited machine.
@@ -96,6 +99,21 @@ func (inst *Instance) ExhibitedState() (*ObjectBehavior, bool) {
 	return nil, false
 }
 
+// ExhibitedMachineLike returns the machine the object exhibits under the same
+// binding as the given one: the machine a restart put in its place. False when
+// the object exhibits none such.
+func (inst *Instance) ExhibitedMachineLike(prev *ObjectBehavior) (*ObjectBehavior, bool) {
+	if prev == nil {
+		return nil, false
+	}
+	for _, b := range inst.behaviors {
+		if b.Kind == lower.ExhibitedState && b.binding == prev.binding && b.Name == prev.Name {
+			return b, true
+		}
+	}
+	return nil, false
+}
+
 // ExhibitedMachineOf returns the machine the object exhibits that is, or is
 // typed by, the given state definition or usage; false when it runs none.
 func (ctx *Context) ExhibitedMachineOf(inst *Instance, machine *symbols.Symbol) (*ObjectBehavior, bool) {
@@ -106,7 +124,7 @@ func (ctx *Context) ExhibitedMachineOf(inst *Instance, machine *symbols.Symbol) 
 		if b.Kind != lower.ExhibitedState {
 			continue
 		}
-		if ctx.model.Conforms(b.member, machine) || ctx.model.Conforms(b.Symbol, machine) {
+		if ctx.conforms(b.member, machine) || ctx.conforms(b.Symbol, machine) {
 			return b, true
 		}
 	}
@@ -252,7 +270,7 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 // startBehaviorsOf attaches the object's behaviors and, at the outermost start,
 // runs everything attached.
 func (ctx *Context) startBehaviorsOf(inst *Instance) error {
-	for _, decl := range ctx.classifierBehaviorsOf(inst.Type) {
+	for i, decl := range ctx.classifierBehaviorsOf(inst.Type) {
 		if inst.runsBound(decl.member) {
 			continue
 		}
@@ -263,6 +281,7 @@ func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 		if err != nil {
 			return err
 		}
+		behavior.binding = i
 		inst.behaviors = append(inst.behaviors, behavior)
 		ctx.pendingBehaviors = append(ctx.pendingBehaviors, behavior)
 		ctx.objectBehaviors = append(ctx.objectBehaviors, behavior)

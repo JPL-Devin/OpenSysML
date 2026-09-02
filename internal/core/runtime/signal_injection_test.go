@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 const lampSource = `
@@ -186,6 +188,121 @@ func TestProcessNextEventTakesAPendingSignalBeforeALaterTimer(t *testing.T) {
 	}
 	if exec.CurrentTime() != 0 {
 		t.Errorf("time = %v, want 0: dispatching the signal advances no clock", exec.CurrentTime())
+	}
+}
+
+// Deciding spends the run's budget only while it lasts: the guard it evaluates
+// costs the run nothing afterwards, so a dispatch the budget allows on its own
+// is not failed by the preflight before it — while a guard the budget cannot
+// cover still fails the preflight rather than running on.
+func TestDecideRefundsTheBudgetItSpends(t *testing.T) {
+	lampOn := func(t *testing.T) (*Context, *StateExecutor, Message) {
+		t.Helper()
+		idx, _, ctx := buildRuntimeWithLibraries(t, "lamp.sysml", parseAndBuild(t, lampSource))
+		root := idx.DocumentRoot("lamp.sysml")
+		bulb, err := ctx.Instantiate(resolveSymbol(t, root, "Bulb"))
+		if err != nil {
+			t.Fatalf("Instantiate: %v", err)
+		}
+		behavior, _ := bulb.ExhibitedState()
+		on, err := ctx.SignalMessage(resolveSymbol(t, root, "go"), nil, bulb)
+		if err != nil {
+			t.Fatalf("SignalMessage(go): %v", err)
+		}
+		ctx.PostMessage(on)
+		if err := behavior.State.ProcessNextEvent(); err != nil {
+			t.Fatalf("ProcessNextEvent(go): %v", err)
+		}
+		dim, err := ctx.SignalMessage(resolveSymbol(t, root, "Dim"), map[string]Value{"level": integerValue(7)}, bulb)
+		if err != nil {
+			t.Fatalf("SignalMessage(Dim): %v", err)
+		}
+		return ctx, behavior.State, dim
+	}
+
+	// What dispatching Dim costs on its own, guard and effect included.
+	ctx, exec, dim := lampOn(t)
+	spent := ctx.steps
+	ctx.PostMessage(dim)
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Dim): %v", err)
+	}
+	cost := ctx.steps - spent
+	if cost <= 0 || activeLeaf(exec) != "dimmed" {
+		t.Fatalf("dispatching Dim cost %d steps and reached %s; want a cost and dimmed", cost, activeLeaf(exec))
+	}
+
+	// A budget with exactly that left: deciding first leaves it whole, so the
+	// dispatch still fits.
+	ctx, exec, dim = lampOn(t)
+	ctx.maxSteps = ctx.steps + cost
+	steps, elements := ctx.steps, ctx.elements
+	if d, err := exec.Decide(dim); err != nil || len(d.Fires) != 1 {
+		t.Fatalf("Decide(Dim) = %+v, %v; want on_dim firing", d, err)
+	}
+	if ctx.steps != steps || ctx.elements != elements {
+		t.Errorf("deciding charged the run %d steps and %d elements", ctx.steps-steps, ctx.elements-elements)
+	}
+	ctx.PostMessage(dim)
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Dim) after deciding: %v", err)
+	}
+	if got := activeLeaf(exec); got != "dimmed" {
+		t.Errorf("state after Dim = %s, want dimmed", got)
+	}
+
+	// No budget left: the guard is still bounded, and the refund still made.
+	ctx, exec, dim = lampOn(t)
+	ctx.maxSteps = ctx.steps
+	steps = ctx.steps
+	if _, err := exec.Decide(dim); !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("Decide(Dim) with no budget gave %v, want ErrStepLimitExceeded", err)
+	}
+	if ctx.steps != steps || ctx.runDepth != 0 {
+		t.Errorf("a failed preflight left %d steps charged and %d runs open", ctx.steps-steps, ctx.runDepth)
+	}
+}
+
+// A signal typed by a symbol from another scope tree over the same document —
+// as a REPL command names it, while a carried-over machine resolves in the
+// index's tree — is the same declaration: the machine accepts it, and the
+// definition finds the machine.
+func TestSignalIdentityCrossesScopeTrees(t *testing.T) {
+	file := parseAndBuild(t, lampSource)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "lamp.sysml", file)
+	bulb, err := ctx.Instantiate(resolveSymbol(t, idx.DocumentRoot("lamp.sysml"), "Bulb"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	exec := bulb.behaviors[0].State
+
+	other := symbols.Build(file)
+	goSym := resolveSymbol(t, other, "go")
+	if indexed := resolveSymbol(t, idx.DocumentRoot("lamp.sysml"), "go"); indexed == goSym || indexed.Decl != goSym.Decl {
+		t.Fatalf("the trees share a symbol or differ in declaration: %p vs %p", indexed, goSym)
+	}
+	msg, err := ctx.SignalMessage(goSym, nil, bulb)
+	if err != nil {
+		t.Fatalf("SignalMessage(go): %v", err)
+	}
+	if !exec.AcceptsMessage(msg) {
+		t.Fatal("go typed from another tree is not accepted in off")
+	}
+	if d, err := exec.Decide(msg); err != nil || len(d.Fires) != 1 {
+		t.Errorf("Decide(go) = %+v, %v; want off_on firing", d, err)
+	}
+	batch, err := ctx.SignalMessage(resolveSymbol(t, other, "Batch"), nil, bulb)
+	if err != nil {
+		t.Fatalf("SignalMessage(Batch): %v", err)
+	}
+	if exec.AcceptsMessage(batch) {
+		t.Error("Batch is accepted in off, though no transition there takes it")
+	}
+	if m, ok := ctx.ExhibitedMachineOf(bulb, resolveSymbol(t, other, "Lamp")); !ok || m.State != exec {
+		t.Errorf("ExhibitedMachineOf(bulb, Lamp from another tree) = %v, %v; want the lamp", m, ok)
+	}
+	if _, ok := ctx.ExhibitedMachineOf(bulb, resolveSymbol(t, other, "Plain")); ok {
+		t.Error("ExhibitedMachineOf(bulb, Plain) found a machine")
 	}
 }
 
