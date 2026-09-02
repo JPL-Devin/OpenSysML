@@ -50,6 +50,22 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the apply against the real stack — an initial load, a revision with a retained-id rename and
   gated deletes, a conflict staged behind the sync's back — and records what read back at the
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+- **Action and state execution has a referee outside the executor.** Six conformance cases —
+  a join fed by branches of unequal length, a join fed twice over one succession, a node two
+  successions reach, two fork branches writing one feature, the specification's `ChargeBattery`
+  merge loop, and a transition's guard, exit, effect and entry made observable through values —
+  carry expected outcomes and traces derived by hand from the Kernel Semantic Library
+  (`Occurrences.kerml` `HappensBefore`, `Performances.kerml`, `ControlPerformances.kerml`,
+  `StatePerformances.kerml`, `TransitionPerformances.kerml`) and the Systems Library
+  (`Actions.sysml`), not recorded from the executor. The derivation, sentence by sentence, and
+  the orderings the library leaves open are in
+  [the semantic oracle record](docs/project/behavior-semantic-oracle.md). Three cases state what
+  the executor does not do yet and are listed as known failures rather than recorded as goldens:
+  a join fires on the count of parked tokens instead of one per incoming succession and then
+  deadlocks, a node reached over two successions is performed twice, and a merge admits one
+  traversal per run so a loop is left after its first pass. The executor is unchanged; the
+  compliance rows for the join, the merge and concurrent same-feature writes cite the cases and
+  stay approximate.
 - **The RDF round trip is measured over every example, and pinned per file.** `TestCorpusRoundTrip`
   converts each of the 345 models under `examples/` — the committed models, the OMG training
   corpus and the three pilot corpora — notation → Turtle → notation → Turtle and compares the two
@@ -128,6 +144,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Changed
 
+- **An OSLC query reports a selected property under the name it was asked for.** `sysml
+  -query 'oslc.where=rdf:type="PartUsage"&oslc.select=rdf:type'` and the REPL's `%query`
+  used to report the property as `@type=PartUsage`, a Go API name that the query text
+  refuses, so a reported row could not be written back into a query; the rows now read
+  `rdf:type=PartUsage`, `sysml:name=battery`, `sysml:owner=Robot::Platform`, and a prefix
+  rebound by `oslc.prefix` renames the property in the answer as well. The gRPC response
+  still keys properties by the query property names the structured `query` field uses.
+  A reported value is a bare name, which the grammar wants quoted, so refusing one now
+  names the form to write: `sysml:name=battery` answers with `write a name as a quoted
+  literal "battery"` instead of only `invalid OSLC value "battery"`. Since a property is
+  reported under one name, `oslc.select` naming the same property twice — as
+  `sysml:name,sysml:name`, or as two prefixes bound to the SysML namespace — is now refused
+  rather than reported twice under whichever name came last.
 - **The documentation site's landing page describes the four oracles instead of quoting their
   totals.** The band below the hero used to state the differential's agreeing-file count, the Xpect
   suites' declared-diagnostic and scope tallies, the rejection corpus's size and the pilot pin, all
