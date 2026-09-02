@@ -350,6 +350,32 @@ func TestExprInvocationOptionalParameterMayBeOmitted(t *testing.T) {
 	wantNoDiags(t, `package P { calc c { ControlFunctions::'if'(false, 1) } }`)
 }
 
+func TestExprInvocationRedefinedParameterKeepsInheritedOptionality(t *testing.T) {
+	// A redefinition stating no multiplicity or default keeps the inherited ones.
+	const model = `package P {
+		calc def Scale {
+			in x : ScalarValues::Integer;
+			in by : ScalarValues::Integer[0..1];
+			in times : ScalarValues::Integer = 1;
+			x
+		}
+		calc def Scaled :> Scale {
+			in redefines by;
+			in redefines times : ScalarValues::Integer;
+			x
+		}
+		calc def Tight :> Scale {
+			in redefines by : ScalarValues::Integer[1];
+			x
+		}
+		calc c { %s }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `Scaled(2)`))
+	wantNoDiags(t, fmt.Sprintf(model, `Scaled(2, 3, 4)`))
+	wantOneDiag(t, fmt.Sprintf(model, `Scaled()`), "Scaled requires 1 argument(s), found 0")
+	wantOneDiag(t, fmt.Sprintf(model, `Tight(2)`), "Tight requires 2 argument(s), found 1")
+}
+
 func TestExprInvocationThroughAliasChecksArguments(t *testing.T) {
 	const model = `package P {
 		` + calcAdd + `

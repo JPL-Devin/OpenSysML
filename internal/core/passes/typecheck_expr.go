@@ -700,7 +700,7 @@ func (ec *exprChecker) checkArguments(
 	}
 	required := 0
 	for _, p := range params {
-		if p.usage.Value == nil && !ec.model.IsOptionalParameter(p.usage) {
+		if p.required(ec.model) {
 			required++
 		}
 	}
@@ -831,6 +831,25 @@ func isRequirementDeclaration(decl ast.Node) bool {
 type parameter struct {
 	usage *ast.Usage
 	owner *symbols.Symbol
+	// redefined is the inherited parameter this declaration redefines, whose
+	// default and multiplicity it keeps where it states none (KerML 1.0 §7.3.4.5).
+	redefined *parameter
+}
+
+// required reports whether an invocation must supply the parameter: it has no
+// default, its own or inherited, and its multiplicity admits no omission.
+func (p parameter) required(m *semantics.Model) bool {
+	for q := &p; q != nil; q = q.redefined {
+		if q.usage.Value != nil {
+			return false
+		}
+	}
+	for q := &p; q != nil; q = q.redefined {
+		if q.usage.Multiplicity != nil {
+			return !m.IsOptionalParameter(q.usage)
+		}
+	}
+	return true
 }
 
 // name returns the name the parameter answers to, which a declaration written
@@ -919,7 +938,7 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 	merged := make([]parameter, 0, len(declared)+len(inherited))
 	claimed := make([]bool, len(inherited))
 	for position, u := range declared {
-		merged = append(merged, parameter{usage: u, owner: sym})
+		p := parameter{usage: u, owner: sym}
 		i := indexOfRedefined(inherited, u)
 		if i < 0 {
 			i = position
@@ -928,7 +947,9 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 		// inherited parameter there stays in the list.
 		if i < len(inherited) && inherited[i].usage.Direction == u.Direction {
 			claimed[i] = true
+			p.redefined = &inherited[i]
 		}
+		merged = append(merged, p)
 	}
 	for i, p := range inherited {
 		if !claimed[i] {
