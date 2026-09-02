@@ -27,16 +27,16 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 120,
-        "digest": "sha256:1807bc173996cee5a9776a987e3bec4409245d16bdbb0d71e6b4d362b60cd81f"
+        "files": 162,
+        "digest": "sha256:987815d394de06fba78f057be356f76fe6fc972639f24d4c300cc2d9f1b0f048"
       }
     ],
     "recorded": "2026-09-02"
   },
   "totals": {
-    "cases": 120,
-    "bothReject": 120,
-    "pilotOnlyRejects": 0,
+    "cases": 162,
+    "bothReject": 149,
+    "pilotOnlyRejects": 13,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -58,6 +58,14 @@
       "cases": 79,
       "bothReject": 79,
       "pilotOnlyRejects": 0,
+      "oursOnlyRejects": 0,
+      "bothAccept": 0
+    },
+    {
+      "source": "semantic",
+      "cases": 42,
+      "bothReject": 29,
+      "pilotOnlyRejects": 13,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
@@ -858,6 +866,423 @@
       "pilotErrors": 4
     },
     {
+      "path": "semantic/k01-two-owned-multiplicities.kerml",
+      "source": "semantic",
+      "rule": "a type may own at most one multiplicity (KerML 8.3.3.1 validateTypeOwnedMultiplicity; pilot validateTypeOwnedMultiplicity).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k02-differences-one-type.kerml",
+      "source": "semantic",
+      "rule": "a type cannot difference exactly one type (KerML 8.3.3.1 validateTypeOwnedDifferencingNotOne; pilot validateOwnedDifferencingNotOne).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k03-intersects-one-type.kerml",
+      "source": "semantic",
+      "rule": "a type cannot intersect exactly one type (KerML 8.3.3.1 validateTypeOwnedIntersectingNotOne; pilot validateOwnedIntersectingNotOne).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k04-unions-one-type.kerml",
+      "source": "semantic",
+      "rule": "a type cannot union exactly one type (KerML 8.3.3.1 validateTypeOwnedUnioningNotOne; pilot validateOwnedUnioningNotOne).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k05-differences-self.kerml",
+      "source": "semantic",
+      "rule": "a type cannot difference with itself (KerML 8.3.3.1 validateTypeDifferencingTypesNotSelf; pilot validateTypeDifferencingTypesNotSelf).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k06-intersects-self.kerml",
+      "source": "semantic",
+      "rule": "a type cannot intersect with itself (KerML 8.3.3.1 validateTypeIntersectingTypesNotSelf; pilot validateTypeIntersectingTypesNotSelf).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k07-unions-self.kerml",
+      "source": "semantic",
+      "rule": "a type cannot union with itself (KerML 8.3.3.1 validateTypeUnioningTypesNotSelf; pilot validateTypeUnioningTypesNotSelf).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k08-conjugated-type-specialized.kerml",
+      "source": "semantic",
+      "rule": "a conjugated type cannot be the specific type of a specialization (KerML 8.3.3.1 validateSpecializationSpecificNotConjugated; pilot validateSpecializationSpecificNotConjugated).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k09-two-reference-subsettings.kerml",
+      "source": "semantic",
+      "rule": "a feature may own at most one reference subsetting (KerML 8.3.3.3 validateFeatureOwnedReferenceSubsetting; pilot validateFeatureOwnedReferenceSubsetting).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k10-portion-var-feature.kerml",
+      "source": "semantic",
+      "rule": "a portion feature cannot be variable (KerML 8.3.3.3 validateFeaturePortionNotVariable; pilot validateFeaturePortionNotVariable).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k11-initial-value-nonvariable.kerml",
+      "source": "semantic",
+      "rule": "only a variable feature can have an initial value (KerML 8.4.4.9 validateFeatureValueIsInitial; pilot validateFeatureValueIsInitial).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 4: Initialized feature must be variable"
+      ]
+    },
+    {
+      "path": "semantic/k12-chain-through-self.kerml",
+      "source": "semantic",
+      "rule": "a feature cannot have itself in its feature chain (KerML 8.3.3.3 validateFeatureChainingFeaturesNotSelf; pilot validateFeatureChainingFeaturesNotSelf).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k13-subsets-inaccessible-feature.kerml",
+      "source": "semantic",
+      "rule": "a subsetted feature must be accessible from the subsetting feature (KerML 8.3.3.3 validateSubsettingFeaturingTypes; pilot validateSubsettingFeaturingTypes).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k14-variable-subsets-constant.kerml",
+      "source": "semantic",
+      "rule": "a variable feature cannot subset a constant one unless it is constant (KerML 8.3.3.3 validateSubsettingConstantConformance; pilot validateSubsettingConstantConformance).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k15-nonend-redefines-end.kerml",
+      "source": "semantic",
+      "rule": "a feature redefining an end feature within an association must be an end (KerML 8.3.3.3 validateRedefinitionEndConformance; pilot validateRedefinitionEndConformance).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k16-crosses-from-nonend.kerml",
+      "source": "semantic",
+      "rule": "a cross subsetting must be owned by an end feature of a type with two or more ends (KerML 8.3.3.3 validateCrossSubsettingCrossingFeature; pilot validateCrossSubsettingCrossingFeature).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 5: Cross subsetting must be owned by one of two or more end features"
+      ]
+    },
+    {
+      "path": "semantic/k17-crosses-not-through-opposite-end.kerml",
+      "source": "semantic",
+      "rule": "a crossed feature must chain through the opposite end feature (KerML 8.3.3.3 validateCrossSubsettingCrossedFeature; pilot validateCrossSubsettingCrossedFeature).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 6: Cross subsetting must chain through an opposite end feature"
+      ]
+    },
+    {
+      "path": "semantic/k18-cross-feature-type-differs.kerml",
+      "source": "semantic",
+      "rule": "a cross feature must have the same type as its end feature (KerML 8.3.3.3 validateFeatureCrossFeatureType; pilot validateFeatureCrossFeatureType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k19-cross-feature-not-specializing.kerml",
+      "source": "semantic",
+      "rule": "a cross feature must specialize the cross features of redefined ends (KerML 8.3.3.3 validateFeatureCrossFeatureSpecialization; pilot validateFeatureCrossFeatureSpecialization).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 13: Cross feature must specialized redefined-end cross features"
+      ]
+    },
+    {
+      "path": "semantic/k20-datatype-specializes-class.kerml",
+      "source": "semantic",
+      "rule": "a data type cannot specialize a class (KerML 8.3.3.4.1 validateDataTypeSpecialization; pilot validateDataTypeSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k21-class-specializes-datatype.kerml",
+      "source": "semantic",
+      "rule": "a class cannot specialize a data type (KerML 8.3.3.4.2 validateClassSpecialization; pilot validateClassSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k22-struct-specializes-behavior.kerml",
+      "source": "semantic",
+      "rule": "a structure cannot specialize a behavior (KerML 8.3.3.4.3 validateStructureSpecialization; pilot validateStructureSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k23-behavior-specializes-struct.kerml",
+      "source": "semantic",
+      "rule": "a behavior cannot specialize a structure (KerML 8.3.4.2 validateBehaviorSpecialization; pilot validateBehaviorSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k24-binary-assoc-three-ends.kerml",
+      "source": "semantic",
+      "rule": "an association specializing BinaryLink cannot have more than two ends (KerML 8.3.3.5 validateAssociationBinarySpecialization; pilot validateAssociationBinarySpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k25-assoc-one-end.kerml",
+      "source": "semantic",
+      "rule": "a concrete association must have at least two related types (KerML 8.3.3.5 validateAssociationRelatedTypes; pilot validateAssociationRelatedTypes).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 4: Must have at least two related elements"
+      ]
+    },
+    {
+      "path": "semantic/k26-binary-connector-three-ends.kerml",
+      "source": "semantic",
+      "rule": "a connector typed by BinaryLink cannot have more than two ends (KerML 8.3.4.1 validateConnectorBinarySpecialization; pilot validateConnectorBinarySpecialization).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 7: Cannot have more than two ends"
+      ]
+    },
+    {
+      "path": "semantic/k27-connector-feature-outside-featuring-type.kerml",
+      "source": "semantic",
+      "rule": "a connector's related features must be featured within its featuring types; here the implicit binding connector of a feature reference expression (KerML 8.3.4.1 validateConnectorTypeFeaturing; pilot validateConnectorTypeFeaturing).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k28-expr-two-return-parameters.kerml",
+      "source": "semantic",
+      "rule": "an expression may own at most one return parameter (KerML 8.3.4.8 validateExpressionResultParameterMembership; pilot validateExpressionResultParameterMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k29-function-inherits-second-result-expression.kerml",
+      "source": "semantic",
+      "rule": "a function may have only one owned or inherited result expression (KerML 8.3.4.8 validateFunctionResultExpressionMembership; pilot validateFunctionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k30-expr-inherits-second-result-expression.kerml",
+      "source": "semantic",
+      "rule": "an expression may have only one owned or inherited result expression (KerML 8.3.4.8 validateExpressionResultExpressionMembership; pilot validateExpressionResultExpressionMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k31-invoke-class.kerml",
+      "source": "semantic",
+      "rule": "an invocation expression must invoke a behavior or behavioral feature (KerML 8.3.4.8 validateInvocationExpressionInstantiatedType; pilot validateInvocationExpressionInstantiatedType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k32-too-many-arguments.kerml",
+      "source": "semantic",
+      "rule": "every invocation argument must correspond to one input parameter of the invoked type (KerML 8.3.4.8 validateInvocationExpressionParameterRedefinition; pilot validateInvocationExpressionParameterRedefinition).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/k33-parameter-bound-twice.kerml",
+      "source": "semantic",
+      "rule": "an invocation cannot bind the same parameter twice (KerML 8.3.4.8 validateInvocationExpressionNoDuplicateParameterRedefinition; pilot validateInvocationExpressionNoDuplicateParameterRedefinition).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 6: Parameter already bound"
+      ]
+    },
+    {
+      "path": "semantic/k34-constructor-feature-bound-twice.kerml",
+      "source": "semantic",
+      "rule": "a constructor expression cannot bind the same feature twice (KerML 8.3.4.8 validateConstructorExpressionNoDuplicateFeatureRedefinition; pilot validateConstructorExpressionNoDuplicateFeatureRedefinition).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 6: Feature already bound"
+      ]
+    },
+    {
+      "path": "semantic/k35-metadata-annotates-wrong-kind.kerml",
+      "source": "semantic",
+      "rule": "a metadata feature's annotated element must conform to its annotatedElement redefinition (KerML 8.3.4.11 validateMetadataFeatureAnnotatedElement; pilot validateMetadataFeatureAnnotatedElement).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 9: Cannot annotate Feature"
+      ]
+    },
+    {
+      "path": "semantic/k36-metadata-body-redefines-outside.kerml",
+      "source": "semantic",
+      "rule": "a metadata body feature must redefine a feature of the metaclass (KerML 8.3.4.11 validateMetadataFeatureBody; pilot validateMetadataFeatureBody).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 7: Must redefine an owning-type feature"
+      ]
+    },
+    {
+      "path": "semantic/k37-multiplicity-bound-not-natural.kerml",
+      "source": "semantic",
+      "rule": "a multiplicity bound must have a Natural value (KerML 8.3.3.6 validateMultiplicityRangeResultTypes; pilot validateMultiplicityRangeResultTypes).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 5: Must have a Natural value"
+      ]
+    },
+    {
+      "path": "semantic/k38-flow-end-without-dot-notation.kerml",
+      "source": "semantic",
+      "rule": "a flow end must subset an identifiable feature through dot notation (KerML 8.3.4.9 validateFlowEndSubsetting; pilot validateFlowEndSubsetting).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 3
+    },
+    {
+      "path": "semantic/k39-feature-reference-to-class.kerml",
+      "source": "semantic",
+      "rule": "a feature reference expression must refer to a feature (KerML 8.3.4.8 validateFeatureReferenceExpressionReferentIsFeature; pilot validateFeatureReferenceExpressionReferentIsFeature).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/k40-metadata-typed-by-class.kerml",
+      "source": "semantic",
+      "rule": "a metadata feature must be typed by a metaclass, not an ordinary class (KerML 8.3.4.11 validateMetadataFeatureMetadata; pilot validateMetadataFeatureMetadata).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 5: Must have a concrete type"
+      ]
+    },
+    {
+      "path": "semantic/k41-chain-expression-to-nested-class.kerml",
+      "source": "semantic",
+      "rule": "the target of a feature chain expression must be a feature of the source's type (KerML 8.3.4.8 validateFeatureChainExpressionFeatureConformance; pilot validateFeatureChainExpressionFeatureConformance).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/s80-constant-attribute-not-variable.sysml",
+      "source": "semantic",
+      "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 5: Only a variable feature can be constant"
+      ]
+    },
+    {
       "path": "xpect/p01-public-root-import.kerml",
       "source": "xpect",
       "rule": "a root-namespace import must be private (KerML 8.2.3.5.2 validateImportTopLevelVisibility; pilot Import_RootNamspace_invalid.kerml.xt).",
@@ -1196,9 +1621,9 @@
       }
     ],
     "totals": {
-      "cases": 120,
-      "bothReject": 120,
-      "pilotOnlyRejects": 0,
+      "cases": 162,
+      "bothReject": 149,
+      "pilotOnlyRejects": 13,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
