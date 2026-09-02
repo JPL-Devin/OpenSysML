@@ -1083,14 +1083,14 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 
 	// Connector lines already spent their share of the budget, so a truncated
 	// listing still shows them rather than dropping what it charged for.
-	truncated := func(lines []string, pad string) []string {
-		return append(append(lines, connectors...), indent+pad+"… (listing truncated)")
+	truncated := func(lines []string) []string {
+		return append(append(lines, connectors...), indent+"… (listing truncated)")
 	}
 
 	var lines []string
 	for i := range features {
 		if w.budget <= 0 {
-			return truncated(lines, "")
+			return truncated(lines)
 		}
 		feat := &features[i]
 		// A constraint or requirement the part carries has no value; what it has
@@ -1110,13 +1110,19 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 			continue
 		}
 		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatFeatureValue(w.ctx, fv)))
+		// The object's remaining features keep a line each; a nested expansion
+		// spends only what is left beyond them.
+		reserved := len(features) - i - 1
 		for _, nested := range nestedInstances(w.ctx, fv) {
-			if w.budget <= 0 {
-				return truncated(lines, "  ")
+			if w.budget <= reserved {
+				lines = append(lines, indent+"  … (listing truncated)")
+				break
 			}
+			w.budget -= reserved
 			w.onPath[nested.Type] = true
 			lines = append(lines, w.lines(nested, indent+"  ", depth+1)...)
 			delete(w.onPath, nested.Type)
+			w.budget += reserved
 		}
 	}
 	return append(lines, connectors...)

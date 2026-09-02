@@ -9,12 +9,13 @@ import (
 // out of its shape; Systems, Domain and OpenSysML members describe it and are kept.
 
 // frameRoots names the Kernel features whose restatements stay in the frame: the
-// object's identity, its portions over time, and its part in transfers.
+// object's identity, its history (time slices, snapshots, start and end) and the
+// transfers it takes part in, which the runtime tracks itself.
 var frameRoots = map[string]bool{
-	"Base::Anything::self":                               true,
-	"Occurrences::Occurrence::timeSlices":                true,
-	"Occurrences::Occurrence::incomingTransfersToSelf":   true,
-	"Occurrences::Occurrence::outgoingTransfersFromSelf": true,
+	"Base::Anything::self":                       true,
+	"Occurrences::Occurrence::timeSlices":        true,
+	"Occurrences::Occurrence::incomingTransfers": true,
+	"Occurrences::Occurrence::outgoingTransfers": true,
 }
 
 // libraryTier reports the tier of the library that declares sym, TierNone for a

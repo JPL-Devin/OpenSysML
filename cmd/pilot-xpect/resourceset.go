@@ -51,7 +51,7 @@ func loadResourceSet(suiteDir string, f xtFile, libs *libraryCache) resourceSet 
 		if isLibrary(r.From) {
 			if root := libs.parse(suiteDir, rel, content); root != nil {
 				idx.AddDocumentWithKind(rel, root, source.KindOf(rel))
-				idx.MarkLibrary(rel)
+				idx.MarkLibraryTier(rel, pilotLibraryTier(r.From))
 				set.libraryRoots = append(set.libraryRoots, rootPackagesIn(content)...)
 			}
 			continue
@@ -74,6 +74,20 @@ func loadResourceSet(suiteDir string, f xtFile, libs *libraryCache) resourceSet 
 	sort.Strings(set.libraryRoots)
 	set.libraryRoots = dedupe(set.libraryRoots)
 	return set
+}
+
+// pilotLibraryTier classifies a declared `/library*` resource by the pilot's
+// layout: `/library.systems` and `/library.domain` are the Systems and Domain
+// libraries; `/library` and `/library.kernel` hold the Kernel tiers together.
+func pilotLibraryTier(from string) symbols.LibraryTier {
+	switch {
+	case strings.HasPrefix(from, "/library.systems/"):
+		return symbols.TierSystems
+	case strings.HasPrefix(from, "/library.domain/"):
+		return symbols.TierDomain
+	default:
+		return symbols.TierLibrary
+	}
 }
 
 // resourcePath resolves a declared resource: a leading slash is suite-relative,

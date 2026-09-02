@@ -865,7 +865,7 @@ func (idx *Index) DocumentLibraryTier(name string) LibraryTier {
 // IsLibraryDocument reports whether the named document holds bundled library
 // content (see MarkLibrary).
 func (idx *Index) IsLibraryDocument(name string) bool {
-	return idx.libraryDocs.at(name)
+	return idx.DocumentLibraryTier(name).Library()
 }
 
 // knows reports whether the index holds anything for the named document.

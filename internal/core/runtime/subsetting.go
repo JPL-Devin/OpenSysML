@@ -22,16 +22,15 @@ import (
 // makes `Subsystems.mass` read the values held under `subsystems`.
 
 // relatedFeatures returns the features of owner that sym's relationships of the
-// given kind name. An unqualified name the declaring scope cannot see is looked
-// up among owner's members (`part a : Sub :> subsystem`); a target resolving
-// outside owner names no feature of it (`:> ISQ::mass`).
+// given kind name. An unqualified name the declaring scope cannot see, or one
+// owner carries under another declaration masking the resolved target, is
+// looked up among owner's members (`part a : Sub :> subsystem`); a target
+// resolving outside owner names no feature of it (`:> ISQ::mass`).
 func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
 	var features []*symbols.Symbol
 	for _, qn := range relationshipTargets(sym, kind) {
-		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil && resolved != sym {
-			if ctx.isFeatureOf(owner, resolved, sym) {
-				features = append(features, resolved)
-			}
+		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil && resolved != sym && ctx.isFeatureOf(owner, resolved, sym) {
+			features = append(features, resolved)
 			continue
 		}
 		if len(qn.Parts) != 1 {
@@ -200,10 +199,12 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 		cur := queue[0]
 		queue = queue[1:]
 		// An end of a connector redefines the end at its position of each
-		// connector its owner specializes without naming it, so the two names read
-		// one feature value as an explicit redefinition's do.
+		// connector its owner specializes, and a subject or objective redefines
+		// the one its owner inherits, without naming it: the two names read one
+		// feature value as an explicit redefinition's do.
 		redefines := append(ctx.relatedFeatures(cur, owner, ast.RelRedefines),
 			ctx.model.ImplicitEndRedefinitions(cur)...)
+		redefines = append(redefines, ctx.model.ImplicitRoleRedefinitions(cur)...)
 		for _, redefined := range redefines {
 			if seen[redefined] {
 				continue
