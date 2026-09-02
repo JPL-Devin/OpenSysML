@@ -5504,6 +5504,6 @@ tells you which one ran without any debug flag.
 - xdotool cannot type the `✓` glyph the CLI prints; `grep -v '^✓'` typed on camera becomes
   `grep -v '^'` and filters everything. Filter on `'= 5'` / `'sysml:'` instead.
 - Konsole starts at a small font: `Ctrl++` three times before recording makes memstats lines legible.
-- No `~/opensysml-venv` on this box at the time: `python3 -m venv /tmp/osvenv && /tmp/osvenv/bin/pip
-  install -e clients/python` took under a minute and the non-tty one-shot `python script.py` with
-  auto-start worked (35 ms connect).
+- The blueprint's venv is `~/pv` (see the maintenance block), but it can exist without the editable
+  `opensysml` install; `~/pv/bin/pip install -e clients/python` (or a fresh `python3 -m venv`) takes
+  under a minute and the non-tty one-shot `python script.py` with auto-start worked (35 ms connect).
