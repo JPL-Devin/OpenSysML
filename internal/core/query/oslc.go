@@ -193,7 +193,28 @@ func parsePrefixes(text string, prefixes map[string]string) error {
 		if len(iri) < 2 || iri[0] != '<' || iri[len(iri)-1] != '>' {
 			return errorf(ErrMalformed, "oslc.prefix binding %q must use an IRI", binding)
 		}
-		prefixes[strings.TrimSuffix(strings.TrimSpace(name), ":")] = iri[1 : len(iri)-1]
+		prefix := strings.TrimSuffix(strings.TrimSpace(name), ":")
+		if err := checkPrefixName(prefix); err != nil {
+			return err
+		}
+		prefixes[prefix] = iri[1 : len(iri)-1]
+	}
+	return nil
+}
+
+// checkPrefixName refuses a prefix no term could be written with: a binding the
+// identifier scanner cannot read is unusable, and offering it in a diagnostic
+// would name a property the parser then rejects.
+func checkPrefixName(prefix string) error {
+	if prefix == "" {
+		return errorf(ErrMalformed, "oslc.prefix binding has an empty prefix")
+	}
+	for _, r := range prefix {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune("_-.", r) {
+			continue
+		}
+		return errorf(ErrMalformed,
+			"oslc.prefix %q contains %q, which no prefixed name can be written with", prefix, r)
 	}
 	return nil
 }

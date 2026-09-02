@@ -252,6 +252,14 @@ func TestParseOSLCPropertyDiagnosticsFollowTheActiveBindings(t *testing.T) {
 	if strings.Contains(got.Message, "sysml:name") || !strings.Contains(got.Message, "which no oslc.prefix binding names") {
 		t.Errorf("error message = %q, want it to report the SysML namespace as unnamed", got.Message)
 	}
+	// A prefix no prefixed name can be written with is refused at its binding,
+	// so it can never be the spelling a diagnostic offers.
+	_, err = ParseParameters(`oslc.prefix=%21s%3D%3Chttps://www.omg.org/spec/SysML%23%3E&oslc.where=sysml:name%3D%22x%22`)
+	got, ok = err.(*Error)
+	if !ok || got.Kind != ErrMalformed || !strings.Contains(got.Message, "!s") {
+		t.Errorf("error = %#v, want ErrMalformed naming the unusable prefix", err)
+	}
+
 	names, unbound := PrefixedPropertyNames(map[string]string{"rdf": rdf.RDFNS})
 	if len(names) != 1 || names[0] != "rdf:type" {
 		t.Errorf("names = %#v, want [rdf:type]", names)
