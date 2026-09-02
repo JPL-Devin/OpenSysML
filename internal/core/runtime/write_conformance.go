@@ -102,8 +102,17 @@ func storeBodyValue(ctx *Context, host stmtHost, env *stmtEnv, name string, valu
 // declared type could hold. A target declaring no type holds anything, and a
 // value whose type the run time cannot name is not judged here.
 func (ctx *Context) checkWriteType(scope *symbols.Scope, what string, declared *symbols.Symbol, value Value) error {
+	if refusal, refused := ctx.writeTypeRefusal(scope, declared, value); refused {
+		return fmt.Errorf("%s: %w: %s", what, ErrTypeMismatch, refusal)
+	}
+	return nil
+}
+
+// writeTypeRefusal says why the first element no feature of the declared type
+// could hold is refused; the second result is false where every element conforms.
+func (ctx *Context) writeTypeRefusal(scope *symbols.Scope, declared *symbols.Symbol, value Value) (string, bool) {
 	if declared == nil {
-		return nil
+		return "", false
 	}
 	for _, element := range elementsOf(value) {
 		conforms, refusal, err := ctx.valueConforms(scope, element, declared)
@@ -114,9 +123,9 @@ func (ctx *Context) checkWriteType(scope *symbols.Scope, what string, declared *
 			refusal = fmt.Sprintf("cannot write %s (%s) to a feature typed by %s",
 				FormatValue(element), describeValue(element), symbolText(declared))
 		}
-		return fmt.Errorf("%s: %w: %s", what, ErrTypeMismatch, refusal)
+		return refusal, true
 	}
-	return nil
+	return "", false
 }
 
 // valueConforms reports whether a feature of the declared type may hold the

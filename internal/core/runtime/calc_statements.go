@@ -67,7 +67,7 @@ func (h *calcStmtHost) assignChain(_ *EvalContext, s lower.Assign, _ Value) erro
 // then holds, so it answers to that parameter's declaration.
 func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
 	if out, ok := h.shape.resultOutput(); ok {
-		if err := out.Decl.checkType(h.ctx, "result", value); err != nil {
+		if err := out.Decl.checkType(h.ctx, value, func() string { return "result" }); err != nil {
 			return err
 		}
 	}

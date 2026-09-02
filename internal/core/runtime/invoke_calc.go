@@ -24,13 +24,16 @@ type calcMemberDecl struct {
 	Owner  *symbols.Symbol
 }
 
-// checkType reports a value outside the declared type; a member the symbol
-// table does not know is not judged.
-func (d calcMemberDecl) checkType(ctx *Context, what string, value Value) error {
+// checkType reports a value outside the declared type, described by what (asked
+// only on refusal, a binding being the hot path); an unknown member is not judged.
+func (d calcMemberDecl) checkType(ctx *Context, value Value, what func() string) error {
 	if d.Target == nil {
 		return nil
 	}
-	return ctx.checkWriteType(declScope(d.Owner), what, d.Target.typ, value)
+	if refusal, refused := ctx.writeTypeRefusal(declScope(d.Owner), d.Target.typ, value); refused {
+		return fmt.Errorf("%s: %w: %s", what(), ErrTypeMismatch, refusal)
+	}
+	return nil
 }
 
 // checkBound reports a value outside the declared type or multiplicity.
@@ -420,8 +423,9 @@ func (ctx *Context) bindCalcParameters(
 		}
 		// The parameter holds the value bound to it, so that value answers to the
 		// parameter's declaration as a written one does.
-		what := fmt.Sprintf("calc %s: %s for parameter %q", shape.Name, source, param.Name)
-		if err := param.Decl.checkType(ctx, what, value); err != nil {
+		if err := param.Decl.checkType(ctx, value, func() string {
+			return fmt.Sprintf("calc %s: %s for parameter %q", shape.Name, source, param.Name)
+		}); err != nil {
 			return err
 		}
 		bindings[param.Name] = value
