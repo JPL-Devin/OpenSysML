@@ -60,7 +60,11 @@ bound predicate that is not in this table:
 | `sysml:multiplicityLower` | `multiplicityLower` |
 | `sysml:multiplicityUpper` | `multiplicityUpper` |
 
-Unknown properties fail the query instead of silently returning no matches.
+Unknown properties fail the query instead of silently returning no matches, and
+the diagnostic lists the OSLC predicates of the left column, since the query
+property names of the right column are the Go API's. `@type` and `@id` are not
+OSLC query text: the first is written `rdf:type`, and identity is reported for
+every result rather than asked for.
 
 ## Semantics and choices
 

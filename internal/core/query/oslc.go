@@ -309,6 +309,10 @@ func (p *oslcParser) identifier() (string, error) {
 		return "*", nil
 	}
 	start := p.pos
+	// A leading "@" scans as a name so resolveProperty can name its OSLC spelling.
+	if p.peek('@') {
+		p.pos++
+	}
 	for p.pos < len(p.s) {
 		r := rune(p.s[p.pos])
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune("_-.:", r) {
@@ -317,10 +321,11 @@ func (p *oslcParser) identifier() (string, error) {
 		}
 		break
 	}
-	if start == p.pos || !strings.Contains(p.s[start:p.pos], ":") {
+	word := p.s[start:p.pos]
+	if start == p.pos || !(strings.Contains(word, ":") || strings.HasPrefix(word, "@")) {
 		return "", errorf(ErrMalformed, "OSLC term requires a prefixed-name identifier")
 	}
-	return p.s[start:p.pos], nil
+	return word, nil
 }
 
 func (p *oslcParser) operator() Operator {
@@ -442,6 +447,14 @@ func resolveProperty(name string, prefixes map[string]string) (string, error) {
 	if name == "*" {
 		return "", wildcardError("oslc.where")
 	}
+	// The Go API names these two "@type" and "@id"; OSLC query text cannot.
+	switch name {
+	case PropertyType:
+		return "", errorf(ErrMalformed, "OSLC query text spells the metamodel type \"rdf:type\", not %q", name)
+	case PropertyID:
+		return "", errorf(ErrMalformed,
+			"%q is not an OSLC query property: element identity is reported for every result", name)
+	}
 	iri, err := expandName(name, prefixes)
 	if err != nil {
 		return "", err
@@ -449,7 +462,28 @@ func resolveProperty(name string, prefixes map[string]string) (string, error) {
 	if property, ok := oslcPropertyMappings[iri]; ok {
 		return property, nil
 	}
-	return "", unknownProperty(name)
+	return "", unknownOSLCProperty(name)
+}
+
+// PrefixedPropertyNames returns the prefixed names OSLC query text spells, in
+// stable order. It is derived from the mapping the parser reads.
+func PrefixedPropertyNames() []string {
+	out := make([]string, 0, len(oslcPropertyMappings))
+	for iri := range oslcPropertyMappings {
+		for prefix, namespace := range DefaultPrefixes {
+			if strings.HasPrefix(iri, namespace) {
+				out = append(out, prefix+":"+strings.TrimPrefix(iri, namespace))
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func unknownOSLCProperty(name string) *Error {
+	return errorf(ErrUnknownProperty, "unknown OSLC query property %q; this implementation reads %s",
+		name, strings.Join(PrefixedPropertyNames(), ", "))
 }
 
 func resolveValue(name string, prefixes map[string]string) (string, error) {

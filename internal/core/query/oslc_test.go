@@ -176,6 +176,46 @@ func TestParseOSLCRefusesQualifiedNameValueUnquoted(t *testing.T) {
 	}
 }
 
+func TestParseOSLCPropertyDiagnosticsNameOSLCSpellings(t *testing.T) {
+	// The list an unknown property is answered with must be writable as it reads.
+	_, err := ParseOSLC(`sysml:id="x"`)
+	got, ok := err.(*Error)
+	if !ok || got.Kind != ErrUnknownProperty {
+		t.Fatalf("error = %#v, want ErrUnknownProperty", err)
+	}
+	for _, name := range PrefixedPropertyNames() {
+		if !strings.Contains(got.Message, name) {
+			t.Errorf("error message = %q, want it to name %q", got.Message, name)
+		}
+		if _, err := ParseOSLC(name + `="x"`); err != nil {
+			t.Errorf("listed property %q: %v", name, err)
+		}
+	}
+	for _, name := range []string{PropertyID, PropertyType} {
+		if strings.Contains(got.Message, name) {
+			t.Errorf("error message = %q, want it to omit the Go API name %q", got.Message, name)
+		}
+	}
+
+	// "@type" and "@id" name themselves in the Go API; OSLC query text cannot.
+	for _, text := range []string{
+		`@type=sysml:PartUsage`,
+		`@id="x"`,
+		`oslc.where=sysml:name%3D%22x%22&oslc.select=@id`,
+		`oslc.where=sysml:name%3D%22x%22&oslc.orderBy=@type`,
+	} {
+		q, err := ParseOSLC(text)
+		got, ok := err.(*Error)
+		if !ok || got.Kind != ErrMalformed {
+			t.Errorf("%q parsed as %#v, error = %#v, want ErrMalformed", text, q, err)
+			continue
+		}
+		if !strings.Contains(got.Message, "rdf:type") && !strings.Contains(got.Message, "reported for every result") {
+			t.Errorf("%q error message = %q, want it to name the OSLC spelling", text, got.Message)
+		}
+	}
+}
+
 func TestParseParametersPreservesEncodedSemicolonAndDecodesValues(t *testing.T) {
 	q, err := ParseParameters(`oslc.where=sysml%3Aname%3D%22a%253Bb%2Bc%22`)
 	if err != nil {
