@@ -451,6 +451,15 @@ func (fc *funcCompiler) compileLoop(s lower.Loop) (Stmt, error) {
 		}
 		loop.Cond = c
 	}
+	// The post-condition is tested after the body, in its scope, so it can
+	// read attributes the body declares.
+	fc.env.push()
+	defer fc.env.pop()
+	body, err := fc.compileBlock(s.Body.Steps())
+	if err != nil {
+		return nil, err
+	}
+	loop.Body = body
 	if until != nil {
 		u, err := fc.compileBool(until, "condition of until")
 		if err != nil {
@@ -458,13 +467,6 @@ func (fc *funcCompiler) compileLoop(s lower.Loop) (Stmt, error) {
 		}
 		loop.Until = u
 	}
-	fc.env.push()
-	body, err := fc.compileBlock(s.Body.Steps())
-	fc.env.pop()
-	if err != nil {
-		return nil, err
-	}
-	loop.Body = body
 	return loop, nil
 }
 

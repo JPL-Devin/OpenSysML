@@ -164,6 +164,19 @@ package Compiled {
 		return : Integer = i;
 	}
 
+	// The post-condition resolves in the body's scope: it reads the body's
+	// `done`, not the outer one.
+	calc def UntilLocal {
+		in n : Integer;
+		attribute i : Integer = 0;
+		attribute done : Boolean = false;
+		loop {
+			i = i + 1;
+			attribute done : Boolean = i >= n;
+		} until done;
+		return : Integer = i;
+	}
+
 	calc def WhileUntil {
 		in n : Integer;
 		attribute i : Integer = 0;
