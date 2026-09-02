@@ -103,12 +103,13 @@ var keywordMetaclass = map[string]string{
 }
 
 // usageMetaclassOf gives the metaclass a usage builds, reading the keyword where
-// the kind does not decide it; a kindless one is a DefaultReferenceUsage.
-func usageMetaclassOf(n *ast.Usage) (string, bool) {
+// the kind does not decide it; a kindless one is a DefaultReferenceUsage, as is
+// a kindless `name = value;` in a metadata body (SysML.xtext MetadataBodyUsage).
+func usageMetaclassOf(n *ast.Usage, inMetadataBody bool) (string, bool) {
 	if m, ok := keywordMetaclass[n.Keyword]; ok {
 		return m, true
 	}
-	if n.Keyword == "" && n.Kind == ast.UsageAttribute {
+	if n.Keyword == "" && (n.Kind == ast.UsageAttribute || inMetadataBody && n.Kind == ast.UsageEnumeration) {
 		return "ReferenceUsage", true
 	}
 	m, ok := usageMetaclass[n.Kind]
@@ -161,7 +162,7 @@ var relationshipProperty = map[ast.RelationshipKind]string{
 	ast.RelChains:      "chains",
 	ast.RelIncludes:    "includes",
 	ast.RelVia:         "via",
-	ast.RelAnnotates:   "annotates",
+	ast.RelAnnotates:   pAnnotatedElement,
 	ast.RelSubject:     "subject",
 	ast.RelFeaturedBy:  "featuringType",
 }

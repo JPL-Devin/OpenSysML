@@ -79,7 +79,7 @@ func TestAnnotatedIDRoundTrips(t *testing.T) {
 			t.Errorf("graph lacks %q:\n%s", want, text)
 		}
 	}
-	if strings.Contains(text, "prefixMetadata") {
+	if strings.Contains(text, "MetadataUsage") {
 		t.Errorf("identity annotations must be consumed, not exported as metadata content:\n%s", text)
 	}
 	// Memberships derive from the effective id, so they inherit its stability.

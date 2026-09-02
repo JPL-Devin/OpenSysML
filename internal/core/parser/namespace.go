@@ -796,13 +796,18 @@ func (p *Parser) identificationThenFrom() bool {
 	return t.Kind == lexer.Keyword && t.KeywordID == "from"
 }
 
-// parsePrefixMetadata parses zero or more `# QualifiedName` prefix annotations.
+// parsePrefixMetadata parses zero or more `# QualifiedName` prefix annotations
+// (SysML.xtext PrefixMetadataUsage). A keyword is allowed as the type name
+// (`#scenario`, `#cause`).
 func (p *Parser) parsePrefixMetadata() []*ast.PrefixMetadata {
 	var prefixes []*ast.PrefixMetadata
 	for p.at(lexer.Hash) {
 		start := p.peek().Span.Offset
 		p.advance() // #
-		qn := p.parseQualifiedName()
+		qn := p.parseQualifiedNameRelaxed()
+		if qn == nil {
+			continue
+		}
 		pm := &ast.PrefixMetadata{Type: qn}
 		pm.NodeSpan = p.spanFrom(start)
 		prefixes = append(prefixes, pm)

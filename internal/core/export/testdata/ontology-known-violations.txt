@@ -30,6 +30,7 @@ domain-mismatch Import importedNamespace         # NamespaceImport_importedNames
 literal-for-object-property AttributeUsage type                                  # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property ReferenceUsage type                                  # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property PartUsage type                                       # Feature_type: the type is written as its name, not as an element IRI
+literal-for-object-property MetadataUsage type                                   # Feature_type: a metadata definition named by its short name (`#safe`) is written as that name, since references resolve declared names only (D7)
 literal-for-object-property urn:opensysml:sysml:InitialNode sourceFeature        # Connector_sourceFeature: a succession end is written as a name (D2)
 literal-for-object-property FeatureReferenceExpression referent                   # FeatureReferenceExpression_referent: a name resolving outside the graph is written as a name, as every reference this tool cannot link is (D7)
 literal-for-object-property FeatureChainExpression targetFeature                  # FeatureChainExpression_targetFeature: a chained feature is written as a name, since the member reached through the chain is not an element of this graph (D7)
@@ -64,6 +65,7 @@ unknown-property PartDefinition specializes                  # specialization is
 unknown-property PartUsage subsets                           # subsetting is a Subsetting element, not a property
 unknown-property urn:opensysml:sysml:MultiplicityDeclaration subsets # a MultiplicitySubset's bounds, written the same way as any other subsetting
 unknown-property PartUsage redefines                         # redefinition is a Redefinition element, not a property
+unknown-property ReferenceUsage redefines                    # a metadata body's `redefines level = 3;`, written the same way as any other redefinition
 unknown-property SubjectMembership redefines                 # redefinition is a Redefinition element, not a property
 unknown-property ActionUsage references                      # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property StateUsage references                       # the state an `exhibit` names, referenced the same way
@@ -77,3 +79,4 @@ unknown-property ReferenceUsage isResult                     # notation flag for
 unknown-property OccurrenceUsage isSnapshot                  # notation flag for the `snapshot` keyword, no metamodel property
 unknown-property OccurrenceUsage isTimeslice                 # notation flag for the `timeslice` keyword, no metamodel property
 unknown-property PartUsage isChain                           # notation flag for a feature chain, no metamodel property
+unknown-property PartUsage isVariant                         # notation flag for the `variant` keyword; the metamodel derives it from a VariantMembership

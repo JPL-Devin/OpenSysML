@@ -1,0 +1,32 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="P" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="M"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="X"))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=M
+            (*ast.QualifiedName))
+          (Relationship kind="about" target=X
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=M
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=M
+            (*ast.QualifiedName))
+          (Relationship kind="about" target=X
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="enum" name="id" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralString value="\"a\"")))))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="m" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=M
+            (*ast.QualifiedName))
+          (Relationship kind="about" target=X
+            (*ast.QualifiedName)))))))

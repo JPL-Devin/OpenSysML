@@ -868,17 +868,7 @@ func (p *Parser) warnAmbiguousModifierKind(mods featureMods, isKind func(lexer.T
 // already established (via atDefUsageStart) that a def/usage begins here.
 func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse optional `#MetadataType` prefixes (user-defined keywords)
-	var prefixes []*ast.PrefixMetadata
-	for p.at(lexer.Hash) {
-		p.advance() // consume #
-		// Allow keywords as metadata type names (e.g., #scenario, #cause)
-		metaName := p.parseQualifiedNameRelaxed()
-		if metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{
-				Type: metaName,
-			})
-		}
-	}
+	prefixes := p.parsePrefixMetadata()
 
 	// Helper to apply prefixes to result node
 	applyPrefixes := func(node ast.Node) ast.Node {
@@ -911,12 +901,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	// UsagePrefix ends in UsageExtensionKeyword* (SysML.xtext:582), so prefix
 	// metadata may follow the modifiers: `abstract #Classified z;`.
-	for p.at(lexer.Hash) {
-		p.advance()
-		if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
-		}
-	}
+	prefixes = append(prefixes, p.parsePrefixMetadata()...)
 
 	// `snapshot` and `timeslice` portion the occurrence usage they prefix:
 	// `timeslice item i;` as well as the bare `timeslice t;`
@@ -931,6 +916,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			p.error(tok.Span, "a usage declares at most one portion kind ('snapshot' or 'timeslice')")
 		}
 		mods.portion = portion
+		// The portion kind is part of the usage prefix, so prefix metadata may
+		// still follow it: `snapshot #Classified part s;`.
+		prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		// Without a kind keyword the portion itself declares an occurrence usage.
 		if !p.atPortionedKind() {
 			isAll := p.acceptSufficientAll()
@@ -995,14 +983,12 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance() // consume the kind keyword
 		// A subject, actor or stakeholder takes prefix metadata after its
 		// keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
-		// StakeholderUsage, each `'keyword' UsageExtensionKeyword* Usage`).
-		if kw == "subject" || kw == "actor" || kw == "stakeholder" {
-			for p.at(lexer.Hash) {
-				p.advance()
-				if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
-					prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
-				}
-			}
+		// StakeholderUsage, each `'keyword' UsageExtensionKeyword* Usage`), as
+		// does a keyword that qualifies the declaration after it: `variant #B
+		// part v;`, `assert #B constraint c;` (VariantUsageElement,
+		// AssertConstraintUsage `UsageExtensionKeyword* ConstraintUsageKeyword`).
+		if kw == "subject" || kw == "actor" || kw == "stakeholder" || kw == "variant" || kindPrefixKeywords[kw] {
+			prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		}
 		// `variant x` declares a variant of the variation that owns it
 		// (VariantMembership, SysML v2 §7.20).
@@ -1944,6 +1930,14 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		(kind == ast.UsageConnector && (p.atKeyword("from") || p.atConnectorChainFirstEnd())) ||
 		((kind == ast.UsageConnection || kind == ast.UsageInterface) &&
 			(keyword == "connect" || p.atConnectorShorthandEnds()))
+	if kind == ast.UsageMetadata && !skipIdentification && p.atName() && !p.atMetadataIdentification() {
+		// `metadata M about x;` states the typing M and no name of its own
+		// (SysML.xtext MetadataUsageDeclaration).
+		skipIdentification = true
+		if metaType := p.parseQualifiedName(); metaType != nil {
+			preRels = append(preRels, &ast.Relationship{Kind: ast.RelTyping, Target: metaType})
+		}
+	}
 	if !skipIdentification {
 		u.Ident = p.parseUsageIdentification(kind)
 	}
@@ -4219,6 +4213,7 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 		}
 		p.expect(lexer.RBrace, "expected '}' after metadata body")
 		pm.Body = body
+		pm.HasBody = true
 	} else {
 		// A usage is a member of its own, so it ends here rather than annotating
 		// whatever follows it — `#Type` is the prefix spelling.

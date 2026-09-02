@@ -19,15 +19,11 @@ func TestUnsupportedConversionMessages(t *testing.T) {
 		src  string
 		want []string
 	}{{
-		name: "metadata_prefix",
-		src:  "package P {\n\tmetadata def M;\n\tpart p {@M{isSet = true;}}\n}",
-		want: []string{"cannot convert the prefix metadata at m.sysml:3:10", remedy},
-	}, {
-		// A metadata usage member (`@M;`) has no mapping in this graph yet, so it
-		// is refused rather than dropped.
-		name: "metadata_usage_member",
-		src:  "package P {\n\tmetadata def M;\n\t@M;\n}",
-		want: []string{"cannot convert the prefix metadata at m.sysml:3:2", remedy},
+		// A calc body's result expression is a member of its own, which the graph
+		// has no place for yet.
+		name: "result_expression",
+		src:  "package P {\n\tcalc def C {\n\t\tin x : Real;\n\t\tx + 1\n\t}\n}",
+		want: []string{"cannot convert the operator expr at m.sysml:4:3", remedy},
 	}, {
 		// A succession naming both ends is written back as the two-name form,
 		// which the parser reads only as basic names, so a quoted end is

@@ -140,7 +140,7 @@ func TestConvertMarksRDFExperimental(t *testing.T) {
 	}
 
 	refused, err := srv.Convert(context.Background(), &pb.ConvertRequest{
-		Source:     &pb.ConvertRequest_Content{Content: "package P { metadata def Safety; part seat {@Safety{isMandatory = true;}} }"},
+		Source:     &pb.ConvertRequest_Content{Content: "package P { part def Seat; part seat : Seat; part seat : Seat; }"},
 		FromFormat: "sysml",
 		ToFormat:   "ttl",
 	})
@@ -148,7 +148,7 @@ func TestConvertMarksRDFExperimental(t *testing.T) {
 		t.Fatalf("Convert: %v", err)
 	}
 	if refused.Error == "" {
-		t.Fatalf("expected the mapping to refuse inline metadata:\n%s", refused.Content)
+		t.Fatalf("expected the mapping to refuse the duplicate declaration:\n%s", refused.Content)
 	}
 	if !refused.Experimental {
 		t.Error("a refusal is the experimental behavior, but was not marked")

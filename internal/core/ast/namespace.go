@@ -182,6 +182,9 @@ type PrefixMetadata struct {
 	Ident Identification
 	Type  *QualifiedName
 	Body  []Node // optional body with property initializers: @Meta{prop = value;}
+	// HasBody records that the usage was written with braces, which an empty
+	// body does not otherwise show.
+	HasBody bool
 	// Elements the usage annotates: `@Meta about a, b;` (SysML.xtext:145-147).
 	About []*QualifiedName
 }

@@ -939,6 +939,7 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.ident(n.Ident)
 		e.node(n.Type)
 		e.nodes(n.Body)
+		e.w.Bool(n.HasBody)
 		e.qnames(n.About)
 	case *ast.PseudostateNode:
 		e.base(&n.NodeBase)
@@ -1412,6 +1413,7 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		n.Ident = d.ident()
 		n.Type = typed[*ast.QualifiedName](d)
 		n.Body = d.nodes()
+		n.HasBody = d.r.Bool()
 		n.About = d.qnames()
 	case *ast.PseudostateNode:
 		d.base(&n.NodeBase)

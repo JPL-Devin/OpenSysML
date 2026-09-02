@@ -499,9 +499,8 @@ func contributesName(sym *symbols.Symbol) bool {
 			// never from one it merely references (KerML 7.4.9).
 			return sym.EffectiveName && !namedByReference(sym)
 		}
-		// `metadata M about x` declares no name: the grammar requires the
-		// typing M there (SysML.xtext MetadataUsageDeclaration), which our
-		// parser records as the declared name instead.
+		// A metadata usage without a typing is malformed (SysML.xtext
+		// MetadataUsageDeclaration requires one) and contributes no name.
 		if decl.Kind == ast.UsageMetadata && !hasTypingRelationship(decl) {
 			return false
 		}

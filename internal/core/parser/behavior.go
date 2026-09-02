@@ -2065,13 +2065,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 
 	// A subject takes prefix metadata after its keyword: `subject #B s;`
 	// (SysML.xtext SubjectUsage, `'subject' UsageExtensionKeyword* Usage`).
-	var prefixes []*ast.PrefixMetadata
-	for p.at(lexer.Hash) {
-		p.advance()
-		if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
-		}
-	}
+	prefixes := p.parsePrefixMetadata()
 
 	// Check for binding pattern: subject = <expr>; OR subject <name> = <expr>;
 	if p.at(lexer.Eq) {
