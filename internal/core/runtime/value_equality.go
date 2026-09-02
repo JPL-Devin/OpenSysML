@@ -47,23 +47,23 @@ func valueKeyFunc(v Value) valueKey {
 		if re, ok := v.realPart(); ok {
 			return valueKeyFunc(realConst(re))
 		}
-		key.realVal, key.imagVal = real(v.Complex), imag(v.Complex)
+		key.realVal, key.imagVal = real(v.Complex()), imag(v.Complex())
 	case ValString:
-		key.strVal = v.Str
+		key.strVal = v.Str()
 	case ValInstance:
 		key.instID = v.Instance
 	case ValSequence:
-		key.colHash = hashSequence(v.Sequence)
+		key.colHash = hashSequence(v.Sequence())
 	case ValSet:
-		key.colHash = hashSet(v.Set)
+		key.colHash = hashSet(v.Set())
 	case ValVariant:
-		key.variant = v.Variant
+		key.variant = v.Variant()
 	case ValEnumLiteral:
-		key.literal = v.Literal
+		key.literal = v.Literal()
 	case ValQuantity:
-		if v.Quantity != nil {
-			key.realVal = v.Quantity.baseMagnitude()
-			key.strVal = v.Quantity.Unit.Term.DimensionKey()
+		if v.Quantity() != nil {
+			key.realVal = v.Quantity().baseMagnitude()
+			key.strVal = v.Quantity().Unit.Term.DimensionKey()
 		}
 	}
 	return key

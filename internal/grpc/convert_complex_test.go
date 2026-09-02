@@ -24,7 +24,7 @@ func TestComplexToProtoIsNamedUnsupported(t *testing.T) {
 	seq := runtime.NewSequence()
 	seq.Append(runtime.NewComplex(complex(1, 2)))
 	seq.Append(runtime.NewComplex(complex(3, 4)))
-	pv = ValueToProto(runtime.Value{Kind: runtime.ValSequence, Sequence: seq}, idx)
+	pv = ValueToProto(runtime.NewSequenceValue(seq), idx)
 	elements := pv.GetSequence().GetElements()
 	if len(elements) != 2 {
 		t.Fatalf("a sequence of two Complex values crossed as %d elements", len(elements))

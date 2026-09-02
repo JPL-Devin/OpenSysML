@@ -26,15 +26,15 @@ import (
 func elementsOf(val Value) []Value {
 	switch val.Kind {
 	case ValSequence:
-		if val.Sequence == nil {
+		if val.Sequence() == nil {
 			return nil
 		}
-		return val.Sequence.Elements()
+		return val.Sequence().Elements()
 	case ValSet:
-		if val.Set == nil {
+		if val.Set() == nil {
 			return nil
 		}
-		return val.Set.Elements()
+		return val.Set().Elements()
 	case ValNull, ValInvalid:
 		return nil
 	default:
@@ -47,15 +47,15 @@ func elementsOf(val Value) []Value {
 func elementCount(val *Value) int64 {
 	switch val.Kind {
 	case ValSequence:
-		if val.Sequence == nil {
-			return 0
+		if seq := val.Sequence(); seq != nil {
+			return int64(seq.Size())
 		}
-		return int64(val.Sequence.Size())
+		return 0
 	case ValSet:
-		if val.Set == nil {
-			return 0
+		if set := val.Set(); set != nil {
+			return int64(set.Size())
 		}
-		return int64(val.Set.Size())
+		return 0
 	case ValNull, ValInvalid:
 		return 0
 	default:
@@ -69,7 +69,7 @@ func sequenceOf(elements []Value) Value {
 	for _, elem := range elements {
 		seq.Append(elem)
 	}
-	return Value{Kind: ValSequence, Sequence: seq}
+	return NewSequenceValue(seq)
 }
 
 // newSequence builds a sequence value from elements, charging them against the
@@ -179,9 +179,9 @@ func bodyOf(op string, val Value, arity int) (*ast.BodyExpr, error) {
 	if val.Kind != ValExpr {
 		return nil, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(val))
 	}
-	body, ok := val.Expr.(*ast.BodyExpr)
+	body, ok := val.Expr().(*ast.BodyExpr)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr)
+		return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr())
 	}
 	if len(body.Params) != arity {
 		return nil, fmt.Errorf("%w: %s calls its body with %d argument(s), but it declares %d parameter(s)",
@@ -842,7 +842,7 @@ func aggregateQuantities(op string, elements []Value, operator ast.OperatorKind)
 			return Value{}, fmt.Errorf("%w: %s requires numeric elements, got %s", ErrTypeMismatch, op, describeValue(elem))
 		}
 		if i == 0 {
-			acc = Value{Kind: ValQuantity, Quantity: q}
+			acc = NewQuantityValue(q)
 			continue
 		}
 		accQ, _ := asQuantity(acc)

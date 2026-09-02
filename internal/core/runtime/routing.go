@@ -405,10 +405,10 @@ func (ctx *Context) heldVariant(inst *Instance, variation string) string {
 	if err != nil || fv == nil {
 		return ""
 	}
-	if fv.Value.Kind != ValVariant || fv.Value.Variant == nil {
+	if fv.Value.Kind != ValVariant || fv.Value.Variant() == nil {
 		return ""
 	}
-	return fv.Value.Variant.Name
+	return fv.Value.Variant().Name
 }
 
 // receivingEnds sorts the ends joined to sendingPort into the ones a message can

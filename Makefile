@@ -35,6 +35,7 @@ SITE_DIR := site
 # Where make self-model writes the architecture self-model's rendered views.
 SELF_MODEL_DIR := examples/self-model
 SELF_MODEL_OUT ?= build/self-model
+LIBS_DIR := internal/core/libs
 
 all: build test python-test ## Build and test everything
 
@@ -103,6 +104,13 @@ lint: ## Run static analysis (staticcheck + gosec), as CI does
 test-short: ## Run Go tests without race detection
 	@echo "Running Go tests without race detection..."
 	go test -v ./...
+
+stdlib-snapshot: ## Regenerate the embedded snapshot of the bundled library after editing $(LIBS_DIR)/stdlib
+	go generate ./$(LIBS_DIR)
+
+stdlib-snapshot-check: ## Verify the committed library snapshot matches the bundled library, as CI does
+	go run ./$(LIBS_DIR)/gensnapshot -check -out $(LIBS_DIR)/stdlib.snapshot
+	@echo "✓ stdlib.snapshot is current"
 
 clean: ## Remove build artifacts
 	@echo "Cleaning..."

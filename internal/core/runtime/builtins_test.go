@@ -13,7 +13,7 @@ func TestBuiltin_SequenceSize(t *testing.T) {
 	seq.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}})
 	seq.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 2}})
 
-	args := []Value{{Kind: ValSequence, Sequence: seq}}
+	args := []Value{NewSequenceValue(seq)}
 
 	fn := builtins["SequenceFunctions::size"]
 	result, err := fn(nil, args)
@@ -90,7 +90,7 @@ func TestBuiltin_ControlSelect(t *testing.T) {
 			t.Fatalf("expected sequence, got %v", result.Kind)
 		}
 
-		elements := result.Sequence.Elements()
+		elements := result.Sequence().Elements()
 		if len(elements) != len(tt.expected) {
 			t.Fatalf("expected %d elements, got %d: %+v", len(tt.expected), len(elements), elements)
 		}
@@ -137,7 +137,7 @@ func TestBuiltin_ControlCollect(t *testing.T) {
 			t.Fatalf("expected sequence, got %v", result.Kind)
 		}
 
-		elements := result.Sequence.Elements()
+		elements := result.Sequence().Elements()
 		if len(elements) != len(tt.expected) {
 			t.Fatalf("expected %d elements, got %d: %+v", len(tt.expected), len(elements), elements)
 		}

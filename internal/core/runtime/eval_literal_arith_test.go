@@ -33,7 +33,7 @@ func TestStringLiteralEscapes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("eval %s: %v", tt.expr, err)
 			}
-			if got.Kind != ValString || got.Str != tt.want {
+			if got.Kind != ValString || got.Str() != tt.want {
 				t.Errorf("eval %s = %#v, want %q", tt.expr, got, tt.want)
 			}
 		})

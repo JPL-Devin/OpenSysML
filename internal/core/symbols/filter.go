@@ -306,7 +306,7 @@ func namespaceMembers(decl ast.Node) []ast.Node {
 
 // sortedKeys returns a map's keys in name order, so that reading it does not
 // depend on map iteration order.
-func sortedKeys(m map[string][]ElementFilter) []string {
+func sortedKeys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

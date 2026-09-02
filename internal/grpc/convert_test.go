@@ -261,8 +261,8 @@ func TestCollectionElementsHandlesSetAndSequence(t *testing.T) {
 	set.Add(two)
 
 	for name, val := range map[string]runtime.Value{
-		"sequence": {Kind: runtime.ValSequence, Sequence: seq},
-		"set":      {Kind: runtime.ValSet, Set: set},
+		"sequence": runtime.NewSequenceValue(seq),
+		"set":      runtime.NewSetValue(set),
 	} {
 		if got := len(collectionElements(val)); got != 2 {
 			t.Errorf("%s: got %d elements, want 2", name, got)

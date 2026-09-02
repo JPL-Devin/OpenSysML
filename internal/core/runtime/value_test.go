@@ -5,17 +5,10 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
-
-// A map stores an element over 128 bytes behind a pointer, so a Value past
-// that size makes every parameter binding an allocation.
-func TestValueFitsInlineInMaps(t *testing.T) {
-	if size := unsafe.Sizeof(Value{}); size > 128 {
-		t.Fatalf("Value is %d bytes, want at most 128", size)
-	}
-}
 
 func TestValueConstWrapping(t *testing.T) {
 	// Test that runtime.Value correctly wraps semantics.Value
@@ -69,7 +62,7 @@ func TestSetOperationsUseExactValueEquality(t *testing.T) {
 	sequenceValue := func(n int64) Value {
 		seq := NewSequence()
 		seq.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: n}})
-		return Value{Kind: ValSequence, Sequence: seq}
+		return NewSequenceValue(seq)
 	}
 	first := sequenceValue(1)
 	second := sequenceValue(65537)
@@ -146,14 +139,14 @@ func TestSetDeduplicatesCommensurableQuantities(t *testing.T) {
 		},
 	}
 	set := NewSet()
-	set.Add(Value{Kind: ValQuantity, Quantity: &Quantity{
+	set.Add(NewQuantityValue(&Quantity{
 		Num:  semantics.Value{Kind: semantics.ValInt, Int: 1},
 		Unit: unit,
-	}})
-	set.Add(Value{Kind: ValQuantity, Quantity: &Quantity{
+	}))
+	set.Add(NewQuantityValue(&Quantity{
 		Num:  semantics.Value{Kind: semantics.ValInt, Int: 1000},
 		Unit: base,
-	}})
+	}))
 	if set.Size() != 1 {
 		t.Fatalf("set size = %d, want 1 for commensurable equal quantities", set.Size())
 	}
@@ -161,22 +154,87 @@ func TestSetDeduplicatesCommensurableQuantities(t *testing.T) {
 
 func TestFormatValueCollections(t *testing.T) {
 	inner := NewSequence()
-	inner.Append(Value{Kind: ValString, Str: "nested"})
+	inner.Append(NewStringValue("nested"))
 	outer := NewSequence()
 	outer.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}})
-	outer.Append(Value{Kind: ValSequence, Sequence: inner})
+	outer.Append(NewSequenceValue(inner))
 
 	set := NewSet()
 	set.Add(Value{Kind: ValInstance, Instance: 3})
-	set.Add(Value{Kind: ValSequence, Sequence: outer})
+	set.Add(NewSequenceValue(outer))
 
-	if got, want := FormatValue(Value{Kind: ValSequence, Sequence: outer}),
+	if got, want := FormatValue(NewSequenceValue(outer)),
 		`[1, ["nested"]]`; got != want {
 		t.Errorf("sequence formatting = %q, want %q", got, want)
 	}
-	if got, want := FormatValue(Value{Kind: ValSet, Set: set}),
+	if got, want := FormatValue(NewSetValue(set)),
 		`Set{instance(3), [1, ["nested"]]}`; got != want {
 		t.Errorf("set formatting = %q, want %q", got, want)
+	}
+}
+
+// Every payload accessor answers only for its own kind and the zero value for
+// the rest, and the struct stays small enough to pass through evaluator frames.
+func TestValuePayloadAccessorsAreKindSpecific(t *testing.T) {
+	if size := unsafe.Sizeof(Value{}); size > 64 {
+		t.Errorf("Value is %d bytes, want at most 64", size)
+	}
+	seq, set, q := NewSequence(), NewSet(), &Quantity{Num: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	variant := &symbols.Symbol{Name: "v"}
+	literal := &symbols.Symbol{Name: "l"}
+	body := &ast.BodyExpr{}
+	values := []Value{
+		{}, {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 7}},
+		{Kind: ValNull}, {Kind: ValInstance, Instance: 9},
+		NewStringValue("s"), NewSequenceValue(seq), NewSetValue(set), NewExprValue(body),
+		NewQuantityValue(q), NewVariantValue(variant, 4), NewEnumLiteral(literal),
+	}
+	// A payload whose Kind was rewritten afterwards answers only to the new kind.
+	for _, v := range values[4:] {
+		for _, kind := range []ValueKind{ValConst, ValNull, ValInstance, ValString, ValSequence, ValSet, ValExpr, ValQuantity, ValVariant, ValEnumLiteral} {
+			if kind != v.Kind {
+				relabeled := v
+				relabeled.Kind = kind
+				values = append(values, relabeled)
+			}
+		}
+	}
+	for _, v := range values {
+		if got := v.Str(); got != "" && v.Kind != ValString {
+			t.Errorf("%s.Str() = %q", v.Kind, got)
+		}
+		if got := v.Sequence(); got != nil && v.Kind != ValSequence {
+			t.Errorf("%s.Sequence() = %v", v.Kind, got)
+		}
+		if got := v.Set(); got != nil && v.Kind != ValSet {
+			t.Errorf("%s.Set() = %v", v.Kind, got)
+		}
+		if got := v.Expr(); got != nil && v.Kind != ValExpr {
+			t.Errorf("%s.Expr() = %v", v.Kind, got)
+		}
+		if got := v.Quantity(); got != nil && v.Kind != ValQuantity {
+			t.Errorf("%s.Quantity() = %v", v.Kind, got)
+		}
+		if got := v.Variant(); got != nil && v.Kind != ValVariant {
+			t.Errorf("%s.Variant() = %v", v.Kind, got)
+		}
+		if got := v.Literal(); got != nil && v.Kind != ValEnumLiteral {
+			t.Errorf("%s.Literal() = %v", v.Kind, got)
+		}
+	}
+	if got := NewStringValue("s").Str(); got != "s" {
+		t.Errorf("Str() = %q, want \"s\"", got)
+	}
+	if NewSequenceValue(seq).Sequence() != seq || NewSetValue(set).Set() != set ||
+		NewExprValue(body).Expr() != body || NewQuantityValue(q).Quantity() != q ||
+		NewVariantValue(variant, 4).Variant() != variant || NewEnumLiteral(literal).Literal() != literal {
+		t.Error("an accessor did not return the payload its constructor was given")
+	}
+	if id, ok := NewVariantValue(variant, 4).Object(); !ok || id != 4 {
+		t.Errorf("variant Object() = %d, %v, want 4, true", id, ok)
+	}
+	if _, ok := NewVariantValue(variant, 0).Object(); ok {
+		t.Error("a variant that materialized no object reports one")
 	}
 }
 

@@ -123,9 +123,9 @@ func heldInstances(ctx *Context, fv *FeatureValue) []*Instance {
 	values := []Value{held}
 	switch held.Kind {
 	case ValSequence:
-		values = held.Sequence.Elements()
+		values = held.Sequence().Elements()
 	case ValSet:
-		values = held.Set.Elements()
+		values = held.Set().Elements()
 	}
 
 	var out []*Instance

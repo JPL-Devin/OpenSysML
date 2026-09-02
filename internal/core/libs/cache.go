@@ -56,7 +56,11 @@ func NewCache() (*Cache, error) {
 // record also holds values the code computes, such as a symbol kind, which no
 // input covers.
 func (c *Cache) keyFor(content []byte, setDigest string) string {
-	sum := sha256.Sum256(content)
+	return c.keyForSum(sha256.Sum256(content), setDigest)
+}
+
+// keyForSum is keyFor given the file content's sha256 sum.
+func (c *Cache) keyForSum(sum [sha256.Size]byte, setDigest string) string {
 	return hex.EncodeToString(sum[:]) + "-s" + setDigest + "-b" + buildID() + "-v" + strconv.Itoa(formatVersion)
 }
 

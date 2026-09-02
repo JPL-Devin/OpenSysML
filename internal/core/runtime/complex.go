@@ -18,10 +18,10 @@ func realConst(x float64) Value {
 // realPart is the Real a complex number on the real axis is, reporting whether
 // the value is one: a ValComplex whose imaginary part is zero.
 func (v Value) realPart() (float64, bool) {
-	if v.Kind != ValComplex || imag(v.Complex) != 0 {
+	if v.Kind != ValComplex || imag(v.Complex()) != 0 {
 		return 0, false
 	}
-	return real(v.Complex), true
+	return real(v.Complex()), true
 }
 
 // complexOf reads a value as a complex number: a ValComplex, or a numeric
@@ -30,7 +30,7 @@ func (v Value) realPart() (float64, bool) {
 func complexOf(v Value) (complex128, bool) {
 	switch v.Kind {
 	case ValComplex:
-		return v.Complex, true
+		return v.Complex(), true
 	case ValConst:
 		if v.Const.IsNumeric() {
 			return complex(asReal(v.Const), 0), true

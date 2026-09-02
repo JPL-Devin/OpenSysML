@@ -40,9 +40,10 @@ func TestComplexIsOneValue(t *testing.T) {
 	if got := elementsOf(z); len(got) != 1 || got[0].Kind != ValComplex {
 		t.Fatalf("elementsOf(%s) = %v, want the Complex itself", FormatValue(z), got)
 	}
-	zs := Value{Kind: ValSequence, Sequence: NewSequence()}
-	zs.Sequence.Append(cx(1, 2))
-	zs.Sequence.Append(cx(3, 4))
+	seq := NewSequence()
+	seq.Append(cx(1, 2))
+	seq.Append(cx(3, 4))
+	zs := NewSequenceValue(seq)
 	if elementCount(&zs) != 2 {
 		t.Fatalf("elementCount(%s) = %d, want 2", FormatTraceValue(zs), elementCount(&zs))
 	}
@@ -91,7 +92,7 @@ func TestComplexEquality(t *testing.T) {
 		{cx(2, 1), constReal(2), false},
 		{cx(1, 2), realVec(1, 2), false},
 		{realVec(1, 2), cx(1, 2), false},
-		{cx(1, 2), Value{Kind: ValString, Str: "1.0 + 2.0i"}, false},
+		{cx(1, 2), NewStringValue("1.0 + 2.0i"), false},
 		{cx(0, 0), Value{Kind: ValNull}, false},
 	} {
 		if got := valueEqual(tc.a, tc.b); got != tc.want {
@@ -121,7 +122,7 @@ func TestComplexHashing(t *testing.T) {
 		set.Add(v)
 	}
 	if set.Size() != 4 {
-		t.Fatalf("set holds %d elements, want 4: %s", set.Size(), FormatTraceValue(Value{Kind: ValSet, Set: set}))
+		t.Fatalf("set holds %d elements, want 4: %s", set.Size(), FormatTraceValue(NewSetValue(set)))
 	}
 	if !set.Contains(constReal(2)) || !set.Contains(cx(2, 0)) || !set.Contains(cx(1, -2)) {
 		t.Fatal("set lost a member it was given")
@@ -148,7 +149,7 @@ func TestEqualNumbersShareOneSetMember(t *testing.T) {
 				set.Add(v)
 			}
 			if set.Size() != 1 {
-				t.Fatalf("set holds %d members, want 1: %s", set.Size(), FormatTraceValue(Value{Kind: ValSet, Set: set}))
+				t.Fatalf("set holds %d members, want 1: %s", set.Size(), FormatTraceValue(NewSetValue(set)))
 			}
 			for _, v := range tc.forms {
 				if !set.Contains(v) {

@@ -1503,7 +1503,7 @@ func complexOptionalOperands(name string, args []Value) (x, y complex128, given 
 
 // concatStrings is StringFunctions::'+': the characters of x then those of y.
 func concatStrings(x, y string) Value {
-	return Value{Kind: ValString, Str: x + y}
+	return NewStringValue(x + y)
 }
 
 // compareStrings applies one of StringFunctions' comparisons. UTF-8 orders bytes
@@ -1531,7 +1531,7 @@ func stringArg(name, param string, val Value) (string, error) {
 			ErrTypeMismatch, name, param, describeOperand(val),
 		)
 	}
-	return val.Str, nil
+	return val.Str(), nil
 }
 
 // stringPositionArg reads an Integer position argument of Substring.
@@ -1592,7 +1592,7 @@ func stringSubstring(name string, _ *Context, args []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: function %s upper character %d is outside 1..%d",
 			ErrIndexOutOfRange, name, upper, len(chars))
 	}
-	return Value{Kind: ValString, Str: string(chars[lower-1 : upper])}, nil
+	return NewStringValue(string(chars[lower-1 : upper])), nil
 }
 
 // stringOrdering is one of StringFunctions' comparisons over two String[1].
@@ -1630,7 +1630,7 @@ func stringToString(name string, _ *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return Value{Kind: ValString, Str: x}, nil
+	return NewStringValue(x), nil
 }
 
 // stringPair reads the two String operands x and y.
