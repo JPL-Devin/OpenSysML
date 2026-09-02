@@ -346,3 +346,44 @@ func TestObjectPathErrorKeepsTheMaterializationFailure(t *testing.T) {
 		t.Errorf("non-interactive run: got %+v, want an unresolved verdict naming the multiplicity violation", v)
 	}
 }
+
+// Members of a multi-valued part are among the objects a not-instantiated error
+// names once they exist, by identity since no path reaches one, and a feature they
+// all carry is a question between them. Unread, the error does not create them.
+func TestNotInstantiatedNamesCollectionMembersByIdentity(t *testing.T) {
+	s := loadFixture(t, "testdata/collection_machine.sysml")
+	run(t, s, "%instantiate Depot::garage")
+	wants(t, run(t, s, "%state Depot::Rover::modes Depot::Rover"), `error: no instance of "Depot::Rover" (use %instantiate first)`)
+	if fv := s.instances["Depot::garage"].FeatureValues["bays"]; fv.Materialized {
+		t.Fatalf("the failed lookup materialized Depot::garage.bays: %+v", fv)
+	}
+
+	listing := run(t, s, "%features Depot::garage")
+	bays := listing[strings.Index(listing, "bays = [Instance(ID: "):]
+	bays = bays[:strings.Index(bays, "]")]
+	first := objectIDIn(t, bays)
+	second := objectIDIn(t, bays[strings.LastIndex(bays, "Instance(ID: "):])
+
+	got := run(t, s, "%state Depot::Rover::modes Depot::Rover")
+	wants(t, got, `error: no instance of the definition "Depot::Rover" itself`,
+		"objects #"+first+", #"+second+" are typed by it", "name #"+first+" or #"+second+" to address one of them",
+		"%instantiate Depot::Rover")
+	if strings.Contains(got, "bays") || strings.Contains(got, "'#") {
+		t.Errorf("a member is named by the collection's path, or its identity quoted:\n%s", got)
+	}
+	_, _, err := s.objectRef("Depot::Rover")
+	var nerr *NotInstantiatedError
+	if !errors.As(err, &nerr) || nerr.UsageAsked || len(nerr.Objects) != 2 {
+		t.Fatalf("got %v (%+v), want a NotInstantiatedError naming both members", err, nerr)
+	}
+	for _, o := range nerr.Objects {
+		if o.Name != "" {
+			t.Errorf("member #%d is named %q, want its identity alone", o.ID, o.Name)
+		}
+	}
+	if s.stateExec != nil {
+		t.Error("a machine was attached to despite the error")
+	}
+
+	wants(t, run(t, s, "%eval Depot::Rover::level"), "error:", "carried by more than one object of this session (#"+first+", #"+second+")")
+}

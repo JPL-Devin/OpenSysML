@@ -1734,7 +1734,7 @@ func onInstance(inst *runtime.Instance, owner string) string {
 	if inst == nil {
 		return ""
 	}
-	return fmt.Sprintf(" (on %s ID: %d)", notationName(owner), inst.ID)
+	return fmt.Sprintf(" (on %s ID: %d)", objectName(owner), inst.ID)
 }
 
 // doRequirement evaluates a requirement definition.

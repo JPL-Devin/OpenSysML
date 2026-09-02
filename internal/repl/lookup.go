@@ -278,30 +278,60 @@ func materializedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
 }
 
 // nestedObjects returns the objects held in the feature values read yields for
-// an object, in feature-value-name order, each under the name it is reached by.
+// an object, in feature-value-name order, each under the name it is reached by:
+// the path through a feature holding it alone, else its `#<n>` identity, which
+// is what nameOf reports for a member of a multi-valued feature.
 func nestedObjects(ctx *runtime.Context, of carrier, read func(string) (*runtime.FeatureValue, bool)) []carrier {
 	fvs := make([]string, 0, len(of.inst.FeatureValues))
 	for name := range of.inst.FeatureValues {
 		fvs = append(fvs, name)
 	}
 	sort.Strings(fvs)
+	_, byIdentity := objectID(of.name)
 	out := make([]carrier, 0, len(fvs))
 	for _, name := range fvs {
 		fv, ok := read(name)
 		if !ok {
 			continue
 		}
-		id, isObject := fv.Value.Object()
-		if !isObject {
+		if fv.Values.Kind == runtime.ValInvalid {
+			if child, ok := heldInstance(ctx, fv.Value); ok {
+				if byIdentity {
+					out = append(out, carrier{name: fmt.Sprintf("#%d", child.ID), inst: child})
+				} else {
+					out = append(out, carrier{name: of.name + "::" + name, inst: child})
+				}
+			}
 			continue
 		}
-		child, ok := ctx.Instance(id)
-		if !ok || child == nil {
-			continue
+		for _, member := range collectionElements(fv.Values) {
+			if child, ok := heldInstance(ctx, member); ok {
+				out = append(out, carrier{name: fmt.Sprintf("#%d", child.ID), inst: child})
+			}
 		}
-		out = append(out, carrier{name: of.name + "::" + name, inst: child})
 	}
 	return out
+}
+
+// heldInstance is the session object a value denotes, if it denotes one.
+func heldInstance(ctx *runtime.Context, v runtime.Value) (*runtime.Instance, bool) {
+	id, isObject := v.Object()
+	if !isObject {
+		return nil, false
+	}
+	child, ok := ctx.Instance(id)
+	return child, ok && child != nil
+}
+
+// collectionElements are the members of a sequence or set value, in its order.
+func collectionElements(v runtime.Value) []runtime.Value {
+	if seq := v.Sequence(); seq != nil {
+		return seq.Elements()
+	}
+	if set := v.Set(); set != nil {
+		return set.Elements()
+	}
+	return nil
 }
 
 // AmbiguousSubjectError reports a feature or condition several of the session's
@@ -330,11 +360,11 @@ func (s *Session) subjectFor(name, fqn string, sym *symbols.Symbol) (*runtime.In
 		return nil, "", nil
 	case 1:
 		// A carrier may be nested, so it is reached the way any object name is.
-		inst, owner := s.objectNamed(carriers[0])
-		if inst == nil {
+		inst, ok := s.heldObject(carriers[0])
+		if !ok || inst == nil {
 			return nil, "", nil
 		}
-		return inst, owner, nil
+		return inst, carriers[0], nil
 	default:
 		return nil, "", &AmbiguousSubjectError{Name: name, Carriers: carriers}
 	}

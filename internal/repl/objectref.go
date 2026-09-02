@@ -75,7 +75,8 @@ type NotInstantiatedError struct {
 }
 
 // ObjectRef names an object the session holds, by identity and by the name it is
-// held under (as the prompt prints names).
+// held under (as the prompt prints names) — "" for one only its identity reaches,
+// such as a member of a multi-valued part.
 type ObjectRef struct {
 	ID   int64
 	Name string
@@ -88,8 +89,12 @@ func (e *NotInstantiatedError) Error() string {
 	labels := make([]string, len(e.Objects))
 	names := make([]string, len(e.Objects))
 	for i, o := range e.Objects {
-		labels[i] = fmt.Sprintf("#%d of %q", o.ID, o.Name)
-		names[i] = o.Name
+		labels[i] = fmt.Sprintf("#%d", o.ID)
+		names[i] = labels[i]
+		if o.Name != "" {
+			labels[i] = fmt.Sprintf("#%d of %q", o.ID, o.Name)
+			names[i] = o.Name
+		}
 	}
 	objects, is := "object "+labels[0]+" is", "it"
 	if len(labels) > 1 {
@@ -355,7 +360,11 @@ func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
 	// An error names what exists; it materializes nothing to find it.
 	s.walkObjects(materializedObjectsIn(ctx), func(cur carrier) bool {
 		if carriesDeclaration(model, cur.inst.Type, definition.Decl) {
-			e.Objects = append(e.Objects, ObjectRef{ID: cur.inst.ID, Name: notationName(cur.name)})
+			ref := ObjectRef{ID: cur.inst.ID}
+			if _, byIdentity := objectID(cur.name); !byIdentity {
+				ref.Name = notationName(cur.name)
+			}
+			e.Objects = append(e.Objects, ref)
 		}
 		return true
 	})
