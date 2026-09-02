@@ -1,4 +1,4 @@
-// Invalid: An interface end must be a port (SysML 7.13 validateInterfaceUsageEnds; pilot InterfaceUsage_Invalid.sysml.xt:63).
+// Invalid: An interface end must be a port (SysML 7.13 validateInterfaceUsageEnd; pilot InterfaceUsage_Invalid.sysml.xt:63).
 package P27InterfaceEndNotPort {
     part def Fuel;
     port def FuelInPort;
