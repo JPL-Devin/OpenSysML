@@ -953,7 +953,7 @@ func TestStringFunctionErrors(t *testing.T) {
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("%s%v = %+v, %v; want error %v", tc.fn, tc.args, got, err, tc.want)
 			}
-			if !strings.Contains(err.Error(), tc.fn) {
+			if !strings.Contains(err.Error(), writtenName(tc.fn)) {
 				t.Fatalf("%s error %q does not name the function", tc.fn, err)
 			}
 		})
@@ -990,6 +990,28 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 		{"VectorFunctions::sum0", []Value{realVec(1, 2, 3), realVec(0, 0, 0)}},
 		{"ComplexFunctions::ToString", []Value{cx(1, 2)}},
 		{"ComplexFunctions::ToComplex", []Value{NewStringValue("1.0")}},
+		{"BaseFunctions::ToString", []Value{cx(1, 2)}},
+		{"RationalFunctions::rat", []Value{constInt(1), constInt(3)}},
+		{"RationalFunctions::numer", []Value{constReal(0.5)}},
+		{"RationalFunctions::denom", []Value{constReal(0.5)}},
+		{"CollectionFunctions::array#", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::[", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::all", nil},
+		{"BaseFunctions::as", []Value{constInt(1)}},
+		{"BaseFunctions::meta", []Value{constInt(1)}},
+		{"BaseFunctions::istype", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::hastype", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::@", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::@@", []Value{constInt(1), constInt(1)}},
+		{"ControlFunctions::.", []Value{constInt(1)}},
+		{"DataFunctions::~", []Value{constInt(1)}},
+		{"ScalarFunctions::~", []Value{constInt(1)}},
+		{"OccurrenceFunctions::===", []Value{constInt(1), constInt(1)}},
+		{"OccurrenceFunctions::isDuring", []Value{constInt(1)}},
+		{"OccurrenceFunctions::create", []Value{constInt(1)}},
+		{"OccurrenceFunctions::destroy", []Value{constInt(1)}},
+		{"OccurrenceFunctions::addNew", []Value{constInt(1), constInt(1)}},
+		{"OccurrenceFunctions::addNewAt", []Value{constInt(1), constInt(1), constInt(1)}},
 	}
 
 	for _, tc := range unevaluable {
@@ -998,29 +1020,50 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 			if !errors.Is(err, ErrUnevaluableLibraryFunction) {
 				t.Fatalf("%s error = %v, want %v", tc.fn, err, ErrUnevaluableLibraryFunction)
 			}
-			if !strings.Contains(err.Error(), tc.fn) {
+			if !strings.Contains(err.Error(), writtenName(tc.fn)) {
 				t.Fatalf("%s error %q does not name the function", tc.fn, err)
 			}
 		})
 	}
+
+	exactRational := "docs/project/exact-rational-evaluation.md"
+	if _, err := applyLibrary(t, "RationalFunctions::rat", constInt(1), constInt(3)); err == nil || !strings.Contains(err.Error(), exactRational) {
+		t.Fatalf("RationalFunctions::rat error = %v, want a reason citing %s", err, exactRational)
+	}
 }
 
-// The vendored declarations these implementations are registered against cannot
-// drift from the registry: every function VectorFunctions, ComplexFunctions,
-// SequenceFunctions and TrigFunctions declare is either implemented here with
-// the declared parameter names in the declared order, or implemented as a
-// built-in over collections (builtins.go), which takes its arguments
-// positionally.
-func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
-	packages := map[string]string{
-		"VectorFunctions":   "Kernel Libraries/Kernel Function Library/VectorFunctions.kerml",
-		"ComplexFunctions":  "Kernel Libraries/Kernel Function Library/ComplexFunctions.kerml",
-		"SequenceFunctions": "Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml",
-		"TrigFunctions":     "Kernel Libraries/Kernel Function Library/TrigFunctions.kerml",
-		"StringFunctions":   "Kernel Libraries/Kernel Function Library/StringFunctions.kerml",
-	}
+// vendoredFunctionPackages lists every function library package the runtime
+// vendors. The declarations the implementations are registered against cannot
+// drift from the registry: every function these packages declare is either
+// implemented here with the declared parameter names in the declared order, or
+// implemented as a built-in over collections (builtins.go), which takes its
+// arguments positionally.
+var vendoredFunctionPackages = map[string]string{
+	"BaseFunctions":          "Kernel Libraries/Kernel Function Library/BaseFunctions.kerml",
+	"BooleanFunctions":       "Kernel Libraries/Kernel Function Library/BooleanFunctions.kerml",
+	"CollectionFunctions":    "Kernel Libraries/Kernel Function Library/CollectionFunctions.kerml",
+	"ComplexFunctions":       "Kernel Libraries/Kernel Function Library/ComplexFunctions.kerml",
+	"ControlFunctions":       "Kernel Libraries/Kernel Function Library/ControlFunctions.kerml",
+	"DataFunctions":          "Kernel Libraries/Kernel Function Library/DataFunctions.kerml",
+	"IntegerFunctions":       "Kernel Libraries/Kernel Function Library/IntegerFunctions.kerml",
+	"NaturalFunctions":       "Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml",
+	"NumericalFunctions":     "Kernel Libraries/Kernel Function Library/NumericalFunctions.kerml",
+	"OccurrenceFunctions":    "Kernel Libraries/Kernel Function Library/OccurrenceFunctions.kerml",
+	"RationalFunctions":      "Kernel Libraries/Kernel Function Library/RationalFunctions.kerml",
+	"RealFunctions":          "Kernel Libraries/Kernel Function Library/RealFunctions.kerml",
+	"ScalarFunctions":        "Kernel Libraries/Kernel Function Library/ScalarFunctions.kerml",
+	"SequenceFunctions":      "Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml",
+	"StringFunctions":        "Kernel Libraries/Kernel Function Library/StringFunctions.kerml",
+	"TrigFunctions":          "Kernel Libraries/Kernel Function Library/TrigFunctions.kerml",
+	"VectorFunctions":        "Kernel Libraries/Kernel Function Library/VectorFunctions.kerml",
+	"OpenSysMLMathFunctions": "OpenSysML Libraries/OpenSysMLMathFunctions.kerml",
+}
 
-	for pkg, path := range packages {
+// Every function each vendored package declares, operator-named ones included,
+// is registered: computed, a builtin, or unevaluable by name with a reason. No
+// declaration is exempt.
+func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
+	for pkg, path := range vendoredFunctionPackages {
 		t.Run(pkg, func(t *testing.T) {
 			data, err := libs.DefaultSource().Read(path)
 			if err != nil {
@@ -1036,10 +1079,12 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 			resolver := resolve.New(idx)
 			ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
 
+			declared := 0
 			for _, sym := range idx.LookupDirectChildren(pkg) {
 				if !isCalcSymbol(sym) {
 					continue
 				}
+				declared++
 				fqn := ctx.qualifiedSymbolName(sym)
 				fn, ok := libraryFunctionByName(fqn)
 				if !ok {
@@ -1061,6 +1106,9 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 						t.Errorf("%s parameter %d is %q, implementation names it %q", fqn, i, name, fn.params[i])
 					}
 				}
+			}
+			if declared == 0 {
+				t.Fatalf("%s declares no function in %s; the package name or path is wrong", pkg, path)
 			}
 		})
 	}

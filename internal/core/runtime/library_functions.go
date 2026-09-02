@@ -10,7 +10,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -50,6 +52,18 @@ type libraryFunction struct {
 // dispatched under, so an implementation shared by several declarations reports
 // the one the model called.
 type libraryApply func(name string, ctx *Context, args []Value) (Value, error)
+
+// writtenName is fqn as a model writes it: a segment that is no basic name, an
+// operator or a keyword, in the quotes of an unrestricted name.
+func writtenName(fqn string) string {
+	parts := strings.Split(fqn, "::")
+	for i, part := range parts {
+		if !lexer.IsIdentifier(part) || lexer.IsKeywordIn(part, source.KindKerML) {
+			parts[i] = "'" + part + "'"
+		}
+	}
+	return strings.Join(parts, "::")
+}
 
 // libraryFunctions maps a function's fully-qualified name to its
 // implementation. Dispatch is by qualified name, so a user-declared calc of the
@@ -125,6 +139,10 @@ func init() {
 	registerVectorFunctions()
 	registerComplexFunctions()
 	registerStringFunctions()
+	registerConversionFunctions()
+	registerGenericExtrema()
+	registerOperatorFunctions()
+	registerUnevaluableDeclarations()
 
 	// OpenSysMLMathFunctions is the non-normative OpenSysML extension library
 	// (internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml),
@@ -389,6 +407,9 @@ func (ctx *Context) libraryDeclared(sym *symbols.Symbol) bool {
 	return idx != nil && idx.Library(sym)
 }
 
+// written is the function's name as a model writes it, which it reports itself by.
+func (fn *libraryFunction) written() string { return writtenName(fn.name) }
+
 // invoke binds args to the declared parameters and applies the function,
 // recording the trace events a calc invocation records so a built-in function
 // appears in a trace like any other invocation.
@@ -413,13 +434,13 @@ func (fn *libraryFunction) invoke(ctx *Context, args calcArgs) (Value, error) {
 // the library's own one-argument `'+'` and `'-'` are called.
 func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, error) {
 	if len(args.positional) > 0 && len(args.named) > 0 {
-		return Value{}, fmt.Errorf("%w: function %s takes either positional or named arguments", ErrCalcArity, fn.name)
+		return Value{}, fmt.Errorf("%w: function %s takes either positional or named arguments", ErrCalcArity, fn.written())
 	}
 	given := len(args.positional) + len(args.named)
 	if given < fn.required || given > len(fn.params) {
 		return Value{}, fmt.Errorf(
 			"%w: function %s takes %s argument(s), got %d",
-			ErrCalcArity, fn.name, fn.arity(), given,
+			ErrCalcArity, fn.written(), fn.arity(), given,
 		)
 	}
 
@@ -438,7 +459,7 @@ func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, err
 			ctx.trace.RecordCalcBind(param, arg, "argument")
 		}
 	}
-	return fn.apply(fn.name, ctx, values)
+	return fn.apply(fn.written(), ctx, values)
 }
 
 // checkNamedArguments rejects an argument named for a parameter the signature
@@ -456,7 +477,7 @@ func (fn *libraryFunction) checkNamedArguments(args calcArgs) error {
 	slices.Sort(unknown)
 	return fmt.Errorf(
 		"%w: function %s has no input parameter %q (expected %s)",
-		ErrUnknownParameter, fn.name, unknown[0], fn.parameterList(),
+		ErrUnknownParameter, fn.written(), unknown[0], fn.parameterList(),
 	)
 }
 
@@ -480,7 +501,7 @@ func (fn *libraryFunction) argumentFor(i int, param string, args calcArgs) (Valu
 		if i < fn.required {
 			return Value{}, fmt.Errorf(
 				"%w: function %s has no input parameter matching the arguments given (expected %q)",
-				ErrUnknownParameter, fn.name, param,
+				ErrUnknownParameter, fn.written(), param,
 			)
 		}
 		return nullValue(), nil

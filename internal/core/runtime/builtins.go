@@ -57,6 +57,8 @@ var builtinLocalNames = map[string]string{
 	"maximize":     "ControlFunctions::maximize",
 	"sum":          "NumericalFunctions::sum",
 	"product":      "NumericalFunctions::product",
+	"sum0":         "NumericalFunctions::sum0",
+	"product1":     "NumericalFunctions::product1",
 }
 
 func init() {
@@ -121,7 +123,7 @@ func init() {
 		"NumericalFunctions::product": builtinNumericalProduct,
 		// IntegerFunctions::'..', the range, whose result the library declares
 		// `Integer[0..*]`: an ordered sequence, not a value kind of its own.
-		"IntegerFunctions::..": builtinIntegerRange,
+		"IntegerFunctions::..": rangeBuiltin("IntegerFunctions::'..'"),
 
 		"IntegerFunctions::sum":      builtinNumericalSum,
 		"IntegerFunctions::product":  builtinNumericalProduct,
@@ -130,6 +132,7 @@ func init() {
 		"RealFunctions::sum":         builtinNumericalSum,
 		"RealFunctions::product":     builtinNumericalProduct,
 	}
+	registerNamedOperatorBuiltins()
 
 	builtinsByLocalName = map[string]func(*EvalContext, []Value) (Value, error){}
 	for local, fqn := range builtinLocalNames {

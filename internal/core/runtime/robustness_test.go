@@ -217,6 +217,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
 	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
+	t.Run("named_library_call_that_has_no_value", testNamedLibraryCallThatHasNoValue)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
@@ -1259,6 +1260,59 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"SequenceFunctions::includingAt((), 9, 2)", ErrIndexOutOfRange},
 		{"SequenceFunctions::includingAt(xs, 9, 1.5)", ErrTypeMismatch},
 		{"SequenceFunctions::includingAt(xs, 9)", ErrCalcArity},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testNamedLibraryCallThatHasNoValue: a conversion, operator-call form, control
+// function, aggregation or unevaluable declaration called by name reports itself
+// by a typed error — no panic, no zero, no answer of another kind.
+func testNamedLibraryCallThatHasNoValue(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{`RealFunctions::ToReal("1.5 meters")`, ErrInvalidNotation},
+		{`RealFunctions::ToReal("NaN")`, ErrInvalidNotation},
+		{`RationalFunctions::ToRational("1/3")`, ErrInvalidNotation},
+		{`IntegerFunctions::ToInteger("2.0")`, ErrInvalidNotation},
+		{`IntegerFunctions::ToInteger("99999999999999999999")`, semantics.ErrArithmeticOverflow},
+		{`RealFunctions::ToInteger(1.0e300)`, semantics.ErrArithmeticOverflow},
+		{`BooleanFunctions::ToBoolean("yes")`, ErrInvalidNotation},
+		{`IntegerFunctions::ToNatural(-1)`, semantics.ErrArithmeticDomain},
+		{`NaturalFunctions::ToNatural("-1")`, semantics.ErrArithmeticDomain},
+		{`RealFunctions::ToReal(xs)`, ErrTypeMismatch},
+		{`RationalFunctions::gcd(1.5, 2)`, semantics.ErrArithmeticDomain},
+		{`RationalFunctions::gcd("1", 2)`, ErrTypeMismatch},
+		{`RationalFunctions::rat(1, 3)`, ErrUnevaluableLibraryFunction},
+		{`RationalFunctions::numer(0.5)`, ErrUnevaluableLibraryFunction},
+		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::isDuring(xs)`, ErrUnevaluableLibraryFunction},
+		{`IntegerFunctions::'+'("a", 1)`, ErrTypeMismatch},
+		{`IntegerFunctions::'/'(1, 0)`, ErrDivisionByZero},
+		{`IntegerFunctions::'%'(1, 0)`, ErrDivisionByZero},
+		{`IntegerFunctions::'*'(9223372036854775807, 2)`, semantics.ErrArithmeticOverflow},
+		{`RealFunctions::'**'(-8.0, 0.5)`, semantics.ErrArithmeticDomain},
+		{`ScalarFunctions::'<'("a", 1)`, ErrTypeMismatch},
+		{`BooleanFunctions::'xor'(true, 1)`, ErrTypeMismatch},
+		{`DataFunctions::max(true, false)`, ErrTypeMismatch},
+		{`ScalarFunctions::min(xs, ys)`, ErrTypeMismatch},
+		{`ScalarFunctions::'..'(1.5, 3)`, ErrTypeMismatch},
+		{`BaseFunctions::'#'(xs, 0)`, ErrIndexOutOfRange},
+		{`ControlFunctions::'if'(1, 2, 3)`, ErrTypeMismatch},
+		{`ControlFunctions::'if'(true, {in x; x}, 3)`, ErrBodyArity},
+		{`ControlFunctions::'and'(true, 1)`, ErrTypeMismatch},
+		{`ControlFunctions::'and'(1, true)`, ErrTypeMismatch},
+		{`ControlFunctions::'implies'(true, xs)`, ErrTypeMismatch},
+		{`NumericalFunctions::sum0(xs, 1)`, ErrTypeMismatch},
+		{`NumericalFunctions::product1(xs, 0)`, ErrTypeMismatch},
+		{`NumericalFunctions::sum0(flags, 0)`, ErrTypeMismatch},
+		{`NumericalFunctions::sum0((9223372036854775807, 1), 0)`, semantics.ErrArithmeticOverflow},
+		{`NumericalFunctions::sum0(xs)`, ErrCalcArity},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {

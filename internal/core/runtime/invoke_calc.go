@@ -569,6 +569,12 @@ func (shape *calcShape) checkArgs(args calcArgs) error {
 	return nil
 }
 
+// optional reports whether the parameter may go without an argument: its
+// declared multiplicity admits no value, as `[0..1]` does.
+func (param *calcParameter) optional() bool {
+	return param.Decl.Target != nil && param.Decl.multStated && param.Decl.Target.mult.AllowsNone()
+}
+
 // hasParameter reports whether the calc declares an input parameter of that name.
 func (shape *calcShape) hasParameter(name string) bool {
 	for _, param := range shape.Params {
@@ -580,8 +586,9 @@ func (shape *calcShape) hasParameter(name string) bool {
 }
 
 // bindCalcParameter resolves the value of one parameter: its argument (by
-// position or by name), else its declared default. A parameter with neither is
-// unbound, which is a modeling error rather than a null value.
+// position or by name), else its declared default, else null for one whose
+// multiplicity admits no value. A parameter with none of these is unbound,
+// which is a modeling error rather than a null value.
 func (ec *EvalContext) bindCalcParameter(
 	shape *calcShape,
 	param *calcParameter,
@@ -595,6 +602,9 @@ func (ec *EvalContext) bindCalcParameter(
 		return value, "argument", nil
 	}
 	if param.Default == nil {
+		if param.optional() {
+			return nullValue(), "omitted", nil
+		}
 		return Value{}, "", fmt.Errorf(
 			"%w: calc %s parameter %q has no argument and no default",
 			ErrUnboundParameter, shape.Name, param.Name,

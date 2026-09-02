@@ -1,0 +1,45 @@
+{
+  "libraries": true,
+  "type": "calcUsage",
+  "evaluate": "test::c",
+  "outputs": {
+    "sum": {"type": "Integer", "value": 3},
+    "negated": {"type": "Integer", "value": -5},
+    "difference": {"type": "Real", "value": -0.5},
+    "product": {"type": "Integer", "value": 12},
+    "quotient": {"type": "Real", "value": 0.25},
+    "remainder": {"type": "Integer", "value": 1},
+    "power": {"type": "Integer", "value": 1024},
+    "caret": {"type": "Real", "value": 0.5},
+    "concatenated": {"type": "String", "value": "ab"},
+    "equal": {"type": "Boolean", "value": true},
+    "equalAcrossKinds": {"type": "Boolean", "value": true},
+    "unequal": {"type": "Boolean", "value": true},
+    "identical": {"type": "Boolean", "value": true},
+    "notIdenticalAcrossKinds": {"type": "Boolean", "value": true},
+    "less": {"type": "Boolean", "value": true},
+    "atMost": {"type": "Boolean", "value": true},
+    "greater": {"type": "Boolean", "value": true},
+    "atLeast": {"type": "Boolean", "value": false},
+    "negation": {"type": "Boolean", "value": false},
+    "exclusive": {"type": "Boolean", "value": true},
+    "either": {"type": "Boolean", "value": true},
+    "both": {"type": "Boolean", "value": false},
+    "dataNegation": {"type": "Boolean", "value": true},
+    "range": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 1},
+      {"type": "Integer", "value": 2},
+      {"type": "Integer", "value": 3}
+    ]},
+    "emptyRange": {"type": "Sequence", "elements": []},
+    "indexed": {"type": "Integer", "value": 20},
+    "joined": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 1},
+      {"type": "Integer", "value": 2},
+      {"type": "Integer", "value": 3}
+    ]},
+    "sameElements": {"type": "Boolean", "value": true},
+    "largest": {"type": "Real", "value": 7.5},
+    "smallest": {"type": "String", "value": "apple"}
+  }
+}

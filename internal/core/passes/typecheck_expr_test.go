@@ -332,6 +332,24 @@ func TestExprInvocationCorrectArityOK(t *testing.T) {
 	wantNoDiags(t, `package P { `+calcAdd+` calc c { add(1, 2) } }`)
 }
 
+// A parameter whose multiplicity admits no value may go without an argument,
+// as the library's `'-'(x)` and two-argument `'if'` do; one declaring `[1]` may not.
+func TestExprInvocationOptionalParameterMayBeOmitted(t *testing.T) {
+	const model = `package P {
+		calc def scale {
+			in x : ScalarValues::Integer;
+			in by : ScalarValues::Integer[0..1];
+			x
+		}
+		calc c { scale(%s) }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `2`))
+	wantNoDiags(t, fmt.Sprintf(model, `2, 3`))
+	wantOneDiag(t, fmt.Sprintf(model, ``), "scale requires 1 argument(s), found 0")
+	wantNoDiags(t, `package P { calc c { IntegerFunctions::'-'(5) } }`)
+	wantNoDiags(t, `package P { calc c { ControlFunctions::'if'(false, 1) } }`)
+}
+
 func TestExprInvocationThroughAliasChecksArguments(t *testing.T) {
 	const model = `package P {
 		` + calcAdd + `

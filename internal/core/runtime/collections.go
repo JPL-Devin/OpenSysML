@@ -366,7 +366,13 @@ func builtinSequenceUnion(ec *EvalContext, args []Value) (Value, error) {
 	if err := checkArity("SequenceFunctions::union", args, 2); err != nil {
 		return Value{}, err
 	}
-	seq1, seq2 := elementsOf(args[0]), elementsOf(args[1])
+	return ec.concatSequences(args[0], args[1])
+}
+
+// concatSequences is `(seq1, seq2)`: the elements of the first followed by the
+// elements of the second.
+func (ec *EvalContext) concatSequences(first, second Value) (Value, error) {
+	seq1, seq2 := elementsOf(first), elementsOf(second)
 	joined := make([]Value, 0, len(seq1)+len(seq2))
 	joined = append(joined, seq1...)
 	joined = append(joined, seq2...)

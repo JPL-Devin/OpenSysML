@@ -1,0 +1,19 @@
+{
+  "libraries": true,
+  "type": "calcUsage",
+  "evaluate": "test::c",
+  "outputs": {
+    "selectedThen": {"type": "Integer", "value": 1},
+    "selectedElse": {"type": "Integer", "value": 2},
+    "omittedElse": {"type": "Null"},
+    "bodyBranch": {"type": "Integer", "value": 2},
+    "andShortCircuits": {"type": "Boolean", "value": false},
+    "andEvaluates": {"type": "Boolean", "value": true},
+    "orShortCircuits": {"type": "Boolean", "value": true},
+    "orEvaluates": {"type": "Boolean", "value": true},
+    "impliesShortCircuits": {"type": "Boolean", "value": true},
+    "impliesEvaluates": {"type": "Boolean", "value": false},
+    "coalescesNull": {"type": "Integer", "value": 5},
+    "keepsValue": {"type": "Integer", "value": 3}
+  }
+}

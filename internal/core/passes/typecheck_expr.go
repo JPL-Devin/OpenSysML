@@ -700,7 +700,7 @@ func (ec *exprChecker) checkArguments(
 	}
 	required := 0
 	for _, p := range params {
-		if p.usage.Value == nil {
+		if p.usage.Value == nil && !ec.model.IsOptionalParameter(p.usage) {
 			required++
 		}
 	}

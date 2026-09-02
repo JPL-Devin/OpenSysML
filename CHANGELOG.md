@@ -36,6 +36,29 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the apply against the real stack — an initial load, a revision with a retained-id rename and
   gated deletes, a conflict staged behind the sync's back — and records what read back at the
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+- **Every Kernel Function Library declaration is dispatchable by name.** All 17 vendored
+  packages, and `OpenSysMLMathFunctions`, are gated: each calc or function declaration —
+  the operator-named ones included — either computes or names itself as unevaluable with the
+  reason, so `RealFunctions::ToReal("1.5")` is `1.5` rather than "calc has no return
+  expression" and `NumericalFunctions::sum0((1, 2, 3), 0)` is `6` rather than an unresolved
+  `+`. New: the conversions `ToString`, `ToBoolean`, `ToInteger`, `ToNatural`, `ToRational`
+  and `ToReal` of every package that declares them (a String that is not a notation of the
+  type, a negative given to `ToNatural` and a value outside the Integer range are typed
+  errors; `ToString` of a Real is the shortest decimal that reads back as the same Real, so
+  `ToReal(ToString(x)) == x`); `RationalFunctions::floor`, `round` and `gcd`
+  (`gcd(0, 0)` is `0`, a negative operand is taken by magnitude); `RealFunctions::re`, `im`
+  and `arg`; `NumericalFunctions::sum0`/`product1`, which answer the identity they are given
+  for an empty collection; `DataFunctions`/`ScalarFunctions::max`/`min` over numbers,
+  strings and quantities; every operator as a function — `IntegerFunctions::'+'(1, 2)`,
+  `DataFunctions::'=='(1, 1)`, `BaseFunctions::'#'(xs, 2)`, `ScalarFunctions::'..'(1, 3)`,
+  `BooleanFunctions::'not'`/`'xor'` — each evaluated by the operator's own code; and
+  `ControlFunctions::'if'`, `'and'`, `'or'`, `'implies'` and `'??'`, which evaluate only the
+  operand they select. `RationalFunctions::rat`/`numer`/`denom` (a Rational is a float64
+  here), `CollectionFunctions::'array#'` and `BaseFunctions::'['` (no Array value kind),
+  `BaseFunctions::all`/`as`/`meta`/`istype`/`hastype`/`'@'`/`'@@'` and `ControlFunctions::'.'`
+  (evaluated from their own notation, not as functions), `DataFunctions`/`ScalarFunctions::'~'`
+  and every `OccurrenceFunctions` declaration report themselves by name. An operator-named
+  function reports itself as the model writes it (`IntegerFunctions::'+'`).
 
 ### Performance
 
