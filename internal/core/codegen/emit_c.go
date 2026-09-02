@@ -144,24 +144,43 @@ static sysml_real sysml_rpow(sysml_real base, sysml_real exp) {
 	return sysml_finite(pow(base, exp));
 }
 
+/* Writes r to buf as [-]d[.ddd]e[+-]xx with the fewest digits that read back
+ * as r, the nearest such spelling when several do (as Go's strconv does).
+ * Above a power of two the rounding interval is twice as wide as below, so the
+ * next p-digit decimal up can read back as r when the nearest one does not. */
+static void sysml_shortest(sysml_real r, char *buf, size_t size) {
+	for (int prec = 1; prec <= 17; prec++) {
+		snprintf(buf, size, "%.*e", prec - 1, r);
+		if (strtod(buf, NULL) == r) return;
+		char up[40];
+		snprintf(up, sizeof up, "%s", buf);
+		char *first = up + (up[0] == '-');
+		char *d = strchr(up, 'e') - 1;
+		while (d >= first && (*d == '.' || *d == '9')) {
+			if (*d == '9') *d = '0';
+			d--;
+		}
+		if (d < first) continue; /* carried out: a shorter spelling already failed */
+		(*d)++;
+		if (strtod(up, NULL) == r) {
+			snprintf(buf, size, "%s", up);
+			return;
+		}
+	}
+}
+
 /* Prints r as the interpreter does: shortest round-trip digits, positional
  * for 1e-4 <= |r| < 1e21 and for 0, exponent form otherwise, always with a
  * fraction or exponent so a whole Real still reads as a Real. */
 static void sysml_print_real(sysml_real r) {
 	char buf[40];
-	int prec = 1;
-	for (; prec < 17; prec++) {
-		snprintf(buf, sizeof buf, "%.*e", prec - 1, r);
-		if (strtod(buf, NULL) == r) break;
-	}
+	sysml_shortest(r, buf, sizeof buf);
 	sysml_real a = fabs(r);
 	if (r != 0 && (a < 1e-4 || a >= 1e21)) {
-		snprintf(buf, sizeof buf, "%.*g", prec, r);
 		fputs(buf, stdout);
 		fputc('\n', stdout);
 		return;
 	}
-	snprintf(buf, sizeof buf, "%.*e", prec - 1, r);
 	/* buf is [-]d[.ddd]e[+-]xx: reassemble the digits around the point. */
 	char digits[24];
 	int nd = 0, exp10 = 0;
