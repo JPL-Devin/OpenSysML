@@ -18,7 +18,7 @@ stable	combined-behavioral-demo.sysml
 refused:invocation-expr	disposal-robot-demo/robot.sysml
 stable	disposal-team-demo/team.sysml
 stable	orthogonal-regions-demo.sysml
-unwritable	parser_features_demo_action_semantics.sysml
+stable	parser_features_demo_action_semantics.sysml
 refused:operator-expr	parser_features_demo_advanced_bodies.kerml
 refused:duplicate-declaration	parser_features_demo_advanced_connectors.kerml
 stable	parser_features_demo_binding.kerml
@@ -93,7 +93,7 @@ stable	pilot-corpora/sysml-examples/Analysis Examples/Dynamics.sysml
 refused:operator-expr	pilot-corpora/sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml
 stable	pilot-corpora/sysml-examples/Analysis Examples/Vehicle Analysis Demo.sysml
 stable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFCoreLib.sysml
-unwritable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFNorwayTopics.sysml
+unparseable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFNorwayTopics.sysml
 stable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFProfileLib.sysml
 refused:event-declaration	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFSequences.sysml
 stable	pilot-corpora/sysml-examples/Association Examples/ProductSelection_N_ary.sysml
@@ -122,7 +122,7 @@ stable	pilot-corpora/sysml-examples/Interaction Sequencing Examples/ServerSequen
 refused:event-declaration	pilot-corpora/sysml-examples/Interaction Sequencing Examples/ServerSequenceOutsideRealization-3.sysml
 refused:event-declaration	pilot-corpora/sysml-examples/Interaction Sequencing Examples/ServerSequenceRealization-2.sysml
 refused:event-declaration	pilot-corpora/sysml-examples/Interaction Sequencing Examples/ServerSequenceRealization-3.sysml
-unwritable	pilot-corpora/sysml-examples/Interaction Sequencing Examples/SwimlaneExample.sysml
+stable	pilot-corpora/sysml-examples/Interaction Sequencing Examples/SwimlaneExample.sysml
 refused:assert-declaration	pilot-corpora/sysml-examples/Mass Roll-up Example/MassConstraintExample.sysml
 stable	pilot-corpora/sysml-examples/Mass Roll-up Example/MassRollup.sysml
 stable	pilot-corpora/sysml-examples/Mass Roll-up Example/Vehicles.sysml
@@ -147,7 +147,7 @@ stable	pilot-corpora/sysml-examples/Simple Tests/CommentTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/ConjugationTest.sysml
 refused:prefix-metadata	pilot-corpora/sysml-examples/Simple Tests/ConnectionTest.sysml
 refused:assert-declaration	pilot-corpora/sysml-examples/Simple Tests/ConstraintTest.sysml
-unwritable	pilot-corpora/sysml-examples/Simple Tests/ControlNodeTest.sysml
+stable	pilot-corpora/sysml-examples/Simple Tests/ControlNodeTest.sysml
 refused:succession	pilot-corpora/sysml-examples/Simple Tests/DecisionTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/DefaultValueTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/DependencyTest.sysml
@@ -165,7 +165,7 @@ stable	pilot-corpora/sysml-examples/Simple Tests/PartTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/RequirementTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/RootPackageTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/StateTest.sysml
-graph-diff	pilot-corpora/sysml-examples/Simple Tests/StructuredControlTest.sysml
+stable	pilot-corpora/sysml-examples/Simple Tests/StructuredControlTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/TextualRepresentationTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/TradeStudyTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/UseCaseTest.sysml
@@ -193,7 +193,7 @@ stable	pilot-corpora/sysml-validation/01-Parts Tree/1d-Parts Tree with Reference
 stable	pilot-corpora/sysml-validation/02-Parts Interconnection/2a-Parts Interconnection.sysml
 stable	pilot-corpora/sysml-validation/02-Parts Interconnection/2c-Parts Interconnection-Multiple Decompositions.sysml
 graph-diff	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-1.sysml
-unwritable	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-2.sysml
+graph-diff	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-2.sysml
 stable	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-3.sysml
 refused:succession	pilot-corpora/sysml-validation/03-Function-based Behavior/3c-Function-based Behavior-structure mod-1.sysml
 refused:succession	pilot-corpora/sysml-validation/03-Function-based Behavior/3c-Function-based Behavior-structure mod-2.sysml
@@ -280,23 +280,23 @@ stable	sysml-v2-training/13. Flows/Flow Definition Example.sysml
 stable	sysml-v2-training/13. Flows/Flow Interface Example.sysml
 stable	sysml-v2-training/13. Flows/Flow Usage Example.sysml
 stable	sysml-v2-training/14. Action Definitions/Action Definition Example.sysml
-unwritable	sysml-v2-training/14. Action Definitions/Action Shorthand Example.sysml
+stable	sysml-v2-training/14. Action Definitions/Action Shorthand Example.sysml
 stable	sysml-v2-training/14. Action Definitions/Action Succession Example-1.sysml
 stable	sysml-v2-training/14. Action Definitions/Action Succession Example-2.sysml
 stable	sysml-v2-training/15. Actions/Action Decomposition.sysml
 stable	sysml-v2-training/16. Conditional Succession/Conditional Succession Example-1.sysml
 stable	sysml-v2-training/16. Conditional Succession/Conditional Succession Example-2.sysml
 stable	sysml-v2-training/17. Control/Camera.sysml
-unwritable	sysml-v2-training/17. Control/Control Structures Example.sysml
-unwritable	sysml-v2-training/17. Control/Decision Example.sysml
+stable	sysml-v2-training/17. Control/Control Structures Example.sysml
+stable	sysml-v2-training/17. Control/Decision Example.sysml
 stable	sysml-v2-training/17. Control/Fork Join Example.sysml
-unwritable	sysml-v2-training/17. Control/Merge Example.sysml
+stable	sysml-v2-training/17. Control/Merge Example.sysml
 stable	sysml-v2-training/18. Action Performance/Action Performance Example.sysml
-unwritable	sysml-v2-training/19. Terminate Actions/Terminate Actions Example-1.sysml
+stable	sysml-v2-training/19. Terminate Actions/Terminate Actions Example-1.sysml
 stable	sysml-v2-training/19. Terminate Actions/Terminate Actions Example-2.sysml
 stable	sysml-v2-training/20. Assignment Actions/Assignment Example.sysml
-unwritable	sysml-v2-training/21. Asynchronous Messaging/Messaging Example.sysml
-unwritable	sysml-v2-training/21. Asynchronous Messaging/Messaging with Ports.sysml
+stable	sysml-v2-training/21. Asynchronous Messaging/Messaging Example.sysml
+stable	sysml-v2-training/21. Asynchronous Messaging/Messaging with Ports.sysml
 stable	sysml-v2-training/22. Opaque Actions/Opaque Action Example.sysml
 stable	sysml-v2-training/23. State Definitions/State Definition Example-1.sysml
 stable	sysml-v2-training/23. State Definitions/State Definition Example-2.sysml
@@ -312,7 +312,7 @@ stable	sysml-v2-training/27. Occurrences/Interaction Example-1.sysml
 refused:event-declaration	sysml-v2-training/27. Occurrences/Interaction Example-2.sysml
 refused:event-declaration	sysml-v2-training/27. Occurrences/Interaction Realization-1.sysml
 refused:event-declaration	sysml-v2-training/27. Occurrences/Interaction Realization-2.sysml
-unwritable	sysml-v2-training/27. Occurrences/Message Payload Example.sysml
+stable	sysml-v2-training/27. Occurrences/Message Payload Example.sysml
 stable	sysml-v2-training/27. Occurrences/Time Slice and Snapshot Example.sysml
 stable	sysml-v2-training/28. Individuals/Individuals and Roles-1.sysml
 stable	sysml-v2-training/28. Individuals/Individuals and Snapshots Example.sysml
