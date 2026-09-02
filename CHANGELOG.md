@@ -50,6 +50,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   parameters) stays on the evaluator, as does every traced, named-argument or non-scalar
   invocation. `OPENSYSML_CALC_COMPILE=0` turns the tier off for bisecting.
 
+- **The compiled calc tier takes the bodies analysis models write.** Four constructs join the
+  compiled subset, each reproducing the reference evaluator's values, error text and step counts
+  exactly: statement bodies of body-local scalar declarations, `return` and `if`/`else`, compiled
+  from the lowered statements into further slots of the scalar frame with the evaluator's
+  declaration-order and shadowing rules (a local read before its declaration, a local without a
+  value, a body that may run off its end, `out` features, loops and assignments stay on the
+  evaluator); parameters redefined along the specialization chain (`in :>> x = 3.0;`,
+  `in x :>> Base::x : Integer;`), laid out as the effective parameter list the evaluator binds; the
+  standard library's scalar functions and constants (`sqrt`, `ln`, `exp`, `abs`, `floor`, `round`,
+  `min`, `max`, the trigonometric functions, `deg`, `rad`, `TrigFunctions::pi`, …), dispatched
+  through the resolved symbol to the Go implementation the evaluator uses — so an alias or an
+  import reaches it and a model's own `sqrt` does not — and `sum`/`product` over a lone scalar;
+  and named arguments (`Fib(k = n - 1)`), bound to slots at compile time with the evaluator's
+  arity and unknown-name checks ahead of dispatch. Over the repository's fixtures, examples and
+  the OMG corpora the tier now compiles 127 of 343 calc definitions (37%) instead of 42 of 263
+  (16%); a recursive tree of three-local bodies calling `sqrt` runs 12.6× faster (10.4 ms instead
+  of 132 for 131 071 invocations) and `Fib(25)` is unchanged at 21–23 ns per invocation. The
+  differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
+  fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
+
 ### Changed
 
 - **The architecture self-model describes the library snapshot.** The standard library stage in
