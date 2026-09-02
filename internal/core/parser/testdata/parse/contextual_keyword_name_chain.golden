@@ -46,6 +46,18 @@
               (Relationship kind="subsets" target=pt
                 (*ast.QualifiedName))))))
       (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="Tag"))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Tag
+            (*ast.QualifiedName))
+          (Relationship kind="about" target=named
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="about" target=bare
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
         (Usage kind="part" name="modifier" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
             (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false chain=true

@@ -698,8 +698,8 @@ func (p *Parser) atChainWord() bool {
 
 // atChainModifier reports whether the cursor is at the `chain` modifier of a
 // declaration rather than at a feature named `chain`: what follows must be able
-// to name the declaration, as parseIdentificationStopping reads it.
-func (p *Parser) atChainModifier() bool {
+// to name a usage of kind, as parseUsageIdentification reads it.
+func (p *Parser) atChainModifier(kind ast.UsageKind) bool {
 	if !p.atChainWord() {
 		return false
 	}
@@ -708,7 +708,7 @@ func (p *Parser) atChainModifier() bool {
 	case lexer.Identifier, lexer.UnrestrictedName, lexer.ColonColon, lexer.Lt:
 		return true
 	case lexer.Keyword:
-		return !declarationTailKeywords[next.KeywordID] && !p.featureSpecializationAt(1)
+		return keywordNamesUsage(kind, next.KeywordID) && !p.featureSpecializationAt(1)
 	}
 	return false
 }
@@ -718,7 +718,8 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 	for {
 		t := p.peek()
 		if p.atChainWord() {
-			if p.atChainModifier() {
+			kind, _ := modifierImpliedKind(m)
+			if p.atChainModifier(kind) {
 				m.isChain = true
 				p.advance()
 				continue
@@ -1298,7 +1299,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse 'all' modifier if present (appears after keyword, before name)
 	isAll := p.acceptSufficientAll()
 
-	if p.atChainModifier() {
+	if p.atChainModifier(p.usageKindOf(kw)) {
 		mods.isChain = true
 		p.advance()
 	}
@@ -1516,22 +1517,38 @@ func (p *Parser) isResultKeyword() bool {
 	return p.at(lexer.Keyword) && p.peek().KeywordID == "return"
 }
 
-// parseUsageIdentification parses identification for usage declarations, with special handling
-// for step usage to allow "do" keyword as identifier name (since "do" is a valid step name like entry/exit).
+// stepNameKeyword is `do`, which names a step (`step do[1] subsets middle;` in
+// StatePerformances.kerml) though it continues every other declaration.
+const stepNameKeyword = "do"
+
+// metadataStopKeyword is `about`, which ends a metadata declaration (SysML.xtext
+// MetadataUsage), so an unnamed `metadata : M about x;` is not named "about".
+const metadataStopKeyword = "about"
+
+// keywordNamesUsage reports whether keyword kw, where a usage of kind states its
+// name, is read as that name rather than as the rest of the declaration.
+func keywordNamesUsage(kind ast.UsageKind, kw string) bool {
+	switch {
+	case kind == ast.UsageStep && kw == stepNameKeyword:
+		return true
+	case kind == ast.UsageMetadata && kw == metadataStopKeyword:
+		return false
+	}
+	return !declarationTailKeywords[kw]
+}
+
+// parseUsageIdentification parses the identification of a usage of kind, reading
+// a keyword as its name when keywordNamesUsage says so.
 func (p *Parser) parseUsageIdentification(kind ast.UsageKind) ast.Identification {
-	// Special case: step usage allows "do" as identifier
-	if kind == ast.UsageStep && p.atKeyword("do") {
+	if kind == ast.UsageStep && p.atKeyword(stepNameKeyword) {
 		tok := p.advance()
 		return ast.Identification{
 			Name: tok.KeywordID,
 		}
 	}
-	// `about` ends a metadata declaration (SysML.xtext MetadataUsage), so an
-	// unnamed `metadata : M about x;` is not named "about".
 	if kind == ast.UsageMetadata {
-		return p.parseIdentificationStopping("about")
+		return p.parseIdentificationStopping(metadataStopKeyword)
 	}
-	// Default: use standard identification parsing
 	return p.parseIdentification()
 }
 

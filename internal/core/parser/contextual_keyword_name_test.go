@@ -85,7 +85,8 @@ func TestParseVarPrefixQualifiesTheKind(t *testing.T) {
 }
 
 // `chain` is the feature chain modifier only when a name follows it; before
-// `=`, `:`, `;` or `[` it names the feature, on either side of the kind keyword.
+// `=`, `:`, `;`, `[` or a keyword that continues the declaration it names the
+// feature, on either side of the kind keyword.
 func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
 	for _, src := range []string{
 		"package P { attribute chain = 1; attribute pt = chain + 1; }",
@@ -97,6 +98,7 @@ func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
 		"package P { attribute chain defined by Integer; }",
 		"package P { attribute chain subsets other; attribute other; }",
 		"package P { attribute chain redefines other; attribute other; }",
+		"package P { metadata chain about other; attribute other; }",
 	} {
 		root := parseClean(t, src)
 		pkg := root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)
@@ -117,6 +119,30 @@ func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
 		u := firstUsage(t, pkg.Members[0].(*ast.Membership).Member)
 		if u.Ident.Name == "chain" || !u.IsChain {
 			t.Errorf("%s\ndeclared %q chain=%t, want the modifier and the name after it", src, u.Ident.Name, u.IsChain)
+		}
+	}
+}
+
+// Whether a keyword after `chain` names the declaration is the declaration
+// kind's call, the same one parseUsageIdentification makes: `do` names a step
+// and nothing else, `about` names nothing in a metadata usage.
+func TestKeywordNamesUsageFollowsTheKind(t *testing.T) {
+	for _, tt := range []struct {
+		kind ast.UsageKind
+		kw   string
+		want bool
+	}{
+		{ast.UsageStep, "do", true},
+		{ast.UsageAttribute, "do", false},
+		{ast.UsageAction, "do", false},
+		{ast.UsageMetadata, "about", false},
+		{ast.UsageAttribute, "about", true},
+		{ast.UsageAttribute, "default", false},
+		{ast.UsageStep, "default", false},
+		{ast.UsageAttribute, "item", true},
+	} {
+		if got := keywordNamesUsage(tt.kind, tt.kw); got != tt.want {
+			t.Errorf("keywordNamesUsage(%v, %q) = %t, want %t", tt.kind, tt.kw, got, tt.want)
 		}
 	}
 }
