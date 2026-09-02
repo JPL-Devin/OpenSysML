@@ -1,0 +1,138 @@
+package passes
+
+import (
+	"strings"
+	"testing"
+)
+
+const featureValueOverridingCode = "feature-value-overriding"
+
+// overridingDiags returns the binding-override diagnostics of src, asserting
+// that each one is an error covering one of the wanted value parts.
+func overridingDiags(t *testing.T, src string, wantSpans ...string) []Diagnostic {
+	t.Helper()
+	diags := only(constraintDiags(t, src), featureValueOverridingCode)
+	if len(diags) != len(wantSpans) {
+		t.Fatalf("got %d diagnostics, want %d: %v", len(diags), len(wantSpans), diags)
+	}
+	for i, d := range diags {
+		if d.Severity != SeverityError {
+			t.Errorf("severity = %v, want an error", d.Severity)
+		}
+		if got := spanText(src, d); got != wantSpans[i] {
+			t.Errorf("span text = %q, want %q", got, wantSpans[i])
+		}
+	}
+	return diags
+}
+
+// A value bound with `=` cannot be overridden by a redefinition, in a usage or
+// in a specializing definition alike (KerML 1.0 §8.3.4.10.2).
+func TestFeatureValueOverridingBindingIsReported(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Integer;
+		part def P { attribute a : Integer = 1; }
+		part p : P { attribute :>> a = 2; }
+		part def Q :> P { attribute :>> a = 3; }
+	}`
+	diags := overridingDiags(t, src, "= 2", "= 3")
+	msg := diags[0].Message
+	for _, want := range []string{"cannot override the binding value of P::P::a", "`default =`", "remove this value"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message %q does not mention %q", msg, want)
+		}
+	}
+}
+
+// A `default` value is there to be overridden.
+func TestFeatureValueOverridingDefaultIsClean(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Integer;
+		part def P { attribute a : Integer default = 1; attribute b : Integer default 1; }
+		part p : P { attribute :>> a = 2; attribute :>> b := 2; }
+		part def Q :> P { attribute :>> a default = 3; }
+	}`
+	overridingDiags(t, src)
+}
+
+// A redefinition that states no value of its own, or only a body, overrides nothing.
+func TestFeatureValueOverridingNoValueIsClean(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Integer;
+		part def P { attribute a : Integer = 1; attribute e : Integer; }
+		part def Q :> P { attribute :>> a; attribute :>> e = 4; }
+		part p : P { attribute :>> a { doc /* restated */ } }
+	}`
+	overridingDiags(t, src)
+}
+
+// The binding is found through the whole redefinition chain: past a redefinition
+// that states no value, and past one that restates it as a default (itself an
+// override of the binding).
+func TestFeatureValueOverridingIsTransitive(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Integer;
+		part def P { attribute a : Integer = 1; }
+		part def Q :> P { attribute :>> a; }
+		part def R :> Q { attribute :>> a = 3; }
+		part def Q2 :> P { attribute :>> a default = 2; }
+		part def R2 :> Q2 { attribute :>> a = 4; }
+	}`
+	overridingDiags(t, src, "= 3", "default = 2", "= 4")
+}
+
+// A default written over a binding is still an override of the binding, and an
+// initial value `:=` is a binding too, whichever side of the redefinition it is on.
+func TestFeatureValueOverridingDefaultAndInitialOverBinding(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Integer;
+		part def P { attribute a : Integer = 1; attribute v : Integer := 1; }
+		part p : P { attribute :>> a default = 2; attribute :>> v = 2; }
+		part q : P { attribute :>> a := 3; }
+	}`
+	overridingDiags(t, src, "default = 2", "= 2", ":= 3")
+}
+
+// A parameter redefines the parameter at its position implicitly, so binding it
+// again overrides the general behavior's binding; a default there is fine.
+func TestFeatureValueOverridingImplicitParameterRedefinition(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Integer;
+		action def A { in x : Integer = 1; in y : Integer default = 1; }
+		action a : A { in x = 2; in y = 2; }
+		action def A2 :> A { in :>> x = 5; }
+		calc def C { in i : Integer = 1; return r : Integer = i; }
+		calc c : C { in i = 3; }
+	}`
+	overridingDiags(t, src, "= 2", "= 5", "= 3")
+}
+
+// Nested and named-redefinition shapes reach the same binding.
+func TestFeatureValueOverridingNestedAndRenamed(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::Integer;
+		part def N { part sub { attribute a : Integer = 1; } }
+		part n : N { part :>> sub { attribute :>> a = 2; } }
+		part def S :> N { part :>> sub { attribute z : Integer :>> a = 9; } }
+	}`
+	overridingDiags(t, src, "= 2", "= 9")
+}
+
+// A requirement's subject is a parameter too: a usage's subject, named, bound
+// anonymously or redefining explicitly, overrides the definition's bound
+// subject, while a `default` subject may be rebound.
+func TestFeatureValueOverridingSubject(t *testing.T) {
+	const src = `package P {
+		part def V;
+		part v0 : V;
+		part v1 : V;
+		requirement def R { subject v : V = v0; }
+		requirement r1 : R { subject = v1; }
+		requirement r2 : R { subject w = v1; }
+		requirement def R2 :> R { subject :>> v default = v1; }
+		requirement def RD { subject v : V default = v0; }
+		requirement r3 : RD { subject :>> v = v1; }
+		requirement r4 : RD { subject = v1; }
+	}`
+	overridingDiags(t, src, "= v1", "= v1", "default = v1")
+}

@@ -86,6 +86,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkW10BCrossFeatures(sym)
 	cc.checkSubsettingFeaturingTypes(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
+	cc.checkFeatureValueOverriding(sym)
 	cc.checkVariantOutsideVariation(sym)
 	cc.checkViewSatisfyTarget(sym)
 	cc.checkAtMostOneMember(sym)
