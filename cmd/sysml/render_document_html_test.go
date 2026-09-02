@@ -171,3 +171,24 @@ func TestRenderDocumentHTMLStylesheetURLScheme(t *testing.T) {
 		"-doc-form", "html", "-html-css", "HTTPS://Example.test/Site.css"),
 		0, `<link rel="stylesheet" href="HTTPS://Example.test/Site.css">`)
 }
+
+// TestSetStylesheetNameLength checks a stylesheet name whose escaping outgrows
+// the file name limit is shortened to a distinct, still-suffixed name.
+func TestSetStylesheetNameLength(t *testing.T) {
+	taken := map[string]bool{}
+	long := strings.Repeat("é", 120) + ".css"
+	name := setStylesheetName(long, taken)
+	if len(name) > 255 {
+		t.Errorf("name is %d bytes: %q", len(name), name)
+	}
+	if !strings.HasSuffix(name, ".css") {
+		t.Errorf("name lost its extension: %q", name)
+	}
+	other := setStylesheetName(strings.Repeat("é", 121)+".css", taken)
+	if other == name {
+		t.Errorf("two stylesheets share the name %q", name)
+	}
+	if len(other) > 255 {
+		t.Errorf("name is %d bytes: %q", len(other), other)
+	}
+}

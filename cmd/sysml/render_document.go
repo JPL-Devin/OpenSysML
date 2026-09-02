@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -155,7 +156,7 @@ func setStylesheetName(name string, taken map[string]bool) string {
 	if name == "" || name == "." || name == string(filepath.Separator) {
 		name = docrender.StylesheetFileName
 	}
-	name = escapeStylesheetName(name)
+	name = shortenStylesheetName(escapeStylesheetName(name))
 	ext := filepath.Ext(name)
 	stem := strings.TrimSuffix(name, ext)
 	unique := name
@@ -181,6 +182,32 @@ func escapeStylesheetName(name string) string {
 		}
 	}
 	return b.String()
+}
+
+// maxStylesheetName bounds an asset name well inside the 255-byte component
+// limit filesystems commonly impose, leaving room for a uniquifying suffix.
+const maxStylesheetName = 240
+
+// shortenStylesheetName keeps an escaped name within the file name limit,
+// ending an over-long one in a digest of the whole so two stay distinct.
+func shortenStylesheetName(name string) string {
+	if len(name) <= maxStylesheetName {
+		return name
+	}
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(name)))[:16]
+	ext := filepath.Ext(name)
+	if len(ext) > maxStylesheetName/2 {
+		ext = ""
+	}
+	stem := strings.TrimSuffix(name, ext)[:maxStylesheetName-len(ext)-len(digest)-1]
+	// A truncation must not end mid-escape, which would name another byte.
+	switch {
+	case strings.HasSuffix(stem, "."):
+		stem = stem[:len(stem)-1]
+	case len(stem) >= 2 && stem[len(stem)-2] == '.':
+		stem = stem[:len(stem)-2]
+	}
+	return stem + "-" + digest + ext
 }
 
 // htmlOptions resolves the HTML flags, reading each -html-css file and
