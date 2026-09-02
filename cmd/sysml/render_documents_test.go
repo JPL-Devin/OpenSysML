@@ -592,6 +592,37 @@ func TestRenderDocumentsHTMLStylesheets(t *testing.T) {
 	}
 }
 
+// TestRenderDocumentsHTMLStylesheetNames checks a stylesheet whose name holds
+// URL delimiters or spaces is written and linked under one escaped name, so
+// the link a page carries names the file beside it.
+func TestRenderDocumentsHTMLStylesheetNames(t *testing.T) {
+	binary := buildCLI(t)
+	work := t.TempDir()
+	dir := filepath.Join(work, "site")
+	awkward := filepath.Join(work, "my theme#1?v=2%.css")
+	if err := os.WriteFile(awkward, []byte(".sysml-document { --sysml-text: rebeccapurple; }\n"), 0o600); err != nil {
+		t.Fatalf("write theme: %v", err)
+	}
+
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "html",
+		"-html-css", awkward), 0)
+	name := "my.20theme.231.3Fv.3D2.25.css"
+	page, err := os.ReadFile(filepath.Join(dir, "Reports-MainReport.html"))
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	if want := `<link rel="stylesheet" href="` + name + `">`; !strings.Contains(string(page), want) {
+		t.Errorf("report lacks %q:\n%s", want, page)
+	}
+	written, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatalf("read written theme: %v", err)
+	}
+	if !strings.Contains(string(written), "rebeccapurple") {
+		t.Errorf("the set's %s is not the sheet asked for:\n%s", name, written)
+	}
+}
+
 // TestRenderDocumentsHTMLFlagConflicts checks the set refuses forms and
 // options it cannot write.
 func TestRenderDocumentsHTMLFlagConflicts(t *testing.T) {

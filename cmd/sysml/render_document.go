@@ -149,12 +149,13 @@ func setStylesheets() ([]docrender.Stylesheet, []repl.RenderedDocument, error) {
 	return links, assets, nil
 }
 
-// setStylesheetName keeps two stylesheets of one base name apart, so neither
-// overwrites the other in the set's directory.
+// setStylesheetName derives a stylesheet's asset name: escaped so the link a
+// page carries names the file, and kept apart from a name already taken.
 func setStylesheetName(name string, taken map[string]bool) string {
 	if name == "" || name == "." || name == string(filepath.Separator) {
 		name = docrender.StylesheetFileName
 	}
+	name = escapeStylesheetName(name)
 	ext := filepath.Ext(name)
 	stem := strings.TrimSuffix(name, ext)
 	unique := name
@@ -163,6 +164,23 @@ func setStylesheetName(name string, taken map[string]bool) string {
 	}
 	taken[unique] = true
 	return unique
+}
+
+// escapeStylesheetName encodes every byte outside [A-Za-z0-9._-] as "." and two
+// hex digits, as anchors are, so a browser requests the file the set wrote.
+func escapeStylesheetName(name string) string {
+	var b strings.Builder
+	for i := 0; i < len(name); i++ {
+		ch := name[i]
+		switch {
+		case ch >= 'A' && ch <= 'Z', ch >= 'a' && ch <= 'z', ch >= '0' && ch <= '9',
+			ch == '_', ch == '-', ch == '.':
+			b.WriteByte(ch)
+		default:
+			fmt.Fprintf(&b, ".%02X", ch)
+		}
+	}
+	return b.String()
 }
 
 // htmlOptions resolves the HTML flags, reading each -html-css file and
