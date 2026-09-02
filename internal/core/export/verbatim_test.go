@@ -244,6 +244,36 @@ func TestStoredTextDoesNotReviveDeletedStructure(t *testing.T) {
 	}
 }
 
+// An expression the graph keeps as text alone is still held to lexing clean:
+// one leaving a comment open is refused as stating nothing, not written.
+func TestTextOnlyExpressionThatDoesNotLexCleanIsRefused(t *testing.T) {
+	src := `package P {
+    part def R {
+        attribute x : ScalarValues::Real;
+        attribute y = x->select {in v; v > 0};
+        part c;
+    }
+}
+`
+	turtle := graphOf(t, src)
+	structure := regexp.MustCompile(`\n    sysx:(bodyParameter|resultExpression) [^\n]*;`)
+	if len(structure.FindAllString(turtle, -1)) != 2 {
+		t.Fatalf("graph does not state the body's parameter and result\n%s", turtle)
+	}
+	textOnly := structure.ReplaceAllLiteralString(turtle, "")
+	if !strings.Contains(toNotation(t, []byte(textOnly)), "{in v; v > 0}") {
+		t.Fatal("text-only body expression was not written from its text")
+	}
+	open := restated(t, textOnly, `"{in v; v > 0}"`, `"{in v; v > 0} /* rest"`)
+	back, err := export.Convert("m.ttl", []byte(open), export.FormatTurtle, export.FormatSysML)
+	if err == nil {
+		t.Fatalf("open comment in a text-only expression was written\n%s", back)
+	}
+	if !strings.Contains(err.Error(), "states no notation and no structure") {
+		t.Errorf("error does not report the expression as stating nothing: %v", err)
+	}
+}
+
 // Without any stored text the writer spells every head and expression from
 // the graph, and the graph it converts to states the same structure.
 func TestNotationComesBackFromTheGraphAlone(t *testing.T) {

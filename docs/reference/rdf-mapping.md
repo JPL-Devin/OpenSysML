@@ -478,7 +478,8 @@ verbatim. Otherwise the structural spelling is written: a stored text that
 names other ends, another operator or another operand than the graph does is
 never written, because a graph edited in place is right and its text is stale;
 nor is one that leaves a comment, note, string or quoted name open, since it
-would swallow whatever is written after it.
+would swallow whatever is written after it — that holds for an expression the
+graph keeps as text alone too, which is then refused as stating nothing.
 For an expression the check reads the stored text back and maps it with the
 same encoder: the graph and the result must make the same statements about the
 node (`sysx:operator`, the operands, the element a reference resolves to),

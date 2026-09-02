@@ -100,8 +100,12 @@ func (d *decoder) keepsText(el *element, text string) bool {
 // textStatesGraph reports whether an expression node's stored notation states
 // exactly the structure the graph carries for it: the text is parsed and mapped
 // with the same encoder, and the two graphs must make the same statements about
-// the node. A node the graph keeps as text alone is not contradicted by any text.
+// the node. A node the graph keeps as text alone is contradicted by no text,
+// though the text must still lex clean.
 func (d *decoder) textStatesGraph(node rdf.Term, text, scope string) bool {
+	if !lexesClean(text) {
+		return false
+	}
 	if d.textOnly(node) {
 		return true
 	}
