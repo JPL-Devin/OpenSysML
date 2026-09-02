@@ -120,9 +120,10 @@ renderer emits no `style` attributes to compete with.
 | `-html-no-default-css` | Leave the default sheet out |
 | `-html-fragment` | Write the `<article>` alone, with no page shell and no stylesheet |
 
-A `-render-documents -doc-form html` set writes one shared
-`sysml-document.css` that every page links, so the styling of a whole set is
-edited in one place.
+A `-render-documents -doc-form html` set writes its stylesheets as files
+beside the pages — `sysml-document.css` and each `-html-css` file, under its
+own base name — and every page links them in order, so the styling of a whole
+set is edited in one place. A `-html-css` URL stays a link.
 
 ## PDF
 

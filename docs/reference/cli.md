@@ -154,11 +154,11 @@ echo "%load model.sysml
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
 | `--render-document <name>` | | Compile a document definition (a `part def` specializing `DocumentQueries::Document`), run its queries against the model, render its diagram blocks through the view engine and write the result as CommonMark Markdown, as `%render-document` does. Paragraphs may hold inline runs (`Span` with a `plain`/`emphasis`/`strong`/`code` style, `Link` to a URL, `Ref` linking to another content block's anchor); a query-backed paragraph or list styles its projected values through nested `SpanColumn`/`LinkColumn` column runs; a table with a `groupBy` column writes one subtable per group value, with the query's projected properties and computed `Column` names as its columns. A `Diagram` block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default form; `-doc-form html` renders the same document tree as semantic HTML (see [Rendering a document as HTML](#rendering-a-document-as-html)) and `-doc-form pdf` converts the Markdown (see [Rendering a document as PDF](#rendering-a-document-as-pdf)). `-json` does not apply. See the [document generation manual](../manual/README.md) |
 | `--doc-form <form>` | | Form `--render-document` writes: `markdown` (default), `html`, rendered from the document tree itself (see [Rendering a document as HTML](#rendering-a-document-as-html)), or `pdf`, which drives an external converter |
-| `--render-documents <dir>` | | Render every document definition the model declares as a linked set into the directory, one file per document, so cross-document references resolve on disk. `--doc-form html` writes the set as HTML pages sharing one `sysml-document.css` |
+| `--render-documents <dir>` | | Render every document definition the model declares as a linked set into the directory, one file per document, so cross-document references resolve on disk. `--doc-form html` writes the set as HTML pages linking shared stylesheet files written beside them |
 | `--doc-title-page` | | Put the document title on a page of its own (`--doc-form html` or `pdf`) |
 | `--doc-toc` | | Write a table of contents ahead of the content (`--doc-form html` or `pdf`) |
 | `--doc-number-sections` | | Number the section headings hierarchically (`--doc-form html` or `pdf`) |
-| `--html-css <file\|url>` | | Style the HTML with this stylesheet: a file is inlined, a URL is linked. Repeatable, applied in order after the default sheet (`--doc-form html`) |
+| `--html-css <file\|url>` | | Style the HTML with this stylesheet: a file is inlined in a single page and written beside a set's pages, a URL is linked. Repeatable, applied in order after the default sheet (`--doc-form html`) |
 | `--html-no-default-css` | | Leave the default stylesheet out, so only `--html-css` sheets style the document |
 | `--html-default-css` | | Write the default document stylesheet and exit, as a starting point for your own |
 | `--html-fragment` | | Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own |
@@ -356,7 +356,7 @@ Your own CSS is unlayered, so it wins on cascade origin rather than specificity 
 default needs neither `!important` nor a matching selector. Every default value comes from a
 `--sysml-*` custom property on `.sysml-document`, so retheming can be a handful of properties, and
 the renderer emits no `style` attributes to compete with. `-html-default-css` writes that sheet to
-copy from, `-html-css` adds sheets after it (a file is inlined, a URL is linked), and
+copy from, `-html-css` adds sheets after it (a file is inlined in a single page and written beside a set's pages, a URL is linked), and
 `-html-no-default-css` drops it entirely. A `-render-documents` set writes one shared
 `sysml-document.css` that every page links, so the styling is edited in one place, and
 `-html-fragment` writes the `<article>` alone, with no page shell and no stylesheet, for embedding

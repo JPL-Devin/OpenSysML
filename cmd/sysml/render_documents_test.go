@@ -543,6 +543,55 @@ func TestRenderDocumentsHTML(t *testing.T) {
 	}
 }
 
+// TestRenderDocumentsHTMLStylesheets checks a custom sheet of an HTML set is
+// a file beside the pages that every page links, rather than bytes repeated
+// in each page, and that a URL stays a link in the order it was given.
+func TestRenderDocumentsHTMLStylesheets(t *testing.T) {
+	binary := buildCLI(t)
+	work := t.TempDir()
+	dir := filepath.Join(work, "site")
+	theme := filepath.Join(work, "theme.css")
+	if err := os.WriteFile(theme, []byte(".sysml-document { --sysml-text: rebeccapurple; }\n"), 0o600); err != nil {
+		t.Fatalf("write theme: %v", err)
+	}
+
+	got := check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "html",
+		"-html-css", theme, "-html-css", "https://example.test/site.css")
+	wantReport(t, got, 0, "theme.css (css,")
+	links := []string{
+		`<link rel="stylesheet" href="sysml-document.css">`,
+		`<link rel="stylesheet" href="theme.css">`,
+		`<link rel="stylesheet" href="https://example.test/site.css">`,
+	}
+	for _, name := range []string{"Reports-MainReport.html", "Reports-Appendix.html"} {
+		page, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		at := -1
+		for _, link := range links {
+			next := strings.Index(string(page), link)
+			if next < 0 {
+				t.Fatalf("%s lacks %q:\n%s", name, link, page)
+			}
+			if next < at {
+				t.Errorf("%s links the stylesheets out of order:\n%s", name, page)
+			}
+			at = next
+		}
+		if strings.Contains(string(page), "rebeccapurple") {
+			t.Errorf("%s inlines the custom sheet rather than linking it:\n%s", name, page)
+		}
+	}
+	written, err := os.ReadFile(filepath.Join(dir, "theme.css"))
+	if err != nil {
+		t.Fatalf("read written theme: %v", err)
+	}
+	if !strings.Contains(string(written), "rebeccapurple") {
+		t.Errorf("the set's theme.css is not the sheet asked for:\n%s", written)
+	}
+}
+
 // TestRenderDocumentsHTMLFlagConflicts checks the set refuses forms and
 // options it cannot write.
 func TestRenderDocumentsHTMLFlagConflicts(t *testing.T) {

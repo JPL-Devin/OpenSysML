@@ -30,7 +30,7 @@ func runRenderDocument(files []string) error {
 		return err
 	}
 	if form == docFormHTML {
-		opts, err := htmlOptions(nil)
+		opts, err := htmlOptions()
 		if err != nil {
 			return err
 		}
@@ -73,21 +73,19 @@ func runRenderDocuments(files []string) error {
 	if err != nil {
 		return err
 	}
-	// A set shares one stylesheet file, so a reader downloads it once and
-	// edits it in one place.
-	var stylesheet string
+	// A set links its stylesheets as files beside the pages, so a reader
+	// downloads each once and edits it in one place.
+	var sheets []repl.RenderedDocument
 	var documents []repl.RenderedDocument
 	if form == docFormHTML {
-		var shared []docrender.Stylesheet
-		if !htmlNoCSS {
-			stylesheet = docrender.DefaultStylesheet()
-			shared = []docrender.Stylesheet{{Href: docrender.StylesheetFileName}}
-		}
-		opts, err := htmlOptions(shared)
+		links, assets, err := setStylesheets()
 		if err != nil {
 			return err
 		}
-		// The set links the shared sheet rather than inlining it in each file.
+		sheets = assets
+		opts := documentOptions()
+		opts.Stylesheets = links
+		// The set links its sheets rather than inlining them in each page.
 		opts.NoDefaultStylesheet = true
 		documents, err = sess.RenderDocumentSetHTML(opts)
 		if err != nil {
@@ -102,30 +100,75 @@ func runRenderDocuments(files []string) error {
 	if len(documents) == 0 {
 		return errors.New("the model declares no documents; nothing was rendered")
 	}
-	if stylesheet != "" {
-		documents = append(documents, repl.RenderedDocument{
-			Name:     docrender.StylesheetFileName,
-			FileName: docrender.StylesheetFileName,
-			Content:  stylesheet,
-		})
-	}
+	documents = append(documents, sheets...)
 	if err := os.MkdirAll(renderDocsDir, 0o750); err != nil {
 		return fmt.Errorf("create rendering directory %s: %w", renderDocsDir, err)
 	}
 	return commitDocumentSet(documents, form)
 }
 
-// htmlOptions resolves the HTML flags, reading each -html-css file and
-// linking each -html-css URL, after the stylesheets the caller shares.
-func htmlOptions(shared []docrender.Stylesheet) (docrender.HTMLOptions, error) {
-	opts := docrender.HTMLOptions{
+// documentOptions carries the flags shaping the document itself, leaving its
+// stylesheets to the caller.
+func documentOptions() docrender.HTMLOptions {
+	return docrender.HTMLOptions{
 		Fragment:            htmlFragment,
 		NoDefaultStylesheet: htmlNoCSS,
-		Stylesheets:         shared,
 		TitlePage:           pdfTitlePage,
 		TOC:                 pdfTOC,
 		NumberSections:      pdfNumbering,
 	}
+}
+
+// setStylesheets resolves the stylesheets of an HTML set: the default sheet
+// and each -html-css file are written beside the pages and linked, in
+// command-line order, and a -html-css URL is linked as it stands.
+func setStylesheets() ([]docrender.Stylesheet, []repl.RenderedDocument, error) {
+	var links []docrender.Stylesheet
+	var assets []repl.RenderedDocument
+	taken := make(map[string]bool, len(htmlCSS)+1)
+	add := func(name, content string) {
+		name = setStylesheetName(name, taken)
+		links = append(links, docrender.Stylesheet{Href: name})
+		assets = append(assets, repl.RenderedDocument{Name: name, FileName: name, Content: content})
+	}
+	if !htmlNoCSS {
+		add(docrender.StylesheetFileName, docrender.DefaultStylesheet())
+	}
+	for _, css := range htmlCSS {
+		if isStylesheetURL(css) {
+			links = append(links, docrender.Stylesheet{Href: css})
+			continue
+		}
+		// #nosec G304 -- the stylesheet is the file the run asked to style with.
+		content, err := os.ReadFile(css)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read stylesheet %s: %w", css, err)
+		}
+		add(filepath.Base(css), string(content))
+	}
+	return links, assets, nil
+}
+
+// setStylesheetName keeps two stylesheets of one base name apart, so neither
+// overwrites the other in the set's directory.
+func setStylesheetName(name string, taken map[string]bool) string {
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		name = docrender.StylesheetFileName
+	}
+	ext := filepath.Ext(name)
+	stem := strings.TrimSuffix(name, ext)
+	unique := name
+	for n := 2; taken[unique]; n++ {
+		unique = fmt.Sprintf("%s-%d%s", stem, n, ext)
+	}
+	taken[unique] = true
+	return unique
+}
+
+// htmlOptions resolves the HTML flags, reading each -html-css file and
+// linking each -html-css URL.
+func htmlOptions() (docrender.HTMLOptions, error) {
+	opts := documentOptions()
 	for _, css := range htmlCSS {
 		if isStylesheetURL(css) {
 			opts.Stylesheets = append(opts.Stylesheets, docrender.Stylesheet{Href: css})
@@ -315,11 +358,11 @@ func documentBytes(document repl.RenderedDocument) []byte {
 	return []byte(strings.TrimRight(document.Content, "\n") + "\n")
 }
 
-// setForm names the form a file of a rendered set was written in; the shared
-// stylesheet of an HTML set is CSS, not a document.
+// setForm names the form a file of a rendered set was written in; the
+// stylesheets of an HTML set are CSS, not documents.
 func setForm(document repl.RenderedDocument, form string) view.Form {
 	switch {
-	case document.FileName == docrender.StylesheetFileName:
+	case strings.HasSuffix(document.FileName, ".css"):
 		return formCSS
 	case form == docFormHTML:
 		return formHTML
