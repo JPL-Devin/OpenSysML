@@ -163,7 +163,12 @@ debugging (`%send go to bulb` names it explicitly, and is the form to use when n
 active). Payload features are written `<parameter>=<expression>` as for `%invoke`, and are checked
 against the signal's declaration: `%send Dim(lvl=1)` is refused because `Dim` carries no `lvl`. A
 signal nothing in the machine's current state accepts is refused up front, with the state named,
-rather than queued to be silently dropped.
+rather than queued to be silently dropped — and so is one whose every triggered transition is
+held back by its guard, decided as the dispatch would decide it, with the payload bound: with
+`transition on_dim first on accept d : Dim if d.level > 0 ...`, `%send Dim(level=0)` is refused
+while `%send Dim(level=3)` is in flight. A guard that cannot be evaluated is a `%send` error. If
+the state or the data a guard reads changes between the send and the dispatch, the `%step` or
+`%advance` that drops the signal says so.
 
 **Action debugging commands:**
 - `%action <name> [<object>]` — Start an action debugging session, optionally performed by an instantiated object

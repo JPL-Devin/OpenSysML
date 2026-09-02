@@ -82,6 +82,33 @@ func TestSendDecidesGuardsAsDispatchWould(t *testing.T) {
 	wants(t, run(t, s, "%features bulb"), "brightness", "3")
 }
 
+// TestSendReportsAGuardThatCannotBeEvaluated: a guard that fails on the payload
+// is a %send error, and the signal is not queued.
+func TestSendReportsAGuardThatCannotBeEvaluated(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`package GuardErr {
+		private import ScalarValues::*;
+		attribute def Dim { attribute level : Integer; }
+		state def Gate {
+			entry; then shut;
+			state shut;
+			transition shut_through first shut accept d : Dim if 10 / d.level > 1 then through;
+			state through;
+		}
+		part def Keeper { exhibit state gate : Gate; }
+		part keeper : Keeper;
+	}`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	run(t, s, "%instantiate keeper")
+	run(t, s, "%state keeper")
+	wants(t, run(t, s, "%send Dim(level=0)"),
+		`error: state machine "Gate" cannot decide Dim(level=0): state shut: eval guard of transition shut_through: division by zero`)
+	wants(t, run(t, s, "%events"), "Event queue empty")
+	wants(t, run(t, s, "%send Dim(level=2)"), "✓ Sent Dim(level=2)", "transition shut_through fires on it")
+	wants(t, run(t, s, "%advance 1"), "Current state: through")
+}
+
 // TestStepReportsASignalDispatchedToNothing: a guard true when the signal was
 // sent may be false when it is dispatched — here a Lock dispatched first shuts
 // the gate — and the step that drops the signal says so.

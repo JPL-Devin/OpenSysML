@@ -72,8 +72,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   feature admits — before anything is sent; an unresolved signal name gets the usual unresolved-reference
   report, an object that runs no machine is reported as such, and a signal nothing in the
   machine's current state accepts is refused up front with the state named, never queued to be
-  dropped in silence. A signal in flight is due now, so a single step dispatches it ahead of a
-  timer set for later, as a run holding time where it is would.
+  dropped in silence — and so is one whose every triggered transition is held back by its guard,
+  decided as the dispatch would decide it with the payload bound; a guard that cannot be evaluated
+  is an error. A signal in flight is due now, so a single step dispatches it ahead of a timer set
+  for later, as a run holding time where it is would; a step that dispatches a signal no transition
+  fires on, because the state or the data its guards read changed since it was sent, says so.
 - **`%state <machine> <object>` attaches to the machine the object already runs.** Naming a
   state definition and an object that exhibits a running machine of that kind now debugs that
   machine and says so, instead of quietly starting a second machine of the same kind on the same
