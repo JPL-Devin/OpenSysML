@@ -113,8 +113,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   name and an `alias` (which used to fail with `cannot evaluate element type *ast.Alias`) all
   reach the element the checker reaches, a `private import` stays reachable only from inside
   the importing namespace, and a name the checker rejects fails with the checker's own
-  `unresolved reference: Priv::x`. A calc usage's outputs, and the "not a variant" / "not a
-  literal" reports, are unchanged.
+  `unresolved reference: Priv::x` or, when several members answer to it, its own
+  `ambiguous reference: Twice::t (2 candidates)` (the resolver now records which names it
+  rejected as ambiguous, `Resolver.Ambiguity`). A calc usage's outputs, and the "not a
+  variant" / "not a literal" reports, are unchanged.
 
 ### Changed
 

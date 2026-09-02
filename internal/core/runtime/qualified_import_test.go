@@ -32,6 +32,11 @@ const qualifiedImportModel = `
 	package Facade { public import Wild::*; }
 	package Recursive { public import A::**; }
 	package Aliased { alias ax for A::x; }
+	package Twice {
+		private import ScalarValues::*;
+		attribute t : Integer = 1;
+		attribute t : Integer = 2;
+	}
 	package Priv {
 		private import A::*;
 		attribute own = x;
@@ -53,21 +58,31 @@ const qualifiedImportModel = `
 		attribute viaPrivate = Priv::x;
 		attribute viaSingleOther = Single::shortNamed;
 		attribute missing = Wild::nope;
+		attribute twice = Twice::t;
 	}
 `
 
 // qualifiedImportRuntime builds the model over the standard library, runs the
-// checker over it, and returns the runtime with the messages the checker reported.
+// checker over it, and returns the runtime with the messages the checker
+// reported inside package probes (Twice's duplicate members are reported too).
 func qualifiedImportRuntime(t *testing.T) (*Context, *symbols.Scope, []string) {
 	t.Helper()
 	file := parseAndBuild(t, qualifiedImportModel)
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", file)
 	ctx.resolver.ResolveDocument("<test>", file)
-	checked := make([]string, 0, len(ctx.resolver.Diagnostics))
-	for _, d := range ctx.resolver.Diagnostics {
-		checked = append(checked, d.Message)
+	root := idx.DocumentRoot("<test>")
+	probes, ok := root.LookupLocal("probes")
+	if !ok || probes.Decl == nil {
+		t.Fatal("package probes not indexed")
 	}
-	return ctx, idx.DocumentRoot("<test>"), checked
+	within := probes.Decl.Span()
+	var checked []string
+	for _, d := range ctx.resolver.Diagnostics {
+		if d.Span.Offset >= within.Offset && d.Span.End() <= within.End() {
+			checked = append(checked, d.Message)
+		}
+	}
+	return ctx, root, checked
 }
 
 // probeValue evaluates the value of the named attribute of package probes in
@@ -90,11 +105,15 @@ func probeValue(t *testing.T, ctx *Context, root *symbols.Scope, name string) (V
 }
 
 // qualifiedImportRejections are the probes the checker rejects, each with the
-// message it reports.
-var qualifiedImportRejections = map[string]string{
-	"viaPrivate":     "unresolved reference: Priv::x",
-	"viaSingleOther": "unresolved reference: Single::shortNamed",
-	"missing":        "unresolved reference: Wild::nope",
+// error the evaluator classifies it as and the message the checker reports.
+var qualifiedImportRejections = map[string]struct {
+	err error
+	msg string
+}{
+	"viaPrivate":     {ErrUnresolvedReference, "unresolved reference: Priv::x"},
+	"viaSingleOther": {ErrUnresolvedReference, "unresolved reference: Single::shortNamed"},
+	"missing":        {ErrUnresolvedReference, "unresolved reference: Wild::nope"},
+	"twice":          {ErrAmbiguousReference, "ambiguous reference: Twice::t (2 candidates)"},
 }
 
 // TestQualifiedNameThroughImportEvaluates evaluates qualified names whose
@@ -150,20 +169,21 @@ func TestQualifiedNameThroughImportEvaluates(t *testing.T) {
 
 // TestQualifiedNameThroughImportRejectedAsChecked rejects at evaluation exactly
 // the qualified names the checker rejects, with the checker's message: a private
-// import, a single-member import naming another member, and a missing name.
+// import, a single-member import naming another member, a missing name, and a
+// name several members answer to.
 func TestQualifiedNameThroughImportRejectedAsChecked(t *testing.T) {
 	ctx, root, checked := qualifiedImportRuntime(t)
 	for name, want := range qualifiedImportRejections {
 		t.Run(name, func(t *testing.T) {
-			if !slices.Contains(checked, want) {
-				t.Errorf("checker reported %q, want %q among them", checked, want)
+			if !slices.Contains(checked, want.msg) {
+				t.Errorf("checker reported %q, want %q among them", checked, want.msg)
 			}
 			_, err := probeValue(t, ctx, root, name)
-			if !errors.Is(err, ErrUnresolvedReference) {
-				t.Fatalf("probes::%s: err = %v, want ErrUnresolvedReference", name, err)
+			if !errors.Is(err, want.err) {
+				t.Fatalf("probes::%s: err = %v, want %v", name, err, want.err)
 			}
-			if err.Error() != want {
-				t.Errorf("probes::%s: err = %q, want the checker's %q", name, err, want)
+			if err.Error() != want.msg {
+				t.Errorf("probes::%s: err = %q, want the checker's %q", name, err, want.msg)
 			}
 		})
 	}
@@ -174,6 +194,10 @@ func TestQualifiedNameThroughImportRejectedAsChecked(t *testing.T) {
 		if !errors.Is(err, ErrUnresolvedReference) || err.Error() != "unresolved reference: "+src {
 			t.Errorf("eval %s: err = %v, want unresolved reference: %s", src, err, src)
 		}
+	}
+	_, err := evalIn(t, ctx, root, "Twice::t + 0")
+	if !errors.Is(err, ErrAmbiguousReference) || err.Error() != "ambiguous reference: Twice::t (2 candidates)" {
+		t.Errorf("eval Twice::t + 0: err = %v, want ambiguous reference: Twice::t (2 candidates)", err)
 	}
 }
 

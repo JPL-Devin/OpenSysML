@@ -503,10 +503,17 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	}
 }
 
-// unresolvedQualifiedName reports a multi-part name the resolver rejected. A
-// variation or enumeration reached by the deepest resolved segment designates
-// its variants or literals, so the segment after it is reported against those.
+// unresolvedQualifiedName reports a multi-part name the resolver rejected: as
+// ambiguous when it named several elements; otherwise against the variants or
+// literals of a variation or enumeration the deepest resolved segment reached.
 func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName) error {
+	written := qualifiedNameToString(qn)
+	if qn.Global {
+		written = "$::" + written
+	}
+	if n, ok := ec.ctx.resolver.Ambiguity(qn); ok {
+		return fmt.Errorf("%w: %s (%d candidates)", ErrAmbiguousReference, written, n)
+	}
 	for i := len(qn.Parts) - 2; i >= 0; i-- {
 		owner, ok := ec.ctx.resolver.PartSymbol(qn, i)
 		if !ok {
@@ -522,10 +529,6 @@ func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName) error {
 				ErrNotALiteral, memberName, owner.Name, ec.ctx.enumerationSummary(owner))
 		}
 		break
-	}
-	written := qualifiedNameToString(qn)
-	if qn.Global {
-		written = "$::" + written
 	}
 	return fmt.Errorf("%w: %s", ErrUnresolvedReference, written)
 }

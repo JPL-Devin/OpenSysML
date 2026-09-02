@@ -145,6 +145,9 @@ type Resolver struct {
 	// reached in another one is not reported against it (see foreignScope).
 	document          string
 	reportedQualified map[*ast.QualifiedName]bool
+	// ambiguities are the candidate counts of the qualified names that failed
+	// by naming several elements, so a consumer can tell that apart from none.
+	ambiguities map[*ast.QualifiedName]int
 	// valuesInProgress are the usages whose value expression is being read for
 	// the type it names, so a value naming its own feature ends the walk.
 	valuesInProgress map[*ast.Usage]bool
@@ -180,6 +183,7 @@ func New(idx *symbols.Index) *Resolver {
 		aliasTargets:      map[*symbols.Symbol]resolution{},
 		resolvingAlias:    map[*symbols.Symbol]bool{},
 		reportedQualified: map[*ast.QualifiedName]bool{},
+		ambiguities:       map[*ast.QualifiedName]int{},
 	}
 }
 
@@ -225,6 +229,13 @@ func (r *Resolver) PartSymbol(qn *ast.QualifiedName, i int) (*symbols.Symbol, bo
 		return nil, false
 	}
 	return syms[i], true
+}
+
+// Ambiguity returns the number of elements qn named when its resolution failed
+// because it named more than one, or false when it did not fail that way.
+func (r *Resolver) Ambiguity(qn *ast.QualifiedName) (int, bool) {
+	n, ok := r.ambiguities[qn]
+	return n, ok
 }
 
 // PartAlias returns the alias membership the i-th segment of qn was written as,
@@ -458,6 +469,7 @@ func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
 	if hadAliases {
 		savedAliases = append([]*symbols.Symbol(nil), savedAliases...)
 	}
+	savedAmbiguity, hadAmbiguity := r.ambiguities[qn]
 	resolved := false
 	r.aside(func() { resolved = f() })
 	if resolved {
@@ -467,6 +479,11 @@ func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
 		r.parts[qn] = saved
 	} else {
 		delete(r.parts, qn)
+	}
+	if hadAmbiguity {
+		r.ambiguities[qn] = savedAmbiguity
+	} else {
+		delete(r.ambiguities, qn)
 	}
 	if hadAliases {
 		r.aliasNames[qn] = savedAliases
