@@ -111,6 +111,10 @@ const dtExpression = "Expression"
 const (
 	mOwningMembership  = "OwningMembership"
 	mFeatureMembership = "FeatureMembership"
+	// The membership a body owns its result expression through, which states
+	// the expression as sysml:ownedResultExpression.
+	mResultExpressionMembership = "ResultExpressionMembership"
+	pOwnedResultExpression      = "ownedResultExpression"
 )
 
 // Metaclass names for the constructs that have no SysML metaclass of their own
@@ -125,6 +129,9 @@ const (
 	mConstraint = "ConstraintMember"
 	mAssume     = "AssumeMember"
 	mRequire    = "RequireMember"
+	// The bare expression a calculation or case body ends in, which the
+	// abstract syntax owns through a ResultExpressionMembership.
+	mResultExpression = "ResultExpressionMember"
 )
 
 // boolProperty pairs an RDF property name with the AST flag it mirrors. Only
@@ -617,6 +624,15 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			Note: "fix the syntax error before converting",
 		}
 	}
+	// A bare expression among a body's members is the result the body computes.
+	if isExpressionMember(node) {
+		head(rdf.OpenSysMLTerm(mResultExpression))
+		e.expression(subject, e.sysx(xResultExpression), xResultExpression, owner, node)
+		if membership, ok := e.graph.Object(subject, rdf.SysML+pOwningMembership); ok {
+			e.graph.Add(membership, e.sysml(pOwnedResultExpression), rdf.ExpressionIRI(subject, xResultExpression))
+		}
+		return nil
+	}
 	// A behavioral node — a control node, statement, loop, conditional, state or
 	// transition — is mapped by the behavior half of this encoder.
 	if handled, err := e.encodeBehavior(node, head, subject, fqn, owner, index); handled {
@@ -669,8 +685,11 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf
 	e.graph.Add(member, e.sysml(pOwningMembership), membership)
 
 	metaclass := mOwningMembership
-	if feature {
+	switch {
+	case feature:
 		metaclass = mFeatureMembership
+	case e.graph.Type(member) == rdf.OpenSysML+mResultExpression:
+		metaclass = mResultExpressionMembership
 	}
 	e.graph.Add(membership, rdf.IRI(rdf.RDFType), e.sysml(metaclass))
 	e.graph.Add(membership, e.sysml(pElementID), rdf.String(rdf.LocalName(membership.Value)))

@@ -211,6 +211,8 @@ The `sysx:` properties:
 | `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
 | `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member). The end is the element itself rather than a name, since there is none to write. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
+| `sysx:resultExpression` | The expression a body ends in: on a `sysx:ResultExpressionMember`, the bare expression a calculation or case body computes; on an expression body (`{ in y : Real; y + x }`), the expression after its parameters. See [Result expressions](#result-expressions). |
+| `sysx:bodyParameter`, `sysx:bodyMember` | The `in` parameters an expression body declares, each a node carrying its name, type, bounds and value, and the other declarations it makes between them and its result, carried as notation. Both are ordered by `sysx:memberIndex`. |
 | `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
 | `sysx:declaredId` | The element's id came from an explicit `@IdentityMetadata::ElementId` annotation, see [Element identity](#element-identity). |
 | `sysx:projectId`, `sysx:branch`, `sysx:org` | The `@IdentityMetadata::ProjectRef` provenance of a scope root, see [Element identity](#element-identity). |
@@ -221,8 +223,8 @@ Metaclass names with no counterpart in the OMG vocabulary are typed in the
 `sysx:` namespace rather than `sysml:`, so a consumer can tell them from the
 standard metaclasses: `sysx:Alias`, `sysx:FilterMember`,
 `sysx:MultiplicityDeclaration`, `sysx:ConstraintMember`, `sysx:AssumeMember`,
-`sysx:RequireMember`, and the behavioral ones listed under
-[Behavior](#behavior).
+`sysx:RequireMember`, `sysx:ResultExpressionMember`, `sysx:BodyMember`, and the
+behavioral ones listed under [Behavior](#behavior).
 
 Comments, documentation and textual representations convert as their own
 elements (`sysml:Comment`, `sysml:Documentation`, `sysml:TextualRepresentation`)
@@ -371,12 +373,71 @@ The rules the tree follows:
   a shape this mapping cannot write (a missing operator, an operand count an
   operator does not take, a literal with no value) is reported as unsupported,
   naming the node, never guessed.
+- **An expression body is structure too.** `{ in y : Real; y + x }` is a
+  `sysml:Expression` node whose `sysx:bodyParameter`s are nodes of their own —
+  each typed `sysml:ReferenceUsage` with `sysml:direction "in"`, its name, `ref`
+  flag, `sysml:type`, bounds, `sysml:value` and any body of its own — and whose
+  `sysx:resultExpression` is the tree of the expression after them, so a nested
+  body (`{ in y : Real; f(x = { in z : Real; z + y }) }`) and an `in expr`
+  parameter's body (`in expr keep : Boolean { in v : Real; v > x }`) rebuild from
+  the graph alone. A declaration a body makes between its parameters and its
+  result (`{ in y : Real; private attribute k : Real = 2; y * k }`) is a
+  `sysx:BodyMember` carrying its notation; a graph that states one without its
+  `sysx:sourceText` is reported, naming the member, as is a parameter with no
+  `sysml:declaredName`.
 - **Older graphs still read.** A position holding a plain literal
   (`sysml:value "1200.0"`), which is what releases before this wrote, is read as
-  that notation.
+  that notation, and a `sysx:bodyParameter` holding a bare name literal is read
+  as that parameter.
 
 Tests: `w6g4_rdf_expr_test.go` (structure, ordering, per-position identity,
-legacy literals, foreign trees, unsupported shapes, round-trip exactness).
+legacy literals, foreign trees, unsupported shapes, round-trip exactness),
+`result_expression_test.go` (expression bodies, their parameters and members).
+
+### Result expressions
+
+A calculation, case, analysis or verification body may end in a bare expression,
+the result it computes (`calc def Double { in x : Real; x * 2 }`). The abstract
+syntax owns that expression through a `ResultExpressionMembership`, and so does
+the graph: the expression is a member of its own, typed
+`sysx:ResultExpressionMember`, placed by `sysx:memberIndex` like every other
+member so a body whose result follows other declarations comes back in the same
+order, and owned through a membership typed `sysml:ResultExpressionMembership`
+that states the expression as `sysml:ownedResultExpression`:
+
+```turtle
+elmt:P__Double___401
+    a sysx:ResultExpressionMember ;
+    sysml:qualifiedName "P::Double::@1" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningMembership elmt:P__Double___401_om ;
+    sysx:resultExpression expr:P__Double___401_presultExpression .
+
+elmt:P__Double___401_om
+    a sysml:ResultExpressionMembership ;
+    sysml:memberElement elmt:P__Double___401 ;
+    sysml:ownedResultExpression expr:P__Double___401_presultExpression .
+
+expr:P__Double___401_presultExpression
+    a sysml:OperatorExpression ;
+    sysx:sourceText "x * 2" ;
+    sysml:operator "*" ;
+    sysml:argument expr:P__Double___401_presultExpression_pa0, expr:P__Double___401_presultExpression_pa1 .
+```
+
+The member has no name, so it is addressed by position, as the shorthand
+relationships under [Limitations](#limitations) are. The expression is the same
+tree a feature value is, so it converts back from the graph with no
+`sysx:sourceText` at all, whether it is an operator, a literal, an invocation, a
+feature chain, a conditional or an expression body; a graph another tool wrote
+that states the result only as the membership's `sysml:ownedResultExpression`
+reads too. A result member whose graph states no expression is reported, naming
+the member, rather than written as an empty line.
+
+Tests: `result_expression_test.go` (the membership, the place among other
+members, the round trip with `sysx:sourceText` stripped, the trip from the
+membership alone, the refusals) and the `result_expressions` and
+`expression_body_members` fixtures under `testdata/convert/`.
 
 ## Behavior
 
@@ -428,8 +489,7 @@ What is still refused, naming the node:
   only when both ends are basic names, so `succession first 'enter vehicle'
   then 'drive vehicle';` would not parse. The edge is reported rather than
   written.
-- **Prefix metadata** (`#Safety part p;`, `@M { … }`) and an **operator
-  expression member**, both unchanged from before.
+- **Prefix metadata** (`#Safety part p;`, `@M { … }`), unchanged from before.
 
 ## Limitations
 
@@ -443,8 +503,10 @@ values, multiplicity bounds, filter and constraint conditions and guards are
 expression trees ([Expressions](#expressions)), which makes them queryable, but
 the nodes are not `Feature`s owned through `FeatureMembership`s the way the
 abstract syntax models an expression. A conversion back to notation is written
-from the text each node was written as. A consumer that wants the metamodel's own
-shape does not get it from this mapping.
+from the text each node was written as where the graph carries it, and from the
+tree where it does not. A consumer that wants the metamodel's own shape does not
+get it from this mapping; the one membership it does materialize is the
+`ResultExpressionMembership` of a [result expression](#result-expressions).
 
 **Lexical comments do not survive the RDF hop.** `//` and `/* */` trivia is
 attached to no element, so a `notation → RDF → notation` round trip drops it:

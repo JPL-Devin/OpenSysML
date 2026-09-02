@@ -173,12 +173,12 @@ declarations and survive.
 
 [`examples/semantic-layer/demo.sysml`](../../examples/semantic-layer/demo.sysml)
 and [`examples/repl-behavioral-demo.sysml`](../../examples/repl-behavioral-demo.sysml)
-also convert, as do most `parser_features_demo_*.kerml` files. The exceptions are
-`..._advanced_bodies.kerml`, which computes a value, and two files that each declare one name
-twice. The behavior written in a body converts too: states, regions, substates, action nodes,
-assignments and transitions all have a mapping. Conversion is refused for constructs the notation
-could not be rebuilt from, such as an expression the graph would have to compute, a name
-shared by two members of one body, or a declaration without a name. A refusal names the construct
+also convert, as do most `parser_features_demo_*.kerml` files. The exceptions are a file that
+declares one name twice and one whose `feature` declarations name no element of their own. The
+behavior written in a body converts too: states, regions, substates, action nodes, assignments,
+transitions and the result expression a calculation ends in all have a mapping. Conversion is
+refused for constructs the notation could not be rebuilt from, such as a name shared by two
+members of one body or a declaration without a name. A refusal names the construct
 where conversion stopped and suggests saving the source instead:
 
 ```bash
@@ -188,12 +188,12 @@ wrote /tmp/action-semantics.ttl (ttl, 21671 bytes)
 0
 ```
 
-For example, an advanced body that contains an operator expression is refused:
+For example, a body that declares the same name twice is refused:
 
 ```bash
-$ sysml examples/parser_features_demo_advanced_bodies.kerml -convert ttl; echo $?
+$ sysml examples/parser_features_demo_advanced_connectors.kerml -convert ttl; echo $?
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
-sysml: cannot convert the operator expr at examples/parser_features_demo_advanced_bodies.kerml:87:9: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
+sysml: cannot convert the duplicate declaration of "transitionLink" at examples/parser_features_demo_advanced_connectors.kerml:21:5: a name identifies an element in the graph, so two members of one namespace cannot share it
 2
 ```
 

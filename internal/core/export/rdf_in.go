@@ -402,9 +402,9 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		return err
 	}
 	b.WriteString(lead + head)
-	if annotationMetaclasses[el.metaclass] {
-		// A comment, doc or rep declaration ends with its comment body, and
-		// takes no terminator.
+	if annotationMetaclasses[el.metaclass] || el.metaclass == mResultExpression {
+		// A comment, doc or rep declaration ends with its comment body, and a
+		// result expression is bare: neither takes a terminator.
 		b.WriteString("\n")
 		return nil
 	}
@@ -508,6 +508,8 @@ func (d *decoder) head(el *element) (string, error) {
 		return d.conditionHead(el, "assume")
 	case mRequire:
 		return d.conditionHead(el, "require")
+	case mResultExpression:
+		return d.resultExpressionHead(el)
 	}
 	// A succession carrying its ends as references is the one the parser builds
 	// for a succession, written back as `succession first <source> then <target>;`.
@@ -830,6 +832,21 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 		return "", d.missing(el, "sysx:"+xCondition, "a condition member states a condition")
 	}
 	return strings.Join(words, " "), nil
+}
+
+// resultExpressionHead writes a result expression member back as the bare
+// expression it states, read from the member or, as the abstract syntax
+// spells it, from the sysml:ownedResultExpression of its membership.
+func (d *decoder) resultExpressionHead(el *element) (string, error) {
+	if text, ok := d.stringOf(el, rdf.OpenSysML+xResultExpression); ok {
+		return text, nil
+	}
+	if m, owned := d.owningMembership[el.iri]; owned {
+		if node, ok := d.graph.Object(rdf.IRI(m.iri), rdf.SysML+pOwnedResultExpression); ok {
+			return d.expressionNodeText(node, el.scope)
+		}
+	}
+	return "", d.missing(el, "sysx:"+xResultExpression, "a result expression member is the expression it states")
 }
 
 // acceptParam returns the synthetic parameter of an accept shorthand, whose

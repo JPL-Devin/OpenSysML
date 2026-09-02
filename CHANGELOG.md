@@ -21,7 +21,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   document changes nothing, and an edit to one is refused with an error rather than applied:
   the library is what every diagnostic is judged against. Other LSP clients get the same by
   registering a content provider for the scheme that calls the request.
-
+- **A body's result expression converts to RDF and back.** `sysml -convert ttl` refused any
+  calculation, analysis, verification or case whose body ends in a bare expression
+  (`calc def Double { in x : Real; x * 2 }`), which is how the OMG corpora write most of theirs.
+  The expression now converts as the metamodel states it: a `sysx:ResultExpressionMember` at its
+  `sysx:memberIndex`, owned through a standard `sysml:ResultExpressionMembership` that carries the
+  expression tree as `sysml:ownedResultExpression`, so a graph without `sysx:sourceText` still
+  writes the notation back. Expression bodies — `{ in y : Real; y + x }` as a result, nested, or
+  as the body of an `in expr` parameter — carry their parameters and result structurally as
+  `sysx:bodyParameter` and `sysx:resultExpression`; a declaration inside one stays a
+  `sysx:BodyMember` with its text, and is refused by name when the text is absent. Across the 345
+  example files, none of the 13 refused for this reason is any longer: 12 convert, 11 of them to
+  a graph that round-trips equal, and the 13th is refused for an unrelated `feature` declaration;
+  80 of the 81 calculation conformance models convert, up from 62. See
+  [the mapping](docs/reference/rdf-mapping.md).
 - **A model's change set applies to a live repository, keyed by identity.**
   `sysml model.sysml -sync-apply http://localhost:8083` diffs the model against its project
   branch on a running SysML v2 API (Flexo MMS) and writes the change set as one commit through
