@@ -79,7 +79,7 @@ func TestStoredLayoutIsWrittenAsStored(t *testing.T) {
 }
 
 // Stored text that spells the graph differently but not otherwise — spacing,
-// line breaks, quoted names — is still the author's layout and is kept.
+// line breaks, quoted names, a comment — is still the author's layout and is kept.
 func TestStoredTextIsKeptUpToSpelling(t *testing.T) {
 	src := `package P {
     part def A;
@@ -91,6 +91,7 @@ func TestStoredTextIsKeptUpToSpelling(t *testing.T) {
 	for _, instead := range []string{
 		`"connect  a\n\t\tto   b;"`,
 		`"connect 'a' to 'b';"`,
+		`"connect a /* which */ to b;"`,
 	} {
 		turtle := restated(t, graphOf(t, src), `"connect a to b;"`, instead)
 		back := toNotation(t, []byte(turtle))

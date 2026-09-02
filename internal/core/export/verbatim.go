@@ -16,8 +16,8 @@ import (
 // docs/reference/rdf-mapping.md § Limitations defines both.
 
 // sameSpelling reports whether two spellings differ only in what the graph does
-// not state: whitespace, notes, name quoting, and a relationship clause's
-// symbol against its keyword (`:>` against `subsets`).
+// not state: whitespace, notes and comments, name quoting, and a relationship
+// clause's symbol against its keyword (`:>` against `subsets`).
 func sameSpelling(a, b string) bool {
 	return slices.Equal(spellingOf(a), spellingOf(b))
 }
@@ -43,7 +43,7 @@ func spellingOf(text string) []token {
 		if tok.Kind == lexer.EOF {
 			return out
 		}
-		if tok.IsTrivia() {
+		if tok.IsTrivia() || tok.Kind == lexer.RegularComment {
 			continue
 		}
 		t := token{kind: tok.Kind, text: sf.Text(tok.Span)}
