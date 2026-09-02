@@ -36,6 +36,17 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the apply against the real stack — an initial load, a revision with a retained-id rename and
   gated deletes, a conflict staged behind the sync's back — and records what read back at the
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+- **The RDF round trip is measured over every example, and pinned per file.** `TestCorpusRoundTrip`
+  converts each of the 345 models under `examples/` — the committed models, the OMG training
+  corpus and the three pilot corpora — notation → Turtle → notation → Turtle and compares the two
+  graphs as triple sets, so a writer or encoder change that moves any file's verdict in either
+  direction fails the suite and is adjudicated, as the pilot corpora gate already does for
+  diagnostics. The baseline records 166 files stable, 71 stable up to the whitespace inside
+  `sysx:sourceText`, 14 that come back as a different graph, 15 that cannot be written back,
+  2 whose written notation no longer converts and 77 refused on the first hop, each refusal
+  classed by the construct it names. The mapping's reference now states that measurement in place
+  of the claim that a second conversion yields the same graph, which held for the fixtures alone
+  ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
 
 ### Performance
 
