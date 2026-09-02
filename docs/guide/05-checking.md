@@ -65,6 +65,22 @@ Features:
     power = 250.0
 ```
 
+The nested engine is an object of its own. Reach it by a path from the object that holds it, or
+by the id it was given, and read a value from it the same way:
+```sysml
+sysml> %features Car.engine
+Instance: Car::engine (ID: 2)
+Features:
+  power = 250.0
+
+sysml> %eval in #2 : power * 2
+✓ power * 2 (on #2 ID: 2)
+  = 500.0
+```
+
+An element of a multi-valued part is picked by index counted from 1, `System.wheels[3]`; see
+[addressing an object](04-repl.md#addressing-an-object).
+
 ## Multiplicity
 
 ```sysml

@@ -37,6 +37,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   gated deletes, a conflict staged behind the sync's back — and records what read back at the
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
 
+- **The REPL addresses an object by id and by path, not only by name.** Every command that takes
+  an object — `%features`, `%invoke`, `%eval in`, and the object `%action` and `%state` work on —
+  reads the same reference: the name the object was instantiated under, the id `%instantiate`
+  printed (`%features #3`), or either followed by a path into the parts it holds (`car.fl.hub`,
+  `#3.fl`), one element of a multi-valued part picked by an index counted from 1
+  (`car.wheels[2]`). In a path `.` and `::` mean the same thing. The id is the object's identity
+  for the session: it survives the carry-over an unrelated declaration triggers, and a second
+  `%instantiate` of the same name, which re-points the name and now says how the first object is
+  still reached; `%instances` lists such an object as `#3 (ID: 3, formerly Demo::car)`. A bad
+  reference is reported in the same words by every command: an unknown id lists the ids there
+  are, a segment that is no feature names the object and its features, an attribute at the end
+  of a path says it holds a value, and a multi-valued part with no index says how many objects it
+  holds and how to pick one. <kbd>Tab</kbd> completes references where a command takes one: `#`
+  offers the ids, `car.` the parts `car` holds ([reference](docs/reference/repl-commands.md#object-references)).
+
 ### Performance
 
 - **A process starts in under 20 ms instead of 100.** Every `sysml`, `sysml-lsp` and `sysml-grpc`

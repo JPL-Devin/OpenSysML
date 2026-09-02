@@ -7,6 +7,12 @@ Every command that takes a `<name>` accepts the quoted spelling the notation use
 quoted segment containing a space and a quoted segment in the middle of a chain:
 `%instantiate 'My Pkg'::Car`, `%features Top::'My Pkg'::Car`.
 
+Every command that takes an `<object>` — `%features`, `%invoke`, `%eval in`, and the object
+`%action` and `%state` are performed by or attached to — reads one
+[object reference](#object-references): the name an object was instantiated under
+(`car`, `Demo::car`), its id as `%instantiate` printed it (`#3`), or either followed by a path
+into the parts it holds (`car.fl.hub`, `#3.fl`, `car.wheels[2]`).
+
 | Command | Description |
 |---------|-------------|
 | `%help` | Show help message |
@@ -27,16 +33,16 @@ quoted segment containing a space and a quoted segment in the middle of a chain:
 | `%render <name> [form]` | Render a view's exposed set in the kind its `render` member states: a containment tree with nested views as subtrees, an interconnection diagram of the exposed parts and the connections between them, a state machine's states and transitions, an action's nodes and successions, or a table of the exposed elements and what they declare. A view with no `render` member renders as a tree. Output is indented text by default, or the machine-readable form of the kind: a [Mermaid](#rendering-a-view) diagram with `mermaid`, a Markdown table with `markdown`. Asking for a form the kind cannot be written in tells you which form it uses. Read-only: it creates no object and leaves a `%action`/`%state` debugging session running. A view that exposes nothing renders empty and says so; a rendering kind this build does not produce is reported by kind and view rather than rendered as something else; an element the rendering cannot represent is reported, not dropped |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create an object of a part definition and start the behaviors its type exhibits or performs. Each object runs its own machine, initialized after its feature values are built and run until it is quiescent. A second `%instantiate` of the same name creates a new object, and the name then refers to that one. A later submission keeps the object's identity but restarts its behaviors from their initial states, and says so |
-| `%features <name>` | Show what an object holds for each feature of its type |
-| `%instances` | List all created objects |
+| `%features <object>` | Show what an object holds for each feature of its type. The object is named, addressed by id, or reached by a path: `%features car`, `%features #3`, `%features car.fl.hub`, `%features car.wheels[2]` |
+| `%instances` | List all created objects: the named ones, and the ones a second `%instantiate` of their name left addressable only by id |
 | `%eval <expr>` | Evaluate expression, in the last namespace the session declared |
-| `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or, when an object has been instantiated under that name, on that object, so that a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
+| `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or, when the name is an [object reference](#object-references) (`car`, `#3`, `car.fl`), on that object, so that a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
 | **Behavioral Execution** | |
 | `%calc <name> [args...]` | Invoke calculation with arguments |
 | `%run-query <name> [<p>=<expr>...]` | Execute a document query (a `calc def` specializing `DocumentQueries::Query`) and print its rows and projected cells. A projection lists declared property names and may add computed columns: `Column(name = "<column>", expression = <expr>)` entries evaluated once per row over the row element's features, with arithmetic (`+`, `-`, `*`, `/`), string concatenation and `??` defaults for absent values. A column expression that fails (including a reference that resolves to no value and has no `??` default) fails the query with a typed error rather than producing an empty cell. Each binding is written as `<parameter>=<expression>`; a name binds the element it refers to, anything else is evaluated as an expression. Named query invocation and relationship traversal (`RelatedElements` over specialization, subsetting, redefinition, typing, connection, allocation, satisfaction and verification edges, outgoing or incoming) are supported; a parameter default written as an expression is reported as an error, since the engine does not evaluate those yet. See the [query cookbook](../manual/query-cookbook.md) |
 | `%render-document <name>` | Compile a document definition (a `part def` specializing `DocumentQueries::Document`), run its queries against the model and print the rendered Markdown. A document binds its queries' parameters in the model, so the name is the whole invocation. The output is deterministic CommonMark: the title and sections as ATX headings; paragraphs from text runs (`Span` runs with a `plain`/`emphasis`/`strong`/`code` style, `Link` runs to a URL, `Ref` runs linking to another content block's anchor, and query-produced values styled through nested `SpanColumn`/`LinkColumn` column runs); GitHub-flavored pipe tables with the projected column names (one subtable per group value when the table has a `groupBy` column); bullet and numbered lists; diagram blocks as fenced ` ```mermaid ` blocks rendered through the view engine (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown metacharacters in content are escaped. Markdown is the only form the REPL writes; the CLI's `-doc-form pdf` converts it to PDF ([Rendering a document as PDF](cli.md#rendering-a-document-as-pdf)). See the [document generation manual](../manual/README.md) |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
-| `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type (an action it owns), performed by that object, with each argument written as `<parameter>=<expression>`. Assignments in the body write that object's feature values; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
+| `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type (an action it owns), performed by that object (`%invoke car start`, `%invoke #3 start`, `%invoke car.engine start`), with each argument written as `<parameter>=<expression>`. Assignments in the body write that object's feature values; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
 | `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | `%check <name>` | **Experimental.** Ask an external SMT solver whether a constraint, requirement or satisfaction assertion *can* be satisfied, and on `sat` print an assignment. Reports `sat`, `unsat` or `unknown`, kept distinct. Needs `z3` or `cvc5` on `PATH` (or `OPENSYSML_SMT`; see [installing a solver](../guide/01-install.md#installing-a-solver-optional)) and reports an error rather than a verdict when none is installed. Satisfiability is not evaluation: use `%constraint`/`%satisfy` to find out what holds for an object |
@@ -45,21 +51,51 @@ quoted segment containing a space and a quoted segment in the middle of a chain:
 | `%configure <name> [<variation>=<variant>...] [all [<count>]]` | **Experimental.** Ask which variants a constraint, requirement or satisfaction assertion permits. With no argument, one consistent selection is synthesised. With `<variation>=<variant>`, the chosen selection is checked and the conflict is named when it is not consistent. With `all`, the consistent selections are enumerated up to `OPENSYSML_SMT_MAX_CONFIGURATIONS` (`all <count>` for a smaller bound), and the report says whether the list is complete or was cut short, either at the bound or because the solver stopped deciding or ran out of time; the selections found so far are still reported. An element that reads no variation point is an error pointing at `%check`. Same solver requirements as `%check` |
 | `%optimize <name>` | **Experimental.** Ask the solver for the best values an `analysis def` (or an analysis usage) admits. Each `objective` is improved as the trade-study definition typing it says (`TradeStudies::MinimizeObjective` or `MaximizeObjective`), over the value it gives for the library's `best` feature (`attribute :>> best = expression;`), within the conditions the case requires or assumes and the ones the objective states itself. Several objectives are improved lexicographically in declaration order. Prints each optimum with its declared unit and the assignment that attains it. An objective that improves without limit, or a bound no assignment attains, is reported as such and never as a number, and every optimum is verified before it is reported. **Needs `z3`**: optimization is a z3 extension, and a backend without it (cvc5) is an error rather than a plain satisfiability check presented as an optimum. Otherwise the same solver requirements as `%check` |
 | **Action debugging** ([guide chapter 6](../guide/06-behavior.md)) | |
-| `%action <name> [<object>]` | Start an action debugging session, optionally performed by an instantiated object |
+| `%action <name> [<object>]` | Start an action debugging session, optionally performed by an instantiated object, given as an [object reference](#object-references) (`%action tally car`, `%action tally #3`) |
 | `%step` | Advance one token step |
 | `%continue` | Run the action to completion |
 | `%tokens` | Show the active tokens |
 | `%break <node>` | Set a breakpoint at a node |
 | `%stop` | Stop the current debugging session |
 | **State machine debugging** ([guide chapter 6](../guide/06-behavior.md)) | |
-| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <part>` after `%instantiate <part>` attaches to that object's own running machine), or start a state machine, optionally performed by an instantiated object. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
+| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <object>` after `%instantiate` attaches to that object's own running machine, whether the object is named, `#3`, or `car.controller`), or start a state machine, optionally performed by an instantiated object. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
 | `%events` | Show the event queue |
 | `%current` | Show the current state and configuration |
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |
 | **Control** | |
 | `%quit` | Exit the REPL |
-| `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …), the form after `%render <name>`, and file paths after `%load` and `%save` |
+| `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …), object references where a command takes one (`#` offers the ids there are; `car.` offers the parts `car` holds, a multi-valued one as `car.wheels[1]`, `car.wheels[2]` …), the form after `%render <name>`, and file paths after `%load` and `%save` |
 | `Ctrl-D` | Exit REPL |
+
+## Object references
+
+An object reference names one object the session holds. It is one of:
+
+| Form | Denotes |
+|------|---------|
+| `car`, `Demo::car` | the object `%instantiate car` created, by the name it was created under (unqualified or qualified, quoted segments included) |
+| `#3` | the object whose id `%instantiate` printed as `ID: 3`. Ids count up from 1 and never change: an object keeps its id when a later submission carries it over, and when a second `%instantiate` of its name creates a new object — the name then denotes the new one, and `#3` is how the old one is reached (`%instances` lists it as `#3 (ID: 3, formerly Demo::car)`) |
+| `car.fl`, `#3.fl`, `car.fl.hub` | a path from a named object or an id through the part features it holds, one nested object per segment. `.` and `::` are interchangeable in a path, so `car::fl` and `car.fl` are the same object; `.` is the shorter spelling and `::` is what the named root itself may contain |
+| `car.wheels[2]` | one element of a multi-valued part feature (`part wheels : Wheel[4]`), counted from 1 in the order the feature holds them |
+
+Reading a path materializes the nested parts it passes through, exactly as `%features car` does.
+
+Every command reports a bad reference in the same words:
+
+```
+sysml> %features #9
+error: no object has id #9 (the objects are #1, #2)
+sysml> %features car.nope
+error: Demo::car has no feature "nope" (its features are fl, mass, wheels)
+sysml> %features car.mass
+error: mass of Demo::car holds a value (1500.0), not an object
+sysml> %features car.wheels
+error: wheels of Demo::car holds 4 objects: pick one by index, wheels[1] to wheels[4]
+sysml> %features car.wheels[5]
+error: wheels of Demo::car holds 4 objects, so wheels[5] names none (indexes run from 1 to 4)
+sysml> %features Wheel
+error: no instance of "Demo::Wheel" (use %instantiate first)
+```
 
 ## Rendering a view
 

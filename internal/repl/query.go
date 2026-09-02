@@ -355,9 +355,9 @@ func (s *Session) instantiateLines(name string) ([]string, error) {
 	return append(s.drainTrace(), lines...), nil
 }
 
-// behaviorsDropped names what the object being unnamed was running, so a machine
-// left behind by a second instantiation is not lost quietly.
-func behaviorsDropped(inst *runtime.Instance) string {
+// behaviorsOf names what the object being unnamed is running, so a machine only
+// its id now reaches is not overlooked.
+func behaviorsOf(inst *runtime.Instance) string {
 	if n := len(inst.Behaviors()); n > 0 {
 		return fmt.Sprintf(", with %s", countOf(n, "behavior of its own", "behaviors of its own"))
 	}
@@ -394,8 +394,9 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	// A second instantiation is a second object, so say which one the name now
 	// denotes rather than let the earlier one look like it was reused.
 	if again && previous != nil && previous.ID != inst.ID {
-		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is no longer named%s",
-			notationName(fqn), previous.ID, behaviorsDropped(previous)))
+		s.unnamed = append(s.unnamed, unnamedObject{fqn: fqn, obj: previous})
+		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is no longer named%s (address it as #%d)",
+			notationName(fqn), previous.ID, behaviorsOf(previous), previous.ID))
 	}
 	return append(out, fmt.Sprintf("  Use %%features %s to inspect", name)), nil
 }

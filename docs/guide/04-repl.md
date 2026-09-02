@@ -289,10 +289,33 @@ sysml> %eval in Demo::Vehicle : mass * 2
 ```
 
 The pinned name may be an element, in which case the expression reads that element's namespace,
-or a name an object was instantiated under, in which case the expression reads that
-object's feature values, the same values an unpinned `%eval` reads after `%instantiate`. A single
-`:` separates the context from the expression; the `::` inside a qualified name is not a
-separator.
+or an object reference, in which case the expression reads that object's feature values, the same
+values an unpinned `%eval` reads after `%instantiate`. A single `:` separates the context from the
+expression; the `::` inside a qualified name is not a separator.
+
+## Addressing an object
+
+Every command that takes an object — `%features`, `%invoke`, `%eval in`, and the object `%action`
+and `%state` work on — accepts the same three spellings: the name the object was instantiated
+under, the id `%instantiate` printed, and either followed by a path into the parts it holds, an
+element of a multi-valued part picked by index counted from 1:
+
+```
+sysml> %eval in Demo::Vehicle : mass * 2
+sysml> %eval in #1 : mass * 2
+sysml> %features Demo::Vehicle.engine
+sysml> %features #1.engine
+sysml> %features Demo::Vehicle.wheels[2]
+```
+
+The id is the object's identity for the rest of the session: a later submission that carries the
+object over keeps it, and so does a second `%instantiate` of the same name, which creates a new
+object and re-points the name — the first object is still there as `#1`, and `%instances` lists it
+as such. A path walks part features only; an attribute at the end of one is a value, and the error
+says so. In a path `.` and `::` mean the same thing, so `Demo::Vehicle::engine` and
+`Demo::Vehicle.engine` are the same object. The forms and every error a bad reference produces are
+listed in the [reference](../reference/repl-commands.md#object-references). <kbd>Tab</kbd>
+completes them: `#` offers the ids there are, `car.` the parts `car` holds.
 
 ## Command summary
 

@@ -90,6 +90,7 @@ type Session struct {
 	idxVersion int                          // document version idx holds, 0 when it holds none
 	names      *nameTable                   // simple names of the documents, rebuilt when their scope trees change
 	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
+	unnamed    []unnamedObject              // objects a later %instantiate of their name displaced, still addressed by id
 
 	// argMemo and nameMemo hold what command text parsed to, so a repeated
 	// invocation is evaluated without being parsed again.
@@ -128,6 +129,12 @@ type Session struct {
 	// renderWidth is the width a text rendering's table is written to fit, 0 for
 	// as wide as its widest cell.
 	renderWidth int
+}
+
+// unnamedObject is an object a later %instantiate of its name displaced.
+type unnamedObject struct {
+	fqn string
+	obj *runtime.Instance
 }
 
 // actionSession holds an active action executor debugging session.
@@ -238,6 +245,7 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 		s.lost = lossOnBudgets(n)
 	}
 	s.instances = make(map[string]*runtime.Instance)
+	s.unnamed = nil
 	return nil
 }
 
@@ -827,7 +835,7 @@ func (s *Session) rebindRestartedMachine() {
 	if s.stateExec == nil || s.stateExec.selfFQN == "" || s.stateExec.fqn != s.stateExec.selfFQN {
 		return
 	}
-	inst, ok := s.instances[s.stateExec.selfFQN]
+	inst, ok := s.heldObject(s.stateExec.selfFQN)
 	if !ok {
 		return
 	}
@@ -894,7 +902,7 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 	// The behavior is performed by an object this submission dropped, so what it
 	// runs against is no longer part of the session.
 	if selfFQN != "" {
-		if _, kept := s.instances[selfFQN]; !kept {
+		if _, kept := s.heldObject(selfFQN); !kept {
 			return selfFQN, true, true
 		}
 	}
@@ -961,6 +969,7 @@ func (s *Session) clear() []string {
 		s.idxVersion = 0
 	}
 	s.instances = make(map[string]*runtime.Instance)
+	s.unnamed = nil
 	s.actionExec = nil
 	s.stateExec = nil
 	s.lost, s.endedAction, s.endedState = lost, endedAction, endedState

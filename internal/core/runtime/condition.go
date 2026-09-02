@@ -462,7 +462,7 @@ func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
 	var out []heldObject
 	for i := range features {
 		feat := &features[i]
-		if feat.Name == "" || !holdsObjects(feat) {
+		if feat.Name == "" || !feat.HoldsObjects() {
 			continue
 		}
 		fv, err := inst.GetFeatureValue(ctx, feat.Name)
@@ -478,9 +478,9 @@ func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
 	return out
 }
 
-// holdsObjects reports whether a feature holds objects rather than values: a
+// HoldsObjects reports whether a feature holds objects rather than values: a
 // nested part has features and conditions of its own, an attribute has neither.
-func holdsObjects(feat *EffectiveFeature) bool {
+func (feat *EffectiveFeature) HoldsObjects() bool {
 	if feat.Symbol == nil {
 		return false
 	}

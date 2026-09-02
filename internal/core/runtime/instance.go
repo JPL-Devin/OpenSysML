@@ -204,7 +204,7 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error
 
 		// Fold constant defaults the feature admits eagerly; a default that is not constant
 		// may read sibling feature values, so GetFeatureValue evaluates (and reports) it.
-		if ctx.valueBinds(feat) && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) &&
+		if ctx.valueBinds(feat) && feat.IsScalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
 			ctx.restatedInValuedBody(feat) == "" {
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 				val := Value{Kind: ValConst, Const: semVal}
@@ -314,10 +314,9 @@ func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
 	return !mult.Upper.Infinite && mult.Upper.Value <= 1
 }
 
-// isScalarFeature reports whether a feature holds at most one value. An
-// unbounded upper bound carries Value 0, so the infinite flag has to be tested
-// separately.
-func isScalarFeature(feat *EffectiveFeature) bool {
+// IsScalar reports whether a feature holds at most one value. An unbounded
+// upper bound carries Value 0, so the infinite flag has to be tested separately.
+func (feat *EffectiveFeature) IsScalar() bool {
 	return !feat.Multiplicity.Upper.Infinite && feat.Multiplicity.Upper.Value <= 1
 }
 
@@ -362,7 +361,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	if err := ctx.checkDefault(inst, fv, name, value); err != nil {
 		return err
 	}
-	if isScalarFeature(fv.Feature) {
+	if fv.Feature.IsScalar() {
 		fv.Value = value
 		fv.Values = Value{}
 	} else {
@@ -449,7 +448,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		if err := ctx.checkDefault(inst, fv, name, val); err != nil {
 			return nil, err
 		}
-		if isScalarFeature(fv.Feature) {
+		if fv.Feature.IsScalar() {
 			fv.Value = val
 		} else {
 			// A multi-valued feature holds a collection, so a single value

@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
@@ -413,6 +414,17 @@ func (ctx *Context) chargeElements(n int64) error {
 // reach the object it names.
 func (ctx *Context) Instance(id int64) (*Instance, bool) {
 	return ctx.getInstance(id)
+}
+
+// InstanceIDs lists the identities of every object this context holds, in
+// ascending order, so a caller can say which ids an unknown one is not among.
+func (ctx *Context) InstanceIDs() []int64 {
+	ids := make([]int64, 0, len(ctx.instances))
+	for id := range ctx.instances {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 // getInstance retrieves an instance by ID.
