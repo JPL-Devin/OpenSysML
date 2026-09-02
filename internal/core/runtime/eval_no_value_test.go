@@ -3,6 +3,8 @@ package runtime
 import (
 	"errors"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // valuelessFeaturesModel declares features nothing gives a value to, single-
@@ -38,7 +40,8 @@ func TestDeclaredFeatureWithoutValueIsNotUnresolved(t *testing.T) {
 	}
 
 	for _, name := range []string{"unsetMass", "tags", "wheels", "wheels.radius", "test::Car::wheels"} {
-		_, err := ctx.EvalWithScope(parseExpr(t, name), scope)
+		expr := parseExpr(t, name)
+		_, err := ctx.EvalWithScope(expr, scope)
 		var noValue *NoValueError
 		if !errors.As(err, &noValue) {
 			t.Errorf("%s: err = %v; want NoValueError", name, err)
@@ -47,10 +50,25 @@ func TestDeclaredFeatureWithoutValueIsNotUnresolved(t *testing.T) {
 		if errors.Is(err, ErrUnresolvedReference) {
 			t.Errorf("%s: a declared feature was reported as unresolved: %v", name, err)
 		}
+		if noValue.Ref == nil || !namesIn(expr, noValue.Ref) {
+			t.Errorf("%s: NoValueError.Ref = %v; want the name read in the expression", name, noValue.Ref)
+		}
 	}
 
 	_, err := ctx.EvalWithScope(parseExpr(t, "nonexistent"), scope)
 	if !errors.Is(err, ErrUnresolvedReference) {
 		t.Errorf("nonexistent: err = %v; want ErrUnresolvedReference", err)
+	}
+}
+
+// namesIn reports whether qn is one of the names expr is written as.
+func namesIn(expr ast.Node, qn *ast.QualifiedName) bool {
+	switch n := expr.(type) {
+	case *ast.FeatureReference:
+		return n.Name == qn
+	case *ast.FeatureChainExpr:
+		return n.Member == qn || namesIn(n.Operand, qn)
+	default:
+		return false
 	}
 }

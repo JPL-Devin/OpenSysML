@@ -603,7 +603,7 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 		// on an object; an operation over one fails, and a name nothing declares
 		// is an error.
 		var noValue *runtime.NoValueError
-		if !errors.As(err, &noValue) || !readsFeature(node, noValue.Feature) {
+		if !errors.As(err, &noValue) || !readsFeature(node, noValue.Ref) {
 			return nil, evalError(expr, err, len(exprPrefix))
 		}
 		return []string{
@@ -801,7 +801,7 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		// all; finding no value there is not the unresolved name the lookup saw.
 		var noValue *runtime.NoValueError
 		if lookupErr != nil {
-			if errors.As(err, &noValue) && readsFeature(evalUsage.Value, noValue.Feature) {
+			if errors.As(err, &noValue) && readsFeature(evalUsage.Value, noValue.Ref) {
 				return nil, fmt.Errorf("%q has no value to evaluate", expr)
 			}
 			return nil, lookupErr
@@ -816,23 +816,21 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 }
 
 // readsFeature reports whether an expression is a bare read — a name, or a
-// chain of names — with feature as one of its links, so that feature having no
-// value is the read's own verdict rather than a failure inside an operation or
-// inside some other feature's default.
-func readsFeature(node ast.Node, feature string) bool {
+// chain of names — and ref is one of its own links, so a feature that link
+// found no value for is the read's own verdict rather than a failure inside an
+// operation or inside some other feature's default.
+func readsFeature(node ast.Node, ref *ast.QualifiedName) bool {
+	if ref == nil {
+		return false
+	}
 	switch n := node.(type) {
 	case *ast.FeatureReference:
-		return readNames(n.Name, feature)
+		return n.Name == ref
 	case *ast.FeatureChainExpr:
-		return readNames(n.Member, feature) || readsFeature(n.Operand, feature)
+		return n.Member == ref || readsFeature(n.Operand, ref)
 	default:
 		return false
 	}
-}
-
-func readNames(qn *ast.QualifiedName, feature string) bool {
-	return qn != nil && len(qn.Parts) > 0 &&
-		(qnString(qn) == feature || qn.Parts[len(qn.Parts)-1].Text == feature)
 }
 
 // exprPrefix wraps an expression as a declaration of its own, so parsing it

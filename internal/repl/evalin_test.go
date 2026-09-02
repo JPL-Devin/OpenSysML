@@ -190,6 +190,27 @@ func TestEvalInDeclarationScopeDoesNotReadCompoundFailuresAsUnset(t *testing.T) 
 	}
 }
 
+// A chain whose operand's own default fails is that failure, even when the
+// feature the default could not read happens to share a link's name.
+func TestEvalInDeclarationScopeChainIsNotUnsetForALinkOfAnotherName(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`private import ScalarValues::*;
+package Defaults {
+    attribute b : Real;
+    attribute pick : Real = b + 1.0;
+}
+part def Car { attribute a : Real = Defaults::pick; }
+part car : Car;`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	for _, cmd := range []string{"%eval in car : a.b", "%eval in car : a"} {
+		got := run(t, s, cmd)
+		wants(t, got, "error", "no value for feature b")
+		rejects(t, got, "✓", "= "+runtime.UnsetText)
+	}
+	rejects(t, run(t, s, "%eval car::a.b"), "✓", "= "+runtime.UnsetText, "has no value to evaluate")
+}
+
 // Once the object exists, the same features read the values it holds.
 func TestEvalInObjectReadsMultiValuedFeatures(t *testing.T) {
 	s := NewSession()

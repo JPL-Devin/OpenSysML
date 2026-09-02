@@ -333,7 +333,7 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 						delete(ec.resolving, name)
 						return val, err
 					}
-					return Value{}, &NoValueError{Feature: name}
+					return Value{}, &NoValueError{Feature: name, Ref: qn}
 				}
 			}
 		}
@@ -422,7 +422,7 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if ec.ctx.model.IsVariationFeature(sym) {
 					return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, name)
 				}
-				return Value{}, ec.resolvedWithoutValue(sym, name)
+				return Value{}, ec.resolvedWithoutValue(sym, qn)
 			}
 		}
 		// Nothing outside the feature supplies its value, so its own value depends
@@ -433,7 +433,7 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		// A feature the element declares but nothing gives a value to is
 		// uninitialized rather than unresolved.
 		if declared {
-			return Value{}, &NoValueError{Feature: name}
+			return Value{}, &NoValueError{Feature: name, Ref: qn}
 		}
 		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedReference, name)
 	}
@@ -515,12 +515,13 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 			return val, err
 		}
 	}
-	return Value{}, ec.resolvedWithoutValue(currentSym, qualifiedNameToString(qn))
+	return Value{}, ec.resolvedWithoutValue(currentSym, qn)
 }
 
 // resolvedWithoutValue reports a name that resolves to sym but reads no value:
 // a feature nothing gives a value to is uninitialized, not unresolved.
-func (ec *EvalContext) resolvedWithoutValue(sym *symbols.Symbol, spelled string) error {
+func (ec *EvalContext) resolvedWithoutValue(sym *symbols.Symbol, qn *ast.QualifiedName) error {
+	spelled := qualifiedNameToString(qn)
 	// A calc usage is an evaluation, not a value: it is read through the output
 	// features it computes, since a name it does not designate a result for has
 	// no one value.
@@ -536,7 +537,7 @@ func (ec *EvalContext) resolvedWithoutValue(sym *symbols.Symbol, spelled string)
 	}
 	// A usage of any kind — a subject or a state included — is a feature.
 	if _, usage := sym.Decl.(*ast.Usage); usage || isFeature(sym) {
-		return &NoValueError{Feature: spelled}
+		return &NoValueError{Feature: spelled, Ref: qn}
 	}
 	return fmt.Errorf("cannot evaluate %s %s", sym.Kind, spelled)
 }
