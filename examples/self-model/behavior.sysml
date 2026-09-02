@@ -182,13 +182,14 @@ package OpenSysMLBehavior {
         transition first constraintTier if failures > 0 then halted;
     }
 
-    // One calc invocation: a pure body runs compiled unless the run is traced or
-    // an argument is bound by name or is not a scalar; the answer is the same.
+    // One calc invocation: a scalar body — locals, returns, conditionals, library
+    // intrinsics, named arguments — runs compiled unless the run is traced or an
+    // argument is not a scalar or leaves a parameter unbound; the answer is the same.
     action def InvokeCalc {
         attribute tierEnabled : Boolean = true;
         attribute untraced : Boolean = true;
-        attribute bodyIsPure : Boolean = true;
-        attribute positionalScalars : Boolean = true;
+        attribute bodyIsScalar : Boolean = true;
+        attribute scalarArguments : Boolean = true;
 
         first start;
 
@@ -207,13 +208,13 @@ package OpenSysMLBehavior {
         else evaluateBody;
 
         decide bodyGate;
-        if bodyIsPure then compileBody;
+        if bodyIsScalar then compileBody;
         else evaluateBody;
 
         succession first compileBody then argumentGate;
 
         decide argumentGate;
-        if positionalScalars then runCompiled;
+        if scalarArguments then runCompiled;
         else evaluateBody;
 
         succession first runCompiled then boxResult;
