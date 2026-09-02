@@ -329,7 +329,8 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   which every result reports rather than asks for. The list follows the query's own `oslc.prefix`
   bindings, since a rebound `sysml` or `rdf` changes what the parser accepts. An `oslc.prefix`
   binding whose prefix no prefixed name can be written with (`!s=<…>`) is refused where it is
-  bound rather than accepted and never usable.
+  bound rather than accepted and never usable, and a prefix of letters outside ASCII
+  (`sÿsml=<…>`) now scans as one name in a query instead of ending mid-letter.
 
 - **An anonymous `doc` or `comment` before a kind keyword is kept.** `doc /* … */` followed by
   `attribute a;` in a definition or usage body parsed as an attribute prefixed by `doc`, so the

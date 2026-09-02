@@ -260,6 +260,25 @@ func TestParseOSLCPropertyDiagnosticsFollowTheActiveBindings(t *testing.T) {
 		t.Errorf("error = %#v, want ErrMalformed naming the unusable prefix", err)
 	}
 
+	// A prefix of multi-byte letters binds and is written as it reads, so the
+	// spellings a diagnostic offers under it are parseable too.
+	const unicodePrefix = "sÿsml"
+	bound := `oslc.prefix=` + url.QueryEscape(unicodePrefix+"=<"+rdf.SysML+">,sysml=<urn:example:other#>")
+	_, err = ParseParameters(bound + `&oslc.where=` + url.QueryEscape(unicodePrefix+`:id="x"`))
+	got, ok = err.(*Error)
+	if !ok || got.Kind != ErrUnknownProperty || !strings.Contains(got.Message, unicodePrefix+":name") {
+		t.Fatalf("error = %#v, want ErrUnknownProperty naming %q", err, unicodePrefix+":name")
+	}
+	for _, parameter := range []string{
+		`oslc.where=` + url.QueryEscape(unicodePrefix+`:name="battery"`),
+		`oslc.where=` + url.QueryEscape(unicodePrefix+`:name="battery"`) + `&oslc.select=` + url.QueryEscape(unicodePrefix+":name"),
+		`oslc.where=` + url.QueryEscape(unicodePrefix+`:name="battery"`) + `&oslc.orderBy=` + url.QueryEscape("-"+unicodePrefix+":name"),
+	} {
+		if _, err := ParseParameters(bound + "&" + parameter); err != nil {
+			t.Errorf("%s: %v", parameter, err)
+		}
+	}
+
 	names, unbound := PrefixedPropertyNames(map[string]string{"rdf": rdf.RDFNS})
 	if len(names) != 1 || names[0] != "rdf:type" {
 		t.Errorf("names = %#v, want [rdf:type]", names)

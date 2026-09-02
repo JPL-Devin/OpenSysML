@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
@@ -202,9 +203,8 @@ func parsePrefixes(text string, prefixes map[string]string) error {
 	return nil
 }
 
-// checkPrefixName refuses a prefix no term could be written with: a binding the
-// identifier scanner cannot read is unusable, and offering it in a diagnostic
-// would name a property the parser then rejects.
+// checkPrefixName refuses a prefix no prefixed name could be written with, so
+// every binding a diagnostic offers is one the parser reads back.
 func checkPrefixName(prefix string) error {
 	if prefix == "" {
 		return errorf(ErrMalformed, "oslc.prefix binding has an empty prefix")
@@ -336,9 +336,14 @@ func (p *oslcParser) identifier() (string, error) {
 		p.pos++
 	}
 	for p.pos < len(p.s) {
-		r := rune(p.s[p.pos])
+		// Decoded, not byte-wise: classifying a byte of a multi-byte letter would
+		// end a name the prefix bindings accept in the middle of a rune.
+		r, size := utf8.DecodeRuneInString(p.s[p.pos:])
+		if r == utf8.RuneError && size <= 1 {
+			break
+		}
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune("_-.:", r) {
-			p.pos++
+			p.pos += size
 			continue
 		}
 		break
@@ -421,8 +426,12 @@ func (p *oslcParser) value() (string, error) {
 		return "*", nil
 	}
 	start := p.pos
-	for p.pos < len(p.s) && !unicode.IsSpace(rune(p.s[p.pos])) && !strings.ContainsRune(",]}", rune(p.s[p.pos])) {
-		p.pos++
+	for p.pos < len(p.s) {
+		r, size := utf8.DecodeRuneInString(p.s[p.pos:])
+		if unicode.IsSpace(r) || strings.ContainsRune(",]}", r) {
+			break
+		}
+		p.pos += size
 	}
 	raw := p.s[start:p.pos]
 	if raw == "true" || raw == "false" {
@@ -438,8 +447,12 @@ func (p *oslcParser) value() (string, error) {
 }
 
 func (p *oslcParser) skipSpace() {
-	for p.pos < len(p.s) && unicode.IsSpace(rune(p.s[p.pos])) {
-		p.pos++
+	for p.pos < len(p.s) {
+		r, size := utf8.DecodeRuneInString(p.s[p.pos:])
+		if !unicode.IsSpace(r) {
+			return
+		}
+		p.pos += size
 	}
 }
 
