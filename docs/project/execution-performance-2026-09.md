@@ -151,3 +151,63 @@ function and shrinking `semantics.Value` — a wide, mechanical change — and
 the calc *usage* environment (`bindCalcUsage`) still binds into a map, as its
 statements read and write outputs by name. The larger step, a compiled fast
 path for pure calc bodies, is the planned follow-up and is out of scope here.
+
+## Follow-up (2026-09-02): pure calc bodies compile to a closure fast path
+
+Measured on the same machine, same method, at revision `8e4c84f0` (the
+evaluator above) before and after the compiled calc tier
+(`internal/core/runtime/compile.go`, `compiled_ops.go`). On its first
+invocation a calc definition whose body is one expression — a lone `return`,
+or a bound result over an otherwise empty body — over Integer, Real and
+Boolean literals, its own `in` parameters, the arithmetic,
+comparison, equality, identity, logical and conditional operators, and
+invocations of other such calcs is compiled once per `Context` into a tree of
+Go closures over an unboxed scalar frame: parameters are slot indexes into a
+per-context scalar stack, callees are resolved at compile time (a cycle through
+a lazily filled cell), and arguments are unboxed and the result boxed only at
+the invocation boundary. Everything else — calc usages and `out` features,
+feature chains, `self`/`that`/`this`, collections, quantities, enumerations,
+strings, body-local declarations, non-literal defaults, a parameter typed
+outside the scalar lattice or redeclared along the specialization chain —
+leaves the calc on the reference evaluator, as does
+any caller of such a calc; a traced context, a named-argument or non-scalar
+call, and `OPENSYSML_CALC_COMPILE=0` take the reference path for the whole
+invocation. The compiled body charges the step budget per node exactly as the
+evaluator does (a branch not taken is not charged), so `OPENSYSML_MAX_STEPS`
+and `OPENSYSML_MAX_CALC_DEPTH` trigger at the same invocation with the same
+error. The benchmark is again `Fib(25)` (242 785 calc invocations), marginal
+between a 1- and a 6-case run, minimum of five repetitions.
+
+| figure | before (evaluator) | after (compiled) |
+| ------ | ------------------ | ---------------- |
+| marginal cost per `Fib(25)` eval | 126–129 ms | 5.1–5.4 ms |
+| per calc invocation | 519–532 ns | 21–22 ns |
+| CPython 3.12 `fib(25)`, same machine, min of 5 | 27.2 ns per call | — |
+| allocations per `Fib(25)` eval (`-memstats` marginal) | ~159 (< 0.001 per invocation) | ~156 (< 0.001 per invocation) |
+| `BenchmarkRunCalc` (`-count 6`, geomean) | 1.88 µs / 768 B / 25 allocs | 1.40 µs / 768 B / 25 allocs |
+
+That is a 24× improvement per invocation, past CPython on the same function
+(the ~1–2 ns of V8 and HotSpot are the domain of a JIT, out of reach of a
+closure tree). The `RunCalc` benchmark moves 26%: its `Calc0(2.0, 3.0)` is a
+single invocation, so what it measures is the REPL's parse, resolve and format
+path around it, which is unchanged.
+
+The CPU profile of `Fib(33)` (11.4 million invocations, 290 ms of samples) is
+the closure tree and little else: `compiledCalc.invoke` 38% flat (arity,
+argument unboxing, the frame push, the depth budget), the `+` node 10%, the
+leaf pair `k - 1`/`k - 2` 10%, `chargeSteps` 7%, the invocation node 7%, the
+parameter type check 7%, the `if` node 3%. The garbage collector's 10% is spent
+over the start-up heap: the compiled path allocates nothing per invocation.
+
+Compliance was checked three ways. The differential test
+(`compile_differential_test.go`) compiles every eligible calc definition in the
+repository's fixtures, examples and the OMG corpora — 42 eligible of 263 calc
+definitions across 739 files, 16.0%; the rest have statement bodies, `out`
+features, parameters typed outside the scalar lattice or redeclared, or call
+library functions — and invokes each through both tiers over generated
+Integer, Real and Boolean argument vectors including 0, ±1 and the Integer
+extremes, asserting identical values or identical errors and identical step
+counts: 8 920 invocations, none differing. The execution conformance,
+trace and robustness suites pass with the tier on and with
+`OPENSYSML_CALC_COMPILE=0`. The pilot execution referee's bucket counts are as
+committed.

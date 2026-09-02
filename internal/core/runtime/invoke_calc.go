@@ -100,6 +100,12 @@ type calcShape struct {
 	BodyOutputs map[string]bool
 	Bindings    []lower.Binding
 	ResultExpr  ast.Node
+	// compiled is the body in the compiled tier once compileState says it is
+	// eligible; a shape found ineligible keeps the evaluator for good.
+	compiled     *compiledCalc
+	compileState compileState
+	// ineligibleWhy says what kept the body out of the compiled tier.
+	ineligibleWhy string
 }
 
 // calcShapeOf resolves the invocation interface of a calc symbol: its
@@ -368,6 +374,16 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		return Value{}, err
 	}
 
+	// A pure body runs compiled unless the run is traced, which records every
+	// sub-expression, or an argument is bound by name or is not a scalar.
+	if ctx.compileCalcs && ctx.trace == nil && len(args.named) == 0 {
+		if compiled := ctx.compiledCalcOf(shape); compiled != nil {
+			if result, ran, err := compiled.invokeBoxed(ctx, args.positional); ran {
+				return result, err
+			}
+		}
+	}
+
 	if err := ctx.enterCalc(shape.Name); err != nil {
 		return Value{}, err
 	}
@@ -422,13 +438,21 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 // while it terminates within the budget. leaveCalc takes it back off.
 func (ctx *Context) enterCalc(name string) error {
 	if int64(ctx.calcDepth) >= ctx.maxCalcDepth {
-		return fmt.Errorf(
-			"%w: calc %s nested %d deep (unbounded recursion?; raise %s to allow more)",
-			ErrCalcRecursionLimit, name, ctx.maxCalcDepth, MaxCalcDepthEnvVar,
-		)
+		return ctx.calcDepthExceeded(name)
 	}
 	ctx.calcDepth++
 	return nil
+}
+
+// calcDepthExceeded reports the calc depth budget spent; kept out of line so
+// enterCalc inlines into every invocation.
+//
+//go:noinline
+func (ctx *Context) calcDepthExceeded(name string) error {
+	return fmt.Errorf(
+		"%w: calc %s nested %d deep (unbounded recursion?; raise %s to allow more)",
+		ErrCalcRecursionLimit, name, ctx.maxCalcDepth, MaxCalcDepthEnvVar,
+	)
 }
 
 // leaveCalc returns the calc depth enterCalc spent.

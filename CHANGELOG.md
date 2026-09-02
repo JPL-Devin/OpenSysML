@@ -36,6 +36,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   measurements are recorded in the
   [execution-performance record](docs/project/execution-performance-2026-09.md).
 
+- **Pure calc bodies compile to a closure fast path.** A calc whose body is one scalar expression
+  — Integer, Real and Boolean literals, its own `in` parameters, the arithmetic, comparison,
+  equality, identity, logical and conditional operators, and invocations of other such calcs,
+  recursion and cycles included — is compiled on its first invocation into a tree of Go closures
+  over an unboxed scalar frame: parameters are slot indexes, callees are resolved once, and values
+  are boxed only at the invocation boundary. A recursive `Fib(25)` costs 21–22 ns per calc
+  invocation instead of 519–532 (CPython 3.12 takes 27 ns for the same function on the same
+  machine). Values, errors, error timing and step counts are identical to the reference evaluator's
+  — a differential test invokes every eligible calc in the fixture and example trees through both
+  tiers on generated edge arguments — and anything outside the subset (calc usages, `out` features,
+  feature chains, collections, quantities, strings, locals, non-literal defaults, redeclared
+  parameters) stays on the evaluator, as does every traced, named-argument or non-scalar
+  invocation. `OPENSYSML_CALC_COMPILE=0` turns the tier off for bisecting.
+
 ## 0.4.3 — 2026-09-01
 
 Release 0.4.3 is where an element gets an identity the notation can carry. The SysML v2 textual

@@ -131,6 +131,14 @@ type Context struct {
 	// innermost last, so an invocation borrows rather than allocates its storage.
 	argStack []Value
 
+	// scalarStack holds the unboxed arguments of the compiled calc invocations
+	// under way, innermost last, the compiled tier's counterpart of argStack.
+	scalarStack []scalar
+
+	// compileCalcs enables the compiled tier for eligible calc bodies; the
+	// OPENSYSML_CALC_COMPILE escape hatch clears it.
+	compileCalcs bool
+
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -195,6 +203,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		invocationTargets: make(map[invocationKey]*invocationTarget),
 		integerLiterals:   make(map[*ast.LiteralInteger]int64),
 		realLiterals:      make(map[*ast.LiteralReal]float64),
+		compileCalcs:      CalcCompileFromEnv(),
 
 		calcUsageRuns: make(map[int64]map[calcUsageKey]*calcRun),
 
@@ -358,9 +367,17 @@ func (ctx *Context) endActivation(activation int64) {
 func (ctx *Context) incrementStep() error {
 	ctx.steps++
 	if ctx.steps > ctx.maxSteps {
-		return fmt.Errorf("%w (%d steps; raise %s to allow more)", ErrStepLimitExceeded, ctx.maxSteps, MaxStepsEnvVar)
+		return ctx.stepLimitExceeded()
 	}
 	return nil
+}
+
+// stepLimitExceeded reports the step budget spent, naming the variable that raises
+// it; kept out of line so the step charge on every evaluation inlines.
+//
+//go:noinline
+func (ctx *Context) stepLimitExceeded() error {
+	return fmt.Errorf("%w (%d steps; raise %s to allow more)", ErrStepLimitExceeded, ctx.maxSteps, MaxStepsEnvVar)
 }
 
 // elementScope brackets one evaluation and returns the function releasing what
