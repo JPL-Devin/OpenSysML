@@ -1238,7 +1238,8 @@ func transitionStatus(trans *ast.TransitionMember) string {
 }
 
 // stateNameAsWritten renders a transition end as the model spells it: `modes.closed`
-// reaches through the exhibited machine, `Modes::closed` into its namespace.
+// reaches through the exhibited machine, `Modes::closed` into its namespace, and a
+// name that is not a basic one keeps its quotes, so the row can be typed back.
 func stateNameAsWritten(qn *ast.QualifiedName) string {
 	if qn == nil {
 		return "<?>"
@@ -1252,7 +1253,7 @@ func stateNameAsWritten(qn *ast.QualifiedName) string {
 		default:
 			sb.WriteString("::")
 		}
-		sb.WriteString(p.Text)
+		sb.WriteString(lexer.NameText(p.Text))
 	}
 	return sb.String()
 }
