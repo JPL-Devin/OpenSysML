@@ -23,7 +23,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -412,16 +411,21 @@ public final class BinaryDownloader {
       Object release =
           Json.parse(new String(get(url, MAX_METADATA_BYTES), StandardCharsets.UTF_8));
       tag = Json.stringMember(release, "tag_name");
-    } catch (IOException | InterruptedException | IllegalArgumentException e) {
-      if (e instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
-      throw new ServiceStartException("failed to resolve latest release from " + url + ": " + e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw unresolvedLatest(url, e);
+    } catch (IOException | IllegalArgumentException e) {
+      throw unresolvedLatest(url, e);
     }
     if (tag.isEmpty()) {
       throw new ServiceStartException("latest release of " + githubRepo + " has no tag name");
     }
     return tag;
+  }
+
+  private static ServiceStartException unresolvedLatest(String url, Exception cause) {
+    return new ServiceStartException(
+        "failed to resolve latest release from " + url + ": " + cause);
   }
 
   /**
@@ -571,26 +575,26 @@ public final class BinaryDownloader {
     if ("latest".equals(version)) {
       version = resolveLatestVersion(githubRepo);
     }
-    String asset = this.asset == null ? ReleasePlatform.assetName() : this.asset;
-    String binaryUrl = releaseDownloadUrl(version, asset, githubRepo);
+    String wanted = this.asset == null ? ReleasePlatform.assetName() : this.asset;
+    String binaryUrl = releaseDownloadUrl(version, wanted, githubRepo);
 
     // A release nothing is pinned for is vouched for by the signature on its checksum
     // manifest instead, which the origin cannot forge.
     String verifiedChecksum = null;
     String unverifiedReason = null;
-    if (pinnedDigest(version, asset, githubRepo).isEmpty()) {
+    if (pinnedDigest(version, wanted, githubRepo).isEmpty()) {
       try {
-        verifiedChecksum = signedManifestDigest(version, asset, githubRepo);
+        verifiedChecksum = signedManifestDigest(version, wanted, githubRepo);
       } catch (UnsignedReleaseException e) {
         unverifiedReason = e.getMessage();
       }
     }
 
-    String servedChecksum = servedDigest(version, asset, githubRepo);
+    String servedChecksum = servedDigest(version, wanted, githubRepo);
     String expected =
         expectedDigest(
             version,
-            asset,
+            wanted,
             servedChecksum,
             githubRepo,
             verifiedChecksum,
@@ -598,7 +602,7 @@ public final class BinaryDownloader {
             options);
 
     byte[] downloaded = fetch(binaryUrl, "binary", MAX_BINARY_BYTES);
-    install(downloaded, expected, asset, version, githubRepo);
+    install(downloaded, expected, wanted, version, githubRepo);
     return binaryPath;
   }
 
@@ -627,19 +631,22 @@ public final class BinaryDownloader {
     if (have.isPresent()) {
       return have.get().equals(wanted)
           ? Optional.empty()
-          : Optional.of(
-              "the binary cached at " + binaryPath + " is " + have.get() + ", but " + wanted
-                  + " was asked for");
+          : Optional.of(staleCache("is " + have.get() + ", but " + wanted));
     }
     String recordedRepo = Json.stringMember(readMetadata(), "repo");
     if (!recordedRepo.isEmpty() && !recordedRepo.equals(githubRepo)) {
       return Optional.of(
-          "the binary cached at " + binaryPath + " was downloaded from " + recordedRepo + ", but "
-              + wanted + " of " + githubRepo + " was asked for");
+          staleCache(
+              "was downloaded from " + recordedRepo + ", but " + wanted + " of " + githubRepo));
     }
     return Optional.of(
-        "the binary cached at " + binaryPath + " was not downloaded by this client, so which "
-            + "release it is cannot be told, and " + wanted + " was asked for");
+        staleCache(
+            "was not downloaded by this client, so which release it is cannot be told, and "
+                + wanted));
+  }
+
+  private String staleCache(String mismatch) {
+    return "the binary cached at " + binaryPath + " " + mismatch + " was asked for";
   }
 
   /**
@@ -818,25 +825,35 @@ public final class BinaryDownloader {
     String url = releaseDownloadUrl(version, asset, githubRepo);
     try {
       return get(url, MAX_METADATA_BYTES);
-    } catch (IOException | InterruptedException | ServiceStartException e) {
-      if (e instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
-      throw new UnsignedReleaseException(
-          version + " of " + githubRepo + " publishes no readable " + asset + " (" + url + ": " + e
-              + "), so its checksums carry no signature to verify");
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw unsigned(version, asset, githubRepo, url, e);
+    } catch (IOException | ServiceStartException e) {
+      throw unsigned(version, asset, githubRepo, url, e);
     }
+  }
+
+  private static UnsignedReleaseException unsigned(
+      String version, String asset, String githubRepo, String url, Exception cause) {
+    return new UnsignedReleaseException(
+        version + " of " + githubRepo + " publishes no readable " + asset + " (" + url + ": "
+            + cause + "), so its checksums carry no signature to verify");
   }
 
   private byte[] fetch(String url, String what, long maxBytes) {
     try {
       return get(url, maxBytes);
-    } catch (IOException | InterruptedException e) {
-      if (e instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
-      throw new ServiceStartException("failed to download the " + what + " from " + url + ": " + e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw undownloaded(what, url, e);
+    } catch (IOException e) {
+      throw undownloaded(what, url, e);
     }
+  }
+
+  private static ServiceStartException undownloaded(String what, String url, Exception cause) {
+    return new ServiceStartException(
+        "failed to download the " + what + " from " + url + ": " + cause);
   }
 
   /** Reads a response up to a limit, so a hostile or broken origin cannot fill this heap. */
@@ -884,8 +901,8 @@ public final class BinaryDownloader {
               }
             });
     watchdog.start();
-    ByteArrayOutputStream read = new ByteArrayOutputStream();
-    try {
+    byte[] content;
+    try (ByteArrayOutputStream read = new ByteArrayOutputStream()) {
       byte[] buffer = new byte[65536];
       for (int n = body.read(buffer); n >= 0; n = body.read(buffer)) {
         lastRead.set(System.nanoTime());
@@ -894,6 +911,7 @@ public final class BinaryDownloader {
           throw new ServiceStartException(url + " is larger than " + maxBytes + " bytes");
         }
       }
+      content = read.toByteArray();
     } catch (IOException e) {
       throw stalled.get() ? stall(url, e) : e;
     } finally {
@@ -902,7 +920,7 @@ public final class BinaryDownloader {
     if (stalled.get()) {
       throw stall(url, null);
     }
-    return read.toByteArray();
+    return content;
   }
 
   private IOException stall(String url, IOException cause) {

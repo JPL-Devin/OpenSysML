@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /** A GitHub releases API and download host serving fixtures, so no test reaches the network. */
 final class ReleaseServer implements AutoCloseable {
@@ -28,6 +30,8 @@ final class ReleaseServer implements AutoCloseable {
   private final List<String> requested = new ArrayList<>();
   private final Set<String> endless = ConcurrentHashMap.newKeySet();
   private final Set<String> stalling = ConcurrentHashMap.newKeySet();
+  /** Released when the server stops, so a stalled exchange does not outlive its test. */
+  private final CountDownLatch stopped = new CountDownLatch(1);
 
   ReleaseServer() throws IOException {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -106,7 +110,7 @@ final class ReleaseServer implements AutoCloseable {
         while (true) {
           body.write(chunk);
         }
-      } catch (IOException stopped) {
+      } catch (IOException gaveUp) {
         // The client gave up on a body it will not read to the end, which is the point.
       }
       return;
@@ -115,8 +119,8 @@ final class ReleaseServer implements AutoCloseable {
       exchange.sendResponseHeaders(200, 0);
       try (OutputStream body = exchange.getResponseBody()) {
         body.flush();
-        Thread.sleep(STALL.toMillis());
-      } catch (IOException | InterruptedException stopped) {
+        stopped.await(STALL.toMillis(), TimeUnit.MILLISECONDS);
+      } catch (IOException | InterruptedException interrupted) {
         Thread.currentThread().interrupt();
       }
       return;
@@ -135,6 +139,7 @@ final class ReleaseServer implements AutoCloseable {
 
   @Override
   public void close() {
+    stopped.countDown();
     server.stop(0);
   }
 }

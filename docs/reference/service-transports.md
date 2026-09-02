@@ -52,7 +52,12 @@ definition rather than a client's guess:
 | The capability describes | A request that needs it | What a client should do |
 |---|---|---|
 | what the service can be *asked*: `strict_conformance`, `inline_language`, `parse_sources`, `evaluate_subject`, `verification`, `convert`, `apply_edits`, `authoring`, `query`, `oslc_query`, `document_query`, `render_document` | is **refused** with `UNIMPLEMENTED`, naming the capability | check the advertised list first, and report the missing capability locally rather than spending a round trip |
-| how a response is *populated*: `type_facts`, `symbol_attributes`, `feature_values`, `enum_values`, `unset_value` | is answered with those fields **omitted** | check before reading the fields; an omitted field is not an error |
+| how a response is *populated*: `type_facts`, `symbol_attributes`, `feature_values`, `enum_values`, `unset_value`, `complex_values` | is answered with those fields **omitted** | check before reading the fields; an omitted field is not an error |
+
+`complex_values` sits in both rows: a complex in a response is reported as an `unsupported`
+null without it, and a complex in an action input or calc argument is refused with
+`UNIMPLEMENTED` rather than read as another value — a service that predates the arm would read
+it as an unknown field, so the Go and Python clients check the list before sending one.
 
 So a client cannot treat "the call succeeded" as "the field was computed", and cannot treat
 "no refusal" as "the capability is there". Every client this repository ships checks the list

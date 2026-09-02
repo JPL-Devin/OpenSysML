@@ -12,6 +12,7 @@ into a reported error instead of a hang.
 | `OPENSYSML_MAX_DO_STEPS` | `5000000` | Do actions one state machine run may perform, and the ones one `%advance` drains |
 | `OPENSYSML_MAX_ELEMENTS` | `1000000` | Collection elements one evaluation may hold — the bound on the memory a run holds rather than on the work it does |
 | `OPENSYSML_MAX_CALC_DEPTH` | `10000` (ceiling `25000`) | Nested `calc` invocations one run may hold on the stack, which is what a recursion spends |
+| `OPENSYSML_CALC_COMPILE` | unset (on) | Set to `0`, `false`, `off` or `no` to run every `calc` on the reference evaluator, instead of compiling a pure scalar body to a closure fast path on its first invocation; results, errors and step counts are the same either way, so this is a bisecting aid |
 | `OPENSYSML_SMT` | unset (look for `z3`, then `cvc5`, on `PATH`) | Executable `%check`, `%explain`, `%solve`, `%configure` and `%optimize` drive as their SMT solver, speaking SMT-LIB2 on standard input (experimental); `%optimize` needs `z3` in particular, as `(minimize …)`/`(maximize …)` is a z3 extension cvc5 does not implement |
 | `OPENSYSML_SMT_TIMEOUT` | `10s` | How long one solver query may take, as a Go duration (`5s`, `500ms`), after which the verdict is `unknown` |
 | `OPENSYSML_SMT_CORE_BUDGET` | `30s` | How long `%explain` may spend reducing an unsat core to a minimal one, as a Go duration; past it the solver's own core is reported, said not to be necessarily minimal |

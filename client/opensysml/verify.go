@@ -208,6 +208,9 @@ func (c *client) EvaluateCalc(
 	if err != nil {
 		return nil, err
 	}
+	if err := c.requireComplexValues(ctx, arguments...); err != nil {
+		return nil, err
+	}
 	req := &pb.EvaluateCalcRequest{ModelHash: hash, SymbolId: symbolID}
 	for _, argument := range arguments {
 		sent, err := valueToProto(argument)

@@ -503,7 +503,7 @@ func TestDeclaredIDLikeExpressionNodeStaysDisjoint(t *testing.T) {
 	if got := rdf.LocalName(graph.Type(rdf.IRI("urn:sysmlv2:element:stable_pvalue"))); got != "PartDefinition" {
 		t.Errorf("element stable_pvalue typed %q, want PartDefinition", got)
 	}
-	if got := rdf.LocalName(graph.Type(rdf.IRI("urn:opensysml:expr:stable_pvalue"))); got == "PartDefinition" {
+	if rdf.LocalName(graph.Type(rdf.IRI("urn:opensysml:expr:stable_pvalue"))) == "PartDefinition" {
 		t.Error("expression node merged with the element sharing its spelling")
 	}
 }

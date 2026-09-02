@@ -260,7 +260,7 @@ Models that convert to Turtle are a narrow set, but the set grows: **condition m
 state and action nodes still do not. Anything with a state substate, an initial node, `perform`,
 `send`, an assignment or prefix metadata still fails with
 `cannot convert the <thing> at <file>:<line>:<col>: save to .sysml or .kerml instead …` and exit 2.
-How many of `examples/` convert is measured in `docs/project/roadmap.md` § D6; most of the
+How many of `examples/` convert is measured in `docs/project/roadmap.md` § Track D; most of the
 training copies do, so a Turtle test can use real models — the Constraints/Requirements/
 Analysis/Verification training packages are the richest. A useful sweep, which also proves "the message is clear and it never panics":
 

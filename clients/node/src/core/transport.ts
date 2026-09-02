@@ -45,12 +45,12 @@ export function interceptors(options: TransportOptions): Interceptor[] {
   return built;
 }
 
-const ENCODINGS: readonly Encoding[] = ["protobuf", "json"];
+const ENCODINGS: ReadonlySet<string> = new Set<Encoding>(["protobuf", "json"]);
 
 /** Protobuf unless the caller asked for JSON. */
 export function encodingOf(options: TransportOptions): Encoding {
   const encoding = options.encoding ?? "protobuf";
-  if (!ENCODINGS.includes(encoding)) {
+  if (!ENCODINGS.has(encoding)) {
     throw new OpenSysMLError(
       `${JSON.stringify(encoding)} is not a body encoding; a connection carries "protobuf" or "json"`,
     );

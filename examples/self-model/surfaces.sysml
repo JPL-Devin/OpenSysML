@@ -427,6 +427,14 @@ package OpenSysMLSurfaces {
         attribute :>> gating = true;
     }
 
+    // The committed library snapshot must be the one a fresh build writes.
+    #Oracle part def StdlibSnapshotGate :> ConformanceOracle {
+        attribute :>> goPackage = "internal/core/libs/gensnapshot";
+        attribute :>> reference = "the bundled library files";
+        attribute :>> baseline = "internal/core/libs/stdlib.snapshot";
+        attribute :>> gating = true;
+    }
+
     // What the oracles lean on: a pinned reference, an errata overlay for the
     // defects in OMG-published material, and the census the status page reads.
     part def OraclePin :> CodeUnit {
@@ -482,6 +490,7 @@ package OpenSysMLSurfaces {
         part grammar : GrammarCoverage;
         part counts : DocCounts;
         part stdlib : StdlibConformanceGate;
+        part snapshotGate : StdlibSnapshotGate;
         part conformance : ConformanceInfrastructure;
 
         connection replDrives : ArtifactChannel connect repl.pipeline to pipeline.textIn;

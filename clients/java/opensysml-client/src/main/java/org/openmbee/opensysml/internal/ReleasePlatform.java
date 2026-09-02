@@ -14,9 +14,11 @@ import java.util.Set;
  */
 public final class ReleasePlatform {
 
+  private static final String WINDOWS = "windows";
+
   /** Every {@code goos-goarch} a release publishes a {@code sysml-grpc} binary for. */
   private static final Set<String> PUBLISHED =
-      Set.of("linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64", "windows-amd64");
+      Set.of("linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64", WINDOWS + "-amd64");
 
   private ReleasePlatform() {}
 
@@ -47,7 +49,7 @@ public final class ReleasePlatform {
               + "; build one with `make build` and name it with ConnectionOptions.binaryPath()");
     }
     String name = "sysml-grpc-" + pair;
-    return "windows".equals(goos) ? name + ".exe" : name;
+    return WINDOWS.equals(goos) ? name + ".exe" : name;
   }
 
   /**
@@ -64,8 +66,8 @@ public final class ReleasePlatform {
     if (name.startsWith("mac") || name.startsWith("darwin")) {
       return "darwin";
     }
-    if (name.startsWith("windows")) {
-      return "windows";
+    if (name.startsWith(WINDOWS)) {
+      return WINDOWS;
     }
     throw new ServiceStartException("unsupported operating system: " + name);
   }
@@ -93,7 +95,7 @@ public final class ReleasePlatform {
    * @return {@code true} on Windows
    */
   public static boolean isWindows() {
-    return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+    return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith(WINDOWS);
   }
 
   /**

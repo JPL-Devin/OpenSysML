@@ -94,6 +94,9 @@ var notKindPrefixKeywords = map[string]bool{
 	// `individual part p` keeps the modifier; the prefix path would drop it.
 	"individual": true,
 	"in":         true, "out": true, "inout": true,
+	// An annotation ends with its comment body, so a kind keyword after
+	// `doc /* … */` opens the next member rather than being qualified by it.
+	"doc": true, "comment": true, "rep": true, "locale": true,
 }
 
 // usageKindKeywords maps a single kind keyword to its UsageKind.

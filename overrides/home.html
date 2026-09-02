@@ -169,7 +169,7 @@
       grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
       gap: .8rem;
     }
-    .osml-referee__figure {
+    .osml-referee__oracle {
       display: block;
       padding: .9rem 1rem;
       background: var(--md-default-bg-color);
@@ -178,15 +178,15 @@
       color: inherit;
       transition: border-color .2s, transform .2s;
     }
-    a.osml-referee__figure:hover {
+    a.osml-referee__oracle:hover {
       border-color: var(--md-accent-fg-color);
       transform: translateY(-2px);
     }
-    .osml-referee__number {
+    .osml-referee__title {
       display: block;
-      font-size: 1.15rem;
+      font-size: .84rem;
       font-weight: 700;
-      line-height: 1.2;
+      line-height: 1.3;
       color: var(--md-primary-fg-color);
     }
     .osml-referee__label {
@@ -328,42 +328,41 @@
 
 <section class="osml-referee" id="refereed">
   <div class="osml-referee__inner">
-    <!-- doc-counts:begin landing-figures -->
-    <p class="osml-referee__eyebrow">Refereed against the OMG pilot implementation &middot; pin <code>2026-07</code>, artifact <code>0.61.0</code></p>
+    <p class="osml-referee__eyebrow">Refereed against the OMG pilot implementation</p>
     <h2>Not self-assessed &mdash; measured against the reference implementation.</h2>
     <p class="osml-referee__lede">
-      Both implementations validate the reference's own corpora and their diagnostics are
-      compared file by file, in both directions. Every figure below is generated from a
-      committed baseline, and anyone can reproduce it.
+      OpenSysML is run beside a pinned build of the OMG pilot implementation over the same
+      models, and the two are compared wherever they can be: the diagnostics each reports,
+      the diagnostics the reference's own test suites declare, how names resolve, and whether
+      an invalid model is turned away. Each comparison has a committed baseline that anyone
+      can reproduce, and the results are kept in the records rather than restated here.
     </p>
     <div class="osml-referee__grid">
-      <a class="osml-referee__figure" href="{{ record('project/pilot-differential.md', base_url) }}">
-        <span class="osml-referee__number">334 of 366</span>
-        <span class="osml-referee__label">files agree diagnostic-by-diagnostic; 20 diagnostics are ours alone and 310 the reference's alone</span>
+      <a class="osml-referee__oracle" href="{{ record('project/pilot-differential.md', base_url) }}">
+        <span class="osml-referee__title">Diagnostic differential</span>
+        <span class="osml-referee__label">Both implementations validate the same models and their diagnostics are compared file by file, in both directions.</span>
       </a>
-      <a class="osml-referee__figure" href="{{ record('project/pilot-xpect.md', base_url) }}">
-        <span class="osml-referee__number">511 of 511</span>
-        <span class="osml-referee__label">diagnostics the reference's own test suites declare that we report too; we are silent on 0</span>
+      <a class="osml-referee__oracle" href="{{ record('project/pilot-xpect.md', base_url) }}">
+        <span class="osml-referee__title">Declared diagnostics</span>
+        <span class="osml-referee__label">The errors the reference's own test suites declare, checked against what we report on the same source.</span>
       </a>
-      <a class="osml-referee__figure" href="{{ record('project/pilot-xpect.md', base_url) }}">
-        <span class="osml-referee__number">230 of 230</span>
-        <span class="osml-referee__label">declared name-resolution assertions our scopes match exactly</span>
+      <a class="osml-referee__oracle" href="{{ record('project/pilot-xpect.md', base_url) }}">
+        <span class="osml-referee__title">Name resolution</span>
+        <span class="osml-referee__label">The scopes the reference's test suites assert, matched against the ones we resolve.</span>
       </a>
-      <a class="osml-referee__figure" href="{{ record('project/pilot-rejection.md', base_url) }}">
-        <span class="osml-referee__number">118 of 120</span>
-        <span class="osml-referee__label">invalid models we wrote ourselves that we reject by default, as the reference does; 2 more only when asked strictly, 0 not at all</span>
+      <a class="osml-referee__oracle" href="{{ record('project/pilot-rejection.md', base_url) }}">
+        <span class="osml-referee__title">Rejection</span>
+        <span class="osml-referee__label">Invalid models the reference turns away, checked to be turned away here too, by default and not only when asked strictly.</span>
       </a>
     </div>
     <p class="osml-referee__note">
-      What this is not: the corpora are demonstrations rather than an official conformance
-      suite, the comparison is of the diagnostics two implementations report on the same
-      files, and no certification or percentage of the specification is claimed. Read
-      <a href="{{ record('project/pilot-differential.md', base_url) }}">how each figure is measured</a>, or
-      <a href="{{ record('project/spec-compliance.md', base_url) }}">which rules are faithful, approximate or missing</a>
-      &mdash; including the 149 behavioral rules the pinned reference cannot referee, because it
-      evaluates expressions but executes neither actions nor state machines.
+      What this is not: the comparison is of what two implementations report on the same
+      files, not an official conformance suite, and no certification or percentage of the
+      specification is claimed. The reference evaluates expressions but executes neither
+      actions nor state machines, so behavior is beyond what it can referee. Read
+      <a href="{{ record('project/pilot-differential.md', base_url) }}">how each comparison is measured and what it currently reports</a>, or
+      <a href="{{ record('project/spec-compliance.md', base_url) }}">which rules are faithful, approximate or missing</a>.
     </p>
-    <!-- doc-counts:end landing-figures -->
   </div>
 </section>
 

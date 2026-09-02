@@ -541,10 +541,7 @@ func runCLI() int {
 
 	if renderDoc != "" {
 		switch {
-		case modelChecks.checksOnly():
-			return refuse(modelChecks,
-				"-render-document writes a document out and decides nothing about the model; check it in its own run")
-		case modelChecks.jsonOut:
+		case modelChecks.jsonOut && !modelChecks.checksOnly():
 			fmt.Fprintln(os.Stderr, "sysml: -render-document writes a document, not JSON; -json reports checks")
 			return 2
 		case modelChecks.requested():
