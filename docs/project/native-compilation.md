@@ -171,8 +171,130 @@ Reading the table:
 ## What this spike does not do
 
 - Compile actions, state machines, constraints, requirements, parts, or instance graphs; the
-  subset is scalar calcs. Extending the IR to collections and structured values is the next step
-  and the one that would let a whole analysis case compile.
+  subset is scalar calcs. The [roadmap](#roadmap-compiling-the-whole-model) below extends it.
 - Enforce the step budget (see [Known differences](#known-differences)).
 - Link the compiled calc into the REPL or gRPC service; the output is a standalone executable.
 - Offer a stable C ABI. The generated `sysml_run` signature is an implementation detail.
+
+## Roadmap: compiling the whole model
+
+The spike fixes the shape of the compiler; the rest of the language is reached by widening the IR
+and its emitters, never by a second front end. Three rules hold throughout:
+
+1. **One lowering, two consumers.** Every construct lowers exactly once, into `internal/core/lower`
+   (`CalcBody`, `ActionGraph`, `StateGraph`), `queryplan` or `docplan`, and both the interpreter
+   and the compiler read that form. Nothing may be interpreter-only by accident: a construct the
+   compiler does not yet handle is refused with an `UnsupportedError` naming it.
+2. **The interpreter is the oracle.** Each phase lands with a differential test running the same
+   model compiled (C and Go) and interpreted, comparing results, verdicts and traces. The
+   `runtime` conformance corpus is the primary fixture source.
+3. **Refuse, never approximate.** No construct compiles until its full semantics do (masking,
+   redefinition, multiplicity, error timing). A phase may narrow *which* constructs compile, never
+   *how faithfully*.
+
+### Target
+
+A model compiles to one dependency-free executable, or to a library with a small C API, whose
+behavior is the interpreter's:
+
+```
+sysml system.sysml -compile Vehicle::Sim -o sim         # a part, action, state machine, calc, constraint, requirement or document
+./sim --in speed=30 --until 10s                        # run to quiescence or a time bound; stream the event trace
+./sim --step                                           # events on stdin, state on stdout
+./sim --verify                                         # evaluate every satisfy/assert in scope; exit 1 on any failure
+./sim --render Reports::MassReport                     # write the document as Markdown
+```
+
+| Construct | Compiled form |
+|---|---|
+| `part`, `attribute`, `port`, `item` | C structs laid out at compile time from the flattened, redefinition-resolved shape (`runtime/shape.go` is the source of truth); no maps, no lazy materialization |
+| `calc` | functions (this spike), widened to collections, records and library functions |
+| `constraint`, `assert constraint` | Boolean functions, evaluated at the points the interpreter checks, with the interpreter's verdicts (`true`/`false`/unresolved) |
+| `requirement`, `satisfy` | one record per requirement: `assume` gates `require`, nested requirements roll up, `satisfy … by P` specializes the predicates to `P`'s struct; a `--verify` report per assertion |
+| `action` | the `ActionGraph`: straight-line code where token flow is deterministic, a scheduler loop where fork/join/accept make it concurrent |
+| `state` | the `StateGraph` as an event loop: dispatch on state × trigger, guards and effects inlined, `defer` as a per-state mask, routing pseudostates as edges |
+| `document def`, `view def` | the `docplan` and its `queryplan` programs emitted as code over the compiled structs; output is Markdown or the `docir` tree; PDF remains the external converter's job |
+| Library functions (OMG `RealFunctions`, `TrigFunctions`, `CollectionFunctions`; OpenSysML `OpenSysMLMathFunctions`) | a precompiled runtime (`libm` / Go `math`) with the interpreter's domain and arity errors, not re-lowered per model |
+| `metadata`, `IdentityMetadata` | constant tables, so a compiled program still reports identities and tags |
+| Extension notations (`defer`, `choice`, `junction`, `history`, `entry`/`exit point`) | already lowered into the `StateGraph`; compile as any other vertex or edge. `-strict` gates them before codegen, as today |
+
+Interpreter-only, refused by the compiler with a named error: SMT-backed satisfiability
+(`internal/core/solve`), REPL introspection and `%trace`, instance adoption across edits, and
+the step budget.
+
+### Phases
+
+Each phase is a session-sized unit with its own PR, its own differential test and a benchmark
+checkpoint that must still show the C backend ahead of the interpreter by two orders of
+magnitude on its own fixtures; a phase that loses the speedup is redesigned, not merged. The
+phases are ordered by dependency: each consumes the IR the one before it introduced.
+
+**Phase 1 — Values: collections, records, library functions.**
+IR: `Type` becomes structural — scalars, `Seq[T]` with a multiplicity bound, `Record{fields}`
+from a flattened shape, `Enum`. Expressions gain `Index`, `Field`, `Seq` literals and the
+collection operations the interpreter implements in `runtime/collections.go` (`size`,
+`includes`, `select`, `collect`, `reduce`, …). Library calls become `LibCall{Fn}` against a
+table shared by both emitters; the OMG and OpenSysML function libraries are compiled once into
+the prelude with `runtime/library_functions.go`'s domain errors. Body-local declarations without
+an initializer become representable (the null the interpreter uses) so the refusal added in the
+spike is lifted. The multiplicity and element budgets are enforced at the same points.
+Exit: every calc in the runtime conformance corpus either compiles and matches, or is refused
+with a documented reason; `OPENSYSML_CALC_COMPILE`'s closure tier and the native tier share the
+eligibility rule.
+
+**Phase 2 — Instances: parts, attributes, ports, connections.**
+IR: `Program` gains `Struct` layouts derived from the flattened shape (redefinitions, subsetting,
+feature chains resolved to offsets; variations to a tagged union with a selected variant).
+Default values and bindings compile to an `init` function per struct; connections and flows to
+pointer fields fixed at initialization. Instance materialization is eager: the whole tree exists
+before `main` runs, which is what makes lookups free. Exit: `-e` expressions over parts and
+attributes give the interpreter's values; feature-chain and redefinition robustness cases give
+the same errors.
+
+**Phase 3 — Constraints, requirements, satisfies.**
+IR: `Predicate` (a `Func` with a Boolean result and an unresolved verdict when an operand is
+unbound), `Requirement{Assume, Require, Nested}`, `Satisfaction{Requirement, Subject}`. The
+`--verify` entry evaluates every assertion in the compiled scope and prints one line per
+assertion in the interpreter's report form (`runtime/satisfy.go`, `CheckResult`). SMT-only
+constraints are refused by name. Exit: `TestSatisfy*` and the requirement conformance fixtures
+agree across all three evaluators; a sweep benchmark (N parameter sets × M satisfactions) is
+added to the checkpoint.
+
+**Phase 4 — Actions.**
+IR: `ActionGraph` is consumed directly. Where the graph is a series–parallel DAG with no `accept`,
+it lowers to straight-line statements in the spike's IR; otherwise to a `Scheduler` with a token
+table, a ready queue and the interpreter's ordering rule (`action_executor.go`), so traces match
+`TestExecutionTrace` exactly. `perform`, `send`, `accept` (signal, time and change triggers) and
+sub-flows compile; the step budget stays interpreter-only and is documented as such. Exit: the
+action conformance corpus and golden traces match; deadlock and unbound-parameter robustness
+cases give the same typed errors.
+
+**Phase 5 — State machines.**
+IR: `StateGraph` → `Machine{States, Regions, Transitions, Deferred}`; the emitted event loop
+dispatches on `(state, trigger)`, evaluates guards, runs exit/effect/entry in the interpreter's
+order, tracks history and deferral, and reports quiescence. `--step` and `--until` drive it.
+Exit: the state conformance corpus, golden traces and the pseudostate robustness cases match; a
+long-run simulation benchmark (events/second) joins the checkpoint.
+
+**Phase 6 — Documents.**
+IR: `docplan.Plan` and `queryplan.Program` emitted as code over Phase 2 structs; `docir`
+construction and the Markdown renderer become a shared runtime. `--render` writes what
+`-render-document` writes today, byte for byte; PDF conversion is unchanged. Exit: every fixture
+in `docrender`'s tests renders identically compiled and interpreted.
+
+**Phase 7 — Embedding.**
+A stable C API (`sysml_new`, `sysml_set`, `sysml_send`, `sysml_step`, `sysml_get`, `sysml_verify`,
+`sysml_free`) and `-compile -lib` producing a static library and header; a Go package wrapping
+it so the REPL and gRPC service can run a compiled model in place of the interpreter when a
+model is compilable. Exit: the Python and Node clients run the same scenario against both.
+
+### Cross-cutting work, folded into the phase that first needs it
+
+- **Error parity.** Each phase adds its interpreter errors to the prelude's message table; the
+  differential test compares messages, not only failure.
+- **Step budget.** Kept interpreter-only. A later `--budget N` on compiled programs is possible
+  (a counter per loop back-edge) but costs the speedup on tight loops; decide with numbers.
+- **Documentation.** `docs/project/spec-compliance.md` gains a "compiled" status per rule as
+  phases land; the guide gains a chapter once Phase 3 makes `--verify` useful to a modeller.
+- **Estimate.** Roughly one session per phase on this foundation, Phases 1–3 first since they
+  unlock verification sweeps, the workload the spike was asked to justify.
