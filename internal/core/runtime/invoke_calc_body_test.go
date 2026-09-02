@@ -165,7 +165,7 @@ func constSequence(values ...int64) Value {
 	for _, v := range values {
 		sequence.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: v}})
 	}
-	return Value{Kind: ValSequence, Sequence: sequence}
+	return NewSequenceValue(sequence)
 }
 
 // TestCalcForLoopOverParameterSequence requires a `for` loop to iterate the

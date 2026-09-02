@@ -541,7 +541,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 				seq.Append(Value{Kind: ValInstance, Instance: childInst.ID})
 				children = append(children, childInst)
 			}
-			fv.Values = Value{Kind: ValSequence, Sequence: seq}
+			fv.Values = NewSequenceValue(seq)
 			fv.Materialized = true
 			if err := ctx.startClassifierBehaviorsOf(children, mark); err != nil {
 				return nil, err

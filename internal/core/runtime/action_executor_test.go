@@ -2627,7 +2627,7 @@ func TestActionExecutor_GuardedSuccession_PrunedMergeStaysOpen(t *testing.T) {
 	step(merge)   // guard 2 > 1 holds: join → after
 	step(after)
 
-	if value, ran := exec.data["result"]; !ran || value.Str != "ran" {
+	if value, ran := exec.data["result"]; !ran || value.Str() != "ran" {
 		t.Errorf("after did not run: result = %v", value)
 	}
 }

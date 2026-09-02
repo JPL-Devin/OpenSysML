@@ -81,6 +81,8 @@ type calcShape struct {
 	Sym    *symbols.Symbol
 	Name   string // qualified name, for diagnostics and traces
 	Params []calcParameter
+	// ParamNames are the Params' names by position: the slots an invocation binds.
+	ParamNames []string
 	// Outputs are the calc's output features — its `out` parameters and the
 	// result parameter a `return` declares — in declaration order.
 	Outputs []calcOutput
@@ -128,6 +130,10 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 		Body:      body,
 		BodyOwner: bodyOwner,
 		Steps:     calcSteps(body),
+	}
+	shape.ParamNames = make([]string, len(shape.Params))
+	for i, param := range shape.Params {
+		shape.ParamNames[i] = param.Name
 	}
 	shape.BodyOutputs = assignedOutputs(shape.Steps, shape.Outputs)
 	shape.Bindings = calcBindings(chain)
@@ -298,20 +304,27 @@ func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope
 // invocationFrame is the storage one calc invocation runs in, held off the
 // context's free list until the invocation returns, so no two active ones share it.
 type invocationFrame struct {
-	ec       EvalContext
-	frames   [1]map[string]Value
+	ec     EvalContext
+	frames [1]frame
+	// slots hold the parameters; bindings the locals the body declares beside them.
+	slots    slotFrame
 	bindings map[string]Value
 	host     calcStmtHost
 	env      stmtEnv
 	engine   stmtEngine
 }
 
+// locals is the frame the invocation's parameters and body locals are bound in.
+func (f *invocationFrame) locals() frame {
+	return frame{slots: &f.slots, vars: f.bindings}
+}
+
 // maxFreeInvocationFrames bounds the frames kept, so one deep recursion does not
 // pin that many for the context's whole life.
 const maxFreeInvocationFrames = 1024
 
-// maxPooledBindings is the widest bindings map a free frame keeps: clearing a map
-// keeps its backing storage, so a wider one is dropped rather than pinned.
+// maxPooledBindings is the widest frame whose storage a free frame keeps: clearing
+// keeps the backing storage, so a wider one is dropped rather than pinned.
 const maxPooledBindings = 32
 
 // acquireInvocationFrame takes a frame off the free list, or makes one when it is empty.
@@ -331,13 +344,17 @@ func (ctx *Context) acquireInvocationFrame() *invocationFrame {
 // releaseInvocationFrame empties frame and keeps it for the next invocation; the
 // caller has ended the activation, so nothing memoized still reads the bindings.
 func (ctx *Context) releaseInvocationFrame(frame *invocationFrame) {
-	bindings := frame.bindings
-	if len(bindings) > maxPooledBindings {
-		bindings = nil
+	bindings, slots := frame.bindings, frame.slots
+	if frame.locals().width() > maxPooledBindings {
+		bindings, slots = nil, slotFrame{}
 	} else {
 		clear(bindings)
+		slots.release()
 	}
-	*frame = invocationFrame{bindings: bindings}
+	frameBuf := frame.engine.frameBuf
+	clear(frameBuf)
+	*frame = invocationFrame{bindings: bindings, slots: slots}
+	frame.engine.frameBuf = frameBuf[:0]
 	if len(ctx.freeInvocationFrames) < maxFreeInvocationFrames {
 		ctx.freeInvocationFrames = append(ctx.freeInvocationFrames, frame)
 	}
@@ -364,12 +381,14 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	activation := ctx.newActivation()
 	defer ctx.endActivation(activation)
 
+	frame.slots.reset(shape.ParamNames)
+	locals := frame.locals()
 	ec := &frame.ec
 	*ec = EvalContext{
 		ctx:        ctx,
 		scope:      ctx.calcScope(shape.BodyOwner, shape.Sym, callerScope),
 		self:       self,
-		frames:     append(frame.frames[:0], frame.bindings),
+		frames:     append(frame.frames[:0], locals),
 		trace:      ctx.trace,
 		activation: activation,
 	}
@@ -378,7 +397,7 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 		ec.trace.RecordCalcEnter(shape.Name)
 	}
 
-	if err := ctx.bindCalcParameters(shape, ec, args, callerScope, frame.bindings, nil); err != nil {
+	if err := ctx.bindCalcParameters(shape, ec, args, callerScope, locals, nil); err != nil {
 		if ec.trace != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
 		}
@@ -428,7 +447,7 @@ func (ctx *Context) bindCalcParameters(
 	ec *EvalContext,
 	args calcArgs,
 	callerScope *symbols.Scope,
-	bindings map[string]Value,
+	bindings frame,
 	nested *EvalContext,
 ) error {
 	for i := range shape.Params {
@@ -449,7 +468,7 @@ func (ctx *Context) bindCalcParameters(
 		}); err != nil {
 			return err
 		}
-		bindings[param.Name] = value
+		bindings.bindParam(i, param.Name, value)
 		if ec.trace != nil {
 			ec.trace.RecordCalcBind(param.Name, value, source)
 		}
@@ -464,8 +483,8 @@ func (ctx *Context) bindCalcParameters(
 // activation, which the caller ends after it.
 func (ctx *Context) runCalcBody(shape *calcShape, frame *invocationFrame, callerScope *symbols.Scope, self *Instance, activation int64) (Value, error) {
 	frame.host = calcStmtHost{ctx: ctx, shape: shape, self: self}
-	frame.env = stmtEnv{data: frame.bindings}
-	frame.engine = stmtEngine{ctx: ctx, host: &frame.host, env: &frame.env, activation: activation}
+	frame.env = stmtEnv{data: frame.locals()}
+	frame.engine = stmtEngine{ctx: ctx, host: &frame.host, env: &frame.env, activation: activation, frameBuf: frame.engine.frameBuf}
 	result, returned, err := runCalcSteps(&frame.engine, &frame.host, shape)
 	if err != nil {
 		return Value{}, err
@@ -480,7 +499,7 @@ func (ctx *Context) runCalcBody(shape *calcShape, frame *invocationFrame, caller
 	// The designated output's binding may name the calc's other outputs, and one
 	// naming itself is a cycle rather than an evaluation, so it is evaluated
 	// through the same run bookkeeping a calc usage's outputs use.
-	run := newCalcRun(shape, callerScope, self, frame.bindings)
+	run := newCalcRun(shape, callerScope, self, frame.locals())
 	run.activation = activation
 	// The invocation already holds this evaluation's nesting feature value.
 	run.onStack = true

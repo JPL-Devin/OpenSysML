@@ -159,7 +159,7 @@ func TestMultiValuedDefaultMaterializes(t *testing.T) {
 	if fv.Values.Kind != ValSequence {
 		t.Fatalf("Values.Kind = %v, want a sequence", fv.Values.Kind)
 	}
-	elements := fv.Values.Sequence.Elements()
+	elements := fv.Values.Sequence().Elements()
 	if len(elements) != 1 || elements[0].Const.Real != 200.0 {
 		t.Errorf("doubles = %v, want [200]", elements)
 	}

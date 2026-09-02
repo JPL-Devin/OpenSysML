@@ -81,7 +81,7 @@ func TestFormatTraceValueCanonicalizesSets(t *testing.T) {
 		set.Add(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: n}})
 	}
 
-	value := Value{Kind: ValSet, Set: set}
+	value := NewSetValue(set)
 	const want = "{1, 2, 3}"
 	for i := 0; i < 50; i++ {
 		if got := FormatTraceValue(value); got != want {
@@ -107,10 +107,10 @@ func TestFormatTraceValueDistinguishesKinds(t *testing.T) {
 		{"fractional real", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 0.25}}, "0.25"},
 		{"boolean", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: true}}, "true"},
 		{"infinity", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInfinity}}, "*"},
-		{"string", Value{Kind: ValString, Str: "on"}, `"on"`},
+		{"string", NewStringValue("on"), `"on"`},
 		{"null", Value{Kind: ValNull}, "null"},
 		{"instance", Value{Kind: ValInstance, Instance: 7}, "instance#7"},
-		{"sequence", Value{Kind: ValSequence, Sequence: sequence}, "(1, null)"},
+		{"sequence", NewSequenceValue(sequence), "(1, null)"},
 	}
 
 	for _, tc := range cases {

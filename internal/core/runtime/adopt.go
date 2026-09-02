@@ -90,7 +90,7 @@ func (ctx *Context) recordShapes(obj *Instance, shapes *Shapes, seen map[int64]b
 	for _, val := range obj.held() {
 		ctx.walkValue(val, func(v Value) {
 			if v.Kind == ValVariant {
-				ctx.recordShape(v.Variant, shapes)
+				ctx.recordShape(v.Variant(), shapes)
 			}
 			if id, ok := v.Object(); ok {
 				if held, found := ctx.instances[id]; found {
@@ -212,14 +212,14 @@ func (ctx *Context) walkValue(val Value, visit func(Value)) {
 	visit(val)
 	switch val.Kind {
 	case ValSequence:
-		if val.Sequence != nil {
-			for _, elem := range val.Sequence.Elements() {
+		if val.Sequence() != nil {
+			for _, elem := range val.Sequence().Elements() {
 				ctx.walkValue(elem, visit)
 			}
 		}
 	case ValSet:
-		if val.Set != nil {
-			for _, elem := range val.Set.Elements() {
+		if val.Set() != nil {
+			for _, elem := range val.Set().Elements() {
 				ctx.walkValue(elem, visit)
 			}
 		}
@@ -485,7 +485,7 @@ func (a *adoption) planValue(owner string, val Value) error {
 			return
 		}
 		if v.Kind == ValVariant {
-			if _, rebindErr := a.rebind(v.Variant, "a variant it selected"); rebindErr != nil {
+			if _, rebindErr := a.rebind(v.Variant(), "a variant it selected"); rebindErr != nil {
 				err = rebindErr
 				return
 			}
@@ -706,30 +706,28 @@ func (a *adoption) carryDerived(adopted map[int64]bool) {
 func (a *adoption) rewrite(val Value) Value {
 	switch val.Kind {
 	case ValVariant:
-		if found, ok := a.rebound[val.Variant]; ok {
-			val.Variant = found
+		if found, ok := a.rebound[val.Variant()]; ok {
+			return NewVariantValue(found, val.Instance)
 		}
 		return val
 	case ValSequence:
-		if val.Sequence == nil {
+		if val.Sequence() == nil {
 			return val
 		}
 		seq := NewSequence()
-		for _, elem := range val.Sequence.Elements() {
+		for _, elem := range val.Sequence().Elements() {
 			seq.Append(a.rewrite(elem))
 		}
-		val.Sequence = seq
-		return val
+		return NewSequenceValue(seq)
 	case ValSet:
-		if val.Set == nil {
+		if val.Set() == nil {
 			return val
 		}
 		set := NewSet()
-		for _, elem := range val.Set.Elements() {
+		for _, elem := range val.Set().Elements() {
 			set.Add(a.rewrite(elem))
 		}
-		val.Set = set
-		return val
+		return NewSetValue(set)
 	default:
 		return val
 	}

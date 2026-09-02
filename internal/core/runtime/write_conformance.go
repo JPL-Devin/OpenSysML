@@ -109,7 +109,7 @@ func storeBodyValue(ctx *Context, host stmtHost, env *stmtEnv, name string, valu
 	if err := ctx.checkBodyWrite(host, s, value); err != nil {
 		return err
 	}
-	env.data[name] = value
+	env.data.set(name, value)
 	return nil
 }
 
@@ -201,10 +201,10 @@ func (ctx *Context) quantityConforms(value Value, declared *symbols.Symbol) (boo
 		return semantics.PrimConforms(semantics.PrimRational, prim), "", nil
 	}
 	want, ok := ctx.model.DimensionOfType(declared)
-	if !ok || value.Quantity == nil {
+	if !ok || value.Quantity() == nil {
 		return true, "", nil
 	}
-	got, ok := ctx.model.DimensionOfUnit(value.Quantity.Unit.Term)
+	got, ok := ctx.model.DimensionOfUnit(value.Quantity().Unit.Term)
 	if !ok || want.Term.Commensurable(got.Term) {
 		return true, "", nil
 	}

@@ -102,7 +102,7 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 	}
 
 	unit := Unit{Text: semantics.UnitExprText(n.Index), Term: term}
-	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: magnitude.Const, Unit: unit}}, nil
+	return NewQuantityValue(&Quantity{Num: magnitude.Const, Unit: unit}), nil
 }
 
 // asQuantity views a value as a quantity: a quantity as itself, and a bare
@@ -111,7 +111,7 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 func asQuantity(val Value) (*Quantity, bool) {
 	switch val.Kind {
 	case ValQuantity:
-		return val.Quantity, true
+		return val.Quantity(), true
 	case ValConst:
 		if val.Const.IsNumeric() {
 			return &Quantity{Num: val.Const, Unit: Unit{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}}, true
@@ -213,7 +213,7 @@ func powQuantity(base *Quantity, exponent semantics.Value) (Value, error) {
 			Real: semantics.ConvertMagnitude(toReal(num), term.Scale, semantics.UnitScale(1))}}, nil
 	}
 	unit := Unit{Text: fmt.Sprintf("(%s)%s%s", base.Unit, ast.OpPow, exponentText(exponent)), Term: term}
-	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: num, Unit: unit}}, nil
+	return NewQuantityValue(&Quantity{Num: num, Unit: unit}), nil
 }
 
 // composedUnitText renders the unit an operation on two quantities produces. A
@@ -291,5 +291,5 @@ func quantityValue(magnitude float64, unit Unit) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: num, Unit: unit}}, nil
+	return NewQuantityValue(&Quantity{Num: num, Unit: unit}), nil
 }

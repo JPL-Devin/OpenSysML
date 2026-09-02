@@ -24,7 +24,7 @@ func (e *StateExecutor) timeMagnitude(val Value, what string) (float64, error) {
 			return 0, fmt.Errorf("%s must be numeric, got %v", what, val.Const.Kind)
 		}
 	case ValQuantity:
-		return e.durationInClockUnits(val.Quantity, what)
+		return e.durationInClockUnits(val.Quantity(), what)
 	default:
 		return 0, fmt.Errorf("%s must be constant, got %v", what, val.Kind)
 	}

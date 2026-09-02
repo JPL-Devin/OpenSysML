@@ -681,7 +681,7 @@ func (m *modelInstance) str(feature string) string {
 	if v.Kind != runtime.ValString {
 		m.t.Fatalf("%s.%s is %s, not a string", m.name, feature, v.Kind)
 	}
-	return v.Str
+	return v.Str()
 }
 
 // integer reads an Integer attribute.

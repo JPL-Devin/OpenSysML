@@ -140,7 +140,7 @@ func TestTypeClassificationFollowsSelectedVariant(t *testing.T) {
 }
 
 // strValue is a String runtime value, the representation of a string literal.
-func strValue(s string) Value { return Value{Kind: ValString, Str: s} }
+func strValue(s string) Value { return NewStringValue(s) }
 
 // evalStringExpr evaluates expr against string-valued attributes, on its own
 // goroutine so an evaluation that neither answers nor fails fails the test.
