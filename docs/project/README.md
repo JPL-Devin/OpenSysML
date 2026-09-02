@@ -17,6 +17,9 @@ says so at the top.
   pilot implementation, advisory
 - **[Pilot execution referee](pilot-execution-referee.md)** — how far the pinned pilot's
   execution surface reaches, and which behavior rows it can adjudicate
+- **[Behavior semantic oracle](behavior-semantic-oracle.md)** — action and state-machine
+  conformance cases whose expected outcomes are derived by hand from the Kernel Semantic and
+  Systems Library text rather than recorded from the executor, and the three the executor fails
 - **[Pilot Xpect expectations](pilot-xpect.md)** — the pilot's own inline `.xt` assertions as a
   declared-intent oracle, advisory
 - **[Grammar coverage](grammar-coverage.md)** — which OMG grammar productions the project's inputs
