@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/docrender"
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 	"github.com/Open-MBEE/OpenSysML/internal/docpdf"
@@ -28,6 +29,17 @@ func runRenderDocument(files []string) error {
 	if err != nil {
 		return err
 	}
+	if form == docFormHTML {
+		opts, err := htmlOptions(nil)
+		if err != nil {
+			return err
+		}
+		rendered, err := sess.RenderDocumentHTML(renderDoc, opts)
+		if err != nil {
+			return err
+		}
+		return writeArtifact(rendered, formHTML)
+	}
 	markdown, err := sess.RenderDocumentMarkdown(renderDoc)
 	if err != nil {
 		return err
@@ -47,9 +59,13 @@ func runRenderDocument(files []string) error {
 }
 
 // runRenderDocuments renders every document definition of the model named on
-// the command line as linked Markdown files in the directory -render-documents
-// names, so cross-document references resolve on disk.
+// the command line as linked files in the directory -render-documents names,
+// so cross-document references resolve on disk.
 func runRenderDocuments(files []string) error {
+	form, err := documentSetForm()
+	if err != nil {
+		return err
+	}
 	if len(files) == 0 {
 		return errors.New("no model to render; name the files the documents are declared in, as `sysml model.sysml -render-documents rendered`")
 	}
@@ -57,17 +73,89 @@ func runRenderDocuments(files []string) error {
 	if err != nil {
 		return err
 	}
-	documents, err := sess.RenderDocumentSetMarkdown()
-	if err != nil {
-		return err
+	// A set shares one stylesheet file, so a reader downloads it once and
+	// edits it in one place.
+	var stylesheet string
+	var documents []repl.RenderedDocument
+	if form == docFormHTML {
+		var shared []docrender.Stylesheet
+		if !htmlNoCSS {
+			stylesheet = docrender.DefaultStylesheet()
+			shared = []docrender.Stylesheet{{Href: docrender.StylesheetFileName}}
+		}
+		opts, err := htmlOptions(shared)
+		if err != nil {
+			return err
+		}
+		// The set links the shared sheet rather than inlining it in each file.
+		opts.NoDefaultStylesheet = true
+		documents, err = sess.RenderDocumentSetHTML(opts)
+		if err != nil {
+			return err
+		}
+	} else {
+		documents, err = sess.RenderDocumentSetMarkdown()
+		if err != nil {
+			return err
+		}
 	}
 	if len(documents) == 0 {
 		return errors.New("the model declares no documents; nothing was rendered")
 	}
+	if stylesheet != "" {
+		documents = append(documents, repl.RenderedDocument{
+			Name:     docrender.StylesheetFileName,
+			FileName: docrender.StylesheetFileName,
+			Content:  stylesheet,
+		})
+	}
 	if err := os.MkdirAll(renderDocsDir, 0o750); err != nil {
 		return fmt.Errorf("create rendering directory %s: %w", renderDocsDir, err)
 	}
-	return commitDocumentSet(documents)
+	return commitDocumentSet(documents, form)
+}
+
+// htmlOptions resolves the HTML flags, reading each -html-css file and
+// linking each -html-css URL, after the stylesheets the caller shares.
+func htmlOptions(shared []docrender.Stylesheet) (docrender.HTMLOptions, error) {
+	opts := docrender.HTMLOptions{
+		Fragment:            htmlFragment,
+		NoDefaultStylesheet: htmlNoCSS,
+		Stylesheets:         shared,
+		TitlePage:           pdfTitlePage,
+		TOC:                 pdfTOC,
+		NumberSections:      pdfNumbering,
+	}
+	for _, css := range htmlCSS {
+		if isStylesheetURL(css) {
+			opts.Stylesheets = append(opts.Stylesheets, docrender.Stylesheet{Href: css})
+			continue
+		}
+		// #nosec G304 -- the stylesheet is the file the run asked to style with.
+		content, err := os.ReadFile(css)
+		if err != nil {
+			return opts, fmt.Errorf("read stylesheet %s: %w", css, err)
+		}
+		opts.Stylesheets = append(opts.Stylesheets, docrender.Stylesheet{Content: string(content)})
+	}
+	return opts, nil
+}
+
+// isStylesheetURL reports whether -html-css named a stylesheet to link rather
+// than a file to inline.
+func isStylesheetURL(css string) bool {
+	for _, scheme := range []string{"http://", "https://", "//"} {
+		if strings.HasPrefix(css, scheme) {
+			return true
+		}
+	}
+	return false
+}
+
+// runDefaultStylesheet writes the default document stylesheet, so a reader
+// styling the HTML starts from the sheet it overrides.
+func runDefaultStylesheet() error {
+	return writeArtifact(docrender.DefaultStylesheet(), formCSS)
 }
 
 // commitDocumentSet writes a rendered document set all-or-nothing: every
@@ -80,7 +168,7 @@ func runRenderDocuments(files []string) error {
 // stands, last, after the regular set commits; bytes a pipe or device already
 // received cannot be recalled, so the all-or-nothing guarantee covers the
 // regular files of the set only.
-func commitDocumentSet(documents []repl.RenderedDocument) error {
+func commitDocumentSet(documents []repl.RenderedDocument, form string) error {
 	targets := make([]string, len(documents))
 	direct := make([]bool, len(documents))
 	replaced := make([]bool, len(documents))
@@ -215,15 +303,27 @@ func commitDocumentSet(documents []repl.RenderedDocument) error {
 		if replaced[i] {
 			what = ", replaced the existing file"
 		}
-		fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes%s)\n", path, view.FormMarkdown, len(documentBytes(document)), what)
+		fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes%s)\n", path, setForm(document, form), len(documentBytes(document)), what)
 	}
 	return nil
 }
 
-// documentBytes is what a rendered document writes: the Markdown with one
+// documentBytes is what a rendered document writes: its content with one
 // trailing newline.
 func documentBytes(document repl.RenderedDocument) []byte {
-	return []byte(strings.TrimRight(document.Markdown, "\n") + "\n")
+	return []byte(strings.TrimRight(document.Content, "\n") + "\n")
+}
+
+// setForm names the form a file of a rendered set was written in; the shared
+// stylesheet of an HTML set is CSS, not a document.
+func setForm(document repl.RenderedDocument, form string) view.Form {
+	switch {
+	case document.FileName == docrender.StylesheetFileName:
+		return formCSS
+	case form == docFormHTML:
+		return formHTML
+	}
+	return view.FormMarkdown
 }
 
 // stageDocument writes a document to a fresh temporary file beside its
@@ -345,29 +445,91 @@ func backUp(target string) (name string, movedAside bool, err error) {
 // The forms -doc-form takes.
 const (
 	docFormMarkdown = "markdown"
+	docFormHTML     = "html"
 	docFormPDF      = "pdf"
 )
+
+// The forms a written artifact is reported in that no rendering form names.
+const (
+	formHTML view.Form = "html"
+	formCSS  view.Form = "css"
+)
+
+// htmlFlagsGiven reports whether the run asked for anything only HTML output
+// shapes.
+func htmlFlagsGiven() bool {
+	return len(htmlCSS) > 0 || htmlNoCSS || htmlFragment
+}
+
+// documentSetForm resolves -doc-form for -render-documents, which writes a
+// linked set of files rather than one artifact.
+func documentSetForm() (string, error) {
+	switch form := docFormOrDefault(); form {
+	case docFormMarkdown:
+		if htmlFlagsGiven() {
+			return "", errors.New("the -html- options shape HTML output; ask for it with -doc-form html")
+		}
+		if pdfEngine != "" {
+			return "", errors.New("-pdf-engine shapes PDF output, which -render-documents does not write; render one document at a time with -render-document")
+		}
+		return form, nil
+	case docFormHTML:
+		if pdfEngine != "" {
+			return "", errors.New("-pdf-engine shapes PDF output; -doc-form html needs no external converter")
+		}
+		return form, nil
+	case docFormPDF:
+		return "", errors.New("-render-documents writes a linked set of files, which PDF cannot be; render one document at a time with -render-document -doc-form pdf")
+	default:
+		return "", unknownDocumentForm(form)
+	}
+}
+
+func docFormOrDefault() string {
+	if docForm == "" {
+		return docFormMarkdown
+	}
+	return docForm
+}
+
+func unknownDocumentForm(form string) error {
+	return fmt.Errorf("unknown document form %q; -doc-form takes %s, %s or %s", form, docFormMarkdown, docFormHTML, docFormPDF)
+}
 
 // documentForm resolves -doc-form and checks the flag combination: the PDF
 // options apply to PDF output, and a PDF is written to a file, not stdout.
 func documentForm() (string, error) {
-	form := docForm
-	if form == "" {
-		form = docFormMarkdown
-	}
-	switch form {
+	switch form := docFormOrDefault(); form {
 	case docFormMarkdown:
-		if pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering {
-			return "", errors.New("-pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections shape PDF output; ask for it with -doc-form pdf")
+		if htmlFlagsGiven() {
+			return "", errors.New("the -html- options shape HTML output; ask for it with -doc-form html")
 		}
+		if pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering {
+			return "", errors.New("-pdf-engine and the title page, contents and numbering options shape HTML and PDF output; ask for one with -doc-form html or -doc-form pdf")
+		}
+		return form, nil
+	case docFormHTML:
+		if pdfEngine != "" {
+			return "", errors.New("-pdf-engine shapes PDF output; -doc-form html needs no external converter")
+		}
+		if htmlFragment && htmlNoCSS {
+			return "", errors.New("-html-fragment already writes no stylesheet; -html-no-default-css leaves the default sheet out of a whole page")
+		}
+		if htmlFragment && len(htmlCSS) > 0 {
+			return "", errors.New("-html-fragment writes the document element alone, with no place for a stylesheet; style the page you embed it in")
+		}
+		return form, nil
 	case docFormPDF:
+		if htmlFlagsGiven() {
+			return "", errors.New("the -html- options shape HTML output; ask for it with -doc-form html")
+		}
 		if outputPath == "" {
 			return "", errors.New("-doc-form pdf writes a binary artifact; name the file to write with -o")
 		}
+		return form, nil
 	default:
-		return "", fmt.Errorf("unknown document form %q; -doc-form takes %s or %s", form, docFormMarkdown, docFormPDF)
+		return "", unknownDocumentForm(form)
 	}
-	return form, nil
 }
 
 // writePDFArtifact writes the PDF bytes to -o, byte-exact.

@@ -152,13 +152,20 @@ echo "%load model.sysml
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
 | `--render-all <dir>` | | Render every declared view into the directory, one artifact per view |
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
-| `--render-document <name>` | | Compile a document definition (a `part def` specializing `DocumentQueries::Document`), run its queries against the model, render its diagram blocks through the view engine and write the result as CommonMark Markdown, as `%render-document` does. Paragraphs may hold inline runs (`Span` with a `plain`/`emphasis`/`strong`/`code` style, `Link` to a URL, `Ref` linking to another content block's anchor); a query-backed paragraph or list styles its projected values through nested `SpanColumn`/`LinkColumn` column runs; a table with a `groupBy` column writes one subtable per group value, with the query's projected properties and computed `Column` names as its columns. A `Diagram` block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default form; `-doc-form pdf` converts it (see [Rendering a document as PDF](#rendering-a-document-as-pdf)). `-json` does not apply. See the [document generation manual](../manual/README.md) |
-| `--doc-form <form>` | | Form `--render-document` writes: `markdown` (default) or `pdf`, which drives an external converter |
-| `--render-documents <dir>` | | Render every document definition the model declares as a linked Markdown set into the directory, one file per document, so cross-document references resolve on disk |
+| `--render-document <name>` | | Compile a document definition (a `part def` specializing `DocumentQueries::Document`), run its queries against the model, render its diagram blocks through the view engine and write the result as CommonMark Markdown, as `%render-document` does. Paragraphs may hold inline runs (`Span` with a `plain`/`emphasis`/`strong`/`code` style, `Link` to a URL, `Ref` linking to another content block's anchor); a query-backed paragraph or list styles its projected values through nested `SpanColumn`/`LinkColumn` column runs; a table with a `groupBy` column writes one subtable per group value, with the query's projected properties and computed `Column` names as its columns. A `Diagram` block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default form; `-doc-form html` renders the same document tree as semantic HTML (see [Rendering a document as HTML](#rendering-a-document-as-html)) and `-doc-form pdf` converts the Markdown (see [Rendering a document as PDF](#rendering-a-document-as-pdf)). `-json` does not apply. See the [document generation manual](../manual/README.md) |
+| `--doc-form <form>` | | Form `--render-document` writes: `markdown` (default), `html`, rendered from the document tree itself (see [Rendering a document as HTML](#rendering-a-document-as-html)), or `pdf`, which drives an external converter |
+| `--render-documents <dir>` | | Render every document definition the model declares as a linked set into the directory, one file per document, so cross-document references resolve on disk. `--doc-form html` writes the set as HTML pages sharing one `sysml-document.css` |
+| `--doc-title-page` | | Put the document title on a page of its own (`--doc-form html` or `pdf`) |
+| `--doc-toc` | | Write a table of contents ahead of the content (`--doc-form html` or `pdf`) |
+| `--doc-number-sections` | | Number the section headings hierarchically (`--doc-form html` or `pdf`) |
+| `--html-css <file\|url>` | | Style the HTML with this stylesheet: a file is inlined, a URL is linked. Repeatable, applied in order after the default sheet (`--doc-form html`) |
+| `--html-no-default-css` | | Leave the default stylesheet out, so only `--html-css` sheets style the document |
+| `--html-default-css` | | Write the default document stylesheet and exit, as a starting point for your own |
+| `--html-fragment` | | Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own |
 | `--pdf-engine <engine>` | | Converter `--doc-form pdf` drives: `weasyprint` (default), `pandoc` or `prince` |
-| `--pdf-title-page` | | Put the document title on a page of its own (`--doc-form pdf`) |
-| `--pdf-toc` | | Write a table of contents ahead of the content (`--doc-form pdf`) |
-| `--pdf-number-sections` | | Number the section headings hierarchically (`--doc-form pdf`) |
+| `--pdf-title-page` | | Alias of `--doc-title-page` |
+| `--pdf-toc` | | Alias of `--doc-toc` |
+| `--pdf-number-sections` | | Alias of `--doc-number-sections` |
 | `--output <file>` | `-o` | Write the conversion, the rendering or the rendered document to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
@@ -305,6 +312,55 @@ document can query elements declared in sibling files:
 ```bash
 sysml model/*.sysml -render-document Reports::MassReport -o report.md
 ```
+
+## Rendering a document as HTML
+
+`-render-document <name> -doc-form html` writes the document as HTML rendered from the compiled
+document tree itself, not by converting the Markdown: the model facts Markdown cannot carry survive
+into the markup, so a stylesheet, a static-site generator, an accessibility tool or a downstream
+processor can address them.
+
+```bash
+sysml model.sysml -render-document Reports::MassReport -doc-form html -o report.html
+sysml model.sysml -render-documents site -doc-form html
+sysml model.sysml -render-document Reports::MassReport -doc-form html \
+    -doc-title-page -doc-toc -doc-number-sections -html-css theme.css -o report.html
+```
+
+The structure is ordinary semantic HTML — `<article>`, nested `<section>` whose heading levels
+follow the nesting, `<p>`, `<table>` with `<caption>`, `<thead>` and `<th scope="col">`,
+`<ul>`/`<ol>`, `<figure>` with `<figcaption>`, `<nav>` for the contents, and `<em>`, `<strong>`,
+`<code>`, `<a>` inline. Styling hooks are a small `sysml-` class vocabulary (`sysml-document`,
+`sysml-section`, `sysml-table`, `sysml-row`, `sysml-cell`, `sysml-value`, `sysml-list`,
+`sysml-item`, `sysml-diagram`, `sysml-caption`, `sysml-link`, `sysml-ref` and their kin), and the
+model facts ride alongside on `data-` attributes: the content kind and name, the query behind a
+table or list, the group-by column, each row's or item's selected element and its element kind
+(`partUsage`, `requirementDef`, …), each cell's projected column and value kind, and a diagram's
+view, kind and flow direction. Identifiers are anchors only, matching the Markdown anchors, so a
+`Ref` resolves within a page and across a rendered set.
+
+Diagram blocks embed their Mermaid source in `<pre class="mermaid">`, which a page that loads
+Mermaid renders as a diagram and any other page shows as source. The output loads nothing over the
+network, runs no JavaScript of its own, and is byte-identical between runs.
+
+### Styling the HTML
+
+The default stylesheet is inlined in a standalone page and declared in a cascade layer:
+
+```css
+@layer opensysml;
+@layer opensysml { /* the defaults */ }
+```
+
+Your own CSS is unlayered, so it wins on cascade origin rather than specificity — overriding a
+default needs neither `!important` nor a matching selector. Every default value comes from a
+`--sysml-*` custom property on `.sysml-document`, so retheming can be a handful of properties, and
+the renderer emits no `style` attributes to compete with. `-html-default-css` writes that sheet to
+copy from, `-html-css` adds sheets after it (a file is inlined, a URL is linked), and
+`-html-no-default-css` drops it entirely. A `-render-documents` set writes one shared
+`sysml-document.css` that every page links, so the styling is edited in one place, and
+`-html-fragment` writes the `<article>` alone, with no page shell and no stylesheet, for embedding
+in a page that brings its own.
 
 ## Rendering a document as PDF
 

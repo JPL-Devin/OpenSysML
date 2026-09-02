@@ -498,3 +498,63 @@ func TestRenderDocumentsFlagConflicts(t *testing.T) {
 	wantReport(t, check(t, binary, linkedModel, "-render-documents", "rendered", "-constraint", "C"),
 		2, "check it in its own run")
 }
+
+// TestRenderDocumentsHTML checks -doc-form html writes the set as linked HTML
+// pages sharing one stylesheet file, so a reader edits the styling in one
+// place.
+func TestRenderDocumentsHTML(t *testing.T) {
+	binary := buildCLI(t)
+	dir := filepath.Join(t.TempDir(), "site")
+
+	got := check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "html")
+	wantReport(t, got, 0, "sysml-document.css (css,", "Reports-MainReport.html (html,")
+	report, err := os.ReadFile(filepath.Join(dir, "Reports-MainReport.html"))
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	for _, want := range []string{
+		`<link rel="stylesheet" href="sysml-document.css">`,
+		`href="Reports-Appendix.html#tables"`,
+	} {
+		if !strings.Contains(string(report), want) {
+			t.Errorf("report lacks %q:\n%s", want, report)
+		}
+	}
+	if strings.Contains(string(report), "@layer opensysml") {
+		t.Errorf("a set links the shared sheet rather than inlining it:\n%s", report)
+	}
+	appendix, err := os.ReadFile(filepath.Join(dir, "Reports-Appendix.html"))
+	if err != nil {
+		t.Fatalf("read appendix: %v", err)
+	}
+	if !strings.Contains(string(appendix), `id="tables"`) {
+		t.Errorf("appendix lacks the referenced identifier:\n%s", appendix)
+	}
+	stylesheet, err := os.ReadFile(filepath.Join(dir, "sysml-document.css"))
+	if err != nil {
+		t.Fatalf("read stylesheet: %v", err)
+	}
+	if !strings.Contains(string(stylesheet), "@layer opensysml;") {
+		t.Errorf("shared stylesheet is not the default sheet:\n%s", stylesheet)
+	}
+	// The Markdown set is untouched by the HTML form.
+	if _, err := os.Stat(filepath.Join(dir, "Reports-MainReport.md")); err == nil {
+		t.Error("the HTML set wrote Markdown files too")
+	}
+}
+
+// TestRenderDocumentsHTMLFlagConflicts checks the set refuses forms and
+// options it cannot write.
+func TestRenderDocumentsHTMLFlagConflicts(t *testing.T) {
+	binary := buildCLI(t)
+	dir := filepath.Join(t.TempDir(), "site")
+
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "pdf"),
+		2, "render one document at a time with -render-document -doc-form pdf")
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-html-fragment", "-doc-form", "html"),
+		2, "-html-fragment writes one document element to embed")
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-html-css", "theme.css"),
+		2, "ask for it with -doc-form html")
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "latex"),
+		2, "unknown document form")
+}
