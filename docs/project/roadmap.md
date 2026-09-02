@@ -467,7 +467,8 @@ have landed, and the profile's documentation should say so.
 # Proposed, not started
 
 **An HTML document backend.** [html-document-backend.md](html-document-backend.md) designs a
-direct `docrender.HTML` backend from the document IR (`-doc-form html`, a stylesheet and a
+direct `docrender.HTML` backend from the document IR (`-doc-form html`, a default stylesheet
+in a cascade layer that reader CSS overrides without specificity fights, `-html-css` and a
 fragment option) and the migration of the PDF path onto it, replacing the Markdown → converter
 hop. Status there is *proposed — nothing on that page is implemented*. It is independent of every
 track above and waits only on someone wanting HTML.
