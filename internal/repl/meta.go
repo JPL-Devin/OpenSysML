@@ -151,7 +151,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupRuntime, name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
 	{group: groupRuntime, name: "%features", args: argName, desc: "show an object's features and their values"},
 	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
-	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
+	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object (a name, a path such as driver.r, or an id such as #3)"},
 
 	{group: groupBehavioral, name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
 	{group: groupBehavioral, name: cmdRunQuery, args: "<name> [<p>=<expr>...]", desc: "execute a document query and print its rows, with each binding written as <parameter>=<expression>"},
@@ -172,7 +172,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupAction, name: "%break", args: "<node>", desc: "set breakpoint at node"},
 	{group: groupAction, name: "%stop", desc: "stop current debugging session"},
 
-	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits, or a state machine performed by an object"},
+	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine attaches too), or a state machine performed by an object; an object is a name, a path such as driver.r, or an id such as #3"},
 	{group: groupState, name: "%events", desc: "show event queue"},
 	{group: groupState, name: "%current", desc: "show current state and configuration"},
 	{group: groupState, name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
@@ -1014,22 +1014,14 @@ func isSymbolReference(expr string) bool {
 
 // doFeatures shows what an object holds for each feature of its type.
 func (s *Session) doFeatures(name string) ([]string, bool, error) {
-	_, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		out := []string{errPrefix + lerr.Error()}
-		// The declaration may be gone with the objects materialized from it, which a
-		// bare unresolved reference does not explain.
-		if note := s.lost.lostNote(); note != "" {
-			out = append(out, note)
+	inst, held, oerr := s.objectRef(name)
+	if oerr != nil {
+		if errors.Is(oerr, errRuntimeInit) {
+			return nil, false, oerr
 		}
-		return out, false, nil
-	}
-
-	inst, ok := s.instances[fqn]
-	if !ok {
-		out := []string{fmt.Sprintf("error: no instance of %q (use %%instantiate first)", notationName(fqn))}
-		// The object may have been there and gone, which is a different answer from
-		// one never created.
+		out := []string{errPrefix + oerr.Error()}
+		// The declaration may be gone with the objects materialized from it, which
+		// neither an unresolved reference nor a missing instance explains.
 		if note := s.lost.lostNote(); note != "" {
 			out = append(out, note)
 		}
@@ -1042,7 +1034,7 @@ func (s *Session) doFeatures(name string) ([]string, bool, error) {
 	}
 
 	lines := []string{
-		fmt.Sprintf("Instance: %s (ID: %d)", notationName(fqn), inst.ID),
+		fmt.Sprintf("Instance: %s (ID: %d)", objectName(heldName(inst, held)), inst.ID),
 		"Features:",
 	}
 	w := &featureValueWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxFeatureValueLines}
@@ -1819,21 +1811,43 @@ func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
 // performingObject resolves the object a debugging session's behavior is
 // performed by: its connections route what the behavior sends. No argument
 // performs the behavior outside any object.
-// It also returns the name that object is held under, so a submission that drops
-// it can end the session.
+// It also returns the name that object is held under — its id when no name
+// reaches it — so a submission that drops it can end the session.
 func (s *Session) performingObject(args []string) (*runtime.Instance, string, error) {
 	if len(args) == 0 {
 		return nil, "", nil
 	}
-	_, fqn, lerr := s.lookupSymbol(args[0])
-	if lerr != nil {
-		return nil, "", lerr
+	inst, held, err := s.objectRef(args[0])
+	if err != nil {
+		return nil, "", err
 	}
-	inst, ok := s.instances[fqn]
-	if !ok {
-		return nil, "", fmt.Errorf("no instance of %q (use %%instantiate first)", notationName(fqn))
+	return inst, heldName(inst, held), nil
+}
+
+// heldName is the name a session tracks an object by: the one reaching it, or
+// its `#<n>` identity when none does.
+func heldName(inst *runtime.Instance, held string) string {
+	if held == "" {
+		return fmt.Sprintf("#%d", inst.ID)
 	}
-	return inst, fqn, nil
+	return held
+}
+
+// objectName prints a held name as the prompt does, an identity unquoted.
+func objectName(held string) string {
+	if _, isID := objectID(held); isID || held == "" {
+		return held
+	}
+	return notationName(held)
+}
+
+// objectLabel names an object in a report: `object #3 of "S1::driver::r"`, or
+// `object #3` for one no name reaches.
+func objectLabel(inst *runtime.Instance, held string) string {
+	if _, isID := objectID(held); isID || held == "" {
+		return fmt.Sprintf("object #%d", inst.ID)
+	}
+	return fmt.Sprintf("object #%d of %q", inst.ID, notationName(held))
 }
 
 // --- Action Debugging Commands ---
@@ -2121,6 +2135,16 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
 	}
 
+	// An object id or a feature path denotes an object, never a machine, so it
+	// names the machine that object exhibits.
+	if len(performer) == 0 && isObjectSpelling(name) {
+		inst, held, oerr := s.objectRef(name)
+		if oerr != nil {
+			return nil, oerr
+		}
+		return s.debugExhibitedMachine(ctx, name, heldName(inst, held), inst, nil)
+	}
+
 	sym, fqn, lerr := s.lookupSymbolOfKinds(name, symbols.SymbolStateDef, symbols.SymbolStateUsage)
 	if lerr != nil {
 		return nil, lerr
@@ -2128,14 +2152,18 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 
 	isMachine := sym.Kind == symbols.SymbolStateDef || sym.Kind == symbols.SymbolStateUsage
 
-	// A name the session materialized denotes that object, whose exhibited
-	// machine is already running: the debugger drives that machine rather than a
-	// detached run of the shared usage. A materialized state machine exhibits
-	// none, so it stays debuggable — including as a machine another object
-	// performs.
-	if inst, ok := s.instances[fqn]; ok {
+	// A name the session materialized, or reaches through what it materialized,
+	// denotes that object, whose exhibited machine is already running: the
+	// debugger drives that machine rather than a detached run of the shared
+	// usage. A materialized state machine exhibits none, so it stays debuggable —
+	// including as a machine another object performs.
+	inst, held, oerr := s.objectDenoted(name, fqn)
+	if errors.Is(oerr, errRuntimeInit) {
+		return nil, oerr
+	}
+	if oerr == nil && inst != nil {
 		if _, exhibits := inst.ExhibitedState(); exhibits || !isMachine {
-			return s.debugExhibitedMachine(ctx, name, fqn, inst, performer)
+			return s.debugExhibitedMachine(ctx, name, held, inst, performer)
 		}
 	}
 
@@ -2146,6 +2174,20 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	self, selfFQN, perr := s.performingObject(performer)
 	if perr != nil {
 		return nil, perr
+	}
+
+	// The machine the object exhibits is already running on it: a second
+	// performance would run entry and do behaviors against the same slots again.
+	if self != nil {
+		if behavior, ok := self.ExhibitedStateOf(sym); ok {
+			lines, err := s.attachExhibitedMachine(ctx, name, selfFQN, self, behavior)
+			if err != nil {
+				return nil, err
+			}
+			notice := fmt.Sprintf("note: %s already exhibits %q, so this session attaches to that running machine rather than starting a second performance of it (as `%%state %s` would)",
+				objectLabel(self, selfFQN), name, performer[0])
+			return append([]string{lines[0], notice}, lines[1:]...), nil
+		}
 	}
 
 	// Create executor
@@ -2185,18 +2227,29 @@ func (s *Session) debugExhibitedMachine(
 	performer []string,
 ) ([]string, error) {
 	if len(performer) > 0 {
-		return nil, fmt.Errorf("%q is an object, which performs its exhibited machine itself", notationName(fqn))
+		return nil, fmt.Errorf("%s is an object, which performs its exhibited machine itself", objectLabel(inst, fqn))
 	}
 	behavior, ok := inst.ExhibitedState()
 	if !ok {
-		return nil, fmt.Errorf("object %q exhibits no state machine", notationName(fqn))
+		return nil, fmt.Errorf("%s exhibits no state machine", objectLabel(inst, fqn))
 	}
+	return s.attachExhibitedMachine(ctx, name, qualifiedOr(fqn, name), inst, behavior)
+}
+
+// attachExhibitedMachine binds the session to a machine an object exhibits. The
+// session is keyed by the object, so a restart of the machine rebinds it.
+func (s *Session) attachExhibitedMachine(
+	ctx *runtime.Context,
+	name, held string,
+	inst *runtime.Instance,
+	behavior *runtime.ObjectBehavior,
+) ([]string, error) {
 	behavior.State.SetTrace(s.trace)
 
 	s.stateExec = &stateSession{
 		name:     name,
-		fqn:      qualifiedOr(fqn, name),
-		selfFQN:  qualifiedOr(fqn, name),
+		fqn:      held,
+		selfFQN:  held,
 		symbol:   behavior.Symbol,
 		executor: behavior.State,
 		rtCtx:    ctx,
@@ -2205,11 +2258,21 @@ func (s *Session) debugExhibitedMachine(
 	s.endedState = nil
 
 	return []string{
-		fmt.Sprintf("✓ Debugging state machine %q exhibited by object #%d of %q", behavior.Name, inst.ID, notationName(fqn)),
+		fmt.Sprintf("✓ Debugging state machine %q exhibited by %s", behavior.Name, objectLabel(inst, held)),
 		fmt.Sprintf("  Current state: %s", currentStateName(behavior.State)),
 		timeLabel + runtime.FormatReal(behavior.State.CurrentTime()),
 		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
 	}, nil
+}
+
+// isObjectSpelling reports an argument that can only denote an object: an id the
+// prompt printed, or a feature path walked from a name.
+func isObjectSpelling(arg string) bool {
+	if _, ok := objectID(arg); ok {
+		return true
+	}
+	_, segments, ok := objectPath(arg)
+	return ok && len(segments) > 0
 }
 
 // stepState takes the machine's next step: a change condition that has become
@@ -2287,7 +2350,7 @@ func (s *Session) invokeOperation(name, operation string, args []string) ([]stri
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
 	}
-	inst, fqn, perr := s.performingObject([]string{name})
+	inst, held, perr := s.performingObject([]string{name})
 	if perr != nil {
 		return nil, perr
 	}
@@ -2299,7 +2362,7 @@ func (s *Session) invokeOperation(name, operation string, args []string) ([]stri
 	if err != nil {
 		return nil, err
 	}
-	out := []string{fmt.Sprintf("✓ Invoked %s on object #%d of %q", operation, inst.ID, notationName(fqn))}
+	out := []string{fmt.Sprintf("✓ Invoked %s on %s", operation, objectLabel(inst, held))}
 	if values := namedValues(ctx, results); len(values) > 0 {
 		out = append(out, "", "Results:")
 		for _, v := range values {

@@ -827,7 +827,7 @@ func (s *Session) rebindRestartedMachine() {
 	if s.stateExec == nil || s.stateExec.selfFQN == "" || s.stateExec.fqn != s.stateExec.selfFQN {
 		return
 	}
-	inst, ok := s.instances[s.stateExec.selfFQN]
+	inst, ok := s.heldObject(s.stateExec.selfFQN)
 	if !ok {
 		return
 	}
@@ -894,7 +894,7 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 	// The behavior is performed by an object this submission dropped, so what it
 	// runs against is no longer part of the session.
 	if selfFQN != "" {
-		if _, kept := s.instances[selfFQN]; !kept {
+		if _, kept := s.heldObject(selfFQN); !kept {
 			return selfFQN, true, true
 		}
 	}

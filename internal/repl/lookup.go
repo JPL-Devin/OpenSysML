@@ -116,19 +116,11 @@ func (s *Session) owningInstance(fqn string) (*runtime.Instance, string) {
 // segments walked through that instance's feature values, since a nested part is an
 // object of its own. The second result is the found object's FQN, for reporting.
 func (s *Session) objectNamed(fqn string) (*runtime.Instance, string) {
-	if fqn == "" {
+	inst, name, err := s.objectAt(fqn)
+	if err != nil || inst == nil {
 		return nil, ""
 	}
-	segments := strings.Split(fqn, "::")
-	for i := len(segments); i > 0; i-- {
-		key := strings.Join(segments[:i], "::")
-		inst, ok := s.instances[key]
-		if !ok {
-			continue
-		}
-		return s.walkFeatureValues(inst, key, segments[i:])
-	}
-	return nil, ""
+	return inst, name
 }
 
 // featureChainSymbol resolves a qualified name whose later segments are members
@@ -218,6 +210,22 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	}
 	model := ctx.Model()
 	var names []string
+	// A feature is read from the outermost object carrying it; its own nested
+	// objects are of other types and are not searched again.
+	s.walkObjects(ctx, func(cur carrier) bool {
+		if !carriesDeclaration(model, cur.inst.Type, declaring.Decl) {
+			return true
+		}
+		names = append(names, cur.name)
+		return false
+	})
+	sort.Strings(names)
+	return names
+}
+
+// walkObjects visits the session's objects and, while visit reports true, the
+// objects they hold, breadth-first in name order and within carrierLimit.
+func (s *Session) walkObjects(ctx *runtime.Context, visit func(carrier) bool) {
 	seen := make(map[int64]bool, len(s.instances))
 	queue := make([]carrier, 0, len(s.instances))
 	for name, inst := range s.instances {
@@ -233,16 +241,10 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 			continue
 		}
 		seen[cur.inst.ID] = true
-		if carriesDeclaration(model, cur.inst.Type, declaring.Decl) {
-			names = append(names, cur.name)
-			// A feature is read from the outermost object carrying it; its own
-			// nested objects are of other types and are not searched again.
-			continue
+		if visit(cur) {
+			queue = append(queue, nestedObjects(ctx, cur)...)
 		}
-		queue = append(queue, nestedObjects(ctx, cur)...)
 	}
-	sort.Strings(names)
-	return names
 }
 
 // carrier is an object reachable from the session's objects, under the
@@ -314,35 +316,6 @@ func (s *Session) subjectFor(name, fqn string, sym *symbols.Symbol) (*runtime.In
 	default:
 		return nil, "", &AmbiguousSubjectError{Name: name, Carriers: carriers}
 	}
-}
-
-// walkFeatureValues follows a chain of part feature values from inst. An unwalkable segment
-// yields no object, since binding to an ancestor would answer about the wrong one.
-func (s *Session) walkFeatureValues(inst *runtime.Instance, name string, segments []string) (*runtime.Instance, string) {
-	if len(segments) == 0 {
-		return inst, name
-	}
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return nil, ""
-	}
-	for _, seg := range segments {
-		fv, serr := inst.GetFeatureValue(ctx, seg)
-		if serr != nil || fv == nil {
-			return nil, ""
-		}
-		// A variation feature value holds the object of the variant it selected.
-		id, isObject := fv.Value.Object()
-		if !isObject {
-			return nil, ""
-		}
-		child, ok := ctx.Instance(id)
-		if !ok {
-			return nil, ""
-		}
-		inst, name = child, name+"::"+seg
-	}
-	return inst, name
 }
 
 // unresolvedError reports a name nothing declares, in the wording every surface

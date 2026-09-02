@@ -31,6 +31,23 @@ func asCommandProblem(lines []string) []string {
 	return out
 }
 
+// flagSpellings restates the prompt commands a check has a flag for, so a verdict
+// that tells the reader what to run names the flag.
+var flagSpellings = strings.NewReplacer(
+	"%instantiate ", "-instantiate ",
+	"%state ", "-state ",
+	"%action ", "-action ",
+)
+
+// asCommandLines restates a verdict's lines as the command spells them.
+func asCommandLines(lines []string) []string {
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		out = append(out, flagSpellings.Replace(line))
+	}
+	return out
+}
+
 // reporter collects what a check mode run decided and reports it, either as the
 // lines the prompt prints or as one JSON document. It also owns the exit status,
 // which is the same in both forms: the worst verdict reached, or the status of a
@@ -102,7 +119,7 @@ type checkResult struct {
 	// Values are what the check or run produced: a calculation's result, a
 	// machine's configuration.
 	Values []namedValue `json:"values"`
-	// Lines is the verdict as the prompt prints it.
+	// Lines is the verdict as the command prints it.
 	Lines []string `json:"lines"`
 }
 
@@ -199,6 +216,7 @@ func (r *reporter) diags(diags []repl.Diagnostic) {
 // the model decided on stdout, and one that was never decided on stderr, where
 // the other failures to run go.
 func (r *reporter) verdict(v repl.Verdict) {
+	v.Lines = asCommandLines(v.Lines)
 	r.verdicts = append(r.verdicts, v)
 	if r.json {
 		// The lines are reported with the check itself, not twice.

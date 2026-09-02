@@ -36,7 +36,7 @@ quoted segment containing a space and a quoted segment in the middle of a chain:
 | `%run-query <name> [<p>=<expr>...]` | Execute a document query (a `calc def` specializing `DocumentQueries::Query`) and print its rows and projected cells. A projection lists declared property names and may add computed columns: `Column(name = "<column>", expression = <expr>)` entries evaluated once per row over the row element's features, with arithmetic (`+`, `-`, `*`, `/`), string concatenation and `??` defaults for absent values. A column expression that fails (including a reference that resolves to no value and has no `??` default) fails the query with a typed error rather than producing an empty cell. Each binding is written as `<parameter>=<expression>`; a name binds the element it refers to, anything else is evaluated as an expression. Named query invocation and relationship traversal (`RelatedElements` over specialization, subsetting, redefinition, typing, connection, allocation, satisfaction and verification edges, outgoing or incoming) are supported; a parameter default written as an expression is reported as an error, since the engine does not evaluate those yet. See the [query cookbook](../manual/query-cookbook.md) |
 | `%render-document <name>` | Compile a document definition (a `part def` specializing `DocumentQueries::Document`), run its queries against the model and print the rendered Markdown. A document binds its queries' parameters in the model, so the name is the whole invocation. The output is deterministic CommonMark: the title and sections as ATX headings; paragraphs from text runs (`Span` runs with a `plain`/`emphasis`/`strong`/`code` style, `Link` runs to a URL, `Ref` runs linking to another content block's anchor, and query-produced values styled through nested `SpanColumn`/`LinkColumn` column runs); GitHub-flavored pipe tables with the projected column names (one subtable per group value when the table has a `groupBy` column); bullet and numbered lists; diagram blocks as fenced ` ```mermaid ` blocks rendered through the view engine (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown metacharacters in content are escaped. Markdown is the only form the REPL writes; the CLI's `-doc-form pdf` converts it to PDF ([Rendering a document as PDF](cli.md#rendering-a-document-as-pdf)). See the [document generation manual](../manual/README.md) |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
-| `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type (an action it owns), performed by that object, with each argument written as `<parameter>=<expression>`. Assignments in the body write that object's feature values; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
+| `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type (an action it owns), performed by that object, with each argument written as `<parameter>=<expression>`. The object is an [object argument](#object-arguments): a top-level name, a feature path such as `driver.r`, or an id such as `#3`. Assignments in the body write that object's feature values; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
 | `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | `%check <name>` | **Experimental.** Ask an external SMT solver whether a constraint, requirement or satisfaction assertion *can* be satisfied, and on `sat` print an assignment. Reports `sat`, `unsat` or `unknown`, kept distinct. Needs `z3` or `cvc5` on `PATH` (or `OPENSYSML_SMT`; see [installing a solver](../guide/01-install.md#installing-a-solver-optional)) and reports an error rather than a verdict when none is installed. Satisfiability is not evaluation: use `%constraint`/`%satisfy` to find out what holds for an object |
@@ -52,7 +52,7 @@ quoted segment containing a space and a quoted segment in the middle of a chain:
 | `%break <node>` | Set a breakpoint at a node |
 | `%stop` | Stop the current debugging session |
 | **State machine debugging** ([guide chapter 6](../guide/06-behavior.md)) | |
-| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <part>` after `%instantiate <part>` attaches to that object's own running machine), or start a state machine, optionally performed by an instantiated object. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
+| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <part>` after `%instantiate <part>` attaches to that object's own running machine), or start a state machine, optionally performed by an instantiated object. Naming the machine the object exhibits (`%state Rover::modes rover`) attaches to that running machine too, with a note saying so, rather than performing it a second time against the same feature values; only a machine the object does not exhibit is started as a detached performance. The object is an [object argument](#object-arguments): a top-level name, a feature path such as `driver.r`, or an id such as `#3`. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
 | `%events` | Show the event queue |
 | `%current` | Show the current state and configuration |
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |
@@ -60,6 +60,29 @@ quoted segment containing a space and a quoted segment in the middle of a chain:
 | `%quit` | Exit the REPL |
 | `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …), the form after `%render <name>`, and file paths after `%load` and `%save` |
 | `Ctrl-D` | Exit REPL |
+
+## Object arguments
+
+`%features`, `%invoke` and `%state` take an object the session holds, written in any of three
+ways:
+
+- the name it was instantiated under (`rover`, `Fleet::rover`);
+- a feature path from such a name, following the parts an object holds (`driver.r`,
+  `driver.r.motor`, or `Fleet::driver::r`);
+- the identity the prompt prints for it (`#3`, from `ID: 3` or `object #3`).
+
+A path that stops short of an object is an error naming the segment that reached none and
+why: `Fleet::driver.x reaches no object at "x": object #1 of "Fleet::driver" has no feature
+"x"`, or `… at "level": feature "level" of object #2 holds 10, which is not an object`. An id
+the session holds no object under is `no object #99 in this session`.
+
+A name nothing was instantiated under says what to instantiate. A usage whose definition alone
+has an object (`%instantiate Fleet::Rover` when `%state … Fleet::rover` wanted the usage) is
+reported as `no instance of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its
+definition "Fleet::Rover", not of the usage — use %instantiate Fleet::rover to create the
+usage's object, or name Fleet::Rover to address it`; a definition whose only objects are
+usages typed by it names those usages the same way. With no related object, the error is
+`no instance of "Fleet::rover" (use %instantiate first)`.
 
 ## Rendering a view
 

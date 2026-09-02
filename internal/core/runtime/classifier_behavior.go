@@ -96,6 +96,23 @@ func (inst *Instance) ExhibitedState() (*ObjectBehavior, bool) {
 	return nil, false
 }
 
+// ExhibitedStateOf returns the machine the object exhibits under sym's declaration:
+// the exhibiting member, or the machine whose body it runs. Declarations are compared.
+func (inst *Instance) ExhibitedStateOf(sym *symbols.Symbol) (*ObjectBehavior, bool) {
+	if sym == nil || sym.Decl == nil {
+		return nil, false
+	}
+	for _, b := range inst.behaviors {
+		if b.Kind != lower.ExhibitedState {
+			continue
+		}
+		if (b.Symbol != nil && b.Symbol.Decl == sym.Decl) || (b.member != nil && b.member.Decl == sym.Decl) {
+			return b, true
+		}
+	}
+	return nil, false
+}
+
 // classifierBehaviorsOf reports the behaviors every object of a type runs:
 // those its own declaration binds and those it inherits.
 func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierBehaviorDecl {

@@ -201,6 +201,96 @@ func TestRunStateMachine(t *testing.T) {
 		2, "-advance takes a number of time units")
 }
 
+// fleetModel states a part exhibiting a machine, both as a top-level usage and as
+// a part nested in another, so -state has objects to reach by path and by id.
+const fleetModel = `package Fleet {
+    part def Rover {
+        attribute level = 0;
+        attribute log = "";
+        exhibit state modes {
+            entry; then waiting;
+            state waiting {
+                entry action w {
+                    assign log := log + "W";
+                    assign level := level + 10;
+                }
+                accept after 5 then moving;
+            }
+            state moving {
+                entry action m {
+                    assign log := log + "M";
+                }
+            }
+        }
+    }
+    part def Driver {
+        part r : Rover;
+    }
+    part rover : Rover;
+    part driver : Driver;
+}
+`
+
+// TestStateAttachesToTheExhibitedMachine checks that -state naming the machine an
+// object exhibits attaches to the running machine instead of starting a second
+// performance of it, and says so in the flag's spelling.
+func TestStateAttachesToTheExhibitedMachine(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, fleetModel, "-instantiate", "Fleet::rover", "-state", "Fleet::Rover::modes Fleet::rover", "-advance", "5")
+	wantReport(t, got, 0, `Debugging state machine "modes" exhibited by object #`, `already exhibits "Fleet::Rover::modes"`,
+		"attaches to that running machine", "`-state Fleet::rover`", "Current state: moving")
+	if strings.Contains(got.output(), "Started state machine executor") {
+		t.Errorf("the exhibited machine was performed a second time:\n%s", got.output())
+	}
+}
+
+// TestStateAddressesANestedPart checks that -state reaches a part nested in a
+// top-level object by a feature path, by its qualified name and by the identity
+// the report prints, and that a path reaching no object names the segment.
+func TestStateAddressesANestedPart(t *testing.T) {
+	binary := buildCLI(t)
+
+	byPath := check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.r", "-advance", "5")
+	wantReport(t, byPath, 0, `exhibited by object #`, `of "Fleet::driver::r"`, "Current state: moving")
+	id := byPath.stdout[strings.Index(byPath.stdout, "object #")+len("object #"):]
+	id = id[:strings.IndexAny(id, " \n")]
+
+	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "#"+id),
+		0, `exhibited by object #`+id+` of "Fleet::driver::r"`, "Current state: waiting")
+	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver::r"),
+		0, `exhibited by object #`+id+` of "Fleet::driver::r"`)
+	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::Rover::modes Fleet::driver.r"),
+		0, `exhibited by object #`+id+` of "Fleet::driver::r"`, "attaches to that running machine", "`-state Fleet::driver.r`")
+
+	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.x"),
+		2, `Fleet::driver.x reaches no object at "x"`, `has no feature "x"`)
+	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.r.level"),
+		2, `Fleet::driver.r.level reaches no object at "level"`, "holds 10, which is not an object")
+	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "#99"),
+		2, "no object #99 in this session")
+}
+
+// TestStateNamesTheUsageToInstantiate checks that -state asked about a usage whose
+// definition alone was instantiated says so, naming the usage to -instantiate.
+func TestStateNamesTheUsageToInstantiate(t *testing.T) {
+	binary := buildCLI(t)
+
+	wantReport(t, check(t, binary, fleetModel, "-state", "Fleet::Rover::modes Fleet::rover"),
+		2, `no instance of "Fleet::rover" (use -instantiate first)`)
+
+	got := check(t, binary, fleetModel, "-instantiate", "Fleet::Rover", "-state", "Fleet::Rover::modes Fleet::rover")
+	wantReport(t, got, 2, `sysml: no instance of the usage "Fleet::rover"`,
+		`of "Fleet::Rover" is of its definition "Fleet::Rover", not of the usage`,
+		"use -instantiate Fleet::rover to create the usage's object", "or name Fleet::Rover to address it")
+	if strings.Contains(got.output(), "%instantiate") {
+		t.Errorf("a command report names a prompt command:\n%s", got.output())
+	}
+
+	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::rover", "-state", "Fleet::Rover::modes Fleet::Rover"),
+		2, `no instance of the definition "Fleet::Rover" itself`, `of "Fleet::rover" is typed by it`, "name Fleet::rover to address it")
+}
+
 // TestJSONReport checks the document a build step parses: the status it exits
 // with, every verdict decided, and the values a run produced.
 func TestJSONReport(t *testing.T) {
