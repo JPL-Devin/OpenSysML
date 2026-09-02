@@ -184,10 +184,10 @@ source → lexer → parser → AST → symbol index → resolve → passes
   symbols, wildcard-import expansion, facts — serialized at generation time
   (`go generate ./internal/core/libs`, `make stdlib-snapshot`) and embedded. A process decodes it
   instead of parsing, when its recorded digest of the library files and its format version match
-  the files in hand; otherwise (an edited file, a library-path override, a stale blob) it parses
-  the files as before. The snapshot is a derived artifact: never edit it, regenerate it, and
-  `TestEmbeddedSnapshotIsCurrent` plus `make stdlib-snapshot-check` in CI fail when it lags the
-  files.
+  the files in hand and its CRC-32C over the stream holds; otherwise (an edited file, a
+  library-path override, a stale or damaged blob) it parses the files as before. The snapshot is
+  a derived artifact: never edit it, regenerate it, and `TestEmbeddedSnapshotIsCurrent` plus
+  `make stdlib-snapshot-check` in CI fail when it lags the files.
 - **Encoding:** `internal/core/pack` (varint scalars over a string table) and
   `internal/core/ast/astcodec` (a node table, every node type, index references in place of
   pointers); `symbols.WriteSnapshot`/`ReadSnapshot` number scopes and symbols the same way. No

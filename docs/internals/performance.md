@@ -278,7 +278,8 @@ Three changes took it to under 20 ms, each measured over the same command
   the collector is paused for the decode, since everything it would mark is live
   for the whole process. Checking that the embedded files still match the
   snapshot's digest (`BenchmarkSetDigest`, SHA-256 over 1.7 MB) is 0.9 ms of the
-  remainder.
+  remainder; the CRC-32C over the 3.4 MB stream that refuses a damaged blob
+  is 0.1 ms.
 
 The snapshot changes nothing observable: `TestSnapshotIndexMatchesFreshLoad`
 compares the decoded index with a fresh load structurally — every field, every

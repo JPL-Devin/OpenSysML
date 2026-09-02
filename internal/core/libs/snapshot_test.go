@@ -92,12 +92,25 @@ func TestDecodeSnapshotRejectsCorruption(t *testing.T) {
 			t.Errorf("truncated to %d bytes: decoded without error", n)
 		}
 	}
-	for _, at := range []int{len(stdlibSnapshot) * 3 / 4, len(stdlibSnapshot) - 200} {
+	// Damage that still parses — a byte inside a string, a run in the string
+	// table — is caught by the checksum, so no altered blob is decoded.
+	header := len(snapshotMagic) + len(digest) + 3
+	for _, at := range []int{header, 200000, len(stdlibSnapshot) * 3 / 4, len(stdlibSnapshot) - 200} {
 		data := bytes.Clone(stdlibSnapshot)
 		data[at] ^= 0xff
-		// A flipped byte may still decode when it lands in a string; what it
-		// must never do is panic.
-		_, _ = DecodeSnapshot(data, digest)
+		if _, err := DecodeSnapshot(data, digest); !errors.Is(err, pack.ErrCorrupt) {
+			t.Errorf("byte %d flipped: got %v, want ErrCorrupt", at, err)
+		}
+	}
+	data := bytes.Clone(stdlibSnapshot)
+	for i := 200000; i < 200064; i++ {
+		data[i] ^= 0xff
+	}
+	if _, err := DecodeSnapshot(data, digest); !errors.Is(err, pack.ErrCorrupt) {
+		t.Errorf("64 bytes flipped: got %v, want ErrCorrupt", err)
+	}
+	if _, err := DecodeSnapshot(append(bytes.Clone(stdlibSnapshot), 0), digest); !errors.Is(err, pack.ErrCorrupt) {
+		t.Errorf("trailing byte: got %v, want ErrCorrupt", err)
 	}
 }
 

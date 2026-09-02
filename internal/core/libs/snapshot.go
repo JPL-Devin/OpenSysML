@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"runtime/debug"
 	"sync"
 
@@ -30,6 +31,10 @@ const (
 	snapshotFormatVersion = 1
 )
 
+// snapshotCRC checksums the index stream, so a damaged byte that still parses
+// is refused rather than decoded into a subtly different library.
+var snapshotCRC = crc32.MakeTable(crc32.Castagnoli)
+
 // ErrSnapshotStale reports a snapshot built from different library files, or
 // in a different format, than the ones in hand.
 var ErrSnapshotStale = errors.New("libs: library snapshot does not match the library files")
@@ -49,12 +54,13 @@ func BuildSnapshot(src Source) ([]byte, error) {
 	if err := idx.WriteSnapshot(w); err != nil {
 		return nil, err
 	}
-	digest := loader.setDigest()
+	digest, stream := loader.setDigest(), w.Bytes()
 	out := []byte(snapshotMagic)
 	out = binary.AppendUvarint(out, snapshotFormatVersion)
 	out = binary.AppendUvarint(out, uint64(len(digest)))
 	out = append(out, digest...)
-	return append(out, w.Bytes()...), nil
+	out = binary.AppendUvarint(out, uint64(crc32.Checksum(stream, snapshotCRC)))
+	return append(out, stream...), nil
 }
 
 // DecodeSnapshot rebuilds the frozen index a snapshot holds, provided it was
@@ -82,6 +88,14 @@ func DecodeSnapshot(data []byte, digest string) (*symbols.Index, error) {
 	rest = rest[size:]
 	if version != snapshotFormatVersion || have != digest {
 		return nil, ErrSnapshotStale
+	}
+	sum, n := binary.Uvarint(rest)
+	if n <= 0 {
+		return nil, fmt.Errorf("%w: checksum", pack.ErrCorrupt)
+	}
+	rest = rest[n:]
+	if uint64(crc32.Checksum(rest, snapshotCRC)) != sum {
+		return nil, fmt.Errorf("%w: checksum mismatch", pack.ErrCorrupt)
 	}
 	r, err := pack.NewReader(rest)
 	if err != nil {
