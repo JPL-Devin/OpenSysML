@@ -15,6 +15,7 @@ import (
 // finite-only binary64, and the interpreter's once-rounded Integer quotient.
 const cPrelude = `#include <errno.h>
 #include <inttypes.h>
+#include <stdarg.h>
 #include <math.h>
 #include <setjmp.h>
 #include <stdbool.h>
@@ -115,6 +116,67 @@ static inline sysml_real sysml_finite(sysml_real r) {
 	return r;
 }
 
+/* Library functions: a NaN result is a domain error, an infinity an overflow. */
+#define SYSML_PI 3.141592653589793
+
+static inline sysml_real sysml_lib_real(sysml_real r) {
+	if (__builtin_expect(isnan(r), 0)) sysml_fail("arithmetic domain error: argument outside the function's domain");
+	if (__builtin_expect(isinf(r), 0)) sysml_fail("arithmetic overflow: result is not a finite Real");
+	return r;
+}
+
+static inline sysml_int sysml_lib_int(sysml_real x) {
+	if (__builtin_expect(isnan(x), 0)) sysml_fail("arithmetic domain error: argument outside the function's domain");
+	if (__builtin_expect(!(x < 9223372036854775808.0 && x >= -9223372036854775808.0), 0)) sysml_fail("arithmetic overflow: result exceeds the Integer range");
+	return (sysml_int)x;
+}
+
+static inline sysml_int sysml_iabs(sysml_int a) {
+	if (__builtin_expect(a == INT64_MIN, 0)) sysml_fail("arithmetic overflow: abs exceeds the Integer range");
+	return a < 0 ? -a : a;
+}
+
+static inline sysml_int sysml_imax(sysml_int a, sysml_int b) { return a > b ? a : b; }
+static inline sysml_int sysml_imin(sysml_int a, sysml_int b) { return a < b ? a : b; }
+
+static inline sysml_int sysml_natural_arg(sysml_int v) {
+	if (__builtin_expect(v < 0, 0)) sysml_fail("type mismatch: requires Natural arguments");
+	return v;
+}
+
+/* Zero signs follow Go's math.Max/Min: max prefers +0, min prefers -0. */
+static inline sysml_real sysml_rmax(sysml_real a, sysml_real b) {
+	if (a == 0 && b == 0) return signbit(a) ? b : a;
+	return a > b ? a : b;
+}
+
+static inline sysml_real sysml_rmin(sysml_real a, sysml_real b) {
+	if (a == 0 && b == 0) return signbit(a) ? a : b;
+	return a < b ? a : b;
+}
+
+static inline sysml_real sysml_tan(sysml_real t) { return sysml_lib_real(sin(t) / cos(t)); }
+static inline sysml_real sysml_cot(sysml_real t) { return sysml_lib_real(cos(t) / sin(t)); }
+
+static inline sysml_real sysml_ln(sysml_real x) {
+	if (__builtin_expect(x <= 0, 0)) sysml_fail("arithmetic domain error: the logarithm of a non-positive argument is not a Real (requires x > 0.0)");
+	return sysml_lib_real(log(x));
+}
+
+static inline sysml_real sysml_log(sysml_real x, sysml_real base) {
+	if (__builtin_expect(x <= 0, 0)) sysml_fail("arithmetic domain error: the logarithm of a non-positive argument is not a Real (requires x > 0.0)");
+	if (__builtin_expect(base <= 0, 0)) sysml_fail("arithmetic domain error: a non-positive base has no logarithm (requires base > 0.0)");
+	if (__builtin_expect(base == 1, 0)) sysml_fail("arithmetic domain error: base 1.0 has no logarithm");
+	if (base == 10) return sysml_lib_real(log10(x));
+	if (base == 2) return sysml_lib_real(log2(x));
+	return sysml_lib_real(log(x) / log(base));
+}
+
+static inline sysml_real sysml_atan2(sysml_real y, sysml_real x) {
+	if (__builtin_expect(y == 0 && x == 0, 0)) sysml_fail("arithmetic domain error: atan2(0.0, 0.0) has no angle");
+	return sysml_lib_real(atan2(y, x));
+}
+
 static inline sysml_real sysml_rdiv(sysml_real a, sysml_real b) {
 	if (__builtin_expect(b == 0, 0)) sysml_fail("division by zero");
 	return sysml_finite(a / b);
@@ -170,13 +232,12 @@ static void sysml_shortest(sysml_real r, char *buf, size_t size) {
 /* Prints r as the interpreter does: shortest round-trip digits, positional
  * for 1e-4 <= |r| < 1e21 and for 0, exponent form otherwise, always with a
  * fraction or exponent so a whole Real still reads as a Real. */
-static void sysml_print_real(sysml_real r) {
+static void sysml_print_real_value(sysml_real r) {
 	char buf[40];
 	sysml_shortest(r, buf, sizeof buf);
 	sysml_real a = fabs(r);
 	if (r != 0 && (a < 1e-4 || a >= 1e21)) {
 		fputs(buf, stdout);
-		fputc('\n', stdout);
 		return;
 	}
 	/* buf is [-]d[.ddd]e[+-]xx: reassemble the digits around the point. */
@@ -200,6 +261,10 @@ static void sysml_print_real(sysml_real r) {
 			fputs(".0", stdout);
 		}
 	}
+}
+
+static void sysml_print_real(sysml_real r) {
+	sysml_print_real_value(r);
 	fputc('\n', stdout);
 }
 
@@ -236,8 +301,13 @@ static sysml_bool sysml_parse_bool(const char *s, const char *name) {
 // reads argv and prints the result when withMain is set (errors: status 1, stderr).
 func EmitC(w io.Writer, p *Program, withMain bool) error {
 	e := &cEmitter{w: w}
+	e.collections = p.Collections
 	e.raw(fmt.Sprintf("#define SYSML_MAX_CALC_DEPTH %d\n", runtime.DefaultMaxCalcDepth))
 	e.raw(cPrelude)
+	if p.Collections {
+		e.raw(fmt.Sprintf("#define SYSML_DEFAULT_MAX_ELEMENTS %d\n", runtime.DefaultMaxElements))
+		e.raw(cSeqRuntime())
+	}
 	for _, fn := range p.Funcs {
 		e.linef("static %s %s(%s);", cType(fn.Result), fn.Ident, cParams(fn))
 	}
@@ -257,12 +327,14 @@ type cEmitter struct {
 	// resultRange is checked on each return of the function being emitted.
 	resultRange Range
 	temps       int
+	// collections brackets every statement with the element budget's release.
+	collections bool
 }
 
 // pure is an operand whose evaluation cannot fail, so its order is immaterial.
 func pure(x Expr) bool {
 	switch x := x.(type) {
-	case IntLit, RealLit, BoolLit, Var:
+	case IntLit, RealLit, BoolLit, Var, NullLit:
 		return true
 	case ToReal:
 		return pure(x.X)
@@ -317,6 +389,8 @@ func cType(t Type) string {
 		return "sysml_real"
 	case TypeBool:
 		return "sysml_bool"
+	case TypeSeqInt, TypeSeqReal, TypeSeqBool:
+		return "sysml_seq_" + cSeqSuffix(t)
 	}
 	return "void"
 }
@@ -346,7 +420,13 @@ func (e *cEmitter) function(fn *Func) {
 	e.indent++
 	e.linef("sysml_enter();")
 	for _, p := range fn.Params {
-		if p.Range != RangeAny {
+		switch {
+		case p.Type.Many():
+			if p.Mult != MultAny || p.Range != RangeAny {
+				v := e.checked(Checked{X: Var{Name: p.Name, T: p.Type}, M: p.Mult, R: p.Range, Where: paramWhere(p.Name)})
+				e.linef("%s = %s;", cLocal(p.Name), v)
+			}
+		case p.Range != RangeAny:
 			e.linef("%s = %s;", cLocal(p.Name), cNarrowed(cLocal(p.Name), p.Range))
 		}
 	}
@@ -359,16 +439,36 @@ func (e *cEmitter) function(fn *Func) {
 	e.raw("\n")
 }
 
+// block emits statements; with collections, the elements a statement
+// materializes are released when it ends, as the interpreter's step does.
 func (e *cEmitter) block(stmts []Stmt) {
+	releases := false
+	for _, s := range stmts {
+		if _, ok := s.(Return); !ok {
+			releases = true
+		}
+	}
+	if !e.collections || !releases {
+		for _, s := range stmts {
+			e.stmt(s)
+		}
+		return
+	}
+	e.temps++
+	held := fmt.Sprintf("sysml_h%d", e.temps)
+	e.linef("sysml_int %s = sysml_elements;", held)
 	for _, s := range stmts {
 		e.stmt(s)
+		if _, ok := s.(Return); !ok {
+			e.linef("sysml_elements = %s;", held)
+		}
 	}
 }
 
 func (e *cEmitter) stmt(s Stmt) {
 	switch s := s.(type) {
 	case Declare:
-		e.linef("%s %s = %s;", cType(s.T), cLocal(s.Name), e.expr(s.Init))
+		e.linef("%s %s = %s;", cType(s.T), cLocal(s.Name), e.declInit(s))
 	case Assign:
 		e.linef("%s = %s;", cLocal(s.Name), cNarrowed(e.expr(s.Value), s.Range))
 	case If:
@@ -392,6 +492,8 @@ func (e *cEmitter) stmt(s Stmt) {
 		}
 		e.indent--
 		e.linef("}")
+	case ForEach:
+		e.forEach(s)
 	case Return:
 		e.linef("{ %s sysml_r = %s; sysml_leave(); return sysml_r; }", e.result, cNarrowed(e.expr(s.Value), e.resultRange))
 	default:
@@ -399,9 +501,20 @@ func (e *cEmitter) stmt(s Stmt) {
 	}
 }
 
+// declInit is a declaration's initial value, null where it states none.
+func (e *cEmitter) declInit(d Declare) string {
+	if d.Init == nil {
+		return fmt.Sprintf("sysml_null_%s()", cSeqSuffix(d.T))
+	}
+	return e.expr(d.Init)
+}
+
 func cZero(t Type) string {
-	if t == TypeBool {
+	switch {
+	case t == TypeBool:
 		return "false"
+	case t.Many():
+		return fmt.Sprintf("sysml_null_%s()", cSeqSuffix(t))
 	}
 	return "0"
 }
@@ -423,6 +536,9 @@ func (e *cEmitter) expr(x Expr) string {
 	case Var:
 		return cLocal(x.Name)
 	case ToReal:
+		if x.X.Type().Many() {
+			return "sysml_widen(" + e.expr(x.X) + ")"
+		}
 		return "(sysml_real)" + e.expr(x.X)
 	case Unary:
 		return e.unary(x)
@@ -431,22 +547,34 @@ func (e *cEmitter) expr(x Expr) string {
 	case Cond:
 		return fmt.Sprintf("(%s ? %s : %s)", e.expr(x.C), e.expr(x.Then), e.expr(x.Else))
 	case Call:
-		values := make([]Expr, len(x.Args))
-		for i, a := range x.Args {
-			values[i] = a.Value
-		}
-		return e.sequenced(values, func(names []string) string {
-			return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(callOperands(x, names), ", "))
+		return e.sequenced(argValues(x.Args), func(names []string) string {
+			return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(callOperands(x.Args, len(x.Fn.Params), names), ", "))
 		})
+	case LibCall:
+		return e.sequenced(argValues(x.Args), func(names []string) string {
+			return x.Op.cExpr(callOperands(x.Args, len(x.Op.Operands()), names))
+		})
+	}
+	if s, ok := e.seqExpr(x); ok {
+		return s
 	}
 	e.err = fmt.Errorf("codegen: C emitter has no case for %T", x)
 	return "0"
 }
 
+// argValues is the arguments' expressions, in source order.
+func argValues(args []Arg) []Expr {
+	values := make([]Expr, len(args))
+	for i, a := range args {
+		values[i] = a.Value
+	}
+	return values
+}
+
 // callOperands picks, per parameter, the name of the last argument bound to it.
-func callOperands(x Call, names []string) []string {
-	operands := make([]string, len(x.Fn.Params))
-	for i, a := range x.Args {
+func callOperands(args []Arg, nParams int, names []string) []string {
+	operands := make([]string, nParams)
+	for i, a := range args {
 		operands[a.Param] = names[i]
 	}
 	return operands
@@ -454,11 +582,11 @@ func callOperands(x Call, names []string) []string {
 
 // inParamOrder reports whether a call's arguments are its parameters once each,
 // in order, so evaluating the call's operands in place is source order.
-func inParamOrder(x Call) bool {
-	if len(x.Args) != len(x.Fn.Params) {
+func inParamOrder(args []Arg, nParams int) bool {
+	if len(args) != nParams {
 		return false
 	}
-	for i, a := range x.Args {
+	for i, a := range args {
 		if a.Param != i {
 			return false
 		}
@@ -581,6 +709,9 @@ func (e *cEmitter) entry(fn *Func, withMain bool) {
 	e.linef("int sysml_run(%s%s *result) {", params, cType(fn.Result))
 	e.indent++
 	e.linef("sysml_depth = 0;")
+	if e.collections {
+		e.linef("sysml_run_begin();")
+	}
 	e.linef("if (setjmp(sysml_escape)) return 1;")
 	args := make([]string, len(fn.Params))
 	for i, p := range fn.Params {
@@ -609,6 +740,9 @@ func (e *cEmitter) entry(fn *Func, withMain bool) {
 	e.linef("return 2;")
 	e.indent--
 	e.linef("}")
+	if e.collections {
+		e.linef("sysml_read_max_elements();")
+	}
 	for i, p := range fn.Params {
 		e.linef("%s %s = sysml_parse_%s(argv[%d], \"%s\");", cType(p.Type), cLocal(p.Name), cType(p.Type)[len("sysml_"):], i+1, p.Name)
 	}
@@ -630,6 +764,8 @@ func (e *cEmitter) entry(fn *Func, withMain bool) {
 		e.linef("sysml_print_real(result);")
 	case TypeBool:
 		e.linef("puts(result ? \"true\" : \"false\");")
+	default:
+		e.linef("sysml_print_seq_%s(result);", cSeqSuffix(fn.Result))
 	}
 	e.linef("return 0;")
 	e.indent--

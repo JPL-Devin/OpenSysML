@@ -243,20 +243,118 @@ package Compiled {
 		in n : Integer;
 		return : Integer = X::Y(n) * 1000 + 'X::Y'(n) * 100 + 'Größe'(n) * 10 + 'Gr_f6__df_e'(n);
 	}
+
+	// Library functions: qualified and imported names, kind-preserving
+	// max/min/abs, Natural parameters, and the extension library's domain errors.
+	package Lib {
+		private import RealFunctions::floor;
+		private import RealFunctions::round;
+		private import TrigFunctions::*;
+		private import OpenSysMLMathFunctions::*;
+
+		calc def Sqrt { in a : Real; return : Real = RealFunctions::sqrt(a); }
+		calc def Floor { in a : Real; return : Integer = floor(a) + round(a); }
+		calc def RealExt { in a : Real; in b : Real; return : Real = RealFunctions::max(a, b) - RealFunctions::min(a, b) + RealFunctions::abs(a); }
+		calc def IntExt { in a : Integer; in b : Integer; return : Integer = NumericalFunctions::max(a, b) - NumericalFunctions::min(a, b) + NumericalFunctions::abs(a); }
+		calc def MixedExt { in a : Integer; in b : Real; return : Real = NumericalFunctions::max(a, b) + RationalFunctions::min(a, b); }
+		calc def IntAbs { in a : Integer; return : Integer = IntegerFunctions::abs(a); }
+		calc def NatMax { in a : Integer; in b : Integer; return : Integer = NaturalFunctions::max(a, b) + NaturalFunctions::min(b, a); }
+		calc def Zero { in a : Real; return : Boolean = NumericalFunctions::isZero(a) or NumericalFunctions::isUnit(a); }
+		calc def Trig { in t : Real; return : Real = sin(t) + cos(t) + tan(t) + cot(t); }
+		calc def Arc { in x : Real; return : Real = arcsin(x) + arccos(x) + arctan(x); }
+		calc def Deg { in t : Real; return : Real = deg(t) + rad(t) + pi; }
+		calc def Exp { in x : Real; return : Real = exp(x) + ln(x); }
+		calc def Log { in x : Real; in base : Real; return : Real = log(x, base); }
+		calc def Atan2 { in y : Real; in x : Real; return : Real = atan2(y, x); }
+		calc def NamedLib { in y : Real; in x : Real; return : Real = atan2(x = x, y = y); }
+	}
+
+	// Collections: homogeneous sequences with the interpreter's shape rules
+	// (null, one value, many), one-based indexing, ranges, the sequence and
+	// control library, `for`, and the scalarization of one-valued operands.
+	package Seq {
+		private import ScalarValues::*;
+		private import SequenceFunctions::*;
+		private import ControlFunctions::*;
+		private import NumericalFunctions::*;
+		private import CollectionFunctions::contains;
+
+		calc def Sequence { in n : Integer; return : Integer = SequenceFunctions::size(1..n); }
+		calc def Library { in a : Real; return : Real = RealFunctions::sum(a); }
+		calc def Unbound { in n : Integer; attribute x : Integer; return : Integer = x + n; }
+		calc def AddS { in x : Integer[0..*]; return : Integer = x + 1; }
+		calc def AddS2 { in x : Integer[0..*]; return : Integer = 1 + x; }
+		calc def AddR { in x : Real[0..*]; return : Real = x + 1.0; }
+		calc def LtS { in x : Integer[0..*]; return : Boolean = x < 1; }
+		calc def AndS { in x : Boolean[0..*]; return : Boolean = x and true; }
+		calc def AndS2 { in x : Boolean[0..*]; return : Boolean = true and x; }
+		calc def NotS { in x : Boolean[0..*]; return : Boolean = not x; }
+		calc def IfS { in x : Boolean[0..*]; return : Integer = if x ? 1 else 2; }
+		calc def NegS { in x : Integer[0..*]; return : Integer = -x; }
+		calc def EqS { in x : Integer[0..*]; return : Boolean = x == 1; }
+		calc def EqS2 { in x : Integer[0..*]; return : Boolean = x == (1); }
+		calc def IdS { in x : Integer[0..*]; return : Boolean = x === 1; }
+		calc def IdN { in x : Integer[0..*]; return : Boolean = x === null; }
+		calc def IdE { in x : Integer[0..*]; in y : Integer[0..*]; return : Boolean = x === y; }
+		calc def IxS { in x : Integer[0..*]; in i : Integer; return : Integer = x#(i); }
+		calc def PowS { in x : Integer[0..*]; return : Integer = x ** 2; }
+		calc def WhS { in x : Boolean[0..*]; attribute n : Integer = 0; while x { n = n + 1; } return : Integer = n; }
+		calc def RetS { in x : Integer[0..*]; return : Integer = x; }
+		calc def LocS { in x : Integer[0..*]; attribute y : Integer = x; return : Integer = y; }
+		calc def LocU { in x : Integer[0..*]; attribute y : Integer; return : Integer[0..*] = y; }
+		calc def LocU2 { in x : Integer; attribute y : Integer[0..*]; y = x; return : Integer[0..*] = y; }
+		calc def MinE { in x : Integer[0..*]; return : Integer = x->minimize {in v; v}; }
+		calc def MinR { in x : Integer[0..*]; return : Real = x->minimize {in v; v / 2}; }
+		calc def RedN { in x : Integer[0..*]; return : Integer = x->reduce {in a; in b; a + b} + 1; }
+		calc def FA { in x : Integer[0..*]; return : Boolean = x->forAll {in v; v > 0 or v / 0 > 1}; }
+		calc def Col2 { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v; (v, v)}; }
+		calc def Sz { in x : Integer[0..*]; return : Integer = size(x) + x->size(); }
+		calc def Hd { in x : Integer[0..*]; return : Integer = head(x); }
+		calc def Hd2 { in x : Integer[0..*]; return : Integer[0..1] = head(x); }
+		calc def CmpS { in x : Integer[0..*]; in y : Integer[0..*]; return : Boolean = x == y; }
+		calc def Nst { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v; x->select {in w; w > v}}; }
+		calc def Rng2 { in n : Integer; return : Integer = sum(1..n); }
+		calc def M2 { in x : Integer[2..3]; return : Integer = size(x); }
+		calc def Ret2 { in x : Integer[0..*]; return : Integer[2..3] = x; }
+		calc def Ass { in x : Integer[0..*]; attribute y : Integer[1..2] = x; return : Integer = size(y); }
+		calc def Ret1 { in x : Integer[0..*]; return : Integer[1] = x; }
+		calc def RetN { in x : Integer[0..*]; return : Natural[0..*] = x; }
+		calc def Coal { in x : Integer[0..*]; return : Integer = x ?? 5; }
+		calc def Tern { in b : Boolean; in x : Integer[0..*]; return : Integer[0..*] = if b ? x else 7; }
+		calc def Big { in n : Integer; return : Integer = size((1..n)->collect {in v; (v, v)}); }
+		calc def Big2 { in n : Integer; attribute s : Integer[0..*] = 1..n; attribute t : Integer[0..*] = 1..n; return : Integer = size(s) + size(t); }
+		calc def Cnt { in x : Integer[0..*]; return : Boolean = contains(x, 2); }
+		calc def IncAt { in x : Integer[0..*]; in i : Integer; return : Integer[0..*] = includingAt(x, 9, i); }
+		calc def Sub3 { in x : Integer[0..*]; in i : Integer; in j : Integer; return : Integer[0..*] = subsequence(x, i, j); }
+		calc def ExAt { in x : Integer[0..*]; in i : Integer; in j : Integer; return : Integer[0..*] = excludingAt(x, i, j); }
+		calc def ForR { in x : Integer[0..*]; attribute s : Real = 0.0; for v in x { s = s + v; } return : Real = s; }
+		calc def ForB { in n : Integer; attribute s : Integer = 0; for v in 1..n { for w in 1..v { s = s + w; } } return : Integer = s; }
+		calc def RS { in x : Integer[0..*]; return : Real = RealFunctions::sum(x); }
+		calc def MaxS { in x : Real[0..*]; return : Real = x->maximize {in v; v}; }
+	}
 }
 
 // Calculations outside the subset, each refused for the reason its name states.
 package Refused {
 	private import ScalarValues::*;
+	private import SequenceFunctions::*;
+	private import ControlFunctions::*;
+
+	attribute def Point { attribute x : Real; attribute y : Real; }
+	enum def Color { red; green; }
+	calc def RecordParam { in p : Point; return : Real = p.x + p.y; }
+	calc def EnumParam { in c : Color; return : Boolean = c == Color::red; }
+	calc def RealIntIdentity { in x : Real; in y : Integer; return : Boolean = x === y; }
+	calc def SelectNonBoolean { in x : Integer[0..*]; return : Integer[0..*] = x->select {in v; v}; }
+	calc def CollectNull { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v; null}; }
+	calc def CoalesceWidened { in x : Integer[0..*]; return : Real = x ?? 5.5; }
+	calc def MixedEquality { in x : Integer[0..*]; in y : Real[0..*]; return : Boolean = x == y; }
+	calc def MixedSame { in x : Integer[0..*]; in y : Real[0..*]; return : Boolean = same(x, y); }
+	calc def MixedUnion { in x : Integer[0..*]; in y : Real[0..*]; return : Real[0..*] = union(x, y); }
 
 	calc def StringResult {
 		in s : String;
 		return : String = s;
-	}
-
-	calc def Sequence {
-		in n : Integer;
-		return : Integer = SequenceFunctions::size(1..n);
 	}
 
 	calc def Defaulted {
@@ -269,9 +367,9 @@ package Refused {
 		out r : Integer = n;
 	}
 
-	calc def Library {
+	calc def RealToNatural {
 		in a : Real;
-		return : Real = RealFunctions::sqrt(a);
+		return : Integer = NaturalFunctions::max(a, 1);
 	}
 
 	// Members of its own would redefine what it inherits; that is not compiled.
@@ -286,12 +384,6 @@ package Refused {
 		attribute x : Integer = n;
 		x = x / 2;
 		return : Integer = x;
-	}
-
-	calc def Unbound {
-		in n : Integer;
-		attribute x : Integer;
-		return : Integer = x + n;
 	}
 
 	calc def DynamicIntPow {

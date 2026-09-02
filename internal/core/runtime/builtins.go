@@ -125,10 +125,10 @@ func init() {
 
 		"IntegerFunctions::sum":      builtinNumericalSum,
 		"IntegerFunctions::product":  builtinNumericalProduct,
-		"RationalFunctions::sum":     builtinNumericalSum,
-		"RationalFunctions::product": builtinNumericalProduct,
-		"RealFunctions::sum":         builtinNumericalSum,
-		"RealFunctions::product":     builtinNumericalProduct,
+		"RationalFunctions::sum":     builtinRealSum,
+		"RationalFunctions::product": builtinRealProduct,
+		"RealFunctions::sum":         builtinRealSum,
+		"RealFunctions::product":     builtinRealProduct,
 	}
 
 	builtinsByLocalName = map[string]func(*EvalContext, []Value) (Value, error){}
