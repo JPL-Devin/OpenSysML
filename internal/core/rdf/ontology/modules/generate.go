@@ -152,7 +152,8 @@ func xmlCatalog(p *Partition, baseIRI string) ([]byte, error) {
 }
 
 // WriteOutputs replaces the generated files under dir with outputs. They are
-// staged in a sibling directory first, and the swap is undone if it fails.
+// staged in a sibling directory first, and the swap is undone if it fails;
+// should that undo fail too, staging is kept (and named in the error) for recovery.
 func WriteOutputs(dir string, outputs []Output) (err error) {
 	existing, err := listOutputs(dir)
 	if err != nil {
@@ -161,11 +162,23 @@ func WriteOutputs(dir string, outputs []Output) (err error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
-	staging, err := os.MkdirTemp(filepath.Dir(dir), "."+filepath.Base(dir)+"-staging-")
+	prefix := "." + filepath.Base(dir) + "-staging-"
+	leftover, err := filepath.Glob(filepath.Join(filepath.Dir(dir), prefix+"*"))
 	if err != nil {
 		return err
 	}
+	if len(leftover) > 0 {
+		return fmt.Errorf("%s may hold a partially replaced tree: staging left by an earlier run at %s; restore its old/ files or remove it before regenerating", dir, strings.Join(leftover, ", "))
+	}
+	staging, err := os.MkdirTemp(filepath.Dir(dir), prefix)
+	if err != nil {
+		return err
+	}
+	keepStaging := false
 	defer func() {
+		if keepStaging {
+			return
+		}
 		if rerr := os.RemoveAll(staging); err == nil {
 			err = rerr
 		}
@@ -189,7 +202,11 @@ func WriteOutputs(dir string, outputs []Output) (err error) {
 				first = err
 			}
 		}
-		return first
+		if first != nil {
+			keepStaging = true
+			return fmt.Errorf("rollback incomplete, prior files kept under %s: %w", staging, first)
+		}
+		return nil
 	}
 	swap := func(from, to string) error {
 		if err := os.MkdirAll(filepath.Dir(to), 0o750); err != nil {

@@ -601,6 +601,57 @@ func TestGenerateAndCheck(t *testing.T) {
 	if siblings, err = os.ReadDir(filepath.Dir(dir)); err != nil || len(siblings) != 1 {
 		t.Errorf("staging directory left behind: %v, %v", siblings, err)
 	}
+
+	// When the undo itself fails, the staging directory survives with the
+	// stranded prior files. Here KerML.ttl/nested.ttl leaves a directory where
+	// the old KerML.ttl must return, so that one rename back cannot succeed.
+	var stranded []Output
+	for _, o := range outputs {
+		if o.Path != "KerML.ttl" {
+			stranded = append(stranded, o)
+		}
+	}
+	stranded = append([]Output{{Path: "KerML.ttl/nested.ttl", Content: []byte("x")}}, stranded...)
+	stranded = append(stranded, Output{Path: "Blocked.ttl", Content: []byte("x")})
+	err = WriteOutputs(dir, stranded)
+	if err == nil {
+		t.Fatal("WriteOutputs with an unrecoverable swap did not fail")
+	}
+	siblings, rerr := os.ReadDir(filepath.Dir(dir))
+	if rerr != nil || len(siblings) != 2 {
+		t.Fatalf("staging directory not kept after a failed rollback: %v, %v", siblings, rerr)
+	}
+	var kept string
+	for _, s := range siblings {
+		if s.Name() != filepath.Base(dir) {
+			kept = filepath.Join(filepath.Dir(dir), s.Name())
+		}
+	}
+	if !strings.Contains(err.Error(), kept) {
+		t.Errorf("error %q does not name the kept staging directory %s", err, kept)
+	}
+	if _, serr := os.Stat(filepath.Join(kept, "old", "KerML.ttl")); serr != nil {
+		t.Errorf("stranded prior file not preserved: %v", serr)
+	}
+
+	// A leftover staging directory, whether kept above or left by a run that
+	// was killed mid-swap, stops the next run until someone has looked at it.
+	err = WriteOutputs(dir, outputs)
+	if err == nil || !strings.Contains(err.Error(), kept) {
+		t.Errorf("WriteOutputs beside leftover staging = %v, want refusal naming %s", err, kept)
+	}
+	if err := os.RemoveAll(filepath.Join(dir, "KerML.ttl")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(kept); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteOutputs(dir, outputs); err != nil {
+		t.Fatal(err)
+	}
+	if stale, err := CheckOutputs(dir, outputs); err != nil || len(stale) != 0 {
+		t.Errorf("after recovery stale = %v, err = %v", stale, err)
+	}
 }
 
 // TestCommittedModulesResolveOffline opens the committed root ontologies from
