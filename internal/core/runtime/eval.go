@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -649,6 +650,12 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	// Evaluate the operand (left side of the chain)
 	operand, err := ec.Eval(n.Operand)
 	if err != nil {
+		var noValue *NoValueError
+		if errors.As(err, &noValue) {
+			if unresolved := ec.chainMembersDeclared(base, parts); unresolved != nil {
+				return Value{}, unresolved
+			}
+		}
 		return Value{}, err
 	}
 
@@ -659,6 +666,38 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	}
 
 	return ec.chainMemberValue(operand, n.Member.Parts, "")
+}
+
+// chainMembersDeclared reports the first chain member nothing declares, so
+// `wheels.nonexistent` is unresolved rather than unset when wheels has no value.
+func (ec *EvalContext) chainMembersDeclared(base ast.Node, parts []ast.NameSegment) error {
+	ref, ok := base.(*ast.FeatureReference)
+	if !ok || ref.Name == nil || ec.ctx.resolver == nil {
+		return nil
+	}
+	cur, ok := ec.ctx.resolver.ResolveQualified(ec.scope, ref.Name)
+	if !ok || cur == nil {
+		return nil
+	}
+	for _, part := range parts {
+		next, ok := ec.ctx.declaredMember(cur, part.Text)
+		if !ok {
+			return fmt.Errorf("%w: %s has no member %s", ErrUnresolvedReference, cur.Name, part.Text)
+		}
+		cur = next
+	}
+	return nil
+}
+
+// declaredMember is what an object of sym holds under name: a feature of its
+// shape, or a member (calc usage, variant) the model reaches by name.
+func (ctx *Context) declaredMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	for _, feat := range ctx.FeaturesOf(sym) {
+		if feat.Name == name && feat.Symbol != nil {
+			return feat.Symbol, true
+		}
+	}
+	return ctx.model.LookupMember(sym, name)
 }
 
 // chainBase flattens a nested feature chain: `lander.mass.mDry` is one chain of

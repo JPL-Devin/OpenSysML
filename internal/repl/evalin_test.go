@@ -190,8 +190,9 @@ func TestEvalInDeclarationScopeDoesNotReadCompoundFailuresAsUnset(t *testing.T) 
 	}
 }
 
-// A chain whose operand's own default fails is that failure, even when the
-// feature the default could not read happens to share a link's name.
+// A feature whose own default fails is that failure, and a chain through it to a
+// member it does not have is unresolved, even when the feature the default could
+// not read happens to share the link's name: neither is unset.
 func TestEvalInDeclarationScopeChainIsNotUnsetForALinkOfAnotherName(t *testing.T) {
 	s := NewSession()
 	if errs := errorDiagnostics(s.Submit(`private import ScalarValues::*;
@@ -203,12 +204,38 @@ part def Car { attribute a : Real = Defaults::pick; }
 part car : Car;`).Diagnostics); len(errs) > 0 {
 		t.Fatalf("model has errors: %v", errs)
 	}
-	for _, cmd := range []string{"%eval in car : a.b", "%eval in car : a"} {
-		got := run(t, s, cmd)
-		wants(t, got, "error", "no value for feature b")
-		rejects(t, got, "✓", "= "+runtime.UnsetText)
-	}
+	got := run(t, s, "%eval in car : a")
+	wants(t, got, "error", "no value for feature b")
+	rejects(t, got, "✓", "= "+runtime.UnsetText)
+	got = run(t, s, "%eval in car : a.b")
+	wants(t, got, "error", "unresolved reference: a has no member b")
+	rejects(t, got, "✓", "= "+runtime.UnsetText)
 	rejects(t, run(t, s, "%eval car::a.b"), "✓", "= "+runtime.UnsetText, "has no value to evaluate")
+}
+
+// A chain from a valueless operand is unset only when every link names a member
+// of what precedes it: a member nothing declares, or a member of a scalar, is
+// the unresolved reference it is, whether or not the operand has a value.
+func TestEvalInDeclarationScopeChainOverValuelessOperandStillResolvesItsMembers(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	for _, c := range []struct{ expr, member string }{
+		{"wheels.nonexistent", "wheels has no member nonexistent"},
+		{"wheels.radius.nonexistent", "radius has no member nonexistent"},
+		{"unsetMass.foo", "unsetMass has no member foo"},
+		{"tags.length", "tags has no member length"},
+	} {
+		got := run(t, s, "%eval in car : "+c.expr)
+		wants(t, got, "error", "unresolved reference: "+c.member)
+		rejects(t, got, "✓", "= "+runtime.UnsetText)
+		got = run(t, s, "%eval car::"+c.expr)
+		wants(t, got, "unresolved reference: "+c.member)
+		rejects(t, got, "✓", "= "+runtime.UnsetText, "has no value to evaluate")
+	}
+	// The valid chain over the same operand is still unset, not unresolved.
+	wants(t, run(t, s, "%eval in car : wheels.radius"), "✓ wheels.radius (in car)", "= "+runtime.UnsetText)
 }
 
 // Once the object exists, the same features read the values it holds.

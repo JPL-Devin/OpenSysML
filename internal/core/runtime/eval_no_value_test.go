@@ -61,6 +61,28 @@ func TestDeclaredFeatureWithoutValueIsNotUnresolved(t *testing.T) {
 	}
 }
 
+// TestChainOverValuelessOperandResolvesItsMembers: a valueless operand does not
+// excuse the members chained from it — one nothing declares is unresolved, not a
+// missing value.
+func TestChainOverValuelessOperandResolvesItsMembers(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, valuelessFeaturesModel)
+	ctx := NewContext(model, resolver, 10000)
+	pkg, _ := root.LookupLocal("test")
+	car, _ := pkg.Scope.LookupLocal("Car")
+	scope := car.Scope
+
+	for _, name := range []string{"wheels.nonexistent", "wheels.radius.nonexistent", "unsetMass.foo", "tags.length"} {
+		_, err := ctx.EvalWithScope(parseExpr(t, name), scope)
+		if !errors.Is(err, ErrUnresolvedReference) {
+			t.Errorf("%s: err = %v; want ErrUnresolvedReference", name, err)
+		}
+		var noValue *NoValueError
+		if errors.As(err, &noValue) {
+			t.Errorf("%s: a chain naming nothing was reported as a missing value: %v", name, err)
+		}
+	}
+}
+
 // namesIn reports whether qn is one of the names expr is written as.
 func namesIn(expr ast.Node, qn *ast.QualifiedName) bool {
 	switch n := expr.(type) {
