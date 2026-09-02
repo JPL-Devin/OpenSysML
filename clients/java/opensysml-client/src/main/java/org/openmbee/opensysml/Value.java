@@ -17,6 +17,29 @@ public sealed interface Value {
   /** A {@code Real} value. */
   record RealValue(double value) implements Value {}
 
+  /**
+   * A {@code Complex} value in rectangular form: one number, never a sequence of two reals.
+   *
+   * <p>Only a service advertising the {@code complex_values} capability reports one as itself
+   * rather than as an unsupported {@link NullValue}. It is not numeric to {@link #asDouble()}: a
+   * complex number has no single real magnitude.
+   *
+   * @param real the real part
+   * @param imaginary the imaginary part
+   */
+  record ComplexValue(double real, double imaginary) implements Value {
+    /**
+     * This number as SysML writes it, {@code 1.5 - 2.0i}, each part in {@link Double#toString}
+     * form; the sign between them is the imaginary part's.
+     *
+     * @return the rectangular rendering
+     */
+    public String format() {
+      boolean negative = Double.doubleToRawLongBits(imaginary) < 0;
+      return real + (negative ? " - " : " + ") + Math.abs(imaginary) + "i";
+    }
+  }
+
   /** A {@code Boolean} value. */
   record BooleanValue(boolean value) implements Value {}
 

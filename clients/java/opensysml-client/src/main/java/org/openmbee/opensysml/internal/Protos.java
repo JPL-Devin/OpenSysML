@@ -42,6 +42,9 @@ public final class Protos {
     return switch (value.getKindCase()) {
       case INT_VALUE -> Optional.of(new Value.IntegerValue(value.getIntValue()));
       case REAL_VALUE -> Optional.of(new Value.RealValue(value.getRealValue()));
+      case COMPLEX ->
+          Optional.of(
+              new Value.ComplexValue(value.getComplex().getReal(), value.getComplex().getImaginary()));
       case BOOL_VALUE -> Optional.of(new Value.BooleanValue(value.getBoolValue()));
       case STRING_VALUE -> Optional.of(new Value.StringValue(value.getStringValue()));
       case INSTANCE_ID -> Optional.of(new Value.InstanceReference(value.getInstanceId()));

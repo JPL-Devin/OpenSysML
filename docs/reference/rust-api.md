@@ -98,6 +98,7 @@ not the ergonomic one.
 match value {
     Value::Integer(v) => (),
     Value::Real(v) => (),
+    Value::Complex(z) => (),           // z.real, z.imaginary; one value, Display as `1.5 - 2.0i`
     Value::Boolean(v) => (),
     Value::Text(v) => (),
     Value::InstanceRef(id) => (),

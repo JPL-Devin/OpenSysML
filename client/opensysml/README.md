@@ -194,7 +194,10 @@ answering implementation supports, and `ServerInfo.Has` checks one. A request
 that asks for an unavailable capability is refused with `CodeUnimplemented`;
 capabilities that describe response population instead omit the fields they
 name. Check the list first for an operation-specific error (the `Capability*`
-constants name the known ones).
+constants name the known ones). One capability is checked for you: a `Complex`
+among `ExecuteAction` inputs or `EvaluateCalc` arguments needs
+`complex_values`, and a service without it would read the value as null, so
+the client refuses with `CodeUnimplemented` before sending anything.
 
 ## Stability
 

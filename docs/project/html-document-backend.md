@@ -83,7 +83,7 @@ A worked shape, for a document with one section, a grouped table, a list and a d
 <head>
 <meta charset="utf-8">
 <title>Mass Report</title>
-<style>/* default stylesheet */</style>
+<style>@layer opensysml; @layer opensysml { .sysml-document { --sysml-measure: 38rem; … } }</style>
 </head>
 <body>
 <article class="sysml-document" data-document="Reports::MassReport">
@@ -111,7 +111,9 @@ A worked shape, for a document with one section, a grouped table, a list and a d
 <tr class="sysml-group-heading"><th scope="rowgroup" colspan="2">stage: Launch</th></tr>
 <tr class="sysml-row" data-element="Vehicles::Booster" data-element-kind="partUsage">
   <td class="sysml-cell" data-column="stage" data-value-kind="string">Launch</td>
-  <td class="sysml-cell" data-column="mass" data-value-kind="real">1200.0</td>
+  <td class="sysml-cell" data-column="mass" data-value-kind="real">
+    <span class="sysml-value" data-value-kind="real">1200.0</span>
+  </td>
 </tr>
 </tbody>
 </table>
@@ -145,6 +147,9 @@ One class per node kind, in a `sysml-` namespace, and `data-` attributes for the
 | Table group | `tbody.sysml-group` | `data-group`, `data-group-key` |
 | Row | `tr.sysml-row` | `data-element`, `data-element-kind` |
 | Cell | `td.sysml-cell` | `data-column`, `data-value-kind` |
+| One value inside a multi-valued cell | `span.sysml-value` | `data-value-kind` |
+| Separator between those values | `span.sysml-separator` | |
+| Group key of a grouped table | `span.sysml-group-key` | |
 | Column header | `th[scope=col]` | `data-column` |
 | List | `ul.sysml-list` / `ol.sysml-list` | `data-content`, `data-query` |
 | List item | `li.sysml-item` | `data-element`, `data-element-kind` |
@@ -193,6 +198,12 @@ Decisions, each with its reason:
   stylesheet, no CDN, no JavaScript. A rendered document is an artifact that has to open
   from a file on a machine with no network, and a generated page that silently fetches a
   script is not that.
+- **Every separator is an element, not bare punctuation.** A multi-valued cell renders each
+  value in `span.sysml-value` with the `, ` between them in `span.sysml-separator`, and a
+  group key gets `span.sysml-group-key`. Markdown has to join those with punctuation; HTML
+  does not, and a theme that wants stacked values or a bullet between them should not have
+  to strip a comma the generator baked in. The punctuation is still real text, so the
+  document reads correctly with styling switched off entirely.
 
 ### Diagrams
 
@@ -209,16 +220,70 @@ subprocess, which is `docpdf`'s job and must not become a dependency of a pure r
 `docrender` exposes the diagram sources in document order and accepts the resulting image
 names in the same order — the ordering convention `docpdf` already uses internally today.
 
-### The stylesheet
+### Styling and overriding it
 
-The default stylesheet is small, screen-oriented, and inline. It styles the semantic structure
-only — readable measure, table rules, captions in small type, a contents list — and states no
-`sysml-` selector beyond what the structure needs, precisely so that the model hooks are left
-for the reader to use. `-html-stylesheet <file>` replaces it with a file's contents, and
-`-html-fragment` writes the `<article>` alone with no `<head>`, no stylesheet and no
-`<!DOCTYPE>`, for embedding in a site that brings its own. The print stylesheet the PDF path
-needs — `@page` margins, page counters, page breaks — stays with the PDF backend, where its
-`@page` rules belong.
+The default stylesheet exists so a rendered document looks like a document when it is opened,
+and it is written on the assumption that it will be overridden. Three properties of the markup
+make overriding it work, and they are structural decisions, not stylesheet decisions.
+
+**The default stylesheet is in a cascade layer; user CSS is not.** Everything the backend
+emits is wrapped in `@layer opensysml { … }`, and the layer is declared first. Unlayered CSS
+always wins over layered CSS regardless of specificity, so a reader's
+`.sysml-table { border: none }` beats the default's rule without matching its specificity and
+without `!important` — and it keeps winning when the default stylesheet is rewritten in a later
+release. This is the single most important decision in this section: without it, every default
+rule is a specificity negotiation, and the usual outcome is a wall of `!important` in the
+reader's stylesheet.
+
+**Every value the default stylesheet uses is a custom property.** Fonts, the text measure,
+spacing, rule and caption colors, table zebra striping are read from `--sysml-*` properties
+declared on `.sysml-document`:
+
+```css
+/* re-theme without replacing anything */
+.sysml-document {
+  --sysml-font-body: "Public Sans", sans-serif;
+  --sysml-measure: 42rem;
+  --sysml-rule: #c8102e;
+}
+/* or restyle structurally — unlayered, so it wins */
+tr[data-element-kind="requirementUsage"] { background: #fff8e1; }
+.sysml-table .sysml-separator { display: none; }
+.sysml-table .sysml-value { display: block; }
+```
+
+The token set is part of the documented contract, the same way the class vocabulary is: a
+reader who only wants their organization's typography and rule color should never have to read
+the default stylesheet, let alone fork it.
+
+**No `style` attributes, no styling-only markup, no styling on `id`.** The backend never emits
+an inline `style`, because an inline style cannot be overridden from a stylesheet at all. It
+emits no wrapper `<div>` that exists only to give CSS a box — every element in the output is
+there because the document model has that node — and it never asks a stylesheet to match an
+`id`, since ids are model anchors and matching them would tie a theme to a particular
+document. Class names are stable and unprefixed by depth: nesting expresses depth
+(`section section .sysml-table`), so a theme is never forced to enumerate levels.
+
+The flags follow from that:
+
+- **`-html-css <file-or-url>`**, repeatable. A file's contents are inlined, so the artifact
+  stays self-contained; a URL becomes a `<link>` for a site that serves its own. Each is
+  emitted after the default, unlayered, in the order given.
+- **`-html-no-default-css`** drops the built-in stylesheet entirely, for a reader who wants to
+  start from nothing rather than from a layer.
+- **`-html-default-css`** writes the built-in stylesheet to stdout, so "start from ours and
+  edit" needs no source dive. It is a printing mode like the other informational flags, not a
+  rendering option.
+- **`-html-fragment`** writes the `<article>` alone — no `<!DOCTYPE>`, `<head>` or stylesheet
+  — for embedding in a site that brings its own CSS.
+- **`-render-documents -doc-form html`** writes one shared `sysml-document.css` beside the
+  files and links it, rather than inlining the same bytes into every document, so a set has
+  one stylesheet to override and it is a file the reader can replace on disk. `-html-css`
+  additions are linked alongside it, in order.
+
+The print stylesheet the PDF path needs — `@page` margins, page counters, page breaks — stays
+with the PDF backend, where its `@page` rules belong, and is layered the same way so
+`-html-css` works for PDF too.
 
 ## Surfaces
 
@@ -228,8 +293,9 @@ needs — `@page` margins, page counters, page breaks — stays with the PDF bac
   `docrender.DocumentFileName` currently hardcodes `.md`; it takes the extension as a
   parameter, and cross-document reference destinations follow the form being rendered, so a
   set of HTML files links to `.html` and a set of Markdown files keeps linking to `.md`.
-- **`-html-stylesheet <file>`** and **`-html-fragment`**, refused for the other forms the way
-  the `-pdf-*` flags already are.
+- **`-html-css`, `-html-no-default-css`, `-html-default-css` and `-html-fragment`**, refused
+  for the other forms the way the `-pdf-*` flags already are, except `-html-css`, which the
+  PDF form accepts too since its converters read the same HTML.
 - **The shared deliverable options.** A title page, a contents list and section numbering are
   not PDF-specific — they are exactly what an HTML deliverable wants too — but they are
   spelled `-pdf-title-page`, `-pdf-toc` and `-pdf-number-sections` today. The proposal is to
@@ -272,6 +338,15 @@ during the work, not here.
   containing `<`, `&`, `"`, `'`, a `</script>` sequence and a newline must appear as text and
   must not be able to close an attribute or introduce an element. This is the property that
   matters most, because unlike Markdown a broken escape here is an injection, not a typo.
+  A supplied stylesheet is inlined, so `</style>` in it is the same class of hazard and gets
+  the same treatment.
+- **The override contract**, as assertions on the goldens rather than prose: no `style`
+  attribute appears anywhere in the output, every class emitted is one the documented
+  vocabulary lists, the default stylesheet is wrapped in `@layer opensysml` and declares the
+  layer before using it, every declaration in it resolves through a `--sysml-*` property, and
+  `-html-css` content lands after the layer, unlayered. A regression in any of these silently
+  breaks reader stylesheets that the project never sees, which is why they are gates and not
+  documentation.
 - **Determinism**, rendering twice and comparing bytes, including for grouped tables and
   multi-document sets.
 - **The PDF path unchanged**, per engine: the existing `docpdf` tests and the integration
@@ -284,9 +359,10 @@ during the work, not here.
 ## Work plan
 
 1. **The backend and its form.** `docrender.HTML` with the vocabulary above, the extension
-   parameter on `DocumentFileName`, `-doc-form html`, `-render-documents` for HTML,
-   `-html-stylesheet`, `-html-fragment`, the shared deliverable options, goldens and the test
-   contract, and the user documentation (`docs/reference/cli.md`, `docs/manual/outputs.md`,
+   parameter on `DocumentFileName`, `-doc-form html`, `-render-documents` for HTML, the
+   layered and tokenized default stylesheet with `-html-css`, `-html-no-default-css`,
+   `-html-default-css` and `-html-fragment`, the shared deliverable options, goldens and the
+   test contract, and the user documentation (`docs/reference/cli.md`, `docs/manual/outputs.md`,
    `docs/manual/interfaces.md`, the guide's document pages).
 2. **The PDF migration.** Point the HTML-input engines at the backend, split the print
    stylesheet out as the PDF backend's own, delete the block parser, page writer, inline
@@ -304,6 +380,10 @@ Markdown.
   source rather than a diagram. Pre-rendered images are available through the PDF path's
   machinery, but wiring `mmdc` into the HTML form — an `-html-diagrams svg` option — is
   deliberately out of scope for the two steps above and left as follow-on work.
-- **One stylesheet, no theme set.** The default is meant to be replaced, not extended. A
-  themed stylesheet set (print, screen, JPL house style) is a separate piece of work that this
-  design enables rather than does.
+- **One stylesheet, no theme set.** The default is a starting point, not a theme system. A
+  themed set (print, screen, house style) is a separate piece of work that the layer and the
+  token vocabulary enable rather than deliver.
+- **The class and token vocabulary becomes a compatibility surface.** Once readers write
+  stylesheets against `sysml-` classes, `data-` attributes and `--sysml-*` properties,
+  renaming one breaks them silently. It is documented in `docs/reference/` as a contract and
+  changes belong in `CHANGELOG.md`, which is a cost this design accepts deliberately.

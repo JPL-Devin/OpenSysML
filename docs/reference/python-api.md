@@ -156,6 +156,7 @@ collection property.
 | SysML | Python |
 | --- | --- |
 | `Real`, `Rational` | `float` |
+| `Complex` | `complex`, one number rather than two floats |
 | `Integer`, `Natural` | `int` |
 | `Boolean` | `bool` |
 | `String` | `str` |
@@ -165,7 +166,7 @@ collection property.
 | multiplicity `1`, `1..1`, or undeclared | `X` |
 | multiplicity `0..1` | `X \| None` |
 | `*`, `0..*`, `n..m` with upper > 1 | `list[X]` |
-| `Complex`, `Number` | `object`, with a comment naming the type |
+| `Number` | `object`, with a comment naming the type |
 | a type resolved outside the model (e.g. a library type) | `object`, with a comment naming its FQN |
 | an unresolved or absent type | `object`, with a comment naming what was written |
 | `specializes`, `subsets` or `redefines` a definition in the model | Python base class |

@@ -105,9 +105,14 @@ LSP client; only the syntax highlighting is specific to VS Code.
   and the `opensysml/renderChanged` notification, announced as
   `experimental: { openSysmlRender: true }` — what the diagram panel is built on,
   documented in [LSP extensions](../reference/lsp.md)
-- ✅ Code actions, quick-fix kind only (`textDocument/codeAction`: spelling of an
+- ✅ Code actions (`textDocument/codeAction`): quick fixes for the spelling of an
   unresolved name, importing the namespace that declares it, inserting a missing
-  semicolon the parser located exactly)
+  semicolon the parser located exactly; and the `refactor.rewrite` actions on a
+  declaration's header that annotate it with a minted element id (an
+  `IdentityMetadata::ElementId`, UUID v4, inline in its body or standalone at
+  the end of the file) and bind an unbound root namespace to a project
+  (`IdentityMetadata::ProjectRef` with a placeholder `projectId` to fill in), see
+  [element identity](../project/element-identity-annotations.md)
 
 **Not implemented:** semantic token deltas (`semanticTokens/full/delta`; the server retains no
 previous result to diff against, so clients re-request the full set), signature help, range
