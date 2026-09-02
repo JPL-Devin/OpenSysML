@@ -27,37 +27,46 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 120,
-        "digest": "sha256:1807bc173996cee5a9776a987e3bec4409245d16bdbb0d71e6b4d362b60cd81f"
+        "files": 173,
+        "digest": "sha256:ffc697d8bc40207cfa093d76f937782ad12a1a58f672c5ba09a926d77ddd786f"
       }
     ],
     "recorded": "2026-09-02"
   },
   "totals": {
-    "cases": 120,
-    "bothReject": 120,
-    "pilotOnlyRejects": 0,
+    "cases": 173,
+    "bothReject": 164,
+    "pilotOnlyRejects": 9,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
   "strictOnlyAgreements": [
     "extensions/x05-defer-member.sysml",
-    "extensions/x06-history-member.sysml"
+    "extensions/x06-history-member.sysml",
+    "extensions/x08-require-outside-requirement-body.sysml"
   ],
   "sources": [
     {
       "source": "extensions",
-      "cases": 7,
-      "bothReject": 7,
+      "cases": 8,
+      "bothReject": 8,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
     {
       "source": "grammar",
-      "cases": 79,
-      "bothReject": 79,
-      "pilotOnlyRejects": 0,
+      "cases": 86,
+      "bothReject": 80,
+      "pilotOnlyRejects": 6,
+      "oursOnlyRejects": 0,
+      "bothAccept": 0
+    },
+    {
+      "source": "semantic",
+      "cases": 45,
+      "bothReject": 42,
+      "pilotOnlyRejects": 3,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
@@ -145,6 +154,16 @@
       "pilotErrors": 4,
       "defaultBucket": "both-reject",
       "defaultErrors": 1
+    },
+    {
+      "path": "extensions/x08-require-outside-requirement-body.sysml",
+      "source": "extensions",
+      "rule": "Only requirements can have assumed or required constraints; 'require' in a part def body is an OpenSysML extension (SysML 7.20 Requirements; pilot validateRequirementConstraintMembershipOwningType, enforced by SysML.xtext RequirementBodyItem).",
+      "mode": "strict",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2,
+      "defaultBucket": "pilot-only-rejects"
     },
     {
       "path": "grammar/g01-unclosed-package-body.sysml",
@@ -687,6 +706,93 @@
       "pilotErrors": 1
     },
     {
+      "path": "grammar/g61-actor-outside-requirement-body.sysml",
+      "source": "grammar",
+      "rule": "ActorMember is a RequirementBodyItem/CaseBodyItem; a part def body admits no 'actor' (SysML.xtext:2089 ActorMember, :2039 RequirementBodyItem; pilot validateActorMembershipOwningType).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 2,
+      "pilot": [
+        "line 5: mismatched input 'actor' expecting '}'",
+        "line 7: extraneous input '}' expecting EOF"
+      ]
+    },
+    {
+      "path": "grammar/g62-subject-outside-requirement-body.sysml",
+      "source": "grammar",
+      "rule": "SubjectMember is a RequirementBodyItem/CaseBodyItem; a part def body admits no 'subject' (SysML.xtext:2049 SubjectMember, :2039 RequirementBodyItem; pilot validateSubjectMembershipOwningType).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 2,
+      "pilot": [
+        "line 5: mismatched input 'subject' expecting '}'",
+        "line 7: extraneous input '}' expecting EOF"
+      ]
+    },
+    {
+      "path": "grammar/g63-objective-outside-case-body.sysml",
+      "source": "grammar",
+      "rule": "ObjectiveMember is a CaseBodyItem; a part def body admits no 'objective' (SysML.xtext:2198 ObjectiveMember, :2190 CaseBodyItem; pilot validateObjectiveMembershipOwningType).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 2,
+      "pilot": [
+        "line 5: mismatched input 'objective' expecting '}'",
+        "line 7: extraneous input '}' expecting EOF"
+      ]
+    },
+    {
+      "path": "grammar/g64-stakeholder-outside-requirement-body.sysml",
+      "source": "grammar",
+      "rule": "StakeholderMember is a RequirementBodyItem; a part def body admits no 'stakeholder' (SysML.xtext:2098 StakeholderMember, :2039 RequirementBodyItem; pilot validateStakeholderMembershipOwningType).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 2,
+      "pilot": [
+        "line 5: mismatched input 'stakeholder' expecting '}'",
+        "line 7: extraneous input '}' expecting EOF"
+      ]
+    },
+    {
+      "path": "grammar/g65-entry-action-outside-state-body.sysml",
+      "source": "grammar",
+      "rule": "EntryActionMember is a StateBodyItem; a part def body admits no 'entry action' (SysML.xtext:1772 EntryActionMember; pilot validateStateSubactionMembershioOwningType).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 2,
+      "pilot": [
+        "line 4: mismatched input 'entry' expecting '}'",
+        "line 6: extraneous input '}' expecting EOF"
+      ]
+    },
+    {
+      "path": "grammar/g66-render-outside-view-body.sysml",
+      "source": "grammar",
+      "rule": "ViewRenderingMember is a ViewBodyItem; a part def body admits no 'render' (SysML.xtext:2335 ViewRenderingMember, :2359 ViewBodyItem; pilot validateViewRenderingMembershipOwningType).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 2,
+      "pilot": [
+        "line 5: mismatched input 'render' expecting '}'",
+        "line 7: extraneous input '}' expecting EOF"
+      ]
+    },
+    {
+      "path": "grammar/g67-expose-outside-view-body.sysml",
+      "source": "grammar",
+      "rule": "Expose is a ViewBodyItem; a part def body admits no 'expose' (SysML.xtext:2374 Expose, :2359 ViewBodyItem; pilot validateExposeOwningNamespace).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -858,6 +964,421 @@
       "pilotErrors": 4
     },
     {
+      "path": "semantic/s01-action-typed-by-part-def.sysml",
+      "source": "semantic",
+      "rule": "An action must be typed by action definitions (SysML 7.16 Actions; pilot validateActionUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s02-allocation-typed-by-connection-def.sysml",
+      "source": "semantic",
+      "rule": "An allocation must be typed by allocation definitions (SysML 7.15 Allocations; pilot validateAllocationUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s03-analysis-typed-by-case-def.sysml",
+      "source": "semantic",
+      "rule": "An analysis case must be typed by one analysis case definition (SysML 7.22 Analysis Cases; pilot validateAnalysisCaseUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s04-assert-references-non-constraint.sysml",
+      "source": "semantic",
+      "rule": "An assert constraint usage must reference a constraint usage (SysML 7.19 Constraints; pilot validateAssertConstraintUsageReference).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 6: Must reference a constraint."
+      ]
+    },
+    {
+      "path": "semantic/s05-assign-to-package-level-attribute.sysml",
+      "source": "semantic",
+      "rule": "An assignment referent must be time varying (SysML 7.16 Actions; pilot validateAssignmentActionUsageReferentIsTimeVarying).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s06-enum-attribute-two-types.sysml",
+      "source": "semantic",
+      "rule": "An enumeration attribute cannot have more than one type (SysML 7.8 Enumerations; pilot validateAttributeUsageEnumerationType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s07-calc-typed-by-action-def.sysml",
+      "source": "semantic",
+      "rule": "A calculation must be typed by one calculation definition (SysML 7.18 Calculations; pilot validateCalculationUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s08-case-def-two-objectives.sysml",
+      "source": "semantic",
+      "rule": "A case definition may have at most one objective (SysML 7.21 Cases; pilot validateCaseDefinitionOnlyOneObjective).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s09-case-def-two-subjects.sysml",
+      "source": "semantic",
+      "rule": "A case definition may have at most one subject (SysML 7.21 Cases; pilot validateCaseDefinitionOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s10-case-def-subject-not-first.sysml",
+      "source": "semantic",
+      "rule": "The subject of a case definition must be its first parameter (SysML 7.21 Cases; pilot validateCaseDefinitionSubjectParameterPosition).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s11-case-two-objectives.sysml",
+      "source": "semantic",
+      "rule": "A case usage may have at most one objective (SysML 7.21 Cases; pilot validateCaseUsageOnlyOneObjective).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s12-case-two-subjects.sysml",
+      "source": "semantic",
+      "rule": "A case usage may have at most one subject (SysML 7.21 Cases; pilot validateCaseUsageOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s13-case-subject-not-first.sysml",
+      "source": "semantic",
+      "rule": "The subject of a case usage must be its first parameter (SysML 7.21 Cases; pilot validateCaseUsageSubjectParameterPosition).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s14-case-typed-by-action-def.sysml",
+      "source": "semantic",
+      "rule": "A case must be typed by one case definition (SysML 7.21 Cases; pilot validateCaseUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s15-connection-typed-by-part-def.sysml",
+      "source": "semantic",
+      "rule": "A connection must be typed by connection definitions (SysML 7.13 Connections; pilot validateConnectionUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s16-event-references-non-occurrence.sysml",
+      "source": "semantic",
+      "rule": "An event occurrence usage must reference an occurrence usage (SysML 7.9 Occurrences; pilot validateEventOccurrenceUsageReferent).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s17-exhibit-references-non-state.sysml",
+      "source": "semantic",
+      "rule": "An exhibit state usage must reference a state usage (SysML 7.17 States; pilot validateExhibitStateUsageReference).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s18-flow-def-three-ends.sysml",
+      "source": "semantic",
+      "rule": "A flow connection definition can have at most two ends (SysML 7.13 Connections; pilot validateFlowDefinitionConnectionEnds).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s19-flow-typed-by-connection-def.sysml",
+      "source": "semantic",
+      "rule": "A flow connection must be typed by flow connection definitions (SysML 7.13 Connections; pilot validateFlowUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s20-include-references-non-use-case.sysml",
+      "source": "semantic",
+      "rule": "An include use case usage must reference a use case usage (SysML 7.24 Use Cases; pilot validateIncludeUseCaseUsageReference).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s21-interface-def-end-not-port.sysml",
+      "source": "semantic",
+      "rule": "An interface definition end must be a port (SysML 7.14 Interfaces; pilot validateInterfaceDefinitionEnd).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s22-interface-typed-by-connection-def.sysml",
+      "source": "semantic",
+      "rule": "An interface must be typed by interface definitions (SysML 7.14 Interfaces; pilot validateInterfaceUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s23-metadata-typed-by-part-def.sysml",
+      "source": "semantic",
+      "rule": "A metadata usage must be typed by one metadata definition (SysML 7.26 Metadata; pilot validateMetadataUsageType).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 2,
+      "pilot": [
+        "line 5: A metadata usage must be typed by one metadata definition.",
+        "line 5: Must have a concrete type"
+      ]
+    },
+    {
+      "path": "semantic/s24-perform-references-non-action.sysml",
+      "source": "semantic",
+      "rule": "A perform action usage must reference an action usage (SysML 7.16 Actions; pilot validatePerformActionUsageReference).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s25-port-nested-composite-part.sysml",
+      "source": "semantic",
+      "rule": "Nested usages in a port usage (other than ports) must be referential (SysML 7.12 Ports; pilot validatePortUsageNestedUsagesNotComposite).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s26-port-typed-by-part-def.sysml",
+      "source": "semantic",
+      "rule": "A port must be typed by port definitions (SysML 7.12 Ports; pilot validatePortUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s27-rendering-typed-by-part-def.sysml",
+      "source": "semantic",
+      "rule": "A rendering must be typed by one rendering definition (SysML 7.25 Views and Viewpoints; pilot validateRenderingUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s28-requirement-def-subject-not-first.sysml",
+      "source": "semantic",
+      "rule": "The subject of a requirement definition must be its first parameter (SysML 7.20 Requirements; pilot validateRequirementDefinitionSubjectParameterPosition).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s29-requirement-two-subjects.sysml",
+      "source": "semantic",
+      "rule": "A requirement usage may have at most one subject (SysML 7.20 Requirements; pilot validateRequirementUsageOnlyOneSubject).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s30-requirement-subject-not-first.sysml",
+      "source": "semantic",
+      "rule": "The subject of a requirement usage must be its first parameter (SysML 7.20 Requirements; pilot validateRequirementUsageSubjectParameterPosition).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s31-requirement-typed-by-constraint-def.sysml",
+      "source": "semantic",
+      "rule": "A requirement must be typed by one requirement definition (SysML 7.20 Requirements; pilot validateRequirementUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s32-satisfy-references-non-requirement.sysml",
+      "source": "semantic",
+      "rule": "A satisfy requirement usage must reference a requirement usage (SysML 7.20 Requirements; pilot validateSatisfyRequirementUsageReference).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s33-parallel-state-usage-with-succession.sysml",
+      "source": "semantic",
+      "rule": "A parallel state usage cannot have successions or transitions (SysML 7.17 States; pilot validateStateUsageParallelSubactions).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s34-state-usage-two-entry-actions.sysml",
+      "source": "semantic",
+      "rule": "A state usage may have at most one entry action (SysML 7.17 States; pilot validateStateUsageSubactionKind).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s35-state-typed-by-part-def.sysml",
+      "source": "semantic",
+      "rule": "A state must be typed by state definitions (SysML 7.17 States; pilot validateStateUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s36-usage-typed-by-feature.sysml",
+      "source": "semantic",
+      "rule": "A usage must be typed by definitions (SysML 7.6 Definition and Usage; pilot validateUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s37-variation-usage-member-not-variant.sysml",
+      "source": "semantic",
+      "rule": "An owned usage of a variation usage must be a variant (SysML 7.6 Definition and Usage; pilot validateUsageVariationMembership).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s38-use-case-typed-by-case-def.sysml",
+      "source": "semantic",
+      "rule": "A use case must be typed by one use case definition (SysML 7.24 Use Cases; pilot validateUseCaseUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s39-verification-typed-by-case-def.sysml",
+      "source": "semantic",
+      "rule": "A verification case must be typed by one verification case definition (SysML 7.23 Verification Cases; pilot validateVerificationCaseUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s40-view-def-two-renderings.sysml",
+      "source": "semantic",
+      "rule": "A view definition may have at most one view rendering (SysML 7.25 Views and Viewpoints; pilot validateViewDefinitionOnlyOnvViewRendering).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s41-view-typed-by-part-def.sysml",
+      "source": "semantic",
+      "rule": "A view must be typed by one view definition (SysML 7.25 Views and Viewpoints; pilot validateViewUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s42-viewpoint-typed-by-requirement-def.sysml",
+      "source": "semantic",
+      "rule": "A viewpoint must be typed by one viewpoint definition (SysML 7.25 Views and Viewpoints; pilot validateViewpointUsageType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/s43-assign-to-non-feature.sysml",
+      "source": "semantic",
+      "rule": "An assignment must have a feature as its referent (SysML 7.16 Actions; pilot validateAssignmentActionUsageReferent).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 5: An assignment must have a referent."
+      ]
+    },
+    {
+      "path": "semantic/s44-transition-target-not-action.sysml",
+      "source": "semantic",
+      "rule": "A transition must own a succession whose target is an action or state (SysML 7.17 States; pilot validateTransitionUsageSuccession).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s45-snapshot-outside-occurrence.sysml",
+      "source": "semantic",
+      "rule": "A portion (snapshot/timeslice) usage must be owned by an occurrence definition or usage (SysML 7.10 Occurrences; pilot validateOccurrenceUsageIsPortion).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "xpect/p01-public-root-import.kerml",
       "source": "xpect",
       "rule": "a root-namespace import must be private (KerML 8.2.3.5.2 validateImportTopLevelVisibility; pilot Import_RootNamspace_invalid.kerml.xt).",
@@ -923,7 +1444,7 @@
     {
       "path": "xpect/p08-variant-outside-variation.sysml",
       "source": "xpect",
-      "rule": "A variant must be an owned member of a variation (SysML 7.9 validateVariantMembershipOwningNamespace; pilot Variability_invalid.sysml.xt:55).",
+      "rule": "A variant must be an owned member of a variation (SysML 7.9 validateVariationMembershipOwningNamespace; pilot Variability_invalid.sysml.xt:55).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -932,7 +1453,7 @@
     {
       "path": "xpect/p09-variation-member-not-variant.sysml",
       "source": "xpect",
-      "rule": "An owned usage of a variation must be a variant (SysML 7.9 validateVariationMembership; pilot Variability_invalid.sysml.xt:46).",
+      "rule": "An owned usage of a variation must be a variant (SysML 7.9 validateDefinitionVariationMembership; pilot Variability_invalid.sysml.xt:46).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -968,7 +1489,7 @@
     {
       "path": "xpect/p13-state-two-entry-actions.sysml",
       "source": "xpect",
-      "rule": "A state may have at most one entry action (SysML 7.16 validateStateUsageStateDefinitionEntryAction; pilot StateSubactions_invalid.sysml.xt).",
+      "rule": "A state may have at most one entry action (SysML 7.16 validateStateDefinitionSubactionKind; pilot StateSubactions_invalid.sysml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -977,7 +1498,7 @@
     {
       "path": "xpect/p14-requirement-two-subjects.sysml",
       "source": "xpect",
-      "rule": "Only one subject is allowed (SysML 7.20 validateSubjectMembership; pilot RequirementSubject_Invalid.sysml.xt).",
+      "rule": "Only one subject is allowed (SysML 7.20 validateRequirementDefinitionOnlyOneSubject; pilot RequirementSubject_Invalid.sysml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -986,7 +1507,7 @@
     {
       "path": "xpect/p15-attribute-typed-by-part-def.sysml",
       "source": "xpect",
-      "rule": "An attribute must be typed by attribute definitions (SysML 7.6 validateAttributeUsageIsReferential; pilot AttributeUsage_invalid.sysml.xt).",
+      "rule": "An attribute must be typed by attribute definitions (SysML 7.6 validateAttributeUsageType; pilot AttributeUsage_invalid.sysml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -995,7 +1516,7 @@
     {
       "path": "xpect/p16-part-typed-by-attribute-def.sysml",
       "source": "xpect",
-      "rule": "An occurrence, item or part must be typed by occurrence definitions (SysML 7.9 validatePartUsage; pilot PartUsage_invalid.sysml.xt).",
+      "rule": "An occurrence, item or part must be typed by occurrence definitions (SysML 7.9 validateOccurrenceUsageType; pilot PartUsage_invalid.sysml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1013,7 +1534,7 @@
     {
       "path": "xpect/p18-enum-two-types.sysml",
       "source": "xpect",
-      "rule": "An enumeration must be typed by one enumeration definition (SysML 7.7 validateEnumerationUsage; pilot EnumerationUsage_invalid.sysml.xt).",
+      "rule": "An enumeration must be typed by one enumeration definition (SysML 7.7 validateEnumerationUsageType; pilot EnumerationUsage_invalid.sysml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1022,7 +1543,7 @@
     {
       "path": "xpect/p19-parallel-state-with-transition.sysml",
       "source": "xpect",
-      "rule": "A parallel state cannot have successions or transitions (SysML 7.16 validateStateUsageParallel; pilot StateUsage_invalid.sysml.xt).",
+      "rule": "A parallel state cannot have successions or transitions (SysML 7.16 validateStateDefinitionParallelSubactions; pilot StateUsage_invalid.sysml.xt).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1085,7 +1606,7 @@
     {
       "path": "xpect/p26-port-def-nonreferential-usage.sysml",
       "source": "xpect",
-      "rule": "Owned usages of a port definition (other than ports) must be referential (SysML 7.13 validatePortDefinitionOwnedUsages; pilot PortUsage_Invalid.sysml.xt:33).",
+      "rule": "Owned usages of a port definition (other than ports) must be referential (SysML 7.13 validatePortDefinitionOwnedUsagesNotComposite; pilot PortUsage_Invalid.sysml.xt:33).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1094,7 +1615,7 @@
     {
       "path": "xpect/p27-interface-end-not-port.sysml",
       "source": "xpect",
-      "rule": "An interface end must be a port (SysML 7.13 validateInterfaceUsageEnds; pilot InterfaceUsage_Invalid.sysml.xt:63).",
+      "rule": "An interface end must be a port (SysML 7.13 validateInterfaceUsageEnd; pilot InterfaceUsage_Invalid.sysml.xt:63).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1112,7 +1633,7 @@
     {
       "path": "xpect/p29-verify-outside-objective.sysml",
       "source": "xpect",
-      "rule": "A requirement verification must be in the objective of a verification case (SysML 7.21 validateRequirementVerificationMembership; pilot Verification_invalid.sysml.xt:30).",
+      "rule": "A requirement verification must be in the objective of a verification case (SysML 7.21 validateRequirementVerificationMembershipOwningType; pilot Verification_invalid.sysml.xt:30).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1121,7 +1642,7 @@
     {
       "path": "xpect/p30-two-view-renderings.sysml",
       "source": "xpect",
-      "rule": "A view may have at most one view rendering (SysML 7.23 validateViewUsageRendering; pilot ViewRendering_invalid.sysml.xt:31).",
+      "rule": "A view may have at most one view rendering (SysML 7.23 validateViewUsageOnlyOneRendering; pilot ViewRendering_invalid.sysml.xt:31).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1148,7 +1669,7 @@
     {
       "path": "xpect/p33-individual-typed-by-plain-def.sysml",
       "source": "xpect",
-      "rule": "An individual must be typed by one individual definition (SysML 7.9 validateOccurrenceUsageIndividualDefinition; pilot IndividualUsage_Invalid.sysml.xt:39).",
+      "rule": "An individual must be typed by one individual definition (SysML 7.9 validateOccurrenceUsageIndividualUsage; pilot IndividualUsage_Invalid.sysml.xt:39).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1157,7 +1678,7 @@
     {
       "path": "xpect/p34-accepter-source-not-state.sysml",
       "source": "xpect",
-      "rule": "A transition with an accepter must have a state as its source (SysML 7.16 validateTransitionUsageAccepter; pilot TransitionUsage_invalid.sysml.xt:54).",
+      "rule": "A transition with an accepter must have a state as its source (SysML 7.16 States; pilot validateTransitionUsageTriggerActions, TransitionUsage_invalid.sysml.xt:54).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1196,9 +1717,9 @@
       }
     ],
     "totals": {
-      "cases": 120,
-      "bothReject": 120,
-      "pilotOnlyRejects": 0,
+      "cases": 173,
+      "bothReject": 164,
+      "pilotOnlyRejects": 9,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
