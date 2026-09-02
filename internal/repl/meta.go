@@ -149,7 +149,7 @@ var metaCommandTable = []metaCommand{
 
 	{group: groupRuntime, name: "%instantiate", args: argName, desc: "create an instance of a part def"},
 	{group: groupRuntime, name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
-	{group: groupRuntime, name: "%features", args: argName, desc: "show an object's features and their values"},
+	{group: groupRuntime, name: "%features", args: argName, desc: "show an object's feature values and what its behaviors are doing"},
 	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
 	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
 
@@ -1103,11 +1103,18 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 	}
 
 	var lines []string
+	var behaviors []*runtime.EffectiveFeature
 	for i := range features {
 		if w.budget <= 0 {
 			return truncated(lines, "")
 		}
 		feat := &features[i]
+		// A state or action holds no value either; what it has is a run, or none,
+		// which is listed under its own heading after the values.
+		if isBehaviorFeature(feat) {
+			behaviors = append(behaviors, feat)
+			continue
+		}
 		// A constraint or requirement the part carries has no value; what it has
 		// is a verdict about this instance, which is the useful thing to show.
 		if verdict, ok := featureVerdict(w.ctx, feat, inst); ok {
@@ -1134,7 +1141,90 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 			delete(w.onPath, nested.Type)
 		}
 	}
-	return append(lines, connectors...)
+	if w.budget <= 0 && len(behaviors) > 0 {
+		return truncated(lines, "")
+	}
+	return append(append(lines, w.behaviorLines(inst, behaviors, indent, depth)...), connectors...)
+}
+
+// isBehaviorFeature reports whether a feature is a state or action usage: a
+// behavior the object may run rather than a value it holds.
+func isBehaviorFeature(feat *runtime.EffectiveFeature) bool {
+	if feat.Symbol == nil {
+		return false
+	}
+	switch feat.Symbol.Kind {
+	case symbols.SymbolStateUsage, symbols.SymbolActionUsage:
+		return true
+	default:
+		return false
+	}
+}
+
+// behaviorLines lists the behaviors an object's type declares under a heading
+// of their own, reporting what each is doing: the active state of a machine the
+// object exhibits, the execution state of an action it performs, or that the
+// object runs no such behavior. The listed object's heading is a sibling of
+// "Features:"; a nested object's sits under its row.
+func (w *featureValueWalk) behaviorLines(inst *runtime.Instance, behaviors []*runtime.EffectiveFeature, indent string, depth int) []string {
+	if len(behaviors) == 0 {
+		return nil
+	}
+	heading, rowIndent := indent+"Behaviors:", indent+"  "
+	if depth == 0 {
+		heading, rowIndent = "Behaviors:", indent
+	}
+	lines := w.emit(nil, heading)
+	for _, feat := range behaviors {
+		if w.budget <= 0 {
+			return append(lines, rowIndent+"… (listing truncated)")
+		}
+		lines = w.emit(lines, fmt.Sprintf("%s%s: %s", rowIndent, feat.Name, behaviorStatus(inst, feat)))
+	}
+	return lines
+}
+
+// behaviorStatus describes what an object is doing with a behavior its type
+// declares. An exhibited machine's active state is rendered as %current renders
+// it, so the two agree.
+func behaviorStatus(inst *runtime.Instance, feat *runtime.EffectiveFeature) string {
+	kind := "state"
+	if feat.Symbol.Kind == symbols.SymbolActionUsage {
+		kind = "action"
+	}
+	behavior, ok := inst.Behavior(feat.Name)
+	if !ok {
+		return kind + ", not running"
+	}
+	switch {
+	case behavior.State != nil:
+		return fmt.Sprintf("%s, %s", behavior.Kind, machineStatus(behavior.State))
+	case behavior.Action != nil:
+		return fmt.Sprintf("%s, %s", behavior.Kind, executionStatus(behavior.Action.State()))
+	default:
+		return kind + ", not running"
+	}
+}
+
+// machineStatus is where a state machine run stands: not started, completed, or
+// the configuration it is in.
+func machineStatus(exec *runtime.StateExecutor) string {
+	switch exec.State() {
+	case runtime.StateReady:
+		return "not started"
+	case runtime.StateCompleted:
+		return "completed"
+	default:
+		return "current state " + currentStateName(exec)
+	}
+}
+
+// executionStatus spells an execution state as a listing reads it.
+func executionStatus(state runtime.ExecutionState) string {
+	if state == runtime.StateReady {
+		return "not started"
+	}
+	return strings.ToLower(state.String())
 }
 
 // connectors lists the connectors the object owns that no feature names: an
