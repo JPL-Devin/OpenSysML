@@ -28,7 +28,7 @@ func (ResultExpressionPass) Run(ctx *Context, name string, root *ast.RootNamespa
 		return nil
 	}
 	c := &resultExpressionChecker{resolver: ctx.Resolver()}
-	w := &w8cWalker{ctx: ctx, seen: make(map[*symbols.Symbol]bool)}
+	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, c.check)
 	return c.diags
 }
