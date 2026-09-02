@@ -652,6 +652,20 @@ func TestGenerateAndCheck(t *testing.T) {
 	if stale, err := CheckOutputs(dir, outputs); err != nil || len(stale) != 0 {
 		t.Errorf("after recovery stale = %v, err = %v", stale, err)
 	}
+
+	// Leftover detection matches the directory name literally, even when it
+	// contains characters a glob would interpret.
+	odd := filepath.Join(t.TempDir(), "out[1]")
+	if err := WriteOutputs(odd, outputs); err != nil {
+		t.Fatal(err)
+	}
+	oddLeft := filepath.Join(filepath.Dir(odd), ".out[1]-staging-x")
+	if err := os.Mkdir(oddLeft, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteOutputs(odd, outputs); err == nil || !strings.Contains(err.Error(), oddLeft) {
+		t.Errorf("WriteOutputs beside leftover staging of %s = %v, want refusal naming %s", odd, err, oddLeft)
+	}
 }
 
 // TestCommittedModulesResolveOffline opens the committed root ontologies from

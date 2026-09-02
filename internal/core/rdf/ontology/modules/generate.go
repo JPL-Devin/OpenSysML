@@ -163,9 +163,15 @@ func WriteOutputs(dir string, outputs []Output) (err error) {
 		return err
 	}
 	prefix := "." + filepath.Base(dir) + "-staging-"
-	leftover, err := filepath.Glob(filepath.Join(filepath.Dir(dir), prefix+"*"))
+	siblings, err := os.ReadDir(filepath.Dir(dir))
 	if err != nil {
 		return err
+	}
+	var leftover []string
+	for _, s := range siblings {
+		if strings.HasPrefix(s.Name(), prefix) {
+			leftover = append(leftover, filepath.Join(filepath.Dir(dir), s.Name()))
+		}
 	}
 	if len(leftover) > 0 {
 		return fmt.Errorf("%s may hold a partially replaced tree: staging left by an earlier run at %s; restore its old/ files or remove it before regenerating", dir, strings.Join(leftover, ", "))
