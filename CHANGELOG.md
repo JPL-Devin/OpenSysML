@@ -61,6 +61,24 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   classed by the construct it names. The mapping's reference now states that measurement in place
   of the claim that a second conversion yields the same graph, which held for the fixtures alone
   ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
+- **Metadata annotations convert to RDF structurally, bodies and prefixes included.** The
+  encoder used to carry a `#Safety` prefix as the text it was written as and to refuse an
+  annotation with a body (`@Safety { level = 2; }`), the most common refusal across the corpus.
+  Every annotation — `@M;`, `@M { … }`, `metadata m : M about a, b;` and the prefix
+  `#M part def P;` — is now a `sysml:MetadataUsage` owned by the element it is written in or
+  ahead of, carrying its type, one `sysml:annotatedElement` per target, `sysx:hasBody`, the sigil
+  it was written with as `sysx:declaredKeyword` (`@`, `#`, or none for `metadata`) and its
+  body's members as owned members with their `sysml:value` expression trees, so the notation is
+  written back from the graph alone, without `sysx:sourceText`. `sysx:prefixMetadata` is gone.
+  Of the 18 files refused for this reason, 16 now convert and 13 of those come back as an equal
+  graph without `sysx:sourceText`; the other three run into older gaps the refusal had hidden
+  (an `isEnd` and an `isNamespaceImport` flag the writer drops, an invocation expression it
+  refuses), and the remaining two fall to an older refusal, an unnamed `feature` or `event`
+  declaration. The parser now reads
+  `metadata M about x;` as typed by `M` and unnamed, as the grammar's
+  `MetadataUsageDeclaration` requires, rather than naming the usage `M` — which had made the
+  training corpus's `Metadata Example-1.sysml` a duplicate declaration under conversion
+  ([docs/reference/rdf-mapping.md](docs/reference/rdf-mapping.md)).
 
 ### Performance
 

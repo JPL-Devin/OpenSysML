@@ -47,7 +47,7 @@ Each file gets exactly one of:
 | `graph-diff` | The triple sets differ beyond `sysx:sourceText` whitespace: hop 2 gained, lost or changed a triple. |
 | `unwritable` | Hop 1 succeeded but Turtle → notation was refused. |
 | `unparseable` | The notation written back was refused on its way to Turtle again. |
-| `refused:<class>` | Notation → Turtle was refused on the first hop. `<class>` is the kind of construct the refusal names (`feature-declaration`, `prefix-metadata`, `succession`, `operator-expr`, `duplicate-declaration`, …), derived from `export.UnsupportedError.What` with its location and identifiers removed so the class is the same wherever in the file the construct sits; `syntax` for source that does not parse; `error` for anything else. |
+| `refused:<class>` | Notation → Turtle was refused on the first hop. `<class>` is the kind of construct the refusal names (`feature-declaration`, `event-declaration`, `succession`, `operator-expr`, `duplicate-declaration`, …), derived from `export.UnsupportedError.What` with its location and identifiers removed so the class is the same wherever in the file the construct sits; `syntax` for source that does not parse; `error` for anything else. |
 
 The comparison is over triple sets, not bytes, so the order in which triples are written is never
 a difference, and only `sysx:sourceText` is normalised: whitespace anywhere else, a datatype, a
@@ -59,20 +59,26 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 166 |
-| `whitespace-only` | 71 |
-| `graph-diff` | 14 |
-| `unwritable` | 15 |
+| `stable` | 176 |
+| `whitespace-only` | 75 |
+| `graph-diff` | 16 |
+| `unwritable` | 16 |
 | `unparseable` | 2 |
-| `refused` | 77 |
+| `refused` | 60 |
 | **total** | **345** |
 
-So 268 of 345 files convert to Turtle, and of those 237 come back as the same graph (166 exactly,
-71 up to `sysx:sourceText` whitespace). The refusals by class: 19 `feature-declaration`,
-18 `prefix-metadata`, 9 `event-declaration`, 7 `succession`, 6 `operator-expr`,
-4 `duplicate-declaration`, 3 each of `snapshot-declaration`, `invocation-expr` and
-`assert-declaration`, 2 `feature-chain-expr`, and 1 each of `timeslice-declaration`,
-`feature-reference` and `constructor-expr`.
+So 285 of 345 files convert to Turtle, and of those 251 come back as the same graph (176 exactly,
+75 up to `sysx:sourceText` whitespace). The refusals by class: 20 `feature-declaration`,
+10 `event-declaration`, 7 `succession`, 6 `operator-expr`, 3 each of `duplicate-declaration`,
+`snapshot-declaration`, `invocation-expr` and `assert-declaration`, 2 `feature-chain-expr`, and
+1 each of `timeslice-declaration`, `feature-reference` and `constructor-expr`.
+
+The gate's first record, before metadata annotations were carried structurally, had 268 files
+converting and 77 refused, 18 of them `prefix-metadata`; of those 18, 16 now convert (10 `stable`,
+3 `whitespace-only`, 2 `graph-diff`, 1 `unwritable`) and 2 fall to the `feature-declaration` and
+`event-declaration` refusals the metadata refusal had hidden. A 19th file, refused as a
+`duplicate-declaration` because the parser had read `metadata M about x;` as a usage *named* `M`,
+converts (`whitespace-only`) now that it is read as typed by `M`.
 
 ## Policy
 

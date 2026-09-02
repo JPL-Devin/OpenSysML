@@ -187,7 +187,8 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   inside the model and as plain literals where it does not: `sysml:type`
   (the `:` clause), `specializes`, `subsets`, `redefines`, `references`,
   `crosses`, `disjointFrom`, `intersects`, `inverseOf`, `unions`, `chains`,
-  `includes`, `via`, `annotates`, `subject`. A literal carries the name itself,
+  `includes`, `via`, `subject`, and `annotatedElement` for an `about` clause. A
+  literal carries the name itself,
   without the quotes an unrestricted name is written with; a target that is an
   expression rather than a name (a feature chain, say) is carried as the text it
   was written as, typed `sysx:Expression` to tell the two apart.
@@ -197,6 +198,20 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
 - `sysml:importedNamespace`, `sysml:aliasedElement`, `sysml:client`,
   `sysml:supplier`, `sysml:body`, `sysml:language`, `sysml:locale`,
   `sysml:annotatedElement`
+- A metadata annotation — `@Safety;`, `@Safety { level = 2; }`, `metadata m :
+  Safety about a, b;` or the prefix `#Safety part def P;` — is a
+  `sysml:MetadataUsage` owned by the element it is written in or ahead of,
+  through an `OwningMembership` (never a `FeatureMembership`: the annotation is
+  not a feature of what it annotates). It carries `sysml:type` for its metadata
+  definition, one `sysml:annotatedElement` per `about` target, `sysx:hasBody`,
+  and `sysx:declaredKeyword` `"@"` or `"#"` for the sigil it was written with
+  (`metadata` is the absence of both). The body's members are its owned members
+  like any other body's: a value binding (`level = 2;`) is a `sysml:ReferenceUsage`
+  carrying `sysml:value`, a redefinition (`:>> level = 3;`) carries
+  `sysml:redefines`, a nested feature keeps its own kind, and `sysx:memberIndex`
+  orders them. A `#` prefix is an owned member of the declaration it prefixes,
+  indexed after the body's members so their indices are the same with or without
+  it, and is written back at the head of that declaration rather than in its body.
 
 The `sysx:` properties:
 
@@ -205,13 +220,12 @@ The `sysx:` properties:
 | `sysx:memberIndex` | Declaration order. The notation is sensitive to the order of members; an RDF graph is an unordered set, so the index is what lets a conversion back to notation reproduce the original sequence. |
 | `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. |
 | `sysx:sourceText` | The verbatim source of the constructs described under *Limitations*. |
-| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
+| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly), and the sigil a metadata annotation was written with: `@` for a member (`@Safety;`), `#` for a prefix ahead of a declaration (`#Safety part def P;`), absent for the `metadata` keyword. |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
 | `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
 | `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member). The end is the element itself rather than a name, since there is none to write. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
-| `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
 | `sysx:declaredId` | The element's id came from an explicit `@IdentityMetadata::ElementId` annotation, see [Element identity](#element-identity). |
 | `sysx:projectId`, `sysx:branch`, `sysx:org` | The `@IdentityMetadata::ProjectRef` provenance of a scope root, see [Element identity](#element-identity). |
 | `sysx:isKindImplicit` | The declaration wrote no kind keyword (`in x : Real;`), which takes its kind from its owner. Without it the canonical keyword would come back written out, declaring what the author did not. A kind named in a comment in the head (`in /* attribute */ x : Real;`) is trivia, not a keyword the declaration wrote. |
@@ -428,8 +442,7 @@ What is still refused, naming the node:
   only when both ends are basic names, so `succession first 'enter vehicle'
   then 'drive vehicle';` would not parse. The edge is reported rather than
   written.
-- **Prefix metadata** (`#Safety part p;`, `@M { … }`) and an **operator
-  expression member**, both unchanged from before.
+- An **operator expression member**, unchanged from before.
 
 ## Limitations
 
@@ -592,14 +605,18 @@ the canonical `occurrence` would be a different declaration. It is reported
 instead. `perform a : A;` does convert: the `perform` is kept as the keyword it
 was written with.
 
-**A metadata annotation is carried as the notation it was written as**
-(`sysx:prefixMetadata "#Safety"`), read from the source because the AST records
-no span for the annotation itself. Two shapes are reported rather than written
-back: an annotation carrying a body of its own (`@M { isSet = true; }`), which
-the vocabulary has no properties for, and an `@` annotation ahead of a
-definition (`@Safety part def Car;`), which the parser records on the
-declaration *before* the one it prefixes, so writing it back would annotate a
-different element.
+**A metadata annotation is carried structurally**, as described under [What
+each element carries](#what-each-element-carries): its type, its `about`
+targets, the sigil it was written with and its body's members as owned members
+with their `sysml:value` expression trees, so `@Safety { level = 2; }` and
+`#Safety part def Car;` come back from the graph alone. Two shapes are reported
+rather than written, and only a graph from another tool can state them: a `#`
+prefix carrying a name, an `about` clause or a body (the grammar's
+`PrefixMetadataUsage` is the type alone, so the parser never produces one), and
+a `#` prefix owned by an element whose head has no prefix position (a state's
+`entry` action, say). `@Safety part def Car;` is not a prefix in the grammar —
+`@` introduces a member of its own, so the parser reports the missing `;` or
+`{` after `@Safety` — and it is refused at the parser, before conversion.
 
 **A name declared twice in one namespace is refused.** An element's derived id
 is the encoding of its qualified name, so `part def A; part def A;` in one

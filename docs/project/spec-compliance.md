@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 814 semantic rules: **725 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 815 semantic rules: **726 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -1542,7 +1542,7 @@ expression nodes an expression-valued position holds to `expr:` =
 `hasBody` and `sourceText` carry order, body presence and verbatim heads,
 `operator`, `argumentIndex`, `relatedFeature`, `endIndex` and `endRole` carry an
 expression's shape and a binding head's ends,
-`prefixMetadata`, `filter`, `isNamespaceImport`, `isRecursive` and `isExpose`
+`filter`, `isNamespaceImport`, `isRecursive` and `isExpose`
 carry notation the metamodel has no property for, and the behavioral properties
 (`guard`, `expression`, `payload`, `subactionKind`, …) carry the parts of a
 behavioral node the metamodel has no predicate for.

@@ -56,7 +56,7 @@ refused:duplicate-declaration	pilot-corpora/kerml-examples/Named Collection Memb
 refused:feature-declaration	pilot-corpora/kerml-examples/Packet Example/PacketUsage.kerml
 refused:feature-declaration	pilot-corpora/kerml-examples/Packet Example/Packets.kerml
 refused:duplicate-declaration	pilot-corpora/kerml-examples/Simple Tests/ArgumentResolution.kerml
-refused:prefix-metadata	pilot-corpora/kerml-examples/Simple Tests/Associations.kerml
+stable	pilot-corpora/kerml-examples/Simple Tests/Associations.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Behaviors.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Circular.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Classes.kerml
@@ -71,7 +71,7 @@ refused:operator-expr	pilot-corpora/kerml-examples/Simple Tests/Expressions.kerm
 unparseable	pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/FeatureInheritance.kerml
 whitespace-only	pilot-corpora/kerml-examples/Simple Tests/Features.kerml
-refused:prefix-metadata	pilot-corpora/kerml-examples/Simple Tests/Filtering.kerml
+refused:feature-declaration	pilot-corpora/kerml-examples/Simple Tests/Filtering.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Imports.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Inheritance.kerml
 whitespace-only	pilot-corpora/kerml-examples/Simple Tests/Inverses.kerml
@@ -88,7 +88,7 @@ refused:feature-declaration	pilot-corpora/kerml-examples/Variable Feature Exampl
 refused:feature-declaration	pilot-corpora/kerml-examples/Variable Feature Examples/TimeVaryingFeatures.kerml
 stable	pilot-corpora/kerml-examples/Vehicle Example/VehicleDefinitions.kerml
 graph-diff	pilot-corpora/kerml-examples/Vehicle Example/VehicleUsages.kerml
-refused:prefix-metadata	pilot-corpora/sysml-examples/Analysis Examples/AnalysisAnnotation.sysml
+stable	pilot-corpora/sysml-examples/Analysis Examples/AnalysisAnnotation.sysml
 whitespace-only	pilot-corpora/sysml-examples/Analysis Examples/Dynamics.sysml
 refused:operator-expr	pilot-corpora/sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml
 whitespace-only	pilot-corpora/sysml-examples/Analysis Examples/Vehicle Analysis Demo.sysml
@@ -128,9 +128,9 @@ stable	pilot-corpora/sysml-examples/Mass Roll-up Example/MassRollup.sysml
 stable	pilot-corpora/sysml-examples/Mass Roll-up Example/Vehicles.sysml
 whitespace-only	pilot-corpora/sysml-examples/Metadata Examples/IssueMetadataExample.sysml
 stable	pilot-corpora/sysml-examples/Metadata Examples/RationaleMetadataExample.sysml
-refused:prefix-metadata	pilot-corpora/sysml-examples/Metadata Examples/RequirementMetadataExample.sysml
-refused:prefix-metadata	pilot-corpora/sysml-examples/Metadata Examples/RiskMetadataExample.sysml
-refused:prefix-metadata	pilot-corpora/sysml-examples/Metadata Examples/VerificationMetadataExample.sysml
+stable	pilot-corpora/sysml-examples/Metadata Examples/RequirementMetadataExample.sysml
+stable	pilot-corpora/sysml-examples/Metadata Examples/RiskMetadataExample.sysml
+stable	pilot-corpora/sysml-examples/Metadata Examples/VerificationMetadataExample.sysml
 stable	pilot-corpora/sysml-examples/Packet Example/PacketUsage.sysml
 graph-diff	pilot-corpora/sysml-examples/Packet Example/Packets.sysml
 stable	pilot-corpora/sysml-examples/Requirements Examples/HSUVRequirements.sysml
@@ -145,7 +145,7 @@ refused:feature-reference	pilot-corpora/sysml-examples/Simple Tests/AssignmentTe
 stable	pilot-corpora/sysml-examples/Simple Tests/CalculationTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/CommentTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/ConjugationTest.sysml
-refused:prefix-metadata	pilot-corpora/sysml-examples/Simple Tests/ConnectionTest.sysml
+graph-diff	pilot-corpora/sysml-examples/Simple Tests/ConnectionTest.sysml
 refused:assert-declaration	pilot-corpora/sysml-examples/Simple Tests/ConstraintTest.sysml
 unwritable	pilot-corpora/sysml-examples/Simple Tests/ControlNodeTest.sysml
 refused:succession	pilot-corpora/sysml-examples/Simple Tests/DecisionTest.sysml
@@ -157,7 +157,7 @@ graph-diff	pilot-corpora/sysml-examples/Simple Tests/ImportTest.sysml
 whitespace-only	pilot-corpora/sysml-examples/Simple Tests/IndividualTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/InterfaceTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/ItemTest.sysml
-refused:prefix-metadata	pilot-corpora/sysml-examples/Simple Tests/MetadataTest.sysml
+whitespace-only	pilot-corpora/sysml-examples/Simple Tests/MetadataTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/MultiplicityTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/OccurrenceTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/ParameterTest.sysml
@@ -177,8 +177,8 @@ whitespace-only	pilot-corpora/sysml-examples/State Space Representation Examples
 whitespace-only	pilot-corpora/sysml-examples/State Space Representation Examples/EVSample1.sysml
 refused:timeslice-declaration	pilot-corpora/sysml-examples/Timeslice and Snapshot Examples/TimeVaryingAttribute.sysml
 whitespace-only	pilot-corpora/sysml-examples/Variability Examples/VehicleVariabilityModel.sysml
-refused:prefix-metadata	pilot-corpora/sysml-examples/Vehicle Example/Annex_A_VehicleViews.sysml
-refused:prefix-metadata	pilot-corpora/sysml-examples/Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml
+unwritable	pilot-corpora/sysml-examples/Vehicle Example/Annex_A_VehicleViews.sysml
+refused:event-declaration	pilot-corpora/sysml-examples/Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml
 stable	pilot-corpora/sysml-examples/Vehicle Example/VehicleDefinitions.sysml
 refused:snapshot-declaration	pilot-corpora/sysml-examples/Vehicle Example/VehicleIndividuals.sysml
 whitespace-only	pilot-corpora/sysml-examples/Vehicle Example/VehicleUsages.sysml
@@ -215,17 +215,17 @@ whitespace-only	pilot-corpora/sysml-validation/10-Analysis and Trades/10b-Trade-
 refused:succession	pilot-corpora/sysml-validation/10-Analysis and Trades/10c-Fuel Economy Analysis.sysml
 stable	pilot-corpora/sysml-validation/10-Analysis and Trades/10d-Dynamics Analysis.sysml
 stable	pilot-corpora/sysml-validation/11-View and Viewpoint/11a-View-Viewpoint.sysml
-refused:prefix-metadata	pilot-corpora/sysml-validation/11-View and Viewpoint/11b-Safety and Security Feature Views.sysml
+graph-diff	pilot-corpora/sysml-validation/11-View and Viewpoint/11b-Safety and Security Feature Views.sysml
 stable	pilot-corpora/sysml-validation/12-Dependency Relationships/12a-Dependency.sysml
 whitespace-only	pilot-corpora/sysml-validation/12-Dependency Relationships/12b-Allocation-1.sysml
 whitespace-only	pilot-corpora/sysml-validation/12-Dependency Relationships/12b-Allocation.sysml
 stable	pilot-corpora/sysml-validation/13-Model Containment/13a-Model Containment.sysml
-refused:prefix-metadata	pilot-corpora/sysml-validation/13-Model Containment/13b-Safety and Security Features Element Group-1.sysml
-refused:prefix-metadata	pilot-corpora/sysml-validation/13-Model Containment/13b-Safety and Security Features Element Group-2.sysml
+stable	pilot-corpora/sysml-validation/13-Model Containment/13b-Safety and Security Features Element Group-1.sysml
+stable	pilot-corpora/sysml-validation/13-Model Containment/13b-Safety and Security Features Element Group-2.sysml
 stable	pilot-corpora/sysml-validation/13-Model Containment/13b-Safety and Security Features Element Group.sysml
-refused:prefix-metadata	pilot-corpora/sysml-validation/14-Language Extensions/14a-Language Extensions.sysml
+whitespace-only	pilot-corpora/sysml-validation/14-Language Extensions/14a-Language Extensions.sysml
 stable	pilot-corpora/sysml-validation/14-Language Extensions/14b-Language Extensions.sysml
-refused:prefix-metadata	pilot-corpora/sysml-validation/14-Language Extensions/14c-Language Extensions.sysml
+whitespace-only	pilot-corpora/sysml-validation/14-Language Extensions/14c-Language Extensions.sysml
 stable	pilot-corpora/sysml-validation/15-Properties-Values-Expressions/15_01-Constants.sysml
 stable	pilot-corpora/sysml-validation/15-Properties-Values-Expressions/15_02-Basic Value Properties.sysml
 stable	pilot-corpora/sysml-validation/15-Properties-Values-Expressions/15_03-Value Expression.sysml
@@ -348,10 +348,10 @@ whitespace-only	sysml-v2-training/36. Variability/Variation Usages.sysml
 stable	sysml-v2-training/37. Dependencies/Dependency Example.sysml
 stable	sysml-v2-training/38. Allocation/Allocation Definition Example.sysml
 whitespace-only	sysml-v2-training/38. Allocation/Allocation Usage Example.sysml
-refused:duplicate-declaration	sysml-v2-training/39. Metadata/Metadata Example-1.sysml
-refused:prefix-metadata	sysml-v2-training/39. Metadata/Metadata Example-2.sysml
-refused:prefix-metadata	sysml-v2-training/40. Filtering/Filtering Example-1.sysml
-refused:prefix-metadata	sysml-v2-training/40. Filtering/Filtering Example-2.sysml
+whitespace-only	sysml-v2-training/39. Metadata/Metadata Example-1.sysml
+stable	sysml-v2-training/39. Metadata/Metadata Example-2.sysml
+stable	sysml-v2-training/40. Filtering/Filtering Example-1.sysml
+stable	sysml-v2-training/40. Filtering/Filtering Example-2.sysml
 whitespace-only	sysml-v2-training/41. Language Extension/Model Library Example.sysml
 stable	sysml-v2-training/41. Language Extension/Semantic Metadata Example.sysml
 stable	sysml-v2-training/41. Language Extension/User Keyword Example.sysml
