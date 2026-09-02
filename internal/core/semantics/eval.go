@@ -45,6 +45,22 @@ type Value struct {
 // IsNumeric reports whether the value is an integer or a real.
 func (v Value) IsNumeric() bool { return v.Kind == ValInt || v.Kind == ValReal }
 
+// WholeNumber returns the value as an Integer when it is one: an integer, or a
+// finite real with no fractional part within the Integer range (4 / 2 is 2.0).
+func (v Value) WholeNumber() (int64, bool) {
+	switch v.Kind {
+	case ValInt:
+		return v.Int, true
+	case ValReal:
+		// MaxInt64 has no float64; 2^63 is the next value up and is out of range.
+		if v.Real != math.Trunc(v.Real) || v.Real >= -float64(math.MinInt64) || v.Real < math.MinInt64 {
+			return 0, false
+		}
+		return int64(v.Real), true
+	}
+	return 0, false
+}
+
 // asReal returns the value as a float64 (int and real only).
 func (v Value) asReal() float64 {
 	if v.Kind == ValInt {

@@ -72,9 +72,8 @@ func TestExprBindFeatureReferenceRespectsDeclaredType(t *testing.T) {
 	}`, "cannot bind Real value to a feature typed by String")
 }
 
-// A type only bounds the values an expression may yield, so a feature typed
-// narrower than the expression is not refused: the Real `w` may hold a whole
-// number, and whether it does is known when the value is bound.
+// A type only bounds an expression's values, so a narrower-typed feature is not
+// refused: the Real `w` may hold a whole number, known when the value is bound.
 func TestExprBindWiderTypedReferenceToNarrowerFeatureOK(t *testing.T) {
 	wantNoDiags(t, `package P {
 		attribute w : ScalarValues::Real = 1.5;
@@ -127,8 +126,7 @@ func TestExprWholeNumberDivisionAndPowerOK(t *testing.T) {
 }
 
 // A quotient is typed Rational, but a Rational may be whole, so a whole-number
-// feature does not refuse it: which values the quotient takes is known when it
-// is evaluated, not from its type. A quotient of decimals is no different.
+// feature does not refuse it; its value is known at evaluation, not from its type.
 func TestExprQuotientMayBindToWholeNumberFeature(t *testing.T) {
 	wantNoDiags(t, `package P {
 	attribute i : ScalarValues::Integer = -7;

@@ -202,6 +202,18 @@ func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, e
 	return ec.Eval(node)
 }
 
+// EvalDeclaredValue evaluates the value a usage declaration binds, as a read of
+// the declaration does: in its own scope, and answering to its declared type.
+func (ctx *Context) EvalDeclaredValue(sym *symbols.Symbol) (Value, error) {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value == nil {
+		return Value{}, fmt.Errorf("%w: %s", ErrNoValue, ctx.qualifiedSymbolName(sym))
+	}
+	defer ctx.beginRun()()
+
+	return NewEvalContext(ctx, sym.OwnerScope).declaredValue(sym, usage)
+}
+
 // EvalWithScopeOn evaluates an expression against a concrete instance, so a
 // feature it names reads that object's feature value. It brackets one run, as
 // EvalWithScope does, which is what bounds the evaluation by the step budget.
@@ -291,12 +303,9 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 							ec.resolving = map[string]bool{}
 						}
 						ec.resolving[name] = true
-						val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
+						val, err := ec.declaredValue(sym, usage)
 						delete(ec.resolving, name)
-						if err != nil {
-							return Value{}, err
-						}
-						return ec.bindVariationOf(sym, val)
+						return val, err
 					}
 					return Value{}, &NoValueError{Feature: name}
 				}
@@ -378,12 +387,9 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 						ec.resolving = map[string]bool{}
 					}
 					ec.resolving[name] = true
-					val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
+					val, err := ec.declaredValue(sym, usage)
 					delete(ec.resolving, name)
-					if err != nil {
-						return Value{}, err
-					}
-					return ec.bindVariationOf(sym, val)
+					return val, err
 				}
 				// A variation holds nothing until it is bound, whether it is read
 				// through an object or through its declaration.
@@ -473,13 +479,7 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 			return ec.enumLiteralValue(currentSym)
 		}
 		if decl.Value != nil {
-			// The value is evaluated in the scope it was declared in, so the units,
-			// enumerations and imports in force there answer the names it uses.
-			val, err := ec.evalIn(currentSym.OwnerScope).Eval(decl.Value)
-			if err != nil {
-				return Value{}, err
-			}
-			return ec.bindVariationOf(currentSym, val)
+			return ec.declaredValue(currentSym, decl)
 		}
 		if ec.ctx.model.IsVariationFeature(currentSym) {
 			return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, qualifiedNameToString(qn))
@@ -504,6 +504,20 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 	default:
 		return Value{}, fmt.Errorf("cannot evaluate element type %T", decl)
 	}
+}
+
+// declaredValue evaluates the value a declaration binds in the scope it was written
+// in (its units and imports answer its names); the value answers to the declared type.
+func (ec *EvalContext) declaredValue(sym *symbols.Symbol, usage *ast.Usage) (Value, error) {
+	val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
+	if err != nil {
+		return Value{}, err
+	}
+	what := fmt.Sprintf("feature value %s", ec.ctx.qualifiedSymbolName(sym))
+	if err := ec.ctx.checkWriteType(sym.OwnerScope, what, ec.ctx.extractType(sym), val); err != nil {
+		return Value{}, err
+	}
+	return ec.bindVariationOf(sym, val)
 }
 
 // occurrenceReference evaluates a name denoting one object — an occurrence or a

@@ -202,14 +202,16 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error
 			Materialized: false,
 		}
 
-		// Fold constant defaults eagerly. A default that is not constant may read
-		// sibling feature values of this very instance, so it is left to GetFeatureValue, which
-		// evaluates it against the finished instance.
+		// Fold constant defaults the feature admits eagerly; a default that is not constant
+		// may read sibling feature values, so GetFeatureValue evaluates (and reports) it.
 		if ctx.valueBinds(feat) && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) &&
 			ctx.restatedInValuedBody(feat) == "" {
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
-				fv.Value = Value{Kind: ValConst, Const: semVal}
-				fv.Materialized = true
+				val := Value{Kind: ValConst, Const: semVal}
+				if ctx.checkDefault(inst, fv, feat.Name, val) == nil {
+					fv.Value = val
+					fv.Materialized = true
+				}
 			}
 		}
 
@@ -319,19 +321,15 @@ func isScalarFeature(feat *EffectiveFeature) bool {
 	return !feat.Multiplicity.Upper.Infinite && feat.Multiplicity.Upper.Value <= 1
 }
 
-// checkDefaultCount reports a default whose element count does not conform to
-// the multiplicity governing the feature, which is the assumed 1..1 for a
-// feature that declares none. A conforming default is merged as written; a
-// non-conforming one is neither broadcast nor padded, since that would invent
-// values the model does not state. The count of an expression's result is only
-// known here, so this is where such a default is reported; a count the type tier
-// can see statically is reported there (passes.checkValueCount).
-func (ctx *Context) checkDefaultCount(inst *Instance, fv *FeatureValue, name string, val Value) error {
+// checkDefault reports a value the feature does not admit: a count outside its
+// multiplicity (1..1 when none is declared) or an element outside its type.
+func (ctx *Context) checkDefault(inst *Instance, fv *FeatureValue, name string, val Value) error {
+	what := fmt.Sprintf("feature value %s.%s", inst.Type.Name, name)
 	count := int64(len(elementsOf(val)))
 	if msg := fv.Feature.Multiplicity.CountViolation(count); msg != "" {
-		return fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, msg)
+		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
-	return nil
+	return ctx.checkWriteType(fv.Feature.DeclScope(), what, fv.Feature.Type, val)
 }
 
 // GetFeatureValue retrieves the feature value for the named feature, materializing it lazily
@@ -360,13 +358,9 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	if !ok {
 		return fmt.Errorf("feature %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
 	}
-	if err := ctx.checkDefaultCount(inst, fv, name, value); err != nil {
-		return err
-	}
-	// Checked before the write, so a value the feature's type does not admit
-	// leaves it holding what it held.
-	if err := ctx.checkWriteType(fv.Feature.DeclScope(),
-		fmt.Sprintf("feature value %s.%s", inst.Type.Name, name), fv.Feature.Type, value); err != nil {
+	// Checked before the write, so a value the feature does not admit leaves it
+	// holding what it held.
+	if err := ctx.checkDefault(inst, fv, name, value); err != nil {
 		return err
 	}
 	if isScalarFeature(fv.Feature) {
@@ -447,13 +441,13 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 	// A default that did not constant-fold is a derived value: evaluate it
 	// against this instance, so that it sees the sibling feature values it refers to.
 	// The feature holds what the default states, once that conforms to the
-	// feature's multiplicity.
+	// feature's multiplicity and type.
 	if ctx.valueBinds(fv.Feature) {
 		val, err := ctx.evalFeatureValueDefault(inst, fv, name)
 		if err != nil {
 			return nil, err
 		}
-		if err := ctx.checkDefaultCount(inst, fv, name, val); err != nil {
+		if err := ctx.checkDefault(inst, fv, name, val); err != nil {
 			return nil, err
 		}
 		if isScalarFeature(fv.Feature) {

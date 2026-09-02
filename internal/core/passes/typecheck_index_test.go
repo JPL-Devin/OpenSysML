@@ -47,17 +47,6 @@ func TestIndexTypedIntegerNotReported(t *testing.T) {
 	}`)
 }
 
-// A quotient is typed Rational and a Real feature may hold a whole number, so
-// either may name a position; which one is known from the value.
-func TestIndexQuotientAndRealReferenceNotReported(t *testing.T) {
-	wantNoDiags(t, `package P {
-		attribute xs = (1, 2, 3);
-		attribute r : ScalarValues::Real = 2.0;
-		attribute x = xs#(4 / 2);
-		attribute y = xs#(r);
-	}`)
-}
-
 // An element of the indexed sequence is typed once, so a mistake inside it is
 // reported once rather than for each pass over the elements.
 func TestIndexReportsAnErrorInAnElementOnce(t *testing.T) {

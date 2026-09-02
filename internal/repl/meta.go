@@ -726,8 +726,8 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		if !ok || usage.Value == nil {
 			return nil, fmt.Errorf("%q has no value to evaluate", expr)
 		}
-		// Evaluate with the symbol's owner scope for proper name resolution
-		val, err := ctx.EvalWithScope(usage.Value, sym.OwnerScope)
+		// Read as the declaration is read: in its own scope, against its declared type.
+		val, err := ctx.EvalDeclaredValue(sym)
 		if err != nil {
 			return nil, fmt.Errorf("evaluation failed: %w", err)
 		}
