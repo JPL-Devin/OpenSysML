@@ -84,8 +84,8 @@ func (e *ActionExecutor) addFeatureDirections(features map[string]ast.FeatureDir
 }
 
 // beginPerformance starts a performance of node, a node of parent's flow. It
-// holds what was delivered to its pins ahead of it, then the values its own
-// declarations and the bindings at its input pins give.
+// holds what was delivered to its pins ahead of it, then what the bindings at
+// its input pins give, and last the values its own declarations default to.
 func (e *ActionExecutor) beginPerformance(parent *actionFrame, node ast.Node) (*actionFrame, error) {
 	graph := parent.graph
 	perf := &actionFrame{
@@ -114,17 +114,17 @@ func (e *ActionExecutor) beginPerformance(parent *actionFrame, node ast.Node) (*
 	parent.takeDeliveries(node, perf)
 	parent.subactions[node] = perf
 
-	if err := e.seedDeclaredValues(perf, graph.Features[node]); err != nil {
+	if err := e.bindInputPins(perf); err != nil {
 		return nil, err
 	}
-	if err := e.bindInputPins(perf); err != nil {
+	if err := e.seedDeclaredValues(perf, graph.Features[node]); err != nil {
 		return nil, err
 	}
 	return perf, nil
 }
 
 // seedDeclaredValues evaluates the values a node's own declarations give its
-// features (`in a = 3;`), where nothing delivered to the pin already holds one.
+// features (`in a = 3;`), where no delivery or binding at the pin holds one yet.
 func (e *ActionExecutor) seedDeclaredValues(perf *actionFrame, features []lower.Feature) error {
 	for _, feature := range features {
 		if feature.Value == nil {

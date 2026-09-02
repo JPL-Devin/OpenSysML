@@ -62,7 +62,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   order — never by what the caller happens to name alike — and the untyped `add` read as a value
   is the callee's `return` parameter, or its `out result`. The callee binds the supplied inputs
   before it evaluates its defaults in declaration order, so `in b : Integer = a * 2;` reads the
-  `a` the caller passed. Two tokens performing one node at once each hold a frame of their own,
+  `a` the caller passed; likewise a `bind` at a node's input pin takes precedence over the value
+  the node's own declaration states. Two tokens performing one node at once each hold a frame of their own,
   take what flows delivered to its pins oldest first and send their own outputs on. A nested
   body still resolves a name it does not declare lexically to the enclosing action's feature and
   writes it in place, so a grandchild writing `legs` keeps working, and a perform usage on a
