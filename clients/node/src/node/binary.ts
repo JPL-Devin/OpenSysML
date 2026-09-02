@@ -746,7 +746,7 @@ function asObject(value: unknown, path: string): Record<string, unknown> {
 }
 
 function own<T>(record: Readonly<Record<string, T>> | undefined, key: string): T | undefined {
-  if (record === undefined || !Object.prototype.hasOwnProperty.call(record, key)) {
+  if (record === undefined || !Object.hasOwn(record, key)) {
     return undefined;
   }
   return record[key];

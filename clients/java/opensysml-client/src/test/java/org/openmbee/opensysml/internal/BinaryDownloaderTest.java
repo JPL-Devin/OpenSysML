@@ -38,6 +38,7 @@ import org.junit.jupiter.api.io.TempDir;
 /** What a download is verified against, and what a failed one leaves behind. */
 class BinaryDownloaderTest {
 
+  private static final ConnectionOptions OPTIONS = ConnectionOptions.defaults();
   private static final String REPO = "Open-MBEE/OpenSysML";
   private static final String VERSION = "v9.9.9";
   private static final String ASSET = "sysml-grpc-linux-amd64";
@@ -80,10 +81,6 @@ class BinaryDownloaderTest {
     return ReleaseDigests.of(Map.of(REPO, Map.of(VERSION, Map.of(ASSET, digest))));
   }
 
-  private static ConnectionOptions options() {
-    return ConnectionOptions.defaults();
-  }
-
   /** The temporary files a download left in the cache directory, which must be none. */
   private List<String> leftBehind() throws IOException {
     try (var entries = Files.list(cache().getParent())) {
@@ -122,7 +119,7 @@ class BinaryDownloaderTest {
     releases.publish(REPO, VERSION, ASSET, BINARY);
     BinaryDownloader downloader = downloader().pins(pinning(ReleaseServer.sha256(BINARY))).build();
 
-    Path installed = downloader.downloadBinary(VERSION, options());
+    Path installed = downloader.downloadBinary(VERSION, OPTIONS);
 
     assertEquals(cache(), installed);
     assertArrayEqualsBytes(BINARY, Files.readAllBytes(installed));
@@ -144,7 +141,7 @@ class BinaryDownloaderTest {
     BinaryDownloader downloader = downloader().pins(pinning(ReleaseServer.sha256(BINARY))).build();
 
     assertEquals(VERSION, downloader.resolveLatestVersion(REPO));
-    downloader.downloadBinary("latest", options());
+    downloader.downloadBinary("latest", OPTIONS);
     assertEquals(Optional.of(VERSION), downloader.cachedRelease(REPO));
   }
 
@@ -156,7 +153,7 @@ class BinaryDownloaderTest {
 
     ChecksumMismatchException refused =
         assertThrows(
-            ChecksumMismatchException.class, () -> downloader.downloadBinary(VERSION, options()));
+            ChecksumMismatchException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
 
     assertTrue(refused.getMessage().contains("this client pins"), refused.getMessage());
     assertEquals("cached", Files.readString(cached));
@@ -179,7 +176,7 @@ class BinaryDownloaderTest {
 
     ChecksumMismatchException refused =
         assertThrows(
-            ChecksumMismatchException.class, () -> downloader.downloadBinary(VERSION, options()));
+            ChecksumMismatchException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
 
     assertTrue(refused.getMessage().contains("hashes to"), refused.getMessage());
     assertEquals("cached", Files.readString(cached));
@@ -196,7 +193,7 @@ class BinaryDownloaderTest {
 
     UnpinnedReleaseException refused =
         assertThrows(
-            UnpinnedReleaseException.class, () -> downloader.downloadBinary(VERSION, options()));
+            UnpinnedReleaseException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
 
     assertTrue(refused.getMessage().contains(VERSION), refused.getMessage());
     assertTrue(refused.getMessage().contains("pins no SHA-256 digest"), refused.getMessage());
@@ -211,7 +208,7 @@ class BinaryDownloaderTest {
     environment.put(ConnectionOptions.ALLOW_UNPINNED_ENV, "1");
     releases.publish(REPO, VERSION, ASSET, BINARY);
 
-    downloader().build().downloadBinary(VERSION, options());
+    downloader().build().downloadBinary(VERSION, OPTIONS);
 
     assertTrue(Files.exists(cache()));
     assertEquals(1, warnings.size(), warnings.toString());
@@ -224,7 +221,7 @@ class BinaryDownloaderTest {
     environment.put(ConnectionOptions.ALLOW_UNPINNED_ENV, "a-fork/OpenSysML, " + REPO);
     releases.publish(REPO, VERSION, ASSET, BINARY);
 
-    downloader().build().downloadBinary(VERSION, options());
+    downloader().build().downloadBinary(VERSION, OPTIONS);
 
     assertTrue(Files.exists(cache()));
     assertEquals(1, warnings.size(), warnings.toString());
@@ -237,7 +234,7 @@ class BinaryDownloaderTest {
     BinaryDownloader downloader = downloader().build();
 
     assertThrows(
-        UnpinnedReleaseException.class, () -> downloader.downloadBinary(VERSION, options()));
+        UnpinnedReleaseException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
   }
 
   @Test
@@ -258,7 +255,7 @@ class BinaryDownloaderTest {
 
     Path installed =
         downloader().trustedRoot(fixture("trusted_root.json")).build()
-            .downloadBinary(VERSION, options());
+            .downloadBinary(VERSION, OPTIONS);
 
     assertArrayEqualsBytes(signed, Files.readAllBytes(installed));
     assertEquals(List.of(), warnings, "a signed manifest is a verified digest, not a fallback");
@@ -274,7 +271,7 @@ class BinaryDownloaderTest {
 
     ManifestSignatureException refused =
         assertThrows(
-            ManifestSignatureException.class, () -> downloader.downloadBinary(VERSION, options()));
+            ManifestSignatureException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
 
     assertTrue(refused.getMessage().contains("does not verify"), refused.getMessage());
     assertFalse(Files.exists(cache()), "a signature that fails is never fallen back from");
@@ -287,7 +284,7 @@ class BinaryDownloaderTest {
     BinaryDownloader downloader = downloader().trustedRoot(fixture("trusted_root.json")).build();
 
     assertThrows(
-        ManifestSignatureException.class, () -> downloader.downloadBinary(VERSION, options()));
+        ManifestSignatureException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
   }
 
   @Test
@@ -302,32 +299,28 @@ class BinaryDownloaderTest {
     BinaryDownloader downloader = downloader().trustedRoot(fixture("trusted_root.json")).build();
 
     assertThrows(
-        ManifestSignatureException.class, () -> downloader.downloadBinary(VERSION, options()));
+        ManifestSignatureException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
   }
 
   @Test
   void aPinIsWhatTheDownloadMustHash() {
-    BinaryDownloader downloader = downloader().pins(pinning("ab".repeat(32))).build();
+    String pinned = "ab".repeat(32);
+    String other = "cd".repeat(32);
+    BinaryDownloader downloader = downloader().pins(pinning(pinned)).build();
     ConnectionOptions allowed = ConnectionOptions.builder().allowUnpinnedDownload(true).build();
 
     assertEquals(
-        "ab".repeat(32),
-        downloader.expectedDigest(
-            VERSION, ASSET, "ab".repeat(32), REPO, "ab".repeat(32), null, options()));
+        pinned, downloader.expectedDigest(VERSION, ASSET, pinned, REPO, pinned, null, OPTIONS));
     // A signed manifest disagreeing with a pin is not a reason to prefer either.
     ChecksumMismatchException contradicted =
         assertThrows(
             ChecksumMismatchException.class,
-            () ->
-                downloader.expectedDigest(
-                    VERSION, ASSET, "ab".repeat(32), REPO, "cd".repeat(32), null, allowed));
+            () -> downloader.expectedDigest(VERSION, ASSET, pinned, REPO, other, null, allowed));
     assertTrue(contradicted.getMessage().contains("signed"), contradicted.getMessage());
     // Nor is same-origin trust, granted or not.
     assertThrows(
         ChecksumMismatchException.class,
-        () ->
-            downloader.expectedDigest(
-                VERSION, ASSET, "cd".repeat(32), REPO, null, null, allowed));
+        () -> downloader.expectedDigest(VERSION, ASSET, other, REPO, null, null, allowed));
   }
 
   @Test
@@ -347,7 +340,7 @@ class BinaryDownloaderTest {
     assertTrue(stale.isPresent());
     assertTrue(stale.get().contains("v0.0.1"), stale.get());
 
-    downloader.downloadBinary(VERSION, options());
+    downloader.downloadBinary(VERSION, OPTIONS);
     assertArrayEqualsBytes(BINARY, Files.readAllBytes(cache()));
   }
 
@@ -359,7 +352,7 @@ class BinaryDownloaderTest {
     // The release publishes no asset at all: a transport failure, which installs nothing.
     ServiceStartException failed =
         assertThrows(
-            ServiceStartException.class, () -> downloader.downloadBinary(VERSION, options()));
+            ServiceStartException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
 
     assertTrue(failed.getMessage().contains("404"), failed.getMessage());
     assertEquals("cached", Files.readString(cached));
@@ -379,10 +372,10 @@ class BinaryDownloaderTest {
   }
 
   @Test
-  void aCacheFromAnotherRepositoryDoesNotAnswerForThisOne() throws IOException {
+  void aCacheFromAnotherRepositoryDoesNotAnswerForThisOne() {
     releases.publish(REPO, VERSION, ASSET, BINARY);
     BinaryDownloader downloader = downloader().pins(pinning(ReleaseServer.sha256(BINARY))).build();
-    downloader.downloadBinary(VERSION, options());
+    downloader.downloadBinary(VERSION, OPTIONS);
 
     assertEquals(Optional.of(VERSION), downloader.cachedRelease(REPO));
     // Forks publish the same tags, so the fork's v9.9.9 is not this one.
@@ -398,19 +391,19 @@ class BinaryDownloaderTest {
     assertEquals(
         Optional.of("v1.2.3"), BinaryDownloader.versionAskedFor(asked, environment::get));
     assertEquals(
-        Optional.empty(), BinaryDownloader.versionAskedFor(options(), environment::get));
+        Optional.empty(), BinaryDownloader.versionAskedFor(OPTIONS, environment::get));
 
     environment.put(ConnectionOptions.VERSION_ENV, "v0.3.0");
     assertEquals(
-        Optional.of("v0.3.0"), BinaryDownloader.versionAskedFor(options(), environment::get));
+        Optional.of("v0.3.0"), BinaryDownloader.versionAskedFor(OPTIONS, environment::get));
     assertEquals(
         Optional.of("v1.2.3"),
         BinaryDownloader.versionAskedFor(asked, environment::get),
         "the caller outranks the environment");
 
-    assertEquals(REPO, BinaryDownloader.githubRepo(options(), environment::get));
+    assertEquals(REPO, BinaryDownloader.githubRepo(OPTIONS, environment::get));
     environment.put(ConnectionOptions.REPO_ENV, "a-fork/OpenSysML");
-    assertEquals("a-fork/OpenSysML", BinaryDownloader.githubRepo(options(), environment::get));
+    assertEquals("a-fork/OpenSysML", BinaryDownloader.githubRepo(OPTIONS, environment::get));
     assertEquals(
         "another/fork",
         BinaryDownloader.githubRepo(
@@ -432,7 +425,7 @@ class BinaryDownloaderTest {
     ServiceStartException refused =
         assertThrows(
             ServiceStartException.class,
-            () -> BinaryDownloader.githubRepo(options(), environment::get));
+            () -> BinaryDownloader.githubRepo(OPTIONS, environment::get));
 
     assertTrue(refused.getMessage().contains(ConnectionOptions.REPO_ENV), refused.getMessage());
   }
@@ -460,7 +453,7 @@ class BinaryDownloaderTest {
 
     List<Callable<Path>> downloads = new ArrayList<>();
     for (int i = 0; i < 8; i++) {
-      downloads.add(() -> downloader.downloadBinary(VERSION, options()));
+      downloads.add(() -> downloader.downloadBinary(VERSION, OPTIONS));
     }
     ExecutorService threads = Executors.newFixedThreadPool(downloads.size());
     try {
@@ -483,7 +476,7 @@ class BinaryDownloaderTest {
 
     ServiceStartException refused =
         assertThrows(
-            ServiceStartException.class, () -> downloader.downloadBinary(VERSION, options()));
+            ServiceStartException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
 
     assertTrue(refused.getMessage().contains("larger than"), refused.getMessage());
     assertFalse(Files.exists(cache()), "an oversized response must install nothing");
@@ -501,7 +494,7 @@ class BinaryDownloaderTest {
 
     ServiceStartException refused =
         assertThrows(
-            ServiceStartException.class, () -> downloader.downloadBinary(VERSION, options()));
+            ServiceStartException.class, () -> downloader.downloadBinary(VERSION, OPTIONS));
 
     assertTrue(refused.getMessage().contains("stopped sending"), refused.getMessage());
     assertFalse(Files.exists(cache()), "a stalled download must install nothing");
@@ -523,7 +516,7 @@ class BinaryDownloaderTest {
       ExecutorService threads = Executors.newSingleThreadExecutor();
       try {
         Future<Path> download =
-            threads.submit(() -> downloader.downloadBinary(VERSION, options()));
+            threads.submit(() -> downloader.downloadBinary(VERSION, OPTIONS));
         assertThrows(TimeoutException.class, () -> download.get(500, TimeUnit.MILLISECONDS));
         held.release();
         assertArrayEqualsBytes(BINARY, Files.readAllBytes(download.get(30, TimeUnit.SECONDS)));

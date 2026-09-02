@@ -2,7 +2,7 @@ package libs
 
 import (
 	"bytes"
-	_ "embed"
+	_ "embed" // for the //go:embed directive
 	"encoding/binary"
 	"errors"
 	"fmt"

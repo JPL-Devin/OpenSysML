@@ -116,10 +116,14 @@ class ModelExamplesTest {
     Model model = connection.parse("package Convert { attribute a = 1; }");
     assertEquals(2L, model.eval("2").asLong());
     assertEquals(2.0, model.eval("2").asDouble());
-    assertThrows(IllegalStateException.class, () -> model.eval("2.7").asLong());
-    assertThrows(IllegalStateException.class, () -> model.eval("\"x\"").asDouble());
-    assertThrows(IllegalStateException.class, () -> model.eval("true").asLong());
-    assertThrows(IllegalStateException.class, () -> model.eval("null").asString());
+    Value real = model.eval("2.7");
+    Value string = model.eval("\"x\"");
+    Value bool = model.eval("true");
+    Value nothing = model.eval("null");
+    assertThrows(IllegalStateException.class, real::asLong);
+    assertThrows(IllegalStateException.class, string::asDouble);
+    assertThrows(IllegalStateException.class, bool::asLong);
+    assertThrows(IllegalStateException.class, nothing::asString);
   }
 
   @Test

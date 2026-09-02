@@ -61,8 +61,7 @@ func markdownWithImages(markdown string, images []string) string {
 	image := 0
 	for i := 0; i < len(lines); i++ {
 		if lines[i] == "```mermaid" && image < len(images) {
-			for i++; i < len(lines) && lines[i] != "```"; i++ {
-			}
+			i = fenceEnd(lines, i+1)
 			out = append(out, "![diagram]("+images[image]+")")
 			image++
 			continue
@@ -70,4 +69,15 @@ func markdownWithImages(markdown string, images []string) string {
 		out = append(out, lines[i])
 	}
 	return strings.Join(out, "\n")
+}
+
+// fenceEnd returns the index of the closing fence at or after from, or
+// len(lines) when the fence is left open.
+func fenceEnd(lines []string, from int) int {
+	for i := from; i < len(lines); i++ {
+		if lines[i] == "```" {
+			return i
+		}
+	}
+	return len(lines)
 }

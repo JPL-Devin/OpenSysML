@@ -110,9 +110,7 @@ export const SIGNED_MANIFEST_SIGNERS: Readonly<Record<string, ReleaseSigner>> = 
 
 /** The signer whose signature a repository's release manifest must carry. */
 export function signerFor(githubRepo: string): ReleaseSigner | undefined {
-  return Object.prototype.hasOwnProperty.call(SIGNED_MANIFEST_SIGNERS, githubRepo)
-    ? SIGNED_MANIFEST_SIGNERS[githubRepo]
-    : undefined;
+  return Object.hasOwn(SIGNED_MANIFEST_SIGNERS, githubRepo) ? SIGNED_MANIFEST_SIGNERS[githubRepo] : undefined;
 }
 
 /** The digest a checksum manifest lists for an asset, as sha256sum writes them. */
@@ -223,5 +221,5 @@ function describe(cause: unknown): string {
 }
 
 function escapeForRegExp(literal: string): string {
-  return literal.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+  return literal.replace(/[.*+?^${}()|[\]\\/]/g, String.raw`\$&`);
 }

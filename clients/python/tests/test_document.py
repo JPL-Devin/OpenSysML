@@ -329,11 +329,9 @@ class TestDocumentsAgainstRealService:
     ):
         with Connection(port=real_service, auto_start=False) as conn:
             model = conn.load_from_content(telescope)
+            bindings = {"depth": 3, "root": ElementRef("Observatory::telescope")}
             with pytest.raises(InvalidRequestError):
-                model.run_document_query(
-                    "Observatory::SubsystemTable",
-                    bindings={"depth": 3, "root": ElementRef("Observatory::telescope")},
-                )
+                model.run_document_query("Observatory::SubsystemTable", bindings=bindings)
 
     def test_an_evicted_model_raises_this_library_s_error(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:

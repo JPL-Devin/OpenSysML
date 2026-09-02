@@ -428,7 +428,7 @@ func replayIntDiv(t *Term, env map[string]replayValue) (replayValue, error) {
 		return replayValue{}, fmt.Errorf("%d div %d exceeds the Integer range", left.i, right.i)
 	}
 	q := left.i / right.i
-	if r := left.i % right.i; r < 0 {
+	if left.i%right.i < 0 {
 		if right.i > 0 {
 			q--
 		} else {
