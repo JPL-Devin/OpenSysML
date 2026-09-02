@@ -13,10 +13,11 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// Hover returns type/kind information for the declaration under the cursor.
+// Hover returns type/kind information for the declaration under the cursor, in
+// a workspace document or a bundled library one.
 func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 	name := uriToName(params.TextDocument.URI)
-	doc := s.ws.Document(name)
+	doc := s.document(name)
 	if doc == nil || doc.Scope == nil {
 		return nil, nil
 	}
@@ -96,12 +97,13 @@ func (s *Server) hoveredSegment(doc string, ref resolve.Reference, offset int) (
 }
 
 // symbolDocComments returns the comment trivia preceding a symbol's
-// declaration, when the document declaring it is loaded.
+// declaration, when the document declaring it is loaded or is a bundled library
+// file.
 func (s *Server) symbolDocComments(sym *symbols.Symbol) []string {
 	if len(sym.LeadingTrivia) == 0 || sym.DocName == "" {
 		return nil
 	}
-	doc := s.ws.Document(sym.DocName)
+	doc := s.document(sym.DocName)
 	if doc == nil {
 		return nil
 	}

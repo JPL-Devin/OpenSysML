@@ -4,8 +4,8 @@ The current state of the project: what is implemented, what is known to be missi
 how a release is produced.
 
 The conformance records below are engineering records rather than user documentation. Where one
-still uses a short internal label — a numbered development round, or an `F<n>` follow-up row — the
-label is defined in the record that uses it and means nothing outside this repository; each record
+still uses a short internal label (a numbered development round, or an `F<n>` follow-up row), the
+label is defined in the record that uses it and means nothing outside this repository. Each record
 says so at the top.
 
 - **[Spec compliance](spec-compliance.md)** — faithful, approximate, or not implemented,
@@ -13,14 +13,19 @@ says so at the top.
 - **[Training examples](training-examples.md)** — the OMG corpus, adjudicated per file
 - **[Pilot corpora gate](pilot-corpora.md)** — OpenSysML diagnostics on the three pinned OMG pilot
   corpora, ratcheted in CI
+- **[RDF corpus round-trip gate](rdf-corpus-roundtrip.md)** — the notation → Turtle → notation →
+  Turtle verdict of every model under `examples/`, ratcheted per file in CI
 - **[Pilot differential](pilot-differential.md)** — OpenSysML diagnostics compared against the OMG
   pilot implementation, advisory
 - **[Pilot execution referee](pilot-execution-referee.md)** — how far the pinned pilot's
   execution surface reaches, and which behavior rows it can adjudicate
+- **[Behavior semantic oracle](behavior-semantic-oracle.md)** — action and state-machine
+  conformance cases whose expected outcomes are derived by hand from the Kernel Semantic and
+  Systems Library text rather than recorded from the executor, and the three the executor fails
 - **[Pilot Xpect expectations](pilot-xpect.md)** — the pilot's own inline `.xt` assertions as a
   declared-intent oracle, advisory
 - **[Grammar coverage](grammar-coverage.md)** — which OMG grammar productions the project's inputs
-  exercise, on input-presence evidence, advisory
+  exercise, judged by whether an input for each exists, advisory
 - **[Validation adjudications](wave10-decisions.md)** — the three adjudications the validation work
   depends on, with the measurements behind them
 - **[Parser findings](wave11b-parser-findings.md)** — the two parsing rows that were parser
