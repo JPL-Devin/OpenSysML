@@ -2927,10 +2927,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 			// Parse optional name
 			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasNameAndBody || hasNameAndMult {
-				tok := p.advance()
-				if p.nameToken(tok) {
-					id.Name = p.src.Text(tok.Span)
-					id.NameSpan = tok.Span
+				if seg, ok := p.parseNameSegmentRelaxed(); ok {
+					id.Name = seg.Text
+					id.NameSpan = seg.Span
 				}
 				if hasNameAndType {
 					p.advance() // consume ':'
@@ -3015,10 +3014,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Check for anonymous feature pattern without modifiers: name : Type
 	if p.atName() && nextKind == lexer.Colon {
 		var id ast.Identification
-		tok := p.advance()
-		if p.nameToken(tok) {
-			id.Name = p.src.Text(tok.Span)
-			id.NameSpan = tok.Span
+		if seg, ok := p.parseNameSegmentRelaxed(); ok {
+			id.Name = seg.Text
+			id.NameSpan = seg.Span
 		}
 
 		// Parse as anonymous usage (attribute by default)
