@@ -175,3 +175,39 @@ func TestFeaturesOfAMachineObjectListsItsStates(t *testing.T) {
 	wants(t, got, "Behaviors:", "  off: state, not running", "  on: state, not running")
 	rejects(t, got, "<unknown>")
 }
+
+// A named transition is a feature too, and the object runs no such thing: it is
+// listed as the step between states it declares, spelled as the model spells
+// them, not as an idle action.
+func TestFeaturesListsNamedTransitionsAsTransitions(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`private import ScalarValues::*;
+state def DoorModes {
+    entry; then closed;
+    state closed;
+    state opened;
+    transition swing first closed then opened;
+}
+part def Door {
+    attribute width : Real = 0.9;
+    exhibit state modes : DoorModes;
+    transition toggle first modes.closed then modes.opened;
+}
+part door : Door;`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+
+	run(t, s, "%instantiate door")
+	got := run(t, s, "%features door")
+	wants(t, got,
+		"Features:\n  width = 0.9\nBehaviors:",
+		"  modes: exhibited state machine, current state ",
+		"  toggle: transition, modes.closed → modes.opened",
+	)
+	rejects(t, got, "toggle: action", "toggle = ", "<unknown>")
+
+	run(t, s, "%instantiate DoorModes")
+	got = run(t, s, "%features DoorModes")
+	wants(t, got, "  closed: state, not running", "  opened: state, not running", "  swing: transition, closed → opened")
+	rejects(t, got, "swing: action", "<unknown>")
+}

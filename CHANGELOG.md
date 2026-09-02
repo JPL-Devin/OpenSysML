@@ -124,9 +124,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   exhibits (`modes: exhibited state machine, current state off`, the very state `%current`
   reports, before and after the debugger drives it), the execution state of an action it performs
   (`tick: performed action, completed`), and `not running` for a state or action the type declares
-  but the object neither exhibits nor performs. A nested object's behaviors are listed under its
-  own row. Nothing is invented: a machine that has not started reads `not started`, one that
-  reached its end reads `completed`.
+  but the object neither exhibits nor performs. A named transition is listed as the step it
+  declares (`toggle: transition, modes.closed → modes.opened`), not as an idle action. A nested
+  object's behaviors are listed under its own row. Nothing is invented: a machine that has not
+  started reads `not started`, one that reached its end reads `completed`.
 
 ### Fixed
 

@@ -1168,8 +1168,8 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 	return append(append(lines, w.behaviorLines(inst, behaviors, indent, depth)...), connectors...)
 }
 
-// isBehaviorFeature reports whether a feature is a state or action usage: a
-// behavior the object may run rather than a value it holds.
+// isBehaviorFeature reports whether a feature is a state or action usage — a
+// named transition among them — a behavior of the object rather than a value it holds.
 func isBehaviorFeature(feat *runtime.EffectiveFeature) bool {
 	if feat.Symbol == nil {
 		return false
@@ -1207,8 +1207,11 @@ func (w *featureValueWalk) behaviorLines(inst *runtime.Instance, behaviors []*ru
 
 // behaviorStatus describes what an object is doing with a behavior its type
 // declares. An exhibited machine's active state is rendered as %current renders
-// it, so the two agree.
+// it, so the two agree; a transition is the step between states it declares.
 func behaviorStatus(inst *runtime.Instance, feat *runtime.EffectiveFeature) string {
+	if trans, ok := feat.Symbol.Decl.(*ast.TransitionMember); ok {
+		return transitionStatus(trans)
+	}
 	kind := "state"
 	if feat.Symbol.Kind == symbols.SymbolActionUsage {
 		kind = "action"
@@ -1225,6 +1228,36 @@ func behaviorStatus(inst *runtime.Instance, feat *runtime.EffectiveFeature) stri
 	default:
 		return kind + ", not running"
 	}
+}
+
+// transitionStatus renders a transition as the step it declares, `first source
+// then target`; a target transition written inside its source state has no
+// source of its own to name.
+func transitionStatus(trans *ast.TransitionMember) string {
+	if trans.Source == nil {
+		return "transition, then " + stateNameAsWritten(trans.Target)
+	}
+	return fmt.Sprintf("transition, %s → %s", stateNameAsWritten(trans.Source), stateNameAsWritten(trans.Target))
+}
+
+// stateNameAsWritten renders a transition end as the model spells it: `modes.closed`
+// reaches through the exhibited machine, `Modes::closed` into its namespace.
+func stateNameAsWritten(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return "<?>"
+	}
+	var sb strings.Builder
+	for i, p := range qn.Parts {
+		switch {
+		case i == 0:
+		case p.Chained:
+			sb.WriteString(".")
+		default:
+			sb.WriteString("::")
+		}
+		sb.WriteString(p.Text)
+	}
+	return sb.String()
 }
 
 // machineStatus is where a state machine run stands: not started, completed, or
