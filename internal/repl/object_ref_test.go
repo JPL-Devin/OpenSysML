@@ -394,3 +394,29 @@ func TestQuotedNestedPerformerSurvivesUnrelatedDeclaration(t *testing.T) {
 		rejects(t, run(t, s, "%step"), "no active action session")
 	})
 }
+
+// Completion reads and never materializes: it follows a part not yet reached by
+// a command by type, and pressing Tab leaves the runtime as it found it.
+func TestCompletionMaterializesNothing(t *testing.T) {
+	s := garage(t)
+	run(t, s, "%instantiate car")
+	car := s.instances["Garage::car"]
+	before := s.rtCtx.InstanceIDs()
+
+	for _, line := range []string{"%features car.", "%features car.fl.", "%features car.wheels[2].", "%eval in car.wheels[1].", "%features #1.fl.hu"} {
+		got := s.Complete(line, len(line))
+		if len(got.Candidates) == 0 {
+			t.Errorf("%q offered nothing", line)
+		}
+	}
+	if after := s.rtCtx.InstanceIDs(); fmt.Sprint(after) != fmt.Sprint(before) {
+		t.Errorf("completion changed the objects held: %v, was %v", after, before)
+	}
+	for _, name := range []string{"fl", "wheels"} {
+		if car.FeatureValues[name].Materialized {
+			t.Errorf("completion materialized car.%s", name)
+		}
+	}
+	wants(t, run(t, s, "%features car.wheels[2].hub"), "bolts = 5")
+	rejects(t, run(t, s, "%features car.wheels[3]"), "bolts")
+}

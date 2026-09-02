@@ -10,6 +10,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // completionLimit bounds a completion answer: the library registers tens of
@@ -271,8 +272,8 @@ func pathCompletions(word string) []string {
 // a multi-valued one picked by index.
 func (s *Session) objectCompletions(word string) []string {
 	if root, sep, partial, walked := lastSegment(word); walked {
-		if inst, _, err := s.resolveObject(root); err == nil {
-			return s.featureCompletions(inst, root+sep, partial)
+		if shape, ok := s.peekObject(root); ok {
+			return s.featureCompletions(shape, root+sep, partial)
 		}
 		if strings.HasPrefix(word, "#") || sep == "." {
 			return nil
@@ -332,15 +333,110 @@ func (s *Session) objectIDs() []string {
 	return out
 }
 
-// featureCompletions offers the object-holding features of inst, written after
+// objectShape is what completion knows of the object a reference reaches
+// without materializing anything: the object once it exists, and until then
+// only the type it will be an object of.
+type objectShape struct {
+	inst *runtime.Instance
+	typ  *symbols.Symbol
+}
+
+// peekObject follows an object reference through what the session already
+// holds. Completion reads and never materializes, so a part not yet reached by a
+// command is followed by type alone.
+func (s *Session) peekObject(text string) (objectShape, bool) {
+	if s.rtCtx == nil {
+		return objectShape{}, false
+	}
+	ref, err := parseObjectRef(text)
+	if err != nil {
+		return objectShape{}, false
+	}
+	var (
+		root *runtime.Instance
+		rest []objectSegment
+		ok   bool
+	)
+	if ref.id > 0 {
+		root, ok = s.rtCtx.Instance(ref.id)
+		rest = ref.segments
+	} else {
+		var rerr error
+		root, _, rest, rerr = s.namedRoot(ref)
+		ok = rerr == nil
+	}
+	if !ok {
+		return objectShape{}, false
+	}
+	shape := objectShape{inst: root, typ: root.Type}
+	for _, seg := range rest {
+		feat := featureNamed(s.rtCtx.FeaturesOf(shape.typ), seg.name)
+		if feat == nil || !feat.HoldsObjects() || feat.IsScalar() != (seg.index == 0) {
+			return objectShape{}, false
+		}
+		if fv := heldFeatureValue(shape.inst, seg.name); fv != nil {
+			val := fv.Value
+			if seg.index > 0 {
+				elements := collectionElements(fv.Values)
+				if seg.index > len(elements) {
+					return objectShape{}, false
+				}
+				val = elements[seg.index-1]
+			}
+			id, isObject := val.Object()
+			if !isObject {
+				return objectShape{}, false
+			}
+			child, has := s.rtCtx.Instance(id)
+			if !has {
+				return objectShape{}, false
+			}
+			shape = objectShape{inst: child, typ: child.Type}
+			continue
+		}
+		if seg.index > s.elementCount(shape.inst, feat) {
+			return objectShape{}, false
+		}
+		typ := s.rtCtx.CompositeTypeOf(feat)
+		if typ == nil {
+			return objectShape{}, false
+		}
+		shape = objectShape{typ: typ}
+	}
+	return shape, true
+}
+
+// featureNamed is the effective feature called name, or nil.
+func featureNamed(features []runtime.EffectiveFeature, name string) *runtime.EffectiveFeature {
+	for i := range features {
+		if features[i].Name == name {
+			return &features[i]
+		}
+	}
+	return nil
+}
+
+// heldFeatureValue is the value inst already holds for name, nil until a command
+// materializes it (or when there is no object yet to hold it).
+func heldFeatureValue(inst *runtime.Instance, name string) *runtime.FeatureValue {
+	if inst == nil {
+		return nil
+	}
+	if fv, ok := inst.FeatureValues[name]; ok && fv.Materialized {
+		return fv
+	}
+	return nil
+}
+
+// featureCompletions offers the object-holding features of shape, written after
 // prefix, that continue partial. A multi-valued feature is offered as indexed
 // elements, since a reference has to pick one.
-func (s *Session) featureCompletions(inst *runtime.Instance, prefix, partial string) []string {
+func (s *Session) featureCompletions(shape objectShape, prefix, partial string) []string {
 	if s.rtCtx == nil {
 		return nil
 	}
 	var candidates []string
-	features := s.rtCtx.FeaturesOf(inst.Type)
+	features := s.rtCtx.FeaturesOf(shape.typ)
 	for i := range features {
 		feat := &features[i]
 		if feat.Name == "" || !feat.HoldsObjects() {
@@ -351,7 +447,7 @@ func (s *Session) featureCompletions(inst *runtime.Instance, prefix, partial str
 			candidates = append(candidates, name)
 			continue
 		}
-		for n := 1; n <= s.elementCount(inst, feat.Name); n++ {
+		for n := 1; n <= s.elementCount(shape.inst, feat); n++ {
 			candidates = append(candidates, fmt.Sprintf("%s[%d]", name, n))
 		}
 	}
@@ -364,14 +460,18 @@ func (s *Session) featureCompletions(inst *runtime.Instance, prefix, partial str
 	return out
 }
 
-// elementCount is how many elements of a multi-valued feature a reference can
-// pick: what it holds, read as resolving the reference would read it.
-func (s *Session) elementCount(inst *runtime.Instance, name string) int {
-	fv, err := inst.GetFeatureValue(s.rtCtx, name)
-	if err != nil || fv == nil {
+// elementCount is how many elements of a multi-valued feature completion may
+// index: the elements held once materialized, before that the ones the lower
+// bound guarantees — never more than a reference then finds.
+func (s *Session) elementCount(inst *runtime.Instance, feat *runtime.EffectiveFeature) int {
+	if fv := heldFeatureValue(inst, feat.Name); fv != nil {
+		return min(len(collectionElements(fv.Values)), elementLimit)
+	}
+	lower := feat.Multiplicity.Lower
+	if !lower.Known || lower.Infinite {
 		return 0
 	}
-	return min(len(collectionElements(fv.Values)), elementLimit)
+	return min(int(lower.Value), elementLimit)
 }
 
 // elementLimit bounds the indexed elements one feature is completed to.

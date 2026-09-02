@@ -639,6 +639,20 @@ func (s *Session) resolveObject(text string) (*runtime.Instance, string, error) 
 // declaration is reported as an uninstantiated one, and one that reaches nothing
 // as the unresolved name it is.
 func (s *Session) resolveNamedObject(ref objectRef) (*runtime.Instance, string, error) {
+	inst, fqn, rest, err := s.namedRoot(ref)
+	if err != nil {
+		return nil, "", err
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, "", err
+	}
+	return s.walkObjectPath(ctx, inst, fqn, rest)
+}
+
+// namedRoot finds the object a name-rooted reference starts from: the object,
+// its qualified name and the segments left to walk from it.
+func (s *Session) namedRoot(ref objectRef) (*runtime.Instance, string, []objectSegment, error) {
 	// Only the declared name's segments are unindexed and, past the first, `::`-joined
 	// as a qualified name is; the first `.` or index is where features start.
 	head, qualified := len(ref.segments), len(ref.segments)
@@ -660,7 +674,7 @@ func (s *Session) resolveNamedObject(ref objectRef) (*runtime.Instance, string, 
 		if err != nil {
 			var ambiguous *AmbiguousNameError
 			if errors.As(err, &ambiguous) {
-				return nil, "", err
+				return nil, "", nil, err
 			}
 			if i == qualified {
 				unresolved = err
@@ -668,11 +682,7 @@ func (s *Session) resolveNamedObject(ref objectRef) (*runtime.Instance, string, 
 			continue
 		}
 		if inst, ok := s.instances[fqn]; ok {
-			ctx, rerr := s.getOrCreateRuntime()
-			if rerr != nil {
-				return nil, "", rerr
-			}
-			return s.walkObjectPath(ctx, inst, fqn, ref.segments[i:])
+			return inst, fqn, ref.segments[i:], nil
 		}
 		// A `.`-walked feature that happens to resolve as a declaration is not what
 		// was asked for, so the name reported is the declared one.
@@ -681,12 +691,12 @@ func (s *Session) resolveNamedObject(ref objectRef) (*runtime.Instance, string, 
 		}
 	}
 	if noInstance != "" {
-		return nil, "", &NoInstanceError{Name: noInstance}
+		return nil, "", nil, &NoInstanceError{Name: noInstance}
 	}
 	if unresolved == nil {
 		_, _, unresolved = s.lookupSymbol(joinTyped(ref.segments[:min(qualified, head)]))
 	}
-	return nil, "", unresolved
+	return nil, "", nil, unresolved
 }
 
 // joinTyped spells segments as the qualified name they were typed as.
