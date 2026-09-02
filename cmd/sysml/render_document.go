@@ -144,8 +144,9 @@ func htmlOptions(shared []docrender.Stylesheet) (docrender.HTMLOptions, error) {
 // isStylesheetURL reports whether -html-css named a stylesheet to link rather
 // than a file to inline.
 func isStylesheetURL(css string) bool {
+	lower := strings.ToLower(css)
 	for _, scheme := range []string{"http://", "https://", "//"} {
-		if strings.HasPrefix(css, scheme) {
+		if strings.HasPrefix(lower, scheme) {
 			return true
 		}
 	}
@@ -471,6 +472,9 @@ func documentSetForm() (string, error) {
 		}
 		if pdfEngine != "" {
 			return "", errors.New("-pdf-engine shapes PDF output, which -render-documents does not write; render one document at a time with -render-document")
+		}
+		if pdfTitlePage || pdfTOC || pdfNumbering {
+			return "", errors.New("the title page, contents and numbering options shape HTML output; ask for it with -doc-form html")
 		}
 		return form, nil
 	case docFormHTML:

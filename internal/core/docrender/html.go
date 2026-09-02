@@ -117,8 +117,8 @@ func (w *htmlWriter) writeDocument(document *docir.Document) error {
 	if w.opts.TOC {
 		w.writeTOC(w.outline(document.Content(), nil))
 	}
-	for _, node := range document.Content() {
-		if err := w.writeContent(node, nil, 2); err != nil {
+	for i, node := range document.Content() {
+		if err := w.writeContent(node, nil, i, 2); err != nil {
 			return err
 		}
 	}
@@ -173,13 +173,13 @@ type outlineEntry struct {
 }
 
 // outline collects the section tree with each section's identifier and number.
-func (w *htmlWriter) outline(nodes []docir.Content, path []string) []outlineEntry {
+func (w *htmlWriter) outline(nodes []docir.Content, path []step) []outlineEntry {
 	var entries []outlineEntry
-	for _, node := range nodes {
+	for i, node := range nodes {
 		if node.Kind() != docir.ContentSection {
 			continue
 		}
-		nested := child(path, node.Name())
+		nested := child(path, node.Name(), i)
 		entries = append(entries, outlineEntry{
 			id:       w.ids[pathKey(nested)],
 			title:    node.Title(),
@@ -190,15 +190,15 @@ func (w *htmlWriter) outline(nodes []docir.Content, path []string) []outlineEntr
 	return entries
 }
 
-// sectionNumbers numbers every section hierarchically, keyed by named path.
-func sectionNumbers(nodes []docir.Content, path []string, prefix string, into map[string]string) map[string]string {
+// sectionNumbers numbers every section hierarchically, keyed by occurrence path.
+func sectionNumbers(nodes []docir.Content, path []step, prefix string, into map[string]string) map[string]string {
 	count := 0
-	for _, node := range nodes {
+	for i, node := range nodes {
 		if node.Kind() != docir.ContentSection {
 			continue
 		}
 		count++
-		nested := child(path, node.Name())
+		nested := child(path, node.Name(), i)
 		number := prefix + strconv.Itoa(count)
 		into[pathKey(nested)] = number
 		sectionNumbers(node.Children(), nested, number+".", into)
@@ -237,9 +237,10 @@ func (w *htmlWriter) writeTOCList(entries []outlineEntry) {
 }
 
 // writeContent writes one content node, with level the heading level a section
-// at this depth writes and path the named path the node is addressed by.
-func (w *htmlWriter) writeContent(node docir.Content, path []string, level int) error {
-	nested := child(path, node.Name())
+// at this depth writes, path the occurrence path of its parent and index its
+// place among its siblings.
+func (w *htmlWriter) writeContent(node docir.Content, path []step, index, level int) error {
+	nested := child(path, node.Name(), index)
 	id := w.ids[pathKey(nested)]
 	switch node.Kind() {
 	case docir.ContentSection:
@@ -264,7 +265,7 @@ func (w *htmlWriter) writeContent(node docir.Content, path []string, level int) 
 
 // writeSection writes one section and its children, numbering the heading when
 // numbering was asked for. Heading levels saturate at 6, as HTML has no more.
-func (w *htmlWriter) writeSection(node docir.Content, path []string, id string, level int) error {
+func (w *htmlWriter) writeSection(node docir.Content, path []step, id string, level int) error {
 	w.b.WriteString("<section class=\"sysml-section\"" + attr("id", id) + " data-content=\"section\"" +
 		attr("data-name", node.Name()) + ">\n")
 	tag := "h" + strconv.Itoa(min(level, 6))
@@ -273,8 +274,8 @@ func (w *htmlWriter) writeSection(node docir.Content, path []string, id string, 
 		w.b.WriteString("<span class=\"sysml-section-number\">" + htmlText(w.numbers[pathKey(path)]) + "</span> ")
 	}
 	w.b.WriteString(htmlText(node.Title()) + "</" + tag + ">\n")
-	for _, child := range node.Children() {
-		if err := w.writeContent(child, path, level+1); err != nil {
+	for i, child := range node.Children() {
+		if err := w.writeContent(child, path, i, level+1); err != nil {
 			return err
 		}
 	}
@@ -505,20 +506,20 @@ func DocumentHTMLFileName(fqn string) string {
 	return documentFileName(fqn, ".html")
 }
 
-// contentIDs maps every content node's named path to the identifier the
+// contentIDs maps every content node's occurrence path to the identifier the
 // document addresses it by: the stable anchor the IR gave it, and for a
-// section without one the anchor its path derives, made unique so no two
+// section without one the anchor its named path derives, made unique so no two
 // nodes share an identifier.
 func contentIDs(document *docir.Document) map[string]string {
 	reserved := reservedIDs(document.Content(), nil, map[string]bool{})
 	ids, used := map[string]string{}, map[string]bool{}
-	var assign func(nodes []docir.Content, path []string)
-	assign = func(nodes []docir.Content, path []string) {
-		for _, node := range nodes {
-			nested := child(path, node.Name())
+	var assign func(nodes []docir.Content, path []step)
+	assign = func(nodes []docir.Content, path []step) {
+		for i, node := range nodes {
+			nested := child(path, node.Name(), i)
 			id := node.Anchor()
 			if id == "" && node.Kind() == docir.ContentSection {
-				id = uniqueID(docir.AnchorFor(nested), reserved, used)
+				id = uniqueID(derivedID(nested), reserved, used)
 			}
 			if id != "" {
 				ids[pathKey(nested)] = id
@@ -533,10 +534,10 @@ func contentIDs(document *docir.Document) map[string]string {
 
 // reservedIDs collects every identifier the document may address a node by, so
 // a derived one is never made to collide with an anchor emitted later.
-func reservedIDs(nodes []docir.Content, path []string, into map[string]bool) map[string]bool {
-	for _, node := range nodes {
-		nested := child(path, node.Name())
-		into[docir.AnchorFor(nested)] = true
+func reservedIDs(nodes []docir.Content, path []step, into map[string]bool) map[string]bool {
+	for i, node := range nodes {
+		nested := child(path, node.Name(), i)
+		into[derivedID(nested)] = true
 		if node.Anchor() != "" {
 			into[node.Anchor()] = true
 		}
@@ -544,6 +545,24 @@ func reservedIDs(nodes []docir.Content, path []string, into map[string]bool) map
 	}
 	return into
 }
+
+// derivedID is the identifier a path derives, which is the anchor of its
+// names; a path of anonymous nodes alone derives none, and is numbered from
+// the fallback instead.
+func derivedID(path []step) string {
+	names := make([]string, 0, len(path))
+	for _, s := range path {
+		names = append(names, s.name)
+	}
+	if anchor := docir.AnchorFor(names); strings.Trim(anchor, "-") != "" {
+		return anchor
+	}
+	return anonymousID
+}
+
+// anonymousID is the identifier a section with no named ancestry is numbered
+// from, since it has no name to derive one.
+const anonymousID = "section"
 
 // uniqueID is the derived identifier itself when no other node has taken it,
 // and the first free numbered variant otherwise: two anonymous siblings derive
@@ -560,12 +579,29 @@ func uniqueID(derived string, reserved, used map[string]bool) string {
 	}
 }
 
-// pathKey keys a named path by a separator no name can contain.
-func pathKey(path []string) string { return strings.Join(path, "\x00") }
+// step is one node of an occurrence path: the node's declared name, empty when
+// anonymous, and its place among its siblings, which tells two anonymous
+// siblings apart.
+type step struct {
+	name  string
+	index int
+}
 
-// child extends a named path without sharing its backing array.
-func child(path []string, name string) []string {
-	return append(append(make([]string, 0, len(path)+1), path...), name)
+// pathKey keys an occurrence path by a separator no name can contain.
+func pathKey(path []step) string {
+	var b strings.Builder
+	for _, s := range path {
+		b.WriteString(strconv.Itoa(s.index))
+		b.WriteByte(0)
+		b.WriteString(s.name)
+		b.WriteByte(0)
+	}
+	return b.String()
+}
+
+// child extends an occurrence path without sharing its backing array.
+func child(path []step, name string, index int) []step {
+	return append(append(make([]step, 0, len(path)+1), path...), step{name: name, index: index})
 }
 
 // attr writes one attribute, escaped, and nothing for an empty value.

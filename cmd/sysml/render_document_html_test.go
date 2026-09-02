@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -75,11 +76,21 @@ func TestRenderDocumentHTMLStylesheets(t *testing.T) {
 		t.Errorf("a fragment carries neither page shell nor stylesheet:\n%s", fragment.stdout)
 	}
 
-	sheet := check(t, binary, documentModel, "-html-default-css")
+	sheet := runCommand(t, exec.Command(binary, "-html-default-css"))
 	wantReport(t, sheet, 0, "@layer opensysml;", "--sysml-font-body")
 	if strings.Contains(sheet.stdout, "<article") {
 		t.Errorf("-html-default-css writes CSS, not a document:\n%s", sheet.stdout)
 	}
+
+	// Writing the sheet is the whole run, so it stands in for no other.
+	wantReport(t, check(t, binary, documentModel, "-html-default-css"),
+		2, "ask for it without model files")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-render-document", "Reports::MassReport")),
+		2, "ask for it in its own run")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-convert", "kerml")),
+		2, "ask for it in its own run")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-html-no-default-css")),
+		2, "not the sheet")
 }
 
 // TestRenderDocumentHTMLDocumentOptions checks the title page, contents and
@@ -115,4 +126,13 @@ func TestRenderDocumentHTMLFlagConflicts(t *testing.T) {
 		2, "read stylesheet")
 	wantReport(t, check(t, binary, documentModel, "-html-css", "theme.css"),
 		2, "apply to -render-document")
+}
+
+// TestRenderDocumentHTMLStylesheetURLScheme checks a stylesheet URL is linked
+// whatever case its scheme is written in, rather than read as a file.
+func TestRenderDocumentHTMLStylesheetURLScheme(t *testing.T) {
+	binary := buildCLI(t)
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-css", "HTTPS://Example.test/Site.css"),
+		0, `<link rel="stylesheet" href="HTTPS://Example.test/Site.css">`)
 }

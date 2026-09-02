@@ -290,3 +290,40 @@ func TestHTMLNilDocument(t *testing.T) {
 		t.Fatalf("HTML(nil) error = %v, want %s", err, ErrorNilDocument)
 	}
 }
+
+// TestHTMLAnonymousSections checks a section with no name is still addressable:
+// every one gets its own identifier, its contents link resolves, and numbering
+// follows the document order.
+func TestHTMLAnonymousSections(t *testing.T) {
+	document := fixtureDocument(t, filepath.Join("testdata", "anonymous_sections.sysml"), "Anonymous::AnonymousReport")
+	got, err := HTML(document, HTMLOptions{TOC: true, NumberSections: true})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	ids := regexp.MustCompile(`<section class="sysml-section" id="([^"]*)"`).FindAllStringSubmatch(got, -1)
+	if len(ids) != 4 {
+		t.Fatalf("sections with identifiers = %d, want 4:\n%s", len(ids), got)
+	}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if id[1] == "" {
+			t.Errorf("a section was written without an identifier:\n%s", got)
+		}
+		if seen[id[1]] {
+			t.Errorf("identifier %q is written twice:\n%s", id[1], got)
+		}
+		seen[id[1]] = true
+	}
+
+	for _, entry := range regexp.MustCompile(`<a href="#([^"]*)">`).FindAllStringSubmatch(got, -1) {
+		if !seen[entry[1]] {
+			t.Errorf("contents links to #%s, which no section carries:\n%s", entry[1], got)
+		}
+	}
+	for _, number := range []string{"1", "1.1", "1.2", "2"} {
+		if !strings.Contains(got, `<span class="sysml-section-number">`+number+`</span>`) {
+			t.Errorf("section number %s is missing:\n%s", number, got)
+		}
+	}
+}

@@ -410,8 +410,23 @@ func runCLI() int {
 		return 2
 	}
 
-	// The default stylesheet is asked for on its own; it needs no model.
+	// The default stylesheet is asked for on its own; it needs no model, and
+	// writing it is the whole run, so it cannot stand in for another.
 	if htmlShowCSS {
+		switch {
+		case len(args) > 0:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which no model shapes; ask for it without model files")
+			return 2
+		case renderDoc != "" || renderDocsDir != "" || renderView != "" || renderAllDir != "" ||
+			convertFormat != "" || syncDiffWith != "" || queryText != "" || len(evalExprs) > 0 ||
+			modelChecks.requested():
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet and nothing else; ask for it in its own run")
+			return 2
+		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
+			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet itself; the document and stylesheet options shape a rendered document, not the sheet")
+			return 2
+		}
 		if err := runDefaultStylesheet(); err != nil {
 			return fail(err)
 		}
