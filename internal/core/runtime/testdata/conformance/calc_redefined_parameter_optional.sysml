@@ -10,6 +10,7 @@ package test {
 	}
 
 	calc def Doubling :> Scale {
+		in redefines x;
 		in redefines factor;
 		return : Integer = x * (factor ?? 2);
 	}

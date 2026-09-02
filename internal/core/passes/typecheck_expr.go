@@ -698,10 +698,11 @@ func (ec *exprChecker) checkArguments(
 		}
 		return
 	}
+	// Arguments bind in order, so a call must reach the last required parameter.
 	required := 0
-	for _, p := range params {
+	for i, p := range params {
 		if p.required(ec.model) {
-			required++
+			required = i + 1
 		}
 	}
 	switch {

@@ -360,11 +360,13 @@ func TestExprInvocationRedefinedParameterKeepsInheritedOptionality(t *testing.T)
 			x
 		}
 		calc def Scaled :> Scale {
+			in redefines x;
 			in redefines by;
 			in redefines times : ScalarValues::Integer;
 			x
 		}
 		calc def Tight :> Scale {
+			in redefines x;
 			in redefines by : ScalarValues::Integer[1];
 			x
 		}
@@ -374,6 +376,29 @@ func TestExprInvocationRedefinedParameterKeepsInheritedOptionality(t *testing.T)
 	wantNoDiags(t, fmt.Sprintf(model, `Scaled(2, 3, 4)`))
 	wantOneDiag(t, fmt.Sprintf(model, `Scaled()`), "Scaled requires 1 argument(s), found 0")
 	wantOneDiag(t, fmt.Sprintf(model, `Tight(2)`), "Tight requires 2 argument(s), found 1")
+}
+
+func TestExprInvocationOptionalBeforeRequiredParameter(t *testing.T) {
+	// Positional arguments bind in order, so an omittable parameter ahead of a
+	// required one does not stand in for it.
+	const model = `package P {
+		calc def Scale {
+			in by : ScalarValues::Integer[0..1];
+			in offset : ScalarValues::Integer = 0;
+			in x : ScalarValues::Integer;
+			x
+		}
+		calc def Scaled :> Scale {
+			in redefines by;
+			in redefines offset;
+			x
+		}
+		calc c { %s }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `Scale(2, 0, 5)`))
+	wantOneDiag(t, fmt.Sprintf(model, `Scale(5)`), "Scale requires 3 argument(s), found 1")
+	wantOneDiag(t, fmt.Sprintf(model, `Scaled(5)`), "Scaled requires 3 argument(s), found 1")
+	wantNoDiags(t, fmt.Sprintf(model, `Scale(x = 5)`))
 }
 
 func TestExprInvocationThroughAliasChecksArguments(t *testing.T) {
