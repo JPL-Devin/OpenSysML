@@ -15,9 +15,13 @@ type calcStmtHost struct {
 	result Value // the value its `return` yielded
 }
 
-// describe names the body in a diagnostic; the invocation adds the calc's name.
+// calcBodyDescription names a calculation body in a diagnostic; the invocation
+// adds the calc's name.
+const calcBodyDescription = "calculation body"
+
+// describe names the body in a diagnostic.
 func (h *calcStmtHost) describe() string {
-	return "calculation body"
+	return calcBodyDescription
 }
 
 func (h *calcStmtHost) send(*EvalContext, lower.Send) error {

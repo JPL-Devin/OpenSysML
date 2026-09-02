@@ -131,9 +131,15 @@ type Context struct {
 	// innermost last, so an invocation borrows rather than allocates its storage.
 	argStack []Value
 
-	// scalarStack holds the unboxed arguments of the compiled calc invocations
-	// under way, innermost last, the compiled tier's counterpart of argStack.
+	// scalarStack holds the frames of the compiled calc invocations under way —
+	// parameters, then body locals — innermost last, the compiled tier's
+	// counterpart of argStack.
 	scalarStack []scalar
+
+	// libraryArgBuf holds the boxed arguments of the library call a compiled body
+	// is making, and libraryEval the context a collection built-in it calls takes.
+	libraryArgBuf []Value
+	libraryEval   EvalContext
 
 	// compileCalcs enables the compiled tier for eligible calc bodies; the
 	// OPENSYSML_CALC_COMPILE escape hatch clears it.
