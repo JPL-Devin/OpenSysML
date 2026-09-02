@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -116,6 +117,40 @@ func (r Range) CountViolation(count int64) string {
 		return fmt.Sprintf("%d value(s) bound to a feature with multiplicity lower bound %d", count, r.Lower.Value)
 	}
 	return ""
+}
+
+// HasBounds reports whether the range is exactly lower..upper — the spec's
+// multiplicityHasBounds (SysML v2 8.3.3.1). ok is false when a bound is not
+// evaluable, so callers can skip the check.
+func (r Range) HasBounds(lower, upper int64) (holds bool, ok bool) {
+	if !r.Lower.Known || !r.Upper.Known {
+		return false, false
+	}
+	if r.Lower.Infinite || r.Upper.Infinite {
+		return false, true
+	}
+	return r.Lower.Value == lower && r.Upper.Value == upper, true
+}
+
+// Text renders the range in multiplicity notation: `[1]`, `[0..1]`, `[1..*]`.
+// A bound that is not evaluable renders as `?`.
+func (r Range) Text() string {
+	lower, upper := r.Lower.Text(), r.Upper.Text()
+	if lower == upper && r.Lower.Known && !r.Lower.Infinite {
+		return "[" + lower + "]"
+	}
+	return "[" + lower + ".." + upper + "]"
+}
+
+// Text renders one bound: a number, `*`, or `?` when it is not evaluable.
+func (b Bound) Text() string {
+	switch {
+	case !b.Known:
+		return "?"
+	case b.Infinite:
+		return "*"
+	}
+	return strconv.FormatInt(b.Value, 10)
 }
 
 // LowerLeUpper reports whether a range's lower bound does not exceed its upper

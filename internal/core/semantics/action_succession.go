@@ -1,0 +1,252 @@
+package semantics
+
+import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+// ActionSuccession is one Succession an action's body declares or inherits,
+// with each end resolved to the member it attaches to. It is the KerML view a
+// Feature's sourceConnector/targetConnector give of the successions written as
+// `succession s first a then b`, `first a then b`, `then b`, or a guarded
+// `if`/`else` edge (whose transition owns a succession).
+type ActionSuccession struct {
+	// Decl is the syntax declaring the succession.
+	Decl ast.Node
+	// Owner is the action whose body declares Decl; nil for a body-local block
+	// such as a loop or branch, or for an action queried by body alone.
+	Owner *symbols.Symbol
+	// Source and Target are the two ends, in connector-end order.
+	Source, Target ActionSuccessionEnd
+}
+
+// ActionSuccessionEnd is one end of an ActionSuccession.
+type ActionSuccessionEnd struct {
+	// Node is the declaration the end attaches to; nil when it names none the
+	// model declares (an implied `start`/`done`, or an unresolved name).
+	Node ast.Node
+	// Multiplicity is the multiplicity the end writes, nil when it writes none.
+	Multiplicity *ast.Multiplicity
+	// Span locates the end as written, or the succession when the end is implied.
+	Span source.Span
+}
+
+// ActionSuccessions returns the successions of an action definition or usage:
+// those inherited from what it specializes or is typed by, most general first,
+// then its own in declaration order. A redefined inherited succession is masked.
+func (m *Model) ActionSuccessions(sym *symbols.Symbol) []ActionSuccession {
+	if sym == nil || sym.Decl == nil {
+		return nil
+	}
+	var out []ActionSuccession
+	sources := m.MemberSources(sym)
+	var visible map[*symbols.Symbol]bool
+	for i := len(sources) - 1; i >= 0; i-- {
+		src := sources[i]
+		if src == nil || src.Scope == nil {
+			continue
+		}
+		if visible == nil {
+			visible = make(map[*symbols.Symbol]bool)
+			for _, member := range m.MembersOf(sym) {
+				visible[member] = true
+			}
+		}
+		for _, s := range m.DeclaredSuccessions(src.Scope, src, actionBodyMembers(src)) {
+			if named, ok := namedSuccession(src.Scope, s.Decl); ok && !visible[named] {
+				continue
+			}
+			out = append(out, s)
+		}
+	}
+	return append(out, m.DeclaredSuccessions(sym.Scope, sym, actionBodyMembers(sym))...)
+}
+
+// namedSuccession is the symbol scope registers for a `succession s` usage. An
+// inherited one is sym's only while MembersOf still lists it: a closer
+// declaration of its name, or a redefinition of it, masks it. The shorthand
+// forms have no name of their own and are never masked.
+func namedSuccession(scope *symbols.Scope, decl ast.Node) (*symbols.Symbol, bool) {
+	usage, ok := decl.(*ast.Usage)
+	if !ok || usage.Ident.Name == "" {
+		return nil, false
+	}
+	for _, member := range scope.AllMembers() {
+		if member.Decl == decl {
+			return member, true
+		}
+	}
+	return nil, false
+}
+
+// actionBodyMembers is the body of an action definition, usage, or control node.
+func actionBodyMembers(sym *symbols.Symbol) []ast.Node {
+	if members := declMembers(sym); members != nil {
+		return members
+	}
+	return ast.NodeBodyMembers(sym.Decl)
+}
+
+// DeclaredSuccessions returns the successions members declare, in order, with
+// end names resolved in scope; owner, which may be nil, is recorded on each.
+func (m *Model) DeclaredSuccessions(scope *symbols.Scope, owner *symbols.Symbol, members []ast.Node) []ActionSuccession {
+	var out []ActionSuccession
+	for _, member := range members {
+		if wrapper, ok := member.(*ast.Membership); ok {
+			member = wrapper.Member
+		}
+		switch n := member.(type) {
+		case *ast.Usage:
+			if n.Kind != ast.UsageSuccession || len(n.ConnectorEnds) != 2 {
+				continue
+			}
+			out = append(out, ActionSuccession{
+				Decl:   n,
+				Owner:  owner,
+				Source: m.connectorEndOf(scope, owner, n.ConnectorEnds[0], n.Span()),
+				Target: m.connectorEndOf(scope, owner, n.ConnectorEnds[1], n.Span()),
+			})
+		case *ast.InitialNode:
+			if n.Successor == nil {
+				continue
+			}
+			out = append(out, ActionSuccession{
+				Decl:   n,
+				Owner:  owner,
+				Source: ActionSuccessionEnd{Node: m.actionNodeNamed(scope, owner, n.Name), Span: n.Span()},
+				Target: m.referenceEnd(scope, owner, n.Successor, n.Span()),
+			})
+		case *ast.SuccessionEdge:
+			out = append(out, ActionSuccession{
+				Decl:   n,
+				Owner:  owner,
+				Source: m.edgeEnd(scope, owner, n.Source, n.SourceMember, n.Span()),
+				Target: m.edgeEnd(scope, owner, n.Target, n.TargetMember, n.Span()),
+			})
+		case *ast.ControlFlowEdge:
+			out = append(out, ActionSuccession{
+				Decl:   n,
+				Owner:  owner,
+				Source: m.edgeEnd(scope, owner, n.Source, n.SourceMember, n.Span()),
+				Target: m.edgeEnd(scope, owner, n.Target, n.TargetMember, n.Span()),
+			})
+		}
+	}
+	return out
+}
+
+func (m *Model) connectorEndOf(scope *symbols.Scope, owner *symbols.Symbol, end *ast.ConnectorEnd, at source.Span) ActionSuccessionEnd {
+	if end == nil {
+		return ActionSuccessionEnd{Span: at}
+	}
+	e := m.referenceEnd(scope, owner, end.AttachedTarget(), end.Span())
+	e.Multiplicity = end.Multiplicity
+	return e
+}
+
+// edgeEnd is an end of an edge member: bound to a neighbouring member by
+// position (`then b` after `action a`), or named.
+func (m *Model) edgeEnd(scope *symbols.Scope, owner *symbols.Symbol, ref *ast.QualifiedName, member ast.Node, at source.Span) ActionSuccessionEnd {
+	if member != nil {
+		return ActionSuccessionEnd{Node: member, Span: at}
+	}
+	if ref == nil {
+		return ActionSuccessionEnd{Span: at}
+	}
+	return m.referenceEnd(scope, owner, ref, at)
+}
+
+func (m *Model) referenceEnd(scope *symbols.Scope, owner *symbols.Symbol, target ast.Node, at source.Span) ActionSuccessionEnd {
+	if target == nil {
+		return ActionSuccessionEnd{Span: at}
+	}
+	e := ActionSuccessionEnd{Span: target.Span()}
+	sym, ok := m.resolver.ResolveTarget(scope, target)
+	if !ok {
+		return e
+	}
+	if _, initial := sym.Decl.(*ast.InitialNode); initial {
+		// `first a` registers a symbol of its own under a's name; the end is the
+		// node declared under that name.
+		e.Node = m.actionNodeNamed(sym.OwnerScope, owner, sym.Name)
+	} else {
+		e.Node = sym.Decl
+	}
+	return e
+}
+
+// actionNodeNamed is the node an action declares or inherits under name, as a
+// `first a` names it: the nearest declaration of that name that is not itself an
+// initial-node marker.
+func (m *Model) actionNodeNamed(scope *symbols.Scope, owner *symbols.Symbol, name string) ast.Node {
+	if name == "" {
+		return nil
+	}
+	if scope != nil {
+		if node := nonInitialDecl(scope.LookupLocalAll(name)); node != nil {
+			return node
+		}
+	}
+	if owner == nil {
+		return nil
+	}
+	var candidates []*symbols.Symbol
+	for _, member := range m.MembersOf(owner) {
+		if member.Name == name || member.ShortName == name {
+			candidates = append(candidates, member)
+		}
+	}
+	if node := nonInitialDecl(candidates); node != nil {
+		return node
+	}
+	// A `first j then …` names j without declaring it, but its symbol masks the
+	// inherited j in MembersOf; look the node up where it is declared.
+	for _, src := range m.MemberSources(owner) {
+		if src == nil || src.Scope == nil {
+			continue
+		}
+		if node := nonInitialDecl(src.Scope.LookupLocalAll(name)); node != nil {
+			return node
+		}
+	}
+	return nil
+}
+
+func nonInitialDecl(syms []*symbols.Symbol) ast.Node {
+	for _, sym := range syms {
+		if _, initial := sym.Decl.(*ast.InitialNode); !initial && sym.Decl != nil {
+			return sym.Decl
+		}
+	}
+	return nil
+}
+
+// ActionDeclaration reports whether decl declares an ActionDefinition or an
+// ActionUsage (SysML v2 8.3.17), including the state, calculation, case,
+// transition, and control-node kinds that specialize them.
+func ActionDeclaration(decl ast.Node) bool {
+	switch d := decl.(type) {
+	case *ast.Definition:
+		switch d.Kind {
+		case ast.DefAction, ast.DefState, ast.DefCalc, ast.DefCase,
+			ast.DefAnalysisCase, ast.DefVerificationCase, ast.DefUseCase:
+			return true
+		}
+	case *ast.Usage:
+		switch d.Kind {
+		case ast.UsageAction, ast.UsageState, ast.UsageCalc, ast.UsageCase,
+			ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase,
+			ast.UsageTransition:
+			return true
+		}
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode,
+		*ast.StateNode, *ast.TransitionMember, *ast.SendStatement,
+		*ast.WhileLoopActionNode, *ast.IfBranchNode:
+		return true
+	case *ast.InitialNode:
+		// `first a if c then b` is a guarded succession: a transition usage.
+		return d.Guard != nil
+	}
+	return false
+}

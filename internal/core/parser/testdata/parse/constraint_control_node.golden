@@ -1,0 +1,15 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="constraint" abstract=false variation=false name="Bounded"
+      (ForkNode name="f")
+      (JoinNode name="j")
+      (ConstraintMember assert=true negated=false
+        (LiteralBool value=true))))
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Tank"
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (MergeNode name="m")
+          (DecisionNode name="d")
+          (ConstraintMember assert=true negated=false
+            (LiteralBool value=true)))))))

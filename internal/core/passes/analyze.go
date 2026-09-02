@@ -59,6 +59,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(W9CBoundFeatureTypesPass{})
 	reg.Register(W11AUsageTypingPass{})
 	reg.Register(W11AKerMLSpecializationPass{})
+	reg.Register(ControlNodeSuccessionPass{})
 	return reg
 }
 

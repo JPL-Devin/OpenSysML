@@ -170,7 +170,7 @@ package OpenSysMLPipeline {
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
-        attribute passCount : Integer = 47;
+        attribute passCount : Integer = 48;
         attribute sortsByLevel : Boolean = true;
         attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
@@ -246,6 +246,10 @@ package OpenSysMLPipeline {
         part boundFeatureTypes : TypeCheck { attribute :>> goType = "W9CBoundFeatureTypesPass"; }
         part usageTyping : TypeCheck { attribute :>> goType = "W11AUsageTypingPass"; }
         part kermlSpecialization : TypeCheck { attribute :>> goType = "W11AKerMLSpecializationPass"; }
+        part controlNodeSuccessions : ConstraintCheck {
+            attribute :>> goType = "ControlNodeSuccessionPass";
+            attribute :>> elementScoped = true;
+        }
 
         in item typed : TypeTable;
         out item findings : Diagnostic;
