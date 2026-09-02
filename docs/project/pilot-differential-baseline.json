@@ -3,6 +3,7 @@
   "pilotRelease": "2026-07 (jupyter-sysml-kernel 0.61.0)",
   "provenance": {
     "pilotTag": "2026-07",
+    "pilotCommit": "c7fc737d56da9e2d78f9d7df6d38efbec2e7e965",
     "pilotArtifact": "0.61.0",
     "errataRegistry": "sha256:2e5a631caa524d6e04675e0c8ff6cb310e020adb4d614e65c3e3d0f0016dea50",
     "tools": [
@@ -70,7 +71,7 @@
         "digest": "sha256:b0153c55bbfcdacabab911725dc44e0e7f4d3a501a281b1f3f2a13cda19737c6"
       }
     ],
-    "recorded": "2026-09-01"
+    "recorded": "2026-09-02"
   },
   "totals": {
     "files": 366,

@@ -110,12 +110,20 @@ own `.kerml` fixtures out of the comparison (see the known limitation below).
 
 The OMG corpora are not vendored, for the same licensing reason as the training corpus, and the
 pilot release they are fetched at is pinned once in `scripts/pilot-pin.sh` — the same pin the
-validator build reads, so corpus and reference can never come from different releases. Each
-corpus directory records the repository and tag it was fetched from in a `.pilot-pin` stamp: one
-stamped with the current pin is left alone (remove it to re-download), one stamped with another
-pin is re-downloaded when the script runs again (the stale copy is kept until its replacement
-has been fetched), and one without a stamp is left alone with a warning. A root whose directory
-is absent is skipped with a warning.
+validator build reads, so corpus and reference can never come from different releases. The pin
+is a release tag *and* the commit it names (`PILOT_TAG=2026-07`,
+`PILOT_COMMIT=c7fc737d56da9e2d78f9d7df6d38efbec2e7e965`): the tag is the human-readable release
+and what the clone asks for, the commit is what makes the pin immutable, and every fetch fails
+if the tag no longer resolves to that commit. A tag alone is a mutable name, so the baselines
+below record `pilotCommit` alongside `pilotTag`: a baseline then identifies the bytes it
+measured, not a name that could be re-pointed. Each corpus directory records the tag, commit and
+repository it was fetched from in a `.pilot-pin` stamp: one stamped with the current pin is left
+alone (remove it to re-download), and one stamped with another pin or not stamped at all is
+re-downloaded when the script runs again (the stale copy is kept until its replacement has been
+fetched). An unstamped copy used to be kept with only a warning, which is how a checkout
+provisioned at `2026-05` (98 example files) survived the re-pin to `2026-07` (99) and failed
+every provenance test at an unchanged pin. A root whose directory is absent is skipped with a
+warning.
 
 ### KerML: how the reference validates it
 

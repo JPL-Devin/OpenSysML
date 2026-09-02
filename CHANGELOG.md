@@ -162,6 +162,16 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   thread rather than an executor, the pandoc fetch refuses a plaintext redirect, and the mermaid
   install runs no dependency's lifecycle script and finishes before calling itself present.
 
+- **The pilot reference is pinned to a commit, and a stale copy of it is replaced.** The corpora,
+  training examples, Xpect suites and grammars were fetched by release tag alone — a name the
+  upstream repository can re-point — and a corpus directory fetched at an earlier release was kept
+  with only a warning, so a checkout re-pinned from `2026-05` to `2026-07` still measured the old
+  material (98 example files where the baselines record 99) and every provenance test failed at an
+  unchanged pin. `scripts/pilot-pin.sh` now names the commit the tag must resolve to and every
+  fetch refuses a tag that resolves elsewhere; each fetched directory is stamped with the tag,
+  commit and repository, and a copy stamped with another pin or not stamped at all is re-fetched;
+  and the committed baselines record the commit they measured next to the tag.
+
 ## 0.4.2 — 2026-08-31
 
 Release 0.4.2 is where document generation from a model becomes a working pipeline. 0.4.1 shipped the

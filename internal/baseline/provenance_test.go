@@ -12,7 +12,7 @@ func TestReadPinResolvesTheRepositorysPin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pin.Tag == "" || pin.Artifact == "" {
+	if pin.Tag == "" || pin.Commit == "" || pin.Artifact == "" {
 		t.Fatalf("%s resolved to %+v", PinPath, pin)
 	}
 	if want := pin.Tag + " (jupyter-sysml-kernel " + pin.Artifact + ")"; pin.Release() != want {
@@ -25,12 +25,20 @@ func TestReadPinFailsOnAPinItCannotResolve(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "scripts"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(PinPath)), []byte("PILOT_TAG=2026-05\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	_, err := ReadPin(root)
-	if err == nil || !strings.Contains(err.Error(), "pins no PILOT_TAG") {
-		t.Fatalf("want a pin-resolution failure, got %v", err)
+	for name, content := range map[string]string{
+		"no defaults":    "PILOT_TAG=2026-05\n",
+		"tag only":       "PILOT_TAG=\"${PILOT_TAG:-2026-05}\"\nPILOT_ARTIFACT_VERSION=\"${PILOT_ARTIFACT_VERSION:-0.60.1}\"\n",
+		"commit not sha": "PILOT_TAG=\"${PILOT_TAG:-2026-05}\"\nPILOT_COMMIT=\"${PILOT_COMMIT:-2026-05}\"\nPILOT_ARTIFACT_VERSION=\"${PILOT_ARTIFACT_VERSION:-0.60.1}\"\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(PinPath)), []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, err := ReadPin(root)
+			if err == nil || !strings.Contains(err.Error(), "pins no PILOT_TAG") {
+				t.Fatalf("want a pin-resolution failure, got %v", err)
+			}
+		})
 	}
 }
 
@@ -81,6 +89,7 @@ func TestDigestFilesIdentifiesTheSetNotTheOrder(t *testing.T) {
 func TestValidateNamesWhatARecordFailsToState(t *testing.T) {
 	complete := Record{
 		PilotTag:      "2026-05",
+		PilotCommit:   "fa709f28dfd49dfdb7ee83e4e19da2f57e0eb3aa",
 		PilotArtifact: "0.60.1",
 		Errata:        "sha256:aa",
 		Inputs:        []Input{{Name: "corpus", Dir: "examples", Origin: OriginOurs, Files: 1, Digest: "sha256:bb"}},
@@ -95,6 +104,7 @@ func TestValidateNamesWhatARecordFailsToState(t *testing.T) {
 		want   string
 	}{
 		{"no tag", func(r *Record) { r.PilotTag = "" }, "states no pilot pin"},
+		{"no commit", func(r *Record) { r.PilotCommit = "" }, "states no pilot pin"},
 		{"no artifact", func(r *Record) { r.PilotArtifact = "" }, "states no pilot pin"},
 		{"no errata", func(r *Record) { r.Errata = "" }, "states no errata registry digest"},
 		{"no inputs", func(r *Record) { r.Inputs = nil }, "states no compared inputs"},
@@ -118,6 +128,7 @@ func TestValidateNamesWhatARecordFailsToState(t *testing.T) {
 func TestCompareClassifiesEveryMismatchByItsAction(t *testing.T) {
 	recorded := Record{
 		PilotTag:      "2026-05",
+		PilotCommit:   "fa709f28dfd49dfdb7ee83e4e19da2f57e0eb3aa",
 		PilotArtifact: "0.60.1",
 		Errata:        "sha256:aa",
 		Tools:         []Tool{{Name: "bridge", Source: "scripts/x.java", SourceDigest: "sha256:cc", Release: "2026-05"}},
@@ -129,6 +140,7 @@ func TestCompareClassifiesEveryMismatchByItsAction(t *testing.T) {
 	}
 	current := recorded
 	current.PilotTag = "2026-11"
+	current.PilotCommit = "c7fc737d56da9e2d78f9d7df6d38efbec2e7e965"
 	current.Tools = []Tool{{Name: "bridge", Source: "scripts/x.java", SourceDigest: "sha256:c0", Release: "2026-11"}}
 	current.Inputs = []Input{
 		{Name: "ours", Dir: "examples", Origin: OriginOurs, Files: 2, Digest: "sha256:d0"},
@@ -137,6 +149,7 @@ func TestCompareClassifiesEveryMismatchByItsAction(t *testing.T) {
 
 	want := map[string]Cause{
 		"pilotTag":                   CausePin,
+		"pilotCommit":                CausePin,
 		"tools[bridge].sourceDigest": CauseOurs,
 		"tools[bridge].release":      CausePin,
 		"inputs[ours].digest":        CauseOurs,
