@@ -683,21 +683,35 @@ func (p *Parser) atDirectionKeyword() bool {
 	return false
 }
 
+// chainWord marks a feature chain declaration (`attribute chain a.b;`). It is
+// a modifier only when a name follows it; otherwise it names the feature.
+const chainWord = "chain"
+
+// atChainWord reports whether the cursor is at the word `chain`.
+func (p *Parser) atChainWord() bool {
+	t := p.peek()
+	return t.Kind == lexer.Identifier && p.src.Text(t.Span) == chainWord
+}
+
+// atChainModifier reports whether the cursor is at the `chain` modifier of a
+// declaration rather than at a feature named `chain`.
+func (p *Parser) atChainModifier() bool {
+	if !p.atChainWord() {
+		return false
+	}
+	return p.peekIsName(1) || p.peekN(1).Kind == lexer.ColonColon
+}
+
 func (p *Parser) parseFeatureModifiers() featureMods {
 	var m featureMods
 	for {
 		t := p.peek()
-		// Handle identifier "chain" as contextual modifier ONLY if followed by name/keyword
-		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == "chain" {
-			next := p.peekN(1)
-			// "chain" is modifier if next token is identifier, keyword, or :: (qualified name)
-			isModifier := next.Kind == lexer.Identifier || next.Kind == lexer.Keyword || next.Kind == lexer.ColonColon
-			if isModifier {
+		if p.atChainWord() {
+			if p.atChainModifier() {
 				m.isChain = true
 				p.advance()
 				continue
 			}
-			// Otherwise "chain" is the declaration name itself - stop parsing modifiers
 			return m
 		}
 		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == varPrefixWord {
@@ -1273,9 +1287,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse 'all' modifier if present (appears after keyword, before name)
 	isAll := p.acceptSufficientAll()
 
-	// Parse 'chain' modifier if present (identifier, not keyword)
-	t2 := p.peek()
-	if t2.Kind == lexer.Identifier && p.src.Text(t2.Span) == "chain" {
+	if p.atChainModifier() {
 		mods.isChain = true
 		p.advance()
 	}

@@ -83,3 +83,55 @@ func TestParseVarPrefixQualifiesTheKind(t *testing.T) {
 		t.Errorf("derived = %v, prefix = %q, name = %q; want true, \"var\", \"a\"", u.IsDerived, u.PrefixKeyword, u.Ident.Name)
 	}
 }
+
+// `chain` is the feature chain modifier only when a name follows it; before
+// `=`, `:`, `;` or `[` it names the feature, on either side of the kind keyword.
+func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
+	for _, src := range []string{
+		"package P { attribute chain = 1; attribute pt = chain + 1; }",
+		"package P { attribute chain : Integer; }",
+		"package P { part def D { attribute chain; attribute chain[*]; } }",
+		"package P { part def D { ref chain :> other; attribute other; } }",
+		"package P { action a { in chain : Integer; assign chain := 1; } }",
+	} {
+		root := parseClean(t, src)
+		pkg := root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)
+		u := firstUsage(t, pkg.Members[0].(*ast.Membership).Member)
+		if u.Ident.Name != "chain" || u.IsChain {
+			t.Errorf("%s\ndeclared %q chain=%t, want the feature named chain", src, u.Ident.Name, u.IsChain)
+		}
+	}
+
+	for _, src := range []string{
+		"package P { attribute chain x : Integer; }",
+		"package P { ref chain x : Integer; }",
+		"package P { ref chain 'x y' : Integer; }",
+	} {
+		root := parseClean(t, src)
+		pkg := root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)
+		u := firstUsage(t, pkg.Members[0].(*ast.Membership).Member)
+		if u.Ident.Name == "chain" || !u.IsChain {
+			t.Errorf("%s\ndeclared %q chain=%t, want the modifier and the name after it", src, u.Ident.Name, u.IsChain)
+		}
+	}
+}
+
+// firstUsage returns n when it is a usage, else the first usage n declares.
+func firstUsage(t *testing.T, n ast.Node) *ast.Usage {
+	t.Helper()
+	switch d := n.(type) {
+	case *ast.Usage:
+		if len(d.Members) > 0 {
+			if u, ok := d.Members[0].(*ast.Membership).Member.(*ast.Usage); ok {
+				return u
+			}
+		}
+		return d
+	case *ast.Definition:
+		if u, ok := d.Members[0].(*ast.Membership).Member.(*ast.Usage); ok {
+			return u
+		}
+	}
+	t.Fatalf("member parsed to %T, want a usage", n)
+	return nil
+}
