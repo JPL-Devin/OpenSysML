@@ -5,8 +5,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"runtime"
 	"sort"
+	"sync"
+	"sync/atomic"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -39,6 +43,16 @@ type pending struct {
 	rec  *IndexRecord
 }
 
+// libraryFile is one file of the source as read and hashed, with its parse tree
+// once parsed; err is the read error when reading it failed.
+type libraryFile struct {
+	name    string
+	content []byte
+	sum     [sha256.Size]byte
+	root    *ast.RootNamespace
+	err     error
+}
+
 // NewLoader returns a Loader over src, using cache for persistence.
 func NewLoader(src Source, cache *Cache) *Loader {
 	return &Loader{src: src, cache: cache}
@@ -48,13 +62,24 @@ func NewLoader(src Source, cache *Cache) *Loader {
 // installs the derived facts of each. It loads the whole set at once because a
 // record holds supertype names a sibling file may declare; an incomplete library
 // is reported and not cached.
+//
+// Hashing and parsing are per file and pure, so the files are hashed and parsed
+// concurrently; the index is then written in source order, so the result is the
+// one a serial load produces.
 func (l *Loader) LoadAll(idx *symbols.Index) error {
 	var errs []error
 	l.hits = 0
-	for _, name := range l.src.List() {
-		if err := l.load(name, idx); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", name, err))
+	files := l.readAll()
+	parallelFor(len(files), func(i int) { files[i].hash(); files[i].parse() })
+	if l.digest == "" {
+		l.digest = digestOf(files)
+	}
+	for _, f := range files {
+		if f.err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", f.name, f.err))
+			continue
 		}
+		l.add(f, idx)
 	}
 
 	// A facade package re-exports what another library package declares.
@@ -67,24 +92,89 @@ func (l *Loader) LoadAll(idx *symbols.Index) error {
 // load parses the named library file into idx and marks it library content,
 // noting the cache record its facts are restored from when there is one.
 func (l *Loader) load(name string, idx *symbols.Index) error {
-	content, err := l.src.Read(name)
-	if err != nil {
-		return err
+	f := l.read(name)
+	if f.err != nil {
+		return f.err
 	}
+	f.hash()
+	f.parse()
+	l.add(f, idx)
+	return nil
+}
 
-	doc := pending{name: name}
+// add registers a parsed file into idx and marks it library content, noting the
+// cache record its facts are restored from when there is one.
+func (l *Loader) add(f libraryFile, idx *symbols.Index) {
+	doc := pending{name: f.name}
 	if l.cache != nil {
-		doc.key = l.cache.keyFor(content, l.setDigest())
+		doc.key = l.cache.keyForSum(f.sum, l.setDigest())
 		if rec, ok := l.cache.Load(doc.key); ok {
 			doc.rec = rec
 		}
 	}
-
-	p := parser.New(source.New(name, content))
-	idx.AddDocument(name, p.ParseFile())
-	idx.MarkLibrary(name)
+	idx.AddDocument(f.name, f.root)
+	idx.MarkLibrary(f.name)
 	l.loaded = append(l.loaded, doc)
-	return nil
+}
+
+// read reads the named file of the source.
+func (l *Loader) read(name string) libraryFile {
+	f := libraryFile{name: name}
+	f.content, f.err = l.src.Read(name)
+	return f
+}
+
+// readAll reads every file of the source, in List order. Reads are serial: a
+// Source need not be safe for concurrent use.
+func (l *Loader) readAll() []libraryFile {
+	names := l.src.List()
+	files := make([]libraryFile, len(names))
+	for i, name := range names {
+		files[i] = l.read(name)
+	}
+	return files
+}
+
+// hash hashes a file that was read, and is a no-op for one that was not.
+func (f *libraryFile) hash() {
+	if f.err == nil {
+		f.sum = sha256.Sum256(f.content)
+	}
+}
+
+// parse parses a file that was read, and is a no-op for one that was not.
+func (f *libraryFile) parse() {
+	if f.err == nil {
+		f.root = parser.New(source.New(f.name, f.content)).ParseFile()
+	}
+}
+
+// parallelFor calls fn for every index below n, from up to GOMAXPROCS
+// goroutines, and returns once every call has.
+func parallelFor(n int, fn func(i int)) {
+	workers := min(runtime.GOMAXPROCS(0), n)
+	if workers <= 1 {
+		for i := 0; i < n; i++ {
+			fn(i)
+		}
+		return
+	}
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= n {
+					return
+				}
+				fn(i)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // installFacts installs the derived facts of every loaded document: restored
@@ -156,20 +246,26 @@ func (l *Loader) Hits() int {
 // it drew a value from, such as a unit reduction following a reference unit
 // declared elsewhere. An unreadable file digests as its read error.
 func (l *Loader) setDigest() string {
-	if l.digest != "" {
-		return l.digest
+	if l.digest == "" {
+		files := l.readAll()
+		parallelFor(len(files), func(i int) { files[i].hash() })
+		l.digest = digestOf(files)
 	}
-	names := append([]string(nil), l.src.List()...)
-	sort.Strings(names)
+	return l.digest
+}
+
+// digestOf is the set digest of the given files (see setDigest), in name order
+// so the result does not depend on the order they were read in.
+func digestOf(files []libraryFile) string {
+	sorted := append([]libraryFile(nil), files...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].name < sorted[j].name })
 	h := sha256.New()
-	for _, name := range names {
-		content, err := l.src.Read(name)
-		if err != nil {
-			fmt.Fprintf(h, "%s\x00!%v\x00", name, err)
+	for _, f := range sorted {
+		if f.err != nil {
+			fmt.Fprintf(h, "%s\x00!%v\x00", f.name, f.err)
 			continue
 		}
-		fmt.Fprintf(h, "%s\x00%x\x00", name, sha256.Sum256(content))
+		fmt.Fprintf(h, "%s\x00%x\x00", f.name, f.sum)
 	}
-	l.digest = hex.EncodeToString(h.Sum(nil))
-	return l.digest
+	return hex.EncodeToString(h.Sum(nil))
 }
