@@ -505,9 +505,18 @@ func hasError(diags []passes.Diagnostic) bool {
 }
 
 // within narrows the result to one span of the submission — one file of a load
-// of several — so what is reported as its own is scoped to that text alone.
+// of several — so what is reported as its own is scoped to that text alone. A
+// member is the file's when it begins there: the last member of a document runs
+// on over the other language's text masked out after it.
 func (r Result) within(span source.Span) Result {
 	r.own = []source.Span{span}
+	members := make([]ast.Node, 0, len(r.Members))
+	for _, m := range r.Members {
+		if at := m.Span().Offset; at >= span.Offset && at < span.End() {
+			members = append(members, m)
+		}
+	}
+	r.Members = members
 	return r
 }
 
