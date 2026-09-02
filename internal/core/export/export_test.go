@@ -68,6 +68,12 @@ func TestConvertedNotationParses(t *testing.T) {
 	}
 }
 
+// textOnlyFixtures are the models whose graph the mapping cannot write back
+// without its source text, by the refusal it must keep reporting for them.
+var textOnlyFixtures = map[string]string{
+	"action_nodes": "this expression states no notation and no structure",
+}
+
 // TestRoundTripIsLossless is the fidelity contract: converting the notation a
 // graph produced back to a graph gives the same graph. Notation and RDF say the
 // same thing in different words, so this is what "no data lost" means — the
@@ -96,7 +102,131 @@ func TestRoundTripIsLossless(t *testing.T) {
 			if string(first) != string(second) {
 				t.Errorf("round trip changed the graph\n--- first ---\n%s\n--- second ---\n%s", first, second)
 			}
+			if textOnly, ok := textOnlyFixtures[name]; ok {
+				_, err := export.Convert(name+".ttl", withoutTriples(t, first, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+				var unsupported *export.UnsupportedError
+				if !errors.As(err, &unsupported) || !strings.Contains(err.Error(), textOnly) {
+					t.Fatalf("the mapping alone should still refuse %s (%s), got: %v", name, textOnly, err)
+				}
+				return
+			}
+			structuralRoundTrip(t, name, first)
 		})
+	}
+}
+
+// structuralRoundTrip strips the source text from a graph and requires the
+// structure alone to carry it to notation and back; it returns that notation.
+func structuralRoundTrip(t *testing.T, name string, first []byte) []byte {
+	t.Helper()
+	structural := withoutTriples(t, first, "sysx:sourceText")
+	fromGraph, err := export.Convert(name+".ttl", structural, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v", err)
+	}
+	again, err := export.Convert(name+".sysml", fromGraph, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again from the mapping alone: %v", err)
+	}
+	if got := withoutTriples(t, again, "sysx:sourceText"); string(got) != string(structural) {
+		t.Errorf("the mapping alone changed the graph\n--- notation ---\n%s\n--- first ---\n%s\n--- second ---\n%s", fromGraph, structural, got)
+	}
+	return fromGraph
+}
+
+// TestWrittenReferencesResolveWhereWritten pins the spelling rule: short when
+// the short name resolves to the graph's element there, else qualified enough.
+func TestWrittenReferencesResolveWhereWritten(t *testing.T) {
+	path := filepath.Join("testdata", "convert", "shadowed_references.sysml")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph, err := export.Convert(path, src, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, want := range []string{
+		// The graph names the package-level targets, not the shadowing members.
+		"sysml:redefines elmt:Shadowing__packet_20data_20field",
+		"sysml:redefines elmt:Shadowing__Packet__data_20field",
+		"sysml:subsets elmt:Shadowing__payload",
+		"sysml:references elmt:Shadowing__Bus__payload",
+		"sysml:type elmt:Shadowing__Packet",
+		"sysml:type elmt:Shadowing__Bus__Packet",
+		"sysml:type elmt:Shadowing__Frame",
+		"sysml:type elmt:Shadowing__Frame__Frame",
+		"sysml:type elmt:Shadowing__Field",
+		"sysml:targetFeature elmt:Shadowing__Packet__payload",
+		"sysml:referent elmt:Shadowing__payload",
+	} {
+		if !strings.Contains(string(graph), want) {
+			t.Errorf("graph does not record %q\n%s", want, graph)
+		}
+	}
+	notation := structuralRoundTrip(t, "shadowed_references", graph)
+	for _, want := range []string{
+		// A redefinition target is looked up past the redefining feature, so
+		// the same name written short still reaches the redefined one.
+		"attribute 'packet data field' redefines 'packet data field';",
+		// A nested member of the same name captures the short name.
+		"attribute 'data field' redefines Packet::'data field' {",
+		// The subsetting feature itself, or a sibling, captures the short name;
+		// a reference to that sibling is short because it is the target.
+		"part payload subsets Shadowing::payload;",
+		"part cargo subsets Shadowing::payload;",
+		"ref part carried references payload;",
+		// A nested definition captures the outer one's name; the nested one
+		// is what the short name reaches.
+		"part wrapped : Shadowing::Packet;",
+		"part raw : Packet;",
+		"ref part outer : Shadowing::Frame;",
+		"ref part inner : Frame;",
+		"attribute 'packet data field' : Shadowing::Field;",
+		// Nothing shadows Field inside Packet, so it stays short.
+		"attribute 'data field' : Field;",
+		"connection link connect wrapped.payload to Shadowing::payload;",
+	} {
+		if !strings.Contains(string(notation), want) {
+			t.Errorf("notation does not write %q\n%s", want, notation)
+		}
+	}
+}
+
+// TestPacketsRoundTripsStructurally is the corpus case the spelling rule was
+// found on: a redefining attribute that bears its target's own name.
+func TestPacketsRoundTripsStructurally(t *testing.T) {
+	path := filepath.Join(corpusRoundTripExamples, "pilot-corpora", "sysml-examples", "Packet Example", "Packets.sysml")
+	src, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		for _, root := range corpusRoundTripRoots {
+			if root.name == "pilot-corpora/sysml-examples" {
+				root.skip(t, path+" is missing")
+			}
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph, err := export.Convert(path, src, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	// Two definitions redefine the package's 'packet data field', one nested
+	// attribute its 'user data field'; none may be its own target.
+	for want, n := range map[string]int{
+		"sysml:redefines elmt:Packets__packet_20data_20field ;":                      2,
+		"sysml:redefines elmt:Packets__packet_20data_20field__user_20data_20field ;": 1,
+	} {
+		if got := strings.Count(string(graph), want); got != n {
+			t.Errorf("graph records %q %d times, want %d\n%s", want, got, n, graph)
+		}
+	}
+	notation := structuralRoundTrip(t, "Packets", graph)
+	// Written short, 'packet data field' would reach the redefinition
+	// inherited from 'Data Packet' instead of the package's attribute.
+	if want := "attribute 'packet data field' redefines Packets::'packet data field' {"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
 	}
 }
 

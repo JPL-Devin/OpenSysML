@@ -1,0 +1,640 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:Shadowing
+    a sysml:Package ;
+    sysml:qualifiedName "Shadowing" ;
+    sysml:elementId "Shadowing" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Shadowing" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Field, elmt:Shadowing__packet_20data_20field, elmt:Shadowing__Packet, elmt:Shadowing__Thermal_20Packet, elmt:Shadowing__payload, elmt:Shadowing__Bus, elmt:Shadowing__Frame ;
+    sysml:ownedMembership elmt:Shadowing__Field_om, elmt:Shadowing__packet_20data_20field_om, elmt:Shadowing__Packet_om, elmt:Shadowing__Thermal_20Packet_om, elmt:Shadowing__payload_om, elmt:Shadowing__Bus_om, elmt:Shadowing__Frame_om ;
+    sysml:ownedRelationship elmt:Shadowing__Field_om, elmt:Shadowing__packet_20data_20field_om, elmt:Shadowing__Packet_om, elmt:Shadowing__Thermal_20Packet_om, elmt:Shadowing__payload_om, elmt:Shadowing__Bus_om, elmt:Shadowing__Frame_om .
+
+elmt:Shadowing__Field
+    a sysml:AttributeDefinition ;
+    sysml:qualifiedName "Shadowing::Field" ;
+    sysml:elementId "Shadowing__Field" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__Field_om ;
+    sysml:owningMembership elmt:Shadowing__Field_om ;
+    sysml:declaredName "Field" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Field_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Field_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__Field ;
+    sysml:ownedMemberElement elmt:Shadowing__Field ;
+    sysml:ownedRelatedElement elmt:Shadowing__Field ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__packet_20data_20field
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Shadowing::packet data field" ;
+    sysml:elementId "Shadowing__packet_20data_20field" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__packet_20data_20field_om ;
+    sysml:owningMembership elmt:Shadowing__packet_20data_20field_om ;
+    sysml:declaredName "packet data field" ;
+    sysml:type elmt:Shadowing__Field ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__packet_20data_20field_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__packet_20data_20field_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__packet_20data_20field ;
+    sysml:ownedMemberElement elmt:Shadowing__packet_20data_20field ;
+    sysml:ownedRelatedElement elmt:Shadowing__packet_20data_20field ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__Packet
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Shadowing::Packet" ;
+    sysml:elementId "Shadowing__Packet" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__Packet_om ;
+    sysml:owningMembership elmt:Shadowing__Packet_om ;
+    sysml:declaredName "Packet" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Packet__data_20field, elmt:Shadowing__Packet__payload ;
+    sysml:ownedMembership elmt:Shadowing__Packet__data_20field_om, elmt:Shadowing__Packet__payload_om ;
+    sysml:ownedRelationship elmt:Shadowing__Packet__data_20field_om, elmt:Shadowing__Packet__payload_om ;
+    sysml:ownedFeature elmt:Shadowing__Packet__data_20field, elmt:Shadowing__Packet__payload ;
+    sysml:ownedFeatureMembership elmt:Shadowing__Packet__data_20field_om, elmt:Shadowing__Packet__payload_om .
+
+elmt:Shadowing__Packet_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Packet_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__Packet ;
+    sysml:ownedMemberElement elmt:Shadowing__Packet ;
+    sysml:ownedRelatedElement elmt:Shadowing__Packet ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__Packet__data_20field
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Shadowing::Packet::data field" ;
+    sysml:elementId "Shadowing__Packet__data_20field" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Packet ;
+    sysml:owner elmt:Shadowing__Packet ;
+    sysml:owningRelationship elmt:Shadowing__Packet__data_20field_om ;
+    sysml:owningMembership elmt:Shadowing__Packet__data_20field_om ;
+    sysml:declaredName "data field" ;
+    sysml:type elmt:Shadowing__Field ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Packet__data_20field_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Packet__data_20field_om" ;
+    sysml:owner elmt:Shadowing__Packet ;
+    sysml:memberElement elmt:Shadowing__Packet__data_20field ;
+    sysml:ownedMemberElement elmt:Shadowing__Packet__data_20field ;
+    sysml:ownedRelatedElement elmt:Shadowing__Packet__data_20field ;
+    sysml:owningRelatedElement elmt:Shadowing__Packet ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Packet ;
+    sysml:ownedMemberFeature elmt:Shadowing__Packet__data_20field ;
+    sysml:owningType elmt:Shadowing__Packet .
+
+elmt:Shadowing__Packet__payload
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Packet::payload" ;
+    sysml:elementId "Shadowing__Packet__payload" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Packet ;
+    sysml:owner elmt:Shadowing__Packet ;
+    sysml:owningRelationship elmt:Shadowing__Packet__payload_om ;
+    sysml:owningMembership elmt:Shadowing__Packet__payload_om ;
+    sysml:declaredName "payload" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Packet__payload_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Packet__payload_om" ;
+    sysml:owner elmt:Shadowing__Packet ;
+    sysml:memberElement elmt:Shadowing__Packet__payload ;
+    sysml:ownedMemberElement elmt:Shadowing__Packet__payload ;
+    sysml:ownedRelatedElement elmt:Shadowing__Packet__payload ;
+    sysml:owningRelatedElement elmt:Shadowing__Packet ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Packet ;
+    sysml:ownedMemberFeature elmt:Shadowing__Packet__payload ;
+    sysml:owningType elmt:Shadowing__Packet .
+
+elmt:Shadowing__Thermal_20Packet
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Shadowing::Thermal Packet" ;
+    sysml:elementId "Shadowing__Thermal_20Packet" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__Thermal_20Packet_om ;
+    sysml:owningMembership elmt:Shadowing__Thermal_20Packet_om ;
+    sysml:declaredName "Thermal Packet" ;
+    sysml:specializes elmt:Shadowing__Packet ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Thermal_20Packet__packet_20data_20field, elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:ownedMembership elmt:Shadowing__Thermal_20Packet__packet_20data_20field_om, elmt:Shadowing__Thermal_20Packet__data_20field_om ;
+    sysml:ownedRelationship elmt:Shadowing__Thermal_20Packet__packet_20data_20field_om, elmt:Shadowing__Thermal_20Packet__data_20field_om ;
+    sysml:ownedFeature elmt:Shadowing__Thermal_20Packet__packet_20data_20field, elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:ownedFeatureMembership elmt:Shadowing__Thermal_20Packet__packet_20data_20field_om, elmt:Shadowing__Thermal_20Packet__data_20field_om .
+
+elmt:Shadowing__Thermal_20Packet_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Thermal_20Packet_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__Thermal_20Packet ;
+    sysml:ownedMemberElement elmt:Shadowing__Thermal_20Packet ;
+    sysml:ownedRelatedElement elmt:Shadowing__Thermal_20Packet ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__Thermal_20Packet__packet_20data_20field
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Shadowing::Thermal Packet::packet data field" ;
+    sysml:elementId "Shadowing__Thermal_20Packet__packet_20data_20field" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Thermal_20Packet ;
+    sysml:owner elmt:Shadowing__Thermal_20Packet ;
+    sysml:owningRelationship elmt:Shadowing__Thermal_20Packet__packet_20data_20field_om ;
+    sysml:owningMembership elmt:Shadowing__Thermal_20Packet__packet_20data_20field_om ;
+    sysml:declaredName "packet data field" ;
+    sysml:redefines elmt:Shadowing__packet_20data_20field ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Thermal_20Packet__packet_20data_20field_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Thermal_20Packet__packet_20data_20field_om" ;
+    sysml:owner elmt:Shadowing__Thermal_20Packet ;
+    sysml:memberElement elmt:Shadowing__Thermal_20Packet__packet_20data_20field ;
+    sysml:ownedMemberElement elmt:Shadowing__Thermal_20Packet__packet_20data_20field ;
+    sysml:ownedRelatedElement elmt:Shadowing__Thermal_20Packet__packet_20data_20field ;
+    sysml:owningRelatedElement elmt:Shadowing__Thermal_20Packet ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Thermal_20Packet ;
+    sysml:ownedMemberFeature elmt:Shadowing__Thermal_20Packet__packet_20data_20field ;
+    sysml:owningType elmt:Shadowing__Thermal_20Packet .
+
+elmt:Shadowing__Thermal_20Packet__data_20field
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Shadowing::Thermal Packet::data field" ;
+    sysml:elementId "Shadowing__Thermal_20Packet__data_20field" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Thermal_20Packet ;
+    sysml:owner elmt:Shadowing__Thermal_20Packet ;
+    sysml:owningRelationship elmt:Shadowing__Thermal_20Packet__data_20field_om ;
+    sysml:owningMembership elmt:Shadowing__Thermal_20Packet__data_20field_om ;
+    sysml:declaredName "data field" ;
+    sysml:redefines elmt:Shadowing__Packet__data_20field ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Thermal_20Packet__data_20field__data_20field ;
+    sysml:ownedMembership elmt:Shadowing__Thermal_20Packet__data_20field__data_20field_om ;
+    sysml:ownedRelationship elmt:Shadowing__Thermal_20Packet__data_20field__data_20field_om ;
+    sysml:ownedFeature elmt:Shadowing__Thermal_20Packet__data_20field__data_20field ;
+    sysml:ownedFeatureMembership elmt:Shadowing__Thermal_20Packet__data_20field__data_20field_om .
+
+elmt:Shadowing__Thermal_20Packet__data_20field_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Thermal_20Packet__data_20field_om" ;
+    sysml:owner elmt:Shadowing__Thermal_20Packet ;
+    sysml:memberElement elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:ownedMemberElement elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:ownedRelatedElement elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:owningRelatedElement elmt:Shadowing__Thermal_20Packet ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Thermal_20Packet ;
+    sysml:ownedMemberFeature elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:owningType elmt:Shadowing__Thermal_20Packet .
+
+elmt:Shadowing__Thermal_20Packet__data_20field__data_20field
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Shadowing::Thermal Packet::data field::data field" ;
+    sysml:elementId "Shadowing__Thermal_20Packet__data_20field__data_20field" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:owner elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:owningRelationship elmt:Shadowing__Thermal_20Packet__data_20field__data_20field_om ;
+    sysml:owningMembership elmt:Shadowing__Thermal_20Packet__data_20field__data_20field_om ;
+    sysml:declaredName "data field" ;
+    sysml:type elmt:Shadowing__Field ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Thermal_20Packet__data_20field__data_20field_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Thermal_20Packet__data_20field__data_20field_om" ;
+    sysml:owner elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:memberElement elmt:Shadowing__Thermal_20Packet__data_20field__data_20field ;
+    sysml:ownedMemberElement elmt:Shadowing__Thermal_20Packet__data_20field__data_20field ;
+    sysml:ownedRelatedElement elmt:Shadowing__Thermal_20Packet__data_20field__data_20field ;
+    sysml:owningRelatedElement elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Thermal_20Packet__data_20field ;
+    sysml:ownedMemberFeature elmt:Shadowing__Thermal_20Packet__data_20field__data_20field ;
+    sysml:owningType elmt:Shadowing__Thermal_20Packet__data_20field .
+
+elmt:Shadowing__payload
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::payload" ;
+    sysml:elementId "Shadowing__payload" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__payload_om ;
+    sysml:owningMembership elmt:Shadowing__payload_om ;
+    sysml:declaredName "payload" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__payload_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__payload_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__payload ;
+    sysml:ownedMemberElement elmt:Shadowing__payload ;
+    sysml:ownedRelatedElement elmt:Shadowing__payload ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__Bus
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Shadowing::Bus" ;
+    sysml:elementId "Shadowing__Bus" ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__Bus_om ;
+    sysml:owningMembership elmt:Shadowing__Bus_om ;
+    sysml:declaredName "Bus" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Bus__payload, elmt:Shadowing__Bus__cargo, elmt:Shadowing__Bus__carried, elmt:Shadowing__Bus__Packet, elmt:Shadowing__Bus__wrapped, elmt:Shadowing__Bus__raw, elmt:Shadowing__Bus__link ;
+    sysml:ownedMembership elmt:Shadowing__Bus__payload_om, elmt:Shadowing__Bus__cargo_om, elmt:Shadowing__Bus__carried_om, elmt:Shadowing__Bus__Packet_om, elmt:Shadowing__Bus__wrapped_om, elmt:Shadowing__Bus__raw_om, elmt:Shadowing__Bus__link_om ;
+    sysml:ownedRelationship elmt:Shadowing__Bus__payload_om, elmt:Shadowing__Bus__cargo_om, elmt:Shadowing__Bus__carried_om, elmt:Shadowing__Bus__Packet_om, elmt:Shadowing__Bus__wrapped_om, elmt:Shadowing__Bus__raw_om, elmt:Shadowing__Bus__link_om ;
+    sysml:ownedFeature elmt:Shadowing__Bus__payload, elmt:Shadowing__Bus__cargo, elmt:Shadowing__Bus__carried, elmt:Shadowing__Bus__wrapped, elmt:Shadowing__Bus__raw, elmt:Shadowing__Bus__link ;
+    sysml:ownedFeatureMembership elmt:Shadowing__Bus__payload_om, elmt:Shadowing__Bus__cargo_om, elmt:Shadowing__Bus__carried_om, elmt:Shadowing__Bus__wrapped_om, elmt:Shadowing__Bus__raw_om, elmt:Shadowing__Bus__link_om .
+
+elmt:Shadowing__Bus_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Bus_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__Bus ;
+    sysml:ownedMemberElement elmt:Shadowing__Bus ;
+    sysml:ownedRelatedElement elmt:Shadowing__Bus ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__Bus__payload
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Bus::payload" ;
+    sysml:elementId "Shadowing__Bus__payload" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Bus ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:owningRelationship elmt:Shadowing__Bus__payload_om ;
+    sysml:owningMembership elmt:Shadowing__Bus__payload_om ;
+    sysml:declaredName "payload" ;
+    sysml:subsets elmt:Shadowing__payload ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Bus__payload_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Bus__payload_om" ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:memberElement elmt:Shadowing__Bus__payload ;
+    sysml:ownedMemberElement elmt:Shadowing__Bus__payload ;
+    sysml:ownedRelatedElement elmt:Shadowing__Bus__payload ;
+    sysml:owningRelatedElement elmt:Shadowing__Bus ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Bus ;
+    sysml:ownedMemberFeature elmt:Shadowing__Bus__payload ;
+    sysml:owningType elmt:Shadowing__Bus .
+
+elmt:Shadowing__Bus__cargo
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Bus::cargo" ;
+    sysml:elementId "Shadowing__Bus__cargo" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Bus ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:owningRelationship elmt:Shadowing__Bus__cargo_om ;
+    sysml:owningMembership elmt:Shadowing__Bus__cargo_om ;
+    sysml:declaredName "cargo" ;
+    sysml:subsets elmt:Shadowing__payload ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Bus__cargo_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Bus__cargo_om" ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:memberElement elmt:Shadowing__Bus__cargo ;
+    sysml:ownedMemberElement elmt:Shadowing__Bus__cargo ;
+    sysml:ownedRelatedElement elmt:Shadowing__Bus__cargo ;
+    sysml:owningRelatedElement elmt:Shadowing__Bus ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Bus ;
+    sysml:ownedMemberFeature elmt:Shadowing__Bus__cargo ;
+    sysml:owningType elmt:Shadowing__Bus .
+
+elmt:Shadowing__Bus__carried
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Bus::carried" ;
+    sysml:elementId "Shadowing__Bus__carried" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Bus ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:owningRelationship elmt:Shadowing__Bus__carried_om ;
+    sysml:owningMembership elmt:Shadowing__Bus__carried_om ;
+    sysml:declaredName "carried" ;
+    sysml:isReference "true"^^xsd:boolean ;
+    sysml:references elmt:Shadowing__Bus__payload ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Bus__carried_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Bus__carried_om" ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:memberElement elmt:Shadowing__Bus__carried ;
+    sysml:ownedMemberElement elmt:Shadowing__Bus__carried ;
+    sysml:ownedRelatedElement elmt:Shadowing__Bus__carried ;
+    sysml:owningRelatedElement elmt:Shadowing__Bus ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Bus ;
+    sysml:ownedMemberFeature elmt:Shadowing__Bus__carried ;
+    sysml:owningType elmt:Shadowing__Bus .
+
+elmt:Shadowing__Bus__Packet
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Shadowing::Bus::Packet" ;
+    sysml:elementId "Shadowing__Bus__Packet" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Bus ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:owningRelationship elmt:Shadowing__Bus__Packet_om ;
+    sysml:owningMembership elmt:Shadowing__Bus__Packet_om ;
+    sysml:declaredName "Packet" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Bus__Packet_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Bus__Packet_om" ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:memberElement elmt:Shadowing__Bus__Packet ;
+    sysml:ownedMemberElement elmt:Shadowing__Bus__Packet ;
+    sysml:ownedRelatedElement elmt:Shadowing__Bus__Packet ;
+    sysml:owningRelatedElement elmt:Shadowing__Bus ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Bus .
+
+elmt:Shadowing__Bus__wrapped
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Bus::wrapped" ;
+    sysml:elementId "Shadowing__Bus__wrapped" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Bus ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:owningRelationship elmt:Shadowing__Bus__wrapped_om ;
+    sysml:owningMembership elmt:Shadowing__Bus__wrapped_om ;
+    sysml:declaredName "wrapped" ;
+    sysml:type elmt:Shadowing__Packet ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Bus__wrapped_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Bus__wrapped_om" ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:memberElement elmt:Shadowing__Bus__wrapped ;
+    sysml:ownedMemberElement elmt:Shadowing__Bus__wrapped ;
+    sysml:ownedRelatedElement elmt:Shadowing__Bus__wrapped ;
+    sysml:owningRelatedElement elmt:Shadowing__Bus ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Bus ;
+    sysml:ownedMemberFeature elmt:Shadowing__Bus__wrapped ;
+    sysml:owningType elmt:Shadowing__Bus .
+
+elmt:Shadowing__Bus__raw
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Bus::raw" ;
+    sysml:elementId "Shadowing__Bus__raw" ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Bus ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:owningRelationship elmt:Shadowing__Bus__raw_om ;
+    sysml:owningMembership elmt:Shadowing__Bus__raw_om ;
+    sysml:declaredName "raw" ;
+    sysml:type elmt:Shadowing__Bus__Packet ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Bus__raw_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Bus__raw_om" ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:memberElement elmt:Shadowing__Bus__raw ;
+    sysml:ownedMemberElement elmt:Shadowing__Bus__raw ;
+    sysml:ownedRelatedElement elmt:Shadowing__Bus__raw ;
+    sysml:owningRelatedElement elmt:Shadowing__Bus ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Bus ;
+    sysml:ownedMemberFeature elmt:Shadowing__Bus__raw ;
+    sysml:owningType elmt:Shadowing__Bus .
+
+elmt:Shadowing__Bus__link
+    a sysml:ConnectionUsage ;
+    sysml:qualifiedName "Shadowing::Bus::link" ;
+    sysml:elementId "Shadowing__Bus__link" ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Bus ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:owningRelationship elmt:Shadowing__Bus__link_om ;
+    sysml:owningMembership elmt:Shadowing__Bus__link_om ;
+    sysml:declaredName "link" ;
+    sysx:sourceText "connection link connect wrapped.payload to Shadowing::payload;" ;
+    sysx:relatedFeature expr:Shadowing__Bus__link_pend0, expr:Shadowing__Bus__link_pend1 ;
+    sysx:endForm "to" ;
+    sysx:endVerb "connect" .
+
+elmt:Shadowing__Bus__link_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Bus__link_om" ;
+    sysml:owner elmt:Shadowing__Bus ;
+    sysml:memberElement elmt:Shadowing__Bus__link ;
+    sysml:ownedMemberElement elmt:Shadowing__Bus__link ;
+    sysml:ownedRelatedElement elmt:Shadowing__Bus__link ;
+    sysml:owningRelatedElement elmt:Shadowing__Bus ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Bus ;
+    sysml:ownedMemberFeature elmt:Shadowing__Bus__link ;
+    sysml:owningType elmt:Shadowing__Bus .
+
+expr:Shadowing__Bus__link_pend0
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "wrapped.payload" ;
+    sysml:elementId "Shadowing__Bus__link_pend0" ;
+    sysml:argument expr:Shadowing__Bus__link_pend0_pa0 ;
+    sysml:targetFeature elmt:Shadowing__Packet__payload ;
+    sysx:endIndex "0"^^xsd:integer .
+
+expr:Shadowing__Bus__link_pend0_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "wrapped" ;
+    sysml:elementId "Shadowing__Bus__link_pend0_pa0" ;
+    sysml:referent elmt:Shadowing__Bus__wrapped ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Shadowing__Bus__link_pend1
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "Shadowing::payload" ;
+    sysml:elementId "Shadowing__Bus__link_pend1" ;
+    sysml:referent elmt:Shadowing__payload ;
+    sysx:endIndex "1"^^xsd:integer .
+
+elmt:Shadowing__Frame
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Shadowing::Frame" ;
+    sysml:elementId "Shadowing__Frame" ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__Frame_om ;
+    sysml:owningMembership elmt:Shadowing__Frame_om ;
+    sysml:declaredName "Frame" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Frame__Frame, elmt:Shadowing__Frame__packet_20data_20field, elmt:Shadowing__Frame__outer, elmt:Shadowing__Frame__inner, elmt:Shadowing__Frame__Field ;
+    sysml:ownedMembership elmt:Shadowing__Frame__Frame_om, elmt:Shadowing__Frame__packet_20data_20field_om, elmt:Shadowing__Frame__outer_om, elmt:Shadowing__Frame__inner_om, elmt:Shadowing__Frame__Field_om ;
+    sysml:ownedRelationship elmt:Shadowing__Frame__Frame_om, elmt:Shadowing__Frame__packet_20data_20field_om, elmt:Shadowing__Frame__outer_om, elmt:Shadowing__Frame__inner_om, elmt:Shadowing__Frame__Field_om ;
+    sysml:ownedFeature elmt:Shadowing__Frame__packet_20data_20field, elmt:Shadowing__Frame__outer, elmt:Shadowing__Frame__inner ;
+    sysml:ownedFeatureMembership elmt:Shadowing__Frame__packet_20data_20field_om, elmt:Shadowing__Frame__outer_om, elmt:Shadowing__Frame__inner_om .
+
+elmt:Shadowing__Frame_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Frame_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__Frame ;
+    sysml:ownedMemberElement elmt:Shadowing__Frame ;
+    sysml:ownedRelatedElement elmt:Shadowing__Frame ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__Frame__Frame
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Shadowing::Frame::Frame" ;
+    sysml:elementId "Shadowing__Frame__Frame" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Frame ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:owningRelationship elmt:Shadowing__Frame__Frame_om ;
+    sysml:owningMembership elmt:Shadowing__Frame__Frame_om ;
+    sysml:declaredName "Frame" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Frame__Frame_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Frame__Frame_om" ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:memberElement elmt:Shadowing__Frame__Frame ;
+    sysml:ownedMemberElement elmt:Shadowing__Frame__Frame ;
+    sysml:ownedRelatedElement elmt:Shadowing__Frame__Frame ;
+    sysml:owningRelatedElement elmt:Shadowing__Frame ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Frame .
+
+elmt:Shadowing__Frame__packet_20data_20field
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Shadowing::Frame::packet data field" ;
+    sysml:elementId "Shadowing__Frame__packet_20data_20field" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Frame ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:owningRelationship elmt:Shadowing__Frame__packet_20data_20field_om ;
+    sysml:owningMembership elmt:Shadowing__Frame__packet_20data_20field_om ;
+    sysml:declaredName "packet data field" ;
+    sysml:type elmt:Shadowing__Field ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Frame__packet_20data_20field_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Frame__packet_20data_20field_om" ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:memberElement elmt:Shadowing__Frame__packet_20data_20field ;
+    sysml:ownedMemberElement elmt:Shadowing__Frame__packet_20data_20field ;
+    sysml:ownedRelatedElement elmt:Shadowing__Frame__packet_20data_20field ;
+    sysml:owningRelatedElement elmt:Shadowing__Frame ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Frame ;
+    sysml:ownedMemberFeature elmt:Shadowing__Frame__packet_20data_20field ;
+    sysml:owningType elmt:Shadowing__Frame .
+
+elmt:Shadowing__Frame__outer
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Frame::outer" ;
+    sysml:elementId "Shadowing__Frame__outer" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Frame ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:owningRelationship elmt:Shadowing__Frame__outer_om ;
+    sysml:owningMembership elmt:Shadowing__Frame__outer_om ;
+    sysml:declaredName "outer" ;
+    sysml:isReference "true"^^xsd:boolean ;
+    sysml:type elmt:Shadowing__Frame ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Frame__outer_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Frame__outer_om" ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:memberElement elmt:Shadowing__Frame__outer ;
+    sysml:ownedMemberElement elmt:Shadowing__Frame__outer ;
+    sysml:ownedRelatedElement elmt:Shadowing__Frame__outer ;
+    sysml:owningRelatedElement elmt:Shadowing__Frame ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Frame ;
+    sysml:ownedMemberFeature elmt:Shadowing__Frame__outer ;
+    sysml:owningType elmt:Shadowing__Frame .
+
+elmt:Shadowing__Frame__inner
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Frame::inner" ;
+    sysml:elementId "Shadowing__Frame__inner" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Frame ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:owningRelationship elmt:Shadowing__Frame__inner_om ;
+    sysml:owningMembership elmt:Shadowing__Frame__inner_om ;
+    sysml:declaredName "inner" ;
+    sysml:isReference "true"^^xsd:boolean ;
+    sysml:type elmt:Shadowing__Frame__Frame ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Frame__inner_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Shadowing__Frame__inner_om" ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:memberElement elmt:Shadowing__Frame__inner ;
+    sysml:ownedMemberElement elmt:Shadowing__Frame__inner ;
+    sysml:ownedRelatedElement elmt:Shadowing__Frame__inner ;
+    sysml:owningRelatedElement elmt:Shadowing__Frame ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Frame ;
+    sysml:ownedMemberFeature elmt:Shadowing__Frame__inner ;
+    sysml:owningType elmt:Shadowing__Frame .
+
+elmt:Shadowing__Frame__Field
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Shadowing::Frame::Field" ;
+    sysml:elementId "Shadowing__Frame__Field" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Frame ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:owningRelationship elmt:Shadowing__Frame__Field_om ;
+    sysml:owningMembership elmt:Shadowing__Frame__Field_om ;
+    sysml:declaredName "Field" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Shadowing__Frame__Field_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Frame__Field_om" ;
+    sysml:owner elmt:Shadowing__Frame ;
+    sysml:memberElement elmt:Shadowing__Frame__Field ;
+    sysml:ownedMemberElement elmt:Shadowing__Frame__Field ;
+    sysml:ownedRelatedElement elmt:Shadowing__Frame__Field ;
+    sysml:owningRelatedElement elmt:Shadowing__Frame ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Frame .

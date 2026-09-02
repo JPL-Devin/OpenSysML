@@ -72,9 +72,8 @@ func (c *refCollector) addEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 	}
 }
 
-// edgeEnd records the end of a succession or control flow the author named; one
-// bound by position or supplied by the notation is no reference (see
-// resolveEdgeEnd).
+// edgeEnd records a succession or control-flow end the author named; one bound
+// by position is no reference (see resolveEdgeEnd).
 func (c *refCollector) edgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, member ast.Node, implied bool) {
 	if qn == nil || member != nil || implied {
 		return
@@ -431,7 +430,11 @@ func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels [
 		}
 		// A subsetting other than of decl itself resolves as a redefinition
 		// does, as in resolveRelationships.
-		if rel.Kind == ast.RelRedefines || (rel.Kind == ast.RelSubsets && !relationshipTargetsDecl(rel, decl)) {
+		if qn, ok := target.(*ast.QualifiedName); ok && rel.Kind == ast.RelSubsets {
+			c.push(Reference{Scope: scope, Subsetting: decl}.Spelled(qn))
+			continue
+		}
+		if rel.Kind == ast.RelRedefines {
 			if qn, ok := target.(*ast.QualifiedName); ok {
 				c.addRedefinition(scope, decl, qn)
 				continue

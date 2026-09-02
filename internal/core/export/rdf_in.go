@@ -68,9 +68,8 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err := checkExtensionNamespace(graph); err != nil {
 		return nil, err
 	}
-	// The first rendering writes every reference fully qualified; the names
-	// each one can be shortened to are then read off that text, and the graph
-	// is rendered again with them.
+	// The first rendering writes every reference fully qualified; the second
+	// uses the spellings chosen by reading that text.
 	first := newDecoder(graph, nil)
 	text, err := first.render()
 	if err != nil {
@@ -165,9 +164,8 @@ type decoder struct {
 	// the member each one owns.
 	memberships      map[string]membership
 	owningMembership map[string]membership
-	// names holds the spelling chosen for each reference; while nil, references
-	// are written fully qualified and recorded in wanted with their
-	// scope-relative spelling.
+	// names is the spelling chosen for each reference; while nil, references are
+	// written fully qualified and their scope-relative spelling noted in wanted.
 	names  nameChoices
 	wanted map[nameKey]string
 }
@@ -1249,9 +1247,8 @@ func (d *decoder) referenceList(el *element, property string) ([]string, error) 
 	return out, nil
 }
 
-// referenceName renders a reference term as the name to write in the
-// declaration of el: a literal as written, an IRI as the spelling of its
-// element's qualified name that resolves to that element there (see names.go).
+// referenceName renders a reference term for the declaration of el: a literal
+// as written, an IRI as the spelling that resolves to its element there.
 func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	if term.IsLiteral() {
 		if term.Datatype == rdf.OpenSysML+dtExpression {
@@ -1275,9 +1272,8 @@ func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	return qualifiedNameText(relative), nil
 }
 
-// memberName renders the member segment of a feature chain: a literal as
-// written, an IRI as its element's own name, since a chain segment is looked up
-// in the operand rather than in the writing scope.
+// memberName renders a feature-chain segment: a literal as written, an IRI as
+// its element's own name, since a segment is looked up in the operand.
 func (d *decoder) memberName(term rdf.Term) (string, error) {
 	if term.IsLiteral() {
 		return qualifiedNameText(term.Value), nil
@@ -1289,9 +1285,8 @@ func (d *decoder) memberName(term rdf.Term) (string, error) {
 	return nameText(lastSegment(target.qname)), nil
 }
 
-// relativeName strips from qname the longest prefix of scope that it is
-// declared under, the textual approximation used for a reference the resolver
-// does not read.
+// relativeName strips from qname the longest prefix of scope it is declared
+// under, the textual approximation for a reference the resolver does not read.
 func relativeName(qname, scope string) string {
 	for {
 		if scope == "" {

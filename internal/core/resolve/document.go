@@ -687,7 +687,12 @@ func relationshipTargetsDecl(rel *ast.Relationship, decl ast.Node) bool {
 		target = fr.Name
 	}
 	qn, ok := target.(*ast.QualifiedName)
-	if !ok || len(qn.Parts) != 1 {
+	return ok && namesDecl(qn, decl)
+}
+
+// namesDecl reports whether qn is decl's own name written bare.
+func namesDecl(qn *ast.QualifiedName, decl ast.Node) bool {
+	if qn == nil || len(qn.Parts) != 1 {
 		return false
 	}
 	name := ""

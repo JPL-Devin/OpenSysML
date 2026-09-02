@@ -479,7 +479,7 @@ func (e *encoder) before(node, inner ast.Node) string {
 }
 
 // between returns the text between two nodes, which is the operator or keyword
-// written there.
+// written there. Parentheses opening the second node belong to it, not here.
 func (e *encoder) between(from, to ast.Node) string {
 	if from == nil || to == nil {
 		return ""
@@ -488,7 +488,7 @@ func (e *encoder) between(from, to ast.Node) string {
 	if end <= start {
 		return ""
 	}
-	return strings.TrimSpace(e.file.Text(source.Span{Offset: start, Len: end - start}))
+	return strings.TrimSpace(strings.TrimRight(e.file.Text(source.Span{Offset: start, Len: end - start}), "( \t\r\n"))
 }
 
 // introducer returns the keyword written immediately before inner, which is

@@ -569,10 +569,8 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
 
-	if p.at(lexer.Identifier) || p.atNameOrKeyword() {
-		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
-		p.advance()
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
+		name = seg.Text
 	}
 
 	// Check for succession edge continuation: first X [if <expr>] then Y;

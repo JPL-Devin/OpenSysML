@@ -172,10 +172,8 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 	return e.graph, nil
 }
 
-// newEncoder analyzes a parsed document ahead of encoding it: its names are
-// resolved, its identity side table built, and the qualified name of every
-// member recorded, so a reference can be told a link to an element in the
-// graph from a name that resolves outside it.
+// newEncoder resolves a parsed document, builds its identity side table and
+// records each member's qualified name, so references can be told from names.
 func newEncoder(file *source.SourceFile, root *ast.RootNamespace) (*encoder, error) {
 	res, model := analyzeDocument(file.Name(), root)
 	ids, err := documentIdentity(file.Name(), res, model)
@@ -214,8 +212,7 @@ type encoder struct {
 	// end the notation leaves unnamed addresses the member it binds.
 	fqn map[ast.Node]string
 	// links is what each written reference resolves to, read with the rule of
-	// its position: a redefinition's target among the generals, a transition
-	// end as a vertex, a chain member in its operand.
+	// its position (a redefinition among the generals, an edge end as a vertex).
 	links map[*ast.QualifiedName]*symbols.Symbol
 	// ids is the document's identity side table: effective ids, declaredness,
 	// scopes, and the annotation nodes consumed into it.
@@ -1026,11 +1023,6 @@ func (e *encoder) multiplicity(subject rdf.Term, owner string, mult *ast.Multipl
 // reference renders a name reference as a link when it resolves to an element
 // this document declares, and as the written name otherwise — a type from the
 // standard library is a name, not an element of this graph.
-//
-// The document walk has already resolved the name with the rules of its
-// position: a redefinition names a feature of the generals, a reference
-// subsetting looks past its own declaration, a transition end names a vertex
-// of its machine. A name the walk could not resolve is carried as written.
 func (e *encoder) reference(name *ast.QualifiedName) rdf.Term {
 	if qualifiedText(name) == "" {
 		return rdf.String("")
@@ -1042,9 +1034,8 @@ func (e *encoder) reference(name *ast.QualifiedName) rdf.Term {
 	return e.linkOrText(name, sym, ok)
 }
 
-// edgeReference renders the end of a transition or succession. An end the
-// notation supplied from the member beside the keyword is no written
-// reference, so it is read from what the walk bound it to.
+// edgeReference renders a transition or succession end from what the document
+// walk bound it to; an end implied by position is no written reference.
 func (e *encoder) edgeReference(name *ast.QualifiedName) rdf.Term {
 	if qualifiedText(name) == "" {
 		return rdf.String("")
@@ -1056,9 +1047,8 @@ func (e *encoder) edgeReference(name *ast.QualifiedName) rdf.Term {
 	return e.linkOrText(name, sym, ok)
 }
 
-// linkOrText links a resolved name to the element it names here, or to the
-// alias membership it was written through when that alias is declared here and
-// the element is not, and carries any other name as written.
+// linkOrText links a resolved name to the element it names here, else to the
+// alias declared here it was written through, else carries it as written.
 func (e *encoder) linkOrText(name *ast.QualifiedName, sym *symbols.Symbol, ok bool) rdf.Term {
 	text := qualifiedText(name)
 	if decl, fqn, ok := e.linked(sym, ok); ok {
@@ -1072,11 +1062,8 @@ func (e *encoder) linkOrText(name *ast.QualifiedName, sym *symbols.Symbol, ok bo
 	return rdf.String(text)
 }
 
-// linked is the declaration and qualified name of the element a resolved
-// symbol stands for in this graph, if it stands for one: the graph names an
-// element declared here under a name, and nothing else. A label the language
-// binds to an element the graph does not name (`first start`, a `for` loop's
-// variable) is not one.
+// linked is the declaration and qualified name of a symbol's element when the
+// graph names it; a `first start` label or loop variable is bound but unnamed.
 func (e *encoder) linked(sym *symbols.Symbol, ok bool) (ast.Node, string, bool) {
 	if !ok || sym == nil {
 		return nil, "", false

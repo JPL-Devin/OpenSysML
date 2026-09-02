@@ -212,8 +212,25 @@ type Reference struct {
 	// Endpoint is set when QN is a transition end, which names a vertex of the
 	// enclosing machine ahead of anything else it reaches (see ResolveEndpoint).
 	Endpoint bool
+	// Subsetting is the declaration QN subsets, if any; its spelling decides
+	// whether it is read as a redefinition or as the declaration's own name.
+	Subsetting ast.Node
 	// Member is the declaration whose text QN is written in, when known.
 	Member ast.Node
+}
+
+// Spelled returns ref as it would be collected had qn been written in its
+// place: the same occurrence, read the way the document walk reads that spelling.
+func (ref Reference) Spelled(qn *ast.QualifiedName) Reference {
+	ref.QN = qn
+	if ref.Subsetting != nil {
+		if namesDecl(qn, ref.Subsetting) {
+			ref.Referrer, ref.Redefines = nil, false
+		} else {
+			ref.Referrer, ref.Redefines = ref.Subsetting, true
+		}
+	}
+	return ref
 }
 
 // ProbeReference resolves ref as a trial reading: what a name spelled differently

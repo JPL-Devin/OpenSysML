@@ -16,17 +16,12 @@ type nameKey struct {
 	member, target string
 }
 
-// nameChoices is the spelling chosen for each reference: one that resolves to
-// the target from where it is written, so the notation names the same element
-// the graph does.
+// nameChoices is the spelling chosen for each reference: one that resolves,
+// from where it is written, to the element the graph names.
 type nameChoices map[nameKey]string
 
-// chooseNames reads notation written with every graph reference fully
-// qualified and finds, for each reference in wanted, a spelling that resolves
-// to its target there: the scope-relative name wanted proposes when it does,
-// else the shortest suffix of the qualified name that does, else the global
-// form. A reference that no spelling reaches is refused: writing it would
-// change what the model means. Text the parser cannot read yields no choices.
+// chooseNames reads notation written with every reference fully qualified and
+// picks each a spelling that resolves to its target there; none is a refusal.
 func chooseNames(text []byte, wanted map[nameKey]string) (nameChoices, error) {
 	names := nameChoices{}
 	if len(wanted) == 0 {
@@ -87,9 +82,8 @@ func readNotation(text []byte) (*source.SourceFile, *ast.RootNamespace, bool) {
 	return nil, nil, false
 }
 
-// spellingFor returns the first of the preferred spelling, the suffixes of
-// qname from shortest to longest, and the global form that every occurrence
-// resolves to target, each read the way the resolver reads a name there.
+// spellingFor tries the preferred spelling, then qname's suffixes shortest
+// first, then the global form, returning the first every occurrence resolves.
 func spellingFor(res *resolve.Resolver, refs []resolve.Reference, preferred, qname string, target ast.Node) (string, bool) {
 	if resolvesTo(res, refs, strings.Split(preferred, "::"), false, target) {
 		return preferred, true
@@ -113,8 +107,7 @@ func resolvesTo(res *resolve.Resolver, refs []resolve.Reference, segments []stri
 		for _, segment := range segments {
 			qn.Parts = append(qn.Parts, ast.NameSegment{Text: segment})
 		}
-		ref.QN = qn
-		sym, ok := res.ProbeReference(ref)
+		sym, ok := res.ProbeReference(ref.Spelled(qn))
 		if !ok || sym == nil {
 			return false
 		}

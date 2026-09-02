@@ -231,9 +231,8 @@ func (r *Resolver) PartSymbol(qn *ast.QualifiedName, i int) (*symbols.Symbol, bo
 	return syms[i], true
 }
 
-// EndSymbol returns the element the edge end qn resolved to during a previous
-// resolution: the vertex a transition endpoint was judged as, which may differ
-// from what its segments alone name, or otherwise its last segment's symbol.
+// EndSymbol returns what the edge end qn resolved to: the vertex a transition
+// end was judged as, or otherwise its last segment's symbol.
 func (r *Resolver) EndSymbol(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 	if res, done := r.endpoints[qn]; done {
 		return res.sym, res.ok

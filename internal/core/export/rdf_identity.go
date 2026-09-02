@@ -47,9 +47,8 @@ func analyzeDocument(name string, root *ast.RootNamespace) (*resolve.Resolver, *
 	return res, model
 }
 
-// documentIdentity builds the identity side table for one parsed document and
-// refuses what the graph cannot carry: an annotation whose id is not a
-// constant string, an empty id, or an id outside the element id alphabet.
+// documentIdentity builds the identity side table for one parsed document,
+// refusing an id that is not a constant string or is outside the id alphabet.
 func documentIdentity(name string, res *resolve.Resolver, model *semantics.Model) (*identityFacts, error) {
 	table := identity.Build(model, res, res.Index().DocumentRoot(name))
 
