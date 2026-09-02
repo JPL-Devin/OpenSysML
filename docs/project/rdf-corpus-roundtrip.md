@@ -72,7 +72,8 @@ byte. Before the writer emitted stored text verbatim the split was 166 stable, 7
 `whitespace-only` and 14 `graph-diff`: the 71 moved to `stable` along with 6 of the 14, whose
 difference was of the same kind but outside the normalisation — a CRLF inside a `doc` body, a
 comment inside an expression's stored text, redefinitions coming back in a fixed order, or a
-`connect … from a to b` head losing its end form. The refusals by class: 19 `feature-declaration`,
+`connect ( a, b )` head spaced differently from its rebuilt spelling losing its end form. The
+refusals by class: 19 `feature-declaration`,
 18 `prefix-metadata`, 9 `event-declaration`, 7 `succession`, 6 `operator-expr`,
 4 `duplicate-declaration`, 3 each of `snapshot-declaration`, `invocation-expr` and
 `assert-declaration`, 2 `feature-chain-expr`, and 1 each of `timeslice-declaration`,

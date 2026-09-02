@@ -65,24 +65,25 @@ func spellingOf(text string) []token {
 
 // keepsText reports whether an element kept as source text is written as that
 // text: the graph states no form to rebuild its head from, or the head rebuilt
-// from the form is the same spelling as the text.
+// from the form is the same spelling as the text. A form the graph states but
+// cannot rebuild is reported from the graph, not papered over by the text.
 func (d *decoder) keepsText(el *element, text string) bool {
 	if !d.graph.HasProperty(rdf.IRI(el.iri), rdf.OpenSysML+xEndForm) {
 		return true
 	}
 	head, err := d.head(el)
 	if err != nil {
-		return true
+		return false
 	}
 	return sameSpelling(text, head+";")
 }
 
 // textStatesGraph reports whether an expression node's stored notation states
-// the structure the graph carries for it: the text is parsed and mapped with the
-// same encoder, and every statement the graph makes about the node must hold in
-// the result. A graph that states no structure is not contradicted by any text.
+// exactly the structure the graph carries for it: the text is parsed and mapped
+// with the same encoder, and the two graphs must make the same statements about
+// the node. A node the graph keeps as text alone is not contradicted by any text.
 func (d *decoder) textStatesGraph(node rdf.Term, text, scope string) bool {
-	if d.statesNoMore(node, rdf.NewGraph()) {
+	if d.textOnly(node) {
 		return true
 	}
 	sf := source.New("<expression>", []byte(text))
@@ -99,7 +100,34 @@ func (d *decoder) textStatesGraph(node rdf.Term, text, scope string) bool {
 		subjects: map[string]string{},
 	}
 	stated.expressionNode(node, scope, expr)
-	return d.statesNoMore(node, stated.graph)
+	return d.sameStatements(node, stated.graph, true)
+}
+
+// textOnly reports whether the graph states nothing about an expression node
+// beyond that it is an expression: no operator, operands, referent or value.
+func (d *decoder) textOnly(node rdf.Term) bool {
+	for _, predicate := range d.graph.Predicates(node) {
+		if layoutPredicate(predicate, true) {
+			continue
+		}
+		if predicate != rdf.RDFType || d.graph.Type(node) != rdf.SysMLTerm(mExpression).Value {
+			return false
+		}
+	}
+	return true
+}
+
+// layoutPredicate reports whether a predicate carries layout or identity rather
+// than structure: the notation itself, the id, and — on the node being checked,
+// whose position its owner states — the position among its siblings.
+func layoutPredicate(predicate string, root bool) bool {
+	switch predicate {
+	case rdf.OpenSysML + xSourceText, rdf.SysML + pElementID:
+		return true
+	case rdf.OpenSysML + xArgumentIndex, rdf.OpenSysML + xEndIndex, rdf.OpenSysML + xEndRole:
+		return root
+	}
+	return false
 }
 
 // declaredNames is the set of qualified names the graph declares, which is what
@@ -116,31 +144,44 @@ func (d *decoder) declaredNames() map[string]bool {
 	return d.declared
 }
 
-// statesNoMore reports whether every statement the graph makes about an
-// expression node also holds in stated, nested nodes included. Notation, id
-// and position are left out: the notation is what is being checked, and the
-// id and position follow from where the node sits in its owner.
-func (d *decoder) statesNoMore(node rdf.Term, stated *rdf.Graph) bool {
+// sameStatements reports whether the graph and stated make the same structural
+// statements about an expression node, nested nodes included. Objects are
+// compared as sets: RDF states no order among the objects of one property.
+func (d *decoder) sameStatements(node rdf.Term, stated *rdf.Graph, root bool) bool {
+	predicates := map[string]bool{}
 	for _, predicate := range d.graph.Predicates(node) {
-		switch predicate {
-		case rdf.OpenSysML + xSourceText, rdf.SysML + pElementID,
-			rdf.OpenSysML + xArgumentIndex, rdf.OpenSysML + xEndIndex, rdf.OpenSysML + xEndRole:
+		predicates[predicate] = true
+	}
+	for _, predicate := range stated.Predicates(node) {
+		predicates[predicate] = true
+	}
+	for predicate := range predicates {
+		if layoutPredicate(predicate, root) {
 			continue
-		case rdf.RDFType:
-			// The generic metaclass states only that the node is an expression.
-			if d.graph.Type(node) == rdf.SysMLTerm(mExpression).Value {
-				continue
-			}
 		}
-		have := d.graph.Objects(node, predicate)
-		want := stated.Objects(node, predicate)
-		if len(have) != len(want) {
+		if !d.sameObjects(d.graph.Objects(node, predicate), stated.Objects(node, predicate), stated) {
 			return false
 		}
-		for i := range have {
-			if !d.sameObject(have[i], want[i], stated) {
-				return false
+	}
+	return true
+}
+
+// sameObjects reports whether two object lists match one to one, in any order.
+func (d *decoder) sameObjects(have, want []rdf.Term, stated *rdf.Graph) bool {
+	if len(have) != len(want) {
+		return false
+	}
+	matched := make([]bool, len(want))
+	for _, h := range have {
+		found := false
+		for i, w := range want {
+			if !matched[i] && d.sameObject(h, w, stated) {
+				matched[i], found = true, true
+				break
 			}
+		}
+		if !found {
+			return false
 		}
 	}
 	return true
@@ -154,7 +195,7 @@ func (d *decoder) sameObject(have, want rdf.Term, stated *rdf.Graph) bool {
 		return have == want
 	}
 	if d.isExpressionNode(have) {
-		return have.Value == want.Value && d.statesNoMore(have, stated)
+		return have.Value == want.Value && d.sameStatements(have, stated, false)
 	}
 	if target, err := d.referencedElement(have.Value); err == nil {
 		named, ok := rdf.DecodeElementID(rdf.LocalName(want.Value))

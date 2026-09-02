@@ -1,6 +1,7 @@
 package export_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -145,6 +146,75 @@ func TestStoredExpressionThatDisagreesWithTheGraphIsRebuilt(t *testing.T) {
 		if !strings.Contains(back, "x > 0") || strings.Contains(back, strings.Trim(instead, `"`)+"\n") {
 			t.Errorf("stored %s did not give way to the graph's expression\n%s", instead, back)
 		}
+	}
+}
+
+// The order in which a Turtle document lists the objects of one property states
+// nothing, so listing an expression's operands the other way round keeps the
+// stored text: sysx:argumentIndex carries their order.
+func TestStoredExpressionSurvivesReorderedOperandTriples(t *testing.T) {
+	src := `package P {
+    part def R {
+        attribute x : ScalarValues::Real;
+        constraint c {
+            x > 0
+        }
+    }
+}
+`
+	first := restated(t, graphOf(t, src), `"x > 0"`, `"x  >\n\t\t0"`)
+	listed := regexp.MustCompile(`sysml:argument (expr:\S+_pa0), (expr:\S+_pa1)`)
+	if !listed.MatchString(first) {
+		t.Fatalf("graph lists no operands\n%s", first)
+	}
+	reordered := listed.ReplaceAllString(first, "sysml:argument $2, $1")
+	if !strings.Contains(toNotation(t, []byte(reordered)), "x  >\n\t\t0") {
+		t.Errorf("relaid expression gave way over operand order alone\n%s", reordered)
+	}
+}
+
+// Stored text that states more than the graph does — an operator, referent or
+// end the graph no longer carries — is not written either: what the graph does
+// not state is reported, never revived from the text.
+func TestStoredTextDoesNotReviveDeletedStructure(t *testing.T) {
+	expression := `package P {
+    part def R {
+        attribute x : ScalarValues::Real;
+        constraint c {
+            x > 0
+        }
+    }
+}
+`
+	connector := `package P {
+    part def A;
+    part a : A;
+    part b : A;
+    connect a to b;
+}
+`
+	for _, tc := range []struct {
+		name, src, deleted, instead, reported string
+	}{
+		{"operator", expression, `\n    sysml:operator ">" ;`, "", "states the operator"},
+		{"referent", expression, `\n    sysml:referent elmt:P__R__x ;`, "", "feature reference"},
+		{"end", connector, `, expr:\S+_pend1 ;`, " ;", "end"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			turtle := graphOf(t, tc.src)
+			deleted := regexp.MustCompile(tc.deleted)
+			if !deleted.MatchString(turtle) {
+				t.Fatalf("graph does not state %q\n%s", tc.deleted, turtle)
+			}
+			edited := deleted.ReplaceAllLiteralString(turtle, tc.instead)
+			back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+			if err == nil {
+				t.Fatalf("deleted %s was revived from the stored text\n%s", tc.name, back)
+			}
+			if !strings.Contains(err.Error(), tc.reported) {
+				t.Errorf("error does not name the missing %s: %v", tc.name, err)
+			}
+		})
 	}
 }
 

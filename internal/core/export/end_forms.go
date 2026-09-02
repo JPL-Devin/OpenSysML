@@ -79,7 +79,6 @@ func (n endNotation) text() (string, error) {
 // is a noun (`allocation a allocate x to y`), by the form they introduce.
 var endVerbs = map[string][]string{
 	formTo:        {"connect", "allocate"},
-	formFromTo:    {"connect", "allocate"},
 	formNary:      {"connect", "allocate"},
 	formEquals:    {"bind", "of"},
 	formFirstThen: {"first"},

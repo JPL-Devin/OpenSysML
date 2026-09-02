@@ -469,19 +469,25 @@ and keeps everything.
 The text is the notation from its first token to its last, stored as written —
 line breaks, indentation, tabs, blank lines and CRLF included; nothing inside it
 is normalised on the way in — and a conversion back to notation writes it byte
-for byte, but only while it still states what the graph states. "Did not restructure" is defined by spelling: the writer spells the head
-or expression from the graph's structure, and if that spelling and the stored
-text are the same sequence of tokens — whitespace and lexical comments aside,
-a quoted name equal to its bare form, `:>` equal to `subsets` — the stored text
-is written verbatim. Otherwise the structural spelling is written: a stored
-text that names other ends, another operator or another operand than the graph
-does is never written, because a graph edited in place is right and its text
-is stale. For an expression the check reads the stored text back and maps it
-with the same encoder: every statement the graph makes about the node
-(`sysx:operator`, the operands and their order, the element a reference
-resolves to) must hold in the result, nested nodes included. A graph carrying
-no `sysx:sourceText` at all is written from its structure alone, exactly as the
-strip-and-rewrite tests do.
+for byte, but only while it still states what the graph states. "Did not
+restructure" is defined by spelling: the writer spells the head or expression
+from the graph's structure, and if that spelling and the stored text are the
+same sequence of tokens — whitespace and lexical comments aside, a quoted name
+equal to its bare form, `:>` equal to `subsets` — the stored text is written
+verbatim. Otherwise the structural spelling is written: a stored text that
+names other ends, another operator or another operand than the graph does is
+never written, because a graph edited in place is right and its text is stale.
+For an expression the check reads the stored text back and maps it with the
+same encoder: the graph and the result must make the same statements about the
+node (`sysx:operator`, the operands, the element a reference resolves to),
+nested nodes included, in both directions — a text stating an operator or
+referent the graph no longer carries is as stale as one contradicting it, and
+is not written either. The objects of one property are compared as a set, since
+Turtle states no order among them; an operand's place is `sysx:argumentIndex`.
+A head whose `sysx:endForm` the graph states but cannot rebuild — an end
+deleted, say — is reported as such rather than written from its text. A graph
+carrying no `sysx:sourceText` at all is written from its structure alone,
+exactly as the strip-and-rewrite tests do.
 
 What follows from this:
 
@@ -489,9 +495,9 @@ What follows from this:
   notation it is written from carries the same text: `TestRoundTripIsLossless`
   asserts it for every fixture under `testdata/convert/` (`irregular_layout.sysml`
   lays its heads, conditions, values and bodies out over several lines with tabs
-  and blank lines inside them) and `TestCorpusSecondConversionIsByteStable`
-  ratchets it over every example model, with the files that do not yet get that
-  far recorded in `testdata/corpus_round_trip_expected.txt`.
+  and blank lines inside them) and `TestCorpusRoundTrip` ratchets it over every
+  example model, with the files that do not yet get that far recorded in
+  `testdata/corpus_roundtrip_expected.txt`.
 - The notation the writer spells itself is indented by nesting depth; a stored
   text is written after that indentation as it was stored, so a continuation
   line keeps the indentation the author gave it rather than being re-indented
@@ -506,7 +512,9 @@ What follows from this:
 
 Tests: `verbatim_test.go` covers the layout that survives, a stored text kept
 up to spelling, a stored head and a stored expression that disagree with the
-graph and give way to it, and the graph written with no stored text at all.
+graph and give way to it, operand triples listed in another order, an operator,
+referent or end deleted from the graph, and the graph written with no stored
+text at all.
 
 ### End-binding heads
 
