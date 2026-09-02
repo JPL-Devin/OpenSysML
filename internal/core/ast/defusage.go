@@ -237,6 +237,16 @@ func (k UsageKind) String() string {
 	return usageKindNames[k]
 }
 
+// IsEdge reports whether a usage of the kind relates other members rather than
+// declaring one: a `then` stating no source sequences past it to the member before.
+func (k UsageKind) IsEdge() bool {
+	switch k {
+	case UsageSuccession, UsageTransition, UsageConnector, UsageFlow, UsageBinding:
+		return true
+	}
+	return false
+}
+
 // RelationshipKind discriminates a specialization/typing edge at a
 // definition or usage declaration head.
 type RelationshipKind int
