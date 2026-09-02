@@ -21,6 +21,13 @@ func TestCompileMutualExclusions(t *testing.T) {
 		{"render-document", []string{"-compile", "Mission::Fall", "-render-document", "Mission::Doc"}, "cannot be combined"},
 		{"target-without-compile", []string{"-target", "go", "-render-all", "out"}, "apply to -compile"},
 		{"source-without-compile", []string{"-source", "-sync-diff", "graph.ttl"}, "apply to -compile"},
+		{"empty-sync-diff", []string{"-compile", "Mission::Fall", "-o", "fall", "-sync-diff", ""}, "-sync-diff is empty"},
+		{"empty-sync-apply", []string{"-compile", "Mission::Fall", "-o", "fall", "-sync-apply", ""}, "-sync-apply is empty"},
+		{"sync-base", []string{"-compile", "Mission::Fall", "-o", "fall", "-sync-base", "base.ttl"}, "not to -compile"},
+		{"sync-state", []string{"-compile", "Mission::Fall", "-o", "fall", "-sync-state", "state.json"}, "not to -compile"},
+		{"sync-confirm-deletes", []string{"-compile", "Mission::Fall", "-o", "fall", "-sync-confirm-deletes"}, "not to -compile"},
+		{"sync-mint-ids", []string{"-compile", "Mission::Fall", "-o", "fall", "-sync-mint-ids"}, "not to -compile"},
+		{"sync-annotate", []string{"-compile", "Mission::Fall", "-o", "fall", "-sync-annotate", "notes.sysml"}, "not to -compile"},
 		{"check", []string{"-compile", "Mission::Fall", "-o", "fall", "-validate"}, "check it in its own run"},
 		{"no-output", []string{"-compile", "Mission::Fall"}, "needs -o"},
 	}

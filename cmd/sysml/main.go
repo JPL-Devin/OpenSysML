@@ -407,6 +407,14 @@ func runCLI() int {
 		return 2
 	}
 
+	if flagGiven("sync-diff") && syncDiffWith == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph or endpoint to diff against")
+		return 2
+	}
+	if flagGiven("sync-apply") && syncApplyTo == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-apply is empty; name the SysML v2 API endpoint to apply to")
+		return 2
+	}
 	if flagGiven("compile") && compileCalc == "" {
 		fmt.Fprintln(os.Stderr, "sysml: -compile is empty; name the calc def to compile, as -compile Pkg::Fib")
 		return 2
@@ -419,6 +427,9 @@ func runCLI() int {
 		switch {
 		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "" || syncDiffWith != "" || syncApplyTo != "":
 			fmt.Fprintln(os.Stderr, "sysml: -compile builds an executable; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query, -eval, -from, -sync-diff or -sync-apply")
+			return 2
+		case syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "":
+			fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff or -sync-apply, not to -compile")
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,
@@ -433,14 +444,6 @@ func runCLI() int {
 		return exitHolds
 	}
 
-	if flagGiven("sync-diff") && syncDiffWith == "" {
-		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph or endpoint to diff against")
-		return 2
-	}
-	if flagGiven("sync-apply") && syncApplyTo == "" {
-		fmt.Fprintln(os.Stderr, "sysml: -sync-apply is empty; name the SysML v2 API endpoint to apply to")
-		return 2
-	}
 	if syncDiffWith != "" && syncApplyTo != "" {
 		fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set without writing and -sync-apply writes one; ask for one per run")
 		return 2
