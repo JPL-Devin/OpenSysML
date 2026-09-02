@@ -33,6 +33,19 @@
               (Multiplicity range=false
                 (LiteralInfinity))))))
       (Membership visibility="default"
+        (Usage kind="part" name="keywordTail" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralInteger value="1")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=pt
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
         (Usage kind="part" name="modifier" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
             (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false chain=true

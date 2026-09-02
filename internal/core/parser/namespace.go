@@ -181,6 +181,13 @@ func (p *Parser) parseIdentification() ast.Identification {
 	return p.parseIdentificationStopping()
 }
 
+// declarationTailKeywords continue a declaration after its identification
+// (a value, connector ends, succession ends, a flow payload), so none names it.
+var declarationTailKeywords = map[string]bool{
+	"default": true, "connect": true, "allocate": true, "from": true, "to": true,
+	"then": true, "first": true, "do": true, "of": true,
+}
+
 // parseIdentificationStopping parses an identification whose name may not be one of
 // stop: those keywords end the declaration rather than naming it.
 func (p *Parser) parseIdentificationStopping(stop ...string) ast.Identification {
@@ -195,8 +202,6 @@ func (p *Parser) parseIdentificationStopping(stop ...string) ast.Identification 
 		}
 		p.expect(lexer.Gt, msgExpectedCloseAngle)
 	}
-	// Parse name, but exclude keywords that have special syntax meaning in declaration context
-	// (e.g., "default" introduces a value expression, "connect"/"allocate" introduce connector ends, "first"/"do" for succession, "of" for flow payload)
 	// A feature specialization keyword states a relationship, not a name, and
 	// must read as its symbol does: `<s> references x` is `<s> ::> x`.
 	if p.atFeatureSpecialization() {
@@ -209,9 +214,7 @@ func (p *Parser) parseIdentificationStopping(stop ...string) ast.Identification 
 				return id
 			}
 		}
-		switch kw {
-		case "default", "connect", "allocate", "from", "to", "then", "first", "do", "of":
-			// These keywords have special syntax meaning, not valid as identifier names here
+		if declarationTailKeywords[kw] {
 			return id
 		}
 		// Any other keyword here is the name the author meant, so it is read as

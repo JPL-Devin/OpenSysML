@@ -93,6 +93,10 @@ func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
 		"package P { part def D { attribute chain; attribute chain[*]; } }",
 		"package P { part def D { ref chain :> other; attribute other; } }",
 		"package P { action a { in chain : Integer; assign chain := 1; } }",
+		"package P { attribute chain default 1; }",
+		"package P { attribute chain defined by Integer; }",
+		"package P { attribute chain subsets other; attribute other; }",
+		"package P { attribute chain redefines other; attribute other; }",
 	} {
 		root := parseClean(t, src)
 		pkg := root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)
@@ -106,6 +110,7 @@ func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
 		"package P { attribute chain x : Integer; }",
 		"package P { ref chain x : Integer; }",
 		"package P { ref chain 'x y' : Integer; }",
+		"package P { ref chain <s> x : Integer; }",
 	} {
 		root := parseClean(t, src)
 		pkg := root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)

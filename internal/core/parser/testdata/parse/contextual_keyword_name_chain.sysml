@@ -1,6 +1,7 @@
 // `chain` is the feature chain modifier only when a name follows it
-// (`attribute chain x : T;`); before `=`, `:`, `;` or `[` it names the feature,
-// on either side of the kind keyword.
+// (`attribute chain x : T;`); before `=`, `:`, `;`, `[` or a keyword that
+// continues the declaration (`default`, `defined by`, `subsets`) it names the
+// feature, on either side of the kind keyword.
 package P {
 	part def Link {
 		attribute chain : Integer;
@@ -15,6 +16,12 @@ package P {
 	part bare {
 		attribute chain;
 		attribute chain[*] :> pt;
+	}
+
+	part keywordTail {
+		attribute chain default 1;
+		attribute chain defined by Integer;
+		attribute chain subsets pt;
 	}
 
 	part modifier {

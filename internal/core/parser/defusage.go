@@ -501,8 +501,11 @@ func (p *Parser) namesReference(n int) bool {
 // here (`:`/`defined by`, `:>`/`subsets`, `::>`/`references`, `=>`/`crosses`,
 // `:>>`/`redefines`), so neither can be read differently from the other.
 // `specializes` is excluded: it relates two types (SubclassificationPart).
-func (p *Parser) atFeatureSpecialization() bool {
-	t := p.peek()
+func (p *Parser) atFeatureSpecialization() bool { return p.featureSpecializationAt(0) }
+
+// featureSpecializationAt is atFeatureSpecialization at the token i ahead.
+func (p *Parser) featureSpecializationAt(i int) bool {
+	t := p.peekN(i)
 	switch t.Kind {
 	case lexer.Colon, lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt:
 		return true
@@ -511,7 +514,7 @@ func (p *Parser) atFeatureSpecialization() bool {
 		case "subsets", "references", "crosses", "redefines":
 			return true
 		case "defined", "typed":
-			n := p.peekN(1)
+			n := p.peekN(i + 1)
 			return n.Kind == lexer.Keyword && n.KeywordID == "by"
 		}
 	}
@@ -694,12 +697,20 @@ func (p *Parser) atChainWord() bool {
 }
 
 // atChainModifier reports whether the cursor is at the `chain` modifier of a
-// declaration rather than at a feature named `chain`.
+// declaration rather than at a feature named `chain`: what follows must be able
+// to name the declaration, as parseIdentificationStopping reads it.
 func (p *Parser) atChainModifier() bool {
 	if !p.atChainWord() {
 		return false
 	}
-	return p.peekIsName(1) || p.peekN(1).Kind == lexer.ColonColon
+	next := p.peekN(1)
+	switch next.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName, lexer.ColonColon, lexer.Lt:
+		return true
+	case lexer.Keyword:
+		return !declarationTailKeywords[next.KeywordID] && !p.featureSpecializationAt(1)
+	}
+	return false
 }
 
 func (p *Parser) parseFeatureModifiers() featureMods {
