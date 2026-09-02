@@ -260,6 +260,13 @@ No model that validated under 0.4.2 stops validating and no import path moves.
 
 ### Fixed
 
+- **An anonymous `doc` or `comment` before a kind keyword is kept.** `doc /* … */` followed by
+  `attribute a;` in a definition or usage body parsed as an attribute prefixed by `doc`, so the
+  documentation vanished silently from the model — absent from validation, printing, the LSP and
+  RDF conversion (Open-MBEE/OpenSysML#85). A `doc`, `comment`, `rep` or `locale` annotation ends
+  with its comment body and never qualifies the member after it; the bundled standard library
+  gains the documentation this had been dropping.
+
 - **A wider-typed expression binds to a narrower feature.** `return : Integer = 7 / 2;` was
   refused statically because the quotient's type is `Rational`, yet an expression's static type
   only bounds its values — `4 / 2` is whole. A binding, argument or index is now refused
