@@ -153,6 +153,27 @@ package Compiled {
 		return : Integer = (a % a) + (b + b);
 	}
 
+	calc fib : Fib;
+
+	calc def Specialized :> Fib;
+
+	calc def ViaUsage {
+		in n : Integer;
+		return : Integer = fib(n) + Specialized(n = n);
+	}
+
+	calc def NamedOrder {
+		in a : Integer;
+		in b : Integer;
+		return : Integer = Arith(b = b + b, a = a % a);
+	}
+
+	calc def NamedTwice {
+		in a : Integer;
+		in b : Integer;
+		return : Integer = Arith(a = a % a, b = 1, a = b + b, b = a);
+	}
+
 	calc def OrderArgs {
 		in a : Integer;
 		in b : Integer;
@@ -220,7 +241,10 @@ package Refused {
 		return : Real = RealFunctions::sqrt(a);
 	}
 
-	calc def Specialized :> Compiled::Fib;
+	// Members of its own would redefine what it inherits; that is not compiled.
+	calc def Refined :> Compiled::Fib {
+		in n : Integer;
+	}
 
 	// The interpreter stores the Real quotient in an Integer attribute; the
 	// compiler would have to pick a representation, so it declines.

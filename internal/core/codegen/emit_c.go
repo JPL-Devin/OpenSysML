@@ -414,12 +414,39 @@ func (e *cEmitter) expr(x Expr) string {
 	case Cond:
 		return fmt.Sprintf("(%s ? %s : %s)", e.expr(x.C), e.expr(x.Then), e.expr(x.Else))
 	case Call:
-		return e.sequenced(x.Args, func(args []string) string {
-			return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(args, ", "))
+		values := make([]Expr, len(x.Args))
+		for i, a := range x.Args {
+			values[i] = a.Value
+		}
+		return e.sequenced(values, func(names []string) string {
+			return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(callOperands(x, names), ", "))
 		})
 	}
 	e.err = fmt.Errorf("codegen: C emitter has no case for %T", x)
 	return "0"
+}
+
+// callOperands picks, per parameter, the name of the last argument bound to it.
+func callOperands(x Call, names []string) []string {
+	operands := make([]string, len(x.Fn.Params))
+	for i, a := range x.Args {
+		operands[a.Param] = names[i]
+	}
+	return operands
+}
+
+// inParamOrder reports whether a call's arguments are its parameters once each,
+// in order, so evaluating the call's operands in place is source order.
+func inParamOrder(x Call) bool {
+	if len(x.Args) != len(x.Fn.Params) {
+		return false
+	}
+	for i, a := range x.Args {
+		if a.Param != i {
+			return false
+		}
+	}
+	return true
 }
 
 // cReal renders a float64 so the C compiler reads back the identical value.

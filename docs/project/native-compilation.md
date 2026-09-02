@@ -45,11 +45,12 @@ A calc compiles when everything it reaches is in this subset:
 | `attribute x : T = e;`, `x = e;` / `assign x := e;` | locals and stores |
 | `if` / `else`, `while` | control flow |
 | Invocation of another compilable calc, positional or named; direct and mutual recursion | native call |
+| `calc c : D;`, `calc def E :> D;` adding no member of its own | compiles as `D` |
 
 Everything else refuses: String, sequence or structured parameters/results, parameter defaults,
 body-local attributes without a value (the interpreter holds null there, which no compiled type can),
-multiplicity other than `[1]`, a calc that `:>`/`:>>`/`redefines` another (its inherited shape is
-not compiled), library-function invocations (`ScalarFunctions::sqrt` and the like), `for` and
+multiplicity other than `[1]`, a calc that `:>`/`:>>`/`redefines` another *and* declares members
+(redefining inherited parameters or body is not compiled), library-function invocations (`ScalarFunctions::sqrt` and the like), `for` and
 collection operations, quantities and units, and `Integer ** <non-literal Integer>` (whether the
 result is an Integer depends on the exponent's sign at run time, which a static type cannot
 express; write the exponent as a literal or make the base Real). The refusal names the calc and
@@ -71,8 +72,9 @@ arithmetic rather than the host language's:
   (see `exact-rational-evaluation.md`; no exact arithmetic is introduced here).
 - **Mixed** Integer/Real operands widen the Integer, in comparisons too.
 - **`and`/`or`/`implies`** short-circuit; the right operand's errors are not raised when the left
-  decides. Every other operator, and every invocation, evaluates its operands left to right, so
-  when both could fail the left failure is the one reported. Generated C sequences operands through
+  decides. Every other operator, and every invocation, evaluates its operands left to right —
+  named arguments in the order written, a parameter named twice taking the later value — so when
+  two could fail the leftmost failure is the one reported. Generated C sequences operands through
   temporaries (GNU statement expressions) because C leaves argument order unspecified; Go's
   evaluation order already matches.
 - **`Natural` and `Positive`** are checked exactly where the interpreter checks them: a negative

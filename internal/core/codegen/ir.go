@@ -110,9 +110,17 @@ type Cond struct {
 }
 
 // Call invokes another compiled function, arguments coerced to parameter types.
+// Call invokes Fn. Args are evaluated in source order, each binding the
+// parameter at Param; a parameter named twice takes the later value.
 type Call struct {
 	Fn   *Func
-	Args []Expr
+	Args []Arg
+}
+
+// Arg is one supplied argument of a Call.
+type Arg struct {
+	Param int
+	Value Expr
 }
 
 // ToReal widens an Integer to a Real.

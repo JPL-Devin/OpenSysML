@@ -375,14 +375,30 @@ func (e *goEmitter) expr(x Expr) string {
 	case Cond:
 		return fmt.Sprintf("func() %s { if %s { return %s }; return %s }()", goType(x.T), e.expr(x.C), e.expr(x.Then), e.expr(x.Else))
 	case Call:
-		args := make([]string, len(x.Args))
-		for i, a := range x.Args {
-			args[i] = e.expr(a)
-		}
-		return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(args, ", "))
+		return e.call(x)
 	}
 	e.err = fmt.Errorf("codegen: Go emitter has no case for %T", x)
 	return "0"
+}
+
+// call emits a call; Go evaluates operands left to right, so only arguments
+// written out of parameter order need temporaries to keep source order.
+func (e *goEmitter) call(x Call) string {
+	names := make([]string, len(x.Args))
+	for i, a := range x.Args {
+		names[i] = e.expr(a.Value)
+	}
+	if inParamOrder(x) {
+		return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(names, ", "))
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "func() %s { ", goType(x.Fn.Result))
+	for i := range x.Args {
+		fmt.Fprintf(&b, "t%d := %s; _ = t%d; ", i, names[i], i)
+		names[i] = fmt.Sprintf("t%d", i)
+	}
+	fmt.Fprintf(&b, "return %s(%s) }()", x.Fn.Ident, strings.Join(callOperands(x, names), ", "))
+	return b.String()
 }
 
 func (e *goEmitter) binary(x Binary) string {

@@ -97,10 +97,8 @@ func (c *Compiler) compileCalc(sym *symbols.Symbol) (*Func, error) {
 	if err != nil {
 		return nil, &UnsupportedError{Calc: c.name(sym), What: err.Error()}
 	}
-	for _, r := range rels {
-		if r != nil {
-			return nil, &UnsupportedError{Calc: c.name(sym), What: "a calc declaring `" + r.Kind.String() + "`; parameters and body it would inherit are not compiled"}
-		}
+	if len(rels) > 0 {
+		return c.compileInheriting(sym, body, rels)
 	}
 
 	fn := &Func{Name: c.name(sym), Ident: identOf(sym)}
@@ -174,6 +172,40 @@ func calcDecl(decl ast.Node) ([]ast.Node, []*ast.Relationship, error) {
 		}
 	}
 	return nil, nil, errors.New("not a calc def or calc usage")
+}
+
+// compileInheriting compiles a calc that specializes or is typed by another.
+// The interpreter flattens parameters and body along the chain of calc
+// supertypes; a calc adding no member of its own is that chain's one other
+// calc, so it compiles to that calc's function. Anything richer is refused.
+func (c *Compiler) compileInheriting(sym *symbols.Symbol, body []ast.Node, rels []*ast.Relationship) (*Func, error) {
+	var parent *symbols.Symbol
+	for _, super := range c.model.DirectSupertypes(sym) {
+		if super == nil || !isCalc(super.Decl) || c.resolver.Index().Library(super) {
+			continue
+		}
+		if parent != nil && parent != super {
+			return nil, &UnsupportedError{Calc: c.name(sym), What: "a calc inheriting from several calcs"}
+		}
+		parent = super
+	}
+	if parent == nil {
+		return nil, &UnsupportedError{Calc: c.name(sym), What: "a calc declaring `" + rels[0].Kind.String() + "` of something that is not a compiled calc"}
+	}
+	if len(unwrapped(body)) > 0 {
+		return nil, &UnsupportedError{Calc: c.name(sym), What: "a calc declaring `" + rels[0].Kind.String() + "` and members of its own; redefinition of inherited parameters and body is not compiled"}
+	}
+	fn, err := c.compileCalc(parent)
+	if err != nil {
+		return nil, err
+	}
+	c.funcs[sym] = fn
+	return fn, nil
+}
+
+func isCalc(decl ast.Node) bool {
+	_, _, err := calcDecl(decl)
+	return err == nil
 }
 
 // declaredResult is the type and range the `return` parameter declares,
@@ -668,14 +700,14 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 	if !ok {
 		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which does not resolve", qnText(n.Type)))
 	}
-	if def, isDef := sym.Decl.(*ast.Definition); !isDef || def.Kind != ast.DefCalc {
-		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which is not a calc def (library functions are not compiled)", fc.c.name(sym)))
+	if !isCalc(sym.Decl) || fc.c.resolver.Index().Library(sym) {
+		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which is not a calc of the model (library functions are not compiled)", fc.c.name(sym)))
 	}
 	callee, err := fc.c.compileCalc(sym)
 	if err != nil {
 		return nil, err
 	}
-	args := make([]Expr, len(callee.Params))
+	var args []Arg
 	bound := make([]bool, len(callee.Params))
 	if len(n.NamedArgs) > 0 {
 		for _, na := range n.NamedArgs {
@@ -687,7 +719,8 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 			if err != nil {
 				return nil, err
 			}
-			args[i], bound[i] = v, true
+			args = append(args, Arg{Param: i, Value: v})
+			bound[i] = true
 		}
 	} else {
 		if len(n.Args) != len(callee.Params) {
@@ -698,7 +731,8 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 			if err != nil {
 				return nil, err
 			}
-			args[i], bound[i] = v, true
+			args = append(args, Arg{Param: i, Value: v})
+			bound[i] = true
 		}
 	}
 	for i, b := range bound {
