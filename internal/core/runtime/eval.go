@@ -1239,49 +1239,55 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		}
 	}
 
+	res, err := constArithmetic(n.Operator, left.Const, right.Const)
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValConst, Const: res}, nil
+}
+
+// constArithmetic is arithmetic over two scalar constants, the core the
+// evaluator and the compiled calc tier share so both report the same results
+// and the same errors.
+func constArithmetic(op ast.OperatorKind, left, right semantics.Value) (semantics.Value, error) {
 	// Exponentiation shares the folder's implementation, so a folded and an
 	// evaluated `**` agree; the folder declines where this reports the error.
-	if n.Operator == ast.OpPow {
-		res, err := semantics.Pow(left.Const, right.Const)
-		if err != nil {
-			return Value{}, err
-		}
-		return Value{Kind: ValConst, Const: res}, nil
+	if op == ast.OpPow {
+		return semantics.Pow(left, right)
 	}
 
 	// Integer arithmetic: an out-of-range result is reported, not wrapped.
-	if left.Const.Kind == semantics.ValInt && right.Const.Kind == semantics.ValInt {
+	if left.Kind == semantics.ValInt && right.Kind == semantics.ValInt {
 		// A quotient is a Rational: the exact ratio, rounded once to float64 so
 		// operands beyond 2^53 are not rounded before dividing.
-		if n.Operator == ast.OpDiv {
-			q, ok := semantics.IntQuotient(left.Const.Int, right.Const.Int)
+		if op == ast.OpDiv {
+			q, ok := semantics.IntQuotient(left.Int, right.Int)
 			if !ok {
-				return Value{}, ErrDivisionByZero
+				return semantics.Value{}, ErrDivisionByZero
 			}
-			return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: q}}, nil
+			return semantics.Value{Kind: semantics.ValReal, Real: q}, nil
 		}
 		var result int64
-		switch n.Operator {
+		switch op {
 		case ast.OpAdd, ast.OpSub, ast.OpMul:
 			var ok bool
-			if result, ok = semantics.IntArith(n.Operator, left.Const.Int, right.Const.Int); !ok {
-				return Value{}, fmt.Errorf("%w: %d %s %d exceeds the Integer range",
-					semantics.ErrArithmeticOverflow, left.Const.Int, n.Operator.String(), right.Const.Int)
+			if result, ok = semantics.IntArith(op, left.Int, right.Int); !ok {
+				return semantics.Value{}, integerOverflow(op, left.Int, right.Int)
 			}
 		case ast.OpMod:
-			if right.Const.Int == 0 {
-				return Value{}, ErrDivisionByZero
+			if right.Int == 0 {
+				return semantics.Value{}, ErrDivisionByZero
 			}
-			result = left.Const.Int % right.Const.Int
+			result = left.Int % right.Int
 		}
-		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: result}}, nil
+		return semantics.Value{Kind: semantics.ValInt, Int: result}, nil
 	}
 
 	// Real arithmetic (coerce int to real if needed)
-	leftReal := toReal(left.Const)
-	rightReal := toReal(right.Const)
+	leftReal := toReal(left)
+	rightReal := toReal(right)
 	var result float64
-	switch n.Operator {
+	switch op {
 	case ast.OpAdd:
 		result = leftReal + rightReal
 	case ast.OpSub:
@@ -1292,21 +1298,23 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		// A real quotient by zero is reported, as an integer one, a quantity one
 		// and the constant folder all report it, rather than carried as an infinity.
 		if rightReal == 0 {
-			return Value{}, ErrDivisionByZero
+			return semantics.Value{}, ErrDivisionByZero
 		}
 		result = leftReal / rightReal
 	case ast.OpMod:
 		if rightReal == 0 {
-			return Value{}, ErrDivisionByZero
+			return semantics.Value{}, ErrDivisionByZero
 		}
 		result = math.Mod(leftReal, rightReal)
 	}
 	// A result that is not a finite Real is reported, not carried as an infinity.
-	res, err := realResult(result)
-	if err != nil {
-		return Value{}, err
-	}
-	return Value{Kind: ValConst, Const: res}, nil
+	return realResult(result)
+}
+
+// integerOverflow reports an Integer operation whose result leaves the range.
+func integerOverflow(op ast.OperatorKind, left, right int64) error {
+	return fmt.Errorf("%w: %d %s %d exceeds the Integer range",
+		semantics.ErrArithmeticOverflow, left, op.String(), right)
 }
 
 // toReal converts a semantics.Value to float64.
@@ -1404,41 +1412,47 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 		return Value{}, fmt.Errorf("comparison operands must be constants, got %s and %s", left.Kind, right.Kind)
 	}
 
+	result, err := constComparison(n.Operator, left.Const, right.Const)
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
+}
+
+// constComparison orders two scalar constants, the core the evaluator and the
+// compiled calc tier share.
+func constComparison(op ast.OperatorKind, left, right semantics.Value) (bool, error) {
 	// Compare integers
-	if left.Const.Kind == semantics.ValInt && right.Const.Kind == semantics.ValInt {
-		var result bool
-		switch n.Operator {
+	if left.Kind == semantics.ValInt && right.Kind == semantics.ValInt {
+		switch op {
 		case ast.OpLt:
-			result = left.Const.Int < right.Const.Int
+			return left.Int < right.Int, nil
 		case ast.OpLe:
-			result = left.Const.Int <= right.Const.Int
+			return left.Int <= right.Int, nil
 		case ast.OpGt:
-			result = left.Const.Int > right.Const.Int
+			return left.Int > right.Int, nil
 		case ast.OpGe:
-			result = left.Const.Int >= right.Const.Int
+			return left.Int >= right.Int, nil
 		default:
-			return Value{}, fmt.Errorf("unknown comparison operator: %v", n.Operator)
+			return false, fmt.Errorf("unknown comparison operator: %v", op)
 		}
-		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 	}
 
 	// Compare reals (coerce int to real)
-	leftReal := toReal(left.Const)
-	rightReal := toReal(right.Const)
-	var result bool
-	switch n.Operator {
+	leftReal := toReal(left)
+	rightReal := toReal(right)
+	switch op {
 	case ast.OpLt:
-		result = leftReal < rightReal
+		return leftReal < rightReal, nil
 	case ast.OpLe:
-		result = leftReal <= rightReal
+		return leftReal <= rightReal, nil
 	case ast.OpGt:
-		result = leftReal > rightReal
+		return leftReal > rightReal, nil
 	case ast.OpGe:
-		result = leftReal >= rightReal
+		return leftReal >= rightReal, nil
 	default:
-		return Value{}, fmt.Errorf("unknown comparison operator: %v", n.Operator)
+		return false, fmt.Errorf("unknown comparison operator: %v", op)
 	}
-	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: result}}, nil
 }
 
 // evalLogical evaluates the Boolean binary operators. `and`, `or` and `implies`
@@ -1533,11 +1547,9 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 
 	switch n.Operator {
 	case ast.OpNot:
-		// Logical not: not bool
-		if operand.Kind != ValConst || operand.Const.Kind != semantics.ValBool {
+		if operand.Kind != ValConst {
 			return Value{}, fmt.Errorf("logical not requires bool operand, got %v", operand.Kind)
 		}
-		return boolValue(!operand.Const.Bool), nil
 	case ast.OpNeg, ast.OpPos:
 		if operand.Kind == ValQuantity {
 			if n.Operator == ast.OpPos {
@@ -1555,19 +1567,35 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 		if operand.Kind != ValConst {
 			return Value{}, fmt.Errorf("unary '%s' requires numeric operand, got %v", n.Operator, operand.Kind)
 		}
-		if n.Operator == ast.OpNeg && operand.Const.Kind == semantics.ValInt &&
-			operand.Const.Int == math.MinInt64 {
-			return Value{}, fmt.Errorf("%w: -(%d) exceeds the Integer range",
-				semantics.ErrArithmeticOverflow, operand.Const.Int)
-		}
-		result, ok := semantics.EvalUnary(n.Operator, operand.Const)
-		if !ok {
-			return Value{}, fmt.Errorf("unary '%s' is not defined for %v", n.Operator, operand.Const)
-		}
-		return Value{Kind: ValConst, Const: result}, nil
 	default:
 		return Value{}, fmt.Errorf("%w: '%s' is not a unary operator", ErrUnsupportedOperator, n.Operator)
 	}
+	result, err := constUnary(n.Operator, operand.Const)
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValConst, Const: result}, nil
+}
+
+// constUnary applies `not`, `-` or `+` to a scalar constant, the core the
+// evaluator and the compiled calc tier share.
+func constUnary(op ast.OperatorKind, operand semantics.Value) (semantics.Value, error) {
+	if op == ast.OpNot {
+		// Logical not: not bool
+		if operand.Kind != semantics.ValBool {
+			return semantics.Value{}, fmt.Errorf("logical not requires bool operand, got %v", ValConst)
+		}
+		return semantics.Value{Kind: semantics.ValBool, Bool: !operand.Bool}, nil
+	}
+	if op == ast.OpNeg && operand.Kind == semantics.ValInt && operand.Int == math.MinInt64 {
+		return semantics.Value{}, fmt.Errorf("%w: -(%d) exceeds the Integer range",
+			semantics.ErrArithmeticOverflow, operand.Int)
+	}
+	result, ok := semantics.EvalUnary(op, operand)
+	if !ok {
+		return semantics.Value{}, fmt.Errorf("unary '%s' is not defined for %v", op, operand)
+	}
+	return result, nil
 }
 
 // evalSequenceExpr evaluates a sequence expression, `(1, 2, 3)`. A KerML
