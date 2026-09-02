@@ -27,8 +27,9 @@ func (W11EConjugatedSpecializationPass) Run(ctx *Context, name string, root *ast
 	if rootScope == nil {
 		return nil
 	}
+	w := &w8cWalker{ctx: ctx}
 	c := &w11eConjugatedChecker{resolver: ctx.Resolver()}
-	w8cWalkSymbols(ctx, rootScope, c.check)
+	w.walk(rootScope, c.check)
 	return c.diags
 }
 

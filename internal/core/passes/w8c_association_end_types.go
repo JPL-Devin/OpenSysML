@@ -26,7 +26,8 @@ func (AssociationEndTypesPass) Run(ctx *Context, name string, root *ast.RootName
 		return nil
 	}
 	c := &associationEndTypesChecker{resolver: ctx.Resolver(), model: ctx.Model()}
-	w8cWalkSymbols(ctx, rootScope, c.check)
+	w := &w8cWalker{ctx: ctx}
+	w.walk(rootScope, c.check)
 	return c.diags
 }
 

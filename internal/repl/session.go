@@ -91,6 +91,11 @@ type Session struct {
 	names      *nameTable                   // simple names of the documents, rebuilt when their scope trees change
 	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
 
+	// argMemo and nameMemo hold what command text parsed to, so a repeated
+	// invocation is evaluated without being parsed again.
+	argMemo  parseMemo[parsedArgs]
+	nameMemo parseMemo[parsedName]
+
 	// Active executor sessions for debugging
 	actionExec *actionSession
 	stateExec  *stateSession
@@ -268,7 +273,8 @@ func (s *Session) accept(origin, src string) {
 // acceptFrom parses src to compute its declared names, drops any snippet from
 // an earlier submission whose names intersect, and appends the new snippet under
 // the current submission generation. It does NOT touch the workspace (Submit
-// does).
+// does). It returns the names src declares as written, whether or not the
+// snippet recorded for it declares them.
 //
 // Only earlier submissions are replaced: redeclaring a name supersedes what was
 // submitted before it, but two files of one load are both part of the model, so
@@ -282,10 +288,11 @@ func (s *Session) accept(origin, src string) {
 //
 // A loaded file supersedes only itself and what the prompt said about the same
 // names, since several files of one model commonly open the same package.
-func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
+func (s *Session) acceptFrom(origin, src string) (declared []string, drops []dropReport) {
 	p := parser.New(source.New(parseDocName(origin), []byte(src)))
 	root := p.ParseFile()
 	names := declaredNames(root)
+	declared = names
 	text := src
 	// A submission that does not close its own text is masked out of the buffer
 	// rather than left to absorb the submissions after it, and declares nothing:
@@ -313,7 +320,7 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 			open:   true,
 			diags:  parseDiagnostics(p),
 		})
-		return drops
+		return declared, drops
 	}
 	var (
 		comments  string
@@ -339,7 +346,7 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 			}
 		}
 		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key, gen: s.version})
-		return append(drops, s.reopenedNamespaces(key, root)...)
+		return declared, append(drops, s.reopenedNamespaces(key, root)...)
 	}
 	if len(names) > 0 {
 		set := nameSet(names)
@@ -376,7 +383,7 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 		prefix: len(comments),
 		own:    mergedOwn,
 	})
-	return drops
+	return declared, drops
 }
 
 // origins locates every file of the current submission in the joined buffer, in
@@ -721,15 +728,15 @@ func (s *Session) submitEach(files []SourceFile) (res Result, byFile [][]string,
 	s.version++
 	byFile = make([][]string, len(files))
 	for i, f := range files {
-		for _, name := range declaredNames(parser.New(source.New(parseDocName(f.Name), []byte(f.Text))).ParseFile()) {
+		names, dropped := s.acceptFrom(f.Name, f.Text)
+		for _, name := range names {
 			if !seen[name] {
 				seen[name] = true
 				declared = append(declared, name)
 			}
 		}
-		fileDrops := s.acceptFrom(f.Name, f.Text)
-		byFile[i] = dropNotices(fileDrops)
-		drops = append(drops, fileDrops...)
+		byFile[i] = dropNotices(dropped)
+		drops = append(drops, dropped...)
 	}
 	joined := s.joined()
 	offset := s.genOffset(joined)

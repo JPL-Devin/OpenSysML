@@ -26,7 +26,8 @@ func (FeatureReferencePass) Run(ctx *Context, name string, root *ast.RootNamespa
 		model:    ctx.Model(),
 		resolver: ctx.Resolver(),
 	}}
-	w8cWalkSymbols(ctx, rootScope, c.checkSymbol)
+	w := &w8cWalker{ctx: ctx}
+	w.walk(rootScope, c.checkSymbol)
 	c.walkFilters(rootScope, make(map[*symbols.Scope]bool))
 	return c.diags
 }

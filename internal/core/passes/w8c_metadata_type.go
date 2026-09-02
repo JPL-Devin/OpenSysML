@@ -24,7 +24,8 @@ func (MetadataTypePass) Run(ctx *Context, name string, root *ast.RootNamespace) 
 		return nil
 	}
 	c := &metadataTypeChecker{ctx: ctx, resolver: ctx.Resolver()}
-	w8cWalkSymbols(ctx, rootScope, c.checkSymbol)
+	w := &w8cWalker{ctx: ctx}
+	w.walk(rootScope, c.checkSymbol)
 	return c.diags
 }
 

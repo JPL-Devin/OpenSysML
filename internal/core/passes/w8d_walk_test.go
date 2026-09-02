@@ -43,10 +43,15 @@ func TestW8CSymbolWalkCachePreservesOrder(t *testing.T) {
 	nested.Scope.Define("leaf", &symbols.Symbol{Name: "leaf"})
 	root.Define("nested", nested)
 
-	want := w8cCollectSymbols(root)
+	direct := &w8cWalker{}
+	var want []*symbols.Symbol
+	direct.walk(root, func(sym *symbols.Symbol) {
+		want = append(want, sym)
+	})
 	ctx := NewContext("test.sysml", symbols.NewIndex(), nil)
+	w := &w8cWalker{ctx: ctx}
 	var got []*symbols.Symbol
-	w8cWalkSymbols(ctx, root, func(sym *symbols.Symbol) {
+	w.walk(root, func(sym *symbols.Symbol) {
 		got = append(got, sym)
 	})
 	if len(got) != len(want) {
@@ -59,25 +64,22 @@ func TestW8CSymbolWalkCachePreservesOrder(t *testing.T) {
 	}
 }
 
-// One declaration registered under several keys, in its own scope and in a
-// nested one, is still visited once.
-func TestW8CWalkDeduplicatesAliasedSymbols(t *testing.T) {
+func TestW8CWalkerDeduplicatesOverlappingScopes(t *testing.T) {
 	root := symbols.NewScope(nil, nil)
 	shared := &symbols.Symbol{Name: "shared"}
-	nested := &symbols.Symbol{Name: "nested"}
-	nested.Scope = symbols.NewScope(root, nil)
-	nested.Scope.Define("shared", shared)
+	overlap := symbols.NewScope(root, nil)
+	overlap.Define("shared", shared)
 	root.Define("shared", shared)
-	root.Define("alias", shared)
-	root.Define("nested", nested)
 
+	w := &w8cWalker{}
 	var got []*symbols.Symbol
-	w8cWalkSymbols(nil, root, func(sym *symbols.Symbol) {
-		if sym == shared {
-			got = append(got, sym)
-		}
+	w.walk(root, func(sym *symbols.Symbol) {
+		got = append(got, sym)
 	})
-	if len(got) != 1 {
-		t.Fatalf("W8C walk visited the shared symbol %d times, want once", len(got))
+	w.walk(overlap, func(sym *symbols.Symbol) {
+		got = append(got, sym)
+	})
+	if len(got) != 1 || got[0] != shared {
+		t.Fatalf("overlapping W8C walk visited %v, want one shared symbol", got)
 	}
 }

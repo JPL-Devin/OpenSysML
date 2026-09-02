@@ -1357,7 +1357,7 @@ func (s *Session) evalCalc(calcName, argText string) ([]string, []NamedValue, er
 		}
 	}
 
-	exprs, err := parseExprList(argText)
+	exprs, err := s.argExprs(argText)
 	if err != nil {
 		return nil, nil, err
 	}

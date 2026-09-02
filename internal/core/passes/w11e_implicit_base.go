@@ -27,7 +27,7 @@ func (ImplicitBasePass) Run(ctx *Context, name string, root *ast.RootNamespace) 
 		return nil
 	}
 	c := &implicitBaseChecker{model: ctx.Model(), index: ctx.Index, isKerML: ctx.Kind == source.KindKerML}
-	w8cWalkSymbols(ctx, rootScope, c.check)
+	(&w8cWalker{ctx: ctx}).walk(rootScope, c.check)
 	return c.diags
 }
 

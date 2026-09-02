@@ -29,7 +29,8 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 	model := ctx.Model()
 	occurrence := w8cLibraryType(ctx, "Occurrences::Occurrence")
 	var diags []Diagnostic
-	w8cWalkSymbols(ctx, rootScope, func(sym *symbols.Symbol) {
+	w := &w8cWalker{ctx: ctx}
+	w.walk(rootScope, func(sym *symbols.Symbol) {
 		u, ok := sym.Decl.(*ast.Usage)
 		if !ok || !u.IsVariable {
 			return
