@@ -1,6 +1,9 @@
 package symbols
 
-import "sync/atomic"
+import (
+	"slices"
+	"sync/atomic"
+)
 
 type indexGeneration struct {
 	value atomic.Uint64
@@ -138,6 +141,53 @@ func writableSlice[K comparable, E any](l *layer[K, []E], k K) []E {
 	shared, _ := l.get(k)
 	out := make([]E, len(shared), len(shared)+1)
 	copy(out, shared)
+	l.set(k, out)
+	return out
+}
+
+// appendSlice appends e to the slice under k, copying a slice the layer below
+// owns first (see writableSlice).
+func appendSlice[K comparable, E any](l *layer[K, []E], k K, e E) {
+	if s, owned := l.own[k]; owned {
+		l.gen.bump()
+		l.own[k] = append(s, e)
+		return
+	}
+	shared, _ := l.get(k)
+	out := make([]E, len(shared), len(shared)+1)
+	copy(out, shared)
+	l.set(k, append(out, e))
+}
+
+// insertSorted adds s to the sorted, duplicate-free slice under k, copying a
+// slice the layer below owns first (see writableSlice).
+func insertSorted(l *layer[string, []string], k, s string) {
+	have, _ := l.get(k)
+	i, found := slices.BinarySearch(have, s)
+	if found {
+		return
+	}
+	if owned, ok := l.own[k]; ok {
+		l.gen.bump()
+		l.own[k] = slices.Insert(owned, i, s)
+		return
+	}
+	out := make([]string, len(have)+1)
+	copy(out, have[:i])
+	out[i] = s
+	copy(out[i+1:], have[i:])
+	l.set(k, out)
+}
+
+// removeSorted drops s from the sorted slice under k and returns what remains.
+func removeSorted(l *layer[string, []string], k, s string) []string {
+	have, _ := l.get(k)
+	i, found := slices.BinarySearch(have, s)
+	if !found {
+		return have
+	}
+	out := writableSlice(l, k)
+	out = slices.Delete(out, i, i+1)
 	l.set(k, out)
 	return out
 }
