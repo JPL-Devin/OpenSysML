@@ -1,8 +1,8 @@
 # The Rust client API
 
-What the `opensysml` crate exposes, why it is blocking, and where its v1 stops.
-Choosing between the clients is [client libraries](clients.md); using one as a task
-is [guide chapter 9](../guide/09-python.md#from-rust). The crate's own notes on
+This page covers what the `opensysml` crate exposes, why it is blocking, and where its v1
+stops. To choose between the clients, see [client libraries](clients.md); for a
+task-oriented walkthrough, see [guide chapter 9](../guide/09-python.md#from-rust). The crate's own notes on
 binary provisioning and its trust model are in
 [clients/rust/README.md](../../clients/rust/README.md).
 
