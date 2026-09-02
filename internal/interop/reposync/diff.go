@@ -55,12 +55,31 @@ type Change struct {
 	Conflict      ConflictKind
 	// RequiresConfirmation marks a delete the options did not confirm.
 	RequiresConfirmation bool
+	// Content is the element as the local graph states it, in the repository's
+	// representation: what a create or an update writes. Nil for a delete.
+	Content []rdf.Triple
+}
+
+// UncarriedProperty is a property of the local graph the repository has no
+// place for: left out of the comparison, since no apply could ever settle it.
+type UncarriedProperty struct {
+	Property string // rendered as in a delta
+	Triples  int
 }
 
 // ChangeSet is what a diff produced for one project scope.
 type ChangeSet struct {
-	Scope   Scope
-	Changes []Change
+	Scope     Scope
+	Changes   []Change
+	Uncarried []UncarriedProperty
+}
+
+// Representation is what a repository can hold of a graph; both sides compare
+// under it, so a successful apply leaves nothing to diff.
+type Representation interface {
+	// Carry maps a triple onto the form the repository stores: ok false when it
+	// has no place for the predicate, err when it cannot represent the value.
+	Carry(triple rdf.Triple) (carried rdf.Triple, ok bool, err error)
 }
 
 // Options steer a diff. Deletes and id minting are explicit opt-ins; neither
@@ -79,6 +98,8 @@ type Options struct {
 	MintIDs bool
 	// NewID overrides the UUID source, for deterministic tests.
 	NewID func() (string, error)
+	// Representation is the repository's; nil compares the graphs as written.
+	Representation Representation
 }
 
 // Diff compares the local graph against the repository graph of the same
@@ -106,11 +127,11 @@ func Diff(local, repository *rdf.Graph, opts Options) (*ChangeSet, error) {
 		newID = MintUUID
 	}
 
-	localView, err := viewOf(local)
+	localView, uncarried, err := viewOf(local, opts.Representation)
 	if err != nil {
 		return nil, err
 	}
-	repoView, err := viewOf(repository)
+	repoView, _, err := viewOf(repository, opts.Representation)
 	if err != nil {
 		return nil, fmt.Errorf("repository graph: %w", err)
 	}
@@ -134,13 +155,13 @@ func Diff(local, repository *rdf.Graph, opts Options) (*ChangeSet, error) {
 				return nil, fmt.Errorf("%w: the sync names branch %q, the baseline graph branch %q", ErrTwoBranches, against.Branch, baseScope.Branch)
 			}
 		}
-		baseView, err = viewOf(opts.Base)
+		baseView, _, err = viewOf(opts.Base, opts.Representation)
 		if err != nil {
 			return nil, fmt.Errorf("baseline graph: %w", err)
 		}
 	}
 
-	set := &ChangeSet{Scope: scope}
+	set := &ChangeSet{Scope: scope, Uncarried: uncarried}
 	for _, id := range sortedIDs(localView, repoView) {
 		at, inLocal := localView[id]
 		was, inRepo := repoView[id]
@@ -151,7 +172,7 @@ func Diff(local, repository *rdf.Graph, opts Options) (*ChangeSet, error) {
 			if len(deltas) == 0 {
 				continue
 			}
-			change := Change{Kind: KindUpdate, Deltas: deltas}
+			change := Change{Kind: KindUpdate, Deltas: deltas, Content: at.content}
 			if opts.Base != nil {
 				switch {
 				case !inBase:
@@ -164,7 +185,7 @@ func Diff(local, repository *rdf.Graph, opts Options) (*ChangeSet, error) {
 			}
 			set.add(change, at)
 		case inLocal:
-			change := Change{Kind: KindCreate}
+			change := Change{Kind: KindCreate, Content: at.content}
 			switch {
 			case inBase:
 				// The last-seen graph had it and the repository dropped it:
@@ -237,16 +258,33 @@ func (cs *ChangeSet) count(kind Kind) int {
 	return n
 }
 
+// NotAppliableError refuses an apply: the set holds conflicts, unconfirmed
+// deletes, or both, and a person has to decide them first.
+type NotAppliableError struct {
+	Conflicts          int
+	UnconfirmedDeletes int
+}
+
+func (e *NotAppliableError) Error() string {
+	var reasons []string
+	if e.Conflicts > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d conflict(s) must be resolved", e.Conflicts))
+	}
+	if e.UnconfirmedDeletes > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d delete(s) need explicit confirmation", e.UnconfirmedDeletes))
+	}
+	return strings.Join(reasons, " and ") + " before this change set can be applied"
+}
+
 // Appliable reports whether the set can be applied as computed: conflicts and
-// unconfirmed deletes refuse an apply until a person decides them.
+// unconfirmed deletes refuse an apply, as a *NotAppliableError, until a person
+// decides them.
 func (cs *ChangeSet) Appliable() error {
-	if n := cs.Conflicts(); n > 0 {
-		return fmt.Errorf("%d conflict(s) must be resolved before this change set can be applied", n)
+	conflicts, unconfirmed := cs.Conflicts(), cs.UnconfirmedDeletes()
+	if conflicts == 0 && unconfirmed == 0 {
+		return nil
 	}
-	if n := cs.UnconfirmedDeletes(); n > 0 {
-		return fmt.Errorf("%d delete(s) need explicit confirmation before this change set can be applied", n)
-	}
-	return nil
+	return &NotAppliableError{Conflicts: conflicts, UnconfirmedDeletes: unconfirmed}
 }
 
 // Mints returns the minted ids of a change set, keyed by the derived id each
@@ -273,6 +311,9 @@ type subjectView struct {
 	// derive their ids and are never minted for.
 	mintable bool
 	props    map[string][]string
+	// content is the subject's type and carried content triples: what an
+	// apply writes for it.
+	content []rdf.Triple
 }
 
 // name names the subject for messages: its qualified name when it has one.
@@ -292,9 +333,11 @@ func identityPredicate(iri string) bool {
 
 // viewOf indexes a graph by effective element id, reducing each subject to the
 // view the comparison works on. The full IRI — scope-qualified or not — only
-// carries the id; two subjects sharing one id in one graph is an error.
-func viewOf(g *rdf.Graph) (map[string]*subjectView, error) {
+// carries the id; two subjects sharing one id in one graph is an error. It also
+// tallies the properties the representation has no place for.
+func viewOf(g *rdf.Graph, rep Representation) (map[string]*subjectView, []UncarriedProperty, error) {
 	views := map[string]*subjectView{}
+	uncarried := map[string]int{}
 	for _, triple := range g.Triples() {
 		if !triple.Subject.IsIRI() {
 			continue
@@ -302,7 +345,7 @@ func viewOf(g *rdf.Graph) (map[string]*subjectView, error) {
 		id := rdf.LocalName(triple.Subject.Value)
 		view := views[id]
 		if view != nil && view.subject != triple.Subject.Value {
-			return nil, fmt.Errorf("two subjects carry the effective id %q: %s and %s", id, view.subject, triple.Subject.Value)
+			return nil, nil, fmt.Errorf("two subjects carry the effective id %q: %s and %s", id, view.subject, triple.Subject.Value)
 		}
 		if view == nil {
 			view = &subjectView{
@@ -314,11 +357,24 @@ func viewOf(g *rdf.Graph) (map[string]*subjectView, error) {
 		}
 		if triple.Predicate.Value == rdf.RDFType {
 			view.metaclass = rdf.LocalName(triple.Object.Value)
+			view.content = append(view.content, triple)
 			continue
 		}
 		if identityPredicate(triple.Predicate.Value) {
 			continue
 		}
+		if rep != nil {
+			carried, ok, err := rep.Carry(triple)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%s %s: %w", view.name(), propertyLabel(triple.Predicate.Value), err)
+			}
+			if !ok {
+				uncarried[triple.Predicate.Value]++
+				continue
+			}
+			triple = carried
+		}
+		view.content = append(view.content, triple)
 		// Keyed by full predicate IRI so same-named properties from
 		// different namespaces never conflate.
 		view.props[triple.Predicate.Value] = append(view.props[triple.Predicate.Value], objectValue(triple.Object))
@@ -333,7 +389,20 @@ func viewOf(g *rdf.Graph) (map[string]*subjectView, error) {
 		view.declared = declaredID(g, view)
 		view.mintable = mintable(view)
 	}
-	return views, nil
+	var left []UncarriedProperty
+	for _, iri := range sortedKeys(uncarried) {
+		left = append(left, UncarriedProperty{Property: propertyLabel(iri), Triples: uncarried[iri]})
+	}
+	return views, left, nil
+}
+
+func sortedKeys(m map[string]int) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // declaredID mirrors the RDF reader: an explicit declaredId marker, or an id

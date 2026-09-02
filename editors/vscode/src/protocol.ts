@@ -13,6 +13,23 @@ export const RENDER_CAPABILITY = "openSysmlRender";
 /** The capability the server advertises when it serves document rendering. */
 export const RENDER_DOCUMENT_CAPABILITY = "openSysmlRenderDocument";
 
+/** The URI scheme the server locates standard-library declarations in. */
+export const STDLIB_SCHEME = "sysml-stdlib";
+
+/** Serves the text of a `sysml-stdlib:` document; mirrors internal/lsp/stdlib.go. */
+export const STDLIB_CONTENT_METHOD = "opensysml/stdlibContent";
+
+/** The capability the server advertises when it serves the content request. */
+export const STDLIB_CONTENT_CAPABILITY = "openSysmlStdlibContent";
+
+export interface StdlibContentParams {
+  uri: string;
+}
+
+export interface StdlibContentResult {
+  text: string;
+}
+
 export interface Position {
   line: number;
   character: number;

@@ -2,7 +2,7 @@
 
 This chapter describes what the runtime evaluates and how each kind of check reports its result.
 A constraint declared on a definition is checked against the object that carries it, so
-instantiate the definition first to obtain a verdict about a concrete value rather than about a
+instantiate the definition first if you want a verdict about a concrete value rather than a
 default.
 
 ## Expressions
@@ -113,7 +113,7 @@ sysml> %requirement SafetyReq
 ✓ Requirement SafetyReq satisfied
 ```
 
-For further examples, see
+For more examples, see
 [examples/repl-behavioral-demo.sysml](../../examples/repl-behavioral-demo.sysml).
 
 ---
