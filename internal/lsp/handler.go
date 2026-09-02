@@ -43,6 +43,9 @@ func (s *Server) changeHandler(inner jsonrpc2.Handler) jsonrpc2.Handler {
 		if err := json.Unmarshal(req.Params(), &params); err != nil {
 			return reply(ctx, nil, err)
 		}
+		if isLibraryURI(params.TextDocument.URI) {
+			return reply(ctx, nil, s.refuseLibraryChange(ctx, params.TextDocument.URI))
+		}
 		s.applyDidChange(ctx, uriToName(params.TextDocument.URI), params.ContentChanges, int(params.TextDocument.Version))
 		return reply(ctx, nil, nil)
 	}
