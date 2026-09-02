@@ -31,7 +31,7 @@ func (r *Rendering) MarkdownCells(escape func(string) string) string {
 		fmt.Fprintf(&b, "<!-- not represented: %s -->\n", markdownComment(notice))
 	}
 	if r.Empty() {
-		fmt.Fprintf(&b, "\n%s\n", r.emptyReason())
+		fmt.Fprintf(&b, "\n%s\n", r.EmptyReason())
 		return b.String()
 	}
 	columns := r.Columns

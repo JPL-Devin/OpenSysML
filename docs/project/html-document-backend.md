@@ -1,12 +1,16 @@
 # HTML document backend — design
 
-Status: **proposed** — nothing in this page is implemented. It records the design agreed for
-rendering documents as HTML directly from the document IR, the class and attribute vocabulary
-that makes the output styleable, and what the change does to the existing PDF backend.
+Status: **implemented, except the PDF migration** — `docrender.HTML`, `-doc-form html`, the
+stylesheet options and linked HTML sets ship; the PDF engines still read the Markdown-derived
+HTML of `internal/docpdf` (see [Rendering a document as HTML](../reference/cli.md#rendering-a-document-as-html)
+for the user-facing surface). This page records the design agreed for rendering documents as HTML
+directly from the document IR, the class and attribute vocabulary that makes the output styleable,
+and what the change does to the existing PDF backend.
 
 ## The problem
 
-`-doc-form` writes Markdown or PDF, and there is no HTML form at all. HTML does exist inside
+The problem this page set out to solve, as it stood: `-doc-form` wrote Markdown or PDF, and there
+was no HTML form at all. HTML did exist inside
 the toolchain, but only as an intermediate for the PDF converters that read HTML — WeasyPrint
 and Prince — and it is built the long way round: `internal/docpdf/markdown.go` re-parses
 docrender's Markdown back into flat presentation blocks (heading, paragraph, caption, table,

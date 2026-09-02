@@ -76,12 +76,18 @@ func TestOSLCQueryMatchesREPLQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The service reports a property under its query property name; the REPL
+	// reports it under the OSLC name the query asked for.
+	asked := []struct{ property, spelling string }{
+		{QueryPropName, "sysml:name"},
+		{QueryPropOwner, "sysml:owner"},
+	}
 	want := make([]string, 0, len(resp.Elements))
 	for _, element := range resp.Elements {
 		line := fmt.Sprintf("%s  %s", element.Id, element.Type)
-		for _, property := range []string{QueryPropName, QueryPropOwner} {
-			if value, ok := element.Properties[property]; ok {
-				line += fmt.Sprintf("  %s=%s", property, value)
+		for _, property := range asked {
+			if value, ok := element.Properties[property.property]; ok {
+				line += fmt.Sprintf("  %s=%s", property.spelling, value)
 			}
 		}
 		want = append(want, line)

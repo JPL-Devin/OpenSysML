@@ -755,12 +755,16 @@ there is no second object to address.
 
 # Proposed, not started
 
-**An HTML document backend.** [html-document-backend.md](html-document-backend.md) designs a
-direct `docrender.HTML` backend from the document IR (`-doc-form html`, a default stylesheet
-in a cascade layer that reader CSS overrides without specificity fights, `-html-css` and a
-fragment option) and the migration of the PDF path onto it, replacing the Markdown → converter
-hop. Status there is *proposed — nothing on that page is implemented*. It is independent of every
-track above and waits only on someone wanting HTML.
+**The PDF path onto the HTML backend.** The backend
+[html-document-backend.md](html-document-backend.md) designs is now implemented: `docrender.HTML`
+renders `-doc-form html` straight from the document IR, with the semantic structure, the `sysml-`
+classes and `data-` model facts, the default stylesheet in a cascade layer that reader CSS
+overrides without specificity fights, `-html-css`, `-html-no-default-css`, `-html-default-css`,
+`-html-fragment`, and linked HTML sets sharing one `sysml-document.css`. What remains is the
+migration designed alongside it: point the HTML-input PDF engines (`weasyprint`, `prince`) at that
+markup and retire `internal/docpdf`'s Markdown re-parse and its own HTML writer, which splits the
+print styling out as a shared asset and moves the PDF goldens. Pandoc keeps reading the Markdown,
+and `-doc-form markdown` is unaffected. About one session, independent of every track above.
 
 **The pilot as an execution referee.** [pilot-execution-referee.md](pilot-execution-referee.md)
 established that the pinned pilot evaluates model-level expressions and nothing else, so
