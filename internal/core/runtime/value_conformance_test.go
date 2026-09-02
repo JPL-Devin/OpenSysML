@@ -129,6 +129,41 @@ func TestDeclaredValueReadChecksItsType(t *testing.T) {
 	}
 }
 
+// A model declaring its own scalar types gives the run time no value semantics
+// for them, so a value is refused only where the two types are disjoint: KerML
+// asks a binding's types to conform in either direction, and the value is not judged.
+func TestUserDeclaredScalarTypeDefersToTheBinding(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			item def Real;
+			item def Integer :> Real;
+			item def Natural :> Integer;
+			item def String;
+			part def P {
+				attribute nat : Natural = 3;
+				attribute narrowed : Integer = 2.5;
+				attribute widened : Real = 3;
+				attribute disjoint : String = 3;
+			}
+			part p : P;
+		}
+	`))
+	inst := instantiateNamed(t, ctx, idx, "test::p")
+	for feature, want := range map[string]string{"nat": "3", "narrowed": "2.5", "widened": "3"} {
+		fv, err := inst.GetFeatureValue(ctx, feature)
+		if err != nil {
+			t.Errorf("%s: %v", feature, err)
+			continue
+		}
+		if got := FormatTraceValue(fv.HeldValue()); got != want {
+			t.Errorf("%s = %s, want %s", feature, got, want)
+		}
+	}
+	if _, err := inst.GetFeatureValue(ctx, "disjoint"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("disjoint: error = %v, want ErrTypeMismatch", err)
+	}
+}
+
 // A positional, named or default argument — through an inherited or redefined
 // parameter too — must be a value of the parameter's type; so must the result.
 func TestCalcParameterAndResultMustConform(t *testing.T) {
