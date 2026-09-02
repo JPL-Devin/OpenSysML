@@ -43,7 +43,7 @@ Each file gets exactly one of:
 | Verdict | Meaning |
 |---|---|
 | `stable` | Hop 2 is byte-identical to hop 1. |
-| `whitespace-only` | The two Turtle documents differ as bytes, but their triple sets are equal once the whitespace inside every `sysx:sourceText` literal is collapsed to single spaces. This is the shape of the mapping's known instability: the writer re-indents a body, and the text the encoder records for it changes with the indentation. |
+| `whitespace-only` | The two Turtle documents differ as bytes, but their triple sets are equal once the whitespace inside every `sysx:sourceText` literal is collapsed to single spaces. This was the shape of the mapping's instability before the writer emitted stored text verbatim ([Stored text is layout](../reference/rdf-mapping.md#stored-text-is-layout)); no file holds it now, and one that regains it means the writer re-indented a body it did not restructure. |
 | `graph-diff` | The triple sets differ beyond `sysx:sourceText` whitespace: hop 2 gained, lost or changed a triple. |
 | `unwritable` | Hop 1 succeeded but Turtle → notation was refused. |
 | `unparseable` | The notation written back was refused on its way to Turtle again. |
@@ -59,16 +59,20 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 166 |
-| `whitespace-only` | 71 |
-| `graph-diff` | 14 |
+| `stable` | 243 |
+| `whitespace-only` | 0 |
+| `graph-diff` | 8 |
 | `unwritable` | 15 |
 | `unparseable` | 2 |
 | `refused` | 77 |
 | **total** | **345** |
 
-So 268 of 345 files convert to Turtle, and of those 237 come back as the same graph (166 exactly,
-71 up to `sysx:sourceText` whitespace). The refusals by class: 19 `feature-declaration`,
+So 268 of 345 files convert to Turtle, and of those 243 come back as the same Turtle byte for
+byte. Before the writer emitted stored text verbatim the split was 166 stable, 71
+`whitespace-only` and 14 `graph-diff`: the 71 moved to `stable` along with 6 of the 14, whose
+difference was of the same kind but outside the normalisation — a CRLF inside a `doc` body, a
+comment inside an expression's stored text, redefinitions coming back in a fixed order, or a
+`connect … from a to b` head losing its end form. The refusals by class: 19 `feature-declaration`,
 18 `prefix-metadata`, 9 `event-declaration`, 7 `succession`, 6 `operator-expr`,
 4 `duplicate-declaration`, 3 each of `snapshot-declaration`, `invocation-expr` and
 `assert-declaration`, 2 `feature-chain-expr`, and 1 each of `timeslice-declaration`,

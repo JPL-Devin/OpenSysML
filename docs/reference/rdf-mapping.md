@@ -14,10 +14,9 @@ report:
 - **What is not mapped is refused, not partly converted**, and the refusal names
   the construct. 268 of the 345 models under `examples/` (committed, training and
   pilot corpora) convert to Turtle; the other 77 are refused. Of the 268, a second
-  conversion of the written-back notation reproduces the graph for 237 (166
-  byte-for-byte, 71 up to the whitespace inside `sysx:sourceText`), differs for
-  14, and 17 cannot be written back or re-read at all. These figures are the
-  per-file ratchet in `internal/core/export/corpus_roundtrip_test.go`, described
+  conversion of the written-back notation reproduces the Turtle byte for byte for
+  243, differs as a graph for 8, and 17 cannot be written back or re-read at all.
+  These figures are the per-file ratchet in `internal/core/export/corpus_roundtrip_test.go`, described
   in [rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md). See
   [Behavior](#behavior) and [Limitations](#limitations).
 - **The vocabulary may change without a compatibility path.** A graph written by
@@ -603,9 +602,8 @@ including a parallel state's regions, calculation and requirement) reads these
 forms back as the same node, and on the fixtures a second conversion writes the
 same Turtle byte for byte (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
 That is a statement about the fixtures, not the mapping: over the example corpus
-the second hop reproduces the graph exactly for 166 of the 268 files that
-convert, up to `sysx:sourceText` whitespace for 71 more, and differs for the
-rest ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). The
+the second hop reproduces the Turtle byte for byte for 243 of the 268 files that
+convert and differs for the rest ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). The
 explicit two-ended form reads only basic names, so a succession naming an end
 that needs quotes is reported rather than written as notation the parser would
 reject.

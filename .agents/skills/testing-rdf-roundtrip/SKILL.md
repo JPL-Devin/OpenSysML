@@ -151,7 +151,7 @@ OPENSYSML_REQUIRE_TRAINING_CORPUS=1 OPENSYSML_REQUIRE_PILOT_CORPORA=1 \
 
 Without the require variables an absent corpus **skips** the gate with a `GATE NOT RUN` banner on
 stderr; CI sets them so absence fails. The `-v` log holds the summary line CI greps for:
-`corpus round trip: 345 files: 166 stable, 71 whitespace-only, 14 graph-diff, 15 unwritable,
+`corpus round trip: 345 files: 243 stable, 0 whitespace-only, 8 graph-diff, 15 unwritable,
 2 unparseable, 77 refused` at the time of writing.
 
 Verdicts, in the order the trip can end: `refused:<class>` (hop 1 refused; the class is the

@@ -176,10 +176,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   at all still writes as it did. Relationship clauses come back in the order the graph states them.
   `connect`/`allocate` heads written `from a to b` record their form like the other end-binding
   heads, and an anonymous usage opened by `ref individual` or a portion keyword keeps that kind
-  instead of parsing as an attribute. Over the 268 example models the mapping converts, 243 now
-  convert to the same graph twice where 166 did; the rest are recorded in
-  `internal/core/export/testdata/corpus_round_trip_expected.txt`, a per-file ratchet checked in
-  CI. `docs/reference/rdf-mapping.md` § Stored text is layout defines the rule.
+  instead of parsing as an attribute. Over the 268 example models the mapping converts,
+  `TestCorpusRoundTrip` now records 243 whose second Turtle is byte-identical to the first where
+  it recorded 166, with the 71 `whitespace-only` and 6 `graph-diff` verdicts moved to `stable` and
+  no other movement. `docs/reference/rdf-mapping.md` § Stored text is layout defines the rule.
 
 ## 0.4.3 — 2026-09-01
 
