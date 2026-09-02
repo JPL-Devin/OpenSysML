@@ -52,6 +52,7 @@ than a generated message with optional fields:
 switch (value.kind) {
   case "int":      value.value;                      // bigint, never lossy
   case "real":     value.value;                       // number
+  case "complex":  value.value.real; value.value.imaginary;  // 1.5 - 2.0i, one value
   case "boolean":  value.value;
   case "string":   value.value;
   case "quantity": value.magnitude; value.unit;       // 1500.0 [kg]

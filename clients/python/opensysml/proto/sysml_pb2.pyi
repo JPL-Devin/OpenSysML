@@ -627,7 +627,7 @@ class AttributeInfo(_message.Message):
     def __init__(self, name: _Optional[str] = ..., type: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ..., unit: _Optional[str] = ...) -> None: ...
 
 class Value(_message.Message):
-    __slots__ = ("int_value", "real_value", "bool_value", "string_value", "instance_id", "sequence", "null", "quantity", "enum_literal", "unset")
+    __slots__ = ("int_value", "real_value", "bool_value", "string_value", "instance_id", "sequence", "null", "quantity", "enum_literal", "unset", "complex")
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     REAL_VALUE_FIELD_NUMBER: _ClassVar[int]
     BOOL_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -638,6 +638,7 @@ class Value(_message.Message):
     QUANTITY_FIELD_NUMBER: _ClassVar[int]
     ENUM_LITERAL_FIELD_NUMBER: _ClassVar[int]
     UNSET_FIELD_NUMBER: _ClassVar[int]
+    COMPLEX_FIELD_NUMBER: _ClassVar[int]
     int_value: int
     real_value: float
     bool_value: bool
@@ -648,7 +649,16 @@ class Value(_message.Message):
     quantity: Quantity
     enum_literal: EnumLiteral
     unset: bool
-    def __init__(self, int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., string_value: _Optional[str] = ..., instance_id: _Optional[int] = ..., sequence: _Optional[_Union[ValueSequence, _Mapping]] = ..., null: _Optional[str] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., enum_literal: _Optional[_Union[EnumLiteral, _Mapping]] = ..., unset: _Optional[bool] = ...) -> None: ...
+    complex: Complex
+    def __init__(self, int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., string_value: _Optional[str] = ..., instance_id: _Optional[int] = ..., sequence: _Optional[_Union[ValueSequence, _Mapping]] = ..., null: _Optional[str] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., enum_literal: _Optional[_Union[EnumLiteral, _Mapping]] = ..., unset: _Optional[bool] = ..., complex: _Optional[_Union[Complex, _Mapping]] = ...) -> None: ...
+
+class Complex(_message.Message):
+    __slots__ = ("real", "imaginary")
+    REAL_FIELD_NUMBER: _ClassVar[int]
+    IMAGINARY_FIELD_NUMBER: _ClassVar[int]
+    real: float
+    imaginary: float
+    def __init__(self, real: _Optional[float] = ..., imaginary: _Optional[float] = ...) -> None: ...
 
 class EnumLiteral(_message.Message):
     __slots__ = ("literal_id", "enumeration_id", "name")

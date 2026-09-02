@@ -9,14 +9,15 @@ Read `AGENTS.md` first; it governs everything below.
 > compilation track, and `R` the release follow-through. Each is stated in full where it is
 > introduced, and a reader who wants only the gap can ignore the label.
 
-`v0.4.2` is the newest tag on `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and
-`sysml-grpc` for five platforms and the Homebrew bundles; the Python client is on PyPI as
-`opensysml` 0.4.0. `CHANGELOG.md` already holds the **0.4.3** notes (dated 2026-09-01) and an
-**Unreleased** section above them — the tag has not been cut, so `main` is ahead of the newest
-release by the identity annotations, the solver-verdict work, the client tours, the profiling pass
-and the start-up and calc-evaluator work under Unreleased. Everything in "Release
-follow-through" is maintainer- or account-gated; everything after it is ordinary engineering
-work.
+`v0.4.3` is the newest tag on `Open-MBEE/OpenSysML` (`99e02003`, 2026-09-02, the "Identity
+Release"); the tag's CI release job publishes `sysml`, `sysml-lsp` and `sysml-grpc` for five
+platforms and the Homebrew bundles, and the Python client is on PyPI as `opensysml` 0.4.0. The
+tag includes this roadmap's baseline commit, so no track below describes work that is still
+unreleased. `CHANGELOG.md` has not caught up with it: the entries under **Unreleased** (the
+serialized library snapshot, the calc-evaluator work and the self-model updates describing them)
+are ancestors of the tag and shipped in it, while the **0.4.3** heading is dated 2026-09-01 — see
+R1. Everything in "Release follow-through" is maintainer- or account-gated; everything after it is
+ordinary engineering work.
 
 **What closed since the last baseline** (`1127a93b`, 2026-08-27) is recorded in `CHANGELOG.md`
 rather than kept here, but the roadmap items it retired are: element identity in the notation
@@ -99,17 +100,20 @@ well as on branches.
 # Release follow-through
 
 Tagging a core release, publishing the Python client and the Homebrew bump are all proven paths:
-`v0.4.2` is released with its full archive set, `opensysml-v0.4.0` uploaded the client to PyPI,
+`v0.4.3` is tagged and its release job runs the same path `v0.4.2` completed with its full archive
+set, `opensysml-v0.4.0` uploaded the client to PyPI,
 and the tap `Open-MBEE/homebrew-tap` bumps itself from its own scheduled workflow on each tag,
 rendering the formula from this repository's `scripts/render-homebrew-formula.sh` and template.
 The procedure and its post-tag verification are in `docs/project/releasing.md`.
 
-## R1 — cut 0.4.3
+## R1 — the changelog says "Unreleased" about work `v0.4.3` shipped
 
-`CHANGELOG.md` carries a dated 0.4.3 entry with no tag behind it, and an Unreleased section has
-started accumulating above it. Either tag `v0.4.3` at the commit the entry describes, or fold the
-Unreleased items into it and re-date. The pre-tag list in `releasing.md` applies — including the
-gate recount above, which that list checks.
+`v0.4.3` was tagged at `99e02003`, which contains everything `CHANGELOG.md` files under
+**Unreleased** above the **0.4.3** heading; a reader of the changelog concludes the 20 ms
+start-up and the calc-evaluator work are not in the release they are running. Fold those entries
+into the 0.4.3 section and date it to the tag (2026-09-02), leaving Unreleased empty. Small, and
+the gate recount above belongs in the same pass, since `releasing.md` checks the four count
+surfaces before the next tag.
 
 ## R2 — the Node, Java and Rust clients are unpublished
 
@@ -163,7 +167,7 @@ and status; none needs code here until an answer arrives.
 
 The library work is otherwise closed: every library file is parsed and indexed on every load path,
 built once and frozen, and read through a per-model overlay (`libs.Loader`, `libs.SharedBase`,
-`symbols.NewOverlay`) rather than copied per model; the Unreleased serialized snapshot now brings a
+`symbols.NewOverlay`) rather than copied per model; the serialized library snapshot brings a
 process up in under 20 ms; and gRPC reports an element's own and non-library-inherited attributes
 and counts the standard-library-inherited ones it withholds rather than omitting them silently.
 
@@ -466,7 +470,8 @@ have landed, and the profile's documentation should say so.
 # Proposed, not started
 
 **An HTML document backend.** [html-document-backend.md](html-document-backend.md) designs a
-direct `docrender.HTML` backend from the document IR (`-doc-form html`, a stylesheet and a
+direct `docrender.HTML` backend from the document IR (`-doc-form html`, a default stylesheet
+in a cascade layer that reader CSS overrides without specificity fights, `-html-css` and a
 fragment option) and the migration of the PDF path onto it, replacing the Markdown → converter
 hop. Status there is *proposed — nothing on that page is implemented*. It is independent of every
 track above and waits only on someone wanting HTML.
@@ -479,9 +484,9 @@ not more harness work.
 
 # Suggested sequencing
 
-1. **R1** first — cut 0.4.3, since the notes are written and Unreleased is accumulating — with the
-   gate-count recount (or its move into `cmd/doc-counts`) in the same pre-tag pass, because
-   `releasing.md` checks it. **R2**–**R5** as the accounts and hardware appear: publisher tokens
+1. **R1** first — fold the shipped Unreleased entries into the 0.4.3 notes — with the gate-count
+   recount (or its move into `cmd/doc-counts`) in the same pass, because `releasing.md` checks it
+   before the next tag. **R2**–**R5** as the accounts and hardware appear: publisher tokens
    for npm, Maven Central and crates.io, a real Mac for the tap, an Apple Developer and an OV/EV
    certificate to sign with, and a marketplace publisher for the extension. None of them gates
    the others or anything below.

@@ -7,7 +7,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
-use opensysml::{Connection, Error, Value};
+use opensysml::{Complex, Connection, Error, EvalOptions, Value};
 
 fn service_or_skip() -> Option<Connection> {
     match Connection::private() {
@@ -139,6 +139,69 @@ fn instantiate_decodes_feature_values() {
     };
     assert_eq!(instance.type_symbol_id(), "Demo::car");
     assert!(instance.feature("mass").is_some());
+}
+
+#[test]
+fn a_complex_number_is_one_value_with_both_parts() {
+    let Some(connection) = service_or_skip() else {
+        return;
+    };
+    assert!(connection.capabilities().has("complex_values"));
+    let model = match connection.parse_content(
+        "package C {
+            private import ScalarValues::*;
+            private import ComplexFunctions::*;
+            part def Signal {
+                attribute z : Complex = rect(1.5, -2.0);
+                attribute zs : Complex[2] = (rect(1.0, 2.0), rect(3.0, 4.0));
+            }
+        }",
+        &Default::default(),
+    ) {
+        Ok(model) => model,
+        Err(error) => panic!("parse failed: {error}"),
+    };
+    let options = EvalOptions {
+        context: Some("C::Signal".to_owned()),
+        subject: None,
+    };
+    let evaluated = match model.evaluate("z", &options) {
+        Ok(evaluation) => evaluation.result,
+        Err(error) => panic!("evaluation failed: {error}"),
+    };
+    assert_eq!(
+        evaluated,
+        Value::Complex(Complex {
+            real: 1.5,
+            imaginary: -2.0
+        })
+    );
+    let instance = match model.instantiate("C::Signal") {
+        Ok(instantiation) => instantiation.instance,
+        Err(error) => panic!("instantiation failed: {error}"),
+    };
+    let z = instance.feature("z").expect("z is materialized");
+    assert_eq!(
+        z.value(),
+        Some(&Value::Complex(Complex {
+            real: 1.5,
+            imaginary: -2.0
+        }))
+    );
+    let zs = instance.feature("zs").expect("zs is materialized");
+    assert_eq!(
+        zs.values(),
+        [
+            Value::Complex(Complex {
+                real: 1.0,
+                imaginary: 2.0
+            }),
+            Value::Complex(Complex {
+                real: 3.0,
+                imaginary: 4.0
+            }),
+        ]
+    );
 }
 
 #[test]

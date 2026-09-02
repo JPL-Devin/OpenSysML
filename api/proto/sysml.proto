@@ -611,7 +611,15 @@ message Value {
     // A valueless feature of a value type: materialized, holding no value.
     // Always true when set; a value the server sends, never one it accepts.
     bool unset = 10;
+    Complex complex = 11;       // one complex number, never two Reals
   }
+}
+
+// Complex is one complex number in rectangular form. It crosses as one value
+// so `1.0 + 2.0i` cannot be mistaken for a sequence of two Reals.
+message Complex {
+  double real = 1;
+  double imaginary = 2;
 }
 
 // EnumLiteral is one literal of an enumeration definition. A literal is its own
@@ -709,6 +717,11 @@ message ServerInfoResponse {
   //   "unset_value" - a valueless feature of a value type is reported as
   //                  Value.unset, rather than as the empty object it
   //                  materializes.
+  //   "complex_values" - a Value carries a complex number as complex, rather
+  //                  than reporting it as an unsupported null, and a complex
+  //                  action input or calc argument is accepted; without it,
+  //                  one is refused with UNIMPLEMENTED rather than read as
+  //                  another value.
   //   "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
   //                  preserving everything the edit did not touch.
   //   "document_query" - the RunDocumentQuery RPC runs a named document query

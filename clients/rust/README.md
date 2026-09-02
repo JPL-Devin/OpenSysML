@@ -143,10 +143,11 @@ for:
 * `evaluate_subject` when a subject symbol is supplied for evaluation.
 
 Decoding a response is never gated on capabilities: if a service sends an
-enum, unset value, or feature-value arm, the client understands that answer.
-Consumers can inspect `Capabilities::has` or use `Capabilities::require` when
-they need to gate their own use of `enum_values`, `unset_value`,
-`feature_values`, or another advertised operation.
+enum, unset value, complex number, or feature-value arm, the client
+understands that answer. Consumers can inspect `Capabilities::has` or use
+`Capabilities::require` when they need to gate their own use of `enum_values`,
+`unset_value`, `complex_values`, `feature_values`, or another advertised
+operation.
 
 ## Conformance runner
 
