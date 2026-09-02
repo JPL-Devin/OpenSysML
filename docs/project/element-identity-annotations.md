@@ -172,10 +172,15 @@ so they inherit annotated stability with no further mechanism.
 
 OpenSysML mints ids in exactly two places, never during parsing or analysis:
 
-- **On first sync/export to a repository**, for elements that need addressing but carry
-  no annotation, the sync layer generates a UUID, writes it to the repository, and
-  offers the annotation back as an edit to the notation (the LSP surfaces it as a code
-  action; the CLI as a rewritten file behind an explicit flag).
+- **On the user's explicit request**, for an element that carries no annotation: the
+  CLI mints on first sync to a repository and writes the annotations back as a rewritten
+  file behind `-sync-mint-ids`/`-sync-annotate`; the LSP offers the "Annotate … with a
+  minted element id" code action (kind `refactor.rewrite`) on the declaration's header
+  (a cursor on it, or a selection of it — whole-line selections included), minting a
+  UUID v4 and inserting the annotation as a text edit — inline at the head of a body,
+  standalone about-form at the end of the file for a bodiless declaration. Under
+  no `ProjectRef`, the same edit also binds the root with a placeholder `projectId` for
+  the user to fill in; a bare "Bind … to a project" action does that alone.
 - **On import from a repository**, elements arrive with ids; the writer emits
   `ElementId` annotations for them, and one `ProjectRef` at the root.
 

@@ -1756,11 +1756,9 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 			// Parse return member (for constraint defs that return result)
 			// Example: return result = expr { doc }
 			members = append(members, p.parseBodyMember())
-		} else if p.atDefUsageStart() || p.atRelationshipKeyword() || p.atKindlessFeatureTyping() {
-			// A declaration, or a member that states a relationship where its
-			// name would go (`redefines partMasses = expr;`, `:>> x = value;`):
-			// both spellings reach parseBodyMember, which reads them as one form
-			// and diagnoses the relationships that are not member forms.
+		} else if p.atDefUsageStart() || p.atRelationshipKeyword() || p.atKindlessFeatureTyping() || p.atMetadataMember() {
+			// A declaration, a relationship where a name would go (`:>> x = v;`),
+			// or a metadata usage (`@M { … }`).
 			members = append(members, p.parseBodyMember())
 		} else {
 			// Default: parse as constraint expression (bare expression)
@@ -1775,6 +1773,55 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
 	return members
+}
+
+// atMetadataMember tells a metadata usage (`@M;`, `@M { … }`, `@ m : M about x;`)
+// from a classification condition of the implicit subject (`@M`, `@M < x`).
+func (p *Parser) atMetadataMember() bool {
+	if !p.at(lexer.At) {
+		return false
+	}
+	n := 1
+	// An identification (`<sn>`? name?) is only one where a typing keyword follows.
+	m := n
+	if p.peekN(m).Kind == lexer.Lt {
+		if !isNameToken(p.peekN(m+1).Kind) || p.peekN(m+2).Kind != lexer.Gt {
+			return false
+		}
+		m += 3
+	}
+	if isNameToken(p.peekN(m).Kind) {
+		m++
+	}
+	if t := p.peekN(m); t.Kind == lexer.Colon {
+		n = m + 1
+	} else if t.Kind == lexer.Keyword && (t.KeywordID == "defined" || t.KeywordID == "typed") {
+		if by := p.peekN(m + 1); by.Kind != lexer.Keyword || by.KeywordID != "by" {
+			return false
+		}
+		n = m + 2
+	}
+	// The metaclass, a qualified name.
+	if !isNameToken(p.peekN(n).Kind) {
+		return false
+	}
+	for n++; p.peekN(n).Kind == lexer.ColonColon; n += 2 {
+		if !isNameToken(p.peekN(n + 1).Kind) {
+			return false
+		}
+	}
+	switch t := p.peekN(n); t.Kind {
+	case lexer.LBrace, lexer.Semicolon:
+		return true
+	case lexer.Keyword:
+		return t.KeywordID == "about"
+	}
+	return false
+}
+
+// isNameToken reports whether k spells a name segment.
+func isNameToken(k lexer.Kind) bool {
+	return k == lexer.Identifier || k == lexer.UnrestrictedName
 }
 
 // atConstraintCondition reports whether an `assert`/`assume` condition follows,

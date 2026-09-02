@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/identity"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/project"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
@@ -141,8 +142,8 @@ func writeAnnotated(local *rdf.Graph, model string, set *reposync.ChangeSet, pat
 			fmt.Fprintf(os.Stderr, "note: %s (%s) has no name to write an annotation against; its minted id %s stays in the repository only\n", change.ID, change.Metaclass, change.MintedID)
 			continue
 		}
-		fmt.Fprintf(&out, "metadata : IdentityMetadata::ElementId about %s { id = \"%s\"; }\n",
-			target, change.MintedID)
+		out.WriteString(identity.ElementIdAbout(target, change.MintedID))
+		out.WriteByte('\n')
 		annotated++
 	}
 	if annotated == 0 {

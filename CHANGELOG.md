@@ -175,6 +175,16 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   names as the notation requires. The last-seen commit is tool state beside the model
   (`<model>.sync.json`), never written into the notation.
 
+- **The editor mints an element id on request.** `sysml-lsp` offers the `refactor.rewrite` code
+  action "Annotate … with a minted element id" on the header of a declaration that carries no
+  `ElementId`. Invoking it mints a UUID v4 and writes the annotation as a text edit that leaves
+  every other byte of the file alone: inline at the head of a body, standalone about-form at the
+  end of the file for a bodiless declaration, names quoted as the notation requires. Where the
+  root carries no `ProjectRef`, the same edit binds it with a placeholder `projectId` to fill in,
+  and a "Bind … to a project" action does that alone. Nothing mints during analysis, and no
+  diagnostic asks for an annotation. A metadata usage in a constraint body (`@Tag { … }`) now
+  parses as the member it is, distinct from a classification condition (`@Tag`).
+
 - **The conformance suite and the pilot differential render as CI test results.** The conformance
   runner emits JUnit XML (stored even when the gate fails), and `pilot-diff` writes JUnit XML with
   one suite per corpus root alongside SARIF 2.1.0 with one result per disagreeing diagnostic

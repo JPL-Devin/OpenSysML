@@ -157,6 +157,32 @@ func Build(model *semantics.Model, res *resolve.Resolver, roots ...*symbols.Scop
 	return t
 }
 
+// Of computes the identity of one symbol without building a whole table; ok
+// is false for a symbol that has no qualified name to derive an id from.
+func Of(model *semantics.Model, res *resolve.Resolver, sym *symbols.Symbol) (*Info, bool) {
+	b := &builder{
+		model:  model,
+		res:    res,
+		idx:    res.Index(),
+		scopes: make(map[*symbols.Symbol]*Scope),
+		known:  make(map[*symbols.Symbol]bool),
+	}
+	info := b.infoOf(sym)
+	return info, info != nil
+}
+
+// Root is the outermost declaration enclosing sym, sym itself at a root; a
+// ProjectRef written there binds sym's whole document subtree.
+func Root(sym *symbols.Symbol) *symbols.Symbol {
+	for {
+		outer := enclosingSymbol(sym)
+		if outer == nil {
+			return sym
+		}
+		sym = outer
+	}
+}
+
 type builder struct {
 	model  *semantics.Model
 	res    *resolve.Resolver
