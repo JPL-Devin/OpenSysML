@@ -380,22 +380,19 @@ func (fc *funcCompiler) compileDeclare(s lower.Declare) (Stmt, error) {
 			return nil, err
 		}
 	}
-	var init Expr
-	if s.Value != nil {
-		v, err := fc.compileExpr(s.Value)
-		if err != nil {
-			return nil, err
-		}
-		if declared == TypeInvalid {
-			declared = v.Type()
-		}
-		init, err = fc.coerce(v, declared, "bound to "+s.Name)
-		if err != nil {
-			return nil, err
-		}
+	if s.Value == nil {
+		return nil, fc.unsupported(fmt.Sprintf("attribute %s has no value; an unbound attribute is null, which the compiled types cannot hold", s.Name))
+	}
+	v, err := fc.compileExpr(s.Value)
+	if err != nil {
+		return nil, err
 	}
 	if declared == TypeInvalid {
-		return nil, fc.unsupported(fmt.Sprintf("attribute %s has neither a type nor a value", s.Name))
+		declared = v.Type()
+	}
+	init, err := fc.coerce(v, declared, "bound to "+s.Name)
+	if err != nil {
+		return nil, err
 	}
 	fc.env.bind(s.Name, binding{declared, rng})
 	return Declare{Name: s.Name, T: declared, Init: init}, nil

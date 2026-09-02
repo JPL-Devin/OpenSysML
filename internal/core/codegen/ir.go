@@ -131,7 +131,7 @@ func (ToReal) Type() Type   { return TypeReal }
 // Stmt is a statement of a function body.
 type Stmt interface{ stmt() }
 
-// Declare introduces a body-local variable; Init is nil for a bare declaration.
+// Declare introduces a body-local variable with its initial value.
 // The interpreter does not judge an initializer against the variable's range,
 // so neither does generated code; later assignments are checked.
 type Declare struct {

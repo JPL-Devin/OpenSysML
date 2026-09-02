@@ -308,11 +308,7 @@ func (e *goEmitter) block(stmts []Stmt) {
 func (e *goEmitter) stmt(s Stmt) {
 	switch s := s.(type) {
 	case Declare:
-		if s.Init == nil {
-			e.linef("var %s %s", goLocal(s.Name), goType(s.T))
-		} else {
-			e.linef("var %s %s = %s", goLocal(s.Name), goType(s.T), e.expr(s.Init))
-		}
+		e.linef("var %s %s = %s", goLocal(s.Name), goType(s.T), e.expr(s.Init))
 		e.linef("_ = %s", goLocal(s.Name))
 	case Assign:
 		e.linef("%s = %s", goLocal(s.Name), goNarrowed(e.expr(s.Value), s.Range))
@@ -433,12 +429,13 @@ func (e *goEmitter) main(fn *Func) {
 	e.linef("func main() {")
 	e.indent++
 	e.linef("args := os.Args[1:]")
-	e.linef("repeat := 1")
+	e.linef("repeat, badRepeat := 1, false")
 	e.linef("if len(args) >= 2 && args[0] == \"--repeat\" {")
-	e.linef("\trepeat, _ = strconv.Atoi(args[1])")
+	e.linef("\tn, err := strconv.Atoi(args[1])")
+	e.linef("\trepeat, badRepeat = n, err != nil || n < 1")
 	e.linef("\targs = args[2:]")
 	e.linef("}")
-	e.linef("if len(args) != %d {", len(fn.Params))
+	e.linef("if badRepeat || len(args) != %d {", len(fn.Params))
 	e.linef("\tfmt.Fprintf(os.Stderr, \"usage: %%s [--repeat N]%s\\n\", os.Args[0])", cUsage(fn))
 	e.linef("\tos.Exit(2)")
 	e.linef("}")

@@ -231,6 +231,12 @@ package Refused {
 		return : Integer = x;
 	}
 
+	calc def Unbound {
+		in n : Integer;
+		attribute x : Integer;
+		return : Integer = x + n;
+	}
+
 	calc def DynamicIntPow {
 		in a : Integer;
 		in b : Integer;

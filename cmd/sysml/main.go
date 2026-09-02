@@ -481,8 +481,8 @@ func runCLI() int {
 	}
 	if compileCalc != "" {
 		switch {
-		case convertFormat != "" || renderView != "" || renderDoc != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "":
-			fmt.Fprintln(os.Stderr, "sysml: -compile builds an executable; it cannot be combined with -convert, -render, -render-document, -query, -eval or -from")
+		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile builds an executable; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query, -eval or -from")
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,

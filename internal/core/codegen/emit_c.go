@@ -351,11 +351,7 @@ func (e *cEmitter) block(stmts []Stmt) {
 func (e *cEmitter) stmt(s Stmt) {
 	switch s := s.(type) {
 	case Declare:
-		if s.Init == nil {
-			e.linef("%s %s = %s;", cType(s.T), cLocal(s.Name), cZero(s.T))
-		} else {
-			e.linef("%s %s = %s;", cType(s.T), cLocal(s.Name), e.expr(s.Init))
-		}
+		e.linef("%s %s = %s;", cType(s.T), cLocal(s.Name), e.expr(s.Init))
 	case Assign:
 		e.linef("%s = %s;", cLocal(s.Name), cNarrowed(e.expr(s.Value), s.Range))
 	case If:
@@ -556,9 +552,14 @@ func (e *cEmitter) entry(fn *Func, withMain bool) {
 	e.raw("\n")
 	e.linef("int main(int argc, char **argv) {")
 	e.indent++
-	e.linef("int repeat = 1;")
-	e.linef("if (argc >= 3 && strcmp(argv[1], \"--repeat\") == 0) { repeat = atoi(argv[2]); argv += 2; argc -= 2; }")
-	e.linef("if (argc != %d) {", len(fn.Params)+1)
+	e.linef("long long repeat = 1;")
+	e.linef("bool bad_repeat = false;")
+	e.linef("if (argc >= 3 && strcmp(argv[1], \"--repeat\") == 0) {")
+	e.linef("\tchar *end; errno = 0; repeat = strtoll(argv[2], &end, 10);")
+	e.linef("\tbad_repeat = *argv[2] == '\\0' || *end != '\\0' || errno != 0 || repeat < 1;")
+	e.linef("\targv += 2; argc -= 2;")
+	e.linef("}")
+	e.linef("if (bad_repeat || argc != %d) {", len(fn.Params)+1)
 	e.indent++
 	e.linef("fprintf(stderr, \"usage: %%s [--repeat N]%s\\n\", argv[0]);", cUsage(fn))
 	e.linef("return 2;")
@@ -568,7 +569,7 @@ func (e *cEmitter) entry(fn *Func, withMain bool) {
 		e.linef("%s %s = sysml_parse_%s(argv[%d], \"%s\");", cType(p.Type), cLocal(p.Name), cType(p.Type)[len("sysml_"):], i+1, p.Name)
 	}
 	e.linef("%s result = %s;", cType(fn.Result), cZero(fn.Result))
-	e.linef("for (int i = 0; i < repeat; i++) {")
+	e.linef("for (long long i = 0; i < repeat; i++) {")
 	e.indent++
 	e.linef("if (sysml_run(%s)) {", strings.Join(append(args, "&result"), ", "))
 	e.indent++

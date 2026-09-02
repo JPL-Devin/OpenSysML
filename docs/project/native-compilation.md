@@ -47,6 +47,7 @@ A calc compiles when everything it reaches is in this subset:
 | Invocation of another compilable calc, positional or named; direct and mutual recursion | native call |
 
 Everything else refuses: String, sequence or structured parameters/results, parameter defaults,
+body-local attributes without a value (the interpreter holds null there, which no compiled type can),
 multiplicity other than `[1]`, a calc that `:>`/`:>>`/`redefines` another (its inherited shape is
 not compiled), library-function invocations (`ScalarFunctions::sqrt` and the like), `for` and
 collection operations, quantities and units, and `Integer ** <non-literal Integer>` (whether the

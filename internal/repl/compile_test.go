@@ -146,6 +146,16 @@ func TestCompiledCalcsAgreeWithInterpreter(t *testing.T) {
 						c.calc, strings.Join(c.args, ", "), gotValue, gotFailure, wantValue, wantFailure)
 				}
 			}
+			for _, repeat := range []string{"0", "-1", "x", "2x", ""} {
+				out, err := exec.Command(exes["Fib"], "--repeat", repeat, "10").CombinedOutput()
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 2 {
+					t.Errorf("--repeat %q: got %v %q, want usage and exit status 2", repeat, err, out)
+				}
+			}
+			if out, err := exec.Command(exes["Fib"], "--repeat", "3", "10").Output(); err != nil || strings.TrimSpace(string(out)) != "55" {
+				t.Errorf("--repeat 3: got %q, %v", out, err)
+			}
 		})
 	}
 }
@@ -162,6 +172,7 @@ func TestCompileRefusesWhatItCannotCompile(t *testing.T) {
 		{"Specialized", "specializes"},
 		{"DynamicIntPow", "non-literal Integer exponent"},
 		{"Narrowed", "Real assigned to x"},
+		{"Unbound", "attribute x has no value"},
 	} {
 		_, err := s.CompileCalc("Refused::" + tc.calc)
 		if err == nil {
