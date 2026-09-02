@@ -102,7 +102,7 @@ func storeBodyValue(ctx *Context, host stmtHost, env *stmtEnv, name string, valu
 // declared type could hold. A target declaring no type holds anything, and a
 // value whose type the run time cannot name is not judged here.
 func (ctx *Context) checkWriteType(scope *symbols.Scope, what string, declared *symbols.Symbol, value Value) error {
-	if refusal, refused := ctx.writeTypeRefusal(scope, declared, value); refused {
+	if refusal, refused := ctx.writeTypeRefusal(scope, declared, &value); refused {
 		return fmt.Errorf("%s: %w: %s", what, ErrTypeMismatch, refusal)
 	}
 	return nil
@@ -110,22 +110,34 @@ func (ctx *Context) checkWriteType(scope *symbols.Scope, what string, declared *
 
 // writeTypeRefusal says why the first element no feature of the declared type
 // could hold is refused; the second result is false where every element conforms.
-func (ctx *Context) writeTypeRefusal(scope *symbols.Scope, declared *symbols.Symbol, value Value) (string, bool) {
+func (ctx *Context) writeTypeRefusal(scope *symbols.Scope, declared *symbols.Symbol, value *Value) (string, bool) {
 	if declared == nil {
 		return "", false
 	}
-	for _, element := range elementsOf(value) {
-		conforms, refusal, err := ctx.valueConforms(scope, element, declared)
-		if err != nil || conforms {
-			continue
+	switch value.Kind {
+	case ValSequence, ValSet:
+		elements := elementsOf(*value)
+		for i := range elements {
+			if refusal, refused := ctx.elementRefusal(scope, declared, &elements[i]); refused {
+				return refusal, true
+			}
 		}
-		if refusal == "" {
-			refusal = fmt.Sprintf("cannot write %s (%s) to a feature typed by %s",
-				FormatValue(element), describeValue(element), symbolText(declared))
-		}
-		return refusal, true
+		return "", false
 	}
-	return "", false
+	return ctx.elementRefusal(scope, declared, value)
+}
+
+// elementRefusal says why one element is refused by a feature of the declared type.
+func (ctx *Context) elementRefusal(scope *symbols.Scope, declared *symbols.Symbol, element *Value) (string, bool) {
+	conforms, refusal, err := ctx.valueConforms(scope, element, declared)
+	if err != nil || conforms {
+		return "", false
+	}
+	if refusal == "" {
+		refusal = fmt.Sprintf("cannot write %s (%s) to a feature typed by %s",
+			FormatValue(*element), describeValue(*element), symbolText(declared))
+	}
+	return refusal, true
 }
 
 // valueConforms reports whether a feature of the declared type may hold the
@@ -133,14 +145,14 @@ func (ctx *Context) writeTypeRefusal(scope *symbols.Scope, declared *symbols.Sym
 // lattice where the target is a scalar type, specialization otherwise. The
 // second result says why a value was refused where the general message would
 // not say it, and is empty otherwise.
-func (ctx *Context) valueConforms(scope *symbols.Scope, value Value, declared *symbols.Symbol) (bool, string, error) {
+func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *symbols.Symbol) (bool, string, error) {
 	switch value.Kind {
 	case ValNull, ValInvalid:
 		// Holds no value to type; how many values a feature may hold is the
 		// multiplicity's to decide.
 		return true, "", nil
 	case ValQuantity:
-		return ctx.quantityConforms(value, declared)
+		return ctx.quantityConforms(*value, declared)
 	}
 	prim := ctx.model.PrimTypeOf(declared)
 	if got := valuePrimType(value); prim != semantics.PrimUnknown && got != semantics.PrimUnknown {
@@ -148,7 +160,7 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value Value, declared *s
 	}
 	// Outside the lattice, a constant's direct type is known by name only, so a
 	// target specializing it may still hold the value; a disjoint one cannot.
-	direct, err := ctx.directValueType(scope, value)
+	direct, err := ctx.directValueType(scope, *value)
 	if err != nil {
 		return false, "", err
 	}
@@ -162,7 +174,7 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value Value, declared *s
 }
 
 // isScalarConstant reports a value written as one scalar constant.
-func isScalarConstant(value Value) bool {
+func isScalarConstant(value *Value) bool {
 	return value.Kind == ValConst || value.Kind == ValString
 }
 
@@ -195,7 +207,7 @@ func dimensionText(d semantics.Dimension) string {
 
 // valuePrimType classifies a value against the scalar lattice by the value itself
 // (4 / 2 is an Integer, 7 / 2 a Rational); outside the lattice it is PrimUnknown.
-func valuePrimType(value Value) semantics.PrimType {
+func valuePrimType(value *Value) semantics.PrimType {
 	switch value.Kind {
 	case ValConst:
 		return semantics.PrimTypeOfValue(value.Const)

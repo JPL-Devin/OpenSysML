@@ -26,7 +26,7 @@ type calcMemberDecl struct {
 
 // checkType reports a value outside the declared type, described by what (asked
 // only on refusal, a binding being the hot path); an unknown member is not judged.
-func (d calcMemberDecl) checkType(ctx *Context, value Value, what func() string) error {
+func (d *calcMemberDecl) checkType(ctx *Context, value *Value, what func() string) error {
 	if d.Target == nil {
 		return nil
 	}
@@ -37,7 +37,7 @@ func (d calcMemberDecl) checkType(ctx *Context, value Value, what func() string)
 }
 
 // checkBound reports a value outside the declared type or multiplicity.
-func (d calcMemberDecl) checkBound(ctx *Context, what string, value Value) error {
+func (d *calcMemberDecl) checkBound(ctx *Context, what string, value Value) error {
 	return ctx.checkWrite(declScope(d.Owner), what, d.Target, value)
 }
 
@@ -411,7 +411,8 @@ func (ctx *Context) bindCalcParameters(
 	bindings map[string]Value,
 	nested *EvalContext,
 ) error {
-	for i, param := range shape.Params {
+	for i := range shape.Params {
+		param := &shape.Params[i]
 		defaultScope := ctx.calcScope(param.Owner, shape.Sym, callerScope)
 		binder := ec
 		if nested != nil && param.Owner == shape.Sym {
@@ -423,7 +424,7 @@ func (ctx *Context) bindCalcParameters(
 		}
 		// The parameter holds the value bound to it, so that value answers to the
 		// parameter's declaration as a written one does.
-		if err := param.Decl.checkType(ctx, value, func() string {
+		if err := param.Decl.checkType(ctx, &value, func() string {
 			return fmt.Sprintf("calc %s: %s for parameter %q", shape.Name, source, param.Name)
 		}); err != nil {
 			return err
@@ -520,7 +521,7 @@ func (shape *calcShape) hasParameter(name string) bool {
 // unbound, which is a modeling error rather than a null value.
 func (ec *EvalContext) bindCalcParameter(
 	shape *calcShape,
-	param calcParameter,
+	param *calcParameter,
 	args calcArgs,
 	position int,
 ) (Value, string, error) {

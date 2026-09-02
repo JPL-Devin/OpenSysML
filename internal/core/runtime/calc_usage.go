@@ -94,13 +94,13 @@ func (ctx *Context) calcOutputs(chain []*symbols.Symbol) []calcOutput {
 }
 
 // resultOutput returns the result parameter a `return` declares, if the calc has one.
-func (shape *calcShape) resultOutput() (calcOutput, bool) {
-	for _, out := range shape.Outputs {
-		if out.IsResult {
-			return out, true
+func (shape *calcShape) resultOutput() *calcOutput {
+	for i := range shape.Outputs {
+		if shape.Outputs[i].IsResult {
+			return &shape.Outputs[i]
 		}
 	}
-	return calcOutput{}, false
+	return nil
 }
 
 // indexOfAnonymousResult finds the unnamed result parameter among outs, which is
