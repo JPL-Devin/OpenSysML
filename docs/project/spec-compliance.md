@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 813 semantic rules: **724 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 814 semantic rules: **725 ✅ faithful, 82 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -607,9 +607,14 @@ The library declares these functions abstractly — a signature and no body — 
 the runtime supplies the implementation. Dispatch is by the declaration's
 qualified name, and a declaration that carries a body is evaluated from that
 body — a result expression or a body assigning an output it declares — so a
-model's own `calc sqrt` is never hijacked. An unqualified call that
-resolves to no declaration dispatches by local name, which is what makes
-`sysml -e "sqrt(2.0)"` evaluable in a model that imports no part of the library.
+model's own `calc sqrt` is never hijacked. An unqualified call is resolved
+where it is written, as the checker resolves it: `sqrt(2.0)` is
+`RealFunctions::sqrt` only under an import of `RealFunctions` (or of another
+package declaring `sqrt`), and where the checker reports the name unresolved the
+call fails with the same `unresolved reference` error and hint
+(`ErrUnresolvedReference`), never answered by a declaration the model did not
+make visible. The qualified spelling, `RealFunctions::sqrt(2.0)`, resolves from
+any scope, since the library packages are members of the root namespace.
 
 Arguments follow the vendored signatures: a `Real` parameter accepts an Integer
 (`ScalarValues` declares `Integer :> Rational :> Real`), an `Integer` parameter
@@ -675,7 +680,6 @@ reports itself by name rather than answering:
 | `VectorFunctions::cartesianZeroVector` | Declared as the 1-, 2- and 3-dimensional zero vectors as one feature of three vectors, which a flat sequence cannot hold. `cartesian3DZeroVector` has a value. |
 | `ComplexFunctions::ToString`/`ToComplex` | No string notation for a Complex value is defined; inventing a rendering would make `ToComplex(ToString(x))` a value nothing else in the library agrees on. |
 | Reading a library feature as a *bare* name at the REPL/CLI surface (`%eval TrigFunctions::pi`, `sysml <model> -eval 'ComplexFunctions::i'`) | A read inside a model or an expression consults the seam (above), but `repl/meta.go` resolves a lone name to a symbol and reads its `usage.Value` without the seam, so the bare form still reports `has no value to evaluate`, and `cartesianZeroVector` shows that generic message rather than its typed unevaluable reason. The hook belongs next to the enumeration-literal case in `repl/meta.go` (owned elsewhere). |
-| Library functions in the checker's own name resolution | An unqualified call to a library function the model does not import evaluates, but the `unresolved-reference` diagnostic still reports the name; importing `RealFunctions::*` clears it. |
 
 ### Sequence Indexing and Collection Operations (KerML §9.3 `SequenceFunctions`, `CollectionFunctions`, `ControlFunctions`)
 
@@ -721,7 +725,8 @@ they cannot drift apart.
 | `ControlFunctions`: `collect`, `select`, `selectOne`, `reject`, `reduce`, `forAll`, `exists`, `allTrue`, `anyTrue`, `minimize`, `maximize` | `runtime/collections.go`, `runtime/builtins.go` | `runtime/collections_test.go` `TestCollectionResults`, `TestCollectionScalarResults`, `TestCollectionOperationErrors` | ✅ Faithful |
 | `NumericalFunctions::sum`/`product` and the specializations that fix the identity of an empty aggregation (`sum0(collection, 0)`, `product1(collection, 1)`), keeping the elements' kind: Integers sum to an Integer, a Real anywhere makes the result a Real, and an overflowing sum or product is reported rather than wrapped | `runtime/collections.go` `aggregate`, `foldNumeric` | `runtime/collections_test.go` `TestCollectionScalarResults`; conformance `calc_empty_collection_aggregation` | ✅ Faithful |
 | A collection of quantities aggregates to a quantity, in the unit of its first element and converting the rest, as the binary operator does; mixing a bare number with a measured value reports incommensurable units | `runtime/collections.go` `aggregate`/`aggregateQuantities`, `quantity.go` `addQuantities`/`scaleQuantities` | conformance `cubesat_mass_rollup`; `runtime/collections_test.go:TestAggregateQuantities`, pilot-exec-diff `w6d:sum-quantities`, `:sum-quantities-mixed-units`, `:quantity-add`, `:add-bare-to-measured`, `:sum-empty` (agrees, `0`) | ⚠️ Approximate (self-assessed: asked, but not answered — the pinned artifact evaluates no quantity arithmetic at all, answering an `InvocationExpression`/`OperatorExpression` for every case above, so the unit of the first element is still a choice with no reference verdict. An empty collection has no unit to answer in, so it aggregates to the numeric identity `0`/`1`) |
-| The unqualified, qualified and receiver (`->`) forms of an operation are one implementation, so `(1,2,3)->size()`, `size((1,2,3))` and `SequenceFunctions::size((1,2,3))` cannot disagree; a name the model itself declares still resolves to that declaration | `runtime/builtins.go` `builtinsByLocalName`, `Context.builtinFor`; `runtime/eval.go` `evalInvocation` (receiver prepended as the first argument) | `runtime/collections_test.go` `TestCollectionScalarResults`; conformance `calc_collection_receiver_form` | ✅ Faithful |
+| The unqualified, qualified and receiver (`->`) forms of an operation are one implementation, so `(1,2,3)->size()`, `size((1,2,3))` and `SequenceFunctions::size((1,2,3))` cannot disagree; a name the model itself declares still resolves to that declaration | `runtime/eval.go` `evalInvocation` (the callee resolved in the invocation's scope through `resolve.Resolver.ResolveQualified`, the receiver prepended as the first argument), `Context.builtinFor` | `runtime/collections_test.go` `TestCollectionScalarResults`; conformance `calc_collection_receiver_form`, `calc_library_function_shadowed_by_own_calc` | ✅ Faithful |
+| An unqualified library function is callable only where the checker resolves it — under an import of its package — and where the checker reports it unresolved the call fails with the same `unresolved reference` error and hint instead of evaluating (`wheels->size()` with no import of `SequenceFunctions`; `ScalarValues::*` alone brings no `size`); the qualified name resolves from any scope | `runtime/eval.go` `evalInvocation`, `EvalContext.unresolvedInvocation`; `resolve/suggest.go` `Resolver.UnresolvedName` (the hint the diagnostic carries) | conformance `calc_library_function_unimported`, `calc_library_function_imported`, `calc_library_function_other_import`, `calc_library_function_shadowed_by_own_calc`; `runtime/library_functions_test.go:TestLibraryFunctionUnqualifiedNames`, `:TestLibraryFunctionQualifiedCallNeedsNoImport`; `robustness_test.go:calc_calls_an_unimported_library_function`; `repl/runtime_commands_test.go:TestEvalResolvesALibraryOperationAsTheCheckerDoes`, `:TestEvalAndCalcOfAnUnimportedLibraryFunction` | ✅ Faithful |
 | A sequence is flat: an element of a sequence expression that is itself a collection contributes its elements, so `(xs, ys)` is `xs->union(ys)` — which is how the library defines `union`, as the sequence expression `(seq1, seq2)` — and a mapper answering several values contributes them all | `runtime/eval.go` `evalSequenceExpr`; `runtime/collections.go` `builtinControlCollect`; `passes/typecheck_expr.go` `writtenLength` (a written length is knowable only where every element is a literal, so a literal index past a sequence of names is left to evaluation) | `runtime/collections_test.go` `TestSequenceExpressionsAreFlat`; conformance `calc_sequence_expression_is_flat` | ✅ Faithful |
 | A receiver binds by position, so a call written with both a receiver and named arguments (`x->f(a = 1)`) states no parameter for the receiver and is a typed error (`ErrReceiverWithNamedArgs`) rather than a call the receiver is dropped from | `runtime/eval.go` `evalInvocation`; `passes/typecheck_expr.go` `checkArguments` | `runtime/collections_test.go` `TestCollectionOperationErrors`, `TestReceiverWithNamedArgumentsIsReported`; `passes/typecheck_expr_test.go` `TestExprInvocationReceiverWithNamedArguments` | ✅ Faithful |
 | A collection operation is an expression wherever an expression is allowed, including inside a calc body's `while` and `for` loops | `runtime/collections.go`, `runtime/action_statements.go` | conformance `calc_collection_ops_in_for_loop`, `calc_collection_ops_in_while_loop` | ✅ Faithful |
@@ -731,7 +736,7 @@ they cannot drift apart.
 | A calc usage declared among a state machine's members binds its inputs from the values the machine has reached, as one in a calc's or an action's body does, so a guard reading it is answered over the running attribute rather than over what it was declared with | `runtime/calc_usage.go` `enclosedByBehaviorBody`, `runtime/invoke_calc.go` `isStateSymbol` | conformance `state_guard_reads_calc_usage` | ✅ Faithful |
 | An evaluation outside a body — a decision guard, an inline node expression, a transition guard, change condition or duration, an attribute default, a feature value default, an action argument, a constraint or requirement check — is a scope of its own, so what a calc usage answers it, and the elements a collection it evaluates materializes, live no longer than that step: the next guard reads the usage again over the values the step before it assigned. A read through a part's feature chain belongs to the evaluation making it and shares its activation | `runtime/eval.go` `beginStep`, `runtime/state_executor.go` `evalStep`, `runtime/action_executor.go` `stepDecisionNode`/`stepActionExecutionNode`/`initializeAttributes`, `runtime/condition.go` `evaluateConditions`, `runtime/calc_usage.go` `calcUsageMemberValue` | conformance `action_guard_reads_calc_usage`; `calc_usage_step_test.go:TestDecisionGuardReadsCalcUsagePerStep`, `:TestDecisionGuardsShareOneCalcUsageEvaluation`, `:TestPartChainReadBelongsToTheReadingActivation` | ✅ Faithful |
 | A failing expression of literals alone is answered at the prompt with the failure itself, so `sysml -e "(1,2,3)#(0)"` reports the index rather than "no declarations loaded" | `repl/meta.go` `tryEvalLiteral`, `isLiteralAnswerError` | `repl/runtime_commands_test.go` `TestEvalReportsTheAnswerOfALiteralExpressionThatFails` | ✅ Faithful |
-| A name the session declares is answered by that declaration, so the prompt's literal pass declines an expression using one rather than letting a library operation of the same unqualified name stand in for it | `repl/meta.go` `tryEvalLiteral`, `declaresANameIn` | `repl/runtime_commands_test.go` `TestEvalPrefersASessionDeclarationOverALibraryOperation` | ✅ Faithful |
+| A name the session declares is answered by that declaration, so the prompt's literal pass declines an expression using one rather than letting a library operation of the same unqualified name stand in for it; the literal pass itself resolves against the library, so a qualified library call is answered from an empty session and an unqualified one is refused with the resolver's hint | `repl/meta.go` `tryEvalLiteral`, `declaresANameIn`, `emptyRuntime`, `errWithoutDeclarations` | `repl/runtime_commands_test.go` `TestEvalResolvesALibraryOperationAsTheCheckerDoes` | ✅ Faithful |
 
 ⚠️ A body parameter takes its type from the element type of whatever the operand
 turns out to hold, which the expression checker does not track: an expression
@@ -774,9 +779,11 @@ the subdirectory out of the OMG notice.
 package, with no diagnostic. A *bare* `exp(x)` with no import is reported
 `unresolved reference: exp` and **does not evaluate**: the name is legal only
 under that import, since no OMG library declares it, so the call fails with
-`ErrUnimportedExtensionFunction` naming the import rather than being answered by
-a declaration the model never made visible. A bare `sqrt(x)` still evaluates —
-the OMG function libraries are in force whatever a model imports.
+`ErrUnresolvedReference` carrying the hint `did you mean
+OpenSysMLMathFunctions::exp?` rather than being answered by a declaration the
+model never made visible. The OMG function libraries follow the same rule: a
+bare `sqrt(x)` evaluates only under an import of `RealFunctions` (see the KerML
+Function Library section).
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
@@ -787,8 +794,8 @@ the OMG function libraries are in force whatever a model imports.
 | `ln(0.0)`, `ln(-1.0)`, `log(x, 1.0)`, `log(-1.0, 10.0)`, `atan2(0.0, 0.0)` report a domain error; `exp` beyond the Real range reports an overflow | `runtime/library_functions.go` | `TestLibraryFunctionErrors`, `TestRuntimeRobustness/extension_library_function_outside_its_domain` | ✅ Faithful |
 | The shipped declarations and the registered implementations cannot drift (names, parameter names, parameter order) | `runtime/library_functions.go` registry | `TestOpenSysMLMathFunctionsMatchTheShippedDeclarations` | ✅ Faithful |
 | Evaluable from a `calc def` body under `import OpenSysMLMathFunctions::*;` | `runtime/invoke_calc.go` | `calc_opensysml_math_functions.sysml` + golden trace | ✅ Faithful |
-| An unqualified call the model imports no declaration of fails with a typed error naming the function and the import that makes it legal, so the diagnostic and the behavior agree instead of contradicting each other | `runtime/library_functions.go` `extensionLocalNames`, `unresolvedLibraryFunction`, `ErrUnimportedExtensionFunction`, read by `runtime/eval.go` (unresolved-call dispatch) | `runtime/library_functions_test.go:TestUnimportedExtensionFunctionCallIsATypedError`, `TestLibraryFunctionUnqualifiedNames`, `TestRuntimeRobustness/calc_calls_an_unimported_extension_function` | ✅ Faithful |
-| The function listing covers every function the build implements, an extension one marked with the import its unqualified name needs, so a working function is advertised neither as unsupported nor as callable bare | `runtime/builtin_names.go` `Builtin.RequiresImport`, `Builtins`, read by `repl/discover.go` `doBuiltins` and `repl/complete.go` | `runtime/library_functions_test.go:TestBuiltinsListExtensionFunctionsWithTheirImport`, `repl/discover_test.go:TestBuiltinsListsAnExtensionFunctionWithItsImport` | ✅ Faithful |
+| An unqualified call the model imports no declaration of fails with a typed error naming the function and the qualified name whose import makes it legal, so the diagnostic and the behavior agree instead of contradicting each other | `runtime/eval.go` `evalInvocation`, `EvalContext.unresolvedInvocation` (the same rule as for the OMG libraries) | `runtime/library_functions_test.go:TestLibraryFunctionUnqualifiedNames`, `TestRuntimeRobustness/calc_calls_an_unimported_extension_function` | ✅ Faithful |
+| The function listing covers every function the build implements, each with the package an import must name for the unqualified call to resolve, so a working function is advertised neither as unsupported nor as callable bare | `runtime/builtin_names.go` `Builtin.Package`, `Builtins`, read by `repl/discover.go` `doBuiltins` and `repl/complete.go` | `runtime/library_functions_test.go:TestBuiltinsListEveryFunctionWithItsPackage`, `repl/discover_test.go:TestBuiltinsCommand`, `:TestBuiltinsListsAnExtensionFunctionWithItsImport` | ✅ Faithful |
 
 ### Static Expression Type Checking (KerML §7.4 Expressions, §8.3 Feature Values)
 

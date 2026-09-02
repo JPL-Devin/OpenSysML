@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -27,6 +28,22 @@ func parseAndBuildModel(t *testing.T, code string) (*semantics.Model, *resolve.R
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
 	return model, resolver, rootScope
+}
+
+// parseAndBuildLibraryModel is parseAndBuildModel over the standard library, for
+// a model whose imports name library packages.
+func parseAndBuildLibraryModel(t *testing.T, code string) (*semantics.Model, *resolve.Resolver, *symbols.Scope) {
+	t.Helper()
+	root := parser.New(source.New("test.sysml", []byte(code))).ParseFile()
+	idx := libs.NewModelIndex()
+	idx.AddDocument("test.sysml", root)
+	idx.ExpandWildcardImports()
+	rootScope := idx.DocumentRoot("test.sysml")
+	if rootScope == nil {
+		t.Fatal("rootScope nil")
+	}
+	resolver := resolve.New(idx)
+	return semantics.NewModel(resolver), resolver, rootScope
 }
 
 func resolveSymbol(t *testing.T, rootScope *symbols.Scope, name string) *symbols.Symbol {

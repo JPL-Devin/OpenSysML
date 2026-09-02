@@ -1481,3 +1481,41 @@ func TestAcceptedSignalMaterializesOneOccurrencePerMessage(t *testing.T) {
 		t.Errorf("expected one Ping occurrence for one message, got %d", count)
 	}
 }
+
+// A send's invocation names a message unless the name resolves to a
+// calculation, and a library function is one only where the model resolves it:
+// under an import or by its qualified name, never by a bare name the model
+// does not import.
+func TestSendInvocationIsACallOnlyWhereItResolvesToACalc(t *testing.T) {
+	ctx, idx := libraryModelContext(t, `package test {
+	private import ScalarValues::*;
+	item def Ping;
+	calc def double { in x : Integer; return : Integer = x * 2; }
+	attribute qualified = SequenceFunctions::size((1, 2));
+	attribute bare = size((1, 2));
+	attribute own = double(2);
+	attribute ping = Ping();
+	package imported {
+		private import SequenceFunctions::*;
+		attribute bare = size((1, 2));
+	}
+}`)
+	ec := NewEvalContext(ctx, nil)
+	cases := map[string]bool{
+		"test::qualified":      true,
+		"test::bare":           false,
+		"test::own":            true,
+		"test::ping":           false,
+		"test::imported::bare": true,
+	}
+	for fqn, want := range cases {
+		sym := lookupOne(t, idx, fqn)
+		inv, ok := sym.Decl.(*ast.Usage).Value.(*ast.InvocationExpr)
+		if !ok {
+			t.Fatalf("%s: value is %T, want an invocation", fqn, sym.Decl.(*ast.Usage).Value)
+		}
+		if got := ec.invokesCalc(sym.Scope, inv); got != want {
+			t.Errorf("%s: invokesCalc = %v, want %v", fqn, got, want)
+		}
+	}
+}

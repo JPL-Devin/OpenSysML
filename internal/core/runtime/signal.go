@@ -791,17 +791,14 @@ func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.Invocati
 	if invocation.Type == nil {
 		return false
 	}
-	if _, isBuiltin := builtins[qualifiedNameToString(invocation.Type)]; isBuiltin {
-		return true
-	}
 	if e.ctx == nil || e.ctx.resolver == nil || scope == nil {
 		return false
 	}
 	sym, ok := e.ctx.resolver.ResolveQualified(scope, invocation.Type)
-	if !ok || sym == nil {
+	if !ok {
 		return false
 	}
-	return isCalcDecl(sym.Decl)
+	return isCalcSymbol(sym)
 }
 
 // buildInvokedMessage builds the message of a send written as an invocation.
