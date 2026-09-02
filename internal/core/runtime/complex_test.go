@@ -128,6 +128,50 @@ func TestComplexHashing(t *testing.T) {
 	}
 }
 
+// One number is one set member whichever of Integer, Real or Complex carries it,
+// so its key agrees with valueEqual across the three.
+func TestEqualNumbersShareOneSetMember(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		forms []Value
+	}{
+		{"whole", []Value{constInt(2), constReal(2), cx(2, 0)}},
+		{"negative whole", []Value{constInt(-7), constReal(-7), cx(-7, 0)}},
+		{"zero", []Value{constInt(0), constReal(0), constReal(math.Copysign(0, -1)), cx(0, 0), cx(math.Copysign(0, -1), 0)}},
+		{"fraction", []Value{constReal(2.5), cx(2.5, 0)}},
+		{"large whole", []Value{constInt(1 << 53), constReal(1 << 53), cx(1<<53, 0)}},
+		{"beyond Integer", []Value{constReal(1e19), cx(1e19, 0)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			set := NewSet()
+			for _, v := range tc.forms {
+				set.Add(v)
+			}
+			if set.Size() != 1 {
+				t.Fatalf("set holds %d members, want 1: %s", set.Size(), FormatTraceValue(Value{Kind: ValSet, Set: set}))
+			}
+			for _, v := range tc.forms {
+				if !set.Contains(v) {
+					t.Fatalf("set does not contain %s", FormatValue(v))
+				}
+				for _, w := range tc.forms {
+					if !valueEqual(v, w) || valueKeyFunc(v) != valueKeyFunc(w) {
+						t.Fatalf("%s and %s: equal=%v, same key=%v", FormatValue(v), FormatValue(w),
+							valueEqual(v, w), valueKeyFunc(v) == valueKeyFunc(w))
+					}
+				}
+			}
+		})
+	}
+	set := NewSet()
+	for _, v := range []Value{constInt(2), constReal(2.5), cx(2, 1), cx(2, 0)} {
+		set.Add(v)
+	}
+	if set.Size() != 3 {
+		t.Fatalf("set holds %d members, want 3", set.Size())
+	}
+}
+
 // A Complex off the real axis is a Complex in the scalar lattice; one on it is
 // the Real it equals: a Rational, or an Integer or Natural where it is whole.
 func TestComplexPrimType(t *testing.T) {

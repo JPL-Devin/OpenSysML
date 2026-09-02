@@ -22,7 +22,8 @@ type valueKey struct {
 	literal *symbols.Symbol
 }
 
-// valueKeyFunc extracts a comparable key from a Value.
+// valueKeyFunc extracts a comparable key from a Value. Values valueEqual holds
+// equal share a key: a whole number has the Integer's whatever kind carries it.
 func valueKeyFunc(v Value) valueKey {
 	key := valueKey{kind: v.Kind}
 	switch v.Kind {
@@ -31,15 +32,18 @@ func valueKeyFunc(v Value) valueKey {
 		case semantics.ValInt:
 			key.intVal = v.Const.Int
 		case semantics.ValReal:
-			key.realVal = v.Const.Real
+			if n, ok := v.Const.WholeNumber(); ok {
+				key.intVal = n
+			} else {
+				key.realVal = v.Const.Real
+			}
 		case semantics.ValBool:
 			key.boolVal = v.Const.Bool
 		case semantics.ValInfinity:
 			key.infVal = true
 		}
 	case ValComplex:
-		// A complex number on the real axis is the Real it equals, so it shares
-		// that Real's key.
+		// A complex number on the real axis is the number it equals and has its key.
 		if re, ok := v.realPart(); ok {
 			return valueKeyFunc(realConst(re))
 		}
