@@ -22,6 +22,26 @@ type calcParameter struct {
 type calcMemberDecl struct {
 	Target *writeTarget
 	Owner  *symbols.Symbol
+	// multStated: Target.mult is declared rather than the assumed 1..1.
+	multStated bool
+}
+
+// redeclaring refines the declaration d redeclares: a redeclaration stating no
+// type or multiplicity keeps the redeclared feature's (KerML 1.0 §7.3.4.5).
+func (d calcMemberDecl) redeclaring(redeclared calcMemberDecl) calcMemberDecl {
+	if d.Target == nil {
+		return redeclared
+	}
+	if redeclared.Target == nil {
+		return d
+	}
+	if d.Target.typ == nil {
+		d.Target.typ = redeclared.Target.typ
+	}
+	if !d.multStated {
+		d.Target.mult, d.multStated = redeclared.Target.mult, redeclared.multStated
+	}
+	return d
 }
 
 // check reports a value outside the declared multiplicity or type, described by
@@ -45,8 +65,12 @@ func (ctx *Context) calcMemberDeclOf(link *symbols.Symbol, usage *ast.Usage, nam
 	if sym == nil {
 		return calcMemberDecl{}
 	}
-	mult, _ := ctx.extractMultiplicity(sym)
-	return calcMemberDecl{Target: &writeTarget{name: name, typ: ctx.extractType(sym), mult: mult}, Owner: link}
+	mult, stated := ctx.extractMultiplicity(sym)
+	return calcMemberDecl{
+		Target:     &writeTarget{name: name, typ: ctx.extractType(sym), mult: mult},
+		Owner:      link,
+		multStated: stated,
+	}
 }
 
 // calcShape is a calc's invocation interface: the input parameters it binds, in
@@ -189,9 +213,7 @@ func (ctx *Context) calcParameters(chain []*symbols.Symbol) []calcParameter {
 					param.Default = params[at].Default
 					param.Owner = params[at].Owner
 				}
-				if param.Decl.Target == nil {
-					param.Decl = params[at].Decl
-				}
+				param.Decl = param.Decl.redeclaring(params[at].Decl)
 				params[at] = param
 				continue
 			}

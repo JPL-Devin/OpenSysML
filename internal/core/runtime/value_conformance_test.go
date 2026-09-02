@@ -225,6 +225,8 @@ func calcMultiplicityContext(t *testing.T) (*Context, *symbols.Index, *symbols.S
 			calc def BadDefault { in x : Integer = (1, 2); return : Integer = x; }
 			calc def DerivedMany :> Many;
 			calc def RedefOne :> Many { in :>> xs : Integer[1]; }
+			calc def RedeclMany :> Many { in :>> xs; }
+			calc def RedeclManyTyped :> Many { in :>> xs : Integer; }
 
 			calc def TwoResults { return : Integer = (1, 2); }
 			calc def NoResult { return : Integer = null; }
@@ -236,6 +238,8 @@ func calcMultiplicityContext(t *testing.T) (*Context, *symbols.Index, *symbols.S
 			}
 			calc def ManyOut { in xs : Integer[*]; out ys : Integer[*] = xs; }
 			calc def OneOut { in xs : Integer[*]; out y : Integer = xs; }
+			calc def ManyOutRedecl :> ManyOut { out :>> ys; }
+			calc def ManyResultsRedecl :> ManyResults { return : Integer; }
 			calc def BoundOne { in xs : Integer[*]; return : Integer; bind result = xs; }
 			calc def BoundMany { in xs : Integer[*]; return : Integer[*]; bind result = xs; }
 			calc def BoundDerived :> BoundOne {
@@ -285,6 +289,10 @@ func TestCalcParameterAndResultMultiplicity(t *testing.T) {
 		{"UpTo2((1, 2))", "2"},
 		{"DerivedMany((1, 2))", "2"},
 		{"RedefOne(1)", "1"},
+		{"RedeclMany((1, 2))", "2"},
+		{"RedeclManyTyped((1, 2))", "2"},
+		{"ManyOutRedecl((1, 2))", "(1, 2)"},
+		{"ManyResultsRedecl()", "(1, 2)"},
 		{"ManyResults()", "(1, 2)"},
 		{"Returned(1)", "1"},
 		{"ManyOut((1, 2))", "(1, 2)"},
@@ -322,8 +330,10 @@ func TestCalcParameterAndResultMultiplicity(t *testing.T) {
 			t.Errorf("%s: error = %v, want ErrMultiplicityViolation", expr, err)
 		}
 	}
-	if _, err := evalIn(t, ctx, scope, "BoundString()"); !errors.Is(err, ErrTypeMismatch) {
-		t.Errorf("BoundString(): error = %v, want ErrTypeMismatch", err)
+	for _, expr := range []string{"BoundString()", `RedeclMany("s")`} {
+		if _, err := evalIn(t, ctx, scope, expr); !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("%s: error = %v, want ErrTypeMismatch", expr, err)
+		}
 	}
 }
 

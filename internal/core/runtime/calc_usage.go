@@ -78,9 +78,7 @@ func (ctx *Context) calcOutputs(chain []*symbols.Symbol) []calcOutput {
 					out.Value = outs[at].Value
 					out.Owner = outs[at].Owner
 				}
-				if out.Decl.Target == nil {
-					out.Decl = outs[at].Decl
-				}
+				out.Decl = out.Decl.redeclaring(outs[at].Decl)
 				outs[at] = out
 				continue
 			}
