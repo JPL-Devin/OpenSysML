@@ -110,11 +110,9 @@ func atSecondArgument(head string) bool {
 
 // atObjectArgument reports whether the word being typed is an argument the
 // command takes an object in: the object %features, %invoke and %state inspect,
-// the performer of %action and %state, and the context of a pinned %eval.
+// the performer of %action and %state, and the context of a pinned %eval. A
+// quoted name still being typed is part of that argument.
 func atObjectArgument(head string) bool {
-	if inUnfinishedName(head) {
-		return false
-	}
 	switch firstToken(head) {
 	case "%features", "%invoke":
 		return argumentIndex(head) == 1
@@ -132,8 +130,12 @@ func atObjectArgument(head string) bool {
 }
 
 // argumentIndex is the position of the word being typed among the command's
-// arguments, the command itself being 0. Counted the way dispatch splits them.
+// arguments, the command itself being 0. Counted the way dispatch splits them,
+// with a quoted name still being typed closed so it counts as one argument.
 func argumentIndex(head string) int {
+	if inUnfinishedName(head) {
+		return len(parseArgs(head+"'")) - 1
+	}
 	args := parseArgs(head)
 	if strings.HasSuffix(head, " ") || strings.HasSuffix(head, "\t") {
 		return len(args)
@@ -183,11 +185,24 @@ func nameWord(head string) string {
 	return trailingWord(head, "_:'")
 }
 
-// objectWord returns the object reference being typed at the end of head: a
-// name's characters together with the `#` of an id, the `.` between segments and
-// the brackets of an index.
+// objectWord returns the object reference being typed at the end of head: the
+// text after the last whitespace outside a quoted name, since a name may hold
+// a space and a reference is one argument.
 func objectWord(head string) string {
-	return trailingWord(head, "_:'#.[]")
+	start, inName, escaped := 0, false, false
+	for i, r := range head {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\':
+			escaped = true
+		case r == '\'':
+			inName = !inName
+		case !inName && (r == ' ' || r == '\t'):
+			start = i + 1
+		}
+	}
+	return head[start:]
 }
 
 // trailingWord returns the trailing run of letters, digits and the punctuation
@@ -282,6 +297,9 @@ func (s *Session) objectCompletions(word string) []string {
 	if strings.HasPrefix(word, "#") {
 		return matchingPrefix(s.objectIDs(), word)
 	}
+	if strings.HasPrefix(word, "'") {
+		return matchingPrefix(s.quotedDeclaredNames(), word)
+	}
 	out := s.nameCompletions(word)
 	if word == "" {
 		out = append(out, s.objectIDs()...)
@@ -290,12 +308,10 @@ func (s *Session) objectCompletions(word string) []string {
 }
 
 // lastSegment splits an object reference before the segment being typed: the
-// reference walked so far, the separator after it, and the partial segment.
-// A reference with no separator yet is not walked.
+// reference walked so far, the separator after it, and the partial segment,
+// which may be a quoted name not yet closed. A reference with no separator yet
+// is not walked.
 func lastSegment(word string) (root, sep, partial string, walked bool) {
-	if inUnfinishedName(word) {
-		return "", "", word, false
-	}
 	inName, escaped := false, false
 	at, width := -1, 0
 	for i := 0; i < len(word); i++ {
@@ -318,6 +334,18 @@ func lastSegment(word string) (root, sep, partial string, walked bool) {
 		return "", "", word, false
 	}
 	return word[:at], word[at : at+width], word[at+width:], true
+}
+
+// quotedDeclaredNames spells the declared names that need quoting as the
+// notation writes them, which is how a reference beginning with `'` continues.
+func (s *Session) quotedDeclaredNames() []string {
+	var out []string
+	for _, name := range s.declaredSymbolNames() {
+		if text := lexer.NameText(name); text != name {
+			out = append(out, text)
+		}
+	}
+	return out
 }
 
 // objectIDs lists the objects the session holds as `#<id>` references.

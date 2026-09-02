@@ -318,6 +318,63 @@ func TestCompleteObjectReferences(t *testing.T) {
 	}
 }
 
+// A quoted segment still being typed keeps the root and separator before it,
+// after `.` and `::` alike, and an escaped quote inside it does not end it.
+func TestCompleteQuotedSegments(t *testing.T) {
+	s := submitted(t, `package Q {
+	part def Gauge;
+	part def Rack {
+		part 'main gauge' : Gauge;
+		part 'main valve' : Gauge;
+		part 'rack\'s spare' : Gauge;
+	}
+	part 'the rack' : Rack;
+}`)
+	run(t, s, "%instantiate 'the rack'")
+	before := s.rtCtx.InstanceIDs()
+
+	tests := []struct {
+		line    string
+		prefix  string
+		wants   []string
+		rejects []string
+	}{
+		{line: "%features 'the ra", prefix: "'the ra", wants: []string{"'the rack'"}},
+		{line: "%features 'the rack'.", prefix: "'the rack'.", wants: []string{"'the rack'.'main gauge'", "'the rack'.'main valve'", `'the rack'.'rack\'s spare'`}},
+		{line: "%features 'the rack'.'main", prefix: "'the rack'.'main", wants: []string{"'the rack'.'main gauge'", "'the rack'.'main valve'"}, rejects: []string{`'the rack'.'rack\'s spare'`}},
+		{line: "%features 'the rack'::'main g", prefix: "'the rack'::'main g", wants: []string{"'the rack'::'main gauge'"}, rejects: []string{"'the rack'::'main valve'"}},
+		{line: `%features 'the rack'.'rack\'s`, prefix: `'the rack'.'rack\'s`, wants: []string{`'the rack'.'rack\'s spare'`}},
+		{line: "%features Q::'the rack'.'main v", prefix: "Q::'the rack'.'main v", wants: []string{"Q::'the rack'.'main valve'"}},
+		{line: "%eval in 'the rack'.'main", prefix: "'the rack'.'main", wants: []string{"'the rack'.'main gauge'"}},
+		{line: "%state Sm 'the rack'.'main", prefix: "'the rack'.'main", wants: []string{"'the rack'.'main gauge'"}},
+		{line: "%features 'the rack'.'nothing", prefix: "'the rack'.'nothing", rejects: []string{"'the rack'.'main gauge'"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.line, func(t *testing.T) {
+			got := s.Complete(tt.line, len(tt.line))
+			if got.Prefix != tt.prefix {
+				t.Errorf("prefix = %q, want %q", got.Prefix, tt.prefix)
+			}
+			for _, want := range tt.wants {
+				if !contains(got.Candidates, want) {
+					t.Errorf("want %q in %v", want, got.Candidates)
+				}
+			}
+			for _, bad := range tt.rejects {
+				if contains(got.Candidates, bad) {
+					t.Errorf("did not want %q in %v", bad, got.Candidates)
+				}
+			}
+		})
+	}
+	if after := s.rtCtx.InstanceIDs(); fmt.Sprint(after) != fmt.Sprint(before) {
+		t.Errorf("completion materialized objects: ids %v, were %v", after, before)
+	}
+	if out := run(t, s, "%features 'the rack'.'main gauge'"); strings.Contains(out, "error") {
+		t.Errorf("completed reference does not resolve:\n%s", out)
+	}
+}
+
 // A multi-valued part is completed to the elements it holds, not to what its
 // multiplicity admits: a ranged part materializes its lower bound, an optional
 // one nothing — and every index offered is one a reference then resolves.
