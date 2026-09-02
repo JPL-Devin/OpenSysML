@@ -77,7 +77,7 @@ func (ec *EvalContext) chainObject(value Value, named string) (*Instance, error)
 	case ValNull, ValInvalid:
 		return nil, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, named)
 	case ValEnumLiteral:
-		inst, err := ec.ctx.enumLiteralObject(value.Literal)
+		inst, err := ec.ctx.enumLiteralObject(value.Literal())
 		if err != nil {
 			return nil, err
 		}

@@ -209,7 +209,7 @@ func (ctx *Context) bindParticipants(inst *Instance, ends []ConnectorEnd) {
 		inst.FeatureValues[participantEndName] = fv
 	}
 	fv.Value = Value{}
-	fv.Values = Value{Kind: ValSequence, Sequence: seq}
+	fv.Values = NewSequenceValue(seq)
 	fv.Materialized = true
 }
 

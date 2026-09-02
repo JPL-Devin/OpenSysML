@@ -64,8 +64,8 @@ func TestEnumLiteralRoundTrip(t *testing.T) {
 		t.Fatalf("Kind: got %v, want ValEnumLiteral", back.Kind)
 	}
 	// Identity, not text: the round-tripped value is the same declaration.
-	if back.Literal != original.Literal {
-		t.Errorf("Literal: got %v, want the D::Color::red declaration", back.Literal)
+	if back.Literal() != original.Literal() {
+		t.Errorf("Literal: got %v, want the D::Color::red declaration", back.Literal())
 	}
 }
 
@@ -82,15 +82,15 @@ func TestEnumLiteralRoundTripInSequence(t *testing.T) {
 	seq.Append(runtime.NewEnumLiteral(red))
 	seq.Append(runtime.NewEnumLiteral(green[0]))
 
-	back, err := ProtoToValueIn(ValueToProto(runtime.Value{Kind: runtime.ValSequence, Sequence: seq}, idx), idx, nil)
+	back, err := ProtoToValueIn(ValueToProto(runtime.NewSequenceValue(seq), idx), idx, nil)
 	if err != nil {
 		t.Fatalf("ProtoToValueIn: %v", err)
 	}
-	elems := back.Sequence.Elements()
+	elems := back.Sequence().Elements()
 	if len(elems) != 2 {
 		t.Fatalf("got %d elements, want 2", len(elems))
 	}
-	if elems[0].Literal != red || elems[1].Literal != green[0] {
+	if elems[0].Literal() != red || elems[1].Literal() != green[0] {
 		t.Errorf("sequence elements lost their literal identity: %v", elems)
 	}
 }

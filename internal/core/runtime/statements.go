@@ -549,15 +549,15 @@ func stmtLabel(stmt lower.Statement) string {
 func forElements(value Value) ([]Value, error) {
 	switch value.Kind {
 	case ValSequence:
-		if value.Sequence == nil {
+		if value.Sequence() == nil {
 			return nil, nil
 		}
-		return value.Sequence.Elements(), nil
+		return value.Sequence().Elements(), nil
 	case ValSet:
-		if value.Set == nil {
+		if value.Set() == nil {
 			return nil, nil
 		}
-		elements := value.Set.Elements()
+		elements := value.Set().Elements()
 		sort.Slice(elements, func(i, j int) bool {
 			return FormatTraceValue(elements[i]) < FormatTraceValue(elements[j])
 		})

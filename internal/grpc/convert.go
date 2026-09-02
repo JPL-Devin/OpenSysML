@@ -253,7 +253,7 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported const kind"}}
 		}
 	case runtime.ValString:
-		return &pb.Value{Kind: &pb.Value_StringValue{StringValue: val.Str}}
+		return &pb.Value{Kind: &pb.Value_StringValue{StringValue: val.Str()}}
 	case runtime.ValNull:
 		return &pb.Value{Kind: &pb.Value_Null{Null: ""}}
 	case runtime.ValInstance:
@@ -261,8 +261,8 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 	case runtime.ValSequence:
 		// Recursively convert sequence elements
 		var pbElements []*pb.Value
-		if val.Sequence != nil {
-			for _, elem := range val.Sequence.Elements() {
+		if val.Sequence() != nil {
+			for _, elem := range val.Sequence().Elements() {
 				pbElements = append(pbElements, ValueToProtoIn(rt, elem, idx))
 			}
 		}
@@ -275,7 +275,7 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 		}
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: variant selection"}}
 	case runtime.ValQuantity:
-		pq := QuantityToProto(val.Quantity)
+		pq := QuantityToProto(val.Quantity())
 		if pq == nil {
 			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: quantity with a non-numeric magnitude"}}
 		}
@@ -294,14 +294,14 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 // enumLiteralToProto names a literal by the declaration it is, which is its
 // identity, and by the enumeration declaring it. Nil for an unresolved literal.
 func enumLiteralToProto(val runtime.Value, idx *symbols.Index) *pb.EnumLiteral {
-	if val.Literal == nil {
+	if val.Literal() == nil {
 		return nil
 	}
 	lit := &pb.EnumLiteral{
-		LiteralId: idx.GetFQN(val.Literal),
+		LiteralId: idx.GetFQN(val.Literal()),
 		Name:      val.LiteralText(),
 	}
-	if enum := semantics.EnumerationOwning(val.Literal); enum != nil {
+	if enum := semantics.EnumerationOwning(val.Literal()); enum != nil {
 		lit.EnumerationId = idx.GetFQN(enum)
 	}
 	return lit
@@ -388,7 +388,7 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 				seq.Append(val)
 			}
 		}
-		return runtime.Value{Kind: runtime.ValSequence, Sequence: seq}, nil
+		return runtime.NewSequenceValue(seq), nil
 	default:
 		return protoToScalar(pv), nil
 	}
@@ -422,7 +422,7 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 	}
 
 	quantity := &runtime.Quantity{Num: num, Unit: runtime.Unit{Text: pq.GetUnit(), Term: term}}
-	return runtime.Value{Kind: runtime.ValQuantity, Quantity: quantity}, nil
+	return runtime.NewQuantityValue(quantity), nil
 }
 
 // protoToUnitTerm rebuilds a unit's reduction, normalized so a term sent in any
@@ -488,7 +488,7 @@ func protoToScalar(pv *pb.Value) runtime.Value {
 	case *pb.Value_BoolValue:
 		return runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: k.BoolValue}}
 	case *pb.Value_StringValue:
-		return runtime.Value{Kind: runtime.ValString, Str: k.StringValue}
+		return runtime.NewStringValue(k.StringValue)
 	case *pb.Value_InstanceId:
 		return runtime.Value{Kind: runtime.ValInstance, Instance: k.InstanceId}
 	case *pb.Value_Null:
@@ -581,12 +581,12 @@ func instanceRefs(fv *pb.FeatureValue) []int64 {
 func collectionElements(val runtime.Value) []runtime.Value {
 	switch val.Kind {
 	case runtime.ValSequence:
-		if val.Sequence != nil {
-			return val.Sequence.Elements()
+		if val.Sequence() != nil {
+			return val.Sequence().Elements()
 		}
 	case runtime.ValSet:
-		if val.Set != nil {
-			return val.Set.Elements()
+		if val.Set() != nil {
+			return val.Set().Elements()
 		}
 	}
 	return nil

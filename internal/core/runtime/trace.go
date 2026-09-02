@@ -287,44 +287,44 @@ func FormatTraceValue(v Value) string {
 	case ValNull:
 		return "null"
 	case ValString:
-		return strconv.Quote(v.Str)
+		return strconv.Quote(v.Str())
 	case ValInstance:
 		return fmt.Sprintf("instance#%d", v.Instance)
 	case ValSequence:
-		if v.Sequence == nil {
+		if v.Sequence() == nil {
 			return "()"
 		}
-		parts := make([]string, 0, v.Sequence.Size())
-		for _, elem := range v.Sequence.Elements() {
+		parts := make([]string, 0, v.Sequence().Size())
+		for _, elem := range v.Sequence().Elements() {
 			parts = append(parts, FormatTraceValue(elem))
 		}
 		return "(" + strings.Join(parts, ", ") + ")"
 	case ValSet:
-		if v.Set == nil {
+		if v.Set() == nil {
 			return "{}"
 		}
-		parts := make([]string, 0, v.Set.Size())
-		for _, elem := range v.Set.Elements() {
+		parts := make([]string, 0, v.Set().Size())
+		for _, elem := range v.Set().Elements() {
 			parts = append(parts, FormatTraceValue(elem))
 		}
 		sort.Strings(parts)
 		return "{" + strings.Join(parts, ", ") + "}"
 	case ValQuantity:
-		if v.Quantity == nil {
+		if v.Quantity() == nil {
 			return v.Kind.String()
 		}
 		// A unit-carrying value is rendered as the REPL renders it, with the
 		// magnitude in the trace's own convention for numbers.
-		return v.Quantity.TextWithMagnitude(formatConst(v.Quantity.Num))
+		return v.Quantity().TextWithMagnitude(formatConst(v.Quantity().Num))
 	case ValVariant:
-		if v.Variant == nil {
+		if v.Variant() == nil {
 			return v.Kind.String()
 		}
-		return v.Variant.Name
+		return v.Variant().Name
 	case ValEnumLiteral:
 		return v.LiteralText()
 	case ValExpr:
-		return fmt.Sprintf("expr(%s)", TraceLabel(v.Expr))
+		return fmt.Sprintf("expr(%s)", TraceLabel(v.Expr()))
 	default:
 		return v.Kind.String()
 	}

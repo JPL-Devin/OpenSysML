@@ -1201,9 +1201,9 @@ func nestedInstances(ctx *runtime.Context, fv *runtime.FeatureValue) []*runtime.
 	values := []runtime.Value{fv.Value}
 	switch fv.Values.Kind {
 	case runtime.ValSequence:
-		values = fv.Values.Sequence.Elements()
+		values = fv.Values.Sequence().Elements()
 	case runtime.ValSet:
-		values = fv.Values.Set.Elements()
+		values = fv.Values.Set().Elements()
 	}
 
 	var out []*runtime.Instance
@@ -1297,20 +1297,20 @@ func formatValue(ctx *runtime.Context, val runtime.Value) string {
 	}
 	switch val.Kind {
 	case runtime.ValSequence:
-		if val.Sequence == nil {
+		if val.Sequence() == nil {
 			return "[]"
 		}
-		parts := make([]string, len(val.Sequence.Elements()))
-		for i, element := range val.Sequence.Elements() {
+		parts := make([]string, len(val.Sequence().Elements()))
+		for i, element := range val.Sequence().Elements() {
 			parts[i] = formatValue(ctx, element)
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
 	case runtime.ValSet:
-		if val.Set == nil {
+		if val.Set() == nil {
 			return "Set{}"
 		}
-		parts := make([]string, len(val.Set.Elements()))
-		for i, element := range val.Set.Elements() {
+		parts := make([]string, len(val.Set().Elements()))
+		for i, element := range val.Set().Elements() {
 			parts[i] = formatValue(ctx, element)
 		}
 		return "Set{" + strings.Join(parts, ", ") + "}"

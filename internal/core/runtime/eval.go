@@ -177,7 +177,7 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 		return ec.evalIndexExpr(n)
 	case *ast.BodyExpr:
 		// BodyExpr is not directly evaluated - wrapped as ValExpr for delayed evaluation
-		return Value{Kind: ValExpr, Expr: n}, nil
+		return NewExprValue(n), nil
 	default:
 		return Value{}, fmt.Errorf("unsupported node type: %T", node)
 	}
@@ -253,7 +253,7 @@ func (ec *EvalContext) evalLiteralBool(n *ast.LiteralBool) (Value, error) {
 // evalLiteralString evaluates a string literal, which spells its text with the
 // quotes and escapes of the notation.
 func (ec *EvalContext) evalLiteralString(n *ast.LiteralString) (Value, error) {
-	return Value{Kind: ValString, Str: lexer.StringValue(n.Value)}, nil
+	return NewStringValue(lexer.StringValue(n.Value)), nil
 }
 
 // evalNull evaluates a null expression.
@@ -664,7 +664,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	case ValEnumLiteral:
 		// A literal is an occurrence of its enumeration, so its own features are
 		// read from the object that literal stands for.
-		inst, err := ec.ctx.enumLiteralObject(value.Literal)
+		inst, err := ec.ctx.enumLiteralObject(value.Literal())
 		if err != nil {
 			return Value{}, err
 		}
@@ -866,10 +866,10 @@ func (ec *EvalContext) evalTypeClassification(n *ast.OperatorExpr) (Value, error
 func (ec *EvalContext) valueHasType(value Value, target *symbols.Symbol, exact bool) (bool, error) {
 	switch value.Kind {
 	case ValSequence:
-		if value.Sequence == nil || value.Sequence.Size() == 0 {
+		if value.Sequence() == nil || value.Sequence().Size() == 0 {
 			return true, nil
 		}
-		for _, element := range value.Sequence.Elements() {
+		for _, element := range value.Sequence().Elements() {
 			matches, err := ec.valueHasType(element, target, exact)
 			if err != nil {
 				return false, err
@@ -880,10 +880,10 @@ func (ec *EvalContext) valueHasType(value Value, target *symbols.Symbol, exact b
 		}
 		return true, nil
 	case ValSet:
-		if value.Set == nil || value.Set.Size() == 0 {
+		if value.Set() == nil || value.Set().Size() == 0 {
 			return true, nil
 		}
-		for _, element := range value.Set.Elements() {
+		for _, element := range value.Set().Elements() {
 			matches, err := ec.valueHasType(element, target, exact)
 			if err != nil {
 				return false, err
@@ -924,7 +924,7 @@ func (ec *EvalContext) evalTypeSubject(node ast.Node) (Value, error) {
 		mult, _ := ec.ctx.extractMultiplicity(sym)
 		if !mult.Lower.Infinite && mult.Lower.Value == 0 {
 			// Classification treats an optional valueless usage as its empty collection.
-			return Value{Kind: ValSequence, Sequence: NewSequence()}, nil
+			return NewSequenceValue(NewSequence()), nil
 		}
 	}
 	return ec.Eval(node)
@@ -959,25 +959,25 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 		}
 		return inst.Type, nil
 	case ValVariant:
-		if value.Variant == nil {
+		if value.Variant() == nil {
 			return nil, fmt.Errorf("%w: variant", ErrUndeterminedValueType)
 		}
-		return value.Variant, nil
+		return value.Variant(), nil
 	case ValEnumLiteral:
-		if value.Literal == nil {
+		if value.Literal() == nil {
 			return nil, fmt.Errorf("%w: enumeration literal", ErrUndeterminedValueType)
 		}
-		enum := semantics.EnumerationOwning(value.Literal)
+		enum := semantics.EnumerationOwning(value.Literal())
 		if enum == nil {
 			return nil, fmt.Errorf("%w: enumeration literal %s",
-				ErrUndeterminedValueType, value.Literal.Name)
+				ErrUndeterminedValueType, value.Literal().Name)
 		}
 		return enum, nil
 	case ValQuantity:
-		if value.Quantity == nil {
+		if value.Quantity() == nil {
 			return nil, fmt.Errorf("%w: quantity", ErrUndeterminedValueType)
 		}
-		return ctx.directValueType(scope, Value{Kind: ValConst, Const: value.Quantity.Num})
+		return ctx.directValueType(scope, Value{Kind: ValConst, Const: value.Quantity().Num})
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -1051,9 +1051,9 @@ func (ec *EvalContext) elementDenotedBy(val Value) (*symbols.Symbol, bool) {
 		}
 		return inst.Type, true
 	case ValVariant:
-		return val.Variant, val.Variant != nil
+		return val.Variant(), val.Variant() != nil
 	case ValEnumLiteral:
-		return val.Literal, val.Literal != nil
+		return val.Literal(), val.Literal() != nil
 	default:
 		return nil, false
 	}
@@ -1170,7 +1170,7 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	// '+' over two strings concatenates, the one arithmetic operator
 	// StringFunctions declares; a non-string operand is not coerced.
 	if n.Operator == ast.OpAdd && left.Kind == ValString && right.Kind == ValString {
-		return concatStrings(left.Str, right.Str), nil
+		return concatStrings(left.Str(), right.Str()), nil
 	}
 
 	// A quantity carries its unit through arithmetic: a sum converts, a product
@@ -1355,7 +1355,7 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 				Span:  n.Span(),
 			}
 		}
-		ordered, err := compareStrings(n.Operator, left.Str, right.Str)
+		ordered, err := compareStrings(n.Operator, left.Str(), right.Str())
 		if err != nil {
 			return Value{}, err
 		}
@@ -1506,7 +1506,7 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 			if n.Operator == ast.OpPos {
 				return operand, nil
 			}
-			return negateQuantity(operand.Quantity)
+			return negateQuantity(operand.Quantity())
 		}
 		// Arithmetic sign: -number, +number
 		if operand.Kind != ValConst {
@@ -1706,27 +1706,27 @@ func valueEqual(a, b Value) bool {
 		result, ok := semantics.EvalBinary(ast.OpEq, a.Const, b.Const)
 		return ok && result.Kind == semantics.ValBool && result.Bool
 	case ValString:
-		return a.Str == b.Str
+		return a.Str() == b.Str()
 	case ValNull:
 		return true
 	case ValInstance:
 		return a.Instance == b.Instance
 	case ValSequence:
-		return sequenceEqual(a.Sequence, b.Sequence)
+		return sequenceEqual(a.Sequence(), b.Sequence())
 	case ValSet:
-		return setEqual(a.Set, b.Set)
+		return setEqual(a.Set(), b.Set())
 	case ValVariant:
 		// A variation compares equal to the variant it selected.
-		return a.Variant == b.Variant
+		return a.Variant() == b.Variant()
 	case ValEnumLiteral:
 		// A literal is its own identity: two literals are equal exactly when they
 		// are the same declaration, across enumerations included.
-		return a.Literal == b.Literal
+		return a.Literal() == b.Literal()
 	case ValQuantity:
 		// Incommensurable units are not equal here: an equality that has to hold
 		// or fail (a set member, a sequence element) has no error to report.
-		converted, err := b.Quantity.convertTo(a.Quantity.Unit)
-		return err == nil && toReal(a.Quantity.Num) == converted
+		converted, err := b.Quantity().convertTo(a.Quantity().Unit)
+		return err == nil && toReal(a.Quantity().Num) == converted
 	default:
 		return false
 	}

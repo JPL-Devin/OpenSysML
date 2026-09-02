@@ -246,7 +246,7 @@ func TestPinRefusesAValueOfTheWrongType(t *testing.T) {
 	sym := symbolNamed(t, idx, "test::Panel::fits")
 	width := symbolNamed(t, idx, "test::Panel::width")
 	_, err := ConstraintWith(ctx, sym, sym.OwnerScope, []Pin{{
-		Feature: width, Name: "width", Value: runtime.Value{Kind: runtime.ValString, Str: "wide"}, Source: PinChosen,
+		Feature: width, Name: "width", Value: runtime.NewStringValue("wide"), Source: PinChosen,
 	}})
 	if !errors.Is(err, ErrNotPinnable) {
 		t.Fatalf("error %v, want a refusal to fix a number to a string", err)

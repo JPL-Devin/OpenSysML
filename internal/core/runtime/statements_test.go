@@ -21,8 +21,8 @@ func TestForElementsOrder(t *testing.T) {
 	}{
 		"a sequence keeps its own order":   {sequenceOf([]Value{integerValue(3), integerValue(1), integerValue(2)}), []int64{3, 1, 2}},
 		"an empty sequence visits nothing": {sequenceOf(nil), nil},
-		"a set sorts by its rendering":     {Value{Kind: ValSet, Set: set}, []int64{100, 30, 4}},
-		"an empty set visits nothing":      {Value{Kind: ValSet, Set: NewSet()}, nil},
+		"a set sorts by its rendering":     {NewSetValue(set), []int64{100, 30, 4}},
+		"an empty set visits nothing":      {NewSetValue(NewSet()), nil},
 		"null visits nothing":              {nullValue(), nil},
 	}
 
@@ -47,7 +47,7 @@ func TestForElementsRejectsANonCollection(t *testing.T) {
 		"an integer":       integerValue(7),
 		"a real":           Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 2.5}},
 		"a boolean":        boolValue(true),
-		"a string":         Value{Kind: ValString, Str: "xs"},
+		"a string":         NewStringValue("xs"),
 		"an expression":    Value{Kind: ValExpr},
 		"an invalid value": Value{Kind: ValInvalid},
 	}
