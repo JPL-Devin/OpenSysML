@@ -599,7 +599,16 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	}
 	val, err := ctx.EvalWithScope(node, scope)
 	if err != nil {
-		return nil, evalError(expr, err, len(exprPrefix))
+		// A feature the declarations give no value to reads as unset, as it does
+		// on an object; only a name nothing declares is an error.
+		var noValue *runtime.NoValueError
+		if !errors.As(err, &noValue) {
+			return nil, evalError(expr, err, len(exprPrefix))
+		}
+		return []string{
+			fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
+			fmt.Sprintf("  = %s", runtime.UnsetText),
+		}, nil
 	}
 	return []string{
 		fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
@@ -787,7 +796,13 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 	// features and the units its imports bring in.
 	val, err := ctx.EvalWithScope(evalUsage.Value, s.promptScope())
 	if err != nil {
+		// A name the lookup missed but the expression reached resolved after
+		// all; finding no value there is not the unresolved name the lookup saw.
+		var noValue *runtime.NoValueError
 		if lookupErr != nil {
+			if errors.As(err, &noValue) {
+				return nil, fmt.Errorf("%q has no value to evaluate", expr)
+			}
 			return nil, lookupErr
 		}
 		return nil, evalError(expr, err, len(tempSrc)-len(expr)-1)

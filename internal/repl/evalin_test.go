@@ -133,3 +133,66 @@ func TestEvalInInstanceIsBoundedByTheStepBudget(t *testing.T) {
 	// The budget bounds one run, not the session.
 	wants(t, run(t, s, "%eval in Demo::Vehicle : mass + 1.0"), "= 1501")
 }
+
+// multiValuedModel declares features nothing gives a value to, single- and
+// multi-valued, beside ones that hold a value or name one object.
+const multiValuedModel = `private import ScalarValues::*;
+part def Wheel { attribute radius : Real = 0.3; }
+part def Car {
+	attribute mass : Real = 1500.0;
+	attribute unsetMass : Real;
+	attribute tags : String[3];
+	part w2 : Wheel;
+	part wheels : Wheel[4];
+}
+part car : Car;`
+
+// Before an object exists, a feature the declarations give no value to reads as
+// unset in its declaration scope, however many values it may hold: it resolves,
+// so it is never reported as an unresolved name.
+func TestEvalInDeclarationScopeReadsValuelessFeaturesAsUnset(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	// What a value or one object answers is unchanged.
+	wants(t, run(t, s, "%eval in car : mass"), "mass (in car)", "= 1500.0")
+	wants(t, run(t, s, "%eval in car : w2.radius"), "= 0.3")
+
+	for _, expr := range []string{"wheels", "wheels.radius", "tags", "unsetMass"} {
+		got := run(t, s, "%eval in car : "+expr)
+		wants(t, got, "✓ "+expr+" (in car)", "= "+runtime.UnsetText)
+		rejects(t, got, "unresolved reference", "error")
+	}
+	// The type's own scope answers the same way as the usage's.
+	wants(t, run(t, s, "%eval in Car : wheels"), "= "+runtime.UnsetText)
+	// A name nothing declares is still the unresolved name it is.
+	wants(t, run(t, s, "%eval in car : nonexistent"), "unresolved reference: nonexistent")
+}
+
+// Once the object exists, the same features read the values it holds.
+func TestEvalInObjectReadsMultiValuedFeatures(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	run(t, s, "%instantiate car")
+	wants(t, run(t, s, "%eval in car : wheels"), "(on car ID: ", "= [Instance(ID: ")
+	wants(t, run(t, s, "%eval in car : tags"), "= [<unset>, <unset>, <unset>]")
+}
+
+// A qualified name the prompt reaches through a usage resolves whether or not
+// the feature holds a value, so a valueless one is reported as such.
+func TestEvalQualifiedValuelessFeatureIsNotUnresolved(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	wants(t, run(t, s, "%eval car::mass"), "= 1500.0")
+	for _, expr := range []string{"car::wheels", "car::unsetMass"} {
+		got := run(t, s, "%eval "+expr)
+		wants(t, got, "has no value to evaluate")
+		rejects(t, got, "unresolved reference")
+	}
+	wants(t, run(t, s, "%eval car::nonexistent"), "unresolved reference")
+}

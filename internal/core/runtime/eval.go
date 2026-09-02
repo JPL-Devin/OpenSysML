@@ -422,6 +422,7 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if ec.ctx.model.IsVariationFeature(sym) {
 					return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, name)
 				}
+				return Value{}, ec.resolvedWithoutValue(sym, name)
 			}
 		}
 		// Nothing outside the feature supplies its value, so its own value depends
@@ -492,8 +493,7 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	}
 
 	// Evaluate the final symbol's declaration
-	switch decl := currentSym.Decl.(type) {
-	case *ast.Usage:
+	if decl, ok := currentSym.Decl.(*ast.Usage); ok {
 		// A variant names a choice its variation can be bound to, and compares
 		// equal to the variation that selected it.
 		if ec.ctx.model.VariationPointOwning(currentSym) != nil {
@@ -514,22 +514,31 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		if val, ok, err := ec.occurrenceReference(currentSym); ok {
 			return val, err
 		}
-		// A calc usage is an evaluation, not a value: it is read through the output
-		// features it computes, since a name it does not designate a result for has
-		// no one value.
-		if isCalcUsageSymbol(currentSym) {
-			return Value{}, fmt.Errorf(
-				"%w: calc usage %s computes output features (%s); read one of them",
-				ErrNoValue, qualifiedNameToString(qn), ec.ctx.calcUsageOutputSummary(currentSym),
-			)
-		}
-		return Value{}, fmt.Errorf("usage %s has no value", qualifiedNameToString(qn))
-	case *ast.Definition:
-		// Definitions are types, not values
-		return Value{}, fmt.Errorf("cannot evaluate definition %s", qualifiedNameToString(qn))
-	default:
-		return Value{}, fmt.Errorf("cannot evaluate element type %T", decl)
 	}
+	return Value{}, ec.resolvedWithoutValue(currentSym, qualifiedNameToString(qn))
+}
+
+// resolvedWithoutValue reports a name that resolves to sym but reads no value:
+// a feature nothing gives a value to is uninitialized, not unresolved.
+func (ec *EvalContext) resolvedWithoutValue(sym *symbols.Symbol, spelled string) error {
+	// A calc usage is an evaluation, not a value: it is read through the output
+	// features it computes, since a name it does not designate a result for has
+	// no one value.
+	if isCalcUsageSymbol(sym) {
+		return fmt.Errorf(
+			"%w: calc usage %s computes output features (%s); read one of them",
+			ErrNoValue, spelled, ec.ctx.calcUsageOutputSummary(sym),
+		)
+	}
+	// Definitions are types, not values.
+	if isDefinitionSymbol(sym) {
+		return fmt.Errorf("cannot evaluate definition %s", spelled)
+	}
+	// A usage of any kind — a subject or a state included — is a feature.
+	if _, usage := sym.Decl.(*ast.Usage); usage || isFeature(sym) {
+		return &NoValueError{Feature: spelled}
+	}
+	return fmt.Errorf("cannot evaluate %s %s", sym.Kind, spelled)
 }
 
 // declaredValue evaluates the value a declaration binds in the scope it was written
