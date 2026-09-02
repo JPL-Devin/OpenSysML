@@ -14,19 +14,15 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 )
 
-// These tests pin textDocument/didChange at the framed JSON-RPC layer, with the
-// notification bytes an editor sends, so a refactor that routes the method
-// through the library's typed decoder — where an omitted range and a range of
-// {0,0}-{0,0} are the same zero value — is caught here rather than by a user
-// whose diagnostics stop updating.
+// These tests drive textDocument/didChange with the framed JSON an editor sends,
+// where an omitted range (full replace) and a {0,0}-{0,0} range (insert) differ.
 
 const wireURI = "file:///tmp/wire.sysml"
 
 const wireSource = "package Vehicles {\n    part def Wheel;\n    part w : Wheel;\n}\n"
 
-// wireSession is a served Server reached only through its framed stream, the
-// way an editor reaches it. Messages are read on one goroutine and handed to
-// the test goroutine, which picks them by id or method.
+// wireSession is a served Server reached only through its framed stream;
+// a reader goroutine hands messages to the test, which picks them by id or method.
 type wireSession struct {
 	t       *testing.T
 	s       *Server
@@ -96,8 +92,7 @@ func (w *wireSession) notify(method, params string) {
 	}
 }
 
-// call sends a request whose params are the given JSON text and returns its
-// result, failing on an error reply.
+// call sends a request with the given JSON params and returns its result.
 func (w *wireSession) call(method, params string) any {
 	w.t.Helper()
 	w.nextID++
@@ -116,8 +111,7 @@ func (w *wireSession) call(method, params string) any {
 	return reply["result"]
 }
 
-// awaitDiagnostics returns the diagnostics of the next publishDiagnostics
-// notification for uri.
+// awaitDiagnostics returns the next publishDiagnostics payload for uri.
 func (w *wireSession) awaitDiagnostics(uri string) []any {
 	w.t.Helper()
 	msg := w.next("publishDiagnostics for "+uri, func(m map[string]any) bool {
@@ -135,9 +129,8 @@ func (w *wireSession) awaitDiagnostics(uri string) []any {
 	return diags
 }
 
-// next returns the first message matching want, keeping the unmatched ones for
-// later pickers: the asynchronous dispatch interleaves replies with
-// notifications.
+// next returns the first message matching want; unmatched ones are kept for
+// later pickers, since replies and notifications interleave.
 func (w *wireSession) next(what string, want func(map[string]any) bool) map[string]any {
 	w.t.Helper()
 	for i, m := range w.pending {
@@ -162,8 +155,7 @@ func (w *wireSession) next(what string, want func(map[string]any) bool) map[stri
 	}
 }
 
-// open initializes the session and opens wireURI with text, consuming the
-// diagnostics the open publishes.
+// open initializes the session and opens wireURI with text, consuming its diagnostics.
 func (w *wireSession) open(text string) {
 	w.t.Helper()
 	w.call("initialize", `{"capabilities":{}}`)
@@ -175,9 +167,8 @@ func (w *wireSession) open(text string) {
 	}
 }
 
-// didChange sends a didChange notification for wireURI whose contentChanges
-// array holds the given JSON objects verbatim, and returns the diagnostics the
-// server publishes for the result.
+// didChange sends the given JSON change objects verbatim for wireURI and
+// returns the diagnostics published for the result.
 func (w *wireSession) didChange(version int, changes ...string) []any {
 	w.t.Helper()
 	w.notify("textDocument/didChange", fmt.Sprintf(
@@ -213,8 +204,7 @@ func (w *wireSession) symbolNames() []string {
 	return names
 }
 
-// hoverText returns the hover contents at the given position, or "" when the
-// server has nothing to say there.
+// hoverText returns the hover contents at the given position, or "".
 func (w *wireSession) hoverText(line, character int) string {
 	w.t.Helper()
 	result := w.call("textDocument/hover", fmt.Sprintf(
@@ -247,8 +237,7 @@ func jsonString(s string) string {
 	return string(b)
 }
 
-// A change without "range" replaces the whole document: the old text is gone
-// from the workspace, from documentSymbol and from hover.
+// A change without "range" replaces the whole document.
 func TestWireDidChangeOmittedRangeReplacesDocument(t *testing.T) {
 	w := newWireSession(t)
 	w.open(wireSource)
@@ -272,8 +261,7 @@ func TestWireDidChangeOmittedRangeReplacesDocument(t *testing.T) {
 	}
 }
 
-// A change whose range is {0,0}-{0,0} with non-empty text is an insertion at
-// the start: the original document follows the inserted text.
+// A {0,0}-{0,0} range with non-empty text inserts at the start; the original follows.
 func TestWireDidChangeZeroRangeInsertsAtStart(t *testing.T) {
 	w := newWireSession(t)
 	w.open(wireSource)
@@ -295,8 +283,7 @@ func TestWireDidChangeZeroRangeInsertsAtStart(t *testing.T) {
 	}
 }
 
-// LSP declares range as optional, never null. A null is read the only way it
-// can mean anything — as no range — so the change is a full replacement.
+// LSP declares range optional, never null; a null is read as no range (full replacement).
 func TestWireDidChangeNullRangeReplacesDocument(t *testing.T) {
 	w := newWireSession(t)
 	w.open(wireSource)
@@ -313,9 +300,7 @@ func TestWireDidChangeNullRangeReplacesDocument(t *testing.T) {
 	}
 }
 
-// The changes of one notification apply in order against the accumulating
-// text: incremental edits, then a full replacement that discards them, then an
-// incremental edit into the replacement.
+// The changes of one notification apply in order against the accumulating text.
 func TestWireDidChangeMixedBatchAppliesInOrder(t *testing.T) {
 	w := newWireSession(t)
 	w.open(wireSource)
@@ -349,9 +334,8 @@ func TestWireDidChangeMixedBatchAppliesInOrder(t *testing.T) {
 	}
 }
 
-// Every didChange republishes diagnostics for what the document now says, on
-// the full-replacement path and on the incremental one alike: breaking the
-// document reports an error, mending it withdraws the error.
+// Both the full-replacement and incremental paths republish diagnostics:
+// breaking the document reports an error, mending it withdraws the error.
 func TestWireDidChangeRepublishesDiagnosticsOnBothPaths(t *testing.T) {
 	t.Run("full replacement", func(t *testing.T) {
 		w := newWireSession(t)
