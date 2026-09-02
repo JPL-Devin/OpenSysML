@@ -319,7 +319,8 @@ func TestCompleteObjectReferences(t *testing.T) {
 }
 
 // A quoted segment still being typed keeps the root and separator before it,
-// after `.` and `::` alike, and an escaped quote inside it does not end it.
+// after `.` and `::` alike, an escaped quote inside it does not end it, and a
+// qualified root is offered as the notation spells it, quoted where needed.
 func TestCompleteQuotedSegments(t *testing.T) {
 	s := submitted(t, `package Q {
 	part def Gauge;
@@ -329,6 +330,10 @@ func TestCompleteQuotedSegments(t *testing.T) {
 		part 'rack\'s spare' : Gauge;
 	}
 	part 'the rack' : Rack;
+}
+package 'Two Words' {
+	part def Car;
+	part car : Car;
 }`)
 	run(t, s, "%instantiate 'the rack'")
 	before := s.rtCtx.InstanceIDs()
@@ -340,6 +345,12 @@ func TestCompleteQuotedSegments(t *testing.T) {
 		rejects []string
 	}{
 		{line: "%features 'the ra", prefix: "'the ra", wants: []string{"'the rack'"}},
+		{line: "%features Q::'the ra", prefix: "Q::'the ra", wants: []string{"Q::'the rack'"}},
+		{line: "%features Q::", prefix: "Q::", wants: []string{"Q::'the rack'", "Q::Rack"}},
+		{line: "%features 'Two Words'::ca", prefix: "'Two Words'::ca", wants: []string{"'Two Words'::car"}},
+		{line: "%features 'Two W", prefix: "'Two W", wants: []string{"'Two Words'"}},
+		{line: "%print 'the ra", prefix: "'the ra", wants: []string{"'the rack'"}},
+		{line: "%print 'Two Words'::c", prefix: "'Two Words'::c", wants: []string{"'Two Words'::car"}},
 		{line: "%features 'the rack'.", prefix: "'the rack'.", wants: []string{"'the rack'.'main gauge'", "'the rack'.'main valve'", `'the rack'.'rack\'s spare'`}},
 		{line: "%features 'the rack'.'main", prefix: "'the rack'.'main", wants: []string{"'the rack'.'main gauge'", "'the rack'.'main valve'"}, rejects: []string{`'the rack'.'rack\'s spare'`}},
 		{line: "%features 'the rack'::'main g", prefix: "'the rack'::'main g", wants: []string{"'the rack'::'main gauge'"}, rejects: []string{"'the rack'::'main valve'"}},

@@ -55,6 +55,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   of a path says it holds a value, and a multi-valued part with no index says how many objects it
   holds and how to pick one. <kbd>Tab</kbd> completes references where a command takes one: `#`
   offers the ids, `car.` the parts `car` holds ([reference](docs/reference/repl-commands.md#object-references)).
+  Names that need quoting are completed as the notation writes them, `'the ra` to `'the rack'` and
+  `Q::'the ra` to `Q::'the rack'`, the closing quote typed or not.
 
 ### Performance
 

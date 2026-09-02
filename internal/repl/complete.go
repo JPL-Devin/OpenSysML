@@ -179,8 +179,8 @@ func lastField(head string) string {
 }
 
 // nameWord returns the name being typed at the end of head: the trailing run of
-// characters a qualified SysML name is written with. Scanned by rune, so a name
-// holding a letter outside ASCII is not cut in the middle of it.
+// characters a qualified SysML name is written with, a quoted name among them
+// taken whole, closing quote typed or not.
 func nameWord(head string) string {
 	return trailingWord(head, "_:'")
 }
@@ -206,21 +206,23 @@ func objectWord(head string) string {
 }
 
 // trailingWord returns the trailing run of letters, digits and the punctuation
-// in extra at the end of head.
+// in extra at the end of head, whatever a quoted name holds included.
 func trailingWord(head, extra string) string {
-	i := len(head)
-	for i > 0 {
-		r, size := utf8.DecodeLastRuneInString(head[:i])
-		if r == utf8.RuneError && size <= 1 {
-			break
+	start, inName, escaped := 0, false, false
+	for i, r := range head {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\':
+			escaped = true
+		case r == '\'':
+			inName = !inName
+		case inName, strings.ContainsRune(extra, r), unicode.IsLetter(r), unicode.IsDigit(r):
+		default:
+			start = i + utf8.RuneLen(r)
 		}
-		if strings.ContainsRune(extra, r) || unicode.IsLetter(r) || unicode.IsDigit(r) {
-			i -= size
-			continue
-		}
-		break
 	}
-	return head[i:]
+	return head[start:]
 }
 
 // matchingPrefix returns the candidates that start with prefix.
@@ -297,9 +299,6 @@ func (s *Session) objectCompletions(word string) []string {
 	if strings.HasPrefix(word, "#") {
 		return matchingPrefix(s.objectIDs(), word)
 	}
-	if strings.HasPrefix(word, "'") {
-		return matchingPrefix(s.quotedDeclaredNames(), word)
-	}
 	out := s.nameCompletions(word)
 	if word == "" {
 		out = append(out, s.objectIDs()...)
@@ -334,18 +333,6 @@ func lastSegment(word string) (root, sep, partial string, walked bool) {
 		return "", "", word, false
 	}
 	return word[:at], word[at : at+width], word[at+width:], true
-}
-
-// quotedDeclaredNames spells the declared names that need quoting as the
-// notation writes them, which is how a reference beginning with `'` continues.
-func (s *Session) quotedDeclaredNames() []string {
-	var out []string
-	for _, name := range s.declaredSymbolNames() {
-		if text := lexer.NameText(name); text != name {
-			out = append(out, text)
-		}
-	}
-	return out
 }
 
 // objectIDs lists the objects the session holds as `#<id>` references.
@@ -504,7 +491,8 @@ const elementLimit = 16
 
 // nameCompletions returns the names that can continue word: the session's own
 // declarations, the next segment of a qualified library name, and the library
-// functions callable by their unqualified name.
+// functions callable by their unqualified name. Names are offered as the
+// notation writes them, a name that needs quoting in quotes.
 func (s *Session) nameCompletions(word string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -519,30 +507,49 @@ func (s *Session) nameCompletions(word string) []string {
 	}
 
 	for _, name := range s.declaredSymbolNames() {
-		add(name)
+		add(lexer.NameText(name))
 	}
 	for _, b := range runtime.Builtins() {
 		add(b.Name)
 	}
 	if idx := s.browseIndex(); idx != nil {
 		for _, fqn := range idx.FQNs() {
-			if !strings.HasPrefix(fqn, word) {
+			text := lexer.QualifiedNameText(fqn)
+			if !strings.HasPrefix(text, word) {
 				continue
 			}
 			// One segment at a time: completing "ISQ" to every name under it
 			// would answer with the whole library. A word already spelling a
 			// namespace is answered with that namespace's members.
-			rest := fqn[len(word):]
-			skip := 0
-			if strings.HasPrefix(rest, "::") {
-				skip = len("::")
+			from := len(word)
+			if strings.HasPrefix(text[from:], "::") {
+				from += len("::")
 			}
-			if cut := strings.Index(rest[skip:], "::"); cut >= 0 {
-				add(fqn[:len(word)+skip+cut])
+			if cut := nextQualifier(text, from); cut >= 0 {
+				add(text[:cut])
 				continue
 			}
-			add(fqn)
+			add(text)
 		}
 	}
 	return out
+}
+
+// nextQualifier is the index of the first `::` at or after from that is not
+// inside a quoted name, or -1.
+func nextQualifier(text string, from int) int {
+	inName, escaped := false, false
+	for i := 0; i < len(text); i++ {
+		switch {
+		case escaped:
+			escaped = false
+		case text[i] == '\\':
+			escaped = true
+		case text[i] == '\'':
+			inName = !inName
+		case !inName && i >= from && strings.HasPrefix(text[i:], "::"):
+			return i
+		}
+	}
+	return -1
 }
