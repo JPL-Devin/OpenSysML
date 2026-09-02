@@ -6,8 +6,9 @@ Read `AGENTS.md` first; it governs everything below.
 > **Labels.** This is an engineering record. The RDF items keep the `D` numbers (`D1`, `D2`,
 > `D3.4`, `D7`, `D8`) that other records, the known-violations inventory and the ontology
 > package's README cross-reference; `L3` names the remaining library item, `N` the native
-> compilation track, and `R` the release follow-through. Each is stated in full where it is
-> introduced, and a reader who wants only the gap can ignore the label.
+> compilation track, `R` the release follow-through, and `E` the behavior-execution semantics
+> the runtime does not yet have. Each is stated in full where it is introduced, and a reader who
+> wants only the gap can ignore the label.
 
 `v0.4.3` is the newest tag on `Open-MBEE/OpenSysML` (`99e02003`, 2026-09-02, the "Identity
 Release"); the tag's CI release job publishes `sysml`, `sysml-lsp` and `sysml-grpc` for five
@@ -464,14 +465,303 @@ have landed, and the profile's documentation should say so.
 
 ---
 
+# Track E — behavior execution
+
+The runtime executes actions, state machines, calculations and constraints against the lowered
+IR (`internal/core/lower` `ActionGraph`/`StateGraph`, `internal/core/runtime`), and
+`docs/project/spec-compliance.md` § "What We Don't (Yet) Support" lists what it does not
+execute: interruptible regions, expansion regions, streaming pins, protocol state machines,
+operation invocation with positional arguments, and routing a send to a second object of one
+usage; a `terminate` inside a body is refused by the runtime with a typed error and appears in no
+list. The behavior-execution review after `v0.4.3` found nothing missing beyond those, and this
+track records each as work with a stated scope, dependency order and acceptance gate rather than
+as a bullet or an error message alone. **None of it is near-term.** No conformance fixture or
+trace golden exercises any of them, each has a typed refusal or a documented limitation in place
+of a wrong result, and the items above this track (release follow-through, the nested-action
+frames the review did find, Track N, Track D) come first. Each item below therefore ends with what
+would move it forward; until that happens, the honest status is the "not supported" bullet or the
+refusal.
+
+Two things about the list's own terms. First, four of the seven items — interruptible regions,
+expansion regions, streaming pins, protocol state machines — are UML 2.5.1 concepts that SysML v2
+(`formal/2026-03-02`) does not carry as notation: its actions (§7.17) spell termination,
+acceptance, loops and flows directly and its states (§7.18) have no protocol variant. Each of
+those items therefore starts by naming the SysML v2 spelling it corresponds to, and the target is
+that spelling's semantics in the Kernel Semantic Library and the Systems Library, never the UML
+feature by name. Second, the proof for every item is the four-layer contract of `AGENTS.md`
+§5.2 — a conformance fixture (`.sysml` + `.expected.json` under
+`internal/core/runtime/testdata/conformance/`), a trace golden where ordering matters
+(`TestExecutionTrace`, `-update-traces`), a robustness case in `robustness_test.go` for the
+failure mode, and the row in `spec-compliance.md` moving out of the "not supported" list — and
+every item is self-assessed, since the pinned pilot evaluates expressions and executes no action
+or state machine ([pilot-execution-referee.md](pilot-execution-referee.md)).
+
+## E1 — `terminate` in a body
+
+**Today.** The parser accepts a terminate action usage in every position the grammar allows
+(`ast.TerminateStatement`, with the terminated occurrence as `Target` or nil for the containing
+action), and lowering carries it losslessly: as a node of the flow (`then terminate;`,
+`lower/action_nodes.go`), as a statement of a control node's or a state's `entry`/`do`/`exit`
+body (`lower/action_graph.go` `lowerStatement` → `Effect{Kind: EffectTerminate}`;
+`lower/state_graph.go` through `BodyStatementMembers`). The runtime then refuses to execute it,
+with one message wherever it is reached: `runtime/action_statements.go`
+`(*actionStmtHost).effect` and `runtime/state_statements.go` `(*stateStmtHost).effect` return
+`<where>: 'terminate' in a body is not executable`; a calculation refuses it as
+`ErrCalcSideEffect` (`runtime/calc_statements.go`), and that refusal is correct and stays — a
+calculation is pure (`robustness_test.go:calc_terminate_is_rejected`). So an action whose flow
+reaches `then terminate;` fails with that error rather than ending. The training corpus's
+`19. Terminate Actions/Terminate Actions Example-1.sysml` (`MonitoredActivity`) uses it twice
+and does not run at this baseline: it stops earlier, at the nested action node whose members are
+`perform`s with no `first` (the nested-action frames item the same review found), and would stop
+at the first `terminate` once that is in.
+
+One position is not refused. A nested action node written as a statement body
+(`action a { assign n := 1; terminate; }`) is lowered by `lower/action_graph.go` `lowerBody`,
+whose statement cases are `send`, `assign`, `while`/`loop`/`for` and `if` — `terminate` is not
+among them, so it is dropped and the node completes as if it were not written (the sibling that
+follows runs; measured at this baseline). That is a silent no-op of the kind `AGENTS.md` §8
+forbids and it is a defect, not part of this item: closing it means adding
+`*ast.TerminateStatement` to that case so the statement is refused there as everywhere else,
+with a robustness case, and it should be fixed whenever it is next touched rather than waiting
+for E1.
+
+**Target.** SysML v2 §7.17.10: a terminate action usage "forces the lifetime of the terminated
+occurrence to end by the completion of the `TerminateAction`"; when no occurrence is given, the
+default is "the immediately containing action of the terminate action usage", and for a nested
+action "it is that nested action that is terminated, not any containing actions"; `terminate
+this;` in a part's action ends the part; the occurrence may also arrive by a `flow` into the
+`terminatedOccurrence` parameter. The library is `Actions::TerminateAction` (`Systems
+Library/Actions.sysml`: `in occurrence terminatedOccurrence[1]`, performed by
+`terminateOccurrence : destroy`) and the base usage `Actions::terminateActions`, whose
+`terminatedOccurrence` defaults to `that as Occurrence`. In a state body the containing action is
+the entry, do or exit behavior it is written in — a `StatePerformance`'s `entry`/`do`/`exit` step
+(`Kernel Semantic Library/StatePerformances.kerml`) — so it ends that behavior, not the state
+machine, unless the machine's exhibiting occurrence is named.
+
+**Work.** Give `lower.Effect` the terminated occurrence as an evaluable target (nil for the
+containing performance), and give both executors a notion of *ending a performance that is still
+ongoing*: for the action executor, dropping every token the terminated node or action still holds
+— including a forked sibling branch still running, as `MonitoredActivity` requires — and
+completing it with the outputs it has; for the state executor, ending the running entry/do/exit
+behavior at that statement (`runtime/state_executor.go` `startDoAction`/`runDoRound` hold the
+running do behaviors) and, for a named occurrence, the object that holds it. A `terminate` naming
+an occurrence that is not ongoing, or a value that is no occurrence, is a typed error. Nothing
+else in the track depends on anything but this item, and E2 depends on it.
+
+**Proof.** Conformance: the training example above runs to completion, `performCriticalActivity`
+ended by its own `terminate` while `monitorCriticalActivity` is still ongoing and `stop` ending
+the whole action; `then terminate;` in a flow ends the action with the outputs assigned so far;
+`terminate` in a `do` body ends that behavior and the state stays active; a nested action's
+`terminate` ends the nested action and its parent continues. A trace golden for
+the fork case (which tokens are dropped, in what order). Robustness: terminate of a completed
+occurrence, of a non-occurrence, and the calculation refusal unchanged. `spec-compliance.md`: the
+Actions map gains a `terminate` row per position (today it has none — the refusal is the only
+record), and the pointer to this track under "not supported" drops the `terminate` clause.
+**Prioritize when** a corpus model or a user model needs `terminate` to run rather than to be
+refused — the training example is the first candidate, once the nested-action frames it also
+needs are in.
+
+## E2 — interrupting an ongoing performance ("interruptible regions")
+
+**Today.** SysML v2 has no interruptible-region notation; what UML models with one is spelled in
+SysML v2 as an `accept` followed by a `terminate` in a forked branch (§7.17.10's
+`MonitoredActivity`: "Terminates `performCriticalActivity` even if `monitorCriticalActivity` is
+still ongoing"), or as a transition leaving a state whose `do` is running (§7.18.3: "If the
+source state has a do action that is still being performed, that is interrupted."). The action
+half is E1 and does not exist yet. The state half runs, with one documented approximation
+(`spec-compliance.md` § Known Limitations, *Runtime*): an inline `do` body is one action, so
+`runDoRound` advances it as a unit and an outgoing transition interrupts it only between rounds,
+never between its statements; the one-action-per-statement `do { … }` form is the interruptible
+spelling. There is no refusal here — the approximation is a documented ordering, not an error.
+
+**Target.** §7.18.3's transition semantics, step 1: the source state's do action, "if it is
+still being performed, is interrupted" when the transition is triggered — `StatePerformance::do`
+is a `step` of the state's performance, and the `StateTransitionPerformance` that leaves it is
+keyed on its `accept` step and `transitionLink` (`StatePerformances.kerml`,
+`TransitionPerformances.kerml`) — so the do behavior's remaining statements do not run once the
+trigger is accepted, whether the body was written as one action or several. For actions, the
+target is E1's: the terminate ends the performance whatever else it has in flight.
+
+**Work.** After E1: make an inline `do` body resumable between statements so a round can leave it
+mid-body (the statement hosts already run a body statement at a time through `stmtEnv` frames;
+what is missing is a do behavior that yields after each statement rather than after the whole
+inline body), and drop the pending statements when the state exits. Depends on E1 for the shared
+notion of ending an ongoing performance; nothing depends on it.
+
+**Proof.** Conformance and a trace golden for a `do` body of three statements interrupted by a
+signal after the first; the existing do-interruption fixtures unchanged; the Known Limitations
+bullet removed and the `entry`/`do`/`exit` row in the State Machine map re-stated.
+**Prioritize when** a model's result depends on a `do` body being interrupted between two of its
+statements — until then the documented spelling (`do { … }` as one action per statement) gives
+the same result.
+
+## E3 — concurrent per-element performance ("expansion regions")
+
+**Today.** SysML v2 has no expansion-region notation. Its iterative half is the `for` loop
+(§7.17.12, `Actions::ForLoopAction`), which the runtime executes in every body position
+(`runtime/action_statements.go`, `runtime/statements.go` `forLoop`), one iteration after the
+other, with the step budget bounding it. Its parallel half — the body performed once per element
+of a collection, all performances ongoing at once — has no spelling the runtime refuses, because
+no spelling for it has been established here: a `for` is sequential by definition
+(`ForLoopAction` walks `seq` by an `index`), and a `fork` duplicates control, not a collection.
+
+**Target.** To be settled before any executor work, in a design record under `docs/project/`
+like the others: whether SysML v2 §7.17.2's multiplicity on a performed action usage, with a
+`flow` delivering the collection to its input, is the standard spelling of concurrent per-element
+performance, and what `Performances.kerml` then says about the ordering of those performances.
+If the reading is that no such spelling exists, the item closes as "the iterative form is `for`;
+the parallel form is not SysML v2" and the bullet is re-worded to say so.
+
+**Work.** The record first; then, if there is a spelling, one performance per element with its
+own token and pins, joined when all complete, on top of the concurrency the fork/join executor
+already has — and the interaction with E4 (a streaming consumer of the elements) decided with it.
+No other item depends on this one.
+
+**Proof.** Conformance for a collection of three performed concurrently with per-element outputs
+collected; a trace golden for the interleaving; robustness for an empty collection and a body
+that fails on one element. **Prioritize when** someone needs it: a model with a per-element
+behavior whose sequential `for` result is wrong or too slow.
+
+## E4 — streaming flows ("streaming pins")
+
+**Today.** A `flow` between two action parameters executes as a *succession* flow: the value
+at the source pin is moved to the target pin when the source node completes
+(`runtime/action_executor.go` `applyDataFlows`, called from the node-completion paths), so the
+target reads it when its own token arrives. SysML v2 §7.16 draws the distinction the runtime does
+not: "the input and output parameters are streaming unless designated as succession flows" — a
+streaming `flow` "can be ongoing while both the source and target action are being performed",
+while a `succession flow` "cannot begin until the source completes". The parser accepts
+`succession flow` and drops the distinction (`parser/defusage.go`: the keyword is consumed and the
+usage is parsed as a plain `flow`), `ast.FlowEnds`/`lower.ObjectFlow` carry no kind, and no
+position refuses anything — both spellings run, both as the succession reading. That is a wrong
+result only for a model whose target reads before its source completes, and no conformance
+fixture writes one.
+
+**Target.** `Flows::Flow :> Message, FlowTransfer` for a streaming flow and
+`Flows::SuccessionFlow :> Flow, FlowTransferBefore` for the succession form (`Systems
+Library/Flows.sysml`, `Kernel Semantic Library/Transfers.kerml`): a streaming flow transfers each
+value the source parameter takes while both performances are ongoing; a succession flow transfers
+after the source completes. What runs today is the second, applied to both.
+
+**Work.** Carry the kind from the parser (`succession flow` as an AST flag) through
+`lower.ObjectFlow` to the executor; keep the succession behavior for the `succession flow`
+spelling; for a plain `flow`, deliver on each write to the source parameter while the target is
+ongoing, which needs a node to be readable while it still holds a token — the same notion of an
+ongoing performance E1 and E2 introduce. Depends on E1 for that notion; E3's parallel form would
+feed it.
+
+**Proof.** Conformance: a producer loop writing three values to an `out` streamed to a consumer
+that accumulates them, with the `succession flow` variant of the same model receiving only the
+last; a trace golden for the interleaving; robustness for a stream whose source never writes.
+`spec-compliance.md`: the Actions map's object-flow rows split by kind and the bullet leaves the
+list. **Prioritize when** a model's result differs between the two readings — a consumer that
+reads before its producer completes.
+
+## E5 — protocol state machines
+
+**Today.** No SysML v2 notation exists for a protocol state machine (UML 2.5.1 §14.4), so nothing
+is parsed, lowered or refused; the bullet in `spec-compliance.md` is the whole record. What SysML
+v2 does have is a state machine exhibited by an occurrence (§7.18.4 `exhibit`), which the runtime
+runs during materialization of an object of the exhibiting type (the Classifier Behaviors map).
+
+**Target.** None is stated, and none should be invented here: a UML protocol state machine
+constrains the order of operation calls on an interface, and the SysML v2 rendering of that
+constraint is a design question — an exhibited state machine on a port definition, with an
+out-of-order message refused as a typed error, is the obvious candidate — to be settled in a design
+record if the need arises.
+
+**Work.** The record; then whatever it concludes. Independent of every other item.
+
+**Proof.** Set by the record. **Prioritize when** a user brings a model that needs the order of
+messages on a port checked at run time; until then the bullet stays as it is.
+
+## E6 — operation invocation with positional arguments
+
+**Today.** `Context.InvokeOperation(inst, name, args map[string]Value)`
+(`runtime/invoke_operation.go`) runs a member of an object's type with the object as performer,
+whichever behavior the member is — an action through `ExecuteActionPerformedBy`, a calc through
+the calc invocation with the object as its featuring object, a constraint through condition
+evaluation — and `TestInvokeOperationPerformedByTheObject` (`runtime/classifier_behavior_test.go`)
+covers all three. The compliance bullet used to name an operation "given as a `calc` or
+`constraint`" beside the positional form; that half is closed by the Classifier Behaviors row that
+says so, the bullet is re-worded to the positional form with this record, and this item is that
+form only. Arguments bind by name and only by name: `operationInputs` takes a map, binds each
+`in`/`inout` parameter by its name and refuses a missing one (`ErrUnboundParameter: parameter …
+has no argument and no default`) and an unknown one (`ErrUnboundParameter: … is no input
+parameter of operation …`). The REPL's `%invoke <object> <op> [<p>=<expr>]` (`repl/meta.go`
+`operationArguments`) refuses an argument not written `<parameter>=<expression>`. There is no
+positional form on either surface, and no refusal specific to one — the row says so: "no
+invocation surface expresses positional operation arguments". An operation call *written in a
+model* is an `InvocationExpression` and is bound by the expression machinery, where positional
+arguments already work (`runtime/invoke_calc.go` `bindCalcParameter`; for a performed action,
+`runtime/invoke_action.go` `bindArguments` binds `inv.args` in parameter order and refuses a
+surplus with `action … takes N input parameter(s), got M argument(s)`).
+
+**Target.** KerML 1.0 §8.2.5.8.3 gives an invocation's `ArgumentList` as either a
+`PositionalArgumentList` or a `NamedArgumentList`, never a mix, and §8.4.4.9.5 binds a positional
+list to the behavior's parameters in declaration order (`feature a redefines F::a = e1; feature b
+redefines F::b = e2; …`) — as `bindArguments` and `bindCalcParameter` already do for a call in the
+model. The API and the REPL should offer the same two forms, so `%invoke rover1 drive 10 20` binds
+`10` and `20` to the first two `in` parameters, a list mixing the two forms is refused, and a
+surplus is refused with the same arity error.
+
+**Work.** Small and self-contained: an ordered argument list on `InvokeOperation` (or a second
+entry point) sharing `bindArguments`'s rules, and `%invoke` accepting a list of bare expressions
+in place of its `<p>=<expr>` pairs. Depends on nothing; nothing depends on it.
+
+**Proof.** `runtime/classifier_behavior_test.go` and `repl/classifier_behavior_test.go` gain the
+positional, mixed and surplus cases; `robustness_test.go` the arity failure; the bullet leaves the
+list. **Prioritize when** a REPL or API user asks for it — it is the smallest item in the track
+and the one most likely to be done on demand.
+
+## E7 — an addressed send to a second object of one usage
+
+**Today.** A `send … to <target>` resolves its target through `runtime/signal.go`
+`resolveAddresses` → `featureAddresses` → `addressOwner`: a name that is a feature of the sending
+object (or of an object holding it) reaches that feature's value, and otherwise the shortest prefix
+naming an occurrence usage that `occursOnce` reaches *the* occurrence this context holds for it
+(`ctx.occurrenceOf(sym)`, `runtime/instance.go`). A `via` send follows the connections
+(`runtime/routing.go`, `signal.go` `postVia`) to the object at the other end. In both forms the
+object reached is the one this context materialized as the usage's occurrence; a second object
+instantiated of that same usage is a different object, which a send addressed to the usage does
+not reach. There is no refusal: the send reaches the held occurrence, and
+`spec-compliance.md` § Known Limitations (*Standard behavioral notation*) documents it.
+
+**Target.** §7.17.7: a `SendAction` has three input parameters — the payload, a *sender*
+occurrence (`via`) and a *receiver* occurrence (`to`) — and "the behavior of a `SendAction` is to
+transfer the payload from the sender to the receiver"; the receiver is a value the `to` expression
+(or a flow or binding into the `receiver` parameter) supplies, and the message is a
+`MessageTransfer` between those two occurrences (`Transfers.kerml`). So a send whose receiver
+expression yields a particular object reaches that object, whichever usage it was instantiated
+from.
+
+**Work.** Address by value rather than by usage: evaluate the `to` expression to an object
+reference and post to that object's identity (`objectID`), with the by-usage resolution kept for a
+target that is a name. That is only meaningful once a context can hold more than one object of one
+usage, which is the "dynamic object creation/destruction" bullet beside this one in the compliance
+list and outside this track: an object materialized by `new` or held in a feature the sender
+reads. Depends on that object-model item; independent of E1–E6.
+
+**Proof.** Conformance: two objects of one usage, a send addressed to the second, only the second's
+accept fires (with the `via` form of the same model); a trace golden; robustness for a target
+expression yielding no object. `spec-compliance.md`: the Known Limitations bullet and the "not
+supported" bullet both leave. **Prioritize when** the object-model item lands, since without it
+there is no second object to address.
+
+---
+
 # Proposed, not started
 
-**An HTML document backend.** [html-document-backend.md](html-document-backend.md) designs a
-direct `docrender.HTML` backend from the document IR (`-doc-form html`, a default stylesheet
-in a cascade layer that reader CSS overrides without specificity fights, `-html-css` and a
-fragment option) and the migration of the PDF path onto it, replacing the Markdown → converter
-hop. Status there is *proposed — nothing on that page is implemented*. It is independent of every
-track above and waits only on someone wanting HTML.
+**The PDF path onto the HTML backend.** The backend
+[html-document-backend.md](html-document-backend.md) designs is now implemented: `docrender.HTML`
+renders `-doc-form html` straight from the document IR, with the semantic structure, the `sysml-`
+classes and `data-` model facts, the default stylesheet in a cascade layer that reader CSS
+overrides without specificity fights, `-html-css`, `-html-no-default-css`, `-html-default-css`,
+`-html-fragment`, and linked HTML sets sharing one `sysml-document.css`. What remains is the
+migration designed alongside it: point the HTML-input PDF engines (`weasyprint`, `prince`) at that
+markup and retire `internal/docpdf`'s Markdown re-parse and its own HTML writer, which splits the
+print styling out as a shared asset and moves the PDF goldens. Pandoc keeps reading the Markdown,
+and `-doc-form markdown` is unaffected. About one session, independent of every track above.
 
 **The pilot as an execution referee.** [pilot-execution-referee.md](pilot-execution-referee.md)
 established that the pinned pilot evaluates model-level expressions and nothing else, so
@@ -499,3 +789,9 @@ not more harness work.
 4. **L3** is independent of everything above and is a runtime item: materialize
    library-inherited features on an instance, then fold their value expressions, then hand
    library-declared conditions to the solver.
+5. **Track E** is not scheduled; each item states what would prioritize it. If one is picked up
+   without such a trigger, the order is **E1** (termination of an ongoing performance, which
+   **E2** and **E4** build on), then **E2**, then **E4**; **E6** whenever asked, being a day's
+   work; **E3** and **E5** only after their design records; **E7** after the object-model item
+   it depends on. The `lowerBody` silent drop noted under E1 is a defect and does not wait for
+   the track.

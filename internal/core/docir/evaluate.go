@@ -520,7 +520,7 @@ func (e *evaluator) evaluateList(node docplan.Content) (Content, error) {
 			if err != nil {
 				return Content{}, err
 			}
-			items = append(items, ListItem{runs: runs, origin: row.Origin()})
+			items = append(items, ListItem{runs: runs, element: row.Element(), origin: row.Origin()})
 		}
 		return Content{
 			kind:        ContentList,
@@ -533,7 +533,7 @@ func (e *evaluator) evaluateList(node docplan.Content) (Content, error) {
 		}, nil
 	}
 	for _, row := range rows {
-		items = append(items, ListItem{runs: e.rowRuns(row), origin: row.Origin()})
+		items = append(items, ListItem{runs: e.rowRuns(row), element: row.Element(), origin: row.Origin()})
 	}
 	return Content{
 		kind:        ContentList,

@@ -332,8 +332,8 @@ package OpenSysMLPipeline {
         out item trace : ExecutionTrace;
     }
 
-    // Pure scalar calc bodies compiled once per context into closures held in a
-    // side table; the evaluator stays the reference the compiled tier must match.
+    // Scalar calc bodies — expressions and statements alike — compiled once per
+    // context into closures held in a side table; the evaluator stays the reference.
     part def CalcCompiler :> CodeUnit {
         attribute :>> goPackage = "internal/core/runtime";
         attribute :>> memoized = true;
