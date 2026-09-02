@@ -288,20 +288,20 @@ func registerUnevaluable(name string, params []string, required int, reason stri
 	})
 }
 
-// numericScalars adapts an implementation over scalar numeric values: every
-// parameter of such a declaration is one number, so a collection, a string or an
-// instance does not conform to it.
+// numericScalars adapts an implementation over scalar numbers; a dimension-one
+// quantity (an angle, a ratio) is the number it reduces to, so `sin(30 ['°'])` is sin(π/6).
 func numericScalars(params []string, apply func([]semantics.Value) (semantics.Value, error)) libraryApply {
 	return func(name string, _ *Context, args []Value) (Value, error) {
 		values := make([]semantics.Value, len(args))
 		for i, arg := range args {
-			if arg.Kind != ValConst || !arg.Const.IsNumeric() {
+			num, ok := numericArgument(arg)
+			if !ok {
 				return Value{}, fmt.Errorf(
-					"%w: function %s parameter %q requires a numeric value",
-					ErrTypeMismatch, name, params[i],
+					"%w: function %s parameter %q requires a numeric value, got %s",
+					ErrTypeMismatch, name, params[i], describeValue(arg),
 				)
 			}
-			values[i] = arg.Const
+			values[i] = num
 		}
 		result, err := apply(values)
 		if err != nil {

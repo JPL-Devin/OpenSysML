@@ -197,6 +197,10 @@ var (
 	// from the library. It is never answered by comparing magnitudes.
 	ErrIncommensurableUnits = errors.New("incommensurable units")
 
+	// ErrUnitRoot is returned when the root of a quantity is taken whose unit
+	// has none: `sqrt(9 [m])`, since no unit squares to a metre.
+	ErrUnitRoot = errors.New("unit has no root")
+
 	// ErrNotASatisfaction is returned when a satisfaction assertion is asked of
 	// an element that states none.
 	ErrNotASatisfaction = errors.New("not a satisfaction assertion")

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -53,7 +52,7 @@ func TestQuantityEvaluation(t *testing.T) {
 		{"1.5 [m/s] + 1.8 [km/h]", "2.0 [m/s]"},
 		{"3.0 [km] + 500.0 [m]", "3.5 [km]"},
 		{"10.0 [m] / 2.0 [s]", "5.0 [m/s]"},
-		{"2.0 [m] * 3.0 [m]", "6.0 [m*m]"},
+		{"2.0 [m] * 3.0 [m]", "6.0 [m**2]"},
 		{"-2.5 [m/s]", "-2.5 [m/s]"},
 		{"3.0 [m] * 2.0", "6.0 [m]"},
 	}
@@ -155,10 +154,10 @@ func TestQuantityExponentiation(t *testing.T) {
 		want     string // rendered value
 		wantKind semantics.ValueKind
 	}{
-		{"(2 [m]) ** 3", "8 [(m)**3]", semantics.ValInt},
-		{"(2.0 [m]) ** 3", "8.0 [(m)**3]", semantics.ValReal},
-		{"(3.0 [m/s]) ** 2.0", "9.0 [(m/s)**2]", semantics.ValReal},
-		{"(2.0 [m]) ** -1", "0.5 [(m)**-1]", semantics.ValReal},
+		{"(2 [m]) ** 3", "8 [m**3]", semantics.ValInt},
+		{"(2.0 [m]) ** 3", "8.0 [m**3]", semantics.ValReal},
+		{"(3.0 [m/s]) ** 2.0", "9.0 [m**2/s**2]", semantics.ValReal},
+		{"(2.0 [m]) ** -1", "0.5 [1/m]", semantics.ValReal},
 	}
 	for _, tc := range cases {
 		t.Run(tc.src, func(t *testing.T) {
@@ -204,37 +203,81 @@ func TestQuantityExponentiationReports(t *testing.T) {
 	}
 }
 
-// TestComposedUnitText renders the unit an operation composes. An operand that
-// is itself composed is parenthesized, since `m/s*kg/s` names a different unit
-// than the product of `m/s` and `kg/s`; an atomic one stays bare.
-func TestComposedUnitText(t *testing.T) {
-	atomic := func(text string) Unit {
-		return Unit{Text: text, Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}
-	}
-	// A bare number contributes no unit: no text, and a dimensionless reduction.
-	number := Unit{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}
+// TestComposedUnitCanonical: a composed unit displays canonically (`m*m`, `(m)**2`,
+// `(m*m)/m` read `m**2`, `m**2`, `m`) while a written unit (`N*m`, `km/h`) keeps its spelling.
+func TestComposedUnitCanonical(t *testing.T) {
+	ctx, scope := quantityContext(t)
 
 	cases := []struct {
-		name        string
-		left, right Unit
-		op          ast.OperatorKind
-		want        string
+		src  string
+		want string
 	}{
-		{"atomic times atomic", atomic("m"), atomic("m"), ast.OpMul, "m*m"},
-		{"atomic over atomic", atomic("m"), atomic("s"), ast.OpDiv, "m/s"},
-		{"atomic times composed", atomic("kg"), atomic("m/s"), ast.OpMul, "kg*(m/s)"},
-		{"composed over atomic", atomic("m/s"), atomic("s"), ast.OpDiv, "(m/s)/s"},
-		{"composed times composed", atomic("m/s"), atomic("kg/s"), ast.OpMul, "(m/s)*(kg/s)"},
-		{"composed over composed", atomic("m/s"), atomic("kg/s"), ast.OpDiv, "(m/s)/(kg/s)"},
-		{"exponentiated operand", atomic("(m)**2"), atomic("s"), ast.OpDiv, "((m)**2)/s"},
-		{"quantity scaled by a number", atomic("m/s"), number, ast.OpMul, "m/s"},
-		{"quantity divided by a number", atomic("m/s"), number, ast.OpDiv, "m/s"},
-		{"number scaling a quantity", number, atomic("m/s"), ast.OpMul, "m/s"},
+		{"3 [m] * 3 [m]", "9 [m**2]"},
+		{"(3 [m]) ** 2", "9 [m**2]"},
+		{"3 [m] * 3 [m] / 3 [m]", "3.0 [m]"},
+		{"(3 [m]) ** 2 / 3 [m]", "3.0 [m]"},
+		{"2 [m] * 2 [SI::m]", "4 [m**2]"},
+		{"1 [N] * 2 [m]", "2 [N*m]"},
+		{"2 [N*m]", "2 [N*m]"},
+		{"1 [N*m] * 2 [m]", "2 [N*m**2]"},
+		{"36 [km/h] / 2 [h]", "18.0 [km/h**2]"},
+		{"1 [m/s] * 1 [kg/s]", "1 [kg*m/s**2]"},
+		{"1 [m/s] / 1 [kg/s]", "1.0 [m/kg]"},
+		{"6 [m] / 2 [s] / 3 [kg]", "1.0 [m/(kg*s)]"},
+		{"2 [m] * 1 [N]", "2 [N*m]"},
+		{"2 [rad] * 3 [m]", "6 [m*rad]"},
+		{"2 [rad] * 3", "6 [rad]"},
+		{"(2.0 [m]) ** -1", "0.5 [1/m]"},
+		{"(4 [m*m]) ** 0.5", "2.0 [m]"},
+		{"2 [m/s] * 2", "4 [m/s]"},
+		{"2 * 2 [m/s]", "4 [m/s]"},
+		{"2 [m/s] / 2", "1.0 [m/s]"},
+		{"1 [m] + 2 [m]", "3 [m]"},
+		{"1 [km] + 500 [m]", "1.5 [km]"},
+		{"1 [km] + 1000 [m]", "2.0 [km]"},
+		{"-(2 [m])", "-2 [m]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, tc.src)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.src, err)
+			}
+			if got.Kind != ValQuantity {
+				t.Fatalf("%s = %v (%s), want a quantity", tc.src, got, got.Kind)
+			}
+			if got.Quantity().String() != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got.Quantity(), tc.want)
+			}
+		})
+	}
+}
+
+// TestUnitProductRendering renders unit products built directly, covering the
+// grouping a unit expression needs to read back as the unit it names.
+func TestUnitProductRendering(t *testing.T) {
+	named := func(name string) semantics.UnitProduct { return semantics.NamedUnitProduct(nil, name, false) }
+	cases := []struct {
+		name string
+		unit semantics.UnitProduct
+		want string
+	}{
+		{"empty is one", semantics.UnitProduct{}, "1"},
+		{"square", named("m").Times(named("m")), "m**2"},
+		{"cancelled", named("m").Times(named("m")).DividedBy(named("m")), "m"},
+		{"fully cancelled", named("m").DividedBy(named("m")), "1"},
+		{"reciprocal", named("m").Pow(-1), "1/m"},
+		{"reciprocal square", named("s").Pow(-2), "1/s**2"},
+		{"grouped denominator", named("m").DividedBy(named("s")).DividedBy(named("kg")), "m/(kg*s)"},
+		{"fractional power", named("m").Pow(0.5), "m**0.5"},
+		{"composed name grouped", named("km/h").Pow(2), "(km/h)**2"},
+		{"sorted by name", named("s").Times(named("m")).Times(named("s")), "m*s**2"},
+		{"operand order does not matter", named("m").Times(named("N")), "N*m"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := composedUnitText(tc.left, tc.right, tc.op); got != tc.want {
-				t.Errorf("composedUnitText(%s, %s, %s) = %q, want %q", tc.left, tc.right, tc.op, got, tc.want)
+			if got := tc.unit.String(); got != tc.want {
+				t.Errorf("%+v renders %q, want %q", tc.unit, got, tc.want)
 			}
 		})
 	}

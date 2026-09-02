@@ -480,8 +480,8 @@ func TestSequenceIndexKeepsQuantityForm(t *testing.T) {
 	}
 }
 
-// TestAggregateQuantities: a roll-up over measured values answers a measured
-// value, in the unit of the first element, and refuses a bare number mixed in.
+// TestAggregateQuantities: a roll-up over measured values answers one in the first
+// element's unit, of the kind the bare magnitudes give, and refuses a bare number mixed in.
 func TestAggregateQuantities(t *testing.T) {
 	ctx, scope := quantityContext(t)
 
@@ -489,8 +489,8 @@ func TestAggregateQuantities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sum of metres: %v", err)
 	}
-	if got.Kind != ValQuantity || got.Quantity().String() != "6.0 [m]" {
-		t.Errorf("sum of metres = %v (%s), want 6.0 [m]", got, got.Kind)
+	if got.Kind != ValQuantity || got.Quantity().String() != "6 [m]" {
+		t.Errorf("sum of metres = %v (%s), want 6 [m]", got, got.Kind)
 	}
 
 	// A commensurable element converts into the first element's unit.

@@ -109,6 +109,9 @@ func describeValue(val Value) string {
 	if val.Kind == ValComplex {
 		return "a Complex"
 	}
+	if val.Kind == ValQuantity {
+		return "a quantity in " + val.Quantity().Unit.String()
+	}
 	if val.Kind != ValConst {
 		return val.Kind.String()
 	}

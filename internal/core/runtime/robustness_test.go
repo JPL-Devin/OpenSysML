@@ -209,6 +209,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("quantity_qualified_unit_is_not_shadowing", testQuantityQualifiedUnitIsNotShadowing)
 	t.Run("quantity_shadowed_unit_without_a_qualifier", testQuantityShadowedUnitWithoutAQualifier)
 	t.Run("quantity_cyclic_unit_definition", testQuantityCyclicUnitDefinition)
+	t.Run("quantity_calculation_that_has_no_value", testQuantityCalculationThatHasNoValue)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
 	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)

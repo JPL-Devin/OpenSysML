@@ -1,0 +1,13 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Turn",
+  "slots": {
+    "right": {"type": "Quantity", "value": 90, "unit": "°"},
+    "risen": {"type": "Boolean", "value": true},
+    "reversed": {"type": "Boolean", "value": true},
+    "flat": {"type": "Real", "value": 0.0},
+    "halved": {"type": "Boolean", "value": true},
+    "unwound": {"type": "Real", "value": 1.5707963267948966}
+  }
+}

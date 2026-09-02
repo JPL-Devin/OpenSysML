@@ -1,0 +1,23 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Plot",
+  "slots": {
+    "side": {"type": "Quantity", "value": 3, "unit": "m"},
+    "area": {"type": "Quantity", "value": 9, "unit": "m**2"},
+    "areaByPower": {"type": "Quantity", "value": 9, "unit": "m**2"},
+    "root": {"type": "Quantity", "value": 3.0, "unit": "m"},
+    "back": {"type": "Quantity", "value": 3.0, "unit": "m"},
+    "depth": {"type": "Quantity", "value": 4, "unit": "m"},
+    "perimeter": {"type": "Quantity", "value": 12, "unit": "m"},
+    "longest": {"type": "Quantity", "value": 400, "unit": "cm"},
+    "shortest": {"type": "Quantity", "value": 3, "unit": "m"},
+    "stepsDown": {"type": "Quantity", "value": 2, "unit": "m"},
+    "stepsNear": {"type": "Quantity", "value": 3, "unit": "m"},
+    "wider": {"type": "Boolean", "value": true},
+    "same": {"type": "Boolean", "value": true},
+    "label": {"type": "String", "value": "3 [m]"},
+    "metres": {"type": "Real", "value": 3.0},
+    "count": {"type": "Integer", "value": 3}
+  }
+}
