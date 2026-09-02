@@ -735,7 +735,7 @@ func (d *decoder) successionHead(el *element) (string, error) {
 			Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
 		}
 	}
-	_, positionalSource := d.endMember(el, xSourceMember)
+	_, positionalSource := d.graph.Object(rdf.IRI(el.iri), rdf.OpenSysML+xSourceMember)
 	switch keyword := d.keywordOr(el, "then"); {
 	case keyword == "else" || d.boolOf(el, rdf.OpenSysML+xIsElse):
 		return "else " + target, nil
@@ -767,89 +767,138 @@ func (d *decoder) successionHead(el *element) (string, error) {
 // name: each sequences from the member before it, folded in as `then action b;`.
 func (d *decoder) positionalSuccessions(children []*element) ([]*element, error) {
 	kept := make([]*element, 0, len(children))
-	// before is the member written that many places back, the end a succession
-	// stating no source name of its own sequences from.
-	before := func(back int) *element {
-		if len(kept) < back {
+	last := func() *element {
+		if len(kept) == 0 {
 			return nil
 		}
-		return kept[len(kept)-back]
+		return kept[len(kept)-1]
+	}
+	// sourceBefore is the member a `then` after the last skip members of kept
+	// sequences from: like the parser, it passes over edges to the member before.
+	sourceBefore := func(skip int) *element {
+		for i := len(kept) - 1 - skip; i >= 0; i-- {
+			if !isEdgeMember(kept[i]) {
+				return kept[i]
+			}
+		}
+		return nil
 	}
 	for _, child := range children {
-		implied := false
-		if form, ok := d.stringOf(child, rdf.OpenSysML+xEndForm); ok {
-			implied = form == formThen
-		}
-		target, positional := d.endMember(child, xTargetMember)
-		if child.metaclass != mSuccession || (!implied && !positional) {
+		if child.metaclass != mSuccession {
 			kept = append(kept, child)
 			continue
 		}
-		if !positional {
-			target = d.namedEnd(child, pTargetFeature)
+		// A source the graph states by position has no name to write, so the
+		// form that leaves it unwritten is the only one for it.
+		form, _ := d.stringOf(child, rdf.OpenSysML+xEndForm)
+		_, positionalSource := d.graph.Object(rdf.IRI(child.iri), rdf.OpenSysML+xSourceMember)
+		_, positionalTarget := d.graph.Object(rdf.IRI(child.iri), rdf.OpenSysML+xTargetMember)
+		if form != formThen && !positionalSource && !positionalTarget {
+			kept = append(kept, child)
+			continue
 		}
-		if target == nil || target != before(1) {
-			// The target is a member elsewhere in the body, so the succession
-			// is written where it stands, sequencing from the member before it.
-			if positional {
-				return nil, d.positionalError(child, "to", "before it")
-			}
-			if err := d.impliedSource(child, before(1)); err != nil {
+		if d.sequencesTo(child, last()) && (positionalTarget || d.keywordOr(child, "then") == "then") {
+			// The target is the member written just before, which this form
+			// introduces: `then` is written ahead of that member's declaration.
+			if err := d.attachable(child, sourceBefore(1)); err != nil {
 				return nil, err
 			}
-			kept = append(kept, child)
+			last().prefix = "then "
 			continue
 		}
-		// The target is the member written just before, which this form
-		// introduces: `then` is written ahead of that member's declaration.
-		if err := d.attachable(child, before(2)); err != nil {
+		// The target is a member elsewhere in the body, so the succession
+		// is written where it stands, sequencing from the member before it.
+		if positionalTarget {
+			return nil, d.positionalError(child, "to", "before it")
+		}
+		if err := d.impliedSource(child, sourceBefore(0)); err != nil {
 			return nil, err
 		}
-		target.prefix = "then "
+		kept = append(kept, child)
 	}
 	return kept, nil
 }
 
-// endMember returns the element an end of a succession reaches by position, and
-// whether the graph states that end that way at all.
-func (d *decoder) endMember(el *element, property string) (*element, bool) {
-	term, ok := d.graph.Object(rdf.IRI(el.iri), rdf.OpenSysML+property)
-	if !ok {
-		return nil, false
-	}
-	return d.byIRI[term.Value], true
+// isEdgeMember reports whether a member is an edge between other members, the
+// rule the parser reads `then` by (parser.isEdgeMember).
+func isEdgeMember(el *element) bool {
+	kind, ok := metaclassUsage[el.metaclass]
+	return ok && kind.IsEdge()
 }
 
-// namedEnd returns the element an end of a succession names, or nil for a name
-// this body does not declare.
-func (d *decoder) namedEnd(el *element, property string) *element {
-	term, ok := d.graph.Object(rdf.IRI(el.iri), rdf.SysML+property)
-	if !ok {
-		return nil
+// answersTo returns the end a `then` sequencing from member el records: the name
+// the parser gives el — `first x` names x, an unnamed usage its naming feature.
+func (d *decoder) answersTo(el *element) (rdf.Term, bool) {
+	if el == nil {
+		return rdf.Term{}, false
 	}
-	return d.byIRI[term.Value]
+	subject := rdf.IRI(el.iri)
+	if el.metaclass == mInitialNode {
+		if term, ok := d.graph.Object(subject, rdf.SysML+pSourceFeature); ok {
+			return term, true
+		}
+		return subject, true
+	}
+	if _, named := d.stringOf(el, rdf.SysML+pDeclaredName); named {
+		return subject, true
+	}
+	if _, usage := metaclassUsage[el.metaclass]; !usage {
+		return subject, true
+	}
+	// The naming feature of KerML 7.3.4.5, as ast.NamingFeature picks it.
+	if refs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelReferences]); len(refs) == 1 {
+		return refs[0], true
+	}
+	if redefs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelRedefines]); len(redefs) == 1 {
+		return redefs[0], true
+	}
+	return subject, true
 }
 
-// sourceEnd returns the element a succession sequences from, by position or by
-// the name it states, and whether it states either.
-func (d *decoder) sourceEnd(el *element) (*element, bool) {
-	if member, positional := d.endMember(el, xSourceMember); positional {
-		return member, true
+// sequencesTo reports whether the target end el states is the member to: by
+// position that member itself, by name the one the parser gives it.
+func (d *decoder) sequencesTo(el, to *element) bool {
+	if to == nil || to.metaclass == mInitialNode {
+		return false
 	}
-	if _, ok := d.graph.Object(rdf.IRI(el.iri), rdf.SysML+pSourceFeature); !ok {
-		return nil, false
+	if term, positional := d.graph.Object(rdf.IRI(el.iri), rdf.OpenSysML+xTargetMember); positional {
+		return term.Value == to.iri
 	}
-	return d.namedEnd(el, pSourceFeature), true
+	target, ok := d.graph.Object(rdf.IRI(el.iri), rdf.SysML+pTargetFeature)
+	if !ok {
+		return false
+	}
+	answers, ok := d.answersTo(to)
+	return ok && target.Equal(answers)
+}
+
+// sourceEnd returns the end a succession sequences from, by position or by the
+// name it states, and whether it states either.
+func (d *decoder) sourceEnd(el *element) (rdf.Term, bool) {
+	if term, positional := d.graph.Object(rdf.IRI(el.iri), rdf.OpenSysML+xSourceMember); positional {
+		return term, true
+	}
+	return d.graph.Object(rdf.IRI(el.iri), rdf.SysML+pSourceFeature)
+}
+
+// sequencesFrom reports whether the source end el states is the one a `then`
+// written after from records.
+func (d *decoder) sequencesFrom(el, from *element) bool {
+	source, states := d.sourceEnd(el)
+	if !states {
+		return false
+	}
+	answers, ok := d.answersTo(from)
+	return ok && source.Equal(answers)
 }
 
 // impliedSource checks a `then <target>`, whose source end is the member before
 // it: the graph has to agree, or the order it states would not be written back.
 func (d *decoder) impliedSource(el, from *element) error {
-	source, states := d.sourceEnd(el)
-	if !states {
+	if _, states := d.sourceEnd(el); !states {
 		return d.missing(el, "sysml:"+pSourceFeature, "a succession written as `then` sequences from the member before it")
 	}
-	if source != from {
+	if !d.sequencesFrom(el, from) {
 		return d.positionalError(el, "from", "before it")
 	}
 	return nil
@@ -870,8 +919,7 @@ func (d *decoder) attachable(el, from *element) error {
 			Note: "it states a guard and reaches a member that states no name, a form that carries no guard",
 		}
 	}
-	source, states := d.sourceEnd(el)
-	if states && source != from {
+	if _, states := d.sourceEnd(el); states && !d.sequencesFrom(el, from) {
 		return d.positionalError(el, "from", "before the member it introduces")
 	}
 	return nil
