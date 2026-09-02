@@ -3,11 +3,11 @@
 ## How errors surface
 
 Document generation fails loudly and early, never partially. Every mistake is
-a **typed error**: planning problems (structure, query references, bindings)
-surface when the document is compiled — as `document-plan-*` diagnostics in
-the editor, and as source-located errors from the CLI — while execution
+a **typed error**. Planning problems (structure, query references, bindings)
+surface when the document is compiled, as `document-plan-*` diagnostics in
+the editor and as source-located errors from the CLI. Execution
 problems (a query that cannot run) stop the render with the query error's
-message. A document that cannot be rendered exits `2`; nothing is written.
+message. A document that cannot be rendered exits `2`, and nothing is written.
 
 ```console
 $ sysml report.sysml -render-document E::R
@@ -90,8 +90,8 @@ $ echo $?
 
 ## Limitations
 
-Kept honest per the project's compliance record; each of these is a current
-fact about the implementation, not a design position.
+Each of these is a current fact about the implementation, not a design
+position; they are tracked in the project's compliance record.
 
 - **The vocabulary is non-normative.** `DocumentQueries` is an OpenSysML
   extension; other SysML v2 tools will parse models that use it but will not

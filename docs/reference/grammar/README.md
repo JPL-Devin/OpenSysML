@@ -12,30 +12,27 @@ For reference, the official Xtext grammar files from OMG are available at:
 **SysML v2 Grammar:**
 - https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/master/org.omg.sysml.xtext/src/org/omg/sysml/xtext/SysML.xtext
 
-These files are licensed under Eclipse Public License 2.0 (EPL-2.0) and are not included in this repository to avoid license mixing. `./scripts/download-pilot-grammars.sh` fetches them at the pinned release into `build/pilot-grammars/` when they are needed.
+These files are licensed under the Eclipse Public License 2.0 (EPL-2.0), so they are not included in this repository. When you need them, `./scripts/download-pilot-grammars.sh` fetches them at the pinned release into `build/pilot-grammars/`.
 
-The productions exercised by this project's test inputs are measured, on input-presence evidence rather than execution coverage, in [grammar-coverage.md](../../project/grammar-coverage.md).
+[grammar-coverage.md](../../project/grammar-coverage.md) reports which grammar productions the project's test inputs exercise. It measures whether an input for each production is present, not whether the parser code for it ran.
 
 ## Conformance Audit
 
-[conformance-audit.md](conformance-audit.md) records, with `file:line` citations
-at the pinned grammars, which words and constructs OpenSysML accepts are standard
-(silent), which are OpenSysML extensions (warned as `nonstandard-notation`), and
-which are KerML-only in a `.sysml` file (warned as `kerml-notation`).
+[conformance-audit.md](conformance-audit.md) goes through every keyword and construct OpenSysML accepts and sorts it into one of three groups: standard notation (accepted silently), OpenSysML extensions (accepted with a `nonstandard-notation` warning), and KerML notation used in a `.sysml` file (accepted with a `kerml-notation` warning). Each entry cites the `file:line` in the pinned OMG grammar that justifies it.
 
 ## State Machine Notation Beyond the OMG Grammar
 
-The OMG textual notation covers state definitions/usages, `entry`/`do`/`exit`
-subactions and transitions (`SysML.xtext`, `StateDefinition` … `TransitionUsage`,
-around the `/* STATES */` section), and nothing else about state machines: there
-is no production for a pseudostate of any kind and none for event deferral.
-Some of these concepts nevertheless have semantics in the bundled KerML semantic
-library or the Systems Library, and those are the governing reference; UML 2.5.1
-§14.2.3.4 (Pseudostates) is cited only for the ones that have neither, whose
-notation there is diagrammatic and so has no textual surface syntax to borrow.
+The OMG textual notation covers state definitions and usages, `entry`/`do`/`exit`
+subactions, and transitions (`SysML.xtext`, `StateDefinition` through `TransitionUsage`,
+near the `/* STATES */` section). That is all it says about state machines: there
+is no production for any kind of pseudostate, and none for event deferral.
+Some of these concepts do have semantics in the bundled KerML semantic
+library or the Systems Library, and where they do, that library is the governing reference.
+For the rest we cite UML 2.5.1 §14.2.3.4 (Pseudostates), but UML's notation for them is
+diagrammatic, so there is no textual syntax to borrow.
 
-OpenSysML therefore defines its own keywords for them, in a state body only.
-They are a documented extension, not an OMG notation, and using one draws a
+OpenSysML therefore defines its own keywords for them, valid only inside a state body.
+They are a documented extension, not OMG notation, and using one produces a
 `nonstandard-notation` warning:
 
 | Form | Meaning | Semantic reference |
@@ -51,66 +48,66 @@ They are a documented extension, not an OMG notation, and using one draws a
 | `exit point <name>;` | exit point | UML `exitPoint` pseudostate |
 | `defer <event> [, <event>]*;` | events the state retains while active | KerML `StatePerformances::StatePerformance::deferrable: Transfer[0..*] subsets acceptable` — "transfers … can be considered for acceptance more than once"; dispatch order is `Occurrences::Occurrence::incomingTransferSort`, defaulting to `earlierFirstIncomingTransferSort` |
 
-The action-level `fork`/`join` control nodes are SysML v2's `Actions::ForkAction`
-and `JoinAction`, whose behavior "results from requiring that the target
+The action-level `fork` and `join` control nodes are SysML v2's `Actions::ForkAction`
+and `JoinAction`. The library gives them no behavior of their own (a
+`ControlAction` has "no inherent behavior"); their effect "results from requiring that the target
 [respectively source] multiplicity of all outgoing [incoming] succession
-connectors be 1..1" — the library states no behavior of their own, a
-`ControlAction` having "no inherent behavior".
+connectors be 1..1".
 
 Notes:
 
-- `fork` and `join` are the exception in that table: both are action node
-  literals a state body admits (`SysML.xtext:1684`, `:1678`, `:1761-1763`), so
-  they are read as standard and are not warned about.
+- `fork` and `join` are the exception in the table above. Both are action node
+  literals that a state body already admits (`SysML.xtext:1684`, `:1678`, `:1761-1763`), so
+  they count as standard and are not warned about.
 - None of `choice`, `decision`, `deep`, `defer`, `done`, `final`, `history`,
-  `initial`, `junction` or `shallow` is reserved: each is a literal in
-  none of the pinned grammars, so all are ordinary names, matched contextually
-  where the notation above needs them.
-- `point` is **not** a reserved word: it is matched contextually after `entry`
-  or `exit` and only when a pseudostate name and `;` follow, because models
+  `initial`, `junction` or `shallow` is a reserved word. None of them appears as a literal
+  in the pinned grammars, so they remain ordinary names and are recognized only in the
+  positions where the notation above needs them.
+- `point` is **not** reserved either. It is recognized only after `entry`
+  or `exit`, and only when a pseudostate name and `;` follow, because models
   routinely declare features named `point`. `entry <action>` keeps its OMG
   meaning.
-- `on` and `var` are **not** reserved either, for the same reason and on the
-  pilot implementation's authority: `on` is a literal in none of its grammars,
-  and `var` only in `KerML.xtext` `BasicFeaturePrefix` (`isVariable ?= 'var'`).
-  So `state on { … }` and `then on;` (the OMG training corpus writes both) and
-  `attribute var : Integer;` declare and name features, while `var` before a
+- `on` and `var` are **not** reserved, for the same reason and on the
+  pilot implementation's authority: `on` is not a literal in any of its grammars,
+  and `var` appears only in `KerML.xtext`'s `BasicFeaturePrefix` (`isVariable ?= 'var'`).
+  So `state on { … }`, `then on;` (the OMG training corpus writes both) and
+  `attribute var : Integer;` all declare and name features, while `var` before a
   kind keyword (`var feature x`, `var attribute total : Integer;`) still marks a
-  variable feature. `var` with the kind keyword left out is not supported and is
+  variable feature. `var` without a kind keyword is not supported and is
   reported. See [pilot-differential.md](../../project/pilot-differential.md).
 - A deferred event is parsed exactly like a transition trigger, so both a signal
-  name (`defer Ping;`) and a call event (`defer setSpeed(value);`) are accepted;
-  time and change events cannot be deferred and are reported at lowering.
-- `defer` is only meaningful inside a state: one in the machine's own body is
+  name (`defer Ping;`) and a call event (`defer setSpeed(value);`) are accepted.
+  Time and change events cannot be deferred; lowering reports them.
+- `defer` is only meaningful inside a state. One written in the machine's own body is
   reported by `lower.ToStateGraph`.
-- Unreserved does not mean invisible to editors: `lexer.ContextualWords(kind)`
-  lists these words for the two surfaces that want them — the VS Code grammars
-  (`keywords-contextual`) and LSP keyword completion — without the lexer
+- Unreserved does not mean invisible to editors. `lexer.ContextualWords(kind)`
+  lists these words for the two places that want them, the VS Code grammars
+  (`keywords-contextual`) and LSP keyword completion, without the lexer
   reserving any of them. `var` is in the `.kerml` list only, and `on` is in
-  neither, being syntax in no position. The two lists are asserted disjoint at
-  grammar-generation time, so a word cannot become reserved by being listed.
+  neither, since it is never syntax. The two lists are checked to be disjoint when
+  the grammars are generated, so listing a word cannot make it reserved.
 
 ## Validation
 
-Grammar conformance is validated through parsing **OMG's own files**:
+Grammar conformance is validated by parsing **OMG's own files**:
 
-1. **Stdlib Conformance Gate** - all 96 bundled library files (94 OMG standard library files and 2 OpenSysML extensions) must parse with zero diagnostics
+1. **Stdlib conformance gate** - all 96 bundled library files (94 OMG standard library files and 2 OpenSysML extensions) must parse with zero diagnostics
    - See: `internal/core/libs/stdlib_conformance_test.go`
    - These files are the **source of truth** for correct parsing
 
-2. **Training Examples** - 100 OMG training files (current result in the page below)
+2. **Training examples** - 100 OMG training files (the current result is on the page below)
    - See: `docs/project/training-examples.md`
 
-3. **Golden AST Tests** - 33 fixtures with expected AST output
+3. **Golden AST tests** - 33 fixtures with expected AST output
    - See: `internal/core/parser/testdata/parse/`
 
-4. **Negative Tests** - 36 test cases for error recovery
+4. **Negative tests** - 36 test cases for error recovery
    - See: `internal/core/parser/negative_test.go`
 
 ## Hand-Written Parser
 
-The parser is hand-written for:
+The parser is hand-written rather than generated because that gives us:
 - **Performance** - 10-100x faster than generated parsers
-- **Error Recovery** - Custom ErrorNode insertion for fault tolerance
-- **Control** - Full control over diagnostic messages
-- **Incremental Parsing** - Future LSP support
+- **Error recovery** - custom `ErrorNode` insertion for fault tolerance
+- **Control** - full control over diagnostic messages
+- **Incremental parsing** - a path to future LSP support

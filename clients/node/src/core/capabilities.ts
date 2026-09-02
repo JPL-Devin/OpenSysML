@@ -16,6 +16,8 @@ export const CAPABILITY_FEATURE_VALUES = "feature_values";
 export const CAPABILITY_ENUM_VALUES = "enum_values";
 /** A valueless feature of a value type as `Value.unset`. */
 export const CAPABILITY_UNSET_VALUE = "unset_value";
+/** A complex number as `Value.complex`, rather than an unsupported null. */
+export const CAPABILITY_COMPLEX_VALUES = "complex_values";
 /** `ParseFileRequest.language`, which declares the language of inline content. */
 export const CAPABILITY_INLINE_LANGUAGE = "inline_language";
 /** `ParseFileRequest.strict_conformance`. */

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/identity"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/project"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
@@ -351,7 +352,7 @@ func prepareAnnotation(local *rdf.Graph, model string, set *reposync.ChangeSet, 
 			a.unnamed = append(a.unnamed, change)
 			continue
 		}
-		clause := fmt.Sprintf("metadata : IdentityMetadata::ElementId about %s { id = \"%s\"; }", target, change.MintedID)
+		clause := identity.ElementIdAbout(target, change.MintedID)
 		out.WriteString(clause + "\n")
 		a.clauses = append(a.clauses, clause)
 	}
