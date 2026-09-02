@@ -221,9 +221,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `internal/core/export/testdata/convert/` lock this in by re-encoding the notation written
   from the graph alone and comparing the two graphs as triple sets; a relationship's symbolic or
   keyword spelling and a doc body's line endings are documented as normalised. On the corpus
-  ratchet, six files move from a differing graph to the same one and four refused for a quoted
-  succession end now round-trip; three others refused for the same reason are now written back
-  up to a `then` folded into the member it introduces, which the writer still reports.
+  ratchet, six files move from a differing graph to the same one and six refused for a quoted
+  succession end now round-trip; the seventh is written back, but its guarded succession
+  (`succession S first A1 if x == 0 then A2;`) is spelled as a `transition` the parser does not
+  read, which is a separate writer defect.
 
 ## 0.4.3 — 2026-09-01
 
