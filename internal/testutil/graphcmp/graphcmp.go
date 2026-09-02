@@ -71,6 +71,12 @@ func (c *comparer) fail(format string, args ...any) error {
 	return fmt.Errorf("%s: %s", strings.Join(c.path, ""), fmt.Sprintf(format, args...))
 }
 
+func (c *comparer) failValues(a, b any) error { return c.fail("%v vs %v", a, b) }
+
+func (c *comparer) failNil(a, b reflect.Value) error {
+	return c.fail("nil %v vs %v", a.IsNil(), b.IsNil())
+}
+
 func (c *comparer) push(p string) { c.path = append(c.path, p) }
 func (c *comparer) pop()          { c.path = c.path[:len(c.path)-1] }
 
@@ -86,7 +92,7 @@ func (c *comparer) walk(a, b reflect.Value) error {
 	case reflect.Interface:
 		if a.IsNil() || b.IsNil() {
 			if a.IsNil() != b.IsNil() {
-				return c.fail("nil %v vs %v", a.IsNil(), b.IsNil())
+				return c.failNil(a, b)
 			}
 			return nil
 		}
@@ -141,7 +147,7 @@ func (c *comparer) walk(a, b reflect.Value) error {
 		}
 	case reflect.Bool:
 		if a.Bool() != b.Bool() {
-			return c.fail("%v vs %v", a.Bool(), b.Bool())
+			return c.failValues(a.Bool(), b.Bool())
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if a.Int() != b.Int() {
@@ -153,15 +159,15 @@ func (c *comparer) walk(a, b reflect.Value) error {
 		}
 	case reflect.Float32, reflect.Float64:
 		if a.Float() != b.Float() {
-			return c.fail("%v vs %v", a.Float(), b.Float())
+			return c.failValues(a.Float(), b.Float())
 		}
 	case reflect.Complex64, reflect.Complex128:
 		if a.Complex() != b.Complex() {
-			return c.fail("%v vs %v", a.Complex(), b.Complex())
+			return c.failValues(a.Complex(), b.Complex())
 		}
 	default: // Chan, Func, UnsafePointer
 		if a.IsNil() != b.IsNil() {
-			return c.fail("nil %v vs %v", a.IsNil(), b.IsNil())
+			return c.failNil(a, b)
 		}
 		if !a.IsNil() {
 			return c.fail("%v values cannot be compared", a.Kind())
@@ -173,7 +179,7 @@ func (c *comparer) walk(a, b reflect.Value) error {
 func (c *comparer) pointer(a, b reflect.Value) error {
 	if a.IsNil() || b.IsNil() {
 		if a.IsNil() != b.IsNil() {
-			return c.fail("nil %v vs %v", a.IsNil(), b.IsNil())
+			return c.failNil(a, b)
 		}
 		return nil
 	}

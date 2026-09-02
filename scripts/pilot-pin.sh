@@ -18,6 +18,7 @@ PILOT_FETCH_GLOBS=('*.sysml' '*.kerml')
 # pilot_pin is the stamp a fetched destination records.
 pilot_pin() {
 	printf '%s %s %s' "$PILOT_TAG" "$PILOT_COMMIT" "$PILOT_REPO"
+	return 0
 }
 
 # pilot_clone sparse-clones the pinned pilot repository into $1 with only the given
@@ -48,6 +49,7 @@ pilot_count_files() {
 		args+=(-o -name "$glob")
 	done
 	find "$dir" -type f \( "${args[@]:1}" \) | wc -l | tr -d ' '
+	return 0
 }
 
 # pilot_install_dir replaces directory $2 with $1. The new tree is first moved
@@ -60,6 +62,7 @@ pilot_install_dir() {
 	mv "$src" "$dst.new"
 	rm -rf "$dst"
 	mv "$dst.new" "$dst"
+	return 0
 }
 
 # pilot_fetch_subtrees copies "<path in the pilot repository>:<destination>" subtrees

@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 keep=""
-if [ "${1:-}" = "-keep" ]; then
+if [[ "${1:-}" == "-keep" ]]; then
   keep=$2
   mkdir -p "$keep"
 fi
@@ -57,7 +57,7 @@ go tool pprof -proto "$work"/*.cpu >"$work/default.pgo" 2>/dev/null
 for dir in cmd/sysml cmd/sysml-lsp cmd/sysml-grpc; do
   cp "$work/default.pgo" "$dir/default.pgo"
 done
-if [ -n "$keep" ]; then
+if [[ -n "$keep" ]]; then
   cp "$work"/*.cpu "$work"/*.log "$keep/"
 fi
 ls -l cmd/*/default.pgo

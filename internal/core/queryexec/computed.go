@@ -17,10 +17,7 @@ type computedColumn struct {
 }
 
 // computedColumns decodes Project's structural columns argument.
-func (e *executor) computedColumns(
-	project queryplan.Expression,
-	value queryplan.Expression,
-) ([]computedColumn, error) {
+func (e *executor) computedColumns(project, value queryplan.Expression) ([]computedColumn, error) {
 	var elements []queryplan.Expression
 	switch value.Operation() {
 	case queryplan.OperationSequence:

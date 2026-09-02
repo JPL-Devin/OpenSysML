@@ -389,7 +389,7 @@ func TestIdentityCrossDocumentAboutAnnotationErrorsInItsOwnDocument(t *testing.T
 }
 `
 	diagsA, diagsB := identityDiagsAcross(t, srcA, srcB)
-	if n := len(only(diagsA, "identity-id-shape")); n != 0 {
+	if len(only(diagsA, "identity-id-shape")) != 0 {
 		t.Fatalf("the annotated element's document must stay clean, got %v", only(diagsA, "identity-id-shape"))
 	}
 	diags := only(diagsB, "identity-id-shape")
@@ -446,7 +446,7 @@ package Meta {
 }
 `
 	diags := w8dDiags(t, src)
-	if n := len(only(diags, "identity-duplicate-id")) + len(only(diags, "identity-unscoped-id")); n != 0 {
+	if len(only(diags, "identity-duplicate-id"))+len(only(diags, "identity-unscoped-id")) != 0 {
 		t.Fatalf("distinct about-form projects must keep the ids legal: %v", diags)
 	}
 }
