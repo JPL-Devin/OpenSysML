@@ -6,6 +6,62 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Added
+
+- **The bundled standard library opens in the editor.** Go-to-definition, find-references
+  and the diagram panel used to report a standard library declaration at a path no editor
+  could open, so a click on `ScalarValues::Integer` went nowhere. `sysml-lsp` now reports
+  such a location under the `sysml-stdlib:` scheme — the file's path within the library —
+  with its line and column computed from the bundled text, and serves that text through the
+  `opensysml/stdlibContent` request, announced as `openSysmlStdlibContent` in the
+  `initialize` result. The VS Code extension registers a provider for the scheme, so
+  <kbd>Ctrl</kbd>+click on a library name opens the bundled file in a read-only editor on the
+  declaring line; hover, go-to-definition, the outline and semantic highlighting work inside
+  it, so navigation continues from one library file into the next. Opening or closing such a
+  document changes nothing, and an edit to one is refused with an error rather than applied:
+  the library is what every diagnostic is judged against. Other LSP clients get the same by
+  registering a content provider for the scheme that calls the request.
+
+- **A model's change set applies to a live repository, keyed by identity.**
+  `sysml model.sysml -sync-apply http://localhost:8083` diffs the model against its project
+  branch on a running SysML v2 API (Flexo MMS) and writes the change set as one commit through
+  the service's own commit path: a rename, move or retype under a retained id is an update of
+  that element — never a delete plus a create — a new id is a create, and a delete goes only
+  when the run confirmed deletes with `-sync-confirm-deletes`. A change set holding a conflict
+  or an unconfirmed delete is refused, as a typed error, before any write; nothing is resolved
+  silently. On success the commit the service names becomes the last-seen commit in
+  `<model>.sync.json`, never in the notation, and it is the baseline of the next run, so
+  repository changes made behind the sync's back surface as conflicts and a second apply finds
+  nothing to change. An apply that finds nothing to change still records the branch head it
+  compared against, so a model first pushed by other means gets its baseline from the first
+  run. The change set is computed at one head commit, and the commit is refused if the branch
+  has moved since — someone else's edit between the read and the write is a stale-head error
+  to diff again after, not a silent overwrite. `-sync-diff` takes the same endpoint URL and
+  stays a dry run; with neither flag nothing is written. A bearer token never goes over
+  plaintext `http://` to a host other than this machine: the compose stack on `localhost` works
+  as documented, anything else needs `https://` or an explicit `FLEXO_ALLOW_PLAIN_HTTP=1`. An
+  apply that mints ids writes the `-sync-annotate` model only after the commit holding them
+  lands, and is refused when a minted element has no name to annotate — an id the notation
+  cannot keep would be minted again on the next run. The exit status keeps its contract: 0
+  applied or nothing to do, 1 a refusal or a repository failure — a read the stack would not
+  answer included, reported with each change's fate — 2 an unusable run. Both sides of the
+  diff are compared under what the service can store, so the properties it has no place for
+  are reported as not compared rather than diffed forever. The opt-in Flexo harness measures
+  the apply against the real stack — an initial load, a revision with a retained-id rename and
+  gated deletes, a conflict staged behind the sync's back — and records what read back at the
+  recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+- **The RDF round trip is measured over every example, and pinned per file.** `TestCorpusRoundTrip`
+  converts each of the 345 models under `examples/` — the committed models, the OMG training
+  corpus and the three pilot corpora — notation → Turtle → notation → Turtle and compares the two
+  graphs as triple sets, so a writer or encoder change that moves any file's verdict in either
+  direction fails the suite and is adjudicated, as the pilot corpora gate already does for
+  diagnostics. The baseline records 166 files stable, 71 stable up to the whitespace inside
+  `sysx:sourceText`, 14 that come back as a different graph, 15 that cannot be written back,
+  2 whose written notation no longer converts and 77 refused on the first hop, each refusal
+  classed by the construct it names. The mapping's reference now states that measurement in place
+  of the claim that a second conversion yields the same graph, which held for the fixtures alone
+  ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
+
 ### Performance
 
 - **A process starts in under 20 ms instead of 100.** Every `sysml`, `sysml-lsp` and `sysml-grpc`
@@ -49,6 +105,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   feature chains, collections, quantities, strings, locals, non-literal defaults, redeclared
   parameters) stays on the evaluator, as does every traced, named-argument or non-scalar
   invocation. `OPENSYSML_CALC_COMPILE=0` turns the tier off for bisecting.
+
+- **The compiled calc tier takes the bodies analysis models write.** Four constructs join the
+  compiled subset, each reproducing the reference evaluator's values, error text and step counts
+  exactly: statement bodies of body-local scalar declarations, `return` and `if`/`else`, compiled
+  from the lowered statements into further slots of the scalar frame with the evaluator's
+  declaration-order and shadowing rules (a local read before its declaration, a local without a
+  value, a body that may run off its end, `out` features, loops and assignments stay on the
+  evaluator); parameters redefined along the specialization chain (`in :>> x = 3.0;`,
+  `in x :>> Base::x : Integer;`), laid out as the effective parameter list the evaluator binds; the
+  standard library's scalar functions and constants (`sqrt`, `ln`, `exp`, `abs`, `floor`, `round`,
+  `min`, `max`, the trigonometric functions, `deg`, `rad`, `TrigFunctions::pi`, …), dispatched
+  through the resolved symbol to the Go implementation the evaluator uses — so an alias or an
+  import reaches it and a model's own `sqrt` does not — and `sum`/`product` over a lone scalar;
+  and named arguments (`Fib(k = n - 1)`), bound to slots at compile time with the evaluator's
+  arity and unknown-name checks ahead of dispatch. Over the repository's fixtures, examples and
+  the OMG corpora the tier now compiles 127 of 343 calc definitions (37%) instead of 42 of 263
+  (16%); a recursive tree of three-local bodies calling `sqrt` runs 12.6× faster (10.4 ms instead
+  of 132 for 131 071 invocations) and `Fib(25)` is unchanged at 21–23 ns per invocation. The
+  differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
+  fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
 
 ### Changed
 
@@ -175,6 +251,16 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   names as the notation requires. The last-seen commit is tool state beside the model
   (`<model>.sync.json`), never written into the notation.
 
+- **The editor mints an element id on request.** `sysml-lsp` offers the `refactor.rewrite` code
+  action "Annotate … with a minted element id" on the header of a declaration that carries no
+  `ElementId`. Invoking it mints a UUID v4 and writes the annotation as a text edit that leaves
+  every other byte of the file alone: inline at the head of a body, standalone about-form at the
+  end of the file for a bodiless declaration, names quoted as the notation requires. Where the
+  root carries no `ProjectRef`, the same edit binds it with a placeholder `projectId` to fill in,
+  and a "Bind … to a project" action does that alone. Nothing mints during analysis, and no
+  diagnostic asks for an annotation. A metadata usage in a constraint body (`@Tag { … }`) now
+  parses as the member it is, distinct from a classification condition (`@Tag`).
+
 - **The conformance suite and the pilot differential render as CI test results.** The conformance
   runner emits JUnit XML (stored even when the gate fails), and `pilot-diff` writes JUnit XML with
   one suite per corpus root alongside SARIF 2.1.0 with one result per disagreeing diagnostic
@@ -279,6 +365,17 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   alone, and a directory without a stamp is left alone with a warning.
 
 ### Fixed
+
+- **An OSLC query's unknown-property diagnostic names properties the query can be written with.**
+  `sysml:id="x"` answered with the Go API's own property names (`@id, @type, declaredName, …`), so a
+  caller who wrote one back got a second, different error: `@type` and `@id` are not OSLC query text.
+  The list is now the OSLC predicates (`rdf:type, sysml:declaredName, …`), derived from the mapping
+  the parser reads, and `@type`/`@id` name their OSLC spelling instead — `rdf:type`, and identity,
+  which every result reports rather than asks for. The list follows the query's own `oslc.prefix`
+  bindings, since a rebound `sysml` or `rdf` changes what the parser accepts. An `oslc.prefix`
+  binding whose prefix no prefixed name can be written with (`!s=<…>`) is refused where it is
+  bound rather than accepted and never usable, and a prefix of letters outside ASCII
+  (`sÿsml=<…>`) now scans as one name in a query instead of ending mid-letter.
 
 - **An anonymous `doc` or `comment` before a kind keyword is kept.** `doc /* … */` followed by
   `attribute a;` in a definition or usage body parsed as an attribute prefixed by `doc`, so the

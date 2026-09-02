@@ -43,6 +43,9 @@ func (s *Server) changeHandler(inner jsonrpc2.Handler) jsonrpc2.Handler {
 		if err := json.Unmarshal(req.Params(), &params); err != nil {
 			return reply(ctx, nil, err)
 		}
+		if isLibraryURI(params.TextDocument.URI) {
+			return reply(ctx, nil, s.refuseLibraryChange(ctx, params.TextDocument.URI))
+		}
 		s.applyDidChange(ctx, uriToName(params.TextDocument.URI), params.ContentChanges, int(params.TextDocument.Version))
 		return reply(ctx, nil, nil)
 	}
@@ -66,7 +69,8 @@ func (s *Server) applyDidChange(ctx context.Context, name string, changes []rawC
 	s.queueOpenDiagnostics(ctx, name)
 }
 
-// applyRawContentChange applies a single change. Nil Range means full replace.
+// applyRawContentChange applies a single change. Nil Range means full replace;
+// a JSON null (not valid LSP, where range is optional) decodes to nil as well.
 // RangeLength is intentionally unused for the splice: it is a UTF-16 code-unit
 // count (not a byte count), and the authoritative delete extent is Range.
 func applyRawContentChange(content []byte, ch rawContentChange) []byte {

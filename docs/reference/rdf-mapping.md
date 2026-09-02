@@ -1,46 +1,54 @@
 # The SysML ↔ RDF mapping
 
-Which triples a model becomes, and which constructs the mapping does not represent. Saving and
-converting as a task is [guide chapter 7](../guide/07-saving-and-rdf.md).
+This page describes which triples a model becomes, and which constructs the mapping does not
+represent. For saving and converting as a task, see [guide chapter 7](../guide/07-saving-and-rdf.md).
 
 ## Status: experimental
 
-RDF conversion — `sysml -convert ttl`, `%save model.ttl`, the service's `Convert`
-to or from `ttl`, and each in reverse — is **experimental** as of 0.1.0. Saving
-and converting notation (`.sysml`, `.kerml`) is stable; this mapping is not, and
-each of these is a deliberate property of it rather than a defect to report:
+RDF conversion (`sysml -convert ttl`, `%save model.ttl`, the service's `Convert`
+to or from `ttl`, and each in reverse) is **experimental** as of 0.1.0. Saving
+and converting notation (`.sysml`, `.kerml`) is stable; this mapping is not. Each
+of the following is a deliberate property of the mapping rather than a defect to
+report:
 
-- **What is not mapped is refused, not partly converted**, with the construct
-  named: 260 of the 334 models under `examples/` convert to Turtle and the other
-  74 are refused. See [Behavior](#behavior) and [Limitations](#limitations).
+- **What is not mapped is refused, not partly converted**, and the refusal names
+  the construct. 268 of the 345 models under `examples/` (committed, training and
+  pilot corpora) convert to Turtle; the other 77 are refused. Of the 268, a second
+  conversion of the written-back notation reproduces the graph for 237 (166
+  byte-for-byte, 71 up to the whitespace inside `sysx:sourceText`), differs for
+  14, and 17 cannot be written back or re-read at all. These figures are the
+  per-file ratchet in `internal/core/export/corpus_roundtrip_test.go`, described
+  in [rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md). See
+  [Behavior](#behavior) and [Limitations](#limitations).
 - **The vocabulary may change without a compatibility path.** A graph written by
   one release may not read back into the next, and no migration is provided.
-  Treat a `.ttl` as a regenerable interchange artifact rather than the copy of
-  record.
+  Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
+  of record.
 - **Interoperability is not yet demonstrated**, and the gap is measured rather
   than argued. The `sysml:` vocabulary and the `elmt:` element base match Flexo
-  MMS's `Namespaces.kt`; OpenSysML's ids — the part of an IRI after the final
-  `:`, for an element and for an expression node alike — match that service's
-  `requireValidId` (`[a-zA-Z0-9_-]+`); every element carries the
-  `sysml:elementId` paged listing and query select on; and ownership is written
-  as the memberships and owner references the roots endpoint filters on. A round
-  trip through a running Flexo MMS stack, measured before that was written,
-  delivered every element of the reference fixture but only 86 of its 142
+  MMS's `Namespaces.kt`. OpenSysML's ids (the part of an IRI after the final
+  `:`, for elements and expression nodes alike) match that service's
+  `requireValidId` (`[a-zA-Z0-9_-]+`). Every element carries the
+  `sysml:elementId` that paged listing and query select use, and ownership is
+  written as the memberships and owner references the roots endpoint filters on.
+  A round trip through a running Flexo MMS stack, measured before that work was
+  done, delivered every element of the reference fixture but only 86 of its 142
   properties, while the same model posted through the service's own commit path
-  lost nothing. What no test here shows is a graph carrying the current output
+  lost nothing. What no test here shows yet is a graph carrying the current output
   loaded into a live service and read back; that is separate work. Known
   mismatches remain: the reader ignores predicates outside `sysml:` and
   `urn:sysmlv2:annotation:json:`, so the 56 `sysx:` properties of that fixture
   do not survive the path, and a standard property carrying more than one value
-  is skipped for want of a JSON annotation. The measurement is
+  is skipped because it has no JSON annotation. The measurement lives in
   `internal/interop/flexo`, an opt-in gate described in
-  `.agents/skills/flexo-interop`, and its committed report is the record of what
-  moves as the rest lands.
+  `.agents/skills/flexo-interop`, and its committed report records what changes
+  as the remaining work lands.
 
-Every surface reports this where it is used: the command line writes a `note:` to
-stderr, `%save` prints one, and `ConvertResponse` carries `experimental` and
-`experimental_notice`, which opensysml raises as an `ExperimentalFeatureWarning`.
-The wording is one constant, `export.ExperimentalNotice`.
+Every surface reports this status where it is used: the command line writes a
+`note:` to stderr, `%save` prints one, and `ConvertResponse` carries `experimental`
+and `experimental_notice`, which the Python client raises as an
+`ExperimentalFeatureWarning`. The wording is a single constant,
+`export.ExperimentalNotice`.
 
 ## The RDF mapping
 
@@ -58,17 +66,17 @@ The `sysml:` vocabulary and the `elmt:` element base match the ones the
 [Flexo MMS SysML v2 service](https://github.com/Open-MBEE/flexo-mms-sysmlv2)
 writes into its triplestore (`Namespaces.kt`). That service derives an
 element's `@id` from the substring after the final `:`, and `requireValidId`
-permits only `[a-zA-Z0-9_-]+`; OpenSysML's encoded element ids satisfy both, and
-so do the `expr:` node ids — a node's id held a `.` until the position was joined
-with `_p` and encoded instead, and that service refused to read one directly.
+permits only `[a-zA-Z0-9_-]+`. OpenSysML's encoded element ids satisfy both, and
+so do the `expr:` node ids. (A node's id used to contain a `.`, which that service
+refused to read; the position is now joined with `_p` and encoded instead.)
 Other mismatches remain: the reader ignores predicates outside `sysml:` and
 `urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path, and
 collection properties carry no JSON annotation. See
 [Status](#status-experimental).
 
-OpenSysML's own additions are namespaced separately as `sysx:` so a consumer can
-tell them from the standard vocabulary and ignore them if it wants only standard
-SysML.
+OpenSysML's own additions live in a separate `sysx:` namespace so a consumer can
+tell them apart from the standard vocabulary and ignore them if it wants only
+standard SysML.
 
 ### Element IRIs
 
@@ -99,14 +107,14 @@ qualified name, with `_` as the escape character:
 The id therefore always matches `[A-Za-z0-9_-]+`, distinct qualified names
 never collide, and `rdf.DecodeElementID` reverses the encoding exactly. The
 IRI is **deterministic**: converting the same model twice yields the same
-IRIs, and re-converting after an edit leaves the untouched elements addressed
-as before. The id is an address, not the copy of record for the name — the
+IRIs, and re-converting after an edit leaves the untouched elements at the same
+addresses. The id is an address, not the copy of record for the name. The
 name is carried by `sysml:qualifiedName`, which is where reading a graph back
 takes it from.
 
 ### Element identity
 
-The encoded qualified name is only the **derived** id — the one an element gets
+The encoded qualified name is only the **derived** id, the one an element gets
 when nothing declares one. An `@IdentityMetadata::ElementId` annotation
 declares the id explicitly, and then the element's IRI and `sysml:elementId`
 carry the declared id instead, so a rename keeps the subject:
@@ -129,11 +137,12 @@ elmt:8f3a41d0 a sysml:PartDefinition ;
 
 The identity annotations are **consumed into identity** rather than exported as
 metadata content, exactly as names are consumed into IRIs. `sysx:declaredId`
-records that the id came from an annotation: explicitness is not recoverable
-from the value, since a declared id may equal the encoding of the current
-qualified name — dropping it would turn the next rename into delete + create.
-A membership's id derives from its member's effective id (`8f3a41d0_om`), and
-an expression node's from its owner's, so both inherit the id's stability.
+records that the id came from an annotation. That fact cannot be recovered from
+the value itself, since a declared id may happen to equal the encoding of the
+current qualified name, and dropping it would turn the next rename into a delete
+plus a create. A membership's id derives from its member's effective id
+(`8f3a41d0_om`), and an expression node's from its owner's, so both inherit the
+id's stability.
 
 A `@IdentityMetadata::ProjectRef` annotation on a scope root is written as
 provenance triples on that root: `sysx:projectId`, `sysx:branch`, `sysx:org`.
@@ -143,10 +152,10 @@ with its scope's provenance (`elmt:<encoded-org>.<encoded-project>:<id>`), so an
 id repeated across scopes stays two subjects; two scopes whose elements would
 still land on one IRI are refused rather than silently merged.
 
-Reading a graph back keys the subjects on `sysml:elementId` — the qualified
+Reading a graph back keys the subjects on `sysml:elementId`; the qualified
 name is a mutable label. A graph without `sysml:elementId` (from before the
-property, or another tool) falls back to the encoding of its qualified name,
-which is what its IRIs carry. The notation writer re-materializes an
+property existed, or from another tool) falls back to the encoding of its
+qualified name, which is what its IRIs carry. The notation writer re-materializes an
 `@ElementId` annotation wherever the graph marks `sysx:declaredId` true **or**
 the id differs from the encoding of the qualified name, and one `@ProjectRef`
 per root carrying provenance. Subjects are classified by their `rdf:type`,
@@ -327,9 +336,9 @@ expr:P__total_pvalue_pa0
 
 The rules the tree follows:
 
-- **A node's IRI is its owner and its position**: `expr:<owner id>_p<slot>`, and
-  a nested operand appends its own index (`_pa0`, `_pa1`). Two expressions of one
-  element therefore never collide, and the IRIs are deterministic, like element
+- **A node's IRI is built from its owner and its position**: `expr:<owner id>_p<slot>`,
+  and a nested operand appends its own index (`_pa0`, `_pa1`). Two expressions of
+  one element therefore never collide, and the IRIs are deterministic, like element
   IRIs. The `_p` marker and the encoding of the position keep a node's id inside
   `[A-Za-z0-9_-]+`, the alphabet the SysML v2 API's `requireValidId` accepts, and
   it can never be read as an element id or a membership id, because an element id
@@ -350,7 +359,7 @@ The rules the tree follows:
   does not define.
 - **A feature reference links to the element** it names (`sysml:referent`) when
   that element is in the graph, and carries its name as a literal when it
-  resolves outside it — the same rule the declaration-head relationships follow.
+  resolves outside it, the same rule the declaration-head relationships follow.
 - **A node carries `sysml:elementId`**, the id its own IRI ends in, so it can be
   read and queried by that id like an element. It is still not a model element:
   it has no `sysml:qualifiedName` and no ownership properties, it is reached only
@@ -359,8 +368,8 @@ The rules the tree follows:
   separate work.
 - **A graph from another tool is read from its structure** when it carries no
   `sysx:sourceText`: the supported shapes above are written back as notation, and
-  a shape this mapping cannot write — a missing operator, an operand count an
-  operator does not take, a literal with no value — is reported as unsupported
+  a shape this mapping cannot write (a missing operator, an operand count an
+  operator does not take, a literal with no value) is reported as unsupported,
   naming the node, never guessed.
 - **Older graphs still read.** A position holding a plain literal
   (`sysml:value "1200.0"`), which is what releases before this wrote, is read as
@@ -371,9 +380,9 @@ legacy literals, foreign trees, unsupported shapes, round-trip exactness).
 
 ## Behavior
 
-An action or state body converts: each node it states has a metaclass and the
+An action or state body converts: each node in it has a metaclass and the
 properties its notation is rebuilt from, so `notation → RDF → notation` returns
-the body byte-identically (`behavior_test.go`). Where the OMG vocabulary names
+the body byte for byte (`behavior_test.go`). Where the OMG vocabulary names
 the node, that name is used; the rest are `sysx:` terms, marked below.
 
 | written | metaclass | carries |
@@ -405,19 +414,19 @@ The conditions and expressions these nodes carry are expression trees, like
 every other expression-valued position ([Expressions](#expressions)): they
 convert back exactly *and* SPARQL can see inside them.
 
-What is still refused, with the node named:
+What is still refused, naming the node:
 
 - **A succession that does not name both of its ends.** `then fork;` and
-  `then monitorPedal;` written under a preceding member state an order whose
+  `then monitorPedal;` written after a preceding member express an order whose
   source end the notation leaves implicit, and the parser records the node the
   statement introduces separately from the edge into it. Reconstructing that
-  shape means inferring which node an edge belongs to from member position,
-  which would silently reattach edges, so it is reported instead. Nine of the
+  shape would mean inferring which node an edge belongs to from member position,
+  which could silently reattach edges, so it is reported instead. Nine of the
   eighteen remaining refusals under `examples/` are this shape.
 - **A succession end whose name is not a basic name.** The two-end form the
   graph is written back as (`succession first a then b;`) is read by the parser
   only when both ends are basic names, so `succession first 'enter vehicle'
-  then 'drive vehicle';` would not parse; the edge is reported rather than
+  then 'drive vehicle';` would not parse. The edge is reported rather than
   written.
 - **Prefix metadata** (`#Safety part p;`, `@M { … }`) and an **operator
   expression member**, both unchanged from before.
@@ -426,16 +435,16 @@ What is still refused, with the node named:
 
 These are the constructs the mapping does not fully represent. Each is a
 documented limitation, not a silent one: converting an affected element from a
-graph that lacks the text reports an error naming the element rather than
+graph that lacks the source text reports an error naming the element rather than
 guessing.
 
 **An expression tree is not the metamodel's own expression model.** Feature
 values, multiplicity bounds, filter and constraint conditions and guards are
-expression trees ([Expressions](#expressions)), which is queryable, but the
-nodes are not `Feature`s owned through `FeatureMembership`s the way the abstract
-syntax models an expression; the notation each node was written as is what a
-conversion back is written from. A consumer wanting the metamodel's own shape
-does not get it from this mapping.
+expression trees ([Expressions](#expressions)), which makes them queryable, but
+the nodes are not `Feature`s owned through `FeatureMembership`s the way the
+abstract syntax models an expression. A conversion back to notation is written
+from the text each node was written as. A consumer that wants the metamodel's own
+shape does not get it from this mapping.
 
 **Lexical comments do not survive the RDF hop.** `//` and `/* */` trivia is
 attached to no element, so a `notation → RDF → notation` round trip drops it:
@@ -450,15 +459,15 @@ package Demo {
 ```
 
 The `comment` and `doc` keywords declare elements, so they convert both ways.
-Save straight to `.sysml` when the trivia matters — that path writes the source
+Save straight to `.sysml` when the comments matter; that path writes the source
 and keeps everything.
 
 ### End-binding heads
 
-**A head that binds ends states the form it writes them in.** A `connect`,
+**A head that binds ends records the form it writes them in.** A `connect`,
 `bind`, `flow`, `succession`, `transition`, `accept` or `satisfy` declaration is
-carried as `sysx:sourceText` — the exact text is what a save writes back — and
-beside it as the structure the head states: its ends, and `sysx:endForm`, the
+carried as `sysx:sourceText` (the exact text is what a save writes back) and,
+beside it, as the structure the head expresses: its ends, and `sysx:endForm`, the
 notation those ends are written in. The form is what makes the head
 reconstructible without the text, so a graph from another tool converts to
 notation as well:
@@ -494,27 +503,27 @@ expr:P__Car___402.end0
 
 A head whose own keyword is the noun form writes a verb ahead of its ends, and
 that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
-is a synonym of the kind's — `verify` for a satisfy, `allocate` for an
-allocation — it is carried as `sysx:declaredKeyword`, as elsewhere.
+is a synonym for the kind (`verify` for a satisfy, `allocate` for an
+allocation) it is carried as `sysx:declaredKeyword`, as elsewhere.
 
-**The form is only stated when rebuilding it reproduces the head as written.**
+**The form is only recorded when rebuilding from it reproduces the head as written.**
 The encoder writes the ends back from `sysx:endForm` and compares them with the
 source before recording it, so a head this mapping cannot rebuild exactly
-carries no form and stays readable as text alone. Those are the heads that state
+carries no form and stays readable as text alone. Those are the heads that say
 more than their ends: an end with a multiplicity or a `references` clause, an
 inline payload declaration (`flow of x : P from a to b`), a satisfy that
 declares a name of its own (`satisfy s : R by v`), or any head with a body.
 Converting such an element from a graph that carries no `sysx:sourceText` is
-reported, not guessed. A graph that relates ends and states no form at all is
+reported, not guessed. A graph that relates ends but gives no form at all is
 reported the same way (`export_test.go:TestEndsWithoutTheirFormAreReported`).
 
 Tests: `export_test.go:TestEndBindingHeadsComeBackFromTheGraphAlone` and
 `TestBehavioralHeadsComeBackFromTheGraphAlone` strip `sysx:sourceText` from the
-graph, write the notation back from the mapping alone, and convert it again —
-the second graph must equal the first, which is what proves the second hop loses
+graph, write the notation back from the mapping alone, and convert it again.
+The second graph must equal the first, which is what proves the second hop loses
 nothing. `TestBindingEndsAreStatedAsStructure` covers the ends themselves.
 
-**A succession carries its two ends.** Every succession is one node stating
+**A succession carries its two ends.** Every succession is one node naming
 the members it sequences, whether it was written as its own member
 (`succession first a then b;`) or attached to one (`then action b : B;`, which
 the parser desugars to the same edge), so the order a model declares survives
@@ -529,35 +538,40 @@ elmt:P__Move___402
 ```
 
 A `then` that names neither end writes `sysx:sourceMember` and
-`sysx:targetMember` instead: the member it sequences is the element, since the
-notation states no name for it. That is what carries a `then` beside a member
+`sysx:targetMember` instead, pointing at the members it sequences, since the
+notation gives them no name. That is what carries a `then` beside a member
 the notation leaves unnamed (`then send Show(x) to screen;`, a state's
-`entry; then s1;`) — the shape the parser used to warn about
+`entry; then s1;`), the shape the parser used to warn about
 (`unnamed-succession-end`) and the encoder used to refuse. Both ends are
 positions in one body, so writing them back is exact: the source end is the
 member before the succession, and a target that *is* that preceding member is
-the declaration the `then` was written ahead of. A graph stating a position the
-notation cannot express — sequencing from a member elsewhere in the body — is
+the declaration the `then` was written ahead of. A graph describing a position the
+notation cannot express (sequencing from a member elsewhere in the body) is
 reported rather than written back somewhere else
 (`export_test.go:TestUnnamedSuccessionEndComesBackFromTheGraph`,
 `TestHalfNamedSuccessionInAGraphIsReported`).
 
-Every body that can carry a succession — definition, usage, action, state (a
-parallel state's regions included), calculation and requirement — reads these forms back as the
-same node, so a second conversion yields the same graph
-(`export_test.go:TestSuccessionRoundTripsInEveryBody`). The explicit two-ended
-form reads only basic names, so a succession naming an end that needs quotes is
-reported rather than written as notation the parser rejects.
+Every body that can carry a succession (definition, usage, action, state,
+including a parallel state's regions, calculation and requirement) reads these
+forms back as the same node, and on the fixtures a second conversion writes the
+same Turtle byte for byte (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
+That is a statement about the fixtures, not the mapping: over the example corpus
+the second hop reproduces the graph exactly for 166 of the 268 files that
+convert, up to `sysx:sourceText` whitespace for 71 more, and differs for the
+rest ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). The
+explicit two-ended form reads only basic names, so a succession naming an end
+that needs quotes is reported rather than written as notation the parser would
+reject.
 
-**A reference end is written back in a spelling the parser reads back
-differently.** `end [*] ref cause : Situation;` is carried faithfully — the
-graph states `sysml:isReference` — and comes back as
+**A reference end is written back in a spelling the parser reads
+differently.** `end [*] ref cause : Situation;` is carried faithfully (the
+graph records `sysml:isReference`) and comes back as
 `end ref attribute cause : Situation[*];`, but the parser records no reference
 flag for a `ref` that follows `end`, so converting *that* notation again drops
-the `ref`. The graph is right; recording the flag in the parser is what a stable
-second hop needs.
+the `ref`. The graph is right; a stable second hop needs the parser to record
+the flag.
 
-**Conditions convert as their notation.** The members that state
+**Conditions convert as their notation.** The members that express
 a condition are carried, each as the `sysx:` metaclass named above with its
 condition as `sysx:condition`: a constraint body's conditions (`assert`,
 `assume`, a bare condition, and the `not` of `assert not …` as
@@ -568,12 +582,12 @@ declares. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
 themselves are notation, with the limits stated above.
 
-The nodes an action or state body states are mapped under
+The nodes in an action or state body are mapped under
 [Behavior](#behavior), together with the shapes still refused there.
 
-**A synonym keyword that names no element of its own is refused.** `snapshot s;`
+**A synonym keyword on a declaration with no name of its own is refused.** `snapshot s;`
 shares its AST kind with `occurrence`, and a declaration that carries no name of
-its own has nothing for `sysx:declaredKeyword` to hang off, so writing it back as
+its own has nothing for `sysx:declaredKeyword` to attach to, so writing it back as
 the canonical `occurrence` would be a different declaration. It is reported
 instead. `perform a : A;` does convert: the `perform` is kept as the keyword it
 was written with.
@@ -584,39 +598,39 @@ no span for the annotation itself. Two shapes are reported rather than written
 back: an annotation carrying a body of its own (`@M { isSet = true; }`), which
 the vocabulary has no properties for, and an `@` annotation ahead of a
 definition (`@Safety part def Car;`), which the parser records on the
-declaration *before* the one it prefixes — writing that back would annotate a
+declaration *before* the one it prefixes, so writing it back would annotate a
 different element.
 
 **A name declared twice in one namespace is refused.** An element's derived id
 is the encoding of its qualified name, so `part def A; part def A;` in one
 container would merge into a single subject. The duplicate is reported instead.
 
-A shorthand relationship declares no name: the `result` of `bind result = x;` and
-the `x` of `first x;` name the end the statement relates, so those elements are
-addressed by position (`sysx:memberIndex`) and the name is carried as a
-reference. Without that they collided with the member they name and the model was
-refused as a duplicate.
+A shorthand relationship declares no name of its own: the `result` in `bind result = x;`
+and the `x` in `first x;` name the end the statement relates. Those elements are
+therefore addressed by position (`sysx:memberIndex`) and the name is carried as a
+reference. Without that they would collide with the member they name and the model
+would be refused as a duplicate.
 
-**Unsupported on the RDF input side**, each an error naming the line or element:
+**Unsupported on the RDF input side**, each reported as an error naming the line or element:
 
 - blank nodes and `[ ... ]` — every element must have a stable IRI
 - RDF collections `( ... )` — order is carried by `sysx:memberIndex`
 - an element with no `rdf:type`, or a metaclass outside the mapping
 - a reference whose IRI names no subject of the graph and whose id no subject
-  carries as `sysml:elementId` — a dangling id is reported as such, never left
+  carries as `sysml:elementId`; a dangling id is reported as such, never left
   as a silently unresolvable name
-- a referenced element with no `sysml:qualifiedName` — the name is read from
+- a referenced element with no `sysml:qualifiedName`; the name is read from
   that property, never recovered from the IRI, so a graph with foreign ids
-  (UUIDs, say) converts exactly when it carries the names
+  (UUIDs, say) converts exactly as long as it carries the names
 - an element whose `sysml:owningNamespace` is not in the graph
-- ownership that forms a cycle, leaving an element no root owns — printing walks
+- ownership that forms a cycle, leaving an element no root owns; printing walks
   down from the roots, so this would otherwise write an empty document
 - Turtle syntax errors, reported with a line number
 - literal shorthands (bare numbers and booleans); literals must be quoted,
   with an `xsd:` datatype where one applies
 
-A graph that uses none of OpenSysML's `sysx:` properties — one produced by
-another tool — converts as far as the mapping allows and errors on the first
+A graph that uses none of OpenSysML's `sysx:` properties (one produced by
+another tool) converts as far as the mapping allows and errors on the first
 element it cannot place, rather than emitting a model with elements missing.
 
 ## Where the code lives
@@ -625,6 +639,7 @@ element it cannot place, rather than emitting a model with elements missing.
 |---------|------|
 | `internal/core/rdf` | Triple/graph model, Turtle writer, Turtle parser |
 | `internal/core/export` | `ToRDF` (AST → graph), `ToSysML` (graph → notation), and the `Convert` entry point |
+| `internal/core/export/corpus_roundtrip_test.go` | The per-file round-trip ratchet over every model under `examples/`, with its baseline in `testdata/corpus_roundtrip_expected.txt` ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)) |
 | `internal/repl` | `%save` |
 | `cmd/sysml` | `-convert`, `-from`, `-o` |
 

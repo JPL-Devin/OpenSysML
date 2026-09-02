@@ -1,11 +1,13 @@
 package query
 
 import (
+	"fmt"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
@@ -192,7 +194,27 @@ func parsePrefixes(text string, prefixes map[string]string) error {
 		if len(iri) < 2 || iri[0] != '<' || iri[len(iri)-1] != '>' {
 			return errorf(ErrMalformed, "oslc.prefix binding %q must use an IRI", binding)
 		}
-		prefixes[strings.TrimSuffix(strings.TrimSpace(name), ":")] = iri[1 : len(iri)-1]
+		prefix := strings.TrimSuffix(strings.TrimSpace(name), ":")
+		if err := checkPrefixName(prefix); err != nil {
+			return err
+		}
+		prefixes[prefix] = iri[1 : len(iri)-1]
+	}
+	return nil
+}
+
+// checkPrefixName refuses a prefix no prefixed name could be written with, so
+// every binding a diagnostic offers is one the parser reads back.
+func checkPrefixName(prefix string) error {
+	if prefix == "" {
+		return errorf(ErrMalformed, "oslc.prefix binding has an empty prefix")
+	}
+	for _, r := range prefix {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune("_-.", r) {
+			continue
+		}
+		return errorf(ErrMalformed,
+			"oslc.prefix %q contains %q, which no prefixed name can be written with", prefix, r)
 	}
 	return nil
 }
@@ -309,18 +331,28 @@ func (p *oslcParser) identifier() (string, error) {
 		return "*", nil
 	}
 	start := p.pos
+	// A leading "@" scans as a name so resolveProperty can name its OSLC spelling.
+	if p.peek('@') {
+		p.pos++
+	}
 	for p.pos < len(p.s) {
-		r := rune(p.s[p.pos])
+		// Decoded, not byte-wise: classifying a byte of a multi-byte letter would
+		// end a name the prefix bindings accept in the middle of a rune.
+		r, size := utf8.DecodeRuneInString(p.s[p.pos:])
+		if r == utf8.RuneError && size <= 1 {
+			break
+		}
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune("_-.:", r) {
-			p.pos++
+			p.pos += size
 			continue
 		}
 		break
 	}
-	if start == p.pos || !strings.Contains(p.s[start:p.pos], ":") {
+	word := p.s[start:p.pos]
+	if start == p.pos || !(strings.Contains(word, ":") || strings.HasPrefix(word, "@")) {
 		return "", errorf(ErrMalformed, "OSLC term requires a prefixed-name identifier")
 	}
-	return p.s[start:p.pos], nil
+	return word, nil
 }
 
 func (p *oslcParser) operator() Operator {
@@ -394,8 +426,12 @@ func (p *oslcParser) value() (string, error) {
 		return "*", nil
 	}
 	start := p.pos
-	for p.pos < len(p.s) && !unicode.IsSpace(rune(p.s[p.pos])) && !strings.ContainsRune(",]}", rune(p.s[p.pos])) {
-		p.pos++
+	for p.pos < len(p.s) {
+		r, size := utf8.DecodeRuneInString(p.s[p.pos:])
+		if unicode.IsSpace(r) || strings.ContainsRune(",]}", r) {
+			break
+		}
+		p.pos += size
 	}
 	raw := p.s[start:p.pos]
 	if raw == "true" || raw == "false" {
@@ -411,8 +447,12 @@ func (p *oslcParser) value() (string, error) {
 }
 
 func (p *oslcParser) skipSpace() {
-	for p.pos < len(p.s) && unicode.IsSpace(rune(p.s[p.pos])) {
-		p.pos++
+	for p.pos < len(p.s) {
+		r, size := utf8.DecodeRuneInString(p.s[p.pos:])
+		if !unicode.IsSpace(r) {
+			return
+		}
+		p.pos += size
 	}
 }
 
@@ -431,8 +471,10 @@ func (p *oslcParser) consumeWord(word string) bool {
 		return false
 	}
 	end := p.pos + len(word)
-	if end < len(p.s) && !unicode.IsSpace(rune(p.s[end])) {
-		return false
+	if end < len(p.s) {
+		if r, _ := utf8.DecodeRuneInString(p.s[end:]); !unicode.IsSpace(r) {
+			return false
+		}
 	}
 	p.pos = end
 	return true
@@ -442,6 +484,14 @@ func resolveProperty(name string, prefixes map[string]string) (string, error) {
 	if name == "*" {
 		return "", wildcardError("oslc.where")
 	}
+	// The Go API names these two "@type" and "@id"; OSLC query text cannot.
+	switch name {
+	case PropertyType:
+		return "", errorf(ErrMalformed, "OSLC query text spells the metamodel type \"rdf:type\", not %q", name)
+	case PropertyID:
+		return "", errorf(ErrMalformed,
+			"%q is not an OSLC query property: element identity is reported for every result", name)
+	}
 	iri, err := expandName(name, prefixes)
 	if err != nil {
 		return "", err
@@ -449,7 +499,76 @@ func resolveProperty(name string, prefixes map[string]string) (string, error) {
 	if property, ok := oslcPropertyMappings[iri]; ok {
 		return property, nil
 	}
-	return "", unknownProperty(name)
+	return "", unknownOSLCProperty(name, prefixes)
+}
+
+// propertyNamespaces are the namespaces the OSLC property mapping spells its
+// properties in.
+var propertyNamespaces = []string{rdf.RDFNS, rdf.SysML}
+
+// PrefixedPropertyNames returns the property names OSLC query text spells
+// under prefixes, in stable order, along with the local names of every
+// namespace those bindings leave unnamed, keyed by namespace. An oslc.prefix
+// binding decides what the parser accepts, so a diagnostic reads the same map.
+func PrefixedPropertyNames(prefixes map[string]string) (names []string, unbound map[string][]string) {
+	unbound = make(map[string][]string)
+	for iri := range oslcPropertyMappings {
+		namespace, local := splitPropertyIRI(iri)
+		if prefix, bound := namingPrefix(prefixes, namespace); bound {
+			names = append(names, prefix+":"+local)
+			continue
+		}
+		unbound[namespace] = append(unbound[namespace], local)
+	}
+	sort.Strings(names)
+	for _, locals := range unbound {
+		sort.Strings(locals)
+	}
+	return names, unbound
+}
+
+func splitPropertyIRI(iri string) (namespace, local string) {
+	for _, namespace := range propertyNamespaces {
+		if strings.HasPrefix(iri, namespace) {
+			return namespace, strings.TrimPrefix(iri, namespace)
+		}
+	}
+	return "", iri
+}
+
+// namingPrefix returns the alphabetically first prefix bound to namespace, so
+// one namespace is always offered under one spelling.
+func namingPrefix(prefixes map[string]string, namespace string) (string, bool) {
+	bound := make([]string, 0, len(prefixes))
+	for prefix, iri := range prefixes {
+		if iri == namespace {
+			bound = append(bound, prefix)
+		}
+	}
+	if len(bound) == 0 {
+		return "", false
+	}
+	sort.Strings(bound)
+	return bound[0], true
+}
+
+func unknownOSLCProperty(name string, prefixes map[string]string) *Error {
+	names, unbound := PrefixedPropertyNames(prefixes)
+	var b strings.Builder
+	fmt.Fprintf(&b, "unknown OSLC query property %q", name)
+	if len(names) > 0 {
+		fmt.Fprintf(&b, "; this implementation reads %s", strings.Join(names, ", "))
+	}
+	namespaces := make([]string, 0, len(unbound))
+	for namespace := range unbound {
+		namespaces = append(namespaces, namespace)
+	}
+	sort.Strings(namespaces)
+	for _, namespace := range namespaces {
+		fmt.Fprintf(&b, "; it also reads %s of <%s>, which no %s binding names",
+			strings.Join(unbound[namespace], ", "), namespace, paramPrefix)
+	}
+	return errorf(ErrUnknownProperty, "%s", b.String())
 }
 
 func resolveValue(name string, prefixes map[string]string) (string, error) {

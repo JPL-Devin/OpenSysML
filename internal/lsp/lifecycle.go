@@ -41,11 +41,15 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 				Range:  true,
 			},
 			CodeActionProvider: &protocol.CodeActionOptions{
-				CodeActionKinds: []protocol.CodeActionKind{protocol.QuickFix},
+				CodeActionKinds: []protocol.CodeActionKind{protocol.QuickFix, identityActionKind},
 			},
 			// A client that draws diagrams speaks opensysml/render, which is no
 			// protocol method; this is how it learns the server serves it.
-			Experimental: map[string]any{"openSysmlRender": true, "openSysmlRenderDocument": true},
+			Experimental: map[string]any{
+				"openSysmlRender":         true,
+				"openSysmlRenderDocument": true,
+				"openSysmlStdlibContent":  true,
+			},
 			// Folders added mid-session are only indexed if the client reports them.
 			Workspace: &protocol.ServerCapabilitiesWorkspace{
 				WorkspaceFolders: &protocol.ServerCapabilitiesWorkspaceFolders{
