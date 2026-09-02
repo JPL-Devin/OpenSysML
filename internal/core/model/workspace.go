@@ -1,6 +1,7 @@
 package model
 
 import (
+	"path/filepath"
 	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -26,6 +27,10 @@ type Workspace struct {
 	// analysis is the options every document of this workspace is analyzed under,
 	// so one session asks one question of all its files.
 	analysis passes.Options
+	// libSource yields the text of the library files the index was built from,
+	// nil when the index came without one; libDocs caches them parsed.
+	libSource libs.Source
+	libDocs   map[string]*Document
 }
 
 // Option configures a workspace at construction.
@@ -36,11 +41,20 @@ func WithConformanceMode(mode conformance.Mode) Option {
 	return func(w *Workspace) { w.analysis.Conformance = mode }
 }
 
+// WithLibrarySource names the source the index's library documents were read
+// from, so LibraryDocument can serve their text. It must serve the bytes the
+// index was built from, or the index's spans address the wrong text.
+func WithLibrarySource(src libs.Source) Option {
+	return func(w *Workspace) { w.libSource = src }
+}
+
 // NewWorkspace returns a workspace with stdlib pre-loaded into the global index.
 // Stdlib files are loaded from embedded sources (or OPENSYSML_LIBRARY_PATH if set).
 // Without options it analyzes in the default conformance mode.
 func NewWorkspace(opts ...Option) *Workspace {
-	return NewWorkspaceWithIndex(libs.NewModelIndex(), opts...)
+	base, src := libs.SharedLibrary()
+	opts = append([]Option{WithLibrarySource(src)}, opts...)
+	return NewWorkspaceWithIndex(symbols.NewOverlay(base), opts...)
 }
 
 // NewWorkspaceWithIndex returns a workspace over a caller-built index, for a
@@ -53,6 +67,7 @@ func NewWorkspaceWithIndex(idx *symbols.Index, opts ...Option) *Workspace {
 		open:      map[string]bool{},
 		index:     idx,
 		diagCache: map[string][]passes.Diagnostic{},
+		libDocs:   map[string]*Document{},
 	}
 	for _, opt := range opts {
 		opt(w)
@@ -348,6 +363,60 @@ func (w *Workspace) DocumentNames() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// IsLibraryDocument reports whether name is a bundled library file the index
+// holds, as opposed to a document of the workspace's own.
+func (w *Workspace) IsLibraryDocument(name string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	_, ok := w.libraryNameLocked(name)
+	return ok
+}
+
+// libraryNameLocked is the index's name for the library file name denotes,
+// accepting the forward-slash form a URI carries where the source listed the
+// file with the OS separator. Caller holds the lock.
+func (w *Workspace) libraryNameLocked(name string) (string, bool) {
+	if w.index.IsLibraryDocument(name) {
+		return name, true
+	}
+	if alt := filepath.FromSlash(name); alt != name && w.index.IsLibraryDocument(alt) {
+		return alt, true
+	}
+	return "", false
+}
+
+// LibraryDocument returns the parsed text of the named bundled library file,
+// read from the source the index was built from, so its spans are the ones the
+// index's symbols carry. It is nil for a name that is no library document and
+// when the workspace has no library source. Library documents are read-only:
+// they are never added to the index, which holds them already.
+func (w *Workspace) LibraryDocument(name string) *Document {
+	w.mu.RLock()
+	name, isLibrary := w.libraryNameLocked(name)
+	doc, cached := w.libDocs[name]
+	src := w.libSource
+	w.mu.RUnlock()
+	if cached {
+		return doc
+	}
+	if src == nil || !isLibrary {
+		return nil
+	}
+	content, err := src.Read(name)
+	if err != nil {
+		return nil
+	}
+	doc = newDocument(name, content, 0)
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if existing, ok := w.libDocs[name]; ok {
+		return existing
+	}
+	w.libDocs[name] = doc
+	return doc
 }
 
 // ResolveQualifiedInDoc resolves a qualified name against the given scope using
