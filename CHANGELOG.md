@@ -223,6 +223,26 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   capability error rather than an input silently read as null. The Python generator emits
   `complex` for a `Complex` feature (emission schema `4`).
 
+- **Documents render as semantic, styleable HTML.** `-doc-form html` writes a document from the
+  compiled document tree itself rather than by converting the Markdown, so the model facts Markdown
+  cannot carry reach the markup: `<article>`, nested `<section>` whose heading levels follow the
+  nesting, `<table>` with `<caption>`/`<thead>`/`<th scope="col">`, `<figure>`/`<figcaption>`,
+  `<nav>` contents and semantic inline runs, hooked by a small `sysml-` class vocabulary and
+  `data-` attributes for the content kind and name, the query behind a table or list, the group-by
+  column, each row's or item's selected element and element kind, each cell's projected column and
+  value kind, and a diagram's view, kind and direction. Identifiers are the Markdown anchors, so a
+  `Ref` resolves within a page and, under `-render-documents -doc-form html`, across a linked set
+  whose pages share one `sysml-document.css`. The default stylesheet sits in an `@layer opensysml`
+  cascade layer and draws every value from `--sysml-*` custom properties, so unlayered reader CSS
+  overrides it without `!important` or specificity fights, and no `style` attribute is ever
+  emitted; `-html-default-css`, `-html-css` (repeatable; a file is inlined, a URL linked),
+  `-html-no-default-css` and `-html-fragment` shape that. Output loads nothing over the network,
+  runs no JavaScript of its own — a diagram's Mermaid source sits in `<pre class="mermaid">` — and
+  is byte-identical between runs. The title page, contents and numbering options are now
+  `-doc-title-page`, `-doc-toc` and `-doc-number-sections`, shared by HTML and PDF, with the
+  `-pdf-*` spellings kept as aliases. Markdown is unchanged, and the PDF engines still read their
+  own HTML for now.
+
 - **An element declares its repository identity in the notation.** `@ElementId { id = "…"; }`
   annotates the element it is written about, and `@ProjectRef { projectId = "…"; }` on a root
   namespace binds the document to its repository, so element-level ids inherit their scope.
