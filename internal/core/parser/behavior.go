@@ -1756,11 +1756,9 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 			// Parse return member (for constraint defs that return result)
 			// Example: return result = expr { doc }
 			members = append(members, p.parseBodyMember())
-		} else if p.atDefUsageStart() || p.atRelationshipKeyword() || p.atKindlessFeatureTyping() {
-			// A declaration, or a member that states a relationship where its
-			// name would go (`redefines partMasses = expr;`, `:>> x = value;`):
-			// both spellings reach parseBodyMember, which reads them as one form
-			// and diagnoses the relationships that are not member forms.
+		} else if p.atDefUsageStart() || p.atRelationshipKeyword() || p.atKindlessFeatureTyping() || p.atMetadataMember() {
+			// A declaration, a relationship where a name would go (`:>> x = v;`),
+			// or a metadata usage (`@M { … }`).
 			members = append(members, p.parseBodyMember())
 		} else {
 			// Default: parse as constraint expression (bare expression)
@@ -1775,6 +1773,30 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
 	return members
+}
+
+// atMetadataMember tells a metadata usage (`@M;`, `@M { … }`, `@M about x;`)
+// from a classification condition of the implicit subject (`@M`, `@M and c`).
+func (p *Parser) atMetadataMember() bool {
+	if !p.at(lexer.At) {
+		return false
+	}
+	for n := 1; ; n++ {
+		switch t := p.peekN(n); t.Kind {
+		case lexer.Identifier, lexer.UnrestrictedName, lexer.ColonColon, lexer.Colon, lexer.Lt, lexer.Gt:
+			continue
+		case lexer.LBrace, lexer.Semicolon:
+			return true
+		case lexer.Keyword:
+			switch t.KeywordID {
+			case "defined", "typed", "by":
+				continue
+			case "about":
+				return true
+			}
+		}
+		return false
+	}
 }
 
 // atConstraintCondition reports whether an `assert`/`assume` condition follows,
