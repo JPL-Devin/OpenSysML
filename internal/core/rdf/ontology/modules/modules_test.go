@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testOWL = `<?xml version="1.0"?>
@@ -138,10 +139,64 @@ func TestReadRDFXMLRejectsUnsupported(t *testing.T) {
 		"mixed":      `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value>text<rdf:Description/></rdf:value></rdf:Description></rdf:RDF>`,
 		"notRDF":     `<owl:Ontology xmlns:owl="http://www.w3.org/2002/07/owl#"/>`,
 		"aboutAndID": `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a" rdf:nodeID="b"/></rdf:RDF>`,
+		"noBase":     `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="#a"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
+		"badBase":    `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xml:base="relative/base"><rdf:Description rdf:about="#a"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
 	} {
 		if _, err := ReadRDFXML(strings.NewReader(doc)); err == nil {
 			t.Errorf("%s: parsed without error", name)
 		}
+	}
+}
+
+func TestReadRDFXMLResolvesReferences(t *testing.T) {
+	const doc = `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xml:base="https://example.org/spec/SysML.owl?v=1">
+  <rdf:Description rdf:about="#frag"><rdf:value rdf:resource="sibling"/></rdf:Description>
+  <rdf:Description rdf:about="/root"><rdf:value rdf:resource="?q"/></rdf:Description>
+  <rdf:Description rdf:about=""><rdf:value rdf:resource="urn:x:abs"/></rdf:Description>
+</rdf:RDF>`
+	triples, err := ReadRDFXML(strings.NewReader(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"<https://example.org/spec/SysML.owl?v=1#frag> <" + RDFNS + "value> <https://example.org/spec/sibling>",
+		"<https://example.org/root> <" + RDFNS + "value> <https://example.org/spec/SysML.owl?q>",
+		"<https://example.org/spec/SysML.owl?v=1> <" + RDFNS + "value> <urn:x:abs>",
+	}
+	for i, w := range want {
+		if got := triples[i].String(); got != w {
+			t.Errorf("triple %d = %s, want %s", i, got, w)
+		}
+	}
+}
+
+func TestReadRDFXMLKeepsNodeIDsDistinct(t *testing.T) {
+	const doc = `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about="x:a">
+    <rdf:value><rdf:Description><rdf:value>anonymous</rdf:value></rdf:Description></rdf:value>
+    <rdf:value rdf:nodeID="b1"/>
+    <rdf:value rdf:nodeID="b1"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="b1"><rdf:value>named</rdf:value></rdf:Description>
+</rdf:RDF>`
+	triples, err := ReadRDFXML(strings.NewReader(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var anonymous, named Node
+	for _, tr := range triples {
+		if tr.Object.Kind == LiteralNode && tr.Object.Value == "anonymous" {
+			anonymous = tr.Subject
+		}
+		if tr.Object.Kind == LiteralNode && tr.Object.Value == "named" {
+			named = tr.Subject
+		}
+	}
+	if anonymous == named || anonymous.Kind != BlankNode || named.Kind != BlankNode {
+		t.Fatalf("anonymous node %s and nodeID node %s should be distinct blank nodes", anonymous, named)
+	}
+	if triples[2].Object != named || triples[3].Object != named {
+		t.Errorf("repeated rdf:nodeID=\"b1\" references do not name one node: %s, %s", triples[2].Object, triples[3].Object)
 	}
 }
 
@@ -232,6 +287,26 @@ func TestPartitionRejectsUnplacedTerms(t *testing.T) {
 	}
 }
 
+func TestPartitionRejectsBlankNodeCycle(t *testing.T) {
+	triples := append(testTriples(t),
+		Triple{Blank("c1"), IRI("x:p"), Blank("c2")},
+		Triple{Blank("c2"), IRI("x:p"), Blank("c1")},
+	)
+	done := make(chan error, 1)
+	go func() {
+		_, err := testMetamodel(t).Partition(triples)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "cycle") {
+			t.Errorf("err = %v, want a cycle error", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Partition did not terminate on a blank-node cycle")
+	}
+}
+
 func TestWriteTurtle(t *testing.T) {
 	p, err := testMetamodel(t).Partition(testTriples(t))
 	if err != nil {
@@ -308,6 +383,31 @@ func TestWriteTurtleCollections(t *testing.T) {
 	_, err = WriteTurtle([]Triple{{IRI("x:a"), IRI("x:p"), Blank("s")}, {IRI("x:b"), IRI("x:p"), Blank("s")}, {Blank("s"), IRI("x:q"), IRI("x:c")}})
 	if err == nil {
 		t.Error("shared blank node did not fail")
+	}
+}
+
+func TestWriteTurtleRejectsListCycle(t *testing.T) {
+	// l2 -> l3 -> l2: the cycle does not pass through the head l1.
+	done := make(chan error, 1)
+	go func() {
+		_, err := WriteTurtle([]Triple{
+			{IRI("x:a"), IRI("x:p"), Blank("l1")},
+			{Blank("l1"), IRI(RDFNS + "first"), IRI("x:b")},
+			{Blank("l1"), IRI(RDFNS + "rest"), Blank("l2")},
+			{Blank("l2"), IRI(RDFNS + "first"), IRI("x:b")},
+			{Blank("l2"), IRI(RDFNS + "rest"), Blank("l3")},
+			{Blank("l3"), IRI(RDFNS + "first"), IRI("x:b")},
+			{Blank("l3"), IRI(RDFNS + "rest"), Blank("l2")},
+		})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("cyclic list did not fail")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("WriteTurtle did not terminate on a cyclic list")
 	}
 }
 

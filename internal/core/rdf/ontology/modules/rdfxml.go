@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 )
 
@@ -32,7 +33,13 @@ func ReadRDFXML(r io.Reader) ([]Triple, error) {
 		if start.Name.Space+start.Name.Local != RDFNS+"RDF" {
 			return nil, fmt.Errorf("rdfxml: root element is %s, want rdf:RDF", start.Name.Local)
 		}
-		p.base = attr(start, "http://www.w3.org/XML/1998/namespace", "base")
+		if base := attr(start, "http://www.w3.org/XML/1998/namespace", "base"); base != "" {
+			u, err := url.Parse(base)
+			if err != nil || !u.IsAbs() {
+				return nil, fmt.Errorf("rdfxml: xml:base %q is not an absolute IRI", base)
+			}
+			p.base = u
+		}
 		if err := p.nodeElements(start); err != nil {
 			return nil, err
 		}
@@ -45,9 +52,30 @@ func ReadRDFXML(r io.Reader) ([]Triple, error) {
 
 type rdfxmlReader struct {
 	decoder *xml.Decoder
-	base    string
+	base    *url.URL
 	blanks  int
+	// nodeIDs maps each rdf:nodeID in the document to its generated label, so
+	// explicit and anonymous blank nodes share one label space.
+	nodeIDs map[string]Node
 	triples []Triple
+}
+
+// blank returns the blank node for an rdf:nodeID, or a fresh one for "".
+func (p *rdfxmlReader) blank(nodeID string) Node {
+	if nodeID != "" {
+		if n, ok := p.nodeIDs[nodeID]; ok {
+			return n
+		}
+	}
+	p.blanks++
+	n := Blank(fmt.Sprintf("b%d", p.blanks))
+	if nodeID != "" {
+		if p.nodeIDs == nil {
+			p.nodeIDs = make(map[string]Node)
+		}
+		p.nodeIDs[nodeID] = n
+	}
+	return n
 }
 
 func (p *rdfxmlReader) emit(s, pr, o Node) {
@@ -85,9 +113,13 @@ func (p *rdfxmlReader) nodeElement(start xml.StartElement) (Node, error) {
 	for _, a := range start.Attr {
 		switch {
 		case a.Name.Space == RDFNS && a.Name.Local == "about":
-			subject = IRI(p.resolve(a.Value))
+			iri, err := p.resolve(a.Value)
+			if err != nil {
+				return Node{}, err
+			}
+			subject = IRI(iri)
 		case a.Name.Space == RDFNS && a.Name.Local == "nodeID":
-			subject = Blank(a.Value)
+			subject = p.blank(a.Value)
 		case a.Name.Space == "xmlns" || a.Name.Local == "xmlns":
 		default:
 			return Node{}, fmt.Errorf("rdfxml: unsupported attribute %s on node element %s",
@@ -95,8 +127,7 @@ func (p *rdfxmlReader) nodeElement(start xml.StartElement) (Node, error) {
 		}
 	}
 	if subject.Value == "" {
-		p.blanks++
-		subject = Blank(fmt.Sprintf("b%d", p.blanks))
+		subject = p.blank("")
 	}
 	if name := start.Name.Space + start.Name.Local; name != RDFNS+"Description" {
 		p.emit(subject, IRI(RDFNS+"type"), IRI(name))
@@ -133,9 +164,13 @@ func (p *rdfxmlReader) propertyElement(subject Node, start xml.StartElement) err
 	for _, a := range start.Attr {
 		switch {
 		case a.Name.Space == RDFNS && a.Name.Local == "resource":
-			object, resolved = IRI(p.resolve(a.Value)), true
+			iri, err := p.resolve(a.Value)
+			if err != nil {
+				return err
+			}
+			object, resolved = IRI(iri), true
 		case a.Name.Space == RDFNS && a.Name.Local == "nodeID":
-			object, resolved = Blank(a.Value), true
+			object, resolved = p.blank(a.Value), true
 		case a.Name.Space == RDFNS && a.Name.Local == "datatype":
 			datatype = a.Value
 		default:
@@ -177,11 +212,20 @@ func (p *rdfxmlReader) propertyElement(subject Node, start xml.StartElement) err
 	}
 }
 
-func (p *rdfxmlReader) resolve(ref string) string {
-	if strings.Contains(ref, ":") || p.base == "" {
-		return ref
+// resolve turns an rdf:about or rdf:resource value into an absolute IRI
+// against xml:base, per RFC 3986.
+func (p *rdfxmlReader) resolve(ref string) (string, error) {
+	u, err := url.Parse(ref)
+	if err != nil {
+		return "", fmt.Errorf("rdfxml: %q: %w", ref, err)
 	}
-	return p.base + ref
+	if u.IsAbs() {
+		return ref, nil
+	}
+	if p.base == nil {
+		return "", fmt.Errorf("rdfxml: relative reference %q with no xml:base", ref)
+	}
+	return p.base.ResolveReference(u).String(), nil
 }
 
 func attr(element xml.StartElement, space, local string) string {

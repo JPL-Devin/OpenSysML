@@ -190,6 +190,7 @@ func (w *turtleWriter) object(b *strings.Builder, o Node, depth int) error {
 func (w *turtleWriter) list(head Node) ([]Node, bool) {
 	var items []Node
 	var cells []Node
+	visited := map[string]bool{head.Value: true}
 	cell := head
 	for {
 		var first, rest Node
@@ -214,9 +215,10 @@ func (w *turtleWriter) list(head Node) ([]Node, bool) {
 			}
 			return items, true
 		}
-		if rest.Kind != BlankNode || w.written[rest.Value] {
+		if rest.Kind != BlankNode || w.written[rest.Value] || visited[rest.Value] {
 			return nil, false
 		}
+		visited[rest.Value] = true
 		cells = append(cells, rest)
 		cell = rest
 	}

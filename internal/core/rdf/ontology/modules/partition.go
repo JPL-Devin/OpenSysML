@@ -59,7 +59,12 @@ func (m *Metamodel) Partition(source []Triple) (*Partition, error) {
 		}
 	}
 	root := func(n Node) (Node, error) {
+		visited := map[string]bool{}
 		for n.Kind == BlankNode {
+			if visited[n.Value] {
+				return n, fmt.Errorf("blank node %s is in a cycle reached from no named subject", n)
+			}
+			visited[n.Value] = true
 			owner, ok := blankOwner[n.Value]
 			if !ok {
 				return n, fmt.Errorf("blank node %s is the object of no triple", n)
