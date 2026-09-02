@@ -262,7 +262,7 @@ func (r *Resolver) indexedNameOf(target *symbols.Symbol) string {
 
 // appendSubtree adds the descendants of target a recursive import surfaces. The
 // walk descends through the members the import can see, as the lookup does: a
-// namespace it cannot surface hides its own contents too (see lookupInSubtree).
+// namespace it cannot surface hides its own contents too (see eachSubtreeMatch).
 func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[symbols.ElementKey]bool) {
 	if target == nil || (target.Scope != nil && target.Scope.BodyLocal()) {
 		return

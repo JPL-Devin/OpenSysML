@@ -17,12 +17,25 @@ func SelectInvocation(resolver *resolve.Resolver, model *semantics.Model, scope 
 	return silent.selectInvocation(scope, e, silent.argumentTypes(scope, e))
 }
 
-// argumentTypes types e's arguments, the receiver of `x->f(a)` first.
-func (ec *exprChecker) argumentTypes(scope *symbols.Scope, e *ast.InvocationExpr) []semantics.PrimType {
+// argumentTypes are the types of e's arguments: the positional ones, the
+// receiver of `x->f(a)` first, and the named ones in the order written.
+type argumentTypes struct {
+	positional []semantics.PrimType
+	named      []semantics.PrimType
+}
+
+// argumentTypes types e's arguments once, so nested errors report once.
+func (ec *exprChecker) argumentTypes(scope *symbols.Scope, e *ast.InvocationExpr) argumentTypes {
 	args := invocationArgs(e)
-	types := make([]semantics.PrimType, len(args))
+	types := argumentTypes{
+		positional: make([]semantics.PrimType, len(args)),
+		named:      make([]semantics.PrimType, len(e.NamedArgs)),
+	}
 	for i, arg := range args {
-		types[i] = ec.infer(scope, arg)
+		types.positional[i] = ec.infer(scope, arg)
+	}
+	for i, arg := range e.NamedArgs {
+		types.named[i] = ec.infer(scope, arg.Value)
 	}
 	return types
 }
@@ -35,22 +48,27 @@ func invocationArgs(e *ast.InvocationExpr) []ast.Node {
 	return append([]ast.Node{e.Operand}, e.Args...)
 }
 
-// selectInvocation records the declaration e calls, from argTypes, the types of
-// its positional arguments; the named arguments are typed here.
-func (ec *exprChecker) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, argTypes []semantics.PrimType) *semantics.InvocationSelection {
+// selectInvocation records the declaration e calls given the types of its arguments.
+func (ec *exprChecker) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, argTypes argumentTypes) *semantics.InvocationSelection {
 	args := invocationArgs(e)
 	typed := make([]semantics.Argument, 0, len(args)+len(e.NamedArgs))
 	for i, arg := range args {
-		typed = append(typed, ec.argument(scope, arg, argTypes[i], ""))
+		typed = append(typed, ec.argument(scope, arg, argTypes.positional[i], ""))
 	}
-	for _, arg := range e.NamedArgs {
-		got := ec.infer(scope, arg.Value)
-		if arg.Name == nil || len(arg.Name.Parts) != 1 {
-			continue
+	for i, arg := range e.NamedArgs {
+		if name, ok := namedArgumentName(arg); ok {
+			typed = append(typed, ec.argument(scope, arg.Value, argTypes.named[i], name))
 		}
-		typed = append(typed, ec.argument(scope, arg.Value, got, arg.Name.Parts[0].Text))
 	}
 	return ec.model.SelectInvocation(scope, e, typed)
+}
+
+// namedArgumentName is the parameter name a named argument binds to.
+func namedArgumentName(arg ast.NamedArg) (string, bool) {
+	if arg.Name == nil || len(arg.Name.Parts) != 1 {
+		return "", false
+	}
+	return arg.Name.Parts[0].Text, true
 }
 
 // argument describes value as an argument of scalar type prim: the declared type

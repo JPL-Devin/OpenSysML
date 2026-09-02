@@ -139,34 +139,57 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 // reference subsetting's target past the borrowed name it binds itself — ask
 // for the contributed member instead.
 func (m *Model) LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	var found *symbols.Symbol
+	m.eachContributedMember(sym, name, func(s *symbols.Symbol) bool {
+		found = s
+		return false
+	})
+	return found, found != nil
+}
+
+// LookupContributedMembers is LookupContributedMember collecting the member
+// each source contributes under name, in source order, without duplicates.
+func (m *Model) LookupContributedMembers(sym *symbols.Symbol, name string) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	m.eachContributedMember(sym, name, func(s *symbols.Symbol) bool {
+		if !containsSymbol(out, s) {
+			out = append(out, s)
+		}
+		return true
+	})
+	return out
+}
+
+// eachContributedMember calls yield with the member each of sym's member
+// sources holds under name, until yield returns false.
+func (m *Model) eachContributedMember(sym *symbols.Symbol, name string, yield func(*symbols.Symbol) bool) {
 	if sym == nil || name == "" {
-		return nil, false
+		return
 	}
 	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
 		sym = target
 	}
 	for _, sup := range m.MemberSources(sym) {
 		if sup.Scope != nil {
-			if s, ok := sup.Scope.LookupLocal(name); ok {
-				return s, true
+			if s, ok := sup.Scope.LookupLocal(name); ok && !yield(s) {
+				return
 			}
+			continue
 		}
-		// Also check index for cached sources with nil Scope
-		if sup.Scope == nil {
-			idx := m.resolver.Index()
-			children := idx.LookupDirectChildren(sup.Name)
-			for _, child := range children {
-				leafName := child.Name
-				if lastIdx := lastDoubleColon(child.Name); lastIdx >= 0 {
-					leafName = child.Name[lastIdx+2:]
+		// A cached source with no scope is read from the index.
+		for _, child := range m.resolver.Index().LookupDirectChildren(sup.Name) {
+			leafName := child.Name
+			if lastIdx := lastDoubleColon(child.Name); lastIdx >= 0 {
+				leafName = child.Name[lastIdx+2:]
+			}
+			if leafName == name {
+				if !yield(child) {
+					return
 				}
-				if leafName == name {
-					return child, true
-				}
+				break
 			}
 		}
 	}
-	return nil, false
 }
 
 // lastDoubleColon returns the index of the last "::" in s, or -1 if not found.

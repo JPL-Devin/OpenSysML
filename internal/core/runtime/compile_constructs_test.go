@@ -48,9 +48,8 @@ var compiledFixtures = []struct {
 		ineligible: []string{"Length", "SumOfSequence", "OwnPi"},
 	},
 	{
-		file:       "named_arguments.sysml",
-		eligible:   []string{"Weighted", "InOrder", "Reordered", "Defaulted", "OnlyRequired", "Failing", "LibraryNamed", "Fib", "Scaled", "Duplicate"},
-		ineligible: []string{"Missing"},
+		file:     "named_arguments.sysml",
+		eligible: []string{"Weighted", "InOrder", "Reordered", "Defaulted", "OnlyRequired", "Failing", "LibraryNamed", "Fib", "Scaled", "Duplicate"},
 	},
 }
 
@@ -69,6 +68,11 @@ func loadCompiledFixture(t *testing.T, file string) *compiledFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return loadCompiledSource(path, src)
+}
+
+// loadCompiledSource builds one model from src with the libraries.
+func loadCompiledSource(path string, src []byte) *compiledFixture {
 	idx := libs.NewModelIndex()
 	idx.AddDocument(path, parser.New(source.New(path, src)).ParseFile())
 	idx.ExpandWildcardImports()
@@ -339,8 +343,6 @@ func TestCompiledNamedArguments(t *testing.T) {
 
 	failing := f.same(t, "Failing", intArg(0))
 	wantErrorIs(t, "Failing(0)", failing, ErrDivisionByZero)
-	missing := f.same(t, "Missing", realArg(1))
-	wantErrorIs(t, "Missing(1)", missing, ErrUnboundParameter)
 	wantOutcomeReal(t, "Duplicate(1)", f.same(t, "Duplicate", realArg(1)), 2)
 
 	// The entry binding by name reaches the compiled tier too.
@@ -357,4 +359,18 @@ func TestCompiledNamedArguments(t *testing.T) {
 	if stringy := f.sameNamed(t, "Weighted", map[string]Value{"value": NewStringValue("x")}); !errors.Is(stringy.err, ErrTypeMismatch) {
 		t.Errorf("Weighted(value = \"x\") = %v", stringy.err)
 	}
+}
+
+// A body leaving a required parameter unbound is ill-typed, so it lives outside
+// the checker-clean fixtures: it compiles on neither tier and both refuse it.
+func TestCompiledNamedArgumentLeftUnbound(t *testing.T) {
+	f := loadCompiledSource("unbound.sysml", []byte(`package test {
+		private import ScalarValues::*;
+		calc def Weighted { in value : Real; in weight : Real = 1.0; return : Real = value * weight; }
+		calc def Missing { in v : Real; return : Real = Weighted(weight = v); }
+	}`))
+	if ok, why := f.eligible(t, "Missing"); ok || why == "" {
+		t.Fatalf("Missing eligible=%v why=%q, want ineligible with a reason", ok, why)
+	}
+	wantErrorIs(t, "Missing(1)", f.same(t, "Missing", realArg(1)), ErrUnboundParameter)
 }

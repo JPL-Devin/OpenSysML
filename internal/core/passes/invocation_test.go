@@ -255,6 +255,28 @@ func TestInvocationOverloadNamedArguments(t *testing.T) {
 		"type.expr", "candidates: P::A::pick, P::B::pick")
 }
 
+// A named argument is checked against the parameter it names as a positional
+// one is against its position, and a parameter without a default must be named.
+func TestInvocationNamedArgumentsAreTypeChecked(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		attribute def Mass :> Real;
+		attribute def Volume :> Real;
+		calc def density { in m : Mass; in v : Volume; in scale : Real = 1.0; return : Real = m / v * scale; }
+		attribute kg : Mass = 3.0;
+		attribute litre : Volume = 2.0;
+		attribute %s
+	}`
+	wantLibraryClean(t, fmt.Sprintf(model, `ok : Real = density(m = kg, v = litre);`))
+	wantLibraryClean(t, fmt.Sprintf(model, `scaled : Real = density(v = litre, m = kg, scale = 2);`))
+	wantLibraryDiag(t, fmt.Sprintf(model, `s : Real = density(m = "3", v = litre);`),
+		"type.expr", `argument m of density expects Real, found String`)
+	wantLibraryDiag(t, fmt.Sprintf(model, `b : Real = density(m = kg, v = litre, scale = true);`),
+		"type.expr", `argument scale of density expects Real, found Boolean`)
+	wantLibraryDiag(t, fmt.Sprintf(model, `partial : Real = density(m = kg);`),
+		"type.expr", `density requires an argument for v`)
+}
+
 // Candidates are gathered through a public import re-exporting them and from
 // the general type a definition inherits them from; an inherited member hides
 // what an import of the same name would bring in, as for any other name.
@@ -287,4 +309,33 @@ func TestInvocationOverloadReexportedAndInheritedCandidates(t *testing.T) {
 	wantLibraryClean(t, fmt.Sprintf(inherited, `i : Integer = pick(2);`))
 	wantLibraryDiag(t, fmt.Sprintf(inherited, `s = pick("s");`),
 		"type.expr", "argument 1 of pick expects Integer, found String")
+}
+
+// Every general type and every descendant of a recursive import contributes its
+// declaration; two generals sharing a name is a warning, not a lost candidate.
+func TestInvocationOverloadCandidatesFromEveryGeneralAndRecursiveImport(t *testing.T) {
+	diags := libraryDiags(t, `package P {
+		private import ScalarValues::*;
+		part def ByNumber { calc def pick { in x : Integer; return : Integer = x; } }
+		part def ByText { calc def pick { in x : String; return : String = x; } }
+		part def Both :> ByNumber, ByText {
+			attribute i : Integer = pick(2);
+			attribute s : String = pick("s");
+		}
+	}`)
+	if len(diags) != 1 || diags[0].Code != "name-conflict" || diags[0].Severity != SeverityWarning {
+		t.Fatalf("expected only the inherited name-conflict warning, got %v", diags)
+	}
+	wantLibraryClean(t, `package P {
+		private import ScalarValues::*;
+		package Lib {
+			package Numbers { calc def pick { in x : Integer; return : Integer = x; } }
+			package Text { calc def pick { in x : String; return : String = x; } }
+		}
+		package C {
+			private import Lib::**;
+			attribute i : Integer = pick(2);
+			attribute s : String = pick("s");
+		}
+	}`)
 }

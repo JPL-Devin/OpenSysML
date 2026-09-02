@@ -689,7 +689,7 @@ func (ec *exprChecker) checkArguments(
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
 	args []ast.Node,
-	argTypes []semantics.PrimType,
+	argTypes argumentTypes,
 	params []parameter,
 	considered []*symbols.Symbol,
 ) {
@@ -701,24 +701,7 @@ func (ec *exprChecker) checkArguments(
 		}
 	}
 	if len(e.NamedArgs) > 0 {
-		// A receiver binds by position, so which parameter it binds to is
-		// unstated beside arguments that bind by name (runtime/eval.go reports
-		// the same call).
-		if e.Operand != nil {
-			report(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
-		}
-		names := make(map[string]bool, len(params))
-		for _, p := range params {
-			names[p.name()] = true
-		}
-		for _, arg := range e.NamedArgs {
-			if arg.Name == nil || len(arg.Name.Parts) != 1 {
-				continue
-			}
-			if name := arg.Name.Parts[0].Text; !names[name] {
-				report(e.Span(), "%s has no parameter named %q", sym.Name, name)
-			}
-		}
+		ec.checkNamedArguments(e, sym, argTypes.named, params, report)
 		return
 	}
 	required := 0
@@ -736,15 +719,76 @@ func (ec *exprChecker) checkArguments(
 		return
 	}
 	for i, arg := range args {
-		want := ec.declaredPrimType(params[i].scope(), params[i].usage.Relationships)
-		got := argTypes[i]
-		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
-			continue
-		}
-		if !bindable(arg, got, want) {
-			report(arg.Span(), "argument %d of %s expects %s, found %s", i+1, sym.Name, want, got)
+		if !ec.argumentFits(arg, argTypes.positional[i], params[i]) {
+			report(arg.Span(), "argument %d of %s expects %s, found %s",
+				i+1, sym.Name, ec.parameterPrimType(params[i]), argTypes.positional[i])
 		}
 	}
+}
+
+// checkNamedArguments reports the named arguments of e that name no `in`
+// parameter of sym or do not bind to the one they name, and the parameters
+// without a default that no argument names.
+func (ec *exprChecker) checkNamedArguments(
+	e *ast.InvocationExpr,
+	sym *symbols.Symbol,
+	namedTypes []semantics.PrimType,
+	params []parameter,
+	report func(source.Span, string, ...any),
+) {
+	// A receiver binds by position, so which parameter it binds to is
+	// unstated beside arguments that bind by name (runtime/eval.go reports
+	// the same call).
+	if e.Operand != nil {
+		report(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
+	}
+	byName := make(map[string]parameter, len(params))
+	for _, p := range params {
+		byName[p.name()] = p
+	}
+	bound := make(map[string]bool, len(e.NamedArgs))
+	unknown := false
+	for i, arg := range e.NamedArgs {
+		name, ok := namedArgumentName(arg)
+		if !ok {
+			continue
+		}
+		p, declared := byName[name]
+		if !declared {
+			report(e.Span(), "%s has no parameter named %q", sym.Name, name)
+			unknown = true
+			continue
+		}
+		bound[name] = true
+		if !ec.argumentFits(arg.Value, namedTypes[i], p) {
+			report(arg.Value.Span(), "argument %s of %s expects %s, found %s",
+				name, sym.Name, ec.parameterPrimType(p), namedTypes[i])
+		}
+	}
+	// A misspelt name is the likelier cause of a parameter left unbound.
+	if unknown {
+		return
+	}
+	for _, p := range params {
+		if p.usage.Value == nil && !bound[p.name()] {
+			report(e.Span(), "%s requires an argument for %s", sym.Name, p.name())
+		}
+	}
+}
+
+// parameterPrimType is the scalar type p is declared with, PrimUnknown when none is known.
+func (ec *exprChecker) parameterPrimType(p parameter) semantics.PrimType {
+	return ec.declaredPrimType(p.scope(), p.usage.Relationships)
+}
+
+// argumentFits reports whether value, of type got, binds to p; an unknown type
+// on either side is not held against the call.
+func (ec *exprChecker) argumentFits(value ast.Node, got semantics.PrimType, p parameter) bool {
+	want := ec.parameterPrimType(p)
+	if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
+		return true
+	}
+	return bindable(value, got, want)
 }
 
 // isBehaviorKind reports the behavior kinds whose parameter lists are checked.
