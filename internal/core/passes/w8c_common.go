@@ -11,16 +11,33 @@ import (
 // w8cWalker visits every symbol of a document's scope tree once, deduping by
 // pointer: one declaration may be registered under several keys.
 type w8cWalker struct {
-	ctx  *Context
-	seen map[*symbols.Symbol]bool
+	ctx *Context
+	// walked is what the first walk visited, which w8cSymbols already dedupes;
+	// seen is built only when a later walk must dedupe against it.
+	walked []*symbols.Symbol
+	seen   map[*symbols.Symbol]bool
 }
 
 func (w *w8cWalker) walk(scope *symbols.Scope, visit func(*symbols.Symbol)) {
 	if w == nil || scope == nil {
 		return
 	}
-	for _, sym := range w8cSymbols(w.ctx, scope) {
-		if sym == nil || w.seen[sym] {
+	syms := w8cSymbols(w.ctx, scope)
+	if w.walked == nil {
+		w.walked = syms
+		for _, sym := range syms {
+			visit(sym)
+		}
+		return
+	}
+	if w.seen == nil {
+		w.seen = make(map[*symbols.Symbol]bool, len(w.walked))
+		for _, sym := range w.walked {
+			w.seen[sym] = true
+		}
+	}
+	for _, sym := range syms {
+		if w.seen[sym] {
 			continue
 		}
 		w.seen[sym] = true
@@ -28,6 +45,8 @@ func (w *w8cWalker) walk(scope *symbols.Scope, visit func(*symbols.Symbol)) {
 	}
 }
 
+// w8cSymbols lists the scope tree's symbols once each, in visiting order, and
+// caches the list on ctx for the passes that share it.
 func w8cSymbols(ctx *Context, root *symbols.Scope) []*symbols.Symbol {
 	if ctx != nil {
 		if cached, ok := ctx.w8cCache[root]; ok {

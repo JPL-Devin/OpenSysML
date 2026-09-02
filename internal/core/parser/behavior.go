@@ -1493,6 +1493,7 @@ func (p *Parser) atReturnedUsage() bool {
 	p.parseIdentification()
 	specialized := p.atFeatureSpecialization()
 	p.restore(cp)
+	p.release()
 	return specialized
 }
 
@@ -2297,6 +2298,7 @@ func (p *Parser) tryParseConstraintReference() (constraintReference, bool) {
 		return constraintReference{}, false
 	}
 	cp := p.checkpoint()
+	defer p.release()
 	ref := p.parseQualifiedName()
 	if ref == nil || len(ref.Parts) == 0 {
 		p.restore(cp)
@@ -2333,6 +2335,7 @@ func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool, k
 		return nil
 	}
 	cp := p.checkpoint()
+	defer p.release()
 	p.advance() // consume 'constraint'
 	var name string
 	if p.at(lexer.Identifier) {

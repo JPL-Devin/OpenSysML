@@ -25,7 +25,7 @@ func (ReferenceSubsettingPass) Run(ctx *Context, name string, root *ast.RootName
 		return nil
 	}
 	var diags []Diagnostic
-	w := &w8cWalker{ctx: ctx, seen: make(map[*symbols.Symbol]bool)}
+	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, func(sym *symbols.Symbol) {
 		// A binding's two ends are encoded as reference subsettings, so its
 		// second one is an end rather than a second reference of one feature.
