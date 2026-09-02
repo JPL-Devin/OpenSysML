@@ -26,6 +26,7 @@ const (
 	ValQuantity    // a magnitude and the measurement unit it is expressed in
 	ValVariant     // the variant selected for a variation, and the object it materializes
 	ValEnumLiteral // one literal of an enumeration definition, identified by itself
+	ValComplex     // one complex number, its real and imaginary parts together
 )
 
 // FormatReal renders a Real as the shortest decimal that reads back as the same
@@ -104,9 +105,22 @@ func FormatValue(v Value) string {
 			return "<unknown>"
 		}
 		return q.TextWithMagnitude(FormatConst(q.Num))
+	case ValComplex:
+		return FormatComplex(v.Complex())
 	default:
 		return "<unknown>"
 	}
+}
+
+// FormatComplex renders a complex number as its parts read, `1.0 + 2.0i`, with
+// the imaginary part's sign as the operator: `1.0 - 2.0i`.
+func FormatComplex(z complex128) string {
+	re, im := real(z), imag(z)
+	sign := " + "
+	if math.Signbit(im) {
+		sign, im = " - ", -im
+	}
+	return FormatReal(re) + sign + FormatReal(im) + "i"
 }
 
 func formatValueElements(elements []Value) []string {
@@ -140,6 +154,8 @@ func (k ValueKind) String() string {
 		return "variant"
 	case ValEnumLiteral:
 		return "enumeration literal"
+	case ValComplex:
+		return "complex number"
 	default:
 		return "invalid"
 	}
@@ -153,9 +169,17 @@ type Value struct {
 	Const    semantics.Value // ValConst: reuse static evaluator
 	Instance int64           // ValInstance: instance ID; ValVariant: materialized object, 0 for none
 	// ref holds the kind-specific payload of the remaining kinds: a string
-	// (ValString), *Sequence, *Set, ast.Node (ValExpr), *Quantity, or the
-	// *symbols.Symbol of a variant (ValVariant) or enumeration literal (ValEnumLiteral).
+	// (ValString), *Sequence, *Set, ast.Node (ValExpr), *Quantity, a complex128
+	// (ValComplex), or the *symbols.Symbol of a variant (ValVariant) or
+	// enumeration literal (ValEnumLiteral).
 	ref any
+}
+
+// NewComplex is the value of one complex number. One with a zero imaginary part
+// is the Real its real part is, as 4 / 2 is the Integer 2: equal to it, and
+// classified as it is.
+func NewComplex(z complex128) Value {
+	return Value{Kind: ValComplex, ref: z}
 }
 
 // NewStringValue is the value of a string.
@@ -238,6 +262,15 @@ func (v Value) Quantity() *Quantity {
 	}
 	q, _ := v.ref.(*Quantity)
 	return q
+}
+
+// Complex is the number a ValComplex is; 0 for every other kind.
+func (v Value) Complex() complex128 {
+	if v.Kind != ValComplex {
+		return 0
+	}
+	z, _ := v.ref.(complex128)
+	return z
 }
 
 // Variant is the variant a ValVariant was bound to; nil for every other kind.

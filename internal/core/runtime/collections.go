@@ -106,6 +106,9 @@ func indexOf(op string, val Value) (int64, error) {
 // describeValue names a value's kind for a diagnostic, distinguishing the
 // numeric constants a single kind covers.
 func describeValue(val Value) string {
+	if val.Kind == ValComplex {
+		return "a Complex"
+	}
 	if val.Kind != ValConst {
 		return val.Kind.String()
 	}
@@ -802,6 +805,12 @@ func aggregate(op string, args []Value, operator ast.OperatorKind) (Value, error
 	for _, elem := range elements {
 		if elem.Kind == ValQuantity {
 			return aggregateQuantities(op, elements, operator)
+		}
+	}
+	// A Complex is a Number, so a collection holding one folds as ComplexFunctions'.
+	for _, elem := range elements {
+		if elem.Kind == ValComplex {
+			return aggregateComplex(op, args[0], operator)
 		}
 	}
 	identity := int64(0)

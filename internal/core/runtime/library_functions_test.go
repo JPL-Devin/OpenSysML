@@ -544,26 +544,42 @@ func TestVectorFunctionScalarValues(t *testing.T) {
 	}
 }
 
-// A Complex is the (re, im) pair rect constructs, and a Real is a Complex with a
-// zero imaginary part (ScalarValues declares Real :> Complex), so both bind to a
+// cx is a Complex runtime value with the given parts.
+func cx(re, im float64) Value { return NewComplex(complex(re, im)) }
+
+// complexValue reads a result as the one Complex value it must be.
+func complexValue(t *testing.T, val Value) complex128 {
+	t.Helper()
+	if val.Kind != ValComplex {
+		t.Fatalf("result is %s (%s), want a Complex", val.Kind, FormatValue(val))
+	}
+	return val.Complex()
+}
+
+// A Complex is one ValComplex value, and a Real is a Complex with a zero
+// imaginary part (ScalarValues declares Real :> Complex), so both bind to a
 // Complex parameter.
 func TestComplexFunctionValues(t *testing.T) {
 	cases := []struct {
 		fn   string
 		args []Value
-		want []semantics.Value
+		want complex128
 	}{
-		{"ComplexFunctions::rect", []Value{constReal(1), constReal(2)}, realConsts(1, 2)},
-		{"ComplexFunctions::rect", []Value{constInt(1), constInt(2)}, realConsts(1, 2)},
-		{"ComplexFunctions::polar", []Value{constReal(2), constReal(0)}, realConsts(2, 0)},
-		{"ComplexFunctions::+", []Value{realVec(1, 2), realVec(3, 4)}, realConsts(4, 6)},
-		{"ComplexFunctions::+", []Value{realVec(1, 2), constReal(3)}, realConsts(4, 2)},
-		{"ComplexFunctions::-", []Value{realVec(1, 2), realVec(3, 4)}, realConsts(-2, -2)},
-		{"ComplexFunctions::*", []Value{realVec(0, 1), realVec(0, 1)}, realConsts(-1, 0)},
-		{"ComplexFunctions::*", []Value{realVec(1, 2), constReal(2)}, realConsts(2, 4)},
-		{"ComplexFunctions::/", []Value{realVec(-1, 0), realVec(0, 1)}, realConsts(0, 1)},
-		{"ComplexFunctions::**", []Value{realVec(0, 1), constInt(2)}, realConsts(-1, 0)},
-		{"ComplexFunctions::^", []Value{constReal(2), constInt(3)}, realConsts(8, 0)},
+		{"ComplexFunctions::rect", []Value{constReal(1), constReal(2)}, complex(1, 2)},
+		{"ComplexFunctions::rect", []Value{constInt(1), constInt(2)}, complex(1, 2)},
+		{"ComplexFunctions::polar", []Value{constReal(2), constReal(0)}, complex(2, 0)},
+		{"ComplexFunctions::+", []Value{cx(1, 2), cx(3, 4)}, complex(4, 6)},
+		{"ComplexFunctions::+", []Value{cx(1, 2), constReal(3)}, complex(4, 2)},
+		{"ComplexFunctions::-", []Value{cx(1, 2), cx(3, 4)}, complex(-2, -2)},
+		{"ComplexFunctions::*", []Value{cx(0, 1), cx(0, 1)}, complex(-1, 0)},
+		{"ComplexFunctions::*", []Value{cx(1, 2), constReal(2)}, complex(2, 4)},
+		{"ComplexFunctions::/", []Value{cx(-1, 0), cx(0, 1)}, complex(0, 1)},
+		{"ComplexFunctions::**", []Value{cx(0, 1), constInt(2)}, complex(-1, 0)},
+		{"ComplexFunctions::^", []Value{constReal(2), constInt(3)}, complex(8, 0)},
+		{"ComplexFunctions::sum", []Value{vec(cx(1, 2), cx(3, 4), constReal(1))}, complex(5, 6)},
+		{"ComplexFunctions::sum", []Value{vec()}, 0},
+		{"ComplexFunctions::product", []Value{vec(cx(0, 1), cx(0, 1))}, complex(-1, 0)},
+		{"ComplexFunctions::product", []Value{nullValue()}, 1},
 	}
 
 	for _, tc := range cases {
@@ -572,16 +588,11 @@ func TestComplexFunctionValues(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s = error %v", tc.fn, err)
 			}
-			elements := vectorValues(t, got)
-			if len(elements) != len(tc.want) {
-				t.Fatalf("%s = %v, want %v", tc.fn, elements, tc.want)
-			}
+			z := complexValue(t, got)
 			// The products and quotients of a Complex round, so compare the parts
 			// as Reals rather than bit for bit.
-			for i := range elements {
-				if math.Abs(asReal(elements[i])-asReal(tc.want[i])) > 1e-12 {
-					t.Fatalf("%s = %v, want %v", tc.fn, elements, tc.want)
-				}
+			if math.Abs(real(z)-real(tc.want)) > 1e-12 || math.Abs(imag(z)-imag(tc.want)) > 1e-12 {
+				t.Fatalf("%s = %s, want %s", tc.fn, FormatValue(got), FormatComplex(tc.want))
 			}
 		})
 	}
@@ -593,18 +604,18 @@ func TestComplexFunctionScalarValues(t *testing.T) {
 		args []Value
 		want semantics.Value
 	}{
-		{"ComplexFunctions::re", []Value{realVec(1, 2)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
-		{"ComplexFunctions::im", []Value{realVec(1, 2)}, semantics.Value{Kind: semantics.ValReal, Real: 2}},
+		{"ComplexFunctions::re", []Value{cx(1, 2)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
+		{"ComplexFunctions::im", []Value{cx(1, 2)}, semantics.Value{Kind: semantics.ValReal, Real: 2}},
 		{"ComplexFunctions::im", []Value{constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: 0}},
-		{"ComplexFunctions::abs", []Value{realVec(3, 4)}, semantics.Value{Kind: semantics.ValReal, Real: 5}},
-		{"ComplexFunctions::arg", []Value{realVec(0, 1)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 2}},
-		{"ComplexFunctions::isZero", []Value{realVec(0, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+		{"ComplexFunctions::abs", []Value{cx(3, 4)}, semantics.Value{Kind: semantics.ValReal, Real: 5}},
+		{"ComplexFunctions::arg", []Value{cx(0, 1)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 2}},
+		{"ComplexFunctions::isZero", []Value{cx(0, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
 		{"ComplexFunctions::isZero", []Value{constInt(0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
-		{"ComplexFunctions::isUnit", []Value{realVec(1, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
-		{"ComplexFunctions::isUnit", []Value{realVec(1, 1)}, semantics.Value{Kind: semantics.ValBool, Bool: false}},
-		// A Real and the pair with a zero imaginary part are the same Complex.
-		{"ComplexFunctions::==", []Value{constReal(2), realVec(2, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
-		{"ComplexFunctions::==", []Value{realVec(2, 1), realVec(2, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: false}},
+		{"ComplexFunctions::isUnit", []Value{cx(1, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+		{"ComplexFunctions::isUnit", []Value{cx(1, 1)}, semantics.Value{Kind: semantics.ValBool, Bool: false}},
+		// A Real and the Complex with a zero imaginary part are the same number.
+		{"ComplexFunctions::==", []Value{constReal(2), cx(2, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+		{"ComplexFunctions::==", []Value{cx(2, 1), cx(2, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: false}},
 		// Both operands are declared [0..1]: two empty operands are equal.
 		{"ComplexFunctions::==", []Value{nullValue(), nullValue()}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
 		{"ComplexFunctions::==", []Value{constReal(0), nullValue()}, semantics.Value{Kind: semantics.ValBool, Bool: false}},
@@ -620,6 +631,30 @@ func TestComplexFunctionScalarValues(t *testing.T) {
 				t.Fatalf("%s = %+v, want %+v", tc.fn, got, tc.want)
 			}
 		})
+	}
+}
+
+// A numeric pair is a vector, not a Complex: only rect, polar, i and the
+// Complex operations make one, so a sequence never binds to a Complex parameter.
+func TestComplexFunctionsRejectNumericPairs(t *testing.T) {
+	for _, fn := range []string{
+		"ComplexFunctions::re", "ComplexFunctions::im", "ComplexFunctions::abs",
+		"ComplexFunctions::arg", "ComplexFunctions::isZero", "ComplexFunctions::isUnit",
+	} {
+		got, err := applyLibrary(t, fn, realVec(1, 2))
+		if !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("%s((1.0, 2.0)) = (%v, %v), want %v", fn, got, err, ErrTypeMismatch)
+		}
+	}
+	for _, fn := range []string{"ComplexFunctions::+", "ComplexFunctions::*", "ComplexFunctions::=="} {
+		got, err := applyLibrary(t, fn, cx(1, 2), realVec(1, 2))
+		if !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("%s(1.0 + 2.0i, (1.0, 2.0)) = (%v, %v), want %v", fn, got, err, ErrTypeMismatch)
+		}
+	}
+	// A one-element collection is not the scalar it holds either.
+	if got, err := applyLibrary(t, "ComplexFunctions::re", realVec(1)); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("re((1.0)) = (%v, %v), want %v", got, err, ErrTypeMismatch)
 	}
 }
 
@@ -659,16 +694,16 @@ func TestLibraryFunctionOptionalOperand(t *testing.T) {
 		t.Fatalf("-((1, -2)) = %v, want (-1, 2)", got)
 	}
 
-	got, err = applyLibrary(t, "ComplexFunctions::-", realVec(1, 2))
+	got, err = applyLibrary(t, "ComplexFunctions::-", cx(1, 2))
 	if err != nil {
 		t.Fatalf("-(1.0 + 2.0i) = error %v", err)
 	}
-	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != -1 || elements[1].Real != -2 {
+	if z := complexValue(t, got); z != complex(-1, -2) {
 		t.Fatalf("-(1.0 + 2.0i) = %v, want -1.0 - 2.0i", got)
 	}
 
 	// A required operand is still required: '*' declares both [1].
-	if _, err := applyLibrary(t, "ComplexFunctions::*", realVec(1, 2)); !errors.Is(err, ErrCalcArity) {
+	if _, err := applyLibrary(t, "ComplexFunctions::*", cx(1, 2)); !errors.Is(err, ErrCalcArity) {
 		t.Fatalf("*(1.0 + 2.0i) error = %v, want %v", err, ErrCalcArity)
 	}
 }
@@ -692,11 +727,11 @@ func TestLibraryFunctionEmptyOptionalOperand(t *testing.T) {
 		t.Fatalf("cartesian-((1.0, 2.0), ()) = %v, want (-1.0, -2.0)", got)
 	}
 
-	got, err = applyLibrary(t, "ComplexFunctions::+", realVec(1, 2), vec())
+	got, err = applyLibrary(t, "ComplexFunctions::+", cx(1, 2), vec())
 	if err != nil {
 		t.Fatalf("+(1.0 + 2.0i, ()) = error %v", err)
 	}
-	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != 1 || elements[1].Real != 2 {
+	if z := complexValue(t, got); z != complex(1, 2) {
 		t.Fatalf("+(1.0 + 2.0i, ()) = %v, want 1.0 + 2.0i", got)
 	}
 
@@ -706,7 +741,7 @@ func TestLibraryFunctionEmptyOptionalOperand(t *testing.T) {
 	}{
 		{[]Value{vec(), vec()}, true},
 		{[]Value{vec(), nullValue()}, true},
-		{[]Value{realVec(1, 2), vec()}, false},
+		{[]Value{cx(1, 2), vec()}, false},
 	} {
 		got, err := applyLibrary(t, "ComplexFunctions::==", tc.args...)
 		if err != nil || got.Kind != ValConst || got.Const.Bool != tc.want {
@@ -732,7 +767,7 @@ func TestVectorAndComplexNamedArguments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rect(im = 2.0, re = 1.0) = error %v", err)
 	}
-	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != 1 || elements[1].Real != 2 {
+	if z := complexValue(t, got); z != complex(1, 2) {
 		t.Fatalf("rect(im = 2.0, re = 1.0) = %v, want 1.0 + 2.0i", got)
 	}
 
@@ -758,10 +793,10 @@ func TestVectorAndComplexUnknownNamedArgument(t *testing.T) {
 		{"VectorFunctions::+", map[string]Value{"v": realVec(1, 2), "zz": realVec(3, 4)}},
 		{"VectorFunctions::cartesian+", map[string]Value{"v": realVec(1, 2), "zz": realVec(3, 4)}},
 		{"VectorFunctions::-", map[string]Value{"v": realVec(1, 2), "zz": realVec(3, 4)}},
-		{"ComplexFunctions::+", map[string]Value{"x": realVec(1, 2), "zz": realVec(3, 4)}},
-		{"ComplexFunctions::-", map[string]Value{"x": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"ComplexFunctions::+", map[string]Value{"x": cx(1, 2), "zz": cx(3, 4)}},
+		{"ComplexFunctions::-", map[string]Value{"x": cx(1, 2), "zz": cx(3, 4)}},
 		{"ComplexFunctions::==", map[string]Value{"zz": constReal(1)}},
-		{"ComplexFunctions::==", map[string]Value{"x": realVec(1, 2), "zz": realVec(1, 2)}},
+		{"ComplexFunctions::==", map[string]Value{"x": cx(1, 2), "zz": cx(1, 2)}},
 	} {
 		fn, ok := libraryFunctionByName(tt.fn)
 		if !ok {
@@ -801,12 +836,16 @@ func TestVectorAndComplexFunctionErrors(t *testing.T) {
 		{"the negation of the least Integer", "VectorFunctions::-", []Value{vec(constInt(math.MinInt64))}, semantics.ErrArithmeticOverflow},
 		{"an Integer scaling beyond the Integer range", "VectorFunctions::scalarVectorMult", []Value{constInt(2), vec(constInt(math.MaxInt64))}, semantics.ErrArithmeticOverflow},
 		{"an Integer inner product beyond the Integer range", "VectorFunctions::inner", []Value{vec(constInt(math.MaxInt64), constInt(1)), vec(constInt(1), constInt(1))}, semantics.ErrArithmeticOverflow},
-		{"three parts of a Complex", "ComplexFunctions::re", []Value{realVec(1, 2, 3)}, ErrTypeMismatch},
+		{"a vector where a Complex is declared", "ComplexFunctions::re", []Value{realVec(1, 2, 3)}, ErrTypeMismatch},
 		{"an empty Complex", "ComplexFunctions::abs", []Value{nullValue()}, ErrTypeMismatch},
-		{"a string part of a Complex", "ComplexFunctions::im", []Value{vec(constReal(1), NewStringValue("2"))}, ErrTypeMismatch},
+		{"a string where a Complex is declared", "ComplexFunctions::im", []Value{strValue("2")}, ErrTypeMismatch},
+		{"a Boolean where a Complex is declared", "ComplexFunctions::isZero", []Value{boolValue(true)}, ErrTypeMismatch},
+		{"a Complex where rect declares a Real", "ComplexFunctions::rect", []Value{cx(1, 2), constReal(0)}, ErrTypeMismatch},
 		{"a vector where rect declares a Real", "ComplexFunctions::rect", []Value{realVec(1, 2), constReal(0)}, ErrTypeMismatch},
-		{"the argument of zero", "ComplexFunctions::arg", []Value{realVec(0, 0)}, semantics.ErrArithmeticDomain},
-		{"division of a Complex by zero", "ComplexFunctions::/", []Value{realVec(1, 2), realVec(0, 0)}, ErrDivisionByZero},
+		{"a string element of a Complex collection", "ComplexFunctions::sum", []Value{vec(cx(1, 2), strValue("2"))}, ErrTypeMismatch},
+		{"the argument of zero", "ComplexFunctions::arg", []Value{cx(0, 0)}, semantics.ErrArithmeticDomain},
+		{"division of a Complex by zero", "ComplexFunctions::/", []Value{cx(1, 2), cx(0, 0)}, ErrDivisionByZero},
+		{"a Complex sum beyond the Real range", "ComplexFunctions::+", []Value{cx(1e308, 0), cx(1e308, 0)}, semantics.ErrArithmeticOverflow},
 		{"zero to a negative power", "ComplexFunctions::**", []Value{constReal(0), constReal(-1)}, semantics.ErrArithmeticDomain},
 		{"a power beyond the Real range", "ComplexFunctions::**", []Value{constReal(1e200), constReal(2)}, semantics.ErrArithmeticOverflow},
 		{"too many arguments to a vector constructor", "VectorFunctions::CartesianVectorOf", []Value{realVec(1), realVec(2)}, ErrCalcArity},
@@ -949,9 +988,7 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 	}{
 		{"VectorFunctions::sum", []Value{realVec(1, 2, 3)}},
 		{"VectorFunctions::sum0", []Value{realVec(1, 2, 3), realVec(0, 0, 0)}},
-		{"ComplexFunctions::sum", []Value{realVec(1, 2)}},
-		{"ComplexFunctions::product", []Value{realVec(1, 2)}},
-		{"ComplexFunctions::ToString", []Value{realVec(1, 2)}},
+		{"ComplexFunctions::ToString", []Value{cx(1, 2)}},
 		{"ComplexFunctions::ToComplex", []Value{NewStringValue("1.0")}},
 	}
 
@@ -1166,7 +1203,7 @@ func TestLibraryFeatureByName(t *testing.T) {
 }
 
 // ComplexFunctions declares `feature i: Complex[1] = rect(0.0, 1.0)`, which the
-// seam supplies as that pair.
+// seam supplies as that one Complex value.
 func TestLibraryFeatureImaginaryUnit(t *testing.T) {
 	feature, ok := libraryFeatureByName("ComplexFunctions::i")
 	if !ok {
@@ -1176,8 +1213,7 @@ func TestLibraryFeatureImaginaryUnit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComplexFunctions::i = error %v", err)
 	}
-	elements := vectorValues(t, got)
-	if len(elements) != 2 || elements[0].Real != 0 || elements[1].Real != 1 {
+	if z := complexValue(t, got); z != complex(0, 1) {
 		t.Fatalf("ComplexFunctions::i = %v, want 0.0 + 1.0i", got)
 	}
 }

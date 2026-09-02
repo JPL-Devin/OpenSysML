@@ -1004,6 +1004,11 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 			return nil, fmt.Errorf("%w: quantity", ErrUndeterminedValueType)
 		}
 		return ctx.directValueType(scope, Value{Kind: ValConst, Const: value.Quantity().Num})
+	case ValComplex:
+		name = "Complex"
+		if re, ok := value.realPart(); ok {
+			return ctx.directValueType(scope, realConst(re))
+		}
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
@@ -1215,6 +1220,12 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 		case ast.OpMod:
 			return Value{}, fmt.Errorf("%w: '%%' is not defined for a quantity", ErrTypeMismatch)
 		}
+	}
+
+	// A complex operand makes the operation ComplexFunctions', the numeric
+	// operand beside it being a Complex too.
+	if lz, rz, ok := complexOperands(left, right); ok {
+		return complexArithmetic(n.Operator, lz, rz, left, right, n.Span())
 	}
 
 	// Arithmetic is defined on constants; anything else names the operator and
@@ -1534,6 +1545,12 @@ func (ec *EvalContext) evalUnary(n *ast.OperatorExpr) (Value, error) {
 			}
 			return negateQuantity(operand.Quantity())
 		}
+		if operand.Kind == ValComplex {
+			if n.Operator == ast.OpPos {
+				return operand, nil
+			}
+			return NewComplex(-operand.Complex()), nil
+		}
 		// Arithmetic sign: -number, +number
 		if operand.Kind != ValConst {
 			return Value{}, fmt.Errorf("unary '%s' requires numeric operand, got %v", n.Operator, operand.Kind)
@@ -1803,6 +1820,10 @@ func qualifiedNameToString(qn *ast.QualifiedName) string {
 
 // valueEqual checks deep equality of two runtime values.
 func valueEqual(a, b Value) bool {
+	// A complex number equals the number it is, whichever kind carries it.
+	if a.Kind == ValComplex || b.Kind == ValComplex {
+		return complexEqual(a, b)
+	}
 	if a.Kind != b.Kind {
 		return false
 	}

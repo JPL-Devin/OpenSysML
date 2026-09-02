@@ -256,6 +256,11 @@ jobs:
       - name: Run static analysis (staticcheck + gosec)
         run: make lint
 
+      # The embedded library snapshot is generated from the bundled OMG files;
+      # a change to either without regenerating it must not land.
+      - name: Check the library snapshot is current
+        run: make stdlib-snapshot-check
+
       - name: Check grpc-go stays out of production code
         run: ./scripts/check-grpc-imports.sh
 
