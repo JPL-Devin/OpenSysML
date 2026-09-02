@@ -392,7 +392,8 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 
 	// Optional value (= expr, := expr, or default [=] expr)
 	var value ast.Node
-	if _, ok := p.acceptValueOperatorSpan(); ok {
+	valueOp, hasValue := p.acceptValueOperator()
+	if hasValue {
 		value = p.ParseExpression()
 	}
 
@@ -418,20 +419,23 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 
 	// Create Usage node with direction
 	usage := &ast.Usage{
-		Kind:          kind,
-		Ident:         ident,
-		Relationships: relationships,
-		Multiplicity:  multiplicity,
-		Value:         value,
-		Members:       members,
-		HasBody:       hasBody,
-		IsReference:   isRef,
-		Direction:     direction,
-		IsOrdered:     postMods.isOrdered,
-		IsNonunique:   postMods.isNonunique,
-		IsEvent:       isEvent,
-		IsIndividual:  isIndividual,
-		Portion:       portion,
+		Kind:              kind,
+		Ident:             ident,
+		Relationships:     relationships,
+		Multiplicity:      multiplicity,
+		Value:             value,
+		ValueOperatorSpan: valueOp.span,
+		ValueIsDefault:    valueOp.isDefault,
+		ValueIsInitial:    valueOp.isInitial,
+		Members:           members,
+		HasBody:           hasBody,
+		IsReference:       isRef,
+		Direction:         direction,
+		IsOrdered:         postMods.isOrdered,
+		IsNonunique:       postMods.isNonunique,
+		IsEvent:           isEvent,
+		IsIndividual:      isIndividual,
+		Portion:           portion,
 	}
 	usage.NodeSpan = p.spanFrom(start)
 
@@ -2076,7 +2080,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// Check for binding pattern: subject = <expr>; OR subject <name> = <expr>;
 	if p.at(lexer.Eq) {
 		// Anonymous binding: subject = <expr>;
-		p.advance() // consume '='
+		op := p.advance() // consume '='
 
 		// Parse value expression
 		value := p.ParseExpression()
@@ -2085,9 +2089,10 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		p.expect(lexer.Semicolon, "expected ';' after subject binding")
 
 		node := &ast.SubjectMember{
-			Prefixes:    prefixes,
-			Name:        "", // Empty name means binding inherited subject
-			BindingExpr: value,
+			Prefixes:          prefixes,
+			Name:              "", // Empty name means binding inherited subject
+			BindingExpr:       value,
+			ValueOperatorSpan: op.Span,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2110,14 +2115,15 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 
 		// Named binding: subject <name> = <expr>;
 		if p.at(lexer.Eq) {
-			p.advance()
+			op := p.advance()
 			value := p.ParseExpression()
 			p.expect(lexer.Semicolon, "expected ';' after subject binding")
 
 			node := &ast.SubjectMember{
-				Prefixes:    prefixes,
-				Name:        name,
-				BindingExpr: value,
+				Prefixes:          prefixes,
+				Name:              name,
+				BindingExpr:       value,
+				ValueOperatorSpan: op.Span,
 			}
 			node.NodeSpan = p.spanFrom(start)
 			return node
@@ -2150,17 +2156,21 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 
 	// Value part: `= expr`, `:= expr` or `default [=] expr`.
 	var value ast.Node
-	if _, ok := p.acceptValueOperatorSpan(); ok {
+	valueOp, hasValue := p.acceptValueOperator()
+	if hasValue {
 		value = p.ParseExpression()
 	}
 
 	node := &ast.SubjectMember{
-		Prefixes:      prefixes,
-		Name:          name,
-		TypeRef:       typeRef,
-		Multiplicity:  mult,
-		Relationships: rels,
-		BindingExpr:   value,
+		Prefixes:          prefixes,
+		Name:              name,
+		TypeRef:           typeRef,
+		Multiplicity:      mult,
+		Relationships:     rels,
+		BindingExpr:       value,
+		ValueOperatorSpan: valueOp.span,
+		ValueIsDefault:    valueOp.isDefault,
+		ValueIsInitial:    valueOp.isInitial,
 	}
 
 	if p.at(lexer.LBrace) {
@@ -2314,7 +2324,7 @@ func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
 	if p.at(lexer.LBracket) {
 		d.multiplicity = p.parseMultiplicity()
 	}
-	if _, ok := p.acceptValueOperatorSpan(); ok {
+	if _, ok := p.acceptValueOperator(); ok {
 		d.value = p.ParseExpression()
 	}
 	if p.at(lexer.LBrace) {

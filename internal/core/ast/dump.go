@@ -392,6 +392,12 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.IsNegated {
 			b.WriteString(` negated=true`)
 		}
+		if v.ValueIsDefault {
+			b.WriteString(` default=true`)
+		}
+		if v.ValueIsInitial {
+			b.WriteString(` initial=true`)
+		}
 		writeChildren(b, depth, usageChildren(v))
 		return true
 	case *FlowEnds:
@@ -486,6 +492,12 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		return true
 	case *SubjectMember:
 		fmt.Fprintf(b, `(SubjectMember name=%q type=%q`, v.Name, qnString(v.TypeRef))
+		if v.ValueIsDefault {
+			b.WriteString(` default=true`)
+		}
+		if v.ValueIsInitial {
+			b.WriteString(` initial=true`)
+		}
 		kids := make([]Node, 0)
 		for _, pm := range v.Prefixes {
 			kids = append(kids, pm)

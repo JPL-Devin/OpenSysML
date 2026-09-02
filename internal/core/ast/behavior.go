@@ -438,6 +438,11 @@ type SubjectMember struct {
 	Relationships []*Relationship // specializations written after the type (`:>> RequirementCheck::subj`)
 	Body          []Node          // optional nested members
 	BindingExpr   Node            // value part: `subject = <expr>;` or a declaration's `= expr` / `default expr`
+	// ValueOperatorSpan, ValueIsDefault and ValueIsInitial describe BindingExpr's
+	// operator as Usage's fields of the same names do.
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
 	// HasBody records that the declaration was written with braces, which an
 	// empty body does not otherwise show.
 	HasBody bool
