@@ -14,6 +14,7 @@ import (
 	"go.lsp.dev/protocol"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/edit"
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/highlight"
@@ -103,6 +104,7 @@ func TestSelfModelInvariantsHold(t *testing.T) {
 			"loweringIsLossless",
 			"executionIsBounded",
 			"libraryIsClean",
+			"snapshotIsDerived",
 			"exportRoundTrips",
 		},
 		"identity.sysml/OpenSysMLIdentity": {
@@ -281,6 +283,75 @@ func TestSelfModelBudgetsMatchImplementation(t *testing.T) {
 		if got != want {
 			t.Errorf("Runtime models %s as %+v, the implementation has %+v", envVar, got, want)
 		}
+	}
+}
+
+// TestSelfModelLibraryMatchesImplementation compares the modelled library with libs:
+// the override variable, the snapshot decoding, its Make targets and the CI check.
+func TestSelfModelLibraryMatchesImplementation(t *testing.T) {
+	idx, ctx := analyseSelfModel(t)
+	stdlib := instantiateSelfModel(t, idx, ctx, "pipeline.sysml", "OpenSysMLPipeline", "StandardLibrary")
+
+	if got, want := stdlib.str("overrideEnvVar"), libs.LibraryPathEnvVar; got != want {
+		t.Errorf("pipeline.sysml says the library is overridden by %s, libs reads %s", got, want)
+	}
+
+	snapshotIdx, err := libs.SnapshotIndex()
+	if decodes := err == nil && snapshotIdx != nil; decodes != stdlib.boolean("snapshotEmbedded") {
+		t.Errorf("pipeline.sysml says snapshotEmbedded = %t, libs.SnapshotIndex() returned (%v, %v)",
+			stdlib.boolean("snapshotEmbedded"), snapshotIdx != nil, err)
+	}
+
+	generator, ok := stdlib.parts()["generator"]
+	if !ok {
+		t.Fatal("StandardLibrary declares no generator part")
+	}
+	makefile, err := os.ReadFile(filepath.Join("..", "Makefile"))
+	if err != nil {
+		t.Fatalf("read the Makefile: %v", err)
+	}
+	targets := map[string]bool{}
+	for _, match := range makeTargetPattern.FindAllStringSubmatch(string(makefile), -1) {
+		targets[match[1]] = true
+	}
+	for _, attribute := range []string{"makeTarget", "checkTarget"} {
+		if target := generator.str(attribute); !targets[target] {
+			t.Errorf("pipeline.sysml says %s = %q, which the Makefile does not define", attribute, target)
+		}
+	}
+
+	workflow, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "pr.yml"))
+	if err != nil {
+		t.Fatalf("read the pull request workflow: %v", err)
+	}
+	gate := instantiateSelfModel(t, idx, ctx, "surfaces.sysml", "OpenSysMLSurfaces", "StdlibSnapshotGate")
+	if gate.str("baseline") != stdlib.str("snapshotFile") {
+		t.Errorf("surfaces.sysml gates %s, pipeline.sysml embeds %s", gate.str("baseline"), stdlib.str("snapshotFile"))
+	}
+	if runs := strings.Contains(string(workflow), "make "+generator.str("checkTarget")); runs != gate.boolean("gating") {
+		t.Errorf("surfaces.sysml says the snapshot gate is gating = %t, the pull request workflow runs make %s: %t",
+			gate.boolean("gating"), generator.str("checkTarget"), runs)
+	}
+}
+
+// TestSelfModelEvaluatorMatchesImplementation checks the evaluator's memoization
+// claim against runtime.Context, which must key a side table by syntax node.
+func TestSelfModelEvaluatorMatchesImplementation(t *testing.T) {
+	idx, ctx := analyseSelfModel(t)
+	evaluator := instantiateSelfModel(t, idx, ctx, "pipeline.sysml", "OpenSysMLPipeline", "Evaluator")
+
+	node := reflect.TypeOf((*ast.Node)(nil)).Elem()
+	keyedByNode := false
+	contextType := reflect.TypeOf(runtime.Context{})
+	for i := 0; i < contextType.NumField(); i++ {
+		field := contextType.Field(i).Type
+		if field.Kind() == reflect.Map && field.Key().Implements(node) {
+			keyedByNode = true
+		}
+	}
+	if keyedByNode != evaluator.boolean("memoized") {
+		t.Errorf("pipeline.sysml says the evaluator is memoized = %t, runtime.Context keyed a side table by syntax node: %t",
+			evaluator.boolean("memoized"), keyedByNode)
 	}
 }
 
@@ -596,7 +667,10 @@ func TestSelfModelDocumentRenders(t *testing.T) {
 		"| sequence | true |",
 		"| geometry | false |",
 		"| differential | pilot validator | docs/project/pilot-differential-baseline.json |",
+		"| snapshotGate | the bundled library files | internal/core/libs/stdlib.snapshot |",
 		"OpenSysMLViews::pipelineStructure",
+		"OpenSysMLViews::libraryLoadFlow",
+		"[snapshotCurrent]",
 		"OpenSysMLViews::budgetExhaustion",
 		"OpenSysMLViews::editorPipeline",
 		"OpenSysMLViews::identityRoundTrip",
@@ -611,7 +685,10 @@ func TestSelfModelDocumentRenders(t *testing.T) {
 // repositoryPathPattern matches the attributes whose values are paths in this
 // repository, singly or as a comma-separated list.
 var repositoryPathPattern = regexp.MustCompile(
-	`(goPackage|generatedStubs|schemaFile|generatedGo|connectAdapter|stdioTransport|consumers|designRecord) = "([^"]+)"`)
+	`(goPackage|generatedStubs|schemaFile|generatedGo|connectAdapter|stdioTransport|consumers|designRecord|snapshotFile) = "([^"]+)"`)
+
+// makeTargetPattern matches the definition of one target in the Makefile.
+var makeTargetPattern = regexp.MustCompile(`(?m)^([a-z-]+):`)
 
 // syncFlagPattern matches the definition of one -sync-* flag in cmd/sysml.
 var syncFlagPattern = regexp.MustCompile(`flag\.\w+Var\(&\w+, "(sync-[a-z-]+)"`)

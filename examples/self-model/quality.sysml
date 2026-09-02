@@ -74,6 +74,16 @@ package OpenSysMLInvariants {
         }
     }
 
+    #Invariant requirement def DerivedLibrarySnapshot {
+        doc /* The embedded snapshot is derived from the library files, checked
+             * against them before use, and never the only way to load them. */
+        subject stdlib : StandardLibrary;
+        require constraint {
+            stdlib.snapshotEmbedded and stdlib.snapshotChecksummed
+                and stdlib.fallsBackToParsing
+        }
+    }
+
     #Invariant requirement def RoundTrippableExport {
         doc /* A model written back out reloads as the same model. */
         subject exporter : Exporter;
@@ -109,6 +119,10 @@ package OpenSysMLInvariants {
     }
 
     requirement libraryIsClean : LibraryConformance {
+        subject stdlib = opensysml.pipeline.stdlib;
+    }
+
+    requirement snapshotIsDerived : DerivedLibrarySnapshot {
         subject stdlib = opensysml.pipeline.stdlib;
     }
 
@@ -156,6 +170,15 @@ package OpenSysMLGates {
         return attribute verdict : VerdictKind;
     }
 
+    verification def SnapshotGate {
+        doc /* make stdlib-snapshot-check; go test -run 'Snapshot' ./internal/core/libs ./internal/core/symbols */
+        subject stdlib : StandardLibrary;
+        objective {
+            verify snapshotIsDerived;
+        }
+        return attribute verdict : VerdictKind;
+    }
+
     verification def RuntimeGate {
         doc /* go test -run 'TestExecutionConformance|TestRuntimeRobustness' ./internal/core/runtime */
         subject runtime : Runtime;
@@ -179,6 +202,10 @@ package OpenSysMLGates {
     }
 
     verification stdlibGate : StdlibGate {
+        subject stdlib = opensysml.pipeline.stdlib;
+    }
+
+    verification snapshotGate : SnapshotGate {
         subject stdlib = opensysml.pipeline.stdlib;
     }
 
@@ -250,6 +277,10 @@ package OpenSysMLCodebase {
     allocate opensysml.pipeline.passes to tree.core;
     allocate opensysml.pipeline.lowering to tree.core;
     allocate opensysml.pipeline.runtime to tree.core;
+    allocate opensysml.pipeline.stdlib to tree.core;
+    allocate opensysml.pipeline.stdlib.encoding to tree.core;
+    allocate opensysml.pipeline.stdlib.trees to tree.core;
+    allocate opensysml.pipeline.stdlib.generator to tree.core;
     allocate opensysml.repl to tree.internals;
     allocate opensysml.lsp to tree.internals;
     allocate opensysml.service to tree.internals;

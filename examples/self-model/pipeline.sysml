@@ -9,6 +9,7 @@ package OpenSysMLArtifacts {
     item def TokenStream;
     item def SyntaxTree;
     item def SymbolIndex;
+    item def LibrarySnapshot;
     item def SideTable;
     item def ResolutionTable :> SideTable;
     item def TypeTable :> SideTable;
@@ -260,11 +261,42 @@ package OpenSysMLPipeline {
         port requests : RequestPort;
     }
 
-    // Bundled standard library with an on-disk index cache.
+    // The compact binary encoding the library snapshot is written in.
+    part def SnapshotCodec :> CodeUnit {
+        attribute :>> goPackage = "internal/core/pack";
+    }
+
+    // Writes syntax trees into a snapshot and reads them back, node for node.
+    part def TreeCodec :> CodeUnit {
+        attribute :>> goPackage = "internal/core/ast/astcodec";
+        in item tree : SyntaxTree;
+    }
+
+    // go generate writes the snapshot; the check target is what CI runs on it.
+    part def SnapshotGenerator :> CodeUnit {
+        attribute :>> goPackage = "internal/core/libs/gensnapshot";
+        attribute makeTarget : String = "stdlib-snapshot";
+        attribute checkTarget : String = "stdlib-snapshot-check";
+        out item snapshotBlob : LibrarySnapshot;
+    }
+
+    // Bundled standard library. Its frozen index is decoded from an embedded
+    // snapshot when that matches the files, and parsed from the files otherwise.
     #SemanticEngine part def StandardLibrary :> Stage {
         attribute :>> goPackage = "internal/core/libs";
         attribute bundledFileCount : Integer = 97;
         attribute cached : Boolean = true;
+        attribute snapshotFile : String = "internal/core/libs/stdlib.snapshot";
+        attribute snapshotEmbedded : Boolean = true;
+        attribute snapshotChecksummed : Boolean = true;
+        attribute fallsBackToParsing : Boolean = true;
+        attribute overrideEnvVar : String = "OPENSYSML_LIBRARY_PATH";
+
+        part encoding : SnapshotCodec;
+        part trees : TreeCodec;
+        part generator : SnapshotGenerator;
+
+        in item snapshotBlob : LibrarySnapshot;
         out item index : SymbolIndex;
         port indexOut : ArtifactPort;
     }
@@ -300,8 +332,11 @@ package OpenSysMLPipeline {
         out item trace : ExecutionTrace;
     }
 
+    // Literals and invocation targets are memoized per context in side tables
+    // keyed by syntax node; the tree itself carries nothing.
     part def Evaluator :> CodeUnit {
         attribute :>> goPackage = "internal/core/runtime";
+        attribute :>> memoized = true;
         attribute supportsCalcInvocation : Boolean = true;
     }
 

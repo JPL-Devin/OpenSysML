@@ -52,6 +52,11 @@ package OpenSysMLViews {
         expose OpenSysMLBehavior::ServeEdit;
     }
 
+    view libraryLoadFlow : ActionFlowView {
+        doc /* The bundled library loaded: from its snapshot, or from its files. */
+        expose OpenSysMLBehavior::LoadLibrary;
+    }
+
     view tierStates : StateTransitionView {
         expose OpenSysMLBehavior::TierProgression;
     }

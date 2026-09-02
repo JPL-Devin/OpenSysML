@@ -101,6 +101,50 @@ package OpenSysMLBehavior {
         succession first sync then done;
     }
 
+    // The library loaded once per process: the snapshot when it was written from
+    // these files and decodes intact, the files otherwise.
+    action def LoadLibrary {
+        attribute snapshotCurrent : Boolean = true;
+        attribute snapshotIntact : Boolean = true;
+
+        in item snapshotBlob : LibrarySnapshot;
+        out item index : SymbolIndex;
+
+        first start;
+
+        action digestFiles;
+        action readHeader;
+        action verifyChecksum;
+        action decodeSnapshot;
+        action parseFiles;
+        action indexFiles;
+        action expandImports;
+        action freeze;
+        action share;
+
+        succession first start then digestFiles;
+        succession first digestFiles then readHeader;
+        succession first readHeader then digestGate;
+
+        // A snapshot of other files, another format or an override parses.
+        decide digestGate;
+        if snapshotCurrent then verifyChecksum;
+        else parseFiles;
+
+        succession first verifyChecksum then checksumGate;
+
+        decide checksumGate;
+        if snapshotIntact then decodeSnapshot;
+        else parseFiles;
+
+        succession first parseFiles then indexFiles;
+        succession first indexFiles then expandImports;
+        succession first expandImports then freeze;
+        succession first decodeSnapshot then share;
+        succession first freeze then share;
+        succession first share then done;
+    }
+
     // The tier ladder as states: each tier is entered only from a clean tier
     // below it, and any failure halts short of execution.
     state def TierProgression {

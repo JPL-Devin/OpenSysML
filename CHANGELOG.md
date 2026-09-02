@@ -36,6 +36,23 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   measurements are recorded in the
   [execution-performance record](docs/project/execution-performance-2026-09.md).
 
+### Changed
+
+- **The architecture self-model describes the library snapshot.** The standard library stage in
+  [`examples/self-model`](examples/self-model/README.md) now carries the embedded snapshot its
+  index is decoded from, the `internal/core/pack` and `internal/core/ast/astcodec` units that
+  encode it and the generator that writes it; `LoadLibrary` models the load as an action whose two
+  decisions — the digest and format match, then the checksum — choose between decoding the snapshot
+  and parsing the files; `stdlib-snapshot-check` is an eighth, gating conformance oracle; and a
+  ninth invariant, `snapshotIsDerived`, states that the snapshot is checked against the files and
+  never the only way to load them. The evaluator now declares itself memoized, since it keeps its
+  per-node caches in side tables beside the tree. The self-model test compares each new claim with
+  the implementation: the override variable, whether the embedded snapshot decodes for the bundled
+  files, the Make targets and the CI step, and the side tables `runtime.Context` keys by syntax
+  node. The architecture document gains a section and diagram on loading the library, and the
+  pilot differential baseline is re-recorded for the larger model: the eleven new rows are all the
+  reference's, of shapes the self-model already drew.
+
 ## 0.4.3 — 2026-09-01
 
 Release 0.4.3 is where an element gets an identity the notation can carry. The SysML v2 textual

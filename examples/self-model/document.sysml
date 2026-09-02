@@ -147,6 +147,16 @@ package OpenSysMLDocument {
             part immutable : Paragraph {
                 attribute redefines text = "The tree is immutable once parsed and carries syntax only. Everything derived from it lives in a side table keyed by node or symbol, which is why resolution can be lazy and memoized without a stale tree to invalidate.";
             }
+
+            part libraryLoading : Paragraph {
+                attribute redefines text = "The bundled standard library is loaded once per process from an embedded snapshot of its frozen index, written at go generate time and checked against the digest of the bundled files, the snapshot format and a checksum before it is trusted. A snapshot that fails any of those checks is ignored and the files are parsed as before, so the library files remain the source of truth and the snapshot is only a faster way to arrive at the same index.";
+            }
+
+            part libraryLoad : Diagram {
+                attribute redefines caption = "Loading the library: the snapshot when it matches the files, the files otherwise";
+                attribute redefines direction = "TB";
+                ref redefines source = OpenSysMLViews::libraryLoadFlow;
+            }
         }
 
         part checking : Section {
