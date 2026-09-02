@@ -44,6 +44,8 @@ const (
 	pLowerBound                = "lowerBound"
 	pUpperBound                = "upperBound"
 	pValue                     = "value"
+	pIsDefault                 = "isDefault"
+	pIsInitial                 = "isInitial"
 	pImportedNamespace         = "importedNamespace"
 	pAliasFor                  = "aliasedElement"
 	pClient                    = "client"
@@ -462,7 +464,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		}
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
-		e.expression(subject, e.sysml(pValue), pValue, owner, n.Value)
+		e.featureValue(subject, owner, n.Value, n.ValueIsDefault, n.ValueIsInitial)
 		// A declaration head that binds ends (connect/bind/flow/succession),
 		// a transition, an accept action or a satisfy usage is kept as source
 		// text: its head is not reconstructible from the properties above.
@@ -602,7 +604,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		}
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
-		e.expression(subject, e.sysml(pValue), pValue, owner, n.BindingExpr)
+		e.featureValue(subject, owner, n.BindingExpr, n.ValueIsDefault, n.ValueIsInitial)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
@@ -818,6 +820,19 @@ func (e *encoder) ident(subject rdf.Term, ident ast.Identification) {
 	if ident.ShortName != "" {
 		e.graph.Add(subject, e.sysml(pDeclaredShortName), rdf.String(ident.ShortName))
 	}
+}
+
+// featureValue emits a feature's value with the `default` and `:=` of its
+// operator (FeatureValue::isDefault, isInitial), so the operator converts back.
+func (e *encoder) featureValue(subject rdf.Term, owner string, value ast.Node, isDefault, isInitial bool) {
+	if value == nil {
+		return
+	}
+	e.expression(subject, e.sysml(pValue), pValue, owner, value)
+	e.flags(subject, []boolProperty{
+		{pIsDefault, isDefault},
+		{pIsInitial, isInitial},
+	})
 }
 
 func (e *encoder) flags(subject rdf.Term, flags []boolProperty) {

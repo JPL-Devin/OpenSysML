@@ -796,9 +796,22 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	}
 	head := strings.Join(words, " ") + multPart
 	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
-		head += " = " + value
+		head += " " + d.valueOperator(el) + " " + value
 	}
 	return head, nil
+}
+
+// valueOperator is the operator a feature value was written with, rebuilt from
+// its isDefault and isInitial flags: `=`, `:=`, `default =` or `default :=`.
+func (d *decoder) valueOperator(el *element) string {
+	op := "="
+	if d.boolOf(el, rdf.SysML+pIsInitial) {
+		op = ":="
+	}
+	if d.boolOf(el, rdf.SysML+pIsDefault) {
+		return "default " + op
+	}
+	return op
 }
 
 // conditionHead rebuilds a condition member from its properties: an inline

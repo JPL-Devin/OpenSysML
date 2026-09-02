@@ -193,7 +193,10 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   was written as, typed `sysx:Expression` to tell the two apart.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
-- `sysml:value` — a feature's value, as an expression node
+- `sysml:value` — a feature's value, as an expression node, with
+  `sysml:isDefault` and `sysml:isInitial` stating the `default` and `:=` of the
+  operator it was written with (so `default = 1` does not come back as the
+  binding `= 1`, which a redefinition may not override)
 - `sysml:importedNamespace`, `sysml:aliasedElement`, `sysml:client`,
   `sysml:supplier`, `sysml:body`, `sysml:language`, `sysml:locale`,
   `sysml:annotatedElement`
