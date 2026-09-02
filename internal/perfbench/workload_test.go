@@ -90,8 +90,18 @@ func syntheticModel(n int) []byte {
 var (
 	syntheticOnce sync.Once
 	syntheticSrc  []byte
+	syntheticDir  string
 	syntheticFile string
 )
+
+// TestMain removes the shared synthetic model once every benchmark is done with it.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if syntheticDir != "" {
+		os.RemoveAll(syntheticDir)
+	}
+	os.Exit(code)
+}
 
 // synthetic returns the generated model's source and a file holding it.
 func synthetic(tb testing.TB) ([]byte, string) {
@@ -101,6 +111,7 @@ func synthetic(tb testing.TB) ([]byte, string) {
 		if err != nil {
 			tb.Fatal(err)
 		}
+		syntheticDir = dir
 		syntheticFile = filepath.Join(dir, "perf.sysml")
 		if err := os.WriteFile(syntheticFile, syntheticSrc, 0o600); err != nil {
 			tb.Fatal(err)
