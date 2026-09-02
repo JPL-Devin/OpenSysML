@@ -41,7 +41,7 @@ part Vehicle {
 private import ScalarValues::*;
 
 part def Engine {
-    attribute power : Real = 200.0;
+    attribute power : Real default = 200.0;
 }
 
 part def Car {

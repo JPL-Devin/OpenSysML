@@ -172,7 +172,7 @@ func TestCheckOnInstantiatedObject(t *testing.T) {
 // usages carry with values of their own.
 const inheritedConditionFixture = `package P {
     part def Sensor {
-        attribute reading = 0.0;
+        attribute reading default = 0.0;
         constraint inRange { reading <= 100.0 }
         requirement ok { require constraint { reading <= 100.0 } }
     }

@@ -12,7 +12,7 @@ import (
 // object a check is about is the nested one rather than the one named.
 const nestedSubjectModelSource = `package Demo {
 	part def Wheel {
-		attribute pressure = 30.0;
+		attribute pressure default = 30.0;
 		constraint inflated {
 			pressure > 20.0
 		}
@@ -74,7 +74,7 @@ func TestVerifyConstraintNamesTheNestedSubject(t *testing.T) {
 // the same car, so no one of them is the object a check is about.
 const ambiguousSubjectModelSource = `package Demo {
 	part def Bolt {
-		attribute torque = 1.0;
+		attribute torque default = 1.0;
 		constraint tight {
 			torque > 10.0
 		}

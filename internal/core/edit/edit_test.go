@@ -180,7 +180,7 @@ func TestSetValueReplacesOnlyTheValueSpan(t *testing.T) {
 
 	res := applyOne(t, m, SetValue("Demo::SC::unitMass", "1050.0[SI::kg]"))
 
-	if !strings.Contains(string(res.Content), "attribute unitMass : ISQ::MassValue = 1050.0[SI::kg];") {
+	if !strings.Contains(string(res.Content), "attribute unitMass : ISQ::MassValue default = 1050.0[SI::kg];") {
 		t.Fatalf("value not set:\n%s", res.Content)
 	}
 	if strings.Contains(string(res.Content), "1000.0[SI::kg]") {
@@ -265,7 +265,7 @@ func TestSetValueKinds(t *testing.T) {
 		value  string
 		want   string
 	}{
-		{"quantity", "Demo::SC::unitMass", "2.5[SI::kg]", "attribute unitMass : ISQ::MassValue = 2.5[SI::kg];"},
+		{"quantity", "Demo::SC::unitMass", "2.5[SI::kg]", "attribute unitMass : ISQ::MassValue default = 2.5[SI::kg];"},
 		{"string", "Demo::SC::label", `"flight-2"`, `attribute label : ScalarValues::String = "flight-2";`},
 		{"boolean", "Demo::SC::active", "false", "attribute active : ScalarValues::Boolean = false;"},
 		{"feature reference", "Demo::SC::total", "unitMass", "attribute total : ISQ::MassValue = unitMass;"},
@@ -300,7 +300,7 @@ func TestApplyManyEditsInOnePass(t *testing.T) {
 		t.Fatalf("Apply: %v", err)
 	}
 	for _, want := range []string{
-		"attribute unitMass : ISQ::MassValue = 1050.0[SI::kg];",
+		"attribute unitMass : ISQ::MassValue default = 1050.0[SI::kg];",
 		"attribute margin : ISQ::MassValue = 10.0[SI::kg];",
 		"attribute redefines unitMass = 1400.0[SI::kg];",
 	} {
@@ -343,7 +343,7 @@ func TestRenameRewritesReferences(t *testing.T) {
 
 	got := string(res.Content)
 	for _, want := range []string{
-		"attribute dryMass : ISQ::MassValue = 1000.0[SI::kg];",
+		"attribute dryMass : ISQ::MassValue default = 1000.0[SI::kg];",
 		"attribute total : ISQ::MassValue = dryMass;",
 		"attribute redefines dryMass = 1200.0[SI::kg];",
 	} {

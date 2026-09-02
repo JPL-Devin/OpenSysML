@@ -12,7 +12,7 @@ import (
 const attributeModel = `
 package Demo {
     part def Base {
-        attribute mass : ISQ::MassValue = 1000.0 [SI::kg];
+        attribute mass : ISQ::MassValue default = 1000.0 [SI::kg];
         attribute label : ScalarValues::String = "base";
         attribute inheritedOnly : ScalarValues::Real = 3.0;
     }
@@ -105,7 +105,7 @@ func TestARedefinitionWithANonConstantDefaultReportsNoValue(t *testing.T) {
 	get := parseForFacts(t, `
 package Demo {
     part def Base {
-        attribute mass : ScalarValues::Real = 1000.0;
+        attribute mass : ScalarValues::Real default = 1000.0;
     }
     part def Car :> Base {
         attribute wheels : ScalarValues::Integer = 4;
@@ -130,7 +130,7 @@ func TestAnIntermediateNonConstantDefaultStopsTheChainWalk(t *testing.T) {
 	get := parseForFacts(t, `
 package Demo {
     part def Base {
-        attribute mass : ScalarValues::Real = 1000.0;
+        attribute mass : ScalarValues::Real default = 1000.0;
     }
     part def Mid :> Base {
         attribute wheels : ScalarValues::Integer = 4;

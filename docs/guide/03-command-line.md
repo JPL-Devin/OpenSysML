@@ -10,7 +10,7 @@ The examples below use the following model, `checks.sysml`:
 ```sysml
 package MyModel {
     part def Sensor {
-        attribute reading = 0.0;
+        attribute reading default = 0.0;
         attribute threshold = 100.0;
     }
 

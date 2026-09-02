@@ -4,7 +4,7 @@ package demo {
 	private import ScalarValues::*;
 
 	part def Car {
-		attribute mass : Real = 1500.0;
+		attribute mass : Real default = 1500.0;
 	}
 
 	part car : Car {

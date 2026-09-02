@@ -45,7 +45,7 @@ MODEL = """package Demo {
     // The mass of one unit, measured on the bench.
     part def SC {
 
-        attribute unitMass : ISQ::MassValue = 1000.0[SI::kg];
+        attribute unitMass : ISQ::MassValue default = 1000.0[SI::kg];
 
         // No margin has been agreed yet.
         attribute margin : ISQ::MassValue;
@@ -587,7 +587,7 @@ class TestEditRoundTripAgainstRealService:
             edited = str(result)
             assert "attribute redefines unitMass = 1300.0[SI::kg];" in edited
             # The definition's own value is untouched.
-            assert "attribute unitMass : ISQ::MassValue = 1000.0[SI::kg];" in edited
+            assert "attribute unitMass : ISQ::MassValue default = 1000.0[SI::kg];" in edited
 
     def test_an_unreferenced_declaration_is_renamed(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:
@@ -602,7 +602,7 @@ class TestEditRoundTripAgainstRealService:
             model = conn.load_from_content(MODEL)
             result = model.edit().rename("Demo::SC::unitMass", "unitWeight").apply()
             edited = str(result)
-            assert "attribute unitWeight : ISQ::MassValue = 1000.0[SI::kg];" in edited
+            assert "attribute unitWeight : ISQ::MassValue default = 1000.0[SI::kg];" in edited
             assert "attribute total : ISQ::MassValue = unitWeight;" in edited
             assert "unitMass" not in edited
             assert conn.load_from_content(edited).find("unitWeight") is not None

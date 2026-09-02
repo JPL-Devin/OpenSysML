@@ -150,7 +150,7 @@ func rejectReport(t *testing.T, got runOutcome, substrings ...string) {
 func TestEvalAfterInstantiateThroughCLI(t *testing.T) {
 	binary := buildCLI(t)
 	const model = `package P {
-    part def Sensor { attribute reading = 0.0; }
+    part def Sensor { attribute reading default = 0.0; }
     part hot : Sensor { attribute :>> reading = 140.0; }
 }
 `
@@ -170,7 +170,7 @@ func TestCheckOfInheritedConstraintAfterInstantiate(t *testing.T) {
 	binary := buildCLI(t)
 	const model = `package P {
     part def Sensor {
-        attribute reading = 0.0;
+        attribute reading default = 0.0;
         constraint inRange { reading <= 100.0 }
     }
     part hot : Sensor { attribute :>> reading = 140.0; }

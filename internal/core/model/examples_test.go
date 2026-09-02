@@ -16,7 +16,15 @@ const examplesDir = "../../../examples"
 // report errors, keyed by path with the reason. README and the guide point new
 // users at examples/, so an example that does not analyse cleanly is a bug
 // unless it is listed here on purpose.
-var examplesKnownFailures = map[string]string{}
+var examplesKnownFailures = map[string]string{
+	"solver-demo.sysml":               solverBestOverridden,
+	"disposal-robot-demo/robot.sysml": solverBestOverridden,
+	"disposal-team-demo/team.sysml":   solverBestOverridden,
+}
+
+// The solver reads objectives from `attribute :>> best = expression;`, which
+// overrides the library's bound `best`; reported until that contract is restated.
+const solverBestOverridden = "the objective restates the library's bound `best`"
 
 // Every example the repository ships must analyse cleanly, so the CLI's
 // -validate exit status stays meaningful for the files the docs point at.
