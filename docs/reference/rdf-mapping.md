@@ -423,11 +423,6 @@ What is still refused, naming the node:
   shape would mean inferring which node an edge belongs to from member position,
   which could silently reattach edges, so it is reported instead. Nine of the
   eighteen remaining refusals under `examples/` are this shape.
-- **A succession end whose name is not a basic name.** The two-end form the
-  graph is written back as (`succession first a then b;`) is read by the parser
-  only when both ends are basic names, so `succession first 'enter vehicle'
-  then 'drive vehicle';` would not parse. The edge is reported rather than
-  written.
 - **Prefix metadata** (`#Safety part p;`, `@M { … }`) and an **operator
   expression member**, both unchanged from before.
 
@@ -461,6 +456,27 @@ package Demo {
 The `comment` and `doc` keywords declare elements, so they convert both ways.
 Save straight to `.sysml` when the comments matter; that path writes the source
 and keeps everything.
+
+**A head comes back in one spelling.** The graph carries what a head declares,
+not how it was spelled, so the notation written back is normalised where the
+notation offers a choice and the model does not:
+
+- A relationship written as a symbol or as its keyword (`:>` or `subsets`,
+  `:>>` or `redefines`, `::>` or `references`) is the same relationship
+  element, so no spelling is recorded and the writer uses one form. This differs
+  from `sysx:declaredKeyword`, which is kept where the notation's synonyms name
+  *different* declarations (`datatype` and `attribute`).
+- The modifiers of a usage are written in the grammar's order (`end #derive r1
+  : R;`, `end ref cause : S[*];`), and a multiplicity goes with the typing
+  clause it qualifies, or with the name when there is none (`composite
+  frontWheel[2] redefines w`). The parser reads the same flags in either order
+  and either position (`export_test.go:TestFixturesComeBackFromTheGraphAlone`).
+- A `doc` or `comment` body is carried with the line endings it was written
+  with, but the notation written back uses the document's own — a body written
+  with CRLF comes back with LF. The text is otherwise verbatim.
+
+A second conversion of the notation written back gives the same graph; only
+`sysx:sourceText`, which quotes the source verbatim, shows the respelling.
 
 ### End-binding heads
 
@@ -572,18 +588,9 @@ same Turtle byte for byte (`export_test.go:TestSuccessionRoundTripsInEveryBody`)
 That is a statement about the fixtures, not the mapping: over the example corpus
 the second hop reproduces the graph exactly for 166 of the 268 files that
 convert, up to `sysx:sourceText` whitespace for 71 more, and differs for the
-rest ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). The
-explicit two-ended form reads only basic names, so a succession naming an end
-that needs quotes is reported rather than written as notation the parser would
-reject.
-
-**A reference end is written back in a spelling the parser reads
-differently.** `end [*] ref cause : Situation;` is carried faithfully (the
-graph records `sysml:isReference`) and comes back as
-`end ref attribute cause : Situation[*];`, but the parser records no reference
-flag for a `ref` that follows `end`, so converting *that* notation again drops
-the `ref`. The graph is right; a stable second hop needs the parser to record
-the flag.
+rest ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). An end
+whose name needs quotes (`first a then 'drive vehicle';`) is a reference to the
+element like any other; the writer quotes the name as the notation requires.
 
 **Conditions convert as their notation.** The members that express
 a condition are carried, each as the `sysx:` metaclass named above with its

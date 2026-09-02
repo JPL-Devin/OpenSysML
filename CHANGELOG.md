@@ -206,6 +206,22 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   round trips reproduce the same graph; the training examples for action shorthand, control
   structures, decisions, merges, terminate actions, messaging and message payloads are among them.
 
+- **The notation the RDF writer spells is read back to the same graph.** Converting a model to
+  Turtle, back to notation and to Turtle again lost flags the first graph carried, because the
+  writer re-spelled a head in a form the parser read differently: `ref x subsets y;` and
+  `composite frontWheel redefines w[2];` lost `ref` and `composite` (the parser only continued a
+  modifier-led declaration into a symbolic `:>`, not the keyword spellings), `#derive end r : R;`
+  lost `end` and `end ref attribute e : S;` lost `ref` (the `end … kind` path applied only the
+  end flag), a nested `private import Pkg1::*;` came back as `Pkg1::**` (the two import suffixes
+  were written as exclusive), and a succession end whose name needs quotes was carried as text
+  and refused when written. The parser now reads every modifier ahead of the kind keyword, the
+  writer spells the modifiers in the grammar's order with the multiplicity beside the clause it
+  qualifies, an import writes `::*` and `::**` independently, and a quoted succession end is a
+  reference to the element like an unquoted one. Five fixtures under
+  `internal/core/export/testdata/convert/` lock this in by re-encoding the notation written
+  from the graph alone and comparing the two graphs as triple sets; a relationship's symbolic or
+  keyword spelling and a doc body's line endings are documented as normalised.
+
 ## 0.4.3 — 2026-09-01
 
 Release 0.4.3 is where an element gets an identity the notation can carry. The SysML v2 textual
