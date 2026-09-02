@@ -22,23 +22,41 @@ type calcParameter struct {
 type calcMemberDecl struct {
 	Target *writeTarget
 	Owner  *symbols.Symbol
+	// multStated: Target.mult is declared rather than the assumed 1..1.
+	multStated bool
 }
 
-// checkType reports a value outside the declared type, described by what (asked
-// only on refusal, a binding being the hot path); an unknown member is not judged.
-func (d *calcMemberDecl) checkType(ctx *Context, value *Value, what func() string) error {
+// redeclaring refines the declaration d redeclares: a redeclaration stating no
+// type or multiplicity keeps the redeclared feature's (KerML 1.0 §7.3.4.5).
+func (d calcMemberDecl) redeclaring(redeclared calcMemberDecl) calcMemberDecl {
+	if d.Target == nil {
+		return redeclared
+	}
+	if redeclared.Target == nil {
+		return d
+	}
+	if d.Target.typ == nil {
+		d.Target.typ = redeclared.Target.typ
+	}
+	if !d.multStated {
+		d.Target.mult, d.multStated = redeclared.Target.mult, redeclared.multStated
+	}
+	return d
+}
+
+// check reports a value outside the declared multiplicity or type, described by
+// what (asked only on refusal, a binding being the hot path); unknown: not judged.
+func (d *calcMemberDecl) check(ctx *Context, value *Value, what func() string) error {
 	if d.Target == nil {
 		return nil
+	}
+	if msg := ctx.writeCountRefusal(d.Target, value); msg != "" {
+		return fmt.Errorf("%s: %w: %s", what(), ErrMultiplicityViolation, msg)
 	}
 	if refusal, refused := ctx.writeTypeRefusal(declScope(d.Owner), d.Target.typ, value); refused {
 		return fmt.Errorf("%s: %w: %s", what(), ErrTypeMismatch, refusal)
 	}
 	return nil
-}
-
-// checkBound reports a value outside the declared type or multiplicity.
-func (d *calcMemberDecl) checkBound(ctx *Context, what string, value Value) error {
-	return ctx.checkWrite(declScope(d.Owner), what, d.Target, value)
 }
 
 // calcMemberDeclOf resolves what a member of link declares for a value bound to it.
@@ -47,8 +65,12 @@ func (ctx *Context) calcMemberDeclOf(link *symbols.Symbol, usage *ast.Usage, nam
 	if sym == nil {
 		return calcMemberDecl{}
 	}
-	mult, _ := ctx.extractMultiplicity(sym)
-	return calcMemberDecl{Target: &writeTarget{name: name, typ: ctx.extractType(sym), mult: mult}, Owner: link}
+	mult, stated := ctx.extractMultiplicity(sym)
+	return calcMemberDecl{
+		Target:     &writeTarget{name: name, typ: ctx.extractType(sym), mult: mult},
+		Owner:      link,
+		multStated: stated,
+	}
 }
 
 // calcShape is a calc's invocation interface: the input parameters it binds, in
@@ -191,9 +213,7 @@ func (ctx *Context) calcParameters(chain []*symbols.Symbol) []calcParameter {
 					param.Default = params[at].Default
 					param.Owner = params[at].Owner
 				}
-				if param.Decl.Target == nil {
-					param.Decl = params[at].Decl
-				}
+				param.Decl = param.Decl.redeclaring(params[at].Decl)
 				params[at] = param
 				continue
 			}
@@ -424,7 +444,7 @@ func (ctx *Context) bindCalcParameters(
 		}
 		// The parameter holds the value bound to it, so that value answers to the
 		// parameter's declaration as a written one does.
-		if err := param.Decl.checkType(ctx, &value, func() string {
+		if err := param.Decl.check(ctx, &value, func() string {
 			return fmt.Sprintf("calc %s: %s for parameter %q", shape.Name, source, param.Name)
 		}); err != nil {
 			return err

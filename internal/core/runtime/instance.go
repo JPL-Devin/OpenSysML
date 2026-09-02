@@ -325,7 +325,7 @@ func isScalarFeature(feat *EffectiveFeature) bool {
 // multiplicity (1..1 when none is declared) or an element outside its type.
 func (ctx *Context) checkDefault(inst *Instance, fv *FeatureValue, name string, val Value) error {
 	what := fmt.Sprintf("feature value %s.%s", inst.Type.Name, name)
-	count := int64(len(elementsOf(val)))
+	count := ctx.boundValueCount(fv.Feature.Type, &val)
 	if msg := fv.Feature.Multiplicity.CountViolation(count); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}

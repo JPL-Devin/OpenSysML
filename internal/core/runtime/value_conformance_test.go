@@ -209,6 +209,197 @@ func TestCalcParameterAndResultMustConform(t *testing.T) {
 	}
 }
 
+// calcMultiplicityContext builds a runtime over calcs declaring every
+// multiplicity form a parameter or result value is counted against.
+func calcMultiplicityContext(t *testing.T) (*Context, *symbols.Index, *symbols.Scope) {
+	t.Helper()
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::*;
+
+			calc def One { in x : Integer; return : Integer = x; }
+			calc def Untyped { in x; return : Integer = x; }
+			calc def Opt { in x : Integer[0..1] = null; return : Integer = x ?? 0; }
+			calc def Many { in xs : Integer[*]; return : Integer = xs->size(); }
+			calc def UpTo2 { in xs : Integer[1..2]; return : Integer = xs->size(); }
+			calc def BadDefault { in x : Integer = (1, 2); return : Integer = x; }
+			calc def DerivedMany :> Many;
+			calc def RedefOne :> Many { in :>> xs : Integer[1]; }
+			calc def RedeclMany :> Many { in :>> xs; }
+			calc def RedeclManyTyped :> Many { in :>> xs : Integer; }
+
+			calc def TwoResults { return : Integer = (1, 2); }
+			calc def NoResult { return : Integer = null; }
+			calc def ManyResults { return : Integer[*] = (1, 2); }
+			calc def Returned {
+				in xs : Integer[*];
+				attribute n : Integer = xs->size();
+				return : Integer = xs;
+			}
+			calc def ManyOut { in xs : Integer[*]; out ys : Integer[*] = xs; }
+			calc def OneOut { in xs : Integer[*]; out y : Integer = xs; }
+			calc def ManyOutRedecl :> ManyOut { out :>> ys; }
+			calc def ManyResultsRedecl :> ManyResults { return : Integer; }
+			calc def BoundOne { in xs : Integer[*]; return : Integer; bind result = xs; }
+			calc def BoundMany { in xs : Integer[*]; return : Integer[*]; bind result = xs; }
+			calc def BoundDerived :> BoundOne {
+				in :>> xs;
+				attribute pair : Integer[2] = (xs, xs);
+				bind result = pair;
+			}
+			calc def BoundString { attribute s : String = "s"; return : Integer; bind result = s; }
+
+			calc def Unit { return : Complex = ComplexFunctions::i; }
+			calc def UnitOut { out z : Complex = ComplexFunctions::i; }
+			calc def UnitReal { return : Real = ComplexFunctions::i; }
+			part def P {
+				attribute z : Complex = ComplexFunctions::rect(0.0, 1.0);
+				attribute r : Complex = 2.0;
+				attribute triple : Complex = (1.0, 2.0, 3.0);
+				attribute pairOfReals : Real = ComplexFunctions::rect(0.0, 1.0);
+			}
+			part p : P;
+		}
+	`))
+	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("test package not indexed")
+	}
+	return ctx, idx, pkg.Scope
+}
+
+// A positional, named or default argument — through an inherited or redefined
+// parameter too — and the result, returned or bound, answer to the declared
+// (else 1..1) multiplicity.
+func TestCalcParameterAndResultMultiplicity(t *testing.T) {
+	ctx, _, scope := calcMultiplicityContext(t)
+
+	for _, tc := range []struct {
+		expr string
+		want string
+	}{
+		{"One(1)", "1"},
+		{"Untyped(1)", "1"},
+		{"Opt()", "0"},
+		{"Opt(null)", "0"},
+		{"Opt(x = 5)", "5"},
+		{"Many((1, 2, 3))", "3"},
+		{"Many(1)", "1"},
+		{"Many(null)", "0"},
+		{"UpTo2((1, 2))", "2"},
+		{"DerivedMany((1, 2))", "2"},
+		{"RedefOne(1)", "1"},
+		{"RedeclMany((1, 2))", "2"},
+		{"RedeclManyTyped((1, 2))", "2"},
+		{"ManyOutRedecl((1, 2))", "(1, 2)"},
+		{"ManyResultsRedecl()", "(1, 2)"},
+		{"ManyResults()", "(1, 2)"},
+		{"Returned(1)", "1"},
+		{"ManyOut((1, 2))", "(1, 2)"},
+		{"OneOut(1)", "1"},
+		{"BoundOne(1)", "1"},
+		{"BoundMany((1, 2))", "(1, 2)"},
+	} {
+		got, err := evalIn(t, ctx, scope, tc.expr)
+		if err != nil {
+			t.Errorf("%s: %v", tc.expr, err)
+			continue
+		}
+		if s := FormatTraceValue(got); s != tc.want {
+			t.Errorf("%s = %s, want %s", tc.expr, s, tc.want)
+		}
+	}
+	for _, expr := range []string{
+		"One((1, 2))",
+		"One(x = (1, 2))",
+		"One(null)",
+		"Untyped((1, 2))",
+		"Opt((1, 2))",
+		"UpTo2((1, 2, 3))",
+		"UpTo2(null)",
+		"BadDefault()",
+		"RedefOne((1, 2))",
+		"TwoResults()",
+		"NoResult()",
+		"Returned((1, 2))",
+		"OneOut((1, 2))",
+		"BoundOne((1, 2))",
+		"BoundDerived(1)",
+	} {
+		if _, err := evalIn(t, ctx, scope, expr); !errors.Is(err, ErrMultiplicityViolation) {
+			t.Errorf("%s: error = %v, want ErrMultiplicityViolation", expr, err)
+		}
+	}
+	for _, expr := range []string{"BoundString()", `RedeclMany("s")`} {
+		if _, err := evalIn(t, ctx, scope, expr); !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("%s: error = %v, want ErrTypeMismatch", expr, err)
+		}
+	}
+}
+
+// A violation is reported at the binding, before the body runs, under the label
+// a type refusal of that binding carries.
+func TestCalcMultiplicityViolationNamesTheBinding(t *testing.T) {
+	ctx, _, scope := calcMultiplicityContext(t)
+	for _, tc := range []struct {
+		expr string
+		want string
+	}{
+		{"One((1, 2))", `calc test::One: argument for parameter "x": multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1`},
+		{"BadDefault()", `calc test::BadDefault: default for parameter "x": multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1`},
+		{"UpTo2(null)", `calc test::UpTo2: argument for parameter "xs": multiplicity violation: 0 value(s) bound to a feature with multiplicity lower bound 1`},
+		{"TwoResults()", `calc test::TwoResults: result: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1`},
+	} {
+		_, err := evalIn(t, ctx, scope, tc.expr)
+		if err == nil || err.Error() != tc.want {
+			t.Errorf("%s: error = %v\nwant %s", tc.expr, err, tc.want)
+		}
+	}
+}
+
+// One Complex is represented as the (re, im) pair rect constructs, so a Complex
+// feature holds that pair as one value; any other feature counts its elements.
+func TestComplexCountsAsOneValueOfAComplexFeature(t *testing.T) {
+	ctx, idx, scope := calcMultiplicityContext(t)
+
+	for _, tc := range []struct {
+		expr string
+		want string
+	}{
+		{"Unit()", "(0.0, 1.0)"},
+		{"UnitOut()", "(0.0, 1.0)"},
+	} {
+		got, err := evalIn(t, ctx, scope, tc.expr)
+		if err != nil {
+			t.Errorf("%s: %v", tc.expr, err)
+			continue
+		}
+		if s := FormatTraceValue(got); s != tc.want {
+			t.Errorf("%s = %s, want %s", tc.expr, s, tc.want)
+		}
+	}
+	if _, err := evalIn(t, ctx, scope, "UnitReal()"); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("UnitReal(): error = %v, want ErrMultiplicityViolation", err)
+	}
+
+	inst := instantiateNamed(t, ctx, idx, "test::p")
+	for feature, want := range map[string]string{"z": "(0.0, 1.0)", "r": "2.0"} {
+		fv, err := inst.GetFeatureValue(ctx, feature)
+		if err != nil {
+			t.Errorf("%s: %v", feature, err)
+			continue
+		}
+		if got := FormatTraceValue(fv.HeldValue()); got != want {
+			t.Errorf("%s = %s, want %s", feature, got, want)
+		}
+	}
+	for _, feature := range []string{"triple", "pairOfReals"} {
+		if _, err := inst.GetFeatureValue(ctx, feature); !errors.Is(err, ErrMultiplicityViolation) {
+			t.Errorf("%s: error = %v, want ErrMultiplicityViolation", feature, err)
+		}
+	}
+}
+
 // A whole-valued Real names a position; a fractional one names none, and is
 // never truncated to one.
 func TestSequenceIndexAcceptsAWholeValuedReal(t *testing.T) {

@@ -57,11 +57,26 @@ func (ctx *Context) checkWrite(scope *symbols.Scope, what string, target *writeT
 	if target == nil {
 		return nil
 	}
-	count := int64(len(elementsOf(value)))
-	if msg := target.mult.CountViolation(count); msg != "" {
+	if msg := ctx.writeCountRefusal(target, &value); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
 	return ctx.checkWriteType(scope, what, target.typ, value)
+}
+
+// writeCountRefusal says why the number of values written is outside the
+// target's multiplicity, or is empty where the count is admitted.
+func (ctx *Context) writeCountRefusal(target *writeTarget, value *Value) string {
+	return target.mult.CountViolation(ctx.boundValueCount(target.typ, value))
+}
+
+// boundValueCount counts the values of the declared type a bound value holds: its
+// elements, except that the (re, im) pair representing one Complex counts as one.
+func (ctx *Context) boundValueCount(declared *symbols.Symbol, value *Value) int64 {
+	count := elementCount(value)
+	if count == 2 && isNumericVector(*value) && ctx.model.PrimTypeOf(declared) == semantics.PrimComplex {
+		return 1
+	}
+	return count
 }
 
 // checkBodyWrite checks a write of a value a behavior body itself holds - a
