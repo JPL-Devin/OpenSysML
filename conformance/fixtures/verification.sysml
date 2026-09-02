@@ -1,6 +1,6 @@
 package Demo {
 	part def Vehicle {
-		attribute mass = 1500.0;
+		attribute mass default = 1500.0;
 
 		constraint massPositive {
 			mass > 0.0
