@@ -116,6 +116,29 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   compiles calcs until that variable says otherwise, and — invoking the model's own `StepBudget`
   through both tiers — that they agree and that a traced run takes the evaluator. The architecture
   document gains a paragraph and diagram on invoking a calc.
+- **`%features` lists an object's behaviors under their own heading instead of as `<unknown>`
+  values.** A state or action a type declares holds no value, and the listing used to render each
+  as a feature row reading `<unknown>` — `off = <unknown>`, nested state by nested state — while the
+  running state was only visible through `%current`. The values are now followed by a `Behaviors:`
+  section that says what the object is doing with each: the current active state of a machine it
+  exhibits (`modes: exhibited state machine, current state off`, the very state `%current`
+  reports, before and after the debugger drives it), the execution state of an action it performs
+  (`tick: performed action, completed`), and `not running` for a state or action the type declares
+  but the object neither exhibits nor performs. A nested object's behaviors are listed under its
+  own row. Nothing is invented: a machine that has not started reads `not started`, one that
+  reached its end reads `completed`.
+
+### Fixed
+
+- **`%eval in <part> : <feature>` reads a valueless feature as `<unset>` rather than calling it
+  unresolved.** Before an object exists, `%eval in car : wheels` for a multi-valued
+  `part wheels : Wheel[4]` — and `wheels.radius`, an attribute with no default, or a multi-valued
+  `String[3]` attribute — reported `unresolved reference`, though the name resolved perfectly well
+  and its single-valued neighbours evaluated. A feature the declarations give no value to now reads
+  `= <unset>`, as it does on an object; `unresolved reference` is reserved for a name nothing
+  declares. The same distinction holds throughout the evaluator: a declared name with no value is
+  a typed no-value error carrying the name, never an unresolved reference, so a qualified
+  `car::wheels` reports that it has no value to evaluate.
 
 ## 0.4.3 — 2026-09-01
 
