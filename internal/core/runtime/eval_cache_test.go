@@ -60,6 +60,53 @@ func TestRepeatedLiteralEvaluationAnswersAlike(t *testing.T) {
 	}
 }
 
+// TestNestedInvocationArgumentsStayDistinct: arguments that are themselves
+// invocations, or that recurse while others are already evaluated, bind to their
+// own parameters, and an argument failing part-way leaves nothing behind for
+// the next invocation to read.
+func TestNestedInvocationArgumentsStayDistinct(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		calc def sub { in a : Integer; in b : Integer; return : Integer = a - b; }
+		calc def fib { in k : Integer; return : Integer = if k <= 1 ? k else fib(k - 1) + fib(k - 2); }
+		calc def three { in a : Integer; in b : Integer; in c : Integer; return : Integer = a * 100 + b * 10 + c; }
+	`)
+	ctx := NewContext(model, resolver, 100000)
+	ec := NewEvalContext(ctx, root)
+
+	for _, tc := range []struct {
+		src  string
+		want int64
+	}{
+		{"sub(fib(10), fib(5))", 50},
+		{"sub(sub(9, fib(3)), sub(fib(4), 1))", 5},
+		{"three(fib(6), sub(fib(7), fib(6)), fib(3))", 852},
+		{"fib(sub(fib(6), 2))", 8},
+	} {
+		expr := parseExpr(t, tc.src)
+		for i := 0; i < 2; i++ {
+			got, err := ec.Eval(expr)
+			if err != nil || got.Kind != ValConst || got.Const.Int != tc.want {
+				t.Fatalf("eval %d of %s = %+v, %v; want %d", i, tc.src, got, err, tc.want)
+			}
+			if len(ctx.argStack) != 0 {
+				t.Fatalf("eval %d of %s left %d arguments on the stack", i, tc.src, len(ctx.argStack))
+			}
+		}
+	}
+
+	failing := parseExpr(t, "sub(fib(5), 9223372036854775808)")
+	if _, err := ec.Eval(failing); !errors.Is(err, semantics.ErrArithmeticOverflow) {
+		t.Fatalf("eval of a failing second argument: err = %v; want ErrArithmeticOverflow", err)
+	}
+	if len(ctx.argStack) != 0 {
+		t.Fatalf("a failing argument left %d arguments on the stack", len(ctx.argStack))
+	}
+	got, err := ec.Eval(parseExpr(t, "sub(7, 2)"))
+	if err != nil || got.Const.Int != 5 {
+		t.Fatalf("sub(7, 2) after a failed invocation = %+v, %v; want 5", got, err)
+	}
+}
+
 // TestRepeatedInvocationEvaluationAnswersAlike: an invocation expression
 // evaluated again in one context reaches the same calc, and one naming no
 // declaration is refused the same way each time, after its arguments.

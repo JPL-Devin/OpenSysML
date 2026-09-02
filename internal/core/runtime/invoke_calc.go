@@ -351,7 +351,10 @@ func (ctx *Context) releaseInvocationFrame(frame *invocationFrame) {
 		clear(bindings)
 		slots.release()
 	}
+	frameBuf := frame.engine.frameBuf
+	clear(frameBuf)
 	*frame = invocationFrame{bindings: bindings, slots: slots}
+	frame.engine.frameBuf = frameBuf[:0]
 	if len(ctx.freeInvocationFrames) < maxFreeInvocationFrames {
 		ctx.freeInvocationFrames = append(ctx.freeInvocationFrames, frame)
 	}
@@ -481,7 +484,7 @@ func (ctx *Context) bindCalcParameters(
 func (ctx *Context) runCalcBody(shape *calcShape, frame *invocationFrame, callerScope *symbols.Scope, self *Instance, activation int64) (Value, error) {
 	frame.host = calcStmtHost{ctx: ctx, shape: shape, self: self}
 	frame.env = stmtEnv{data: frame.locals()}
-	frame.engine = stmtEngine{ctx: ctx, host: &frame.host, env: &frame.env, activation: activation}
+	frame.engine = stmtEngine{ctx: ctx, host: &frame.host, env: &frame.env, activation: activation, frameBuf: frame.engine.frameBuf}
 	result, returned, err := runCalcSteps(&frame.engine, &frame.host, shape)
 	if err != nil {
 		return Value{}, err

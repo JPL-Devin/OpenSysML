@@ -1670,6 +1670,11 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	if n.Operand != nil {
 		exprs = append([]ast.Node{n.Operand}, n.Args...)
 	}
+	// A calc bound by position alone consumes its arguments within the call, so
+	// they live on the context's argument stack rather than in a slice of their own.
+	if target.shape != nil && len(n.NamedArgs) == 0 {
+		return ec.invokeCalcShapeStacked(target.shape, exprs)
+	}
 	args := make([]Value, len(exprs))
 	for i, arg := range exprs {
 		val, err := ec.Eval(arg)
@@ -1754,6 +1759,32 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		return ec.ctx.invokeCalcWithSelf(calcSym, callArgs, ec.scope, ec.self)
 	}
 	return ec.ctx.invokeCalcShape(target.shape, callArgs, ec.scope, ec.self)
+}
+
+// invokeCalcShapeStacked evaluates exprs onto the context's argument stack and
+// invokes shape with them, popping them however the invocation ends.
+func (ec *EvalContext) invokeCalcShapeStacked(shape *calcShape, exprs []ast.Node) (Value, error) {
+	ctx := ec.ctx
+	base := len(ctx.argStack)
+	for _, arg := range exprs {
+		val, err := ec.Eval(arg)
+		if err != nil {
+			ctx.popArgs(base)
+			return Value{}, err
+		}
+		ctx.argStack = append(ctx.argStack, val)
+	}
+	top := len(ctx.argStack)
+	args := ctx.argStack[base:top:top]
+	result, err := ctx.invokeCalcShape(shape, calcArgs{positional: args}, ec.scope, ec.self)
+	ctx.popArgs(base)
+	return result, err
+}
+
+// popArgs releases the arguments pushed since the stack was base deep.
+func (ctx *Context) popArgs(base int) {
+	clear(ctx.argStack[base:])
+	ctx.argStack = ctx.argStack[:base]
 }
 
 // qualifiedNameToString converts a QualifiedName AST node to "Package::Name" format.

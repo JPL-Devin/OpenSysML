@@ -145,6 +145,8 @@ type stmtEngine struct {
 	// scratch is the context evalIn answers with: statements run one after another
 	// and none keeps it past its own evaluation, so one serves them all.
 	scratch EvalContext
+	// frameBuf is the frame stack scratch reads, rebuilt by every evalIn.
+	frameBuf []frame
 }
 
 // newStmtEngine returns an engine running statements against data — the
@@ -171,14 +173,14 @@ func (e *stmtEngine) finish() {
 // statement was written in, reading the behavior's data and the frames entered,
 // innermost last so a block-local name shadows an outer one.
 func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
-	frames := make([]frame, 0, 1+len(e.env.outer)+len(e.env.frames))
-	frames = append(frames, e.env.data)
+	frames := append(e.frameBuf[:0], e.env.data)
 	for _, outer := range e.env.outer {
 		frames = append(frames, mapFrame(outer))
 	}
 	for _, local := range e.env.frames {
 		frames = append(frames, mapFrame(local))
 	}
+	e.frameBuf = frames
 	ec := &e.scratch
 	*ec = EvalContext{
 		ctx:            e.ctx,

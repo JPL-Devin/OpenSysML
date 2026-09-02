@@ -127,6 +127,10 @@ type Context struct {
 	// recursion reuses storage rather than allocating per call.
 	freeInvocationFrames []*invocationFrame
 
+	// argStack holds the positional arguments of the calc invocations under way,
+	// innermost last, so an invocation borrows rather than allocates its storage.
+	argStack []Value
+
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
