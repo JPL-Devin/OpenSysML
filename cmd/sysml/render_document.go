@@ -128,7 +128,7 @@ func setStylesheets() ([]docrender.Stylesheet, []repl.RenderedDocument, error) {
 	taken := make(map[string]bool, len(htmlCSS)+1)
 	add := func(name, content string) {
 		name = setStylesheetName(name, taken)
-		links = append(links, docrender.Stylesheet{Href: name})
+		links = append(links, docrender.LinkedStylesheet(name))
 		assets = append(assets, repl.RenderedDocument{Name: name, FileName: name, Content: content})
 	}
 	if !htmlNoCSS {
@@ -136,7 +136,7 @@ func setStylesheets() ([]docrender.Stylesheet, []repl.RenderedDocument, error) {
 	}
 	for _, css := range htmlCSS {
 		if isStylesheetURL(css) {
-			links = append(links, docrender.Stylesheet{Href: css})
+			links = append(links, docrender.LinkedStylesheet(css))
 			continue
 		}
 		// #nosec G304 -- the stylesheet is the file the run asked to style with.
@@ -171,7 +171,7 @@ func htmlOptions() (docrender.HTMLOptions, error) {
 	opts := documentOptions()
 	for _, css := range htmlCSS {
 		if isStylesheetURL(css) {
-			opts.Stylesheets = append(opts.Stylesheets, docrender.Stylesheet{Href: css})
+			opts.Stylesheets = append(opts.Stylesheets, docrender.LinkedStylesheet(css))
 			continue
 		}
 		// #nosec G304 -- the stylesheet is the file the run asked to style with.
@@ -179,7 +179,7 @@ func htmlOptions() (docrender.HTMLOptions, error) {
 		if err != nil {
 			return opts, fmt.Errorf("read stylesheet %s: %w", css, err)
 		}
-		opts.Stylesheets = append(opts.Stylesheets, docrender.Stylesheet{Content: string(content)})
+		opts.Stylesheets = append(opts.Stylesheets, docrender.InlineStylesheet(string(content)))
 	}
 	return opts, nil
 }

@@ -199,6 +199,19 @@ func TestHTMLSuppliedStylesheets(t *testing.T) {
 	}
 }
 
+// TestHTMLEmptyStylesheet checks a stylesheet the run named but which declares
+// nothing is inlined empty, rather than rejected as an unspecified sheet.
+func TestHTMLEmptyStylesheet(t *testing.T) {
+	document := fixtureDocument(t, filepath.Join("testdata", "telescope_report.sysml"), "Observatory::MassReport")
+	got, err := HTML(document, HTMLOptions{Stylesheets: []Stylesheet{InlineStylesheet("")}})
+	if err != nil {
+		t.Fatalf("an empty stylesheet file is a stylesheet: %v", err)
+	}
+	if !strings.Contains(got, "@layer opensysml {") {
+		t.Errorf("the default stylesheet is still carried:\n%s", got)
+	}
+}
+
 // TestHTMLStylesheetErrors checks the typed errors for a stylesheet that is
 // neither content nor URL, both at once, or would close its style element.
 func TestHTMLStylesheetErrors(t *testing.T) {
@@ -325,5 +338,30 @@ func TestHTMLAnonymousSections(t *testing.T) {
 		if !strings.Contains(got, `<span class="sysml-section-number">`+number+`</span>`) {
 			t.Errorf("section number %s is missing:\n%s", number, got)
 		}
+	}
+}
+
+// TestHTMLAnonymousSectionLeavesReservedAnchor checks an anonymous section
+// numbers itself around the anchor a later named section is referenced by,
+// rather than taking the identifier that reference resolves to.
+func TestHTMLAnonymousSectionLeavesReservedAnchor(t *testing.T) {
+	document := fixtureDocument(t, filepath.Join("testdata", "reserved_anchor.sysml"), "Reserved::ReservedAnchorReport")
+	got, err := HTML(document, HTMLOptions{TOC: true})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	ids := regexp.MustCompile(`<section class="sysml-section" id="([^"]*)"`).FindAllStringSubmatch(got, -1)
+	if len(ids) != 2 {
+		t.Fatalf("sections with identifiers = %d, want 2:\n%s", len(ids), got)
+	}
+	if ids[0][1] == "section" {
+		t.Errorf("the anonymous section took the anchor the named section is referenced by:\n%s", got)
+	}
+	if ids[1][1] != "section" {
+		t.Errorf("the named section's anchor = %q, want \"section\":\n%s", ids[1][1], got)
+	}
+	if !strings.Contains(got, `<a class="sysml-ref" href="#section"`) {
+		t.Errorf("the reference does not resolve to the named section:\n%s", got)
 	}
 }

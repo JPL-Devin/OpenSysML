@@ -62,6 +62,14 @@ func TestRenderDocumentHTMLStylesheets(t *testing.T) {
 		t.Errorf("supplied CSS must follow the default layer:\n%s", got.stdout)
 	}
 
+	// A sheet that declares nothing is still the sheet the run named.
+	empty := filepath.Join(t.TempDir(), "empty.css")
+	if err := os.WriteFile(empty, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wantReport(t, check(t, binary, documentModel, "-render-document", "Reports::MassReport",
+		"-doc-form", "html", "-html-css", empty), 0, "<!DOCTYPE html>", "@layer opensysml")
+
 	bare := check(t, binary, documentModel, "-render-document", "Reports::MassReport",
 		"-doc-form", "html", "-html-no-default-css")
 	wantReport(t, bare, 0, "<!DOCTYPE html>")
@@ -91,6 +99,31 @@ func TestRenderDocumentHTMLStylesheets(t *testing.T) {
 		2, "ask for it in its own run")
 	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-html-no-default-css")),
 		2, "not the sheet")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-sync-diff", "repo.ttl")),
+		2, "ask for it in its own run")
+	for _, unrelated := range [][]string{
+		{"-from", "kerml"},
+		{"-strict"},
+		{"-sync-base", "base.ttl"},
+		{"-sync-state", "state.json"},
+		{"-sync-confirm-deletes"},
+		{"-sync-mint-ids"},
+		{"-sync-annotate", "all"},
+	} {
+		wantReport(t, runCommand(t, exec.Command(binary, append([]string{"-html-default-css"}, unrelated...)...)),
+			2, "do not apply")
+	}
+
+	// -o is where the sheet is written, so it stays supported.
+	destination := filepath.Join(t.TempDir(), "sysml-document.css")
+	wantReport(t, runCommand(t, exec.Command(binary, "-html-default-css", "-o", destination)), 0)
+	written, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatalf("read written stylesheet: %v", err)
+	}
+	if !strings.Contains(string(written), "@layer opensysml;") {
+		t.Errorf("-o did not receive the default stylesheet:\n%s", written)
+	}
 }
 
 // TestRenderDocumentHTMLDocumentOptions checks the title page, contents and

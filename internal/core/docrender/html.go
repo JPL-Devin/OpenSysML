@@ -26,13 +26,25 @@ func DefaultStylesheet() string { return defaultCSS }
 const StylesheetFileName = "sysml-document.css"
 
 // Stylesheet is one stylesheet a standalone document carries: Content is
-// inlined, Href is linked. Exactly one of the two is set.
+// inlined, Href is linked. Exactly one of the two is set; InlineStylesheet
+// states a sheet is inlined when its content is empty.
 type Stylesheet struct {
 	// Content is stylesheet text to inline, keeping the document self-contained.
 	Content string
 	// Href is a stylesheet URL to link, for a site-hosted stylesheet.
 	Href string
+	// inline states the sheet is content, however empty that content is.
+	inline bool
 }
+
+// InlineStylesheet is a stylesheet inlined in the document, whose content may
+// be empty: a file the run named is a stylesheet even when it declares nothing.
+func InlineStylesheet(content string) Stylesheet {
+	return Stylesheet{Content: content, inline: true}
+}
+
+// LinkedStylesheet is a stylesheet the document links rather than carries.
+func LinkedStylesheet(href string) Stylesheet { return Stylesheet{Href: href} }
 
 // HTMLOptions are the presentation choices of the HTML backend. They are
 // options of this backend, never document-model attributes.
@@ -89,7 +101,7 @@ func HTML(document *docir.Document, opts HTMLOptions) (string, error) {
 // would close the <style> element it is inlined in.
 func (s Stylesheet) check() error {
 	switch {
-	case s.Content == "" && s.Href == "":
+	case s.Content == "" && s.Href == "" && !s.inline:
 		return &Error{Kind: ErrorEmptyStylesheet}
 	case s.Content != "" && s.Href != "":
 		return &Error{Kind: ErrorAmbiguousStylesheet, Actual: s.Href}
@@ -512,6 +524,7 @@ func DocumentHTMLFileName(fqn string) string {
 // nodes share an identifier.
 func contentIDs(document *docir.Document) map[string]string {
 	reserved := reservedIDs(document.Content(), nil, map[string]bool{})
+	anchors := anchorIDs(document.Content(), map[string]bool{})
 	ids, used := map[string]string{}, map[string]bool{}
 	var assign func(nodes []docir.Content, path []step)
 	assign = func(nodes []docir.Content, path []step) {
@@ -519,7 +532,7 @@ func contentIDs(document *docir.Document) map[string]string {
 			nested := child(path, node.Name(), i)
 			id := node.Anchor()
 			if id == "" && node.Kind() == docir.ContentSection {
-				id = uniqueID(derivedID(nested), reserved, used)
+				id = uniqueID(derivedID(nested), reserved, used, anchors)
 			}
 			if id != "" {
 				ids[pathKey(nested)] = id
@@ -546,6 +559,18 @@ func reservedIDs(nodes []docir.Content, path []step, into map[string]bool) map[s
 	return into
 }
 
+// anchorIDs collects the anchors the IR gave nodes, which a derived identifier
+// must leave to them however early it is allocated.
+func anchorIDs(nodes []docir.Content, into map[string]bool) map[string]bool {
+	for _, node := range nodes {
+		if node.Anchor() != "" {
+			into[node.Anchor()] = true
+		}
+		anchorIDs(node.Children(), into)
+	}
+	return into
+}
+
 // derivedID is the identifier a path derives, which is the anchor of its
 // names; a path of anonymous nodes alone derives none, and is numbered from
 // the fallback instead.
@@ -564,11 +589,11 @@ func derivedID(path []step) string {
 // from, since it has no name to derive one.
 const anonymousID = "section"
 
-// uniqueID is the derived identifier itself when no other node has taken it,
-// and the first free numbered variant otherwise: two anonymous siblings derive
-// the same path.
-func uniqueID(derived string, reserved, used map[string]bool) string {
-	if !used[derived] {
+// uniqueID is the derived identifier itself when no other node has taken it or
+// owns it as an anchor, and the first free numbered variant otherwise: two
+// anonymous siblings derive the same path.
+func uniqueID(derived string, reserved, used, anchors map[string]bool) string {
+	if !used[derived] && !anchors[derived] {
 		return derived
 	}
 	for n := 2; ; n++ {
