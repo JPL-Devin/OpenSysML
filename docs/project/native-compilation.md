@@ -43,7 +43,7 @@ A calc compiles when everything it reaches is in this subset:
 | Literals; parameter and body-local attribute references | as written |
 | `+ - * / % **`, unary `-`, comparison, `== !=`, `and or xor not`, `implies`, `if c ? a else b` | checked native operations |
 | `attribute x : T = e;`, `x = e;` / `assign x := e;` | locals and stores |
-| `if` / `else`, `while` | control flow |
+| `if` / `else`, `while … [until]`, `loop { … } until` | control flow |
 | Invocation of another compilable calc, positional or named; direct and mutual recursion | native call |
 | `calc c : D;`, `calc def E :> D;` adding no member of its own | compiles as `D` |
 

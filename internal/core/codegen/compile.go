@@ -434,23 +434,29 @@ func (fc *funcCompiler) compileLoop(s lower.Loop) (Stmt, error) {
 	if s.Kind == ast.LoopFor {
 		return nil, fc.unsupported("a `for` loop over a collection")
 	}
-	loop := While{Cond: BoolLit{Value: true}}
-	if s.Condition != nil {
-		cond, err := fc.compileBool(s.Condition, "condition of while")
-		if err != nil {
-			return nil, err
-		}
-		loop.Cond = cond
+	// `loop { … } until c` keeps its post-condition in Condition; a `while`
+	// loop's optional `until` clause is in Until (see lower.Loop).
+	cond, until := s.Condition, s.Until
+	if s.Kind == ast.LoopUntil {
+		cond, until = nil, s.Condition
 	}
-	if s.Until != nil {
-		until, err := fc.compileBool(s.Until, "condition of until")
-		if err != nil {
-			return nil, err
-		}
-		loop.Until = until
-	}
-	if s.Condition == nil && s.Until == nil {
+	if cond == nil && until == nil {
 		return nil, fc.unsupported("a loop with neither a while nor an until condition")
+	}
+	loop := While{Cond: BoolLit{Value: true}}
+	if cond != nil {
+		c, err := fc.compileBool(cond, "condition of while")
+		if err != nil {
+			return nil, err
+		}
+		loop.Cond = c
+	}
+	if until != nil {
+		u, err := fc.compileBool(until, "condition of until")
+		if err != nil {
+			return nil, err
+		}
+		loop.Until = u
 	}
 	fc.env.push()
 	body, err := fc.compileBlock(s.Body.Steps())

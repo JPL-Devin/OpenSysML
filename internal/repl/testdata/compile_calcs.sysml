@@ -153,6 +153,26 @@ package Compiled {
 		return : Integer = (a % a) + (b + b);
 	}
 
+	// The post-condition is tested after each iteration: the body runs at
+	// least once, even when the condition already holds.
+	calc def UntilLoop {
+		in n : Integer;
+		attribute i : Integer = 0;
+		loop {
+			i = i + 1;
+		} until i >= n;
+		return : Integer = i;
+	}
+
+	calc def WhileUntil {
+		in n : Integer;
+		attribute i : Integer = 0;
+		while i < n {
+			i = i + 3;
+		} until i > 7;
+		return : Integer = i;
+	}
+
 	calc fib : Fib;
 
 	calc def Specialized :> Fib;
