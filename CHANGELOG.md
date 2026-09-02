@@ -220,7 +220,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   reference to the element like an unquoted one. Five fixtures under
   `internal/core/export/testdata/convert/` lock this in by re-encoding the notation written
   from the graph alone and comparing the two graphs as triple sets; a relationship's symbolic or
-  keyword spelling and a doc body's line endings are documented as normalised.
+  keyword spelling and a doc body's line endings are documented as normalised. On the corpus
+  ratchet, six files move from a differing graph to the same one and four refused for a quoted
+  succession end now round-trip; three others refused for the same reason are now written back
+  up to a `then` folded into the member it introduces, which the writer still reports.
 
 ## 0.4.3 — 2026-09-01
 

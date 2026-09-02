@@ -12,11 +12,11 @@ of the following is a deliberate property of the mapping rather than a defect to
 report:
 
 - **What is not mapped is refused, not partly converted**, and the refusal names
-  the construct. 268 of the 345 models under `examples/` (committed, training and
-  pilot corpora) convert to Turtle; the other 77 are refused. Of the 268, a second
-  conversion of the written-back notation reproduces the graph for 237 (166
-  byte-for-byte, 71 up to the whitespace inside `sysx:sourceText`), differs for
-  14, and 17 cannot be written back or re-read at all. These figures are the
+  the construct. 275 of the 345 models under `examples/` (committed, training and
+  pilot corpora) convert to Turtle; the other 70 are refused. Of the 275, a second
+  conversion of the written-back notation reproduces the graph for 247 (171
+  byte-for-byte, 76 up to the whitespace inside `sysx:sourceText`), differs for
+  8, and 20 cannot be written back or re-read at all. These figures are the
   per-file ratchet in `internal/core/export/corpus_roundtrip_test.go`, described
   in [rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md). See
   [Behavior](#behavior) and [Limitations](#limitations).
@@ -586,8 +586,8 @@ including a parallel state's regions, calculation and requirement) reads these
 forms back as the same node, and on the fixtures a second conversion writes the
 same Turtle byte for byte (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
 That is a statement about the fixtures, not the mapping: over the example corpus
-the second hop reproduces the graph exactly for 166 of the 268 files that
-convert, up to `sysx:sourceText` whitespace for 71 more, and differs for the
+the second hop reproduces the graph exactly for 171 of the 275 files that
+convert, up to `sysx:sourceText` whitespace for 76 more, and differs for the
 rest ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). An end
 whose name needs quotes (`first a then 'drive vehicle';`) is a reference to the
 element like any other; the writer quotes the name as the notation requires.
