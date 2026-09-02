@@ -12,8 +12,14 @@ of the following is a deliberate property of the mapping rather than a defect to
 report:
 
 - **What is not mapped is refused, not partly converted**, and the refusal names
-  the construct. 260 of the 334 models under `examples/` convert to Turtle; the
-  other 74 are refused. See [Behavior](#behavior) and [Limitations](#limitations).
+  the construct. 268 of the 345 models under `examples/` (committed, training and
+  pilot corpora) convert to Turtle; the other 77 are refused. Of the 268, a second
+  conversion of the written-back notation reproduces the graph for 237 (166
+  byte-for-byte, 71 up to the whitespace inside `sysx:sourceText`), differs for
+  14, and 17 cannot be written back or re-read at all. These figures are the
+  per-file ratchet in `internal/core/export/corpus_roundtrip_test.go`, described
+  in [rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md). See
+  [Behavior](#behavior) and [Limitations](#limitations).
 - **The vocabulary may change without a compatibility path.** A graph written by
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
@@ -547,10 +553,15 @@ reported rather than written back somewhere else
 
 Every body that can carry a succession (definition, usage, action, state,
 including a parallel state's regions, calculation and requirement) reads these
-forms back as the same node, so a second conversion yields the same graph
-(`export_test.go:TestSuccessionRoundTripsInEveryBody`). The explicit two-ended
-form reads only basic names, so a succession naming an end that needs quotes is
-reported rather than written as notation the parser would reject.
+forms back as the same node, and on the fixtures a second conversion writes the
+same Turtle byte for byte (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
+That is a statement about the fixtures, not the mapping: over the example corpus
+the second hop reproduces the graph exactly for 166 of the 268 files that
+convert, up to `sysx:sourceText` whitespace for 71 more, and differs for the
+rest ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). The
+explicit two-ended form reads only basic names, so a succession naming an end
+that needs quotes is reported rather than written as notation the parser would
+reject.
 
 **A reference end is written back in a spelling the parser reads
 differently.** `end [*] ref cause : Situation;` is carried faithfully (the
@@ -628,6 +639,7 @@ element it cannot place, rather than emitting a model with elements missing.
 |---------|------|
 | `internal/core/rdf` | Triple/graph model, Turtle writer, Turtle parser |
 | `internal/core/export` | `ToRDF` (AST → graph), `ToSysML` (graph → notation), and the `Convert` entry point |
+| `internal/core/export/corpus_roundtrip_test.go` | The per-file round-trip ratchet over every model under `examples/`, with its baseline in `testdata/corpus_roundtrip_expected.txt` ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)) |
 | `internal/repl` | `%save` |
 | `cmd/sysml` | `-convert`, `-from`, `-o` |
 | `internal/core/rdf/ontology` | The SysML v2 OWL ontology's term table, generated from upstream, and the domain/range gate |

@@ -302,6 +302,18 @@ jobs:
             exit 1
           fi
 
+      # The RDF round-trip ratchet over every example on its own, so its
+      # per-verdict counts are legible in the log and a skip must not pass.
+      - name: Run RDF corpus round-trip gate
+        run: |
+          set -o pipefail
+          go test -count=1 -v ./internal/core/export -run 'TestCorpusRoundTrip' | tee corpus-roundtrip-gate.log
+          grep -E 'corpus round trip: [0-9]+ files:' corpus-roundtrip-gate.log
+          if grep -qE '^\s*--- SKIP' corpus-roundtrip-gate.log; then
+            echo "error: the RDF corpus round-trip gate skipped" >&2
+            exit 1
+          fi
+
       # Re-run the solver gate on its own, as the corpus gate is, so a skip
       # cannot hide behind a green suite.
       - name: Run solver gate (Z3)
