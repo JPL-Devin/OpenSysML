@@ -49,8 +49,8 @@ type libraryFunction struct {
 	// rest are declared [0..1] and bind null where a call omits them.
 	required int
 	apply    libraryApply
-	// scalar marks a function over numeric scalars alone, which the compiled
-	// calc tier may call with unboxed arguments.
+	// scalar marks a function whose result is a scalar whenever its arguments
+	// are, which the compiled calc tier may call with unboxed arguments.
 	scalar bool
 }
 
@@ -175,12 +175,12 @@ func registerVectorFunctions() {
 func registerComplexFunctions() {
 	registerValueFunction("ComplexFunctions::rect", []string{"re", "im"}, 2, complexRect)
 	registerValueFunction("ComplexFunctions::polar", []string{"abs", "arg"}, 2, complexPolar)
-	registerValueFunction("ComplexFunctions::re", []string{"x"}, 1, complexRealPart)
-	registerValueFunction("ComplexFunctions::im", []string{"x"}, 1, complexImagPart)
-	registerValueFunction("ComplexFunctions::isZero", []string{"x"}, 1, complexIsZero)
-	registerValueFunction("ComplexFunctions::isUnit", []string{"x"}, 1, complexIsUnit)
-	registerValueFunction("ComplexFunctions::abs", []string{"x"}, 1, complexModulus)
-	registerValueFunction("ComplexFunctions::arg", []string{"x"}, 1, complexArgument)
+	registerScalarResultFunction("ComplexFunctions::re", []string{"x"}, complexRealPart)
+	registerScalarResultFunction("ComplexFunctions::im", []string{"x"}, complexImagPart)
+	registerScalarResultFunction("ComplexFunctions::isZero", []string{"x"}, complexIsZero)
+	registerScalarResultFunction("ComplexFunctions::isUnit", []string{"x"}, complexIsUnit)
+	registerScalarResultFunction("ComplexFunctions::abs", []string{"x"}, complexModulus)
+	registerScalarResultFunction("ComplexFunctions::arg", []string{"x"}, complexArgument)
 	registerValueFunction("ComplexFunctions::+", []string{"x", "y"}, 1, complexAdd)
 	registerValueFunction("ComplexFunctions::-", []string{"x", "y"}, 1, complexSubtract)
 	registerValueFunction("ComplexFunctions::*", []string{"x", "y"}, 2, complexMultiply)
@@ -219,6 +219,14 @@ func registerStringFunctions() {
 // arguments, which is what most of the numeric library declares.
 func registerLibraryFunction(name string, params []string, apply func([]semantics.Value) (semantics.Value, error)) {
 	registerValueFunction(name, params, len(params), numericScalars(params, apply))
+	libraryFunctions[name].scalar = true
+}
+
+// registerScalarResultFunction adds one implementation over runtime values whose
+// result is a scalar (a Real or a Boolean) for every argument, so the compiled
+// tier may call it where a scalar argument selects it.
+func registerScalarResultFunction(name string, params []string, apply libraryApply) {
+	registerValueFunction(name, params, len(params), apply)
 	libraryFunctions[name].scalar = true
 }
 

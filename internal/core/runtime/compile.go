@@ -670,6 +670,8 @@ func (c *calcCompiler) compileInvocation(n *ast.InvocationExpr, scope *symbols.S
 	}
 	target := (&EvalContext{ctx: c.ctx, scope: scope}).invocationTarget(n)
 	switch {
+	case len(target.ambiguous) > 0:
+		return nil, ineligible(fmt.Sprintf("%s is ambiguous", target.qualName))
 	case target.builtin != nil:
 		return c.compileAggregate(target.qualName, target.builtin, &args, scope, layout)
 	case target.calc == nil:
@@ -681,7 +683,7 @@ func (c *calcCompiler) compileInvocation(n *ast.InvocationExpr, scope *symbols.S
 			return c.compileLibraryCall(fn, &args, scope, layout)
 		}
 		if builtin, ok := builtinsByLocalName[target.qualName]; ok {
-			return c.compileAggregate(builtinLocalNames[target.qualName], builtin, &args, scope, layout)
+			return c.compileAggregate(builtinQualifiedNames[target.qualName], builtin, &args, scope, layout)
 		}
 		return nil, ineligible(fmt.Sprintf("%s does not resolve to a calc", target.qualName))
 	case target.calcBuiltin != nil:

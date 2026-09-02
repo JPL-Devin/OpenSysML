@@ -90,8 +90,8 @@ var functions = map[string][]string{
 	"reduce":       {"ControlFunctions::reduce"},
 	"minimize":     {"ControlFunctions::minimize"},
 	"maximize":     {"ControlFunctions::maximize"},
-	"sum":          {"NumericalFunctions::sum"},
-	"product":      {"NumericalFunctions::product"},
+	"sum":          {"NumericalFunctions::sum", "ComplexFunctions::sum", "RealFunctions::sum", "RationalFunctions::sum", "IntegerFunctions::sum"},
+	"product":      {"NumericalFunctions::product", "ComplexFunctions::product", "RealFunctions::product", "RationalFunctions::product", "IntegerFunctions::product"},
 }
 
 // extensions maps the unqualified name of an OpenSysML extension function to

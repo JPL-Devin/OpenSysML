@@ -1,0 +1,10 @@
+{
+  "libraries": true,
+  "type": "instance",
+  "instantiate": "test::Probe",
+  "slots": {
+    "absInteger": {"type": "Integer", "value": 2},
+    "absComplex": {"type": "Real", "value": 5.0},
+    "zeroComplex": {"type": "Boolean", "value": true}
+  }
+}

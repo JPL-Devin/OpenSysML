@@ -70,6 +70,19 @@ func TestInvocationOverloadSelectsByArgumentType(t *testing.T) {
 	}`)
 }
 
+// Importing part of the library does not hide the rest of it: with only the
+// numeric packages imported, a Complex argument still selects ComplexFunctions::abs.
+func TestInvocationOverloadImportedLibraryJoinsInForceLibrary(t *testing.T) {
+	wantLibraryClean(t, `package P {
+		private import ScalarValues::*;
+		private import IntegerFunctions::*;
+		private import RealFunctions::*;
+		private import RationalFunctions::*;
+		attribute c : Real = abs(rect(3.0, 4.0));
+		attribute z : Boolean = isZero(rect(0.0, 0.0));
+	}`)
+}
+
 // Among the applicable candidates, the most specific parameter types win: the
 // result of the call is typed by that candidate, which a binding then checks.
 func TestInvocationOverloadResultTypeFollowsSelection(t *testing.T) {

@@ -20,6 +20,10 @@ var builtins map[string]func(*EvalContext, []Value) (Value, error)
 // calc of the same name still resolves to itself.
 var builtinsByLocalName map[string]func(*EvalContext, []Value) (Value, error)
 
+// builtinQualifiedNames maps an unqualified name to the qualified declaration
+// builtinsByLocalName dispatches it as.
+var builtinQualifiedNames map[string]string
+
 func init() {
 	builtins = map[string]func(*EvalContext, []Value) (Value, error){
 		// SequenceFunctions: the operations on general sequences of values.

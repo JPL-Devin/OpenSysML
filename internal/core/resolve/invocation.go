@@ -51,6 +51,8 @@ func (r *Resolver) LibraryFunctions(name string) []*symbols.Symbol {
 // from scope, in lookup order: the first is what ResolveInvocationName reaches.
 // A bare name is bound by the first scope step that finds it, every import of
 // that scope contributing, or by the library when the model declares nothing.
+// Imported library declarations do not hide the rest of the in-force library set
+// of that name; a declaration of the model's own does.
 func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
 		return nil
@@ -70,7 +72,25 @@ func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedN
 	if len(out) == 0 {
 		return r.LibraryFunctions(name)
 	}
+	if r.allLibrary(out) {
+		for _, sym := range r.LibraryFunctions(name) {
+			out = appendSymbol(out, sym)
+		}
+	}
 	return out
+}
+
+// allLibrary reports whether every symbol is declared by bundled library content.
+func (r *Resolver) allLibrary(syms []*symbols.Symbol) bool {
+	if r.idx == nil {
+		return false
+	}
+	for _, sym := range syms {
+		if !r.idx.Library(sym) {
+			return false
+		}
+	}
+	return true
 }
 
 // unqualifiedCandidates walks the scopes as walkUnqualifiedHiding does, stopping
