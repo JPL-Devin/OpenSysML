@@ -52,6 +52,16 @@ package OpenSysMLViews {
         expose OpenSysMLBehavior::ServeEdit;
     }
 
+    view libraryLoadFlow : ActionFlowView {
+        doc /* The bundled library loaded: from its snapshot, or from its files. */
+        expose OpenSysMLBehavior::LoadLibrary;
+    }
+
+    view calcInvocationFlow : ActionFlowView {
+        doc /* One calc invoked: compiled when it may be, on the evaluator otherwise. */
+        expose OpenSysMLBehavior::InvokeCalc;
+    }
+
     view tierStates : StateTransitionView {
         expose OpenSysMLBehavior::TierProgression;
     }

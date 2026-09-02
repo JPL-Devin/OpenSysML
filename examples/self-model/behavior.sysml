@@ -101,6 +101,50 @@ package OpenSysMLBehavior {
         succession first sync then done;
     }
 
+    // The library loaded once per process: the snapshot when it was written from
+    // these files and decodes intact, the files otherwise.
+    action def LoadLibrary {
+        attribute snapshotCurrent : Boolean = true;
+        attribute snapshotIntact : Boolean = true;
+
+        in item snapshotBlob : LibrarySnapshot;
+        out item index : SymbolIndex;
+
+        first start;
+
+        action digestFiles;
+        action readHeader;
+        action verifyChecksum;
+        action decodeSnapshot;
+        action parseFiles;
+        action indexFiles;
+        action expandImports;
+        action freeze;
+        action share;
+
+        succession first start then digestFiles;
+        succession first digestFiles then readHeader;
+        succession first readHeader then digestGate;
+
+        // A snapshot of other files, another format or an override parses.
+        decide digestGate;
+        if snapshotCurrent then verifyChecksum;
+        else parseFiles;
+
+        succession first verifyChecksum then checksumGate;
+
+        decide checksumGate;
+        if snapshotIntact then decodeSnapshot;
+        else parseFiles;
+
+        succession first parseFiles then indexFiles;
+        succession first indexFiles then expandImports;
+        succession first expandImports then freeze;
+        succession first decodeSnapshot then share;
+        succession first freeze then share;
+        succession first share then done;
+    }
+
     // The tier ladder as states: each tier is entered only from a clean tier
     // below it, and any failure halts short of execution.
     state def TierProgression {
@@ -136,6 +180,45 @@ package OpenSysMLBehavior {
         transition first typeTier if failures > 0 then halted;
         transition first constraintTier if failures == 0 then executing;
         transition first constraintTier if failures > 0 then halted;
+    }
+
+    // One calc invocation: a pure body runs compiled unless the run is traced or
+    // an argument is bound by name or is not a scalar; the answer is the same.
+    action def InvokeCalc {
+        attribute tierEnabled : Boolean = true;
+        attribute untraced : Boolean = true;
+        attribute bodyIsPure : Boolean = true;
+        attribute positionalScalars : Boolean = true;
+
+        first start;
+
+        action bindArguments;
+        action compileBody;
+        action runCompiled;
+        action boxResult;
+        action evaluateBody;
+
+        succession first start then bindArguments;
+        succession first bindArguments then traceGate;
+
+        // A traced run records every sub-expression, which only the evaluator does.
+        decide traceGate;
+        if tierEnabled and untraced then bodyGate;
+        else evaluateBody;
+
+        decide bodyGate;
+        if bodyIsPure then compileBody;
+        else evaluateBody;
+
+        succession first compileBody then argumentGate;
+
+        decide argumentGate;
+        if positionalScalars then runCompiled;
+        else evaluateBody;
+
+        succession first runCompiled then boxResult;
+        succession first boxResult then done;
+        succession first evaluateBody then done;
     }
 
     // The runtime tiers, from an effective feature list to a simulated model.
