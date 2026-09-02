@@ -102,9 +102,8 @@ func TestEvalDivByZeroNotEvaluable(t *testing.T) {
 	}
 }
 
-// A constant is a value of the narrowest scalar type that holds it, whatever
-// kind computed it: 4 / 2 is a Natural, 7 / 2 a Rational, -2.0 an Integer. A
-// real that is no whole number in the Integer range is never one.
+// A constant is a value of the narrowest scalar type that holds it, whatever kind
+// computed it: 4 / 2 is a Natural, 7 / 2 a Rational, -2.0 an Integer.
 func TestPrimTypeOfValueClassifiesByTheValue(t *testing.T) {
 	for _, tc := range []struct {
 		v    Value

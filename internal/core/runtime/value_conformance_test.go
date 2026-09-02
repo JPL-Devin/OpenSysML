@@ -7,9 +7,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// valueConformanceContext builds a runtime over a model whose feature values and
-// calculation arguments are typed wider than their targets, so the type checker
-// defers them to evaluation: a quotient is a Rational, a Real may hold a whole.
+// valueConformanceContext builds a runtime over a model whose feature values and calc
+// arguments are typed wider than their targets, so the type checker defers them.
 func valueConformanceContext(t *testing.T) (*Context, *symbols.Index, *symbols.Scope) {
 	t.Helper()
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
@@ -130,9 +129,8 @@ func TestDeclaredValueReadChecksItsType(t *testing.T) {
 	}
 }
 
-// Binding a calculation's parameter is a binding too: a positional, a named or
-// a default argument, and one bound through an inherited or redefined
-// parameter, must be a value of the parameter's type; so must its result.
+// A positional, named or default argument — through an inherited or redefined
+// parameter too — must be a value of the parameter's type; so must the result.
 func TestCalcParameterAndResultMustConform(t *testing.T) {
 	ctx, _, scope := valueConformanceContext(t)
 

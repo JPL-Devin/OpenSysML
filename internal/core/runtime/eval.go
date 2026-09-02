@@ -506,9 +506,8 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 	}
 }
 
-// declaredValue evaluates the value a declaration binds, in the scope it was
-// written in (its units, enumerations and imports answer the names it uses).
-// The feature holds that value, so it answers to the declared type.
+// declaredValue evaluates the value a declaration binds in the scope it was written
+// in (its units and imports answer its names); the value answers to the declared type.
 func (ec *EvalContext) declaredValue(sym *symbols.Symbol, usage *ast.Usage) (Value, error) {
 	val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
 	if err != nil {
