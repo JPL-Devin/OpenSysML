@@ -144,10 +144,8 @@ static sysml_real sysml_rpow(sysml_real base, sysml_real exp) {
 	return sysml_finite(pow(base, exp));
 }
 
-/* Writes r to buf as [-]d[.ddd]e[+-]xx with the fewest digits that read back
- * as r, the nearest such spelling when several do (as Go's strconv does).
- * Above a power of two the rounding interval is twice as wide as below, so the
- * next p-digit decimal up can read back as r when the nearest one does not. */
+/* Writes r to buf as [-]d[.ddd]e[+-]xx with the fewest digits that read back as r,
+ * trying the nearest p-digit decimal then its upper neighbour (wider above powers of two). */
 static void sysml_shortest(sysml_real r, char *buf, size_t size) {
 	for (int prec = 1; prec <= 17; prec++) {
 		snprintf(buf, size, "%.*e", prec - 1, r);
