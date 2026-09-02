@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 817 semantic rules: **727 ✅ faithful, 83 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 818 semantic rules: **727 ✅ faithful, 84 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
