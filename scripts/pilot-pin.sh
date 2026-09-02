@@ -50,6 +50,18 @@ pilot_count_files() {
 	find "$dir" -type f \( "${args[@]:1}" \) | wc -l | tr -d ' '
 }
 
+# pilot_install_dir replaces directory $2 with $1. The new tree is first moved
+# beside $2 (a copy if the work tree is on another filesystem), so the old copy
+# is only removed once its replacement is complete and a rename away.
+pilot_install_dir() {
+	local src="$1" dst="$2"
+	mkdir -p "$(dirname "$dst")"
+	rm -rf "$dst.new"
+	mv "$src" "$dst.new"
+	rm -rf "$dst"
+	mv "$dst.new" "$dst"
+}
+
 # pilot_fetch_subtrees copies "<path in the pilot repository>:<destination>" subtrees
 # out of one sparse clone; a destination whose .pilot-pin stamp is not the current pin is re-fetched.
 pilot_fetch_subtrees() {
@@ -91,10 +103,8 @@ pilot_fetch_subtrees() {
 			echo "error: $source_path is missing from $PILOT_REPO at $PILOT_TAG" >&2
 			return 1
 		fi
-		mkdir -p "$(dirname "$target")"
-		rm -rf "$target"
-		mv "$work/pilot/$source_path" "$target"
-		printf '%s\n' "$pin" >"$target/.pilot-pin"
+		printf '%s\n' "$pin" >"$work/pilot/$source_path/.pilot-pin"
+		pilot_install_dir "$work/pilot/$source_path" "$target"
 		echo "Downloaded $(pilot_count_files "$target") file(s) from $source_path to $target"
 	done
 }

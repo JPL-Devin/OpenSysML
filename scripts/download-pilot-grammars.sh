@@ -52,7 +52,7 @@ trap 'rm -rf "$work"' EXIT
 
 pilot_clone "$work/pilot" "${wanted_paths[@]}"
 
-# Assembled aside and swapped in whole, so a refresh cannot leave a grammar
+# Assembled aside and installed whole, so a refresh cannot leave a grammar
 # from the previous pin beside the new ones.
 staged="$work/grammars"
 mkdir -p "$staged"
@@ -72,9 +72,7 @@ done
 printf '%s\n' "$PILOT_TAG" >"$staged/PILOT_TAG"
 printf '%s\n' "$pin" >"$staged/.pilot-pin"
 
-mkdir -p "$(dirname "$target")"
-rm -rf "$target"
-mv "$staged" "$target"
+pilot_install_dir "$staged" "$target"
 
 echo "Measure our production coverage against them with:"
 echo "  go run ./cmd/grammar-coverage"
