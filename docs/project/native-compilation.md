@@ -227,7 +227,8 @@ the step budget.
 Each phase is a session-sized unit with its own PR, its own differential test and a benchmark
 checkpoint that must still show the C backend ahead of the interpreter by two orders of
 magnitude on its own fixtures; a phase that loses the speedup is redesigned, not merged. The
-phases are ordered by dependency: each consumes the IR the one before it introduced.
+phases are ordered by dependency, and documents come before behavior because they need only
+values, structs and verdicts, so compiled report generation arrives after four phases.
 
 **Phase 1 — Values: collections, records, library functions.**
 IR: `Type` becomes structural — scalars, `Seq[T]` with a multiplicity bound, `Record{fields}`
@@ -260,7 +261,13 @@ constraints are refused by name. Exit: `TestSatisfy*` and the requirement confor
 agree across all three evaluators; a sweep benchmark (N parameter sets × M satisfactions) is
 added to the checkpoint.
 
-**Phase 4 — Actions.**
+**Phase 4 — Documents.**
+IR: `docplan.Plan` and `queryplan.Program` emitted as code over Phase 2 structs; `docir`
+construction and the Markdown renderer become a shared runtime. `--render` writes what
+`-render-document` writes today, byte for byte; PDF conversion is unchanged. Exit: every fixture
+in `docrender`'s tests renders identically compiled and interpreted.
+
+**Phase 5 — Actions.**
 IR: `ActionGraph` is consumed directly. Where the graph is a series–parallel DAG with no `accept`,
 it lowers to straight-line statements in the spike's IR; otherwise to a `Scheduler` with a token
 table, a ready queue and the interpreter's ordering rule (`action_executor.go`), so traces match
@@ -269,18 +276,12 @@ sub-flows compile; the step budget stays interpreter-only and is documented as s
 action conformance corpus and golden traces match; deadlock and unbound-parameter robustness
 cases give the same typed errors.
 
-**Phase 5 — State machines.**
+**Phase 6 — State machines.**
 IR: `StateGraph` → `Machine{States, Regions, Transitions, Deferred}`; the emitted event loop
 dispatches on `(state, trigger)`, evaluates guards, runs exit/effect/entry in the interpreter's
 order, tracks history and deferral, and reports quiescence. `--step` and `--until` drive it.
 Exit: the state conformance corpus, golden traces and the pseudostate robustness cases match; a
 long-run simulation benchmark (events/second) joins the checkpoint.
-
-**Phase 6 — Documents.**
-IR: `docplan.Plan` and `queryplan.Program` emitted as code over Phase 2 structs; `docir`
-construction and the Markdown renderer become a shared runtime. `--render` writes what
-`-render-document` writes today, byte for byte; PDF conversion is unchanged. Exit: every fixture
-in `docrender`'s tests renders identically compiled and interpreted.
 
 **Phase 7 — Embedding.**
 A stable C API (`sysml_new`, `sysml_set`, `sysml_send`, `sysml_step`, `sysml_get`, `sysml_verify`,
@@ -296,5 +297,6 @@ model is compilable. Exit: the Python and Node clients run the same scenario aga
   (a counter per loop back-edge) but costs the speedup on tight loops; decide with numbers.
 - **Documentation.** `docs/project/spec-compliance.md` gains a "compiled" status per rule as
   phases land; the guide gains a chapter once Phase 3 makes `--verify` useful to a modeller.
-- **Estimate.** Roughly one session per phase on this foundation, Phases 1–3 first since they
-  unlock verification sweeps, the workload the spike was asked to justify.
+- **Estimate.** One session per phase on this foundation, two for instances and for actions,
+  whose layout and scheduling rules are the interpreter's most involved. Phases 1–3 unlock
+  verification sweeps, the workload the spike was asked to justify; Phase 4 compiled documents.
