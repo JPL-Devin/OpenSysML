@@ -13,6 +13,8 @@ says so at the top.
 - **[Training examples](training-examples.md)** — the OMG corpus, adjudicated per file
 - **[Pilot corpora gate](pilot-corpora.md)** — OpenSysML diagnostics on the three pinned OMG pilot
   corpora, ratcheted in CI
+- **[RDF corpus round-trip gate](rdf-corpus-roundtrip.md)** — the notation → Turtle → notation →
+  Turtle verdict of every model under `examples/`, ratcheted per file in CI
 - **[Pilot differential](pilot-differential.md)** — OpenSysML diagnostics compared against the OMG
   pilot implementation, advisory
 - **[Pilot execution referee](pilot-execution-referee.md)** — how far the pinned pilot's

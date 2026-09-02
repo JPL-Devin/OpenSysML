@@ -830,6 +830,12 @@ func (idx *Index) Library(sym *Symbol) bool {
 	return sym != nil && idx.librarySyms.at(sym)
 }
 
+// IsLibraryDocument reports whether the named document holds bundled library
+// content (see MarkLibrary).
+func (idx *Index) IsLibraryDocument(name string) bool {
+	return idx.libraryDocs.at(name)
+}
+
 // knows reports whether the index holds anything for the named document.
 func (idx *Index) knows(name string) bool {
 	if _, ok := idx.contributions.get(name); ok {
