@@ -150,25 +150,48 @@ func xmlCatalog(p *Partition, baseIRI string) ([]byte, error) {
 	return append(append([]byte(xml.Header), body...), '\n'), nil
 }
 
-// WriteOutputs writes outputs under dir, first removing every .ttl, both
-// catalogs and the version file already there so stale modules do not linger.
-func WriteOutputs(dir string, outputs []Output) error {
+// WriteOutputs replaces the generated files under dir with outputs. Every
+// output is first written to a staging directory beside dir, so a failed
+// write leaves the existing tree untouched; only then are the stale .ttl,
+// catalogs and version file removed and the staged files moved into place.
+func WriteOutputs(dir string, outputs []Output) (err error) {
 	existing, err := listOutputs(dir)
 	if err != nil {
 		return err
 	}
-	for _, path := range existing {
-		if err := os.Remove(filepath.Join(dir, path)); err != nil {
-			return err
-		}
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return err
 	}
+	staging, err := os.MkdirTemp(filepath.Dir(dir), "."+filepath.Base(dir)+"-staging-")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if rerr := os.RemoveAll(staging); err == nil {
+			err = rerr
+		}
+	}()
 	for _, o := range outputs {
-		full := filepath.Join(dir, filepath.FromSlash(o.Path))
+		full := filepath.Join(staging, filepath.FromSlash(o.Path))
 		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 			return err
 		}
 		err := os.WriteFile(full, o.Content, 0o644) // #nosec G306 -- committed source artifacts are meant to be readable
 		if err != nil {
+			return err
+		}
+	}
+	for _, path := range existing {
+		if err := os.Remove(filepath.Join(dir, filepath.FromSlash(path))); err != nil {
+			return err
+		}
+	}
+	for _, o := range outputs {
+		rel := filepath.FromSlash(o.Path)
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, rel)), 0o750); err != nil {
+			return err
+		}
+		if err := os.Rename(filepath.Join(staging, rel), filepath.Join(dir, rel)); err != nil {
 			return err
 		}
 	}

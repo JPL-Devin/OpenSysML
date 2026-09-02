@@ -497,6 +497,23 @@ func TestGenerateAndCheck(t *testing.T) {
 	if got := loadClosure(t, dir, "KerML.ttl"); len(got) != 4 {
 		t.Errorf("closure from KerML.ttl = %v, want all 4 documents", got)
 	}
+
+	// A write that fails while staging leaves the previous tree untouched and
+	// no staging directory behind.
+	bad := append([]Output{{Path: "KerML.ttl/nested.ttl", Content: []byte("x")}}, outputs...)
+	if err := WriteOutputs(dir, bad); err == nil {
+		t.Fatal("WriteOutputs with an unwritable output did not fail")
+	}
+	if stale, err := CheckOutputs(dir, outputs); err != nil || len(stale) != 0 {
+		t.Errorf("after failed write stale = %v, err = %v", stale, err)
+	}
+	siblings, err := os.ReadDir(filepath.Dir(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(siblings) != 1 {
+		t.Errorf("staging directory left behind: %v", siblings)
+	}
 }
 
 // TestCommittedModulesResolveOffline opens the committed root ontologies from
