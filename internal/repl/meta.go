@@ -1196,15 +1196,16 @@ func (w *featureValueWalk) behaviorLines(inst *runtime.Instance, behaviors []*ru
 		if w.budget <= 0 {
 			return append(lines, rowIndent+"… (listing truncated)")
 		}
-		lines = w.emit(lines, fmt.Sprintf("%s%s: %s", rowIndent, feat.Name, behaviorStatus(inst, feat)))
+		lines = w.emit(lines, fmt.Sprintf("%s%s: %s", rowIndent, feat.Name, behaviorStatus(w.ctx, inst, feat)))
 	}
 	return lines
 }
 
 // behaviorStatus describes what an object is doing with a behavior its type
 // declares. An exhibited machine's active state is rendered as %current renders
-// it, so the two agree; a transition is the step between states it declares.
-func behaviorStatus(inst *runtime.Instance, feat *runtime.EffectiveFeature) string {
+// it, so the two agree; a transition is the step between states it declares. A
+// behavior a redefinition renamed reports the one execution under both names.
+func behaviorStatus(ctx *runtime.Context, inst *runtime.Instance, feat *runtime.EffectiveFeature) string {
 	if trans, ok := feat.Symbol.Decl.(*ast.TransitionMember); ok {
 		return transitionStatus(trans)
 	}
@@ -1212,7 +1213,7 @@ func behaviorStatus(inst *runtime.Instance, feat *runtime.EffectiveFeature) stri
 	if feat.Symbol.Kind == symbols.SymbolActionUsage {
 		kind = "action"
 	}
-	behavior, ok := inst.Behavior(feat.Name)
+	behavior, ok := ctx.BehaviorNamed(inst, feat.Name)
 	if !ok {
 		return kind + ", not running"
 	}

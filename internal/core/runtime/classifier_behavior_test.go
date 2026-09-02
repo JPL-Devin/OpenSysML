@@ -174,6 +174,54 @@ func TestExhibitedMachineWritesItsOwnOccurrence(t *testing.T) {
 	}
 }
 
+// A redefinition renames the behavior it redefines, so the object runs one
+// behavior that answers to both names; a name of no behavior answers to none.
+func TestBehaviorNamedFollowsRedefinition(t *testing.T) {
+	src := `
+		state def Modes {
+			entry; then off;
+			state off;
+		}
+		part def Lamp {
+			exhibit state modes : Modes;
+			perform action tick { action step; }
+			action blink;
+		}
+		part def FancyLamp :> Lamp {
+			exhibit state fancyModes :>> modes;
+			perform action fancyTick :>> tick { action step; }
+			action fancyBlink :>> blink;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "FancyLamp"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for _, names := range [][2]string{{"fancyModes", "modes"}, {"fancyTick", "tick"}} {
+		renamed, ok := inst.Behavior(names[0])
+		if !ok {
+			t.Fatalf("object runs no %s behavior: %v", names[0], inst.Behaviors())
+		}
+		if _, ok := inst.Behavior(names[1]); ok {
+			t.Errorf("Behavior(%q) matched by name alone", names[1])
+		}
+		for _, name := range names {
+			got, ok := ctx.BehaviorNamed(inst, name)
+			if !ok || got != renamed {
+				t.Errorf("BehaviorNamed(%q) = %v, %v; want the %s behavior", name, got, ok, names[0])
+			}
+		}
+	}
+	for _, name := range []string{"blink", "fancyBlink", "nothing", ""} {
+		if got, ok := ctx.BehaviorNamed(inst, name); ok {
+			t.Errorf("BehaviorNamed(%q) = %v; want none", name, got)
+		}
+	}
+}
+
 // An action-declared feature is written on the action performance occurrence,
 // while a like-named feature of the performer remains distinct. The results the
 // run reports mirror the occurrence, which is authoritative.

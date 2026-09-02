@@ -162,6 +162,40 @@ func TestFeaturesListsNestedBehaviorsUnderTheNestedObject(t *testing.T) {
 	rejects(t, got, "\nBehaviors:", "<unknown>")
 }
 
+// A redefinition renames the behavior it redefines, so the object runs one
+// machine and one action under two names each: both names report that one
+// execution, and neither reads "not running" while the other runs.
+func TestFeaturesReportsARenamedBehaviorUnderBothNames(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(behaviorsModel + `
+part def FancyLamp :> Lamp {
+    exhibit state fancyModes :>> modes;
+    perform action fancyTick :>> tick { first bump; action bump { assign watts := watts + 3.0; } }
+}
+part fancy : FancyLamp;`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	run(t, s, "%instantiate fancy")
+
+	got := run(t, s, "%features fancy")
+	wants(t, got,
+		"  fancyModes: exhibited state machine, current state off",
+		"  modes: exhibited state machine, current state off",
+		"  fancyTick: performed action, completed",
+		"  tick: performed action, completed",
+	)
+	rejects(t, got, "modes: state, not running", "tick: action, not running", "<unknown>")
+
+	wants(t, run(t, s, "%state fancy"), "Current state: off")
+	wants(t, run(t, s, "%advance 10"), "Current state: on")
+	got = run(t, s, "%features fancy")
+	wants(t, got,
+		"  fancyModes: exhibited state machine, current state on",
+		"  modes: exhibited state machine, current state on",
+	)
+	rejects(t, got, "current state off", "modes: state, not running")
+}
+
 // An object of a state definition has states, not values: they are listed as
 // behaviors the object does not run rather than as <unknown> values.
 func TestFeaturesOfAMachineObjectListsItsStates(t *testing.T) {
