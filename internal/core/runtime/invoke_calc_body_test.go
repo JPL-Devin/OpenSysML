@@ -320,6 +320,71 @@ package test {
 }
 `
 
+const unboundResultModel = `
+package test {
+	private import ScalarValues::*;
+
+	calc def Named {
+		in a : Real;
+		attribute h : Real = a * 2.0;
+		return h;
+	}
+
+	calc def UntypedSibling {
+		in a : Real;
+		attribute h = a * 2.0;
+		return h;
+	}
+
+	calc def Anonymous {
+		in a : Real;
+		return : Real;
+	}
+
+	calc def Fresh {
+		in a : Real;
+		return selected :> a;
+	}
+
+	calc def Plain {
+		in a : Real;
+	}
+}
+`
+
+// TestUnboundResultParameterHint requires a body whose 'return' declares a
+// result parameter without binding it to say so, with the two forms that state
+// a computed result, and a body with no result parameter at all to say nothing more.
+func TestUnboundResultParameterHint(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, unboundResultModel))
+	root := idx.DocumentRoot("<test>")
+
+	cases := []struct{ calc, want string }{
+		{"Named", "no result expression: calc test::Named has no return expression: result parameter h binds no value; " +
+			"write the result as the trailing expression 'h', or bind it with 'return : Real = h;'"},
+		{"UntypedSibling", "no result expression: calc test::UntypedSibling has no return expression: result parameter h binds no value; " +
+			"write the result as the trailing expression 'h', or bind it with 'return : <type> = h;'"},
+		{"Anonymous", "no result expression: calc test::Anonymous has no return expression: the result parameter binds no value; " +
+			"write the result as the trailing expression of the body, or bind it with 'return : Real = <expr>;'"},
+		{"Fresh", "no result expression: calc test::Fresh has no return expression: result parameter selected binds no value; " +
+			"write the result as the trailing expression of the body, or bind it with 'return : <type> = <expr>;'"},
+		{"Plain", "no result expression: calc test::Plain has no return expression"},
+	}
+	for _, tc := range cases {
+		calc, scope := calcByName(t, root, "test", tc.calc)
+		_, err := ctx.InvokeCalc(calc, []Value{constReal(1)}, scope)
+		if err == nil {
+			t.Fatalf("InvokeCalc(%s) succeeded, want %q", tc.calc, tc.want)
+		}
+		if !errors.Is(err, ErrNoResultExpression) {
+			t.Errorf("InvokeCalc(%s) = %v, want ErrNoResultExpression", tc.calc, err)
+		}
+		if err.Error() != tc.want {
+			t.Errorf("InvokeCalc(%s) = %q, want %q", tc.calc, err, tc.want)
+		}
+	}
+}
+
 // TestUnevaluableResultIsNotReportedAsMissing requires a body stating a result
 // the evaluator cannot compute to report that, not that there is no result.
 func TestUnevaluableResultIsNotReportedAsMissing(t *testing.T) {
