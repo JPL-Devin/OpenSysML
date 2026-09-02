@@ -71,13 +71,32 @@ func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 			continue
 		}
-		if !semantics.PrimConforms(got, want) {
+		if !bindable(element, got, want) {
 			ec.errorf(element.Span(), "cannot bind %s value to a feature typed by %s", got, want)
 		}
 	}
 	ec.checkValueConformance(valueScope, declScope, u, value)
 	ec.checkValueDimension(valueScope, declScope, u, value)
 	ec.checkValueCount(declScope, u, value)
+}
+
+// bindable reports whether a got-typed value may bind to a want-typed feature: a literal's
+// type is exact, an expression's only bounds its values (7 / 2 is Rational, 4 / 2 whole).
+func bindable(value ast.Node, got, want semantics.PrimType) bool {
+	if semantics.PrimConforms(got, want) {
+		return true
+	}
+	return !spellsOneValue(value) && semantics.PrimConforms(want, got)
+}
+
+// spellsOneValue reports whether an expression writes its value out: a literal, or a signed one.
+func spellsOneValue(n ast.Node) bool {
+	if isLiteral(n) {
+		return true
+	}
+	op, ok := n.(*ast.OperatorExpr)
+	return ok && (op.Operator == ast.OpNeg || op.Operator == ast.OpPos) &&
+		len(op.Operands) == 1 && isLiteral(op.Operands[0])
 }
 
 // declaredPrimType returns the scalar type a usage is typed by, or PrimUnknown.
@@ -203,11 +222,10 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 		return semantics.PrimUnknown
 	}
 
-	// `SequenceFunctions::'#'` declares `in index: Positive[1]`, so a Real, a
-	// Boolean or a String names no position. Whether a whole number names one is
-	// known from the value, so an Integer index is checked at evaluation.
+	// `SequenceFunctions::'#'` declares `in index: Positive[1]`, so a Boolean, a String or
+	// a decimal literal names no position; whether a number does is checked at evaluation.
 	index := ec.infer(scope, e.Index)
-	if !semantics.PrimConforms(index, semantics.PrimInteger) && e.Index != nil {
+	if !bindable(e.Index, index, semantics.PrimInteger) && e.Index != nil {
 		ec.errorf(e.Index.Span(), "sequence index must be an Integer, found %s", index)
 	}
 
@@ -259,7 +277,12 @@ func writtenLength(seq *ast.SequenceExpr) (int64, bool) {
 // one value whatever the model holds — a literal is, a name or a call may be a
 // collection.
 func isSingleValued(el ast.Node) bool {
-	switch el.(type) {
+	return isLiteral(el)
+}
+
+// isLiteral reports whether an expression is a scalar literal, whose exact type is written out.
+func isLiteral(n ast.Node) bool {
+	switch n.(type) {
 	case *ast.LiteralInteger, *ast.LiteralReal, *ast.LiteralString, *ast.LiteralBool:
 		return true
 	default:
@@ -694,7 +717,7 @@ func (ec *exprChecker) checkArguments(
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 			continue
 		}
-		if !semantics.PrimConforms(got, want) {
+		if !bindable(arg, got, want) {
 			ec.errorf(arg.Span(), "argument %d of %s expects %s, found %s", i+1, sym.Name, want, got)
 		}
 	}

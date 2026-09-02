@@ -209,9 +209,9 @@ No compliance row's status flag is changed on the strength of this work.
 
 Run it with `go run ./cmd/pilot-exec-diff` after `./scripts/download-pilot-evaluator.sh`; with the
 execution artifact absent it prints a provisioning instruction, exits 0 and writes nothing, so
-`cmd/pilot-diff` and its committed baseline are untouched. The bucket counts below are as measured at
-the round this record documents and are not the current baseline — `go run ./cmd/pilot-exec-diff`
-prints the current ones. State of the 94 committed cases then, the original 32 plus the 62 the
+`cmd/pilot-diff` and its committed baseline are untouched. The bucket counts below are as measured
+when this record was last updated and are not the current baseline — `go run ./cmd/pilot-exec-diff`
+prints the current ones. State of the 94 committed cases, the original 32 plus the 62 the
 expression round added:
 
 ```
@@ -225,6 +225,22 @@ A later round of runtime fixes moved five of the six `ours-error` cases to `agre
 `w6d:inherited-value-template`, `w6d:vector-elements`) and `bump-out-target` from
 `both-error` to `pilot-error`: we now answer `n = 1` on `--target=Behave::Bump`, which the pilot
 refuses outright, so the remaining error is the pilot's alone.
+
+These counts were lost once and regained. When the expression type checker
+(`passes/typecheck_expr.go`) landed, 20 cases moved from `agree` (19) and `kind-only` (1) to
+`ours-error` — `agree: 37 · ours-error: 21` — without a single referee case changing. All 20 draw on
+`expr_values.sysml`, and the checker refused that whole model on one declaration, `calc def IntDiv {
+return : Integer = 7 / 2; }`, with `cannot bind Rational value to a feature typed by Integer`. The
+rejection was a false positive from partial information: the checker types a whole-number quotient
+as `Rational` because that is what the reference evaluates it to (see
+[omg-issues.md](omg-issues.md)), but an expression's static type only bounds its values, and `4 / 2`
+is whole. The fix is in the checker, not the cases: a binding is now refused only when the value's
+type and the feature's are disjoint (`String` to `Integer`, `Boolean` to `Real`) or when the value
+is a literal, signed or not, whose type is exact (`2.5` or `-3` to `Natural`). A quotient, a call or
+a `Real` feature bound to an `Integer` is left to evaluation, which still checks the value it turns
+out to be. `divisionResult` still types integer division as `Rational`, so `constraint def c { 7 / 2
+}` is still reported as not Boolean. The counts above are as remeasured after that fix; each of the
+20 returned to the bucket it held before.
 
 The one `kind-only` is `2 ** 40` (above). The `pilot-error`, `pilot-unevaluated` and `pilot-silent`
 buckets — 26 cases, more than a quarter of the corpus — are the pilot's limits rather than
