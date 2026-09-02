@@ -578,6 +578,30 @@ func (p *Parser) atKindlessFeatureTyping() bool {
 	return beginsDeclarationTail(next, p.peekN(2))
 }
 
+// atEnumeratedValueTyping reports whether an enumeration body member is an
+// enumerated value stating a specialization or multiplicity with no `enum`
+// keyword (SysML.xtext EnumeratedValue), behind an optional visibility.
+func (p *Parser) atEnumeratedValueTyping() bool {
+	off := 0
+	if t := p.peek(); t.Kind == lexer.Keyword {
+		switch t.KeywordID {
+		case "public", "private", "protected":
+			off = 1
+		}
+	}
+	if t := p.peekN(off); t.Kind != lexer.Identifier && t.Kind != lexer.UnrestrictedName {
+		return false
+	}
+	next := p.peekN(off + 1)
+	if next.Kind == lexer.LBracket {
+		return true
+	}
+	if next.Kind == lexer.Eq || next.Kind == lexer.ColonEq || next.Kind == lexer.EqGt {
+		return false
+	}
+	return beginsDeclarationTail(next, p.peekN(off+2))
+}
+
 // atKeywordlessFeature reports whether the cursor is at such a feature, either
 // directly or behind a `var` prefix (`var p : Real;`).
 func (p *Parser) atKeywordlessFeature() bool {
@@ -2301,6 +2325,19 @@ func (p *Parser) parseEnumBody() []ast.Node {
 			p.expect(lexer.Semicolon, "expected ';' after enumerated value")
 			u.NodeSpan = p.spanFrom(start)
 			m := &ast.Membership{Member: u}
+			m.NodeSpan = p.spanFrom(start)
+			m.SetLeadingTrivia(trivia)
+			body.add(m)
+			continue
+		}
+		// `uncl : Level = 0;` is an enumerated value with a specialization part
+		// (SysML.xtext EnumeratedValue), not a keyword-less attribute.
+		if p.atEnumeratedValueTyping() {
+			start := p.peek().Span.Offset
+			trivia := p.takeTrivia()
+			vis := p.parseVisibility()
+			u := p.parseUsage(start, ast.UsageEnumeration, "", featureMods{visibility: vis}, false)
+			m := &ast.Membership{Visibility: vis, Member: u}
 			m.NodeSpan = p.spanFrom(start)
 			m.SetLeadingTrivia(trivia)
 			body.add(m)

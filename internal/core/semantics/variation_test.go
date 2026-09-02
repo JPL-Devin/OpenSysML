@@ -53,6 +53,35 @@ func TestVariationAndVariantModifiers(t *testing.T) {
 	}
 }
 
+// An enumeration definition is a variation without writing the modifier, and
+// its literals are ordinary members to the runtime's variation-point queries.
+func TestIsVariationIncludesEnumerationDefinitions(t *testing.T) {
+	m, root := buildModel(t, `
+		enum def Color { red; green; }
+		attribute def Plain;
+		attribute c : Color;
+	`)
+	color := sym(t, root, "Color")
+	if !IsVariation(color) {
+		t.Error("an enumeration definition is a variation")
+	}
+	if DeclaresVariation(color) {
+		t.Error("an enumeration definition does not declare the modifier")
+	}
+	if IsVariation(sym(t, root, "Plain")) || IsVariation(nil) {
+		t.Error("an attribute definition, or nothing, is no variation")
+	}
+	if m.IsVariationFeature(sym(t, root, "c")) {
+		t.Error("an enumeration-typed attribute is not a variation point")
+	}
+	if EnumerationDefinitionOwning(member(t, m, color, "red")) != color {
+		t.Error("red is owned by Color")
+	}
+	if EnumerationDefinitionOwning(color) != nil {
+		t.Error("Color's owner is not an enumeration definition")
+	}
+}
+
 // A variation point is the feature declaring the modifier and any feature
 // specializing it, since a redefinition does not restate the modifier.
 func TestIsVariationFeatureThroughSpecialization(t *testing.T) {

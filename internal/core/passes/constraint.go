@@ -148,15 +148,19 @@ func (cc *constraintChecker) checkViewSatisfyTarget(sym *symbols.Symbol) {
 
 // checkVariantOutsideVariation reports a `variant` whose owner is not a
 // variation: it offers no choice to anything (SysML v2 §7.20 VariantMembership).
-// Pilot SysMLValidator (2026-05) validateVariantMembershipOwningNamespace.
+// Pilot SysMLValidator (2026-07) validateVariantMembershipOwningNamespace.
 func (cc *constraintChecker) checkVariantOutsideVariation(sym *symbols.Symbol) {
 	if !semantics.DeclaresVariant(sym) || cc.model.VariationPointOwning(sym) != nil {
 		return
 	}
+	msg := msgVariantOutsideVariation
+	if owner := semantics.EnumerationDefinitionOwning(sym); owner != nil {
+		msg = fmt.Sprintf("`variant` is not written in enumeration definition %s: every enumerated value of an enumeration definition is already a variant; drop the keyword", w8dSymbolName(owner))
+	}
 	cc.diags = append(cc.diags, Diagnostic{
 		Severity: SeverityError,
 		Span:     sym.Decl.Span(),
-		Message:  msgVariantOutsideVariation,
+		Message:  msg,
 		Code:     "variant-outside-variation",
 		Source:   "constraint",
 	})

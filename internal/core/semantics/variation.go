@@ -21,6 +21,12 @@ func DeclaresVariation(sym *symbols.Symbol) bool {
 	return false
 }
 
+// IsVariation reports whether sym is a variation: declared `variation`, or an
+// enumeration definition, whose isVariation is always true (SysML v2 §8.3.9).
+func IsVariation(sym *symbols.Symbol) bool {
+	return DeclaresVariation(sym) || (sym != nil && sym.Kind == symbols.SymbolEnumerationDef)
+}
+
 // DeclaresVariant reports whether sym is declared with the `variant` keyword,
 // which makes it one of the choices of the variation that owns it.
 func DeclaresVariant(sym *symbols.Symbol) bool {

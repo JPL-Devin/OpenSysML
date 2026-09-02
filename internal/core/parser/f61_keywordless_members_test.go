@@ -108,6 +108,26 @@ func TestF61KeywordlessMembers(t *testing.T) {
 		}
 	})
 
+	t.Run("typed_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { enum def L :> ScalarValues::Natural { uncl : L = 0; private conf :> uncl; x [1]; } }")
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 3 {
+			t.Fatalf("members = %d, want 3", len(def.Members))
+		}
+		for i, want := range []string{"uncl", "conf", "x"} {
+			u := usageAt(t, def.Members, i)
+			if u.Ident.Name != want || u.Kind != ast.UsageEnumeration {
+				t.Errorf("member %d = %q kind %v, want enumerated value %q", i, u.Ident.Name, u.Kind, want)
+			}
+		}
+		if u := usageAt(t, def.Members, 0); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping || u.Value == nil {
+			t.Errorf("uncl = %#v, want a typing and a value", u)
+		}
+		if u := usageAt(t, def.Members, 1); u.Visibility != ast.VisibilityPrivate || len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelSubsets {
+			t.Errorf("conf = %#v, want a private subsetting", u)
+		}
+	})
+
 	t.Run("result_expression_in_case_body", func(t *testing.T) {
 		pkg := parsePkg(t, "package B { attribute def V { attribute m; } analysis def A { subject v : V; v.m } }")
 		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
