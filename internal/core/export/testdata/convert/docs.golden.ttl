@@ -13,7 +13,9 @@ elmt:Documented
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Documented___400, elmt:Documented__Wheel, elmt:Documented___402, elmt:Documented__asJava ;
     sysml:ownedMembership elmt:Documented___400_om, elmt:Documented__Wheel_om, elmt:Documented___402_om, elmt:Documented__asJava_om ;
-    sysml:ownedRelationship elmt:Documented___400_om, elmt:Documented__Wheel_om, elmt:Documented___402_om, elmt:Documented__asJava_om .
+    sysml:ownedRelationship elmt:Documented___400_om, elmt:Documented__Wheel_om, elmt:Documented___402_om, elmt:Documented__asJava_om ;
+    sysx:sourceText "package Documented {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Documented___400
     a sysml:Documentation ;
@@ -24,7 +26,8 @@ elmt:Documented___400
     sysml:owner elmt:Documented ;
     sysml:owningRelationship elmt:Documented___400_om ;
     sysml:owningMembership elmt:Documented___400_om ;
-    sysml:body " what this package is for " .
+    sysml:body " what this package is for " ;
+    sysx:sourceText "    doc /* what this package is for */\n" .
 
 elmt:Documented___400_om
     a sysml:OwningMembership ;
@@ -49,7 +52,9 @@ elmt:Documented__Wheel
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Documented__Wheel___400 ;
     sysml:ownedMembership elmt:Documented__Wheel___400_om ;
-    sysml:ownedRelationship elmt:Documented__Wheel___400_om .
+    sysml:ownedRelationship elmt:Documented__Wheel___400_om ;
+    sysx:sourceText "    part def Wheel {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Documented__Wheel_om
     a sysml:OwningMembership ;
@@ -70,7 +75,8 @@ elmt:Documented__Wheel___400
     sysml:owner elmt:Documented__Wheel ;
     sysml:owningRelationship elmt:Documented__Wheel___400_om ;
     sysml:owningMembership elmt:Documented__Wheel___400_om ;
-    sysml:body " one wheel " .
+    sysml:body " one wheel " ;
+    sysx:sourceText "        doc /* one wheel */\n" .
 
 elmt:Documented__Wheel___400_om
     a sysml:OwningMembership ;
@@ -92,7 +98,8 @@ elmt:Documented___402
     sysml:owningRelationship elmt:Documented___402_om ;
     sysml:owningMembership elmt:Documented___402_om ;
     sysml:annotatedElement elmt:Documented__Wheel ;
-    sysml:body " a note on wheels " .
+    sysml:body " a note on wheels " ;
+    sysx:sourceText "    comment about Wheel /* a note on wheels */\n" .
 
 elmt:Documented___402_om
     a sysml:OwningMembership ;
@@ -115,7 +122,8 @@ elmt:Documented__asJava
     sysml:owningMembership elmt:Documented__asJava_om ;
     sysml:declaredName "asJava" ;
     sysml:language "java" ;
-    sysml:body " class Wheel {} " .
+    sysml:body " class Wheel {} " ;
+    sysx:sourceText "    rep asJava language \"java\" /* class Wheel {} */\n" .
 
 elmt:Documented__asJava_om
     a sysml:OwningMembership ;

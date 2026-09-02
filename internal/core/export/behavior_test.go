@@ -276,16 +276,18 @@ func TestSubactionDoSurvivesWithoutASpace(t *testing.T) {
 		if !strings.Contains(string(turtle), "sysx:declaredKeyword \"entry do\"") {
 			t.Fatalf("the `do` of %q was not recorded:\n%s", subaction, turtle)
 		}
-		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
-		if err != nil {
-			t.Fatalf("back to notation: %v", err)
+		// With its source text the graph comes back as written; without, as the
+		// printer writes the keyword the graph recorded.
+		if back, want := toNotation(t, turtle), formatted(t, src); back != want {
+			t.Fatalf("%q did not come back as written:\n--- want ---\n%s--- got ---\n%s", subaction, want, back)
 		}
-		if !strings.Contains(string(back), "entry do {") {
+		back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))
+		if !strings.Contains(back, "entry do {") {
 			t.Fatalf("%q lost its `do`:\n%s", subaction, back)
 		}
 		// The notation it comes back as is what the printer writes, so converting
 		// that again must change nothing at all.
-		checkRoundTrip(t, string(back))
+		checkRoundTrip(t, back)
 	}
 }
 

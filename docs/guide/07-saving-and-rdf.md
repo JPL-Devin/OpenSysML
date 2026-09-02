@@ -140,15 +140,23 @@ The client API is documented in [reference/python-api.md](../reference/python-ap
 `notation → RDF → notation → RDF` returns the *same graph*. This is the property asserted by the
 test suite over the fixtures in `internal/core/export/testdata/convert/`.
 
-The notation produced by a round trip is equivalent but not always character-identical: a
-reference may be written relative to a different scope, and a clause written `:>` is returned as
-`specializes`. Both forms parse to the same model, which the second conversion to RDF confirms.
+The notation produced by a round trip is the source itself when the graph still carries it: every
+element written to `.ttl` carries its lines as `sysx:sourceText`, comments and blank lines
+included, and converting back returns them, so a formatted file comes back byte for byte and an
+unformatted one comes back formatted, as it would from a save. The graph stays authoritative: an
+element whose triples were edited after the export — a flag set, a value changed, a member
+removed — is written back from its structure in canonical notation, and only that element's
+lines change. A graph without source text, from another tool or with the text stripped, is
+written entirely from its structure: a reference may then be written relative to a different
+scope, and a clause written `:>` comes back as `specializes`. Both forms parse to the same model,
+which the second conversion to RDF confirms. The rules are in
+[reference/rdf-mapping.md](../reference/rdf-mapping.md#source-text).
 
-**A save to `.sysml` behaves differently and is exact.** It writes the session's own source
-through the formatter rather than re-printing the graph, so comments, notes and spacing are
-preserved. Only the `.ttl` direction uses the mapping. Syntax is checked in every direction, and
-notation the parser cannot read is rejected, so a save never silently reformats a model that does
-not parse.
+**A save to `.sysml` writes the source directly.** It writes the session's own source through
+the formatter rather than re-printing the graph, so comments, notes and spacing are preserved
+whether or not the model was edited. Only the `.ttl` direction uses the mapping. Syntax is
+checked in every direction, and notation the parser cannot read is rejected, so a save never
+silently reformats a model that does not parse.
 
 ## A worked example
 
@@ -167,9 +175,10 @@ wrote /tmp/rover-back.sysml (sysml, 877 bytes)
 ```
 
 Converting the returned notation again yields a byte-identical graph, which is the round-trip
-property described above. The `//` header comment is the only content lost, as described in
+property described above. The `//` header comment comes back with the source text the graph
+carries and is lost once that text is stripped, as described in
 [reference/rdf-mapping.md](../reference/rdf-mapping.md); the package's `doc` and `comment` are
-declarations and are preserved.
+declarations and are preserved either way.
 
 [`examples/semantic-layer/demo.sysml`](../../examples/semantic-layer/demo.sysml)
 and [`examples/repl-behavioral-demo.sysml`](../../examples/repl-behavioral-demo.sysml)

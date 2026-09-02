@@ -13,7 +13,9 @@ elmt:Accepts
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Accepts__Scene, elmt:Accepts__Camera, elmt:Accepts__Observe, elmt:Accepts__Watch ;
     sysml:ownedMembership elmt:Accepts__Scene_om, elmt:Accepts__Camera_om, elmt:Accepts__Observe_om, elmt:Accepts__Watch_om ;
-    sysml:ownedRelationship elmt:Accepts__Scene_om, elmt:Accepts__Camera_om, elmt:Accepts__Observe_om, elmt:Accepts__Watch_om .
+    sysml:ownedRelationship elmt:Accepts__Scene_om, elmt:Accepts__Camera_om, elmt:Accepts__Observe_om, elmt:Accepts__Watch_om ;
+    sysx:sourceText "package Accepts {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Accepts__Scene
     a sysml:ItemDefinition ;
@@ -25,7 +27,8 @@ elmt:Accepts__Scene
     sysml:owningRelationship elmt:Accepts__Scene_om ;
     sysml:owningMembership elmt:Accepts__Scene_om ;
     sysml:declaredName "Scene" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    item def Scene;\n" .
 
 elmt:Accepts__Scene_om
     a sysml:OwningMembership ;
@@ -47,7 +50,8 @@ elmt:Accepts__Camera
     sysml:owningRelationship elmt:Accepts__Camera_om ;
     sysml:owningMembership elmt:Accepts__Camera_om ;
     sysml:declaredName "Camera" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    port def Camera;\n" .
 
 elmt:Accepts__Camera_om
     a sysml:OwningMembership ;
@@ -74,7 +78,9 @@ elmt:Accepts__Observe
     sysml:ownedMembership elmt:Accepts__Observe__trigger_om ;
     sysml:ownedRelationship elmt:Accepts__Observe__trigger_om ;
     sysml:ownedFeature elmt:Accepts__Observe__trigger ;
-    sysml:ownedFeatureMembership elmt:Accepts__Observe__trigger_om .
+    sysml:ownedFeatureMembership elmt:Accepts__Observe__trigger_om ;
+    sysx:sourceText "    action def Observe {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Accepts__Observe_om
     a sysml:OwningMembership ;
@@ -101,7 +107,9 @@ elmt:Accepts__Observe__trigger
     sysml:ownedMembership elmt:Accepts__Observe__trigger__scene_om ;
     sysml:ownedRelationship elmt:Accepts__Observe__trigger__scene_om ;
     sysml:ownedFeature elmt:Accepts__Observe__trigger__scene ;
-    sysml:ownedFeatureMembership elmt:Accepts__Observe__trigger__scene_om .
+    sysml:ownedFeatureMembership elmt:Accepts__Observe__trigger__scene_om ;
+    sysx:sourceText "        action trigger accept" ;
+    sysx:sourceTail ";\n" .
 
 elmt:Accepts__Observe__trigger_om
     a sysml:FeatureMembership ;
@@ -130,7 +138,8 @@ elmt:Accepts__Observe__trigger__scene
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:type elmt:Accepts__Scene ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText " scene : Scene" .
 
 elmt:Accepts__Observe__trigger__scene_om
     a sysml:FeatureMembership ;
@@ -159,7 +168,9 @@ elmt:Accepts__Watch
     sysml:ownedMembership elmt:Accepts__Watch__lens_om, elmt:Accepts__Watch__framed_om ;
     sysml:ownedRelationship elmt:Accepts__Watch__lens_om, elmt:Accepts__Watch__framed_om ;
     sysml:ownedFeature elmt:Accepts__Watch__lens, elmt:Accepts__Watch__framed ;
-    sysml:ownedFeatureMembership elmt:Accepts__Watch__lens_om, elmt:Accepts__Watch__framed_om .
+    sysml:ownedFeatureMembership elmt:Accepts__Watch__lens_om, elmt:Accepts__Watch__framed_om ;
+    sysx:sourceText "    action def Watch {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Accepts__Watch_om
     a sysml:OwningMembership ;
@@ -182,7 +193,8 @@ elmt:Accepts__Watch__lens
     sysml:owningMembership elmt:Accepts__Watch__lens_om ;
     sysml:declaredName "lens" ;
     sysml:type elmt:Accepts__Camera ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        port lens : Camera;\n" .
 
 elmt:Accepts__Watch__lens_om
     a sysml:FeatureMembership ;
@@ -212,7 +224,9 @@ elmt:Accepts__Watch__framed
     sysml:ownedMembership elmt:Accepts__Watch__framed__scene_om ;
     sysml:ownedRelationship elmt:Accepts__Watch__framed__scene_om ;
     sysml:ownedFeature elmt:Accepts__Watch__framed__scene ;
-    sysml:ownedFeatureMembership elmt:Accepts__Watch__framed__scene_om .
+    sysml:ownedFeatureMembership elmt:Accepts__Watch__framed__scene_om ;
+    sysx:sourceText "        action framed accept" ;
+    sysx:sourceTail " via lens;\n" .
 
 elmt:Accepts__Watch__framed_om
     a sysml:FeatureMembership ;
@@ -241,7 +255,8 @@ elmt:Accepts__Watch__framed__scene
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:type elmt:Accepts__Scene ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText " scene : Scene" .
 
 elmt:Accepts__Watch__framed__scene_om
     a sysml:FeatureMembership ;

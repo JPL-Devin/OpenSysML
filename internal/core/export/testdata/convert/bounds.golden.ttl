@@ -14,7 +14,9 @@ elmt:Bounds
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Bounds__Vehicle, elmt:Bounds__Fleet ;
     sysml:ownedMembership elmt:Bounds__Vehicle_om, elmt:Bounds__Fleet_om ;
-    sysml:ownedRelationship elmt:Bounds__Vehicle_om, elmt:Bounds__Fleet_om .
+    sysml:ownedRelationship elmt:Bounds__Vehicle_om, elmt:Bounds__Fleet_om ;
+    sysx:sourceText "package Bounds {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Bounds__Vehicle
     a sysml:PartDefinition ;
@@ -26,7 +28,8 @@ elmt:Bounds__Vehicle
     sysml:owningRelationship elmt:Bounds__Vehicle_om ;
     sysml:owningMembership elmt:Bounds__Vehicle_om ;
     sysml:declaredName "Vehicle" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def Vehicle;\n" .
 
 elmt:Bounds__Vehicle_om
     a sysml:OwningMembership ;
@@ -53,7 +56,9 @@ elmt:Bounds__Fleet
     sysml:ownedMembership elmt:Bounds__Fleet__exact_om, elmt:Bounds__Fleet__range_om, elmt:Bounds__Fleet__many_om, elmt:Bounds__Fleet__loose_om, elmt:Bounds__Fleet__shared_om, elmt:Bounds__Fleet__owned_om, elmt:Bounds__Fleet__count_om ;
     sysml:ownedRelationship elmt:Bounds__Fleet__exact_om, elmt:Bounds__Fleet__range_om, elmt:Bounds__Fleet__many_om, elmt:Bounds__Fleet__loose_om, elmt:Bounds__Fleet__shared_om, elmt:Bounds__Fleet__owned_om, elmt:Bounds__Fleet__count_om ;
     sysml:ownedFeature elmt:Bounds__Fleet__exact, elmt:Bounds__Fleet__range, elmt:Bounds__Fleet__many, elmt:Bounds__Fleet__loose, elmt:Bounds__Fleet__shared, elmt:Bounds__Fleet__owned, elmt:Bounds__Fleet__count ;
-    sysml:ownedFeatureMembership elmt:Bounds__Fleet__exact_om, elmt:Bounds__Fleet__range_om, elmt:Bounds__Fleet__many_om, elmt:Bounds__Fleet__loose_om, elmt:Bounds__Fleet__shared_om, elmt:Bounds__Fleet__owned_om, elmt:Bounds__Fleet__count_om .
+    sysml:ownedFeatureMembership elmt:Bounds__Fleet__exact_om, elmt:Bounds__Fleet__range_om, elmt:Bounds__Fleet__many_om, elmt:Bounds__Fleet__loose_om, elmt:Bounds__Fleet__shared_om, elmt:Bounds__Fleet__owned_om, elmt:Bounds__Fleet__count_om ;
+    sysx:sourceText "    part def Fleet {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Bounds__Fleet_om
     a sysml:OwningMembership ;
@@ -77,7 +82,8 @@ elmt:Bounds__Fleet__exact
     sysml:declaredName "exact" ;
     sysml:type elmt:Bounds__Vehicle ;
     sysml:upperBound expr:Bounds__Fleet__exact_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part exact : Vehicle[3];\n" .
 
 elmt:Bounds__Fleet__exact_om
     a sysml:FeatureMembership ;
@@ -110,7 +116,8 @@ elmt:Bounds__Fleet__range
     sysml:type elmt:Bounds__Vehicle ;
     sysml:lowerBound expr:Bounds__Fleet__range_plowerBound ;
     sysml:upperBound expr:Bounds__Fleet__range_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part range : Vehicle[1..4];\n" .
 
 elmt:Bounds__Fleet__range_om
     a sysml:FeatureMembership ;
@@ -149,7 +156,8 @@ elmt:Bounds__Fleet__many
     sysml:type elmt:Bounds__Vehicle ;
     sysml:lowerBound expr:Bounds__Fleet__many_plowerBound ;
     sysml:upperBound expr:Bounds__Fleet__many_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part many : Vehicle[0..*];\n" .
 
 elmt:Bounds__Fleet__many_om
     a sysml:FeatureMembership ;
@@ -188,7 +196,8 @@ elmt:Bounds__Fleet__loose
     sysml:isNonunique "true"^^xsd:boolean ;
     sysml:type elmt:Bounds__Vehicle ;
     sysml:upperBound expr:Bounds__Fleet__loose_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part loose : Vehicle[*] ordered nonunique;\n" .
 
 elmt:Bounds__Fleet__loose_om
     a sysml:FeatureMembership ;
@@ -219,7 +228,8 @@ elmt:Bounds__Fleet__shared
     sysml:declaredName "shared" ;
     sysml:isReference "true"^^xsd:boolean ;
     sysml:type elmt:Bounds__Vehicle ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        ref part shared : Vehicle;\n" .
 
 elmt:Bounds__Fleet__shared_om
     a sysml:FeatureMembership ;
@@ -245,7 +255,8 @@ elmt:Bounds__Fleet__owned
     sysml:declaredName "owned" ;
     sysml:isComposite "true"^^xsd:boolean ;
     sysml:type elmt:Bounds__Vehicle ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        composite part owned : Vehicle;\n" .
 
 elmt:Bounds__Fleet__owned_om
     a sysml:FeatureMembership ;
@@ -271,7 +282,8 @@ elmt:Bounds__Fleet__count
     sysml:declaredName "count" ;
     sysml:isDerived "true"^^xsd:boolean ;
     sysml:type "Integer" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        derived attribute count : Integer;\n" .
 
 elmt:Bounds__Fleet__count_om
     a sysml:FeatureMembership ;

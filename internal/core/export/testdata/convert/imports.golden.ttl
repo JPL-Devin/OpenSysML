@@ -12,7 +12,9 @@ elmt:Importer
     sysml:declaredName "Importer" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 ;
-    sysml:ownedImport elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 .
+    sysml:ownedImport elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 ;
+    sysx:sourceText "package Importer {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Importer___400
     a sysml:Import ;
@@ -26,7 +28,8 @@ elmt:Importer___400
     sysml:visibility "private" ;
     sysml:importedNamespace "ISQ" ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    private import ISQ::*;\n" .
 
 elmt:Importer___401
     a sysml:Import ;
@@ -39,7 +42,8 @@ elmt:Importer___401
     sysml:importOwningNamespace elmt:Importer ;
     sysml:visibility "private" ;
     sysml:importedNamespace "ScalarValues::Real" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    private import ScalarValues::Real;\n" .
 
 elmt:Importer___402
     a sysml:Import ;
@@ -53,4 +57,5 @@ elmt:Importer___402
     sysml:visibility "private" ;
     sysml:importedNamespace "Deep" ;
     sysx:isRecursive "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    private import Deep::**;\n" .

@@ -13,7 +13,9 @@ elmt:Deps
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Deps__A, elmt:Deps__B ;
     sysml:ownedMembership elmt:Deps__A_om, elmt:Deps__B_om ;
-    sysml:ownedRelationship elmt:Deps__A_om, elmt:Deps__B_om, elmt:Deps___402, elmt:Deps__named .
+    sysml:ownedRelationship elmt:Deps__A_om, elmt:Deps__B_om, elmt:Deps___402, elmt:Deps__named ;
+    sysx:sourceText "package Deps {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Deps__A
     a sysml:PartDefinition ;
@@ -25,7 +27,8 @@ elmt:Deps__A
     sysml:owningRelationship elmt:Deps__A_om ;
     sysml:owningMembership elmt:Deps__A_om ;
     sysml:declaredName "A" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def A;\n" .
 
 elmt:Deps__A_om
     a sysml:OwningMembership ;
@@ -47,7 +50,8 @@ elmt:Deps__B
     sysml:owningRelationship elmt:Deps__B_om ;
     sysml:owningMembership elmt:Deps__B_om ;
     sysml:declaredName "B" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def B;\n" .
 
 elmt:Deps__B_om
     a sysml:OwningMembership ;
@@ -69,7 +73,8 @@ elmt:Deps___402
     sysml:owningRelatedElement elmt:Deps ;
     sysml:client elmt:Deps__A ;
     sysml:supplier elmt:Deps__B ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    dependency from A to B;\n" .
 
 elmt:Deps__named
     a sysml:Dependency ;
@@ -82,4 +87,5 @@ elmt:Deps__named
     sysml:declaredName "named" ;
     sysml:client elmt:Deps__A ;
     sysml:supplier elmt:Deps__B ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    dependency named from A to B;\n" .

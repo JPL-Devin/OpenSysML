@@ -13,7 +13,9 @@ elmt:Conjugation
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Conjugation__CommunicationPort, elmt:Conjugation__Ground, elmt:Conjugation__Link ;
     sysml:ownedMembership elmt:Conjugation__CommunicationPort_om, elmt:Conjugation__Ground_om, elmt:Conjugation__Link_om ;
-    sysml:ownedRelationship elmt:Conjugation__CommunicationPort_om, elmt:Conjugation__Ground_om, elmt:Conjugation__Link_om .
+    sysml:ownedRelationship elmt:Conjugation__CommunicationPort_om, elmt:Conjugation__Ground_om, elmt:Conjugation__Link_om ;
+    sysx:sourceText "package Conjugation {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Conjugation__CommunicationPort
     a sysml:PortDefinition ;
@@ -30,7 +32,9 @@ elmt:Conjugation__CommunicationPort
     sysml:ownedMembership elmt:Conjugation__CommunicationPort__signal_om ;
     sysml:ownedRelationship elmt:Conjugation__CommunicationPort__signal_om ;
     sysml:ownedFeature elmt:Conjugation__CommunicationPort__signal ;
-    sysml:ownedFeatureMembership elmt:Conjugation__CommunicationPort__signal_om .
+    sysml:ownedFeatureMembership elmt:Conjugation__CommunicationPort__signal_om ;
+    sysx:sourceText "    port def CommunicationPort {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Conjugation__CommunicationPort_om
     a sysml:OwningMembership ;
@@ -53,7 +57,8 @@ elmt:Conjugation__CommunicationPort__signal
     sysml:owningMembership elmt:Conjugation__CommunicationPort__signal_om ;
     sysml:declaredName "signal" ;
     sysml:direction "out" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        out item signal;\n" .
 
 elmt:Conjugation__CommunicationPort__signal_om
     a sysml:FeatureMembership ;
@@ -82,7 +87,9 @@ elmt:Conjugation__Ground
     sysml:ownedMembership elmt:Conjugation__Ground__groundPort_om, elmt:Conjugation__Ground__spacePort_om ;
     sysml:ownedRelationship elmt:Conjugation__Ground__groundPort_om, elmt:Conjugation__Ground__spacePort_om ;
     sysml:ownedFeature elmt:Conjugation__Ground__groundPort, elmt:Conjugation__Ground__spacePort ;
-    sysml:ownedFeatureMembership elmt:Conjugation__Ground__groundPort_om, elmt:Conjugation__Ground__spacePort_om .
+    sysml:ownedFeatureMembership elmt:Conjugation__Ground__groundPort_om, elmt:Conjugation__Ground__spacePort_om ;
+    sysx:sourceText "    part def Ground {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Conjugation__Ground_om
     a sysml:OwningMembership ;
@@ -105,7 +112,8 @@ elmt:Conjugation__Ground__groundPort
     sysml:owningMembership elmt:Conjugation__Ground__groundPort_om ;
     sysml:declaredName "groundPort" ;
     sysml:type elmt:Conjugation__CommunicationPort ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        port groundPort : CommunicationPort;\n" .
 
 elmt:Conjugation__Ground__groundPort_om
     a sysml:FeatureMembership ;
@@ -131,7 +139,8 @@ elmt:Conjugation__Ground__spacePort
     sysml:declaredName "spacePort" ;
     sysml:isConjugated "true"^^xsd:boolean ;
     sysml:type elmt:Conjugation__CommunicationPort ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        port spacePort : ~CommunicationPort;\n" .
 
 elmt:Conjugation__Ground__spacePort_om
     a sysml:FeatureMembership ;
@@ -160,7 +169,9 @@ elmt:Conjugation__Link
     sysml:ownedMembership elmt:Conjugation__Link__a_om, elmt:Conjugation__Link__b_om ;
     sysml:ownedRelationship elmt:Conjugation__Link__a_om, elmt:Conjugation__Link__b_om ;
     sysml:ownedFeature elmt:Conjugation__Link__a, elmt:Conjugation__Link__b ;
-    sysml:ownedFeatureMembership elmt:Conjugation__Link__a_om, elmt:Conjugation__Link__b_om .
+    sysml:ownedFeatureMembership elmt:Conjugation__Link__a_om, elmt:Conjugation__Link__b_om ;
+    sysx:sourceText "    interface def Link {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Conjugation__Link_om
     a sysml:OwningMembership ;
@@ -184,7 +195,8 @@ elmt:Conjugation__Link__a
     sysml:declaredName "a" ;
     sysml:isEnd "true"^^xsd:boolean ;
     sysml:type elmt:Conjugation__CommunicationPort ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        end port a : CommunicationPort;\n" .
 
 elmt:Conjugation__Link__a_om
     a sysml:FeatureMembership ;
@@ -211,7 +223,8 @@ elmt:Conjugation__Link__b
     sysml:isEnd "true"^^xsd:boolean ;
     sysml:isConjugated "true"^^xsd:boolean ;
     sysml:type elmt:Conjugation__CommunicationPort ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        end port b : ~CommunicationPort;\n" .
 
 elmt:Conjugation__Link__b_om
     a sysml:FeatureMembership ;

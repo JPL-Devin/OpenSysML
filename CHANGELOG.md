@@ -52,6 +52,24 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Changed
 
+- **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
+  carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
+  and an element with members carries the lines closing its body as `sysx:sourceTail`; the writer
+  formats the file before slicing it, and the two properties are one-line literals with newlines
+  escaped. `sysml model.ttl -convert sysml` now writes that text back, so a formatted
+  `.sysml → .ttl → .sysml` round trip is byte for byte and an unformatted one comes back formatted,
+  where before it came back canonical with its `//` and `/* */` comments dropped. The graph stays
+  authoritative: the candidate notation is converted back to RDF and compared with the graph, and
+  each element whose text no longer states its triples — a flag set, a value changed, a member
+  removed or an identity annotation dropped after the export — is written canonically instead,
+  with `@IdentityMetadata::ElementId` and `ProjectRef` materialized exactly as for a graph without
+  text; text that no longer parses demotes the whole file. A graph without `sysx:sourceText` — from
+  another tool, or stripped — converts as before, and the round-trip tests keep stripping it to
+  prove the structural predicates carry the model; each fixture under
+  `internal/core/export/testdata/convert` now locks both notations. The
+  [saving guide](docs/guide/07-saving-and-rdf.md), the
+  [RDF mapping](docs/reference/rdf-mapping.md#source-text) and the round-trip testing skill
+  describe the precedence.
 - **The architecture self-model describes the library snapshot.** The standard library stage in
   [`examples/self-model`](examples/self-model/README.md) now carries the embedded snapshot its
   index is decoded from, the `internal/core/pack` and `internal/core/ast/astcodec` units that

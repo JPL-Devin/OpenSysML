@@ -161,6 +161,9 @@ func (g *Graph) subjects() map[Term]*subjectIndex {
 // graph's storage and must not be mutated.
 func (g *Graph) Triples() []Triple { return g.triples }
 
+// Has reports whether the graph contains t.
+func (g *Graph) Has(t Triple) bool { return g.seen[t] }
+
 // Len returns the number of triples.
 func (g *Graph) Len() int { return len(g.triples) }
 
@@ -245,13 +248,10 @@ func (g *Graph) Type(subject Term) string {
 	return obj.Value
 }
 
-// quoteLiteral renders a lexical form as a Turtle quoted string, using the
-// long form when the value contains a newline so that embedded source text
-// stays readable.
+// quoteLiteral renders a lexical form as a Turtle quoted string. Newlines are
+// escaped rather than written in a long literal, so every triple stays on one
+// line and a line-oriented tool can drop a property whole.
 func quoteLiteral(value string) string {
-	if strings.Contains(value, "\n") {
-		return `"""` + escapeLong(value) + `"""`
-	}
 	return `"` + escapeShort(value) + `"`
 }
 
@@ -269,26 +269,6 @@ func escapeShort(value string) string {
 			b.WriteString(`\r`)
 		case '\t':
 			b.WriteString(`\t`)
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
-
-// escapeLong escapes only what a triple-quoted Turtle string cannot hold
-// literally, keeping newlines and tabs as themselves. Quotes are escaped so a
-// value ending in one, or embedding `"""`, cannot close the literal early.
-func escapeLong(value string) string {
-	var b strings.Builder
-	for _, r := range value {
-		switch r {
-		case '\\':
-			b.WriteString(`\\`)
-		case '"':
-			b.WriteString(`\"`)
-		case '\r':
-			b.WriteString(`\r`)
 		default:
 			b.WriteRune(r)
 		}

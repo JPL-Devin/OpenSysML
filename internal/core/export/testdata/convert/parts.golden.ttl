@@ -14,7 +14,9 @@ elmt:Vehicles
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Vehicles__Vehicle, elmt:Vehicles__Engine ;
     sysml:ownedMembership elmt:Vehicles__Vehicle_om, elmt:Vehicles__Engine_om ;
-    sysml:ownedRelationship elmt:Vehicles__Vehicle_om, elmt:Vehicles__Engine_om .
+    sysml:ownedRelationship elmt:Vehicles__Vehicle_om, elmt:Vehicles__Engine_om ;
+    sysx:sourceText "package Vehicles {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Vehicles__Vehicle
     a sysml:PartDefinition ;
@@ -31,7 +33,9 @@ elmt:Vehicles__Vehicle
     sysml:ownedMembership elmt:Vehicles__Vehicle__mass_om, elmt:Vehicles__Vehicle__engine_om ;
     sysml:ownedRelationship elmt:Vehicles__Vehicle__mass_om, elmt:Vehicles__Vehicle__engine_om ;
     sysml:ownedFeature elmt:Vehicles__Vehicle__mass, elmt:Vehicles__Vehicle__engine ;
-    sysml:ownedFeatureMembership elmt:Vehicles__Vehicle__mass_om, elmt:Vehicles__Vehicle__engine_om .
+    sysml:ownedFeatureMembership elmt:Vehicles__Vehicle__mass_om, elmt:Vehicles__Vehicle__engine_om ;
+    sysx:sourceText "    part def Vehicle {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Vehicles__Vehicle_om
     a sysml:OwningMembership ;
@@ -54,7 +58,8 @@ elmt:Vehicles__Vehicle__mass
     sysml:owningMembership elmt:Vehicles__Vehicle__mass_om ;
     sysml:declaredName "mass" ;
     sysml:type "ISQ::MassValue" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute mass : ISQ::MassValue;\n" .
 
 elmt:Vehicles__Vehicle__mass_om
     a sysml:FeatureMembership ;
@@ -80,7 +85,8 @@ elmt:Vehicles__Vehicle__engine
     sysml:declaredName "engine" ;
     sysml:type elmt:Vehicles__Engine ;
     sysml:upperBound expr:Vehicles__Vehicle__engine_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part engine : Engine[1];\n" .
 
 elmt:Vehicles__Vehicle__engine_om
     a sysml:FeatureMembership ;
@@ -110,7 +116,8 @@ elmt:Vehicles__Engine
     sysml:owningRelationship elmt:Vehicles__Engine_om ;
     sysml:owningMembership elmt:Vehicles__Engine_om ;
     sysml:declaredName "Engine" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def Engine;\n" .
 
 elmt:Vehicles__Engine_om
     a sysml:OwningMembership ;

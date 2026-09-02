@@ -328,9 +328,9 @@ func TestTermPredicates(t *testing.T) {
 	}
 }
 
-// A long literal is delimited by `"""`, so a value that ends in a quote or
-// embeds three of them must be escaped or it closes the literal early.
-func TestLongLiteralQuotesSurviveRoundTrip(t *testing.T) {
+// A value with newlines and quotes in any arrangement must be escaped so that
+// it neither closes the literal early nor spills onto another line.
+func TestMultilineLiteralsSurviveRoundTripOnOneLine(t *testing.T) {
 	for _, value := range []string{
 		"\"a\" +\n    \"b\"",
 		"line\n\"",
@@ -339,9 +339,15 @@ func TestLongLiteralQuotesSurviveRoundTrip(t *testing.T) {
 	} {
 		g := NewGraph()
 		g.Add(ElementIRI("A"), IRI(SysML+"value"), String(value))
-		parsed, err := ParseTurtle(WriteTurtle(g))
+		turtle := WriteTurtle(g)
+		for _, line := range strings.Split(string(turtle), "\n") {
+			if strings.Contains(line, "sysml:value") && !strings.HasSuffix(line, `" .`) {
+				t.Errorf("value %q spills over its line:\n%s", value, turtle)
+			}
+		}
+		parsed, err := ParseTurtle(turtle)
 		if err != nil {
-			t.Errorf("value %q does not parse back: %v\n%s", value, err, WriteTurtle(g))
+			t.Errorf("value %q does not parse back: %v\n%s", value, err, turtle)
 			continue
 		}
 		got, ok := parsed.Lexical(ElementIRI("A"), SysML+"value")
