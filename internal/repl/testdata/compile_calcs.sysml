@@ -145,6 +145,50 @@ package Compiled {
 		in a : Integer;
 		return : Real = a * 1.0e300 * 1.0e10;
 	}
+
+	// Both operands can fail; the left one must be reported, as the interpreter does.
+	calc def Order {
+		in a : Integer;
+		in b : Integer;
+		return : Integer = (a % a) + (b + b);
+	}
+
+	calc def OrderArgs {
+		in a : Integer;
+		in b : Integer;
+		return : Integer = Arith(a % a, b + b);
+	}
+
+	calc def Nat {
+		in n : Natural;
+		return : Natural = n - 1;
+	}
+
+	calc def Pos {
+		in n : Positive;
+		attribute k : Positive = n;
+		k = k - 1;
+		return : Integer = k;
+	}
+
+	calc def One {
+		in n : Integer[1];
+		attribute m : Integer[1..1] = n;
+		return : Integer[1] = m * 2;
+	}
+
+	// Names whose naive encodings collide: X::Y against the unrestricted name 'X::Y',
+	// a Unicode name against the text of its own escape.
+	package X {
+		calc def Y { in n : Integer; return : Integer = n + 1; }
+	}
+	calc def 'X::Y' { in n : Integer; return : Integer = n + 2; }
+	calc def 'Größe' { in n : Integer; return : Integer = n + 3; }
+	calc def 'Gr_f6__df_e' { in n : Integer; return : Integer = n + 4; }
+	calc def Collide {
+		in n : Integer;
+		return : Integer = X::Y(n) * 1000 + 'X::Y'(n) * 100 + 'Größe'(n) * 10 + 'Gr_f6__df_e'(n);
+	}
 }
 
 // Calculations outside the subset, each refused for the reason its name states.

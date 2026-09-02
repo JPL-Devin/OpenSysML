@@ -99,6 +99,13 @@ func sysmlQuot(a, b int64) float64 {
 	return q
 }
 
+func sysmlNonNegative(v int64, typ string) int64 {
+	if v < 0 {
+		sysmlFail(fmt.Sprintf("type mismatch: cannot write %d (an Integer) to a feature typed by %s", v, typ))
+	}
+	return v
+}
+
 func sysmlFinite(r float64) float64 {
 	if math.IsNaN(r) || math.IsInf(r, 0) {
 		sysmlFail("arithmetic overflow: result is not a finite Real")
@@ -228,6 +235,8 @@ type goEmitter struct {
 	w      io.Writer
 	err    error
 	indent int
+	// resultRange is checked on each return of the function being emitted.
+	resultRange Range
 }
 
 func (e *goEmitter) raw(s string) {
@@ -255,6 +264,14 @@ func goType(t Type) string {
 
 func goLocal(name string) string { return cLocal(name) }
 
+// goNarrowed checks v against the range of the feature it is written to.
+func goNarrowed(v string, r Range) string {
+	if r == RangeAny {
+		return v
+	}
+	return fmt.Sprintf("sysmlNonNegative(%s, %q)", v, r.String())
+}
+
 func goParams(fn *Func) string {
 	parts := make([]string, len(fn.Params))
 	for i, p := range fn.Params {
@@ -269,6 +286,12 @@ func (e *goEmitter) function(fn *Func) {
 	e.indent++
 	e.linef("sysmlEnter()")
 	e.linef("defer sysmlLeave()")
+	for _, p := range fn.Params {
+		if p.Range != RangeAny {
+			e.linef("%s = %s", goLocal(p.Name), goNarrowed(goLocal(p.Name), p.Range))
+		}
+	}
+	e.resultRange = fn.ResultRange
 	e.block(fn.Body)
 	e.linef("sysmlFail(%s)", strconv.Quote("calc "+fn.Name+" completed without returning a value"))
 	e.linef("panic(\"unreachable\")")
@@ -292,7 +315,7 @@ func (e *goEmitter) stmt(s Stmt) {
 		}
 		e.linef("_ = %s", goLocal(s.Name))
 	case Assign:
-		e.linef("%s = %s", goLocal(s.Name), e.expr(s.Value))
+		e.linef("%s = %s", goLocal(s.Name), goNarrowed(e.expr(s.Value), s.Range))
 	case If:
 		e.linef("if %s {", e.expr(s.Cond))
 		e.indent++
@@ -317,7 +340,7 @@ func (e *goEmitter) stmt(s Stmt) {
 		e.indent--
 		e.linef("}")
 	case Return:
-		e.linef("return %s", e.expr(s.Value))
+		e.linef("return %s", goNarrowed(e.expr(s.Value), e.resultRange))
 	default:
 		e.err = fmt.Errorf("codegen: Go emitter has no case for %T", s)
 	}

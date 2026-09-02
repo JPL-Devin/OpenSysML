@@ -55,19 +55,25 @@ func (c *Compiler) Compile(entry *symbols.Symbol) (*Program, error) {
 // env is the lexical environment of a body: parameters and body-local variables,
 // innermost block last.
 type env struct {
-	frames []map[string]Type
+	frames []map[string]binding
 }
 
-func (e *env) push()                 { e.frames = append(e.frames, map[string]Type{}) }
-func (e *env) pop()                  { e.frames = e.frames[:len(e.frames)-1] }
-func (e *env) bind(n string, t Type) { e.frames[len(e.frames)-1][n] = t }
-func (e *env) lookup(n string) (Type, bool) {
+// binding is the declared type of a variable and the range it is narrowed to.
+type binding struct {
+	t Type
+	r Range
+}
+
+func (e *env) push()                    { e.frames = append(e.frames, map[string]binding{}) }
+func (e *env) pop()                     { e.frames = e.frames[:len(e.frames)-1] }
+func (e *env) bind(n string, b binding) { e.frames[len(e.frames)-1][n] = b }
+func (e *env) lookup(n string) (binding, bool) {
 	for i := len(e.frames) - 1; i >= 0; i-- {
-		if t, ok := e.frames[i][n]; ok {
-			return t, true
+		if b, ok := e.frames[i][n]; ok {
+			return b, true
 		}
 	}
-	return TypeInvalid, false
+	return binding{}, false
 }
 
 // funcCompiler compiles one calc body.
@@ -97,7 +103,7 @@ func (c *Compiler) compileCalc(sym *symbols.Symbol) (*Func, error) {
 		}
 	}
 
-	fn := &Func{Name: c.name(sym), Ident: identOf(c.name(sym))}
+	fn := &Func{Name: c.name(sym), Ident: identOf(sym)}
 	// Registered before the body is compiled so recursion finds it; the result
 	// type of a recursive call is fixed by an earlier return (see compileCall).
 	c.funcs[sym] = fn
@@ -120,26 +126,27 @@ func (c *Compiler) compileCalc(sym *symbols.Symbol) (*Func, error) {
 		if u.Value != nil {
 			return nil, fc.unsupported(fmt.Sprintf("parameter %s has a default value", name))
 		}
-		if u.Multiplicity != nil {
-			return nil, fc.unsupported(fmt.Sprintf("parameter %s declares a multiplicity", name))
+		if err := fc.exactlyOne(u, "parameter "+name); err != nil {
+			return nil, err
 		}
-		t, err := fc.declaredType(sym.Scope, u, name)
+		t, r, err := fc.declaredType(sym.Scope, u, name)
 		if err != nil {
 			return nil, err
 		}
-		fn.Params = append(fn.Params, Param{Name: name, Type: t})
-		fc.env.bind(name, t)
+		fn.Params = append(fn.Params, Param{Name: name, Type: t, Range: r})
+		fc.env.bind(name, binding{t, r})
 	}
 
 	stmts := lower.CalcBody(body, sym.Scope)
 	if !lower.Returns(stmts) {
 		return nil, fc.unsupported("a calc that binds `out` features rather than returning a value")
 	}
-	if declared, err := fc.declaredResult(sym, body); err != nil {
+	if declared, r, err := fc.declaredResult(sym, body); err != nil {
 		return nil, err
 	} else if declared != TypeInvalid {
 		fc.result = declared
 		fn.Result = declared
+		fn.ResultRange = r
 	}
 	compiled, err := fc.compileBlock(stmts)
 	if err != nil {
@@ -169,24 +176,41 @@ func calcDecl(decl ast.Node) ([]ast.Node, []*ast.Relationship, error) {
 	return nil, nil, errors.New("not a calc def or calc usage")
 }
 
-// declaredResult is the type the `return` parameter declares, TypeInvalid when
-// it declares none.
-func (fc *funcCompiler) declaredResult(sym *symbols.Symbol, body []ast.Node) (Type, error) {
+// declaredResult is the type and range the `return` parameter declares,
+// TypeInvalid when it declares none.
+func (fc *funcCompiler) declaredResult(sym *symbols.Symbol, body []ast.Node) (Type, Range, error) {
 	for _, member := range unwrapped(body) {
 		u, ok := member.(*ast.Usage)
 		if !ok || !(u.IsResult || u.Direction == ast.DirOut) {
 			continue
 		}
 		if u.Direction == ast.DirOut && !u.IsResult {
-			return TypeInvalid, fc.unsupported("an `out` parameter")
+			return TypeInvalid, RangeAny, fc.unsupported("an `out` parameter")
+		}
+		if err := fc.exactlyOne(u, "the result"); err != nil {
+			return TypeInvalid, RangeAny, err
 		}
 		name, _ := ast.EffectiveName(u)
 		if !hasTyping(u) {
-			return TypeInvalid, nil
+			return TypeInvalid, RangeAny, nil
 		}
 		return fc.declaredType(sym.Scope, u, name)
 	}
-	return TypeInvalid, nil
+	return TypeInvalid, RangeAny, nil
+}
+
+// exactlyOne accepts a usage declaring no multiplicity or one equivalent to
+// `[1]`; a scalar is one value.
+func (fc *funcCompiler) exactlyOne(u *ast.Usage, what string) error {
+	rng, ok := fc.c.model.RangeOf(u.Multiplicity)
+	if !ok {
+		return nil
+	}
+	one := func(b semantics.Bound) bool { return b.Known && !b.Infinite && b.Value == 1 }
+	if one(rng.Lower) && one(rng.Upper) {
+		return nil
+	}
+	return fc.unsupported(what + " declares a multiplicity other than [1]")
 }
 
 func hasTyping(u *ast.Usage) bool {
@@ -198,8 +222,8 @@ func hasTyping(u *ast.Usage) bool {
 	return false
 }
 
-// declaredType resolves the scalar type a usage is typed by.
-func (fc *funcCompiler) declaredType(scope *symbols.Scope, u *ast.Usage, name string) (Type, error) {
+// declaredType resolves the scalar type a usage is typed by, and its range.
+func (fc *funcCompiler) declaredType(scope *symbols.Scope, u *ast.Usage, name string) (Type, Range, error) {
 	var typ *symbols.Symbol
 	for _, r := range u.Relationships {
 		if r == nil || r.Kind != ast.RelTyping || r.Target == nil {
@@ -211,38 +235,43 @@ func (fc *funcCompiler) declaredType(scope *symbols.Scope, u *ast.Usage, name st
 		}
 		qn, ok := target.(*ast.QualifiedName)
 		if !ok {
-			return TypeInvalid, fc.unsupported(fmt.Sprintf("%s: typing by an expression", name))
+			return TypeInvalid, RangeAny, fc.unsupported(fmt.Sprintf("%s: typing by an expression", name))
 		}
 		resolved, ok := fc.c.resolver.ResolveQualified(scope, qn)
 		if !ok {
-			return TypeInvalid, fc.unsupported(fmt.Sprintf("%s: type %s does not resolve", name, qnText(qn)))
+			return TypeInvalid, RangeAny, fc.unsupported(fmt.Sprintf("%s: type %s does not resolve", name, qnText(qn)))
 		}
 		if typ != nil {
-			return TypeInvalid, fc.unsupported(fmt.Sprintf("%s is typed more than once", name))
+			return TypeInvalid, RangeAny, fc.unsupported(fmt.Sprintf("%s is typed more than once", name))
 		}
 		typ = resolved
 	}
 	if typ == nil {
-		return TypeInvalid, fc.unsupported(fmt.Sprintf("%s declares no type", name))
+		return TypeInvalid, RangeAny, fc.unsupported(fmt.Sprintf("%s declares no type", name))
 	}
-	t, ok := scalarType(fc.c.name(typ))
+	t, r, ok := scalarType(fc.c.name(typ))
 	if !ok {
-		return TypeInvalid, fc.unsupported(fmt.Sprintf("%s: type %s is not Integer, Real or Boolean", name, fc.c.name(typ)))
+		return TypeInvalid, RangeAny, fc.unsupported(fmt.Sprintf("%s: type %s is not Integer, Real or Boolean", name, fc.c.name(typ)))
 	}
-	return t, nil
+	return t, r, nil
 }
 
-// scalarType maps a library data type to the compiled representation.
-func scalarType(fqn string) (Type, bool) {
+// scalarType maps a library data type to the compiled representation and the
+// range a write to it is checked against.
+func scalarType(fqn string) (Type, Range, bool) {
 	switch fqn {
-	case "ScalarValues::Integer", "ScalarValues::Natural", "ScalarValues::Positive":
-		return TypeInt, true
+	case "ScalarValues::Integer":
+		return TypeInt, RangeAny, true
+	case "ScalarValues::Natural":
+		return TypeInt, RangeNatural, true
+	case "ScalarValues::Positive":
+		return TypeInt, RangePositive, true
 	case "ScalarValues::Real", "ScalarValues::Rational":
-		return TypeReal, true
+		return TypeReal, RangeAny, true
 	case "ScalarValues::Boolean":
-		return TypeBool, true
+		return TypeBool, RangeAny, true
 	}
-	return TypeInvalid, false
+	return TypeInvalid, RangeAny, false
 }
 
 func (fc *funcCompiler) compileBlock(stmts []lower.Statement) ([]Stmt, error) {
@@ -267,7 +296,7 @@ func (fc *funcCompiler) compileStmt(s lower.Statement) (Stmt, error) {
 		if s.Chain != nil {
 			return nil, fc.unsupported("assignment through a feature chain")
 		}
-		t, ok := fc.env.lookup(s.Target)
+		b, ok := fc.env.lookup(s.Target)
 		if !ok {
 			return nil, fc.unsupported(fmt.Sprintf("assignment to %s, which the body does not declare", s.Target))
 		}
@@ -275,11 +304,11 @@ func (fc *funcCompiler) compileStmt(s lower.Statement) (Stmt, error) {
 		if err != nil {
 			return nil, err
 		}
-		v, err = fc.coerce(v, t, "assigned to "+s.Target)
+		v, err = fc.coerce(v, b.t, "assigned to "+s.Target)
 		if err != nil {
 			return nil, err
 		}
-		return Assign{Name: s.Target, Value: v}, nil
+		return Assign{Name: s.Target, Range: b.r, Value: v}, nil
 	case lower.If:
 		cond, err := fc.compileBool(s.Condition, "condition of if")
 		if err != nil {
@@ -338,15 +367,18 @@ func (fc *funcCompiler) compileStmt(s lower.Statement) (Stmt, error) {
 func (fc *funcCompiler) compileDeclare(s lower.Declare) (Stmt, error) {
 	u, _ := s.Node.(*ast.Usage)
 	var declared Type
+	var rng Range
 	if u != nil && hasTyping(u) {
-		t, err := fc.declaredType(s.Scope, u, s.Name)
+		t, r, err := fc.declaredType(s.Scope, u, s.Name)
 		if err != nil {
 			return nil, err
 		}
-		declared = t
+		declared, rng = t, r
 	}
-	if u != nil && u.Multiplicity != nil {
-		return nil, fc.unsupported(fmt.Sprintf("attribute %s declares a multiplicity", s.Name))
+	if u != nil {
+		if err := fc.exactlyOne(u, "attribute "+s.Name); err != nil {
+			return nil, err
+		}
 	}
 	var init Expr
 	if s.Value != nil {
@@ -365,7 +397,7 @@ func (fc *funcCompiler) compileDeclare(s lower.Declare) (Stmt, error) {
 	if declared == TypeInvalid {
 		return nil, fc.unsupported(fmt.Sprintf("attribute %s has neither a type nor a value", s.Name))
 	}
-	fc.env.bind(s.Name, declared)
+	fc.env.bind(s.Name, binding{declared, rng})
 	return Declare{Name: s.Name, T: declared, Init: init}, nil
 }
 
@@ -472,8 +504,8 @@ func (fc *funcCompiler) compileName(qn *ast.QualifiedName) (Expr, error) {
 		return nil, fc.unsupported(fmt.Sprintf("reference to %s, which is not a parameter or body-local attribute", qnText(qn)))
 	}
 	name := qn.Parts[0].Text
-	if t, ok := fc.env.lookup(name); ok {
-		return Var{Name: name, T: t}, nil
+	if b, ok := fc.env.lookup(name); ok {
+		return Var{Name: name, T: b.t}, nil
 	}
 	return nil, fc.unsupported(fmt.Sprintf("reference to %s, which is not a parameter or body-local attribute", name))
 }
@@ -742,19 +774,33 @@ func unwrapped(members []ast.Node) []ast.Node {
 	return out
 }
 
-// identOf turns a qualified SysML name into an identifier valid in C and Go.
-func identOf(fqn string) string {
-	var b strings.Builder
-	b.WriteString("calc_")
-	for _, r := range fqn {
-		switch {
-		case r == ':':
-			b.WriteByte('_')
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
-			b.WriteRune(r)
-		default:
-			fmt.Fprintf(&b, "u%04x", r)
+// identOf gives a symbol a C/Go identifier, injectively: names of the owner
+// chain are joined by `_s_`, non-alphanumeric runes (`_` too) become `_hex_`.
+func identOf(sym *symbols.Symbol) string {
+	var names []string
+	for s := sym; s != nil; {
+		names = append(names, s.Name)
+		if s.OwnerScope == nil {
+			break
 		}
+		s = s.OwnerScope.Owner()
+	}
+	var b strings.Builder
+	b.WriteString("calc")
+	for i := len(names) - 1; i >= 0; i-- {
+		b.WriteString("_s_")
+		encodeName(&b, names[i])
 	}
 	return b.String()
+}
+
+func encodeName(b *strings.Builder, name string) {
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		default:
+			fmt.Fprintf(b, "_%x_", r)
+		}
+	}
 }

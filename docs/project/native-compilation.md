@@ -38,7 +38,7 @@ A calc compiles when everything it reaches is in this subset:
 
 | Construct | Compiled as |
 |---|---|
-| `in` parameters typed `Integer` (or a subtype), `Real`/`Rational`, `Boolean` | `int64_t` / `double` / `bool` |
+| `in` parameters typed `Integer`, `Natural`, `Positive`, `Real`/`Rational`, `Boolean`, with no multiplicity or `[1]` | `int64_t` / `double` / `bool` |
 | Result: the body's trailing expression, or `return : T = <expr>;` | function result |
 | Literals; parameter and body-local attribute references | as written |
 | `+ - * / % **`, unary `-`, comparison, `== !=`, `and or xor not`, `implies`, `if c ? a else b` | checked native operations |
@@ -70,7 +70,18 @@ arithmetic rather than the host language's:
   (see `exact-rational-evaluation.md`; no exact arithmetic is introduced here).
 - **Mixed** Integer/Real operands widen the Integer, in comparisons too.
 - **`and`/`or`/`implies`** short-circuit; the right operand's errors are not raised when the left
-  decides.
+  decides. Every other operator, and every invocation, evaluates its operands left to right, so
+  when both could fail the left failure is the one reported. Generated C sequences operands through
+  temporaries (GNU statement expressions) because C leaves argument order unspecified; Go's
+  evaluation order already matches.
+- **`Natural` and `Positive`** are checked exactly where the interpreter checks them: a negative
+  Integer bound to such a parameter, assigned to such an attribute, or returned as such a result
+  fails with the interpreter's `type mismatch` reason. Two interpreter behaviours are mirrored
+  rather than corrected: `Positive` admits `0` (the interpreter's type lattice folds it into
+  `Natural`), and an attribute's initializer is not checked, only later assignments.
+- **Identifiers** of generated functions encode each name of the owner chain injectively
+  (letters and digits verbatim, every other rune as `_hex_`, names joined by `_s_`), so `X::Y`,
+  `X__Y`, the unrestricted name `'X::Y'` and a Unicode name never share a function.
 - **Recursion** is bounded by the same depth as the interpreter's default
   (`runtime.DefaultMaxCalcDepth`), reported as the interpreter reports it.
 - **Output** uses the interpreter's `FormatReal` convention: positional notation with a `.0` on

@@ -44,11 +44,18 @@ var compiledCases = []compiledCase{
 	{"Ratio", []string{"3", "4"}}, {"Ratio", []string{"0", "4"}},
 	{"Even", []string{"7"}}, {"Even", []string{"10"}}, {"Even", []string{"100000"}}, // exceeds the recursion limit
 	{"Big", []string{"1"}}, {"Big", []string{"0"}},
+	{"Order", []string{"0", "9223372036854775807"}}, {"Order", []string{"3", "9223372036854775807"}},
+	{"Order", []string{"3", "4"}},
+	{"OrderArgs", []string{"0", "9223372036854775807"}}, {"OrderArgs", []string{"3", "9223372036854775807"}},
+	{"Nat", []string{"5"}}, {"Nat", []string{"0"}}, {"Nat", []string{"-1"}},
+	{"Pos", []string{"2"}}, {"Pos", []string{"1"}}, {"Pos", []string{"0"}},
+	{"One", []string{"21"}},
+	{"Collide", []string{"1"}},
 }
 
 // failureClass is the part of a failure both surfaces spell the same way.
 func failureClass(msg string) string {
-	for _, class := range []string{"arithmetic overflow", "arithmetic domain", "division by zero", "calc recursion limit exceeded"} {
+	for _, class := range []string{"arithmetic overflow", "arithmetic domain", "division by zero", "calc recursion limit exceeded", "typed by Natural", "typed by Positive"} {
 		if strings.Contains(msg, class) {
 			return class
 		}

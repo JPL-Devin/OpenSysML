@@ -101,6 +101,15 @@ static sysml_real sysml_quot(sysml_int a, sysml_int b) {
 	return negative ? -r : r;
 }
 
+static inline sysml_int sysml_nonnegative(sysml_int v, const char *type) {
+	if (__builtin_expect(v < 0, 0)) {
+		static char msg[128];
+		snprintf(msg, sizeof msg, "type mismatch: cannot write %lld (an Integer) to a feature typed by %s", (long long)v, type);
+		sysml_fail(msg);
+	}
+	return v;
+}
+
 static inline sysml_real sysml_finite(sysml_real r) {
 	if (__builtin_expect(!isfinite(r), 0)) sysml_fail("arithmetic overflow: result is not a finite Real");
 	return r;
@@ -228,6 +237,48 @@ type cEmitter struct {
 	err    error
 	indent int
 	result string
+	// resultRange is checked on each return of the function being emitted.
+	resultRange Range
+	temps       int
+}
+
+// pure is an operand whose evaluation cannot fail, so its order is immaterial.
+func pure(x Expr) bool {
+	switch x := x.(type) {
+	case IntLit, RealLit, BoolLit, Var:
+		return true
+	case ToReal:
+		return pure(x.X)
+	}
+	return false
+}
+
+// sequenced evaluates operands left to right into temporaries, as the
+// interpreter does, then applies body to them; C leaves argument order open.
+func (e *cEmitter) sequenced(operands []Expr, body func(names []string) string) string {
+	names := make([]string, len(operands))
+	var pre strings.Builder
+	for i, x := range operands {
+		if pure(x) {
+			names[i] = e.expr(x)
+			continue
+		}
+		e.temps++
+		names[i] = fmt.Sprintf("sysml_t%d", e.temps)
+		fmt.Fprintf(&pre, "%s %s = %s; ", cType(x.Type()), names[i], e.expr(x))
+	}
+	if pre.Len() == 0 {
+		return body(names)
+	}
+	return fmt.Sprintf("({ %s%s; })", pre.String(), body(names))
+}
+
+// narrowed checks v against the range of the feature it is written to.
+func cNarrowed(v string, r Range) string {
+	if r == RangeAny {
+		return v
+	}
+	return fmt.Sprintf("sysml_nonnegative(%s, \"%s\")", v, r)
 }
 
 func (e *cEmitter) raw(s string) {
@@ -267,14 +318,23 @@ func cParams(fn *Func) string {
 // cLocal namespaces a SysML local so it can never collide with a C keyword or
 // a prelude symbol.
 func cLocal(name string) string {
-	return "v_" + identOf(name)[len("calc_"):]
+	var b strings.Builder
+	b.WriteString("v_")
+	encodeName(&b, name)
+	return b.String()
 }
 
 func (e *cEmitter) function(fn *Func) {
 	e.linef("static %s %s(%s) {", cType(fn.Result), fn.Ident, cParams(fn))
 	e.indent++
 	e.linef("sysml_enter();")
+	for _, p := range fn.Params {
+		if p.Range != RangeAny {
+			e.linef("%s = %s;", cLocal(p.Name), cNarrowed(cLocal(p.Name), p.Range))
+		}
+	}
 	e.result = cType(fn.Result)
+	e.resultRange = fn.ResultRange
 	e.block(fn.Body)
 	e.linef("sysml_fail(\"calc %s completed without returning a value\");", fn.Name)
 	e.indent--
@@ -297,7 +357,7 @@ func (e *cEmitter) stmt(s Stmt) {
 			e.linef("%s %s = %s;", cType(s.T), cLocal(s.Name), e.expr(s.Init))
 		}
 	case Assign:
-		e.linef("%s = %s;", cLocal(s.Name), e.expr(s.Value))
+		e.linef("%s = %s;", cLocal(s.Name), cNarrowed(e.expr(s.Value), s.Range))
 	case If:
 		e.linef("if (%s) {", e.expr(s.Cond))
 		e.indent++
@@ -320,7 +380,7 @@ func (e *cEmitter) stmt(s Stmt) {
 		e.indent--
 		e.linef("}")
 	case Return:
-		e.linef("{ %s sysml_r = %s; sysml_leave(); return sysml_r; }", e.result, e.expr(s.Value))
+		e.linef("{ %s sysml_r = %s; sysml_leave(); return sysml_r; }", e.result, cNarrowed(e.expr(s.Value), e.resultRange))
 	default:
 		e.err = fmt.Errorf("codegen: C emitter has no case for %T", s)
 	}
@@ -358,11 +418,9 @@ func (e *cEmitter) expr(x Expr) string {
 	case Cond:
 		return fmt.Sprintf("(%s ? %s : %s)", e.expr(x.C), e.expr(x.Then), e.expr(x.Else))
 	case Call:
-		args := make([]string, len(x.Args))
-		for i, a := range x.Args {
-			args[i] = e.expr(a)
-		}
-		return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(args, ", "))
+		return e.sequenced(x.Args, func(args []string) string {
+			return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(args, ", "))
+		})
 	}
 	e.err = fmt.Errorf("codegen: C emitter has no case for %T", x)
 	return "0"
@@ -395,7 +453,19 @@ func (e *cEmitter) unary(x Unary) string {
 }
 
 func (e *cEmitter) binary(x Binary) string {
-	l, r := e.expr(x.L), e.expr(x.R)
+	switch x.Op {
+	case ast.OpAnd, ast.OpConditionalAnd:
+		return fmt.Sprintf("(%s && %s)", e.expr(x.L), e.expr(x.R))
+	case ast.OpOr, ast.OpConditionalOr:
+		return fmt.Sprintf("(%s || %s)", e.expr(x.L), e.expr(x.R))
+	case ast.OpImplies:
+		return fmt.Sprintf("(!%s || %s)", e.expr(x.L), e.expr(x.R))
+	}
+	return e.sequenced([]Expr{x.L, x.R}, func(v []string) string { return e.strict(x, v[0], v[1]) })
+}
+
+// strict is a binary operator whose operands l and r are already evaluated.
+func (e *cEmitter) strict(x Binary, l, r string) string {
 	operands := x.L.Type()
 	switch x.Op {
 	case ast.OpAdd, ast.OpSub, ast.OpMul:
@@ -417,14 +487,8 @@ func (e *cEmitter) binary(x Binary) string {
 		return e.pow(x, l, r)
 	case ast.OpLt, ast.OpLe, ast.OpGt, ast.OpGe, ast.OpEq, ast.OpNeq:
 		return fmt.Sprintf("(%s %s %s)", l, cOperator(x.Op), r)
-	case ast.OpAnd, ast.OpConditionalAnd:
-		return fmt.Sprintf("(%s && %s)", l, r)
-	case ast.OpOr, ast.OpConditionalOr:
-		return fmt.Sprintf("(%s || %s)", l, r)
 	case ast.OpXor:
 		return fmt.Sprintf("(%s != %s)", l, r)
-	case ast.OpImplies:
-		return fmt.Sprintf("(!%s || %s)", l, r)
 	}
 	e.err = fmt.Errorf("codegen: C emitter has no binary case for %s", x.Op)
 	return "0"

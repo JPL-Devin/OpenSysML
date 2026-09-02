@@ -26,6 +26,28 @@ func (t Type) String() string {
 	return "invalid"
 }
 
+// Range narrows an Integer to the values its declared library subtype admits.
+// The interpreter judges Positive as Natural, so both admit every non-negative
+// Integer and differ only in the type the refusal names.
+type Range int
+
+const (
+	RangeAny Range = iota
+	RangeNatural
+	RangePositive
+)
+
+// String is the library type name the range comes from; empty for RangeAny.
+func (r Range) String() string {
+	switch r {
+	case RangeNatural:
+		return "Natural"
+	case RangePositive:
+		return "Positive"
+	}
+	return ""
+}
+
 // Program is a set of compiled functions with one entry point.
 type Program struct {
 	Funcs []*Func
@@ -38,13 +60,16 @@ type Func struct {
 	Ident  string // identifier valid in every target language
 	Params []Param
 	Result Type
-	Body   []Stmt
+	// ResultRange is checked on every return.
+	ResultRange Range
+	Body        []Stmt
 }
 
-// Param is one input parameter.
+// Param is one input parameter; Range is checked on entry.
 type Param struct {
-	Name string
-	Type Type
+	Name  string
+	Type  Type
+	Range Range
 }
 
 // Expr is a typed expression.
@@ -107,15 +132,18 @@ func (ToReal) Type() Type   { return TypeReal }
 type Stmt interface{ stmt() }
 
 // Declare introduces a body-local variable; Init is nil for a bare declaration.
+// The interpreter does not judge an initializer against the variable's range,
+// so neither does generated code; later assignments are checked.
 type Declare struct {
 	Name string
 	T    Type
 	Init Expr
 }
 
-// Assign writes a body-local variable or parameter.
+// Assign writes a body-local variable or parameter, checking its Range.
 type Assign struct {
 	Name  string
+	Range Range
 	Value Expr
 }
 
