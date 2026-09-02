@@ -306,9 +306,13 @@ func sysmlRun(fn func()) (err error) {
 // EmitGo writes program as a self-contained Go main package whose command line
 // and output match the C program's.
 func EmitGo(w io.Writer, p *Program) error {
-	e := &goEmitter{w: w}
+	e := &goEmitter{w: w, collections: p.Collections}
 	e.raw(goPrelude)
 	e.raw(fmt.Sprintf("const sysmlMaxCalcDepth = %d\n\n", runtime.DefaultMaxCalcDepth))
+	if p.Collections {
+		e.raw(fmt.Sprintf("const sysmlDefaultMaxElements = %d\n", runtime.DefaultMaxElements))
+		e.raw(goSeqPrelude)
+	}
 	for _, fn := range p.Funcs {
 		e.function(fn)
 	}
@@ -322,6 +326,9 @@ type goEmitter struct {
 	indent int
 	// resultRange is checked on each return of the function being emitted.
 	resultRange Range
+	// collections brackets every statement with the element budget's release.
+	collections bool
+	temps       int
 }
 
 func (e *goEmitter) raw(s string) {
@@ -343,6 +350,8 @@ func goType(t Type) string {
 		return "float64"
 	case TypeBool:
 		return "bool"
+	case TypeSeqInt, TypeSeqReal, TypeSeqBool:
+		return goSeqType(t)
 	}
 	return "struct{}"
 }
@@ -372,7 +381,13 @@ func (e *goEmitter) function(fn *Func) {
 	e.linef("sysmlEnter()")
 	e.linef("defer sysmlLeave()")
 	for _, p := range fn.Params {
-		if p.Range != RangeAny {
+		switch {
+		case p.Type.Many():
+			if p.Mult != MultAny || p.Range != RangeAny {
+				v := e.checked(Checked{X: Var{Name: p.Name, T: p.Type}, M: p.Mult, R: p.Range, Where: paramWhere(p.Name)})
+				e.linef("%s = %s", goLocal(p.Name), v)
+			}
+		case p.Range != RangeAny:
 			e.linef("%s = %s", goLocal(p.Name), goNarrowed(goLocal(p.Name), p.Range))
 		}
 	}
@@ -384,16 +399,36 @@ func (e *goEmitter) function(fn *Func) {
 	e.linef("}")
 }
 
+// block emits statements; with collections, the elements a statement
+// materializes are released when it ends, as the interpreter's step does.
 func (e *goEmitter) block(stmts []Stmt) {
+	releases := false
+	for _, s := range stmts {
+		if _, ok := s.(Return); !ok {
+			releases = true
+		}
+	}
+	if !e.collections || !releases {
+		for _, s := range stmts {
+			e.stmt(s)
+		}
+		return
+	}
+	e.temps++
+	held := fmt.Sprintf("sysmlH%d", e.temps)
+	e.linef("%s := sysmlElements", held)
 	for _, s := range stmts {
 		e.stmt(s)
+		if _, ok := s.(Return); !ok {
+			e.linef("sysmlElements = %s", held)
+		}
 	}
 }
 
 func (e *goEmitter) stmt(s Stmt) {
 	switch s := s.(type) {
 	case Declare:
-		e.linef("var %s %s = %s", goLocal(s.Name), goType(s.T), e.expr(s.Init))
+		e.linef("var %s %s = %s", goLocal(s.Name), goType(s.T), e.declInit(s))
 		e.linef("_ = %s", goLocal(s.Name))
 	case Assign:
 		e.linef("%s = %s", goLocal(s.Name), goNarrowed(e.expr(s.Value), s.Range))
@@ -420,6 +455,8 @@ func (e *goEmitter) stmt(s Stmt) {
 		}
 		e.indent--
 		e.linef("}")
+	case ForEach:
+		e.forEach(s)
 	case Return:
 		e.linef("return %s", goNarrowed(e.expr(s.Value), e.resultRange))
 	default:
@@ -441,6 +478,9 @@ func (e *goEmitter) expr(x Expr) string {
 	case Var:
 		return goLocal(x.Name)
 	case ToReal:
+		if x.X.Type().Many() {
+			return "sysmlWiden(" + e.expr(x.X) + ")"
+		}
 		return "float64(" + e.expr(x.X) + ")"
 	case Unary:
 		operand := e.expr(x.X)
@@ -465,6 +505,9 @@ func (e *goEmitter) expr(x Expr) string {
 		})
 	case LibCall:
 		return e.call(x.Args, len(x.Op.Operands()), goType(x.Op.Result()), x.Op.goExpr)
+	}
+	if s, ok := e.seqExpr(x); ok {
+		return s
 	}
 	e.err = fmt.Errorf("codegen: Go emitter has no case for %T", x)
 	return "0"
@@ -544,20 +587,36 @@ func (e *goEmitter) main(fn *Func) {
 	e.linef("\tfmt.Fprintf(os.Stderr, \"usage: %%s [--repeat N]%s\\n\", os.Args[0])", cUsage(fn))
 	e.linef("\tos.Exit(2)")
 	e.linef("}")
+	if e.collections {
+		e.linef("sysmlReadMaxElements()")
+	}
 	args := make([]string, len(fn.Params))
 	for i, p := range fn.Params {
-		parser := map[Type]string{TypeInt: "sysmlParseInt", TypeReal: "sysmlParseReal", TypeBool: "sysmlParseBool"}[p.Type]
-		e.linef("%s := %s(args[%d], %q)", goLocal(p.Name), parser, i, p.Name)
+		parser := map[Type]string{TypeInt: "sysmlParseInt", TypeReal: "sysmlParseReal", TypeBool: "sysmlParseBool"}[p.Type.Elem()]
+		if p.Type.Many() {
+			parser = fmt.Sprintf("sysmlParseSeq[%s](args[%d], %q, %s)", goElem(p.Type), i, p.Name, parser)
+		} else {
+			parser = fmt.Sprintf("%s(args[%d], %q)", parser, i, p.Name)
+		}
+		e.linef("%s := %s", goLocal(p.Name), parser)
 		args[i] = goLocal(p.Name)
 	}
 	e.linef("var result %s", goType(fn.Result))
+	reset := ""
+	if e.collections {
+		reset = "sysmlElements = 0; "
+	}
 	e.linef("for i := 0; i < repeat; i++ {")
-	e.linef("\tif err := sysmlRun(func() { result = %s(%s) }); err != nil {", fn.Ident, strings.Join(args, ", "))
+	e.linef("\tif err := sysmlRun(func() { %sresult = %s(%s) }); err != nil {", reset, fn.Ident, strings.Join(args, ", "))
 	e.linef("\t\tfmt.Fprintf(os.Stderr, \"%s: %%s\\n\", err)", fn.Name)
 	e.linef("\t\tos.Exit(1)")
 	e.linef("\t}")
 	e.linef("}")
-	e.linef("fmt.Println(sysmlFormat(result))")
+	if fn.Result.Many() {
+		e.linef("fmt.Println(sysmlFormatSeq(result))")
+	} else {
+		e.linef("fmt.Println(sysmlFormat(result))")
+	}
 	e.indent--
 	e.linef("}")
 }

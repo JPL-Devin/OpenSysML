@@ -15,6 +15,7 @@ import (
 // finite-only binary64, and the interpreter's once-rounded Integer quotient.
 const cPrelude = `#include <errno.h>
 #include <inttypes.h>
+#include <stdarg.h>
 #include <math.h>
 #include <setjmp.h>
 #include <stdbool.h>
@@ -231,13 +232,12 @@ static void sysml_shortest(sysml_real r, char *buf, size_t size) {
 /* Prints r as the interpreter does: shortest round-trip digits, positional
  * for 1e-4 <= |r| < 1e21 and for 0, exponent form otherwise, always with a
  * fraction or exponent so a whole Real still reads as a Real. */
-static void sysml_print_real(sysml_real r) {
+static void sysml_print_real_value(sysml_real r) {
 	char buf[40];
 	sysml_shortest(r, buf, sizeof buf);
 	sysml_real a = fabs(r);
 	if (r != 0 && (a < 1e-4 || a >= 1e21)) {
 		fputs(buf, stdout);
-		fputc('\n', stdout);
 		return;
 	}
 	/* buf is [-]d[.ddd]e[+-]xx: reassemble the digits around the point. */
@@ -261,6 +261,10 @@ static void sysml_print_real(sysml_real r) {
 			fputs(".0", stdout);
 		}
 	}
+}
+
+static void sysml_print_real(sysml_real r) {
+	sysml_print_real_value(r);
 	fputc('\n', stdout);
 }
 
@@ -297,8 +301,13 @@ static sysml_bool sysml_parse_bool(const char *s, const char *name) {
 // reads argv and prints the result when withMain is set (errors: status 1, stderr).
 func EmitC(w io.Writer, p *Program, withMain bool) error {
 	e := &cEmitter{w: w}
+	e.collections = p.Collections
 	e.raw(fmt.Sprintf("#define SYSML_MAX_CALC_DEPTH %d\n", runtime.DefaultMaxCalcDepth))
 	e.raw(cPrelude)
+	if p.Collections {
+		e.raw(fmt.Sprintf("#define SYSML_DEFAULT_MAX_ELEMENTS %d\n", runtime.DefaultMaxElements))
+		e.raw(cSeqRuntime())
+	}
 	for _, fn := range p.Funcs {
 		e.linef("static %s %s(%s);", cType(fn.Result), fn.Ident, cParams(fn))
 	}
@@ -318,12 +327,14 @@ type cEmitter struct {
 	// resultRange is checked on each return of the function being emitted.
 	resultRange Range
 	temps       int
+	// collections brackets every statement with the element budget's release.
+	collections bool
 }
 
 // pure is an operand whose evaluation cannot fail, so its order is immaterial.
 func pure(x Expr) bool {
 	switch x := x.(type) {
-	case IntLit, RealLit, BoolLit, Var:
+	case IntLit, RealLit, BoolLit, Var, NullLit:
 		return true
 	case ToReal:
 		return pure(x.X)
@@ -378,6 +389,8 @@ func cType(t Type) string {
 		return "sysml_real"
 	case TypeBool:
 		return "sysml_bool"
+	case TypeSeqInt, TypeSeqReal, TypeSeqBool:
+		return "sysml_seq_" + cSeqSuffix(t)
 	}
 	return "void"
 }
@@ -407,7 +420,13 @@ func (e *cEmitter) function(fn *Func) {
 	e.indent++
 	e.linef("sysml_enter();")
 	for _, p := range fn.Params {
-		if p.Range != RangeAny {
+		switch {
+		case p.Type.Many():
+			if p.Mult != MultAny || p.Range != RangeAny {
+				v := e.checked(Checked{X: Var{Name: p.Name, T: p.Type}, M: p.Mult, R: p.Range, Where: paramWhere(p.Name)})
+				e.linef("%s = %s;", cLocal(p.Name), v)
+			}
+		case p.Range != RangeAny:
 			e.linef("%s = %s;", cLocal(p.Name), cNarrowed(cLocal(p.Name), p.Range))
 		}
 	}
@@ -420,16 +439,36 @@ func (e *cEmitter) function(fn *Func) {
 	e.raw("\n")
 }
 
+// block emits statements; with collections, the elements a statement
+// materializes are released when it ends, as the interpreter's step does.
 func (e *cEmitter) block(stmts []Stmt) {
+	releases := false
+	for _, s := range stmts {
+		if _, ok := s.(Return); !ok {
+			releases = true
+		}
+	}
+	if !e.collections || !releases {
+		for _, s := range stmts {
+			e.stmt(s)
+		}
+		return
+	}
+	e.temps++
+	held := fmt.Sprintf("sysml_h%d", e.temps)
+	e.linef("sysml_int %s = sysml_elements;", held)
 	for _, s := range stmts {
 		e.stmt(s)
+		if _, ok := s.(Return); !ok {
+			e.linef("sysml_elements = %s;", held)
+		}
 	}
 }
 
 func (e *cEmitter) stmt(s Stmt) {
 	switch s := s.(type) {
 	case Declare:
-		e.linef("%s %s = %s;", cType(s.T), cLocal(s.Name), e.expr(s.Init))
+		e.linef("%s %s = %s;", cType(s.T), cLocal(s.Name), e.declInit(s))
 	case Assign:
 		e.linef("%s = %s;", cLocal(s.Name), cNarrowed(e.expr(s.Value), s.Range))
 	case If:
@@ -453,6 +492,8 @@ func (e *cEmitter) stmt(s Stmt) {
 		}
 		e.indent--
 		e.linef("}")
+	case ForEach:
+		e.forEach(s)
 	case Return:
 		e.linef("{ %s sysml_r = %s; sysml_leave(); return sysml_r; }", e.result, cNarrowed(e.expr(s.Value), e.resultRange))
 	default:
@@ -460,9 +501,20 @@ func (e *cEmitter) stmt(s Stmt) {
 	}
 }
 
+// declInit is a declaration's initial value, null where it states none.
+func (e *cEmitter) declInit(d Declare) string {
+	if d.Init == nil {
+		return fmt.Sprintf("sysml_null_%s()", cSeqSuffix(d.T))
+	}
+	return e.expr(d.Init)
+}
+
 func cZero(t Type) string {
-	if t == TypeBool {
+	switch {
+	case t == TypeBool:
 		return "false"
+	case t.Many():
+		return fmt.Sprintf("sysml_null_%s()", cSeqSuffix(t))
 	}
 	return "0"
 }
@@ -484,6 +536,9 @@ func (e *cEmitter) expr(x Expr) string {
 	case Var:
 		return cLocal(x.Name)
 	case ToReal:
+		if x.X.Type().Many() {
+			return "sysml_widen(" + e.expr(x.X) + ")"
+		}
 		return "(sysml_real)" + e.expr(x.X)
 	case Unary:
 		return e.unary(x)
@@ -499,6 +554,9 @@ func (e *cEmitter) expr(x Expr) string {
 		return e.sequenced(argValues(x.Args), func(names []string) string {
 			return x.Op.cExpr(callOperands(x.Args, len(x.Op.Operands()), names))
 		})
+	}
+	if s, ok := e.seqExpr(x); ok {
+		return s
 	}
 	e.err = fmt.Errorf("codegen: C emitter has no case for %T", x)
 	return "0"
@@ -651,6 +709,9 @@ func (e *cEmitter) entry(fn *Func, withMain bool) {
 	e.linef("int sysml_run(%s%s *result) {", params, cType(fn.Result))
 	e.indent++
 	e.linef("sysml_depth = 0;")
+	if e.collections {
+		e.linef("sysml_run_begin();")
+	}
 	e.linef("if (setjmp(sysml_escape)) return 1;")
 	args := make([]string, len(fn.Params))
 	for i, p := range fn.Params {
@@ -679,6 +740,9 @@ func (e *cEmitter) entry(fn *Func, withMain bool) {
 	e.linef("return 2;")
 	e.indent--
 	e.linef("}")
+	if e.collections {
+		e.linef("sysml_read_max_elements();")
+	}
 	for i, p := range fn.Params {
 		e.linef("%s %s = sysml_parse_%s(argv[%d], \"%s\");", cType(p.Type), cLocal(p.Name), cType(p.Type)[len("sysml_"):], i+1, p.Name)
 	}
@@ -700,6 +764,8 @@ func (e *cEmitter) entry(fn *Func, withMain bool) {
 		e.linef("sysml_print_real(result);")
 	case TypeBool:
 		e.linef("puts(result ? \"true\" : \"false\");")
+	default:
+		e.linef("sysml_print_seq_%s(result);", cSeqSuffix(fn.Result))
 	}
 	e.linef("return 0;")
 	e.indent--

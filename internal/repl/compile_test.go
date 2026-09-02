@@ -76,6 +76,57 @@ var compiledCases = []compiledCase{
 	{"Lib::Log", []string{"9.0", "1.0"}}, {"Lib::Log", []string{"9.0", "0.0"}}, {"Lib::Log", []string{"-9.0", "3.0"}},
 	{"Lib::Atan2", []string{"1.0", "1.0"}}, {"Lib::Atan2", []string{"0.0", "0.0"}}, {"Lib::Atan2", []string{"0.0", "-1.0"}},
 	{"Lib::NamedLib", []string{"1.0", "-1.0"}},
+	{"Seq::Sequence", []string{"5"}}, {"Seq::Sequence", []string{"0"}}, {"Seq::Library", []string{"2.5"}},
+	{"Seq::Unbound", []string{"1"}},
+	{"Seq::AddS", []string{"(1,2)"}}, {"Seq::AddS", []string{"null"}}, {"Seq::AddS", []string{"4"}}, {"Seq::AddS", []string{"(3)"}},
+	{"Seq::AddS2", []string{"(1,2)"}}, {"Seq::AddS2", []string{"null"}}, {"Seq::AddS2", []string{"(3)"}},
+	{"Seq::AddR", []string{"(1.5)"}}, {"Seq::AddR", []string{"null"}},
+	{"Seq::LtS", []string{"(1)"}}, {"Seq::LtS", []string{"(1,2)"}}, {"Seq::LtS", []string{"null"}}, {"Seq::LtS", []string{"0"}},
+	{"Seq::AndS", []string{"(true)"}}, {"Seq::AndS", []string{"null"}}, {"Seq::AndS", []string{"(true,false)"}},
+	{"Seq::AndS2", []string{"(true)"}}, {"Seq::AndS2", []string{"null"}},
+	{"Seq::NotS", []string{"(true)"}}, {"Seq::NotS", []string{"null"}}, {"Seq::NotS", []string{"(true,true)"}},
+	{"Seq::IfS", []string{"(true)"}}, {"Seq::IfS", []string{"null"}}, {"Seq::IfS", []string{"false"}},
+	{"Seq::NegS", []string{"(3)"}}, {"Seq::NegS", []string{"null"}}, {"Seq::NegS", []string{"(1,2)"}},
+	{"Seq::EqS", []string{"(1)"}}, {"Seq::EqS", []string{"null"}}, {"Seq::EqS", []string{"(1,2)"}}, {"Seq::EqS", []string{"2"}},
+	{"Seq::EqS2", []string{"(1)"}}, {"Seq::EqS2", []string{"null"}}, {"Seq::EqS2", []string{"(1,2)"}},
+	{"Seq::IdS", []string{"(1)"}}, {"Seq::IdS", []string{"null"}}, {"Seq::IdS", []string{"(1,2)"}},
+	{"Seq::IdN", []string{"null"}}, {"Seq::IdN", []string{"1"}}, {"Seq::IdN", []string{"()"}},
+	{"Seq::IdE", []string{"(1,2)", "(1,2)"}}, {"Seq::IdE", []string{"null", "null"}}, {"Seq::IdE", []string{"null", "1"}}, {"Seq::IdE", []string{"1", "(1)"}},
+	{"Seq::IxS", []string{"(1,2)", "2"}}, {"Seq::IxS", []string{"(1,2)", "0"}}, {"Seq::IxS", []string{"(1,2)", "3"}}, {"Seq::IxS", []string{"null", "1"}}, {"Seq::IxS", []string{"4", "1"}},
+	{"Seq::PowS", []string{"(3)"}}, {"Seq::PowS", []string{"(1,2)"}},
+	{"Seq::WhS", []string{"false"}}, {"Seq::WhS", []string{"(false)"}}, {"Seq::WhS", []string{"null"}},
+	{"Seq::RetS", []string{"(1,2)"}}, {"Seq::RetS", []string{"null"}}, {"Seq::RetS", []string{"(4)"}},
+	{"Seq::LocS", []string{"(1,2)"}}, {"Seq::LocS", []string{"4"}},
+	{"Seq::LocU", []string{"4"}}, {"Seq::LocU2", []string{"4"}},
+	{"Seq::MinE", []string{"(3,1,2)"}}, {"Seq::MinE", []string{"null"}}, {"Seq::MinE", []string{"7"}},
+	{"Seq::MinR", []string{"(3,1)"}},
+	{"Seq::RedN", []string{"(1,2,3)"}}, {"Seq::RedN", []string{"null"}}, {"Seq::RedN", []string{"(7)"}},
+	{"Seq::FA", []string{"(2,4)"}}, {"Seq::FA", []string{"null"}}, {"Seq::FA", []string{"(-1,0)"}},
+	{"Seq::Col2", []string{"(1,2,3)"}}, {"Seq::Col2", []string{"null"}}, {"Seq::Col2", []string{"()"}},
+	{"Seq::Sz", []string{"(1,2)"}}, {"Seq::Sz", []string{"null"}}, {"Seq::Sz", []string{"5"}},
+	{"Seq::Hd", []string{"(1,2)"}}, {"Seq::Hd", []string{"null"}}, {"Seq::Hd", []string{"()"}},
+	{"Seq::Hd2", []string{"(1,2)"}}, {"Seq::Hd2", []string{"null"}}, {"Seq::Hd2", []string{"()"}},
+	{"Seq::CmpS", []string{"5", "(5)"}}, {"Seq::CmpS", []string{"5", "(5,5)"}}, {"Seq::CmpS", []string{"null", "null"}},
+	{"Seq::CmpS", []string{"(1,2)", "(1,2)"}}, {"Seq::CmpS", []string{"(1,2)", "(1,3)"}}, {"Seq::CmpS", []string{"null", "()"}}, {"Seq::CmpS", []string{"()", "()"}},
+	{"Seq::Nst", []string{"(1,2,3)"}}, {"Seq::Nst", []string{"null"}},
+	{"Seq::Rng2", []string{"5"}}, {"Seq::Rng2", []string{"-2"}},
+	{"Seq::M2", []string{"(1,2)"}}, {"Seq::M2", []string{"(1)"}}, {"Seq::M2", []string{"null"}}, {"Seq::M2", []string{"(1,2,3,4)"}},
+	{"Seq::Ret2", []string{"(1,2)"}}, {"Seq::Ret2", []string{"(1)"}}, {"Seq::Ret2", []string{"null"}},
+	{"Seq::Ass", []string{"(1,2)"}}, {"Seq::Ass", []string{"(1,2,3)"}}, {"Seq::Ass", []string{"null"}},
+	{"Seq::Ret1", []string{"(1)"}}, {"Seq::Ret1", []string{"(1,2)"}}, {"Seq::Ret1", []string{"null"}},
+	{"Seq::RetN", []string{"(1,2)"}}, {"Seq::RetN", []string{"(-1,2)"}}, {"Seq::RetN", []string{"null"}},
+	{"Seq::Coal", []string{"(1,2)"}}, {"Seq::Coal", []string{"null"}}, {"Seq::Coal", []string{"(3)"}},
+	{"Seq::Tern", []string{"true", "(1,2)"}}, {"Seq::Tern", []string{"false", "(1,2)"}}, {"Seq::Tern", []string{"true", "null"}},
+	{"Seq::Big", []string{"1000"}}, {"Seq::Big", []string{"1000000"}}, // the second exceeds the element budget
+	{"Seq::Big2", []string{"1000000"}},
+	{"Seq::Cnt", []string{"(1,2,3)"}}, {"Seq::Cnt", []string{"null"}}, {"Seq::Cnt", []string{"(1,3)"}},
+	{"Seq::IncAt", []string{"(1,2)", "1"}}, {"Seq::IncAt", []string{"(1,2)", "3"}}, {"Seq::IncAt", []string{"(1,2)", "4"}}, {"Seq::IncAt", []string{"null", "1"}}, {"Seq::IncAt", []string{"null", "2"}},
+	{"Seq::Sub3", []string{"(1,2,3)", "1", "2"}}, {"Seq::Sub3", []string{"(1,2,3)", "2", "1"}}, {"Seq::Sub3", []string{"(1,2,3)", "0", "2"}}, {"Seq::Sub3", []string{"(1,2,3)", "1", "4"}}, {"Seq::Sub3", []string{"null", "1", "1"}},
+	{"Seq::ExAt", []string{"(1,2,3)", "1", "2"}}, {"Seq::ExAt", []string{"(1,2,3)", "0", "2"}}, {"Seq::ExAt", []string{"null", "1", "1"}}, {"Seq::ExAt", []string{"4", "1", "1"}},
+	{"Seq::ForR", []string{"(1,2,3)"}}, {"Seq::ForR", []string{"null"}}, {"Seq::ForR", []string{"4"}},
+	{"Seq::ForB", []string{"4"}}, {"Seq::ForB", []string{"0"}},
+	{"Seq::RS", []string{"(1,2,3)"}}, {"Seq::RS", []string{"null"}}, {"Seq::RS", []string{"4"}},
+	{"Seq::MaxS", []string{"(1.5,2.5)"}}, {"Seq::MaxS", []string{"null"}},
 }
 
 // transcendental calcs call libm functions whose last bit is the library's, so the
@@ -98,14 +149,28 @@ func withinUlps(a, b string, n uint64) bool {
 	return bx-by <= n
 }
 
-// failureClass is the part of a failure both surfaces spell the same way.
-func failureClass(msg string) string {
+// failureClass is the part of a failure both surfaces spell the same way: the
+// class of a scalar fault, else the whole message once the interpreter's
+// context labels and the program's calc name are stripped.
+func failureClass(calc, msg string) string {
 	for _, class := range []string{"arithmetic overflow", "arithmetic domain", "division by zero", "calc recursion limit exceeded", "typed by Natural", "typed by Positive", "requires Natural"} {
 		if strings.Contains(msg, class) {
 			return class
 		}
 	}
-	return "unclassified: " + msg
+	msg = strings.TrimSpace(msg)
+	if _, rest, ok := strings.Cut(msg, "Compiled::"+calc+": "); ok {
+		msg = rest
+	}
+	for again := true; again; {
+		again = false
+		for _, label := range []string{"evaluating the returned expression: ", "calculation body: ", "result: "} {
+			if rest, ok := strings.CutPrefix(msg, label); ok {
+				msg, again = rest, true
+			}
+		}
+	}
+	return msg
 }
 
 // interpreted answers a case with the interpreter: the value, or the failure.
@@ -120,7 +185,7 @@ func interpreted(t *testing.T, s *Session, c compiledCase) (value, failure strin
 		}
 		t.Fatalf("%s%v: no value in %q", c.calc, c.args, v.Lines)
 	}
-	return "", failureClass(strings.Join(v.Lines, "\n"))
+	return "", failureClass(c.calc, strings.Join(v.Lines, "\n"))
 }
 
 // compiledRun answers a case with the executable: the value, or the failure.
@@ -135,7 +200,7 @@ func compiledRun(t *testing.T, exe string, c compiledCase) (value, failure strin
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
 		t.Fatalf("%s %v: %v\n%s", exe, c.args, err, text)
 	}
-	return "", failureClass(text)
+	return "", failureClass(c.calc, text)
 }
 
 // loadCompileFixture loads the fixture into a session whose step budget is
@@ -213,15 +278,21 @@ func TestCompileRefusesWhatItCannotCompile(t *testing.T) {
 	s := loadCompileFixture(t)
 	for _, tc := range []struct{ calc, reason string }{
 		{"StringResult", "String"},
-		{"Sequence", "SequenceFunctions::size is not compiled"},
 		{"Defaulted", "default value"},
 		{"OutOnly", "`out`"},
-		{"Library", "RealFunctions::sum is not compiled"},
 		{"RealToNatural", "requires Integer arguments"},
 		{"Refined", "members of its own"},
 		{"DynamicIntPow", "non-literal Integer exponent"},
-		{"Narrowed", "Real assigned to x"},
-		{"Unbound", "attribute x has no value"},
+		{"Narrowed", "a Real bound at x, which holds Integer"},
+		{"RecordParam", "type Refused::Point is not Integer, Real or Boolean"},
+		{"EnumParam", "type Refused::Color is not Integer, Real or Boolean"},
+		{"RealIntIdentity", "'===' between Real and Integer"},
+		{"SelectNonBoolean", "select whose body yields Integer, not a Boolean"},
+		{"CollectNull", "collect whose body yields null"},
+		{"CoalesceWidened", "a Real at the right operand of '??', which holds Integer[0..*]"},
+		{"MixedEquality", "a Integer[0..*] at the left operand of '==', which holds Real[0..*]"},
+		{"MixedSame", "same over Integer and Real collections"},
+		{"MixedUnion", "union over Integer and Real collections"},
 	} {
 		_, err := s.CompileCalc("Refused::" + tc.calc)
 		if err == nil {

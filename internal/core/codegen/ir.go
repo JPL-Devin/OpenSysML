@@ -1,10 +1,12 @@
-// Package codegen compiles the scalar subset of SysML v2 calcs to native code;
+// Package codegen compiles the value subset of SysML v2 calcs to native code;
 // see docs/project/native-compilation.md for the subset and its semantics.
 package codegen
 
 import "github.com/Open-MBEE/OpenSysML/internal/core/ast"
 
-// Type is a scalar type of the compiled subset.
+// Type is a type of the compiled subset: a scalar, or a collection of scalars.
+// A collection value is the interpreter's dynamic view of a multi-valued
+// feature: null, one bare scalar, or a sequence of any length (its shape).
 type Type int
 
 const (
@@ -12,6 +14,10 @@ const (
 	TypeInt          // Integer and its subtypes, int64 with reported overflow
 	TypeReal         // Real and Rational, IEEE 754 binary64
 	TypeBool
+	TypeNull    // `null` before context fixes its collection type
+	TypeSeqInt  // collection of Integers
+	TypeSeqReal // collection of Reals
+	TypeSeqBool // collection of Booleans
 )
 
 func (t Type) String() string {
@@ -22,8 +28,51 @@ func (t Type) String() string {
 		return "Real"
 	case TypeBool:
 		return "Boolean"
+	case TypeNull:
+		return "null"
+	case TypeSeqInt, TypeSeqReal, TypeSeqBool:
+		return t.Elem().String() + "[0..*]"
 	}
 	return "invalid"
+}
+
+// Scalar reports whether t is exactly one Integer, Real or Boolean.
+func (t Type) Scalar() bool { return t >= TypeInt && t <= TypeBool }
+
+// Many reports whether t is a collection type.
+func (t Type) Many() bool { return t >= TypeSeqInt }
+
+// Elem is the scalar type of t's values: t itself for a scalar.
+func (t Type) Elem() Type {
+	if t.Many() {
+		return t - TypeSeqInt + TypeInt
+	}
+	return t
+}
+
+// Seq is the collection type over t's scalar type.
+func (t Type) Seq() Type {
+	if !t.Scalar() {
+		return t
+	}
+	return t - TypeInt + TypeSeqInt
+}
+
+// Mult is a declared multiplicity, checked on the count of values a collection
+// feature is bound to. Upper is negative for an unbounded feature.
+type Mult struct {
+	Lower, Upper int64
+}
+
+// MultAny admits every count; MultOne is `[1]`.
+var (
+	MultAny = Mult{Lower: 0, Upper: -1}
+	MultOne = Mult{Lower: 1, Upper: 1}
+)
+
+// Admits reports whether a value count n satisfies m.
+func (m Mult) Admits(n int64) bool {
+	return n >= m.Lower && (m.Upper < 0 || n <= m.Upper)
 }
 
 // Range narrows an Integer to the values its declared library subtype admits.
@@ -48,10 +97,13 @@ func (r Range) String() string {
 	return ""
 }
 
-// Program is a set of compiled functions with one entry point.
+// Program is a set of compiled functions with one entry point. Collections
+// is set when any function handles a collection, which the emitters' element
+// budget and per-statement release then track.
 type Program struct {
-	Funcs []*Func
-	Entry *Func
+	Funcs       []*Func
+	Entry       *Func
+	Collections bool
 }
 
 // Func is one compiled calculation.
@@ -60,16 +112,19 @@ type Func struct {
 	Ident  string // identifier valid in every target language
 	Params []Param
 	Result Type
-	// ResultRange is checked on every return.
+	// ResultRange is checked on every return; a collection result's
+	// multiplicity is checked by the Checked the return wraps.
 	ResultRange Range
 	Body        []Stmt
 }
 
-// Param is one input parameter; Range is checked on entry.
+// Param is one input parameter; Range and, for a collection, Mult are
+// checked on entry.
 type Param struct {
 	Name  string
 	Type  Type
 	Range Range
+	Mult  Mult
 }
 
 // Expr is a typed expression.
@@ -130,8 +185,96 @@ type LibCall struct {
 	Args []Arg
 }
 
-// ToReal widens an Integer to a Real.
+// ToReal widens an Integer to a Real; over a collection, every element.
 type ToReal struct{ X Expr }
+
+// NullLit is `null`, the empty value of collection type T (or TypeNull).
+type NullLit struct{ T Type }
+
+// SeqLit is `(a, b, …)`: the elements of each collection operand, in order,
+// as a sequence of type T.
+type SeqLit struct {
+	Elems []Expr
+	T     Type
+}
+
+// ToMany views a scalar as the collection holding it, as the interpreter does.
+type ToMany struct{ X Expr }
+
+// ToOne is the one scalar X holds; Where names a `[1]` binding, else Fail's %s
+// is the shape found ("a sequence", bare "sequence") and Other's a second %s.
+type ToOne struct {
+	X        Expr
+	Where    string
+	Fail     string
+	Bare     bool
+	Other    Expr
+	OtherOne string
+}
+
+// Checked binds a collection to a feature of multiplicity M and range R at
+// Where, failing as the interpreter's binding does.
+type Checked struct {
+	X     Expr
+	M     Mult
+	R     Range
+	Where string
+}
+
+// Let evaluates Value into the temporary Name, then In, which reads it as a Var.
+type Let struct {
+	Name  string
+	Value Expr
+	In    Expr
+}
+
+// Coalesce is `L ?? R`: L unless it is null. Both are of collection type T.
+type Coalesce struct {
+	L, R Expr
+	T    Type
+}
+
+// SeqEq is `==` (Neq negated) over collections of one type: same shape, same
+// elements in order. Ident is `===`, which no coercion precedes.
+type SeqEq struct {
+	L, R  Expr
+	Neq   bool
+	Ident bool
+}
+
+// Index is `Seq#(I)`, one-based over the elements of Seq; I is an Integer.
+type Index struct {
+	Seq, I Expr
+}
+
+// RangeExpr is `Lo..Hi`, the Integers from Lo to Hi, empty when Lo > Hi.
+type RangeExpr struct{ Lo, Hi Expr }
+
+// SeqCall applies a collection operation (seqops.go) to operands in
+// parameter order; T is its result type.
+type SeqCall struct {
+	Op   SeqOp
+	Args []Expr
+	T    Type
+}
+
+// Lambda is a body expression `{in x; …}`: Params are bound to the
+// operation's per-element arguments in order, Locals are declared, then
+// Body is evaluated.
+type Lambda struct {
+	Params []Param
+	Locals []Declare
+	Body   Expr
+}
+
+// Fold applies a body operation (seqops.go) over the elements of Seq; T is
+// its result type.
+type Fold struct {
+	Op   SeqOp
+	Seq  Expr
+	Body Lambda
+	T    Type
+}
 
 func (IntLit) Type() Type    { return TypeInt }
 func (RealLit) Type() Type   { return TypeReal }
@@ -142,21 +285,40 @@ func (u Unary) Type() Type   { return u.T }
 func (c Cond) Type() Type    { return c.T }
 func (c Call) Type() Type    { return c.Fn.Result }
 func (l LibCall) Type() Type { return l.Op.Result() }
-func (ToReal) Type() Type    { return TypeReal }
+func (t ToReal) Type() Type {
+	if t.X.Type().Many() {
+		return TypeSeqReal
+	}
+	return TypeReal
+}
+func (n NullLit) Type() Type  { return n.T }
+func (s SeqLit) Type() Type   { return s.T }
+func (t ToMany) Type() Type   { return t.X.Type().Seq() }
+func (t ToOne) Type() Type    { return t.X.Type().Elem() }
+func (c Checked) Type() Type  { return c.X.Type() }
+func (l Let) Type() Type      { return l.In.Type() }
+func (c Coalesce) Type() Type { return c.T }
+func (SeqEq) Type() Type      { return TypeBool }
+func (i Index) Type() Type    { return i.Seq.Type().Elem() }
+func (RangeExpr) Type() Type  { return TypeSeqInt }
+func (s SeqCall) Type() Type  { return s.T }
+func (f Fold) Type() Type     { return f.T }
 
 // Stmt is a statement of a function body.
 type Stmt interface{ stmt() }
 
-// Declare introduces a body-local variable with its initial value.
-// The interpreter does not judge an initializer against the variable's range,
-// so neither does generated code; later assignments are checked.
+// Declare introduces a body-local variable with its initial value, null (a
+// collection) when Init is nil. The interpreter does not judge an
+// initializer against the variable's range or multiplicity, so neither does
+// generated code; later assignments are checked.
 type Declare struct {
 	Name string
 	T    Type
 	Init Expr
 }
 
-// Assign writes a body-local variable or parameter, checking its Range.
+// Assign writes a body-local variable or parameter; a scalar is checked
+// against Range, a collection by the Checked or ToOne that Value is.
 type Assign struct {
 	Name  string
 	Range Range
@@ -178,6 +340,14 @@ type While struct {
 	Body  []Stmt
 }
 
+// ForEach runs Body once per element of Seq, bound to Var; a bare scalar
+// is not iterable and fails, as the interpreter's `for` does.
+type ForEach struct {
+	Var  string
+	Seq  Expr
+	Body []Stmt
+}
+
 // Return answers the function's result.
 type Return struct{ Value Expr }
 
@@ -185,4 +355,5 @@ func (Declare) stmt() {}
 func (Assign) stmt()  {}
 func (If) stmt()      {}
 func (While) stmt()   {}
+func (ForEach) stmt() {}
 func (Return) stmt()  {}
