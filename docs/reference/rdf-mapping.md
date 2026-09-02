@@ -476,7 +476,9 @@ same sequence of tokens — whitespace and lexical comments aside, a quoted name
 equal to its bare form, `:>` equal to `subsets` — the stored text is written
 verbatim. Otherwise the structural spelling is written: a stored text that
 names other ends, another operator or another operand than the graph does is
-never written, because a graph edited in place is right and its text is stale.
+never written, because a graph edited in place is right and its text is stale;
+nor is one that leaves a comment, note, string or quoted name open, since it
+would swallow whatever is written after it.
 For an expression the check reads the stored text back and maps it with the
 same encoder: the graph and the result must make the same statements about the
 node (`sysx:operator`, the operands, the element a reference resolves to),

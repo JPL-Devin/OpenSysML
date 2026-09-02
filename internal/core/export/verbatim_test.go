@@ -125,6 +125,31 @@ func TestStoredHeadThatDisagreesWithTheGraphIsRebuilt(t *testing.T) {
 	}
 }
 
+// Stored text that leaves a comment, note, string or quoted name open would
+// swallow every declaration written after it; it is spelled from the graph.
+func TestStoredTextThatDoesNotLexCleanIsRebuilt(t *testing.T) {
+	src := `package P {
+    part def A;
+    part a : A;
+    part b : A;
+    connect a to b;
+    part c : A;
+}
+`
+	for _, instead := range []string{
+		`"connect a to b; /* rest"`,
+		`"connect a to b; //* rest"`,
+		`"connect 'a to b;"`,
+		`"connect a to b; \"rest"`,
+	} {
+		turtle := restated(t, graphOf(t, src), `"connect a to b;"`, instead)
+		back := toNotation(t, []byte(turtle))
+		if !strings.Contains(back, "connect a to b;\n    part c : A;") {
+			t.Errorf("stored %s was not rebuilt from the graph\n%s", instead, back)
+		}
+	}
+}
+
 // A stored expression is written as stored while reading it gives the operator
 // and operands the graph states, and from the graph once it does not.
 func TestStoredExpressionThatDisagreesWithTheGraphIsRebuilt(t *testing.T) {

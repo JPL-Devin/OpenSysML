@@ -63,11 +63,30 @@ func spellingOf(text string) []token {
 	}
 }
 
+// lexesClean reports whether text closes every comment, note, string and
+// quoted name it opens; one that does not would swallow what is written after it.
+func lexesClean(text string) bool {
+	lx := lexer.New(source.New("<spelling>", []byte(text)))
+	for {
+		tok := lx.Next()
+		if tok.Kind == lexer.Error || tok.Unterminated {
+			return false
+		}
+		if tok.Kind == lexer.EOF {
+			return true
+		}
+	}
+}
+
 // keepsText reports whether an element kept as source text is written as that
-// text: the graph states no form to rebuild its head from, or the head rebuilt
-// from the form is the same spelling as the text. A form the graph states but
-// cannot rebuild is reported from the graph, not papered over by the text.
+// text: it lexes clean, and the graph states no form to rebuild its head from
+// or the head rebuilt from the form is the same spelling as the text. A form
+// the graph states but cannot rebuild is reported from the graph, not papered
+// over by the text.
 func (d *decoder) keepsText(el *element, text string) bool {
+	if !lexesClean(text) {
+		return false
+	}
 	if !d.graph.HasProperty(rdf.IRI(el.iri), rdf.OpenSysML+xEndForm) {
 		return true
 	}
