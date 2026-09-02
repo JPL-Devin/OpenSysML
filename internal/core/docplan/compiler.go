@@ -213,7 +213,7 @@ func (c *compiler) registerTarget(member *symbols.Symbol, target refTarget) {
 // rejectStructural rejects declarations that cannot appear in a structural
 // scope, letting attributes, annotations, and other non-content members
 // through.
-func (c *compiler) rejectStructural(owner *symbols.Symbol, member *symbols.Symbol) error {
+func (c *compiler) rejectStructural(owner, member *symbols.Symbol) error {
 	if member.Kind == symbols.SymbolCalcUsage || member.Kind == symbols.SymbolPartUsage {
 		return &Error{
 			Kind:     ErrorInvalidContent,
@@ -381,7 +381,7 @@ func (c *compiler) compileColumnRun(member *symbols.Symbol, query *QueryRef) (Co
 	if err := c.rejectNestedContent(member); err != nil {
 		return ColumnRun{}, err
 	}
-	if err := c.rejectRunQuery(member); err != nil {
+	if err := c.rejectQuery(member); err != nil {
 		return ColumnRun{}, err
 	}
 	span := c.model.Conforms(member, c.bases.spanColumn)
@@ -527,7 +527,7 @@ func (c *compiler) compileRun(member *symbols.Symbol) (Run, error) {
 	if err := c.rejectNestedContent(member); err != nil {
 		return Run{}, err
 	}
-	if err := c.rejectRunQuery(member); err != nil {
+	if err := c.rejectQuery(member); err != nil {
 		return Run{}, err
 	}
 	span := c.model.Conforms(member, c.bases.span)
@@ -701,8 +701,9 @@ func (c *compiler) qualifiedRoot(name *ast.QualifiedName) *symbols.Symbol {
 	return nil
 }
 
-// rejectRunQuery rejects a query declared in an inline run.
-func (c *compiler) rejectRunQuery(member *symbols.Symbol) error {
+// rejectQuery rejects a query declared in content that renders no query rows:
+// an inline run, or a diagram, which renders a view.
+func (c *compiler) rejectQuery(member *symbols.Symbol) error {
 	for _, candidate := range c.effectiveMembers(member) {
 		if candidate.Kind == symbols.SymbolCalcUsage {
 			return &Error{
@@ -1265,7 +1266,7 @@ func (c *compiler) compileDiagram(member *symbols.Symbol) (Content, error) {
 		}
 		reference.direction = direction
 	}
-	if err := c.rejectDiagramQuery(member); err != nil {
+	if err := c.rejectQuery(member); err != nil {
 		return Content{}, err
 	}
 	if err := c.rejectNestedContent(member); err != nil {
@@ -1400,22 +1401,6 @@ func qualifiedNameText(name *ast.QualifiedName) string {
 		parts = append(parts, part.Text)
 	}
 	return strings.Join(parts, "::")
-}
-
-// rejectDiagramQuery rejects a query declared in a diagram, which renders a
-// view rather than query rows.
-func (c *compiler) rejectDiagramQuery(member *symbols.Symbol) error {
-	for _, candidate := range c.effectiveMembers(member) {
-		if candidate.Kind == symbols.SymbolCalcUsage {
-			return &Error{
-				Kind:     ErrorInvalidContent,
-				Document: c.document,
-				Content:  c.contentName(candidate),
-				Origin:   provenance.Symbol(candidate),
-			}
-		}
-	}
-	return nil
 }
 
 // rejectNestedContent rejects content blocks nested inside a content block,

@@ -19,17 +19,15 @@ import os
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCE = os.path.join(REPO_ROOT, "clients", "release-digests.json")
+TABLE = "release-digests.json"
+SOURCE = os.path.join(REPO_ROOT, "clients", TABLE)
 
 #: Path, relative to the repository root, of every client's shipped copy.
 COPIES = (
-    os.path.join("clients", "python", "opensysml", "release-digests.json"),
-    os.path.join("clients", "node", "release-digests.json"),
-    os.path.join(
-        "clients", "java", "opensysml-client", "src", "main", "resources",
-        "release-digests.json",
-    ),
-    os.path.join("clients", "rust", "opensysml", "release-digests.json"),
+    os.path.join("clients", "python", "opensysml", TABLE),
+    os.path.join("clients", "node", TABLE),
+    os.path.join("clients", "java", "opensysml-client", "src", "main", "resources", TABLE),
+    os.path.join("clients", "rust", "opensysml", TABLE),
 )
 
 
