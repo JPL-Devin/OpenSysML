@@ -321,6 +321,17 @@ No model that validated under 0.4.2 stops validating and no import path moves.
 
 ### Fixed
 
+- **An OSLC query's unknown-property diagnostic names properties the query can be written with.**
+  `sysml:id="x"` answered with the Go API's own property names (`@id, @type, declaredName, …`), so a
+  caller who wrote one back got a second, different error: `@type` and `@id` are not OSLC query text.
+  The list is now the OSLC predicates (`rdf:type, sysml:declaredName, …`), derived from the mapping
+  the parser reads, and `@type`/`@id` name their OSLC spelling instead — `rdf:type`, and identity,
+  which every result reports rather than asks for. The list follows the query's own `oslc.prefix`
+  bindings, since a rebound `sysml` or `rdf` changes what the parser accepts. An `oslc.prefix`
+  binding whose prefix no prefixed name can be written with (`!s=<…>`) is refused where it is
+  bound rather than accepted and never usable, and a prefix of letters outside ASCII
+  (`sÿsml=<…>`) now scans as one name in a query instead of ending mid-letter.
+
 - **An anonymous `doc` or `comment` before a kind keyword is kept.** `doc /* … */` followed by
   `attribute a;` in a definition or usage body parsed as an attribute prefixed by `doc`, so the
   documentation vanished silently from the model — absent from validation, printing, the LSP and
