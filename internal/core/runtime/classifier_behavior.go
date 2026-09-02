@@ -96,6 +96,23 @@ func (inst *Instance) ExhibitedState() (*ObjectBehavior, bool) {
 	return nil, false
 }
 
+// ExhibitedMachineOf returns the machine the object exhibits that is, or is
+// typed by, the given state definition or usage; false when it runs none.
+func (ctx *Context) ExhibitedMachineOf(inst *Instance, machine *symbols.Symbol) (*ObjectBehavior, bool) {
+	if inst == nil || machine == nil {
+		return nil, false
+	}
+	for _, b := range inst.behaviors {
+		if b.Kind != lower.ExhibitedState {
+			continue
+		}
+		if ctx.model.Conforms(b.member, machine) || ctx.model.Conforms(b.Symbol, machine) {
+			return b, true
+		}
+	}
+	return nil, false
+}
+
 // classifierBehaviorsOf reports the behaviors every object of a type runs:
 // those its own declaration binds and those it inherits.
 func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierBehaviorDecl {

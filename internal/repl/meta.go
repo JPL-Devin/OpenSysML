@@ -173,7 +173,8 @@ var metaCommandTable = []metaCommand{
 	{group: groupAction, name: "%stop", desc: "stop current debugging session"},
 
 	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits, or a state machine performed by an object"},
-	{group: groupState, name: "%events", desc: "show event queue"},
+	{group: groupState, name: "%send", args: "<signal>[(<p>=<expr>, ...)] [to <object>]", desc: "send a signal to an object's machine, by default the one being debugged"},
+	{group: groupState, name: "%events", desc: "show event queue and signals in flight"},
 	{group: groupState, name: "%current", desc: "show current state and configuration"},
 	{group: groupState, name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
 }
@@ -464,6 +465,8 @@ func (s *Session) metaDebugCommand(fields []string, line string) (metaResult, bo
 			return metaOut([]string{"no elements matched"}, false, nil), true
 		}
 		return metaOut(lines, false, nil), true
+	case "%send":
+		return metaOut(s.doSend(strings.TrimPrefix(strings.TrimSpace(line), "%send"))), true
 	case "%events":
 		return metaOut(s.doEvents()), true
 	case "%current":
@@ -2148,6 +2151,13 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		return nil, perr
 	}
 
+	// An object already running a machine of this kind is debugged on that
+	// machine, so the object never runs two of them.
+	if behavior, ok := ctx.ExhibitedMachineOf(self, sym); ok {
+		lines := s.attachExhibitedMachine(ctx, name, selfFQN, self, behavior)
+		return append(lines, "  Attached to the machine already running rather than starting a second one"), nil
+	}
+
 	// Create executor
 	exec, err := ctx.CreateStateExecutorFor(sym, self)
 	if err != nil {
@@ -2167,12 +2177,15 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	}
 	s.endedState = nil
 
-	return []string{
-		fmt.Sprintf("✓ Started state machine executor for %q", name),
+	lines := []string{fmt.Sprintf("✓ Started state machine executor for %q", name)}
+	if self != nil {
+		lines = append(lines, fmt.Sprintf("  Performed by object #%d of %q, which exhibits no running machine of this kind", self.ID, notationName(selfFQN)))
+	}
+	return append(lines,
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		timeLabel + runtime.FormatReal(exec.CurrentTime()),
+		timeLabel+runtime.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
-	}, nil
+	), nil
 }
 
 // debugExhibitedMachine binds the debugging session to the machine an object
@@ -2191,6 +2204,16 @@ func (s *Session) debugExhibitedMachine(
 	if !ok {
 		return nil, fmt.Errorf("object %q exhibits no state machine", notationName(fqn))
 	}
+	return s.attachExhibitedMachine(ctx, name, fqn, inst, behavior), nil
+}
+
+// attachExhibitedMachine makes the given exhibited machine the debugged one.
+func (s *Session) attachExhibitedMachine(
+	ctx *runtime.Context,
+	name, fqn string,
+	inst *runtime.Instance,
+	behavior *runtime.ObjectBehavior,
+) []string {
 	behavior.State.SetTrace(s.trace)
 
 	s.stateExec = &stateSession{
@@ -2209,7 +2232,7 @@ func (s *Session) debugExhibitedMachine(
 		fmt.Sprintf("  Current state: %s", currentStateName(behavior.State)),
 		timeLabel + runtime.FormatReal(behavior.State.CurrentTime()),
 		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
-	}, nil
+	}
 }
 
 // stepState takes the machine's next step: a change condition that has become
@@ -2347,16 +2370,36 @@ func (s *Session) doEvents() ([]string, bool, error) {
 
 	exec := s.stateExec.executor
 	queue := exec.EventQueue()
+	signals := s.signalsInFlight(exec)
 
-	if queue.Len() == 0 {
+	if queue.Len() == 0 && len(signals) == 0 {
 		return []string{"Event queue empty"}, false, nil
 	}
 
 	// Note: EventQueue doesn't expose events directly, so just show count
-	return []string{
-		fmt.Sprintf("Event queue: %d events", queue.Len()),
-		"Use %advance <time> to process next event",
-	}, false, nil
+	var out []string
+	if queue.Len() > 0 {
+		out = append(out, fmt.Sprintf("Event queue: %d events", queue.Len()))
+	}
+	if len(signals) > 0 {
+		out = append(out, fmt.Sprintf("Signals in flight: %d", len(signals)))
+		for _, msg := range signals {
+			out = append(out, "  "+signalText(msg))
+		}
+	}
+	return append(out, "Use %advance <time> to process next event"), false, nil
+}
+
+// signalsInFlight lists the messages on the bus the debugged machine would
+// deliver on its next step.
+func (s *Session) signalsInFlight(exec *runtime.StateExecutor) []runtime.Message {
+	var out []runtime.Message
+	for _, msg := range s.stateExec.rtCtx.PendingMessages() {
+		if exec.AcceptsMessage(msg) {
+			out = append(out, msg)
+		}
+	}
+	return out
 }
 
 // doCurrent shows current state and configuration.
@@ -2483,7 +2526,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 		}
 		// A signal in flight is due now, whatever the deadline: dispatching it is
 		// the step RunToCompletion would take here.
-		if exec.EventQueue().Len() == 0 && exec.HasPendingSignal() {
+		if exec.HasPendingSignal() {
 			if err := exec.ProcessNextEvent(); err != nil {
 				return nil, fmt.Errorf("event processing failed: %w", err)
 			}

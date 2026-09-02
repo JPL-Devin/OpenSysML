@@ -1932,6 +1932,17 @@ func (e *StateExecutor) HasPendingSignal() bool {
 	return e.hasPendingSignal()
 }
 
+// AcceptsMessage reports whether the active configuration would take a message in
+// flight: it reaches this machine and triggers a transition out of an active state.
+func (e *StateExecutor) AcceptsMessage(m Message) bool {
+	return e.acceptableMessage(m)
+}
+
+// Performer is the object this machine is performed by, nil for none.
+func (e *StateExecutor) Performer() *Instance {
+	return e.self
+}
+
 // hasPendingSignal reports whether a message in flight would be delivered by
 // the next step, without consuming it.
 func (e *StateExecutor) hasPendingSignal() bool {
@@ -2479,9 +2490,10 @@ func (e *StateExecutor) ProcessNextEvent() error {
 	if fired {
 		return nil
 	}
-	// A signal sent by a behavior sharing this context is dispatched by the same
-	// step RunToCompletion takes, so stepping and running agree.
-	if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() && ran > 0 {
+	// A signal in flight is due now, so it is queued ahead of a timer set for
+	// later, as a run holding time where it is would dispatch it.
+	e.deliverPendingSignal()
+	if e.eventQueue.Len() == 0 && ran > 0 {
 		return nil
 	}
 	return e.processNextEvent()

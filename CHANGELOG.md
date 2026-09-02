@@ -36,6 +36,23 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the apply against the real stack — an initial load, a revision with a retained-id rename and
   gated deletes, a conflict staged behind the sync's back — and records what read back at the
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+- **The REPL sends a signal into a running machine.** `%send go` and
+  `%send Dim(level=3+4) to bulb` put the signal on the runtime's message bus exactly as a
+  `send` from an action body would, so a `transition ... accept go then on` is driven from the
+  prompt without writing an action just to fire it: `%events` lists the signal in flight, and
+  `%step` or `%advance` dispatches it. Without `to`, the signal goes to the object whose machine
+  the `%state` session is debugging, and with no session the command says so rather than
+  guessing. Arguments are written `<parameter>=<expression>` as for `%invoke` and are checked
+  against the signal's declaration; an unresolved signal name gets the usual unresolved-reference
+  report, an object that runs no machine is reported as such, and a signal nothing in the
+  machine's current state accepts is refused up front with the state named, never queued to be
+  dropped in silence. A signal in flight is due now, so a single step dispatches it ahead of a
+  timer set for later, as a run holding time where it is would.
+- **`%state <machine> <object>` attaches to the machine the object already runs.** Naming a
+  state definition and an object that exhibits a running machine of that kind now debugs that
+  machine and says so, instead of quietly starting a second machine of the same kind on the same
+  object. Only an object that exhibits no such machine gets a new executor, and the report says
+  that too; `%state <usage> <object>` behaves as before.
 
 ### Performance
 

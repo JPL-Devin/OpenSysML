@@ -93,6 +93,78 @@ sysml> %advance 30
 ✓ State machine completed (a transition reached `done`)
 ```
 
+**Sending a signal.** A transition that waits on an `accept` is driven from the prompt with
+`%send`, which puts the signal on the runtime's message bus exactly as a `send` from an action
+would, so nothing has to be written in the model just to fire it:
+
+```sysml
+sysml> package Lamps {
+  ...>     private import ScalarValues::*;
+  ...>     attribute def go;
+  ...>     attribute def Dim { attribute level : Integer; }
+  ...>     state def Lamp {
+  ...>         attribute brightness : Integer = 0;
+  ...>         entry; then off;
+  ...>         state off;
+  ...>         transition off_on first off accept go then on;
+  ...>         state on;
+  ...>         transition on_dim first on accept d : Dim do assign brightness := d.level then dimmed;
+  ...>         state dimmed;
+  ...>     }
+  ...>     part def Bulb { exhibit state lamp : Lamp; }
+  ...>     part bulb : Bulb;
+  ...> }
+✓ package Lamps
+
+sysml> %instantiate bulb
+✓ Created instance of Lamps::bulb
+  ID: 1
+  Use %features bulb to inspect
+
+sysml> %state bulb
+✓ Debugging state machine "lamp" exhibited by object #1 of "Lamps::bulb"
+  Current state: off
+  Time: 0.0
+  Events: 0
+
+sysml> %send go
+✓ Sent go to object #1 of "Lamps::bulb"
+  Accepted by state machine "Lamp" in state off
+
+Use %step or %advance <time> to dispatch it
+
+sysml> %events
+Signals in flight: 1
+  go
+Use %advance <time> to process next event
+
+sysml> %advance 1
+✓ Advanced to 1.0 (1 event(s) processed)
+  Current state: on
+  Last event at: 0.0
+  Remaining events: 0
+
+sysml> %send Dim(level=3+4)
+✓ Sent Dim(level=7) to object #1 of "Lamps::bulb"
+  Accepted by state machine "Lamp" in state on
+
+sysml> %step
+✓ Event dispatched
+  Current state: dimmed
+  Time: 0.0
+  Events: 0
+
+sysml> %send go
+error: object #1 of "Lamps::bulb" accepts no signal go now: state machine "Lamp" in state dimmed
+```
+
+Without `to <object>`, the signal goes to the object whose machine the `%state` session is
+debugging (`%send go to bulb` names it explicitly, and is the form to use when no session is
+active). Payload features are written `<parameter>=<expression>` as for `%invoke`, and are checked
+against the signal's declaration: `%send Dim(lvl=1)` is refused because `Dim` carries no `lvl`. A
+signal nothing in the machine's current state accepts is refused up front, with the state named,
+rather than queued to be silently dropped.
+
 **Action debugging commands:**
 - `%action <name> [<object>]` — Start an action debugging session, optionally performed by an instantiated object
 - `%step` — Advance all tokens one step
@@ -102,8 +174,9 @@ sysml> %advance 30
 - `%stop` — Stop debugging
 
 **State machine debugging commands:**
-- `%state <name> [<object>]` — Start a state machine debugging session; naming an instantiated object runs the machine on behalf of that object, so what it sends routes over that object's connections
-- `%events` — Show event queue
+- `%state <name> [<object>]` — Start a state machine debugging session; naming an instantiated object runs the machine on behalf of that object, so what it sends routes over that object's connections. An object already exhibiting a running machine of that kind is debugged on that machine rather than given a second one
+- `%send <signal>[(<p>=<expr>, ...)] [to <object>]` — Send a signal to an object's machine over the runtime's message bus; by default to the object being debugged
+- `%events` — Show event queue and signals in flight
 - `%current` — Show current state, stack, data
 - `%advance <time>` — Advance simulation time by `<time>` units, processing every event due
 - `%stop` — Stop debugging

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -114,6 +115,68 @@ func (ctx *Context) PendingMessages() []Message {
 	out := make([]Message, len(ctx.messages))
 	copy(out, ctx.messages)
 	return out
+}
+
+// SignalMessage builds the message `send Signal(args) to <object>` posts, for
+// PostMessage; a nil object is one anyone may take, an unknown argument is refused.
+func (ctx *Context) SignalMessage(signal *symbols.Symbol, args map[string]Value, to *Instance) (Message, error) {
+	if !isDefinitionSymbol(signal) {
+		return Message{}, fmt.Errorf("%w: %s", ErrNotASignal, symbolText(signal))
+	}
+	payload := make(map[string]Value, len(args))
+	for _, name := range sortedArgNames(args) {
+		if !ctx.carriesFeature(signal, name) {
+			return Message{}, fmt.Errorf("%w: %s carries no feature %q%s",
+				ErrSignalArgument, symbolText(signal), name, ctx.carriedFeaturesNote(signal))
+		}
+		payload[name] = args[name]
+	}
+	msg := NamedSignalMessage(signal.Name, to)
+	msg.Signal, msg.Payload = signal, payload
+	return msg, nil
+}
+
+// NamedSignalMessage builds the message a send of a signal no declaration types
+// posts: matched by name alone, addressed to the object when there is one.
+func NamedSignalMessage(name string, to *Instance) Message {
+	msg := Message{SignalType: name}
+	if addr, ok := objectAddress(objectID(to)); ok {
+		msg.Object, msg.Delivery = addr.Object, addr.Delivery
+	}
+	return msg
+}
+
+// sortedArgNames lists the argument names in a stable order.
+func sortedArgNames(args map[string]Value) []string {
+	names := make([]string, 0, len(args))
+	for name := range args {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// carriesFeature reports whether a signal definition carries a feature of the name.
+func (ctx *Context) carriesFeature(signal *symbols.Symbol, name string) bool {
+	for _, feat := range ctx.FeaturesOf(signal) {
+		if feat.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// carriedFeaturesNote names the features a signal carries, for an argument error.
+func (ctx *Context) carriedFeaturesNote(signal *symbols.Symbol) string {
+	features := ctx.FeaturesOf(signal)
+	if len(features) == 0 {
+		return " (it carries none)"
+	}
+	names := make([]string, 0, len(features))
+	for _, feat := range features {
+		names = append(names, feat.Name)
+	}
+	return " (it carries " + strings.Join(names, ", ") + ")"
 }
 
 // reaches reports whether a consumer named name, accepting on port and performed
