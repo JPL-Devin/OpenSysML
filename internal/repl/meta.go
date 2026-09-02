@@ -815,10 +815,8 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 	}, nil
 }
 
-// readsFeature reports whether an expression is a bare read — a name, or a
-// chain of names — and ref is one of its own links, so a feature that link
-// found no value for is the read's own verdict rather than a failure inside an
-// operation or inside some other feature's default.
+// readsFeature reports whether an expression is a bare read (a name or a chain
+// of names) with ref as one of its own links, not a name read inside a default.
 func readsFeature(node ast.Node, ref *ast.QualifiedName) bool {
 	if ref == nil {
 		return false
