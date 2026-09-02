@@ -127,8 +127,8 @@ func combineProducts(a, b UnitProduct, sign float64) UnitProduct {
 	return normalizeProduct(out)
 }
 
-// normalizeProduct merges repeated units (by symbol, or by name where unresolved),
-// drops cancelled powers and orders the rest by name.
+// normalizeProduct merges repeated units (by symbol, or by name where both are
+// unresolved), drops cancelled powers and orders the rest by name.
 func normalizeProduct(p UnitProduct) UnitProduct {
 	merged := make([]UnitPower, 0, len(p.Powers))
 	for _, f := range p.Powers {
@@ -149,8 +149,10 @@ func normalizeProduct(p UnitProduct) UnitProduct {
 	return UnitProduct{Powers: kept}
 }
 
+// sameUnit: two resolved powers are one unit by symbol; two unresolved ones by
+// text; a resolved and an unresolved power are never the same unit.
 func sameUnit(f, g UnitPower) bool {
-	if f.Unit != nil && g.Unit != nil {
+	if f.Unit != nil || g.Unit != nil {
 		return f.Unit == g.Unit
 	}
 	return f.Name == g.Name

@@ -367,6 +367,7 @@ func TestQuantityFromWireComposesAsWritten(t *testing.T) {
 	calc def Dist { in v; in dt; v * dt }
 	calc def Area { in a; in b; a * b }
 	calc def Metre { 2.0 [m] }
+	calc def Kilometre { 3.0 [km] }
 }
 `
 	hash := mustVerifyModel(t, srv, source, "quantity-composes-as-written")
@@ -457,6 +458,17 @@ func TestQuantityFromWireComposesAsWritten(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("%s over a metre reduction * SI::m = %s, want %s", tc.unit, got, tc.want)
 		}
+	}
+	// Nor does the opaque unit merge with the resolved unit spelt the same way:
+	// `km**2` would read as a million square metres where the reduction has a thousand.
+	opaqueKm := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 2},
+		Unit:      "km",
+		UnitTerm:  metre.GetUnitTerm(),
+	}
+	got = describeQuantity(evaluate("Q::Area", opaqueKm, evaluate("Q::Kilometre")))
+	if got != "6 [km*km] = 1000/1·SI::metre^2" {
+		t.Errorf("opaque km over a metre reduction * km = %s, want 6 [km*km] = 1000/1·SI::metre^2", got)
 	}
 }
 

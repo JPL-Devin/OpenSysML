@@ -257,6 +257,10 @@ func TestComposedUnitCanonical(t *testing.T) {
 // grouping a unit expression needs to read back as the unit it names.
 func TestUnitProductRendering(t *testing.T) {
 	named := func(name string) semantics.UnitProduct { return semantics.NamedUnitProduct(nil, name, false) }
+	metre, otherMetre := &symbols.Symbol{Name: "metre"}, &symbols.Symbol{Name: "metre"}
+	resolved := func(sym *symbols.Symbol, name string) semantics.UnitProduct {
+		return semantics.NamedUnitProduct(sym, name, false)
+	}
 	cases := []struct {
 		name string
 		unit semantics.UnitProduct
@@ -273,6 +277,9 @@ func TestUnitProductRendering(t *testing.T) {
 		{"composed name grouped", named("km/h").Pow(2), "(km/h)**2"},
 		{"sorted by name", named("s").Times(named("m")).Times(named("s")), "m*s**2"},
 		{"operand order does not matter", named("m").Times(named("N")), "N*m"},
+		{"one unit under two spellings", resolved(metre, "m").Times(resolved(metre, "SI::m")), "m**2"},
+		{"two units under one spelling", resolved(metre, "m").Times(resolved(otherMetre, "m")), "m*m"},
+		{"an unresolved unit is not the resolved one it is spelt like", resolved(metre, "m").DividedBy(named("m")), "m/m"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
