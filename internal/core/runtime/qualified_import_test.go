@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -276,5 +278,43 @@ func TestLibraryQuantityThroughFacadeResolves(t *testing.T) {
 	val, err := evalIn(t, ctx, root, "TrigFunctions::pi")
 	if err != nil || !strings.HasPrefix(FormatValue(val), "3.14159") {
 		t.Errorf("TrigFunctions::pi = (%v, %v), want the library constant", val, err)
+	}
+}
+
+// TestQualifiedNameEvaluatedInSeveralScopes evaluates one parsed A::x in two
+// scopes that each hold their own A::x, in both orders: each evaluation answers
+// with its scope's value rather than the first scope's.
+func TestQualifiedNameEvaluatedInSeveralScopes(t *testing.T) {
+	file := parseAndBuild(t, `
+		package One { package A { attribute x = 1; } }
+		package Two { package A { attribute x = 2; } }
+	`)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", file)
+	ctx.resolver.ResolveDocument("<test>", file)
+	root := idx.DocumentRoot("<test>")
+	scopes := map[string]*symbols.Scope{}
+	for _, name := range []string{"One", "Two"} {
+		pkg, ok := root.LookupLocal(name)
+		if !ok || pkg.Scope == nil {
+			t.Fatalf("package %s not indexed", name)
+		}
+		scopes[name] = pkg.Scope
+	}
+	p := parser.New(source.New("<expr>", []byte("A::x")))
+	expr := p.ParseExpression()
+	if expr == nil || len(p.Diagnostics) > 0 {
+		t.Fatalf("parse A::x: %v", p.Diagnostics)
+	}
+	for _, order := range [][]string{{"One", "Two"}, {"Two", "One"}} {
+		for _, name := range order {
+			want := map[string]string{"One": "1", "Two": "2"}[name]
+			val, err := ctx.EvalWithScope(expr, scopes[name])
+			if err != nil || FormatValue(val) != want {
+				t.Errorf("A::x in %s (after %v) = (%v, %v), want %s", name, order, val, err, want)
+			}
+		}
+	}
+	if n := len(ctx.resolver.Diagnostics); n != 0 {
+		t.Errorf("evaluation reported %d resolver diagnostics: %v", n, ctx.resolver.Diagnostics)
 	}
 }

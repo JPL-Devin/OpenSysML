@@ -148,6 +148,9 @@ type Resolver struct {
 	// ambiguities are the candidate counts of the qualified names that failed
 	// by naming several elements, so a consumer can tell that apart from none.
 	ambiguities map[*ast.QualifiedName]int
+	// readings are the answers to qualified names read in a chosen scope, kept
+	// apart from the written name's memo: see ReadQualified.
+	readings map[readingKey]Reading
 	// valuesInProgress are the usages whose value expression is being read for
 	// the type it names, so a value naming its own feature ends the walk.
 	valuesInProgress map[*ast.Usage]bool
@@ -184,6 +187,7 @@ func New(idx *symbols.Index) *Resolver {
 		resolvingAlias:    map[*symbols.Symbol]bool{},
 		reportedQualified: map[*ast.QualifiedName]bool{},
 		ambiguities:       map[*ast.QualifiedName]int{},
+		readings:          map[readingKey]Reading{},
 	}
 }
 
@@ -229,13 +233,6 @@ func (r *Resolver) PartSymbol(qn *ast.QualifiedName, i int) (*symbols.Symbol, bo
 		return nil, false
 	}
 	return syms[i], true
-}
-
-// Ambiguity returns the number of elements qn named when its resolution failed
-// because it named more than one, or false when it did not fail that way.
-func (r *Resolver) Ambiguity(qn *ast.QualifiedName) (int, bool) {
-	n, ok := r.ambiguities[qn]
-	return n, ok
 }
 
 // PartAlias returns the alias membership the i-th segment of qn was written as,
@@ -461,36 +458,56 @@ func (r *Resolver) outsideAllVisible(f func()) {
 // kept only where it resolved: a reading not adopted leaves nothing behind for a
 // caller to read back.
 func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
-	saved, had := r.parts[qn]
-	if had {
-		saved = append([]*symbols.Symbol(nil), saved...)
-	}
-	savedAliases, hadAliases := r.aliasNames[qn]
-	if hadAliases {
-		savedAliases = append([]*symbols.Symbol(nil), savedAliases...)
-	}
-	savedAmbiguity, hadAmbiguity := r.ambiguities[qn]
+	saved := r.saveSegments(qn)
 	resolved := false
 	r.aside(func() { resolved = f() })
-	if resolved {
-		return true
+	if !resolved {
+		r.restoreSegments(qn, saved)
 	}
-	if had {
-		r.parts[qn] = saved
-	} else {
-		delete(r.parts, qn)
+	return resolved
+}
+
+// segmentRecords are the per-segment records a walk of a qualified name leaves
+// behind, copied so a later walk cannot alter them.
+type segmentRecords struct {
+	parts, aliases       []*symbols.Symbol
+	hadParts, hadAliases bool
+	ambiguity            int
+	hadAmbiguity         bool
+}
+
+// saveSegments copies the records qn holds, for restoreSegments to put back.
+func (r *Resolver) saveSegments(qn *ast.QualifiedName) segmentRecords {
+	var saved segmentRecords
+	if parts, had := r.parts[qn]; had {
+		saved.parts, saved.hadParts = append([]*symbols.Symbol(nil), parts...), true
 	}
-	if hadAmbiguity {
-		r.ambiguities[qn] = savedAmbiguity
-	} else {
-		delete(r.ambiguities, qn)
+	if aliases, had := r.aliasNames[qn]; had {
+		saved.aliases, saved.hadAliases = append([]*symbols.Symbol(nil), aliases...), true
 	}
-	if hadAliases {
-		r.aliasNames[qn] = savedAliases
-	} else {
-		delete(r.aliasNames, qn)
+	saved.ambiguity, saved.hadAmbiguity = r.ambiguities[qn]
+	return saved
+}
+
+// restoreSegments puts back the records qn held when saved was taken.
+func (r *Resolver) restoreSegments(qn *ast.QualifiedName, saved segmentRecords) {
+	r.clearSegments(qn)
+	if saved.hadParts {
+		r.parts[qn] = saved.parts
 	}
-	return false
+	if saved.hadAliases {
+		r.aliasNames[qn] = saved.aliases
+	}
+	if saved.hadAmbiguity {
+		r.ambiguities[qn] = saved.ambiguity
+	}
+}
+
+// clearSegments drops the records qn holds, so a walk records it afresh.
+func (r *Resolver) clearSegments(qn *ast.QualifiedName) {
+	delete(r.parts, qn)
+	delete(r.aliasNames, qn)
+	delete(r.ambiguities, qn)
 }
 
 // modeKey keys a lookup made in a non-default mode, reporting false when the

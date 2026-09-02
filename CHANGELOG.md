@@ -139,8 +139,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   reach the element the checker reaches, a `private import` stays reachable only from inside
   the importing namespace, and a name the checker rejects fails with the checker's own
   `unresolved reference: Priv::x` or, when several members answer to it, its own
-  `ambiguous reference: Twice::t (2 candidates)` (the resolver now records which names it
-  rejected as ambiguous, `Resolver.Ambiguity`). A calc usage's outputs, and the "not a
+  `ambiguous reference: Twice::t (2 candidates)`. The evaluator reads the name through a new
+  `Resolver.ReadQualified`, whose answer (element, segments, ambiguity) is memoized by scope and
+  node rather than by node alone, so one parsed expression evaluated in two scopes that each
+  hold their own `A::x` answers with each scope's value. A calc usage's outputs, and the "not a
   variant" / "not a literal" reports, are unchanged.
 
 ### Changed

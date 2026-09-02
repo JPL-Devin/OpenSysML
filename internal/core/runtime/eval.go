@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -438,13 +439,15 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	}
 
 	// A multi-part name A::B::x resolves as the checker resolves it — imports,
-	// visibility, aliases and inherited members included — so the two agree.
-	currentSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn)
+	// visibility, aliases and inherited members included — so the two agree. It
+	// is read in this evaluation's scope, since one expression may be evaluated
+	// in several.
+	reading := ec.ctx.resolver.ReadQualified(ec.scope, qn)
 
 	// A calc usage's output features are computed rather than declared values,
 	// so a name qualified by one reads the rest from an evaluation of the usage.
 	for i := 0; i < len(qn.Parts)-1; i++ {
-		part, resolved := ec.ctx.resolver.PartSymbol(qn, i)
+		part, resolved := reading.Part(i)
 		if !resolved {
 			break
 		}
@@ -452,8 +455,9 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 			return ec.evalCalcUsageMembers(part, qn.Parts[i+1:])
 		}
 	}
+	currentSym, ok := reading.Symbol()
 	if !ok {
-		return Value{}, ec.unresolvedQualifiedName(qn)
+		return Value{}, ec.unresolvedQualifiedName(qn, reading)
 	}
 
 	// A library feature reads through the feature seam, whatever the library
@@ -506,16 +510,16 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 // unresolvedQualifiedName reports a multi-part name the resolver rejected: as
 // ambiguous when it named several elements; otherwise against the variants or
 // literals of a variation or enumeration the deepest resolved segment reached.
-func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName) error {
+func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName, reading resolve.Reading) error {
 	written := qualifiedNameToString(qn)
 	if qn.Global {
 		written = "$::" + written
 	}
-	if n, ok := ec.ctx.resolver.Ambiguity(qn); ok {
+	if n, ok := reading.Ambiguity(); ok {
 		return fmt.Errorf("%w: %s (%d candidates)", ErrAmbiguousReference, written, n)
 	}
 	for i := len(qn.Parts) - 2; i >= 0; i-- {
-		owner, ok := ec.ctx.resolver.PartSymbol(qn, i)
+		owner, ok := reading.Part(i)
 		if !ok {
 			continue
 		}
