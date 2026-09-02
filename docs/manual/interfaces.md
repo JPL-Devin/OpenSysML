@@ -27,9 +27,9 @@ $ sysml model.sysml -run-query "Observatory::SubsystemTable root=Observatory::te
 | `-o <file>` | Output file; required for PDF |
 
 `-run-query` bindings are space-separated `parameter=expression` pairs after
-the query's qualified name; a name expression binds the element it denotes,
+the query's qualified name. A name expression binds the element it refers to;
 quoted strings and numeric literals bind values. The exit code is non-zero
-on any planning, binding or execution error. Full details:
+on any planning, binding or execution error. Full details are in the
 [CLI reference](../reference/cli.md).
 
 ## REPL
