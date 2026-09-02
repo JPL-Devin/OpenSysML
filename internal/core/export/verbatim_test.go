@@ -166,42 +166,43 @@ func TestMembersAfterARemovedOneKeepTheirText(t *testing.T) {
 }
 
 // The blank line ahead of a member is its own: it stays when the member before
-// it is rebuilt or removed, and an edit is blamed on the member it was made to.
+// it is rebuilt or removed, whichever newline the file is written with.
 func TestBlankLinesStayWithTheMemberAfterThem(t *testing.T) {
-	notation := `package P {
+	for name, nl := range map[string]string{"LF": "\n", "CRLF": "\r\n"} {
+		t.Run(name, func(t *testing.T) {
+			lines := func(text string) string { return strings.ReplaceAll(text, "\n", nl) }
+			notation := lines(`package P {
     part def A;
 
     // about B
-    part def B;
+    part def B {
+
+        part x : A;
+    }
 
     part def C; // the third
 }
-`
-	edited := editTurtle(t, idTurtle(t, notation),
-		"    sysml:declaredName \"A\" ;\n",
-		"    sysml:declaredName \"A\" ;\n    sysml:isAbstract \"true\"^^xsd:boolean ;\n")
-	back := toNotation(t, edited)
-	want := `package P {
-    abstract part def A;
-
-    // about B
-    part def B;
-
-    part def C; // the third
-}
-`
-	if back != want {
-		t.Errorf("rebuilding a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
-	}
-	back = toNotation(t, withoutMember(t, idTurtle(t, notation), "elmt:P__B"))
-	want = `package P {
+`)
+			if back := toNotation(t, idTurtle(t, notation)); back != notation {
+				t.Errorf("the notation changed:\n--- want ---\n%s--- got ---\n%s", notation, back)
+			}
+			edited := editTurtle(t, idTurtle(t, notation),
+				"    sysml:declaredName \"A\" ;\n",
+				"    sysml:declaredName \"A\" ;\n    sysml:isAbstract \"true\"^^xsd:boolean ;\n")
+			want := strings.Replace(notation, "    part def A;", "    abstract part def A;", 1)
+			if back := toNotation(t, edited); back != want {
+				t.Errorf("rebuilding a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
+			}
+			want = lines(`package P {
     part def A;
 
     part def C; // the third
 }
-`
-	if back != want {
-		t.Errorf("removing a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
+`)
+			if back := toNotation(t, withoutMember(t, idTurtle(t, notation), "elmt:P__B")); back != want {
+				t.Errorf("removing a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
+			}
+		})
 	}
 }
 
@@ -229,8 +230,9 @@ func TestThenIsNotWrittenTwice(t *testing.T) {
 	}
 }
 
-// withoutMember drops the given member of P from a Turtle document, as an edit
-// to the graph after export would, leaving the other members numbered as before.
+// withoutMember drops the given member of P from a Turtle document, its own
+// members with it, as an edit to the graph after export would, leaving the
+// other members numbered as before.
 func withoutMember(t *testing.T, turtle []byte, member string) []byte {
 	t.Helper()
 	var kept []string
@@ -243,7 +245,14 @@ func withoutMember(t *testing.T, turtle []byte, member string) []byte {
 		}
 		kept = append(kept, line)
 	}
-	return withoutSubjects(t, []byte(strings.Join(kept, "\n")), member, member+"_om")
+	var subjects []string
+	for _, block := range strings.Split(strings.Join(kept, "\n"), "\n\n") {
+		subject, _, _ := strings.Cut(block, "\n")
+		if subject == member || strings.HasPrefix(subject, member+"_") {
+			subjects = append(subjects, subject)
+		}
+	}
+	return withoutSubjects(t, []byte(strings.Join(kept, "\n")), subjects...)
 }
 
 // withoutSubjects drops every block of a Turtle document describing one of the

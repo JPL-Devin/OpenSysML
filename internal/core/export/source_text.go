@@ -100,8 +100,12 @@ func (s *formattedSource) tile(spans []source.Span) []region {
 			end = s.lineStart(s.fmtd[next].Offset)
 		}
 		// Blank lines ahead of the next member are its own, so they outlive this one.
-		for end >= 2 && s.text[end-1] == '\n' && s.text[end-2] == '\n' {
-			end--
+		for {
+			start, blank := s.blankLineBefore(end)
+			if !blank {
+				break
+			}
+			end = start
 		}
 		var start int
 		if i > 0 {
@@ -146,6 +150,22 @@ func (s *formattedSource) newlineBefore(k int) bool {
 	}
 	prev := s.fmtd[k-1]
 	return s.kinds[k-1] == lexer.SLNote || bytes.IndexByte(s.text[prev.End():s.fmtd[k].Offset], '\n') >= 0
+}
+
+// blankLineBefore returns where the line ending at end starts, if that line is
+// empty: a newline, LF or CRLF, right after another.
+func (s *formattedSource) blankLineBefore(end int) (int, bool) {
+	if end == 0 || s.text[end-1] != '\n' {
+		return 0, false
+	}
+	start := end - 1
+	if start > 0 && s.text[start-1] == '\r' {
+		start--
+	}
+	if start == 0 || s.text[start-1] != '\n' {
+		return 0, false
+	}
+	return start, true
 }
 
 // lineStart returns the offset of the indentation before pos on its line, or
