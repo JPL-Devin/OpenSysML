@@ -45,7 +45,7 @@ func (s *Session) query(text string) ([]string, error) {
 		line := fmt.Sprintf("%s  %s", element.ID, element.Type)
 		for _, name := range q.Select {
 			if value, ok := element.Properties[name]; ok {
-				line += fmt.Sprintf("  %s=%s", name, value)
+				line += fmt.Sprintf("  %s=%s", q.SpellingOf(name), value)
 			}
 		}
 		lines = append(lines, line)
