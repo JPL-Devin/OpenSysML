@@ -128,9 +128,10 @@ func TestW8DEnumerationDefinitionMembers(t *testing.T) {
 	}
 }
 
-// Legal enumerations stay silent: literals with and without values, anonymous
-// ones, the `enum` keyword form, a scalar or attribute-definition general, and
-// usages typed by an enumeration.
+// Legal enumerations stay silent: literals with and without values, anonymous,
+// short-named or nameless ones stating a typing, redefinition or multiplicity,
+// the `enum` keyword form, a scalar or attribute-definition general, and usages
+// typed by an enumeration.
 func TestW8DLegalEnumerationStaysSilent(t *testing.T) {
 	const src = `package P {
 		private import ScalarValues::*;
@@ -138,7 +139,7 @@ func TestW8DLegalEnumerationStaysSilent(t *testing.T) {
 		enum def K :> Real { A = 4.0; B = 3.0; }
 		enum def L { enum m; = 1; doc /* the levels */ }
 		attribute def AD { attribute q : Integer; }
-		enum def M :> AD { x; y; }
+		enum def M :> AD { x; y; <s1> z : M; <s2>; : M; :>> q = 3; [1]; private <s3> w; }
 		attribute def Plain :> E;
 		enum def N :> Plain;
 		part def P1 { attribute e : E = E::a; enum f : E; attribute g : Real; }

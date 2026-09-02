@@ -578,10 +578,11 @@ func (p *Parser) atKindlessFeatureTyping() bool {
 	return beginsDeclarationTail(next, p.peekN(2))
 }
 
-// atEnumeratedValueTyping reports whether an enumeration body member is an
-// enumerated value stating a specialization or multiplicity with no `enum`
-// keyword (SysML.xtext EnumeratedValue), behind an optional visibility.
-func (p *Parser) atEnumeratedValueTyping() bool {
+// atEnumeratedValueDeclaration reports whether an enumeration body member is
+// an enumerated value with no `enum` keyword that opens with a short name or
+// states a specialization or multiplicity, named or not (SysML.xtext
+// EnumeratedValue over FeatureDeclaration), behind an optional visibility.
+func (p *Parser) atEnumeratedValueDeclaration() bool {
 	off := 0
 	if t := p.peek(); t.Kind == lexer.Keyword {
 		switch t.KeywordID {
@@ -589,17 +590,37 @@ func (p *Parser) atEnumeratedValueTyping() bool {
 			off = 1
 		}
 	}
-	if t := p.peekN(off); t.Kind != lexer.Identifier && t.Kind != lexer.UnrestrictedName {
-		return false
-	}
-	next := p.peekN(off + 1)
-	if next.Kind == lexer.LBracket {
+	switch t := p.peekN(off); t.Kind {
+	case lexer.Lt:
 		return true
+	case lexer.Identifier, lexer.UnrestrictedName:
+		off++
 	}
-	if next.Kind == lexer.Eq || next.Kind == lexer.ColonEq || next.Kind == lexer.EqGt {
-		return false
+	return p.atFeatureSpecializationPartAt(off)
+}
+
+// atFeatureSpecializationPartAt reports whether the token off positions ahead
+// opens a FeatureSpecializationPart (KerML.xtext): a specialization or a
+// multiplicity. Only such tokens are looked past, since reading beyond a `doc`
+// or `;` would pull the trivia that follows into the current member.
+func (p *Parser) atFeatureSpecializationPartAt(off int) bool {
+	t := p.peekN(off)
+	switch t.Kind {
+	case lexer.LBracket, lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt:
+		return true
+	case lexer.Colon:
+		n := p.peekN(off + 1)
+		return n.Kind == lexer.Identifier || n.Kind == lexer.UnrestrictedName
+	case lexer.Keyword:
+		switch t.KeywordID {
+		case "subsets", "references", "crosses", "redefines":
+			return true
+		case "defined", "typed":
+			n := p.peekN(off + 1)
+			return n.Kind == lexer.Keyword && n.KeywordID == "by"
+		}
 	}
-	return beginsDeclarationTail(next, p.peekN(off+2))
+	return false
 }
 
 // atKeywordlessFeature reports whether the cursor is at such a feature, either
@@ -2330,9 +2351,9 @@ func (p *Parser) parseEnumBody() []ast.Node {
 			body.add(m)
 			continue
 		}
-		// `uncl : Level = 0;` is an enumerated value with a specialization part
-		// (SysML.xtext EnumeratedValue), not a keyword-less attribute.
-		if p.atEnumeratedValueTyping() {
+		// `uncl : Level = 0;`, `<u> uncl;` and `: Level;` are enumerated values
+		// (SysML.xtext EnumeratedValue), not keyword-less attributes.
+		if p.atEnumeratedValueDeclaration() {
 			start := p.peek().Span.Offset
 			trivia := p.takeTrivia()
 			vis := p.parseVisibility()

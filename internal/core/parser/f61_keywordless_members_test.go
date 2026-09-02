@@ -128,6 +128,45 @@ func TestF61KeywordlessMembers(t *testing.T) {
 		}
 	})
 
+	t.Run("short_named_and_nameless_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { attribute def D { attribute n; } enum def S :> D { <s1> a : S; <s2>; <s3> = 1; : S; :>> n = 3; [1]; public <s4> c; private : S; } }")
+		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 8 {
+			t.Fatalf("members = %d, want 8", len(def.Members))
+		}
+		for i, want := range []struct{ short, name string }{{"s1", "a"}, {"s2", ""}, {"s3", ""}, {"", ""}, {"", ""}, {"", ""}, {"s4", "c"}, {"", ""}} {
+			u := usageAt(t, def.Members, i)
+			if u.Kind != ast.UsageEnumeration || u.Ident.ShortName != want.short || u.Ident.Name != want.name {
+				t.Errorf("member %d = kind %v <%q> %q, want enumerated value <%q> %q", i, u.Kind, u.Ident.ShortName, u.Ident.Name, want.short, want.name)
+			}
+		}
+		if u := usageAt(t, def.Members, 2); u.Value == nil {
+			t.Errorf("<s3> = 1 has no value")
+		}
+		if u := usageAt(t, def.Members, 3); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping {
+			t.Errorf(": S = %#v, want a typing", u)
+		}
+		if u := usageAt(t, def.Members, 4); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelRedefines || u.Value == nil {
+			t.Errorf(":>> n = 3 = %#v, want a redefinition and a value", u)
+		}
+		if u := usageAt(t, def.Members, 5); u.Multiplicity == nil {
+			t.Errorf("[1] has no multiplicity")
+		}
+		if u := usageAt(t, def.Members, 7); u.Visibility != ast.VisibilityPrivate {
+			t.Errorf("private : S visibility = %v, want private", u.Visibility)
+		}
+	})
+
+	t.Run("enum_value_trivia_stays_with_the_next_member", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { enum def S { a; /* c */ b; /* d */ doc /* e */ } }")
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		for i, want := range []int{0, 1, 1} {
+			if got := len(def.Members[i].(*ast.Membership).LeadingTrivia()); got != want {
+				t.Errorf("member %d has %d leading trivia, want %d", i, got, want)
+			}
+		}
+	})
+
 	t.Run("result_expression_in_case_body", func(t *testing.T) {
 		pkg := parsePkg(t, "package B { attribute def V { attribute m; } analysis def A { subject v : V; v.m } }")
 		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
