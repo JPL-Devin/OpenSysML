@@ -57,6 +57,11 @@ package OpenSysMLViews {
         expose OpenSysMLBehavior::LoadLibrary;
     }
 
+    view calcInvocationFlow : ActionFlowView {
+        doc /* One calc invoked: compiled when it may be, on the evaluator otherwise. */
+        expose OpenSysMLBehavior::InvokeCalc;
+    }
+
     view tierStates : StateTransitionView {
         expose OpenSysMLBehavior::TierProgression;
     }

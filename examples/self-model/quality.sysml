@@ -84,6 +84,16 @@ package OpenSysMLInvariants {
         }
     }
 
+    #Invariant requirement def ReferenceEvaluator {
+        doc /* A compiled calc is an optimization of the evaluator, never a second
+             * semantics: it can be switched off, and what it cannot take the evaluator runs. */
+        subject evaluator : Evaluator;
+        require constraint {
+            evaluator.compilesPureCalcs implies
+                (evaluator.compiled.memoized and evaluator.compiled.fallsBackToEvaluator)
+        }
+    }
+
     #Invariant requirement def RoundTrippableExport {
         doc /* A model written back out reloads as the same model. */
         subject exporter : Exporter;
@@ -124,6 +134,10 @@ package OpenSysMLInvariants {
 
     requirement snapshotIsDerived : DerivedLibrarySnapshot {
         subject stdlib = opensysml.pipeline.stdlib;
+    }
+
+    requirement evaluatorIsReference : ReferenceEvaluator {
+        subject evaluator = opensysml.pipeline.runtime.evaluator;
     }
 
     requirement exportRoundTrips : RoundTrippableExport {
@@ -179,6 +193,15 @@ package OpenSysMLGates {
         return attribute verdict : VerdictKind;
     }
 
+    verification def CalcDifferential {
+        doc /* go test -run 'TestCompiledCalc' ./internal/core/runtime */
+        subject evaluator : Evaluator;
+        objective {
+            verify evaluatorIsReference;
+        }
+        return attribute verdict : VerdictKind;
+    }
+
     verification def RuntimeGate {
         doc /* go test -run 'TestExecutionConformance|TestRuntimeRobustness' ./internal/core/runtime */
         subject runtime : Runtime;
@@ -207,6 +230,10 @@ package OpenSysMLGates {
 
     verification snapshotGate : SnapshotGate {
         subject stdlib = opensysml.pipeline.stdlib;
+    }
+
+    verification calcDifferential : CalcDifferential {
+        subject evaluator = opensysml.pipeline.runtime.evaluator;
     }
 
     verification runtimeGate : RuntimeGate {
@@ -277,6 +304,7 @@ package OpenSysMLCodebase {
     allocate opensysml.pipeline.passes to tree.core;
     allocate opensysml.pipeline.lowering to tree.core;
     allocate opensysml.pipeline.runtime to tree.core;
+    allocate opensysml.pipeline.runtime.evaluator.compiled to tree.core;
     allocate opensysml.pipeline.stdlib to tree.core;
     allocate opensysml.pipeline.stdlib.encoding to tree.core;
     allocate opensysml.pipeline.stdlib.trees to tree.core;

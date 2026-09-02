@@ -218,9 +218,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 32 | 21 | 2 | 296 | 0 | 1 | 1 | 295 |
+| `examples` | 32 | 21 | 2 | 307 | 0 | 1 | 1 | 306 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **366** | **334** | **56** | **357** | **34** | **2** | **20** | **321** |
+| **Total** | **366** | **334** | **56** | **368** | **34** | **2** | **20** | **332** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -346,8 +346,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **321** |
-| pilot diagnostics | 123 | **357** |
+| only pilot | 82 | **332** |
+| pilot diagnostics | 123 | **368** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -551,7 +551,7 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 10 syntax, 41 `unmapped`, 69 `kind-mismatch`, 175 `unresolved-reference` — of which
+`examples` 10 syntax, 44 `unmapped`, 71 `kind-mismatch`, 181 `unresolved-reference` — of which
 `relay-probe-demo/mission.sysml` carries three: two `unmapped` where the pilot rejects a snapshot
 redefining the mass its individual binds (`Cannot override a binding feature value`) and one
 `kind-mismatch` on its send of a `Telemetry` instantiation, the same two rules it already flags on
@@ -559,8 +559,8 @@ redefining the mass its individual binds (`Cannot override a binding feature val
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
-The architecture self-model under `examples/self-model` adds nineteen of the shapes this root
-already carries: seventeen `unmapped` where `pipeline.sysml`, `surfaces.sysml` and `identity.sysml`
+The architecture self-model under `examples/self-model` adds twenty of the shapes this root
+already carries: eighteen `unmapped` where `pipeline.sysml`, `surfaces.sysml` and `identity.sysml`
 redefine an inherited attribute's default (`Cannot override a binding feature value`, the rule
 `solver-demo.sysml` and `relay-probe-demo/mission.sysml` already draw — the self-model draws it once
 per validation pass it marks element-scoped, per rendering kind it marks unsupported, per budget
@@ -568,22 +568,24 @@ default it restates, per unit it marks memoized and per oracle it marks gating) 
 where `views.sysml` frames a concern, which the reference rejects on `views-demo.sysml` the same
 way. The accuracy round that modelled the pass registry, the six runtime budgets and the rendering
 kinds took the `unmapped` count from five to fifteen without adding a shape; modelling the library
-snapshot, its gating check and the evaluator's memoization took it to seventeen the same way.
+snapshot, its gating check and the evaluator's memoization took it to seventeen the same way, and
+the compiled calc tier, memoized like the evaluator it sits beside, to eighteen.
 
-**`self-model/document.sysml` carries 249 pilot-only rows on its own, and every one of them has a
+**`self-model/document.sysml` carries 259 pilot-only rows on its own, and every one of them has a
 single cause: the reference has no `DocumentQueries` library.** The file is the architecture
 document written in the notation, so its first line imports the document and query vocabulary this
 project bundles as an OpenSysML library ([the authoring chapter](../manual/authoring.md)); the
-reference cannot resolve that namespace, and the cascade is 174 `unresolved-reference`, 64
+reference cannot resolve that namespace, and the cascade is 180 `unresolved-reference`, 66
 `kind-mismatch` (`Must invoke a behavior or a behavioral feature`, once per query invocation whose
-calc def did not resolve) and 11 `unmapped`. It is the first file in any root that depends on a
-library the reference does not ship, which is why the `examples` only-pilot column jumps 34 → 295
+calc def did not resolve) and 13 `unmapped`. It is the first file in any root that depends on a
+library the reference does not ship, which is why the `examples` only-pilot column jumps 34 → 306
 without a single one of our own diagnostics moving: only-ours stays at 20 and our diagnostics at 56.
 The cascade grows with the document (182 rows when the self-model landed, 240 after its accuracy
 round added queries over the pass registry, the budgets and the rendering kinds, 249 after the
-section on loading the library snapshot), so its size measures how much the document asks of the
-library, not conformance. Read this root's only-pilot total as "one file the reference has no
-library for, plus the 46 rows the other files carry", not as a conformance movement.
+section on loading the library snapshot, 259 after the paragraph and diagram on invoking a calc),
+so its size measures how much the document asks of the library, not conformance. Read this root's
+only-pilot total as "one file the reference has no library for, plus the 47 rows the other files
+carry", not as a conformance movement.
 
 **`pilot-examples` is the row to read carefully: its total falls 68 → 63 and its mix barely
 resembles the old one.** All 31 syntax rows are gone, and `pilot-validation`'s 7 with them — wave 10D
@@ -623,7 +625,7 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **295** |
+| `examples`: only pilot | **40** | **306** |
 | `examples`: fully agreeing | **15** | **21** |
 | `unmapped`, our side | **20** | **19** |
 

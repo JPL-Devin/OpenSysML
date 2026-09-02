@@ -66,6 +66,17 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   node. The architecture document gains a section and diagram on loading the library, and the
   pilot differential baseline is re-recorded for the larger model: the eleven new rows are all the
   reference's, of shapes the self-model already drew.
+- **The architecture self-model describes the compiled calc tier.** The evaluator now carries a
+  `CalcCompiler` part — memoized, switched off by `OPENSYSML_CALC_COMPILE`, falling back to the
+  evaluator — and `InvokeCalc` models one invocation as an action whose three decisions (a traced
+  run, a pure body, positional scalar arguments) send it to the compiled tier or to the evaluator
+  whole. A tenth invariant, `evaluatorIsReference`, states that the compiled tier is an optimization
+  of the evaluator and never a second semantics; `CalcDifferential` names the parity and
+  differential tests that verify it. The self-model test checks the variable's name against
+  `runtime.CalcCompileEnvVar` and the environment reference, that a fresh `runtime.Context`
+  compiles calcs until that variable says otherwise, and — invoking the model's own `StepBudget`
+  through both tiers — that they agree and that a traced run takes the evaluator. The architecture
+  document gains a paragraph and diagram on invoking a calc.
 
 ## 0.4.3 — 2026-09-01
 

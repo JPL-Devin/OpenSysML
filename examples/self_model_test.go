@@ -105,6 +105,7 @@ func TestSelfModelInvariantsHold(t *testing.T) {
 			"executionIsBounded",
 			"libraryIsClean",
 			"snapshotIsDerived",
+			"evaluatorIsReference",
 			"exportRoundTrips",
 		},
 		"identity.sysml/OpenSysMLIdentity": {
@@ -352,6 +353,88 @@ func TestSelfModelEvaluatorMatchesImplementation(t *testing.T) {
 	if keyedByNode != evaluator.boolean("memoized") {
 		t.Errorf("pipeline.sysml says the evaluator is memoized = %t, runtime.Context keyed a side table by syntax node: %t",
 			evaluator.boolean("memoized"), keyedByNode)
+	}
+}
+
+// TestSelfModelCalcCompilerMatchesImplementation checks the compiled calc tier's
+// switch and its fallback against the runtime, invoking the self-model's own
+// StepBudget calc through both tiers.
+func TestSelfModelCalcCompilerMatchesImplementation(t *testing.T) {
+	idx, ctx := analyseSelfModel(t)
+	evaluator := instantiateSelfModel(t, idx, ctx, "pipeline.sysml", "OpenSysMLPipeline", "Evaluator")
+	compiled, ok := evaluator.parts()["compiled"]
+	if !ok {
+		t.Fatal("Evaluator declares no compiled part")
+	}
+
+	envVar := compiled.str("overrideEnvVar")
+	if envVar != runtime.CalcCompileEnvVar {
+		t.Errorf("pipeline.sysml says the compiled tier is switched by %s, runtime reads %s", envVar, runtime.CalcCompileEnvVar)
+	}
+	reference, err := os.ReadFile(filepath.Join("..", "docs", "reference", "environment.md"))
+	if err != nil {
+		t.Fatalf("read the environment reference: %v", err)
+	}
+	if !strings.Contains(string(reference), "`"+envVar+"`") {
+		t.Errorf("docs/reference/environment.md does not document %s", envVar)
+	}
+
+	t.Setenv(runtime.CalcCompileEnvVar, "")
+	_, onByDefault := analyseSelfModel(t)
+	if onByDefault.CalcCompile() != evaluator.boolean("compilesPureCalcs") {
+		t.Errorf("pipeline.sysml says compilesPureCalcs = %t, a fresh runtime.Context compiles calcs: %t",
+			evaluator.boolean("compilesPureCalcs"), onByDefault.CalcCompile())
+	}
+	t.Setenv(runtime.CalcCompileEnvVar, "0")
+	_, switchedOff := analyseSelfModel(t)
+	if switchedOff.CalcCompile() {
+		t.Errorf("%s=0 left a fresh runtime.Context compiling calcs", runtime.CalcCompileEnvVar)
+	}
+	t.Setenv(runtime.CalcCompileEnvVar, "")
+
+	// The same invocation through both tiers, plain and traced: same value, and
+	// a traced run records the evaluator's sub-expressions whichever tier is on.
+	integer := func(i int64) runtime.Value {
+		return runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: i}}
+	}
+	var values, traces [2]string
+	for i, compile := range []bool{true, false} {
+		for _, traced := range []bool{false, true} {
+			tierIdx, tierCtx := analyseSelfModel(t)
+			tierCtx.SetCalcCompile(compile)
+			scope := packageScope(t, tierIdx, "behavior.sysml", "OpenSysMLBehavior")
+			sym, ok := scope.LookupLocal("StepBudget")
+			if !ok {
+				t.Fatal("OpenSysMLBehavior declares no StepBudget")
+			}
+			var tr *runtime.TraceRecorder
+			if traced {
+				tr = runtime.NewTraceRecorder()
+				tierCtx.SetTrace(tr)
+			}
+			got, err := tierCtx.InvokeCalc(sym, []runtime.Value{integer(6), integer(7)}, scope)
+			if err != nil {
+				t.Fatalf("compile=%t traced=%t: StepBudget(6, 7): %v", compile, traced, err)
+			}
+			if got.Kind != runtime.ValConst || got.Const.Int != 42 {
+				t.Errorf("compile=%t traced=%t: StepBudget(6, 7) = %s", compile, traced, runtime.FormatTraceValue(got))
+			}
+			if traced {
+				traces[i] = tr.String()
+			} else {
+				values[i] = runtime.FormatTraceValue(got)
+			}
+		}
+	}
+	if values[0] != values[1] {
+		t.Errorf("the compiled tier and the evaluator disagree on StepBudget(6, 7): %s vs %s", values[0], values[1])
+	}
+	if !strings.Contains(traces[1], "eval operator *") {
+		t.Fatalf("the evaluator's trace records no sub-expression:\n%s", traces[1])
+	}
+	if fellBack := traces[0] == traces[1]; fellBack != compiled.boolean("fallsBackToEvaluator") {
+		t.Errorf("pipeline.sysml says fallsBackToEvaluator = %t, a traced run under the compiled tier matched the evaluator's trace: %t\n%s\n---\n%s",
+			compiled.boolean("fallsBackToEvaluator"), fellBack, traces[0], traces[1])
 	}
 }
 

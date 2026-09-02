@@ -182,6 +182,45 @@ package OpenSysMLBehavior {
         transition first constraintTier if failures > 0 then halted;
     }
 
+    // One calc invocation: a pure body runs compiled unless the run is traced or
+    // an argument is bound by name or is not a scalar; the answer is the same.
+    action def InvokeCalc {
+        attribute tierEnabled : Boolean = true;
+        attribute untraced : Boolean = true;
+        attribute bodyIsPure : Boolean = true;
+        attribute positionalScalars : Boolean = true;
+
+        first start;
+
+        action bindArguments;
+        action compileBody;
+        action runCompiled;
+        action boxResult;
+        action evaluateBody;
+
+        succession first start then bindArguments;
+        succession first bindArguments then traceGate;
+
+        // A traced run records every sub-expression, which only the evaluator does.
+        decide traceGate;
+        if tierEnabled and untraced then bodyGate;
+        else evaluateBody;
+
+        decide bodyGate;
+        if bodyIsPure then compileBody;
+        else evaluateBody;
+
+        succession first compileBody then argumentGate;
+
+        decide argumentGate;
+        if positionalScalars then runCompiled;
+        else evaluateBody;
+
+        succession first runCompiled then boxResult;
+        succession first boxResult then done;
+        succession first evaluateBody then done;
+    }
+
     // The runtime tiers, from an effective feature list to a simulated model.
     state def RuntimeTiers {
         entry; then featureFlattening;

@@ -332,12 +332,24 @@ package OpenSysMLPipeline {
         out item trace : ExecutionTrace;
     }
 
+    // Pure scalar calc bodies compiled once per context into closures held in a
+    // side table; the evaluator stays the reference the compiled tier must match.
+    part def CalcCompiler :> CodeUnit {
+        attribute :>> goPackage = "internal/core/runtime";
+        attribute :>> memoized = true;
+        attribute overrideEnvVar : String = "OPENSYSML_CALC_COMPILE";
+        attribute fallsBackToEvaluator : Boolean = true;
+    }
+
     // Literals and invocation targets are memoized per context in side tables
     // keyed by syntax node; the tree itself carries nothing.
     part def Evaluator :> CodeUnit {
         attribute :>> goPackage = "internal/core/runtime";
         attribute :>> memoized = true;
         attribute supportsCalcInvocation : Boolean = true;
+        attribute compilesPureCalcs : Boolean = true;
+
+        part compiled : CalcCompiler;
     }
 
     part def InstanceModel :> CodeUnit {

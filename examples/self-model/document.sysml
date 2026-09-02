@@ -196,6 +196,16 @@ package OpenSysMLDocument {
                 ref redefines source = OpenSysMLViews::budgetExhaustion;
             }
 
+            part calculating : Paragraph {
+                attribute redefines text = "A calc whose body is one pure scalar expression is compiled on its first invocation into closures over an unboxed frame, kept in a side table on the context like every other derived fact. The evaluator remains the reference: the compiled tier must reproduce its values, errors and step charges exactly, a traced run or an invocation it cannot take goes to the evaluator whole, and an environment variable switches the tier off for bisecting.";
+            }
+
+            part calculation : Diagram {
+                attribute redefines caption = "Invoking a calc: compiled when it may be, on the evaluator otherwise";
+                attribute redefines direction = "TB";
+                ref redefines source = OpenSysMLViews::calcInvocationFlow;
+            }
+
             part analysed : Diagram {
                 attribute redefines caption = "One document analysed end to end";
                 attribute redefines direction = "TB";
