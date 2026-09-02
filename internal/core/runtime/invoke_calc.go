@@ -277,7 +277,7 @@ func unboundResultHint(chain []*symbols.Symbol) string {
 		if name != "" {
 			spelled := lexer.NameText(name)
 			who = "result parameter " + spelled
-			if sibling := bodyMemberNamed(members, name, result); sibling != nil {
+			if sibling := valuedMemberNamed(members, name, result); sibling != nil {
 				trailing, expr = "`"+spelled+"`", spelled
 				if typ == "" {
 					typ = usageTypeText(sibling)
@@ -303,11 +303,12 @@ func unboundResultParameter(members []ast.Node) *ast.Usage {
 	return nil
 }
 
-// bodyMemberNamed returns the body member called name other than except, or nil.
-func bodyMemberNamed(members []ast.Node, name string, except *ast.Usage) *ast.Usage {
+// valuedMemberNamed returns the body member called name, other than except,
+// whose declaration binds a value; an unbound one would not compute a result.
+func valuedMemberNamed(members []ast.Node, name string, except *ast.Usage) *ast.Usage {
 	for _, member := range members {
 		u, ok := member.(*ast.Usage)
-		if !ok || u == except {
+		if !ok || u == except || u.Value == nil {
 			continue
 		}
 		if actual, _ := ast.EffectiveName(u); actual == name {

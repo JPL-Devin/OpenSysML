@@ -366,6 +366,12 @@ package test {
 		attribute 'action' = a;
 		return 'action' : $::ScalarValues::'Real';
 	}
+
+	calc def Uninitialized {
+		in a : Real;
+		attribute h : Real;
+		return h;
+	}
 }
 `
 
@@ -390,6 +396,8 @@ func TestUnboundResultParameterHint(t *testing.T) {
 			"write the result as the trailing expression `'my result'`, or bind it with `return : 'Wide Real' = 'my result';`"},
 		{"Keyword", "no result expression: calc test::Keyword has no return expression: result parameter 'action' binds no value; " +
 			"write the result as the trailing expression `'action'`, or bind it with `return : $::ScalarValues::Real = 'action';`"},
+		{"Uninitialized", "no result expression: calc test::Uninitialized has no return expression: result parameter h binds no value; " +
+			"write the result as the trailing expression of the body, or bind it with `return : <type> = <expr>;`"},
 	}
 	for _, tc := range cases {
 		calc, scope := calcByName(t, root, "test", tc.calc)

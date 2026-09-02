@@ -150,7 +150,7 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   duplicate name — and returns nothing; the evaluator's "no result expression" error used to
   stop there. It now names the unbound result parameter and shows the two forms that state a
   computed result: the body's trailing expression `h`, or `return : Real = h;` (the type and
-  expression are taken from the same-named member when there is one, and names are spelled as
+  expression are taken from a same-named member that binds a value, and names are spelled as
   the notation writes them, so `'my result'` keeps its quotes). The grammar and the error's
   type are unchanged.
 
