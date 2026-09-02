@@ -495,13 +495,16 @@ func (e *ActionExecutor) NodeNames() []string {
 	return append(names, e.subflowNodeNames(e.graph)...)
 }
 
-// initializeAttributes populates the feature space from the performance
-// occurrence, whose slots are materialized already so a usage-level default or
-// redefinition wins, and from the defaults lowering recorded when the action is
-// performed through no occurrence.
+// initializeAttributes fills the features no supplied input holds yet: from the
+// performance occurrence, whose materialized slots carry a usage-level default or
+// redefinition, or from the declared defaults, evaluated in order over the values
+// already held so a default may read an input bound before it.
 func (e *ActionExecutor) initializeAttributes() error {
 	if e.occurrence != nil {
 		for _, attr := range e.graph.Attributes {
+			if _, held := e.root.data[attr.Name]; held {
+				continue
+			}
 			fv, err := e.occurrence.GetFeatureValue(e.ctx, attr.Name)
 			if err != nil {
 				return fmt.Errorf("%w: read %s of object #%d: %w",
@@ -514,10 +517,13 @@ func (e *ActionExecutor) initializeAttributes() error {
 		return nil
 	}
 
-	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
+	ec := e.evalContextFor(e.root, e.graph.Scope)
 	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
 		if attr.Value == nil {
+			continue
+		}
+		if _, held := e.root.data[attr.Name]; held {
 			continue
 		}
 		value, err := ec.Eval(attr.Value)
@@ -646,17 +652,15 @@ func (e *ActionExecutor) initialize() error {
 
 	initialNode := e.graph.Initial
 
-	// Initialize the feature space with the action's attribute defaults.
-	if err := e.initializeAttributes(); err != nil {
-		return fmt.Errorf("initialize attributes: %w", err)
-	}
-
-	// Apply input parameter bindings, overriding any defaults with the same name.
+	// Bind the supplied inputs first: a default written in terms of one reads it.
 	if err := e.checkInputNames(); err != nil {
 		return err
 	}
 	if err := e.setFrameFeatures(e.root, e.inputs); err != nil {
 		return err
+	}
+	if err := e.initializeAttributes(); err != nil {
+		return fmt.Errorf("initialize attributes: %w", err)
 	}
 
 	// Spawn initial token
