@@ -34,15 +34,6 @@ func (u Unit) String() string {
 	return u.Term.String()
 }
 
-// product is the named units the unit is a product of. A unit known by its
-// text alone — one rebuilt from the wire — is that name to the first power.
-func (u Unit) product() semantics.UnitProduct {
-	if !u.Product.IsEmpty() || u.Text == "" {
-		return u.Product
-	}
-	return semantics.NamedUnitProduct(nil, u.Text, u.Term.Dimensionless())
-}
-
 // composedQuantity is a result in the canonical form of its composed unit (`m**2`, `m`).
 // A unit that cancels leaves a number unless it names a dimension-one unit (`rad`).
 func composedQuantity(num semantics.Value, product semantics.UnitProduct, term semantics.UnitTerm) (Value, error) {
@@ -195,10 +186,10 @@ func scaleQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) 
 		term    semantics.UnitTerm
 	)
 	if op == ast.OpMul {
-		product = left.Unit.product().Times(right.Unit.product())
+		product = left.Unit.Product.Times(right.Unit.Product)
 		term = left.Unit.Term.Times(right.Unit.Term)
 	} else {
-		product = left.Unit.product().DividedBy(right.Unit.product())
+		product = left.Unit.Product.DividedBy(right.Unit.Product)
 		term = left.Unit.Term.DividedBy(right.Unit.Term)
 	}
 	return composedQuantity(num, product, term)
@@ -216,11 +207,13 @@ func powQuantity(base *Quantity, exponent semantics.Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return composedQuantity(num, base.Unit.product().Pow(toReal(exponent)), base.Unit.Term.Pow(toReal(exponent)))
+	return composedQuantity(num, base.Unit.Product.Pow(toReal(exponent)), base.Unit.Term.Pow(toReal(exponent)))
 }
 
 // sqrtQuantity is the square root of a quantity, `9 [m**2]` giving `3.0 [m]`;
 // a unit with a base unit at an odd power has no root, so `sqrt(9 [m])` is rejected.
+// A root the named units cannot spell at whole powers (`km*m`) is taken over the
+// base units instead, unless a dimension-one unit (`rad`, `°`) would be lost there.
 func sqrtQuantity(q *Quantity) (Value, error) {
 	for _, f := range q.Unit.Term.Factors {
 		if math.Mod(f.Exponent, 2) != 0 {
@@ -228,15 +221,27 @@ func sqrtQuantity(q *Quantity) (Value, error) {
 				ErrUnitRoot, q.Unit, q.Unit.Term, f.Unit.Name, f.Exponent)
 		}
 	}
-	magnitude := toReal(q.Num)
+	magnitude, term := toReal(q.Num), q.Unit.Term
 	if magnitude < 0 {
 		return Value{}, fmt.Errorf("%w: sqrt of a negative quantity %s", semantics.ErrArithmeticDomain, q)
+	}
+	root, ok := q.Unit.Product.Root(2)
+	if !ok {
+		for _, f := range q.Unit.Product.Powers {
+			if f.DimensionOne && math.Mod(f.Exponent, 2) != 0 {
+				return Value{}, fmt.Errorf("%w: %s raises the dimension-one unit %s to the odd power %g",
+					ErrUnitRoot, q.Unit, f.Name, f.Exponent)
+			}
+		}
+		magnitude = q.baseMagnitude()
+		term = semantics.UnitTerm{Scale: semantics.UnitScale(1), Factors: term.Factors}
+		root, _ = term.BaseProduct().Root(2)
 	}
 	num, err := realResult(math.Sqrt(magnitude))
 	if err != nil {
 		return Value{}, err
 	}
-	return composedQuantity(num, q.Unit.product().Pow(0.5), q.Unit.Term.Pow(0.5))
+	return composedQuantity(num, root, term.Pow(0.5))
 }
 
 // dimensionlessValue is the number a ratio of like quantities computes,

@@ -38,7 +38,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
 - **The Quantities and Units domain library's calculations compute over quantities.** Every
   `QuantityCalculations` declaration dispatches to the runtime's unit-aware arithmetic:
-  `sqrt(9 [m**2])` is `3.0 [m]` and `sqrt(9 [m])` is a typed error (`unit has no root`)
+  `sqrt(9 [m**2])` is `3.0 [m]`, while `sqrt(9 [m])` and `sqrt(9 [rad])` — an angle is
+  dimension one, but a named unit all the same — are a typed error (`unit has no root`)
   rather than a magnitude in a fractional unit; `abs`, `floor` and `round` keep the unit;
   `max`/`min` convert to compare and answer the winning operand as written; `sum`/`product`
   fold in the first element's unit; the operator, comparison, predicate and conversion forms
@@ -56,7 +57,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   than `9.0 [m*m]`, `9 [(m)**2]` and `3.0 [(m*m)/m]`, and `(m/s) * (kg/s)` prints
   `kg*m/s**2` — while a named derived unit stays as written (`2 [N*m]`, `18.0 [km/h**2]`). A
   product of quantities keeps the magnitude kind bare arithmetic gives, so `l1 * l1` and
-  `l1 ** 2` agree. The REPL, the trace and the gRPC `unit` field all render the one text.
+  `l1 ** 2` agree. The REPL, the trace and the gRPC `unit` field all render the one text, and
+  a quantity sent over gRPC composes as one written locally does: `SI::m/SI::s` times `SI::s`
+  is `SI::m`. Only the trigonometric functions take a dimension-one quantity for a number;
+  `IntegerFunctions::abs(1 [rad])` is a type mismatch, as its declaration says.
 
 ### Performance
 

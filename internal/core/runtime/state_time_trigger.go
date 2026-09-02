@@ -65,5 +65,5 @@ func (e *StateExecutor) clockUnit() (Unit, error) {
 	if err != nil {
 		return Unit{}, err
 	}
-	return Unit{Text: "s", Term: term}, nil
+	return Unit{Text: "s", Product: semantics.NamedUnitProduct(matches[0], "s", false), Term: term}, nil
 }

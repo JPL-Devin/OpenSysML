@@ -356,6 +356,70 @@ func TestQuantityWithoutItsReduction(t *testing.T) {
 	}
 }
 
+// TestQuantityFromWireComposesAsWritten pins that a quantity read back from the
+// wire keeps the named units its unit text composes, so an operation on it in a
+// calc cancels and merges them exactly as it does for a quantity written in the model.
+func TestQuantityFromWireComposesAsWritten(t *testing.T) {
+	srv := mustNewService(t, 4)
+	source := `package Q {
+	private import ScalarValues::*;
+	calc def Dist { in v; in dt; v * dt }
+	calc def Area { in a; in b; a * b }
+}
+`
+	hash := mustVerifyModel(t, srv, source, "quantity-composes-as-written")
+	evaluate := func(calc string, args ...*pb.Quantity) *pb.Quantity {
+		t.Helper()
+		req := &pb.EvaluateCalcRequest{ModelHash: hash, SymbolId: calc}
+		for _, arg := range args {
+			req.Arguments = append(req.Arguments, &pb.Value{Kind: &pb.Value_Quantity{Quantity: arg}})
+		}
+		resp, err := srv.EvaluateCalc(context.Background(), req)
+		if err != nil {
+			t.Fatalf("EvaluateCalc %s: %v", calc, err)
+		}
+		if resp.Error != "" {
+			t.Fatalf("EvaluateCalc %s reported %q", calc, resp.Error)
+		}
+		if resp.Result.GetQuantity() == nil {
+			t.Fatalf("EvaluateCalc %s = %v, want a quantity", calc, resp.Result)
+		}
+		return resp.Result.GetQuantity()
+	}
+
+	speed := mustEvaluateQuantity(t, srv, hash, "3.0 [SI::m] / 1.0 [SI::s]")
+	if speed.GetUnit() != "SI::m/SI::s" {
+		t.Fatalf("speed crosses the wire in %q, want SI::m/SI::s", speed.GetUnit())
+	}
+	dist := evaluate("Q::Dist", speed, mustEvaluateQuantity(t, srv, hash, "2.0 [SI::s]"))
+	if got := describeQuantity(dist); got != "6 [SI::m] = SI::metre" {
+		t.Errorf("m/s * s over the wire = %s, want 6 [SI::m] = SI::metre", got)
+	}
+
+	// A scaled named unit stays the unit it was written in, as it does locally.
+	byHand := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 2},
+		Unit:      "SI::km",
+		UnitTerm:  mustEvaluateQuantity(t, srv, hash, "1.0 [SI::km]").GetUnitTerm(),
+	}
+	area := evaluate("Q::Area", byHand, byHand)
+	if got := describeQuantity(area); got != "4 [SI::km**2] = 1e+06/1·SI::metre^2" {
+		t.Errorf("km * km over the wire = %s, want 4 [SI::km**2] = 1e+06/1·SI::metre^2", got)
+	}
+
+	// Unit text that is no unit expression is one opaque unit: still a quantity
+	// over the reduction sent, and still what the sender wrote.
+	opaque := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5},
+		Unit:      "metres per second",
+		UnitTerm:  speed.GetUnitTerm(),
+	}
+	got := describeQuantity(evaluate("Q::Dist", opaque, mustEvaluateQuantity(t, srv, hash, "1.0 [SI::s]")))
+	if got != "5 [SI::s*metres per second] = SI::metre" {
+		t.Errorf("opaque unit over the wire = %s, want 5 [SI::s*metres per second] = SI::metre", got)
+	}
+}
+
 // TestQuantityAsAnActionInput drives ExecuteAction with a quantity input: it is
 // decoded against the model, and one that cannot be read is reported by name.
 func TestQuantityAsAnActionInput(t *testing.T) {

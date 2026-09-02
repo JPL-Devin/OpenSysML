@@ -115,9 +115,39 @@ func registerTensorCalculations() {
 		[]string{"transformation", "sourceTensor"}, 2, noCoordinateTransformation)
 }
 
-// numericArgument reads an argument to a numeric parameter: a number, or a
-// quantity of dimension one as the number it reduces to (`30 ['°']` is π/6).
-func numericArgument(val Value) (semantics.Value, bool) {
+// registerAngleFunction adds a trigonometric function of an angle in radians,
+// which also accepts the angle as a quantity: `sin(30 ['°'])` is sin(π/6).
+func registerAngleFunction(name string, params []string, apply func([]semantics.Value) (semantics.Value, error)) {
+	registerValueFunction(name, params, len(params), angleScalars(params, apply))
+}
+
+// angleScalars adapts a numeric implementation so that each argument may be a
+// number of radians or a quantity of dimension one (an angle, a ratio), read as
+// the number it reduces to; a quantity of any other dimension is not an angle.
+func angleScalars(params []string, apply func([]semantics.Value) (semantics.Value, error)) libraryApply {
+	return func(name string, _ *Context, args []Value) (Value, error) {
+		values := make([]semantics.Value, len(args))
+		for i, arg := range args {
+			num, ok := angleArgument(arg)
+			if !ok {
+				return Value{}, fmt.Errorf(
+					"%w: function %s parameter %q requires a number of radians or an angle quantity, got %s",
+					ErrTypeMismatch, name, params[i], describeValue(arg),
+				)
+			}
+			values[i] = num
+		}
+		result, err := apply(values)
+		if err != nil {
+			return Value{}, fmt.Errorf("function %s: %w", name, err)
+		}
+		return Value{Kind: ValConst, Const: result}, nil
+	}
+}
+
+// angleArgument reads an angle: a number, or a dimension-one quantity as the
+// number it reduces to.
+func angleArgument(val Value) (semantics.Value, bool) {
 	switch val.Kind {
 	case ValConst:
 		return val.Const, val.Const.IsNumeric()

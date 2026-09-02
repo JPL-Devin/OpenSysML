@@ -108,10 +108,10 @@ func init() {
 	// TrigFunctions. The library names the angle `theta` and the inverse
 	// functions `arcsin`/`arccos`/`arctan` over a `x` parameter; `tan` and `cot`
 	// carry bodies there (sin/cos and cos/sin), which these compute directly.
-	registerLibraryFunction("TrigFunctions::sin", []string{"theta"}, realUnary(math.Sin))
-	registerLibraryFunction("TrigFunctions::cos", []string{"theta"}, realUnary(math.Cos))
-	registerLibraryFunction("TrigFunctions::tan", []string{"theta"}, realUnary(tanReal))
-	registerLibraryFunction("TrigFunctions::cot", []string{"theta"}, realUnary(cotReal))
+	registerAngleFunction("TrigFunctions::sin", []string{"theta"}, realUnary(math.Sin))
+	registerAngleFunction("TrigFunctions::cos", []string{"theta"}, realUnary(math.Cos))
+	registerAngleFunction("TrigFunctions::tan", []string{"theta"}, realUnary(tanReal))
+	registerAngleFunction("TrigFunctions::cot", []string{"theta"}, realUnary(cotReal))
 	registerLibraryFunction("TrigFunctions::arcsin", []string{"x"}, realUnary(math.Asin))
 	registerLibraryFunction("TrigFunctions::arccos", []string{"x"}, realUnary(math.Acos))
 	registerLibraryFunction("TrigFunctions::arctan", []string{"x"}, realUnary(math.Atan))
@@ -288,20 +288,20 @@ func registerUnevaluable(name string, params []string, required int, reason stri
 	})
 }
 
-// numericScalars adapts an implementation over scalar numbers; a dimension-one
-// quantity (an angle, a ratio) is the number it reduces to, so `sin(30 ['°'])` is sin(π/6).
+// numericScalars adapts an implementation over scalar numeric values: every
+// parameter of such a declaration is one number, so a collection, a string, an
+// instance or a quantity does not conform to it.
 func numericScalars(params []string, apply func([]semantics.Value) (semantics.Value, error)) libraryApply {
 	return func(name string, _ *Context, args []Value) (Value, error) {
 		values := make([]semantics.Value, len(args))
 		for i, arg := range args {
-			num, ok := numericArgument(arg)
-			if !ok {
+			if arg.Kind != ValConst || !arg.Const.IsNumeric() {
 				return Value{}, fmt.Errorf(
 					"%w: function %s parameter %q requires a numeric value, got %s",
 					ErrTypeMismatch, name, params[i], describeValue(arg),
 				)
 			}
-			values[i] = num
+			values[i] = arg.Const
 		}
 		result, err := apply(values)
 		if err != nil {

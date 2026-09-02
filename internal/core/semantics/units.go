@@ -206,6 +206,20 @@ func (t UnitTerm) Pow(exp float64) UnitTerm {
 	return normalizeTerm(out)
 }
 
+// BaseProduct is the term's base units as a product named by their symbols
+// (`m`, `s`); a magnitude over it is the term's magnitude times the term's scale.
+func (t UnitTerm) BaseProduct() UnitProduct {
+	out := UnitProduct{}
+	for _, f := range t.Factors {
+		name := f.Unit.ShortName
+		if name == "" {
+			name = f.Unit.Name
+		}
+		out.Powers = append(out.Powers, UnitPower{Unit: f.Unit, Name: name, Exponent: f.Exponent})
+	}
+	return normalizeProduct(out)
+}
+
 // Normalized restores the term's invariant: repeated base units summed, those
 // that cancel dropped, the rest ordered by name. For a term built from outside.
 func (t UnitTerm) Normalized() UnitTerm { return normalizeTerm(t) }

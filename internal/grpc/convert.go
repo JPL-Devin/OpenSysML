@@ -424,7 +424,9 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 }
 
 // ProtoToQuantity rebuilds a quantity from the wire: the magnitude as sent, in
-// the unit as written, over the base units idx resolves its reduction to.
+// the unit as written — read as the product of the named units it composes, so
+// an operation over it cancels and merges them — over the base units idx
+// resolves its reduction to.
 func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
 	if pq == nil {
 		return runtime.Value{Kind: runtime.ValNull}, nil
@@ -450,8 +452,37 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 		return runtime.Value{}, fmt.Errorf("quantity in %q carries no magnitude", pq.GetUnit())
 	}
 
-	quantity := &runtime.Quantity{Num: num, Unit: runtime.Unit{Text: pq.GetUnit(), Term: term}}
-	return runtime.NewQuantityValue(quantity), nil
+	unit := runtime.Unit{Text: pq.GetUnit(), Product: unitProductOfText(pq.GetUnit(), term, idx, sem), Term: term}
+	return runtime.NewQuantityValue(&runtime.Quantity{Num: num, Unit: unit}), nil
+}
+
+// unitProductOfText reads a unit as written (`SI::m/SI::s`) as the product of
+// the named units it composes, each resolved against the model where its name
+// is one the model declares. Text that is no unit expression is one opaque unit.
+func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) semantics.UnitProduct {
+	if text == "" {
+		return semantics.UnitProduct{}
+	}
+	opaque := semantics.NamedUnitProduct(nil, text, term.Dimensionless())
+	if idx == nil || sem == nil {
+		return opaque
+	}
+	p := parser.New(source.New("<unit>", []byte(text)))
+	expr := p.ParseExpression()
+	if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
+		return opaque
+	}
+	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+		matches := idx.LookupQualified(semantics.QualifiedNameText(qn))
+		if len(matches) != 1 || !sem.IsMeasurementUnit(matches[0]) {
+			return nil, false
+		}
+		return matches[0], true
+	})
+	if err != nil {
+		return opaque
+	}
+	return product
 }
 
 // protoToUnitTerm rebuilds a unit's reduction, normalized so a term sent in any

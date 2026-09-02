@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
@@ -61,6 +62,17 @@ func (p UnitProduct) Pow(exp float64) UnitProduct {
 		out.Powers = append(out.Powers, f)
 	}
 	return normalizeProduct(out)
+}
+
+// Root divides every power by n, reporting false where a power does not divide
+// into a whole exponent: `m**2` has a square root `m`, `rad` and `km*m` have none.
+func (p UnitProduct) Root(n float64) (UnitProduct, bool) {
+	for _, f := range p.Powers {
+		if math.Mod(f.Exponent, n) != 0 {
+			return UnitProduct{}, false
+		}
+	}
+	return p.Pow(1 / n), true
 }
 
 // String renders the product as the notation reads it back: positive powers joined
@@ -144,16 +156,38 @@ func sameUnit(f, g UnitPower) bool {
 	return f.Name == g.Name
 }
 
+// UnitLookup resolves a unit name written in a unit expression to its
+// declaration, reporting false for a name it does not know.
+type UnitLookup func(qn *ast.QualifiedName) (*symbols.Symbol, bool)
+
 // UnitProductOfExpr reads a unit expression as the product of the named units it
 // multiplies, divides and raises; it accepts and rejects exactly what UnitTermOfExpr does.
 func (m *Model) UnitProductOfExpr(scope *symbols.Scope, node ast.Node) (UnitProduct, error) {
+	return m.UnitProductOfExprBy(node, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+		if m.resolver == nil {
+			return nil, false
+		}
+		sym, ok := m.resolver.ResolveQualified(scope, qn)
+		if !ok || sym == nil {
+			return nil, false
+		}
+		if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			return alias, true
+		}
+		return sym, true
+	})
+}
+
+// UnitProductOfExprBy reads a unit expression, identifying each named unit by
+// what lookup resolves it to; a name lookup does not know is kept by its text.
+func (m *Model) UnitProductOfExprBy(node ast.Node, lookup UnitLookup) (UnitProduct, error) {
 	switch n := node.(type) {
 	case *ast.FeatureReference:
-		return m.unitProductOfName(scope, n.Name)
+		return m.unitProductOfName(n.Name, lookup)
 	case *ast.QualifiedName:
-		return m.unitProductOfName(scope, n)
+		return m.unitProductOfName(n, lookup)
 	case *ast.OperatorExpr:
-		return m.unitProductOfOperator(scope, n)
+		return m.unitProductOfOperator(n, lookup)
 	case *ast.LiteralInteger:
 		if val, ok := m.Eval(n); ok && val.Kind == ValInt && val.Int == 1 {
 			return UnitProduct{}, nil
@@ -164,38 +198,33 @@ func (m *Model) UnitProductOfExpr(scope *symbols.Scope, node ast.Node) (UnitProd
 
 // unitProductOfName is the named unit qn writes, identified by the declaration
 // it resolves to where it resolves.
-func (m *Model) unitProductOfName(scope *symbols.Scope, qn *ast.QualifiedName) (UnitProduct, error) {
+func (m *Model) unitProductOfName(qn *ast.QualifiedName, lookup UnitLookup) (UnitProduct, error) {
 	if qn == nil {
 		return UnitProduct{}, ErrUnitExpr
 	}
 	var unit *symbols.Symbol
 	dimensionOne := false
-	if m.resolver != nil {
-		if sym, ok := m.resolver.ResolveQualified(scope, qn); ok && sym != nil {
-			unit = sym
-			if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
-				unit = alias
-			}
-			if term, err := m.UnitTermOf(unit); err == nil {
-				dimensionOne = term.Dimensionless()
-			}
+	if sym, ok := lookup(qn); ok && sym != nil {
+		unit = sym
+		if term, err := m.UnitTermOf(unit); err == nil {
+			dimensionOne = term.Dimensionless()
 		}
 	}
 	return NamedUnitProduct(unit, QualifiedNameText(qn), dimensionOne), nil
 }
 
 // unitProductOfOperator reads a product, quotient or power of units.
-func (m *Model) unitProductOfOperator(scope *symbols.Scope, n *ast.OperatorExpr) (UnitProduct, error) {
+func (m *Model) unitProductOfOperator(n *ast.OperatorExpr, lookup UnitLookup) (UnitProduct, error) {
 	if len(n.Operands) != 2 {
 		return UnitProduct{}, fmt.Errorf("%w: %v takes 2 operands, got %d", ErrUnitExpr, n.Operator, len(n.Operands))
 	}
-	left, err := m.UnitProductOfExpr(scope, n.Operands[0])
+	left, err := m.UnitProductOfExprBy(n.Operands[0], lookup)
 	if err != nil {
 		return UnitProduct{}, err
 	}
 	switch n.Operator {
 	case ast.OpMul, ast.OpDiv:
-		right, err := m.UnitProductOfExpr(scope, n.Operands[1])
+		right, err := m.UnitProductOfExprBy(n.Operands[1], lookup)
 		if err != nil {
 			return UnitProduct{}, err
 		}
