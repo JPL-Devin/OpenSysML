@@ -38,7 +38,7 @@ typing) are refereed under the same conditions our workspace validates under.
 The corpus is committed under `cmd/pilot-reject/testdata/negative/`. Every file's first line is a
 mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule the case violates and
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
-systematically from three sources, one subdirectory each:
+systematically from four sources, one subdirectory each:
 
 1. **`grammar/` — grammar mutation** (78 cases; 20 in wave 8, 45 added by wave 9F along the
    *unreached* axis described below, 13 by wave 10G's second pass). For productions our corpus exercises in the
@@ -67,8 +67,21 @@ systematically from three sources, one subdirectory each:
    `Feature_invalid_noType.kerml.xt`) only error in a library-less resource set — with the
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
+4. **`semantic/` — the pilot validators' named constraints** (42 cases). The pinned
+   `KerMLValidator` and `SysMLValidator` implement 217 named `validate*` constraints, and before
+   this source only the 34 `xpect/` cases tested any of them. Each case here is one minimal
+   standalone model that violates one named KerML constraint (the constraints whose source is
+   KerML or shared with SysML; the SysML-only constraints are a separate slice) and whose header
+   cites that `validate*` name, so the constraint census can join on it. Coverage was derived by
+   reading every constraint's Java implementation and message string: 41 of the 42 cases are
+   `.kerml` (`k01`–`k41`); the one `.sysml` case (`s80`) is a shared constraint whose only
+   legal violating spelling is SysML's `constant` usage prefix. Two things this source records
+   that the buckets cannot: constraints the pilot declares but only warns about or never
+   checks, and constraints for which no legal violating model exists under the loaded standard
+   library — both listed under [Permissiveness gaps](#permissiveness-gaps) below, since a
+   both-accept case is a corpus bug and none was kept.
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 120
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 162
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -114,7 +127,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-120 case(s): 120 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
+162 case(s): 149 both reject, 13 only the pilot rejects, 0 only we reject, 0 both accept
   of which 2 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -122,10 +135,13 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 79 | 79 | 0 | 0 | 0 |
+| semantic | 42 | 29 | 13 | 0 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
-The corpus grew from 79 cases to 119 in wave 10G and to 120 with `g60` (an `alias` named by a
-keyword), and the default-mode gap count is now 2 of 120: only the intended `extensions/`
+The corpus grew from 79 cases to 119 in wave 10G, to 120 with `g60` (an `alias` named by a
+keyword), and to 162 with the `semantic/` source, which reopened 13 gaps — all of them semantic
+rules the pilot enforces and we do not (see [Permissiveness gaps](#permissiveness-gaps)). Before
+that source the default-mode gap count was 2 of 120: only the intended `extensions/`
 notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
@@ -142,8 +158,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 118 agreements and 2 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 120 and 0. Reserved keywords recovered as declared
+the default mode the same corpus gives 147 agreements and 15 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 149 and 13. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -152,7 +168,7 @@ validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wav
 Read those two as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 120 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 162 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
@@ -164,9 +180,90 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 0 gaps under `-conformance auto` are closed. The final three were severity-policy gaps: the pinned
-grammar excluded the spellings, while OpenSysML retained recoverable trees and reported only
-warnings by default. The approved policy now reports errors without removing that recovery.
+All 13 gaps under `-conformance auto` are open, and all of them come from the `semantic/` source:
+named KerML constraints the pinned validators enforce as errors and OpenSysML does not report.
+The three grammar gaps this section carried before were severity-policy gaps — the pinned grammar
+excluded the spellings, while OpenSysML retained recoverable trees and reported only warnings by
+default — and the approved policy closed them by reporting errors without removing that recovery.
+
+| Case | We | Pilot says | Likely root cause |
+| --- | --- | --- | --- |
+| `semantic/k11-initial-value-nonvariable.kerml` | accepts | `Initialized feature must be variable` | `internal/core/passes` — no pass relates the `:=` initial-value form to the feature's variability (`validateFeatureValueIsInitial`) |
+| `semantic/k16-crosses-from-nonend.kerml` | accepts | `Cross subsetting must be owned by one of two or more end features` | `internal/core/passes/w10b_cross_features.go` — checks the shape of a `crosses` chain on association ends, not that the owner is an end of a type with two or more ends (`validateCrossSubsettingCrossingFeature`) |
+| `semantic/k17-crosses-not-through-opposite-end.kerml` | accepts | `Cross subsetting must chain through an opposite end feature` | `internal/core/passes/w10b_cross_features.go` — the opposite-end check does not reach a `crosses` that names the opposite end itself instead of chaining through it (`validateCrossSubsettingCrossedFeature`) |
+| `semantic/k19-cross-feature-not-specializing.kerml` | accepts | `Cross feature must specialized redefined-end cross features` | `internal/core/passes/w10b_cross_features.go` — the redefined-end specialization check does not reach a KerML `assoc` that specializes another and redefines its ends (`validateFeatureCrossFeatureSpecialization`) |
+| `semantic/k25-assoc-one-end.kerml` | accepts | `Must have at least two related elements` | `internal/core/passes/w10b_related_elements.go` — fires for a SysML `connection def` with one end (`xpect/p20`) but not for a KerML `assoc` with one end (`validateAssociationRelatedTypes`) |
+| `semantic/k26-binary-connector-three-ends.kerml` | accepts | `Cannot have more than two ends` | `internal/core/passes/constraint.go` `checkConnectorEndRedefinition` — counts declared `end` features (it rejects `k24`), not the positional ends of `connector c : BinaryLink (x, y, z)` (`validateConnectorBinarySpecialization`) |
+| `semantic/k33-parameter-bound-twice.kerml` | accepts | `Parameter already bound` | `internal/core/passes` — the invocation arity check (`k32`) counts arguments but does not detect the same named parameter bound twice (`validateInvocationExpressionNoDuplicateParameterRedefinition`) |
+| `semantic/k34-constructor-feature-bound-twice.kerml` | accepts | `Feature already bound` | `internal/core/passes` — no duplicate-binding check for `new T(f = …, f = …)` (`validateConstructorExpressionNoDuplicateFeatureRedefinition`) |
+| `semantic/k35-metadata-annotates-wrong-kind.kerml` | accepts | `Cannot annotate Feature` | `internal/core/passes/w8c_metadata_annotation.go` — does not read a metaclass's own `annotatedElement` redefinition (`:>> annotatedElement : KerML::Class`) to restrict what `@M about …` may annotate (`validateMetadataFeatureAnnotatedElement`) |
+| `semantic/k36-metadata-body-redefines-outside.kerml` | accepts | `Must redefine an owning-type feature` | `internal/core/passes/w8d_metadata_usage.go` — emits this message for a SysML metadata usage body but is gated on `ast.UsageMetadata`, so a KerML `@M about C { :>> g; }` body is not checked (`validateMetadataFeatureBody`) |
+| `semantic/k37-multiplicity-bound-not-natural.kerml` | accepts | `Must have a Natural value` | `internal/core/passes/w8c_multiplicity_bounds.go` — only reports a bound whose primitive type is known and non-integer; a bound naming a feature typed by a class has no primitive type and is passed (`validateMultiplicityRangeResultTypes`) |
+| `semantic/k40-metadata-typed-by-class.kerml` | accepts | `Must have a concrete type` | `internal/core/passes/w8c_metadata_type.go` — checks that the type is not abstract (`xpect/p24`) but not that it is a metaclass at all (`validateMetadataFeatureMetadata`) |
+| `semantic/s80-constant-attribute-not-variable.sysml` | accepts | `Only a variable feature can be constant` | `internal/core/passes` — the `constant` usage prefix is parsed but no pass relates it to variability, which an attribute of a data type never has (`validateFeatureConstantIsVariable`) |
+
+### Constraints the pilot declares but does not enforce
+
+Each of these is a named constant in the pinned `KerMLValidator` whose check is either absent or
+reported at warning severity, which the harness does not count as rejection. A minimal violating
+model was refereed for each; the pilot accepted it (or only warned) and so did we, so no case was
+kept — a both-accept case is a corpus bug, not a finding. None is drafted as an upstream issue:
+the unchecked constants are satisfied by construction and the warnings are a deliberate severity
+choice of the pilot, not a defect in its reading of the specification.
+
+- Declared but never checked (the constant has no `error(...)` or `warning(...)` call):
+  `validateFeatureEndIsConstant`, `validateSubsettingPortionConformance`, and
+  `validateAssociationStructureIntersection` (commented in `checkAssociation` as
+  "automatically satisfied" — every association is an intersection of its ends' types by
+  construction).
+- Checked at warning severity only: `validateFeatureEndFeatureMultiplicity` (end feature
+  multiplicity other than 1), `validateRedefinitionMultiplicityConformance` and
+  `validateSubsettingMultiplicityConformance` (a subsetting or redefining feature whose
+  multiplicity exceeds the general's), `validateOperatorExpressionCastConformance` (`as` to a
+  non-conforming type), `validateOperatorExpressionBracketOperator` (`[` applied to a
+  non-Anything argument), `validateFlowEndImplicitSubsetting`,
+  `validateLibraryPackageNotStandard` (`User library packages should not be marked as
+  standard`), and `validateNamespaceDistinguishability` (`Duplicate of other owned member
+  name`, which OpenSysML also reports as a warning).
+
+### Constraints without a constructible violating model
+
+These constraints are enforced by the pinned pilot, but no legal model exists that violates only
+them under the loaded standard library, so they have no case. The reason is recorded so a later
+round does not repeat the search.
+
+- Satisfied by construction in the pilot's own derivations: `validateClassifierDefaultSupertype`
+  (the pilot adds the implicit default supertype whenever it is missing, so the check never
+  fails on parsed text), `validateElementIsImpliedIncluded` (implied relationships are created
+  only when `isImpliedIncluded` is set), `validateAnnotationAnnotatingElement` and
+  `validateAnnotationAnnotatedElementOwnership` (the grammar produces annotations only in the
+  owned-or-owning shapes the constraints require), `validateFeatureHasType` (with the library
+  loaded every feature gets an implicit type; the library-less Xpect negative is noted under
+  `xpect/` above), `validateTypeAtMostOneConjugator`, and the operator-name constraints for
+  collect, select, index and feature-chain expressions (the parser fixes the operator name).
+- Guarded by the grammar: `validateFlowItemFeature` (a flow declaration admits one payload),
+  `validateEndFeatureMembershipIsEnd`, `validateFeatureEndNoDirection`,
+  `validateFeatureEndNotDerivedAbstractCompositeOrPortion` (an `end` prefix excludes the
+  conflicting prefixes), `validateMultiplicityRangeBounds` (bound order and ownership),
+  `validateParameterMembershipOwningType`, `validateParameterMembershipDirection`,
+  `validateReturnParameterMembershipOwningType`, `validateResultExpressionMembershipOwningType`
+  (parameter and result memberships cannot be spelled outside a behavior, step, function or
+  expression), `validateConstructorExpressionOwnedFeatures`,
+  `validateInvocationExpressionOwnedFeatures`, `validateInstantiationExpressionInstantiatedType`,
+  `validateInstantiationExpressionResult`, `validateFeatureReferenceExpressionResult`,
+  `validateFlowEndIsEnd`, `validateFlowEndNestedFeature` and `validateFlowEndOwningType` (the
+  flow-end, argument and result shapes are produced by the parser, not written by the author).
+- Domain-derived: `validateClassifierMultiplicityDomain` and `validateFeatureMultiplicityDomain`
+  compare a multiplicity's featuring types with its owner's; a multiplicity written in the
+  owner's body always has the owner's featuring types, and there is no notation to give it
+  others.
+- Violable only together with another constraint: `validateBindingConnectorIsBinary` — a binding
+  typed by a three-ended association also trips `validateConnectorRelatedFeatures`, so the pilot
+  reports two errors and the case would not violate exactly one rule (we accept it, which the
+  `k25`/`k26` rows above already record for the related-elements shape).
+- `validateFeatureChainingFeatureConformance` — every spelling of a chain whose second feature is
+  not featured by the first's type fails name resolution in both implementations before the
+  conformance check runs, so the violation cannot be isolated from an unresolved reference.
 
 ### p24, deferred by Step 3 and closed by the record format
 
