@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check self-model
+.PHONY: all build build-sysml build-lsp build-grpc pgo-profile conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check self-model
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -59,6 +59,11 @@ build-grpc: ## Build sysml-grpc binary
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/sysml-grpc ./cmd/sysml-grpc
 	@echo "✓ Built $(BIN_DIR)/sysml-grpc ($(VERSION))"
 
+pgo-profile: ## Regenerate cmd/*/default.pgo, the CPU profile go build optimizes the binaries against
+	@echo "Collecting the PGO profile..."
+	scripts/pgo-profile.sh
+	@echo "✓ Regenerated cmd/*/default.pgo"
+
 conformance: ## Run the language-independent conformance suite against sysml-grpc
 	@echo "Running the conformance suite..."
 	@mkdir -p $(BIN_DIR)
@@ -79,15 +84,16 @@ conformance-pkg: ## Run the conformance suite through the public Go API (client/
 test: ## Run Go tests with race detection and coverage
 	@echo "Running Go race tests..."
 	@# Per-package timeout: under -race, passes and model run within 1% of go's 10m default.
-	go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
+	@# -pgo=off: coverage plus cmd/*/default.pgo trips golang/go#80891 (link: fingerprint mismatch).
+	go test -v -race -pgo=off -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
 
 coverage: ## Write the coverage profile the SonarCloud scan reads
 	@echo "Writing coverage.txt..."
 	@# -coverpkg credits a package for the code it exercises elsewhere: without it
 	@# ast/dump.go measures 21% though the parser's golden tests run 90% of it.
 	@# Instrumenting every package is too slow to combine with -race, which
-	@# make test above runs instead.
-	go test -timeout 30m -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic ./...
+	@# make test above runs instead. -pgo=off as in make test.
+	go test -pgo=off -timeout 30m -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic ./...
 	@# -coverpkg repeats every block once per test binary; see the script's header.
 	python3 scripts/dedupe-coverage.py coverage.txt
 	@go tool cover -func=coverage.txt | tail -n 1

@@ -68,6 +68,44 @@ The pilot corpora used by additional gates can be downloaded with:
 ./scripts/download-pilot-corpora.sh
 ```
 
+### Profile-guided optimization
+
+Each main package (`cmd/sysml`, `cmd/sysml-lsp`, `cmd/sysml-grpc`) carries a
+`default.pgo`, a merged CPU profile that `go build` and `go install` apply
+automatically (`-pgo=auto` is the default; pass `-pgo=off` to compare against an
+unoptimized build). The three files are identical: one profile of a
+representative mix — the core test suites, the calc and REPL benchmarks, the
+gRPC service, the `internal/perfbench` harness, and the `sysml` CLI validating
+every example and corpus model in the checkout.
+
+`make test` and `make coverage` pass `-pgo=off`: a coverage-instrumented
+`go test ./...` that includes a main package with a `default.pgo` fails to link
+its test binary (`fingerprint mismatch`, [golang/go#80891](https://github.com/golang/go/issues/80891)).
+PGO only steers optimization decisions (inlining, devirtualization), not
+semantics, so the tests lose nothing running against the unoptimized code; a
+plain `go test ./...` links fine either way.
+
+The profile does not need to track every change: the toolchain tolerates a
+stale profile and only loses the optimization for code whose hot paths moved.
+Regenerate it when a release nears or after a change that reshapes hot paths
+(the parser, resolver, passes, runtime, or workspace). Fetch the corpora first
+so real models are in the mix, then:
+
+```bash
+./scripts/download-training-examples.sh
+./scripts/download-pilot-corpora.sh
+make pgo-profile          # or: scripts/pgo-profile.sh [-keep DIR]
+git diff --stat cmd/*/default.pgo
+```
+
+`make pgo-profile` runs the workloads under `-cpuprofile`, merges them with
+`go tool pprof -proto`, and overwrites `cmd/*/default.pgo`. It takes a few
+minutes and must run on an otherwise idle machine, since a profile taken under
+load weights the wrong paths. `-keep DIR` retains the individual profiles and
+logs for inspection with `go tool pprof`. Commit the regenerated files with
+`-pgo=off` versus default before/after figures, taken as the "Profile-guided
+optimization" section of `docs/project/performance-profile-2026-09.md` does.
+
 ### Learn one path end to end
 
 Before changing a subsystem, trace a small model through this path:
