@@ -4,6 +4,38 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### Performance
+
+- **A process starts in under 20 ms instead of 100.** Every `sysml`, `sysml-lsp` and `sysml-grpc`
+  start, and every test that builds a model, first parsed the 97 bundled OMG library files, indexed
+  them and expanded their wildcard imports — about 100 ms and 467k allocations before the model was
+  looked at. The library's frozen index is now serialized once, at `go generate` time, into
+  `internal/core/libs/stdlib.snapshot` — a hand-rolled binary format (varints over a string table,
+  a node table per syntax-node type, index references in place of pointers; no `encoding/gob`, no
+  reflection) that is embedded in the binary and decoded at start-up, reproducing the object graph a
+  fresh load builds. `bin/sysml -memstats -e "2+3"` over a one-part model goes from 95–102 ms,
+  53.3 MiB and 466.9k allocations to 17–23 ms, 32.4 MiB and 67.1k; the `sysml` binary grows from
+  16.9 to 20.5 MB. The OMG files stay the source of truth: the snapshot records their digest and a
+  format version, and a process whose bundled files, `OPENSYSML_LIBRARY_PATH` override or snapshot
+  format do not match parses the files as before. `make stdlib-snapshot` regenerates it; a test and
+  a CI check fail when the committed snapshot lags the files or the indexing code. The parse path
+  itself is also faster — the files are hashed and parsed concurrently and added to the index in
+  the same order as before, and wildcard expansion no longer re-sorts namespace children out of a
+  map on every enumeration (33 ms → 31 ms over the library).
+
+- **The calc evaluator does less work per invocation.** `runtime.Value` is 64 bytes instead of
+  120, so a value returned through the evaluator's nested frames copies half as much; parsed
+  literals and resolved invocation targets are memoized per evaluation context, keyed by the
+  syntax node an edit replaces; a calc's parameters bind into slot-indexed frames resolved once
+  per calc, with a bare name answered from the frames before the general resolution chain; and an
+  invocation's arguments and frame stack are borrowed from per-context storage. A recursive
+  `Fib(25)` costs 0.65 µs per calc invocation instead of 1.01 µs and allocates about 160 objects
+  per evaluation instead of 971 000. Results, errors, traces and step counts are unchanged; the
+  measurements are recorded in the
+  [execution-performance record](docs/project/execution-performance-2026-09.md).
+
 ## 0.4.3 — 2026-09-01
 
 Release 0.4.3 is where an element gets an identity the notation can carry. The SysML v2 textual

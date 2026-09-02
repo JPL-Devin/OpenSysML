@@ -277,6 +277,16 @@ us — the pilot's `re`/`im` have no evaluable body, and the same run answers `f
 zero. Read it as unrefereeable, and see the `ComplexFunctions` row of
 [spec-compliance.md](spec-compliance.md) for the adjudication.
 
+The dedicated Complex value moved no case between buckets — the counts above are as remeasured
+after it — but it changed one answer inside `pilot-unevaluated`: `w6d:complex-mul-re`,
+`re(rect(0.0, 1.0) * rect(0.0, 1.0))`, now answers `-1.0` where we reported `operator '*' is not
+defined for a sequence and a sequence`. A Complex was two Reals, so the unqualified `*` saw two
+sequences; it is one value now (`runtime.ValComplex`), and an arithmetic operator over a Complex
+operand computes as the `ComplexFunctions` declaration of the same name. The pilot answers no value
+for the case, so the bucket does not move. `w6d:complex-abs` and `w6d:complex-is-zero` still report
+that `NumericalFunctions::abs`/`isZero` require a numeric value: the unqualified name still selects
+those declarations, which is the overload-selection gap named in the `ComplexFunctions` row.
+
 The two remaining `ours-error` cases are adjudicated divergences:
 
 | Case | Ours | Read |

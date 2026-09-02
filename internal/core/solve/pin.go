@@ -370,15 +370,15 @@ func (t *translator) pinTerm(p Pin, v *Var) (*Term, string, error) {
 		if v.Sort.Kind != SortString {
 			return nil, text, t.pinRefusal(p, v, text, msgValuesAre+v.Sort.Name)
 		}
-		return StringTerm(p.Value.Str), text, nil
+		return StringTerm(p.Value.Str()), text, nil
 	case runtime.ValQuantity:
 		term, err := t.pinQuantity(p, v, text)
 		return term, text, err
 	case runtime.ValVariant:
-		term, err := t.pinDatatype(p, v, text, p.Value.Variant)
+		term, err := t.pinDatatype(p, v, text, p.Value.Variant())
 		return term, text, err
 	case runtime.ValEnumLiteral:
-		term, err := t.pinDatatype(p, v, text, p.Value.Literal)
+		term, err := t.pinDatatype(p, v, text, p.Value.Literal())
 		return term, text, err
 	}
 	return nil, text, t.pinRefusal(p, v, text, "a "+p.Value.Kind.String()+" has no literal in the term language")
@@ -422,7 +422,7 @@ func (t *translator) pinQuantity(p Pin, v *Var, text string) (*Term, error) {
 	if v.Sort.Kind != SortReal {
 		return nil, t.pinRefusal(p, v, text, msgValuesAre+v.Sort.Name+" rather than a magnitude")
 	}
-	quantity := p.Value.Quantity
+	quantity := p.Value.Quantity()
 	if quantity == nil {
 		return nil, t.pinRefusal(p, v, text, "it carries no magnitude")
 	}
@@ -510,17 +510,17 @@ func pinText(t *translator, val runtime.Value) string {
 	case runtime.ValConst:
 		return constText(val.Const)
 	case runtime.ValString:
-		return strconv.Quote(val.Str)
+		return strconv.Quote(val.Str())
 	case runtime.ValQuantity:
-		if val.Quantity == nil {
+		if val.Quantity() == nil {
 			return "<quantity without a magnitude>"
 		}
-		return val.Quantity.String()
+		return val.Quantity().String()
 	case runtime.ValVariant:
-		if val.Variant == nil {
+		if val.Variant() == nil {
 			return "<unknown variant>"
 		}
-		return t.fqn(val.Variant)
+		return t.fqn(val.Variant())
 	case runtime.ValEnumLiteral:
 		return val.LiteralText()
 	default:

@@ -325,8 +325,7 @@ func isScalarFeature(feat *EffectiveFeature) bool {
 // multiplicity (1..1 when none is declared) or an element outside its type.
 func (ctx *Context) checkDefault(inst *Instance, fv *FeatureValue, name string, val Value) error {
 	what := fmt.Sprintf("feature value %s.%s", inst.Type.Name, name)
-	count := ctx.boundValueCount(fv.Feature.Type, &val)
-	if msg := fv.Feature.Multiplicity.CountViolation(count); msg != "" {
+	if msg := fv.Feature.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
 	return ctx.checkWriteType(fv.Feature.DeclScope(), what, fv.Feature.Type, val)
@@ -541,7 +540,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 				seq.Append(Value{Kind: ValInstance, Instance: childInst.ID})
 				children = append(children, childInst)
 			}
-			fv.Values = Value{Kind: ValSequence, Sequence: seq}
+			fv.Values = NewSequenceValue(seq)
 			fv.Materialized = true
 			if err := ctx.startClassifierBehaviorsOf(children, mark); err != nil {
 				return nil, err

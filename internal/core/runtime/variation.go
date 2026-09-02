@@ -12,7 +12,7 @@ import (
 // variantReference is the value a name resolving to a variant evaluates to: the
 // choice itself, which a variation is bound to and compared with.
 func variantReference(sym *symbols.Symbol) Value {
-	return Value{Kind: ValVariant, Variant: sym}
+	return NewVariantValue(sym, 0)
 }
 
 // IsVariationFeature reports whether a feature is a variation point, whose feature value
@@ -55,9 +55,9 @@ func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value, owner
 	name := feat.Name
 	switch selection.Kind {
 	case ValSequence:
-		return ctx.bindOneVariant(feat, selection.Sequence.Elements(), owner)
+		return ctx.bindOneVariant(feat, selection.Sequence().Elements(), owner)
 	case ValSet:
-		return ctx.bindOneVariant(feat, selection.Set.Elements(), owner)
+		return ctx.bindOneVariant(feat, selection.Set().Elements(), owner)
 	case ValVariant:
 	default:
 		if ctx.model.IsVariationFeature(feat.Symbol) {
@@ -66,7 +66,7 @@ func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value, owner
 		return selection, nil
 	}
 
-	variant := selection.Variant
+	variant := selection.Variant()
 	if !ctx.model.SelectsVariantOf(feat.Symbol, variant) {
 		return Value{}, fmt.Errorf("%w: %s is not a variant of %s (%s)",
 			ErrNotAVariant, variant.Name, name, ctx.variantSummary(feat.Symbol))
@@ -105,7 +105,7 @@ func (ctx *Context) bindOneVariant(feat *EffectiveFeature, elements []Value, own
 	case len(selected) > 1:
 		names := make([]string, 0, len(selected))
 		for _, el := range selected {
-			names = append(names, el.Variant.Name)
+			names = append(names, el.Variant().Name)
 		}
 		return Value{}, fmt.Errorf("%w: variation %s selects %d variants (%s)",
 			ErrMultipleVariants, feat.Name, len(selected), strings.Join(names, ", "))
@@ -132,7 +132,7 @@ func (ctx *Context) variantValue(variation, variant *symbols.Symbol, owner int64
 	key := variantObject{owner: owner, variation: variation, variant: variant}
 	if id, ok := ctx.variantObjects[key]; ok {
 		if _, live := ctx.instances[id]; live {
-			return Value{Kind: ValVariant, Variant: variant, Instance: id}, nil
+			return NewVariantValue(variant, id), nil
 		}
 	}
 	inst, err := ctx.variantInstance(variant, owner)
@@ -140,7 +140,7 @@ func (ctx *Context) variantValue(variation, variant *symbols.Symbol, owner int64
 		return Value{}, fmt.Errorf("variant %s: %w", variant.Name, err)
 	}
 	ctx.variantObjects[key] = inst.ID
-	return Value{Kind: ValVariant, Variant: variant, Instance: inst.ID}, nil
+	return NewVariantValue(variant, inst.ID), nil
 }
 
 // variantInstance builds the object a selected variant stands for. A variant
@@ -177,14 +177,14 @@ func (ctx *Context) variantConnectorBase(variant *symbols.Symbol) *symbols.Symbo
 // value with a variant compares what the variant stands for. A variant
 // declaring no value is identified by the selection itself.
 func (ctx *Context) variantAsValue(v Value) (Value, error) {
-	if v.Kind != ValVariant || v.Variant == nil {
+	if v.Kind != ValVariant || v.Variant() == nil {
 		return v, nil
 	}
-	if semantics.VariantValue(v.Variant) == nil {
+	if semantics.VariantValue(v.Variant()) == nil {
 		return v, nil
 	}
 	// A variant reached this way declares a value, so no object of it is needed.
-	return ctx.variantValue(nil, v.Variant, 0)
+	return ctx.variantValue(nil, v.Variant(), 0)
 }
 
 // variantObject keys the object a variant stands for by the selection that made

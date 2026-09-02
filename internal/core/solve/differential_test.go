@@ -526,7 +526,7 @@ func pinTerm(v *Var, val runtime.Value) (*Term, string, error) {
 		}
 	case SortString:
 		if val.Kind == runtime.ValString {
-			return StringTerm(val.Str), `"` + val.Str + `"`, nil
+			return StringTerm(val.Str()), `"` + val.Str() + `"`, nil
 		}
 	case SortDatatype:
 		if name, ok := datatypeValueOf(v.Sort, val); ok {
@@ -544,14 +544,14 @@ func ratOfValue(val runtime.Value) (*big.Rat, bool) {
 	case runtime.ValConst:
 		return ratOfConst(val.Const)
 	case runtime.ValQuantity:
-		if val.Quantity == nil {
+		if val.Quantity() == nil {
 			return nil, false
 		}
-		magnitude, ok := ratOfConst(val.Quantity.Num)
+		magnitude, ok := ratOfConst(val.Quantity().Num)
 		if !ok {
 			return nil, false
 		}
-		scale, ok := ratOfScale(val.Quantity.Unit.Term.Normalized().Scale)
+		scale, ok := ratOfScale(val.Quantity().Unit.Term.Normalized().Scale)
 		if !ok {
 			return nil, false
 		}
@@ -566,9 +566,9 @@ func datatypeValueOf(sort Sort, val runtime.Value) (string, bool) {
 	var sym *symbols.Symbol
 	switch val.Kind {
 	case runtime.ValEnumLiteral:
-		sym = val.Literal
+		sym = val.Literal()
 	case runtime.ValVariant:
-		sym = val.Variant
+		sym = val.Variant()
 	}
 	if sym == nil {
 		return "", false

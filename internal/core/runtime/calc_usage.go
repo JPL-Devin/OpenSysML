@@ -277,7 +277,7 @@ type calcRun struct {
 	shape *calcShape
 	scope *symbols.Scope // scope of whoever reads the usage, for a calc that owns none
 	self  *Instance      // object the usage is a feature of, nil when unbound
-	env   map[string]Value
+	env   frame
 	// outer is the environment of the evaluation reading the usage, for a usage
 	// nested in a calc: the bindings the usage itself declares are written there.
 	outer  *EvalContext
@@ -299,7 +299,7 @@ type calcRun struct {
 }
 
 // newCalcRun holds the environment one evaluation of a calc computed.
-func newCalcRun(shape *calcShape, scope *symbols.Scope, self *Instance, env map[string]Value) *calcRun {
+func newCalcRun(shape *calcShape, scope *symbols.Scope, self *Instance, env frame) *calcRun {
 	return &calcRun{
 		shape:     shape,
 		scope:     scope,
@@ -448,14 +448,14 @@ func (ctx *Context) forgetCalcUsage(activation int64, sym *symbols.Symbol) {
 // bindCalcUsage binds a calc usage's inputs, answering with the environment the
 // usage's body runs in, the environment reading it (null unless it is nested in
 // a calc), and the bindings themselves.
-func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalContext, *EvalContext, map[string]Value, error) {
+func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalContext, *EvalContext, frame, error) {
 	ec := NewEvalContextIn(ctx, ctx.calcScope(shape.BodyOwner, shape.Sym, reader.scope), reader.self)
 	if ec.trace != nil {
 		ec.trace.RecordCalcEnter(shape.Name)
 	}
 
-	env := make(map[string]Value, len(shape.Params))
-	ec.Push(env)
+	env := mapFrame(make(map[string]Value, len(shape.Params)))
+	ec.pushFrame(env)
 
 	// A usage declared in a behavior's body is written in that body, so its own
 	// bindings see the values the evaluation reading it holds, and none of the
@@ -472,7 +472,7 @@ func (ctx *Context) bindCalcUsage(shape *calcShape, reader *EvalContext) (*EvalC
 		if ec.trace != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)
 		}
-		return nil, nil, nil, err
+		return nil, nil, frame{}, err
 	}
 	return ec, nested, env, nil
 }
@@ -516,10 +516,10 @@ func (ctx *Context) checkCalcTyping(sym *symbols.Symbol) error {
 // keeping the environment the computation ends with so the usage's outputs can
 // be evaluated against it.
 func (ctx *Context) runCalcUsage(
-	shape *calcShape, ec, nested *EvalContext, env map[string]Value, reader *EvalContext,
+	shape *calcShape, ec, nested *EvalContext, env frame, reader *EvalContext,
 ) (*calcRun, error) {
 	host := &calcStmtHost{ctx: ctx, shape: shape, self: reader.self}
-	engine := newStmtEngine(ctx, host, env)
+	engine := newStmtEngine(ctx, host, env.vars)
 	result, returned, err := runCalcSteps(engine, host, shape)
 	if err != nil {
 		if ec.trace != nil {
@@ -584,7 +584,7 @@ func (run *calcRun) value(ctx *Context, out calcOutput) (Value, error) {
 	if out.Value == nil {
 		// An output the body assigned, and an `inout` the invocation bound, are values
 		// the activation left behind rather than bindings to evaluate.
-		if value, ok := run.env[out.Name]; ok && out.Name != "" {
+		if value, ok := run.env.lookup(out.Name); ok && out.Name != "" {
 			run.outputs[out.Name] = value
 			return value, nil
 		}
@@ -652,7 +652,7 @@ func (run *calcRun) bindingEnv(ctx *Context, owner *symbols.Symbol) *EvalContext
 	if run.outer != nil && owner == run.shape.Sym {
 		ec = run.outer.nestedEnv(scope)
 	}
-	ec.Push(run.env)
+	ec.pushFrame(run.env)
 	ec.calcRun = run
 	return ec
 }

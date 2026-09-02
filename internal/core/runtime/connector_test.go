@@ -229,7 +229,7 @@ func TestNaryConnectorKeepsEveryEnd(t *testing.T) {
 	if fv.Values.Kind != ValSequence {
 		t.Fatalf("participant holds %s, want a sequence of the ends", fv.Values.Kind)
 	}
-	got := fv.Values.Sequence.Elements()
+	got := fv.Values.Sequence().Elements()
 	if len(got) != len(want) {
 		t.Fatalf("participant holds %d ends, want %d", len(got), len(want))
 	}
