@@ -671,23 +671,13 @@ func (c *calcCompiler) compileInvocation(n *ast.InvocationExpr, scope *symbols.S
 	target := (&EvalContext{ctx: c.ctx, scope: scope}).invocationTarget(n)
 	switch {
 	case target.builtin != nil:
-		return c.compileAggregate(target.qualName, target.builtin, &args, scope, layout)
-	case target.calc == nil:
-		fn, libErr := unresolvedLibraryFunction(n.Type, target.qualName)
-		if libErr != nil {
-			return nil, ineligible(fmt.Sprintf("%s: %v", target.qualName, libErr))
-		}
-		if fn != nil {
-			return c.compileLibraryCall(fn, &args, scope, layout)
-		}
-		if builtin, ok := builtinsByLocalName[target.qualName]; ok {
-			return c.compileAggregate(builtinLocalNames[target.qualName], builtin, &args, scope, layout)
-		}
-		return nil, ineligible(fmt.Sprintf("%s does not resolve to a calc", target.qualName))
-	case target.calcBuiltin != nil:
-		return c.compileAggregate(c.ctx.qualifiedSymbolName(target.calc), target.calcBuiltin, &args, scope, layout)
+		return c.compileAggregate(target.builtinName, target.builtin, &args, scope, layout)
+	case target.err != nil:
+		return nil, ineligible(fmt.Sprintf("%s: %v", target.qualName, target.err))
 	case target.library != nil:
 		return c.compileLibraryCall(target.library, &args, scope, layout)
+	case target.calc == nil:
+		return nil, ineligible(fmt.Sprintf("%s does not resolve to a calc", target.qualName))
 	case target.shape == nil:
 		return nil, ineligible(fmt.Sprintf("%s is not a calc with a shape", target.qualName))
 	}
@@ -751,7 +741,7 @@ func (c *calcCompiler) compileLibraryCall(fn *libraryFunction, args *callArgumen
 
 // compileAggregate compiles a sum or product of one scalar argument, which the
 // evaluator's built-in aggregates as a one-element collection.
-func (c *calcCompiler) compileAggregate(name string, fn func(*EvalContext, []Value) (Value, error), args *callArguments, scope *symbols.Scope, layout *frameLayout) (*cnode, error) {
+func (c *calcCompiler) compileAggregate(name string, fn builtinFunc, args *callArguments, scope *symbols.Scope, layout *frameLayout) (*cnode, error) {
 	if !scalarAggregates[name] {
 		return nil, ineligible(fmt.Sprintf("collection function %s", name))
 	}

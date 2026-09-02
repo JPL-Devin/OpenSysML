@@ -6,17 +6,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
-// builtinDeferredParams lists, per built-in, the positions of the parameters
-// the library declares `expr`: their arguments bind unevaluated, so the function
-// decides whether and when each is evaluated, as `if` and `and` require.
-var builtinDeferredParams = map[string]map[int]bool{
-	"ControlFunctions::if":      {1: true, 2: true},
-	"ControlFunctions::??":      {1: true},
-	"ControlFunctions::and":     {1: true},
-	"ControlFunctions::or":      {1: true},
-	"ControlFunctions::implies": {1: true},
-}
-
 // registerNamedOperatorBuiltins adds the function-call forms of the operators
 // whose results are collections or whose arguments are expressions, and the
 // aggregations that take an explicit identity element.
@@ -92,7 +81,7 @@ func builtinControlNullCoalesce(ec *EvalContext, args []Value) (Value, error) {
 // builtinControlLogical is ControlFunctions::'and', 'or' or 'implies': the
 // first value decides alone where it can, and secondValue is evaluated only
 // where it cannot.
-func builtinControlLogical(op ast.OperatorKind) func(*EvalContext, []Value) (Value, error) {
+func builtinControlLogical(op ast.OperatorKind) builtinFunc {
 	name := fmt.Sprintf("ControlFunctions::'%s'", op)
 	return func(ec *EvalContext, args []Value) (Value, error) {
 		if err := checkArity(name, args, 2); err != nil {

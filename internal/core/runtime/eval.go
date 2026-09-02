@@ -1666,7 +1666,7 @@ func (ec *EvalContext) evalSelectExpr(n *ast.SelectExpr) (Value, error) {
 func (ec *EvalContext) evalCollectionNotation(
 	notation string,
 	operandExpr, bodyExpr ast.Node,
-	fn func(*EvalContext, []Value) (Value, error),
+	fn builtinFunc,
 ) (Value, error) {
 	operand, err := ec.Eval(operandExpr)
 	if err != nil {
@@ -1693,35 +1693,45 @@ type invocationKey struct {
 // context; at most one implementation is set, in the order they are tried.
 type invocationTarget struct {
 	qualName    string
-	builtin     func(*EvalContext, []Value) (Value, error) // the written name is a builtin's
-	calc        *symbols.Symbol                            // the declaration the written name resolves to, nil for none
-	calcBuiltin func(*EvalContext, []Value) (Value, error) // calc is a collection function declaration
-	library     *libraryFunction                           // calc is a function library declaration
-	shape       *calcShape                                 // calc's invocation interface, nil when it has none
-	deferred    map[int]bool                               // positions of the builtin's `expr` parameters, bound unevaluated
+	calc        *symbols.Symbol  // the declaration the written name resolves to, nil for none
+	builtin     builtinFunc      // the built-in the name denotes: calc's, or the library's for an unresolved name
+	builtinName string           // the built-in's registered name, keying its declared signature
+	library     *libraryFunction // the library function the name denotes: calc's, or one an unresolved name still means
+	shape       *calcShape       // calc's invocation interface, nil when it has none
+	err         error            // the name denotes nothing the model may call as written
 }
 
 // invocationTarget resolves what n denotes in this context's scope, memoized
 // per context: resolution reads only the model, which is fixed for its life.
+// The model is consulted first, so a declaration of the model's own is invoked
+// as written even under a name a library built-in is registered by. A name that
+// resolves to nothing still denotes the library function of that name: the OMG
+// libraries are in force whether or not the model imports them.
 func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget {
 	key := invocationKey{node: n, scope: ec.scope}
 	if target, ok := ec.ctx.invocationTargets[key]; ok {
 		return target
 	}
 	target := &invocationTarget{qualName: qualifiedNameToString(n.Type)}
-	if fn, ok := builtins[target.qualName]; ok {
-		target.builtin = fn
-		target.deferred = builtinDeferredParams[target.qualName]
-	} else if sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type); ok && sym != nil {
+	if sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type); ok && sym != nil {
 		target.calc = sym
 		if fn, ok := ec.ctx.builtinFor(sym); ok {
-			target.calcBuiltin = fn
-			target.deferred = builtinDeferredParams[ec.ctx.qualifiedSymbolName(sym)]
+			target.builtin, target.builtinName = fn, ec.ctx.qualifiedSymbolName(sym)
 		} else if fn, ok := ec.ctx.libraryFunctionFor(sym); ok {
 			target.library = fn
 		} else if shape, err := ec.ctx.calcShapeOf(sym); err == nil {
 			target.shape = shape
 		}
+	} else if fn, ok := builtins[target.qualName]; ok {
+		target.builtin, target.builtinName = fn, target.qualName
+	} else if fn, err := unresolvedLibraryFunction(n.Type, target.qualName); err != nil {
+		target.err = err
+	} else if fn != nil {
+		target.library = fn
+	} else if fn, ok := builtinsByLocalName[target.qualName]; ok {
+		// `size(seq)` denotes SequenceFunctions::size like `seq->size()` does;
+		// a model's own `size` calc resolved above and denotes itself.
+		target.builtin, target.builtinName = fn, builtinLocalNames[target.qualName]
 	}
 	ec.ctx.invocationTargets[key] = target
 	return target
@@ -1754,12 +1764,14 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	if target.shape != nil && len(n.NamedArgs) == 0 {
 		return ec.invokeCalcShapeStacked(target.shape, exprs)
 	}
+	// A built-in binds its arguments by its declared signature, whether the
+	// written name resolved to the library declaration or to nothing at all.
+	if target.builtin != nil {
+		return ec.invokeBuiltin(target.builtinName, target.builtin, exprs, n.NamedArgs)
+	}
+
 	args := make([]Value, len(exprs))
 	for i, arg := range exprs {
-		if target.deferred[i] {
-			args[i] = NewExprValue(arg)
-			continue
-		}
 		val, err := ec.Eval(arg)
 		if err != nil {
 			return Value{}, err
@@ -1782,52 +1794,10 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		named[arg.Name.Parts[len(arg.Name.Parts)-1].Text] = val
 	}
 
-	// Check builtin registry
-	if target.builtin != nil {
-		if len(named) > 0 {
-			return Value{}, fmt.Errorf("%w: builtin %s takes positional arguments only", ErrUnknownParameter, qualName)
-		}
-		return target.builtin(ec, args)
+	// An argument that fails is reported before the target is judged.
+	if target.err != nil {
+		return Value{}, target.err
 	}
-
-	// User-defined calc: the target symbol resolved from the evaluation context scope.
-	calcSym := target.calc
-	if calcSym == nil {
-		// A KerML function library function is evaluable even where the model
-		// imports no part of the library, so a name that denotes no declaration
-		// still denotes the library function of that name. A name only a
-		// OpenSysML extension declares is in scope under its import alone.
-		fn, libErr := unresolvedLibraryFunction(n.Type, qualName)
-		if libErr != nil {
-			return Value{}, libErr
-		}
-		if fn != nil {
-			return fn.invoke(ec.ctx, calcArgs{positional: args, named: named})
-		}
-		// The same holds of the collection functions: `seq->size()` and `size(seq)`
-		// denote SequenceFunctions::size, whose implementation the qualified name
-		// reaches above. Only an unqualified name the model declares nothing for
-		// gets here, so a model's own `size` calc still denotes itself.
-		if fn, isBuiltin := builtinsByLocalName[qualName]; isBuiltin {
-			if len(named) > 0 {
-				return Value{}, fmt.Errorf("%w: builtin %s takes positional arguments only", ErrUnknownParameter, qualName)
-			}
-			return fn(ec, args)
-		}
-		return Value{}, fmt.Errorf("%w: calc %s", ErrUnresolvedReference, qualName)
-	}
-
-	// A name that resolves to one of the collection function declarations is
-	// computed by the implementation of that operation, whatever notation the
-	// call was written in and whether or not the library declaration carries a
-	// body to evaluate instead.
-	if target.calcBuiltin != nil {
-		if len(named) > 0 {
-			return Value{}, fmt.Errorf("%w: builtin %s takes positional arguments only", ErrUnknownParameter, qualName)
-		}
-		return target.calcBuiltin(ec, args)
-	}
-
 	// Every invocation goes through the one calc path, so an expression and a
 	// direct InvokeCalc bind parameters and trace identically. The notation keeps
 	// the argument forms mutually exclusive.
@@ -1838,8 +1808,11 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	if target.library != nil {
 		return target.library.invoke(ec.ctx, callArgs)
 	}
+	if target.calc == nil {
+		return Value{}, fmt.Errorf("%w: calc %s", ErrUnresolvedReference, qualName)
+	}
 	if target.shape == nil {
-		return ec.ctx.invokeCalcWithSelf(calcSym, callArgs, ec.scope, ec.self)
+		return ec.ctx.invokeCalcWithSelf(target.calc, callArgs, ec.scope, ec.self)
 	}
 	return ec.ctx.invokeCalcShape(target.shape, callArgs, ec.scope, ec.self)
 }

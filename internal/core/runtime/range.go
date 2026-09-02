@@ -89,7 +89,7 @@ func rangeBound(op, which string, val Value) (int64, error) {
 
 // rangeBuiltin is the range function op ('..' at any level of the library)
 // called as a function.
-func rangeBuiltin(op string) func(*EvalContext, []Value) (Value, error) {
+func rangeBuiltin(op string) builtinFunc {
 	return func(ec *EvalContext, args []Value) (Value, error) {
 		if err := checkArity(op, args, 2); err != nil {
 			return Value{}, err

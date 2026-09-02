@@ -11,7 +11,7 @@ import (
 // scalar library registry (library_functions.go) cannot express: it applies to
 // semantics.Values, while these need runtime values and an evaluation context to
 // call a body with.
-var builtins map[string]func(*EvalContext, []Value) (Value, error)
+var builtins map[string]builtinFunc
 
 // builtinsByLocalName maps an unqualified name to the declaration a bare or
 // arrow-form call denotes — `(1,2,3)->size()` and `size((1,2,3))` are
@@ -19,7 +19,7 @@ var builtins map[string]func(*EvalContext, []Value) (Value, error)
 // declaration of it means the same operation, and dispatch reaches it only for
 // a name the model itself declares nothing for, so a user-declared calc of the
 // same name still resolves to itself.
-var builtinsByLocalName map[string]func(*EvalContext, []Value) (Value, error)
+var builtinsByLocalName map[string]builtinFunc
 
 // builtinLocalNames records which library declaration each unqualified name
 // denotes, so the mapping can be listed as well as dispatched on.
@@ -62,7 +62,7 @@ var builtinLocalNames = map[string]string{
 }
 
 func init() {
-	builtins = map[string]func(*EvalContext, []Value) (Value, error){
+	builtins = map[string]builtinFunc{
 		// SequenceFunctions: the operations on general sequences of values.
 		"SequenceFunctions::#":            builtinSequenceIndex,
 		"SequenceFunctions::size":         builtinSequenceSize,
@@ -134,7 +134,7 @@ func init() {
 	}
 	registerNamedOperatorBuiltins()
 
-	builtinsByLocalName = map[string]func(*EvalContext, []Value) (Value, error){}
+	builtinsByLocalName = map[string]builtinFunc{}
 	for local, fqn := range builtinLocalNames {
 		fn, ok := builtins[fqn]
 		if !ok {
@@ -150,14 +150,17 @@ func init() {
 // defined recursively as `if isEmpty(seq)? 0 else size(tail(seq)) + 1` — but
 // the body is the specification of the operation, not the way to compute it, so
 // a name that denotes the library declaration is computed by the implementation
-// of that operation. A calc the model declares itself resolves to its own
-// symbol, whose qualified name is not one of these.
-func (ctx *Context) builtinFor(sym *symbols.Symbol) (func(*EvalContext, []Value) (Value, error), bool) {
+// of that operation. A calc the model declares under the same qualified name
+// is the model's own where it carries a body, as libraryFunctionFor decides.
+func (ctx *Context) builtinFor(sym *symbols.Symbol) (builtinFunc, bool) {
 	if sym == nil {
 		return nil, false
 	}
 	fn, ok := builtins[ctx.qualifiedSymbolName(sym)]
-	return fn, ok
+	if !ok || (!ctx.libraryDeclared(sym) && ctx.hasCalcBody(sym)) {
+		return nil, false
+	}
+	return fn, true
 }
 
 // boolValue wraps a Boolean result.

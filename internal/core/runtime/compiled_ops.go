@@ -631,7 +631,7 @@ func libraryCallNode(fn *libraryFunction, args []*cnode, slots []int) *cnode {
 
 // aggregateNode calls a collection builtin over its one scalar argument, which
 // the builtin reads as the one-element sequence the evaluator makes of it.
-func aggregateNode(name string, fn func(*EvalContext, []Value) (Value, error), arg *cnode) *cnode {
+func aggregateNode(name string, fn builtinFunc, arg *cnode) *cnode {
 	n := &cnode{prefix: 1 + arg.prefix}
 	n.emit = func(precharged bool) compiledExpr {
 		var pre int64
