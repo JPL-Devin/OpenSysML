@@ -209,7 +209,12 @@ func (shape *calcShape) outputNames() string {
 // being narrowed to whichever output comes first.
 func (shape *calcShape) designatedOutput() (calcOutput, error) {
 	if shape.ResultExpr != nil {
-		return calcOutput{Name: "result", Value: shape.ResultExpr, Owner: shape.Sym, IsResult: true}, nil
+		// The bound value is the declared result's, so it answers to that declaration.
+		out := calcOutput{Name: "result", Value: shape.ResultExpr, Owner: shape.Sym, IsResult: true}
+		if declared := shape.resultOutput(); declared != nil {
+			out.Decl = declared.Decl
+		}
+		return out, nil
 	}
 	var valued []calcOutput
 	for _, out := range shape.Outputs {

@@ -236,6 +236,14 @@ func calcMultiplicityContext(t *testing.T) (*Context, *symbols.Index, *symbols.S
 			}
 			calc def ManyOut { in xs : Integer[*]; out ys : Integer[*] = xs; }
 			calc def OneOut { in xs : Integer[*]; out y : Integer = xs; }
+			calc def BoundOne { in xs : Integer[*]; return : Integer; bind result = xs; }
+			calc def BoundMany { in xs : Integer[*]; return : Integer[*]; bind result = xs; }
+			calc def BoundDerived :> BoundOne {
+				in :>> xs;
+				attribute pair : Integer[2] = (xs, xs);
+				bind result = pair;
+			}
+			calc def BoundString { attribute s : String = "s"; return : Integer; bind result = s; }
 
 			calc def Unit { return : Complex = ComplexFunctions::i; }
 			calc def UnitOut { out z : Complex = ComplexFunctions::i; }
@@ -257,7 +265,8 @@ func calcMultiplicityContext(t *testing.T) (*Context, *symbols.Index, *symbols.S
 }
 
 // A positional, named or default argument — through an inherited or redefined
-// parameter too — and the result answer to the declared (else 1..1) multiplicity.
+// parameter too — and the result, returned or bound, answer to the declared
+// (else 1..1) multiplicity.
 func TestCalcParameterAndResultMultiplicity(t *testing.T) {
 	ctx, _, scope := calcMultiplicityContext(t)
 
@@ -280,6 +289,8 @@ func TestCalcParameterAndResultMultiplicity(t *testing.T) {
 		{"Returned(1)", "1"},
 		{"ManyOut((1, 2))", "(1, 2)"},
 		{"OneOut(1)", "1"},
+		{"BoundOne(1)", "1"},
+		{"BoundMany((1, 2))", "(1, 2)"},
 	} {
 		got, err := evalIn(t, ctx, scope, tc.expr)
 		if err != nil {
@@ -304,10 +315,15 @@ func TestCalcParameterAndResultMultiplicity(t *testing.T) {
 		"NoResult()",
 		"Returned((1, 2))",
 		"OneOut((1, 2))",
+		"BoundOne((1, 2))",
+		"BoundDerived(1)",
 	} {
 		if _, err := evalIn(t, ctx, scope, expr); !errors.Is(err, ErrMultiplicityViolation) {
 			t.Errorf("%s: error = %v, want ErrMultiplicityViolation", expr, err)
 		}
+	}
+	if _, err := evalIn(t, ctx, scope, "BoundString()"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("BoundString(): error = %v, want ErrTypeMismatch", err)
 	}
 }
 
