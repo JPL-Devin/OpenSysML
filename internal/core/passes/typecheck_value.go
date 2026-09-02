@@ -168,14 +168,13 @@ func (ec *exprChecker) declaredTypeSymbol(scope *symbols.Scope, rels []*ast.Rela
 }
 
 // valueTypeSymbol returns the type of a bound value as a symbol, or nil when it
-// is not a name the checker can type: a literal (the scalar rules cover those),
-// an expression, or a name that does not resolve.
+// is not a feature the checker can type (a literal, an expression, an unresolved
+// name). A feature chain is typed by its last feature (KerML 8.3.3.3).
 func (ec *exprChecker) valueTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
-	qn, ok := qualifiedNameOf(value)
-	if !ok {
+	if !namesFeature(value) {
 		return nil
 	}
-	sym, resolved := ec.resolver.ResolveQualified(scope, qn)
+	sym, resolved := ec.resolver.ResolveTarget(scope, value)
 	if !resolved || sym == nil {
 		return nil
 	}
@@ -240,13 +239,18 @@ func (ec *exprChecker) owningEnumeration(sym *symbols.Symbol) *symbols.Symbol {
 	return owner
 }
 
-// qualifiedNameOf unwraps the name forms a value expression can take.
-func qualifiedNameOf(value ast.Node) (*ast.QualifiedName, bool) {
+// namesFeature reports whether a value expression names a feature outright — a
+// qualified name, a feature chain or an element `a#(i)` — rather than computing one.
+func namesFeature(value ast.Node) bool {
 	switch v := value.(type) {
 	case *ast.FeatureReference:
-		return v.Name, v.Name != nil
+		return v.Name != nil
 	case *ast.QualifiedName:
-		return v, true
+		return true
+	case *ast.FeatureChainExpr:
+		return v.Member != nil && namesFeature(v.Operand)
+	case *ast.IndexExpr:
+		return !v.Bracket && namesFeature(v.Operand)
 	}
-	return nil, false
+	return false
 }
