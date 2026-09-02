@@ -4,10 +4,10 @@ package Debug {
 	state Tick {
 		entry; then a;
 		state a {
-			accept after 1 then b;
+			accept after 1 [SI::s] then b;
 		}
 		state b {
-			accept after 1 then a;
+			accept after 1 [SI::s] then a;
 		}
 	}
 }

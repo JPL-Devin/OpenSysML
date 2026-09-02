@@ -51,9 +51,9 @@ and the machine completes only once every region has reached it.
 sysml> state TrafficLight {
   ...>     entry; then start;
   ...>     state start;
-  ...>     state green { accept after 25 then yellow; }
-  ...>     state yellow { accept after 5 then red; }
-  ...>     state red { accept after 30 then done; }
+  ...>     state green { accept after 25 [SI::s] then yellow; }
+  ...>     state yellow { accept after 5 [SI::s] then red; }
+  ...>     state red { accept after 30 [SI::s] then done; }
   ...>     succession first start then green;
   ...> }
 ✓ state TrafficLight
@@ -128,7 +128,7 @@ sysml> part def Monitor {
   ...>         entry; then idle;
   ...>         state idle {
   ...>             entry action bump { assign count := count + 1; }
-  ...>             accept after 10 then awake;
+  ...>             accept after 10 [SI::s] then awake;
   ...>         }
   ...>         state awake { entry action mark { assign count := count + 10; } }
   ...>     }

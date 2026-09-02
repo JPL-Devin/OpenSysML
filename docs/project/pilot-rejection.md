@@ -38,7 +38,7 @@ typing) are refereed under the same conditions our workspace validates under.
 The corpus is committed under `cmd/pilot-reject/testdata/negative/`. Every file's first line is a
 mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule the case violates and
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
-systematically from three sources, one subdirectory each:
+systematically from four sources, one subdirectory each:
 
 1. **`grammar/` — grammar mutation** (78 cases; 20 in wave 8, 45 added by wave 9F along the
    *unreached* axis described below, 13 by wave 10G's second pass). For productions our corpus exercises in the
@@ -67,8 +67,14 @@ systematically from three sources, one subdirectory each:
    `Feature_invalid_noType.kerml.xt`) only error in a library-less resource set — with the
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
+4. **`semantic/` — semantic constraints of the SysML v2 specification** the pilot's
+   `SysMLValidator` enforces and no Xpect suite declares. Each case is one violation of one OCL
+   constraint, cited by its specification clause and the pilot's `validate…` method: `s01`–`s03`
+   are the three typing rules of `TriggerInvocationExpression` — an `after` argument that is not a
+   `DurationValue`, an `at` argument that is not a `TimeInstantValue`, a `when` argument that is
+   not Boolean.
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 120
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 123
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -114,7 +120,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-120 case(s): 120 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
+123 case(s): 123 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
   of which 2 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -122,11 +128,12 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 79 | 79 | 0 | 0 | 0 |
+| semantic | 3 | 3 | 0 | 0 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
-The corpus grew from 79 cases to 119 in wave 10G and to 120 with `g60` (an `alias` named by a
-keyword), and the default-mode gap count is now 2 of 120: only the intended `extensions/`
-notation. Wave 11 closed two `xpect/` gaps: `p11`
+The corpus grew from 79 cases to 119 in wave 10G, to 120 with `g60` (an `alias` named by a
+keyword) and to 123 with the `semantic/` trigger-typing cases, and the default-mode gap count is
+now 2 of 123: only the intended `extensions/` notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
 declaration and its abstractness on every load path, which is what the rule reads. Wave 10C closed the two `grammar/` gaps
@@ -142,8 +149,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 118 agreements and 2 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 120 and 0. Reserved keywords recovered as declared
+the default mode the same corpus gives 121 agreements and 2 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 123 and 0. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -152,7 +159,7 @@ validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wav
 Read those two as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 120 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 123 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 

@@ -10,7 +10,7 @@ package Obj {
 				entry action bump {
 					assign count := count + 1;
 				}
-				accept after 10 then awake;
+				accept after 10 [SI::s] then awake;
 			}
 			state awake {
 				entry action mark {

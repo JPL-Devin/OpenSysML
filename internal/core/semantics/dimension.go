@@ -12,12 +12,14 @@ import (
 // members it is read from.
 const (
 	fqnScalarQuantityValue = "Quantities::ScalarQuantityValue"
+	fqnMeasurementScale    = "MeasurementReferences::MeasurementScale"
 
 	memberQuantityDimension    = "quantityDimension"
 	memberQuantityPowerFactors = "quantityPowerFactors"
 	memberQuantity             = "quantity"
 	memberExponent             = "exponent"
 	memberMRef                 = "mRef"
+	memberUnit                 = "unit"
 )
 
 // Dimension is the quantity dimension of a measurement: a product of powers of
@@ -307,7 +309,8 @@ func (m *Model) dimensionOfUnitTerm(term UnitTerm) (UnitTerm, bool) {
 // dimensionOf reports the dimension a measurement unit or unit definition
 // measures in, and whether any declaration determines it. A definition states it
 // as the power factors of its `quantityDimension` member; a unit takes it from the
-// definition that types it; a unit of dimension one has the empty dimension.
+// definition that types it; a unit of dimension one has the empty dimension; a
+// measurement scale measures in the dimension of its `unit`.
 // A unit specializing MeasurementUnit directly has none — reported as unknown
 // rather than assumed dimensionless. Memoized per symbol, negatives included.
 func (m *Model) dimensionOf(sym *symbols.Symbol) (UnitTerm, bool) {
@@ -338,7 +341,24 @@ func (m *Model) deriveDimension(sym *symbols.Symbol) (UnitTerm, bool) {
 	if term, ok := m.declaredDimension(sym); ok {
 		return term, true
 	}
+	if term, ok := m.scaleDimension(sym); ok {
+		return term, true
+	}
 	return m.inheritedDimension(sym)
+}
+
+// scaleDimension reports the dimension a measurement scale (a TimeScale) measures
+// in: the one of the unit its points are counted in.
+func (m *Model) scaleDimension(sym *symbols.Symbol) (UnitTerm, bool) {
+	scale := m.libSymbol(fqnMeasurementScale)
+	if scale == nil || !m.Conforms(sym, scale) {
+		return UnitTerm{}, false
+	}
+	unit, ok := m.LookupMember(sym, memberUnit)
+	if !ok {
+		return UnitTerm{}, false
+	}
+	return m.dimensionOf(unit)
 }
 
 // recordedDimension rebuilds a dimension recorded for a library symbol,

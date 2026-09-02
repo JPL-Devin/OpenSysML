@@ -30,11 +30,16 @@ type exprChecker struct {
 }
 
 func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
+	ec.errorCode("type.expr", span, format, args...)
+}
+
+// errorCode is errorf under the code of a rule with its own.
+func (ec *exprChecker) errorCode(code string, span source.Span, format string, args ...any) {
 	ec.diags = append(ec.diags, Diagnostic{
 		Severity: SeverityError,
 		Span:     span,
 		Message:  fmt.Sprintf(format, args...),
-		Code:     "type.expr",
+		Code:     code,
 		Source:   "type",
 	})
 }
@@ -138,6 +143,12 @@ func (ec *exprChecker) resolveTarget(scope *symbols.Scope, target ast.Node) *sym
 
 // checkBoolean checks an expression used where a condition is required.
 func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context string) {
+	ec.checkCondition(scope, n, "type.expr", context+" must be Boolean, found %s")
+}
+
+// checkCondition is checkBoolean reporting under a rule's own code and message,
+// whose one verb takes the type found.
+func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, format string) {
 	if n == nil {
 		return
 	}
@@ -146,24 +157,32 @@ func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context st
 		return
 	}
 	if got == semantics.PrimUnknown {
-		ec.checkNonScalarCondition(scope, n, context)
+		ec.checkNonScalarCondition(scope, n, code, format)
 		return
 	}
-	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, got)
+	ec.errorCode(code, n.Span(), format, got)
 }
 
 // checkNonScalarCondition reports a condition naming a feature typed by
-// something no Boolean can come from: a part, an item, an enumeration.
-func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, context string) {
+// something no Boolean can come from: a part, an item, an enumeration — or
+// one whose type is inherited, chained to or computed and is not Boolean: a
+// redefined duration, a quantity.
+func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, code, format string) {
 	typeSym := ec.valueTypeSymbol(scope, n)
 	if typeSym == nil {
 		typeSym = ec.invocationResultTypeSymbol(scope, n)
 	}
-	if typeSym == nil || !ec.isDefinitelyNonBehavior(typeSym) ||
+	if typeSym == nil {
+		if c := ec.model.ExprConformsToLibrary(scope, n, semantics.FQNBoolean); c.Known && !c.Holds {
+			ec.errorCode(code, n.Span(), format, c.Found)
+		}
+		return
+	}
+	if !ec.isDefinitelyNonBehavior(typeSym) ||
 		ec.model.CouldHold(typeSym, semantics.PrimBoolean) {
 		return
 	}
-	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, typeSym.Name)
+	ec.errorCode(code, n.Span(), format, typeSym.Name)
 }
 
 // infer returns the scalar type of an expression, checking its operands on the

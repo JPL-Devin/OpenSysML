@@ -342,9 +342,9 @@ package Mission {
 
     state rover {
         entry; then idle;
-        state idle     { accept after 5  then driving; }
-        state driving  { accept after 10 then charging; }
-        state charging { accept after 20 then idle; }
+        state idle     { accept after 5 [SI::s]  then driving; }
+        state driving  { accept after 10 [SI::s] then charging; }
+        state charging { accept after 20 [SI::s] then idle; }
     }
 }
 EOF

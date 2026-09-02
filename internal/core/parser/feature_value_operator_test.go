@@ -44,6 +44,9 @@ func TestFeatureValueOperators(t *testing.T) {
 			if !strings.HasPrefix(src[usage.ValueOperatorSpan.Offset:], tc.op) {
 				t.Errorf("value operator span starts at %d, not at %q", usage.ValueOperatorSpan.Offset, tc.op)
 			}
+			if want := strings.HasPrefix(tc.op, "default"); usage.IsDefault != want {
+				t.Errorf("IsDefault = %t, want %t", usage.IsDefault, want)
+			}
 		})
 	}
 }

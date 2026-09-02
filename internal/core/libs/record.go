@@ -200,6 +200,11 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver, mode
 		if superFQN == "" {
 			return nil, false
 		}
+		// A nameless target — an unnamed result parameter — has no name to
+		// restore it by, so the whole edge set is derived on load.
+		if idx.Declaring(superFQN) != super {
+			return nil, complete
+		}
 		if seen[superFQN] {
 			continue
 		}

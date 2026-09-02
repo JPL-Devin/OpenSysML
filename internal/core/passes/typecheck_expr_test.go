@@ -243,7 +243,7 @@ func TestExprChangeEventConditionMustBeBoolean(t *testing.T) {
 				transition first a when temp + 1 then b;
 			}
 		}
-	}`, "change event condition must be Boolean, found Integer")
+	}`, "a 'when' trigger's condition must be Boolean, found Integer")
 }
 
 func TestExprChangeEventConditionOK(t *testing.T) {
@@ -286,7 +286,7 @@ func TestExprAcceptWhenConditionMustBeBoolean(t *testing.T) {
 				state b;
 			}
 		}
-	}`, "change event condition must be Boolean, found Integer")
+	}`, "a 'when' trigger's condition must be Boolean, found Integer")
 }
 
 func TestExprTransitionGuardComparisonOK(t *testing.T) {

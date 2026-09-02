@@ -11,7 +11,7 @@ package Typed {
 			entry action bump {
 				assign hits := hits + 1;
 			}
-			accept after 5 then i2;
+			accept after 5 [SI::s] then i2;
 		}
 		state i2;
 	}

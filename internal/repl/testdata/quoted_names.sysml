@@ -39,7 +39,7 @@ package 'My Pkg' {
 		entry; then init;
 		state init;
 		state waiting {
-			accept after 10 then done;
+			accept after 10 [SI::s] then done;
 		}
 
 		succession first init then waiting;

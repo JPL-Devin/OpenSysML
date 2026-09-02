@@ -227,6 +227,27 @@ func TestConformsToAnything(t *testing.T) {
 	}
 }
 
+// Resolving a nameless parameter's typing asks for that parameter's supertypes
+// (it may be named by what it redefines), and the typing itself is still on the
+// resolver's stack then. The answer computed there is provisional: memoizing it
+// would leave the parameter untyped for every later query.
+func TestDirectSupertypesNotMemoizedWhileOwnTypingResolves(t *testing.T) {
+	m, root := buildModel(t, `package Q { attribute def Len; }
+		calc def C { return : Q::Len; }`)
+	c := sym(t, root, "C")
+	var result *symbols.Symbol
+	for _, member := range c.Scope.AnonymousMembers() {
+		result = member
+	}
+	if result == nil {
+		t.Fatal("the nameless return parameter was not indexed")
+	}
+	q := sym(t, root, "Q")
+	if got := m.DirectSupertypes(result); len(got) != 1 || got[0] != sym(t, q.Scope, "Len") {
+		t.Fatalf("DirectSupertypes(return) = %v, want [Q::Len]", got)
+	}
+}
+
 // A closure built while a metadata annotation type is unresolved must not be
 // memoized, or the base type it contributes never appears once it resolves.
 func TestAllSupertypesNotMemoizedWhileMetadataProvisional(t *testing.T) {

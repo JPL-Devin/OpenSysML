@@ -35,7 +35,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	}
 	tc.expr.walkMembers = tc.walk
 	tc.walk(rootScope, root.Members)
-	(&assignWalker{expr: tc.expr}).walk(rootScope, root.Members)
+	(&bodyWalker{expr: tc.expr}).walk(rootScope, root.Members)
 	return append(tc.diags, tc.expr.diags...)
 }
 
@@ -72,7 +72,9 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				span:         d.Span(),
 			})
 			tc.checkOneType(scope, d)
-			tc.expr.checkUsageValue(scope, d)
+			if !isTriggerValue(d.Value) {
+				tc.expr.checkUsageValue(scope, d)
+			}
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -128,11 +130,9 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.checkBoolean(body, m.Condition, "condition of '"+m.Kind.String()+"'")
 		tc.expr.checkBoolean(body, m.Until, "condition of 'until'")
 		tc.walk(body, m.Body)
-	case *ast.TransitionMember:
-		tc.checkTrigger(scope, m.Trigger)
-	case *ast.AssignmentActionNode:
-		// Both the value and the feature it is written to are checked by the
-		// assignment walk, which reaches every body an `assign` may stand in.
+	case *ast.TransitionMember, *ast.AssignmentActionNode:
+		// Triggers and assignments are checked by the body walk, which reaches
+		// every body they may stand in.
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
 	case *ast.SubjectMember:
@@ -161,24 +161,6 @@ func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMe
 			body = child
 		}
 		tc.walk(body, m.Body)
-	}
-}
-
-// checkTrigger types a transition trigger. A change event carries a Boolean
-// condition and a time event a duration expression; a signal or call trigger
-// names an event and has nothing to type here. `transition ... when <expr>`
-// leaves the trigger as a bare expression, which is a change-event condition
-// unless it is a bare name — that names a signal.
-func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
-	switch t := trigger.(type) {
-	case nil:
-	case *ast.ChangeEvent:
-		tc.expr.checkBoolean(scope, t.Condition, "change event condition")
-	case *ast.TimeEvent:
-		tc.expr.infer(scope, t.Duration)
-	case *ast.FeatureReference, *ast.QualifiedName, *ast.AcceptEvent, *ast.CallEvent:
-	default:
-		tc.expr.checkBoolean(scope, trigger, "change event condition")
 	}
 }
 

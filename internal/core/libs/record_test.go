@@ -112,3 +112,24 @@ func TestRecordSupersCoversGeneralizationEdges(t *testing.T) {
 		t.Fatalf("Supers of c = %v, want none (reference subsetting)", got["c"])
 	}
 }
+
+// A result parameter implicitly redefines the nameless result of the behavior
+// its owner specializes. That edge has no qualified name to restore it by, so
+// the symbol's edges are left to be derived on load rather than recorded short.
+func TestRecordSkipsSupersReachingNamelessTarget(t *testing.T) {
+	idx := indexOf(t, "lib.kerml", `package P {
+		datatype Boolean;
+		abstract function Check { return : Boolean; }
+		function Named specializes Check { return result : Boolean; }
+		function Plain specializes Check { return result = true; }
+	}`)
+	got := supersByFQN(recordOf("lib.kerml", idx))
+	if want := []string{"P::Check"}; !slices.Equal(got["P::Named"], want) {
+		t.Fatalf("Supers of P::Named = %v, want %v", got["P::Named"], want)
+	}
+	for _, fqn := range []string{"P::Named::result", "P::Plain::result"} {
+		if supers, recorded := got[fqn]; recorded {
+			t.Errorf("Supers of %s = %v recorded, want derived on load", fqn, supers)
+		}
+	}
+}

@@ -173,6 +173,22 @@ func (k SymbolKind) String() string {
 	return "unknown"
 }
 
+// IsDefinition reports whether k classifies a definition — a SysML `def` or a
+// KerML classifier — as opposed to a usage or a non-type member.
+func (k SymbolKind) IsDefinition() bool {
+	switch k {
+	case SymbolPartDef, SymbolAttributeDef, SymbolItemDef, SymbolOccurrenceDef,
+		SymbolIndividualDef, SymbolMetadataDef, SymbolMetaclass, SymbolEnumerationDef,
+		SymbolViewDef, SymbolViewpointDef, SymbolRenderingDef, SymbolConcernDef,
+		SymbolConnectionDef, SymbolFlowDef, SymbolPortDef, SymbolInterfaceDef,
+		SymbolAllocationDef, SymbolActionDef, SymbolStateDef, SymbolCalcDef,
+		SymbolConstraintDef, SymbolRequirementDef, SymbolCaseDef, SymbolAnalysisCaseDef,
+		SymbolVerificationCaseDef, SymbolUseCaseDef, SymbolKerMLType:
+		return true
+	}
+	return false
+}
+
 // Notation names a symbol the way the notation declares it — "part def",
 // "state", "render" — rather than by its internal classification.
 func (s *Symbol) Notation() string {

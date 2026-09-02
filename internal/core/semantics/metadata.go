@@ -285,5 +285,11 @@ func isFeature(sym *symbols.Symbol) bool {
 	if _, ok := sym.Decl.(*ast.Usage); !ok {
 		return false
 	}
-	return !isKerMLTypeDecl(sym)
+	return !isTypeDecl(sym)
+}
+
+// isTypeDecl reports whether sym declares a type rather than a feature: a SysML
+// definition, or a KerML classifier the parser records as a usage (`datatype`).
+func isTypeDecl(sym *symbols.Symbol) bool {
+	return sym != nil && sym.Kind.IsDefinition()
 }

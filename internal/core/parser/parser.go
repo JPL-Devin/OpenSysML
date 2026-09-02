@@ -258,13 +258,14 @@ func (p *Parser) valueOperatorAt(n int) bool {
 }
 
 // acceptValueOperatorSpan consumes a feature value operator and returns the
-// source span from its first token through the last consumed operator token.
-func (p *Parser) acceptValueOperatorSpan() (source.Span, bool) {
+// source span from its first token through the last consumed operator token,
+// and whether the operator was the `default` form.
+func (p *Parser) acceptValueOperatorSpan() (span source.Span, isDefault, ok bool) {
 	if op, ok := p.accept(lexer.Eq); ok {
-		return op.Span, true
+		return op.Span, false, true
 	}
 	if op, ok := p.accept(lexer.ColonEq); ok {
-		return op.Span, true
+		return op.Span, false, true
 	}
 	if p.atKeyword("default") {
 		first := p.advance()
@@ -274,17 +275,18 @@ func (p *Parser) acceptValueOperatorSpan() (source.Span, bool) {
 		} else if op, ok := p.accept(lexer.ColonEq); ok {
 			last = op
 		}
-		return source.Span{Offset: first.Span.Offset, Len: last.Span.End() - first.Span.Offset}, true
+		return source.Span{Offset: first.Span.Offset, Len: last.Span.End() - first.Span.Offset}, true, true
 	}
-	return source.Span{}, false
+	return source.Span{}, false, false
 }
 
 func (p *Parser) parseUsageValue(u *ast.Usage) bool {
-	span, ok := p.acceptValueOperatorSpan()
+	span, isDefault, ok := p.acceptValueOperatorSpan()
 	if !ok {
 		return false
 	}
 	u.ValueOperatorSpan = span
+	u.IsDefault = isDefault
 	u.Value = p.ParseExpression()
 	return true
 }

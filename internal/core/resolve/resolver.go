@@ -296,6 +296,13 @@ func (r *Resolver) ResolveQualified(scope *symbols.Scope, qn *ast.QualifiedName)
 	return r.resolveQualified(scope, qn, nil)
 }
 
+// Resolving reports whether target is being resolved on the current stack, so a
+// query for it just now failed on the cycle guard and not on the name. A caller
+// memoizing derived facts must treat such an answer as provisional.
+func (r *Resolver) Resolving(target ast.Node) bool {
+	return r.resolving[target]
+}
+
 // resolveQualified is ResolveQualified with an optional filter hiding the
 // bindings a reference subsetting's own borrowed name contributes.
 func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName, hide *refFilter) (*symbols.Symbol, bool) {

@@ -392,7 +392,9 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 
 	// Optional value (= expr, := expr, or default [=] expr)
 	var value ast.Node
-	if _, ok := p.acceptValueOperatorSpan(); ok {
+	var isDefault bool
+	if _, def, ok := p.acceptValueOperatorSpan(); ok {
+		isDefault = def
 		value = p.ParseExpression()
 	}
 
@@ -423,6 +425,7 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		Relationships: relationships,
 		Multiplicity:  multiplicity,
 		Value:         value,
+		IsDefault:     isDefault,
 		Members:       members,
 		HasBody:       hasBody,
 		IsReference:   isRef,
@@ -2150,7 +2153,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 
 	// Value part: `= expr`, `:= expr` or `default [=] expr`.
 	var value ast.Node
-	if _, ok := p.acceptValueOperatorSpan(); ok {
+	if _, _, ok := p.acceptValueOperatorSpan(); ok {
 		value = p.ParseExpression()
 	}
 
@@ -2314,7 +2317,7 @@ func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
 	if p.at(lexer.LBracket) {
 		d.multiplicity = p.parseMultiplicity()
 	}
-	if _, ok := p.acceptValueOperatorSpan(); ok {
+	if _, _, ok := p.acceptValueOperatorSpan(); ok {
 		d.value = p.ParseExpression()
 	}
 	if p.at(lexer.LBrace) {
