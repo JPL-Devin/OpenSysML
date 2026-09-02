@@ -190,6 +190,53 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 	}
 }
 
+// TestCheckProbesCoverage covers what the probe check demands: a probe for every
+// implemented row, one per notation when both validators declare the
+// constraint, and none for a row recorded as unreported.
+func TestCheckProbesCoverage(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, filepath.FromSlash(probesDir))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, constraint string) {
+		content := "// Census: " + constraint + "\n// Expect: error: x\npackage P;\n"
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	base := &Baseline{Constraints: []Constraint{
+		{Name: "validateA", Source: "kerml", Status: StatusFaithful},
+		{Name: "validateB", Source: "both", Status: StatusApproximate},
+		{Name: "validateC", Source: "sysml", Status: StatusNotImplemented},
+	}}
+	write("validateA.sysml", "validateA")
+	write("validateB.kerml", "validateB")
+	err := checkProbes(root, base)
+	if err == nil || !strings.Contains(err.Error(), "validateB is recorded approximate in both notations but no .sysml probe") {
+		t.Fatalf("a shared constraint with one notation probed must fail, got %v", err)
+	}
+	write("validateB.sysml", "validateB")
+	if err := checkProbes(root, base); err != nil {
+		t.Fatalf("both notations probed must pass: %v", err)
+	}
+	write("validateC.sysml", "validateC")
+	err = checkProbes(root, base)
+	if err == nil || !strings.Contains(err.Error(), "validateC, which the baseline records as not-implemented") {
+		t.Fatalf("a probe for an unreported constraint must fail, got %v", err)
+	}
+	if err := os.Remove(filepath.Join(dir, "validateC.sysml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "validateA.sysml")); err != nil {
+		t.Fatal(err)
+	}
+	err = checkProbes(root, base)
+	if err == nil || !strings.Contains(err.Error(), "validateA is recorded faithful but no probe") {
+		t.Fatalf("an implemented row without a probe must fail, got %v", err)
+	}
+}
+
 // TestBaselineMatchesNamesEverySide checks the jar comparison names a removed and
 // an added constraint.
 func TestBaselineMatchesNamesEverySide(t *testing.T) {

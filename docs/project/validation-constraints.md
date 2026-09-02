@@ -46,7 +46,8 @@ Every ✅ and ⚠️ row has a probe under `cmd/validation-census/testdata/probe
 a minimal model that violates the constraint, headed by the constraint name and the severity and
 message fragment OpenSysML must report for it. `go test ./cmd/validation-census` runs each probe
 through the workspace and fails if the diagnostic is missing; `-check` fails if an implemented
-row has no probe or a probe names a row that is not implemented. The probes were also run through
+row has no probe (a row both validators declare needs one probe per notation, `.kerml` and
+`.sysml`, because the two mappings differ) or a probe names a row that is not implemented. The probes were also run through
 the pinned pilot validators (`build/pilot-sysml-validator/validate-sysml-batch`,
 `build/pilot-kerml-validator/validate-kerml`) to confirm the pilot reports the constraint the
 row names on the same model; where it reports a different one, the *Checks* column says so.

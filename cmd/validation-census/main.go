@@ -103,7 +103,7 @@ func runWrite(root string, opts options, out io.Writer) error {
 		return err
 	}
 	if rewritten != string(content) {
-		err := os.WriteFile(docPath, []byte(rewritten), 0o644) // #nosec G306 -- documentation
+		err := os.WriteFile(docPath, []byte(rewritten), 0o644) // #nosec G306 G703 -- fixed repository documentation path
 		if err != nil {
 			return err
 		}

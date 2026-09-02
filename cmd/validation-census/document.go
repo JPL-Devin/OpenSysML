@@ -220,7 +220,9 @@ const probesDir = "cmd/validation-census/testdata/probes"
 type probe struct {
 	Path       string
 	Constraint string
-	Severity   string
+	// Language is the model's notation, kerml or sysml, from its extension.
+	Language string
+	Severity string
 	// Message is a fragment the diagnostic's message must contain.
 	Message string
 }
@@ -263,13 +265,23 @@ func loadProbes(root string) ([]probe, error) {
 		if stem != name[1] {
 			return nil, fmt.Errorf("%s/%s: the file is named for %s but declares %s", probesDir, entry.Name(), stem, name[1])
 		}
-		probes = append(probes, probe{Path: filepath.Join(probesDir, entry.Name()), Constraint: name[1], Severity: expect[1], Message: expect[2]})
+		probes = append(probes, probe{Path: filepath.Join(probesDir, entry.Name()), Constraint: name[1], Language: ext[1:], Severity: expect[1], Message: expect[2]})
 	}
 	return probes, nil
 }
 
-// checkProbes verifies that every implemented constraint has a probe and that no
-// probe claims a diagnostic for a constraint the baseline records as unreported.
+// probeLanguages lists the notations a constraint's probes must cover; a
+// constraint both validators declare has a mapping per notation.
+func probeLanguages(source string) []string {
+	if source == "both" {
+		return []string{"kerml", "sysml"}
+	}
+	return []string{""}
+}
+
+// checkProbes verifies that every implemented constraint has a probe (one per
+// notation when both validators declare it) and that no probe claims a
+// diagnostic for a constraint the baseline records as unreported.
 func checkProbes(root string, base *Baseline) error {
 	probes, err := loadProbes(root)
 	if err != nil {
@@ -279,7 +291,7 @@ func checkProbes(root string, base *Baseline) error {
 	for _, c := range base.Constraints {
 		recorded[c.Name] = c
 	}
-	backed := make(map[string]bool)
+	backed := make(map[string]map[string]bool)
 	var problems []string
 	for _, p := range probes {
 		c, ok := recorded[p.Constraint]
@@ -291,11 +303,25 @@ func checkProbes(root string, base *Baseline) error {
 			problems = append(problems, fmt.Sprintf("%s expects a %s for %s, which the baseline records as %s", p.Path, p.Severity, p.Constraint, c.Status))
 			continue
 		}
-		backed[p.Constraint] = true
+		if backed[p.Constraint] == nil {
+			backed[p.Constraint] = make(map[string]bool)
+		}
+		backed[p.Constraint][p.Language] = true
+		backed[p.Constraint][""] = true
 	}
 	for _, c := range base.Constraints {
-		if implemented(c.Status) && !backed[c.Name] {
-			problems = append(problems, fmt.Sprintf("%s is recorded %s but no probe under %s expects its diagnostic", c.Name, c.Status, probesDir))
+		if !implemented(c.Status) {
+			continue
+		}
+		for _, lang := range probeLanguages(c.Source) {
+			if backed[c.Name][lang] {
+				continue
+			}
+			if lang == "" {
+				problems = append(problems, fmt.Sprintf("%s is recorded %s but no probe under %s expects its diagnostic", c.Name, c.Status, probesDir))
+			} else {
+				problems = append(problems, fmt.Sprintf("%s is recorded %s in both notations but no .%s probe under %s expects its diagnostic", c.Name, c.Status, lang, probesDir))
+			}
 		}
 	}
 	if len(problems) == 0 {

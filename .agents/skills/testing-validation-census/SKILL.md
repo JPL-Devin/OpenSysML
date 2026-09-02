@@ -47,6 +47,7 @@ afterwards (`git checkout -- <file>` on a clean tree, or keep a copy).
 - Change a row's status marker or language: the row is reported as disagreeing with the baseline.
 - Point a row's *Negative case* at a file that is not under `cmd/pilot-reject/testdata/negative/`.
 - Delete a probe of a ✅/⚠️ row, or add a probe for a ❌/❔ row.
+- Delete the `.sysml` (or `.kerml`) probe of a row whose language is `both`: each notation needs one.
 
 ## Reading a probe
 
